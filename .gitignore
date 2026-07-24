@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-electron
+release
+*.log
+
+# Licensed sprite pack: usable in the project, but not redistributable as files.
+# Regenerate with:  python3 tools/recolor.py --src <pack> --out public/heroes
+public/heroes

@@ -1,0 +1,154 @@
+import { GameState, GuildFacility, SAVE_VERSION } from '../types';
+import { createRng } from '../rng';
+import { HeroManager } from './HeroManager';
+
+/** Storage abstraction so the game also runs in a plain browser tab for testing. */
+export interface SaveAdapter {
+  read(): Promise<string | null>;
+  write(json: string): Promise<void>;
+}
+
+declare global {
+  interface Window {
+    littleKnight?: {
+      readSave(): Promise<string | null>;
+      writeSave(json: string): Promise<boolean>;
+      saveFolder(): Promise<string>;
+      setWindowMode(mode: 'idle' | 'menu'): Promise<void>;
+      setAlwaysOnTop(value: boolean): Promise<boolean>;
+      getAlwaysOnTop(): Promise<boolean>;
+      minimize(): Promise<void>;
+      quit(): Promise<void>;
+    };
+  }
+}
+
+const LOCAL_KEY = 'little-knight-save';
+
+export const electronAdapter: SaveAdapter = {
+  read: () => window.littleKnight!.readSave(),
+  write: async (json) => { await window.littleKnight!.writeSave(json); },
+};
+
+export const localStorageAdapter: SaveAdapter = {
+  read: async () => window.localStorage.getItem(LOCAL_KEY),
+  write: async (json) => { window.localStorage.setItem(LOCAL_KEY, json); },
+};
+
+export function defaultAdapter(): SaveAdapter {
+  return window.littleKnight ? electronAdapter : localStorageAdapter;
+}
+
+const EMPTY_GUILD: Record<GuildFacility, number> = {
+  barracks: 0, treasury: 0, workshop: 0, library: 0, tavern: 0,
+};
+
+export function createInitialState(now = Date.now()): GameState {
+  const rng = createRng(`start:${now}`);
+  const knight = HeroManager.create('knight', rng);
+  return {
+    version: SAVE_VERSION,
+    createdAt: now,
+    lastSeen: now,
+    gold: 50,
+    renown: 0,
+    heroes: [knight],
+    heroSlots: 1,
+    roster: ['knight'],
+    inventory: { healing_potion: 1 },
+    stash: [],
+    questBoard: [],
+    boardRefreshedAt: 0,
+    activeQuests: [],
+    activeChains: [],
+    completedChains: [],
+    upgrades: {},
+    guild: { ...EMPTY_GUILD },
+    renownPerks: {},
+    shop: { refreshedAt: 0, consumables: [], equipment: [] },
+    stats: {
+      totalQuests: 0, successes: 0, failures: 0,
+      goldEarned: 0, goldSpent: 0, highestReward: 0,
+      legendaryItemsFound: 0, itemsFound: 0, injuriesSuffered: 0,
+      itemsBroken: 0, chainsCompleted: 0,
+      playTimeMs: 0, offlineTimeMs: 0, prestigeCount: 0, firstPlayedAt: now,
+    },
+    log: [],
+    discoveredItems: [],
+  };
+}
+
+/**
+ * Migrations run in order. Each one takes a save at version N and returns a
+ * save at version N+1, so old saves keep working across releases.
+ */
+type Migration = (save: Record<string, unknown>) => Record<string, unknown>;
+
+const MIGRATIONS: Record<number, Migration> = {
+  1: (save) => ({
+    ...save,
+    version: 2,
+    activeChains: save.activeChains ?? [],
+    completedChains: save.completedChains ?? [],
+    discoveredItems: save.discoveredItems ?? [],
+  }),
+  2: (save) => ({
+    ...save,
+    version: 3,
+    renownPerks: save.renownPerks ?? {},
+    roster: save.roster ?? ['knight'],
+  }),
+};
+
+export const SaveManager = {
+  serialize(state: GameState): string {
+    return JSON.stringify({ ...state, version: SAVE_VERSION });
+  },
+
+  migrate(raw: Record<string, unknown>): GameState {
+    let save = raw;
+    let version = typeof save.version === 'number' ? save.version : 1;
+    while (version < SAVE_VERSION) {
+      const migration = MIGRATIONS[version];
+      if (!migration) break;
+      save = migration(save);
+      version = typeof save.version === 'number' ? save.version : version + 1;
+    }
+    // Fill in anything a migration missed so a partial save never crashes the UI.
+    const base = createInitialState();
+    return { ...base, ...(save as unknown as GameState), version: SAVE_VERSION };
+  },
+
+  async load(adapter: SaveAdapter): Promise<{ state: GameState; isNew: boolean }> {
+    try {
+      const json = await adapter.read();
+      if (!json) return { state: createInitialState(), isNew: true };
+      const parsed = JSON.parse(json) as Record<string, unknown>;
+      return { state: SaveManager.migrate(parsed), isNew: false };
+    } catch (err) {
+      console.error('Save could not be read, starting a fresh guild.', err);
+      return { state: createInitialState(), isNew: true };
+    }
+  },
+
+  async save(adapter: SaveAdapter, state: GameState): Promise<void> {
+    try {
+      await adapter.write(SaveManager.serialize(state));
+    } catch (err) {
+      console.error('Save failed.', err);
+    }
+  },
+
+  exportToClipboard(state: GameState): string {
+    return btoa(unescape(encodeURIComponent(SaveManager.serialize(state))));
+  },
+
+  importFromString(encoded: string): GameState | null {
+    try {
+      const json = decodeURIComponent(escape(atob(encoded.trim())));
+      return SaveManager.migrate(JSON.parse(json) as Record<string, unknown>);
+    } catch {
+      return null;
+    }
+  },
+};
