@@ -1,0 +1,1233 @@
+diff --git a/src/game/data/equipment.ts b/src/game/data/equipment.ts
+index a141872..9e56a7e 100644
+--- a/src/game/data/equipment.ts
++++ b/src/game/data/equipment.ts
+@@ -44,6 +44,15 @@ export const ITEM_SETS: ItemSet[] = [
+       { count: 3, mods: { success: 18, gold: 30, loot: 15, injuryResist: 15, xp: 25 }, label: 'Unmade' },
+     ],
+   },
++  {
++    id: 'empyrean',
++    name: 'Empyrean Set',
++    pieces: ['empyrean_blade', 'empyrean_halo', 'empyrean_aegis'],
++    bonuses: [
++      { count: 2, mods: { success: 14, injuryResist: 14 }, label: 'Ascendant' },
++      { count: 3, mods: { success: 24, gold: 40, loot: 22, injuryResist: 20, xp: 35, speed: 12 }, label: 'Beyond the Vault of Heaven' },
++    ],
++  },
+ ];
+ 
+ export const SET_BY_ID: Record<string, ItemSet> = Object.fromEntries(ITEM_SETS.map((s) => [s.id, s]));
+diff --git a/src/game/data/events.ts b/src/game/data/events.ts
+index fe62654..06b3c37 100644
+--- a/src/game/data/events.ts
++++ b/src/game/data/events.ts
+@@ -1,4 +1,4 @@
+-import { Rarity } from '../types';
++import { Difficulty, Rarity } from '../types';
+ 
+ export interface EventDef {
+   id: string;
+@@ -6,6 +6,8 @@ export interface EventDef {
+   description: string;
+   kind: 'positive' | 'neutral' | 'negative';
+   weight: number;
++  /** Reserves the grander/grimmer events for quests that deserve them. */
++  minDifficulty?: Difficulty;
+   effects: {
+     /** Percentage points added to the success roll for this quest. */
+     success?: number;
+diff --git a/src/game/data/items.ts b/src/game/data/items.ts
+index 28295b4..f19bcaa 100644
+--- a/src/game/data/items.ts
++++ b/src/game/data/items.ts
+@@ -1,4 +1,4 @@
+-import { ConsumableDef, Injury } from '../types';
++import { ConsumableDef, Difficulty, Injury } from '../types';
+ import { HOUR, MINUTE } from '../util';
+ 
+ /**
+@@ -21,34 +21,36 @@ export interface InjuryDef {
+   mods: Injury['mods'];
+   treatmentCost: number;
+   weight: number;
++  /** Reserves the grimmer injuries for quests that deserve them. */
++  minDifficulty?: Difficulty;
+ }
+ 
+-export const INJURIES: InjuryDef[] = [
+-  {
+-    id: 'bruised', name: 'Bruised',
+-    description: 'Sore ribs. Nothing a day of quiet will not fix.',
+-    durationMs: 2 * HOUR, mods: { success: -5 }, treatmentCost: 40, weight: 34,
+-  },
+-  {
+-    id: 'sprained_ankle', name: 'Sprained Ankle',
+-    description: 'Every road is longer than it looks.',
+-    durationMs: 4 * HOUR, mods: { success: -5, speed: -20 }, treatmentCost: 90, weight: 26,
+-  },
+-  {
+-    id: 'exhausted', name: 'Exhausted',
+-    description: 'Swings land late and rewards land light.',
+-    durationMs: 3 * HOUR, mods: { success: -8, gold: -20 }, treatmentCost: 70, weight: 24,
+-  },
+-  {
+-    id: 'poisoned', name: 'Poisoned',
+-    description: 'Slow, green, and unpleasant. Treat it properly.',
+-    durationMs: 6 * HOUR, mods: { success: -12, gold: -15, speed: -10 }, treatmentCost: 150, weight: 12,
+-  },
+-  {
+-    id: 'cracked_ribs', name: 'Cracked Ribs',
+-    description: 'Serious. The guild surgeon will want paying.',
+-    durationMs: 10 * HOUR, mods: { success: -18, speed: -25 }, treatmentCost: 300, weight: 4,
+-  },
+-];
++/**
++ * Injuries live in json/injuries.json so they can be edited via tools/devtool.
++ * The JSON stores `durationHours` (easier to read and edit than raw
++ * milliseconds); this is where it's converted to the `durationMs` the rest of
++ * the game expects.
++ */
++import injuriesJson from './json/injuries.json';
++interface InjuryJson {
++  id: string;
++  name: string;
++  description: string;
++  durationHours: number;
++  mods: Injury['mods'];
++  treatmentCost: number;
++  weight: number;
++  minDifficulty?: Difficulty;
++}
++export const INJURIES: InjuryDef[] = (injuriesJson as InjuryJson[]).map((j) => ({
++  id: j.id,
++  name: j.name,
++  description: j.description,
++  durationMs: j.durationHours * HOUR,
++  mods: j.mods,
++  treatmentCost: j.treatmentCost,
++  weight: j.weight,
++  minDifficulty: j.minDifficulty,
++}));
+ 
+ export const REST_TICK = 30 * MINUTE;
+diff --git a/src/game/data/json/equipment.json b/src/game/data/json/equipment.json
+index 292cb25..6fb1bfc 100644
+--- a/src/game/data/json/equipment.json
++++ b/src/game/data/json/equipment.json
+@@ -686,5 +686,85 @@
+     "stats": {
+       "endurance": 7
+     }
++  },
++  {
++    "id": "empyrean_blade",
++    "name": "Empyrean Greatblade",
++    "slot": "weapon",
++    "rarity": "legendary",
++    "reqLevel": 45,
++    "maxDurability": 300,
++    "value": 18000,
++    "mods": {
++      "success": 24,
++      "gold": 20,
++      "loot": 10,
++      "speed": 10
++    },
++    "stats": {
++      "strength": 20,
++      "luck": 5
++    },
++    "setId": "empyrean"
++  },
++  {
++    "id": "empyrean_halo",
++    "name": "Empyrean Halo",
++    "slot": "helmet",
++    "rarity": "legendary",
++    "reqLevel": 45,
++    "maxDurability": 280,
++    "value": 17200,
++    "mods": {
++      "success": 18,
++      "injuryResist": 26,
++      "xp": 26
++    },
++    "stats": {
++      "wisdom": 15,
++      "endurance": 7
++    },
++    "setId": "empyrean"
++  },
++  {
++    "id": "empyrean_aegis",
++    "name": "Empyrean Aegis",
++    "slot": "chest",
++    "rarity": "legendary",
++    "reqLevel": 45,
++    "maxDurability": 320,
++    "value": 19000,
++    "mods": {
++      "injuryResist": 34,
++      "success": 16,
++      "durability": 30
++    },
++    "stats": {
++      "endurance": 20,
++      "strength": 6
++    },
++    "setId": "empyrean"
++  },
++  {
++    "id": "the_last_ember",
++    "name": "The Last Ember",
++    "slot": "amulet",
++    "rarity": "legendary",
++    "reqLevel": 55,
++    "maxDurability": 400,
++    "value": 40000,
++    "mods": {
++      "success": 20,
++      "gold": 45,
++      "loot": 20,
++      "xp": 35,
++      "injuryResist": 20
++    },
++    "stats": {
++      "strength": 10,
++      "endurance": 10,
++      "luck": 10,
++      "wisdom": 10
++    }
+   }
+ ]
+diff --git a/src/game/data/json/events.json b/src/game/data/json/events.json
+index d62685c..fa05442 100644
+--- a/src/game/data/json/events.json
++++ b/src/game/data/json/events.json
+@@ -171,5 +171,79 @@
+     "effects": {
+       "goldPct": -0.25
+     }
++  },
++  {
++    "id": "voidforged_cache",
++    "name": "A Voidforged Cache",
++    "kind": "positive",
++    "weight": 10,
++    "description": "Sealed behind a ward that gave out just as you found it. Someone left this on purpose.",
++    "effects": {
++      "flatGold": 400,
++      "loot": 20
++    },
++    "minDifficulty": "epic"
++  },
++  {
++    "id": "old_gods_favour",
++    "name": "The Old Gods Are Watching, and Amused",
++    "kind": "positive",
++    "weight": 8,
++    "description": "Nothing you did should have worked. It worked anyway.",
++    "effects": {
++      "success": 18,
++      "xpPct": 0.4
++    },
++    "minDifficulty": "legendary"
++  },
++  {
++    "id": "the_watcher_passes",
++    "name": "The Watcher Passes You By",
++    "kind": "neutral",
++    "weight": 10,
++    "description": "It looked directly at you. It kept walking. You are still deciding how you feel about that.",
++    "effects": {
++      "xpPct": 0.3,
++      "delay": 10
++    },
++    "minDifficulty": "epic"
++  },
++  {
++    "id": "the_ground_remembers",
++    "name": "The Ground Remembers the Last War",
++    "kind": "negative",
++    "weight": 12,
++    "description": "Old bones, older iron, and something underneath that is still technically alive.",
++    "effects": {
++      "success": -16,
++      "durability": 10,
++      "injury": true
++    },
++    "minDifficulty": "epic"
++  },
++  {
++    "id": "it_noticed_you",
++    "name": "It Noticed You",
++    "kind": "negative",
++    "weight": 8,
++    "description": "You were careful. It did not matter. Something this size does not need to be quiet.",
++    "effects": {
++      "success": -22,
++      "goldPct": -0.2,
++      "injury": true
++    },
++    "minDifficulty": "legendary"
++  },
++  {
++    "id": "the_price_of_passage",
++    "name": "The Price of Passage",
++    "kind": "negative",
++    "weight": 10,
++    "description": "Whatever guards the deep places does not take gold. It took something else instead.",
++    "effects": {
++      "goldPct": -0.35,
++      "xpPct": -0.1
++    },
++    "minDifficulty": "epic"
+   }
+-]
++]
+\ No newline at end of file
+diff --git a/src/game/data/json/injuries.json b/src/game/data/json/injuries.json
+new file mode 100644
+index 0000000..ebdc73f
+--- /dev/null
++++ b/src/game/data/json/injuries.json
+@@ -0,0 +1,117 @@
++[
++  {
++    "id": "bruised",
++    "name": "Bruised",
++    "description": "Sore ribs. Nothing a day of quiet will not fix.",
++    "durationHours": 2,
++    "mods": {
++      "success": -5
++    },
++    "treatmentCost": 40,
++    "weight": 34
++  },
++  {
++    "id": "sprained_ankle",
++    "name": "Sprained Ankle",
++    "description": "Every road is longer than it looks.",
++    "durationHours": 4,
++    "mods": {
++      "success": -5,
++      "speed": -20
++    },
++    "treatmentCost": 90,
++    "weight": 26
++  },
++  {
++    "id": "exhausted",
++    "name": "Exhausted",
++    "description": "Swings land late and rewards land light.",
++    "durationHours": 3,
++    "mods": {
++      "success": -8,
++      "gold": -20
++    },
++    "treatmentCost": 70,
++    "weight": 24
++  },
++  {
++    "id": "poisoned",
++    "name": "Poisoned",
++    "description": "Slow, green, and unpleasant. Treat it properly.",
++    "durationHours": 6,
++    "mods": {
++      "success": -12,
++      "gold": -15,
++      "speed": -10
++    },
++    "treatmentCost": 150,
++    "weight": 12
++  },
++  {
++    "id": "cracked_ribs",
++    "name": "Cracked Ribs",
++    "description": "Serious. The guild surgeon will want paying.",
++    "durationHours": 10,
++    "mods": {
++      "success": -18,
++      "speed": -25
++    },
++    "treatmentCost": 300,
++    "weight": 4
++  },
++  {
++    "id": "dragonfire_scorch",
++    "name": "Dragonfire Scorch",
++    "description": "Armour half-melted to skin. This is not a bruise, this is a warning.",
++    "durationHours": 14,
++    "mods": {
++      "success": -22,
++      "gold": -20,
++      "speed": -15
++    },
++    "treatmentCost": 480,
++    "weight": 8,
++    "minDifficulty": "epic"
++  },
++  {
++    "id": "void_touched",
++    "name": "Void-Touched",
++    "description": "Something reached back. Part of the wound is not entirely there anymore.",
++    "durationHours": 18,
++    "mods": {
++      "success": -25,
++      "xp": -20,
++      "injuryResist": -10
++    },
++    "treatmentCost": 650,
++    "weight": 5,
++    "minDifficulty": "legendary"
++  },
++  {
++    "id": "shattered_spirit",
++    "name": "Shattered Spirit",
++    "description": "The body will mend. The nerve to face what did this again will take longer.",
++    "durationHours": 16,
++    "mods": {
++      "success": -20,
++      "gold": -25
++    },
++    "treatmentCost": 550,
++    "weight": 6,
++    "minDifficulty": "epic"
++  },
++  {
++    "id": "world_ender_mark",
++    "name": "Marked by the World-Ender",
++    "description": "A brand that was not there this morning, and will not fade on its own schedule.",
++    "durationHours": 24,
++    "mods": {
++      "success": -28,
++      "speed": -20,
++      "gold": -20
++    },
++    "treatmentCost": 900,
++    "weight": 3,
++    "minDifficulty": "legendary"
++  }
++]
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 3dfe467..3c171aa 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -57,6 +57,12 @@ export const UPGRADES: UpgradeDef[] = [
+     baseCost: 3000, costGrowth: 1, maxLevel: 1,
+     modsPerLevel: {}, unlocks: 'chains',
+   },
++  {
++    id: 'black_market_contact', name: 'Black Market Contact',
++    description: "Someone who knows someone. Unlocks a second, pricier stock rotation biased toward rare and legendary gear — often stock the regular armourer would never touch.",
++    baseCost: 9000, costGrowth: 1, maxLevel: 1,
++    modsPerLevel: {}, unlocks: 'blackMarket',
++  },
+ ];
+ 
+ export const UPGRADE_BY_ID: Record<string, UpgradeDef> = Object.fromEntries(UPGRADES.map((u) => [u.id, u]));
+diff --git a/src/game/data/quests.ts b/src/game/data/quests.ts
+index c8c60b8..ec610ea 100644
+--- a/src/game/data/quests.ts
++++ b/src/game/data/quests.ts
+@@ -97,6 +97,11 @@ export interface ChainDef {
+   rewardGold: number;
+   rewardItems: string[];
+   rewardRenown: number;
++  /**
++   * An epithet granted to whichever hero completes the final stage, shown as
++   * "<Title> <Name>". Cleared if that hero later retires.
++   */
++  title?: string;
+ }
+ 
+ export const QUEST_CHAINS: ChainDef[] = [
+@@ -108,6 +113,7 @@ export const QUEST_CHAINS: ChainDef[] = [
+     rewardGold: 4000,
+     rewardItems: ['dragon_helm', 'dragon_blade'],
+     rewardRenown: 2,
++    title: 'Dragonbane',
+     stages: [
+       { name: 'Follow the Ash Trail', flavour: 'Cold ash, warm ground. It passed here recently.', difficulty: 'hard', duration: 8 * HOUR, goldMultiplier: 1.5 },
+       { name: 'Question the Survivors', flavour: 'They describe wings the width of the valley.', difficulty: 'normal', duration: 6 * HOUR, goldMultiplier: 1.5 },
+@@ -123,6 +129,7 @@ export const QUEST_CHAINS: ChainDef[] = [
+     rewardGold: 2600,
+     rewardItems: ['crown_of_the_lost'],
+     rewardRenown: 1,
++    title: 'Kingdom-Finder',
+     stages: [
+       { name: 'Chart the Grey Marches', flavour: 'Six days of nothing, then a road that should not exist.', difficulty: 'normal', duration: 10 * HOUR, goldMultiplier: 1.6 },
+       { name: 'Cross the Silent Bridge', flavour: 'It holds. That is the surprising part.', difficulty: 'hard', duration: 12 * HOUR, goldMultiplier: 1.8 },
+@@ -137,6 +144,7 @@ export const QUEST_CHAINS: ChainDef[] = [
+     rewardGold: 6500,
+     rewardItems: ['dragon_armor', 'amulet_of_fortune'],
+     rewardRenown: 3,
++    title: 'Hellgate Breaker',
+     stages: [
+       { name: 'Break the Outer Siege', flavour: 'Ladders, fire, and a very long night.', difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 2 },
+       { name: 'Silence the Warding Choir', flavour: 'The singing has not stopped in nine years.', difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.4 },
+@@ -152,6 +160,7 @@ export const QUEST_CHAINS: ChainDef[] = [
+     rewardGold: 1800,
+     rewardItems: ['lucky_ring'],
+     rewardRenown: 1,
++    title: 'Crownbearer',
+     stages: [
+       { name: 'The Fragment in the Fen', flavour: 'Wet, cold, and guarded by something patient.', difficulty: 'normal', duration: 8 * HOUR, goldMultiplier: 1.5 },
+       { name: 'The Fragment in the Vault', flavour: 'The banker insists it is a paperweight.', difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 1.8 },
+@@ -166,6 +175,7 @@ export const QUEST_CHAINS: ChainDef[] = [
+     rewardGold: 550,
+     rewardItems: ['warband_cleaver'],
+     rewardRenown: 1,
++    title: 'Warband-Breaker',
+     stages: [
+       { name: 'Scatter the Outriders', flavour: 'They ride ahead of the warband, loud and badly armoured.', difficulty: 'normal', duration: 3 * HOUR, goldMultiplier: 1.3 },
+       { name: "The Chieftain's Camp", flavour: 'He wears three crowns. None of them fit. All of them are stolen.', difficulty: 'hard', duration: 5 * HOUR, goldMultiplier: 1.6 },
+@@ -179,6 +189,7 @@ export const QUEST_CHAINS: ChainDef[] = [
+     rewardGold: 5200,
+     rewardItems: ['choir_mask', 'silenced_bell'],
+     rewardRenown: 2,
++    title: 'Choir-Silencer',
+     stages: [
+       { name: 'Follow the Hymn', flavour: 'It carries for miles and never repeats a verse.', difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 1.8 },
+       { name: 'The Choir Loft', flavour: 'No singers. Just mouths, carved into the stone, still moving.', difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.2 },
+@@ -195,6 +206,7 @@ export const QUEST_CHAINS: ChainDef[] = [
+     rewardGold: 22000,
+     rewardItems: ['voidforged_blade', 'voidforged_crown', 'voidforged_plate', 'voidforged_signet'],
+     rewardRenown: 6,
++    title: "World's End",
+     stages: [
+       { name: 'The Road That Should Not Exist', flavour: 'It appeared on the map three nights ago. It has always been on the ground.', difficulty: 'epic', duration: 16 * HOUR, goldMultiplier: 2.6 },
+       { name: 'The Watchers in the Dark Between Stars', flavour: 'They have been counting something. You do not want to know what.', difficulty: 'legendary', duration: 20 * HOUR, goldMultiplier: 3.2 },
+@@ -203,4 +215,40 @@ export const QUEST_CHAINS: ChainDef[] = [
+       { name: 'The World-Ender', flavour: 'It does not have a name. It has never needed one. This ends here, one way or the other.', difficulty: 'legendary', duration: 32 * HOUR, goldMultiplier: 5.0 },
+     ],
+   },
++  {
++    id: 'hollow_king',
++    name: "The Hollow King's Return",
++    description:
++      'For guilds a run or two into prestige. The king everyone thought was buried is not staying ' +
++      'that way, and the things escorting him back are worse than he is.',
++    reqLevel: 45,
++    rewardGold: 42000,
++    rewardItems: ['empyrean_blade', 'empyrean_halo', 'empyrean_aegis'],
++    rewardRenown: 10,
++    title: 'Kingslayer Twice Over',
++    stages: [
++      { name: 'The Grave Reopens', flavour: 'The seal held for three hundred years. It held for one night less than it needed to.', difficulty: 'epic', duration: 18 * HOUR, goldMultiplier: 2.8 },
++      { name: 'The Procession of the Dead Court', flavour: 'Every advisor he ever executed is walking behind him now, and none of them look angry anymore. That is worse.', difficulty: 'legendary', duration: 22 * HOUR, goldMultiplier: 3.4 },
++      { name: 'The Bridge of Forgotten Oaths', flavour: 'It only holds the weight of those who never broke a promise. Cross carefully.', difficulty: 'legendary', duration: 26 * HOUR, goldMultiplier: 3.8 },
++      { name: 'The Second Coronation', flavour: 'He is almost home. The crown remembers him even if the kingdom does not.', difficulty: 'legendary', duration: 30 * HOUR, goldMultiplier: 4.4 },
++    ],
++  },
++  {
++    id: 'last_god',
++    name: 'Requiem for the Last God',
++    description:
++      'The deepest expedition the guild has ever chartered. There is no patron this time — nobody ' +
++      'left to pay for it. You are doing this because someone has to, and everyone else already tried.',
++    reqLevel: 55,
++    rewardGold: 90000,
++    rewardItems: ['the_last_ember'],
++    rewardRenown: 20,
++    title: 'Requiem-Bearer',
++    stages: [
++      { name: 'The Last Map', flavour: 'Every cartographer who charted this route stopped charting anything afterward.', difficulty: 'legendary', duration: 24 * HOUR, goldMultiplier: 4.0 },
++      { name: 'The Field of Failed Guilds', flavour: 'Banners, still standing, none of them yours. Yet.', difficulty: 'legendary', duration: 28 * HOUR, goldMultiplier: 4.5 },
++      { name: 'The Silence Where Prayer Used to Work', flavour: 'Nothing answers here anymore. That used to be a comfort to something.', difficulty: 'legendary', duration: 32 * HOUR, goldMultiplier: 5.0 },
++      { name: 'What Is Left of It', flavour: 'Not a battle. A kindness, if you can call it that. Someone has to finish the story.', difficulty: 'legendary', duration: 36 * HOUR, goldMultiplier: 6.0 },
++    ],
++  },
+ ];
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 8da469d..dcd18f9 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -10,6 +10,7 @@ import { GuildManager } from './managers/GuildManager';
+ import { PrestigeManager } from './managers/PrestigeManager';
+ import { ModifierManager } from './managers/ModifierManager';
+ import { SKIN_BY_ID, SKIN_PRICE } from './data/progression';
++import { playSound } from './sound';
+ 
+ const TICK_MS = 1000;
+ const AUTOSAVE_MS = 15_000;
+@@ -118,6 +119,14 @@ export class GameEngine {
+       const result = QuestManager.resolve(this.state, quest, quest.endsAt);
+       this.lastResult = result;
+       changed = true;
++      // Biggest news first, and only one cue per resolution — a chain
++      // completion is a bigger deal than a routine level-up, which is a
++      // bigger deal than a plain success. Offline catch-up never reaches
++      // here, so this only fires for quests you were actually watching.
++      if (result.chainAdvanced?.completed) playSound('chain_complete');
++      else if (result.loot.some((l) => l.rarity === 'legendary')) playSound('legendary_drop');
++      else if (result.levelsGained > 0) playSound('level_up');
++      else playSound(result.success ? 'quest_success' : 'quest_fail');
+     }
+ 
+     if (this.refreshWorld(now)) changed = true;
+@@ -146,6 +155,11 @@ export class GameEngine {
+       ShopManager.refresh(this.state, now, true);
+       changed = true;
+     }
++    if (ModifierManager.hasUnlock(this.state, 'blackMarket')
++      && (ShopManager.blackMarketNeedsRefresh(this.state, now) || this.state.blackMarket.equipment.length === 0)) {
++      ShopManager.refreshBlackMarket(this.state, now, true);
++      changed = true;
++    }
+     return changed;
+   }
+ 
+@@ -245,6 +259,7 @@ export class GameEngine {
+     const { error } = QuestManager.start(this.state, hero, offer, consumables, Date.now());
+     if (error) return this.say(error);
+     this.state.focusedHeroId = heroId;
++    playSound('depart');
+     this.say(`${hero.name} sets out: ${offer.name}`);
+     void this.saveNow();
+   }
+@@ -310,6 +325,7 @@ export class GameEngine {
+   buyConsumable(defId: string, amount = 1) {
+     const error = InventoryManager.buy(this.state, defId, amount);
+     if (error) return this.say(error);
++    playSound('purchase');
+     this.notify();
+     void this.saveNow();
+   }
+@@ -317,10 +333,19 @@ export class GameEngine {
+   buyShopEquipment(shopUid: string) {
+     const error = ShopManager.buyEquipment(this.state, shopUid);
+     if (error) return this.say(error);
++    playSound('purchase');
+     this.say('Added to the stash.');
+     void this.saveNow();
+   }
+ 
++  buyBlackMarketEquipment(shopUid: string) {
++    const error = ShopManager.buyBlackMarketEquipment(this.state, shopUid);
++    if (error) return this.say(error);
++    playSound('purchase');
++    this.say('The contact melts back into the crowd. Added to the stash.');
++    void this.saveNow();
++  }
++
+   useConsumable(heroId: string, defId: string) {
+     const hero = this.hero(heroId);
+     if (!hero) return;
+@@ -395,6 +420,7 @@ export class GameEngine {
+     const def = SKIN_BY_ID[skinId];
+     if (!def) return this.say('Unknown skin.');
+     if (this.state.gold < def.cost) return this.say('Not enough gold.');
++    playSound('purchase');
+     this.state.gold -= def.cost;
+     this.state.stats.goldSpent += def.cost;
+     this.state.unlockedSkins.push(skinId);
+diff --git a/src/game/managers/EventManager.ts b/src/game/managers/EventManager.ts
+index 34bada4..bdea704 100644
+--- a/src/game/managers/EventManager.ts
++++ b/src/game/managers/EventManager.ts
+@@ -17,23 +17,33 @@ export interface RolledEvents {
+ export const EventManager = {
+   /**
+    * Rolls zero to two events for a quest. Higher difficulty means more chances
+-   * for the road to get interesting in either direction.
++   * for the road to get interesting in either direction, and unlocks the
++   * grimmer/grander events reserved for Epic and Legendary contracts.
+    */
+   roll(quest: ActiveQuest, rng: Rng): RolledEvents {
+     const tierIndex = DIFFICULTY_ORDER.indexOf(quest.offer.difficulty);
+     const baseChance = EVENT_CHANCE[Math.max(0, tierIndex)];
+     const defs: EventDef[] = [];
+ 
++    const eligible = (pool: EventDef[]) => pool.filter((e) => {
++      if (!e.minDifficulty) return true;
++      return DIFFICULTY_ORDER.indexOf(e.minDifficulty) <= tierIndex;
++    });
++
+     if (quest.guaranteedGoodEvent) {
+-      defs.push(rng.weighted(EVENTS_BY_KIND.positive.map((e) => ({ item: e, weight: e.weight }))));
++      const pool = eligible(EVENTS_BY_KIND.positive);
++      defs.push(rng.weighted((pool.length > 0 ? pool : EVENTS_BY_KIND.positive).map((e) => ({ item: e, weight: e.weight }))));
+     }
+ 
++    const rollPool = eligible(EVENTS);
++    const drawFrom = rollPool.length > 0 ? rollPool : EVENTS;
++
+     if (rng.chance(baseChance)) {
+-      defs.push(rng.weighted(EVENTS.map((e) => ({ item: e, weight: e.weight }))));
++      defs.push(rng.weighted(drawFrom.map((e) => ({ item: e, weight: e.weight }))));
+     }
+     // A second event only on the harder tiers, and only sometimes.
+     if (tierIndex >= 2 && rng.chance(baseChance / 3)) {
+-      defs.push(rng.weighted(EVENTS.map((e) => ({ item: e, weight: e.weight }))));
++      defs.push(rng.weighted(drawFrom.map((e) => ({ item: e, weight: e.weight }))));
+     }
+ 
+     const rolled: RolledEvents = {
+diff --git a/src/game/managers/HeroManager.ts b/src/game/managers/HeroManager.ts
+index 9fd8a1c..bb69990 100644
+--- a/src/game/managers/HeroManager.ts
++++ b/src/game/managers/HeroManager.ts
+@@ -1,7 +1,8 @@
+ import { EQUIPMENT_BY_ID, SET_BY_ID } from '../data/equipment';
+ import { INJURIES } from '../data/items';
+ import { HERO_CLASSES, RECRUIT_START_LEVEL, xpForLevel } from '../data/progression';
+-import { Hero, HeroClass, Injury, Modifiers, Stats } from '../types';
++import { DIFFICULTY_ORDER } from '../data/quests';
++import { Difficulty, Hero, HeroClass, Injury, Modifiers, Stats } from '../types';
+ import { Rng, uid } from '../rng';
+ import { scaleMods, sumMods } from '../util';
+ 
+@@ -158,8 +159,14 @@ export const HeroManager = {
+     );
+   },
+ 
+-  rollInjury(rng: Rng): Injury {
+-    const def = rng.weighted(INJURIES.map((i) => ({ item: i, weight: i.weight })));
++  rollInjury(rng: Rng, difficulty: Difficulty = 'normal'): Injury {
++    const tierIndex = DIFFICULTY_ORDER.indexOf(difficulty);
++    const eligible = INJURIES.filter((i) => {
++      if (!i.minDifficulty) return true;
++      return DIFFICULTY_ORDER.indexOf(i.minDifficulty) <= tierIndex;
++    });
++    const pool = eligible.length > 0 ? eligible : INJURIES;
++    const def = rng.weighted(pool.map((i) => ({ item: i, weight: i.weight })));
+     return {
+       id: def.id,
+       name: def.name,
+diff --git a/src/game/managers/ModifierManager.ts b/src/game/managers/ModifierManager.ts
+index 978da98..290b9be 100644
+--- a/src/game/managers/ModifierManager.ts
++++ b/src/game/managers/ModifierManager.ts
+@@ -57,7 +57,7 @@ export const ModifierManager = {
+     return 1 + tavern + perks;
+   },
+ 
+-  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains'): boolean {
++  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket'): boolean {
+     return Object.entries(state.upgrades).some(([id, level]) => {
+       const def = UPGRADE_BY_ID[id];
+       return !!def && def.unlocks === unlock && level > 0;
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index fd2b22b..6f1f4b6 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -213,7 +213,7 @@ export const QuestManager = {
+       ? (events.forcedInjury ? 25 : 0)
+       : clamp(35 + DIFFICULTY_ORDER.indexOf(quest.offer.difficulty) * 8 - quest.injuryResist, 0, 90);
+     if (quest.injuryResist < 100 && rng.chance(injuryRisk)) {
+-      injury = HeroManager.rollInjury(rng);
++      injury = HeroManager.rollInjury(rng, quest.offer.difficulty);
+       injury.healsAt = resolvedAt + (injury.healsAt - Date.now());
+     }
+ 
+@@ -269,6 +269,7 @@ export const QuestManager = {
+           state.completedChains.push(chainId);
+           state.activeChains = state.activeChains.filter((c) => c.chainId !== chainId);
+           state.stats.chainsCompleted += 1;
++          if (chain.title && hero) hero.title = chain.title;
+         }
+       } else {
+         active.failedStages += 1;
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 0f3df83..745a3f3 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -66,6 +66,7 @@ export function createInitialState(now = Date.now()): GameState {
+     guild: { ...EMPTY_GUILD },
+     renownPerks: {},
+     shop: { refreshedAt: 0, consumables: [], equipment: [] },
++    blackMarket: { refreshedAt: 0, consumables: [], equipment: [] },
+     stats: {
+       totalQuests: 0, successes: 0, failures: 0,
+       goldEarned: 0, goldSpent: 0, highestReward: 0,
+@@ -135,6 +136,11 @@ const MIGRATIONS: Record<number, Migration> = {
+     version: 6,
+     focusedHeroId: (save.focusedHeroId as string | null | undefined) ?? null,
+   }),
++  6: (save) => ({
++    ...save,
++    version: 7,
++    blackMarket: (save.blackMarket as unknown) ?? { refreshedAt: 0, consumables: [], equipment: [] },
++  }),
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/managers/ShopManager.ts b/src/game/managers/ShopManager.ts
+index 205b8bc..4b40c0f 100644
+--- a/src/game/managers/ShopManager.ts
++++ b/src/game/managers/ShopManager.ts
+@@ -8,6 +8,13 @@ import { EquipmentManager } from './EquipmentManager';
+ export const SHOP_REFRESH_MS = 4 * HOUR;
+ const SHOP_EQUIPMENT_SLOTS = 5;
+ 
++export const BLACK_MARKET_REFRESH_MS = 16 * HOUR;
++const BLACK_MARKET_SLOTS = 3;
++/** Black market items cost more than the same piece would at the armourer. */
++const BLACK_MARKET_MARKUP = 1.65;
++/** Only these rarities ever show up — this is where the good stuff lives. */
++const BLACK_MARKET_RARITIES = ['rare', 'epic', 'legendary'] as const;
++
+ export const ShopManager = {
+   needsRefresh(state: GameState, now: number): boolean {
+     return now - state.shop.refreshedAt >= SHOP_REFRESH_MS;
+@@ -44,6 +51,65 @@ export const ShopManager = {
+     return Math.max(0, state.shop.refreshedAt + SHOP_REFRESH_MS - now);
+   },
+ 
++  /* ------------------------------ black market ----------------------------- */
++
++  blackMarketNeedsRefresh(state: GameState, now: number): boolean {
++    return now - (state.blackMarket?.refreshedAt ?? 0) >= BLACK_MARKET_REFRESH_MS;
++  },
++
++  /**
++   * Deliberately does not filter by hero level the way the regular shop does —
++   * the point of the black market is gear worth aspiring to, not gear you can
++   * use today. reqLevel still gates equipping it once bought.
++   */
++  refreshBlackMarket(state: GameState, now: number, force = false): ShopStock {
++    if (!force && !ShopManager.blackMarketNeedsRefresh(state, now)) return state.blackMarket;
++    const window = Math.floor(now / BLACK_MARKET_REFRESH_MS);
++    const rng = createRng(`blackmarket:${window}:${state.createdAt}`);
++
++    const eligible = EQUIPMENT.filter((def) => (BLACK_MARKET_RARITIES as readonly string[]).includes(def.rarity));
++    const picks = new Set<string>();
++    let guard = 0;
++    while (picks.size < Math.min(BLACK_MARKET_SLOTS, eligible.length) && guard++ < 200) {
++      // Weighted toward legendary more heavily than the regular shop — that's
++      // the entire point of paying a markup here.
++      const def = rng.weighted(eligible.map((e) => ({
++        item: e,
++        weight: e.rarity === 'legendary' ? 6 : e.rarity === 'epic' ? 3 : 1,
++      })));
++      picks.add(def.id);
++    }
++
++    state.blackMarket = {
++      refreshedAt: window * BLACK_MARKET_REFRESH_MS,
++      consumables: [],
++      equipment: [...picks].map((defId) => ({
++        uid: uid('blackmarket'),
++        defId,
++        price: Math.ceil(EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]) * BLACK_MARKET_MARKUP),
++      })),
++    };
++    return state.blackMarket;
++  },
++
++  timeUntilBlackMarketRefresh(state: GameState, now: number): number {
++    return Math.max(0, (state.blackMarket?.refreshedAt ?? 0) + BLACK_MARKET_REFRESH_MS - now);
++  },
++
++  buyBlackMarketEquipment(state: GameState, shopUid: string): string | null {
++    const entry = state.blackMarket.equipment.find((e) => e.uid === shopUid);
++    if (!entry) return 'That item has already been sold.';
++    if (state.gold < entry.price) return 'Not enough gold.';
++    const item: EquipmentItem | null = EquipmentManager.instantiate(entry.defId);
++    if (!item) return 'Unknown item.';
++    state.gold -= entry.price;
++    state.stats.goldSpent += entry.price;
++    state.stash.push(item);
++    if (!state.discoveredItems.includes(entry.defId)) state.discoveredItems.push(entry.defId);
++    state.blackMarket.equipment = state.blackMarket.equipment.filter((e) => e.uid !== shopUid);
++    return null;
++  },
++
+   buyEquipment(state: GameState, shopUid: string): string | null {
+     const entry = state.shop.equipment.find((e) => e.uid === shopUid);
+     if (!entry) return 'That item has already been sold.';
+diff --git a/src/game/settings.ts b/src/game/settings.ts
+index 18bd92b..dc54395 100644
+--- a/src/game/settings.ts
++++ b/src/game/settings.ts
+@@ -47,6 +47,11 @@ export interface Settings {
+   confirmSell: boolean;
+   /** Reduce motion for accessibility (overrides animationSpeed to 0). */
+   reduceMotion: boolean;
++
++  /** Master switch for all sound cues. */
++  soundEnabled: boolean;
++  /** 0 - 1. */
++  soundVolume: number;
+ }
+ 
+ export const DEFAULT_SETTINGS: Settings = {
+@@ -61,6 +66,8 @@ export const DEFAULT_SETTINGS: Settings = {
+   confirmRetire: true,
+   confirmSell: false,
+   reduceMotion: false,
++  soundEnabled: true,
++  soundVolume: 0.5,
+ };
+ 
+ /* --------------------------------- themes --------------------------------- */
+diff --git a/src/game/sound.ts b/src/game/sound.ts
+new file mode 100644
+index 0000000..a5f4ddc
+--- /dev/null
++++ b/src/game/sound.ts
+@@ -0,0 +1,119 @@
++/**
++ * Sound cues, synthesized with the Web Audio API rather than shipped as audio
++ * files. This means: no licensing question, nothing to bundle, and every cue
++ * is a few lines of oscillator/envelope code that's easy to retune by ear.
++ *
++ * All playback is gated through Settings (soundEnabled / soundVolume), read
++ * fresh on every call so a toggle takes effect immediately without needing to
++ * thread settings through every call site.
++ */
++
++import { SettingsStore } from './settings';
++
++export type SoundCue =
++  | 'quest_success' | 'quest_fail' | 'level_up' | 'legendary_drop'
++  | 'chain_complete' | 'purchase' | 'error' | 'depart';
++
++let ctx: AudioContext | null = null;
++
++function getContext(): AudioContext | null {
++  if (typeof window === 'undefined') return null;
++  const AudioCtor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
++  if (!AudioCtor) return null;
++  if (!ctx) ctx = new AudioCtor();
++  // Browsers suspend a freshly-created context until a user gesture; resume
++  // opportunistically. If it's still suspended the sound just won't play,
++  // which is a fine failure mode (no error, no crash).
++  if (ctx.state === 'suspended') void ctx.resume();
++  return ctx;
++}
++
++interface Tone {
++  /** Hz */
++  freq: number;
++  /** Seconds from the start of the cue. */
++  start: number;
++  /** Seconds. */
++  duration: number;
++  type?: OscillatorType;
++  /** Relative gain 0-1, multiplied by the master volume. */
++  gain?: number;
++}
++
++/** Each cue is a tiny sequence of tones — a tune, not a sample. */
++const CUES: Record<SoundCue, Tone[]> = {
++  quest_success: [
++    { freq: 523.25, start: 0, duration: 0.09, type: 'triangle', gain: 0.5 },
++    { freq: 659.25, start: 0.08, duration: 0.14, type: 'triangle', gain: 0.5 },
++  ],
++  quest_fail: [
++    { freq: 220, start: 0, duration: 0.16, type: 'sine', gain: 0.4 },
++    { freq: 174.61, start: 0.12, duration: 0.22, type: 'sine', gain: 0.35 },
++  ],
++  level_up: [
++    { freq: 392.0, start: 0, duration: 0.08, type: 'triangle', gain: 0.45 },
++    { freq: 523.25, start: 0.07, duration: 0.08, type: 'triangle', gain: 0.45 },
++    { freq: 659.25, start: 0.14, duration: 0.08, type: 'triangle', gain: 0.45 },
++    { freq: 783.99, start: 0.21, duration: 0.22, type: 'triangle', gain: 0.5 },
++  ],
++  legendary_drop: [
++    { freq: 392.0, start: 0, duration: 0.1, type: 'sine', gain: 0.4 },
++    { freq: 587.33, start: 0.08, duration: 0.1, type: 'sine', gain: 0.42 },
++    { freq: 783.99, start: 0.16, duration: 0.1, type: 'sine', gain: 0.44 },
++    { freq: 1046.5, start: 0.24, duration: 0.3, type: 'triangle', gain: 0.5 },
++  ],
++  chain_complete: [
++    { freq: 261.63, start: 0, duration: 0.12, type: 'triangle', gain: 0.4 },
++    { freq: 329.63, start: 0.1, duration: 0.12, type: 'triangle', gain: 0.42 },
++    { freq: 392.0, start: 0.2, duration: 0.12, type: 'triangle', gain: 0.44 },
++    { freq: 523.25, start: 0.3, duration: 0.16, type: 'triangle', gain: 0.46 },
++    { freq: 659.25, start: 0.42, duration: 0.4, type: 'triangle', gain: 0.5 },
++  ],
++  purchase: [
++    { freq: 700, start: 0, duration: 0.04, type: 'square', gain: 0.2 },
++    { freq: 900, start: 0.03, duration: 0.05, type: 'square', gain: 0.22 },
++  ],
++  error: [
++    { freq: 180, start: 0, duration: 0.12, type: 'square', gain: 0.25 },
++  ],
++  depart: [
++    { freq: 440, start: 0, duration: 0.06, type: 'triangle', gain: 0.3 },
++    { freq: 554.37, start: 0.05, duration: 0.08, type: 'triangle', gain: 0.3 },
++  ],
++};
++
++export function playSound(cue: SoundCue): void {
++  const settings = SettingsStore.load();
++  if (!settings.soundEnabled || settings.soundVolume <= 0) return;
++
++  const audioCtx = getContext();
++  if (!audioCtx) return;
++
++  const tones = CUES[cue];
++  const now = audioCtx.currentTime;
++
++  for (const tone of tones) {
++    const osc = audioCtx.createOscillator();
++    const gainNode = audioCtx.createGain();
++    osc.type = tone.type ?? 'sine';
++    osc.frequency.value = tone.freq;
++
++    const peak = (tone.gain ?? 0.4) * settings.soundVolume;
++    const t0 = now + tone.start;
++    const t1 = t0 + tone.duration;
++
++    // Short envelope so notes don't click at the edges.
++    gainNode.gain.setValueAtTime(0, t0);
++    gainNode.gain.linearRampToValueAtTime(peak, t0 + Math.min(0.015, tone.duration / 4));
++    gainNode.gain.linearRampToValueAtTime(0, t1);
++
++    osc.connect(gainNode).connect(audioCtx.destination);
++    osc.start(t0);
++    osc.stop(t1 + 0.02);
++  }
++}
++
++/** Used by the settings panel's "test sound" button. */
++export function previewSound(): void {
++  playSound('level_up');
++}
+diff --git a/src/game/types.ts b/src/game/types.ts
+index b0338b8..8397dd3 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 6;
++export const SAVE_VERSION = 7;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -132,6 +132,8 @@ export interface Hero {
+    * to base stats.
+    */
+   bonusStats: Stats;
++  /** Earned by completing certain quest chains. Cleared on retirement. */
++  title?: string;
+ }
+ 
+ /* ----------------------------- quests ----------------------------- */
+@@ -217,7 +219,7 @@ export interface UpgradeDef {
+   costGrowth: number;
+   maxLevel: number;
+   modsPerLevel: Partial<Modifiers>;
+-  unlocks?: 'legendaryQuests' | 'chains';
++  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket';
+ }
+ 
+ export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern';
+@@ -296,6 +298,8 @@ export interface GameState {
+   renownPerks: Record<string, number>;
+ 
+   shop: ShopStock;
++  /** A second rotating stock, epic/legendary-biased and pricier, unlocked separately. */
++  blackMarket: ShopStock;
+   stats: Statistics;
+   log: QuestResult[];
+   discoveredItems: string[];
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 37ff9b9..708a228 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -537,3 +537,21 @@ input[type='range'] {
+   color: var(--brass);
+   transform: none;
+ }
++
++/* ------------------------------ black market ------------------------------ */
++
++.black-market-item {
++  border-left-color: var(--violet);
++  background: linear-gradient(90deg, rgba(168, 116, 214, 0.10), transparent 60%);
++}
++
++/* --------------------------------- titles ---------------------------------- */
++
++.hero-title {
++  display: block;
++  font-size: 9px;
++  color: var(--brass);
++  text-transform: uppercase;
++  letter-spacing: 0.06em;
++  font-weight: normal;
++}
+diff --git a/src/ui/IdleView.tsx b/src/ui/IdleView.tsx
+index 1142a8b..159fb01 100644
+--- a/src/ui/IdleView.tsx
++++ b/src/ui/IdleView.tsx
+@@ -91,15 +91,15 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+           <button
+             className={`knight-button ${anim}`}
+             onClick={onOpenMenu}
+-            title={`${hero.name} — click to open the guild menu`}
+-            aria-label={`${hero.name}, level ${hero.level}. Open the guild menu.`}
++            title={`${hero.title ? hero.title + ' ' : ''}${hero.name} — click to open the guild menu`}
++            aria-label={`${hero.title ? hero.title + ' ' : ''}${hero.name}, level ${hero.level}. Open the guild menu.`}
+           >
+             <HeroSprite
+               heroClass={hero.heroClass}
+               skin={hero.skin}
+               animation={spriteAnimation}
+               height={Math.round(120 * settings.spriteScale)}
+-              title={`${hero.name}, level ${hero.level}`}
++              title={`${hero.title ? hero.title + ' ' : ''}${hero.name}, level ${hero.level}`}
+             />
+           </button>
+ 
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index ecdd803..9055fa6 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -37,7 +37,10 @@ export function HeroesPanel() {
+               <HeroSprite heroClass={hero.heroClass} skin={hero.skin} animation={hero.injuries.length > 0 ? 'hurt' : 'idle'} height={Math.round(76 * settings.spriteScale)} />
+               <div style={{ flex: 1, minWidth: 0 }}>
+                 <div className="spread">
+-                  <span className="card-title">{hero.name}</span>
++                  <span className="card-title">
++                    {hero.title && <span className="hero-title">{hero.title}</span>}
++                    {hero.name}
++                  </span>
+                   <span className="small muted">{classDef.name} · Level {hero.level}</span>
+                 </div>
+                 <button
+diff --git a/src/ui/panels/SettingsPanel.tsx b/src/ui/panels/SettingsPanel.tsx
+index cc056e7..a3f0047 100644
+--- a/src/ui/panels/SettingsPanel.tsx
++++ b/src/ui/panels/SettingsPanel.tsx
+@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
+ import { useSettings } from '../useSettings';
+ import { HeroSprite } from '../sprites/HeroSprite';
+ import { Settings, THEMES } from '../../game/settings';
++import { previewSound } from '../../game/sound';
+ 
+ /* ------------------------------ small controls ---------------------------- */
+ 
+@@ -138,6 +139,31 @@ export function SettingsPanel() {
+         <Toggle value={settings.reduceMotion} onChange={set('reduceMotion')} />
+       </Row>
+ 
++      <div className="section-heading">Sound</div>
++
++      <Row label="Sound effects" hint="Quest outcomes, level-ups, drops, purchases.">
++        <Toggle value={settings.soundEnabled} onChange={set('soundEnabled')} />
++      </Row>
++
++      <Row label="Volume" hint={`${Math.round(settings.soundVolume * 100)}%`}>
++        <div className="row" style={{ gap: 10, alignItems: 'center' }}>
++          <input
++            type="range" min={0} max={1} step={0.05}
++            value={settings.soundVolume}
++            disabled={!settings.soundEnabled}
++            onChange={(e) => update('soundVolume', Number(e.target.value))}
++          />
++          <button
++            className="btn-ghost"
++            disabled={!settings.soundEnabled}
++            onClick={() => previewSound()}
++            style={{ minHeight: 26, padding: '4px 10px' }}
++          >
++            Test
++          </button>
++        </div>
++      </Row>
++
+       <div className="section-heading">Quality of life</div>
+ 
+       <Row label="Offline summary on launch" hint="Show what happened while the app was closed.">
+diff --git a/src/ui/panels/ShopPanel.tsx b/src/ui/panels/ShopPanel.tsx
+index 444706d..0ae92e3 100644
+--- a/src/ui/panels/ShopPanel.tsx
++++ b/src/ui/panels/ShopPanel.tsx
+@@ -1,6 +1,7 @@
+ import { useEngine, useNow } from '../useEngine';
+ import { useSettings } from '../useSettings';
+ import { ShopManager } from '../../game/managers/ShopManager';
++import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
+ import { CONSUMABLE_BY_ID } from '../../game/data/items';
+ import { EquipmentManager } from '../../game/managers/EquipmentManager';
+@@ -11,6 +12,7 @@ export function ShopPanel() {
+   const { settings } = useSettings();
+   const now = useNow();
+   const state = engine.state;
++  const blackMarketUnlocked = ModifierManager.hasUnlock(state, 'blackMarket');
+ 
+   return (
+     <>
+@@ -64,6 +66,46 @@ export function ShopPanel() {
+         })}
+       </div>
+ 
++      <div className="section-heading">Black Market</div>
++      {!blackMarketUnlocked ? (
++        <p className="small muted">
++          Rumour is there's a contact who deals in rarer stock — for a price. Unlock via the
++          Black Market Contact upgrade in the Upgrades tab.
++        </p>
++      ) : (
++        <>
++          <p className="small muted" style={{ marginBottom: 10 }}>
++            Rare, epic, and legendary only. No haggling. Stock turns over in{' '}
++            {formatDuration(ShopManager.timeUntilBlackMarketRefresh(state, now))}.
++          </p>
++          {state.blackMarket.equipment.length === 0 && (
++            <p className="small muted">The contact has nothing worth showing right now.</p>
++          )}
++          <div className="grid two">
++            {state.blackMarket.equipment.map((entry) => {
++              const def = EQUIPMENT_BY_ID[entry.defId];
++              if (!def) return null;
++              return (
++                <div key={entry.uid} className="card black-market-item" style={{ marginBottom: 0 }}>
++                  <div style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 11 }}>{def.name}</div>
++                  <div className="tiny muted">{def.slot} · {def.rarity} · requires level {def.reqLevel}</div>
++                  <div className="stat-row" style={{ margin: '6px 0 8px' }}>
++                    {describeMods(def.mods).map((line) => <span key={line}>{line}</span>)}
++                  </div>
++                  <button
++                    className="btn-primary"
++                    disabled={state.gold < entry.price}
++                    onClick={() => engine.buyBlackMarketEquipment(entry.uid)}
++                  >
++                    Buy · {formatGold(entry.price)}
++                  </button>
++                </div>
++              );
++            })}
++          </div>
++        </>
++      )}
++
+       <div className="section-heading">Sell from the stash</div>
+       {state.stash.length === 0 && <p className="small muted">Nothing spare to sell.</p>}
+       <div className="grid two">
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 1c24239..61f3b93 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -92,6 +92,22 @@ const SCHEMAS = {
+       kind: { type: 'enum', required: true, options: ['positive', 'neutral', 'negative'] },
+       weight: { type: 'number', required: true },
+       effects: { type: 'eventEffects', required: false },
++      minDifficulty: { type: 'enum', required: false, options: ['easy', 'normal', 'hard', 'epic', 'legendary'] },
++    },
++  },
++  'injuries': {
++    file: 'injuries.json',
++    label: 'Injuries',
++    idField: 'id',
++    fields: {
++      id: { type: 'string', required: true, slug: true },
++      name: { type: 'string', required: true },
++      description: { type: 'string', required: true },
++      durationHours: { type: 'number', required: true },
++      mods: { type: 'mods', required: false },
++      treatmentCost: { type: 'number', required: true },
++      weight: { type: 'number', required: true },
++      minDifficulty: { type: 'enum', required: false, options: ['easy', 'normal', 'hard', 'epic', 'legendary'] },
+     },
+   },
+ };

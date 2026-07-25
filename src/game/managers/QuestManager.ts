@@ -213,7 +213,7 @@ export const QuestManager = {
       ? (events.forcedInjury ? 25 : 0)
       : clamp(35 + DIFFICULTY_ORDER.indexOf(quest.offer.difficulty) * 8 - quest.injuryResist, 0, 90);
     if (quest.injuryResist < 100 && rng.chance(injuryRisk)) {
-      injury = HeroManager.rollInjury(rng);
+      injury = HeroManager.rollInjury(rng, quest.offer.difficulty);
       injury.healsAt = resolvedAt + (injury.healsAt - Date.now());
     }
 
@@ -269,6 +269,7 @@ export const QuestManager = {
           state.completedChains.push(chainId);
           state.activeChains = state.activeChains.filter((c) => c.chainId !== chainId);
           state.stats.chainsCompleted += 1;
+          if (chain.title && hero) hero.title = chain.title;
         }
       } else {
         active.failedStages += 1;

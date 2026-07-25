@@ -91,15 +91,15 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
           <button
             className={`knight-button ${anim}`}
             onClick={onOpenMenu}
-            title={`${hero.name} — click to open the guild menu`}
-            aria-label={`${hero.name}, level ${hero.level}. Open the guild menu.`}
+            title={`${hero.title ? hero.title + ' ' : ''}${hero.name} — click to open the guild menu`}
+            aria-label={`${hero.title ? hero.title + ' ' : ''}${hero.name}, level ${hero.level}. Open the guild menu.`}
           >
             <HeroSprite
               heroClass={hero.heroClass}
               skin={hero.skin}
               animation={spriteAnimation}
               height={Math.round(120 * settings.spriteScale)}
-              title={`${hero.name}, level ${hero.level}`}
+              title={`${hero.title ? hero.title + ' ' : ''}${hero.name}, level ${hero.level}`}
             />
           </button>
 

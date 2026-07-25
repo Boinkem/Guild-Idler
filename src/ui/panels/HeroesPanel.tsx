@@ -37,7 +37,10 @@ export function HeroesPanel() {
               <HeroSprite heroClass={hero.heroClass} skin={hero.skin} animation={hero.injuries.length > 0 ? 'hurt' : 'idle'} height={Math.round(76 * settings.spriteScale)} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="spread">
-                  <span className="card-title">{hero.name}</span>
+                  <span className="card-title">
+                    {hero.title && <span className="hero-title">{hero.title}</span>}
+                    {hero.name}
+                  </span>
                   <span className="small muted">{classDef.name} · Level {hero.level}</span>
                 </div>
                 <button

@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -132,6 +132,8 @@ export interface Hero {
    * to base stats.
    */
   bonusStats: Stats;
+  /** Earned by completing certain quest chains. Cleared on retirement. */
+  title?: string;
 }
 
 /* ----------------------------- quests ----------------------------- */
@@ -217,7 +219,7 @@ export interface UpgradeDef {
   costGrowth: number;
   maxLevel: number;
   modsPerLevel: Partial<Modifiers>;
-  unlocks?: 'legendaryQuests' | 'chains';
+  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket';
 }
 
 export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern';
@@ -296,6 +298,8 @@ export interface GameState {
   renownPerks: Record<string, number>;
 
   shop: ShopStock;
+  /** A second rotating stock, epic/legendary-biased and pricier, unlocked separately. */
+  blackMarket: ShopStock;
   stats: Statistics;
   log: QuestResult[];
   discoveredItems: string[];

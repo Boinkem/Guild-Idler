@@ -1,4 +1,4 @@
-import { ConsumableDef, Injury } from '../types';
+import { ConsumableDef, Difficulty, Injury } from '../types';
 import { HOUR, MINUTE } from '../util';
 
 /**
@@ -21,34 +21,36 @@ export interface InjuryDef {
   mods: Injury['mods'];
   treatmentCost: number;
   weight: number;
+  /** Reserves the grimmer injuries for quests that deserve them. */
+  minDifficulty?: Difficulty;
 }
 
-export const INJURIES: InjuryDef[] = [
-  {
-    id: 'bruised', name: 'Bruised',
-    description: 'Sore ribs. Nothing a day of quiet will not fix.',
-    durationMs: 2 * HOUR, mods: { success: -5 }, treatmentCost: 40, weight: 34,
-  },
-  {
-    id: 'sprained_ankle', name: 'Sprained Ankle',
-    description: 'Every road is longer than it looks.',
-    durationMs: 4 * HOUR, mods: { success: -5, speed: -20 }, treatmentCost: 90, weight: 26,
-  },
-  {
-    id: 'exhausted', name: 'Exhausted',
-    description: 'Swings land late and rewards land light.',
-    durationMs: 3 * HOUR, mods: { success: -8, gold: -20 }, treatmentCost: 70, weight: 24,
-  },
-  {
-    id: 'poisoned', name: 'Poisoned',
-    description: 'Slow, green, and unpleasant. Treat it properly.',
-    durationMs: 6 * HOUR, mods: { success: -12, gold: -15, speed: -10 }, treatmentCost: 150, weight: 12,
-  },
-  {
-    id: 'cracked_ribs', name: 'Cracked Ribs',
-    description: 'Serious. The guild surgeon will want paying.',
-    durationMs: 10 * HOUR, mods: { success: -18, speed: -25 }, treatmentCost: 300, weight: 4,
-  },
-];
+/**
+ * Injuries live in json/injuries.json so they can be edited via tools/devtool.
+ * The JSON stores `durationHours` (easier to read and edit than raw
+ * milliseconds); this is where it's converted to the `durationMs` the rest of
+ * the game expects.
+ */
+import injuriesJson from './json/injuries.json';
+interface InjuryJson {
+  id: string;
+  name: string;
+  description: string;
+  durationHours: number;
+  mods: Injury['mods'];
+  treatmentCost: number;
+  weight: number;
+  minDifficulty?: Difficulty;
+}
+export const INJURIES: InjuryDef[] = (injuriesJson as InjuryJson[]).map((j) => ({
+  id: j.id,
+  name: j.name,
+  description: j.description,
+  durationMs: j.durationHours * HOUR,
+  mods: j.mods,
+  treatmentCost: j.treatmentCost,
+  weight: j.weight,
+  minDifficulty: j.minDifficulty,
+}));
 
 export const REST_TICK = 30 * MINUTE;

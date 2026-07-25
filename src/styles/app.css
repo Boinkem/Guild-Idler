@@ -537,3 +537,21 @@ input[type='range'] {
   color: var(--brass);
   transform: none;
 }
+
+/* ------------------------------ black market ------------------------------ */
+
+.black-market-item {
+  border-left-color: var(--violet);
+  background: linear-gradient(90deg, rgba(168, 116, 214, 0.10), transparent 60%);
+}
+
+/* --------------------------------- titles ---------------------------------- */
+
+.hero-title {
+  display: block;
+  font-size: 9px;
+  color: var(--brass);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: normal;
+}

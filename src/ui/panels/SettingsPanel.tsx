@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useSettings } from '../useSettings';
 import { HeroSprite } from '../sprites/HeroSprite';
 import { Settings, THEMES } from '../../game/settings';
+import { previewSound } from '../../game/sound';
 
 /* ------------------------------ small controls ---------------------------- */
 
@@ -136,6 +137,31 @@ export function SettingsPanel() {
 
       <Row label="Reduce motion" hint="Stops idle bobbing and transitions. Overrides animation speed.">
         <Toggle value={settings.reduceMotion} onChange={set('reduceMotion')} />
+      </Row>
+
+      <div className="section-heading">Sound</div>
+
+      <Row label="Sound effects" hint="Quest outcomes, level-ups, drops, purchases.">
+        <Toggle value={settings.soundEnabled} onChange={set('soundEnabled')} />
+      </Row>
+
+      <Row label="Volume" hint={`${Math.round(settings.soundVolume * 100)}%`}>
+        <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+          <input
+            type="range" min={0} max={1} step={0.05}
+            value={settings.soundVolume}
+            disabled={!settings.soundEnabled}
+            onChange={(e) => update('soundVolume', Number(e.target.value))}
+          />
+          <button
+            className="btn-ghost"
+            disabled={!settings.soundEnabled}
+            onClick={() => previewSound()}
+            style={{ minHeight: 26, padding: '4px 10px' }}
+          >
+            Test
+          </button>
+        </div>
       </Row>
 
       <div className="section-heading">Quality of life</div>

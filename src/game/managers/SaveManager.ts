@@ -66,6 +66,7 @@ export function createInitialState(now = Date.now()): GameState {
     guild: { ...EMPTY_GUILD },
     renownPerks: {},
     shop: { refreshedAt: 0, consumables: [], equipment: [] },
+    blackMarket: { refreshedAt: 0, consumables: [], equipment: [] },
     stats: {
       totalQuests: 0, successes: 0, failures: 0,
       goldEarned: 0, goldSpent: 0, highestReward: 0,
@@ -134,6 +135,11 @@ const MIGRATIONS: Record<number, Migration> = {
     ...save,
     version: 6,
     focusedHeroId: (save.focusedHeroId as string | null | undefined) ?? null,
+  }),
+  6: (save) => ({
+    ...save,
+    version: 7,
+    blackMarket: (save.blackMarket as unknown) ?? { refreshedAt: 0, consumables: [], equipment: [] },
   }),
 };
 

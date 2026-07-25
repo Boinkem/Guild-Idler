@@ -1,6 +1,7 @@
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { ShopManager } from '../../game/managers/ShopManager';
+import { ModifierManager } from '../../game/managers/ModifierManager';
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
 import { CONSUMABLE_BY_ID } from '../../game/data/items';
 import { EquipmentManager } from '../../game/managers/EquipmentManager';
@@ -11,6 +12,7 @@ export function ShopPanel() {
   const { settings } = useSettings();
   const now = useNow();
   const state = engine.state;
+  const blackMarketUnlocked = ModifierManager.hasUnlock(state, 'blackMarket');
 
   return (
     <>
@@ -63,6 +65,46 @@ export function ShopPanel() {
           );
         })}
       </div>
+
+      <div className="section-heading">Black Market</div>
+      {!blackMarketUnlocked ? (
+        <p className="small muted">
+          Rumour is there's a contact who deals in rarer stock — for a price. Unlock via the
+          Black Market Contact upgrade in the Upgrades tab.
+        </p>
+      ) : (
+        <>
+          <p className="small muted" style={{ marginBottom: 10 }}>
+            Rare, epic, and legendary only. No haggling. Stock turns over in{' '}
+            {formatDuration(ShopManager.timeUntilBlackMarketRefresh(state, now))}.
+          </p>
+          {state.blackMarket.equipment.length === 0 && (
+            <p className="small muted">The contact has nothing worth showing right now.</p>
+          )}
+          <div className="grid two">
+            {state.blackMarket.equipment.map((entry) => {
+              const def = EQUIPMENT_BY_ID[entry.defId];
+              if (!def) return null;
+              return (
+                <div key={entry.uid} className="card black-market-item" style={{ marginBottom: 0 }}>
+                  <div style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 11 }}>{def.name}</div>
+                  <div className="tiny muted">{def.slot} · {def.rarity} · requires level {def.reqLevel}</div>
+                  <div className="stat-row" style={{ margin: '6px 0 8px' }}>
+                    {describeMods(def.mods).map((line) => <span key={line}>{line}</span>)}
+                  </div>
+                  <button
+                    className="btn-primary"
+                    disabled={state.gold < entry.price}
+                    onClick={() => engine.buyBlackMarketEquipment(entry.uid)}
+                  >
+                    Buy · {formatGold(entry.price)}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       <div className="section-heading">Sell from the stash</div>
       {state.stash.length === 0 && <p className="small muted">Nothing spare to sell.</p>}

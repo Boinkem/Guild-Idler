@@ -47,6 +47,11 @@ export interface Settings {
   confirmSell: boolean;
   /** Reduce motion for accessibility (overrides animationSpeed to 0). */
   reduceMotion: boolean;
+
+  /** Master switch for all sound cues. */
+  soundEnabled: boolean;
+  /** 0 - 1. */
+  soundVolume: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -61,6 +66,8 @@ export const DEFAULT_SETTINGS: Settings = {
   confirmRetire: true,
   confirmSell: false,
   reduceMotion: false,
+  soundEnabled: true,
+  soundVolume: 0.5,
 };
 
 /* --------------------------------- themes --------------------------------- */

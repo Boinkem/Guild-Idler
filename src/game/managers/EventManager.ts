@@ -17,23 +17,33 @@ export interface RolledEvents {
 export const EventManager = {
   /**
    * Rolls zero to two events for a quest. Higher difficulty means more chances
-   * for the road to get interesting in either direction.
+   * for the road to get interesting in either direction, and unlocks the
+   * grimmer/grander events reserved for Epic and Legendary contracts.
    */
   roll(quest: ActiveQuest, rng: Rng): RolledEvents {
     const tierIndex = DIFFICULTY_ORDER.indexOf(quest.offer.difficulty);
     const baseChance = EVENT_CHANCE[Math.max(0, tierIndex)];
     const defs: EventDef[] = [];
 
+    const eligible = (pool: EventDef[]) => pool.filter((e) => {
+      if (!e.minDifficulty) return true;
+      return DIFFICULTY_ORDER.indexOf(e.minDifficulty) <= tierIndex;
+    });
+
     if (quest.guaranteedGoodEvent) {
-      defs.push(rng.weighted(EVENTS_BY_KIND.positive.map((e) => ({ item: e, weight: e.weight }))));
+      const pool = eligible(EVENTS_BY_KIND.positive);
+      defs.push(rng.weighted((pool.length > 0 ? pool : EVENTS_BY_KIND.positive).map((e) => ({ item: e, weight: e.weight }))));
     }
 
+    const rollPool = eligible(EVENTS);
+    const drawFrom = rollPool.length > 0 ? rollPool : EVENTS;
+
     if (rng.chance(baseChance)) {
-      defs.push(rng.weighted(EVENTS.map((e) => ({ item: e, weight: e.weight }))));
+      defs.push(rng.weighted(drawFrom.map((e) => ({ item: e, weight: e.weight }))));
     }
     // A second event only on the harder tiers, and only sometimes.
     if (tierIndex >= 2 && rng.chance(baseChance / 3)) {
-      defs.push(rng.weighted(EVENTS.map((e) => ({ item: e, weight: e.weight }))));
+      defs.push(rng.weighted(drawFrom.map((e) => ({ item: e, weight: e.weight }))));
     }
 
     const rolled: RolledEvents = {

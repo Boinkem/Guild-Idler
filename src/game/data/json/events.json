@@ -171,5 +171,79 @@
     "effects": {
       "goldPct": -0.25
     }
+  },
+  {
+    "id": "voidforged_cache",
+    "name": "A Voidforged Cache",
+    "kind": "positive",
+    "weight": 10,
+    "description": "Sealed behind a ward that gave out just as you found it. Someone left this on purpose.",
+    "effects": {
+      "flatGold": 400,
+      "loot": 20
+    },
+    "minDifficulty": "epic"
+  },
+  {
+    "id": "old_gods_favour",
+    "name": "The Old Gods Are Watching, and Amused",
+    "kind": "positive",
+    "weight": 8,
+    "description": "Nothing you did should have worked. It worked anyway.",
+    "effects": {
+      "success": 18,
+      "xpPct": 0.4
+    },
+    "minDifficulty": "legendary"
+  },
+  {
+    "id": "the_watcher_passes",
+    "name": "The Watcher Passes You By",
+    "kind": "neutral",
+    "weight": 10,
+    "description": "It looked directly at you. It kept walking. You are still deciding how you feel about that.",
+    "effects": {
+      "xpPct": 0.3,
+      "delay": 10
+    },
+    "minDifficulty": "epic"
+  },
+  {
+    "id": "the_ground_remembers",
+    "name": "The Ground Remembers the Last War",
+    "kind": "negative",
+    "weight": 12,
+    "description": "Old bones, older iron, and something underneath that is still technically alive.",
+    "effects": {
+      "success": -16,
+      "durability": 10,
+      "injury": true
+    },
+    "minDifficulty": "epic"
+  },
+  {
+    "id": "it_noticed_you",
+    "name": "It Noticed You",
+    "kind": "negative",
+    "weight": 8,
+    "description": "You were careful. It did not matter. Something this size does not need to be quiet.",
+    "effects": {
+      "success": -22,
+      "goldPct": -0.2,
+      "injury": true
+    },
+    "minDifficulty": "legendary"
+  },
+  {
+    "id": "the_price_of_passage",
+    "name": "The Price of Passage",
+    "kind": "negative",
+    "weight": 10,
+    "description": "Whatever guards the deep places does not take gold. It took something else instead.",
+    "effects": {
+      "goldPct": -0.35,
+      "xpPct": -0.1
+    },
+    "minDifficulty": "epic"
   }
 ]

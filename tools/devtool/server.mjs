@@ -92,6 +92,22 @@ const SCHEMAS = {
       kind: { type: 'enum', required: true, options: ['positive', 'neutral', 'negative'] },
       weight: { type: 'number', required: true },
       effects: { type: 'eventEffects', required: false },
+      minDifficulty: { type: 'enum', required: false, options: ['easy', 'normal', 'hard', 'epic', 'legendary'] },
+    },
+  },
+  'injuries': {
+    file: 'injuries.json',
+    label: 'Injuries',
+    idField: 'id',
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      name: { type: 'string', required: true },
+      description: { type: 'string', required: true },
+      durationHours: { type: 'number', required: true },
+      mods: { type: 'mods', required: false },
+      treatmentCost: { type: 'number', required: true },
+      weight: { type: 'number', required: true },
+      minDifficulty: { type: 'enum', required: false, options: ['easy', 'normal', 'hard', 'epic', 'legendary'] },
     },
   },
 };

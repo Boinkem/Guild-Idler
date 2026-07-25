@@ -44,6 +44,15 @@ export const ITEM_SETS: ItemSet[] = [
       { count: 3, mods: { success: 18, gold: 30, loot: 15, injuryResist: 15, xp: 25 }, label: 'Unmade' },
     ],
   },
+  {
+    id: 'empyrean',
+    name: 'Empyrean Set',
+    pieces: ['empyrean_blade', 'empyrean_halo', 'empyrean_aegis'],
+    bonuses: [
+      { count: 2, mods: { success: 14, injuryResist: 14 }, label: 'Ascendant' },
+      { count: 3, mods: { success: 24, gold: 40, loot: 22, injuryResist: 20, xp: 35, speed: 12 }, label: 'Beyond the Vault of Heaven' },
+    ],
+  },
 ];
 
 export const SET_BY_ID: Record<string, ItemSet> = Object.fromEntries(ITEM_SETS.map((s) => [s.id, s]));

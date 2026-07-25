@@ -57,6 +57,12 @@ export const UPGRADES: UpgradeDef[] = [
     baseCost: 3000, costGrowth: 1, maxLevel: 1,
     modsPerLevel: {}, unlocks: 'chains',
   },
+  {
+    id: 'black_market_contact', name: 'Black Market Contact',
+    description: "Someone who knows someone. Unlocks a second, pricier stock rotation biased toward rare and legendary gear — often stock the regular armourer would never touch.",
+    baseCost: 9000, costGrowth: 1, maxLevel: 1,
+    modsPerLevel: {}, unlocks: 'blackMarket',
+  },
 ];
 
 export const UPGRADE_BY_ID: Record<string, UpgradeDef> = Object.fromEntries(UPGRADES.map((u) => [u.id, u]));

@@ -1,0 +1,117 @@
+[
+  {
+    "id": "bruised",
+    "name": "Bruised",
+    "description": "Sore ribs. Nothing a day of quiet will not fix.",
+    "durationHours": 2,
+    "mods": {
+      "success": -5
+    },
+    "treatmentCost": 40,
+    "weight": 34
+  },
+  {
+    "id": "sprained_ankle",
+    "name": "Sprained Ankle",
+    "description": "Every road is longer than it looks.",
+    "durationHours": 4,
+    "mods": {
+      "success": -5,
+      "speed": -20
+    },
+    "treatmentCost": 90,
+    "weight": 26
+  },
+  {
+    "id": "exhausted",
+    "name": "Exhausted",
+    "description": "Swings land late and rewards land light.",
+    "durationHours": 3,
+    "mods": {
+      "success": -8,
+      "gold": -20
+    },
+    "treatmentCost": 70,
+    "weight": 24
+  },
+  {
+    "id": "poisoned",
+    "name": "Poisoned",
+    "description": "Slow, green, and unpleasant. Treat it properly.",
+    "durationHours": 6,
+    "mods": {
+      "success": -12,
+      "gold": -15,
+      "speed": -10
+    },
+    "treatmentCost": 150,
+    "weight": 12
+  },
+  {
+    "id": "cracked_ribs",
+    "name": "Cracked Ribs",
+    "description": "Serious. The guild surgeon will want paying.",
+    "durationHours": 10,
+    "mods": {
+      "success": -18,
+      "speed": -25
+    },
+    "treatmentCost": 300,
+    "weight": 4
+  },
+  {
+    "id": "dragonfire_scorch",
+    "name": "Dragonfire Scorch",
+    "description": "Armour half-melted to skin. This is not a bruise, this is a warning.",
+    "durationHours": 14,
+    "mods": {
+      "success": -22,
+      "gold": -20,
+      "speed": -15
+    },
+    "treatmentCost": 480,
+    "weight": 8,
+    "minDifficulty": "epic"
+  },
+  {
+    "id": "void_touched",
+    "name": "Void-Touched",
+    "description": "Something reached back. Part of the wound is not entirely there anymore.",
+    "durationHours": 18,
+    "mods": {
+      "success": -25,
+      "xp": -20,
+      "injuryResist": -10
+    },
+    "treatmentCost": 650,
+    "weight": 5,
+    "minDifficulty": "legendary"
+  },
+  {
+    "id": "shattered_spirit",
+    "name": "Shattered Spirit",
+    "description": "The body will mend. The nerve to face what did this again will take longer.",
+    "durationHours": 16,
+    "mods": {
+      "success": -20,
+      "gold": -25
+    },
+    "treatmentCost": 550,
+    "weight": 6,
+    "minDifficulty": "epic"
+  },
+  {
+    "id": "world_ender_mark",
+    "name": "Marked by the World-Ender",
+    "description": "A brand that was not there this morning, and will not fade on its own schedule.",
+    "durationHours": 24,
+    "mods": {
+      "success": -28,
+      "speed": -20,
+      "gold": -20
+    },
+    "treatmentCost": 900,
+    "weight": 3,
+    "minDifficulty": "legendary"
+  }
+]

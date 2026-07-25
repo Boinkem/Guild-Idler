@@ -1,4 +1,4 @@
-import { Rarity } from '../types';
+import { Difficulty, Rarity } from '../types';
 
 export interface EventDef {
   id: string;
@@ -6,6 +6,8 @@ export interface EventDef {
   description: string;
   kind: 'positive' | 'neutral' | 'negative';
   weight: number;
+  /** Reserves the grander/grimmer events for quests that deserve them. */
+  minDifficulty?: Difficulty;
   effects: {
     /** Percentage points added to the success roll for this quest. */
     success?: number;

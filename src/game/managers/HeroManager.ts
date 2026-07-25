@@ -1,7 +1,8 @@
 import { EQUIPMENT_BY_ID, SET_BY_ID } from '../data/equipment';
 import { INJURIES } from '../data/items';
 import { HERO_CLASSES, RECRUIT_START_LEVEL, xpForLevel } from '../data/progression';
-import { Hero, HeroClass, Injury, Modifiers, Stats } from '../types';
+import { DIFFICULTY_ORDER } from '../data/quests';
+import { Difficulty, Hero, HeroClass, Injury, Modifiers, Stats } from '../types';
 import { Rng, uid } from '../rng';
 import { scaleMods, sumMods } from '../util';
 
@@ -158,8 +159,14 @@ export const HeroManager = {
     );
   },
 
-  rollInjury(rng: Rng): Injury {
-    const def = rng.weighted(INJURIES.map((i) => ({ item: i, weight: i.weight })));
+  rollInjury(rng: Rng, difficulty: Difficulty = 'normal'): Injury {
+    const tierIndex = DIFFICULTY_ORDER.indexOf(difficulty);
+    const eligible = INJURIES.filter((i) => {
+      if (!i.minDifficulty) return true;
+      return DIFFICULTY_ORDER.indexOf(i.minDifficulty) <= tierIndex;
+    });
+    const pool = eligible.length > 0 ? eligible : INJURIES;
+    const def = rng.weighted(pool.map((i) => ({ item: i, weight: i.weight })));
     return {
       id: def.id,
       name: def.name,

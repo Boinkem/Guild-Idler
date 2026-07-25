@@ -686,5 +686,85 @@
     "stats": {
       "endurance": 7
     }
+  },
+  {
+    "id": "empyrean_blade",
+    "name": "Empyrean Greatblade",
+    "slot": "weapon",
+    "rarity": "legendary",
+    "reqLevel": 45,
+    "maxDurability": 300,
+    "value": 18000,
+    "mods": {
+      "success": 24,
+      "gold": 20,
+      "loot": 10,
+      "speed": 10
+    },
+    "stats": {
+      "strength": 20,
+      "luck": 5
+    },
+    "setId": "empyrean"
+  },
+  {
+    "id": "empyrean_halo",
+    "name": "Empyrean Halo",
+    "slot": "helmet",
+    "rarity": "legendary",
+    "reqLevel": 45,
+    "maxDurability": 280,
+    "value": 17200,
+    "mods": {
+      "success": 18,
+      "injuryResist": 26,
+      "xp": 26
+    },
+    "stats": {
+      "wisdom": 15,
+      "endurance": 7
+    },
+    "setId": "empyrean"
+  },
+  {
+    "id": "empyrean_aegis",
+    "name": "Empyrean Aegis",
+    "slot": "chest",
+    "rarity": "legendary",
+    "reqLevel": 45,
+    "maxDurability": 320,
+    "value": 19000,
+    "mods": {
+      "injuryResist": 34,
+      "success": 16,
+      "durability": 30
+    },
+    "stats": {
+      "endurance": 20,
+      "strength": 6
+    },
+    "setId": "empyrean"
+  },
+  {
+    "id": "the_last_ember",
+    "name": "The Last Ember",
+    "slot": "amulet",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 400,
+    "value": 40000,
+    "mods": {
+      "success": 20,
+      "gold": 45,
+      "loot": 20,
+      "xp": 35,
+      "injuryResist": 20
+    },
+    "stats": {
+      "strength": 10,
+      "endurance": 10,
+      "luck": 10,
+      "wisdom": 10
+    }
   }
 ]

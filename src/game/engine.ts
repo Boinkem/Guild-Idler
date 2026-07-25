@@ -10,6 +10,7 @@ import { GuildManager } from './managers/GuildManager';
 import { PrestigeManager } from './managers/PrestigeManager';
 import { ModifierManager } from './managers/ModifierManager';
 import { SKIN_BY_ID, SKIN_PRICE } from './data/progression';
+import { playSound } from './sound';
 
 const TICK_MS = 1000;
 const AUTOSAVE_MS = 15_000;
@@ -118,6 +119,14 @@ export class GameEngine {
       const result = QuestManager.resolve(this.state, quest, quest.endsAt);
       this.lastResult = result;
       changed = true;
+      // Biggest news first, and only one cue per resolution — a chain
+      // completion is a bigger deal than a routine level-up, which is a
+      // bigger deal than a plain success. Offline catch-up never reaches
+      // here, so this only fires for quests you were actually watching.
+      if (result.chainAdvanced?.completed) playSound('chain_complete');
+      else if (result.loot.some((l) => l.rarity === 'legendary')) playSound('legendary_drop');
+      else if (result.levelsGained > 0) playSound('level_up');
+      else playSound(result.success ? 'quest_success' : 'quest_fail');
     }
 
     if (this.refreshWorld(now)) changed = true;
@@ -144,6 +153,11 @@ export class GameEngine {
     }
     if (ShopManager.needsRefresh(this.state, now) || this.state.shop.equipment.length === 0) {
       ShopManager.refresh(this.state, now, true);
+      changed = true;
+    }
+    if (ModifierManager.hasUnlock(this.state, 'blackMarket')
+      && (ShopManager.blackMarketNeedsRefresh(this.state, now) || this.state.blackMarket.equipment.length === 0)) {
+      ShopManager.refreshBlackMarket(this.state, now, true);
       changed = true;
     }
     return changed;
@@ -245,6 +259,7 @@ export class GameEngine {
     const { error } = QuestManager.start(this.state, hero, offer, consumables, Date.now());
     if (error) return this.say(error);
     this.state.focusedHeroId = heroId;
+    playSound('depart');
     this.say(`${hero.name} sets out: ${offer.name}`);
     void this.saveNow();
   }
@@ -310,6 +325,7 @@ export class GameEngine {
   buyConsumable(defId: string, amount = 1) {
     const error = InventoryManager.buy(this.state, defId, amount);
     if (error) return this.say(error);
+    playSound('purchase');
     this.notify();
     void this.saveNow();
   }
@@ -317,7 +333,16 @@ export class GameEngine {
   buyShopEquipment(shopUid: string) {
     const error = ShopManager.buyEquipment(this.state, shopUid);
     if (error) return this.say(error);
+    playSound('purchase');
     this.say('Added to the stash.');
+    void this.saveNow();
+  }
+
+  buyBlackMarketEquipment(shopUid: string) {
+    const error = ShopManager.buyBlackMarketEquipment(this.state, shopUid);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.say('The contact melts back into the crowd. Added to the stash.');
     void this.saveNow();
   }
 
@@ -395,6 +420,7 @@ export class GameEngine {
     const def = SKIN_BY_ID[skinId];
     if (!def) return this.say('Unknown skin.');
     if (this.state.gold < def.cost) return this.say('Not enough gold.');
+    playSound('purchase');
     this.state.gold -= def.cost;
     this.state.stats.goldSpent += def.cost;
     this.state.unlockedSkins.push(skinId);

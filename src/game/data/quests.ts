@@ -97,6 +97,11 @@ export interface ChainDef {
   rewardGold: number;
   rewardItems: string[];
   rewardRenown: number;
+  /**
+   * An epithet granted to whichever hero completes the final stage, shown as
+   * "<Title> <Name>". Cleared if that hero later retires.
+   */
+  title?: string;
 }
 
 export const QUEST_CHAINS: ChainDef[] = [
@@ -108,6 +113,7 @@ export const QUEST_CHAINS: ChainDef[] = [
     rewardGold: 4000,
     rewardItems: ['dragon_helm', 'dragon_blade'],
     rewardRenown: 2,
+    title: 'Dragonbane',
     stages: [
       { name: 'Follow the Ash Trail', flavour: 'Cold ash, warm ground. It passed here recently.', difficulty: 'hard', duration: 8 * HOUR, goldMultiplier: 1.5 },
       { name: 'Question the Survivors', flavour: 'They describe wings the width of the valley.', difficulty: 'normal', duration: 6 * HOUR, goldMultiplier: 1.5 },
@@ -123,6 +129,7 @@ export const QUEST_CHAINS: ChainDef[] = [
     rewardGold: 2600,
     rewardItems: ['crown_of_the_lost'],
     rewardRenown: 1,
+    title: 'Kingdom-Finder',
     stages: [
       { name: 'Chart the Grey Marches', flavour: 'Six days of nothing, then a road that should not exist.', difficulty: 'normal', duration: 10 * HOUR, goldMultiplier: 1.6 },
       { name: 'Cross the Silent Bridge', flavour: 'It holds. That is the surprising part.', difficulty: 'hard', duration: 12 * HOUR, goldMultiplier: 1.8 },
@@ -137,6 +144,7 @@ export const QUEST_CHAINS: ChainDef[] = [
     rewardGold: 6500,
     rewardItems: ['dragon_armor', 'amulet_of_fortune'],
     rewardRenown: 3,
+    title: 'Hellgate Breaker',
     stages: [
       { name: 'Break the Outer Siege', flavour: 'Ladders, fire, and a very long night.', difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 2 },
       { name: 'Silence the Warding Choir', flavour: 'The singing has not stopped in nine years.', difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.4 },
@@ -152,6 +160,7 @@ export const QUEST_CHAINS: ChainDef[] = [
     rewardGold: 1800,
     rewardItems: ['lucky_ring'],
     rewardRenown: 1,
+    title: 'Crownbearer',
     stages: [
       { name: 'The Fragment in the Fen', flavour: 'Wet, cold, and guarded by something patient.', difficulty: 'normal', duration: 8 * HOUR, goldMultiplier: 1.5 },
       { name: 'The Fragment in the Vault', flavour: 'The banker insists it is a paperweight.', difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 1.8 },
@@ -166,6 +175,7 @@ export const QUEST_CHAINS: ChainDef[] = [
     rewardGold: 550,
     rewardItems: ['warband_cleaver'],
     rewardRenown: 1,
+    title: 'Warband-Breaker',
     stages: [
       { name: 'Scatter the Outriders', flavour: 'They ride ahead of the warband, loud and badly armoured.', difficulty: 'normal', duration: 3 * HOUR, goldMultiplier: 1.3 },
       { name: "The Chieftain's Camp", flavour: 'He wears three crowns. None of them fit. All of them are stolen.', difficulty: 'hard', duration: 5 * HOUR, goldMultiplier: 1.6 },
@@ -179,6 +189,7 @@ export const QUEST_CHAINS: ChainDef[] = [
     rewardGold: 5200,
     rewardItems: ['choir_mask', 'silenced_bell'],
     rewardRenown: 2,
+    title: 'Choir-Silencer',
     stages: [
       { name: 'Follow the Hymn', flavour: 'It carries for miles and never repeats a verse.', difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 1.8 },
       { name: 'The Choir Loft', flavour: 'No singers. Just mouths, carved into the stone, still moving.', difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.2 },
@@ -195,12 +206,49 @@ export const QUEST_CHAINS: ChainDef[] = [
     rewardGold: 22000,
     rewardItems: ['voidforged_blade', 'voidforged_crown', 'voidforged_plate', 'voidforged_signet'],
     rewardRenown: 6,
+    title: "World's End",
     stages: [
       { name: 'The Road That Should Not Exist', flavour: 'It appeared on the map three nights ago. It has always been on the ground.', difficulty: 'epic', duration: 16 * HOUR, goldMultiplier: 2.6 },
       { name: 'The Watchers in the Dark Between Stars', flavour: 'They have been counting something. You do not want to know what.', difficulty: 'legendary', duration: 20 * HOUR, goldMultiplier: 3.2 },
       { name: 'The Court of the Unmade King', flavour: 'He ruled before the first kingdom. He intends to rule after the last.', difficulty: 'legendary', duration: 24 * HOUR, goldMultiplier: 3.6 },
       { name: 'The Breaking of the Vigil', flavour: 'Whatever has been holding it back is tired. So are you. Keep going anyway.', difficulty: 'legendary', duration: 28 * HOUR, goldMultiplier: 4.0 },
       { name: 'The World-Ender', flavour: 'It does not have a name. It has never needed one. This ends here, one way or the other.', difficulty: 'legendary', duration: 32 * HOUR, goldMultiplier: 5.0 },
+    ],
+  },
+  {
+    id: 'hollow_king',
+    name: "The Hollow King's Return",
+    description:
+      'For guilds a run or two into prestige. The king everyone thought was buried is not staying ' +
+      'that way, and the things escorting him back are worse than he is.',
+    reqLevel: 45,
+    rewardGold: 42000,
+    rewardItems: ['empyrean_blade', 'empyrean_halo', 'empyrean_aegis'],
+    rewardRenown: 10,
+    title: 'Kingslayer Twice Over',
+    stages: [
+      { name: 'The Grave Reopens', flavour: 'The seal held for three hundred years. It held for one night less than it needed to.', difficulty: 'epic', duration: 18 * HOUR, goldMultiplier: 2.8 },
+      { name: 'The Procession of the Dead Court', flavour: 'Every advisor he ever executed is walking behind him now, and none of them look angry anymore. That is worse.', difficulty: 'legendary', duration: 22 * HOUR, goldMultiplier: 3.4 },
+      { name: 'The Bridge of Forgotten Oaths', flavour: 'It only holds the weight of those who never broke a promise. Cross carefully.', difficulty: 'legendary', duration: 26 * HOUR, goldMultiplier: 3.8 },
+      { name: 'The Second Coronation', flavour: 'He is almost home. The crown remembers him even if the kingdom does not.', difficulty: 'legendary', duration: 30 * HOUR, goldMultiplier: 4.4 },
+    ],
+  },
+  {
+    id: 'last_god',
+    name: 'Requiem for the Last God',
+    description:
+      'The deepest expedition the guild has ever chartered. There is no patron this time — nobody ' +
+      'left to pay for it. You are doing this because someone has to, and everyone else already tried.',
+    reqLevel: 55,
+    rewardGold: 90000,
+    rewardItems: ['the_last_ember'],
+    rewardRenown: 20,
+    title: 'Requiem-Bearer',
+    stages: [
+      { name: 'The Last Map', flavour: 'Every cartographer who charted this route stopped charting anything afterward.', difficulty: 'legendary', duration: 24 * HOUR, goldMultiplier: 4.0 },
+      { name: 'The Field of Failed Guilds', flavour: 'Banners, still standing, none of them yours. Yet.', difficulty: 'legendary', duration: 28 * HOUR, goldMultiplier: 4.5 },
+      { name: 'The Silence Where Prayer Used to Work', flavour: 'Nothing answers here anymore. That used to be a comfort to something.', difficulty: 'legendary', duration: 32 * HOUR, goldMultiplier: 5.0 },
+      { name: 'What Is Left of It', flavour: 'Not a battle. A kindness, if you can call it that. Someone has to finish the story.', difficulty: 'legendary', duration: 36 * HOUR, goldMultiplier: 6.0 },
     ],
   },
 ];
