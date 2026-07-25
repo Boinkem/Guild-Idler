@@ -1,6 +1,7 @@
 import { GameState, GuildFacility, SAVE_VERSION } from '../types';
 import { createRng } from '../rng';
 import { HeroManager } from './HeroManager';
+import { AchievementManager } from './AchievementManager';
 
 /** Storage abstraction so the game also runs in a plain browser tab for testing. */
 export interface SaveAdapter {
@@ -21,6 +22,7 @@ declare global {
       getLocked(): Promise<boolean>;
       minimize(): Promise<void>;
       quit(): Promise<void>;
+      unlockAchievement(steamApiName: string): Promise<boolean>;
     };
   }
 }
@@ -74,7 +76,8 @@ export function createInitialState(now = Date.now()): GameState {
       goldEarned: 0, goldSpent: 0, highestReward: 0,
       legendaryItemsFound: 0, itemsFound: 0, injuriesSuffered: 0,
       itemsBroken: 0, chainsCompleted: 0,
-      playTimeMs: 0, offlineTimeMs: 0, prestigeCount: 0, bestPrestigeStreak: 0, firstPlayedAt: now,
+      playTimeMs: 0, offlineTimeMs: 0, prestigeCount: 0, bestPrestigeStreak: 0,
+      lowestSuccessfulChance: null, blackMarketPurchases: 0, firstPlayedAt: now,
     },
     log: [],
     discoveredItems: [],
@@ -82,6 +85,7 @@ export function createInitialState(now = Date.now()): GameState {
     focusedHeroId: null,
     prestigeStreak: 0,
     lastPrestigeAt: null,
+    unlockedAchievements: {},
   };
 }
 
@@ -160,6 +164,29 @@ const MIGRATIONS: Record<number, Migration> = {
       prestigeStreak: (save.prestigeStreak as number | undefined) ?? 0,
       lastPrestigeAt: (save.lastPrestigeAt as number | null | undefined) ?? null,
     };
+  },
+  8: (save) => {
+    const stats = (save.stats as Record<string, unknown>) ?? {};
+    stats.lowestSuccessfulChance = stats.lowestSuccessfulChance ?? null;
+    stats.blackMarketPurchases = stats.blackMarketPurchases ?? 0;
+    const next = {
+      ...save,
+      version: 9,
+      stats,
+      unlockedAchievements: (save.unlockedAchievements as Record<string, number> | undefined) ?? {},
+    } as unknown as GameState;
+    // Achievements are a new system, but the conditions for most of them
+    // (total quests, legendary finds, ascension, etc.) could already be true
+    // in an existing save. Check once here so nobody has to "do it again"
+    // just because the update landed after they'd already earned it. Every
+    // future checkAll() call skips ids that are already unlocked, so this is
+    // also the only chance to push a retroactive grant to Steam — do it here
+    // rather than leaving it silently un-synced forever.
+    const granted = AchievementManager.checkAll(next, Date.now());
+    for (const id of granted) {
+      void (typeof window !== 'undefined' ? window.littleKnight?.unlockAchievement(id) : undefined);
+    }
+    return next as unknown as Record<string, unknown>;
   },
 };
 

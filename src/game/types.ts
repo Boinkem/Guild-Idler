@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -303,6 +303,9 @@ export interface Statistics {
   offlineTimeMs: number;
   prestigeCount: number;
   bestPrestigeStreak: number;
+  /** Lowest success chance a quest has ever WON at, or null if none yet. Powers the "Against the Odds" achievement, and lets it survive a save migration retroactively rather than only firing on the next lucky win. */
+  lowestSuccessfulChance: number | null;
+  blackMarketPurchases: number;
   firstPlayedAt: number;
 }
 
@@ -350,4 +353,6 @@ export interface GameState {
   prestigeStreak: number;
   /** Epoch ms of the last retirement, or null if none yet. */
   lastPrestigeAt: number | null;
+  /** Achievement id -> epoch ms when it unlocked. */
+  unlockedAchievements: Record<string, number>;
 }

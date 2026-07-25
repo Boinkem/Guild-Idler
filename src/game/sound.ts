@@ -12,7 +12,7 @@ import { SettingsStore } from './settings';
 
 export type SoundCue =
   | 'quest_success' | 'quest_fail' | 'level_up' | 'legendary_drop'
-  | 'chain_complete' | 'purchase' | 'error' | 'depart';
+  | 'chain_complete' | 'purchase' | 'error' | 'depart' | 'achievement';
 
 let ctx: AudioContext | null = null;
 
@@ -79,6 +79,11 @@ const CUES: Record<SoundCue, Tone[]> = {
   depart: [
     { freq: 440, start: 0, duration: 0.06, type: 'triangle', gain: 0.3 },
     { freq: 554.37, start: 0.05, duration: 0.08, type: 'triangle', gain: 0.3 },
+  ],
+  achievement: [
+    { freq: 587.33, start: 0, duration: 0.09, type: 'square', gain: 0.35 },
+    { freq: 739.99, start: 0.08, duration: 0.09, type: 'square', gain: 0.35 },
+    { freq: 880.0, start: 0.16, duration: 0.28, type: 'triangle', gain: 0.45 },
   ],
 };
 

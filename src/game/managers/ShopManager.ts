@@ -107,6 +107,7 @@ export const ShopManager = {
     state.stash.push(item);
     if (!state.discoveredItems.includes(entry.defId)) state.discoveredItems.push(entry.defId);
     state.blackMarket.equipment = state.blackMarket.equipment.filter((e) => e.uid !== shopUid);
+    state.stats.blackMarketPurchases += 1;
     return null;
   },
 

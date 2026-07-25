@@ -114,6 +114,23 @@ const SCHEMAS = {
       minDifficulty: { type: 'enum', required: false, options: ['easy', 'normal', 'hard', 'epic', 'legendary'] },
     },
   },
+  'achievements': {
+    file: 'achievements.json',
+    label: 'Achievements',
+    idField: 'id',
+    // Editable here: name, description, hidden. The unlock CONDITION for
+    // each achievement id is not data — it's a check function in
+    // AchievementManager.ts. Renaming an achievement or rewriting its
+    // flavour text here is fully safe and takes effect immediately; adding
+    // a brand new achievement id here does nothing on its own until a
+    // matching check is added in code. See DEVTOOL.md.
+    fields: {
+      id: { type: 'string', required: true, steamId: true },
+      name: { type: 'string', required: true },
+      description: { type: 'string', required: true },
+      hidden: { type: 'boolean', required: true },
+    },
+  },
 };
 
 const MOD_KEYS = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability'];
@@ -162,9 +179,15 @@ function validateEntry(schema, entry, index) {
         if (typeof value !== 'object') errors.push(`entry ${index}: "${key}" must be an object`);
         else for (const k of Object.keys(value)) if (!EVENT_EFFECT_KEYS.includes(k)) errors.push(`entry ${index}: unknown effect key "${k}"`);
         break;
+      case 'boolean':
+        if (typeof value !== 'boolean') errors.push(`entry ${index}: "${key}" must be true or false`);
+        break;
     }
     if (spec.slug && typeof value === 'string' && !/^[a-z][a-z0-9_]*$/.test(value)) {
       errors.push(`entry ${index}: "${key}" should be lowercase_with_underscores (got "${value}")`);
+    }
+    if (spec.steamId && typeof value === 'string' && !/^[A-Z][A-Z0-9_]*$/.test(value)) {
+      errors.push(`entry ${index}: "${key}" should be UPPER_SNAKE_CASE, matching Steam's achievement API name convention (got "${value}")`);
     }
   }
   return errors;

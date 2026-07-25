@@ -86,13 +86,30 @@ conflict, history surgery), use the terminal.
 ## What's editable here vs. not
 
 **In the tool:** quest name templates (verb/subject/flavour), all equipment,
-consumables, and random road events — content with no logic attached, just
-numbers and text.
+consumables, injuries, random road events, and achievement names/descriptions
+— content with no logic attached, just numbers and text.
 
-**Still in code**, because logic is wired to them and editing blind is riskier:
-hero classes and their stats, guild upgrades, difficulty tuning, quest chains.
-Ask if you want any of these opened up next; it's the same pattern, just with a
-bit more care around what "valid" means for each.
+**Achievements are a special, half-and-half case, worth understanding.** The
+*name*, *description*, and *hidden* flag for each achievement live here and
+are fully safe to rename or reword — takes effect immediately. But the
+*unlock condition* — what actually has to happen for "Living Legend" to pop —
+is not data, it's a small check function in
+`src/game/managers/AchievementManager.ts`. Adding a brand-new achievement row
+here does nothing on its own: the game will show it as permanently locked
+forever, since nothing is checking for it. Renaming or re-describing an
+*existing* achievement is completely safe; adding a new one needs a matching
+code change too. If you want a new achievement, describe the condition and
+ask — the code side is usually a couple of lines.
+
+The `id` field for an achievement is Steam's achievement API name and uses
+Steam's own UPPER_SNAKE_CASE convention (e.g. `FIRST_LEGENDARY`), unlike every
+other id in this project which is lowercase — the tool enforces the right
+case for whichever content type you're in.
+
+**Still fully in code**, because logic is wired to them and editing blind is
+riskier: hero classes and their stats, guild upgrades, difficulty tuning,
+quest chains. Ask if you want any of these opened up next; it's the same
+pattern, just with a bit more care around what "valid" means for each.
 
 ## If something looks wrong in the game after an edit
 

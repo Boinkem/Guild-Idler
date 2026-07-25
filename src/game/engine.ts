@@ -9,6 +9,7 @@ import { InventoryManager } from './managers/InventoryManager';
 import { GuildManager } from './managers/GuildManager';
 import { PrestigeManager } from './managers/PrestigeManager';
 import { ModifierManager } from './managers/ModifierManager';
+import { AchievementManager } from './managers/AchievementManager';
 import { SKIN_BY_ID, SKIN_PRICE } from './data/progression';
 import { playSound } from './sound';
 
@@ -71,6 +72,17 @@ export class GameEngine {
     this.notify();
   }
 
+  /** Sound, toast, and the Steam stub, for every achievement id that just unlocked. */
+  private reportAchievements(ids: string[]) {
+    if (ids.length === 0) return;
+    for (const id of ids) {
+      const def = AchievementManager.list().find((a) => a.id === id);
+      playSound('achievement');
+      this.say(`Achievement unlocked: ${def?.name ?? id}`);
+      void window.littleKnight?.unlockAchievement(id);
+    }
+  }
+
   clearToast() {
     this.toast = null;
     this.notify();
@@ -127,6 +139,7 @@ export class GameEngine {
       else if (result.loot.some((l) => l.rarity === 'legendary')) playSound('legendary_drop');
       else if (result.levelsGained > 0) playSound('level_up');
       else playSound(result.success ? 'quest_success' : 'quest_fail');
+      this.reportAchievements(AchievementManager.checkAll(this.state, now));
     }
 
     if (this.refreshWorld(now)) changed = true;
@@ -178,7 +191,15 @@ export class GameEngine {
       .sort((a, b) => a.endsAt - b.endsAt);
 
     for (const quest of due) {
-      results.push(QuestManager.resolve(this.state, quest, quest.endsAt));
+      const result = QuestManager.resolve(this.state, quest, quest.endsAt);
+      results.push(result);
+      // Unlocks still register (and Steam still gets notified) for progress
+      // made while the app was closed — just quietly, without the toast/sound
+      // treatment live play gets, since a barrage of those on launch would be
+      // more annoying than celebratory.
+      for (const id of AchievementManager.checkAll(this.state, quest.endsAt)) {
+        void window.littleKnight?.unlockAchievement(id);
+      }
     }
     for (const hero of this.state.heroes) HeroManager.pruneInjuries(hero, now);
 
@@ -343,6 +364,7 @@ export class GameEngine {
     if (error) return this.say(error);
     playSound('purchase');
     this.say('The contact melts back into the crowd. Added to the stash.');
+    this.reportAchievements(AchievementManager.checkAll(this.state));
     void this.saveNow();
   }
 
@@ -386,6 +408,7 @@ export class GameEngine {
     const error = GuildManager.recruit(this.state, heroClass, createRng(uid('recruit')));
     if (error) return this.say(error);
     this.say('A new hero joins the guild.');
+    this.reportAchievements(AchievementManager.checkAll(this.state));
     void this.saveNow();
   }
 
@@ -404,6 +427,7 @@ export class GameEngine {
     const streakNote = outcome.streak > 1 ? ` Streak ×${outcome.streak}!` : '';
     playSound(outcome.streak > 3 ? 'chain_complete' : 'level_up');
     this.say(`${hero.name} retires a legend. +${outcome.renownGained} Heroic Renown.${streakNote}`);
+    this.reportAchievements(AchievementManager.checkAll(this.state));
     void this.saveNow();
   }
 
@@ -427,6 +451,7 @@ export class GameEngine {
     this.state.stats.goldSpent += def.cost;
     this.state.unlockedSkins.push(skinId);
     this.say(`${def.name} livery unlocked for the whole guild.`);
+    this.reportAchievements(AchievementManager.checkAll(this.state));
     void this.saveNow();
   }
 

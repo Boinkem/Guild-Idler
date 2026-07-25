@@ -151,7 +151,8 @@ function fieldControl(spec, key, value) {
     return `<textarea id="${id}">${escapeHtml(value ?? '')}</textarea>`;
   }
   if (spec.type === 'string') {
-    return `<input type="text" id="${id}" value="${escapeHtml(value ?? '')}" ${spec.slug ? 'placeholder="lowercase_with_underscores"' : ''} />`;
+    const placeholder = spec.slug ? 'lowercase_with_underscores' : spec.steamId ? 'UPPER_SNAKE_CASE' : '';
+    return `<input type="text" id="${id}" value="${escapeHtml(value ?? '')}" ${placeholder ? `placeholder="${placeholder}"` : ''} />`;
   }
   if (spec.type === 'number') {
     return `<input type="number" id="${id}" value="${value ?? 0}" step="any" />`;
@@ -162,6 +163,9 @@ function fieldControl(spec, key, value) {
   }
   if (spec.type === 'string[]') {
     return listInput(id, value ?? []);
+  }
+  if (spec.type === 'boolean') {
+    return `<input type="checkbox" id="${id}" ${value ? 'checked' : ''} style="width:18px;height:18px;" />`;
   }
   if (spec.type === 'mods') return kvGrid(id, MOD_KEYS, value ?? {}, 'number');
   if (spec.type === 'stats') return kvGrid(id, STAT_KEYS, value ?? {}, 'number');
@@ -218,6 +222,7 @@ function readField(spec, key) {
   const el = document.getElementById(`f_${key}`);
   if (spec.type === 'string' || spec.type === 'enum') return el.value;
   if (spec.type === 'number') return parseFloat(el.value) || 0;
+  if (spec.type === 'boolean') return el.checked;
   if (spec.type === 'string[]') {
     return [...el.querySelectorAll('[data-list-item]')].map((i) => i.value.trim()).filter(Boolean);
   }
@@ -298,6 +303,9 @@ function clientValidate(schema, entry) {
     }
     if (spec.slug && entry[key] && !/^[a-z][a-z0-9_]*$/.test(entry[key])) {
       errors.push(`"${key}" should be lowercase_with_underscores`);
+    }
+    if (spec.steamId && entry[key] && !/^[A-Z][A-Z0-9_]*$/.test(entry[key])) {
+      errors.push(`"${key}" should be UPPER_SNAKE_CASE`);
     }
   }
   if (schema.idField && entry[schema.idField]) {

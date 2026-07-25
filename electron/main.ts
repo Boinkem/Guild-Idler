@@ -223,6 +223,24 @@ ipcMain.handle('window:getLocked', () => companionLocked);
 ipcMain.handle('window:minimize', () => win?.minimize());
 ipcMain.handle('window:quit', () => app.quit());
 
+/**
+ * Steam achievement unlock — currently a stub. Swap the body for a real
+ * steamworks.js call once the SDK is installed and an App ID exists:
+ *
+ *   import steamworks from 'steamworks.js';
+ *   const client = steamworks.init(APP_ID);
+ *   client.achievement.activate(steamApiName);
+ *
+ * Kept as a no-op-but-logged IPC call rather than skipped entirely so the
+ * renderer side (engine.ts, AchievementManager) can be built and tested now
+ * and never needs to change when the real SDK goes in — only this handler's
+ * body does.
+ */
+ipcMain.handle('steam:unlockAchievement', (_e, steamApiName: string) => {
+  console.log(`[steam stub] would unlock achievement: ${steamApiName}`);
+  return true;
+});
+
 /* ------------------------------ lifecycle ------------------------------ */
 
 app.whenReady().then(async () => {

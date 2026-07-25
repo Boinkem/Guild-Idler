@@ -1,4 +1,5 @@
 import { useEngine } from '../useEngine';
+import { AchievementManager } from '../../game/managers/AchievementManager';
 import { formatGold, formatPlayTime } from '../../game/util';
 
 export function StatsPanel() {
@@ -7,6 +8,7 @@ export function StatsPanel() {
   const successRate = stats.totalQuests > 0
     ? `${Math.round((stats.successes / stats.totalQuests) * 100)}%`
     : '—';
+  const achProgress = AchievementManager.progress(engine.state);
 
   const rows: [string, string][] = [
     ['Total quests', stats.totalQuests.toLocaleString()],
@@ -31,6 +33,30 @@ export function StatsPanel() {
     <>
       <h2>Statistics</h2>
       <p className="subtitle">Everything the guild scribe has bothered to write down.</p>
+
+      <div className="section-heading">Achievements ({achProgress.unlocked}/{achProgress.total})</div>
+      <div className="grid three" style={{ marginBottom: 8 }}>
+        {AchievementManager.list().map((def) => {
+          const unlockedAt = engine.state.unlockedAchievements[def.id];
+          const unlocked = unlockedAt !== undefined;
+          const showHidden = def.hidden && !unlocked;
+          return (
+            <div key={def.id} className={`card achievement-card ${unlocked ? 'unlocked' : ''}`} style={{ marginBottom: 0 }}>
+              <div className="card-title" style={{ fontSize: 11 }}>
+                {unlocked ? '🏆' : '🔒'} {showHidden ? '???' : def.name}
+              </div>
+              <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+                {showHidden ? 'Hidden until unlocked.' : def.description}
+              </p>
+              {unlocked && (
+                <p className="tiny" style={{ margin: '4px 0 0', color: 'var(--brass)' }}>
+                  {new Date(unlockedAt).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
 
       <div className="grid two">
         {rows.map(([label, value]) => (

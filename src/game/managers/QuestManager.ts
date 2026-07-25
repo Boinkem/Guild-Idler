@@ -284,6 +284,11 @@ export const QuestManager = {
     state.stats.highestReward = Math.max(state.stats.highestReward, gold);
     if (injury) state.stats.injuriesSuffered += 1;
     state.stats.itemsBroken += broken.length;
+    if (success) {
+      state.stats.lowestSuccessfulChance = state.stats.lowestSuccessfulChance === null
+        ? finalSuccess
+        : Math.min(state.stats.lowestSuccessfulChance, finalSuccess);
+    }
 
     state.activeQuests = state.activeQuests.filter((q) => q.id !== quest.id);
 

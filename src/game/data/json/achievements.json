@@ -1,0 +1,68 @@
+[
+  {
+    "id": "FIRST_CONTRACT",
+    "name": "First Contract",
+    "description": "Complete your first quest.",
+    "hidden": false
+  },
+  {
+    "id": "AGAINST_THE_ODDS",
+    "name": "Against the Odds",
+    "description": "Win a quest with less than 30% success chance.",
+    "hidden": false
+  },
+  {
+    "id": "FIRST_LEGENDARY",
+    "name": "The Good Stuff",
+    "description": "Find your first legendary item.",
+    "hidden": false
+  },
+  {
+    "id": "RETIREMENT_PARTY",
+    "name": "Retirement Party",
+    "description": "Retire a hero for the first time.",
+    "hidden": false
+  },
+  {
+    "id": "LIVING_LEGEND",
+    "name": "Living Legend",
+    "description": "Retire the same hero identity ten times.",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_BREAKER",
+    "name": "Chain Breaker",
+    "description": "Complete your first multi-stage quest chain.",
+    "hidden": false
+  },
+  {
+    "id": "WORLDS_END",
+    "name": "World's End",
+    "description": "Complete the World-Ender's Vigil.",
+    "hidden": true
+  },
+  {
+    "id": "ON_A_ROLL",
+    "name": "On a Roll",
+    "description": "Reach a prestige streak of 5.",
+    "hidden": false
+  },
+  {
+    "id": "FULL_ROSTER",
+    "name": "Full Roster",
+    "description": "Recruit at least one hero of every class.",
+    "hidden": false
+  },
+  {
+    "id": "BLACK_MARKET_REGULAR",
+    "name": "No Questions Asked",
+    "description": "Buy something from the black market.",
+    "hidden": false
+  },
+  {
+    "id": "COMPLETE_WARDROBE",
+    "name": "Complete Wardrobe",
+    "description": "Unlock every livery.",
+    "hidden": false
+  }
+]

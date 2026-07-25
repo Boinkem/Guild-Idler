@@ -15,6 +15,7 @@ const api = {
   getLocked: (): Promise<boolean> => ipcRenderer.invoke('window:getLocked'),
   minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
   quit: (): Promise<void> => ipcRenderer.invoke('window:quit'),
+  unlockAchievement: (steamApiName: string): Promise<boolean> => ipcRenderer.invoke('steam:unlockAchievement', steamApiName),
 };
 
 contextBridge.exposeInMainWorld('littleKnight', api);
