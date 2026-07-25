@@ -116,7 +116,7 @@ export function SettingsPanel() {
             onChange={(e) => update('spriteScale', Number(e.target.value))}
           />
           <div className="sprite-preview">
-            <HeroSprite heroClass="knight" animation="idle" scale={Math.round(2 * settings.spriteScale)} />
+            <HeroSprite heroClass="knight" animation="idle" height={Math.round(80 * settings.spriteScale)} />
           </div>
         </div>
       </Row>

@@ -61,8 +61,9 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
         >
           <HeroSprite
             heroClass={hero.heroClass}
+            skin={hero.skin}
             animation={spriteAnimation}
-            scale={Math.max(1, Math.round(3 * settings.spriteScale))}
+            height={Math.round(120 * settings.spriteScale)}
             title={`${hero.name}, level ${hero.level}`}
           />
         </button>

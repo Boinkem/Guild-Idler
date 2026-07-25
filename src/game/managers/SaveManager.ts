@@ -75,6 +75,7 @@ export function createInitialState(now = Date.now()): GameState {
     },
     log: [],
     discoveredItems: [],
+    unlockedSkins: ['original'],
   };
 }
 
@@ -98,6 +99,29 @@ const MIGRATIONS: Record<number, Migration> = {
     renownPerks: save.renownPerks ?? {},
     roster: save.roster ?? ['knight'],
   }),
+  3: (save) => {
+    // Classes were reworked from recolours to distinct characters. Any hero on
+    // a retired class id is remapped to the nearest equivalent so old saves keep
+    // their roster instead of losing heroes.
+    const remap: Record<string, string> = {
+      squire: 'gladiator', archer: 'gladiator', rogue: 'witch',
+      mage: 'wizard', paladin: 'dwarf',
+    };
+    const heroes = Array.isArray(save.heroes) ? save.heroes as Record<string, unknown>[] : [];
+    for (const h of heroes) {
+      const cls = h.heroClass as string;
+      if (remap[cls]) h.heroClass = remap[cls];
+      h.skin = h.skin ?? 'original';
+      h.bonusStats = h.bonusStats ?? { strength: 0, endurance: 0, luck: 0, wisdom: 0 };
+    }
+    return {
+      ...save,
+      version: 4,
+      heroes,
+      unlockedSkins: (save.unlockedSkins as string[]) ?? ['original'],
+      roster: ['knight'],
+    };
+  },
 };
 
 export const SaveManager = {

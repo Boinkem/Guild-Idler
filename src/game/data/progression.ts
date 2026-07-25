@@ -163,70 +163,118 @@ export interface HeroClassDef {
   preferredBonus: number;
   /** Tavern level needed to recruit. */
   unlockTavernLevel: number;
-  palette: { armor: string; trim: string; cloth: string };
+  /** Baseline power tier 0-3; higher hires start stronger to justify the cost. */
+  tier: number;
   names: string[];
 }
 
 export const HERO_CLASSES: Record<HeroClass, HeroClassDef> = {
   knight: {
-    id: 'knight', name: 'Knight', blurb: 'Dependable in a fight and hard to knock down.',
+    id: 'knight', name: 'Knight', blurb: 'Dependable in a fight and hard to knock down. The guild starts here.',
     baseStats: { strength: 6, endurance: 6, luck: 3, wisdom: 3 },
     growth: { strength: 1.2, endurance: 1.1, luck: 0.4, wisdom: 0.4 },
     mods: { injuryResist: 5 }, preferred: ['combat', 'defense'], preferredBonus: 6,
-    unlockTavernLevel: 0,
-    palette: { armor: '#b9c3d6', trim: '#d9a441', cloth: '#a33a3a' },
+    unlockTavernLevel: 0, tier: 0,
     names: ['Sir Pip', 'Sir Bramble', 'Dame Orla', 'Sir Corwin', 'Dame Wren'],
   },
-  squire: {
-    id: 'squire', name: 'Squire', blurb: 'Cheap, eager, and learns faster than anyone.',
-    baseStats: { strength: 4, endurance: 4, luck: 4, wisdom: 4 },
-    growth: { strength: 0.8, endurance: 0.8, luck: 0.8, wisdom: 0.8 },
-    mods: { xp: 30, gold: -10 }, preferred: ['escort'], preferredBonus: 8,
-    unlockTavernLevel: 1,
-    palette: { armor: '#9aa0a8', trim: '#c9b27a', cloth: '#4f7a58' },
-    names: ['Tam', 'Nessa', 'Bertie', 'Ilse', 'Cob'],
+  dwarf: {
+    id: 'dwarf', name: 'Dwarf Warrior', blurb: 'A wall with an axe. Almost impossible to put down, in no particular hurry.',
+    baseStats: { strength: 7, endurance: 9, luck: 2, wisdom: 3 },
+    growth: { strength: 1.1, endurance: 1.5, luck: 0.3, wisdom: 0.5 },
+    mods: { injuryResist: 22, durability: 15, speed: -12 }, preferred: ['defense'], preferredBonus: 12,
+    unlockTavernLevel: 1, tier: 1,
+    names: ['Brenna', 'Durgan', 'Thora', 'Balin', 'Greta Stoneheel'],
   },
-  archer: {
-    id: 'archer', name: 'Archer', blurb: 'Ends fights from a comfortable distance.',
-    baseStats: { strength: 5, endurance: 4, luck: 6, wisdom: 4 },
-    growth: { strength: 0.9, endurance: 0.7, luck: 1.1, wisdom: 0.5 },
-    mods: { speed: 10, loot: 3 }, preferred: ['combat', 'explore'], preferredBonus: 7,
-    unlockTavernLevel: 2,
-    palette: { armor: '#6f8f5f', trim: '#c9b27a', cloth: '#3f5a45' },
-    names: ['Fenn', 'Alys', 'Roe', 'Sparrow', 'Hale'],
+  gladiator: {
+    id: 'gladiator', name: 'Gladiator', blurb: 'Sword, net, and a bow for the ones that run. Fast and greedy for spoils.',
+    baseStats: { strength: 7, endurance: 5, luck: 6, wisdom: 3 },
+    growth: { strength: 1.1, endurance: 0.8, luck: 1.0, wisdom: 0.4 },
+    mods: { speed: 12, loot: 5, gold: 8 }, preferred: ['combat', 'explore'], preferredBonus: 8,
+    unlockTavernLevel: 1, tier: 1,
+    names: ['Marcus', 'Livia', 'Crixus', 'Vela', 'Otho the Swift'],
   },
-  rogue: {
-    id: 'rogue', name: 'Rogue', blurb: 'Brings back more than the contract specified.',
-    baseStats: { strength: 4, endurance: 4, luck: 8, wisdom: 4 },
-    growth: { strength: 0.7, endurance: 0.6, luck: 1.4, wisdom: 0.6 },
-    mods: { gold: 20, loot: 6, injuryResist: -5 }, preferred: ['stealth', 'explore'], preferredBonus: 10,
-    unlockTavernLevel: 3,
-    palette: { armor: '#4b4a5c', trim: '#8d7fb0', cloth: '#2b2a38' },
-    names: ['Quill', 'Sable', 'Nix', 'Mira', 'Dusk'],
+  samurai: {
+    id: 'samurai', name: 'Samurai', blurb: 'One clean strike. Prizes a perfect kill and the rare blade it earns.',
+    baseStats: { strength: 9, endurance: 6, luck: 5, wisdom: 5 },
+    growth: { strength: 1.4, endurance: 0.9, luck: 0.7, wisdom: 0.7 },
+    mods: { success: 6, loot: 8 }, preferred: ['combat'], preferredBonus: 12,
+    unlockTavernLevel: 2, tier: 2,
+    names: ['Kaede', 'Hiroshi', 'Ayame', 'Takeshi', 'Rin of the Reed'],
   },
-  mage: {
-    id: 'mage', name: 'Mage', blurb: 'Unmatched on arcane work, fragile everywhere else.',
-    baseStats: { strength: 3, endurance: 3, luck: 5, wisdom: 9 },
-    growth: { strength: 0.4, endurance: 0.5, luck: 0.8, wisdom: 1.6 },
-    mods: { xp: 20, loot: 5, injuryResist: -8 }, preferred: ['arcane'], preferredBonus: 14,
-    unlockTavernLevel: 4,
-    palette: { armor: '#4d5aa8', trim: '#d9a441', cloth: '#2a2f5c' },
-    names: ['Elowen', 'Vesper', 'Calder', 'Isolde', 'Aster'],
+  witch: {
+    id: 'witch', name: 'Witch', blurb: 'Hexes, bargains, and a nose for what a ruin is really worth. Fragile.',
+    baseStats: { strength: 3, endurance: 4, luck: 8, wisdom: 8 },
+    growth: { strength: 0.5, endurance: 0.6, luck: 1.3, wisdom: 1.3 },
+    mods: { loot: 12, gold: 22, injuryResist: -10 }, preferred: ['arcane', 'stealth'], preferredBonus: 12,
+    unlockTavernLevel: 2, tier: 2,
+    names: ['Morwenna', 'Hazel', 'Sybil', 'Nettle', 'Old Agatha'],
   },
-  paladin: {
-    id: 'paladin', name: 'Paladin', blurb: 'Slow, expensive, and almost impossible to stop.',
-    baseStats: { strength: 7, endurance: 8, luck: 3, wisdom: 6 },
-    growth: { strength: 1.1, endurance: 1.4, luck: 0.4, wisdom: 0.8 },
-    mods: { injuryResist: 20, success: 5, speed: -10 }, preferred: ['defense', 'arcane'], preferredBonus: 8,
-    unlockTavernLevel: 5,
-    palette: { armor: '#e6dcc3', trim: '#d9a441', cloth: '#8d6bb0' },
-    names: ['Ser Aldwin', 'Dame Solene', 'Ser Halric', 'Dame Iseult'],
+  lizardman: {
+    id: 'lizardman', name: 'Lizardman', blurb: 'Scales, claws, and a swamp-born refusal to die. Little sense for coin.',
+    baseStats: { strength: 8, endurance: 8, luck: 4, wisdom: 3 },
+    growth: { strength: 1.3, endurance: 1.3, luck: 0.5, wisdom: 0.3 },
+    mods: { success: 8, injuryResist: 15, gold: -12 }, preferred: ['combat', 'explore'], preferredBonus: 10,
+    unlockTavernLevel: 3, tier: 3,
+    names: ['Sythiss', 'Vorak', 'Xala', 'Threelk', 'Marsh-King Ozz'],
+  },
+  pyromancer: {
+    id: 'pyromancer', name: 'Pyromancer', blurb: 'Answers every problem with fire. Devastating, and made of paper.',
+    baseStats: { strength: 4, endurance: 3, luck: 5, wisdom: 10 },
+    growth: { strength: 0.5, endurance: 0.4, luck: 0.8, wisdom: 1.7 },
+    mods: { xp: 30, gold: 25, injuryResist: -15 }, preferred: ['arcane'], preferredBonus: 16,
+    unlockTavernLevel: 3, tier: 3,
+    names: ['Ignatia', 'Cinder', 'Ravan', 'Ember', 'Lord Vaylen'],
+  },
+  wizard: {
+    id: 'wizard', name: 'Wizard', blurb: 'Decades of study in a pointed hat. Unmatched on anything arcane.',
+    baseStats: { strength: 3, endurance: 4, luck: 5, wisdom: 12 },
+    growth: { strength: 0.4, endurance: 0.6, luck: 0.7, wisdom: 1.9 },
+    mods: { xp: 25, success: 5, loot: 6, injuryResist: -6 }, preferred: ['arcane', 'explore'], preferredBonus: 14,
+    unlockTavernLevel: 4, tier: 3,
+    names: ['Alaric', 'Merewyn', 'Cassius', 'Elspeth', 'Grand Magus Vorn'],
   },
 };
 
 export const RECRUIT_COST: Record<HeroClass, number> = {
-  knight: 0, squire: 800, archer: 2500, rogue: 6000, mage: 14000, paladin: 30000,
+  knight: 0,
+  dwarf: 1200, gladiator: 1500,
+  samurai: 5000, witch: 6500,
+  lizardman: 16000, pyromancer: 20000, wizard: 32000,
 };
+
+/**
+ * Higher-tier heroes are expensive, so they start ahead: a fresh hire begins at
+ * this level with stat points already banked, rather than at level 1. Combined
+ * with per-hero training gifts (bonusStats) this lets a late recruit stay
+ * relevant instead of spending days catching up.
+ */
+export const RECRUIT_START_LEVEL: Record<number, number> = {
+  0: 1, 1: 3, 2: 8, 3: 15,
+};
+
+/* -------------------------------- skins --------------------------------- */
+
+export interface SkinDef {
+  id: string;
+  name: string;
+  description: string;
+  /** Flat gold price; every skin costs the same regardless of class. */
+  cost: number;
+  /** Small swatch colours for the shop UI. */
+  swatch: [string, string];
+}
+
+export const SKIN_PRICE = 3500;
+
+export const SKINS: SkinDef[] = [
+  { id: 'original', name: 'Original', description: 'The colours they arrived in. Always owned.', cost: 0, swatch: ['#8e8e8e', '#c0c0c0'] },
+  { id: 'necrotic', name: 'Necrotic', description: 'Graveyard greens and a violet pallor.', cost: SKIN_PRICE, swatch: ['#3aa55d', '#7a4fa0'] },
+  { id: 'holy', name: 'Holy', description: 'Bleached white and gilded edges.', cost: SKIN_PRICE, swatch: ['#e9d8a0', '#bcd0e0'] },
+  { id: 'infernal', name: 'Infernal', description: 'Ember reds banked over black.', cost: SKIN_PRICE, swatch: ['#c0331e', '#e07a2a'] },
+  { id: 'frost', name: 'Frost', description: 'Glacier blues and pale teal.', cost: SKIN_PRICE, swatch: ['#5aa8d8', '#79c0c0'] },
+];
+
+export const SKIN_BY_ID: Record<string, SkinDef> = Object.fromEntries(SKINS.map((s) => [s.id, s]));
 
 /* ----------------------------- level curve ------------------------------ */
 

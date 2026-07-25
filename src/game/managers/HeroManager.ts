@@ -1,6 +1,6 @@
 import { EQUIPMENT_BY_ID, SET_BY_ID } from '../data/equipment';
 import { INJURIES } from '../data/items';
-import { HERO_CLASSES, xpForLevel } from '../data/progression';
+import { HERO_CLASSES, RECRUIT_START_LEVEL, xpForLevel } from '../data/progression';
 import { Hero, HeroClass, Injury, Modifiers, Stats } from '../types';
 import { Rng, uid } from '../rng';
 import { scaleMods, sumMods } from '../util';
@@ -8,19 +8,33 @@ import { scaleMods, sumMods } from '../util';
 export const HeroManager = {
   create(heroClass: HeroClass, rng: Rng, nameOverride?: string): Hero {
     const def = HERO_CLASSES[heroClass];
+    const startLevel = RECRUIT_START_LEVEL[def.tier] ?? 1;
+
+    // Grow base stats up to the starting level so a tier-3 hire isn't a level-1
+    // weakling despite the price. Each level applies the class growth once.
+    const stats = { ...def.baseStats };
+    for (let lvl = 1; lvl < startLevel; lvl++) {
+      stats.strength += def.growth.strength;
+      stats.endurance += def.growth.endurance;
+      stats.luck += def.growth.luck;
+      stats.wisdom += def.growth.wisdom;
+    }
+
     return {
       id: uid('hero'),
       name: nameOverride ?? rng.pick(def.names),
       heroClass,
-      level: 1,
+      level: startLevel,
       xp: 0,
-      stats: { ...def.baseStats },
-      statPoints: 0,
+      stats,
+      statPoints: startLevel - 1,
       equipment: {},
       injuries: [],
       status: 'idle',
       activeQuestId: null,
       questsCompleted: 0,
+      skin: 'original',
+      bonusStats: { strength: 0, endurance: 0, luck: 0, wisdom: 0 },
     };
   },
 
@@ -66,11 +80,12 @@ export const HeroManager = {
 
   totalStats(hero: Hero): Stats {
     const gear = HeroManager.equipmentStats(hero);
+    const bonus = hero.bonusStats ?? { strength: 0, endurance: 0, luck: 0, wisdom: 0 };
     return {
-      strength: hero.stats.strength + gear.strength,
-      endurance: hero.stats.endurance + gear.endurance,
-      luck: hero.stats.luck + gear.luck,
-      wisdom: hero.stats.wisdom + gear.wisdom,
+      strength: hero.stats.strength + gear.strength + bonus.strength,
+      endurance: hero.stats.endurance + gear.endurance + bonus.endurance,
+      luck: hero.stats.luck + gear.luck + bonus.luck,
+      wisdom: hero.stats.wisdom + gear.wisdom + bonus.wisdom,
     };
   },
 

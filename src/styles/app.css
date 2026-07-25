@@ -497,3 +497,15 @@ input[type='range'] {
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-thumb { background: var(--panel-3); }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* --------------------------------- skins ---------------------------------- */
+
+.skin-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 9px; padding: 3px 6px; min-height: 22px;
+  background: var(--panel-2); border: 1px solid var(--panel-3);
+}
+.skin-chip.on { border-color: var(--brass); color: var(--brass); }
+.skin-chip:disabled { opacity: 0.4; }
+.skin-dots { display: inline-flex; gap: 2px; }
+.skin-dots span { width: 9px; height: 9px; border: 1px solid var(--edge); }

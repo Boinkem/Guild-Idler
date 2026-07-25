@@ -3,7 +3,7 @@ import { useSettings } from '../useSettings';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { InventoryManager } from '../../game/managers/InventoryManager';
-import { HERO_CLASSES, RECRUIT_COST } from '../../game/data/progression';
+import { HERO_CLASSES, RECRUIT_COST, SKINS } from '../../game/data/progression';
 import { HeroClass, Stats } from '../../game/types';
 import { describeMods, formatDuration, formatGold } from '../../game/util';
 import { HeroSprite } from '../sprites/HeroSprite';
@@ -34,7 +34,7 @@ export function HeroesPanel() {
         return (
           <div key={hero.id} className="card">
             <div className="row" style={{ alignItems: 'flex-start', gap: 12 }}>
-              <HeroSprite heroClass={hero.heroClass} animation={hero.injuries.length > 0 ? 'hurt' : 'idle'} scale={Math.max(1, Math.round(1.5 * settings.spriteScale))} />
+              <HeroSprite heroClass={hero.heroClass} skin={hero.skin} animation={hero.injuries.length > 0 ? 'hurt' : 'idle'} height={Math.round(76 * settings.spriteScale)} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="spread">
                   <span className="card-title">{hero.name}</span>
@@ -108,6 +108,29 @@ export function HeroesPanel() {
                   {' '}{hero.questsCompleted} quests completed ·
                   {' '}{hero.status === 'questing' ? 'away on a quest' : 'at the guild'}
                 </p>
+
+                <div className="row wrap" style={{ marginTop: 6, alignItems: 'center' }}>
+                  <span className="tiny muted">Livery:</span>
+                  {SKINS.map((sk) => {
+                    const owned = sk.id === 'original' || state.unlockedSkins.includes(sk.id);
+                    const active = (hero.skin ?? 'original') === sk.id;
+                    return (
+                      <button
+                        key={sk.id}
+                        className={`skin-chip ${active ? 'on' : ''}`}
+                        disabled={!owned}
+                        title={owned ? sk.name : `${sk.name} — buy in the Skins shop below`}
+                        onClick={() => engine.setHeroSkin(hero.id, sk.id)}
+                      >
+                        <span className="skin-dots">
+                          <span style={{ background: sk.swatch[0] }} />
+                          <span style={{ background: sk.swatch[1] }} />
+                        </span>
+                        {sk.name}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
@@ -136,6 +159,36 @@ export function HeroesPanel() {
                 onClick={() => engine.recruit(id)}
               >
                 {unlocked ? `Recruit · ${formatGold(cost)}` : `Tavern level ${def.unlockTavernLevel}`}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="section-heading">Skins</div>
+      <p className="small muted">
+        Cosmetic liveries, unlocked once for the whole guild and usable by any hero.
+        A pure gold sink — no effect on stats.
+      </p>
+      <div className="grid three">
+        {SKINS.filter((sk) => sk.id !== 'original').map((sk) => {
+          const owned = state.unlockedSkins.includes(sk.id);
+          return (
+            <div key={sk.id} className="card" style={{ marginBottom: 0 }}>
+              <div className="spread">
+                <span className="card-title">{sk.name}</span>
+                <span className="skin-dots">
+                  <span style={{ background: sk.swatch[0] }} />
+                  <span style={{ background: sk.swatch[1] }} />
+                </span>
+              </div>
+              <p className="card-flavour">{sk.description}</p>
+              <button
+                className="btn-primary"
+                disabled={owned || state.gold < sk.cost}
+                onClick={() => engine.buySkin(sk.id)}
+              >
+                {owned ? 'Owned' : `Unlock · ${formatGold(sk.cost)}`}
               </button>
             </div>
           );

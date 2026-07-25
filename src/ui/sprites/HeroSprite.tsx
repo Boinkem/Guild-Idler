@@ -1,79 +1,66 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { HeroClass } from '../../game/types';
-import { KNIGHT_STAND, PixelSprite, WALK_CYCLE } from './PixelSprite';
-import { HERO_CLASSES } from '../../game/data/progression';
+import { HeroClass, HeroSkin } from '../../game/types';
 
 /**
- * Renders the licensed knight sprite pack.
+ * Renders the character sprite packs. Each character has its own frame size and
+ * animation set, described by public/heroes/manifest.json, which this component
+ * loads once at startup. The art itself is gitignored (licensed, not
+ * redistributable), so everything degrades gracefully when it is absent.
  *
- * The art is not committed to the repository, so this component degrades to the
- * built-in generated sprites when the sheets are missing. A fresh clone still
- * runs; installing the pack simply upgrades the visuals.
- *
- * Install with:
- *   python3 tools/recolor.py --src <pack folder> --out public/heroes
+ * Generate the art with:
+ *   python3 tools/import_characters.py --src <packs> --knight-src <knight> --out public/heroes
  */
 
 export type HeroAnimation =
-  | 'idle' | 'walk' | 'run' | 'jump' | 'defend' | 'hurt' | 'death'
+  | 'idle' | 'walk' | 'run' | 'jump' | 'defend' | 'throw' | 'hurt' | 'death'
   | 'attack_1' | 'attack_2' | 'attack_3';
 
-/** Frame counts, from the sheets as shipped. */
-export const ANIMATION_FRAMES: Record<HeroAnimation, number> = {
-  idle: 7, walk: 8, run: 8, jump: 5, defend: 6, hurt: 4, death: 12,
-  attack_1: 6, attack_2: 5, attack_3: 6,
-};
-
-/** Frame size after tools/recolor.py crops away the empty margins. */
-export const FRAME_W = 64;
-export const FRAME_H = 46;
-
-const DEFAULT_FPS: Partial<Record<HeroAnimation, number>> = {
-  idle: 7, walk: 10, run: 14, hurt: 6, death: 8, defend: 8,
-  attack_1: 12, attack_2: 12, attack_3: 12,
-};
-
-function sheetUrl(heroClass: HeroClass, animation: HeroAnimation): string {
-  return `./heroes/${heroClass}/${animation}.png`;
+interface CharManifest {
+  frameW: number;
+  frameH: number;
+  animations: Partial<Record<HeroAnimation, number>>;
+  attacks: HeroAnimation[];
 }
 
-/** Module-level cache so each sheet is probed once per session. */
-const probeCache = new Map<string, boolean>();
+type Manifest = Partial<Record<HeroClass, CharManifest>>;
 
-function useSheet(url: string): 'loading' | 'ready' | 'missing' {
-  const [state, setState] = useState<'loading' | 'ready' | 'missing'>(
-    () => (probeCache.has(url) ? (probeCache.get(url) ? 'ready' : 'missing') : 'loading'),
-  );
+const DEFAULT_FPS: Partial<Record<HeroAnimation, number>> = {
+  idle: 6, walk: 9, run: 12, hurt: 6, death: 8, defend: 8, jump: 10,
+  attack_1: 11, attack_2: 11, attack_3: 11, throw: 11,
+};
 
+let manifestCache: Manifest | null = null;
+let manifestPromise: Promise<Manifest> | null = null;
+
+function loadManifest(): Promise<Manifest> {
+  if (manifestCache) return Promise.resolve(manifestCache);
+  if (!manifestPromise) {
+    manifestPromise = fetch('./heroes/manifest.json')
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((m: Manifest) => { manifestCache = m; return m; })
+      .catch(() => { manifestCache = {}; return {}; });
+  }
+  return manifestPromise;
+}
+
+function useManifest(): Manifest | null {
+  const [manifest, setManifest] = useState<Manifest | null>(manifestCache);
   useEffect(() => {
-    if (probeCache.has(url)) {
-      setState(probeCache.get(url) ? 'ready' : 'missing');
-      return;
-    }
+    if (manifestCache) { setManifest(manifestCache); return; }
     let live = true;
-    const img = new Image();
-    img.onload = () => {
-      probeCache.set(url, true);
-      if (live) setState('ready');
-    };
-    img.onerror = () => {
-      probeCache.set(url, false);
-      if (live) setState('missing');
-    };
-    img.src = url;
+    void loadManifest().then((m) => { if (live) setManifest(m); });
     return () => { live = false; };
-  }, [url]);
-
-  return state;
+  }, []);
+  return manifest;
 }
 
 export interface HeroSpriteProps {
   heroClass: HeroClass;
+  skin?: HeroSkin;
   animation?: HeroAnimation;
-  scale?: number;
+  height?: number;
   fps?: number;
-  /** Play once and stop on the last frame instead of looping. */
   once?: boolean;
   onComplete?: () => void;
   flip?: boolean;
@@ -83,8 +70,9 @@ export interface HeroSpriteProps {
 
 export function HeroSprite({
   heroClass,
+  skin = 'original',
   animation = 'idle',
-  scale = 3,
+  height = 96,
   fps,
   once = false,
   onComplete,
@@ -92,29 +80,33 @@ export function HeroSprite({
   className,
   title,
 }: HeroSpriteProps) {
-  const url = sheetUrl(heroClass, animation);
-  const status = useSheet(url);
-  const frames = ANIMATION_FRAMES[animation];
-  const rate = fps ?? DEFAULT_FPS[animation] ?? 10;
+  const manifest = useManifest();
+  const char = manifest?.[heroClass];
+
+  const resolved = useMemo<HeroAnimation>(() => {
+    if (!char) return animation;
+    if (char.animations[animation]) return animation;
+    if (animation === 'run' && char.animations.walk) return 'walk';
+    if (animation.startsWith('attack') && char.attacks[0]) return char.attacks[0];
+    if (animation === 'defend' && char.animations.idle) return 'idle';
+    return 'idle';
+  }, [char, animation]);
+
+  const frames = char?.animations[resolved] ?? 1;
+  const rate = fps ?? DEFAULT_FPS[resolved] ?? 8;
   const [index, setIndex] = useState(0);
   const doneRef = useRef(false);
 
-  useEffect(() => {
-    setIndex(0);
-    doneRef.current = false;
-  }, [animation, heroClass]);
+  useEffect(() => { setIndex(0); doneRef.current = false; }, [resolved, heroClass, skin]);
 
   useEffect(() => {
-    if (status !== 'ready') return;
+    if (!char || frames <= 1) return;
     const id = window.setInterval(() => {
-      setIndex((current) => {
-        const next = current + 1;
+      setIndex((cur) => {
+        const next = cur + 1;
         if (next >= frames) {
           if (once) {
-            if (!doneRef.current) {
-              doneRef.current = true;
-              onComplete?.();
-            }
+            if (!doneRef.current) { doneRef.current = true; onComplete?.(); }
             return frames - 1;
           }
           return 0;
@@ -123,38 +115,42 @@ export function HeroSprite({
       });
     }, 1000 / rate);
     return () => window.clearInterval(id);
-  }, [status, frames, rate, once, onComplete]);
+  }, [char, frames, rate, once, onComplete]);
 
-  const style = useMemo<CSSProperties>(() => ({
-    width: FRAME_W * scale,
-    height: FRAME_H * scale,
+  if (manifest === null) {
+    return <div className={className} style={{ height, width: height }} />;
+  }
+
+  if (!char) {
+    return (
+      <div
+        className={className}
+        style={{
+          height, width: height, display: 'grid', placeItems: 'center',
+          border: '1px dashed var(--panel-3)', background: 'var(--panel)',
+          fontSize: Math.max(9, height / 8), color: 'var(--muted)', textTransform: 'capitalize',
+        }}
+        title={title ?? heroClass}
+      >
+        {heroClass}
+      </div>
+    );
+  }
+
+  const scale = height / char.frameH;
+  const url = `./heroes/${heroClass}/${skin}/${resolved}.png`;
+  const style: CSSProperties = {
+    width: char.frameW * scale,
+    height: char.frameH * scale,
     backgroundImage: `url(${url})`,
-    backgroundSize: `${FRAME_W * frames * scale}px ${FRAME_H * scale}px`,
-    backgroundPosition: `-${index * FRAME_W * scale}px 0`,
+    backgroundSize: `${char.frameW * frames * scale}px ${char.frameH * scale}px`,
+    backgroundPosition: `-${index * char.frameW * scale}px 0`,
     backgroundRepeat: 'no-repeat',
     imageRendering: 'pixelated',
     transform: flip ? 'scaleX(-1)' : undefined,
-  }), [url, frames, index, scale, flip]);
-
-  if (status === 'missing') {
-    // Generated fallback art, so the game is never blank.
-    const palette = HERO_CLASSES[heroClass].palette;
-    const frame = animation === 'walk' || animation === 'run'
-      ? WALK_CYCLE[index % WALK_CYCLE.length]
-      : KNIGHT_STAND;
-    return <PixelSprite frame={frame} scale={Math.max(1, Math.round(scale * 1.4))} colors={palette} title={title} />;
-  }
-
-  if (status === 'loading') {
-    return <div className={className} style={{ width: FRAME_W * scale, height: FRAME_H * scale }} />;
-  }
+  };
 
   return (
-    <div
-      className={className}
-      style={style}
-      role={title ? 'img' : 'presentation'}
-      aria-label={title}
-    />
+    <div className={className} style={style} role={title ? 'img' : 'presentation'} aria-label={title} />
   );
 }

@@ -9,6 +9,7 @@ import { InventoryManager } from './managers/InventoryManager';
 import { GuildManager } from './managers/GuildManager';
 import { PrestigeManager } from './managers/PrestigeManager';
 import { ModifierManager } from './managers/ModifierManager';
+import { SKIN_BY_ID, SKIN_PRICE } from './data/progression';
 
 const TICK_MS = 1000;
 const AUTOSAVE_MS = 15_000;
@@ -357,6 +358,33 @@ export class GameEngine {
     this.notify();
     void this.saveNow();
   }
+
+  /** Buys a skin for the guild (usable by any hero of any class). */
+  buySkin(skinId: string) {
+    if (this.state.unlockedSkins.includes(skinId)) return this.say('Already owned.');
+    const def = SKIN_BY_ID[skinId];
+    if (!def) return this.say('Unknown skin.');
+    if (this.state.gold < def.cost) return this.say('Not enough gold.');
+    this.state.gold -= def.cost;
+    this.state.stats.goldSpent += def.cost;
+    this.state.unlockedSkins.push(skinId);
+    this.say(`${def.name} livery unlocked for the whole guild.`);
+    void this.saveNow();
+  }
+
+  /** Applies an owned skin to one hero. Free once unlocked. */
+  setHeroSkin(heroId: string, skinId: string) {
+    const hero = this.hero(heroId);
+    if (!hero) return;
+    if (skinId !== 'original' && !this.state.unlockedSkins.includes(skinId)) {
+      return this.say('That livery is not unlocked yet.');
+    }
+    hero.skin = skinId as typeof hero.skin;
+    this.notify();
+    void this.saveNow();
+  }
+
+  get skinPrice() { return SKIN_PRICE; }
 
   hardReset() {
     this.state = createInitialState();

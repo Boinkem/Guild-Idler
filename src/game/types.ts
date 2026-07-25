@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -11,7 +11,11 @@ export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
 export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'gloves' | 'boots' | 'ring' | 'amulet';
 
-export type HeroClass = 'knight' | 'squire' | 'archer' | 'rogue' | 'mage' | 'paladin';
+export type HeroClass = 'knight' | 'gladiator' | 'samurai' | 'witch' | 'pyromancer' | 'lizardman' | 'wizard' | 'dwarf';
+
+/** Cosmetic recolour skins, applied per hero. */
+
+export type HeroSkin = 'original' | 'necrotic' | 'holy' | 'infernal' | 'frost';
 
 export type HeroStatus = 'idle' | 'questing' | 'resting';
 
@@ -120,6 +124,14 @@ export interface Hero {
   activeQuestId: string | null;
   /** Total quests finished by this hero, used for flavour and stats. */
   questsCompleted: number;
+  /** Currently worn cosmetic skin. */
+  skin: HeroSkin;
+  /**
+   * Permanent scaling gifts applied to this specific hero from quest rewards
+   * and training items — lets an expensive late hire catch up. Flat additions
+   * to base stats.
+   */
+  bonusStats: Stats;
 }
 
 /* ----------------------------- quests ----------------------------- */
@@ -287,4 +299,6 @@ export interface GameState {
   stats: Statistics;
   log: QuestResult[];
   discoveredItems: string[];
+  /** Skins the guild has purchased; usable by any hero of that class. */
+  unlockedSkins: string[];
 }

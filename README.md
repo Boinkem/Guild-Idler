@@ -187,72 +187,65 @@ Checks run against the compiled game logic:
 
 ## Art
 
-The game supports two sources of sprite art and picks whichever is available.
+Eight playable classes, each a distinct character pack from the same artist:
+knight, dwarf warrior, gladiator, samurai, witch, lizardman, pyromancer, wizard.
+Each ships in its original colours plus four themed recolour **skins** (Necrotic,
+Holy, Infernal, Frost) used as a cosmetic gold sink.
 
-### 1. The licensed sprite pack (preferred)
-
-Frames are 96x84 in the pack as shipped; `tools/recolor.py` crops them to the
-content box (64x46, about a third of the original pixels) and generates one
-recoloured variant per hero class.
-
-```bash
-python3 tools/recolor.py --src /path/to/knight-pack --out public/heroes
-```
-
-That writes `public/heroes/<class>/<animation>.png` for six classes across ten
-animations — idle, walk, run, jump, defend, hurt, death and three attacks —
-totalling about 210 KB.
-
-**The art is not committed to the repository** (`public/heroes` is gitignored),
-because the pack licence permits use within a project but not redistribution of
-the files themselves. Anyone cloning the repo runs `recolor.py` against their
-own copy of the pack.
-
-#### How the recolouring works
-
-Strict palette swap with lightness preservation. The pack uses only 22 colours
-and binary alpha — no anti-aliasing — so every pixel matches one of a few known
-ramps exactly. For each colour we replace **hue and saturation only** and leave
-**lightness untouched**, which means the artist's shading survives byte for
-byte. Nothing is blurred, averaged, or resampled.
-
-Verified on the shipped pack:
-
-- Silhouette and alpha identical across all six variants
-- The `knight` variant is byte-identical to the source on every opaque pixel
-- No tone collisions: all 6 armour tones and 5 cloth tones stay distinct in
-  every class, so no shading step is flattened
-- Relative lightness ordering preserved in every ramp
-
-Skin, outline, white highlights and the gold/blue effect colours are held
-constant across classes, so the six read as one knight in different livery
-rather than six unrelated characters. Adjust the `CLASSES` table at the top of
-`recolor.py` to retune; each entry is a hue, a saturation multiplier and a
-lightness multiplier for the armour and cloth groups.
-
-### 2. Generated fallback sprites
-
-`src/ui/sprites/PixelSprite.tsx` holds 32x32 character grids rendered to SVG
-rects. `HeroSprite` falls back to these automatically when a sheet is missing,
-so a fresh clone without the pack still runs and still recolours per class —
-installing the pack simply upgrades the visuals.
-
-These grids are authored by `sprite_lab.py` in three passes: draw a flat
-silhouette in materials using span helpers, derive each pixel's tone from which
-edges of its region it sits on (light from the upper left), then outline.
+### Importing the packs
 
 ```bash
-python3 sprite_lab.py     # renders a preview PNG to /tmp
+python3 tools/import_characters.py \
+  --src <folder with the extracted character packs> \
+  --knight-src <folder with the original knight sheets> \
+  --out public/heroes
 ```
+
+This normalises the differently-nested packs, crops each character to its own
+tight frame box, and writes `public/heroes/<class>/<skin>/<animation>.png` plus
+a `manifest.json` the game reads at runtime for per-character frame sizes and
+animation counts. Around 260 files, 1.7 MB.
+
+**None of it is committed** (`public/heroes` is gitignored) — the licence allows
+use inside a project but not redistribution of the files. It permits commercial
+use and modification, which is what makes the recolours legal. Keep your
+original packs safe and regenerate any time.
+
+#### Recolour skins
+
+Same lightness-preserving palette swap as before: binary alpha and low colour
+counts mean texture survives exactly. Each theme remaps saturated "identity"
+pixels toward a primary/secondary hue pair while leaving neutrals (outlines,
+steel, bone, eyes) untouched, so a two-tone character keeps its internal
+contrast in the new livery. Verified across all seven imported characters: 100%
+of tones stay distinct, lightness range 0.60–0.93 (well above the muddiness
+floor). Retune the four themes in the `SKINS` table in `import_characters.py`.
+
+#### Per-character frames
+
+Frame sizes differ (gladiator 40×38 after cropping, lizardman 101×85, etc), so
+`HeroSprite` sizes each character from the manifest and takes a target `height`
+rather than an integer scale. Animation sets differ too — the samurai has ten
+including jump/defend/throw, most others have the core five. `HeroSprite`
+resolves a requested animation to the nearest one the character actually has
+(missing run → walk, missing attack → its first attack, missing defend → idle).
+
+### Generated fallback sprites
+
+`src/ui/sprites/PixelSprite.tsx` still holds the 32×32 SVG-grid knight from
+before. It is no longer wired into the main views but remains as a reference
+implementation and a safety net; `HeroSprite` shows a labelled placeholder if a
+character's art is absent, so a fresh clone without the packs still runs.
 
 ### Animation mapping
 
 | Game state | Animation |
 | --- | --- |
 | At the guild | `idle` |
-| Leaving on a quest | `run` |
+| Leaving on a quest | `run` (falls back to `walk`) |
 | Away / returning | `walk` |
 | Injured | `hurt` |
 
-`defend`, `death`, `jump` and the three attack sheets are loaded and available
-in `ANIMATION_FRAMES` but not yet used — obvious hooks for quest-result flourishes.
+The `attack`, `defend`, `jump`, `throw` and `death` sheets are imported and in
+the manifest, ready for quest-result flourishes.
+
