@@ -91,6 +91,11 @@ button:focus-visible, [tabindex]:focus-visible {
   justify-content: flex-end;
   align-items: center;
   padding-bottom: 6px;
+  -webkit-app-region: no-drag;
+}
+
+/* Only draggable once explicitly unlocked — see the lock toggle in IdleView. */
+.idle-root.unlocked {
   -webkit-app-region: drag;
 }
 

@@ -11,6 +11,8 @@ const api = {
   setWindowMode: (mode: 'idle' | 'menu'): Promise<void> => ipcRenderer.invoke('window:setMode', mode),
   setAlwaysOnTop: (value: boolean): Promise<boolean> => ipcRenderer.invoke('window:setAlwaysOnTop', value),
   getAlwaysOnTop: (): Promise<boolean> => ipcRenderer.invoke('window:getAlwaysOnTop'),
+  setLocked: (value: boolean): Promise<boolean> => ipcRenderer.invoke('window:setLocked', value),
+  getLocked: (): Promise<boolean> => ipcRenderer.invoke('window:getLocked'),
   minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
   quit: (): Promise<void> => ipcRenderer.invoke('window:quit'),
 };

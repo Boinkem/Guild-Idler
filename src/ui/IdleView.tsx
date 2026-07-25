@@ -14,6 +14,17 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
   const hero = engine.displayedHero;
   const quest = engine.activeQuestFor(hero.id);
   const [anim, setAnim] = useState<Anim>(quest ? 'walking' : 'idle');
+  const [locked, setLocked] = useState(true);
+
+  useEffect(() => {
+    void window.littleKnight?.getLocked().then((v) => setLocked(v ?? true));
+  }, []);
+
+  const toggleLocked = async () => {
+    const next = !locked;
+    const confirmed = await window.littleKnight?.setLocked(next);
+    setLocked(confirmed ?? next);
+  };
 
   // Tracks the previously shown hero/quest pair so that cycling to a
   // different hero snaps straight to their real state, while an actual
@@ -70,7 +81,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
       : `+${others.length} more at the guild`;
 
   return (
-    <div className="idle-root">
+    <div className={`idle-root ${locked ? '' : 'unlocked'}`}>
       <div className="idle-stage">
         {!quest && questsReady > 0 && (
           <PixelSprite frame={QUEST_MARK} scale={3} className="quest-mark" title="Quests available" />
@@ -126,6 +137,13 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
 
         <div className="idle-actions">
           <button className="btn-ghost" onClick={onOpenMenu}>Open guild</button>
+          <button
+            className="btn-ghost"
+            onClick={toggleLocked}
+            title={locked ? 'Unlock to drag the companion to a new spot' : 'Lock the companion in its current spot'}
+          >
+            {locked ? '🔒' : '🔓'}
+          </button>
           <button className="btn-ghost" onClick={() => window.littleKnight?.minimize()}>Hide</button>
         </div>
       </div>

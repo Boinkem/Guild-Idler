@@ -30,6 +30,26 @@ const DEFAULT_FPS: Partial<Record<HeroAnimation, number>> = {
   attack_1: 11, attack_2: 11, attack_3: 11, throw: 11,
 };
 
+/**
+ * Each character's frame is cropped tight to its own bounding box across
+ * every animation it has, but source packs differ wildly in how much of that
+ * box the character actually fills — measured directly (idle-frame opaque
+ * pixel height / frame height): gladiator and adventurer fill ~97%, knight
+ * ~80%, samurai only ~62%. Rendering every class at the same target `height`
+ * therefore made some visibly bigger than others despite identical code.
+ *
+ * This corrects the oversized ones down to match knight (the longest-tuned
+ * reference). Undersized classes are deliberately left at 1 rather than
+ * scaled up — inflating them risks overflowing the tiny companion window,
+ * especially stacked with the user's own sprite-size setting.
+ */
+const HERO_DISPLAY_SCALE: Partial<Record<HeroClass, number>> = {
+  gladiator: 0.83,
+  adventurer: 0.83,
+  wizard: 0.86,
+  dwarf: 0.92,
+};
+
 let manifestCache: Manifest | null = null;
 let manifestPromise: Promise<Manifest> | null = null;
 
@@ -137,7 +157,7 @@ export function HeroSprite({
     );
   }
 
-  const scale = height / char.frameH;
+  const scale = (height / char.frameH) * (HERO_DISPLAY_SCALE[heroClass] ?? 1);
   const url = `./heroes/${heroClass}/${skin}/${resolved}.png`;
   const style: CSSProperties = {
     width: char.frameW * scale,

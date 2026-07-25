@@ -13,12 +13,30 @@ let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let alwaysOnTop = true;
 
+/**
+ * Which window mode the renderer currently shows, and the companion's "home"
+ * position — independent concepts that used to get tangled together. The
+ * home position is where the tiny idle window belongs; opening the big menu
+ * and dragging it around must never overwrite that, or closing the menu
+ * leaves the companion stranded wherever the menu happened to end up rather
+ * than back at its actual spot.
+ */
+let currentMode: 'idle' | 'menu' = 'idle';
+let idleBounds: { x: number; y: number } | null = null;
+/** When locked (default), the idle companion can't be dragged at all. */
+let companionLocked = true;
+
 const userDataDir = () => app.getPath('userData');
 const savePath = () => path.join(userDataDir(), 'little-knight-save.json');
 const backupPath = () => path.join(userDataDir(), 'little-knight-save.backup.json');
 const settingsPath = () => path.join(userDataDir(), 'little-knight-settings.json');
 
-type Settings = { alwaysOnTop: boolean; x?: number; y?: number };
+interface Settings {
+  alwaysOnTop: boolean;
+  x?: number;
+  y?: number;
+  locked?: boolean;
+}
 
 async function readSettings(): Promise<Settings> {
   try {
@@ -28,7 +46,9 @@ async function readSettings(): Promise<Settings> {
   }
 }
 
-async function writeSettings(next: Settings) {
+async function writeSettings(patch: Partial<Settings>) {
+  const current = await readSettings();
+  const next = { ...current, ...patch };
   await fs.writeFile(settingsPath(), JSON.stringify(next, null, 2), 'utf8');
 }
 
@@ -40,17 +60,28 @@ function bottomRight(width: number, height: number) {
   };
 }
 
+/** Clamps a top-left position so the given size stays fully on the primary display. */
+function clampToWorkArea(x: number, y: number, width: number, height: number) {
+  const { workArea } = screen.getPrimaryDisplay();
+  return {
+    x: Math.max(workArea.x, Math.min(x, workArea.x + workArea.width - width)),
+    y: Math.max(workArea.y, Math.min(y, workArea.y + workArea.height - height)),
+  };
+}
+
 async function createWindow() {
   const settings = await readSettings();
   alwaysOnTop = settings.alwaysOnTop ?? true;
+  companionLocked = settings.locked ?? true;
 
-  const pos = settings.x != null && settings.y != null
+  idleBounds = settings.x != null && settings.y != null
     ? { x: settings.x, y: settings.y }
     : bottomRight(IDLE_SIZE.width, IDLE_SIZE.height);
+  currentMode = 'idle';
 
   win = new BrowserWindow({
     ...IDLE_SIZE,
-    ...pos,
+    ...idleBounds,
     frame: false,
     transparent: true,
     resizable: false,
@@ -79,8 +110,13 @@ async function createWindow() {
 
   win.on('moved', async () => {
     if (!win) return;
+    // Only a move of the IDLE window updates its home position. Dragging the
+    // menu window around (a deliberately supported thing to do) must not
+    // relocate where the companion snaps back to afterward.
+    if (currentMode !== 'idle') return;
     const [x, y] = win.getPosition();
-    await writeSettings({ alwaysOnTop, x, y });
+    idleBounds = { x, y };
+    await writeSettings({ x, y });
   });
 }
 
@@ -96,6 +132,15 @@ function createTray() {
         alwaysOnTop = item.checked;
         win?.setAlwaysOnTop(alwaysOnTop, 'floating');
         void writeSettings({ alwaysOnTop });
+      },
+    },
+    {
+      label: 'Lock companion position',
+      type: 'checkbox',
+      checked: companionLocked,
+      click: (item) => {
+        companionLocked = item.checked;
+        void writeSettings({ locked: companionLocked });
       },
     },
     { label: 'Show knight', click: () => win?.show() },
@@ -137,16 +182,25 @@ ipcMain.handle('save:reveal', () => userDataDir());
 
 ipcMain.handle('window:setMode', (_e, mode: 'idle' | 'menu') => {
   if (!win) return;
-  const size = mode === 'menu' ? MENU_SIZE : IDLE_SIZE;
-  const [curX, curY] = win.getPosition();
-  const [curW, curH] = win.getSize();
-  // Grow from the bottom-right corner so the knight stays put.
-  const anchorX = curX + curW;
-  const anchorY = curY + curH;
-  const { workArea } = screen.getPrimaryDisplay();
-  const x = Math.max(workArea.x, Math.min(anchorX - size.width, workArea.x + workArea.width - size.width));
-  const y = Math.max(workArea.y, Math.min(anchorY - size.height, workArea.y + workArea.height - size.height));
-  win.setBounds({ x, y, ...size }, false);
+  if (mode === currentMode) return;
+
+  if (mode === 'menu') {
+    // Capture the idle position before growing, so we have somewhere correct
+    // to return to later regardless of where the menu window gets dragged.
+    const [x, y] = win.getPosition();
+    idleBounds = { x, y };
+    const anchorX = x + IDLE_SIZE.width;
+    const anchorY = y + IDLE_SIZE.height;
+    const pos = clampToWorkArea(anchorX - MENU_SIZE.width, anchorY - MENU_SIZE.height, MENU_SIZE.width, MENU_SIZE.height);
+    win.setBounds({ ...pos, ...MENU_SIZE }, false);
+  } else {
+    // Always return to the saved home position, never wherever the menu
+    // window currently happens to be sitting.
+    const home = idleBounds ?? bottomRight(IDLE_SIZE.width, IDLE_SIZE.height);
+    const pos = clampToWorkArea(home.x, home.y, IDLE_SIZE.width, IDLE_SIZE.height);
+    win.setBounds({ ...pos, ...IDLE_SIZE }, false);
+  }
+  currentMode = mode;
 });
 
 ipcMain.handle('window:setAlwaysOnTop', (_e, value: boolean) => {
@@ -157,6 +211,15 @@ ipcMain.handle('window:setAlwaysOnTop', (_e, value: boolean) => {
 });
 
 ipcMain.handle('window:getAlwaysOnTop', () => alwaysOnTop);
+
+ipcMain.handle('window:setLocked', (_e, value: boolean) => {
+  companionLocked = value;
+  void writeSettings({ locked: value });
+  return value;
+});
+
+ipcMain.handle('window:getLocked', () => companionLocked);
+
 ipcMain.handle('window:minimize', () => win?.minimize());
 ipcMain.handle('window:quit', () => app.quit());
 

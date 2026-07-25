@@ -17,6 +17,8 @@ declare global {
       setWindowMode(mode: 'idle' | 'menu'): Promise<void>;
       setAlwaysOnTop(value: boolean): Promise<boolean>;
       getAlwaysOnTop(): Promise<boolean>;
+      setLocked(value: boolean): Promise<boolean>;
+      getLocked(): Promise<boolean>;
       minimize(): Promise<void>;
       quit(): Promise<void>;
     };
