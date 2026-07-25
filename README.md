@@ -4,6 +4,10 @@ A cozy desktop companion idle game. A small pixel knight stands in the corner of
 
 ---
 
+## Editing game content
+
+Quest templates, equipment, consumables, and events can be edited without touching code — see [DEVTOOL.md](./DEVTOOL.md). Everything else (classes, upgrades, difficulty tuning) is still in TypeScript.
+
 ## Running it
 
 Requires Node 18 or newer.

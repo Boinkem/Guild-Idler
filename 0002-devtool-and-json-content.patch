@@ -1,0 +1,2145 @@
+diff --git a/.gitignore b/.gitignore
+index 4d9e4c5..780bd83 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -7,3 +7,6 @@ release
+ # Licensed sprite pack: usable in the project, but not redistributable as files.
+ # Regenerate with:  python3 tools/recolor.py --src <pack> --out public/heroes
+ public/heroes
++tools/__pycache__
++tools/devtool/public/*.bak
++src/game/data/json/*.bak
+diff --git a/DEVTOOL.md b/DEVTOOL.md
+new file mode 100644
+index 0000000..fe52753
+--- /dev/null
++++ b/DEVTOOL.md
+@@ -0,0 +1,84 @@
++# Dev Tool — editing game content without touching code
++
++A local editor for quest templates, equipment, consumables, and events. Runs
++independently of the game itself.
++
++## Running it
++
++```powershell
++cd C:\Little-Knight
++npm run devtool
++```
++
++Then open **http://localhost:5175** in any browser. Leave the PowerShell window
++open while you work — closing it stops the server. `Ctrl+C` in that window also
++stops it cleanly.
++
++You can run this while the game is open or closed; they don't interact.
++
++## Workflow
++
++1. Pick a tab: Quest Templates, Equipment, Consumables, or Events.
++2. **Edit** an existing entry, **Duplicate** one as a starting point for something
++   similar, or **+ Add** a new one from scratch.
++3. Fill in the form. Required fields are marked with `*`. The tool will not let
++   you save something broken — see **What it stops you from doing** below.
++4. Save. The status bar in the top right confirms it, or explains what's wrong.
++5. Restart the game (`npm run dev`) to see the change. There's no live-reload
++   into the running game on purpose — keeps this tool simple and the game
++   untouched while you're mid-edit.
++
++## What it stops you from doing
++
++Every save is checked before it touches disk:
++
++- **Missing required fields** — you can't save an item with no `name`.
++- **Wrong type in a dropdown field** — `slot` must be one of the seven real
++  slots, `rarity` one of the five real rarities, etc.
++- **Bad ids** — the `id` field (used internally, e.g. `rusty_sword`) must be
++  lowercase with underscores, no spaces or capitals.
++- **Duplicate ids** — two equipment pieces can't share an id.
++- **Unknown stat/modifier keys** — a typo like `succes` instead of `success` in
++  a modifier gets caught immediately rather than silently doing nothing in-game.
++
++If a save is rejected, your edits stay on screen — fix the highlighted problem
++and save again. Nothing is lost.
++
++### Why this matters more than it might seem
++
++TypeScript's own type-checking does **not** catch a bad edit here. The game
++imports this JSON with a type assertion (`as EquipmentDef[]`), which tells
++TypeScript "trust me" rather than actually checking the shape — we confirmed
++this directly: deleting a required field from the JSON still passes `npm run
++build` cleanly. The dev tool's validation is the only real safety net, so it's
++worth using the tool rather than hand-editing the JSON files in a text editor.
++If you do edit a JSON file by hand, run the dev tool afterward and just hit
++Save on the file you touched — it'll validate on write and tell you if
++something's wrong.
++
++## Backups
++
++Every successful save writes a `.bak` copy of the *previous* version in
++`src/game/data/json/` before overwriting. One level of undo, independent of
++git. These `.bak` files are gitignored — they're a safety net, not something to
++commit.
++
++## What's editable here vs. not
++
++**In the tool:** quest name templates (verb/subject/flavour), all equipment,
++consumables, and random road events — content with no logic attached, just
++numbers and text.
++
++**Still in code**, because logic is wired to them and editing blind is riskier:
++hero classes and their stats, guild upgrades, difficulty tuning, quest chains.
++Ask if you want any of these opened up next; it's the same pattern, just with a
++bit more care around what "valid" means for each.
++
++## If something looks wrong in the game after an edit
++
++1. Check the entry in the dev tool again — did it actually save (status bar
++   said "Saved")?
++2. Did you restart `npm run dev` after saving?
++3. Run `npm run build` — if your edit was somehow still structurally wrong in a
++   way the dev tool's validation didn't catch, this is the net that catches it
++   before you'd see it live.
+diff --git a/README.md b/README.md
+index b302b70..1bdac9e 100644
+--- a/README.md
++++ b/README.md
+@@ -4,6 +4,10 @@ A cozy desktop companion idle game. A small pixel knight stands in the corner of
+ 
+ ---
+ 
++## Editing game content
++
++Quest templates, equipment, consumables, and events can be edited without touching code — see [DEVTOOL.md](./DEVTOOL.md). Everything else (classes, upgrades, difficulty tuning) is still in TypeScript.
++
+ ## Running it
+ 
+ Requires Node 18 or newer.
+diff --git a/package.json b/package.json
+index e20cc44..5f4e426 100644
+--- a/package.json
++++ b/package.json
+@@ -13,7 +13,8 @@
+     "build": "tsc --noEmit && vite build",
+     "preview": "vite preview",
+     "start": "npm run build && electron .",
+-    "package": "npm run build && electron-builder"
++    "package": "npm run build && electron-builder",
++    "devtool": "node tools/devtool/server.mjs"
+   },
+   "dependencies": {
+     "react": "^18.3.1",
+diff --git a/src/game/data/equipment.ts b/src/game/data/equipment.ts
+index 24a651d..6112ba8 100644
+--- a/src/game/data/equipment.ts
++++ b/src/game/data/equipment.ts
+@@ -14,53 +14,12 @@ export const RARITY_PRICE_MULT: Record<Rarity, number> = {
+   common: 1, uncommon: 2.2, rare: 5, epic: 12, legendary: 32,
+ };
+ 
+-export const EQUIPMENT: EquipmentDef[] = [
+-  /* ------------------------------ weapons ------------------------------ */
+-  { id: 'rusty_sword', name: 'Rusty Sword', slot: 'weapon', rarity: 'common', reqLevel: 1, maxDurability: 40, value: 30, mods: { success: 2 }, stats: { strength: 1 } },
+-  { id: 'woodcutter_axe', name: "Woodcutter's Axe", slot: 'weapon', rarity: 'common', reqLevel: 2, maxDurability: 45, value: 45, mods: { success: 3 }, stats: { strength: 1 } },
+-  { id: 'knights_blade', name: "Knight's Blade", slot: 'weapon', rarity: 'uncommon', reqLevel: 5, maxDurability: 70, value: 160, mods: { success: 5, gold: 4 }, stats: { strength: 3 } },
+-  { id: 'silver_rapier', name: 'Silver Rapier', slot: 'weapon', rarity: 'rare', reqLevel: 10, maxDurability: 90, value: 520, mods: { success: 8, speed: 5 }, stats: { strength: 4, luck: 2 } },
+-  { id: 'oathkeeper', name: 'Oathkeeper', slot: 'weapon', rarity: 'epic', reqLevel: 18, maxDurability: 130, value: 1900, mods: { success: 12, injuryResist: 8 }, stats: { strength: 7, endurance: 3 } },
+-  { id: 'dragon_blade', name: 'Dragonfang Greatsword', slot: 'weapon', rarity: 'legendary', reqLevel: 25, maxDurability: 200, value: 7200, mods: { success: 16, gold: 12, loot: 4 }, stats: { strength: 12 }, setId: 'dragon_slayer' },
+-
+-  /* ------------------------------ helmets ------------------------------ */
+-  { id: 'leather_cap', name: 'Leather Cap', slot: 'helmet', rarity: 'common', reqLevel: 1, maxDurability: 35, value: 25, mods: { injuryResist: 3 } },
+-  { id: 'iron_helm', name: 'Iron Helm', slot: 'helmet', rarity: 'uncommon', reqLevel: 4, maxDurability: 60, value: 140, mods: { injuryResist: 7, success: 2 }, stats: { endurance: 2 } },
+-  { id: 'visored_sallet', name: 'Visored Sallet', slot: 'helmet', rarity: 'rare', reqLevel: 11, maxDurability: 85, value: 470, mods: { injuryResist: 12, success: 4 }, stats: { endurance: 4 } },
+-  { id: 'crown_of_the_lost', name: 'Crown of the Lost Kingdom', slot: 'helmet', rarity: 'epic', reqLevel: 16, maxDurability: 120, value: 2100, mods: { xp: 25, loot: 5, success: 5 }, stats: { wisdom: 8 } },
+-  { id: 'dragon_helm', name: 'Dragonscale Helm', slot: 'helmet', rarity: 'legendary', reqLevel: 25, maxDurability: 190, value: 6400, mods: { injuryResist: 20, success: 8 }, stats: { endurance: 9 }, setId: 'dragon_slayer' },
+-
+-  /* ------------------------------- chest ------------------------------- */
+-  { id: 'padded_gambeson', name: 'Padded Gambeson', slot: 'chest', rarity: 'common', reqLevel: 1, maxDurability: 45, value: 35, mods: { injuryResist: 4 } },
+-  { id: 'chainmail', name: 'Chainmail Hauberk', slot: 'chest', rarity: 'uncommon', reqLevel: 6, maxDurability: 75, value: 210, mods: { injuryResist: 9, success: 3 }, stats: { endurance: 3 } },
+-  { id: 'guardplate', name: 'Guardsman Plate', slot: 'chest', rarity: 'rare', reqLevel: 12, maxDurability: 110, value: 640, mods: { injuryResist: 14, success: 5 }, stats: { endurance: 6 } },
+-  { id: 'bulwark_cuirass', name: 'Bulwark Cuirass', slot: 'chest', rarity: 'epic', reqLevel: 20, maxDurability: 150, value: 2400, mods: { injuryResist: 22, success: 8, durability: 15 }, stats: { endurance: 9 } },
+-  { id: 'dragon_armor', name: 'Dragonplate Armor', slot: 'chest', rarity: 'legendary', reqLevel: 26, maxDurability: 220, value: 8200, mods: { injuryResist: 28, success: 10, durability: 20 }, stats: { endurance: 13, strength: 4 }, setId: 'dragon_slayer' },
+-
+-  /* ------------------------------ gloves ------------------------------- */
+-  { id: 'work_gloves', name: 'Work Gloves', slot: 'gloves', rarity: 'common', reqLevel: 1, maxDurability: 30, value: 20, mods: { gold: 3 } },
+-  { id: 'gauntlets', name: 'Steel Gauntlets', slot: 'gloves', rarity: 'uncommon', reqLevel: 5, maxDurability: 55, value: 130, mods: { success: 3, injuryResist: 4 }, stats: { strength: 2 } },
+-  { id: 'thief_wraps', name: "Cutpurse's Wraps", slot: 'gloves', rarity: 'rare', reqLevel: 10, maxDurability: 70, value: 430, mods: { gold: 14, loot: 3 }, stats: { luck: 4 } },
+-  { id: 'grasp_of_avarice', name: 'Grasp of Avarice', slot: 'gloves', rarity: 'epic', reqLevel: 19, maxDurability: 110, value: 2000, mods: { gold: 30, loot: 6 }, stats: { luck: 8 } },
+-
+-  /* ------------------------------- boots ------------------------------- */
+-  { id: 'worn_boots', name: 'Worn Boots', slot: 'boots', rarity: 'common', reqLevel: 1, maxDurability: 32, value: 22, mods: { speed: 3 } },
+-  { id: 'ranger_boots', name: 'Ranger Boots', slot: 'boots', rarity: 'uncommon', reqLevel: 4, maxDurability: 58, value: 135, mods: { speed: 7 }, stats: { endurance: 2 } },
+-  { id: 'sevenleague_boots', name: 'Seven-League Boots', slot: 'boots', rarity: 'rare', reqLevel: 13, maxDurability: 88, value: 560, mods: { speed: 14 }, stats: { endurance: 3, luck: 2 } },
+-  { id: 'windstride_greaves', name: 'Windstride Greaves', slot: 'boots', rarity: 'epic', reqLevel: 21, maxDurability: 130, value: 2300, mods: { speed: 22, success: 4 }, stats: { endurance: 7 } },
+-
+-  /* -------------------------------- ring ------------------------------- */
+-  { id: 'copper_band', name: 'Copper Band', slot: 'ring', rarity: 'common', reqLevel: 1, maxDurability: 60, value: 30, mods: { loot: 1 } },
+-  { id: 'lucky_ring', name: 'Lucky Ring', slot: 'ring', rarity: 'rare', reqLevel: 7, maxDurability: 100, value: 600, mods: { loot: 6, gold: 10 }, stats: { luck: 6 } },
+-  { id: 'signet_of_wardens', name: 'Signet of the Wardens', slot: 'ring', rarity: 'epic', reqLevel: 17, maxDurability: 140, value: 2200, mods: { success: 9, injuryResist: 10 }, stats: { luck: 5, wisdom: 4 } },
+-  { id: 'ring_of_endless_roads', name: 'Ring of Endless Roads', slot: 'ring', rarity: 'legendary', reqLevel: 28, maxDurability: 210, value: 7600, mods: { speed: 25, xp: 30, loot: 8 }, stats: { luck: 9, wisdom: 8 } },
+-
+-  /* ------------------------------- amulet ------------------------------ */
+-  { id: 'bone_charm', name: 'Bone Charm', slot: 'amulet', rarity: 'common', reqLevel: 1, maxDurability: 55, value: 28, mods: { xp: 5 } },
+-  { id: 'scholars_pendant', name: "Scholar's Pendant", slot: 'amulet', rarity: 'uncommon', reqLevel: 6, maxDurability: 80, value: 190, mods: { xp: 15 }, stats: { wisdom: 3 } },
+-  { id: 'amulet_of_fortune', name: 'Amulet of Fortune', slot: 'amulet', rarity: 'epic', reqLevel: 18, maxDurability: 145, value: 2500, mods: { gold: 28, loot: 8 }, stats: { luck: 9 } },
+-  { id: 'heart_of_the_mountain', name: 'Heart of the Mountain', slot: 'amulet', rarity: 'legendary', reqLevel: 30, maxDurability: 230, value: 9000, mods: { success: 14, injuryResist: 18, durability: 30 }, stats: { endurance: 12, wisdom: 6 } },
+-];
++/**
++ * Equipment lives in json/equipment.json so it can be edited via
++ * tools/devtool without touching TypeScript.
++ */
++import equipmentJson from './json/equipment.json';
++export const EQUIPMENT: EquipmentDef[] = equipmentJson as EquipmentDef[];
+ 
+ export const EQUIPMENT_BY_ID: Record<string, EquipmentDef> = Object.fromEntries(
+   EQUIPMENT.map((e) => [e.id, e]),
+diff --git a/src/game/data/events.ts b/src/game/data/events.ts
+index 443a584..fe62654 100644
+--- a/src/game/data/events.ts
++++ b/src/game/data/events.ts
+@@ -27,61 +27,12 @@ export interface EventDef {
+   };
+ }
+ 
+-export const EVENTS: EventDef[] = [
+-  /* ------------------------------ positive ------------------------------ */
+-  { id: 'treasure_chest', name: 'Found a Treasure Chest', kind: 'positive', weight: 20,
+-    description: 'Half-buried by the road, hinges rusted but the lock intact.',
+-    effects: { flatGold: 60, goldPct: 0.2 } },
+-  { id: 'helpful_merchant', name: 'Helpful Merchant', kind: 'positive', weight: 22,
+-    description: 'Shared a meal and a shortcut through the hills.',
+-    effects: { success: 8, goldPct: 0.1 } },
+-  { id: 'hidden_cache', name: 'Hidden Cache', kind: 'positive', weight: 16,
+-    description: 'Someone stashed supplies here and never came back for them.',
+-    effects: { flatGold: 35, loot: 10 } },
+-  { id: 'ancient_shrine', name: 'Ancient Shrine', kind: 'positive', weight: 14,
+-    description: 'A small offering, a long silence, and a lighter step afterwards.',
+-    effects: { success: 10, xpPct: 0.25 } },
+-  { id: 'lost_noble', name: 'Lost Noble Rewarded You', kind: 'positive', weight: 10,
+-    description: 'Pointed him toward the right road. He paid for the trouble.',
+-    effects: { flatGold: 140 } },
+-  { id: 'veteran_advice', name: 'Advice from a Veteran', kind: 'positive', weight: 12,
+-    description: 'An old campaigner drew the ground in the dirt and explained it twice.',
+-    effects: { success: 12 } },
+-
+-  /* ------------------------------ neutral ------------------------------- */
+-  { id: 'strange_wanderer', name: 'Strange Wanderer', kind: 'neutral', weight: 18,
+-    description: 'Spoke in riddles, left before dawn, took nothing.',
+-    effects: { xpPct: 0.1 } },
+-  { id: 'mysterious_cave', name: 'Mysterious Cave', kind: 'neutral', weight: 16,
+-    description: 'Explored a little way in. Marked it on the map for later.',
+-    effects: { loot: 5, delay: 5 } },
+-  { id: 'weather_delay', name: 'Weather Delay', kind: 'neutral', weight: 20,
+-    description: 'Waited out the storm under a rock ledge.',
+-    effects: { delay: 15 } },
+-  { id: 'old_battlefield', name: 'Old Battlefield', kind: 'neutral', weight: 12,
+-    description: 'Counted the cairns. Left them undisturbed.',
+-    effects: { xpPct: 0.15, success: -2 } },
+-
+-  /* ------------------------------ negative ------------------------------ */
+-  { id: 'bandit_ambush', name: 'Ambushed by Bandits', kind: 'negative', weight: 20,
+-    description: 'Four of them, badly organised, but they got a swing in.',
+-    effects: { success: -10, durability: 4, goldPct: -0.15 } },
+-  { id: 'monster_attack', name: 'Monster Attack', kind: 'negative', weight: 16,
+-    description: 'Something large came out of the treeline without warning.',
+-    effects: { success: -14, durability: 6, injury: true } },
+-  { id: 'broken_equipment', name: 'Broken Equipment', kind: 'negative', weight: 14,
+-    description: 'A strap gave out at the worst moment.',
+-    effects: { success: -6, durability: 10 } },
+-  { id: 'poison_cloud', name: 'Poisoned', kind: 'negative', weight: 10,
+-    description: 'Spores, fumes, or a very unfriendly dart.',
+-    effects: { success: -12, injury: true } },
+-  { id: 'lost_the_trail', name: 'Lost the Trail', kind: 'negative', weight: 16,
+-    description: 'Doubled back twice before finding the right ford.',
+-    effects: { success: -8, delay: 20 } },
+-  { id: 'toll_collectors', name: 'Toll Collectors', kind: 'negative', weight: 12,
+-    description: 'Official-looking. Probably not official.',
+-    effects: { goldPct: -0.25 } },
+-];
++/**
++ * Events live in json/events.json so they can be edited via tools/devtool
++ * without touching TypeScript.
++ */
++import eventsJson from './json/events.json';
++export const EVENTS: EventDef[] = eventsJson as EventDef[];
+ 
+ export const EVENTS_BY_KIND = {
+   positive: EVENTS.filter((e) => e.kind === 'positive'),
+diff --git a/src/game/data/items.ts b/src/game/data/items.ts
+index a002dbc..28295b4 100644
+--- a/src/game/data/items.ts
++++ b/src/game/data/items.ts
+@@ -1,56 +1,12 @@
+ import { ConsumableDef, Injury } from '../types';
+ import { HOUR, MINUTE } from '../util';
+ 
+-export const CONSUMABLES: ConsumableDef[] = [
+-  {
+-    id: 'healing_potion',
+-    name: 'Healing Potion',
+-    description: 'Steadies the hands before a fight.',
+-    cost: 25,
+-    glyph: '❤',
+-    effect: { success: 15 },
+-  },
+-  {
+-    id: 'lucky_potion',
+-    name: 'Lucky Potion',
+-    description: 'Coins seem to find their way into pockets.',
+-    cost: 50,
+-    glyph: '✦',
+-    effect: { gold: 50 },
+-  },
+-  {
+-    id: 'strength_potion',
+-    name: 'Strength Potion',
+-    description: 'A hard swing and a fair price for it.',
+-    cost: 75,
+-    glyph: '⚔',
+-    effect: { success: 10, gold: 25 },
+-  },
+-  {
+-    id: 'protection_charm',
+-    name: 'Protection Charm',
+-    description: 'Your knight comes home unhurt, win or lose.',
+-    cost: 100,
+-    glyph: '⛨',
+-    effect: { preventInjury: true },
+-  },
+-  {
+-    id: 'elixir_of_fortune',
+-    name: 'Elixir of Fortune',
+-    description: 'Guarantees a favourable event on the road.',
+-    cost: 250,
+-    glyph: '☘',
+-    effect: { guaranteedGoodEvent: true },
+-  },
+-  {
+-    id: 'field_bandage',
+-    name: 'Field Bandage',
+-    description: 'Clears one injury immediately.',
+-    cost: 60,
+-    glyph: '✚',
+-    effect: { healInjury: true },
+-  },
+-];
++/**
++ * Consumables live in json/consumables.json so they can be edited via
++ * tools/devtool without touching TypeScript.
++ */
++import consumablesJson from './json/consumables.json';
++export const CONSUMABLES: ConsumableDef[] = consumablesJson as ConsumableDef[];
+ 
+ export const CONSUMABLE_BY_ID: Record<string, ConsumableDef> = Object.fromEntries(
+   CONSUMABLES.map((c) => [c.id, c]),
+diff --git a/src/game/data/json/consumables.json b/src/game/data/json/consumables.json
+new file mode 100644
+index 0000000..1ef87f4
+--- /dev/null
++++ b/src/game/data/json/consumables.json
+@@ -0,0 +1,63 @@
++[
++  {
++    "id": "healing_potion",
++    "name": "Healing Potion",
++    "description": "Steadies the hands before a fight.",
++    "cost": 25,
++    "glyph": "\u2764",
++    "effect": {
++      "success": 15
++    }
++  },
++  {
++    "id": "lucky_potion",
++    "name": "Lucky Potion",
++    "description": "Coins seem to find their way into pockets.",
++    "cost": 50,
++    "glyph": "\u2726",
++    "effect": {
++      "gold": 50
++    }
++  },
++  {
++    "id": "strength_potion",
++    "name": "Strength Potion",
++    "description": "A hard swing and a fair price for it.",
++    "cost": 75,
++    "glyph": "\u2694",
++    "effect": {
++      "success": 10,
++      "gold": 25
++    }
++  },
++  {
++    "id": "protection_charm",
++    "name": "Protection Charm",
++    "description": "Your knight comes home unhurt, win or lose.",
++    "cost": 100,
++    "glyph": "\u26e8",
++    "effect": {
++      "preventInjury": true
++    }
++  },
++  {
++    "id": "elixir_of_fortune",
++    "name": "Elixir of Fortune",
++    "description": "Guarantees a favourable event on the road.",
++    "cost": 250,
++    "glyph": "\u2618",
++    "effect": {
++      "guaranteedGoodEvent": true
++    }
++  },
++  {
++    "id": "field_bandage",
++    "name": "Field Bandage",
++    "description": "Clears one injury immediately.",
++    "cost": 60,
++    "glyph": "\u271a",
++    "effect": {
++      "healInjury": true
++    }
++  }
++]
+\ No newline at end of file
+diff --git a/src/game/data/json/equipment.json b/src/game/data/json/equipment.json
+new file mode 100644
+index 0000000..657b8c9
+--- /dev/null
++++ b/src/game/data/json/equipment.json
+@@ -0,0 +1,501 @@
++[
++  {
++    "id": "rusty_sword",
++    "name": "Rusty Sword",
++    "slot": "weapon",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 40,
++    "value": 30,
++    "mods": {
++      "success": 2
++    },
++    "stats": {
++      "strength": 1
++    }
++  },
++  {
++    "id": "woodcutter_axe",
++    "name": "Woodcutter's Axe",
++    "slot": "weapon",
++    "rarity": "common",
++    "reqLevel": 2,
++    "maxDurability": 45,
++    "value": 45,
++    "mods": {
++      "success": 3
++    },
++    "stats": {
++      "strength": 1
++    }
++  },
++  {
++    "id": "knights_blade",
++    "name": "Knight's Blade",
++    "slot": "weapon",
++    "rarity": "uncommon",
++    "reqLevel": 5,
++    "maxDurability": 70,
++    "value": 160,
++    "mods": {
++      "success": 5,
++      "gold": 4
++    },
++    "stats": {
++      "strength": 3
++    }
++  },
++  {
++    "id": "silver_rapier",
++    "name": "Silver Rapier",
++    "slot": "weapon",
++    "rarity": "rare",
++    "reqLevel": 10,
++    "maxDurability": 90,
++    "value": 520,
++    "mods": {
++      "success": 8,
++      "speed": 5
++    },
++    "stats": {
++      "strength": 4,
++      "luck": 2
++    }
++  },
++  {
++    "id": "oathkeeper",
++    "name": "Oathkeeper",
++    "slot": "weapon",
++    "rarity": "epic",
++    "reqLevel": 18,
++    "maxDurability": 130,
++    "value": 1900,
++    "mods": {
++      "success": 12,
++      "injuryResist": 8
++    },
++    "stats": {
++      "strength": 7,
++      "endurance": 3
++    }
++  },
++  {
++    "id": "dragon_blade",
++    "name": "Dragonfang Greatsword",
++    "slot": "weapon",
++    "rarity": "legendary",
++    "reqLevel": 25,
++    "maxDurability": 200,
++    "value": 7200,
++    "mods": {
++      "success": 16,
++      "gold": 12,
++      "loot": 4
++    },
++    "stats": {
++      "strength": 12
++    },
++    "setId": "dragon_slayer"
++  },
++  {
++    "id": "leather_cap",
++    "name": "Leather Cap",
++    "slot": "helmet",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 35,
++    "value": 25,
++    "mods": {
++      "injuryResist": 3
++    }
++  },
++  {
++    "id": "iron_helm",
++    "name": "Iron Helm",
++    "slot": "helmet",
++    "rarity": "uncommon",
++    "reqLevel": 4,
++    "maxDurability": 60,
++    "value": 140,
++    "mods": {
++      "injuryResist": 7,
++      "success": 2
++    },
++    "stats": {
++      "endurance": 2
++    }
++  },
++  {
++    "id": "visored_sallet",
++    "name": "Visored Sallet",
++    "slot": "helmet",
++    "rarity": "rare",
++    "reqLevel": 11,
++    "maxDurability": 85,
++    "value": 470,
++    "mods": {
++      "injuryResist": 12,
++      "success": 4
++    },
++    "stats": {
++      "endurance": 4
++    }
++  },
++  {
++    "id": "crown_of_the_lost",
++    "name": "Crown of the Lost Kingdom",
++    "slot": "helmet",
++    "rarity": "epic",
++    "reqLevel": 16,
++    "maxDurability": 120,
++    "value": 2100,
++    "mods": {
++      "xp": 25,
++      "loot": 5,
++      "success": 5
++    },
++    "stats": {
++      "wisdom": 8
++    }
++  },
++  {
++    "id": "dragon_helm",
++    "name": "Dragonscale Helm",
++    "slot": "helmet",
++    "rarity": "legendary",
++    "reqLevel": 25,
++    "maxDurability": 190,
++    "value": 6400,
++    "mods": {
++      "injuryResist": 20,
++      "success": 8
++    },
++    "stats": {
++      "endurance": 9
++    },
++    "setId": "dragon_slayer"
++  },
++  {
++    "id": "padded_gambeson",
++    "name": "Padded Gambeson",
++    "slot": "chest",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 45,
++    "value": 35,
++    "mods": {
++      "injuryResist": 4
++    }
++  },
++  {
++    "id": "chainmail",
++    "name": "Chainmail Hauberk",
++    "slot": "chest",
++    "rarity": "uncommon",
++    "reqLevel": 6,
++    "maxDurability": 75,
++    "value": 210,
++    "mods": {
++      "injuryResist": 9,
++      "success": 3
++    },
++    "stats": {
++      "endurance": 3
++    }
++  },
++  {
++    "id": "guardplate",
++    "name": "Guardsman Plate",
++    "slot": "chest",
++    "rarity": "rare",
++    "reqLevel": 12,
++    "maxDurability": 110,
++    "value": 640,
++    "mods": {
++      "injuryResist": 14,
++      "success": 5
++    },
++    "stats": {
++      "endurance": 6
++    }
++  },
++  {
++    "id": "bulwark_cuirass",
++    "name": "Bulwark Cuirass",
++    "slot": "chest",
++    "rarity": "epic",
++    "reqLevel": 20,
++    "maxDurability": 150,
++    "value": 2400,
++    "mods": {
++      "injuryResist": 22,
++      "success": 8,
++      "durability": 15
++    },
++    "stats": {
++      "endurance": 9
++    }
++  },
++  {
++    "id": "dragon_armor",
++    "name": "Dragonplate Armor",
++    "slot": "chest",
++    "rarity": "legendary",
++    "reqLevel": 26,
++    "maxDurability": 220,
++    "value": 8200,
++    "mods": {
++      "injuryResist": 28,
++      "success": 10,
++      "durability": 20
++    },
++    "stats": {
++      "endurance": 13,
++      "strength": 4
++    },
++    "setId": "dragon_slayer"
++  },
++  {
++    "id": "work_gloves",
++    "name": "Work Gloves",
++    "slot": "gloves",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 30,
++    "value": 20,
++    "mods": {
++      "gold": 3
++    }
++  },
++  {
++    "id": "gauntlets",
++    "name": "Steel Gauntlets",
++    "slot": "gloves",
++    "rarity": "uncommon",
++    "reqLevel": 5,
++    "maxDurability": 55,
++    "value": 130,
++    "mods": {
++      "success": 3,
++      "injuryResist": 4
++    },
++    "stats": {
++      "strength": 2
++    }
++  },
++  {
++    "id": "thief_wraps",
++    "name": "Cutpurse's Wraps",
++    "slot": "gloves",
++    "rarity": "rare",
++    "reqLevel": 10,
++    "maxDurability": 70,
++    "value": 430,
++    "mods": {
++      "gold": 14,
++      "loot": 3
++    },
++    "stats": {
++      "luck": 4
++    }
++  },
++  {
++    "id": "grasp_of_avarice",
++    "name": "Grasp of Avarice",
++    "slot": "gloves",
++    "rarity": "epic",
++    "reqLevel": 19,
++    "maxDurability": 110,
++    "value": 2000,
++    "mods": {
++      "gold": 30,
++      "loot": 6
++    },
++    "stats": {
++      "luck": 8
++    }
++  },
++  {
++    "id": "worn_boots",
++    "name": "Worn Boots",
++    "slot": "boots",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 32,
++    "value": 22,
++    "mods": {
++      "speed": 3
++    }
++  },
++  {
++    "id": "ranger_boots",
++    "name": "Ranger Boots",
++    "slot": "boots",
++    "rarity": "uncommon",
++    "reqLevel": 4,
++    "maxDurability": 58,
++    "value": 135,
++    "mods": {
++      "speed": 7
++    },
++    "stats": {
++      "endurance": 2
++    }
++  },
++  {
++    "id": "sevenleague_boots",
++    "name": "Seven-League Boots",
++    "slot": "boots",
++    "rarity": "rare",
++    "reqLevel": 13,
++    "maxDurability": 88,
++    "value": 560,
++    "mods": {
++      "speed": 14
++    },
++    "stats": {
++      "endurance": 3,
++      "luck": 2
++    }
++  },
++  {
++    "id": "windstride_greaves",
++    "name": "Windstride Greaves",
++    "slot": "boots",
++    "rarity": "epic",
++    "reqLevel": 21,
++    "maxDurability": 130,
++    "value": 2300,
++    "mods": {
++      "speed": 22,
++      "success": 4
++    },
++    "stats": {
++      "endurance": 7
++    }
++  },
++  {
++    "id": "copper_band",
++    "name": "Copper Band",
++    "slot": "ring",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 60,
++    "value": 30,
++    "mods": {
++      "loot": 1
++    }
++  },
++  {
++    "id": "lucky_ring",
++    "name": "Lucky Ring",
++    "slot": "ring",
++    "rarity": "rare",
++    "reqLevel": 7,
++    "maxDurability": 100,
++    "value": 600,
++    "mods": {
++      "loot": 6,
++      "gold": 10
++    },
++    "stats": {
++      "luck": 6
++    }
++  },
++  {
++    "id": "signet_of_wardens",
++    "name": "Signet of the Wardens",
++    "slot": "ring",
++    "rarity": "epic",
++    "reqLevel": 17,
++    "maxDurability": 140,
++    "value": 2200,
++    "mods": {
++      "success": 9,
++      "injuryResist": 10
++    },
++    "stats": {
++      "luck": 5,
++      "wisdom": 4
++    }
++  },
++  {
++    "id": "ring_of_endless_roads",
++    "name": "Ring of Endless Roads",
++    "slot": "ring",
++    "rarity": "legendary",
++    "reqLevel": 28,
++    "maxDurability": 210,
++    "value": 7600,
++    "mods": {
++      "speed": 25,
++      "xp": 30,
++      "loot": 8
++    },
++    "stats": {
++      "luck": 9,
++      "wisdom": 8
++    }
++  },
++  {
++    "id": "bone_charm",
++    "name": "Bone Charm",
++    "slot": "amulet",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 55,
++    "value": 28,
++    "mods": {
++      "xp": 5
++    }
++  },
++  {
++    "id": "scholars_pendant",
++    "name": "Scholar's Pendant",
++    "slot": "amulet",
++    "rarity": "uncommon",
++    "reqLevel": 6,
++    "maxDurability": 80,
++    "value": 190,
++    "mods": {
++      "xp": 15
++    },
++    "stats": {
++      "wisdom": 3
++    }
++  },
++  {
++    "id": "amulet_of_fortune",
++    "name": "Amulet of Fortune",
++    "slot": "amulet",
++    "rarity": "epic",
++    "reqLevel": 18,
++    "maxDurability": 145,
++    "value": 2500,
++    "mods": {
++      "gold": 28,
++      "loot": 8
++    },
++    "stats": {
++      "luck": 9
++    }
++  },
++  {
++    "id": "heart_of_the_mountain",
++    "name": "Heart of the Mountain",
++    "slot": "amulet",
++    "rarity": "legendary",
++    "reqLevel": 30,
++    "maxDurability": 230,
++    "value": 9000,
++    "mods": {
++      "success": 14,
++      "injuryResist": 18,
++      "durability": 30
++    },
++    "stats": {
++      "endurance": 12,
++      "wisdom": 6
++    }
++  }
++]
+\ No newline at end of file
+diff --git a/src/game/data/json/events.json b/src/game/data/json/events.json
+new file mode 100644
+index 0000000..e8c0351
+--- /dev/null
++++ b/src/game/data/json/events.json
+@@ -0,0 +1,175 @@
++[
++  {
++    "id": "treasure_chest",
++    "name": "Found a Treasure Chest",
++    "kind": "positive",
++    "weight": 20,
++    "description": "Half-buried by the road, hinges rusted but the lock intact.",
++    "effects": {
++      "flatGold": 60,
++      "goldPct": 0.2
++    }
++  },
++  {
++    "id": "helpful_merchant",
++    "name": "Helpful Merchant",
++    "kind": "positive",
++    "weight": 22,
++    "description": "Shared a meal and a shortcut through the hills.",
++    "effects": {
++      "success": 8,
++      "goldPct": 0.1
++    }
++  },
++  {
++    "id": "hidden_cache",
++    "name": "Hidden Cache",
++    "kind": "positive",
++    "weight": 16,
++    "description": "Someone stashed supplies here and never came back for them.",
++    "effects": {
++      "flatGold": 35,
++      "loot": 10
++    }
++  },
++  {
++    "id": "ancient_shrine",
++    "name": "Ancient Shrine",
++    "kind": "positive",
++    "weight": 14,
++    "description": "A small offering, a long silence, and a lighter step afterwards.",
++    "effects": {
++      "success": 10,
++      "xpPct": 0.25
++    }
++  },
++  {
++    "id": "lost_noble",
++    "name": "Lost Noble Rewarded You",
++    "kind": "positive",
++    "weight": 10,
++    "description": "Pointed him toward the right road. He paid for the trouble.",
++    "effects": {
++      "flatGold": 140
++    }
++  },
++  {
++    "id": "veteran_advice",
++    "name": "Advice from a Veteran",
++    "kind": "positive",
++    "weight": 12,
++    "description": "An old campaigner drew the ground in the dirt and explained it twice.",
++    "effects": {
++      "success": 12
++    }
++  },
++  {
++    "id": "strange_wanderer",
++    "name": "Strange Wanderer",
++    "kind": "neutral",
++    "weight": 18,
++    "description": "Spoke in riddles, left before dawn, took nothing.",
++    "effects": {
++      "xpPct": 0.1
++    }
++  },
++  {
++    "id": "mysterious_cave",
++    "name": "Mysterious Cave",
++    "kind": "neutral",
++    "weight": 16,
++    "description": "Explored a little way in. Marked it on the map for later.",
++    "effects": {
++      "loot": 5,
++      "delay": 5
++    }
++  },
++  {
++    "id": "weather_delay",
++    "name": "Weather Delay",
++    "kind": "neutral",
++    "weight": 20,
++    "description": "Waited out the storm under a rock ledge.",
++    "effects": {
++      "delay": 15
++    }
++  },
++  {
++    "id": "old_battlefield",
++    "name": "Old Battlefield",
++    "kind": "neutral",
++    "weight": 12,
++    "description": "Counted the cairns. Left them undisturbed.",
++    "effects": {
++      "xpPct": 0.15,
++      "success": -2
++    }
++  },
++  {
++    "id": "bandit_ambush",
++    "name": "Ambushed by Bandits",
++    "kind": "negative",
++    "weight": 20,
++    "description": "Four of them, badly organised, but they got a swing in.",
++    "effects": {
++      "success": -10,
++      "durability": 4,
++      "goldPct": -0.15
++    }
++  },
++  {
++    "id": "monster_attack",
++    "name": "Monster Attack",
++    "kind": "negative",
++    "weight": 16,
++    "description": "Something large came out of the treeline without warning.",
++    "effects": {
++      "success": -14,
++      "durability": 6,
++      "injury": true
++    }
++  },
++  {
++    "id": "broken_equipment",
++    "name": "Broken Equipment",
++    "kind": "negative",
++    "weight": 14,
++    "description": "A strap gave out at the worst moment.",
++    "effects": {
++      "success": -6,
++      "durability": 10
++    }
++  },
++  {
++    "id": "poison_cloud",
++    "name": "Poisoned",
++    "kind": "negative",
++    "weight": 10,
++    "description": "Spores, fumes, or a very unfriendly dart.",
++    "effects": {
++      "success": -12,
++      "injury": true
++    }
++  },
++  {
++    "id": "lost_the_trail",
++    "name": "Lost the Trail",
++    "kind": "negative",
++    "weight": 16,
++    "description": "Doubled back twice before finding the right ford.",
++    "effects": {
++      "success": -8,
++      "delay": 20
++    }
++  },
++  {
++    "id": "toll_collectors",
++    "name": "Toll Collectors",
++    "kind": "negative",
++    "weight": 12,
++    "description": "Official-looking. Probably not official.",
++    "effects": {
++      "goldPct": -0.25
++    }
++  }
++]
+\ No newline at end of file
+diff --git a/src/game/data/json/quest-prefixes.json b/src/game/data/json/quest-prefixes.json
+new file mode 100644
+index 0000000..1d91fc1
+--- /dev/null
++++ b/src/game/data/json/quest-prefixes.json
+@@ -0,0 +1,7 @@
++[
++  "Urgent:",
++  "Contract:",
++  "Bounty:",
++  "Request:",
++  "Sealed Orders:"
++]
+\ No newline at end of file
+diff --git a/src/game/data/json/quest-templates.json b/src/game/data/json/quest-templates.json
+new file mode 100644
+index 0000000..175007c
+--- /dev/null
++++ b/src/game/data/json/quest-templates.json
+@@ -0,0 +1,161 @@
++[
++  {
++    "verb": "Hunt",
++    "tag": "combat",
++    "subjects": [
++      "Dire Wolf",
++      "Bog Lurker",
++      "Frost Boar",
++      "Marsh Hydra",
++      "Ashen Wyvern",
++      "Thicket Stalker"
++    ],
++    "flavour": [
++      "Tracks lead north past the old mill.",
++      "The farmers have stopped counting their losses.",
++      "It hunts at dusk. So will we."
++    ]
++  },
++  {
++    "verb": "Escort",
++    "tag": "escort",
++    "subjects": [
++      "Merchant",
++      "Pilgrim Caravan",
++      "Wandering Scholar",
++      "Salt Trader",
++      "Envoy of Highmoor"
++    ],
++    "flavour": [
++      "Pays well and complains loudly.",
++      "The road is quiet lately. Suspiciously quiet.",
++      "Three carts, one bridge, no patience."
++    ]
++  },
++  {
++    "verb": "Defend",
++    "tag": "defense",
++    "subjects": [
++      "Village",
++      "River Crossing",
++      "Grain Stores",
++      "Watchtower",
++      "Chapel of Embers"
++    ],
++    "flavour": [
++      "They asked for soldiers. They got you.",
++      "Hold until the horn sounds.",
++      "Bring rope. Bring more rope."
++    ]
++  },
++  {
++    "verb": "Explore",
++    "tag": "explore",
++    "subjects": [
++      "Ancient Ruins",
++      "Sunken Aqueduct",
++      "Fogbound Vale",
++      "Collapsed Library",
++      "Hollow Beneath Oakfell"
++    ],
++    "flavour": [
++      "Nobody has mapped it properly. Nobody has come back to try.",
++      "The stones are older than the kingdom.",
++      "Bring a lantern and a strong stomach."
++    ]
++  },
++  {
++    "verb": "Clear",
++    "tag": "combat",
++    "subjects": [
++      "Goblin Camp",
++      "Bandit Hideout",
++      "Spider Warren",
++      "Kobold Tunnels",
++      "Deserter Stockade"
++    ],
++    "flavour": [
++      "Small problem. Growing fast.",
++      "They took the tax cart. Twice.",
++      "In and out before the moon rises."
++    ]
++  },
++  {
++    "verb": "Slay",
++    "tag": "combat",
++    "subjects": [
++      "Cave Troll",
++      "Bone Warden",
++      "Blight Ogre",
++      "Sunless Chimera",
++      "The Thing in the Weir"
++    ],
++    "flavour": [
++      "The bounty has been raised four times.",
++      "It has a name. That is never a good sign.",
++      "Two knights went. Neither returned."
++    ]
++  },
++  {
++    "verb": "Recover",
++    "tag": "explore",
++    "subjects": [
++      "Sacred Relic",
++      "Stolen Crown Jewel",
++      "Guild Ledger",
++      "Warden\\'s Signet",
++      "Reliquary of Saint Aldwin"
++    ],
++    "flavour": [
++      "The temple is offering gold and no questions.",
++      "It was never supposed to leave the vault.",
++      "Discretion is part of the fee."
++    ]
++  },
++  {
++    "verb": "Investigate",
++    "tag": "arcane",
++    "subjects": [
++      "Haunted Mine",
++      "Silent Village",
++      "Weeping Standing Stones",
++      "Drowned Shrine",
++      "Cursed Orchard"
++    ],
++    "flavour": [
++      "Lights underground. No miners left to hold them.",
++      "The bell rings on its own.",
++      "Everyone left in one night. Doors still open."
++    ]
++  },
++  {
++    "verb": "Infiltrate",
++    "tag": "stealth",
++    "subjects": [
++      "Smuggler Warehouse",
++      "Cult Sanctum",
++      "Rival Guild Hall",
++      "Blackrock Keep"
++    ],
++    "flavour": [
++      "Quiet work. Quiet pay.",
++      "Get in, read the ledger, leave nothing behind.",
++      "No banners. No noise."
++    ]
++  },
++  {
++    "verb": "Break",
++    "tag": "arcane",
++    "subjects": [
++      "Binding Ward",
++      "Curse of Hollowmere",
++      "Sealed Gate",
++      "Witch\\'s Pact"
++    ],
++    "flavour": [
++      "The scholars have theories. You have a sword.",
++      "Undo it carefully or not at all.",
++      "The old words still hold. Barely."
++    ]
++  }
++]
+\ No newline at end of file
+diff --git a/src/game/data/quests.ts b/src/game/data/quests.ts
+index 647f739..9e76ef8 100644
+--- a/src/game/data/quests.ts
++++ b/src/game/data/quests.ts
+@@ -61,60 +61,16 @@ interface Template {
+   flavour: string[];
+ }
+ 
+-export const QUEST_TEMPLATES: Template[] = [
+-  {
+-    verb: 'Hunt', tag: 'combat',
+-    subjects: ['Dire Wolf', 'Bog Lurker', 'Frost Boar', 'Marsh Hydra', 'Ashen Wyvern', 'Thicket Stalker'],
+-    flavour: ['Tracks lead north past the old mill.', 'The farmers have stopped counting their losses.', 'It hunts at dusk. So will we.'],
+-  },
+-  {
+-    verb: 'Escort', tag: 'escort',
+-    subjects: ['Merchant', 'Pilgrim Caravan', 'Wandering Scholar', 'Salt Trader', 'Envoy of Highmoor'],
+-    flavour: ['Pays well and complains loudly.', 'The road is quiet lately. Suspiciously quiet.', 'Three carts, one bridge, no patience.'],
+-  },
+-  {
+-    verb: 'Defend', tag: 'defense',
+-    subjects: ['Village', 'River Crossing', 'Grain Stores', 'Watchtower', 'Chapel of Embers'],
+-    flavour: ['They asked for soldiers. They got you.', 'Hold until the horn sounds.', 'Bring rope. Bring more rope.'],
+-  },
+-  {
+-    verb: 'Explore', tag: 'explore',
+-    subjects: ['Ancient Ruins', 'Sunken Aqueduct', 'Fogbound Vale', 'Collapsed Library', 'Hollow Beneath Oakfell'],
+-    flavour: ['Nobody has mapped it properly. Nobody has come back to try.', 'The stones are older than the kingdom.', 'Bring a lantern and a strong stomach.'],
+-  },
+-  {
+-    verb: 'Clear', tag: 'combat',
+-    subjects: ['Goblin Camp', 'Bandit Hideout', 'Spider Warren', 'Kobold Tunnels', 'Deserter Stockade'],
+-    flavour: ['Small problem. Growing fast.', 'They took the tax cart. Twice.', 'In and out before the moon rises.'],
+-  },
+-  {
+-    verb: 'Slay', tag: 'combat',
+-    subjects: ['Cave Troll', 'Bone Warden', 'Blight Ogre', 'Sunless Chimera', 'The Thing in the Weir'],
+-    flavour: ['The bounty has been raised four times.', 'It has a name. That is never a good sign.', 'Two knights went. Neither returned.'],
+-  },
+-  {
+-    verb: 'Recover', tag: 'explore',
+-    subjects: ['Sacred Relic', 'Stolen Crown Jewel', 'Guild Ledger', 'Warden\'s Signet', 'Reliquary of Saint Aldwin'],
+-    flavour: ['The temple is offering gold and no questions.', 'It was never supposed to leave the vault.', 'Discretion is part of the fee.'],
+-  },
+-  {
+-    verb: 'Investigate', tag: 'arcane',
+-    subjects: ['Haunted Mine', 'Silent Village', 'Weeping Standing Stones', 'Drowned Shrine', 'Cursed Orchard'],
+-    flavour: ['Lights underground. No miners left to hold them.', 'The bell rings on its own.', 'Everyone left in one night. Doors still open.'],
+-  },
+-  {
+-    verb: 'Infiltrate', tag: 'stealth',
+-    subjects: ['Smuggler Warehouse', 'Cult Sanctum', 'Rival Guild Hall', 'Blackrock Keep'],
+-    flavour: ['Quiet work. Quiet pay.', 'Get in, read the ledger, leave nothing behind.', 'No banners. No noise.'],
+-  },
+-  {
+-    verb: 'Break', tag: 'arcane',
+-    subjects: ['Binding Ward', 'Curse of Hollowmere', 'Sealed Gate', 'Witch\'s Pact'],
+-    flavour: ['The scholars have theories. You have a sword.', 'Undo it carefully or not at all.', 'The old words still hold. Barely.'],
+-  },
+-];
++/**
++ * Quest name templates live in json/quest-templates.json so they can be edited
++ * via tools/devtool without touching TypeScript. This file just types and
++ * re-exports them.
++ */
++import questTemplatesJson from './json/quest-templates.json';
++export const QUEST_TEMPLATES: Template[] = questTemplatesJson as Template[];
+ 
+-export const QUEST_PREFIXES = ['Urgent:', 'Contract:', 'Bounty:', 'Request:', 'Sealed Orders:'];
++import questPrefixesJson from './json/quest-prefixes.json';
++export const QUEST_PREFIXES: string[] = questPrefixesJson as string[];
+ 
+ /* --------------------------- multi-day chains --------------------------- */
+ 
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+new file mode 100644
+index 0000000..9cdd4c0
+--- /dev/null
++++ b/tools/devtool/public/app.js
+@@ -0,0 +1,319 @@
++/**
++ * Little Knight Dev Tool — frontend.
++ *
++ * Vanilla JS, no build step, no framework. Each content type is described by
++ * the schema the server sends (tools/devtool/server.mjs), and this file
++ * generates a table + an add/edit form from that schema generically — adding a
++ * new field to a content type in the server schema is enough for it to show up
++ * here with no frontend changes needed.
++ */
++
++const state = { schema: null, kind: null, rows: [], dirty: false };
++
++const tabsEl = document.getElementById('tabs');
++const appEl = document.getElementById('app');
++const statusEl = document.getElementById('status');
++
++async function api(path, opts) {
++  const res = await fetch(path, opts);
++  const body = await res.json().catch(() => ({}));
++  if (!res.ok) throw Object.assign(new Error(body.error || 'Request failed'), { details: body.details });
++  return body;
++}
++
++function setStatus(text, kind) {
++  statusEl.textContent = text;
++  statusEl.className = 'topbar-status' + (kind ? ' ' + kind : '');
++}
++
++async function init() {
++  state.schema = await api('/api/schema');
++  const kinds = Object.keys(state.schema);
++  tabsEl.innerHTML = '';
++  kinds.forEach((kind, i) => {
++    const btn = document.createElement('button');
++    btn.textContent = state.schema[kind].label;
++    btn.onclick = () => selectTab(kind);
++    btn.dataset.kind = kind;
++    tabsEl.appendChild(btn);
++    if (i === 0) selectTab(kind);
++  });
++}
++
++async function selectTab(kind) {
++  state.kind = kind;
++  [...tabsEl.children].forEach((b) => b.classList.toggle('active', b.dataset.kind === kind));
++  setStatus('Loading…');
++  try {
++    const { data } = await api(`/api/data/${kind}`);
++    state.rows = data;
++    setStatus('');
++    renderTable();
++  } catch (err) {
++    setStatus(err.message, 'err');
++  }
++}
++
++/* -------------------------------------------------------------- table --- */
++
++function displayColumns(schema) {
++  // A short, sensible subset of fields for the table view; the editor still
++  // exposes every field.
++  const priority = ['id', 'verb', 'name', 'label', 'slot', 'rarity', 'kind', 'tag', 'cost', 'value', 'weight', 'reqLevel'];
++  return Object.keys(schema.fields).filter((f) => priority.includes(f)).sort((a, b) => priority.indexOf(a) - priority.indexOf(b));
++}
++
++function renderTable() {
++  const schema = state.schema[state.kind];
++  const cols = displayColumns(schema);
++
++  const toolbar = document.createElement('div');
++  toolbar.className = 'toolbar';
++  toolbar.innerHTML = `
++    <button class="primary" id="addBtn">+ Add ${schema.label.replace(/s$/, '')}</button>
++    <span class="spacer"></span>
++    <span style="color: var(--muted); font-size: 11px;">${state.rows.length} entries</span>
++  `;
++
++  const table = document.createElement('table');
++  const thead = document.createElement('thead');
++  thead.innerHTML = `<tr>${cols.map((c) => `<th>${c}</th>`).join('')}<th></th></tr>`;
++  const tbody = document.createElement('tbody');
++
++  if (state.rows.length === 0) {
++    const tr = document.createElement('tr');
++    tr.innerHTML = `<td colspan="${cols.length + 1}"><div class="empty">Nothing here yet.</div></td>`;
++    tbody.appendChild(tr);
++  }
++
++  state.rows.forEach((row, index) => {
++    const tr = document.createElement('tr');
++    const cells = cols.map((c) => {
++      let val = row[c];
++      if (Array.isArray(val)) val = val.slice(0, 2).join(', ') + (val.length > 2 ? '…' : '');
++      const cls = c === 'rarity' ? `rarity-${val}` : c === 'kind' ? `kind-${val}` : '';
++      return `<td class="${cls}">${val ?? ''}</td>`;
++    }).join('');
++    tr.innerHTML = `${cells}<td class="actions">
++      <button data-edit="${index}">Edit</button>
++      <button data-dup="${index}">Duplicate</button>
++      <button class="danger" data-del="${index}">Delete</button>
++    </td>`;
++    tbody.appendChild(tr);
++  });
++
++  table.appendChild(thead);
++  table.appendChild(tbody);
++
++  appEl.innerHTML = '';
++  appEl.appendChild(toolbar);
++  appEl.appendChild(table);
++
++  document.getElementById('addBtn').onclick = () => openEditor(null);
++  tbody.querySelectorAll('[data-edit]').forEach((b) => b.onclick = () => openEditor(+b.dataset.edit));
++  tbody.querySelectorAll('[data-dup]').forEach((b) => b.onclick = () => duplicateRow(+b.dataset.dup));
++  tbody.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => deleteRow(+b.dataset.del));
++}
++
++function duplicateRow(index) {
++  const schema = state.schema[state.kind];
++  const copy = JSON.parse(JSON.stringify(state.rows[index]));
++  if (schema.idField && copy[schema.idField]) copy[schema.idField] += '_copy';
++  state.rows.splice(index + 1, 0, copy);
++  saveToServer(`Duplicated entry ${index}.`);
++}
++
++function deleteRow(index) {
++  const schema = state.schema[state.kind];
++  const label = schema.idField ? state.rows[index][schema.idField] : `entry ${index}`;
++  if (!confirm(`Delete "${label}"? This cannot be undone from here (though the server keeps one .bak backup).`)) return;
++  state.rows.splice(index, 1);
++  saveToServer(`Deleted ${label}.`);
++}
++
++/* ------------------------------------------------------------- editor --- */
++
++function fieldControl(spec, key, value) {
++  const id = `f_${key}`;
++  if (spec.type === 'string' && (key === 'description' || key === 'flavour')) {
++    return `<textarea id="${id}">${escapeHtml(value ?? '')}</textarea>`;
++  }
++  if (spec.type === 'string') {
++    return `<input type="text" id="${id}" value="${escapeHtml(value ?? '')}" ${spec.slug ? 'placeholder="lowercase_with_underscores"' : ''} />`;
++  }
++  if (spec.type === 'number') {
++    return `<input type="number" id="${id}" value="${value ?? 0}" step="any" />`;
++  }
++  if (spec.type === 'enum') {
++    const opts = spec.options.map((o) => `<option value="${o}" ${o === value ? 'selected' : ''}>${o}</option>`).join('');
++    return `<select id="${id}">${opts}</select>`;
++  }
++  if (spec.type === 'string[]') {
++    return listInput(id, value ?? []);
++  }
++  if (spec.type === 'mods') return kvGrid(id, MOD_KEYS, value ?? {}, 'number');
++  if (spec.type === 'stats') return kvGrid(id, STAT_KEYS, value ?? {}, 'number');
++  if (spec.type === 'effect') return kvGrid(id, EFFECT_KEYS, value ?? {}, 'mixed');
++  if (spec.type === 'eventEffects') return kvGrid(id, EVENT_EFFECT_KEYS, value ?? {}, 'mixed');
++  return `<input type="text" id="${id}" value="${escapeHtml(JSON.stringify(value))}" />`;
++}
++
++const MOD_KEYS = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability'];
++const STAT_KEYS = ['strength', 'endurance', 'luck', 'wisdom'];
++const EFFECT_KEYS = ['success', 'gold', 'preventInjury', 'guaranteedGoodEvent', 'healInjury'];
++const EVENT_EFFECT_KEYS = ['success', 'goldPct', 'flatGold', 'xpPct', 'loot', 'durability', 'delay', 'injury', 'guaranteedLoot'];
++const BOOL_KEYS = new Set(['preventInjury', 'guaranteedGoodEvent', 'healInjury', 'injury']);
++
++function listInput(id, items) {
++  const rows = (items.length ? items : ['']).map((v, i) => `
++    <div class="row">
++      <input type="text" data-list-item value="${escapeHtml(v)}" />
++      <button type="button" class="remove" data-remove-item>&minus;</button>
++    </div>`).join('');
++  return `<div class="list-input" id="${id}">${rows}<button type="button" data-add-item>+ add</button></div>`;
++}
++
++function kvGrid(id, keys, values, kind) {
++  const rows = keys.map((k) => {
++    if (kind === 'mixed' && BOOL_KEYS.has(k)) {
++      return `<label>${k}</label><input type="checkbox" data-kv="${k}" ${values[k] ? 'checked' : ''} />`;
++    }
++    return `<label>${k}</label><input type="number" step="any" data-kv="${k}" value="${values[k] ?? ''}" placeholder="—" />`;
++  }).join('');
++  return `<div class="kv-grid" id="${id}">${rows}</div>`;
++}
++
++function escapeHtml(s) {
++  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
++}
++
++function wireListInput(container) {
++  container.querySelectorAll('[data-add-item]').forEach((btn) => {
++    btn.onclick = () => {
++      const row = document.createElement('div');
++      row.className = 'row';
++      row.innerHTML = `<input type="text" data-list-item /><button type="button" class="remove" data-remove-item>&minus;</button>`;
++      row.querySelector('[data-remove-item]').onclick = () => row.remove();
++      btn.parentElement.insertBefore(row, btn);
++    };
++  });
++  container.querySelectorAll('[data-remove-item]').forEach((btn) => {
++    btn.onclick = () => btn.parentElement.remove();
++  });
++}
++
++function readField(spec, key) {
++  const el = document.getElementById(`f_${key}`);
++  if (spec.type === 'string' || spec.type === 'enum') return el.value;
++  if (spec.type === 'number') return parseFloat(el.value) || 0;
++  if (spec.type === 'string[]') {
++    return [...el.querySelectorAll('[data-list-item]')].map((i) => i.value.trim()).filter(Boolean);
++  }
++  if (['mods', 'stats', 'effect', 'eventEffects'].includes(spec.type)) {
++    const out = {};
++    el.querySelectorAll('[data-kv]').forEach((input) => {
++      const k = input.dataset.kv;
++      if (input.type === 'checkbox') {
++        if (input.checked) out[k] = true;
++      } else if (input.value !== '') {
++        out[k] = parseFloat(input.value);
++      }
++    });
++    return out;
++  }
++  return el.value;
++}
++
++function openEditor(index) {
++  const schema = state.schema[state.kind];
++  const isNew = index === null;
++  const row = isNew ? {} : state.rows[index];
++
++  const overlay = document.createElement('div');
++  overlay.className = 'editor-overlay';
++  const editor = document.createElement('div');
++  editor.className = 'editor';
++
++  const fieldsHtml = Object.entries(schema.fields).map(([key, spec]) => `
++    <div class="field">
++      <label>${key}${spec.required ? ' *' : ''}</label>
++      ${fieldControl(spec, key, row[key])}
++      ${spec.slug ? '<div class="hint">Used as the internal id. Lowercase, no spaces.</div>' : ''}
++    </div>
++  `).join('');
++
++  editor.innerHTML = `
++    <h2>${isNew ? 'New' : 'Edit'} ${schema.label.replace(/s$/, '')}</h2>
++    <div id="editorErrors"></div>
++    ${fieldsHtml}
++    <div class="editor-actions">
++      <button id="cancelBtn">Cancel</button>
++      <button class="primary" id="saveBtn">Save</button>
++    </div>
++  `;
++  overlay.appendChild(editor);
++  document.body.appendChild(overlay);
++  wireListInput(editor);
++
++  editor.querySelector('#cancelBtn').onclick = () => overlay.remove();
++  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
++
++  editor.querySelector('#saveBtn').onclick = () => {
++    const entry = {};
++    for (const [key, spec] of Object.entries(schema.fields)) {
++      const value = readField(spec, key);
++      const isEmpty = value === '' || value === null || (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0) || (Array.isArray(value) && value.length === 0);
++      if (!spec.required && isEmpty) continue;
++      entry[key] = value;
++    }
++    const errors = clientValidate(schema, entry);
++    if (errors.length) {
++      editor.querySelector('#editorErrors').innerHTML =
++        `<div class="errors"><strong>Fix before saving:</strong><ul>${errors.map((e) => `<li>${e}</li>`).join('')}</ul></div>`;
++      return;
++    }
++    if (isNew) state.rows.push(entry); else state.rows[index] = entry;
++    overlay.remove();
++    saveToServer(isNew ? 'Added new entry.' : 'Updated entry.');
++  };
++}
++
++function clientValidate(schema, entry) {
++  const errors = [];
++  for (const [key, spec] of Object.entries(schema.fields)) {
++    if (spec.required && (entry[key] === undefined || entry[key] === '' || (Array.isArray(entry[key]) && entry[key].length === 0))) {
++      errors.push(`"${key}" is required`);
++    }
++    if (spec.slug && entry[key] && !/^[a-z][a-z0-9_]*$/.test(entry[key])) {
++      errors.push(`"${key}" should be lowercase_with_underscores`);
++    }
++  }
++  if (schema.idField && entry[schema.idField]) {
++    const dupe = state.rows.some((r, i) => r[schema.idField] === entry[schema.idField] && state.rows[i] !== entry);
++    // duplicate check happens server-side too (covers the edit-in-place case correctly);
++    // this is just an early warning when adding a brand new id that collides.
++  }
++  return errors;
++}
++
++/* --------------------------------------------------------------- save --- */
++
++async function saveToServer(message) {
++  setStatus('Saving…');
++  try {
++    const result = await api(`/api/data/${state.kind}`, {
++      method: 'POST',
++      headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify(state.rows),
++    });
++    setStatus(`${message} Saved (${result.count} entries).`, 'ok');
++    renderTable();
++  } catch (err) {
++    const detail = err.details ? '\n' + err.details.join('\n') : '';
++    setStatus('Save failed — see console.', 'err');
++    console.error(err.message + detail);
++    alert(`Could not save:\n\n${err.message}${detail}\n\nYour change was kept on screen; fix the issue and save again.`);
++  }
++}
++
++init().catch((err) => setStatus(err.message, 'err'));
+diff --git a/tools/devtool/public/index.html b/tools/devtool/public/index.html
+new file mode 100644
+index 0000000..8c7f74b
+--- /dev/null
++++ b/tools/devtool/public/index.html
+@@ -0,0 +1,17 @@
++<!doctype html>
++<html lang="en">
++<head>
++  <meta charset="UTF-8" />
++  <title>Little Knight — Dev Tool</title>
++  <link rel="stylesheet" href="style.css" />
++</head>
++<body>
++  <header class="topbar">
++    <h1>Little Knight <span>Dev Tool</span></h1>
++    <nav id="tabs"></nav>
++    <div class="topbar-status" id="status"></div>
++  </header>
++  <main id="app"></main>
++  <script src="app.js"></script>
++</body>
++</html>
+diff --git a/tools/devtool/public/style.css b/tools/devtool/public/style.css
+new file mode 100644
+index 0000000..35f13e1
+--- /dev/null
++++ b/tools/devtool/public/style.css
+@@ -0,0 +1,85 @@
++:root {
++  --bg: #171320; --panel: #221c2e; --panel2: #2b2338; --panel3: #362c46;
++  --edge: #0e0b14; --text: #f3e6c8; --muted: #a294b5;
++  --brass: #d9a441; --good: #79a86b; --bad: #a33a3a; --blue: #5b8fd6;
++  font-family: ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
++}
++* { box-sizing: border-box; }
++body { margin: 0; background: var(--bg); color: var(--text); font-size: 13px; }
++
++.topbar {
++  display: flex; align-items: center; gap: 20px;
++  padding: 10px 16px; background: var(--panel2); border-bottom: 1px solid var(--edge);
++  position: sticky; top: 0; z-index: 5;
++}
++.topbar h1 { font-size: 15px; margin: 0; white-space: nowrap; }
++.topbar h1 span { color: var(--brass); font-weight: normal; margin-left: 6px; }
++#tabs { display: flex; gap: 4px; flex: 1; flex-wrap: wrap; }
++#tabs button {
++  background: var(--panel); border: 1px solid var(--edge); color: var(--text);
++  padding: 7px 12px; cursor: pointer; font: inherit;
++}
++#tabs button.active { background: var(--brass); color: #241a0a; font-weight: bold; }
++.topbar-status { font-size: 11px; color: var(--muted); min-width: 160px; text-align: right; }
++.topbar-status.err { color: var(--bad); }
++.topbar-status.ok { color: var(--good); }
++
++main { padding: 18px; max-width: 1100px; margin: 0 auto; }
++
++.toolbar { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }
++.toolbar .spacer { flex: 1; }
++
++button {
++  background: var(--panel2); border: 1px solid var(--edge); color: var(--text);
++  padding: 7px 12px; cursor: pointer; font: inherit;
++}
++button:hover { background: var(--panel3); }
++button.primary { background: #8c6a2a; border-color: var(--brass); color: #fff8e6; }
++button.primary:hover { background: var(--brass); color: #241a0a; }
++button.danger { border-color: var(--bad); }
++button.danger:hover { background: var(--bad); }
++button:disabled { opacity: 0.4; cursor: not-allowed; }
++
++table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
++th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--panel3); font-size: 12px; }
++th { color: var(--muted); font-weight: normal; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; }
++tr:hover td { background: var(--panel); }
++td.actions { white-space: nowrap; width: 1%; }
++td.actions button { padding: 4px 8px; font-size: 11px; margin-right: 4px; }
++
++.rarity-common { color: #b9ad93; } .rarity-uncommon { color: var(--good); }
++.rarity-rare { color: var(--blue); } .rarity-epic { color: #a874d6; } .rarity-legendary { color: var(--brass); }
++.kind-positive { color: var(--good); } .kind-negative { color: var(--bad); } .kind-neutral { color: var(--muted); }
++
++.editor-overlay {
++  position: fixed; inset: 0; background: rgba(10, 8, 14, 0.82);
++  display: flex; align-items: flex-start; justify-content: center; padding: 40px 20px;
++  overflow-y: auto; z-index: 10;
++}
++.editor {
++  background: var(--panel); border: 1px solid var(--brass); padding: 20px;
++  width: 100%; max-width: 560px;
++}
++.editor h2 { margin-top: 0; font-size: 14px; color: var(--brass); }
++.field { margin-bottom: 12px; }
++.field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
++.field input[type=text], .field input[type=number], .field textarea, .field select {
++  width: 100%; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text);
++  padding: 7px 8px; font: inherit;
++}
++.field textarea { min-height: 50px; resize: vertical; }
++.field .hint { font-size: 10px; color: var(--muted); margin-top: 3px; }
++.field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
++.list-input { display: flex; flex-direction: column; gap: 4px; }
++.list-input .row { display: flex; gap: 4px; }
++.list-input input { flex: 1; }
++.list-input .remove { padding: 4px 8px; }
++.kv-grid { display: grid; grid-template-columns: 1fr 90px; gap: 6px 8px; align-items: center; }
++.kv-grid label { font-size: 11px; color: var(--muted); }
++
++.errors { background: rgba(163, 58, 58, 0.15); border: 1px solid var(--bad); padding: 10px 12px; margin-bottom: 14px; font-size: 12px; }
++.errors ul { margin: 6px 0 0; padding-left: 18px; }
++
++.editor-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
++
++.empty { color: var(--muted); font-size: 12px; padding: 20px 0; text-align: center; }
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+new file mode 100644
+index 0000000..56f8a02
+--- /dev/null
++++ b/tools/devtool/server.mjs
+@@ -0,0 +1,250 @@
++#!/usr/bin/env node
++/**
++ * Little Knight Dev Tool — standalone content editor.
++ *
++ * A tiny local web server (no dependencies, no build step) that serves a plain
++ * HTML/JS page for editing quest templates, equipment, consumables, and events.
++ * It reads and writes the same JSON files the game itself loads at build time,
++ * so a save here + `npm run dev` restart is all it takes to see the change.
++ *
++ * This is intentionally separate from the game's own dev server — it has
++ * nothing to do with Electron or Vite, and can be run while the game is open
++ * or closed.
++ *
++ * Usage:
++ *   node tools/devtool/server.mjs
++ *   (or)  npm run devtool
++ *
++ * Then open http://localhost:5175 in a browser.
++ */
++import http from 'node:http';
++import fs from 'node:fs/promises';
++import path from 'node:path';
++import { fileURLToPath } from 'node:url';
++
++const __dirname = path.dirname(fileURLToPath(import.meta.url));
++const ROOT = path.resolve(__dirname, '..', '..');
++const DATA_DIR = path.join(ROOT, 'src', 'game', 'data', 'json');
++const PUBLIC_DIR = path.join(__dirname, 'public');
++const PORT = 5175;
++
++/* --------------------------------------------------------------- schema --- */
++// Required fields per content type. This is the real safety net: TypeScript's
++// `as Foo[]` cast on the JSON import does NOT validate structure at compile
++// time (confirmed — deleting a required field from the JSON still passes
++// `tsc`), so this server is the only thing standing between a bad edit and a
++// broken build. Every write is checked against these before it touches disk.
++
++const SCHEMAS = {
++  'quest-templates': {
++    file: 'quest-templates.json',
++    label: 'Quest Templates',
++    idField: null,
++    fields: {
++      verb: { type: 'string', required: true },
++      tag: { type: 'enum', required: true, options: ['combat', 'escort', 'explore', 'arcane', 'stealth', 'defense'] },
++      subjects: { type: 'string[]', required: true },
++      flavour: { type: 'string[]', required: true },
++    },
++  },
++  'equipment': {
++    file: 'equipment.json',
++    label: 'Equipment',
++    idField: 'id',
++    fields: {
++      id: { type: 'string', required: true, slug: true },
++      name: { type: 'string', required: true },
++      slot: { type: 'enum', required: true, options: ['weapon', 'helmet', 'chest', 'gloves', 'boots', 'ring', 'amulet'] },
++      rarity: { type: 'enum', required: true, options: ['common', 'uncommon', 'rare', 'epic', 'legendary'] },
++      reqLevel: { type: 'number', required: true },
++      maxDurability: { type: 'number', required: true },
++      value: { type: 'number', required: true },
++      mods: { type: 'mods', required: false },
++      stats: { type: 'stats', required: false },
++      setId: { type: 'string', required: false },
++    },
++  },
++  'consumables': {
++    file: 'consumables.json',
++    label: 'Consumables',
++    idField: 'id',
++    fields: {
++      id: { type: 'string', required: true, slug: true },
++      name: { type: 'string', required: true },
++      description: { type: 'string', required: true },
++      cost: { type: 'number', required: true },
++      glyph: { type: 'string', required: true },
++      effect: { type: 'effect', required: true },
++    },
++  },
++  'events': {
++    file: 'events.json',
++    label: 'Events',
++    idField: 'id',
++    fields: {
++      id: { type: 'string', required: true, slug: true },
++      name: { type: 'string', required: true },
++      description: { type: 'string', required: true },
++      kind: { type: 'enum', required: true, options: ['positive', 'neutral', 'negative'] },
++      weight: { type: 'number', required: true },
++      effects: { type: 'eventEffects', required: false },
++    },
++  },
++};
++
++const MOD_KEYS = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability'];
++const STAT_KEYS = ['strength', 'endurance', 'luck', 'wisdom'];
++const EFFECT_KEYS = ['success', 'gold', 'preventInjury', 'guaranteedGoodEvent', 'healInjury'];
++const EVENT_EFFECT_KEYS = ['success', 'goldPct', 'flatGold', 'xpPct', 'loot', 'durability', 'delay', 'injury', 'guaranteedLoot'];
++
++function validateEntry(schema, entry, index) {
++  const errors = [];
++  for (const [key, spec] of Object.entries(schema.fields)) {
++    const value = entry[key];
++    const present = value !== undefined && value !== null && value !== '';
++    if (spec.required && !present) {
++      errors.push(`entry ${index}: "${key}" is required`);
++      continue;
++    }
++    if (!present) continue;
++    switch (spec.type) {
++      case 'string':
++        if (typeof value !== 'string') errors.push(`entry ${index}: "${key}" must be text`);
++        break;
++      case 'number':
++        if (typeof value !== 'number' || Number.isNaN(value)) errors.push(`entry ${index}: "${key}" must be a number`);
++        break;
++      case 'enum':
++        if (!spec.options.includes(value)) errors.push(`entry ${index}: "${key}" must be one of ${spec.options.join(', ')}`);
++        break;
++      case 'string[]':
++        if (!Array.isArray(value) || value.length === 0 || value.some((v) => typeof v !== 'string')) {
++          errors.push(`entry ${index}: "${key}" must be a non-empty list of text`);
++        }
++        break;
++      case 'mods':
++        if (typeof value !== 'object') errors.push(`entry ${index}: "${key}" must be an object`);
++        else for (const k of Object.keys(value)) if (!MOD_KEYS.includes(k)) errors.push(`entry ${index}: unknown modifier "${k}"`);
++        break;
++      case 'stats':
++        if (typeof value !== 'object') errors.push(`entry ${index}: "${key}" must be an object`);
++        else for (const k of Object.keys(value)) if (!STAT_KEYS.includes(k)) errors.push(`entry ${index}: unknown stat "${k}"`);
++        break;
++      case 'effect':
++        if (typeof value !== 'object') errors.push(`entry ${index}: "${key}" must be an object`);
++        else for (const k of Object.keys(value)) if (!EFFECT_KEYS.includes(k)) errors.push(`entry ${index}: unknown effect key "${k}"`);
++        break;
++      case 'eventEffects':
++        if (typeof value !== 'object') errors.push(`entry ${index}: "${key}" must be an object`);
++        else for (const k of Object.keys(value)) if (!EVENT_EFFECT_KEYS.includes(k)) errors.push(`entry ${index}: unknown effect key "${k}"`);
++        break;
++    }
++    if (spec.slug && typeof value === 'string' && !/^[a-z][a-z0-9_]*$/.test(value)) {
++      errors.push(`entry ${index}: "${key}" should be lowercase_with_underscores (got "${value}")`);
++    }
++  }
++  return errors;
++}
++
++function validateArray(kind, data) {
++  const schema = SCHEMAS[kind];
++  if (!Array.isArray(data)) return [`${schema.label}: data must be a list`];
++  const errors = [];
++  data.forEach((entry, i) => errors.push(...validateEntry(schema, entry, i)));
++  if (schema.idField) {
++    const ids = data.map((e) => e[schema.idField]).filter(Boolean);
++    const dupes = ids.filter((id, i) => ids.indexOf(id) !== i);
++    if (dupes.length) errors.push(`duplicate id(s): ${[...new Set(dupes)].join(', ')}`);
++  }
++  return errors;
++}
++
++/* ------------------------------------------------------------------ http --- */
++
++const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
++
++async function serveStatic(req, res) {
++  let rel = req.url === '/' ? '/index.html' : req.url;
++  rel = rel.split('?')[0];
++  const filePath = path.join(PUBLIC_DIR, rel);
++  if (!filePath.startsWith(PUBLIC_DIR)) { res.writeHead(403); res.end(); return; }
++  try {
++    const body = await fs.readFile(filePath);
++    res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] ?? 'application/octet-stream' });
++    res.end(body);
++  } catch {
++    res.writeHead(404);
++    res.end('Not found');
++  }
++}
++
++function readBody(req) {
++  return new Promise((resolve, reject) => {
++    let chunks = '';
++    req.on('data', (c) => { chunks += c; });
++    req.on('end', () => resolve(chunks));
++    req.on('error', reject);
++  });
++}
++
++function json(res, status, payload) {
++  res.writeHead(status, { 'Content-Type': 'application/json' });
++  res.end(JSON.stringify(payload));
++}
++
++const server = http.createServer(async (req, res) => {
++  const url = new URL(req.url, `http://localhost:${PORT}`);
++
++  if (url.pathname === '/api/schema') {
++    return json(res, 200, SCHEMAS);
++  }
++
++  const match = url.pathname.match(/^\/api\/data\/([\w-]+)$/);
++  if (match) {
++    const kind = match[1];
++    const schema = SCHEMAS[kind];
++    if (!schema) return json(res, 404, { error: `Unknown content type "${kind}"` });
++    const filePath = path.join(DATA_DIR, schema.file);
++
++    if (req.method === 'GET') {
++      try {
++        const raw = await fs.readFile(filePath, 'utf8');
++        return json(res, 200, { data: JSON.parse(raw) });
++      } catch (err) {
++        return json(res, 500, { error: `Could not read ${schema.file}: ${err.message}` });
++      }
++    }
++
++    if (req.method === 'POST') {
++      let data;
++      try {
++        data = JSON.parse(await readBody(req));
++      } catch {
++        return json(res, 400, { error: 'Malformed JSON in request body.' });
++      }
++      const errors = validateArray(kind, data);
++      if (errors.length) return json(res, 400, { error: 'Validation failed.', details: errors });
++
++      try {
++        const previous = await fs.readFile(filePath, 'utf8').catch(() => null);
++        if (previous) await fs.writeFile(filePath + '.bak', previous, 'utf8');
++        await fs.writeFile(filePath, JSON.stringify(data, null, 2) + '\n', 'utf8');
++      } catch (err) {
++        return json(res, 500, { error: `Could not write ${schema.file}: ${err.message}` });
++      }
++      return json(res, 200, { ok: true, count: data.length });
++    }
++
++    res.writeHead(405);
++    return res.end();
++  }
++
++  return serveStatic(req, res);
++});
++
++server.listen(PORT, () => {
++  console.log(`Little Knight Dev Tool running at http://localhost:${PORT}`);
++  console.log(`Editing JSON files in ${path.relative(ROOT, DATA_DIR)}`);
++  console.log('Save in the tool, then restart `npm run dev` to see changes in the game.');
++  console.log('Press Ctrl+C to stop.');
++});
+diff --git a/tools/extract_data_to_json.py b/tools/extract_data_to_json.py
+new file mode 100644
+index 0000000..b057114
+--- /dev/null
++++ b/tools/extract_data_to_json.py
+@@ -0,0 +1,95 @@
++#!/usr/bin/env python3
++"""
++One-time (repeatable) extraction of hand-authored TS data arrays into JSON, so
++they can be edited by non-programmers via tools/devtool.
++
++Safe against the two failure modes a naive regex hits: colons inside string
++literals (e.g. "Sealed Orders:") and type annotations before the `=` sign
++(e.g. `Template[] = [`). Strings are stashed behind placeholders before any
++key-quoting happens, so nothing inside a string is ever touched.
++
++This script is idempotent-ish but not meant to be re-run blindly against a file
++that has since been hand-edited back in TS form — it's a one-way door. Once data
++lives in JSON (see src/game/data/*.ts for the thin re-export wrappers), edit the
++JSON directly or through the devtool.
++"""
++import re
++import json
++import os
++
++ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
++
++
++def extract_array(block: str):
++    m = re.search(r'=\s*(\[)', block)
++    start = m.start(1)
++    depth, i, in_str, quote = 0, start, False, ''
++    end = None
++    while i < len(block):
++        c = block[i]
++        if in_str:
++            if c == '\\':
++                i += 2
++                continue
++            if c == quote:
++                in_str = False
++        else:
++            if c in ("'", '"'):
++                in_str, quote = True, c
++            elif c == '[':
++                depth += 1
++            elif c == ']':
++                depth -= 1
++                if depth == 0:
++                    end = i
++                    break
++        i += 1
++    body = block[start:end + 1]
++
++    strings = []
++    def stash(m):
++        strings.append(m.group(1) if m.group(1) is not None else m.group(2))
++        return f'\x00{len(strings) - 1}\x00'
++    # TS source mixes single-quoted strings with double-quoted ones (used when
++    # the text itself contains an apostrophe, e.g. "Woodcutter's Axe") — stash
++    # both so nothing inside either kind of string gets touched downstream.
++    protected = re.sub(r"'((?:[^'\\]|\\.)*)'|\"((?:[^\"\\]|\\.)*)\"", stash, body)
++    # Section-divider comments like `/* weapons */` are common in these files;
++    # safe to strip now because string contents are already stashed above.
++    protected = re.sub(r'/\*.*?\*/', '', protected, flags=re.S)
++    protected = re.sub(r'//[^\n]*', '', protected)
++    protected = re.sub(r'(\b[a-zA-Z_]\w*\b)\s*:', r'"\1":', protected)
++    protected = re.sub(r',(\s*[\]}])', r'\1', protected)
++    protected = re.sub(r'\x00(\d+)\x00', lambda m: json.dumps(strings[int(m.group(1))]), protected)
++    return json.loads(protected)
++
++
++def slice_between(src: str, start_marker: str, end_marker: str) -> str:
++    start = src.index(start_marker)
++    end = src.index(end_marker, start) if end_marker else len(src)
++    return src[start:end]
++
++
++def main():
++    out_dir = os.path.join(ROOT, 'src', 'game', 'data', 'json')
++    os.makedirs(out_dir, exist_ok=True)
++
++    jobs = [
++        ('src/game/data/quests.ts', 'export const QUEST_TEMPLATES', 'export const QUEST_PREFIXES', 'quest-templates.json'),
++        ('src/game/data/quests.ts', 'export const QUEST_PREFIXES', '/* --------------------------- multi-day chains', 'quest-prefixes.json'),
++        ('src/game/data/equipment.ts', 'export const EQUIPMENT:', 'export const EQUIPMENT_BY_ID', 'equipment.json'),
++        ('src/game/data/items.ts', 'export const CONSUMABLES:', 'export const CONSUMABLE_BY_ID', 'consumables.json'),
++        ('src/game/data/events.ts', 'export const EVENTS:', 'export const EVENTS_BY_KIND', 'events.json'),
++    ]
++
++    for rel_path, start_marker, end_marker, out_name in jobs:
++        src = open(os.path.join(ROOT, rel_path)).read()
++        block = slice_between(src, start_marker, end_marker)
++        data = extract_array(block)
++        out_path = os.path.join(out_dir, out_name)
++        json.dump(data, open(out_path, 'w'), indent=2)
++        print(f'{out_name}: {len(data)} entries')
++
++
++if __name__ == '__main__':
++    main()

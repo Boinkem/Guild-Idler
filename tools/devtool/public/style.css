@@ -1,0 +1,85 @@
+:root {
+  --bg: #171320; --panel: #221c2e; --panel2: #2b2338; --panel3: #362c46;
+  --edge: #0e0b14; --text: #f3e6c8; --muted: #a294b5;
+  --brass: #d9a441; --good: #79a86b; --bad: #a33a3a; --blue: #5b8fd6;
+  font-family: ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-size: 13px; }
+
+.topbar {
+  display: flex; align-items: center; gap: 20px;
+  padding: 10px 16px; background: var(--panel2); border-bottom: 1px solid var(--edge);
+  position: sticky; top: 0; z-index: 5;
+}
+.topbar h1 { font-size: 15px; margin: 0; white-space: nowrap; }
+.topbar h1 span { color: var(--brass); font-weight: normal; margin-left: 6px; }
+#tabs { display: flex; gap: 4px; flex: 1; flex-wrap: wrap; }
+#tabs button {
+  background: var(--panel); border: 1px solid var(--edge); color: var(--text);
+  padding: 7px 12px; cursor: pointer; font: inherit;
+}
+#tabs button.active { background: var(--brass); color: #241a0a; font-weight: bold; }
+.topbar-status { font-size: 11px; color: var(--muted); min-width: 160px; text-align: right; }
+.topbar-status.err { color: var(--bad); }
+.topbar-status.ok { color: var(--good); }
+
+main { padding: 18px; max-width: 1100px; margin: 0 auto; }
+
+.toolbar { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }
+.toolbar .spacer { flex: 1; }
+
+button {
+  background: var(--panel2); border: 1px solid var(--edge); color: var(--text);
+  padding: 7px 12px; cursor: pointer; font: inherit;
+}
+button:hover { background: var(--panel3); }
+button.primary { background: #8c6a2a; border-color: var(--brass); color: #fff8e6; }
+button.primary:hover { background: var(--brass); color: #241a0a; }
+button.danger { border-color: var(--bad); }
+button.danger:hover { background: var(--bad); }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--panel3); font-size: 12px; }
+th { color: var(--muted); font-weight: normal; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; }
+tr:hover td { background: var(--panel); }
+td.actions { white-space: nowrap; width: 1%; }
+td.actions button { padding: 4px 8px; font-size: 11px; margin-right: 4px; }
+
+.rarity-common { color: #b9ad93; } .rarity-uncommon { color: var(--good); }
+.rarity-rare { color: var(--blue); } .rarity-epic { color: #a874d6; } .rarity-legendary { color: var(--brass); }
+.kind-positive { color: var(--good); } .kind-negative { color: var(--bad); } .kind-neutral { color: var(--muted); }
+
+.editor-overlay {
+  position: fixed; inset: 0; background: rgba(10, 8, 14, 0.82);
+  display: flex; align-items: flex-start; justify-content: center; padding: 40px 20px;
+  overflow-y: auto; z-index: 10;
+}
+.editor {
+  background: var(--panel); border: 1px solid var(--brass); padding: 20px;
+  width: 100%; max-width: 560px;
+}
+.editor h2 { margin-top: 0; font-size: 14px; color: var(--brass); }
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.field input[type=text], .field input[type=number], .field textarea, .field select {
+  width: 100%; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text);
+  padding: 7px 8px; font: inherit;
+}
+.field textarea { min-height: 50px; resize: vertical; }
+.field .hint { font-size: 10px; color: var(--muted); margin-top: 3px; }
+.field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.list-input { display: flex; flex-direction: column; gap: 4px; }
+.list-input .row { display: flex; gap: 4px; }
+.list-input input { flex: 1; }
+.list-input .remove { padding: 4px 8px; }
+.kv-grid { display: grid; grid-template-columns: 1fr 90px; gap: 6px 8px; align-items: center; }
+.kv-grid label { font-size: 11px; color: var(--muted); }
+
+.errors { background: rgba(163, 58, 58, 0.15); border: 1px solid var(--bad); padding: 10px 12px; margin-bottom: 14px; font-size: 12px; }
+.errors ul { margin: 6px 0 0; padding-left: 18px; }
+
+.editor-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+.empty { color: var(--muted); font-size: 12px; padding: 20px 0; text-align: center; }

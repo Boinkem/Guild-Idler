@@ -61,60 +61,16 @@ interface Template {
   flavour: string[];
 }
 
-export const QUEST_TEMPLATES: Template[] = [
-  {
-    verb: 'Hunt', tag: 'combat',
-    subjects: ['Dire Wolf', 'Bog Lurker', 'Frost Boar', 'Marsh Hydra', 'Ashen Wyvern', 'Thicket Stalker'],
-    flavour: ['Tracks lead north past the old mill.', 'The farmers have stopped counting their losses.', 'It hunts at dusk. So will we.'],
-  },
-  {
-    verb: 'Escort', tag: 'escort',
-    subjects: ['Merchant', 'Pilgrim Caravan', 'Wandering Scholar', 'Salt Trader', 'Envoy of Highmoor'],
-    flavour: ['Pays well and complains loudly.', 'The road is quiet lately. Suspiciously quiet.', 'Three carts, one bridge, no patience.'],
-  },
-  {
-    verb: 'Defend', tag: 'defense',
-    subjects: ['Village', 'River Crossing', 'Grain Stores', 'Watchtower', 'Chapel of Embers'],
-    flavour: ['They asked for soldiers. They got you.', 'Hold until the horn sounds.', 'Bring rope. Bring more rope.'],
-  },
-  {
-    verb: 'Explore', tag: 'explore',
-    subjects: ['Ancient Ruins', 'Sunken Aqueduct', 'Fogbound Vale', 'Collapsed Library', 'Hollow Beneath Oakfell'],
-    flavour: ['Nobody has mapped it properly. Nobody has come back to try.', 'The stones are older than the kingdom.', 'Bring a lantern and a strong stomach.'],
-  },
-  {
-    verb: 'Clear', tag: 'combat',
-    subjects: ['Goblin Camp', 'Bandit Hideout', 'Spider Warren', 'Kobold Tunnels', 'Deserter Stockade'],
-    flavour: ['Small problem. Growing fast.', 'They took the tax cart. Twice.', 'In and out before the moon rises.'],
-  },
-  {
-    verb: 'Slay', tag: 'combat',
-    subjects: ['Cave Troll', 'Bone Warden', 'Blight Ogre', 'Sunless Chimera', 'The Thing in the Weir'],
-    flavour: ['The bounty has been raised four times.', 'It has a name. That is never a good sign.', 'Two knights went. Neither returned.'],
-  },
-  {
-    verb: 'Recover', tag: 'explore',
-    subjects: ['Sacred Relic', 'Stolen Crown Jewel', 'Guild Ledger', 'Warden\'s Signet', 'Reliquary of Saint Aldwin'],
-    flavour: ['The temple is offering gold and no questions.', 'It was never supposed to leave the vault.', 'Discretion is part of the fee.'],
-  },
-  {
-    verb: 'Investigate', tag: 'arcane',
-    subjects: ['Haunted Mine', 'Silent Village', 'Weeping Standing Stones', 'Drowned Shrine', 'Cursed Orchard'],
-    flavour: ['Lights underground. No miners left to hold them.', 'The bell rings on its own.', 'Everyone left in one night. Doors still open.'],
-  },
-  {
-    verb: 'Infiltrate', tag: 'stealth',
-    subjects: ['Smuggler Warehouse', 'Cult Sanctum', 'Rival Guild Hall', 'Blackrock Keep'],
-    flavour: ['Quiet work. Quiet pay.', 'Get in, read the ledger, leave nothing behind.', 'No banners. No noise.'],
-  },
-  {
-    verb: 'Break', tag: 'arcane',
-    subjects: ['Binding Ward', 'Curse of Hollowmere', 'Sealed Gate', 'Witch\'s Pact'],
-    flavour: ['The scholars have theories. You have a sword.', 'Undo it carefully or not at all.', 'The old words still hold. Barely.'],
-  },
-];
+/**
+ * Quest name templates live in json/quest-templates.json so they can be edited
+ * via tools/devtool without touching TypeScript. This file just types and
+ * re-exports them.
+ */
+import questTemplatesJson from './json/quest-templates.json';
+export const QUEST_TEMPLATES: Template[] = questTemplatesJson as Template[];
 
-export const QUEST_PREFIXES = ['Urgent:', 'Contract:', 'Bounty:', 'Request:', 'Sealed Orders:'];
+import questPrefixesJson from './json/quest-prefixes.json';
+export const QUEST_PREFIXES: string[] = questPrefixesJson as string[];
 
 /* --------------------------- multi-day chains --------------------------- */
 

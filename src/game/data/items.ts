@@ -1,56 +1,12 @@
 import { ConsumableDef, Injury } from '../types';
 import { HOUR, MINUTE } from '../util';
 
-export const CONSUMABLES: ConsumableDef[] = [
-  {
-    id: 'healing_potion',
-    name: 'Healing Potion',
-    description: 'Steadies the hands before a fight.',
-    cost: 25,
-    glyph: '❤',
-    effect: { success: 15 },
-  },
-  {
-    id: 'lucky_potion',
-    name: 'Lucky Potion',
-    description: 'Coins seem to find their way into pockets.',
-    cost: 50,
-    glyph: '✦',
-    effect: { gold: 50 },
-  },
-  {
-    id: 'strength_potion',
-    name: 'Strength Potion',
-    description: 'A hard swing and a fair price for it.',
-    cost: 75,
-    glyph: '⚔',
-    effect: { success: 10, gold: 25 },
-  },
-  {
-    id: 'protection_charm',
-    name: 'Protection Charm',
-    description: 'Your knight comes home unhurt, win or lose.',
-    cost: 100,
-    glyph: '⛨',
-    effect: { preventInjury: true },
-  },
-  {
-    id: 'elixir_of_fortune',
-    name: 'Elixir of Fortune',
-    description: 'Guarantees a favourable event on the road.',
-    cost: 250,
-    glyph: '☘',
-    effect: { guaranteedGoodEvent: true },
-  },
-  {
-    id: 'field_bandage',
-    name: 'Field Bandage',
-    description: 'Clears one injury immediately.',
-    cost: 60,
-    glyph: '✚',
-    effect: { healInjury: true },
-  },
-];
+/**
+ * Consumables live in json/consumables.json so they can be edited via
+ * tools/devtool without touching TypeScript.
+ */
+import consumablesJson from './json/consumables.json';
+export const CONSUMABLES: ConsumableDef[] = consumablesJson as ConsumableDef[];
 
 export const CONSUMABLE_BY_ID: Record<string, ConsumableDef> = Object.fromEntries(
   CONSUMABLES.map((c) => [c.id, c]),

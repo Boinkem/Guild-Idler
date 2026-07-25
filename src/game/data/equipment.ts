@@ -14,53 +14,12 @@ export const RARITY_PRICE_MULT: Record<Rarity, number> = {
   common: 1, uncommon: 2.2, rare: 5, epic: 12, legendary: 32,
 };
 
-export const EQUIPMENT: EquipmentDef[] = [
-  /* ------------------------------ weapons ------------------------------ */
-  { id: 'rusty_sword', name: 'Rusty Sword', slot: 'weapon', rarity: 'common', reqLevel: 1, maxDurability: 40, value: 30, mods: { success: 2 }, stats: { strength: 1 } },
-  { id: 'woodcutter_axe', name: "Woodcutter's Axe", slot: 'weapon', rarity: 'common', reqLevel: 2, maxDurability: 45, value: 45, mods: { success: 3 }, stats: { strength: 1 } },
-  { id: 'knights_blade', name: "Knight's Blade", slot: 'weapon', rarity: 'uncommon', reqLevel: 5, maxDurability: 70, value: 160, mods: { success: 5, gold: 4 }, stats: { strength: 3 } },
-  { id: 'silver_rapier', name: 'Silver Rapier', slot: 'weapon', rarity: 'rare', reqLevel: 10, maxDurability: 90, value: 520, mods: { success: 8, speed: 5 }, stats: { strength: 4, luck: 2 } },
-  { id: 'oathkeeper', name: 'Oathkeeper', slot: 'weapon', rarity: 'epic', reqLevel: 18, maxDurability: 130, value: 1900, mods: { success: 12, injuryResist: 8 }, stats: { strength: 7, endurance: 3 } },
-  { id: 'dragon_blade', name: 'Dragonfang Greatsword', slot: 'weapon', rarity: 'legendary', reqLevel: 25, maxDurability: 200, value: 7200, mods: { success: 16, gold: 12, loot: 4 }, stats: { strength: 12 }, setId: 'dragon_slayer' },
-
-  /* ------------------------------ helmets ------------------------------ */
-  { id: 'leather_cap', name: 'Leather Cap', slot: 'helmet', rarity: 'common', reqLevel: 1, maxDurability: 35, value: 25, mods: { injuryResist: 3 } },
-  { id: 'iron_helm', name: 'Iron Helm', slot: 'helmet', rarity: 'uncommon', reqLevel: 4, maxDurability: 60, value: 140, mods: { injuryResist: 7, success: 2 }, stats: { endurance: 2 } },
-  { id: 'visored_sallet', name: 'Visored Sallet', slot: 'helmet', rarity: 'rare', reqLevel: 11, maxDurability: 85, value: 470, mods: { injuryResist: 12, success: 4 }, stats: { endurance: 4 } },
-  { id: 'crown_of_the_lost', name: 'Crown of the Lost Kingdom', slot: 'helmet', rarity: 'epic', reqLevel: 16, maxDurability: 120, value: 2100, mods: { xp: 25, loot: 5, success: 5 }, stats: { wisdom: 8 } },
-  { id: 'dragon_helm', name: 'Dragonscale Helm', slot: 'helmet', rarity: 'legendary', reqLevel: 25, maxDurability: 190, value: 6400, mods: { injuryResist: 20, success: 8 }, stats: { endurance: 9 }, setId: 'dragon_slayer' },
-
-  /* ------------------------------- chest ------------------------------- */
-  { id: 'padded_gambeson', name: 'Padded Gambeson', slot: 'chest', rarity: 'common', reqLevel: 1, maxDurability: 45, value: 35, mods: { injuryResist: 4 } },
-  { id: 'chainmail', name: 'Chainmail Hauberk', slot: 'chest', rarity: 'uncommon', reqLevel: 6, maxDurability: 75, value: 210, mods: { injuryResist: 9, success: 3 }, stats: { endurance: 3 } },
-  { id: 'guardplate', name: 'Guardsman Plate', slot: 'chest', rarity: 'rare', reqLevel: 12, maxDurability: 110, value: 640, mods: { injuryResist: 14, success: 5 }, stats: { endurance: 6 } },
-  { id: 'bulwark_cuirass', name: 'Bulwark Cuirass', slot: 'chest', rarity: 'epic', reqLevel: 20, maxDurability: 150, value: 2400, mods: { injuryResist: 22, success: 8, durability: 15 }, stats: { endurance: 9 } },
-  { id: 'dragon_armor', name: 'Dragonplate Armor', slot: 'chest', rarity: 'legendary', reqLevel: 26, maxDurability: 220, value: 8200, mods: { injuryResist: 28, success: 10, durability: 20 }, stats: { endurance: 13, strength: 4 }, setId: 'dragon_slayer' },
-
-  /* ------------------------------ gloves ------------------------------- */
-  { id: 'work_gloves', name: 'Work Gloves', slot: 'gloves', rarity: 'common', reqLevel: 1, maxDurability: 30, value: 20, mods: { gold: 3 } },
-  { id: 'gauntlets', name: 'Steel Gauntlets', slot: 'gloves', rarity: 'uncommon', reqLevel: 5, maxDurability: 55, value: 130, mods: { success: 3, injuryResist: 4 }, stats: { strength: 2 } },
-  { id: 'thief_wraps', name: "Cutpurse's Wraps", slot: 'gloves', rarity: 'rare', reqLevel: 10, maxDurability: 70, value: 430, mods: { gold: 14, loot: 3 }, stats: { luck: 4 } },
-  { id: 'grasp_of_avarice', name: 'Grasp of Avarice', slot: 'gloves', rarity: 'epic', reqLevel: 19, maxDurability: 110, value: 2000, mods: { gold: 30, loot: 6 }, stats: { luck: 8 } },
-
-  /* ------------------------------- boots ------------------------------- */
-  { id: 'worn_boots', name: 'Worn Boots', slot: 'boots', rarity: 'common', reqLevel: 1, maxDurability: 32, value: 22, mods: { speed: 3 } },
-  { id: 'ranger_boots', name: 'Ranger Boots', slot: 'boots', rarity: 'uncommon', reqLevel: 4, maxDurability: 58, value: 135, mods: { speed: 7 }, stats: { endurance: 2 } },
-  { id: 'sevenleague_boots', name: 'Seven-League Boots', slot: 'boots', rarity: 'rare', reqLevel: 13, maxDurability: 88, value: 560, mods: { speed: 14 }, stats: { endurance: 3, luck: 2 } },
-  { id: 'windstride_greaves', name: 'Windstride Greaves', slot: 'boots', rarity: 'epic', reqLevel: 21, maxDurability: 130, value: 2300, mods: { speed: 22, success: 4 }, stats: { endurance: 7 } },
-
-  /* -------------------------------- ring ------------------------------- */
-  { id: 'copper_band', name: 'Copper Band', slot: 'ring', rarity: 'common', reqLevel: 1, maxDurability: 60, value: 30, mods: { loot: 1 } },
-  { id: 'lucky_ring', name: 'Lucky Ring', slot: 'ring', rarity: 'rare', reqLevel: 7, maxDurability: 100, value: 600, mods: { loot: 6, gold: 10 }, stats: { luck: 6 } },
-  { id: 'signet_of_wardens', name: 'Signet of the Wardens', slot: 'ring', rarity: 'epic', reqLevel: 17, maxDurability: 140, value: 2200, mods: { success: 9, injuryResist: 10 }, stats: { luck: 5, wisdom: 4 } },
-  { id: 'ring_of_endless_roads', name: 'Ring of Endless Roads', slot: 'ring', rarity: 'legendary', reqLevel: 28, maxDurability: 210, value: 7600, mods: { speed: 25, xp: 30, loot: 8 }, stats: { luck: 9, wisdom: 8 } },
-
-  /* ------------------------------- amulet ------------------------------ */
-  { id: 'bone_charm', name: 'Bone Charm', slot: 'amulet', rarity: 'common', reqLevel: 1, maxDurability: 55, value: 28, mods: { xp: 5 } },
-  { id: 'scholars_pendant', name: "Scholar's Pendant", slot: 'amulet', rarity: 'uncommon', reqLevel: 6, maxDurability: 80, value: 190, mods: { xp: 15 }, stats: { wisdom: 3 } },
-  { id: 'amulet_of_fortune', name: 'Amulet of Fortune', slot: 'amulet', rarity: 'epic', reqLevel: 18, maxDurability: 145, value: 2500, mods: { gold: 28, loot: 8 }, stats: { luck: 9 } },
-  { id: 'heart_of_the_mountain', name: 'Heart of the Mountain', slot: 'amulet', rarity: 'legendary', reqLevel: 30, maxDurability: 230, value: 9000, mods: { success: 14, injuryResist: 18, durability: 30 }, stats: { endurance: 12, wisdom: 6 } },
-];
+/**
+ * Equipment lives in json/equipment.json so it can be edited via
+ * tools/devtool without touching TypeScript.
+ */
+import equipmentJson from './json/equipment.json';
+export const EQUIPMENT: EquipmentDef[] = equipmentJson as EquipmentDef[];
 
 export const EQUIPMENT_BY_ID: Record<string, EquipmentDef> = Object.fromEntries(
   EQUIPMENT.map((e) => [e.id, e]),
