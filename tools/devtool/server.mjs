@@ -21,7 +21,7 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -215,12 +215,13 @@ function validateArray(kind, data) {
 
 const GIT_TIMEOUT_MS = 20_000;
 const BUILD_TIMEOUT_MS = 5 * 60_000;
+const PACKAGE_TIMEOUT_MS = 10 * 60_000;
 const NPM_BIN = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
-async function run(cmd, args, timeout) {
+async function run(cmd, args, timeout, opts = {}) {
   try {
     const { stdout, stderr } = await execFileAsync(cmd, args, {
-      cwd: ROOT, timeout, maxBuffer: 20 * 1024 * 1024,
+      cwd: ROOT, timeout, maxBuffer: 20 * 1024 * 1024, ...opts,
     });
     return { ok: true, code: 0, stdout, stderr };
   } catch (err) {
@@ -235,6 +236,19 @@ async function run(cmd, args, timeout) {
       timedOut: !!err.killed && err.signal === 'SIGTERM',
     };
   }
+}
+
+/**
+ * npm on Windows is npm.cmd, a shell shim rather than a real executable —
+ * execFile can't run it directly and fails with `spawn EINVAL` (a well-known
+ * Node/Windows gotcha, not specific to this project). shell:true routes it
+ * through cmd.exe instead. Git commands don't need this — git.exe is a real
+ * binary on every platform — so this is deliberately npm-only rather than a
+ * blanket shell:true on every command here, which would also make the
+ * commit-message path (arbitrary user text) harder to reason about safely.
+ */
+async function runNpm(args, timeout) {
+  return run(NPM_BIN, args, timeout, { shell: process.platform === 'win32' });
 }
 
 async function listPatchFiles() {
@@ -282,6 +296,83 @@ async function gitStatus() {
     lastCommit: log.stdout.trim(),
     branch: branch.stdout.trim(),
   };
+}
+
+async function readPackageVersion() {
+  try {
+    const raw = await fs.readFile(path.join(ROOT, 'package.json'), 'utf8');
+    return JSON.parse(raw).version ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function listGitTags() {
+  const result = await run('git', ['tag', '--list', '--sort=-creatordate'], GIT_TIMEOUT_MS);
+  return result.ok ? result.stdout.split('\n').filter(Boolean).slice(0, 10) : [];
+}
+
+/* ------------------------------- dev server -------------------------------- */
+// `npm run dev` doesn't exit — it starts Vite and Electron and runs until
+// stopped. That's a different shape from check/apply/commit/build (which run
+// to completion and report a result), so it gets its own start/stop/status
+// trio instead of reusing run(): started detached and unref'd so it outlives
+// this request, tracked by PID, and stopped by killing the whole process
+// tree — killing just the top process would leave Vite/Electron orphaned,
+// since npm spawns them as children of the shell it runs under.
+
+
+let devProcess = null; // { pid, startedAt }
+
+function isPidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function killProcessTree(pid) {
+  if (process.platform === 'win32') {
+    await run('taskkill', ['/pid', String(pid), '/T', '/F'], GIT_TIMEOUT_MS);
+  } else {
+    try {
+      process.kill(-pid, 'SIGTERM'); // negative pid = whole process group (see detached below)
+    } catch {
+      /* already gone */
+    }
+  }
+}
+
+function startDevServer() {
+  if (devProcess && isPidAlive(devProcess.pid)) {
+    return { ok: false, error: 'Dev server already running.' };
+  }
+  const child = spawn(NPM_BIN, ['run', 'dev'], {
+    cwd: ROOT,
+    detached: true,
+    stdio: 'ignore',
+    shell: process.platform === 'win32',
+  });
+  child.unref();
+  devProcess = { pid: child.pid, startedAt: Date.now() };
+  return { ok: true, pid: child.pid };
+}
+
+async function stopDevServer() {
+  if (!devProcess || !isPidAlive(devProcess.pid)) {
+    devProcess = null;
+    return { ok: false, error: 'Dev server is not running.' };
+  }
+  await killProcessTree(devProcess.pid);
+  devProcess = null;
+  return { ok: true };
+}
+
+function devServerStatus() {
+  if (devProcess && isPidAlive(devProcess.pid)) return { running: true, ...devProcess };
+  return { running: false };
 }
 
 /* ------------------------------------------------------------------ http --- */
@@ -365,8 +456,42 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url.pathname === '/api/patches/build' && req.method === 'POST') {
-    const result = await run(NPM_BIN, ['run', 'build'], BUILD_TIMEOUT_MS);
+    const result = await runNpm(['run', 'build'], BUILD_TIMEOUT_MS);
     return json(res, 200, result);
+  }
+
+  if (url.pathname === '/api/patches/package' && req.method === 'POST') {
+    const result = await runNpm(['run', 'package'], PACKAGE_TIMEOUT_MS);
+    return json(res, 200, result);
+  }
+
+  if (url.pathname === '/api/version' && req.method === 'GET') {
+    const version = await readPackageVersion();
+    const tags = await listGitTags();
+    return json(res, 200, { version, tags });
+  }
+
+  if (url.pathname === '/api/version/bump' && req.method === 'POST') {
+    const body = JSON.parse(await readBody(req));
+    const level = ['patch', 'minor', 'major'].includes(body.level) ? body.level : null;
+    if (!level) return json(res, 400, { error: 'level must be patch, minor, or major.' });
+    // npm version bumps package.json, commits, and tags (e.g. v0.1.10) in one
+    // step — this is the real release version, distinct from the 000N patch
+    // filenames, which are just this-session-to-that-session identifiers.
+    const result = await runNpm(['version', level], GIT_TIMEOUT_MS);
+    return json(res, 200, result);
+  }
+
+  if (url.pathname === '/api/dev/start' && req.method === 'POST') {
+    return json(res, 200, startDevServer());
+  }
+
+  if (url.pathname === '/api/dev/stop' && req.method === 'POST') {
+    return json(res, 200, await stopDevServer());
+  }
+
+  if (url.pathname === '/api/dev/status' && req.method === 'GET') {
+    return json(res, 200, devServerStatus());
   }
 
   const match = url.pathname.match(/^\/api\/data\/([\w-]+)$/);

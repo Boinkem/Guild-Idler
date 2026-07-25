@@ -65,23 +65,55 @@ commit.
 
 ## Applying patches without the command line
 
-The **Patches** tab (first tab, left of Quest Templates) wraps the git workflow
-from WORKFLOW.md into buttons: select a `.patch` file sitting in the project
-root or a `patches/` folder, then step through Check → Apply → Commit → Build.
+The **Patches** tab (first tab, left of Quest Templates) wraps the whole
+release workflow from WORKFLOW.md into buttons.
 
-Each step is a real command run for you — `git apply --check`, `git apply`,
-`git add -A && git commit`, `npm run build` — shown with its actual output, and
-nothing auto-chains. A failed check just tells you it failed; it doesn't try
-to apply anyway. A successful apply doesn't auto-commit. You press each button.
+### Dev server
+
+A quick-access panel at the top starts and stops `npm run dev` (Vite +
+Electron). **Start** launches it in the background and returns immediately —
+this is deliberate, since a dev server doesn't exit the way a build does, so
+the page can't wait for it to finish. **Stop** kills the whole process tree,
+not just the top process; `npm run dev` chains npm → Vite → Electron as child
+processes, and killing only the first would leave the others running
+invisibly. Status (🟢 running / ⚪ stopped) is checked on load and after every
+start/stop.
+
+### The patch flow: Check → Apply → Commit
+
+Select a `.patch` file sitting in the project root or a `patches/` folder,
+then step through **Check** (`git apply --check`, a dry run) → **Apply**
+(`git apply`, actually changes files) → **Commit** (`git add -A && git
+commit`). Each step shows its real output. Nothing auto-chains — a failed
+check doesn't try to apply anyway, a successful apply doesn't auto-commit.
+You press each button.
 
 The current git status (branch, clean/dirty, last commit) shows at the top and
-updates after every step, so you always know where you stand. If the working
-tree isn't clean, it says so — worth resolving that first, but it won't stop
-you from proceeding.
+updates after every step. If the working tree isn't clean, it says so — worth
+resolving first, but it won't stop you from proceeding.
+
+### Build, Package, and Tag — the release steps
+
+These three matter more once you're cutting an actual build for playtesters
+or Steam, and are separate from the patch flow above — use them any time, not
+just right after applying something.
+
+- **Build** (step 5) — `npm run build`. Confirms nothing is broken.
+- **Package** (step 6) — `npm run package`. Runs electron-builder and produces
+  installers/unpacked builds in `release/` — this is what you'd hand to
+  playtesters or upload to Steam. Can take several minutes the first time.
+- **Tag a release version** (step 7) — runs `npm version patch/minor/major`,
+  which bumps `package.json`, commits, and creates a git tag (`v0.1.10`) in one
+  step. **This is deliberately separate from the `000N-name.patch` filenames.**
+  A patch filename just identifies one batch of changes between us in this
+  conversation; a version tag is the real release number that matters to
+  players and to Steam. Do this once you're happy with everything above —
+  typically after applying several patches and confirming the build — not
+  after every single patch.
 
 This is a convenience wrapper around the same commands, not a replacement for
-git — for anything beyond apply-commit-build (branches, resolving a real merge
-conflict, history surgery), use the terminal.
+git — for anything beyond this (branches, resolving a real merge conflict,
+history surgery), use the terminal.
 
 ## What's editable here vs. not
 

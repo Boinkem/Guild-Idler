@@ -361,14 +361,27 @@ async function selectPatchesTab() {
   markActiveTab('__patches__');
   setStatus('Loading…');
   try {
-    const { files, status } = await api('/api/patches/list');
+    const [{ files, status }, versionInfo, devStatus] = await Promise.all([
+      api('/api/patches/list'),
+      api('/api/version'),
+      api('/api/dev/status'),
+    ]);
     patchState.files = files;
     patchState.gitStatus = status;
+    patchState.version = versionInfo.version;
+    patchState.tags = versionInfo.tags;
+    patchState.devRunning = devStatus.running;
     setStatus('');
     renderPatches();
   } catch (err) {
     setStatus(err.message, 'err');
   }
+}
+
+async function refreshDevStatus() {
+  const s = await api('/api/dev/status');
+  patchState.devRunning = s.running;
+  renderPatches();
 }
 
 async function refreshGitStatus() {
@@ -398,7 +411,21 @@ function renderPatches() {
       auto-chains — each button only does the one thing it says.
     </p>
 
-    <div class="patch-git-status ${gs?.clean ? 'clean' : 'dirty'}">
+    <div class="patch-git-status">
+      <div class="spread">
+        <span><b>Dev server:</b> ${patchState.devRunning ? '🟢 running' : '⚪ stopped'}</span>
+        <span class="row" style="gap:6px;">
+          <button id="devStartBtn" ${patchState.devRunning ? 'disabled' : ''}>Start (npm run dev)</button>
+          <button id="devStopBtn" ${!patchState.devRunning ? 'disabled' : ''}>Stop</button>
+        </span>
+      </div>
+      <p class="tiny muted" style="margin: 6px 0 0;">
+        Starts Vite + Electron in the background and returns immediately — this page doesn't wait for
+        it to exit, since it isn't supposed to. Stop kills the whole process tree, not just the shell.
+      </p>
+    </div>
+
+    <div class="patch-git-status ${gs?.clean ? 'clean' : 'dirty'}" style="margin-top:10px;">
       <div class="spread">
         <span><b>Branch:</b> ${escapeHtml(gs?.branch || '?')} &nbsp; <b>Last commit:</b> ${escapeHtml(gs?.lastCommit || '?')}</span>
         <button id="refreshStatusBtn">Refresh</button>
@@ -446,9 +473,51 @@ function renderPatches() {
     <p class="tiny muted">Runs <code>npm run build</code> to confirm nothing is broken. Can take a minute.</p>
     <button id="buildBtn">Run build</button>
     <div id="buildResult"></div>
+
+    <div class="section-heading">6. Package into an installer</div>
+    <p class="tiny muted">
+      Runs <code>npm run package</code> — produces installers/unpacked builds in <code>release/</code>.
+      This is what you'd upload to Steam or hand to playtesters. Can take several minutes the first time.
+    </p>
+    <button id="packageBtn">Run package</button>
+    <div id="packageResult"></div>
+
+    <div class="section-heading">7. Tag a release version</div>
+    <p class="tiny muted">
+      Current version: <b>${escapeHtml(patchState.version || '?')}</b>.
+      ${patchState.tags?.length ? `Recent tags: ${patchState.tags.map(escapeHtml).join(', ')}.` : 'No tags yet.'}
+      This is separate from the <code>000N-name.patch</code> filenames, which just identify a batch of
+      changes between us — a version bump is the real release number, and creates a git commit + tag
+      (e.g. <code>v${escapeHtml(patchState.version || '0.0.0')}</code> → next patch bump) in one step.
+      Do this once you're happy with everything above, not per-patch.
+    </p>
+    <div class="row" style="gap:6px;">
+      <button id="bumpPatchBtn">Bump patch (bug fixes)</button>
+      <button id="bumpMinorBtn">Bump minor (new features)</button>
+      <button id="bumpMajorBtn">Bump major (breaking/big)</button>
+    </div>
+    <div id="versionResult"></div>
   `;
 
   document.getElementById('refreshStatusBtn').onclick = () => refreshGitStatus();
+
+  const devStartBtn = document.getElementById('devStartBtn');
+  devStartBtn.onclick = async () => {
+    devStartBtn.disabled = true;
+    devStartBtn.textContent = 'Starting…';
+    const result = await api('/api/dev/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    if (!result.ok) alert(result.error || 'Could not start the dev server.');
+    await refreshDevStatus();
+  };
+
+  const devStopBtn = document.getElementById('devStopBtn');
+  devStopBtn.onclick = async () => {
+    devStopBtn.disabled = true;
+    devStopBtn.textContent = 'Stopping…';
+    const result = await api('/api/dev/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    if (!result.ok) alert(result.error || 'Could not stop the dev server.');
+    await refreshDevStatus();
+  };
 
   appEl.querySelectorAll('input[name="patchfile"]').forEach((input) => {
     input.onchange = () => {
@@ -513,4 +582,39 @@ function renderPatches() {
     buildBtn.textContent = 'Run build';
     document.getElementById('buildResult').innerHTML = resultBlock(result, 'Build');
   };
+
+  const packageBtn = document.getElementById('packageBtn');
+  if (packageBtn) packageBtn.onclick = async () => {
+    packageBtn.disabled = true;
+    packageBtn.textContent = 'Packaging… (this can take several minutes)';
+    const result = await api('/api/patches/package', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+    packageBtn.disabled = false;
+    packageBtn.textContent = 'Run package';
+    document.getElementById('packageResult').innerHTML = resultBlock(result, 'Package');
+  };
+
+  ['bumpPatchBtn', 'bumpMinorBtn', 'bumpMajorBtn'].forEach((id, i) => {
+    const level = ['patch', 'minor', 'major'][i];
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.onclick = async () => {
+      if (!confirm(`Bump the ${level} version? This commits and creates a git tag.`)) return;
+      btn.disabled = true;
+      const result = await api('/api/version/bump', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level }),
+      });
+      btn.disabled = false;
+      document.getElementById('versionResult').innerHTML = resultBlock(result, `Version bump (${level})`);
+      if (result.ok) {
+        const versionInfo = await api('/api/version');
+        patchState.version = versionInfo.version;
+        patchState.tags = versionInfo.tags;
+        renderPatches();
+        document.getElementById('versionResult').innerHTML = resultBlock(result, `Version bump (${level})`);
+      }
+    };
+  });
 }

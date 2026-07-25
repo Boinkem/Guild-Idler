@@ -104,6 +104,12 @@ git diff > my-changes.patch
 
 ## Cutting a build for playtesters
 
+**Preferred: the devtool.** `npm run devtool` → Patches tab → step 7 (Tag a
+release version) → step 6 (Package). Same commands as below, run for you with
+their output shown, no terminal needed.
+
+**Or by hand:**
+
 ```powershell
 # 1. make sure the art is present (a fresh clone won't have it)
 python3 tools/import_characters.py --src <packs> --out public/heroes
@@ -123,6 +129,10 @@ Two steps people forget, both with silent consequences:
   auto-update (when you add it) never triggers.
 - **Skipping the recolor step on a clean clone** — the installer builds fine but
   ships with the plain generated sprites instead of your pack, with no error.
+
+Art import isn't in the devtool (it needs the original source packs on disk,
+which vary in location), so that one step still needs the terminal even if you
+do everything else through the devtool.
 
 `release/` is gitignored, so installers never bloat the repo.
 
@@ -145,14 +155,15 @@ save, ask, and I'll confirm whether a migration is needed.
 
 ## Cheat sheet
 
-| I want to… | Command |
-| --- | --- |
-| Try a change | `npm run dev` |
-| See what changed | `git diff` |
-| Save a checkpoint | `git add -A` then `git commit -m "..."` |
-| Undo all uncommitted changes | `git reset --hard HEAD` |
-| List checkpoints | `git log --oneline` |
-| Apply a patch from me | `git apply file.patch` |
-| Make a patch for me | `git diff > my-changes.patch` |
-| Build for testers | `npm version patch` then `npm run package` |
-| Regenerate sprites | `python3 tools/import_characters.py --src <packs> --out public/heroes` |
+| I want to… | Devtool | Or by hand |
+| --- | --- | --- |
+| Try a change | Patches tab → Start (dev server) | `npm run dev` |
+| See what changed | Patches tab shows git status | `git diff` |
+| Save a checkpoint | Patches tab → Commit | `git add -A` then `git commit -m "..."` |
+| Undo all uncommitted changes | — | `git reset --hard HEAD` |
+| List checkpoints | — | `git log --oneline` |
+| Apply a patch from me | Patches tab → select it → Check → Apply | `git apply file.patch` |
+| Make a patch for me | — | `git diff > my-changes.patch` |
+| Confirm nothing's broken | Patches tab → Run build | `npm run build` |
+| Build for testers | Patches tab → Tag a version → Run package | `npm version patch` then `npm run package` |
+| Regenerate sprites | — | `python3 tools/import_characters.py --src <packs> --out public/heroes` |
