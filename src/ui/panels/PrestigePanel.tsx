@@ -1,21 +1,28 @@
-import { useEngine } from '../useEngine';
+import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { PrestigeManager } from '../../game/managers/PrestigeManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
-import { PRESTIGE_MIN_LEVEL, renownEffectiveMaxLevel } from '../../game/data/progression';
-import { describeMods } from '../../game/util';
+import { PRESTIGE_MIN_LEVEL, PRESTIGE_STREAK_WINDOW_MS, renownEffectiveMaxLevel } from '../../game/data/progression';
+import { describeMods, formatDuration } from '../../game/util';
 
 export function PrestigePanel() {
   const engine = useEngine();
   const { settings } = useSettings();
+  const now = useNow();
   const state = engine.state;
+
+  const streakActive = state.lastPrestigeAt !== null
+    && now - state.lastPrestigeAt <= PRESTIGE_STREAK_WINDOW_MS;
+  const streakExpiresIn = state.lastPrestigeAt !== null
+    ? PRESTIGE_STREAK_WINDOW_MS - (now - state.lastPrestigeAt)
+    : 0;
 
   return (
     <>
       <h2>Prestige</h2>
       <p className="subtitle">
-        Retire a hero at level {PRESTIGE_MIN_LEVEL} or above. They hand in their level and stats;
-        the guild keeps their gear, gold, upgrades, and facilities, and gains Heroic Renown.
+        Retire a hero at level {PRESTIGE_MIN_LEVEL} or above. They hand in their level, XP, and gear;
+        the guild keeps everything else, and gains Heroic Renown.
       </p>
 
       <div className="card">
@@ -28,16 +35,42 @@ export function PrestigePanel() {
         </div>
       </div>
 
+      <div className="card">
+        <div className="spread">
+          <span className="card-title">Prestige Streak</span>
+          <b style={{ color: streakActive ? 'var(--brass)' : 'var(--muted)' }}>
+            {streakActive ? `×${state.prestigeStreak}` : 'inactive'}
+          </b>
+        </div>
+        <p className="small muted" style={{ margin: '6px 0 0' }}>
+          {streakActive
+            ? `Retiring again within ${formatDuration(streakExpiresIn)} keeps it going and pushes the bonus higher. Let it lapse and the next retirement starts a fresh streak.`
+            : state.stats.prestigeCount === 0
+              ? 'Your first retirement starts a streak. Keep retiring within three days of the last one to build a renown bonus, up to +50%.'
+              : 'The streak lapsed. Your next retirement starts a new one from scratch.'}
+        </p>
+        {state.stats.bestPrestigeStreak > 0 && (
+          <p className="tiny muted" style={{ margin: '4px 0 0' }}>Best streak so far: ×{state.stats.bestPrestigeStreak}</p>
+        )}
+      </div>
+
       <div className="section-heading">Retire a hero</div>
       {state.heroes.map((hero) => {
         const eligible = PrestigeManager.canRetire(hero);
-        const gain = PrestigeManager.renownPreview(hero);
+        const preview = PrestigeManager.streakPreview(state, hero, now);
+        const rank = PrestigeManager.rankFor(hero);
         return (
           <div key={hero.id} className="spread card">
             <div>
-              <div className="card-title">{hero.name}</div>
+              <div className="card-title">
+                {rank && <span className="hero-title">{rank}</span>}
+                {hero.name}
+                {hero.ascension > 0 && <span className="tiny muted" style={{ marginLeft: 6 }}>ascended ×{hero.ascension}</span>}
+              </div>
               <div className="tiny muted">
-                Level {hero.level} · {hero.questsCompleted} quests · would grant ✦ {gain}
+                Level {hero.level} · {hero.questsCompleted} quests · would grant{' '}
+                <b className="gold-text">✦ {preview.total}</b>
+                {preview.bonusPct > 0 && <span> (base {PrestigeManager.renownPreview(hero)} + streak {preview.bonusPct}%)</span>}
               </div>
             </div>
             <button
@@ -45,7 +78,7 @@ export function PrestigePanel() {
               disabled={!eligible}
               onClick={() => {
                 if (!settings.confirmRetire
-                  || confirm(`Retire ${hero.name}? They return to level 1 and the guild gains ${gain} renown.`)) {
+                  || confirm(`Retire ${hero.name}? They return to level 1 and the guild gains ${preview.total} renown.`)) {
                   engine.retire(hero.id);
                 }
               }}

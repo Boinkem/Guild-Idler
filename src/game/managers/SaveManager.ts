@@ -72,12 +72,14 @@ export function createInitialState(now = Date.now()): GameState {
       goldEarned: 0, goldSpent: 0, highestReward: 0,
       legendaryItemsFound: 0, itemsFound: 0, injuriesSuffered: 0,
       itemsBroken: 0, chainsCompleted: 0,
-      playTimeMs: 0, offlineTimeMs: 0, prestigeCount: 0, firstPlayedAt: now,
+      playTimeMs: 0, offlineTimeMs: 0, prestigeCount: 0, bestPrestigeStreak: 0, firstPlayedAt: now,
     },
     log: [],
     discoveredItems: [],
     unlockedSkins: ['original'],
     focusedHeroId: null,
+    prestigeStreak: 0,
+    lastPrestigeAt: null,
   };
 }
 
@@ -141,6 +143,22 @@ const MIGRATIONS: Record<number, Migration> = {
     version: 7,
     blackMarket: (save.blackMarket as unknown) ?? { refreshedAt: 0, consumables: [], equipment: [] },
   }),
+  7: (save) => {
+    const heroes = Array.isArray(save.heroes) ? save.heroes as Record<string, unknown>[] : [];
+    for (const h of heroes) {
+      h.ascension = h.ascension ?? 0;
+    }
+    const stats = (save.stats as Record<string, unknown>) ?? {};
+    stats.bestPrestigeStreak = stats.bestPrestigeStreak ?? 0;
+    return {
+      ...save,
+      version: 8,
+      heroes,
+      stats,
+      prestigeStreak: (save.prestigeStreak as number | undefined) ?? 0,
+      lastPrestigeAt: (save.lastPrestigeAt as number | null | undefined) ?? null,
+    };
+  },
 };
 
 export const SaveManager = {

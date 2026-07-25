@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -134,6 +134,12 @@ export interface Hero {
   bonusStats: Stats;
   /** Earned by completing certain quest chains. Cleared on retirement. */
   title?: string;
+  /**
+   * Times this specific hero identity has been retired. Persists and grows
+   * across retirements (unlike title, which is cleared), and grants a small
+   * permanent stat bonus via bonusStats — see PrestigeManager.retire.
+   */
+  ascension: number;
 }
 
 /* ----------------------------- quests ----------------------------- */
@@ -296,6 +302,7 @@ export interface Statistics {
   playTimeMs: number;
   offlineTimeMs: number;
   prestigeCount: number;
+  bestPrestigeStreak: number;
   firstPlayedAt: number;
 }
 
@@ -339,4 +346,8 @@ export interface GameState {
    * Null falls back to heroes[0].
    */
   focusedHeroId: string | null;
+  /** Consecutive retirements performed within the streak window of each other. */
+  prestigeStreak: number;
+  /** Epoch ms of the last retirement, or null if none yet. */
+  lastPrestigeAt: number | null;
 }

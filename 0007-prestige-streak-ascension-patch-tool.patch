@@ -1,0 +1,810 @@
+diff --git a/DEVTOOL.md b/DEVTOOL.md
+index fe52753..c7138c8 100644
+--- a/DEVTOOL.md
++++ b/DEVTOOL.md
+@@ -63,6 +63,26 @@ Every successful save writes a `.bak` copy of the *previous* version in
+ git. These `.bak` files are gitignored — they're a safety net, not something to
+ commit.
+ 
++## Applying patches without the command line
++
++The **Patches** tab (first tab, left of Quest Templates) wraps the git workflow
++from WORKFLOW.md into buttons: select a `.patch` file sitting in the project
++root or a `patches/` folder, then step through Check → Apply → Commit → Build.
++
++Each step is a real command run for you — `git apply --check`, `git apply`,
++`git add -A && git commit`, `npm run build` — shown with its actual output, and
++nothing auto-chains. A failed check just tells you it failed; it doesn't try
++to apply anyway. A successful apply doesn't auto-commit. You press each button.
++
++The current git status (branch, clean/dirty, last commit) shows at the top and
++updates after every step, so you always know where you stand. If the working
++tree isn't clean, it says so — worth resolving that first, but it won't stop
++you from proceeding.
++
++This is a convenience wrapper around the same commands, not a replacement for
++git — for anything beyond apply-commit-build (branches, resolving a real merge
++conflict, history surgery), use the terminal.
++
+ ## What's editable here vs. not
+ 
+ **In the tool:** quest name templates (verb/subject/flavour), all equipment,
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 8de06d2..e36c2f3 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -320,3 +320,34 @@ export function renownForRetirement(level: number, totalQuests: number): number
+   if (level < PRESTIGE_MIN_LEVEL) return 0;
+   return Math.max(1, Math.floor(Math.pow(level - PRESTIGE_MIN_LEVEL + 1, 0.75) + totalQuests / 150));
+ }
++
++/* ------------------------------ prestige streak ---------------------------- */
++
++/** Retiring again within this window of the last retirement extends the streak. */
++export const PRESTIGE_STREAK_WINDOW_MS = 72 * 60 * 60 * 1000; // 3 days
++const PRESTIGE_STREAK_BONUS_PER_STEP = 5; // percent
++const PRESTIGE_STREAK_BONUS_CAP = 50; // percent, reached at streak 11
++
++/** Percentage bonus applied to renown gained, based on the current streak. */
++export function prestigeStreakBonusPct(streak: number): number {
++  return Math.min((Math.max(1, streak) - 1) * PRESTIGE_STREAK_BONUS_PER_STEP, PRESTIGE_STREAK_BONUS_CAP);
++}
++
++/* -------------------------------- ascension -------------------------------- */
++
++/** Flat permanent stat bonus per ascension level, applied to every stat. */
++export const ASCENSION_STAT_BONUS = 1;
++
++const ASCENSION_RANKS: { min: number; name: string }[] = [
++  { min: 10, name: 'Living Legend' },
++  { min: 6, name: 'Elder' },
++  { min: 3, name: 'Veteran' },
++];
++
++/** The rank label for a given ascension count, or null below the first threshold. */
++export function ascensionRank(ascension: number): string | null {
++  for (const rank of ASCENSION_RANKS) {
++    if (ascension >= rank.min) return rank.name;
++  }
++  return null;
++}
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index dcd18f9..5f16eb9 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -399,9 +399,11 @@ export class GameEngine {
+   retire(heroId: string) {
+     const hero = this.hero(heroId);
+     if (!hero) return;
+-    const outcome = PrestigeManager.retire(this.state, hero, createRng(uid('retire')));
++    const outcome = PrestigeManager.retire(this.state, hero, createRng(uid('retire')), Date.now());
+     if ('error' in outcome) return this.say(outcome.error);
+-    this.say(`${hero.name} retires a legend. +${outcome.renownGained} Heroic Renown.`);
++    const streakNote = outcome.streak > 1 ? ` Streak ×${outcome.streak}!` : '';
++    playSound(outcome.streak > 3 ? 'chain_complete' : 'level_up');
++    this.say(`${hero.name} retires a legend. +${outcome.renownGained} Heroic Renown.${streakNote}`);
+     void this.saveNow();
+   }
+ 
+diff --git a/src/game/managers/HeroManager.ts b/src/game/managers/HeroManager.ts
+index bb69990..944a670 100644
+--- a/src/game/managers/HeroManager.ts
++++ b/src/game/managers/HeroManager.ts
+@@ -35,6 +35,7 @@ export const HeroManager = {
+       activeQuestId: null,
+       questsCompleted: 0,
+       skin: 'original',
++      ascension: 0,
+       bonusStats: { strength: 0, endurance: 0, luck: 0, wisdom: 0 },
+     };
+   },
+diff --git a/src/game/managers/PrestigeManager.ts b/src/game/managers/PrestigeManager.ts
+index e96fae7..52d423f 100644
+--- a/src/game/managers/PrestigeManager.ts
++++ b/src/game/managers/PrestigeManager.ts
+@@ -1,4 +1,8 @@
+-import { PRESTIGE_MIN_LEVEL, RENOWN_BY_ID, RENOWN_PERKS, renownCost, renownEffectiveMaxLevel, renownForRetirement } from '../data/progression';
++import {
++  PRESTIGE_MIN_LEVEL, PRESTIGE_STREAK_WINDOW_MS, RENOWN_BY_ID, RENOWN_PERKS,
++  ASCENSION_STAT_BONUS, ascensionRank, prestigeStreakBonusPct, renownCost,
++  renownEffectiveMaxLevel, renownForRetirement,
++} from '../data/progression';
+ import { GameState, Hero } from '../types';
+ import { Rng } from '../rng';
+ import { HeroManager } from './HeroManager';
+@@ -8,35 +12,75 @@ export const PrestigeManager = {
+     return hero.level >= PRESTIGE_MIN_LEVEL && hero.status !== 'questing';
+   },
+ 
++  /** Base renown, before any streak bonus. Shown as the "guaranteed" part of the preview. */
+   renownPreview(hero: Hero): number {
+     return renownForRetirement(hero.level, hero.questsCompleted);
+   },
+ 
++  /** What the streak bonus would add right now if this hero retired this instant. */
++  streakPreview(state: GameState, hero: Hero, now: number): { streak: number; bonusPct: number; total: number } {
++    const streak = PrestigeManager.projectedStreak(state, now);
++    const bonusPct = prestigeStreakBonusPct(streak);
++    const base = PrestigeManager.renownPreview(hero);
++    return { streak, bonusPct, total: Math.floor(base * (1 + bonusPct / 100)) };
++  },
++
++  /** What the streak WOULD become if a retirement happened right now. */
++  projectedStreak(state: GameState, now: number): number {
++    if (state.lastPrestigeAt === null) return 1;
++    return now - state.lastPrestigeAt <= PRESTIGE_STREAK_WINDOW_MS ? state.prestigeStreak + 1 : 1;
++  },
++
+   /**
+-   * Retiring wipes the hero's level, stats, and gear but keeps everything the
+-   * guild owns: upgrades, facilities, discovered items, and renown perks.
++   * Retiring wipes the hero's level, xp, equipped gear, and title, but keeps
++   * everything the guild owns: upgrades, facilities, discovered items, and
++   * renown perks. Two things persist for this specific hero identity across
++   * the reset: ascension count (and the small permanent stat bonus it
++   * grants), and — guild-wide — the prestige streak, which rewards retiring
++   * again soon rather than letting months pass between retirements.
+    */
+-  retire(state: GameState, hero: Hero, rng: Rng): { renownGained: number } | { error: string } {
++  retire(state: GameState, hero: Hero, rng: Rng, now: number): { renownGained: number; streak: number; ascension: number } | { error: string } {
+     if (hero.status === 'questing') return { error: `${hero.name} is out on a quest.` };
+     if (hero.level < PRESTIGE_MIN_LEVEL) {
+       return { error: `Heroes retire at level ${PRESTIGE_MIN_LEVEL}. ${hero.name} is level ${hero.level}.` };
+     }
+-    const renownGained = PrestigeManager.renownPreview(hero);
++
++    const streak = PrestigeManager.projectedStreak(state, now);
++    const bonusPct = prestigeStreakBonusPct(streak);
++    const baseRenown = PrestigeManager.renownPreview(hero);
++    const renownGained = Math.floor(baseRenown * (1 + bonusPct / 100));
+ 
+     // Their gear goes back to the guild stash rather than vanishing.
+     for (const item of Object.values(hero.equipment)) {
+       if (item) state.stash.push(item);
+     }
+ 
++    const ascension = hero.ascension + 1;
+     const replacement = HeroManager.create(hero.heroClass, rng);
+     replacement.id = hero.id;
+     replacement.name = hero.name;
++    replacement.ascension = ascension;
++    replacement.bonusStats = {
++      strength: ascension * ASCENSION_STAT_BONUS,
++      endurance: ascension * ASCENSION_STAT_BONUS,
++      luck: ascension * ASCENSION_STAT_BONUS,
++      wisdom: ascension * ASCENSION_STAT_BONUS,
++    };
+     const index = state.heroes.findIndex((h) => h.id === hero.id);
+     state.heroes[index] = replacement;
+ 
+     state.renown += renownGained;
+     state.stats.prestigeCount += 1;
+-    return { renownGained };
++    state.prestigeStreak = streak;
++    state.lastPrestigeAt = now;
++    state.stats.bestPrestigeStreak = Math.max(state.stats.bestPrestigeStreak, streak);
++
++    return { renownGained, streak, ascension };
++  },
++
++  /** Display label for a hero's ascension rank, or null if not yet ranked. */
++  rankFor(hero: Hero): string | null {
++    return ascensionRank(hero.ascension);
+   },
+ 
+   perkLevel(state: GameState, id: string): number {
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 745a3f3..373b3c0 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -72,12 +72,14 @@ export function createInitialState(now = Date.now()): GameState {
+       goldEarned: 0, goldSpent: 0, highestReward: 0,
+       legendaryItemsFound: 0, itemsFound: 0, injuriesSuffered: 0,
+       itemsBroken: 0, chainsCompleted: 0,
+-      playTimeMs: 0, offlineTimeMs: 0, prestigeCount: 0, firstPlayedAt: now,
++      playTimeMs: 0, offlineTimeMs: 0, prestigeCount: 0, bestPrestigeStreak: 0, firstPlayedAt: now,
+     },
+     log: [],
+     discoveredItems: [],
+     unlockedSkins: ['original'],
+     focusedHeroId: null,
++    prestigeStreak: 0,
++    lastPrestigeAt: null,
+   };
+ }
+ 
+@@ -141,6 +143,22 @@ const MIGRATIONS: Record<number, Migration> = {
+     version: 7,
+     blackMarket: (save.blackMarket as unknown) ?? { refreshedAt: 0, consumables: [], equipment: [] },
+   }),
++  7: (save) => {
++    const heroes = Array.isArray(save.heroes) ? save.heroes as Record<string, unknown>[] : [];
++    for (const h of heroes) {
++      h.ascension = h.ascension ?? 0;
++    }
++    const stats = (save.stats as Record<string, unknown>) ?? {};
++    stats.bestPrestigeStreak = stats.bestPrestigeStreak ?? 0;
++    return {
++      ...save,
++      version: 8,
++      heroes,
++      stats,
++      prestigeStreak: (save.prestigeStreak as number | undefined) ?? 0,
++      lastPrestigeAt: (save.lastPrestigeAt as number | null | undefined) ?? null,
++    };
++  },
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 72df481..1fb1019 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 7;
++export const SAVE_VERSION = 8;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -134,6 +134,12 @@ export interface Hero {
+   bonusStats: Stats;
+   /** Earned by completing certain quest chains. Cleared on retirement. */
+   title?: string;
++  /**
++   * Times this specific hero identity has been retired. Persists and grows
++   * across retirements (unlike title, which is cleared), and grants a small
++   * permanent stat bonus via bonusStats — see PrestigeManager.retire.
++   */
++  ascension: number;
+ }
+ 
+ /* ----------------------------- quests ----------------------------- */
+@@ -296,6 +302,7 @@ export interface Statistics {
+   playTimeMs: number;
+   offlineTimeMs: number;
+   prestigeCount: number;
++  bestPrestigeStreak: number;
+   firstPlayedAt: number;
+ }
+ 
+@@ -339,4 +346,8 @@ export interface GameState {
+    * Null falls back to heroes[0].
+    */
+   focusedHeroId: string | null;
++  /** Consecutive retirements performed within the streak window of each other. */
++  prestigeStreak: number;
++  /** Epoch ms of the last retirement, or null if none yet. */
++  lastPrestigeAt: number | null;
+ }
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index 9055fa6..a7f2de8 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -2,6 +2,7 @@ import { useEngine, useNow } from '../useEngine';
+ import { useSettings } from '../useSettings';
+ import { HeroManager } from '../../game/managers/HeroManager';
+ import { GuildManager } from '../../game/managers/GuildManager';
++import { PrestigeManager } from '../../game/managers/PrestigeManager';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { HERO_CLASSES, RECRUIT_COST, SKINS } from '../../game/data/progression';
+ import { HeroClass, Stats } from '../../game/types';
+@@ -41,7 +42,12 @@ export function HeroesPanel() {
+                     {hero.title && <span className="hero-title">{hero.title}</span>}
+                     {hero.name}
+                   </span>
+-                  <span className="small muted">{classDef.name} · Level {hero.level}</span>
++                  <span className="small muted">
++                    {classDef.name} · Level {hero.level}
++                    {hero.ascension > 0 && (
++                      <> · {PrestigeManager.rankFor(hero) ?? `ascended ×${hero.ascension}`}</>
++                    )}
++                  </span>
+                 </div>
+                 <button
+                   className={`chip ${engine.displayedHero.id === hero.id ? 'on' : ''}`}
+diff --git a/src/ui/panels/PrestigePanel.tsx b/src/ui/panels/PrestigePanel.tsx
+index ebfbc61..8ffeb32 100644
+--- a/src/ui/panels/PrestigePanel.tsx
++++ b/src/ui/panels/PrestigePanel.tsx
+@@ -1,21 +1,28 @@
+-import { useEngine } from '../useEngine';
++import { useEngine, useNow } from '../useEngine';
+ import { useSettings } from '../useSettings';
+ import { PrestigeManager } from '../../game/managers/PrestigeManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+-import { PRESTIGE_MIN_LEVEL, renownEffectiveMaxLevel } from '../../game/data/progression';
+-import { describeMods } from '../../game/util';
++import { PRESTIGE_MIN_LEVEL, PRESTIGE_STREAK_WINDOW_MS, renownEffectiveMaxLevel } from '../../game/data/progression';
++import { describeMods, formatDuration } from '../../game/util';
+ 
+ export function PrestigePanel() {
+   const engine = useEngine();
+   const { settings } = useSettings();
++  const now = useNow();
+   const state = engine.state;
+ 
++  const streakActive = state.lastPrestigeAt !== null
++    && now - state.lastPrestigeAt <= PRESTIGE_STREAK_WINDOW_MS;
++  const streakExpiresIn = state.lastPrestigeAt !== null
++    ? PRESTIGE_STREAK_WINDOW_MS - (now - state.lastPrestigeAt)
++    : 0;
++
+   return (
+     <>
+       <h2>Prestige</h2>
+       <p className="subtitle">
+-        Retire a hero at level {PRESTIGE_MIN_LEVEL} or above. They hand in their level and stats;
+-        the guild keeps their gear, gold, upgrades, and facilities, and gains Heroic Renown.
++        Retire a hero at level {PRESTIGE_MIN_LEVEL} or above. They hand in their level, XP, and gear;
++        the guild keeps everything else, and gains Heroic Renown.
+       </p>
+ 
+       <div className="card">
+@@ -28,16 +35,42 @@ export function PrestigePanel() {
+         </div>
+       </div>
+ 
++      <div className="card">
++        <div className="spread">
++          <span className="card-title">Prestige Streak</span>
++          <b style={{ color: streakActive ? 'var(--brass)' : 'var(--muted)' }}>
++            {streakActive ? `×${state.prestigeStreak}` : 'inactive'}
++          </b>
++        </div>
++        <p className="small muted" style={{ margin: '6px 0 0' }}>
++          {streakActive
++            ? `Retiring again within ${formatDuration(streakExpiresIn)} keeps it going and pushes the bonus higher. Let it lapse and the next retirement starts a fresh streak.`
++            : state.stats.prestigeCount === 0
++              ? 'Your first retirement starts a streak. Keep retiring within three days of the last one to build a renown bonus, up to +50%.'
++              : 'The streak lapsed. Your next retirement starts a new one from scratch.'}
++        </p>
++        {state.stats.bestPrestigeStreak > 0 && (
++          <p className="tiny muted" style={{ margin: '4px 0 0' }}>Best streak so far: ×{state.stats.bestPrestigeStreak}</p>
++        )}
++      </div>
++
+       <div className="section-heading">Retire a hero</div>
+       {state.heroes.map((hero) => {
+         const eligible = PrestigeManager.canRetire(hero);
+-        const gain = PrestigeManager.renownPreview(hero);
++        const preview = PrestigeManager.streakPreview(state, hero, now);
++        const rank = PrestigeManager.rankFor(hero);
+         return (
+           <div key={hero.id} className="spread card">
+             <div>
+-              <div className="card-title">{hero.name}</div>
++              <div className="card-title">
++                {rank && <span className="hero-title">{rank}</span>}
++                {hero.name}
++                {hero.ascension > 0 && <span className="tiny muted" style={{ marginLeft: 6 }}>ascended ×{hero.ascension}</span>}
++              </div>
+               <div className="tiny muted">
+-                Level {hero.level} · {hero.questsCompleted} quests · would grant ✦ {gain}
++                Level {hero.level} · {hero.questsCompleted} quests · would grant{' '}
++                <b className="gold-text">✦ {preview.total}</b>
++                {preview.bonusPct > 0 && <span> (base {PrestigeManager.renownPreview(hero)} + streak {preview.bonusPct}%)</span>}
+               </div>
+             </div>
+             <button
+@@ -45,7 +78,7 @@ export function PrestigePanel() {
+               disabled={!eligible}
+               onClick={() => {
+                 if (!settings.confirmRetire
+-                  || confirm(`Retire ${hero.name}? They return to level 1 and the guild gains ${gain} renown.`)) {
++                  || confirm(`Retire ${hero.name}? They return to level 1 and the guild gains ${preview.total} renown.`)) {
+                   engine.retire(hero.id);
+                 }
+               }}
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index 9cdd4c0..b806d09 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -30,19 +30,31 @@ async function init() {
+   state.schema = await api('/api/schema');
+   const kinds = Object.keys(state.schema);
+   tabsEl.innerHTML = '';
+-  kinds.forEach((kind, i) => {
++
++  const patchBtn = document.createElement('button');
++  patchBtn.textContent = 'Patches';
++  patchBtn.dataset.kind = '__patches__';
++  patchBtn.onclick = () => selectPatchesTab();
++  tabsEl.appendChild(patchBtn);
++
++  kinds.forEach((kind) => {
+     const btn = document.createElement('button');
+     btn.textContent = state.schema[kind].label;
+     btn.onclick = () => selectTab(kind);
+     btn.dataset.kind = kind;
+     tabsEl.appendChild(btn);
+-    if (i === 0) selectTab(kind);
+   });
++
++  selectPatchesTab();
++}
++
++function markActiveTab(kind) {
++  [...tabsEl.children].forEach((b) => b.classList.toggle('active', b.dataset.kind === kind));
+ }
+ 
+ async function selectTab(kind) {
+   state.kind = kind;
+-  [...tabsEl.children].forEach((b) => b.classList.toggle('active', b.dataset.kind === kind));
++  markActiveTab(kind);
+   setStatus('Loading…');
+   try {
+     const { data } = await api(`/api/data/${kind}`);
+@@ -317,3 +329,180 @@ async function saveToServer(message) {
+ }
+ 
+ init().catch((err) => setStatus(err.message, 'err'));
++
++/* -------------------------------- patches -------------------------------- */
++
++const patchState = { files: [], gitStatus: null, selected: null, checked: false, applied: false };
++
++function formatBytes(n) {
++  if (n < 1024) return `${n} B`;
++  return `${(n / 1024).toFixed(1)} KB`;
++}
++
++function formatWhen(mtime) {
++  const diffMs = Date.now() - mtime;
++  const mins = Math.round(diffMs / 60000);
++  if (mins < 60) return `${mins}m ago`;
++  const hours = Math.round(mins / 60);
++  if (hours < 48) return `${hours}h ago`;
++  return `${Math.round(hours / 24)}d ago`;
++}
++
++async function selectPatchesTab() {
++  state.kind = '__patches__';
++  markActiveTab('__patches__');
++  setStatus('Loading…');
++  try {
++    const { files, status } = await api('/api/patches/list');
++    patchState.files = files;
++    patchState.gitStatus = status;
++    setStatus('');
++    renderPatches();
++  } catch (err) {
++    setStatus(err.message, 'err');
++  }
++}
++
++async function refreshGitStatus() {
++  patchState.gitStatus = await api('/api/patches/status');
++  renderPatches();
++}
++
++function resultBlock(result, label) {
++  if (!result) return '';
++  const cls = result.ok ? 'good' : 'bad';
++  const text = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
++  return `
++    <div class="patch-result ${cls}">
++      <div class="patch-result-label">${label}: ${result.ok ? 'succeeded' : 'failed' + (result.timedOut ? ' (timed out)' : '')}</div>
++      ${text ? `<pre>${escapeHtml(text)}</pre>` : '<div class="tiny muted">No output.</div>'}
++    </div>`;
++}
++
++function renderPatches() {
++  const gs = patchState.gitStatus;
++  const sel = patchState.selected;
++
++  appEl.innerHTML = `
++    <h2 style="font-family: inherit; font-size: 14px; margin: 0 0 4px;">Apply a Patch</h2>
++    <p style="color: var(--muted); font-size: 11px; margin: 0 0 16px;">
++      Runs the same git/npm commands you'd type by hand, one confirmed step at a time. Nothing here
++      auto-chains — each button only does the one thing it says.
++    </p>
++
++    <div class="patch-git-status ${gs?.clean ? 'clean' : 'dirty'}">
++      <div class="spread">
++        <span><b>Branch:</b> ${escapeHtml(gs?.branch || '?')} &nbsp; <b>Last commit:</b> ${escapeHtml(gs?.lastCommit || '?')}</span>
++        <button id="refreshStatusBtn">Refresh</button>
++      </div>
++      ${gs?.clean
++        ? '<div class="tiny" style="margin-top:6px;">Working tree is clean.</div>'
++        : `<div class="tiny" style="margin-top:6px; color: var(--brass);">Uncommitted changes present — review before applying a patch on top:</div>
++           <pre style="margin-top:4px;">${escapeHtml(gs?.statusText || '')}</pre>`}
++    </div>
++
++    <div class="section-heading" style="margin-top:18px;">1. Select a patch</div>
++    ${patchState.files.length === 0
++      ? '<p class="tiny muted">No .patch files found in the project root or a patches/ folder. Drop one in and hit Refresh.</p>'
++      : `<div class="patch-list">${patchState.files.map((f) => `
++          <label class="patch-item ${sel === f.name ? 'selected' : ''}">
++            <input type="radio" name="patchfile" value="${escapeHtml(f.name)}" ${sel === f.name ? 'checked' : ''} />
++            <div>
++              <div class="patch-name">${escapeHtml(f.name)}</div>
++              <div class="tiny muted">${f.dir === '.' ? 'project root' : f.dir} · ${formatBytes(f.size)} · ${formatWhen(f.mtime)}</div>
++            </div>
++          </label>
++        `).join('')}</div>`}
++
++    <div class="section-heading">2. Check</div>
++    <p class="tiny muted">Dry run — confirms the patch would apply cleanly without changing anything yet.</p>
++    <button id="checkBtn" class="primary" ${!sel ? 'disabled' : ''}>Check patch</button>
++    <div id="checkResult"></div>
++
++    <div class="section-heading">3. Apply</div>
++    <p class="tiny muted">Actually modifies files on disk. Only enabled after a successful check.</p>
++    <button id="applyBtn" class="primary" ${!patchState.checked ? 'disabled' : ''}>Apply patch</button>
++    <div id="applyResult"></div>
++
++    <div class="section-heading">4. Commit</div>
++    <p class="tiny muted">Stages everything and commits. Only enabled after a successful apply.</p>
++    <div class="row" style="gap: 8px; margin-bottom: 8px;">
++      <input type="text" id="commitMsg" placeholder="Commit message"
++        value="${sel ? escapeHtml('Apply ' + sel.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ')) : ''}"
++        style="flex:1; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
++      <button id="commitBtn" class="primary" ${!patchState.applied ? 'disabled' : ''}>Commit</button>
++    </div>
++    <div id="commitResult"></div>
++
++    <div class="section-heading">5. Build</div>
++    <p class="tiny muted">Runs <code>npm run build</code> to confirm nothing is broken. Can take a minute.</p>
++    <button id="buildBtn">Run build</button>
++    <div id="buildResult"></div>
++  `;
++
++  document.getElementById('refreshStatusBtn').onclick = () => refreshGitStatus();
++
++  appEl.querySelectorAll('input[name="patchfile"]').forEach((input) => {
++    input.onchange = () => {
++      patchState.selected = input.value;
++      patchState.checked = false;
++      patchState.applied = false;
++      renderPatches();
++    };
++  });
++
++  const checkBtn = document.getElementById('checkBtn');
++  if (checkBtn) checkBtn.onclick = async () => {
++    checkBtn.disabled = true;
++    checkBtn.textContent = 'Checking…';
++    const result = await api('/api/patches/check', {
++      method: 'POST', headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify({ name: patchState.selected }),
++    });
++    patchState.checked = result.ok;
++    checkBtn.disabled = false;
++    checkBtn.textContent = 'Check patch';
++    renderPatches();
++    document.getElementById('checkResult').innerHTML = resultBlock(result, 'Check');
++  };
++
++  const applyBtn = document.getElementById('applyBtn');
++  if (applyBtn) applyBtn.onclick = async () => {
++    applyBtn.disabled = true;
++    applyBtn.textContent = 'Applying…';
++    const result = await api('/api/patches/apply', {
++      method: 'POST', headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify({ name: patchState.selected }),
++    });
++    patchState.applied = result.ok;
++    renderPatches();
++    document.getElementById('applyResult').innerHTML = resultBlock(result, 'Apply');
++    if (result.ok) refreshGitStatus();
++  };
++
++  const commitBtn = document.getElementById('commitBtn');
++  if (commitBtn) commitBtn.onclick = async () => {
++    const message = document.getElementById('commitMsg').value;
++    commitBtn.disabled = true;
++    commitBtn.textContent = 'Committing…';
++    const result = await api('/api/patches/commit', {
++      method: 'POST', headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify({ message }),
++    });
++    renderPatches();
++    document.getElementById('commitResult').innerHTML = resultBlock(result, 'Commit');
++    if (result.ok) refreshGitStatus();
++  };
++
++  const buildBtn = document.getElementById('buildBtn');
++  if (buildBtn) buildBtn.onclick = async () => {
++    buildBtn.disabled = true;
++    buildBtn.textContent = 'Building… (this can take a minute)';
++    const result = await api('/api/patches/build', {
++      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
++    });
++    buildBtn.disabled = false;
++    buildBtn.textContent = 'Run build';
++    document.getElementById('buildResult').innerHTML = resultBlock(result, 'Build');
++  };
++}
+diff --git a/tools/devtool/public/style.css b/tools/devtool/public/style.css
+index 35f13e1..768356e 100644
+--- a/tools/devtool/public/style.css
++++ b/tools/devtool/public/style.css
+@@ -83,3 +83,33 @@ td.actions button { padding: 4px 8px; font-size: 11px; margin-right: 4px; }
+ .editor-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+ 
+ .empty { color: var(--muted); font-size: 12px; padding: 20px 0; text-align: center; }
++
++/* -------------------------------- patches -------------------------------- */
++
++.patch-git-status {
++  border: 1px solid var(--panel3);
++  background: var(--panel);
++  padding: 10px 12px;
++  font-size: 11px;
++}
++.patch-git-status.dirty { border-color: var(--brass); }
++.patch-git-status pre { max-height: 140px; overflow-y: auto; font-size: 10px; color: var(--muted); }
++
++.patch-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
++.patch-item {
++  display: flex; align-items: center; gap: 10px;
++  border: 1px solid var(--panel3); background: var(--panel);
++  padding: 8px 10px; cursor: pointer;
++}
++.patch-item.selected { border-color: var(--brass); background: var(--panel2); }
++.patch-item input { accent-color: var(--brass); }
++.patch-name { font-size: 12px; font-weight: bold; }
++
++.patch-result { margin: 8px 0 4px; border-left: 3px solid var(--panel3); padding: 6px 10px; font-size: 11px; }
++.patch-result.good { border-left-color: var(--good); }
++.patch-result.bad { border-left-color: var(--bad); }
++.patch-result-label { font-weight: bold; margin-bottom: 4px; }
++.patch-result pre {
++  max-height: 220px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
++  background: var(--panel); border: 1px solid var(--panel3); padding: 6px 8px; font-size: 10px;
++}
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 61f3b93..2cf0aed 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -21,6 +21,10 @@ import http from 'node:http';
+ import fs from 'node:fs/promises';
+ import path from 'node:path';
+ import { fileURLToPath } from 'node:url';
++import { execFile } from 'node:child_process';
++import { promisify } from 'node:util';
++
++const execFileAsync = promisify(execFile);
+ 
+ const __dirname = path.dirname(fileURLToPath(import.meta.url));
+ const ROOT = path.resolve(__dirname, '..', '..');
+@@ -179,6 +183,84 @@ function validateArray(kind, data) {
+   return errors;
+ }
+ 
++/* ---------------------------------------------------------------- patches --- */
++// Applying a patch, committing, and building are the same handful of commands
++// every time — this wraps them behind buttons instead of copy-pasted shell
++// lines. It only ever runs a small, fixed set of git/npm subcommands, and the
++// one piece of user input that reaches a shell (the patch filename) is always
++// checked against the real directory listing first, never passed through raw.
++
++const GIT_TIMEOUT_MS = 20_000;
++const BUILD_TIMEOUT_MS = 5 * 60_000;
++const NPM_BIN = process.platform === 'win32' ? 'npm.cmd' : 'npm';
++
++async function run(cmd, args, timeout) {
++  try {
++    const { stdout, stderr } = await execFileAsync(cmd, args, {
++      cwd: ROOT, timeout, maxBuffer: 20 * 1024 * 1024,
++    });
++    return { ok: true, code: 0, stdout, stderr };
++  } catch (err) {
++    // execFile rejects on non-zero exit; that's a normal outcome here (e.g. a
++    // failed `git apply --check`), not a tool malfunction, so it's reported
++    // back as data rather than re-thrown.
++    return {
++      ok: false,
++      code: typeof err.code === 'number' ? err.code : -1,
++      stdout: err.stdout ?? '',
++      stderr: err.stderr ?? String(err.message ?? err),
++      timedOut: !!err.killed && err.signal === 'SIGTERM',
++    };
++  }
++}
++
++async function listPatchFiles() {
++  const found = [];
++  const dirs = [ROOT, path.join(ROOT, 'patches')];
++  for (const dir of dirs) {
++    let entries;
++    try {
++      entries = await fs.readdir(dir, { withFileTypes: true });
++    } catch {
++      continue;
++    }
++    for (const entry of entries) {
++      if (entry.isFile() && entry.name.endsWith('.patch')) {
++        const full = path.join(dir, entry.name);
++        const stat = await fs.stat(full);
++        found.push({
++          name: entry.name,
++          dir: path.relative(ROOT, dir) || '.',
++          size: stat.size,
++          mtime: stat.mtimeMs,
++        });
++      }
++    }
++  }
++  found.sort((a, b) => b.mtime - a.mtime);
++  return found;
++}
++
++/** Resolves a client-supplied filename to a real, whitelisted patch path. Never trusts the client's path directly. */
++async function resolvePatchPath(name) {
++  const files = await listPatchFiles();
++  const match = files.find((f) => f.name === name);
++  if (!match) return null;
++  return path.join(ROOT, match.dir, match.name);
++}
++
++async function gitStatus() {
++  const status = await run('git', ['status', '--porcelain'], GIT_TIMEOUT_MS);
++  const log = await run('git', ['log', '-1', '--oneline'], GIT_TIMEOUT_MS);
++  const branch = await run('git', ['rev-parse', '--abbrev-ref', 'HEAD'], GIT_TIMEOUT_MS);
++  return {
++    clean: status.ok && status.stdout.trim() === '',
++    statusText: status.stdout,
++    lastCommit: log.stdout.trim(),
++    branch: branch.stdout.trim(),
++  };
++}
++
+ /* ------------------------------------------------------------------ http --- */
+ 
+ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
+@@ -219,6 +301,51 @@ const server = http.createServer(async (req, res) => {
+     return json(res, 200, SCHEMAS);
+   }
+ 
++  if (url.pathname === '/api/patches/list' && req.method === 'GET') {
++    const files = await listPatchFiles();
++    const status = await gitStatus();
++    return json(res, 200, { files, status });
++  }
++
++  if (url.pathname === '/api/patches/status' && req.method === 'GET') {
++    return json(res, 200, await gitStatus());
++  }
++
++  if (url.pathname === '/api/patches/check' && req.method === 'POST') {
++    const body = JSON.parse(await readBody(req));
++    const resolved = await resolvePatchPath(body.name);
++    if (!resolved) return json(res, 404, { error: 'Unknown patch file.' });
++    const result = await run('git', ['apply', '--check', resolved], GIT_TIMEOUT_MS);
++    return json(res, 200, result);
++  }
++
++  if (url.pathname === '/api/patches/apply' && req.method === 'POST') {
++    const body = JSON.parse(await readBody(req));
++    const resolved = await resolvePatchPath(body.name);
++    if (!resolved) return json(res, 404, { error: 'Unknown patch file.' });
++    const result = await run('git', ['apply', resolved], GIT_TIMEOUT_MS);
++    return json(res, 200, result);
++  }
++
++  if (url.pathname === '/api/patches/commit' && req.method === 'POST') {
++    const body = JSON.parse(await readBody(req));
++    const message = typeof body.message === 'string' && body.message.trim()
++      ? body.message.trim()
++      : 'Apply patch';
++    const add = await run('git', ['add', '-A'], GIT_TIMEOUT_MS);
++    if (!add.ok) return json(res, 200, add);
++    // The commit message is passed as a single execFile argument, never
++    // through a shell, so it can't be used to inject additional commands
++    // regardless of what characters it contains.
++    const commit = await run('git', ['commit', '-m', message], GIT_TIMEOUT_MS);
++    return json(res, 200, commit);
++  }
++
++  if (url.pathname === '/api/patches/build' && req.method === 'POST') {
++    const result = await run(NPM_BIN, ['run', 'build'], BUILD_TIMEOUT_MS);
++    return json(res, 200, result);
++  }
++
+   const match = url.pathname.match(/^\/api\/data\/([\w-]+)$/);
+   if (match) {
+     const kind = match[1];

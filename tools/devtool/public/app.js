@@ -30,19 +30,31 @@ async function init() {
   state.schema = await api('/api/schema');
   const kinds = Object.keys(state.schema);
   tabsEl.innerHTML = '';
-  kinds.forEach((kind, i) => {
+
+  const patchBtn = document.createElement('button');
+  patchBtn.textContent = 'Patches';
+  patchBtn.dataset.kind = '__patches__';
+  patchBtn.onclick = () => selectPatchesTab();
+  tabsEl.appendChild(patchBtn);
+
+  kinds.forEach((kind) => {
     const btn = document.createElement('button');
     btn.textContent = state.schema[kind].label;
     btn.onclick = () => selectTab(kind);
     btn.dataset.kind = kind;
     tabsEl.appendChild(btn);
-    if (i === 0) selectTab(kind);
   });
+
+  selectPatchesTab();
+}
+
+function markActiveTab(kind) {
+  [...tabsEl.children].forEach((b) => b.classList.toggle('active', b.dataset.kind === kind));
 }
 
 async function selectTab(kind) {
   state.kind = kind;
-  [...tabsEl.children].forEach((b) => b.classList.toggle('active', b.dataset.kind === kind));
+  markActiveTab(kind);
   setStatus('Loading…');
   try {
     const { data } = await api(`/api/data/${kind}`);
@@ -317,3 +329,180 @@ async function saveToServer(message) {
 }
 
 init().catch((err) => setStatus(err.message, 'err'));
+
+/* -------------------------------- patches -------------------------------- */
+
+const patchState = { files: [], gitStatus: null, selected: null, checked: false, applied: false };
+
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  return `${(n / 1024).toFixed(1)} KB`;
+}
+
+function formatWhen(mtime) {
+  const diffMs = Date.now() - mtime;
+  const mins = Math.round(diffMs / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 48) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+async function selectPatchesTab() {
+  state.kind = '__patches__';
+  markActiveTab('__patches__');
+  setStatus('Loading…');
+  try {
+    const { files, status } = await api('/api/patches/list');
+    patchState.files = files;
+    patchState.gitStatus = status;
+    setStatus('');
+    renderPatches();
+  } catch (err) {
+    setStatus(err.message, 'err');
+  }
+}
+
+async function refreshGitStatus() {
+  patchState.gitStatus = await api('/api/patches/status');
+  renderPatches();
+}
+
+function resultBlock(result, label) {
+  if (!result) return '';
+  const cls = result.ok ? 'good' : 'bad';
+  const text = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
+  return `
+    <div class="patch-result ${cls}">
+      <div class="patch-result-label">${label}: ${result.ok ? 'succeeded' : 'failed' + (result.timedOut ? ' (timed out)' : '')}</div>
+      ${text ? `<pre>${escapeHtml(text)}</pre>` : '<div class="tiny muted">No output.</div>'}
+    </div>`;
+}
+
+function renderPatches() {
+  const gs = patchState.gitStatus;
+  const sel = patchState.selected;
+
+  appEl.innerHTML = `
+    <h2 style="font-family: inherit; font-size: 14px; margin: 0 0 4px;">Apply a Patch</h2>
+    <p style="color: var(--muted); font-size: 11px; margin: 0 0 16px;">
+      Runs the same git/npm commands you'd type by hand, one confirmed step at a time. Nothing here
+      auto-chains — each button only does the one thing it says.
+    </p>
+
+    <div class="patch-git-status ${gs?.clean ? 'clean' : 'dirty'}">
+      <div class="spread">
+        <span><b>Branch:</b> ${escapeHtml(gs?.branch || '?')} &nbsp; <b>Last commit:</b> ${escapeHtml(gs?.lastCommit || '?')}</span>
+        <button id="refreshStatusBtn">Refresh</button>
+      </div>
+      ${gs?.clean
+        ? '<div class="tiny" style="margin-top:6px;">Working tree is clean.</div>'
+        : `<div class="tiny" style="margin-top:6px; color: var(--brass);">Uncommitted changes present — review before applying a patch on top:</div>
+           <pre style="margin-top:4px;">${escapeHtml(gs?.statusText || '')}</pre>`}
+    </div>
+
+    <div class="section-heading" style="margin-top:18px;">1. Select a patch</div>
+    ${patchState.files.length === 0
+      ? '<p class="tiny muted">No .patch files found in the project root or a patches/ folder. Drop one in and hit Refresh.</p>'
+      : `<div class="patch-list">${patchState.files.map((f) => `
+          <label class="patch-item ${sel === f.name ? 'selected' : ''}">
+            <input type="radio" name="patchfile" value="${escapeHtml(f.name)}" ${sel === f.name ? 'checked' : ''} />
+            <div>
+              <div class="patch-name">${escapeHtml(f.name)}</div>
+              <div class="tiny muted">${f.dir === '.' ? 'project root' : f.dir} · ${formatBytes(f.size)} · ${formatWhen(f.mtime)}</div>
+            </div>
+          </label>
+        `).join('')}</div>`}
+
+    <div class="section-heading">2. Check</div>
+    <p class="tiny muted">Dry run — confirms the patch would apply cleanly without changing anything yet.</p>
+    <button id="checkBtn" class="primary" ${!sel ? 'disabled' : ''}>Check patch</button>
+    <div id="checkResult"></div>
+
+    <div class="section-heading">3. Apply</div>
+    <p class="tiny muted">Actually modifies files on disk. Only enabled after a successful check.</p>
+    <button id="applyBtn" class="primary" ${!patchState.checked ? 'disabled' : ''}>Apply patch</button>
+    <div id="applyResult"></div>
+
+    <div class="section-heading">4. Commit</div>
+    <p class="tiny muted">Stages everything and commits. Only enabled after a successful apply.</p>
+    <div class="row" style="gap: 8px; margin-bottom: 8px;">
+      <input type="text" id="commitMsg" placeholder="Commit message"
+        value="${sel ? escapeHtml('Apply ' + sel.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ')) : ''}"
+        style="flex:1; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+      <button id="commitBtn" class="primary" ${!patchState.applied ? 'disabled' : ''}>Commit</button>
+    </div>
+    <div id="commitResult"></div>
+
+    <div class="section-heading">5. Build</div>
+    <p class="tiny muted">Runs <code>npm run build</code> to confirm nothing is broken. Can take a minute.</p>
+    <button id="buildBtn">Run build</button>
+    <div id="buildResult"></div>
+  `;
+
+  document.getElementById('refreshStatusBtn').onclick = () => refreshGitStatus();
+
+  appEl.querySelectorAll('input[name="patchfile"]').forEach((input) => {
+    input.onchange = () => {
+      patchState.selected = input.value;
+      patchState.checked = false;
+      patchState.applied = false;
+      renderPatches();
+    };
+  });
+
+  const checkBtn = document.getElementById('checkBtn');
+  if (checkBtn) checkBtn.onclick = async () => {
+    checkBtn.disabled = true;
+    checkBtn.textContent = 'Checking…';
+    const result = await api('/api/patches/check', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: patchState.selected }),
+    });
+    patchState.checked = result.ok;
+    checkBtn.disabled = false;
+    checkBtn.textContent = 'Check patch';
+    renderPatches();
+    document.getElementById('checkResult').innerHTML = resultBlock(result, 'Check');
+  };
+
+  const applyBtn = document.getElementById('applyBtn');
+  if (applyBtn) applyBtn.onclick = async () => {
+    applyBtn.disabled = true;
+    applyBtn.textContent = 'Applying…';
+    const result = await api('/api/patches/apply', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: patchState.selected }),
+    });
+    patchState.applied = result.ok;
+    renderPatches();
+    document.getElementById('applyResult').innerHTML = resultBlock(result, 'Apply');
+    if (result.ok) refreshGitStatus();
+  };
+
+  const commitBtn = document.getElementById('commitBtn');
+  if (commitBtn) commitBtn.onclick = async () => {
+    const message = document.getElementById('commitMsg').value;
+    commitBtn.disabled = true;
+    commitBtn.textContent = 'Committing…';
+    const result = await api('/api/patches/commit', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    });
+    renderPatches();
+    document.getElementById('commitResult').innerHTML = resultBlock(result, 'Commit');
+    if (result.ok) refreshGitStatus();
+  };
+
+  const buildBtn = document.getElementById('buildBtn');
+  if (buildBtn) buildBtn.onclick = async () => {
+    buildBtn.disabled = true;
+    buildBtn.textContent = 'Building… (this can take a minute)';
+    const result = await api('/api/patches/build', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+    buildBtn.disabled = false;
+    buildBtn.textContent = 'Run build';
+    document.getElementById('buildResult').innerHTML = resultBlock(result, 'Build');
+  };
+}

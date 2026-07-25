@@ -21,6 +21,10 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -179,6 +183,84 @@ function validateArray(kind, data) {
   return errors;
 }
 
+/* ---------------------------------------------------------------- patches --- */
+// Applying a patch, committing, and building are the same handful of commands
+// every time — this wraps them behind buttons instead of copy-pasted shell
+// lines. It only ever runs a small, fixed set of git/npm subcommands, and the
+// one piece of user input that reaches a shell (the patch filename) is always
+// checked against the real directory listing first, never passed through raw.
+
+const GIT_TIMEOUT_MS = 20_000;
+const BUILD_TIMEOUT_MS = 5 * 60_000;
+const NPM_BIN = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+
+async function run(cmd, args, timeout) {
+  try {
+    const { stdout, stderr } = await execFileAsync(cmd, args, {
+      cwd: ROOT, timeout, maxBuffer: 20 * 1024 * 1024,
+    });
+    return { ok: true, code: 0, stdout, stderr };
+  } catch (err) {
+    // execFile rejects on non-zero exit; that's a normal outcome here (e.g. a
+    // failed `git apply --check`), not a tool malfunction, so it's reported
+    // back as data rather than re-thrown.
+    return {
+      ok: false,
+      code: typeof err.code === 'number' ? err.code : -1,
+      stdout: err.stdout ?? '',
+      stderr: err.stderr ?? String(err.message ?? err),
+      timedOut: !!err.killed && err.signal === 'SIGTERM',
+    };
+  }
+}
+
+async function listPatchFiles() {
+  const found = [];
+  const dirs = [ROOT, path.join(ROOT, 'patches')];
+  for (const dir of dirs) {
+    let entries;
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name.endsWith('.patch')) {
+        const full = path.join(dir, entry.name);
+        const stat = await fs.stat(full);
+        found.push({
+          name: entry.name,
+          dir: path.relative(ROOT, dir) || '.',
+          size: stat.size,
+          mtime: stat.mtimeMs,
+        });
+      }
+    }
+  }
+  found.sort((a, b) => b.mtime - a.mtime);
+  return found;
+}
+
+/** Resolves a client-supplied filename to a real, whitelisted patch path. Never trusts the client's path directly. */
+async function resolvePatchPath(name) {
+  const files = await listPatchFiles();
+  const match = files.find((f) => f.name === name);
+  if (!match) return null;
+  return path.join(ROOT, match.dir, match.name);
+}
+
+async function gitStatus() {
+  const status = await run('git', ['status', '--porcelain'], GIT_TIMEOUT_MS);
+  const log = await run('git', ['log', '-1', '--oneline'], GIT_TIMEOUT_MS);
+  const branch = await run('git', ['rev-parse', '--abbrev-ref', 'HEAD'], GIT_TIMEOUT_MS);
+  return {
+    clean: status.ok && status.stdout.trim() === '',
+    statusText: status.stdout,
+    lastCommit: log.stdout.trim(),
+    branch: branch.stdout.trim(),
+  };
+}
+
 /* ------------------------------------------------------------------ http --- */
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
@@ -217,6 +299,51 @@ const server = http.createServer(async (req, res) => {
 
   if (url.pathname === '/api/schema') {
     return json(res, 200, SCHEMAS);
+  }
+
+  if (url.pathname === '/api/patches/list' && req.method === 'GET') {
+    const files = await listPatchFiles();
+    const status = await gitStatus();
+    return json(res, 200, { files, status });
+  }
+
+  if (url.pathname === '/api/patches/status' && req.method === 'GET') {
+    return json(res, 200, await gitStatus());
+  }
+
+  if (url.pathname === '/api/patches/check' && req.method === 'POST') {
+    const body = JSON.parse(await readBody(req));
+    const resolved = await resolvePatchPath(body.name);
+    if (!resolved) return json(res, 404, { error: 'Unknown patch file.' });
+    const result = await run('git', ['apply', '--check', resolved], GIT_TIMEOUT_MS);
+    return json(res, 200, result);
+  }
+
+  if (url.pathname === '/api/patches/apply' && req.method === 'POST') {
+    const body = JSON.parse(await readBody(req));
+    const resolved = await resolvePatchPath(body.name);
+    if (!resolved) return json(res, 404, { error: 'Unknown patch file.' });
+    const result = await run('git', ['apply', resolved], GIT_TIMEOUT_MS);
+    return json(res, 200, result);
+  }
+
+  if (url.pathname === '/api/patches/commit' && req.method === 'POST') {
+    const body = JSON.parse(await readBody(req));
+    const message = typeof body.message === 'string' && body.message.trim()
+      ? body.message.trim()
+      : 'Apply patch';
+    const add = await run('git', ['add', '-A'], GIT_TIMEOUT_MS);
+    if (!add.ok) return json(res, 200, add);
+    // The commit message is passed as a single execFile argument, never
+    // through a shell, so it can't be used to inject additional commands
+    // regardless of what characters it contains.
+    const commit = await run('git', ['commit', '-m', message], GIT_TIMEOUT_MS);
+    return json(res, 200, commit);
+  }
+
+  if (url.pathname === '/api/patches/build' && req.method === 'POST') {
+    const result = await run(NPM_BIN, ['run', 'build'], BUILD_TIMEOUT_MS);
+    return json(res, 200, result);
   }
 
   const match = url.pathname.match(/^\/api\/data\/([\w-]+)$/);

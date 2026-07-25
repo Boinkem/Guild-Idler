@@ -320,3 +320,34 @@ export function renownForRetirement(level: number, totalQuests: number): number 
   if (level < PRESTIGE_MIN_LEVEL) return 0;
   return Math.max(1, Math.floor(Math.pow(level - PRESTIGE_MIN_LEVEL + 1, 0.75) + totalQuests / 150));
 }
+
+/* ------------------------------ prestige streak ---------------------------- */
+
+/** Retiring again within this window of the last retirement extends the streak. */
+export const PRESTIGE_STREAK_WINDOW_MS = 72 * 60 * 60 * 1000; // 3 days
+const PRESTIGE_STREAK_BONUS_PER_STEP = 5; // percent
+const PRESTIGE_STREAK_BONUS_CAP = 50; // percent, reached at streak 11
+
+/** Percentage bonus applied to renown gained, based on the current streak. */
+export function prestigeStreakBonusPct(streak: number): number {
+  return Math.min((Math.max(1, streak) - 1) * PRESTIGE_STREAK_BONUS_PER_STEP, PRESTIGE_STREAK_BONUS_CAP);
+}
+
+/* -------------------------------- ascension -------------------------------- */
+
+/** Flat permanent stat bonus per ascension level, applied to every stat. */
+export const ASCENSION_STAT_BONUS = 1;
+
+const ASCENSION_RANKS: { min: number; name: string }[] = [
+  { min: 10, name: 'Living Legend' },
+  { min: 6, name: 'Elder' },
+  { min: 3, name: 'Veteran' },
+];
+
+/** The rank label for a given ascension count, or null below the first threshold. */
+export function ascensionRank(ascension: number): string | null {
+  for (const rank of ASCENSION_RANKS) {
+    if (ascension >= rank.min) return rank.name;
+  }
+  return null;
+}

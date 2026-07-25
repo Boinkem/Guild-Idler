@@ -83,3 +83,33 @@ td.actions button { padding: 4px 8px; font-size: 11px; margin-right: 4px; }
 .editor-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
 
 .empty { color: var(--muted); font-size: 12px; padding: 20px 0; text-align: center; }
+
+/* -------------------------------- patches -------------------------------- */
+
+.patch-git-status {
+  border: 1px solid var(--panel3);
+  background: var(--panel);
+  padding: 10px 12px;
+  font-size: 11px;
+}
+.patch-git-status.dirty { border-color: var(--brass); }
+.patch-git-status pre { max-height: 140px; overflow-y: auto; font-size: 10px; color: var(--muted); }
+
+.patch-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.patch-item {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--panel3); background: var(--panel);
+  padding: 8px 10px; cursor: pointer;
+}
+.patch-item.selected { border-color: var(--brass); background: var(--panel2); }
+.patch-item input { accent-color: var(--brass); }
+.patch-name { font-size: 12px; font-weight: bold; }
+
+.patch-result { margin: 8px 0 4px; border-left: 3px solid var(--panel3); padding: 6px 10px; font-size: 11px; }
+.patch-result.good { border-left-color: var(--good); }
+.patch-result.bad { border-left-color: var(--bad); }
+.patch-result-label { font-weight: bold; margin-bottom: 4px; }
+.patch-result pre {
+  max-height: 220px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+  background: var(--panel); border: 1px solid var(--panel3); padding: 6px 8px; font-size: 10px;
+}

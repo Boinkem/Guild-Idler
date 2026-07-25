@@ -2,6 +2,7 @@ import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { GuildManager } from '../../game/managers/GuildManager';
+import { PrestigeManager } from '../../game/managers/PrestigeManager';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { HERO_CLASSES, RECRUIT_COST, SKINS } from '../../game/data/progression';
 import { HeroClass, Stats } from '../../game/types';
@@ -41,7 +42,12 @@ export function HeroesPanel() {
                     {hero.title && <span className="hero-title">{hero.title}</span>}
                     {hero.name}
                   </span>
-                  <span className="small muted">{classDef.name} · Level {hero.level}</span>
+                  <span className="small muted">
+                    {classDef.name} · Level {hero.level}
+                    {hero.ascension > 0 && (
+                      <> · {PrestigeManager.rankFor(hero) ?? `ascended ×${hero.ascension}`}</>
+                    )}
+                  </span>
                 </div>
                 <button
                   className={`chip ${engine.displayedHero.id === hero.id ? 'on' : ''}`}

@@ -35,6 +35,7 @@ export const HeroManager = {
       activeQuestId: null,
       questsCompleted: 0,
       skin: 'original',
+      ascension: 0,
       bonusStats: { strength: 0, endurance: 0, luck: 0, wisdom: 0 },
     };
   },

@@ -399,9 +399,11 @@ export class GameEngine {
   retire(heroId: string) {
     const hero = this.hero(heroId);
     if (!hero) return;
-    const outcome = PrestigeManager.retire(this.state, hero, createRng(uid('retire')));
+    const outcome = PrestigeManager.retire(this.state, hero, createRng(uid('retire')), Date.now());
     if ('error' in outcome) return this.say(outcome.error);
-    this.say(`${hero.name} retires a legend. +${outcome.renownGained} Heroic Renown.`);
+    const streakNote = outcome.streak > 1 ? ` Streak ×${outcome.streak}!` : '';
+    playSound(outcome.streak > 3 ? 'chain_complete' : 'level_up');
+    this.say(`${hero.name} retires a legend. +${outcome.renownGained} Heroic Renown.${streakNote}`);
     void this.saveNow();
   }
 

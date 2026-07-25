@@ -1,4 +1,8 @@
-import { PRESTIGE_MIN_LEVEL, RENOWN_BY_ID, RENOWN_PERKS, renownCost, renownEffectiveMaxLevel, renownForRetirement } from '../data/progression';
+import {
+  PRESTIGE_MIN_LEVEL, PRESTIGE_STREAK_WINDOW_MS, RENOWN_BY_ID, RENOWN_PERKS,
+  ASCENSION_STAT_BONUS, ascensionRank, prestigeStreakBonusPct, renownCost,
+  renownEffectiveMaxLevel, renownForRetirement,
+} from '../data/progression';
 import { GameState, Hero } from '../types';
 import { Rng } from '../rng';
 import { HeroManager } from './HeroManager';
@@ -8,35 +12,75 @@ export const PrestigeManager = {
     return hero.level >= PRESTIGE_MIN_LEVEL && hero.status !== 'questing';
   },
 
+  /** Base renown, before any streak bonus. Shown as the "guaranteed" part of the preview. */
   renownPreview(hero: Hero): number {
     return renownForRetirement(hero.level, hero.questsCompleted);
   },
 
+  /** What the streak bonus would add right now if this hero retired this instant. */
+  streakPreview(state: GameState, hero: Hero, now: number): { streak: number; bonusPct: number; total: number } {
+    const streak = PrestigeManager.projectedStreak(state, now);
+    const bonusPct = prestigeStreakBonusPct(streak);
+    const base = PrestigeManager.renownPreview(hero);
+    return { streak, bonusPct, total: Math.floor(base * (1 + bonusPct / 100)) };
+  },
+
+  /** What the streak WOULD become if a retirement happened right now. */
+  projectedStreak(state: GameState, now: number): number {
+    if (state.lastPrestigeAt === null) return 1;
+    return now - state.lastPrestigeAt <= PRESTIGE_STREAK_WINDOW_MS ? state.prestigeStreak + 1 : 1;
+  },
+
   /**
-   * Retiring wipes the hero's level, stats, and gear but keeps everything the
-   * guild owns: upgrades, facilities, discovered items, and renown perks.
+   * Retiring wipes the hero's level, xp, equipped gear, and title, but keeps
+   * everything the guild owns: upgrades, facilities, discovered items, and
+   * renown perks. Two things persist for this specific hero identity across
+   * the reset: ascension count (and the small permanent stat bonus it
+   * grants), and — guild-wide — the prestige streak, which rewards retiring
+   * again soon rather than letting months pass between retirements.
    */
-  retire(state: GameState, hero: Hero, rng: Rng): { renownGained: number } | { error: string } {
+  retire(state: GameState, hero: Hero, rng: Rng, now: number): { renownGained: number; streak: number; ascension: number } | { error: string } {
     if (hero.status === 'questing') return { error: `${hero.name} is out on a quest.` };
     if (hero.level < PRESTIGE_MIN_LEVEL) {
       return { error: `Heroes retire at level ${PRESTIGE_MIN_LEVEL}. ${hero.name} is level ${hero.level}.` };
     }
-    const renownGained = PrestigeManager.renownPreview(hero);
+
+    const streak = PrestigeManager.projectedStreak(state, now);
+    const bonusPct = prestigeStreakBonusPct(streak);
+    const baseRenown = PrestigeManager.renownPreview(hero);
+    const renownGained = Math.floor(baseRenown * (1 + bonusPct / 100));
 
     // Their gear goes back to the guild stash rather than vanishing.
     for (const item of Object.values(hero.equipment)) {
       if (item) state.stash.push(item);
     }
 
+    const ascension = hero.ascension + 1;
     const replacement = HeroManager.create(hero.heroClass, rng);
     replacement.id = hero.id;
     replacement.name = hero.name;
+    replacement.ascension = ascension;
+    replacement.bonusStats = {
+      strength: ascension * ASCENSION_STAT_BONUS,
+      endurance: ascension * ASCENSION_STAT_BONUS,
+      luck: ascension * ASCENSION_STAT_BONUS,
+      wisdom: ascension * ASCENSION_STAT_BONUS,
+    };
     const index = state.heroes.findIndex((h) => h.id === hero.id);
     state.heroes[index] = replacement;
 
     state.renown += renownGained;
     state.stats.prestigeCount += 1;
-    return { renownGained };
+    state.prestigeStreak = streak;
+    state.lastPrestigeAt = now;
+    state.stats.bestPrestigeStreak = Math.max(state.stats.bestPrestigeStreak, streak);
+
+    return { renownGained, streak, ascension };
+  },
+
+  /** Display label for a hero's ascension rank, or null if not yet ranked. */
+  rankFor(hero: Hero): string | null {
+    return ascensionRank(hero.ascension);
   },
 
   perkLevel(state: GameState, id: string): number {

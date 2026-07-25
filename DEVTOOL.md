@@ -63,6 +63,26 @@ Every successful save writes a `.bak` copy of the *previous* version in
 git. These `.bak` files are gitignored — they're a safety net, not something to
 commit.
 
+## Applying patches without the command line
+
+The **Patches** tab (first tab, left of Quest Templates) wraps the git workflow
+from WORKFLOW.md into buttons: select a `.patch` file sitting in the project
+root or a `patches/` folder, then step through Check → Apply → Commit → Build.
+
+Each step is a real command run for you — `git apply --check`, `git apply`,
+`git add -A && git commit`, `npm run build` — shown with its actual output, and
+nothing auto-chains. A failed check just tells you it failed; it doesn't try
+to apply anyway. A successful apply doesn't auto-commit. You press each button.
+
+The current git status (branch, clean/dirty, last commit) shows at the top and
+updates after every step, so you always know where you stand. If the working
+tree isn't clean, it says so — worth resolving that first, but it won't stop
+you from proceeding.
+
+This is a convenience wrapper around the same commands, not a replacement for
+git — for anything beyond apply-commit-build (branches, resolving a real merge
+conflict, history surgery), use the terminal.
+
 ## What's editable here vs. not
 
 **In the tool:** quest name templates (verb/subject/flavour), all equipment,
