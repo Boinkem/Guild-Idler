@@ -169,11 +169,19 @@ export interface HeroClassDef {
 }
 
 export const HERO_CLASSES: Record<HeroClass, HeroClassDef> = {
-  knight: {
-    id: 'knight', name: 'Knight', blurb: 'Dependable in a fight and hard to knock down. The guild starts here.',
+  adventurer: {
+    id: 'adventurer', name: 'Adventurer', blurb: 'No banner, no order, just grit and a willingness to go first. The guild starts here.',
     baseStats: { strength: 6, endurance: 6, luck: 3, wisdom: 3 },
     growth: { strength: 1.2, endurance: 1.1, luck: 0.4, wisdom: 0.4 },
     mods: { injuryResist: 5 }, preferred: ['combat', 'defense'], preferredBonus: 6,
+    unlockTavernLevel: 0, tier: 0,
+    names: ['Finn', 'Robin', 'Cade', 'Briar', 'Wren Ashfield'],
+  },
+  knight: {
+    id: 'knight', name: 'Knight', blurb: 'Sworn, drilled, and reliable in a way freelancers rarely are. Cheap for what it brings.',
+    baseStats: { strength: 6, endurance: 7, luck: 2, wisdom: 3 },
+    growth: { strength: 1.15, endurance: 1.25, luck: 0.3, wisdom: 0.4 },
+    mods: { injuryResist: 10 }, preferred: ['combat', 'defense'], preferredBonus: 8,
     unlockTavernLevel: 0, tier: 0,
     names: ['Sir Pip', 'Sir Bramble', 'Dame Orla', 'Sir Corwin', 'Dame Wren'],
   },
@@ -236,7 +244,7 @@ export const HERO_CLASSES: Record<HeroClass, HeroClassDef> = {
 };
 
 export const RECRUIT_COST: Record<HeroClass, number> = {
-  knight: 0,
+  adventurer: 0, knight: 400,
   dwarf: 1200, gladiator: 1500,
   samurai: 5000, witch: 6500,
   lizardman: 16000, pyromancer: 20000, wizard: 32000,

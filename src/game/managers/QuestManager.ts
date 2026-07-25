@@ -65,7 +65,12 @@ export const QuestManager = {
 
   generateOffer(difficulty: Difficulty, rng: Rng, seedTag: string): QuestOffer {
     const cfg = DIFFICULTIES[difficulty];
-    const template = rng.pick(QUEST_TEMPLATES);
+    const tierIndex = DIFFICULTY_ORDER.indexOf(difficulty);
+    const eligible = QUEST_TEMPLATES.filter((t) => {
+      if (!t.minDifficulty) return true;
+      return DIFFICULTY_ORDER.indexOf(t.minDifficulty) <= tierIndex;
+    });
+    const template = rng.pick(eligible.length > 0 ? eligible : QUEST_TEMPLATES);
     const subject = rng.pick(template.subjects);
     const prefix = rng.chance(18) ? `${rng.pick(QUEST_PREFIXES)} ` : '';
     return {

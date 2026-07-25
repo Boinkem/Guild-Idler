@@ -4,7 +4,6 @@ import { formatGold } from '../game/util';
 import { QuestPanel } from './panels/QuestPanel';
 import { HeroesPanel } from './panels/HeroesPanel';
 import { EquipmentPanel } from './panels/EquipmentPanel';
-import { InventoryPanel } from './panels/InventoryPanel';
 import { ShopPanel } from './panels/ShopPanel';
 import { UpgradesPanel } from './panels/UpgradesPanel';
 import { GuildPanel } from './panels/GuildPanel';
@@ -15,8 +14,7 @@ import { SettingsPanel } from './panels/SettingsPanel';
 const TABS = [
   { id: 'quests', label: 'Quests', Panel: QuestPanel },
   { id: 'heroes', label: 'Heroes', Panel: HeroesPanel },
-  { id: 'equipment', label: 'Equipment', Panel: EquipmentPanel },
-  { id: 'inventory', label: 'Inventory', Panel: InventoryPanel },
+  { id: 'equipment', label: 'Inventory', Panel: EquipmentPanel },
   { id: 'shop', label: 'Shop', Panel: ShopPanel },
   { id: 'upgrades', label: 'Upgrades', Panel: UpgradesPanel },
   { id: 'guild', label: 'Guild Hall', Panel: GuildPanel },

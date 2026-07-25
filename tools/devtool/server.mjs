@@ -45,6 +45,10 @@ const SCHEMAS = {
       tag: { type: 'enum', required: true, options: ['combat', 'escort', 'explore', 'arcane', 'stealth', 'defense'] },
       subjects: { type: 'string[]', required: true },
       flavour: { type: 'string[]', required: true },
+      minDifficulty: {
+        type: 'enum', required: false,
+        options: ['easy', 'normal', 'hard', 'epic', 'legendary'],
+      },
     },
   },
   'equipment': {

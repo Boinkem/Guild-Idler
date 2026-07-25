@@ -45,16 +45,16 @@ const EMPTY_GUILD: Record<GuildFacility, number> = {
 
 export function createInitialState(now = Date.now()): GameState {
   const rng = createRng(`start:${now}`);
-  const knight = HeroManager.create('knight', rng);
+  const starter = HeroManager.create('adventurer', rng);
   return {
     version: SAVE_VERSION,
     createdAt: now,
     lastSeen: now,
     gold: 50,
     renown: 0,
-    heroes: [knight],
+    heroes: [starter],
     heroSlots: 1,
-    roster: ['knight'],
+    roster: ['adventurer'],
     inventory: { healing_potion: 1 },
     stash: [],
     questBoard: [],
@@ -121,6 +121,13 @@ const MIGRATIONS: Record<number, Migration> = {
       unlockedSkins: (save.unlockedSkins as string[]) ?? ['original'],
       roster: ['knight'],
     };
+  },
+  4: (save) => {
+    // The Adventurer joined as the new default starter, but Knight remains a
+    // real recruitable class (now a cheap early hire rather than the free
+    // starter). Existing knight heroes are untouched — nothing to remap here,
+    // this migration just carries the save forward to the new version.
+    return { ...save, version: 5 };
   },
 };
 

@@ -1,6 +1,6 @@
 # Little Knight
 
-A cozy desktop companion idle game. A small pixel knight stands in the corner of your screen and goes on quests while you work. Contracts run for hours or days, resolve whether or not the app is open, and the guild behind him grows over months.
+A cozy desktop companion idle game. A small pixel adventurer stands in the corner of your screen and goes on quests while you work. Contracts run for hours or days, resolve whether or not the app is open, and the guild behind him grows over months.
 
 ---
 
@@ -192,18 +192,19 @@ Checks run against the compiled game logic:
 ## Art
 
 Eight playable classes, each a distinct character pack from the same artist:
-knight, dwarf warrior, gladiator, samurai, witch, lizardman, pyromancer, wizard.
+adventurer (the starter), knight, dwarf warrior, gladiator, samurai, witch, lizardman, pyromancer, wizard.
 Each ships in its original colours plus four themed recolour **skins** (Necrotic,
 Holy, Infernal, Frost) used as a cosmetic gold sink.
 
 ### Importing the packs
 
 ```bash
-python3 tools/import_characters.py \
-  --src <folder with the extracted character packs> \
-  --knight-src <folder with the original knight sheets> \
-  --out public/heroes
+python3 tools/import_characters.py --src <folder with the extracted character packs> --out public/heroes
 ```
+
+Packs shipped as individual numbered frame files rather than sheets (the
+Adventurer pack is like this) need `tools/assemble_strips.py` run first to
+build strips — see that file's docstring.
 
 This normalises the differently-nested packs, crops each character to its own
 tight frame box, and writes `public/heroes/<class>/<skin>/<animation>.png` plus

@@ -106,7 +106,7 @@ git diff > my-changes.patch
 
 ```powershell
 # 1. make sure the art is present (a fresh clone won't have it)
-python3 tools/import_characters.py --src <packs> --knight-src <knight> --out public/heroes
+python3 tools/import_characters.py --src <packs> --out public/heroes
 
 # 2. bump the version — this drives the installer name and future auto-update
 npm version patch          # 0.1.0 -> 0.1.1, commits and tags automatically
@@ -155,4 +155,4 @@ save, ask, and I'll confirm whether a migration is needed.
 | Apply a patch from me | `git apply file.patch` |
 | Make a patch for me | `git diff > my-changes.patch` |
 | Build for testers | `npm version patch` then `npm run package` |
-| Regenerate sprites | `python3 tools/import_characters.py --src <packs> --knight-src <knight> --out public/heroes` |
+| Regenerate sprites | `python3 tools/import_characters.py --src <packs> --out public/heroes` |

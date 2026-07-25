@@ -4,7 +4,7 @@
     "name": "Healing Potion",
     "description": "Steadies the hands before a fight.",
     "cost": 25,
-    "glyph": "\u2764",
+    "glyph": "❤",
     "effect": {
       "success": 15
     }
@@ -14,7 +14,7 @@
     "name": "Lucky Potion",
     "description": "Coins seem to find their way into pockets.",
     "cost": 50,
-    "glyph": "\u2726",
+    "glyph": "✦",
     "effect": {
       "gold": 50
     }
@@ -24,7 +24,7 @@
     "name": "Strength Potion",
     "description": "A hard swing and a fair price for it.",
     "cost": 75,
-    "glyph": "\u2694",
+    "glyph": "⚔",
     "effect": {
       "success": 10,
       "gold": 25
@@ -35,7 +35,7 @@
     "name": "Protection Charm",
     "description": "Your knight comes home unhurt, win or lose.",
     "cost": 100,
-    "glyph": "\u26e8",
+    "glyph": "⛨",
     "effect": {
       "preventInjury": true
     }
@@ -45,7 +45,7 @@
     "name": "Elixir of Fortune",
     "description": "Guarantees a favourable event on the road.",
     "cost": 250,
-    "glyph": "\u2618",
+    "glyph": "☘",
     "effect": {
       "guaranteedGoodEvent": true
     }
@@ -55,7 +55,7 @@
     "name": "Field Bandage",
     "description": "Clears one injury immediately.",
     "cost": 60,
-    "glyph": "\u271a",
+    "glyph": "✚",
     "effect": {
       "healInjury": true
     }

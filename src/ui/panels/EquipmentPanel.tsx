@@ -4,6 +4,7 @@ import { useSettings } from '../useSettings';
 import { EquipmentManager, MAX_PLUS } from '../../game/managers/EquipmentManager';
 import { EQUIPMENT_BY_ID, ITEM_SETS } from '../../game/data/equipment';
 import { EquipSlot, EquipmentItem } from '../../game/types';
+import { InventoryManager } from '../../game/managers/InventoryManager';
 import { describeMods, formatGold, RARITY_COLOR } from '../../game/util';
 
 const SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'gloves', 'boots', 'ring', 'amulet'];
@@ -46,8 +47,11 @@ export function EquipmentPanel() {
 
   return (
     <>
-      <h2>Equipment</h2>
-      <p className="subtitle">Gear wears down on every quest. Broken pieces give nothing until repaired.</p>
+      <h2>Inventory</h2>
+      <p className="subtitle">
+        Everything the guild owns: worn gear, the shared stash, and consumables on hand.
+        Buying and selling both happen in the Shop — this is just what you have.
+      </p>
 
       <div className="row wrap" style={{ marginBottom: 10 }}>
         {state.heroes.map((h) => (
@@ -100,6 +104,19 @@ export function EquipmentPanel() {
           );
         })}
       </div>
+
+      <div className="section-heading">Consumables</div>
+      {InventoryManager.owned(state).length === 0 ? (
+        <p className="small muted">None on hand. The Shop sells potions and charms.</p>
+      ) : (
+        <div className="row wrap" style={{ marginBottom: 8 }}>
+          {InventoryManager.owned(state).map(({ def, count }) => (
+            <span key={def.id} className="chip" title={def.description}>
+              {def.glyph} {def.name} ×{count}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="section-heading">Stash ({state.stash.length})</div>
       {state.stash.length === 0 && <p className="small muted">Nothing spare. Loot drops from successful quests.</p>}

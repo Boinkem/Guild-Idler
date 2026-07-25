@@ -59,6 +59,11 @@ interface Template {
   subjects: string[];
   tag: QuestTag;
   flavour: string[];
+  /**
+   * Reserves grandiose "raid boss" templates for the difficulty tiers that
+   * deserve them. Omit for a template usable at any difficulty.
+   */
+  minDifficulty?: Difficulty;
 }
 
 /**
@@ -151,6 +156,51 @@ export const QUEST_CHAINS: ChainDef[] = [
       { name: 'The Fragment in the Fen', flavour: 'Wet, cold, and guarded by something patient.', difficulty: 'normal', duration: 8 * HOUR, goldMultiplier: 1.5 },
       { name: 'The Fragment in the Vault', flavour: 'The banker insists it is a paperweight.', difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 1.8 },
       { name: 'The Fragment in the Fire', flavour: 'Last seen inside an active forge. Naturally.', difficulty: 'epic', duration: 12 * HOUR, goldMultiplier: 2.2 },
+    ],
+  },
+  {
+    id: 'goblin_warband',
+    name: "The Goblin King's Warband",
+    description: 'A goblin chieftain has united three warbands under one crown. Someone should un-unite them.',
+    reqLevel: 6,
+    rewardGold: 550,
+    rewardItems: ['warband_cleaver'],
+    rewardRenown: 1,
+    stages: [
+      { name: 'Scatter the Outriders', flavour: 'They ride ahead of the warband, loud and badly armoured.', difficulty: 'normal', duration: 3 * HOUR, goldMultiplier: 1.3 },
+      { name: "The Chieftain's Camp", flavour: 'He wears three crowns. None of them fit. All of them are stolen.', difficulty: 'hard', duration: 5 * HOUR, goldMultiplier: 1.6 },
+    ],
+  },
+  {
+    id: 'hollow_choir',
+    name: 'The Hollow Choir',
+    description: 'Something has been singing in the old cathedral for nine years straight. It never breathes.',
+    reqLevel: 26,
+    rewardGold: 5200,
+    rewardItems: ['choir_mask', 'silenced_bell'],
+    rewardRenown: 2,
+    stages: [
+      { name: 'Follow the Hymn', flavour: 'It carries for miles and never repeats a verse.', difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 1.8 },
+      { name: 'The Choir Loft', flavour: 'No singers. Just mouths, carved into the stone, still moving.', difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.2 },
+      { name: 'Silence the Chord', flavour: 'Whatever it is building toward, it is almost finished.', difficulty: 'epic', duration: 18 * HOUR, goldMultiplier: 2.6 },
+    ],
+  },
+  {
+    id: 'world_ender',
+    name: "The World-Ender's Vigil",
+    description:
+      'A capstone expedition for guilds that have already retired a hero or two. Five stages, ' +
+      'no easy ones, and a patron who refuses to say what is actually waiting at the end.',
+    reqLevel: 34,
+    rewardGold: 22000,
+    rewardItems: ['voidforged_blade', 'voidforged_crown', 'voidforged_plate', 'voidforged_signet'],
+    rewardRenown: 6,
+    stages: [
+      { name: 'The Road That Should Not Exist', flavour: 'It appeared on the map three nights ago. It has always been on the ground.', difficulty: 'epic', duration: 16 * HOUR, goldMultiplier: 2.6 },
+      { name: 'The Watchers in the Dark Between Stars', flavour: 'They have been counting something. You do not want to know what.', difficulty: 'legendary', duration: 20 * HOUR, goldMultiplier: 3.2 },
+      { name: 'The Court of the Unmade King', flavour: 'He ruled before the first kingdom. He intends to rule after the last.', difficulty: 'legendary', duration: 24 * HOUR, goldMultiplier: 3.6 },
+      { name: 'The Breaking of the Vigil', flavour: 'Whatever has been holding it back is tired. So are you. Keep going anyway.', difficulty: 'legendary', duration: 28 * HOUR, goldMultiplier: 4.0 },
+      { name: 'The World-Ender', flavour: 'It does not have a name. It has never needed one. This ends here, one way or the other.', difficulty: 'legendary', duration: 32 * HOUR, goldMultiplier: 5.0 },
     ],
   },
 ];

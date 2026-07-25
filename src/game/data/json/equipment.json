@@ -497,5 +497,194 @@
       "endurance": 12,
       "wisdom": 6
     }
+  },
+  {
+    "id": "warband_cleaver",
+    "name": "Warband Cleaver",
+    "slot": "weapon",
+    "rarity": "uncommon",
+    "reqLevel": 6,
+    "maxDurability": 65,
+    "value": 150,
+    "mods": {
+      "success": 6,
+      "gold": 6
+    },
+    "stats": {
+      "strength": 3
+    }
+  },
+  {
+    "id": "choir_mask",
+    "name": "Mask of the Hollow Choir",
+    "slot": "helmet",
+    "rarity": "epic",
+    "reqLevel": 24,
+    "maxDurability": 125,
+    "value": 2300,
+    "mods": {
+      "xp": 20,
+      "loot": 10,
+      "injuryResist": 6
+    },
+    "stats": {
+      "wisdom": 9
+    }
+  },
+  {
+    "id": "silenced_bell",
+    "name": "The Silenced Bell",
+    "slot": "amulet",
+    "rarity": "epic",
+    "reqLevel": 24,
+    "maxDurability": 130,
+    "value": 2400,
+    "mods": {
+      "success": 10,
+      "gold": 20
+    },
+    "stats": {
+      "wisdom": 6,
+      "luck": 5
+    }
+  },
+  {
+    "id": "voidforged_blade",
+    "name": "Voidforged Blade",
+    "slot": "weapon",
+    "rarity": "legendary",
+    "reqLevel": 36,
+    "maxDurability": 260,
+    "value": 12500,
+    "mods": {
+      "success": 20,
+      "gold": 16,
+      "loot": 8,
+      "speed": 8
+    },
+    "stats": {
+      "strength": 16,
+      "luck": 4
+    },
+    "setId": "voidforged"
+  },
+  {
+    "id": "voidforged_crown",
+    "name": "Voidforged Crown",
+    "slot": "helmet",
+    "rarity": "legendary",
+    "reqLevel": 36,
+    "maxDurability": 240,
+    "value": 11800,
+    "mods": {
+      "success": 14,
+      "injuryResist": 22,
+      "xp": 20
+    },
+    "stats": {
+      "wisdom": 12,
+      "endurance": 6
+    },
+    "setId": "voidforged"
+  },
+  {
+    "id": "voidforged_plate",
+    "name": "Voidforged Plate",
+    "slot": "chest",
+    "rarity": "legendary",
+    "reqLevel": 36,
+    "maxDurability": 280,
+    "value": 13200,
+    "mods": {
+      "injuryResist": 30,
+      "success": 12,
+      "durability": 25
+    },
+    "stats": {
+      "endurance": 16,
+      "strength": 5
+    },
+    "setId": "voidforged"
+  },
+  {
+    "id": "voidforged_signet",
+    "name": "Voidforged Signet",
+    "slot": "ring",
+    "rarity": "legendary",
+    "reqLevel": 38,
+    "maxDurability": 220,
+    "value": 10500,
+    "mods": {
+      "loot": 14,
+      "gold": 22,
+      "speed": 10
+    },
+    "stats": {
+      "luck": 14
+    }
+  },
+  {
+    "id": "stormcaller_axe",
+    "name": "Stormcaller Axe",
+    "slot": "weapon",
+    "rarity": "epic",
+    "reqLevel": 22,
+    "maxDurability": 150,
+    "value": 2100,
+    "mods": {
+      "success": 11,
+      "speed": 6
+    },
+    "stats": {
+      "strength": 8
+    }
+  },
+  {
+    "id": "ashen_greaves",
+    "name": "Ashen Greaves",
+    "slot": "boots",
+    "rarity": "epic",
+    "reqLevel": 23,
+    "maxDurability": 140,
+    "value": 2250,
+    "mods": {
+      "speed": 24,
+      "injuryResist": 8
+    },
+    "stats": {
+      "endurance": 6
+    }
+  },
+  {
+    "id": "gravekeepers_gloves",
+    "name": "Gravekeeper's Gloves",
+    "slot": "gloves",
+    "rarity": "epic",
+    "reqLevel": 24,
+    "maxDurability": 135,
+    "value": 2150,
+    "mods": {
+      "gold": 24,
+      "loot": 9
+    },
+    "stats": {
+      "luck": 7
+    }
+  },
+  {
+    "id": "wardens_bulwark",
+    "name": "Warden's Bulwark",
+    "slot": "chest",
+    "rarity": "rare",
+    "reqLevel": 15,
+    "maxDurability": 115,
+    "value": 680,
+    "mods": {
+      "injuryResist": 16,
+      "success": 5
+    },
+    "stats": {
+      "endurance": 7
+    }
   }
 ]

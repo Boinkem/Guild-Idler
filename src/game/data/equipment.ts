@@ -35,6 +35,15 @@ export const ITEM_SETS: ItemSet[] = [
       { count: 3, mods: { success: 12, gold: 40, loot: 10, durability: 25 }, label: 'Wyrmbane' },
     ],
   },
+  {
+    id: 'voidforged',
+    name: 'Voidforged Set',
+    pieces: ['voidforged_blade', 'voidforged_crown', 'voidforged_plate'],
+    bonuses: [
+      { count: 2, mods: { success: 10, loot: 8 }, label: 'Between Worlds' },
+      { count: 3, mods: { success: 18, gold: 30, loot: 15, injuryResist: 15, xp: 25 }, label: 'Unmade' },
+    ],
+  },
 ];
 
 export const SET_BY_ID: Record<string, ItemSet> = Object.fromEntries(ITEM_SETS.map((s) => [s.id, s]));

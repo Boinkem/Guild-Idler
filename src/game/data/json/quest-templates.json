@@ -157,5 +157,106 @@
       "Undo it carefully or not at all.",
       "The old words still hold. Barely."
     ]
+  },
+  {
+    "verb": "Raid",
+    "tag": "combat",
+    "minDifficulty": "epic",
+    "subjects": [
+      "the Bone Citadel",
+      "the Sunken Cathedral",
+      "the Obsidian Spire",
+      "the Frozen Throne of Kaltenreach",
+      "the Hanging Gardens of the Mad King"
+    ],
+    "flavour": [
+      "Three guilds have tried. Three guilds are still inside.",
+      "The walls are older than the kingdom, and they remember every siege.",
+      "Bring everyone you can spare. Then bring more."
+    ]
+  },
+  {
+    "verb": "Storm",
+    "tag": "combat",
+    "minDifficulty": "epic",
+    "subjects": [
+      "the Gates of Emberhold",
+      "the Last Bastion",
+      "the Rift Fortress",
+      "the Walls of Greywatch",
+      "the Iron Throne of the Usurper King"
+    ],
+    "flavour": [
+      "No clever plan this time. Just the front door, and everyone who's still standing.",
+      "The horns have been sounding for three days. They know we're coming.",
+      "Every failed siege in the last decade has a memorial stone here. Don't add one."
+    ]
+  },
+  {
+    "verb": "Slay the Ancient",
+    "tag": "combat",
+    "minDifficulty": "legendary",
+    "subjects": [
+      "Wyrm of the Deep",
+      "Titan of the Frozen Wastes",
+      "World-Serpent Morleth",
+      "Star-Fallen Horror",
+      "First Flame, Last of Its Brood"
+    ],
+    "flavour": [
+      "It was old when the mountains were young. It is not impressed by you.",
+      "The last three guilds who tried are why the bounty is this high.",
+      "Songs will be written either way. Try to be the one still alive to hear them."
+    ]
+  },
+  {
+    "verb": "Descend Into",
+    "tag": "explore",
+    "minDifficulty": "epic",
+    "subjects": [
+      "the Abyssal Maw",
+      "the Hollow Beneath the World",
+      "the Weeping Depths",
+      "the Root of the Dead Tree",
+      "the Well That Has No Bottom"
+    ],
+    "flavour": [
+      "Every expedition map ends the same way: a note that says 'further than this, nothing.'",
+      "The deeper you go, the older the dark gets.",
+      "Rope, lanterns, and a very good reason to come back up."
+    ]
+  },
+  {
+    "verb": "Banish",
+    "tag": "arcane",
+    "minDifficulty": "legendary",
+    "subjects": [
+      "the Nameless One",
+      "the Devourer of Stars",
+      "the Widow Queen's Ghost",
+      "the Thing That Wears a Crown",
+      "the Silence Beneath Everfall"
+    ],
+    "flavour": [
+      "The circle has been drawn seven times. It has broken seven times.",
+      "Say its name and it hears you. So don't.",
+      "The last binding held for two hundred years. This one needs to hold longer."
+    ]
+  },
+  {
+    "verb": "Break",
+    "tag": "defense",
+    "minDifficulty": "epic",
+    "subjects": [
+      "the Siege of Highmoor",
+      "the War in the Deep Marches",
+      "the Endless Host at Greywatch",
+      "the Blockade of the Salt Road"
+    ],
+    "flavour": [
+      "The city has six days of food left. You have less time than that.",
+      "They outnumber the garrison eleven to one. Those are good odds, for them.",
+      "Hold the line until the horn sounds twice. It has never sounded twice."
+    ]
   }
 ]

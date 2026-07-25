@@ -39,9 +39,17 @@ RGB = Tuple[int, int, int]
 # sheet so the game can pick one at random for variety.
 
 CHARACTERS: Dict[str, dict] = {
+    'adventurer': {
+        'frame_w': 50, 'frame_h': 37,
+        'base': 'Adventurer',
+        # idle.png and walk.png are pre-assembled strips (tools/assemble_strips.py
+        # concatenates the individually-shipped frame files this pack uses, since it
+        # has no sheet files at all — one PNG per frame instead).
+        'map': {'idle': 'idle', 'walk': 'walk'},
+    },
     'knight': {
-        'frame_w': 96, 'frame_h': 84, 'crop': (16, 16, 80, 62),
-        'base': '__KNIGHT__',            # the original pack, imported separately
+        'frame_w': 96, 'frame_h': 84,
+        'base': 'Knight',
         'map': {'IDLE': 'idle', 'WALK': 'walk', 'RUN': 'run', 'DEFEND': 'defend',
                 'HURT': 'hurt', 'DEATH': 'death', 'JUMP': 'jump',
                 'ATTACK_1': 'attack_1', 'ATTACK_2': 'attack_2', 'ATTACK_3': 'attack_3'},
@@ -210,43 +218,14 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument('--src', required=True, help='root folder holding the extracted character packs')
     ap.add_argument('--out', required=True, help='output folder, e.g. public/heroes')
-    ap.add_argument('--knight-src', help='folder with the original knight sheets (IDLE.png ...)')
     ap.add_argument('--only', nargs='*', help='limit to these character names')
     args = ap.parse_args()
 
     runtime_manifest: Dict[str, dict] = {}
-    names = args.only or [n for n in CHARACTERS if n != 'knight']
+    names = args.only or list(CHARACTERS)
 
     for name in names:
-        if name == 'knight':
-            continue
         process_character(name, args.src, args.out, runtime_manifest)
-
-    # The knight lives in its own pack with a different path.
-    if args.knight_src and (not args.only or 'knight' in args.only):
-        spec = CHARACTERS['knight']
-        original: Dict[str, List[Image.Image]] = {}
-        for artist_name, anim_key in spec['map'].items():
-            path = find_sheet(args.knight_src, artist_name)
-            if path:
-                original[anim_key] = slice_frames(Image.open(path).convert('RGBA'), spec['frame_w'])
-        if original:
-            box = spec['crop']
-            cw, ch = box[2] - box[0], box[3] - box[1]
-            counts = {k: len(v) for k, v in original.items()}
-            runtime_manifest['knight'] = {
-                'frameW': cw, 'frameH': ch, 'animations': counts,
-                'attacks': sorted(k for k in counts if k.startswith('attack')),
-            }
-            for skin_name, theme in SKINS.items():
-                dest = os.path.join(args.out, 'knight', skin_name)
-                os.makedirs(dest, exist_ok=True)
-                for anim_key, frames in original.items():
-                    strip = Image.new('RGBA', (cw * len(frames), ch))
-                    for i, f in enumerate(frames):
-                        strip.paste(f.crop(box), (i * cw, 0))
-                    recolor(strip, theme).save(os.path.join(dest, f'{anim_key}.png'), optimize=True)
-            print(f'  knight: {len(original)} animations, frame {cw}x{ch}')
 
     # Emit a runtime manifest the game reads to size each character correctly.
     os.makedirs(args.out, exist_ok=True)
