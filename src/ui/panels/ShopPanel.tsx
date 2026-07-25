@@ -1,4 +1,5 @@
 import { useEngine, useNow } from '../useEngine';
+import { useSettings } from '../useSettings';
 import { ShopManager } from '../../game/managers/ShopManager';
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
 import { CONSUMABLE_BY_ID } from '../../game/data/items';
