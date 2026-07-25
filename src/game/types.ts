@@ -237,6 +237,26 @@ export interface GuildDef {
   heroSlotsPerLevel?: number;
 }
 
+export interface RenownPerkTier2 {
+  /** New absolute level cap once tier 2 is unlocked. */
+  maxLevel: number;
+  /**
+   * Tier 2 has its own cost curve entirely — starting price and growth rate —
+   * rather than multiplying the (already large) compounded base-tier price.
+   * Compounding a multiplier on top of an already-exponential base blows up
+   * fast: verified directly, a naive 3.5x multiplier on the base curve's own
+   * growth rate over the same number of extra levels priced a full tier-2
+   * clear at ~850,000 renown against a base tier that only costs ~20,000 —
+   * a single retirement grants single-digit-to-low-double-digit renown, so
+   * that's not a long-term goal, it's an unreachable one. An independent,
+   * gentler curve keeps tier 2 a genuine but achievable stretch.
+   */
+  startCost: number;
+  costGrowth: number;
+  /** Shown once the base tier is maxed and tier 2 becomes visible. */
+  unlockFlavour: string;
+}
+
 export interface RenownPerkDef {
   id: string;
   name: string;
@@ -246,6 +266,13 @@ export interface RenownPerkDef {
   maxLevel: number;
   modsPerLevel: Partial<Modifiers>;
   heroSlotsPerLevel?: number;
+  /**
+   * A second tier that extends the level cap once the first is maxed, at a
+   * steeper cost — so renown keeps having somewhere to go across many
+   * prestiges instead of hard-capping. Perks with heroSlotsPerLevel don't
+   * get one; extra hero slots stay a deliberately fixed, small number.
+   */
+  tier2?: RenownPerkTier2;
 }
 
 export interface ShopStock {

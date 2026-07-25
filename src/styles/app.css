@@ -555,3 +555,10 @@ input[type='range'] {
   letter-spacing: 0.06em;
   font-weight: normal;
 }
+
+/* ------------------------------ renown tiers ------------------------------ */
+
+.renown-tier2 {
+  border-left-color: var(--violet);
+  background: linear-gradient(90deg, rgba(168, 116, 214, 0.08), transparent 60%);
+}

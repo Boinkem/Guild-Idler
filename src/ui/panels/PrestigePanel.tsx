@@ -2,7 +2,7 @@ import { useEngine } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { PrestigeManager } from '../../game/managers/PrestigeManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
-import { PRESTIGE_MIN_LEVEL } from '../../game/data/progression';
+import { PRESTIGE_MIN_LEVEL, renownEffectiveMaxLevel } from '../../game/data/progression';
 import { describeMods } from '../../game/util';
 
 export function PrestigePanel() {
@@ -62,13 +62,21 @@ export function PrestigePanel() {
           const level = PrestigeManager.perkLevel(state, def.id);
           const cost = PrestigeManager.nextPerkCost(state, def.id);
           const maxed = cost === null;
+          const cap = renownEffectiveMaxLevel(def);
+          const inTier2 = PrestigeManager.perkInTier2(state, def.id);
+          const justUnlocked = PrestigeManager.perkTier2JustUnlocked(state, def.id);
           return (
-            <div key={def.id} className="card" style={{ marginBottom: 0 }}>
+            <div key={def.id} className={`card ${inTier2 ? 'renown-tier2' : ''}`} style={{ marginBottom: 0 }}>
               <div className="spread">
-                <span className="card-title">{def.name}</span>
-                <span className="small muted">{level}/{def.maxLevel}</span>
+                <span className="card-title">
+                  {def.name}
+                  {inTier2 && <span className="tag" style={{ color: 'var(--violet)', marginLeft: 6 }}>Tier II</span>}
+                </span>
+                <span className="small muted">{level}/{cap}</span>
               </div>
-              <p className="card-flavour">{def.description}</p>
+              <p className="card-flavour">
+                {justUnlocked && def.tier2 ? def.tier2.unlockFlavour : def.description}
+              </p>
               <div className="stat-row" style={{ marginBottom: 8 }}>
                 {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
                 {def.heroSlotsPerLevel && <span className="gold-text">+1 hero slot per level</span>}

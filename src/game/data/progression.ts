@@ -116,42 +116,59 @@ export const RENOWN_PERKS: RenownPerkDef[] = [
     id: 'renowned_skill', name: 'Renowned Skill',
     description: 'Every retired knight leaves behind hard-won technique.',
     cost: 1, costGrowth: 1.6, maxLevel: 20, modsPerLevel: { success: 3 },
+    tier2: { maxLevel: 25, startCost: 9822, costGrowth: 1.12, unlockFlavour: 'The old masters take on students of their own.' },
   },
   {
     id: 'legacy_of_wealth', name: 'Legacy of Wealth',
     description: 'The guild coffers remember better days.',
     cost: 1, costGrowth: 1.6, maxLevel: 20, modsPerLevel: { gold: 15 },
+    tier2: { maxLevel: 25, startCost: 9822, costGrowth: 1.12, unlockFlavour: 'Word of the guild reaches courts that used to ignore it.' },
   },
   {
     id: 'swift_legend', name: 'Swift Legend',
     description: 'Reputation opens gates that used to take days.',
     cost: 2, costGrowth: 1.7, maxLevel: 10, modsPerLevel: { speed: 5 },
+    tier2: { maxLevel: 13, startCost: 309, costGrowth: 1.12, unlockFlavour: 'Roads that were never built start showing up on the map.' },
   },
   {
     id: 'collectors_eye', name: "Collector's Eye",
     description: 'You know exactly what is worth carrying home.',
     cost: 2, costGrowth: 1.7, maxLevel: 12, modsPerLevel: { loot: 4 },
+    tier2: { maxLevel: 15, startCost: 891, costGrowth: 1.12, unlockFlavour: 'Things that should stay buried start feeling curious about you too.' },
   },
   {
     id: 'enduring_legend', name: 'Enduring Legend',
     description: 'Heroes trained on your legend get hurt far less.',
     cost: 2, costGrowth: 1.65, maxLevel: 10, modsPerLevel: { injuryResist: 10 },
+    tier2: { maxLevel: 13, startCost: 236, costGrowth: 1.12, unlockFlavour: 'New recruits flinch less on their first day than veterans used to on their hundredth.' },
   },
   {
     id: 'extra_banner', name: 'Extra Banner',
     description: 'A permanent additional hero slot.',
     cost: 5, costGrowth: 2.2, maxLevel: 4, modsPerLevel: {}, heroSlotsPerLevel: 1,
+    // Deliberately no tier2: hero slots stay a small, fixed number rather
+    // than scaling indefinitely — the roster is meant to stay a roster.
   },
   {
     id: 'scholars_legacy', name: "Scholar's Legacy",
     description: 'New heroes learn from every campaign that came before.',
     cost: 1, costGrowth: 1.6, maxLevel: 15, modsPerLevel: { xp: 20 },
+    tier2: { maxLevel: 19, startCost: 936, costGrowth: 1.12, unlockFlavour: 'The guild library runs out of shelf space again.' },
   },
 ];
 
 export const RENOWN_BY_ID: Record<string, RenownPerkDef> = Object.fromEntries(RENOWN_PERKS.map((p) => [p.id, p]));
 
+/** The real level ceiling for a perk, accounting for tier 2 if it has one. */
+export function renownEffectiveMaxLevel(def: RenownPerkDef): number {
+  return def.tier2?.maxLevel ?? def.maxLevel;
+}
+
 export function renownCost(def: RenownPerkDef, currentLevel: number): number {
+  if (def.tier2 && currentLevel >= def.maxLevel) {
+    const tier2Level = currentLevel - def.maxLevel;
+    return Math.max(1, Math.floor(def.tier2.startCost * Math.pow(def.tier2.costGrowth, tier2Level)));
+  }
   return Math.max(1, Math.floor(def.cost * Math.pow(def.costGrowth, currentLevel)));
 }
 

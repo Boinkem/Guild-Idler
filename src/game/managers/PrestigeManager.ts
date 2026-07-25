@@ -1,4 +1,4 @@
-import { PRESTIGE_MIN_LEVEL, RENOWN_BY_ID, RENOWN_PERKS, renownCost, renownForRetirement } from '../data/progression';
+import { PRESTIGE_MIN_LEVEL, RENOWN_BY_ID, RENOWN_PERKS, renownCost, renownEffectiveMaxLevel, renownForRetirement } from '../data/progression';
 import { GameState, Hero } from '../types';
 import { Rng } from '../rng';
 import { HeroManager } from './HeroManager';
@@ -46,15 +46,31 @@ export const PrestigeManager = {
   nextPerkCost(state: GameState, id: string): number | null {
     const def = RENOWN_BY_ID[id];
     const level = PrestigeManager.perkLevel(state, id);
-    if (!def || level >= def.maxLevel) return null;
+    if (!def || level >= renownEffectiveMaxLevel(def)) return null;
     return renownCost(def, level);
+  },
+
+  /** True once the base tier is maxed but a tier2 extension exists and isn't maxed yet. */
+  perkInTier2(state: GameState, id: string): boolean {
+    const def = RENOWN_BY_ID[id];
+    if (!def?.tier2) return false;
+    const level = PrestigeManager.perkLevel(state, id);
+    return level >= def.maxLevel && level < def.tier2.maxLevel;
+  },
+
+  /** True once the base tier is maxed and tier2 exists but hasn't been touched yet — used to surface the unlock flavour once. */
+  perkTier2JustUnlocked(state: GameState, id: string): boolean {
+    const def = RENOWN_BY_ID[id];
+    if (!def?.tier2) return false;
+    return PrestigeManager.perkLevel(state, id) === def.maxLevel;
   },
 
   buyPerk(state: GameState, id: string): string | null {
     const def = RENOWN_BY_ID[id];
     if (!def) return 'Unknown perk.';
     const level = PrestigeManager.perkLevel(state, id);
-    if (level >= def.maxLevel) return 'Already at maximum.';
+    const cap = renownEffectiveMaxLevel(def);
+    if (level >= cap) return 'Already at maximum.';
     const cost = renownCost(def, level);
     if (state.renown < cost) return 'Not enough Heroic Renown.';
     state.renown -= cost;
