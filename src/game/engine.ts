@@ -199,6 +199,35 @@ export class GameEngine {
     return this.state.heroes[0];
   }
 
+  /**
+   * The hero the desktop companion shows. Follows whoever was most recently
+   * sent on a quest (set by startQuest below), falling back to heroes[0] if
+   * that hero no longer exists — e.g. after a hard reset.
+   */
+  get displayedHero(): Hero {
+    const focused = this.state.focusedHeroId
+      ? this.state.heroes.find((h) => h.id === this.state.focusedHeroId)
+      : undefined;
+    return focused ?? this.state.heroes[0];
+  }
+
+  /** Manually focus a specific hero, e.g. from the Heroes panel or the widget's cycle arrows. */
+  setFocusedHero(heroId: string) {
+    if (!this.state.heroes.some((h) => h.id === heroId)) return;
+    this.state.focusedHeroId = heroId;
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Cycles the companion to the next (or previous) hero in roster order. */
+  cycleFocusedHero(direction: 1 | -1 = 1) {
+    const heroes = this.state.heroes;
+    if (heroes.length <= 1) return;
+    const currentIndex = heroes.findIndex((h) => h.id === this.displayedHero.id);
+    const nextIndex = (currentIndex + direction + heroes.length) % heroes.length;
+    this.setFocusedHero(heroes[nextIndex].id);
+  }
+
   /** What the corner sprite should be doing right now. */
   get companionStatus(): 'idle' | 'questing' | 'injured' | 'ready' {
     const heroes = this.state.heroes;
@@ -215,6 +244,7 @@ export class GameEngine {
     if (!hero) return;
     const { error } = QuestManager.start(this.state, hero, offer, consumables, Date.now());
     if (error) return this.say(error);
+    this.state.focusedHeroId = heroId;
     this.say(`${hero.name} sets out: ${offer.name}`);
     void this.saveNow();
   }

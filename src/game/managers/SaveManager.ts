@@ -76,6 +76,7 @@ export function createInitialState(now = Date.now()): GameState {
     log: [],
     discoveredItems: [],
     unlockedSkins: ['original'],
+    focusedHeroId: null,
   };
 }
 
@@ -129,6 +130,11 @@ const MIGRATIONS: Record<number, Migration> = {
     // this migration just carries the save forward to the new version.
     return { ...save, version: 5 };
   },
+  5: (save) => ({
+    ...save,
+    version: 6,
+    focusedHeroId: (save.focusedHeroId as string | null | undefined) ?? null,
+  }),
 };
 
 export const SaveManager = {

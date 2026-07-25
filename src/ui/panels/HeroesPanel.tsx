@@ -40,6 +40,15 @@ export function HeroesPanel() {
                   <span className="card-title">{hero.name}</span>
                   <span className="small muted">{classDef.name} · Level {hero.level}</span>
                 </div>
+                <button
+                  className={`chip ${engine.displayedHero.id === hero.id ? 'on' : ''}`}
+                  style={{ marginTop: 4 }}
+                  onClick={() => engine.setFocusedHero(hero.id)}
+                  disabled={engine.displayedHero.id === hero.id}
+                  title="Shows this hero on the desktop companion"
+                >
+                  {engine.displayedHero.id === hero.id ? '● Showing on desktop' : 'Show on desktop'}
+                </button>
                 <p className="card-flavour">{classDef.blurb}</p>
 
                 <div className="small muted" style={{ marginBottom: 3 }}>

@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -301,4 +301,11 @@ export interface GameState {
   discoveredItems: string[];
   /** Skins the guild has purchased; usable by any hero of that class. */
   unlockedSkins: string[];
+  /**
+   * Which hero the desktop companion shows. Updates automatically whenever a
+   * hero is sent on a quest (so departures are always visible), and can be
+   * changed manually by cycling on the widget or picking in the Heroes panel.
+   * Null falls back to heroes[0].
+   */
+  focusedHeroId: string | null;
 }

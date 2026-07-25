@@ -509,3 +509,31 @@ input[type='range'] {
 .skin-chip:disabled { opacity: 0.4; }
 .skin-dots { display: inline-flex; gap: 2px; }
 .skin-dots span { width: 9px; height: 9px; border: 1px solid var(--edge); }
+
+/* -------------------------------- carousel -------------------------------- */
+
+.hero-carousel {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.carousel-arrow {
+  background: none;
+  border: none;
+  box-shadow: none;
+  min-height: 0;
+  padding: 4px 2px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--muted);
+  opacity: 0.55;
+  transition: opacity 90ms linear, color 90ms linear;
+}
+.carousel-arrow:hover {
+  background: none;
+  opacity: 1;
+  color: var(--brass);
+  transform: none;
+}
