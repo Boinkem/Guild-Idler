@@ -140,6 +140,14 @@ export const DENSITY_PADDING: Record<Settings['density'], string> = {
   comfortable: '14px 18px',
 };
 
+/** Numeric multiplier for gaps, button padding, and section spacing — density
+ * used to only touch .card padding, which was too narrow to actually notice. */
+export const DENSITY_SCALE: Record<Settings['density'], number> = {
+  compact: 0.7,
+  cozy: 1,
+  comfortable: 1.35,
+};
+
 /* ------------------------------- persistence ------------------------------ */
 
 const KEY = 'little-knight-settings';
@@ -189,6 +197,7 @@ export const SettingsStore = {
     root.style.setProperty('--font-scale', String(settings.fontScale));
     root.style.setProperty('--sprite-scale', String(settings.spriteScale));
     root.style.setProperty('--card-pad', DENSITY_PADDING[settings.density]);
+    root.style.setProperty('--density-scale', String(DENSITY_SCALE[settings.density]));
 
     const motion = settings.reduceMotion ? 0 : settings.animationSpeed;
     root.style.setProperty('--anim-speed', String(motion));

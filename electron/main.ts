@@ -189,9 +189,15 @@ ipcMain.handle('window:setMode', (_e, mode: 'idle' | 'menu') => {
     // to return to later regardless of where the menu window gets dragged.
     const [x, y] = win.getPosition();
     idleBounds = { x, y };
-    const anchorX = x + IDLE_SIZE.width;
-    const anchorY = y + IDLE_SIZE.height;
-    const pos = clampToWorkArea(anchorX - MENU_SIZE.width, anchorY - MENU_SIZE.height, MENU_SIZE.width, MENU_SIZE.height);
+    // The guild menu opens centred on screen rather than anchored to the
+    // companion's corner — confirmed as the preferred default: the hero stays
+    // put bottom-right, but the menu is a separate, larger surface that reads
+    // better centred than sprouting from a corner.
+    const { workArea } = screen.getPrimaryDisplay();
+    const pos = {
+      x: Math.round(workArea.x + (workArea.width - MENU_SIZE.width) / 2),
+      y: Math.round(workArea.y + (workArea.height - MENU_SIZE.height) / 2),
+    };
     win.setBounds({ ...pos, ...MENU_SIZE }, false);
   } else {
     // Always return to the saved home position, never wherever the menu

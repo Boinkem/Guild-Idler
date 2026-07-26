@@ -465,7 +465,7 @@ function renderPatches() {
       <input type="text" id="commitMsg" placeholder="Commit message"
         value="${sel ? escapeHtml('Apply ' + sel.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ')) : ''}"
         style="flex:1; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
-      <button id="commitBtn" class="primary" ${!patchState.applied ? 'disabled' : ''}>Commit</button>
+      <button id="commitBtn" class="primary" ${gs?.clean !== false ? 'disabled' : ''}>Commit</button>
     </div>
     <div id="commitResult"></div>
 

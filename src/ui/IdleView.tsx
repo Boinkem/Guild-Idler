@@ -7,6 +7,11 @@ import { formatDuration, formatGold } from '../game/util';
 
 type Anim = 'idle' | 'walking' | 'departing' | 'returning';
 
+/** A quest needs to run at least this long for a mid-quest attack flash to be
+ * worth scheduling — a 5-minute quest would be over before it read clearly. */
+const MIN_DURATION_FOR_FLASH_MS = 20 * 60 * 1000;
+const ATTACK_VARIANTS: HeroAnimation[] = ['attack_1', 'attack_2', 'attack_3'];
+
 export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
   const engine = useEngine();
   const now = useNow();
@@ -15,6 +20,8 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
   const quest = engine.activeQuestFor(hero.id);
   const [anim, setAnim] = useState<Anim>(quest ? 'walking' : 'idle');
   const [locked, setLocked] = useState(true);
+  const [flashAttack, setFlashAttack] = useState<HeroAnimation | null>(null);
+  const [floatingText, setFloatingText] = useState<{ gold: number; xp: number; key: number } | null>(null);
 
   useEffect(() => {
     void window.littleKnight?.getLocked().then((v) => setLocked(v ?? true));
@@ -54,15 +61,59 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
     return () => window.clearTimeout(id);
   }, [hero.id, quest?.id]);
 
+  // A brief attack animation partway through a long enough quest — pure
+  // flavour, timed once per quest at a random point so it doesn't feel
+  // metronomic across many quests in a row.
+  const flashTimers = useRef<{ start: number | null; end: number | null }>({ start: null, end: null });
+  useEffect(() => {
+    setFlashAttack(null);
+    if (!quest) return undefined;
+    const duration = quest.endsAt - quest.startedAt;
+    if (duration < MIN_DURATION_FOR_FLASH_MS) return undefined;
+
+    const flashAt = duration * (0.35 + Math.random() * 0.3); // 35%-65% through
+    flashTimers.current.start = window.setTimeout(() => {
+      setFlashAttack(ATTACK_VARIANTS[Math.floor(Math.random() * ATTACK_VARIANTS.length)]);
+      flashTimers.current.end = window.setTimeout(() => setFlashAttack(null), 1800);
+    }, flashAt);
+
+    return () => {
+      if (flashTimers.current.start) window.clearTimeout(flashTimers.current.start);
+      if (flashTimers.current.end) window.clearTimeout(flashTimers.current.end);
+      flashTimers.current = { start: null, end: null };
+    };
+  }, [quest?.id]);
+
+  // A floating "+XP / +Gold" moment whenever a new result comes in — visible
+  // even with the menu closed, since the idle companion is the one surface
+  // that's always on screen. Keyed by questId so re-renders don't re-trigger.
+  const lastResultId = useRef<string | null>(null);
+  useEffect(() => {
+    const result = engine.lastResult;
+    if (!result || result.questId === lastResultId.current) return;
+    lastResultId.current = result.questId;
+    if (result.gold > 0 || result.xp > 0) {
+      setFloatingText({ gold: result.gold, xp: result.xp, key: Date.now() });
+      const id = window.setTimeout(() => setFloatingText(null), 2200);
+      return () => window.clearTimeout(id);
+    }
+    return undefined;
+  }, [engine.lastResult]);
+
   const questsReady = engine.state.questBoard.length;
   const injured = hero.injuries.length > 0;
 
   const spriteAnimation: HeroAnimation =
-    anim === 'departing' ? 'run'
-      : anim === 'walking' ? 'walk'
-        : anim === 'returning' ? 'walk'
-          : injured ? 'hurt'
-            : 'idle';
+    flashAttack && (anim === 'walking')
+      ? flashAttack
+      : anim === 'departing' ? 'run'
+        : anim === 'walking' ? 'walk'
+          : anim === 'returning' ? 'walk'
+            : injured ? 'hurt'
+              : 'idle';
+
+  // Faces away heading out, faces back (mirrored) coming home.
+  const facingReturn = anim === 'returning';
 
   const status = quest
     ? `${quest.offer.name} — ${formatDuration(quest.endsAt - now)} left`
@@ -109,9 +160,16 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
               heroClass={hero.heroClass}
               skin={hero.skin}
               animation={spriteAnimation}
+              flip={facingReturn}
               height={Math.round(120 * settings.spriteScale)}
               title={`${hero.title ? hero.title + ' ' : ''}${hero.name}, level ${hero.level}`}
             />
+            {floatingText && (
+              <div className="floating-reward" key={floatingText.key}>
+                {floatingText.xp > 0 && <span className="floating-xp">+{floatingText.xp} XP</span>}
+                {floatingText.gold > 0 && <span className="floating-gold">+{floatingText.gold} gold</span>}
+              </div>
+            )}
           </button>
 
           {others.length > 0 && (
