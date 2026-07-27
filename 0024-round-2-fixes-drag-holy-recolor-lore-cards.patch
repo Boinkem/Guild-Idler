@@ -1,0 +1,996 @@
+From c9dd37e04dcb122bbad864b3b23d5db54760f9a5 Mon Sep 17 00:00:00 2001
+From: Dev <dev@example.com>
+Date: Mon, 27 Jul 2026 12:09:53 +0000
+Subject: [PATCH] Round 2 fixes: drag region, samurai offset, Holy recolor,
+ daylight default
+
+- Fixed the modern-style pill radius clipping quest card text: it was
+  applying the small-chip 999px pill to whole cards, not just chips/tags
+  (app.css).
+- Fixed drag-to-move for real this time: the sprite button itself was still
+  force-set to no-drag even when unlocked, so there was nothing to actually
+  grab. It's now part of the drag region; Chromium still treats a
+  no-movement mousedown/up as a click, so opening the menu still works
+  (app.css).
+- Samurai offset increased and now applies only to the idle pose -- the
+  crop box is shared across all 10 animations (deliberately, so switching
+  animations doesn't resize/re-anchor the sprite), and idle sits in the
+  upper-left of a box sized for wider action poses (HeroSprite.tsx).
+- Rewrote the Holy skin's recolor theme: was desaturating to 45% and
+  routing half the pixels to a cool blue secondary hue -- now both hues
+  stay in the warm gold/ivory family with saturation and lightness both
+  raised (tools/import_characters.py). Regenerate the art to see it:
+  python3 tools/import_characters.py --src <packs> --out public/heroes
+- Daylight is now the default theme (settings.ts).
+- Quest board cards and Lore entries now use the same condensed
+  summary-row + click-to-expand pattern as hero cards, instead of the
+  quest popout modal from the last patch (QuestPanel.tsx, LorePanel.tsx).
+- Quest result modal no longer says 'Good work' on a failed quest -- the
+  button reads 'Understood' instead (QuestResultModal.tsx).
+- Guild Hall facility upgrades were the one purchase path missing the
+  'purchase' sound cue every other buy action has (engine.ts). Also wired
+  facilities into the same max-flash treatment as upgrades/vendors, and
+  extracted that into a shared src/ui/maxFlash.tsx instead of duplicating
+  it (GuildPanel.tsx, UpgradesPanel.tsx).
+- The 9-class hero roster genuinely can fit in the max slot count (1 base +
+  5 Tavern + 4 Extra Banner = 10), but Extra Banner is a Prestige/renown
+  perk, not a regular upgrade -- it requires retiring a level-30+ hero
+  first. Recruit cards and the blocked-banner now say so explicitly
+  instead of silently disabling with a misleading 'Recruit' label
+  (HeroesPanel.tsx).
+- Reworked the Crow's Warning and Proving the Bastion chain intros: the
+  former now names 'the cure' explicitly so the latter's callback to it
+  isn't ambiguous, and both read less awkwardly (quests.ts).
+---
+ src/game/data/quests.ts         |  13 +-
+ src/game/engine.ts              |   1 +
+ src/game/settings.ts            |   2 +-
+ src/styles/app.css              |  38 ++++--
+ src/ui/QuestResultModal.tsx     |   4 +-
+ src/ui/maxFlash.tsx             |  83 +++++++++++++
+ src/ui/panels/GuildPanel.tsx    |  13 +-
+ src/ui/panels/HeroesPanel.tsx   |  13 +-
+ src/ui/panels/LorePanel.tsx     | 211 +++++++++++++++++++-------------
+ src/ui/panels/QuestPanel.tsx    | 160 ++++++++----------------
+ src/ui/panels/UpgradesPanel.tsx |  84 +------------
+ src/ui/sprites/HeroSprite.tsx   |  22 ++--
+ tools/import_characters.py      |   9 +-
+ 13 files changed, 342 insertions(+), 311 deletions(-)
+ create mode 100644 src/ui/maxFlash.tsx
+
+diff --git a/src/game/data/quests.ts b/src/game/data/quests.ts
+index 6931498..7c06a7c 100644
+--- a/src/game/data/quests.ts
++++ b/src/game/data/quests.ts
+@@ -156,8 +156,10 @@ export const QUEST_CHAINS: ChainDef[] = [
+     id: 'crows_warning',
+     name: "The Crow's Warning",
+     description:
+-      'Smoke over Thornhollow, and something worse than raiders. A crow that will not stop ' +
+-      'following you may be the only reason anyone survives what comes next.',
++      "Thornhollow isn't burned, it's been searched — room by room, like whatever hit it wanted " +
++      'something specific. Whoever it bit is not staying human for long, and there is no cure ' +
++      'in the town to slow it down. A crow that will not stop following you might be the only ' +
++      'reason one reaches Thornhollow in time.',
+     reqLevel: 8,
+     rewardGold: 900,
+     rewardItems: ['crow_feather_charm'],
+@@ -230,9 +232,10 @@ export const QUEST_CHAINS: ChainDef[] = [
+     id: 'proving_the_bastion',
+     name: 'Proving the Bastion',
+     description:
+-      "The cure reached IronRest Bastion intact, and Captain Maeryn Thorne has not forgotten " +
+-      'it. She is short on officers she can spare and long on work that needs doing. Prove ' +
+-      'useful enough, and she has bigger work in mind.',
++      'The Thornhollow cure reached IronRest Bastion exactly as promised, carried the last leg ' +
++      'by the same guild that ran the vials there in the first place. Captain Maeryn Thorne ' +
++      'does not forget a debt like that — and she is long on work that needs trustworthy ' +
++      'hands. Prove useful enough, and she has bigger work in mind.',
+     reqLevel: 16,
+     rewardGold: 3800,
+     rewardItems: ['wardens_signet'],
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index ee335d1..909522a 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -583,6 +583,7 @@ export class GameEngine {
+   upgradeFacility(id: Parameters<typeof GuildManager.upgradeFacility>[1]) {
+     const error = GuildManager.upgradeFacility(this.state, id);
+     if (error) return this.say(error);
++    playSound('purchase');
+     this.notify();
+     void this.saveNow();
+   }
+diff --git a/src/game/settings.ts b/src/game/settings.ts
+index 96e4e71..0360f29 100644
+--- a/src/game/settings.ts
++++ b/src/game/settings.ts
+@@ -70,7 +70,7 @@ export const DEFAULT_SETTINGS: Settings = {
+   fontScale: 1.35,
+   spriteScale: 1,
+   density: 'cozy',
+-  theme: 'candlelit',
++  theme: 'daylight',
+   styleId: 'adventure',
+   animationSpeed: 1,
+   offlineReportOnLaunch: true,
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 9d00906..f6d81be 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -100,18 +100,30 @@ button:focus-visible, [tabindex]:focus-visible {
+  * .idle-stage covers almost the entire visible companion (sprite, plate,
+  * status text), so it has to opt back into "drag" itself when unlocked, or
+  * there is nothing left to grab -- the 6px of outer padding alone is not
+- * enough to reliably click. Buttons inside stay clickable because they get
+- * their own no-drag below, which wins over the drag region they sit inside.
++ * enough to reliably click.
++ *
++ * .knight-button (the sprite itself) is deliberately INCLUDED in the drag
++ * region here, not excluded -- Chromium still fires its onClick on a plain
++ * mouse-down/up with no movement, and only treats it as a window drag once
++ * the cursor actually moves, so "click the knight to open the guild" and
++ * "click-and-drag the knight to move the window" both keep working. This
++ * was the actual bug: an earlier version blanket-applied no-drag to every
++ * button, which included the knight and made the sprite itself the one
++ * thing in this window you couldn't grab.
++ *
++ * The small utility controls (lock/hide/open-guild, carousel arrows) stay
++ * no-drag on purpose, since those are meant to be pure clicks even mid-drag.
+  */
+ .idle-root.unlocked,
+ .idle-root.unlocked .idle-stage,
+ .idle-root.unlocked .idle-plate,
+ .idle-root.unlocked .idle-status,
+-.idle-root.unlocked .knight-shadow {
++.idle-root.unlocked .knight-shadow,
++.idle-root.unlocked .knight-button {
+   -webkit-app-region: drag;
+ }
+-.idle-root.unlocked button,
+-.idle-root.unlocked .hero-carousel {
++.idle-root.unlocked .idle-actions button,
++.idle-root.unlocked .carousel-arrow {
+   -webkit-app-region: no-drag;
+ }
+ 
+@@ -878,12 +890,11 @@ input[type='range'] {
+   border-top: 1px solid var(--panel-3);
+ }
+ 
+-/* -------------------------------- quest popout ------------------------------ */
++/* --------------------------- quest board cards ------------------------------ */
++/* Condensed by default, same click-to-expand pattern as hero cards -- only
++   the title/tag header row is the toggle, so it doesn't fight the Send
++   button's own click. */
+ 
+-.quest-card {
+-  cursor: pointer;
+-}
+-.quest-card:hover { border-left-color: var(--brass); }
+ .quest-popout-loot { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+ 
+ /* ============================================================================
+@@ -919,6 +930,12 @@ input[type='range'] {
+   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+ }
+ 
++/*
++ * Full "pill" (999px) is only for small, single-line controls. A whole card
++ * -- quest-card included -- is not a pill; it went in here once and the
++ * stadium curve on a tall rectangle clipped the text in its own corners.
++ * Cards get the modest 16px radius above instead, same as every other card.
++ */
+ [data-style='modern'] .tag,
+ [data-style='modern'] .chip,
+ [data-style='modern'] .skin-chip,
+@@ -926,7 +943,6 @@ input[type='range'] {
+ [data-style='modern'] .toast,
+ [data-style='modern'] .idle-plate,
+ [data-style='modern'] .hero-card-expand,
+-[data-style='modern'] .quest-card,
+ [data-style='modern'] .vendor-tabs button,
+ [data-style='modern'] .tabs button {
+   border-radius: 999px;
+diff --git a/src/ui/QuestResultModal.tsx b/src/ui/QuestResultModal.tsx
+index 2b568cc..322909d 100644
+--- a/src/ui/QuestResultModal.tsx
++++ b/src/ui/QuestResultModal.tsx
+@@ -75,7 +75,9 @@ export function QuestResultModal() {
+         )}
+ 
+         <div className="row end" style={{ marginTop: 12 }}>
+-          <button className="btn-primary" onClick={() => engine.dismissResult()}>Good work</button>
++          <button className="btn-primary" onClick={() => engine.dismissResult()}>
++            {result.success ? 'Good work' : 'Understood'}
++          </button>
+         </div>
+       </div>
+     </div>
+diff --git a/src/ui/maxFlash.tsx b/src/ui/maxFlash.tsx
+new file mode 100644
+index 0000000..614c398
+--- /dev/null
++++ b/src/ui/maxFlash.tsx
+@@ -0,0 +1,83 @@
++import { useEffect, useRef, useState } from 'react';
++import type { CSSProperties } from 'react';
++
++/**
++ * Shared "Fully upgraded X" card flash -- stars poof up and out, then fade.
++ * Used by anything with a level cap: permanent upgrades, vendor levels, and
++ * Guild Hall facilities. Extracted here rather than duplicated per panel.
++ */
++
++const STAR_BURST: { dx: number; dy: number; rot: number }[] = [
++  { dx: 0, dy: -36, rot: -12 },
++  { dx: 27, dy: -24, rot: 16 },
++  { dx: 36, dy: 3, rot: -20 },
++  { dx: 23, dy: 30, rot: 24 },
++  { dx: -4, dy: 36, rot: -9 },
++  { dx: -29, dy: 23, rot: 18 },
++  { dx: -36, dy: -4, rot: -22 },
++  { dx: -21, dy: -29, rot: 13 },
++];
++
++export function MaxFlash({ label, onDone }: { label: string; onDone: () => void }) {
++  useEffect(() => {
++    const id = window.setTimeout(onDone, 1400);
++    return () => window.clearTimeout(id);
++  }, [onDone]);
++
++  return (
++    <div className="max-flash-layer" aria-hidden="true">
++      <span className="max-flash-text">Fully upgraded — {label}</span>
++      {STAR_BURST.map((s, i) => (
++        <span
++          key={i}
++          className="max-flash-star"
++          style={{ '--dx': `${s.dx}px`, '--dy': `${s.dy}px`, '--rot': `${s.rot}deg`, animationDelay: `${i * 25}ms` } as CSSProperties}
++        >
++          ★
++        </span>
++      ))}
++    </div>
++  );
++}
++
++export interface FlashTarget { id: string; name: string; level: number; maxLevel: number }
++
++/** Fires a one-off flash the moment any tracked item's level first reaches
++ * its cap -- not on mount, so opening the panel on an already-maxed item
++ * doesn't replay it. */
++export function useMaxFlash(items: FlashTarget[]) {
++  const prevRef = useRef<Record<string, number> | null>(null);
++  const [flashes, setFlashes] = useState<Record<string, { name: string; key: number }>>({});
++
++  const signature = items.map((i) => `${i.id}:${i.level}`).join('|');
++  useEffect(() => {
++    const prev = prevRef.current;
++    const next: Record<string, number> = {};
++    const newlyMaxed: FlashTarget[] = [];
++    for (const item of items) {
++      next[item.id] = item.level;
++      const before = prev?.[item.id];
++      if (prev && item.level >= item.maxLevel && before !== undefined && before < item.maxLevel) {
++        newlyMaxed.push(item);
++      }
++    }
++    prevRef.current = next;
++    if (newlyMaxed.length > 0) {
++      setFlashes((cur) => {
++        const merged = { ...cur };
++        for (const item of newlyMaxed) merged[item.id] = { name: item.name, key: Date.now() + Math.random() };
++        return merged;
++      });
++    }
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [signature]);
++
++  const dismiss = (id: string) => setFlashes((cur) => {
++    if (!(id in cur)) return cur;
++    const rest = { ...cur };
++    delete rest[id];
++    return rest;
++  });
++
++  return { flashes, dismiss };
++}
+diff --git a/src/ui/panels/GuildPanel.tsx b/src/ui/panels/GuildPanel.tsx
+index 7c734f6..1050a7d 100644
+--- a/src/ui/panels/GuildPanel.tsx
++++ b/src/ui/panels/GuildPanel.tsx
+@@ -4,11 +4,20 @@ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { CHAIN_BY_ID } from '../../game/managers/QuestManager';
+ import { QUEST_CHAINS } from '../../game/data/quests';
+ import { describeMods, formatGold } from '../../game/util';
++import { MaxFlash, useMaxFlash } from '../maxFlash';
+ 
+ export function GuildPanel() {
+   const engine = useEngine();
+   const state = engine.state;
+ 
++  const facilities = GuildManager.facilities();
++  const { flashes, dismiss } = useMaxFlash(
++    facilities.map((def) => ({
++      id: def.id, name: def.name,
++      level: GuildManager.facilityLevel(state, def.id), maxLevel: def.maxLevel,
++    })),
++  );
++
+   return (
+     <>
+       <h2>Guild Hall</h2>
+@@ -18,10 +27,11 @@ export function GuildPanel() {
+       </p>
+ 
+       <div className="grid two">
+-        {GuildManager.facilities().map((def) => {
++        {facilities.map((def) => {
+           const level = GuildManager.facilityLevel(state, def.id);
+           const cost = GuildManager.nextCost(state, def.id);
+           const maxed = cost === null;
++          const flash = flashes[def.id];
+           return (
+             <div key={def.id} className="card" style={{ marginBottom: 0 }}>
+               <div className="spread">
+@@ -41,6 +51,7 @@ export function GuildPanel() {
+               >
+                 {maxed ? 'Fully built' : `Build · ${formatGold(cost)}`}
+               </button>
++              {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
+             </div>
+           );
+         })}
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index d702449..1eb18fc 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -204,13 +204,18 @@ export function HeroesPanel() {
+ 
+       <div className="section-heading">Recruit</div>
+       {state.heroes.length >= slots && (
+-        <p className="small muted">No free slots. Upgrade the Tavern, or buy an Extra Banner with renown.</p>
++        <p className="small muted">
++          No free slots. The Tavern adds one per level up to 5; beyond that, retire a hero at
++          level 30+ in the Prestige tab for Heroic Renown, then spend it on Extra Banner
++          (up to 4 more) — {slots} is not necessarily your ceiling.
++        </p>
+       )}
+       <div className="grid three">
+         {(Object.keys(HERO_CLASSES) as HeroClass[]).map((id) => {
+           const def = HERO_CLASSES[id];
+           const unlocked = recruitable.includes(id);
+           const cost = RECRUIT_COST[id];
++          const slotsFull = state.heroes.length >= slots;
+           return (
+             <div key={id} className="card" style={{ marginBottom: 0 }}>
+               <div className="card-title">{def.name}</div>
+@@ -220,10 +225,12 @@ export function HeroesPanel() {
+               </div>
+               <button
+                 className="btn-primary"
+-                disabled={!unlocked || state.gold < cost || state.heroes.length >= slots}
++                disabled={!unlocked || state.gold < cost || slotsFull}
+                 onClick={() => engine.recruit(id)}
+               >
+-                {unlocked ? `Recruit · ${formatGold(cost)}` : `Tavern level ${def.unlockTavernLevel}`}
++                {!unlocked
++                  ? `Tavern level ${def.unlockTavernLevel}`
++                  : slotsFull ? 'No free slots' : `Recruit · ${formatGold(cost)}`}
+               </button>
+             </div>
+           );
+diff --git a/src/ui/panels/LorePanel.tsx b/src/ui/panels/LorePanel.tsx
+index 15b5791..35655c7 100644
+--- a/src/ui/panels/LorePanel.tsx
++++ b/src/ui/panels/LorePanel.tsx
+@@ -1,88 +1,123 @@
+-import { useEngine } from '../useEngine';
+-import { QUEST_CHAINS, ChainDef } from '../../game/data/quests';
+-
+-function CompletedEntry({ chain }: { chain: ChainDef }) {
+-  return (
+-    <div className="card lore-card lore-completed">
+-      <div className="spread">
+-        <span className="card-title">{chain.name}</span>
+-        <span className="tiny gold-text">Lv {chain.reqLevel}</span>
+-      </div>
+-      {chain.title && <p className="tiny muted" style={{ margin: '2px 0 8px' }}>Grants the title "{chain.title}"</p>}
+-      <p className="card-flavour">{chain.epilogue ?? chain.description}</p>
+-      <details>
+-        <summary className="tiny muted">How it went</summary>
+-        <ol className="lore-stage-list">
+-          {chain.stages.map((s) => (
+-            <li key={s.name}>
+-              <b>{s.name}.</b> <span className="muted">{s.flavour}</span>
+-            </li>
+-          ))}
+-        </ol>
+-      </details>
+-    </div>
+-  );
+-}
+-
+-function InProgressEntry({ chain, stage }: { chain: ChainDef; stage: number }) {
+-  return (
+-    <div className="card lore-card lore-in-progress">
+-      <div className="spread">
+-        <span className="card-title">{chain.name}</span>
+-        <span className="tiny muted">{stage}/{chain.stages.length}</span>
+-      </div>
+-      <p className="card-flavour">{chain.description}</p>
+-      <ol className="lore-stage-list">
+-        {chain.stages.slice(0, stage).map((s) => (
+-          <li key={s.name}><b>{s.name}.</b> <span className="muted">{s.flavour}</span></li>
+-        ))}
+-        {stage < chain.stages.length && <li className="muted">The story isn't finished yet...</li>}
+-      </ol>
+-    </div>
+-  );
+-}
+-
+-export function LorePanel() {
+-  const engine = useEngine();
+-  const state = engine.state;
+-
+-  const completed = QUEST_CHAINS
+-    .filter((c) => state.completedChains.includes(c.id))
+-    .sort((a, b) => a.reqLevel - b.reqLevel);
+-
+-  const inProgress = state.activeChains
+-    .map((ac) => ({ active: ac, chain: QUEST_CHAINS.find((c) => c.id === ac.chainId) }))
+-    .filter((x): x is { active: typeof state.activeChains[number]; chain: ChainDef } => !!x.chain)
+-    .sort((a, b) => a.chain.reqLevel - b.chain.reqLevel);
+-
+-  const discoveredIds = new Set([...completed.map((c) => c.id), ...inProgress.map((x) => x.chain.id)]);
+-  const undiscovered = QUEST_CHAINS.length - discoveredIds.size;
+-
+-  return (
+-    <>
+-      <h2>Lore</h2>
+-      <p className="subtitle">Every contract tells a small story. This is the guild's record of the ones worth remembering.</p>
+-
+-      {inProgress.length > 0 && (
+-        <>
+-          <div className="section-heading">Still unfolding</div>
+-          {inProgress.map(({ active, chain }) => (
+-            <InProgressEntry key={chain.id} chain={chain} stage={active.stage} />
+-          ))}
+-        </>
+-      )}
+-
+-      <div className="section-heading">Completed</div>
+-      {completed.length === 0 && (
+-        <p className="small muted">No chapters finished yet. Contracts on the board sometimes lead somewhere bigger — keep an eye out.</p>
+-      )}
+-      {completed.map((chain) => <CompletedEntry key={chain.id} chain={chain} />)}
+-
+-      {undiscovered > 0 && (
+-        <p className="tiny muted" style={{ marginTop: 12 }}>
+-          {undiscovered} more {undiscovered === 1 ? 'story' : 'stories'} out there, waiting to be found.
+-        </p>
+-      )}
+-    </>
+-  );
+-}
++import { useState } from 'react';
++import type { MouseEvent } from 'react';
++import { QUEST_CHAINS, ChainDef } from '../../game/data/quests';
++import { useEngine } from '../useEngine';
++
++/** Shared summary/expand toggle button, matching the Heroes tab pattern. */
++function ExpandToggle({ open, onClick }: { open: boolean; onClick: (e: MouseEvent) => void }) {
++  return (
++    <button className="btn-ghost hero-card-expand" onClick={onClick}>
++      {open ? 'Less ▲' : 'More ▼'}
++    </button>
++  );
++}
++
++function CompletedEntry({ chain }: { chain: ChainDef }) {
++  const [open, setOpen] = useState(false);
++  return (
++    <div className="card lore-card lore-completed">
++      <div
++        className="spread hero-card-summary"
++        onClick={() => setOpen((v) => !v)}
++        role="button"
++        tabIndex={0}
++        aria-expanded={open}
++        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
++      >
++        <span className="card-title hero-card-name">{chain.name}</span>
++        <span className="tiny gold-text">Lv {chain.reqLevel}</span>
++      </div>
++      {!open && chain.title && <p className="tiny muted" style={{ margin: '4px 0 0' }}>Grants the title "{chain.title}"</p>}
++      {open && (
++        <div className="hero-card-details">
++          {chain.title && <p className="tiny muted" style={{ margin: '0 0 8px' }}>Grants the title "{chain.title}"</p>}
++          <p className="card-flavour">{chain.epilogue ?? chain.description}</p>
++          <ol className="lore-stage-list">
++            {chain.stages.map((s) => (
++              <li key={s.name}>
++                <b>{s.name}.</b> <span className="muted">{s.flavour}</span>
++              </li>
++            ))}
++          </ol>
++        </div>
++      )}
++      <ExpandToggle open={open} onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} />
++    </div>
++  );
++}
++
++function InProgressEntry({ chain, stage }: { chain: ChainDef; stage: number }) {
++  const [open, setOpen] = useState(false);
++  return (
++    <div className="card lore-card lore-in-progress">
++      <div
++        className="spread hero-card-summary"
++        onClick={() => setOpen((v) => !v)}
++        role="button"
++        tabIndex={0}
++        aria-expanded={open}
++        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
++      >
++        <span className="card-title hero-card-name">{chain.name}</span>
++        <span className="tiny muted">{stage}/{chain.stages.length}</span>
++      </div>
++      {open && (
++        <div className="hero-card-details">
++          <p className="card-flavour">{chain.description}</p>
++          <ol className="lore-stage-list">
++            {chain.stages.slice(0, stage).map((s) => (
++              <li key={s.name}><b>{s.name}.</b> <span className="muted">{s.flavour}</span></li>
++            ))}
++            {stage < chain.stages.length && <li className="muted">The story isn't finished yet...</li>}
++          </ol>
++        </div>
++      )}
++      <ExpandToggle open={open} onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} />
++    </div>
++  );
++}
++
++export function LorePanel() {
++  const engine = useEngine();
++  const state = engine.state;
++
++  const completed = QUEST_CHAINS
++    .filter((c) => state.completedChains.includes(c.id))
++    .sort((a, b) => a.reqLevel - b.reqLevel);
++
++  const inProgress = state.activeChains
++    .map((ac) => ({ active: ac, chain: QUEST_CHAINS.find((c) => c.id === ac.chainId) }))
++    .filter((x): x is { active: typeof state.activeChains[number]; chain: ChainDef } => !!x.chain)
++    .sort((a, b) => a.chain.reqLevel - b.chain.reqLevel);
++
++  const discoveredIds = new Set([...completed.map((c) => c.id), ...inProgress.map((x) => x.chain.id)]);
++  const undiscovered = QUEST_CHAINS.length - discoveredIds.size;
++
++  return (
++    <>
++      <h2>Lore</h2>
++      <p className="subtitle">Every contract tells a small story. This is the guild's record of the ones worth remembering.</p>
++
++      {inProgress.length > 0 && (
++        <>
++          <div className="section-heading">Still unfolding</div>
++          {inProgress.map(({ active, chain }) => (
++            <InProgressEntry key={chain.id} chain={chain} stage={active.stage} />
++          ))}
++        </>
++      )}
++
++      <div className="section-heading">Completed</div>
++      {completed.length === 0 && (
++        <p className="small muted">No chapters finished yet. Contracts on the board sometimes lead somewhere bigger — keep an eye out.</p>
++      )}
++      {completed.map((chain) => <CompletedEntry key={chain.id} chain={chain} />)}
++
++      {undiscovered > 0 && (
++        <p className="tiny muted" style={{ marginTop: 12 }}>
++          {undiscovered} more {undiscovered === 1 ? 'story' : 'stories'} out there, waiting to be found.
++        </p>
++      )}
++    </>
++  );
++}
+diff --git a/src/ui/panels/QuestPanel.tsx b/src/ui/panels/QuestPanel.tsx
+index ee30e55..39c6900 100644
+--- a/src/ui/panels/QuestPanel.tsx
++++ b/src/ui/panels/QuestPanel.tsx
+@@ -4,71 +4,8 @@ import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { DIFFICULTIES } from '../../game/data/quests';
+ import { CONSUMABLE_BY_ID } from '../../game/data/items';
+-import { QuestOffer } from '../../game/types';
+ import { formatDuration, formatGold, RARITY_COLOR } from '../../game/util';
+ 
+-/** Full-detail popout for a single board contract, opened by clicking its
+- * card. Reuses the same data the card already has -- this is a closer look,
+- * not a second data source -- plus the full loot list without wrapping into
+- * a cramped row. */
+-function QuestDetailModal({
+-  offer, hero, chance, duration, locked, onSend, onClose,
+-}: {
+-  offer: QuestOffer;
+-  hero: { name: string; level: number };
+-  chance: number;
+-  duration: number;
+-  locked: boolean;
+-  onSend: () => void;
+-  onClose: () => void;
+-}) {
+-  const cfg = DIFFICULTIES[offer.difficulty];
+-  const chain = offer.chain ? CHAIN_BY_ID[offer.chain.chainId] : undefined;
+-
+-  return (
+-    <div className="overlay" onClick={onClose}>
+-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+-        <div className="card-head" style={{ marginBottom: 4 }}>
+-          <h3 style={{ margin: 0 }}>{offer.name}</h3>
+-          <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
+-          {offer.chain && (
+-            <span className="tag" style={{ color: 'var(--blood)' }}>
+-              Chain {offer.chain.stage + 1}/{offer.chain.totalStages}
+-            </span>
+-          )}
+-        </div>
+-        <p className="small muted" style={{ marginTop: 0 }}>
+-          {chain ? `${chain.description} — ${offer.flavour}` : offer.flavour}
+-        </p>
+-
+-        <div className="stat-row" style={{ marginBottom: 10 }}>
+-          <span>Success <b className={chance >= 60 ? 'good' : chance >= 35 ? '' : 'bad'}>{Math.round(chance)}%</b></span>
+-          <span>Time <b>{formatDuration(duration)}</b></span>
+-          <span>Gold <b className="gold-text">{formatGold(offer.rewardGold)}</b></span>
+-          <span>XP <b>{offer.rewardXp}</b></span>
+-        </div>
+-
+-        <div className="section-heading">Possible loot</div>
+-        <div className="quest-popout-loot">
+-          {QuestManager.lootPreview(offer).map((entry) => (
+-            <span key={entry.name} className="small" style={{ color: RARITY_COLOR[entry.rarity] }}>
+-              ◇ {entry.name}
+-            </span>
+-          ))}
+-        </div>
+-
+-        <div className="row end" style={{ marginTop: 12, gap: 8 }}>
+-          {locked && <span className="tiny muted">Requires level {offer.reqLevel}</span>}
+-          <button className="btn-ghost" onClick={onClose}>Close</button>
+-          <button className="btn-primary" disabled={locked} onClick={onSend}>
+-            Send {hero.name}
+-          </button>
+-        </div>
+-      </div>
+-    </div>
+-  );
+-}
+-
+ export function QuestPanel() {
+   const engine = useEngine();
+   const now = useNow();
+@@ -77,7 +14,18 @@ export function QuestPanel() {
+   const idleHeroes = state.heroes.filter((h) => h.status !== 'questing');
+   const [heroId, setHeroId] = useState<string>(() => idleHeroes[0]?.id ?? state.heroes[0].id);
+   const [loadout, setLoadout] = useState<string[]>([]);
+-  const [detailOffer, setDetailOffer] = useState<QuestOffer | null>(null);
++
++  // Condensed by default, same pattern as the Heroes tab -- a full board of
++  // contracts used to run the panel very long. Flavour text and the full
++  // loot list live behind the per-card toggle now.
++  const [expanded, setExpanded] = useState<Set<string>>(new Set());
++  const toggleExpanded = (offerId: string) => {
++    setExpanded((current) => {
++      const next = new Set(current);
++      if (next.has(offerId)) next.delete(offerId); else next.add(offerId);
++      return next;
++    });
++  };
+ 
+   const hero = state.heroes.find((h) => h.id === heroId) ?? state.heroes[0];
+   const owned = InventoryManager.owned(state).filter((e) => !e.def.effect.healInjury);
+@@ -95,18 +43,6 @@ export function QuestPanel() {
+     });
+   };
+ 
+-  const send = (offer: QuestOffer) => {
+-    engine.startQuest(hero.id, offer, loadout.filter((id) => InventoryManager.count(state, id) > 0));
+-    setLoadout([]);
+-    setDetailOffer(null);
+-  };
+-
+-  // The offer object backing an open modal can go stale once the board
+-  // rotates (the offer scrolls off, or is re-rolled with the same id
+-  // reused by a fresh window) -- re-resolve against the live board each
+-  // render rather than trusting the snapshot captured at click time.
+-  const liveDetailOffer = detailOffer ? board.find((o) => o.id === detailOffer.id) ?? null : null;
+-
+   return (
+     <>
+       <h2>Quest Board</h2>
+@@ -184,7 +120,6 @@ export function QuestPanel() {
+ 
+       {/* ------------------------------- board ------------------------------- */}
+       <div className="section-heading">Available contracts</div>
+-      <p className="tiny muted" style={{ marginTop: -8, marginBottom: 10 }}>Click a contract for the full details.</p>
+       {board.length === 0 && <p className="small muted">The board is empty. New contracts arrive shortly.</p>}
+ 
+       {board.map((offer) => {
+@@ -193,18 +128,19 @@ export function QuestPanel() {
+         const duration = QuestManager.previewDuration(engine.state, hero, offer, now);
+         const locked = hero.level < offer.reqLevel || hero.status === 'questing';
+         const chain = offer.chain ? CHAIN_BY_ID[offer.chain.chainId] : undefined;
++        const isOpen = expanded.has(offer.id);
+ 
+         return (
+-          <div
+-            key={offer.id}
+-            className={`card quest-card ${offer.difficulty} ${offer.chain ? 'chain' : ''}`}
+-            onClick={() => setDetailOffer(offer)}
+-            role="button"
+-            tabIndex={0}
+-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailOffer(offer); } }}
+-          >
+-            <div className="card-head">
+-              <span className="card-title quest-title">{offer.name}</span>
++          <div key={offer.id} className={`card quest-card ${offer.difficulty} ${offer.chain ? 'chain' : ''}`}>
++            <div
++              className="card-head hero-card-summary"
++              onClick={() => toggleExpanded(offer.id)}
++              role="button"
++              tabIndex={0}
++              aria-expanded={isOpen}
++              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpanded(offer.id); } }}
++            >
++              <span className="card-title quest-title hero-card-name">{offer.name}</span>
+               <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
+               {offer.chain && (
+                 <span className="tag" style={{ color: 'var(--blood)' }}>
+@@ -212,26 +148,42 @@ export function QuestPanel() {
+                 </span>
+               )}
+             </div>
+-            <p className="card-flavour">{chain ? `${chain.description} — ${offer.flavour}` : offer.flavour}</p>
+-            <div className="stat-row" style={{ marginBottom: 8 }}>
++
++            <div className="stat-row" style={{ margin: '6px 0' }}>
+               <span>Success <b className={chance >= 60 ? 'good' : chance >= 35 ? '' : 'bad'}>{Math.round(chance)}%</b></span>
+               <span>Time <b>{formatDuration(duration)}</b></span>
+               <span>Gold <b className="gold-text">{formatGold(offer.rewardGold)}</b></span>
+               <span>XP <b>{offer.rewardXp}</b></span>
+             </div>
+-            <div className="row wrap" style={{ marginBottom: 8 }}>
+-              {QuestManager.lootPreview(offer).map((entry) => (
+-                <span key={entry.name} className="tiny" style={{ color: RARITY_COLOR[entry.rarity] }}>
+-                  ◇ {entry.name}
+-                </span>
+-              ))}
+-            </div>
+-            <div className="row end">
++
++            {isOpen && (
++              <>
++                <p className="card-flavour">{chain ? `${chain.description} — ${offer.flavour}` : offer.flavour}</p>
++                <div className="row wrap quest-popout-loot">
++                  {QuestManager.lootPreview(offer).map((entry) => (
++                    <span key={entry.name} className="tiny" style={{ color: RARITY_COLOR[entry.rarity] }}>
++                      ◇ {entry.name}
++                    </span>
++                  ))}
++                </div>
++              </>
++            )}
++
++            <div className="row end" style={{ marginTop: 4, gap: 8 }}>
++              <button
++                className="btn-ghost hero-card-expand"
++                onClick={(e) => { e.stopPropagation(); toggleExpanded(offer.id); }}
++              >
++                {isOpen ? 'Less ▲' : 'Details ▼'}
++              </button>
+               {locked && <span className="tiny muted">Requires level {offer.reqLevel}</span>}
+               <button
+                 className="btn-primary"
+                 disabled={locked}
+-                onClick={(e) => { e.stopPropagation(); send(offer); }}
++                onClick={() => {
++                  engine.startQuest(hero.id, offer, loadout.filter((id) => InventoryManager.count(state, id) > 0));
++                  setLoadout([]);
++                }}
+               >
+                 Send {hero.name}
+               </button>
+@@ -239,18 +191,6 @@ export function QuestPanel() {
+           </div>
+         );
+       })}
+-
+-      {liveDetailOffer && (
+-        <QuestDetailModal
+-          offer={liveDetailOffer}
+-          hero={hero}
+-          chance={QuestManager.previewSuccess(engine.state, hero, liveDetailOffer, loadout, now)}
+-          duration={QuestManager.previewDuration(engine.state, hero, liveDetailOffer, now)}
+-          locked={hero.level < liveDetailOffer.reqLevel || hero.status === 'questing'}
+-          onSend={() => send(liveDetailOffer)}
+-          onClose={() => setDetailOffer(null)}
+-        />
+-      )}
+     </>
+   );
+ }
+diff --git a/src/ui/panels/UpgradesPanel.tsx b/src/ui/panels/UpgradesPanel.tsx
+index 7f55c5f..7c9cd88 100644
+--- a/src/ui/panels/UpgradesPanel.tsx
++++ b/src/ui/panels/UpgradesPanel.tsx
+@@ -1,5 +1,4 @@
+-import { useEffect, useRef, useState } from 'react';
+-import type { CSSProperties } from 'react';
++import { useState } from 'react';
+ import { useEngine } from '../useEngine';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+@@ -7,6 +6,7 @@ import { AUTO_CHAIN_RANGES, VENDORS, vendorUpgrades } from '../../game/data/prog
+ import { VendorId, UpgradeDef } from '../../game/types';
+ import { describeMods, formatGold } from '../../game/util';
+ import { VendorSprite } from '../sprites/VendorSprite';
++import { MaxFlash, useMaxFlash, FlashTarget } from '../maxFlash';
+ 
+ type Tab = 'general' | VendorId;
+ 
+@@ -15,86 +15,6 @@ function chainRangeText(level: number): string {
+   return range.min === range.max ? `${range.min}` : `${range.min}-${range.max}`;
+ }
+ 
+-/* ------------------------------ max-level flash ----------------------------- */
+-
+-/** A small fixed burst pattern -- eight points around a circle -- reused for
+- * every flash. No need for randomness; the star delays below give it enough
+- * life that it doesn't read as mechanical. */
+-const STAR_BURST: { dx: number; dy: number; rot: number }[] = [
+-  { dx: 0, dy: -36, rot: -12 },
+-  { dx: 27, dy: -24, rot: 16 },
+-  { dx: 36, dy: 3, rot: -20 },
+-  { dx: 23, dy: 30, rot: 24 },
+-  { dx: -4, dy: 36, rot: -9 },
+-  { dx: -29, dy: 23, rot: 18 },
+-  { dx: -36, dy: -4, rot: -22 },
+-  { dx: -21, dy: -29, rot: 13 },
+-];
+-
+-function MaxFlash({ label, onDone }: { label: string; onDone: () => void }) {
+-  useEffect(() => {
+-    const id = window.setTimeout(onDone, 1400);
+-    return () => window.clearTimeout(id);
+-  }, [onDone]);
+-
+-  return (
+-    <div className="max-flash-layer" aria-hidden="true">
+-      <span className="max-flash-text">Fully upgraded — {label}</span>
+-      {STAR_BURST.map((s, i) => (
+-        <span
+-          key={i}
+-          className="max-flash-star"
+-          style={{ '--dx': `${s.dx}px`, '--dy': `${s.dy}px`, '--rot': `${s.rot}deg`, animationDelay: `${i * 25}ms` } as CSSProperties}
+-        >
+-          ★
+-        </span>
+-      ))}
+-    </div>
+-  );
+-}
+-
+-interface FlashTarget { id: string; name: string; level: number; maxLevel: number }
+-
+-/** Fires a one-off flash the moment any tracked item's level first reaches
+- * its cap -- not on mount, so re-opening the panel on an already-maxed
+- * upgrade doesn't replay it. */
+-function useMaxFlash(items: FlashTarget[]) {
+-  const prevRef = useRef<Record<string, number> | null>(null);
+-  const [flashes, setFlashes] = useState<Record<string, { name: string; key: number }>>({});
+-
+-  const signature = items.map((i) => `${i.id}:${i.level}`).join('|');
+-  useEffect(() => {
+-    const prev = prevRef.current;
+-    const next: Record<string, number> = {};
+-    const newlyMaxed: FlashTarget[] = [];
+-    for (const item of items) {
+-      next[item.id] = item.level;
+-      const before = prev?.[item.id];
+-      if (prev && item.level >= item.maxLevel && before !== undefined && before < item.maxLevel) {
+-        newlyMaxed.push(item);
+-      }
+-    }
+-    prevRef.current = next;
+-    if (newlyMaxed.length > 0) {
+-      setFlashes((cur) => {
+-        const merged = { ...cur };
+-        for (const item of newlyMaxed) merged[item.id] = { name: item.name, key: Date.now() + Math.random() };
+-        return merged;
+-      });
+-    }
+-    // eslint-disable-next-line react-hooks/exhaustive-deps
+-  }, [signature]);
+-
+-  const dismiss = (id: string) => setFlashes((cur) => {
+-    if (!(id in cur)) return cur;
+-    const rest = { ...cur };
+-    delete rest[id];
+-    return rest;
+-  });
+-
+-  return { flashes, dismiss };
+-}
+-
+ export function UpgradesPanel() {
+   const engine = useEngine();
+   const state = engine.state;
+diff --git a/src/ui/sprites/HeroSprite.tsx b/src/ui/sprites/HeroSprite.tsx
+index 8d4841e..aa359ac 100644
+--- a/src/ui/sprites/HeroSprite.tsx
++++ b/src/ui/sprites/HeroSprite.tsx
+@@ -51,15 +51,21 @@ const HERO_DISPLAY_SCALE: Partial<Record<HeroClass, number>> = {
+ };
+ 
+ /**
+- * The samurai pack crops its bounding box asymmetrically -- more empty
+- * margin is left on the right and bottom than the left and top, so the
+- * character itself sits visibly up and to the left of center once rendered
+- * at a fixed frameW x frameH box. Nudges it back toward true center; values
+- * are a percentage of the sprite's own rendered width/height (positive x
+- * moves right, positive y moves down).
++ * `content_box` in tools/import_characters.py fits one shared crop box
++ * across ALL of a character's animations, on purpose, so switching between
++ * idle/walk/attack doesn't resize or re-anchor the sprite mid-transition.
++ * The samurai has ten animations including wide attack/jump/throw poses
++ * that reach further right and down than a resting stance does, so that
++ * shared box is sized for the widest pose -- and idle, the calm one shown
++ * on the desktop 90%+ of the time, ends up sitting in the upper-left
++ * portion of a box built for a much bigger swing. A first pass at this
++ * (7%, 5%) was too small to actually read as centered; this is a bigger,
++ * eyeballed correction from the reported screenshot. Gated to the idle
++ * pose specifically below, since action animations already fill the box
++ * they defined and don't need the same push.
+  */
+ const HERO_DISPLAY_OFFSET: Partial<Record<HeroClass, { x: number; y: number }>> = {
+-  samurai: { x: 7, y: 5 },
++  samurai: { x: 16, y: 13 },
+ };
+ 
+ let manifestCache: Manifest | null = null;
+@@ -171,7 +177,7 @@ export function HeroSprite({
+ 
+   const scale = (height / char.frameH) * (HERO_DISPLAY_SCALE[heroClass] ?? 1);
+   const url = `./heroes/${heroClass}/${skin}/${resolved}.png`;
+-  const offset = HERO_DISPLAY_OFFSET[heroClass];
++  const offset = resolved === 'idle' ? HERO_DISPLAY_OFFSET[heroClass] : undefined;
+   const transforms: string[] = [];
+   if (flip) transforms.push('scaleX(-1)');
+   if (offset) transforms.push(`translate(${flip ? -offset.x : offset.x}%, ${offset.y}%)`);
+diff --git a/tools/import_characters.py b/tools/import_characters.py
+index c810459..ffb3982 100644
+--- a/tools/import_characters.py
++++ b/tools/import_characters.py
+@@ -100,7 +100,14 @@ CHARACTERS: Dict[str, dict] = {
+ SKINS: Dict[str, Optional[dict]] = {
+     'original': None,  # ship the artist's colours untouched
+     'necrotic': dict(primary=0.34, secondary=0.75, sat=0.85, light=0.95),
+-    'holy':     dict(primary=0.13, secondary=0.58, sat=0.45, light=1.12),
++    # Was desaturating everything to ~45% (the reported "washed out" look) and
++    # routing half the identity pixels to a cool blue secondary hue, which
++    # fights the "bleached white and gilded" description outright. Both hues
++    # now sit in the same warm gold/ivory family -- primary for the richer
++    # gilded trim, secondary a touch paler for the bleached-white base -- with
++    # saturation and lightness both pushed up so the recolor actually reads
++    # as bright gold rather than pale tan.
++    'holy':     dict(primary=0.13, secondary=0.11, sat=0.88, light=1.2),
+     'infernal': dict(primary=0.02, secondary=0.09, sat=1.05, light=0.92),
+     'frost':    dict(primary=0.55, secondary=0.47, sat=0.80, light=1.08),
+ }
+-- 
+2.43.0
+

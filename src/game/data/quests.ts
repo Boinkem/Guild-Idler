@@ -156,8 +156,10 @@ export const QUEST_CHAINS: ChainDef[] = [
     id: 'crows_warning',
     name: "The Crow's Warning",
     description:
-      'Smoke over Thornhollow, and something worse than raiders. A crow that will not stop ' +
-      'following you may be the only reason anyone survives what comes next.',
+      "Thornhollow isn't burned, it's been searched — room by room, like whatever hit it wanted " +
+      'something specific. Whoever it bit is not staying human for long, and there is no cure ' +
+      'in the town to slow it down. A crow that will not stop following you might be the only ' +
+      'reason one reaches Thornhollow in time.',
     reqLevel: 8,
     rewardGold: 900,
     rewardItems: ['crow_feather_charm'],
@@ -230,9 +232,10 @@ export const QUEST_CHAINS: ChainDef[] = [
     id: 'proving_the_bastion',
     name: 'Proving the Bastion',
     description:
-      "The cure reached IronRest Bastion intact, and Captain Maeryn Thorne has not forgotten " +
-      'it. She is short on officers she can spare and long on work that needs doing. Prove ' +
-      'useful enough, and she has bigger work in mind.',
+      'The Thornhollow cure reached IronRest Bastion exactly as promised, carried the last leg ' +
+      'by the same guild that ran the vials there in the first place. Captain Maeryn Thorne ' +
+      'does not forget a debt like that — and she is long on work that needs trustworthy ' +
+      'hands. Prove useful enough, and she has bigger work in mind.',
     reqLevel: 16,
     rewardGold: 3800,
     rewardItems: ['wardens_signet'],

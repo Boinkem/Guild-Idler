@@ -100,18 +100,30 @@ button:focus-visible, [tabindex]:focus-visible {
  * .idle-stage covers almost the entire visible companion (sprite, plate,
  * status text), so it has to opt back into "drag" itself when unlocked, or
  * there is nothing left to grab -- the 6px of outer padding alone is not
- * enough to reliably click. Buttons inside stay clickable because they get
- * their own no-drag below, which wins over the drag region they sit inside.
+ * enough to reliably click.
+ *
+ * .knight-button (the sprite itself) is deliberately INCLUDED in the drag
+ * region here, not excluded -- Chromium still fires its onClick on a plain
+ * mouse-down/up with no movement, and only treats it as a window drag once
+ * the cursor actually moves, so "click the knight to open the guild" and
+ * "click-and-drag the knight to move the window" both keep working. This
+ * was the actual bug: an earlier version blanket-applied no-drag to every
+ * button, which included the knight and made the sprite itself the one
+ * thing in this window you couldn't grab.
+ *
+ * The small utility controls (lock/hide/open-guild, carousel arrows) stay
+ * no-drag on purpose, since those are meant to be pure clicks even mid-drag.
  */
 .idle-root.unlocked,
 .idle-root.unlocked .idle-stage,
 .idle-root.unlocked .idle-plate,
 .idle-root.unlocked .idle-status,
-.idle-root.unlocked .knight-shadow {
+.idle-root.unlocked .knight-shadow,
+.idle-root.unlocked .knight-button {
   -webkit-app-region: drag;
 }
-.idle-root.unlocked button,
-.idle-root.unlocked .hero-carousel {
+.idle-root.unlocked .idle-actions button,
+.idle-root.unlocked .carousel-arrow {
   -webkit-app-region: no-drag;
 }
 
@@ -878,12 +890,11 @@ input[type='range'] {
   border-top: 1px solid var(--panel-3);
 }
 
-/* -------------------------------- quest popout ------------------------------ */
+/* --------------------------- quest board cards ------------------------------ */
+/* Condensed by default, same click-to-expand pattern as hero cards -- only
+   the title/tag header row is the toggle, so it doesn't fight the Send
+   button's own click. */
 
-.quest-card {
-  cursor: pointer;
-}
-.quest-card:hover { border-left-color: var(--brass); }
 .quest-popout-loot { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 
 /* ============================================================================
@@ -919,6 +930,12 @@ input[type='range'] {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
 }
 
+/*
+ * Full "pill" (999px) is only for small, single-line controls. A whole card
+ * -- quest-card included -- is not a pill; it went in here once and the
+ * stadium curve on a tall rectangle clipped the text in its own corners.
+ * Cards get the modest 16px radius above instead, same as every other card.
+ */
 [data-style='modern'] .tag,
 [data-style='modern'] .chip,
 [data-style='modern'] .skin-chip,
@@ -926,7 +943,6 @@ input[type='range'] {
 [data-style='modern'] .toast,
 [data-style='modern'] .idle-plate,
 [data-style='modern'] .hero-card-expand,
-[data-style='modern'] .quest-card,
 [data-style='modern'] .vendor-tabs button,
 [data-style='modern'] .tabs button {
   border-radius: 999px;

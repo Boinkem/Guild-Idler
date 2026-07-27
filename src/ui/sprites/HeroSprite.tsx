@@ -51,15 +51,21 @@ const HERO_DISPLAY_SCALE: Partial<Record<HeroClass, number>> = {
 };
 
 /**
- * The samurai pack crops its bounding box asymmetrically -- more empty
- * margin is left on the right and bottom than the left and top, so the
- * character itself sits visibly up and to the left of center once rendered
- * at a fixed frameW x frameH box. Nudges it back toward true center; values
- * are a percentage of the sprite's own rendered width/height (positive x
- * moves right, positive y moves down).
+ * `content_box` in tools/import_characters.py fits one shared crop box
+ * across ALL of a character's animations, on purpose, so switching between
+ * idle/walk/attack doesn't resize or re-anchor the sprite mid-transition.
+ * The samurai has ten animations including wide attack/jump/throw poses
+ * that reach further right and down than a resting stance does, so that
+ * shared box is sized for the widest pose -- and idle, the calm one shown
+ * on the desktop 90%+ of the time, ends up sitting in the upper-left
+ * portion of a box built for a much bigger swing. A first pass at this
+ * (7%, 5%) was too small to actually read as centered; this is a bigger,
+ * eyeballed correction from the reported screenshot. Gated to the idle
+ * pose specifically below, since action animations already fill the box
+ * they defined and don't need the same push.
  */
 const HERO_DISPLAY_OFFSET: Partial<Record<HeroClass, { x: number; y: number }>> = {
-  samurai: { x: 7, y: 5 },
+  samurai: { x: 16, y: 13 },
 };
 
 let manifestCache: Manifest | null = null;
@@ -171,7 +177,7 @@ export function HeroSprite({
 
   const scale = (height / char.frameH) * (HERO_DISPLAY_SCALE[heroClass] ?? 1);
   const url = `./heroes/${heroClass}/${skin}/${resolved}.png`;
-  const offset = HERO_DISPLAY_OFFSET[heroClass];
+  const offset = resolved === 'idle' ? HERO_DISPLAY_OFFSET[heroClass] : undefined;
   const transforms: string[] = [];
   if (flip) transforms.push('scaleX(-1)');
   if (offset) transforms.push(`translate(${flip ? -offset.x : offset.x}%, ${offset.y}%)`);

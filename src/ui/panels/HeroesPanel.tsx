@@ -204,13 +204,18 @@ export function HeroesPanel() {
 
       <div className="section-heading">Recruit</div>
       {state.heroes.length >= slots && (
-        <p className="small muted">No free slots. Upgrade the Tavern, or buy an Extra Banner with renown.</p>
+        <p className="small muted">
+          No free slots. The Tavern adds one per level up to 5; beyond that, retire a hero at
+          level 30+ in the Prestige tab for Heroic Renown, then spend it on Extra Banner
+          (up to 4 more) — {slots} is not necessarily your ceiling.
+        </p>
       )}
       <div className="grid three">
         {(Object.keys(HERO_CLASSES) as HeroClass[]).map((id) => {
           const def = HERO_CLASSES[id];
           const unlocked = recruitable.includes(id);
           const cost = RECRUIT_COST[id];
+          const slotsFull = state.heroes.length >= slots;
           return (
             <div key={id} className="card" style={{ marginBottom: 0 }}>
               <div className="card-title">{def.name}</div>
@@ -220,10 +225,12 @@ export function HeroesPanel() {
               </div>
               <button
                 className="btn-primary"
-                disabled={!unlocked || state.gold < cost || state.heroes.length >= slots}
+                disabled={!unlocked || state.gold < cost || slotsFull}
                 onClick={() => engine.recruit(id)}
               >
-                {unlocked ? `Recruit · ${formatGold(cost)}` : `Tavern level ${def.unlockTavernLevel}`}
+                {!unlocked
+                  ? `Tavern level ${def.unlockTavernLevel}`
+                  : slotsFull ? 'No free slots' : `Recruit · ${formatGold(cost)}`}
               </button>
             </div>
           );

@@ -75,7 +75,9 @@ export function QuestResultModal() {
         )}
 
         <div className="row end" style={{ marginTop: 12 }}>
-          <button className="btn-primary" onClick={() => engine.dismissResult()}>Good work</button>
+          <button className="btn-primary" onClick={() => engine.dismissResult()}>
+            {result.success ? 'Good work' : 'Understood'}
+          </button>
         </div>
       </div>
     </div>

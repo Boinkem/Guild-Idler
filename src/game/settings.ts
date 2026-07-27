@@ -70,7 +70,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fontScale: 1.35,
   spriteScale: 1,
   density: 'cozy',
-  theme: 'candlelit',
+  theme: 'daylight',
   styleId: 'adventure',
   animationSpeed: 1,
   offlineReportOnLaunch: true,

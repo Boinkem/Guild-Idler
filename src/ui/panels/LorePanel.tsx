@@ -1,43 +1,78 @@
-import { useEngine } from '../useEngine';
+import { useState } from 'react';
+import type { MouseEvent } from 'react';
 import { QUEST_CHAINS, ChainDef } from '../../game/data/quests';
+import { useEngine } from '../useEngine';
+
+/** Shared summary/expand toggle button, matching the Heroes tab pattern. */
+function ExpandToggle({ open, onClick }: { open: boolean; onClick: (e: MouseEvent) => void }) {
+  return (
+    <button className="btn-ghost hero-card-expand" onClick={onClick}>
+      {open ? 'Less ▲' : 'More ▼'}
+    </button>
+  );
+}
 
 function CompletedEntry({ chain }: { chain: ChainDef }) {
+  const [open, setOpen] = useState(false);
   return (
     <div className="card lore-card lore-completed">
-      <div className="spread">
-        <span className="card-title">{chain.name}</span>
+      <div
+        className="spread hero-card-summary"
+        onClick={() => setOpen((v) => !v)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
+      >
+        <span className="card-title hero-card-name">{chain.name}</span>
         <span className="tiny gold-text">Lv {chain.reqLevel}</span>
       </div>
-      {chain.title && <p className="tiny muted" style={{ margin: '2px 0 8px' }}>Grants the title "{chain.title}"</p>}
-      <p className="card-flavour">{chain.epilogue ?? chain.description}</p>
-      <details>
-        <summary className="tiny muted">How it went</summary>
-        <ol className="lore-stage-list">
-          {chain.stages.map((s) => (
-            <li key={s.name}>
-              <b>{s.name}.</b> <span className="muted">{s.flavour}</span>
-            </li>
-          ))}
-        </ol>
-      </details>
+      {!open && chain.title && <p className="tiny muted" style={{ margin: '4px 0 0' }}>Grants the title "{chain.title}"</p>}
+      {open && (
+        <div className="hero-card-details">
+          {chain.title && <p className="tiny muted" style={{ margin: '0 0 8px' }}>Grants the title "{chain.title}"</p>}
+          <p className="card-flavour">{chain.epilogue ?? chain.description}</p>
+          <ol className="lore-stage-list">
+            {chain.stages.map((s) => (
+              <li key={s.name}>
+                <b>{s.name}.</b> <span className="muted">{s.flavour}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+      <ExpandToggle open={open} onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} />
     </div>
   );
 }
 
 function InProgressEntry({ chain, stage }: { chain: ChainDef; stage: number }) {
+  const [open, setOpen] = useState(false);
   return (
     <div className="card lore-card lore-in-progress">
-      <div className="spread">
-        <span className="card-title">{chain.name}</span>
+      <div
+        className="spread hero-card-summary"
+        onClick={() => setOpen((v) => !v)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
+      >
+        <span className="card-title hero-card-name">{chain.name}</span>
         <span className="tiny muted">{stage}/{chain.stages.length}</span>
       </div>
-      <p className="card-flavour">{chain.description}</p>
-      <ol className="lore-stage-list">
-        {chain.stages.slice(0, stage).map((s) => (
-          <li key={s.name}><b>{s.name}.</b> <span className="muted">{s.flavour}</span></li>
-        ))}
-        {stage < chain.stages.length && <li className="muted">The story isn't finished yet...</li>}
-      </ol>
+      {open && (
+        <div className="hero-card-details">
+          <p className="card-flavour">{chain.description}</p>
+          <ol className="lore-stage-list">
+            {chain.stages.slice(0, stage).map((s) => (
+              <li key={s.name}><b>{s.name}.</b> <span className="muted">{s.flavour}</span></li>
+            ))}
+            {stage < chain.stages.length && <li className="muted">The story isn't finished yet...</li>}
+          </ol>
+        </div>
+      )}
+      <ExpandToggle open={open} onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} />
     </div>
   );
 }

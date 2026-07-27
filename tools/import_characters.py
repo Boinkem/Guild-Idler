@@ -100,7 +100,14 @@ CHARACTERS: Dict[str, dict] = {
 SKINS: Dict[str, Optional[dict]] = {
     'original': None,  # ship the artist's colours untouched
     'necrotic': dict(primary=0.34, secondary=0.75, sat=0.85, light=0.95),
-    'holy':     dict(primary=0.13, secondary=0.58, sat=0.45, light=1.12),
+    # Was desaturating everything to ~45% (the reported "washed out" look) and
+    # routing half the identity pixels to a cool blue secondary hue, which
+    # fights the "bleached white and gilded" description outright. Both hues
+    # now sit in the same warm gold/ivory family -- primary for the richer
+    # gilded trim, secondary a touch paler for the bleached-white base -- with
+    # saturation and lightness both pushed up so the recolor actually reads
+    # as bright gold rather than pale tan.
+    'holy':     dict(primary=0.13, secondary=0.11, sat=0.88, light=1.2),
     'infernal': dict(primary=0.02, secondary=0.09, sat=1.05, light=0.92),
     'frost':    dict(primary=0.55, secondary=0.47, sat=0.80, light=1.08),
 }

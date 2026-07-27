@@ -583,6 +583,7 @@ export class GameEngine {
   upgradeFacility(id: Parameters<typeof GuildManager.upgradeFacility>[1]) {
     const error = GuildManager.upgradeFacility(this.state, id);
     if (error) return this.say(error);
+    playSound('purchase');
     this.notify();
     void this.saveNow();
   }
