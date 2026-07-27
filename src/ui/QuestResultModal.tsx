@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { GameEngine } from '../game/engine';
+import { QuestResult } from '../game/types';
 import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
 import { playSound } from '../game/sound';
@@ -24,12 +26,27 @@ const XP_PARTICLES = [
   { dx: 2, dy: -118, rot: 2, delay: 130 },
 ];
 
-/** Shown when a quest resolves while the player is watching. */
+/**
+ * Shown when a quest resolves while the player is watching. Split into an
+ * outer component that just decides whether to show anything, and an inner
+ * card keyed by result.questId.
+ *
+ * The key matters: Auto-Chain can resolve a fresh quest (a new lastResult)
+ * before the previous card's ~640ms dismiss animation finishes -- e.g. a
+ * hero mid-streak finishing back to back. Without the key, React reuses the
+ * same component instance across that swap, so its `dismissing` state (and
+ * the pending dismiss timeout from the *previous* result) carried over onto
+ * the new one: the card could get stuck faded to invisible mid-pop-out
+ * while the still-fully-opaque .overlay behind it kept blocking every
+ * click, with no visible dialog left to dismiss it. The key forces a full
+ * unmount/remount per result instead, so a new result always starts clean,
+ * and the effect below cancels any in-flight timeout from the one it
+ * replaced rather than letting it fire against state it no longer owns.
+ */
 export function QuestResultModal() {
   const engine = useEngine();
   const { settings } = useSettings();
   const result = engine.lastResult;
-  const [dismissing, setDismissing] = useState(false);
 
   useEffect(() => {
     if (result && !settings.questResultPopups) engine.dismissResult();
@@ -37,11 +54,22 @@ export function QuestResultModal() {
 
   if (!result || !settings.questResultPopups) return null;
 
+  return <QuestResultCard key={result.questId} result={result} engine={engine} />;
+}
+
+function QuestResultCard({ result, engine }: { result: QuestResult; engine: GameEngine }) {
+  const [dismissing, setDismissing] = useState(false);
+  const timeoutRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
+  }, []);
+
   const handleDismiss = () => {
     if (dismissing) return;
     setDismissing(true);
     playSound('collect');
-    window.setTimeout(() => engine.dismissResult(), DISMISS_DELAY_MS);
+    timeoutRef.current = window.setTimeout(() => engine.dismissResult(), DISMISS_DELAY_MS);
   };
 
   return (

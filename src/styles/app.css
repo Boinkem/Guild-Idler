@@ -216,6 +216,13 @@ button:focus-visible, [tabindex]:focus-visible {
   margin-top: 4px;
   max-width: 220px;
   text-align: center;
+  /* Same theme-aware tint as .idle-plate -- this used to be bare text
+     directly over the desktop, which was hard to read over busy or light
+     wallpaper. */
+  background: color-mix(in srgb, var(--night) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--edge) 35%, transparent);
+  padding: 3px 8px;
+  -webkit-app-region: no-drag;
 }
 
 .idle-actions { display: flex; gap: 4px; margin-top: 6px; -webkit-app-region: no-drag; }
@@ -673,7 +680,8 @@ input[type='range'] {
 
 /* ----------------------------- hover reveal ------------------------------- */
 
-.idle-stage:hover .idle-plate {
+.idle-stage:hover .idle-plate,
+.idle-stage:hover .idle-status {
   background: color-mix(in srgb, var(--night) 92%, transparent);
   border-color: var(--edge);
 }
@@ -996,6 +1004,7 @@ input[type='range'] {
 [data-style='modern'] .toggle,
 [data-style='modern'] .toast,
 [data-style='modern'] .idle-plate,
+[data-style='modern'] .idle-status,
 [data-style='modern'] .hero-card-expand,
 [data-style='modern'] .vendor-tabs button,
 [data-style='modern'] .tabs button {
