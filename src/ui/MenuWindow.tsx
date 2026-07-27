@@ -11,6 +11,8 @@ import { LorePanel } from './panels/LorePanel';
 import { StatsPanel } from './panels/StatsPanel';
 import { PrestigePanel } from './panels/PrestigePanel';
 import { SettingsPanel } from './panels/SettingsPanel';
+import { TestingPanel } from './panels/TestingPanel';
+import { TESTING_TOOLS_ENABLED } from '../game/testingTools';
 
 const TABS = [
   { id: 'quests', label: 'Quests', Panel: QuestPanel },
@@ -23,6 +25,7 @@ const TABS = [
   { id: 'stats', label: 'Statistics', Panel: StatsPanel },
   { id: 'prestige', label: 'Prestige', Panel: PrestigePanel },
   { id: 'settings', label: 'Settings', Panel: SettingsPanel },
+  ...(TESTING_TOOLS_ENABLED ? [{ id: 'testing', label: 'Testing', Panel: TestingPanel }] as const : []),
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];

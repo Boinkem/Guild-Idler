@@ -12,6 +12,7 @@ import { ModifierManager } from './managers/ModifierManager';
 import { AchievementManager } from './managers/AchievementManager';
 import { SKIN_BY_ID, SKIN_PRICE, AUTO_CHAIN_RANGES } from './data/progression';
 import { playSound } from './sound';
+import { TESTING_TOOLS_ENABLED } from './testingTools';
 
 const TICK_MS = 1000;
 const AUTOSAVE_MS = 15_000;
@@ -280,6 +281,59 @@ export class GameEngine {
   saveNow() {
     return SaveManager.save(this.adapter, this.state);
   }
+
+  // --- TESTING TOOLS (delete this block to remove) ---
+  // Gated by TESTING_TOOLS_ENABLED at the UI level (MenuWindow only shows the
+  // tab when it's true) and again here, so these no-op even if somehow
+  // called directly. Everything testing-related in this file lives in this
+  // one fenced block.
+
+  /**
+   * Rewinds lastSeen and runs the real offline catch-up on it — the exact
+   * same event-driven logic (including Auto-Chain continuation) that a
+   * genuine multi-day absence would trigger, just without waiting. This is
+   * deliberately not an "instantly win" cheat: a tester skipping a month
+   * sees what a month of real play would actually have produced.
+   */
+  testSkipTime(ms: number) {
+    if (!TESTING_TOOLS_ENABLED) return;
+    // endsAt on an active quest is an absolute real-world timestamp fixed at
+    // departure, independent of lastSeen -- rewinding lastSeen alone updates
+    // the offline-report bookkeeping but does nothing to make an in-flight
+    // quest actually due. Verified this directly: an early version of this
+    // method reported a correct 24h elapsed gap while resolving zero quests,
+    // because the quest's own endsAt hadn't moved. Shifting every active
+    // quest's endsAt back by the same amount is what actually makes time-
+    // based completion trigger.
+    for (const quest of this.state.activeQuests) {
+      quest.endsAt -= ms;
+    }
+    this.state.lastSeen = Math.max(0, this.state.lastSeen - ms);
+    this.catchUpOffline();
+    this.notify();
+    void this.saveNow();
+  }
+
+  testAddGold(amount: number) {
+    if (!TESTING_TOOLS_ENABLED) return;
+    this.state.gold = Math.max(0, this.state.gold + amount);
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Resolves a hero's active quest immediately, using its own already-locked-in odds — not a guaranteed win, just not waiting for the clock. */
+  testCompleteActiveQuest(heroId: string) {
+    if (!TESTING_TOOLS_ENABLED) return;
+    const quest = this.state.activeQuests.find((q) => q.heroId === heroId);
+    if (!quest) return;
+    const result = QuestManager.resolve(this.state, quest, quest.endsAt);
+    this.lastResult = result;
+    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+    this.notify();
+    void this.saveNow();
+  }
+
+  // --- end testing tools ---
 
   /* -------------------------------- queries ---------------------------- */
 
