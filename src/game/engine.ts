@@ -10,7 +10,7 @@ import { GuildManager } from './managers/GuildManager';
 import { PrestigeManager } from './managers/PrestigeManager';
 import { ModifierManager } from './managers/ModifierManager';
 import { AchievementManager } from './managers/AchievementManager';
-import { SKIN_BY_ID, SKIN_PRICE, AUTO_CHAIN_RANGES } from './data/progression';
+import { SKIN_BY_ID, SKIN_PRICE, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
 import { playSound } from './sound';
 import { TESTING_TOOLS_ENABLED } from './testingTools';
 
@@ -321,6 +321,39 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  testAddRenown(amount: number) {
+    if (!TESTING_TOOLS_ENABLED) return;
+    this.state.renown = Math.max(0, this.state.renown + amount);
+    this.notify();
+    void this.saveNow();
+  }
+
+  /**
+   * Jumps a hero straight to a target level, for reaching level-gated
+   * content without playing through everything below it. Reuses
+   * HeroManager.grantXp rather than setting hero.level directly, so stat
+   * growth per level stays exactly consistent with normal play — granting
+   * precisely the cumulative XP needed lands exactly on the target level
+   * with the same stats a hero who actually earned it would have.
+   */
+  testSetHeroLevel(heroId: string, targetLevel: number) {
+    if (!TESTING_TOOLS_ENABLED) return;
+    const hero = this.hero(heroId);
+    if (!hero || targetLevel <= hero.level) return;
+    let needed = -hero.xp; // cancel out whatever partial xp they already have
+    for (let lvl = hero.level; lvl < targetLevel; lvl++) needed += xpForLevel(lvl);
+    HeroManager.grantXp(hero, Math.max(0, needed));
+    this.notify();
+    void this.saveNow();
+  }
+
+  testHealAllInjuries() {
+    if (!TESTING_TOOLS_ENABLED) return;
+    for (const hero of this.state.heroes) hero.injuries = [];
+    this.notify();
+    void this.saveNow();
+  }
+
   /** Resolves a hero's active quest immediately, using its own already-locked-in odds — not a guaranteed win, just not waiting for the clock. */
   testCompleteActiveQuest(heroId: string) {
     if (!TESTING_TOOLS_ENABLED) return;
@@ -328,6 +361,17 @@ export class GameEngine {
     if (!quest) return;
     const result = QuestManager.resolve(this.state, quest, quest.endsAt);
     this.lastResult = result;
+    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+    this.notify();
+    void this.saveNow();
+  }
+
+  testCompleteAllActiveQuests() {
+    if (!TESTING_TOOLS_ENABLED) return;
+    for (const quest of [...this.state.activeQuests]) {
+      const result = QuestManager.resolve(this.state, quest, quest.endsAt);
+      this.lastResult = result;
+    }
     this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
     this.notify();
     void this.saveNow();

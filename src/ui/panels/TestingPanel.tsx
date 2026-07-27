@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useEngine } from '../useEngine';
 import { formatGold, formatDuration } from '../../game/util';
 
@@ -7,6 +8,8 @@ export function TestingPanel() {
   const engine = useEngine();
   const state = engine.state;
   const questing = state.heroes.filter((h) => h.status === 'questing');
+  const injured = state.heroes.filter((h) => h.injuries.length > 0);
+  const [levelTarget, setLevelTarget] = useState<Record<string, string>>({});
 
   return (
     <>
@@ -19,7 +22,8 @@ export function TestingPanel() {
       <div className="section-heading">Skip time</div>
       <p className="small muted" style={{ marginBottom: 8 }}>
         Runs the real offline catch-up (including Auto-Chain) as if this much time had actually
-        passed — not a free-win button, just not waiting for the clock.
+        passed — not a free-win button, just not waiting for the clock. Without Auto-Chain, a hero
+        only resolves whatever they were already questing, exactly like real play.
       </p>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <button onClick={() => engine.testSkipTime(HOUR)}>+1 hour</button>
@@ -28,15 +32,56 @@ export function TestingPanel() {
         <button onClick={() => engine.testSkipTime(30 * 24 * HOUR)}>+1 month</button>
       </div>
 
-      <div className="section-heading">Gold</div>
-      <div className="row" style={{ gap: 8 }}>
-        <button onClick={() => engine.testAddGold(1000)}>+1,000</button>
-        <button onClick={() => engine.testAddGold(10000)}>+10,000</button>
-        <button onClick={() => engine.testAddGold(100000)}>+100,000</button>
+      <div className="section-heading">Currency</div>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <button onClick={() => engine.testAddGold(1000)}>+1,000 gold</button>
+        <button onClick={() => engine.testAddGold(10000)}>+10,000 gold</button>
+        <button onClick={() => engine.testAddGold(100000)}>+100,000 gold</button>
       </div>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+        <button onClick={() => engine.testAddRenown(5)}>+5 renown</button>
+        <button onClick={() => engine.testAddRenown(50)}>+50 renown</button>
+        <button onClick={() => engine.testAddRenown(500)}>+500 renown</button>
+      </div>
+
+      <div className="section-heading">Heroes</div>
+      {injured.length > 0 && (
+        <button style={{ marginBottom: 10 }} onClick={() => engine.testHealAllInjuries()}>
+          Heal all injuries ({injured.length})
+        </button>
+      )}
+      {state.heroes.map((hero) => (
+        <div key={hero.id} className="spread card" style={{ marginBottom: 8 }}>
+          <div>
+            <div className="card-title">{hero.name}</div>
+            <div className="tiny muted">Level {hero.level}</div>
+          </div>
+          <div className="row" style={{ gap: 6 }}>
+            <input
+              type="number" min={hero.level + 1} placeholder="Lv"
+              value={levelTarget[hero.id] ?? ''}
+              onChange={(e) => setLevelTarget((s) => ({ ...s, [hero.id]: e.target.value }))}
+              style={{ width: 56, background: 'var(--panel2)', border: '1px solid var(--panel3)', color: 'var(--text)', padding: '4px 6px' }}
+            />
+            <button
+              onClick={() => {
+                const target = parseInt(levelTarget[hero.id] ?? '', 10);
+                if (target > hero.level) engine.testSetHeroLevel(hero.id, target);
+              }}
+            >
+              Set level
+            </button>
+          </div>
+        </div>
+      ))}
 
       <div className="section-heading">Complete a quest now</div>
       {questing.length === 0 && <p className="small muted">No heroes currently questing.</p>}
+      {questing.length > 1 && (
+        <button style={{ marginBottom: 8 }} onClick={() => engine.testCompleteAllActiveQuests()}>
+          Complete all ({questing.length})
+        </button>
+      )}
       {questing.map((hero) => {
         const quest = state.activeQuests.find((q) => q.heroId === hero.id);
         return (
