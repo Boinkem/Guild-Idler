@@ -12,7 +12,7 @@ import { SettingsStore } from './settings';
 
 export type SoundCue =
   | 'quest_success' | 'quest_fail' | 'level_up' | 'legendary_drop'
-  | 'chain_complete' | 'purchase' | 'error' | 'depart' | 'achievement';
+  | 'chain_complete' | 'purchase' | 'error' | 'depart' | 'achievement' | 'collect';
 
 let ctx: AudioContext | null = null;
 
@@ -84,6 +84,14 @@ const CUES: Record<SoundCue, Tone[]> = {
     { freq: 587.33, start: 0, duration: 0.09, type: 'square', gain: 0.35 },
     { freq: 739.99, start: 0.08, duration: 0.09, type: 'square', gain: 0.35 },
     { freq: 880.0, start: 0.16, duration: 0.28, type: 'triangle', gain: 0.45 },
+  ],
+  // Plays when the reward card is dismissed, timed with the coins/XP flying
+  // up off the card -- a quick bright sparkle rather than the fuller fanfare
+  // that already played when the quest resolved.
+  collect: [
+    { freq: 880.0, start: 0, duration: 0.05, type: 'triangle', gain: 0.3 },
+    { freq: 1108.73, start: 0.04, duration: 0.06, type: 'triangle', gain: 0.32 },
+    { freq: 1318.51, start: 0.09, duration: 0.14, type: 'sine', gain: 0.38 },
   ],
 };
 
