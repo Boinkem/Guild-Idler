@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { HeroManager } from '../../game/managers/HeroManager';
@@ -20,6 +21,18 @@ export function HeroesPanel() {
   const recruitable = GuildManager.recruitableClasses(state);
   const bandages = InventoryManager.count(state, 'field_bandage');
 
+  // Condensed by default -- a guild of even three or four heroes used to eat
+  // almost the whole screen. Each card opens on click for the full stat
+  // breakdown, mods, injuries, and livery picker.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpanded = (heroId: string) => {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(heroId)) next.delete(heroId); else next.add(heroId);
+      return next;
+    });
+  };
+
   return (
     <>
       <h2>Heroes</h2>
@@ -31,14 +44,29 @@ export function HeroesPanel() {
         const toNext = HeroManager.xpToNext(hero);
         const mods = HeroManager.heroMods(hero, now);
         const sets = HeroManager.activeSetBonuses(hero);
+        const isOpen = expanded.has(hero.id);
+        const showingOnDesktop = engine.displayedHero.id === hero.id;
 
         return (
           <div key={hero.id} className="card">
-            <div className="row" style={{ alignItems: 'flex-start', gap: 12 }}>
-              <HeroSprite heroClass={hero.heroClass} skin={hero.skin} animation={hero.injuries.length > 0 ? 'hurt' : 'idle'} height={Math.round(76 * settings.spriteScale)} />
+            <div
+              className="row hero-card-summary"
+              style={{ alignItems: 'center', gap: 12 }}
+              onClick={() => toggleExpanded(hero.id)}
+              role="button"
+              tabIndex={0}
+              aria-expanded={isOpen}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpanded(hero.id); } }}
+            >
+              <HeroSprite
+                heroClass={hero.heroClass}
+                skin={hero.skin}
+                animation={hero.injuries.length > 0 ? 'hurt' : 'idle'}
+                height={Math.round((isOpen ? 76 : 44) * settings.spriteScale)}
+              />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="spread">
-                  <span className="card-title">
+                  <span className="card-title hero-card-name">
                     {hero.title && <span className="hero-title">{hero.title}</span>}
                     {hero.name}
                   </span>
@@ -49,14 +77,33 @@ export function HeroesPanel() {
                     )}
                   </span>
                 </div>
+                <div className="bar xp" style={{ marginTop: 6 }}><span style={{ width: `${(hero.xp / toNext) * 100}%` }} /></div>
+                {!isOpen && (
+                  <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+                    {hero.status === 'questing' ? 'away on a quest' : 'at the guild'}
+                    {hero.injuries.length > 0 && <span className="bad"> · {hero.injuries.map((i) => i.name).join(', ')}</span>}
+                    {showingOnDesktop && <span className="good"> · showing on desktop</span>}
+                  </p>
+                )}
+              </div>
+              <button
+                className="btn-ghost hero-card-expand"
+                onClick={(e) => { e.stopPropagation(); toggleExpanded(hero.id); }}
+              >
+                {isOpen ? 'Hide details ▲' : 'Details ▼'}
+              </button>
+            </div>
+
+            {isOpen && (
+              <div className="hero-card-details">
                 <button
-                  className={`chip ${engine.displayedHero.id === hero.id ? 'on' : ''}`}
-                  style={{ marginTop: 4 }}
+                  className={`chip ${showingOnDesktop ? 'on' : ''}`}
+                  style={{ marginBottom: 8 }}
                   onClick={() => engine.setFocusedHero(hero.id)}
-                  disabled={engine.displayedHero.id === hero.id}
+                  disabled={showingOnDesktop}
                   title="Shows this hero on the desktop companion"
                 >
-                  {engine.displayedHero.id === hero.id ? '● Showing on desktop' : 'Show on desktop'}
+                  {showingOnDesktop ? '● Showing on desktop' : 'Show on desktop'}
                 </button>
                 <p className="card-flavour">{classDef.blurb}</p>
 
@@ -150,7 +197,7 @@ export function HeroesPanel() {
                   })}
                 </div>
               </div>
-            </div>
+            )}
           </div>
         );
       })}

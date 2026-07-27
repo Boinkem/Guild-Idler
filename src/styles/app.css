@@ -95,9 +95,24 @@ button:focus-visible, [tabindex]:focus-visible {
   -webkit-app-region: no-drag;
 }
 
-/* Only draggable once explicitly unlocked — see the lock toggle in IdleView. */
-.idle-root.unlocked {
+/*
+ * Only draggable once explicitly unlocked — see the lock toggle in IdleView.
+ * .idle-stage covers almost the entire visible companion (sprite, plate,
+ * status text), so it has to opt back into "drag" itself when unlocked, or
+ * there is nothing left to grab -- the 6px of outer padding alone is not
+ * enough to reliably click. Buttons inside stay clickable because they get
+ * their own no-drag below, which wins over the drag region they sit inside.
+ */
+.idle-root.unlocked,
+.idle-root.unlocked .idle-stage,
+.idle-root.unlocked .idle-plate,
+.idle-root.unlocked .idle-status,
+.idle-root.unlocked .knight-shadow {
   -webkit-app-region: drag;
+}
+.idle-root.unlocked button,
+.idle-root.unlocked .hero-carousel {
+  -webkit-app-region: no-drag;
 }
 
 .idle-stage {
@@ -163,10 +178,18 @@ button:focus-visible, [tabindex]:focus-visible {
   display: flex;
   gap: 8px;
   align-items: center;
-  background: rgba(23, 19, 32, 0.12);
-  border: 1px solid rgba(14, 11, 20, 0.12);
+  /*
+   * Was a hardcoded dark rgba() regardless of theme. On a light theme (e.g.
+   * Old Parchment, Daylight) the text here is dark ink, so a permanently
+   * dark plate made it unreadable over a bright desktop -- this is the
+   * "parchment doesn't translate on desktop" issue. color-mix ties the tint
+   * to the active theme's own --night value, so light themes get a light
+   * plate and dark themes keep the original look.
+   */
+  background: color-mix(in srgb, var(--night) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--edge) 35%, transparent);
   transition: background 160ms ease, border-color 160ms ease;
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
   padding: 5px 9px;
   font-size: 0.625rem;
   letter-spacing: 0.02em;
@@ -290,11 +313,13 @@ button:focus-visible, [tabindex]:focus-visible {
 /* --------------------------------- cards --------------------------------- */
 
 .card {
+  position: relative;
   background: var(--panel);
   border: 1px solid var(--edge);
   border-left: 3px solid var(--panel-3);
   padding: var(--card-pad);
   margin-bottom: 8px;
+  overflow: hidden;
 }
 
 .card.easy { border-left-color: var(--moss); }
@@ -305,12 +330,16 @@ button:focus-visible, [tabindex]:focus-visible {
 .card.chain { border-left-color: var(--blood); background: linear-gradient(90deg, rgba(163, 58, 58, 0.14), transparent 60%); }
 
 .card-head { display: flex; align-items: baseline; gap: 8px; }
-.card-title { font-size: 0.75rem; font-weight: 700; }
+.card-title { font-size: 0.8125rem; font-weight: 700; }
 .card-flavour { color: var(--muted); font-size: 0.625rem; margin: 4px 0 8px; font-style: italic; }
 
+/* Quest board titles read as the most important line on the busiest panel in
+   the app -- bumped further above the general card-title size. */
+.quest-title { font-size: 0.9375rem; }
+
 .tag {
-  font-size: 0.5625rem;
-  padding: 1px 5px;
+  font-size: 0.6875rem;
+  padding: 2px 7px;
   border: 1px solid currentColor;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -579,7 +608,7 @@ input[type='range'] {
 /* ----------------------------- hover reveal ------------------------------- */
 
 .idle-stage:hover .idle-plate {
-  background: rgba(23, 19, 32, 0.88);
+  background: color-mix(in srgb, var(--night) 92%, transparent);
   border-color: var(--edge);
 }
 
@@ -751,3 +780,173 @@ input[type='range'] {
   0% { transform: scale(1.5); color: var(--brass); text-shadow: 0 0 12px rgba(217, 164, 65, 0.7); }
   100% { transform: scale(1); }
 }
+
+/* ------------------------------ max-level flash ---------------------------- */
+/* "Fully upgraded X" -- a brief card flash with stars poofing up and out,
+   triggered once when an upgrade or vendor first reaches its cap. See the
+   useMaxFlash hook in UpgradesPanel.tsx. */
+
+.max-flash-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none;
+  z-index: 3;
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--brass) 35%, transparent), transparent 70%);
+  animation: max-flash-bg 1400ms ease-out forwards;
+}
+
+.max-flash-text {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  padding: 0 10px;
+  color: var(--brass);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--brass) 80%, transparent), 0 2px 3px rgba(0, 0, 0, 0.8);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  animation: max-flash-text 1400ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+@keyframes max-flash-bg {
+  0% { opacity: 0; }
+  14% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes max-flash-text {
+  0% { transform: scale(0.5); opacity: 0; }
+  25% { transform: scale(1.1); opacity: 1; }
+  40% { transform: scale(1); opacity: 1; }
+  85% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
+.max-flash-star {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  font-size: 0.875rem;
+  color: var(--brass);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--brass) 80%, transparent);
+  opacity: 0;
+  animation: star-poof 1300ms ease-out forwards;
+}
+
+@keyframes star-poof {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(0deg); }
+  18% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.05) rotate(var(--rot)); }
+}
+
+/* --------------------------------- toast ------------------------------------ */
+/* A quick golden pop whenever the toast text changes -- the visual half of
+   the existing purchase/action sound cue, not just a silent text swap. */
+
+.toast-pop {
+  animation: toast-pop 380ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+@keyframes toast-pop {
+  0% { transform: translateX(-50%) scale(0.85); box-shadow: 0 0 0 rgba(217, 164, 65, 0); }
+  40% { transform: translateX(-50%) scale(1.04); box-shadow: 0 0 16px color-mix(in srgb, var(--brass) 55%, transparent); }
+  100% { transform: translateX(-50%) scale(1); box-shadow: 0 0 0 rgba(217, 164, 65, 0); }
+}
+
+/* ------------------------------- hero cards -------------------------------- */
+/* Condensed by default -- one hero is one summary row instead of half a
+   screen -- with a details toggle for stats/mods/injuries/livery. */
+
+.hero-card-summary {
+  cursor: pointer;
+}
+.hero-card-summary:hover .hero-card-name { color: var(--brass); }
+
+.hero-card-expand {
+  min-height: 0;
+  padding: 3px 8px;
+  font-size: 0.6875rem;
+  flex: none;
+}
+
+.hero-card-details {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--panel-3);
+}
+
+/* -------------------------------- quest popout ------------------------------ */
+
+.quest-card {
+  cursor: pointer;
+}
+.quest-card:hover { border-left-color: var(--brass); }
+.quest-popout-loot { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+
+/* ============================================================================
+   Style: Modern
+   A softer, rounded-pill overlay toggled from Settings > Appearance > Style.
+   Same layout, same classes, same data -- only the chrome changes, entirely
+   through this block, so no component needed to change to support it.
+   ============================================================================ */
+
+[data-style='modern'] {
+  --radius: 14px;
+}
+
+[data-style='modern'] button {
+  border-radius: 999px;
+  border-color: transparent;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+[data-style='modern'] button:active:not(:disabled) { transform: translateY(1px) scale(0.98); }
+
+[data-style='modern'] .btn-primary {
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--brass) 35%, transparent);
+}
+[data-style='modern'] .btn-ghost {
+  background: var(--panel-2);
+  box-shadow: none;
+}
+
+[data-style='modern'] .card {
+  border-radius: 16px;
+  border-left-width: 5px;
+  border-color: var(--panel-3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+[data-style='modern'] .tag,
+[data-style='modern'] .chip,
+[data-style='modern'] .skin-chip,
+[data-style='modern'] .toggle,
+[data-style='modern'] .toast,
+[data-style='modern'] .idle-plate,
+[data-style='modern'] .hero-card-expand,
+[data-style='modern'] .quest-card,
+[data-style='modern'] .vendor-tabs button,
+[data-style='modern'] .tabs button {
+  border-radius: 999px;
+}
+
+[data-style='modern'] .segmented {
+  border-radius: 999px;
+  overflow: hidden;
+  border-color: var(--panel-3);
+}
+[data-style='modern'] .segmented .seg { border-radius: 0; }
+
+[data-style='modern'] .bar { border-radius: 999px; }
+[data-style='modern'] .bar > span { border-radius: 999px; }
+
+[data-style='modern'] .modal {
+  border-radius: 20px;
+  border-color: var(--panel-3);
+}
+
+[data-style='modern'] .menu-root { border-radius: 10px; overflow: hidden; }
+
+[data-style='modern'] .knight-button { border-radius: 0; box-shadow: none; }

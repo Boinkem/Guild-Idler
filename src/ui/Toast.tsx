@@ -12,5 +12,8 @@ export function Toast() {
   }, [message, engine]);
 
   if (!message) return null;
-  return <div className="toast" role="status">{message}</div>;
+  // Keying on the message text forces a remount whenever it changes, which
+  // restarts the toast-pop animation -- the visual half of the sound cue
+  // that already plays for purchases and other actions.
+  return <div key={message} className="toast toast-pop" role="status">{message}</div>;
 }

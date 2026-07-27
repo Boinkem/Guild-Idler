@@ -12,7 +12,16 @@
 
 export const SETTINGS_VERSION = 1;
 
-export type ThemeId = 'candlelit' | 'midnight' | 'parchment' | 'forest' | 'high_contrast';
+export type ThemeId = 'candlelit' | 'midnight' | 'parchment' | 'forest' | 'high_contrast' | 'daylight';
+
+/**
+ * 'adventure' is the original chunky/pixel look (square corners, brass edges).
+ * 'modern' is a softer, rounded-pill overlay for people who find the adventure
+ * look busy on a desktop — same layout and data, different chrome. Driven
+ * entirely by CSS (see [data-style='modern'] in app.css), so it needs no
+ * per-component changes.
+ */
+export type StyleId = 'adventure' | 'modern';
 
 export interface Theme {
   id: ThemeId;
@@ -26,13 +35,15 @@ export interface Settings {
   version: number;
 
   /** Root font size in px; every rem-based measure scales from this. */
-  fontScale: number;          // 0.85 – 1.4, 1 = default
+  fontScale: number;          // 0.85 – 1.5, 1.35 = default (the old 1 read small on a desktop)
   /** Multiplier on the corner companion and menu hero sprites. */
   spriteScale: number;        // 0.75 – 1.75
   /** Menu density: tightens or loosens padding across cards and panels. */
   density: 'compact' | 'cozy' | 'comfortable';
 
   theme: ThemeId;
+  /** Visual chrome: chunky pixel 'adventure' or rounded-pill 'modern'. */
+  styleId: StyleId;
 
   /** Animation speed multiplier; 0 disables idle bobbing entirely. */
   animationSpeed: number;     // 0, 0.5, 1, 1.5
@@ -56,10 +67,11 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   version: SETTINGS_VERSION,
-  fontScale: 1,
+  fontScale: 1.35,
   spriteScale: 1,
   density: 'cozy',
   theme: 'candlelit',
+  styleId: 'adventure',
   animationSpeed: 1,
   offlineReportOnLaunch: true,
   questResultPopups: true,
@@ -120,12 +132,23 @@ export const THEMES: Theme[] = [
   {
     id: 'high_contrast',
     name: 'High Contrast',
-    description: 'Maximum legibility. Strong edges, bright text.',
+    description: 'Maximum legibility, near-black. Doubles as a clean dark mode.',
     vars: {
       '--night': '#000000', '--panel': '#101014', '--panel-2': '#18181f',
       '--panel-3': '#26262f', '--edge': '#000000', '--parchment': '#ffffff',
       '--muted': '#c0c0cc', '--brass': '#ffcc44', '--brass-dim': '#c99a1e',
       '--moss': '#66d466', '--blood': '#ff6b6b', '--sky': '#66b8ff', '--violet': '#c88fff',
+    },
+  },
+  {
+    id: 'daylight',
+    name: 'Daylight',
+    description: 'Near-white and neutral, closer to a stock desktop app than a tavern.',
+    vars: {
+      '--night': '#f4f5f7', '--panel': '#ffffff', '--panel-2': '#f0f1f4',
+      '--panel-3': '#e2e4e9', '--edge': '#c7cad1', '--parchment': '#20232a',
+      '--muted': '#5b616e', '--brass': '#a5670f', '--brass-dim': '#8a5510',
+      '--moss': '#2f7d4f', '--blood': '#c22f3d', '--sky': '#1f6fc9', '--violet': '#7346c7',
     },
   },
 ];
@@ -204,6 +227,7 @@ export const SettingsStore = {
     // A base font-size on the root makes every rem unit scale at once.
     root.style.fontSize = `${16 * settings.fontScale}px`;
     root.dataset.theme = settings.theme;
+    root.dataset.style = settings.styleId;
     root.dataset.motion = motion === 0 ? 'off' : 'on';
   },
 };

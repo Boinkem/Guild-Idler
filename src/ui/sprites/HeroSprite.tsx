@@ -50,6 +50,18 @@ const HERO_DISPLAY_SCALE: Partial<Record<HeroClass, number>> = {
   dwarf: 0.92,
 };
 
+/**
+ * The samurai pack crops its bounding box asymmetrically -- more empty
+ * margin is left on the right and bottom than the left and top, so the
+ * character itself sits visibly up and to the left of center once rendered
+ * at a fixed frameW x frameH box. Nudges it back toward true center; values
+ * are a percentage of the sprite's own rendered width/height (positive x
+ * moves right, positive y moves down).
+ */
+const HERO_DISPLAY_OFFSET: Partial<Record<HeroClass, { x: number; y: number }>> = {
+  samurai: { x: 7, y: 5 },
+};
+
 let manifestCache: Manifest | null = null;
 let manifestPromise: Promise<Manifest> | null = null;
 
@@ -159,6 +171,10 @@ export function HeroSprite({
 
   const scale = (height / char.frameH) * (HERO_DISPLAY_SCALE[heroClass] ?? 1);
   const url = `./heroes/${heroClass}/${skin}/${resolved}.png`;
+  const offset = HERO_DISPLAY_OFFSET[heroClass];
+  const transforms: string[] = [];
+  if (flip) transforms.push('scaleX(-1)');
+  if (offset) transforms.push(`translate(${flip ? -offset.x : offset.x}%, ${offset.y}%)`);
   const style: CSSProperties = {
     width: char.frameW * scale,
     height: char.frameH * scale,
@@ -167,7 +183,7 @@ export function HeroSprite({
     backgroundPosition: `-${index * char.frameW * scale}px 0`,
     backgroundRepeat: 'no-repeat',
     imageRendering: 'pixelated',
-    transform: flip ? 'scaleX(-1)' : undefined,
+    transform: transforms.length > 0 ? transforms.join(' ') : undefined,
   };
 
   return (

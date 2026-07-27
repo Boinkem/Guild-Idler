@@ -66,6 +66,17 @@ export function SettingsPanel() {
 
       <div className="section-heading">Appearance</div>
 
+      <Row label="Style" hint="Adventure is the original chunky look. Modern swaps in rounded pills and softer cards.">
+        <Segmented
+          value={settings.styleId}
+          onChange={set('styleId')}
+          options={[
+            { label: 'Adventure', value: 'adventure' },
+            { label: 'Modern', value: 'modern' },
+          ]}
+        />
+      </Row>
+
       <Row label="Theme" hint="Recolours the entire guild menu.">
         <div className="theme-grid">
           {THEMES.map((theme) => (

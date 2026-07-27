@@ -16,8 +16,8 @@ export const UPGRADES: UpgradeDef[] = [
     modsPerLevel: { gold: 10 },
   },
   {
-    id: 'veteran_explorer', name: 'Veteran Explorer',
-    description: 'Knows which rubble is worth turning over.',
+    id: 'veteran_explorer', name: 'Alchemical Assay',
+    description: 'Acid, flame, and a practiced eye separate true ore from slag before the cart even leaves the ruin.',
     baseCost: 400, costGrowth: 1.9, maxLevel: 8,
     modsPerLevel: { loot: 5 }, vendor: 'alchemist',
   },
@@ -28,8 +28,8 @@ export const UPGRADES: UpgradeDef[] = [
     modsPerLevel: { speed: 10 }, vendor: 'blacksmith',
   },
   {
-    id: 'field_medicine', name: 'Field Medicine',
-    description: 'Fewer injuries make it home with the knight.',
+    id: 'field_medicine', name: 'Restorative Tinctures',
+    description: 'Bitter draughts, brewed to knit flesh faster than they have any business doing.',
     baseCost: 350, costGrowth: 1.85, maxLevel: 8,
     modsPerLevel: { injuryResist: 8 }, vendor: 'alchemist',
   },
@@ -40,14 +40,14 @@ export const UPGRADES: UpgradeDef[] = [
     modsPerLevel: { durability: 10 }, vendor: 'blacksmith',
   },
   {
-    id: 'war_stories', name: 'War Stories',
-    description: 'Every quest teaches more when it is retold properly.',
+    id: 'war_stories', name: 'Runic Insight',
+    description: 'Wards etched into a hero\'s gear murmur half-remembered lessons back to whoever carries them.',
     baseCost: 450, costGrowth: 1.85, maxLevel: 8,
     modsPerLevel: { xp: 15 }, vendor: 'enchanter',
   },
   {
-    id: 'master_adventurer', name: 'Master Adventurer',
-    description: 'Unlocks Legendary contracts on the quest board.',
+    id: 'master_adventurer', name: 'Enchanted Seal',
+    description: 'A ward pressed into the guild charter unlocks Legendary contracts on the quest board -- and lends every hero its quiet protection.',
     baseCost: 5000, costGrowth: 1, maxLevel: 1,
     modsPerLevel: { success: 3 }, unlocks: 'legendaryQuests', vendor: 'enchanter',
   },
@@ -356,7 +356,7 @@ export const SKIN_PRICE = 3500;
 export const SKINS: SkinDef[] = [
   { id: 'original', name: 'Original', description: 'The colours they arrived in. Always owned.', cost: 0, swatch: ['#8e8e8e', '#c0c0c0'] },
   { id: 'necrotic', name: 'Necrotic', description: 'Graveyard greens and a violet pallor.', cost: SKIN_PRICE, swatch: ['#3aa55d', '#7a4fa0'] },
-  { id: 'holy', name: 'Holy', description: 'Bleached white and gilded edges.', cost: SKIN_PRICE, swatch: ['#e9d8a0', '#bcd0e0'] },
+  { id: 'holy', name: 'Holy', description: 'Bleached white and gilded edges.', cost: SKIN_PRICE, swatch: ['#fff6d9', '#e8c250'] },
   { id: 'infernal', name: 'Infernal', description: 'Ember reds banked over black.', cost: SKIN_PRICE, swatch: ['#c0331e', '#e07a2a'] },
   { id: 'frost', name: 'Frost', description: 'Glacier blues and pale teal.', cost: SKIN_PRICE, swatch: ['#5aa8d8', '#79c0c0'] },
 ];
