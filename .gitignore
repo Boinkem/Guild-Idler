@@ -7,6 +7,9 @@ release
 # Licensed sprite pack: usable in the project, but not redistributable as files.
 # Regenerate with:  python3 tools/recolor.py --src <pack> --out public/heroes
 public/heroes
+
+# Regenerate with:  python3 tools/import_vendors.py --src <folder> --out public/vendors
+public/vendors
 tools/__pycache__
 tools/devtool/public/*.bak
 src/game/data/json/*.bak

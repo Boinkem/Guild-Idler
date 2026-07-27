@@ -1,4 +1,4 @@
-# Working on Little Knight — the day-to-day guide
+# Working on Guild Idler — the day-to-day guide
 
 This is the practical loop for making changes, testing them, and handing builds
 to playtesters. No prior git knowledge assumed.
@@ -120,7 +120,7 @@ npm version patch          # 0.1.0 -> 0.1.1, commits and tags automatically
 # 3. build installers
 npm run package            # lands in release/
 
-# 4. hand out release/Little Knight Setup 0.1.1.exe
+# 4. hand out release/Guild Idler Setup 0.1.1.exe
 ```
 
 Two steps people forget, both with silent consequences:

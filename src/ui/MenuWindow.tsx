@@ -7,6 +7,7 @@ import { EquipmentPanel } from './panels/EquipmentPanel';
 import { ShopPanel } from './panels/ShopPanel';
 import { UpgradesPanel } from './panels/UpgradesPanel';
 import { GuildPanel } from './panels/GuildPanel';
+import { LorePanel } from './panels/LorePanel';
 import { StatsPanel } from './panels/StatsPanel';
 import { PrestigePanel } from './panels/PrestigePanel';
 import { SettingsPanel } from './panels/SettingsPanel';
@@ -18,6 +19,7 @@ const TABS = [
   { id: 'shop', label: 'Shop', Panel: ShopPanel },
   { id: 'upgrades', label: 'Upgrades', Panel: UpgradesPanel },
   { id: 'guild', label: 'Guild Hall', Panel: GuildPanel },
+  { id: 'lore', label: 'Lore', Panel: LorePanel },
   { id: 'stats', label: 'Statistics', Panel: StatsPanel },
   { id: 'prestige', label: 'Prestige', Panel: PrestigePanel },
   { id: 'settings', label: 'Settings', Panel: SettingsPanel },
@@ -46,7 +48,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   return (
     <div className="menu-root">
       <header className="titlebar">
-        <h1>Little Knight</h1>
+        <h1>Guild Idler</h1>
         <div className="resources">
           <span className="gold">◆ {formatGold(engine.state.gold)} / {formatGold(engine.goldStorage)}</span>
           <span className="renown">✦ {engine.state.renown} renown</span>

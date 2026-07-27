@@ -1,9 +1,9 @@
 /* =========================================================================
- * Little Knight — shared type definitions
+ * Guild Idler — shared type definitions
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 9;
+export const SAVE_VERSION = 11;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -140,6 +140,15 @@ export interface Hero {
    * permanent stat bonus via bonusStats — see PrestigeManager.retire.
    */
   ascension: number;
+  /** How many quests this hero has auto-chained in the current streak. */
+  autoChainCount: number;
+  /**
+   * How many quests the current streak will run before stopping and prompting
+   * for a manual restart, or null if no streak is active (needs a manual
+   * send to start one). Rerolled within the upgrade's current tier range each
+   * time a fresh streak begins.
+   */
+  autoChainTarget: number | null;
 }
 
 /* ----------------------------- quests ----------------------------- */
@@ -217,6 +226,8 @@ export interface ActiveChain {
 
 /* -------------------------- progression -------------------------- */
 
+export type VendorId = 'blacksmith' | 'alchemist' | 'enchanter';
+
 export interface UpgradeDef {
   id: string;
   name: string;
@@ -225,7 +236,16 @@ export interface UpgradeDef {
   costGrowth: number;
   maxLevel: number;
   modsPerLevel: Partial<Modifiers>;
-  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket';
+  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain';
+  /**
+   * Which vendor offers this upgrade. Undefined means it's a general guild
+   * upgrade with no vendor attached (unlocks like Guild Charter or Black
+   * Market Contact are administrative/structural rather than a craft, so
+   * they stay here rather than being forced into one of the three vendors).
+   * Vendor upgrades are additionally gated by vendorLevel — see
+   * ModifierManager.vendorUpgradeIndex.
+   */
+  vendor?: VendorId;
 }
 
 export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern';
@@ -355,4 +375,6 @@ export interface GameState {
   lastPrestigeAt: number | null;
   /** Achievement id -> epoch ms when it unlocked. */
   unlockedAchievements: Record<string, number>;
+  /** How far each vendor's relationship has been invested in — gates how many of their upgrades are visible. */
+  vendorLevels: Record<VendorId, number>;
 }

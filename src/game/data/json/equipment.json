@@ -766,5 +766,141 @@
       "luck": 10,
       "wisdom": 10
     }
+  },
+  {
+    "id": "cellar_dwellers_tooth",
+    "name": "Cellar-Dweller's Tooth",
+    "slot": "amulet",
+    "rarity": "uncommon",
+    "reqLevel": 3,
+    "maxDurability": 60,
+    "value": 75,
+    "mods": {
+      "success": 4,
+      "injuryResist": 6
+    },
+    "stats": {
+      "luck": 2
+    }
+  },
+  {
+    "id": "crow_feather_charm",
+    "name": "Crow-Feather Charm",
+    "slot": "amulet",
+    "rarity": "uncommon",
+    "reqLevel": 8,
+    "maxDurability": 90,
+    "value": 260,
+    "mods": {
+      "success": 6,
+      "loot": 5
+    },
+    "stats": {
+      "wisdom": 3
+    }
+  },
+  {
+    "id": "wardens_signet",
+    "name": "Warden of the Keep's Signet",
+    "slot": "ring",
+    "rarity": "epic",
+    "reqLevel": 16,
+    "maxDurability": 160,
+    "value": 2800,
+    "mods": {
+      "success": 12,
+      "gold": 15,
+      "injuryResist": 10
+    },
+    "stats": {
+      "wisdom": 6,
+      "endurance": 4
+    }
+  },
+  {
+    "id": "sword_of_the_ashen_hand",
+    "name": "Sword of the Ashen Hand",
+    "slot": "weapon",
+    "rarity": "legendary",
+    "reqLevel": 32,
+    "maxDurability": 230,
+    "value": 9800,
+    "mods": {
+      "success": 18,
+      "gold": 10,
+      "injuryResist": 8
+    },
+    "stats": {
+      "strength": 14,
+      "wisdom": 4
+    }
+  },
+  {
+    "id": "bulwark_of_the_war_saint",
+    "name": "Bulwark of the War Saint",
+    "slot": "chest",
+    "rarity": "legendary",
+    "reqLevel": 32,
+    "maxDurability": 240,
+    "value": 9600,
+    "mods": {
+      "injuryResist": 30,
+      "success": 10,
+      "durability": 20
+    },
+    "stats": {
+      "endurance": 14,
+      "wisdom": 4
+    }
+  },
+  {
+    "id": "ashwoven_charm",
+    "name": "Ashwoven Charm",
+    "slot": "amulet",
+    "rarity": "rare",
+    "reqLevel": 11,
+    "maxDurability": 130,
+    "value": 500,
+    "mods": {
+      "success": 6,
+      "injuryResist": 8
+    },
+    "stats": {
+      "wisdom": 4
+    }
+  },
+  {
+    "id": "seized_glaive",
+    "name": "Seized Glaive",
+    "slot": "weapon",
+    "rarity": "rare",
+    "reqLevel": 15,
+    "maxDurability": 170,
+    "value": 720,
+    "mods": {
+      "success": 9,
+      "gold": 6
+    },
+    "stats": {
+      "strength": 6
+    }
+  },
+  {
+    "id": "gravewatchers_band",
+    "name": "Gravewatcher's Band",
+    "slot": "ring",
+    "rarity": "epic",
+    "reqLevel": 19,
+    "maxDurability": 190,
+    "value": 1950,
+    "mods": {
+      "injuryResist": 14,
+      "success": 6,
+      "loot": 5
+    },
+    "stats": {
+      "wisdom": 5,
+      "endurance": 3
+    }
   }
 ]

@@ -73,16 +73,38 @@ export const QuestManager = {
     const template = rng.pick(eligible.length > 0 ? eligible : QUEST_TEMPLATES);
     const subject = rng.pick(template.subjects);
     const prefix = rng.chance(18) ? `${rng.pick(QUEST_PREFIXES)} ` : '';
+
+    // Duration and reward used to be rolled independently, which meant a
+    // quest at the short end of a tier's range paid exactly as well as one at
+    // the long end. Reward now interpolates across whichever range was
+    // actually rolled. Burst quests use their own explicit reward range
+    // (deliberately generous — see the comment on burstMinGold) rather than
+    // a proportional slice of the full range, which measured out to 1-2 XP
+    // per burst quest — mathematically fair, but reads as insulting rather
+    // than the "numbers going up" feeling this is supposed to deliver.
+    const useBurst = cfg.burstChance !== undefined && rng.chance(cfg.burstChance);
+    const durMin = useBurst ? cfg.burstMinDuration! : cfg.minDuration;
+    const durMax = useBurst ? cfg.burstMaxDuration! : cfg.maxDuration;
+    const duration = rng.int(durMin, durMax);
+    const span = durMax - durMin;
+    const t = span > 0 ? (duration - durMin) / span : 1;
+    const goldMin = useBurst ? cfg.burstMinGold! : cfg.minGold;
+    const goldMax = useBurst ? cfg.burstMaxGold! : cfg.maxGold;
+    const xpMin = useBurst ? cfg.burstMinXp! : 18;
+    const xpMax = useBurst ? cfg.burstMaxXp! : 30;
+    const rewardGold = Math.max(1, Math.round(goldMin + t * (goldMax - goldMin)));
+    const rewardXp = Math.floor((xpMin + t * (xpMax - xpMin)) * cfg.xpMultiplier);
+
     return {
       id: `${seedTag}:${difficulty}:${subject.replace(/\s+/g, '_')}`,
       name: `${prefix}${template.verb} ${subject}`,
       flavour: rng.pick(template.flavour),
       difficulty,
       tag: template.tag,
-      duration: rng.int(cfg.minDuration, cfg.maxDuration),
+      duration,
       baseSuccess: cfg.baseSuccess,
-      rewardGold: rng.int(cfg.minGold, cfg.maxGold),
-      rewardXp: Math.floor(rng.int(18, 30) * cfg.xpMultiplier),
+      rewardGold,
+      rewardXp,
       loot: lootTableFor(difficulty, rng),
       reqLevel: cfg.reqLevel,
     };
@@ -105,6 +127,25 @@ export const QuestManager = {
       reqLevel: chain.reqLevel,
       chain: { chainId: chain.id, stage, totalStages: chain.stages.length },
     };
+  },
+
+  /**
+   * Picks the best quest currently on offer for a hero — same heuristic used
+   * throughout the balance simulations elsewhere in this project: continue
+   * an active chain's next stage if one is available, otherwise the
+   * highest-paying quest at 50%+ odds, otherwise the best odds available
+   * rather than stalling. Used by Auto-Chain to pick a hero's next contract
+   * without the player choosing it themselves.
+   */
+  pickBestQuest(state: GameState, hero: Hero, now: number): QuestOffer | null {
+    const eligible = state.questBoard.filter((o) => hero.level >= o.reqLevel);
+    if (eligible.length === 0) return null;
+    const chainQuest = eligible.find((o) => o.chain);
+    if (chainQuest) return chainQuest;
+    const scored = eligible.map((o) => ({ o, p: QuestManager.previewSuccess(state, hero, o, [], now) }));
+    const viable = scored.filter((e) => e.p >= 50).sort((a, b) => b.o.rewardGold - a.o.rewardGold);
+    if (viable.length > 0) return viable[0].o;
+    return scored.sort((a, b) => b.p - a.p)[0].o;
   },
 
   /** Success chance preview, used by the UI and locked in at departure. */
@@ -193,7 +234,7 @@ export const QuestManager = {
     if (success) {
       gold = Math.floor(quest.offer.rewardGold * quest.goldMultiplier * (1 + events.goldPct)) + events.flatGold;
       xp = Math.floor(quest.offer.rewardXp * quest.xpMultiplier * (1 + events.xpPct));
-      const lootChance = cfg.lootChance + quest.lootBonus;
+      const lootChance = cfg.lootChance + quest.lootBonus + events.lootDelta;
       for (const entry of quest.offer.loot) {
         if (rng.chance(Math.min(90, entry.chance * (1 + lootChance / 100)))) {
           const def = EQUIPMENT_BY_ID[entry.defId];

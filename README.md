@@ -1,4 +1,4 @@
-# Little Knight
+# Guild Idler
 
 A cozy desktop companion idle game. A small pixel adventurer stands in the corner of your screen and goes on quests while you work. Contracts run for hours or days, resolve whether or not the app is open, and the guild behind him grows over months.
 
@@ -135,10 +135,10 @@ The tuning below comes from a 90-day simulation (`~400 quests`) of a player who 
 
 | Day | Level | Quests run |
 | --- | --- | --- |
-| 1 | 3 | 10 |
-| 7 | 7 | 54 |
-| 30 | 13 | 177 |
-| 90 | 24 | 405 |
+| 1 | 3 | 11 |
+| 7 | 7 | 52 |
+| 30 | 14 | 165 |
+| 90 | 26 | 405 |
 
 - Win rate at that risk appetite: ~86%
 - Legendary items in 90 days: 0–1
@@ -148,6 +148,21 @@ The tuning below comes from a 90-day simulation (`~400 quests`) of a player who 
 Two numbers were corrected after the first simulation run. Legendary drop chance was derived from an inverse-square-root of rarity weight, which produced 45 legendaries in 90 days; it is now an explicit `RARITY_LOOT_CHANCE` table topping out at 0.4% per roll. The XP exponent dropped from 1.65 to 1.55, which moved first retirement from beyond six months to about four.
 
 Retuning is data-only. `DIFFICULTIES` in `data/quests.ts`, `RARITY_LOOT_CHANCE` in `data/equipment.ts`, and `xpForLevel` in `data/progression.ts` are the three knobs that move almost everything.
+
+### Fast-start pacing
+
+Easy quests have a `burstChance` (45%) of rolling a short 90s–8min contract
+with its own explicit, generous reward range instead of the normal 1–2h
+range — something to click every other minute in the first few sessions,
+tapering naturally into the slower/idle-friendly pace as normal/hard tiers
+open up. A strict proportional slice of the full reward range was tried
+first and measured directly: it rounded to 1–2 XP per burst quest, which is
+mathematically fair but reads as insulting rather than the "numbers going
+up" feeling it's meant to deliver — burst rewards are deliberately generous
+rather than strictly proportional. Verified this doesn't disturb the
+established mid/late curve above: a 90-day simulation with bursts active
+lands within 1-2 levels of the original baseline at every checkpoint, with
+day-90 quest count matching almost exactly.
 
 ---
 

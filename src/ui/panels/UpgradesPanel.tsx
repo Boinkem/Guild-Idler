@@ -1,12 +1,69 @@
+import { useState } from 'react';
 import { useEngine } from '../useEngine';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
+import { AUTO_CHAIN_RANGES, VENDORS, vendorUpgrades } from '../../game/data/progression';
+import { VendorId, UpgradeDef } from '../../game/types';
 import { describeMods, formatGold } from '../../game/util';
+import { VendorSprite } from '../sprites/VendorSprite';
+
+type Tab = 'general' | VendorId;
+
+function chainRangeText(level: number): string {
+  const range = AUTO_CHAIN_RANGES[level];
+  return range.min === range.max ? `${range.min}` : `${range.min}-${range.max}`;
+}
 
 export function UpgradesPanel() {
   const engine = useEngine();
   const state = engine.state;
   const global = ModifierManager.global(state);
+  const [tab, setTab] = useState<Tab>('general');
+
+  const generalUpgrades = GuildManager.upgrades().filter((u) => !u.vendor);
+
+  function upgradeCard(def: UpgradeDef) {
+    const level = GuildManager.upgradeLevel(state, def.id);
+    const cost = GuildManager.nextUpgradeCost(state, def.id);
+    const maxed = cost === null && level >= def.maxLevel;
+    return (
+      <div key={def.id} className="card" style={{ marginBottom: 0 }}>
+        <div className="spread">
+          <span className="card-title">{def.name}</span>
+          <span className="small muted">{level}/{def.maxLevel}</span>
+        </div>
+        <p className="card-flavour">{def.description}</p>
+        <div className="stat-row" style={{ marginBottom: 8 }}>
+          {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
+          {def.unlocks === 'legendaryQuests' && <span className="gold-text">Unlocks Legendary quests</span>}
+          {def.unlocks === 'chains' && <span className="gold-text">Unlocks multi-day quest chains</span>}
+          {def.unlocks === 'blackMarket' && <span className="gold-text">Unlocks the Black Market</span>}
+          {def.unlocks === 'autoChain' && level > 0 && (
+            <span className="gold-text">Currently chains {chainRangeText(level)} quests per streak</span>
+          )}
+          {def.unlocks === 'autoChain' && !maxed && (
+            <span className="muted">Next tier: {chainRangeText(level + 1)} quests per streak</span>
+          )}
+        </div>
+        <button
+          className="btn-primary"
+          disabled={maxed || cost === null || state.gold < cost}
+          onClick={() => engine.buyUpgrade(def.id)}
+        >
+          {maxed ? 'Fully upgraded' : `Buy · ${formatGold(cost ?? 0)}`}
+        </button>
+      </div>
+    );
+  }
+
+  function lockedCard(vendorId: VendorId, requiredLevel: number) {
+    return (
+      <div key={`locked-${requiredLevel}`} className="card locked-upgrade" style={{ marginBottom: 0 }}>
+        <div className="card-title muted">???</div>
+        <p className="card-flavour muted">Level up {VENDORS.find((v) => v.id === vendorId)?.name} to level {requiredLevel} to see this.</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -22,34 +79,52 @@ export function UpgradesPanel() {
         </div>
       </div>
 
-      <div className="grid two">
-        {GuildManager.upgrades().map((def) => {
-          const level = GuildManager.upgradeLevel(state, def.id);
-          const cost = GuildManager.nextUpgradeCost(state, def.id);
-          const maxed = cost === null;
-          return (
-            <div key={def.id} className="card" style={{ marginBottom: 0 }}>
-              <div className="spread">
-                <span className="card-title">{def.name}</span>
-                <span className="small muted">{level}/{def.maxLevel}</span>
-              </div>
-              <p className="card-flavour">{def.description}</p>
-              <div className="stat-row" style={{ marginBottom: 8 }}>
-                {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
-                {def.unlocks === 'legendaryQuests' && <span className="gold-text">Unlocks Legendary quests</span>}
-                {def.unlocks === 'chains' && <span className="gold-text">Unlocks multi-day quest chains</span>}
-              </div>
-              <button
-                className="btn-primary"
-                disabled={maxed || state.gold < cost}
-                onClick={() => engine.buyUpgrade(def.id)}
-              >
-                {maxed ? 'Fully upgraded' : `Buy · ${formatGold(cost)}`}
-              </button>
-            </div>
-          );
-        })}
+      <div className="row vendor-tabs" style={{ gap: 6, marginBottom: 12 }}>
+        <button className={tab === 'general' ? 'active' : ''} onClick={() => setTab('general')}>General</button>
+        {VENDORS.map((v) => (
+          <button key={v.id} className={tab === v.id ? 'active' : ''} onClick={() => setTab(v.id)}>{v.name}</button>
+        ))}
       </div>
+
+      {tab === 'general' && (
+        <div className="grid two">
+          {generalUpgrades.map(upgradeCard)}
+        </div>
+      )}
+
+      {VENDORS.filter((v) => v.id === tab).map((vendorDef) => {
+        const level = GuildManager.vendorLevel(state, vendorDef.id);
+        const cost = GuildManager.nextVendorLevelCost(state, vendorDef.id);
+        const list = vendorUpgrades(vendorDef.id);
+        const maxed = cost === null;
+        return (
+          <div key={vendorDef.id}>
+            <div className="card vendor-card">
+              <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
+                <VendorSprite vendor={vendorDef.id} height={72} animate />
+                <div style={{ flex: 1 }}>
+                  <div className="spread">
+                    <span className="card-title">{vendorDef.name}</span>
+                    <span className="small muted">Level {level}/{list.length}</span>
+                  </div>
+                  <p className="card-flavour">{vendorDef.blurb}</p>
+                  <button
+                    className="btn-primary"
+                    disabled={maxed || cost === null || state.gold < cost}
+                    onClick={() => engine.levelUpVendor(vendorDef.id)}
+                  >
+                    {maxed ? 'Nothing more to teach' : `Level up · ${formatGold(cost ?? 0)}`}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid two">
+              {list.map((def, index) => (level >= index + 1 ? upgradeCard(def) : lockedCard(vendorDef.id, index + 1)))}
+            </div>
+          </div>
+        );
+      })}
     </>
   );
 }

@@ -1,5 +1,5 @@
 /**
- * Little Knight Dev Tool — frontend.
+ * Guild Idler Dev Tool — frontend.
  *
  * Vanilla JS, no build step, no framework. Each content type is described by
  * the schema the server sends (tools/devtool/server.mjs), and this file

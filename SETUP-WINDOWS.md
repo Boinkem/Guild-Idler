@@ -1,4 +1,4 @@
-# Getting Little Knight running on Windows
+# Getting Guild Idler running on Windows
 
 ## What the error means
 

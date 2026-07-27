@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Little Knight Dev Tool — standalone content editor.
+ * Guild Idler Dev Tool — standalone content editor.
  *
  * A tiny local web server (no dependencies, no build step) that serves a plain
  * HTML/JS page for editing quest templates, equipment, consumables, and events.
@@ -538,7 +538,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Little Knight Dev Tool running at http://localhost:${PORT}`);
+  console.log(`Guild Idler Dev Tool running at http://localhost:${PORT}`);
   console.log(`Editing JSON files in ${path.relative(ROOT, DATA_DIR)}`);
   console.log('Save in the tool, then restart `npm run dev` to see changes in the game.');
   console.log('Press Ctrl+C to stop.');

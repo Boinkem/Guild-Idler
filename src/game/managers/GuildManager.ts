@@ -1,8 +1,8 @@
 import {
-  GUILD_BY_ID, GUILD_FACILITIES, HERO_CLASSES, RECRUIT_COST, UPGRADE_BY_ID, UPGRADES,
-  guildCost, upgradeCost,
+  GUILD_BY_ID, GUILD_FACILITIES, HERO_CLASSES, RECRUIT_COST, UPGRADE_BY_ID, UPGRADES, VENDORS,
+  guildCost, upgradeCost, vendorLevelCost, isVendorUpgradeUnlocked,
 } from '../data/progression';
-import { GameState, GuildFacility, HeroClass } from '../types';
+import { GameState, GuildFacility, HeroClass, VendorId } from '../types';
 import { Rng } from '../rng';
 import { HeroManager } from './HeroManager';
 import { ModifierManager } from './ModifierManager';
@@ -46,12 +46,16 @@ export const GuildManager = {
     const def = UPGRADE_BY_ID[id];
     const level = GuildManager.upgradeLevel(state, id);
     if (!def || level >= def.maxLevel) return null;
+    if (def.vendor && !isVendorUpgradeUnlocked(state.vendorLevels[def.vendor], def.vendor, def.id)) return null;
     return upgradeCost(def, level);
   },
 
   buyUpgrade(state: GameState, id: string): string | null {
     const def = UPGRADE_BY_ID[id];
     if (!def) return 'Unknown upgrade.';
+    if (def.vendor && !isVendorUpgradeUnlocked(state.vendorLevels[def.vendor], def.vendor, def.id)) {
+      return 'Not offered yet — level up the vendor first.';
+    }
     const level = GuildManager.upgradeLevel(state, id);
     if (level >= def.maxLevel) return 'Already at maximum.';
     const cost = upgradeCost(def, level);
@@ -64,6 +68,31 @@ export const GuildManager = {
 
   upgrades() {
     return UPGRADES;
+  },
+
+  /* ------------------------------- vendors ------------------------------- */
+
+  vendorLevel(state: GameState, vendorId: VendorId): number {
+    return state.vendorLevels[vendorId] ?? 0;
+  },
+
+  nextVendorLevelCost(state: GameState, vendorId: VendorId): number | null {
+    return vendorLevelCost(vendorId, GuildManager.vendorLevel(state, vendorId));
+  },
+
+  levelUpVendor(state: GameState, vendorId: VendorId): string | null {
+    const level = GuildManager.vendorLevel(state, vendorId);
+    const cost = vendorLevelCost(vendorId, level);
+    if (cost === null) return 'This vendor has nothing further to teach right now.';
+    if (state.gold < cost) return 'Not enough gold.';
+    state.gold -= cost;
+    state.stats.goldSpent += cost;
+    state.vendorLevels[vendorId] = level + 1;
+    return null;
+  },
+
+  vendors() {
+    return VENDORS;
   },
 
   /* ------------------------------ heroes ------------------------------ */

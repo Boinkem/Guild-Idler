@@ -1,8 +1,8 @@
 {
   "name": "little-knight",
   "version": "1.0.1",
-  "description": "A cozy desktop companion idle game. A small knight lives in the corner of your screen and goes on quests while you work.",
-  "author": "Little Knight",
+  "description": "A cozy desktop companion idle game. Send heroes on quests, manage your guild's vendors, and grow a fantasy guild that runs while you work.",
+  "author": "Guild Idler",
   "license": "MIT",
   "main": "dist-electron/main.js",
   "type": "module",
@@ -33,7 +33,7 @@
   },
   "build": {
     "appId": "com.littleknight.app",
-    "productName": "Little Knight",
+    "productName": "Guild Idler",
     "files": [
       "dist/**/*",
       "dist-electron/**/*"

@@ -2,6 +2,7 @@ import { GameState, GuildFacility, SAVE_VERSION } from '../types';
 import { createRng } from '../rng';
 import { HeroManager } from './HeroManager';
 import { AchievementManager } from './AchievementManager';
+import { UPGRADES, vendorUpgrades } from '../data/progression';
 
 /** Storage abstraction so the game also runs in a plain browser tab for testing. */
 export interface SaveAdapter {
@@ -86,6 +87,7 @@ export function createInitialState(now = Date.now()): GameState {
     prestigeStreak: 0,
     lastPrestigeAt: null,
     unlockedAchievements: {},
+    vendorLevels: { blacksmith: 0, alchemist: 0, enchanter: 0 },
   };
 }
 
@@ -187,6 +189,35 @@ const MIGRATIONS: Record<number, Migration> = {
       void (typeof window !== 'undefined' ? window.littleKnight?.unlockAchievement(id) : undefined);
     }
     return next as unknown as Record<string, unknown>;
+  },
+  9: (save) => {
+    const heroes = Array.isArray(save.heroes) ? save.heroes as Record<string, unknown>[] : [];
+    for (const h of heroes) {
+      h.autoChainCount = h.autoChainCount ?? 0;
+      h.autoChainTarget = h.autoChainTarget ?? null;
+    }
+    return { ...save, version: 10, heroes };
+  },
+  10: (save) => {
+    const existing = (save.vendorLevels as Record<string, number> | undefined) ?? {};
+    const owned = (save.upgrades as Record<string, number> | undefined) ?? {};
+    // Existing saves may already have levels in upgrades that are now
+    // vendor-gated (e.g. weapons_training bought under the old flat list).
+    // Retroactively grant enough vendor level to keep anything already
+    // purchased visible and further-upgradable — a save shouldn't lose
+    // access to something it earned just because the upgrade moved house.
+    const vendorLevels: Record<string, number> = {
+      blacksmith: existing.blacksmith ?? 0,
+      alchemist: existing.alchemist ?? 0,
+      enchanter: existing.enchanter ?? 0,
+    };
+    for (const def of UPGRADES) {
+      if (!def.vendor) continue;
+      if ((owned[def.id] ?? 0) <= 0) continue;
+      const index = vendorUpgrades(def.vendor).findIndex((u) => u.id === def.id);
+      vendorLevels[def.vendor] = Math.max(vendorLevels[def.vendor], index + 1);
+    }
+    return { ...save, version: 11, vendorLevels };
   },
 };
 

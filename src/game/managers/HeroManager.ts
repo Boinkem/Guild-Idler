@@ -36,6 +36,8 @@ export const HeroManager = {
       questsCompleted: 0,
       skin: 'original',
       ascension: 0,
+      autoChainCount: 0,
+      autoChainTarget: null,
       bonusStats: { strength: 0, endurance: 0, luck: 0, wisdom: 0 },
     };
   },

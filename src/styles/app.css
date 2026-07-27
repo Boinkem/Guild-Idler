@@ -1,5 +1,5 @@
 /* =========================================================================
-   Little Knight — visual system
+   Guild Idler — visual system
    Palette: candlelit guild hall. Deep plum shadow, oiled parchment, brass.
    Type: a chunky pixel/mono display face for headings, a readable mono body.
    ========================================================================= */
@@ -618,3 +618,42 @@ input[type='range'] {
   75% { opacity: 1; }
   100% { transform: translate(-50%, -34px); opacity: 0; }
 }
+
+/* --------------------------------- vendors --------------------------------- */
+
+.vendor-tabs button {
+  flex: 1;
+  min-height: 30px;
+  padding: 6px 8px;
+  font-size: 0.6875rem;
+}
+.vendor-tabs button.active {
+  background: var(--brass);
+  color: var(--night);
+  border-color: var(--brass);
+}
+
+.vendor-card {
+  background: linear-gradient(90deg, rgba(217, 164, 65, 0.08), transparent 60%);
+  border-left-color: var(--brass);
+}
+
+.locked-upgrade {
+  opacity: 0.5;
+  border-style: dashed;
+}
+
+/* ---------------------------------- lore ----------------------------------- */
+
+.lore-card { margin-bottom: 10px; }
+.lore-completed { border-left-color: var(--brass); }
+.lore-in-progress { border-left-color: var(--sky); border-style: dashed; }
+.lore-stage-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 0.6875rem;
+  line-height: 1.5;
+}
+.lore-stage-list li { margin-bottom: 4px; }
+.lore-card details summary { cursor: pointer; }
+.lore-card details[open] summary { margin-bottom: 4px; }

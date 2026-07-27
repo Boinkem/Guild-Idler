@@ -1,0 +1,74 @@
+diff --git a/src/game/data/quests.ts b/src/game/data/quests.ts
+index 23ff091..e316950 100644
+--- a/src/game/data/quests.ts
++++ b/src/game/data/quests.ts
+@@ -199,7 +199,7 @@ export const QUEST_CHAINS: ChainDef[] = [
+     rewardItems: ['seized_glaive'],
+     rewardRenown: 2,
+     title: 'Tally-Breaker',
+-    epilogue: 'The general kept records. Names, dates, places, tallied like inventory. One word appears in the margins more than any other, in a hand that is not the general\'s own: the Harrower. Nobody at the Keep has heard the name before. Everybody has started asking around anyway.',
++    epilogue: "The general kept records. Names, dates, places, tallied like inventory. One word appears in the margins more than any other, in a hand that is not the general's own: the Harrower. Nobody at IronRest has heard the name before. People have started asking around anyway.",
+     stages: [
+       { name: "The General's Column", flavour: 'It marches in formation. Demons do not march. Something taught it to.', difficulty: 'hard', duration: 9 * HOUR, goldMultiplier: 2.0 },
+       { name: 'The Ledger', flavour: 'It kept count of everyone it took. It was going to keep counting after you, too.', difficulty: 'epic', duration: 12 * HOUR, goldMultiplier: 2.4 },
+@@ -258,7 +258,7 @@ export const QUEST_CHAINS: ChainDef[] = [
+     rewardItems: ['bulwark_cuirass'],
+     rewardRenown: 2,
+     title: "Garrick's End",
+-    epilogue: 'Garrick\'s raiders scattered the moment he stopped giving orders, which told its own story about what kind of leader he actually was. The Stone Masons Guild has not forgotten who reopened their gate.',
++    epilogue: "Garrick's raiders scattered the moment he stopped giving orders, which told its own story about what kind of leader he actually was. The Stone Masons Guild has not forgotten who reopened their gate.",
+     stages: [
+       { name: 'The Silent Quarry', flavour: 'Garrick and his raiders hold the town gate. The masons hold everything behind it, for now.', difficulty: 'hard', duration: 8 * HOUR, goldMultiplier: 2.0 },
+       { name: "Garrick's Reckoning", flavour: 'He built his camp inside the quarry itself. Stonemasons do not forget who did that.', difficulty: 'epic', duration: 12 * HOUR, goldMultiplier: 2.4 },
+@@ -296,21 +296,21 @@ export const QUEST_CHAINS: ChainDef[] = [
+     epilogue: 'He dismounted, in the end. The Paladins of the Ashen Hand do not talk about what that looked like, and nobody has pushed them to.',
+     stages: [
+       { name: "The Ashen Hand's Plea", flavour: 'They do not ask for help easily. That they are asking at all should worry you more than it does.', difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.6 },
+-      { name: 'The Road to Saint Aurlias Rest', flavour: 'An old war-cleric built a church there once, long before anyone needed protecting from what sleeps under it now.', difficulty: 'epic', duration: 16 * HOUR, goldMultiplier: 2.9 },
+-      { name: 'The Dead of Saint Aurlias', flavour: 'The town moves before the church does. It will not be the last thing that moves tonight.', difficulty: 'epic', duration: 18 * HOUR, goldMultiplier: 3.1 },
+-      { name: 'The Rider in the Nave', flavour: 'He does not dismount. He has not needed to in a very long time.', difficulty: 'legendary', duration: 24 * HOUR, goldMultiplier: 4.0 },
++      { name: 'The Road to Saint Aurlias Rest', flavour: 'An old war-cleric built a church there once, long before anyone needed protecting from what sleeps under it now. Hoofprints on this road, and only this road, for eleven miles.', difficulty: 'epic', duration: 16 * HOUR, goldMultiplier: 2.9 },
++      { name: 'The Dead of Saint Aurlias', flavour: 'The graves emptied from the inside, same as everywhere else the Harrower has passed — except these are walking toward the church, not away from it, like something on the other side of that door is calling them home.', difficulty: 'epic', duration: 18 * HOUR, goldMultiplier: 3.1 },
++      { name: 'The Rider in the Nave', flavour: 'He was waiting behind the doors the dead were so eager to reach. He does not dismount. He has not needed to in a very long time.', difficulty: 'legendary', duration: 24 * HOUR, goldMultiplier: 4.0 },
+     ],
+   },
+   {
+     id: 'dragon_hunt',
+     name: 'The Dragon Hunt',
+-    description: 'Something is burning the northern holdfasts. Four stages, several days, one dragon.',
++    description: 'Something is burning Emberfell, northernmost of the holdfasts. Four stages, several days, one dragon.',
+     reqLevel: 18,
+     rewardGold: 4000,
+     rewardItems: ['dragon_helm', 'dragon_blade'],
+     rewardRenown: 2,
+     title: 'Dragonbane',
+-    epilogue: 'Emberfell does not burn anymore. The dragon\'s hoard more than covered the cost of rebuilding, which several holdfast elders have pointed out was a strange kind of silver lining.',
++    epilogue: "Emberfell does not burn anymore. The dragon's hoard more than covered the cost of rebuilding, which several holdfast elders have pointed out was a strange kind of silver lining.",
+     stages: [
+       { name: 'Follow the Ash Trail', flavour: 'Cold ash, warm ground. It passed here recently.', difficulty: 'hard', duration: 8 * HOUR, goldMultiplier: 1.5 },
+       { name: 'Question the Survivors', flavour: 'They describe wings the width of the valley.', difficulty: 'normal', duration: 6 * HOUR, goldMultiplier: 1.5 },
+@@ -337,13 +337,13 @@ export const QUEST_CHAINS: ChainDef[] = [
+   {
+     id: 'demon_fortress',
+     name: 'Demon Fortress Assault',
+-    description: 'The guild is gathering banners. Your knight has been asked to lead the breach.',
++    description: 'The guild is gathering banners. Whoever you send has been asked to lead the breach.',
+     reqLevel: 22,
+     rewardGold: 6500,
+     rewardItems: ['dragon_armor', 'amulet_of_fortune'],
+     rewardRenown: 3,
+     title: 'Hellgate Breaker',
+-    epilogue: 'The iron gate finally opened for someone who wasn\'t trying to get out. The choir kept singing a while longer, as it turned out — but that is a story that starts somewhere else.',
++    epilogue: "The iron gate finally opened for someone who wasn't trying to get out. The choir kept singing a while longer, as it turned out — but that is a story that starts somewhere else.",
+     stages: [
+       { name: 'Break the Outer Siege', flavour: 'Ladders, fire, and a very long night.', difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 2 },
+       { name: 'Silence the Warding Choir', flavour: 'The singing has not stopped in nine years. It stops today — or you tell yourself that, going in.', difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.4 },
+@@ -376,7 +376,7 @@ export const QUEST_CHAINS: ChainDef[] = [
+     rewardItems: ['warband_cleaver'],
+     rewardRenown: 1,
+     title: 'Warband-Breaker',
+-    epilogue: 'Three warbands, one crown, and considerably less unity than the goblin king was hoping for. The crown, it turns out, was stolen from someone else\'s story entirely — but that is a different job for a different day.',
++    epilogue: "Three warbands, one crown, and considerably less unity than the goblin king was hoping for. The crown, it turns out, was stolen from someone else's story entirely — but that is a different job for a different day.",
+     stages: [
+       { name: 'Scatter the Outriders', flavour: 'They ride ahead of the warband, loud and badly armoured.', difficulty: 'normal', duration: 3 * HOUR, goldMultiplier: 1.3 },
+       { name: "The Chieftain's Camp", flavour: 'He wears three crowns. None of them fit. All of them are stolen.', difficulty: 'hard', duration: 5 * HOUR, goldMultiplier: 1.6 },

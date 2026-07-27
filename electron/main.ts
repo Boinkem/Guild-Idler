@@ -5,6 +5,17 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Electron derives the userData folder (where saves live) from app.getName(),
+ * which defaults to package.json's name/productName. Locking it explicitly
+ * here means the display name (productName, window titles, installer name)
+ * can change freely — as it just did, Little Knight -> Guild Idler — without
+ * silently redirecting existing testers to a new, empty save folder. This
+ * must run before any app.getPath('userData') call, including ones inside
+ * imported modules that might run at import time.
+ */
+app.setName('little-knight');
+
 /** Window sizes. The idle companion is tiny; the menu needs room. */
 const IDLE_SIZE = { width: 260, height: 300 };
 const MENU_SIZE = { width: 900, height: 620 };
@@ -147,7 +158,7 @@ function createTray() {
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() },
   ]);
-  tray.setToolTip('Little Knight');
+  tray.setToolTip('Guild Idler');
   tray.setContextMenu(menu);
 }
 

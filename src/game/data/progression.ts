@@ -1,4 +1,4 @@
-import { GuildDef, HeroClass, Modifiers, QuestTag, RenownPerkDef, Stats, UpgradeDef } from '../types';
+import { GuildDef, HeroClass, Modifiers, QuestTag, RenownPerkDef, Stats, UpgradeDef, VendorId } from '../types';
 
 /* --------------------------- permanent upgrades --------------------------- */
 
@@ -7,7 +7,7 @@ export const UPGRADES: UpgradeDef[] = [
     id: 'weapons_training', name: 'Better Weapons Training',
     description: 'Drill the fundamentals until they are boring.',
     baseCost: 200, costGrowth: 1.75, maxLevel: 10,
-    modsPerLevel: { success: 5 },
+    modsPerLevel: { success: 5 }, vendor: 'blacksmith',
   },
   {
     id: 'efficient_adventuring', name: 'Efficient Adventuring',
@@ -19,37 +19,37 @@ export const UPGRADES: UpgradeDef[] = [
     id: 'veteran_explorer', name: 'Veteran Explorer',
     description: 'Knows which rubble is worth turning over.',
     baseCost: 400, costGrowth: 1.9, maxLevel: 8,
-    modsPerLevel: { loot: 5 },
+    modsPerLevel: { loot: 5 }, vendor: 'alchemist',
   },
   {
     id: 'mounted_travel', name: 'Mounted Travel',
     description: 'A good horse shortens every road.',
     baseCost: 600, costGrowth: 2.0, maxLevel: 6,
-    modsPerLevel: { speed: 10 },
+    modsPerLevel: { speed: 10 }, vendor: 'blacksmith',
   },
   {
     id: 'field_medicine', name: 'Field Medicine',
     description: 'Fewer injuries make it home with the knight.',
     baseCost: 350, costGrowth: 1.85, maxLevel: 8,
-    modsPerLevel: { injuryResist: 8 },
+    modsPerLevel: { injuryResist: 8 }, vendor: 'alchemist',
   },
   {
     id: 'armourers_contract', name: "Armourer's Contract",
     description: 'Standing repairs mean gear lasts noticeably longer.',
     baseCost: 500, costGrowth: 1.9, maxLevel: 6,
-    modsPerLevel: { durability: 10 },
+    modsPerLevel: { durability: 10 }, vendor: 'blacksmith',
   },
   {
     id: 'war_stories', name: 'War Stories',
     description: 'Every quest teaches more when it is retold properly.',
     baseCost: 450, costGrowth: 1.85, maxLevel: 8,
-    modsPerLevel: { xp: 15 },
+    modsPerLevel: { xp: 15 }, vendor: 'enchanter',
   },
   {
     id: 'master_adventurer', name: 'Master Adventurer',
     description: 'Unlocks Legendary contracts on the quest board.',
     baseCost: 5000, costGrowth: 1, maxLevel: 1,
-    modsPerLevel: { success: 3 }, unlocks: 'legendaryQuests',
+    modsPerLevel: { success: 3 }, unlocks: 'legendaryQuests', vendor: 'enchanter',
   },
   {
     id: 'guild_charter', name: 'Guild Charter',
@@ -63,7 +63,63 @@ export const UPGRADES: UpgradeDef[] = [
     baseCost: 9000, costGrowth: 1, maxLevel: 1,
     modsPerLevel: {}, unlocks: 'blackMarket',
   },
+  {
+    id: 'auto_chain', name: 'Auto-Chain',
+    description: 'A hero keeps taking the next contract on their own instead of waiting for orders — for a while. Each level lets the streak run longer before it needs a fresh send.',
+    baseCost: 3500, costGrowth: 2.3, maxLevel: 4,
+    modsPerLevel: {}, unlocks: 'autoChain',
+  },
 ];
+
+/**
+ * Auto-Chain quest-count range per upgrade level, indexed 1-4. A streak's
+ * actual length is rolled within this range each time a fresh one starts
+ * (via a manual send), so the exact stopping point stays a little
+ * unpredictable rather than a metronomic "always exactly 3."
+ */
+export const AUTO_CHAIN_RANGES: Record<number, { min: number; max: number }> = {
+  1: { min: 2, max: 3 },
+  2: { min: 3, max: 5 },
+  3: { min: 6, max: 8 },
+  4: { min: 10, max: 10 },
+};
+
+/* --------------------------------- vendors --------------------------------- */
+
+export interface VendorDef {
+  id: VendorId;
+  name: string;
+  blurb: string;
+}
+
+export const VENDORS: VendorDef[] = [
+  { id: 'blacksmith', name: 'The Blacksmith', blurb: 'Weapons, armour, and a horse that actually listens.' },
+  { id: 'alchemist', name: 'The Alchemist', blurb: 'Salves, remedies, and an eye for what a ruin is really worth.' },
+  { id: 'enchanter', name: 'The Enchanter', blurb: 'Old books, older favours, and a taste for the theatrical.' },
+];
+
+const VENDOR_LEVEL_BASE_COST = 800;
+const VENDOR_LEVEL_COST_GROWTH = 2.1;
+
+/** Every upgrade a given vendor offers, in the fixed order they unlock at vendor levels 1, 2, 3... */
+export function vendorUpgrades(vendorId: VendorId): UpgradeDef[] {
+  return UPGRADES.filter((u) => u.vendor === vendorId);
+}
+
+/** Cost to raise a vendor from currentLevel to currentLevel+1, or null if they're already at their cap. */
+export function vendorLevelCost(vendorId: VendorId, currentLevel: number): number | null {
+  const cap = vendorUpgrades(vendorId).length;
+  if (currentLevel >= cap) return null;
+  return Math.floor(VENDOR_LEVEL_BASE_COST * Math.pow(VENDOR_LEVEL_COST_GROWTH, currentLevel));
+}
+
+/** Whether a specific upgrade is currently visible/purchasable given the vendor's level. */
+export function isVendorUpgradeUnlocked(vendorLevel: number, vendorId: VendorId, upgradeId: string): boolean {
+  const list = vendorUpgrades(vendorId);
+  const index = list.findIndex((u) => u.id === upgradeId);
+  if (index === -1) return true; // not a vendor upgrade at all -- not gated
+  return vendorLevel >= index + 1;
+}
 
 export const UPGRADE_BY_ID: Record<string, UpgradeDef> = Object.fromEntries(UPGRADES.map((u) => [u.id, u]));
 

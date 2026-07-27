@@ -115,8 +115,11 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
   // Faces away heading out, faces back (mirrored) coming home.
   const facingReturn = anim === 'returning';
 
+  const chainProgress = hero.autoChainTarget !== null
+    ? ` (auto-chain ${hero.autoChainCount}/${hero.autoChainTarget})`
+    : '';
   const status = quest
-    ? `${quest.offer.name} — ${formatDuration(quest.endsAt - now)} left`
+    ? `${quest.offer.name} — ${formatDuration(quest.endsAt - now)} left${chainProgress}`
     : injured
       ? `${hero.injuries[0].name}. Heals in ${formatDuration(hero.injuries[0].healsAt - now)}.`
       : questsReady > 0

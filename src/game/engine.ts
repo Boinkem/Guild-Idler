@@ -10,7 +10,7 @@ import { GuildManager } from './managers/GuildManager';
 import { PrestigeManager } from './managers/PrestigeManager';
 import { ModifierManager } from './managers/ModifierManager';
 import { AchievementManager } from './managers/AchievementManager';
-import { SKIN_BY_ID, SKIN_PRICE } from './data/progression';
+import { SKIN_BY_ID, SKIN_PRICE, AUTO_CHAIN_RANGES } from './data/progression';
 import { playSound } from './sound';
 
 const TICK_MS = 1000;
@@ -83,6 +83,42 @@ export class GameEngine {
     }
   }
 
+  /**
+   * Called right after a quest resolves for a hero with an active Auto-Chain
+   * streak. Either starts the next quest and extends the streak, or ends it
+   * (cap reached, upgrade somehow no longer active, or nothing eligible on
+   * the board) and resets the hero's counters. Shared by live tick() and
+   * offline catch-up — offline continuation works the same way, just without
+   * the toast/sound treatment live play gets, and using generateBoard's own
+   * time-seeded determinism to reproduce what the board would have shown at
+   * that historical moment rather than needing a separate simulation.
+   */
+  private tryContinueAutoChain(hero: Hero, now: number): { continued: boolean; completedCount: number; target: number } | null {
+    if (hero.autoChainTarget === null) return null;
+    const target = hero.autoChainTarget;
+
+    const giveUp = (): { continued: boolean; completedCount: number; target: number } => {
+      const completedCount = hero.autoChainCount;
+      hero.autoChainTarget = null;
+      hero.autoChainCount = 0;
+      return { continued: false, completedCount, target };
+    };
+
+    if (hero.autoChainCount >= target) return giveUp();
+    const level = this.state.upgrades['auto_chain'] ?? 0;
+    if (level <= 0) return giveUp();
+
+    this.state.questBoard = QuestManager.generateBoard(this.state, now);
+    const offer = QuestManager.pickBestQuest(this.state, hero, now);
+    if (!offer) return giveUp();
+
+    const { error } = QuestManager.start(this.state, hero, offer, [], now);
+    if (error) return giveUp();
+
+    hero.autoChainCount += 1;
+    return { continued: true, completedCount: hero.autoChainCount, target };
+  }
+
   clearToast() {
     this.toast = null;
     this.notify();
@@ -140,6 +176,21 @@ export class GameEngine {
       else if (result.levelsGained > 0) playSound('level_up');
       else playSound(result.success ? 'quest_success' : 'quest_fail');
       this.reportAchievements(AchievementManager.checkAll(this.state, now));
+
+      const chainHero = this.state.heroes.find((h) => h.id === quest.heroId);
+      if (chainHero) {
+        const chainResult = this.tryContinueAutoChain(chainHero, now);
+        if (chainResult) {
+          if (chainResult.continued) {
+            playSound('depart');
+            this.say(`${chainHero.name} keeps going — ${chainResult.completedCount}/${chainResult.target} in this streak.`);
+          } else {
+            playSound('chain_complete');
+            const n = chainResult.completedCount;
+            this.say(`${chainHero.name} has chained ${n} quest${n === 1 ? '' : 's'} and is waiting for new orders.`);
+          }
+        }
+      }
     }
 
     if (this.refreshWorld(now)) changed = true;
@@ -186,11 +237,18 @@ export class GameEngine {
     if (elapsed < 60_000) return;
 
     const results: QuestResult[] = [];
-    const due = this.state.activeQuests
-      .filter((q) => q.endsAt <= now)
-      .sort((a, b) => a.endsAt - b.endsAt);
-
-    for (const quest of due) {
+    // Auto-Chain can inject a newly-started quest into this same pass — if
+    // it also ends before `now`, it needs resolving in this same offline
+    // catch-up rather than waiting for the next time the app opens. Capped
+    // generously as a pure safety net: a streak stops itself at its target
+    // and needs a manual send to resume, so no single hero can ever produce
+    // more than ~10 (the highest tier) extra iterations from this regardless
+    // of how long the offline gap was.
+    let guard = 0;
+    while (guard++ < 500) {
+      const due = this.state.activeQuests.filter((q) => q.endsAt <= now).sort((a, b) => a.endsAt - b.endsAt);
+      if (due.length === 0) break;
+      const quest = due[0];
       const result = QuestManager.resolve(this.state, quest, quest.endsAt);
       results.push(result);
       // Unlocks still register (and Steam still gets notified) for progress
@@ -200,6 +258,9 @@ export class GameEngine {
       for (const id of AchievementManager.checkAll(this.state, quest.endsAt)) {
         void window.littleKnight?.unlockAchievement(id);
       }
+
+      const hero = this.state.heroes.find((h) => h.id === quest.heroId);
+      if (hero) this.tryContinueAutoChain(hero, quest.endsAt);
     }
     for (const hero of this.state.heroes) HeroManager.pruneInjuries(hero, now);
 
@@ -280,6 +341,20 @@ export class GameEngine {
     const { error } = QuestManager.start(this.state, hero, offer, consumables, Date.now());
     if (error) return this.say(error);
     this.state.focusedHeroId = heroId;
+
+    // A manual send always (re)starts a fresh Auto-Chain streak if the
+    // upgrade is owned — choosing to send by hand again implicitly abandons
+    // whatever streak state was there before.
+    const level = this.state.upgrades['auto_chain'] ?? 0;
+    if (level > 0) {
+      const range = AUTO_CHAIN_RANGES[level];
+      hero.autoChainTarget = range.min + Math.floor(Math.random() * (range.max - range.min + 1));
+      hero.autoChainCount = 1;
+    } else {
+      hero.autoChainTarget = null;
+      hero.autoChainCount = 0;
+    }
+
     playSound('depart');
     this.say(`${hero.name} sets out: ${offer.name}`);
     void this.saveNow();
@@ -393,7 +468,17 @@ export class GameEngine {
   buyUpgrade(id: string) {
     const error = GuildManager.buyUpgrade(this.state, id);
     if (error) return this.say(error);
+    playSound('purchase');
     this.notify();
+    void this.saveNow();
+  }
+
+  levelUpVendor(vendorId: Parameters<typeof GuildManager.levelUpVendor>[1]) {
+    const error = GuildManager.levelUpVendor(this.state, vendorId);
+    if (error) return this.say(error);
+    playSound('purchase');
+    const def = GuildManager.vendors().find((v) => v.id === vendorId);
+    this.say(`${def?.name ?? 'The vendor'} has more to offer now.`);
     void this.saveNow();
   }
 
