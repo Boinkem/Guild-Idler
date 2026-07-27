@@ -8,6 +8,7 @@ import { ShopPanel } from './panels/ShopPanel';
 import { UpgradesPanel } from './panels/UpgradesPanel';
 import { GuildPanel } from './panels/GuildPanel';
 import { LorePanel } from './panels/LorePanel';
+import { DashboardPanel } from './panels/DashboardPanel';
 import { StatsPanel } from './panels/StatsPanel';
 import { PrestigePanel } from './panels/PrestigePanel';
 import { SettingsPanel } from './panels/SettingsPanel';
@@ -15,6 +16,7 @@ import { TestingPanel } from './panels/TestingPanel';
 import { TESTING_TOOLS_ENABLED } from '../game/testingTools';
 
 const TABS = [
+  { id: 'dashboard', label: 'The Guild', Panel: DashboardPanel },
   { id: 'quests', label: 'Quests', Panel: QuestPanel },
   { id: 'heroes', label: 'Heroes', Panel: HeroesPanel },
   { id: 'equipment', label: 'Inventory', Panel: EquipmentPanel },
@@ -32,7 +34,7 @@ type TabId = (typeof TABS)[number]['id'];
 
 export function MenuWindow({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
-  const [tab, setTab] = useState<TabId>('quests');
+  const [tab, setTab] = useState<TabId>('dashboard');
   const [onTop, setOnTop] = useState(true);
 
   useEffect(() => {

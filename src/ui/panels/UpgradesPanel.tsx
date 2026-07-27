@@ -30,7 +30,7 @@ export function UpgradesPanel() {
       <div key={def.id} className="card" style={{ marginBottom: 0 }}>
         <div className="spread">
           <span className="card-title">{def.name}</span>
-          <span className="small muted">{level}/{def.maxLevel}</span>
+          <span key={level} className="small muted purchase-pulse">{level}/{def.maxLevel}</span>
         </div>
         <p className="card-flavour">{def.description}</p>
         <div className="stat-row" style={{ marginBottom: 8 }}>
@@ -105,7 +105,7 @@ export function UpgradesPanel() {
                 <div style={{ flex: 1 }}>
                   <div className="spread">
                     <span className="card-title">{vendorDef.name}</span>
-                    <span className="small muted">Level {level}/{list.length}</span>
+                    <span key={level} className="small muted purchase-pulse">Level {level}/{list.length}</span>
                   </div>
                   <p className="card-flavour">{vendorDef.blurb}</p>
                   <button

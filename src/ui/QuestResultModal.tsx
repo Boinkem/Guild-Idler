@@ -25,11 +25,11 @@ export function QuestResultModal() {
           {result.success ? 'The contract is fulfilled.' : 'The contract failed.'}
         </p>
 
-        <div className="stat-row" style={{ marginBottom: 10 }}>
-          <span className="gold-text">+{formatGold(result.gold)} gold</span>
-          <span>+{result.xp} experience</span>
-          {result.levelsGained > 0 && <span className="good">Level up ×{result.levelsGained}</span>}
+        <div className="reward-burst">
+          {result.xp > 0 && <span className="burst-xp">+{result.xp} XP</span>}
+          {result.gold > 0 && <span className="burst-gold">+{formatGold(result.gold)} gold</span>}
         </div>
+        {result.levelsGained > 0 && <p className="good burst-levelup">Level up ×{result.levelsGained}!</p>}
 
         {result.loot.length > 0 && (
           <>

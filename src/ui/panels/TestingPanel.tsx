@@ -61,7 +61,7 @@ export function TestingPanel() {
               type="number" min={hero.level + 1} placeholder="Lv"
               value={levelTarget[hero.id] ?? ''}
               onChange={(e) => setLevelTarget((s) => ({ ...s, [hero.id]: e.target.value }))}
-              style={{ width: 56, background: 'var(--panel2)', border: '1px solid var(--panel3)', color: 'var(--text)', padding: '4px 6px' }}
+              style={{ width: 56, background: 'var(--panel-2)', border: '1px solid var(--panel-3)', color: 'var(--parchment)', padding: '4px 6px' }}
             />
             <button
               onClick={() => {
