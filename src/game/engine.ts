@@ -36,6 +36,13 @@ export class GameEngine {
   offlineReport: OfflineReport | null = null;
   lastResult: QuestResult | null = null;
   toast: string | null = null;
+  /**
+   * Transient (unsaved) request to open the menu on a specific tab -- e.g.
+   * "View in Lore" on a chain-completion result. Not part of GameState since
+   * it's a one-shot UI intent, not save data. Consumed once by MenuWindow on
+   * mount, same pattern as lastResult/toast being read-then-cleared.
+   */
+  requestedTab: string | null = null;
 
   private listeners = new Set<Listener>();
   private timer: number | null = null;
@@ -433,6 +440,18 @@ export class GameEngine {
     this.state.guildName = trimmed;
     this.notify();
     void this.saveNow();
+  }
+
+  /** Requests that the menu open (or switch) to a specific tab id. */
+  requestTab(id: string) {
+    this.requestedTab = id;
+  }
+
+  /** Reads and clears the pending tab request. Called once by MenuWindow on mount. */
+  consumeRequestedTab(): string | null {
+    const id = this.requestedTab;
+    this.requestedTab = null;
+    return id;
   }
 
   /** What the corner sprite should be doing right now. */

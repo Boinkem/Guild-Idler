@@ -34,7 +34,7 @@ type TabId = (typeof TABS)[number]['id'];
 
 export function MenuWindow({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
-  const [tab, setTab] = useState<TabId>('dashboard');
+  const [tab, setTab] = useState<TabId>(() => (engine.consumeRequestedTab() as TabId) ?? 'dashboard');
   const [onTop, setOnTop] = useState(true);
 
   useEffect(() => {
@@ -51,8 +51,26 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   const idleHeroes = engine.state.heroes.filter((h) => h.status !== 'questing').length;
 
   return (
-    <div className="menu-root">
-      <header className="titlebar">
+    <div className="menu-root" style={{ position: 'relative' }}>
+      {/*
+        Subtle background art behind the whole menu tool. Faded via a
+        separate layer (not the image's own opacity) so it never washes out
+        the panel content drawn on top. A missing file just paints nothing,
+        so this is safe to ship before art lands -- same pattern as the Lore
+        tab's per-chain card backgrounds.
+      */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute', inset: 0,
+          backgroundImage: 'url(./lore/guild-hall-bg.jpg)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          opacity: 0.35,
+          pointerEvents: 'none',
+        }}
+      />
+      <header className="titlebar" style={{ position: 'relative' }}>
         <h1>Guild Idler</h1>
         <div className="resources">
           <span className="gold">◆ {formatGold(engine.state.gold)} / {formatGold(engine.goldStorage)}</span>
@@ -71,7 +89,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         <button className="btn-ghost" onClick={onClose}>Back to desktop</button>
       </header>
 
-      <div className="menu-body">
+      <div className="menu-body" style={{ position: 'relative' }}>
         <nav className="tabs" aria-label="Guild sections">
           {TABS.map((t) => (
             <button

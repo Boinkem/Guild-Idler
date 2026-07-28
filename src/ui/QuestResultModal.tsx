@@ -43,7 +43,7 @@ const XP_PARTICLES = [
  * and the effect below cancels any in-flight timeout from the one it
  * replaced rather than letting it fire against state it no longer owns.
  */
-export function QuestResultModal() {
+export function QuestResultModal({ onViewLore }: { onViewLore?: () => void }) {
   const engine = useEngine();
   const { settings } = useSettings();
   const result = engine.lastResult;
@@ -54,10 +54,10 @@ export function QuestResultModal() {
 
   if (!result || !settings.questResultPopups) return null;
 
-  return <QuestResultCard key={result.questId} result={result} engine={engine} />;
+  return <QuestResultCard key={result.questId} result={result} engine={engine} onViewLore={onViewLore} />;
 }
 
-function QuestResultCard({ result, engine }: { result: QuestResult; engine: GameEngine }) {
+function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; engine: GameEngine; onViewLore?: () => void }) {
   const [dismissing, setDismissing] = useState(false);
   const timeoutRef = useRef<number | null>(null);
 
@@ -70,6 +70,12 @@ function QuestResultCard({ result, engine }: { result: QuestResult; engine: Game
     setDismissing(true);
     playSound('collect');
     timeoutRef.current = window.setTimeout(() => engine.dismissResult(), DISMISS_DELAY_MS);
+  };
+
+  const viewLore = () => {
+    engine.requestTab('lore');
+    onViewLore?.();
+    handleDismiss();
   };
 
   return (
@@ -129,6 +135,12 @@ function QuestResultCard({ result, engine }: { result: QuestResult; engine: Game
               ? 'The expedition is complete. Rewards delivered to the guild.'
               : `Expedition progress: stage ${result.chainAdvanced.stage + 1} of ${result.chainAdvanced.totalStages}.`}
           </p>
+        )}
+
+        {result.chainAdvanced?.completed && onViewLore && (
+          <button className="btn-ghost" onClick={viewLore} style={{ marginBottom: 8 }}>
+            View in Lore →
+          </button>
         )}
 
         <div className="row end" style={{ marginTop: 12 }}>

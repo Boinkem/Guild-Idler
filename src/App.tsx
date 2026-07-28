@@ -57,7 +57,7 @@ export function App() {
       {engine.state.guildName !== '' && (
         <>
           <OfflineReportModal />
-          <QuestResultModal />
+          <QuestResultModal onViewLore={() => changeMode('menu')} />
         </>
       )}
       <Toast />
