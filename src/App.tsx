@@ -68,7 +68,14 @@ export function App() {
       <GuildNamingModal />
       {engine.state.guildName !== '' && (
         <>
-          <OfflineReportModal />
+          {/* Always mounted regardless of mode -- its own auto-dismiss
+              effect (silently clearing a report when the setting is off)
+              needs to keep running even while the idle companion, not this
+              modal, is what's showing. Its full-detail render is gated on
+              "active" internally, so it never displays cropped inside the
+              tiny idle window; IdleView shows a compact banner instead and
+              opens the menu on click. */}
+          <OfflineReportModal active={mode === 'menu'} />
           <QuestResultModal onViewLore={() => changeMode('menu')} />
         </>
       )}

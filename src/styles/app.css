@@ -238,6 +238,20 @@ button:focus-visible, [tabindex]:focus-visible {
   -webkit-app-region: no-drag;
 }
 
+.idle-away-banner {
+  font-size: 0.5625rem;
+  color: var(--brass);
+  margin-top: 4px;
+  max-width: 220px;
+  text-align: center;
+  background: color-mix(in srgb, var(--night) 30%, transparent);
+  border: 1px solid var(--brass-dim);
+  padding: 4px 8px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.idle-away-banner:hover { border-color: var(--brass); }
+
 .idle-actions { display: flex; gap: 4px; margin-top: 6px; -webkit-app-region: no-drag; }
 .idle-actions button { font-size: 0.5625rem; padding: 4px 7px; min-height: 24px; }
 

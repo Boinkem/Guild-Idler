@@ -1,0 +1,111 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index 4e2fe49..0b1cbf3 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -68,7 +68,14 @@ export function App() {
+       <GuildNamingModal />
+       {engine.state.guildName !== '' && (
+         <>
+-          <OfflineReportModal />
++          {/* Always mounted regardless of mode -- its own auto-dismiss
++              effect (silently clearing a report when the setting is off)
++              needs to keep running even while the idle companion, not this
++              modal, is what's showing. Its full-detail render is gated on
++              "active" internally, so it never displays cropped inside the
++              tiny idle window; IdleView shows a compact banner instead and
++              opens the menu on click. */}
++          <OfflineReportModal active={mode === 'menu'} />
+           <QuestResultModal onViewLore={() => changeMode('menu')} />
+         </>
+       )}
+diff --git a/src/ui/IdleView.tsx b/src/ui/IdleView.tsx
+index e7a3aec..725c3d0 100644
+--- a/src/ui/IdleView.tsx
++++ b/src/ui/IdleView.tsx
+@@ -134,6 +134,17 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+       ? `+${others.length} more at the guild · ${othersQuesting} also questing`
+       : `+${others.length} more at the guild`;
+ 
++  // Compact stand-in for the full "while you were away" report while still
++  // in the tiny idle-companion window -- clicking it opens the menu, where
++  // OfflineReportModal (now gated on being active there) shows the real
++  // detail. Never shown at all if the setting to skip the report is off.
++  const report = engine.offlineReport;
++  const awayBanner = report && settings.offlineReportOnLaunch
++    ? report.results.length > 0
++      ? `While you were away: ${report.results.length} quest${report.results.length === 1 ? '' : 's'}, +${formatGold(report.goldGained)} gold →`
++      : 'While you were away: nothing finished yet →'
++    : null;
++
+   return (
+     <div className={`idle-root ${locked ? '' : 'unlocked'}`}>
+       <div className="idle-stage">
+@@ -195,6 +206,9 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+         </div>
+         <div className="idle-status">{status}</div>
+         {otherHint && <div className="idle-status muted">{otherHint}</div>}
++        {awayBanner && (
++          <button className="idle-away-banner" onClick={onOpenMenu}>{awayBanner}</button>
++        )}
+ 
+         <div className="idle-actions">
+           <button className="btn-ghost" onClick={onOpenMenu}>Open guild</button>
+diff --git a/src/ui/OfflineReportModal.tsx b/src/ui/OfflineReportModal.tsx
+index 6109857..ccc9a58 100644
+--- a/src/ui/OfflineReportModal.tsx
++++ b/src/ui/OfflineReportModal.tsx
+@@ -3,8 +3,18 @@ import { useEngine } from './useEngine';
+ import { useSettings } from './useSettings';
+ import { formatDuration, formatGold } from '../game/util';
+ 
+-/** Summarises everything that happened while the app was closed. */
+-export function OfflineReportModal() {
++/**
++ * Summarises everything that happened while the app was closed.
++ *
++ * Always mounted regardless of view mode (see App.tsx) so the auto-dismiss
++ * effect below keeps running even while the idle companion is what's
++ * showing -- but only actually renders its full-detail content when
++ * `active` (i.e. the menu window, properly sized, is open). Showing this
++ * full report cropped inside the tiny idle-companion window was the
++ * original bug; IdleView now shows a compact banner instead and opens the
++ * menu on click, which is what makes `active` true.
++ */
++export function OfflineReportModal({ active }: { active: boolean }) {
+   const engine = useEngine();
+   const { settings } = useSettings();
+   const report = engine.offlineReport;
+@@ -15,7 +25,7 @@ export function OfflineReportModal() {
+     if (report && !settings.offlineReportOnLaunch) engine.dismissOfflineReport();
+   }, [report, settings.offlineReportOnLaunch, engine]);
+ 
+-  if (!report || !settings.offlineReportOnLaunch) return null;
++  if (!active || !report || !settings.offlineReportOnLaunch) return null;
+ 
+   return (
+     <div className="overlay">
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 1681e05..29b69b8 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -238,6 +238,20 @@ button:focus-visible, [tabindex]:focus-visible {
+   -webkit-app-region: no-drag;
+ }
+ 
++.idle-away-banner {
++  font-size: 0.5625rem;
++  color: var(--brass);
++  margin-top: 4px;
++  max-width: 220px;
++  text-align: center;
++  background: color-mix(in srgb, var(--night) 30%, transparent);
++  border: 1px solid var(--brass-dim);
++  padding: 4px 8px;
++  cursor: pointer;
++  -webkit-app-region: no-drag;
++}
++.idle-away-banner:hover { border-color: var(--brass); }
++
+ .idle-actions { display: flex; gap: 4px; margin-top: 6px; -webkit-app-region: no-drag; }
+ .idle-actions button { font-size: 0.5625rem; padding: 4px 7px; min-height: 24px; }
+ 

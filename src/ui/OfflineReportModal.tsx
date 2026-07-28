@@ -3,8 +3,18 @@ import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
 import { formatDuration, formatGold } from '../game/util';
 
-/** Summarises everything that happened while the app was closed. */
-export function OfflineReportModal() {
+/**
+ * Summarises everything that happened while the app was closed.
+ *
+ * Always mounted regardless of view mode (see App.tsx) so the auto-dismiss
+ * effect below keeps running even while the idle companion is what's
+ * showing -- but only actually renders its full-detail content when
+ * `active` (i.e. the menu window, properly sized, is open). Showing this
+ * full report cropped inside the tiny idle-companion window was the
+ * original bug; IdleView now shows a compact banner instead and opens the
+ * menu on click, which is what makes `active` true.
+ */
+export function OfflineReportModal({ active }: { active: boolean }) {
   const engine = useEngine();
   const { settings } = useSettings();
   const report = engine.offlineReport;
@@ -15,7 +25,7 @@ export function OfflineReportModal() {
     if (report && !settings.offlineReportOnLaunch) engine.dismissOfflineReport();
   }, [report, settings.offlineReportOnLaunch, engine]);
 
-  if (!report || !settings.offlineReportOnLaunch) return null;
+  if (!active || !report || !settings.offlineReportOnLaunch) return null;
 
   return (
     <div className="overlay">

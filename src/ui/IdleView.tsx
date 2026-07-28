@@ -134,6 +134,17 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
       ? `+${others.length} more at the guild · ${othersQuesting} also questing`
       : `+${others.length} more at the guild`;
 
+  // Compact stand-in for the full "while you were away" report while still
+  // in the tiny idle-companion window -- clicking it opens the menu, where
+  // OfflineReportModal (now gated on being active there) shows the real
+  // detail. Never shown at all if the setting to skip the report is off.
+  const report = engine.offlineReport;
+  const awayBanner = report && settings.offlineReportOnLaunch
+    ? report.results.length > 0
+      ? `While you were away: ${report.results.length} quest${report.results.length === 1 ? '' : 's'}, +${formatGold(report.goldGained)} gold →`
+      : 'While you were away: nothing finished yet →'
+    : null;
+
   return (
     <div className={`idle-root ${locked ? '' : 'unlocked'}`}>
       <div className="idle-stage">
@@ -195,6 +206,9 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
         </div>
         <div className="idle-status">{status}</div>
         {otherHint && <div className="idle-status muted">{otherHint}</div>}
+        {awayBanner && (
+          <button className="idle-away-banner" onClick={onOpenMenu}>{awayBanner}</button>
+        )}
 
         <div className="idle-actions">
           <button className="btn-ghost" onClick={onOpenMenu}>Open guild</button>
