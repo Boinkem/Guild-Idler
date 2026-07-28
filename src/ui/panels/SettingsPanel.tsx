@@ -77,6 +77,17 @@ export function SettingsPanel() {
         />
       </Row>
 
+      <Row label="Font" hint="Themed is pixel headings and monospace text. Readable swaps in a plain sans-serif for long descriptions.">
+        <Segmented
+          value={settings.fontId}
+          onChange={set('fontId')}
+          options={[
+            { label: 'Themed', value: 'themed' },
+            { label: 'Readable', value: 'readable' },
+          ]}
+        />
+      </Row>
+
       <Row label="Theme" hint="Recolours the entire guild menu.">
         <div className="theme-grid">
           {THEMES.map((theme) => (

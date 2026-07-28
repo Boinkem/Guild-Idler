@@ -34,6 +34,19 @@
   --anim-speed: 1;
 }
 
+/*
+ * Settings > Appearance > Font > Readable. Independent of --style (chrome)
+ * on purpose -- this only swaps the typeface, leaving corners/pills/layout
+ * untouched. --font-body in particular matters here: it's applied to the
+ * whole document via `body { font-family: var(--font-body); }` below, so
+ * every quest description, lore epilogue, and button label reads in this
+ * instead of the default monospace.
+ */
+[data-font='readable'] {
+  --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
 * { box-sizing: border-box; }
 
 html, body, #root {
