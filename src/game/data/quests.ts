@@ -346,10 +346,10 @@ export const QUEST_CHAINS: ChainDef[] = [
     rewardItems: ['dragon_armor', 'amulet_of_fortune'],
     rewardRenown: 3,
     title: 'Hellgate Breaker',
-    epilogue: "The iron gate finally opened for someone who wasn't trying to get out. The choir kept singing a while longer, as it turned out — but that is a story that starts somewhere else.",
+    epilogue: "The demon lord who held that throne won't be sitting on it again. The gate is open, the wards are broken, and whatever was singing behind them is not where you left it. It got out in the noise. It won't get far — but it isn't here anymore.",
     stages: [
       { name: 'Break the Outer Siege', flavour: 'Ladders, fire, and a very long night.', difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 2 },
-      { name: 'Silence the Warding Choir', flavour: 'The singing has not stopped in nine years. It stops today — or you tell yourself that, going in.', difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.4 },
+      { name: 'Break the Warding Choir', flavour: 'Nine years unbroken, and thick enough to hold a fortress shut from the inside. You are not here to make it stop — just to make it stop mattering, long enough to get through.', difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.4 },
       { name: 'The Iron Gate', flavour: 'Held by something that remembers the last siege.', difficulty: 'epic', duration: 18 * HOUR, goldMultiplier: 2.6 },
       { name: 'Descend to the Throne', flavour: 'One door left. It is already open.', difficulty: 'legendary', duration: 24 * HOUR, goldMultiplier: 3.5 },
     ],
@@ -389,9 +389,10 @@ export const QUEST_CHAINS: ChainDef[] = [
     id: 'hollow_choir',
     name: 'The Hollow Choir',
     description:
-      'The guild silenced a choir like this once before, at the fortress. It stopped for exactly ' +
-      'as long as it took to relocate. Something has been singing in the old cathedral for nine ' +
-      'years straight. It never breathes.',
+      "The guild broke a choir like this once before, at the demon fortress — cracked its wards, " +
+      "cut down the demon lord that kept it caged, and left the voices behind, because voices " +
+      "were never the job. It didn't stay put for long. Something has settled into the old " +
+      "cathedral now, singing like it means to make a home of it. It never breathes.",
     reqLevel: 26,
     rewardGold: 5200,
     rewardItems: ['choir_mask', 'silenced_bell'],
@@ -399,8 +400,8 @@ export const QUEST_CHAINS: ChainDef[] = [
     title: 'Choir-Silencer',
     epilogue: 'The singing stopped for real this time — or at least, it has been quiet long enough that most people have stopped flinching at cathedral bells. Most people.',
     stages: [
-      { name: 'Follow the Hymn', flavour: 'It carries for miles and never repeats a verse. You have heard something close to it before, at the fortress.', difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 1.8 },
-      { name: 'The Choir Loft', flavour: 'No singers. Just mouths, carved into the stone, still moving.', difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.2 },
+      { name: 'Follow the Hymn', flavour: "It carries for miles and never repeats a verse. You've heard the shape of it before — not the tune, the wards underneath it. Whatever was under that fortress has made its new home here. Not for long.", difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 1.8 },
+      { name: 'The Choir Loft', flavour: 'No singers. One thing, fused into the rafters in wet coils of flesh, dozens of mouths opening and closing in turn so the note never has to stop. It sings beautifully. That is somehow the worst part.', difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.2 },
       { name: 'Silence the Chord', flavour: 'Whatever it is building toward, it is almost finished.', difficulty: 'epic', duration: 18 * HOUR, goldMultiplier: 2.6 },
     ],
   },
@@ -408,8 +409,20 @@ export const QUEST_CHAINS: ChainDef[] = [
     id: 'world_ender',
     name: "The World-Ender's Vigil",
     description:
-      'A capstone expedition for guilds that have already retired a hero or two. Five stages, ' +
-      'no easy ones, and a patron who refuses to say what is actually waiting at the end.',
+      "Every culture that has ever kept records tells some version of this story, though never " +
+      "with the same name twice — an ending that waits somewhere past the edge of the maps, not " +
+      "born but always waiting, patient in a way patience was never meant to be. Sailors used to " +
+      "mark the same blank stretch of open water on a dozen unrelated charts, a century apart, " +
+      "with the same warning scrawled beside it: past here, the world stops arguing. Scholars " +
+      "called it superstition for three hundred years and stopped calling it that the first time " +
+      "someone found the stretch on land instead — because it does not have one location. It has " +
+      "never needed one. Wherever it is finally ready to be found, the road, the hills, even the " +
+      "sky rearrange themselves around whoever gets close enough to matter, on foot, with nothing " +
+      "so practical as a ship or a marching column to bring along the way. The guild's patron for " +
+      "this expedition has personally funded five prior attempts. None of them came back, and he " +
+      "will not say what he sent them to find — only that this time he isn't sending strangers. " +
+      "Five stages. No easy ones. A capstone expedition, for guilds that have already retired a " +
+      "hero or two and have nothing left to lose by looking.",
     reqLevel: 34,
     rewardGold: 22000,
     rewardItems: ['voidforged_blade', 'voidforged_crown', 'voidforged_plate', 'voidforged_signet'],
@@ -417,11 +430,11 @@ export const QUEST_CHAINS: ChainDef[] = [
     title: "World's End",
     epilogue: 'It did not have a name when this started, and it does not have one now. What it had, it does not have anymore. That will have to be enough of an ending.',
     stages: [
-      { name: 'The Road That Should Not Exist', flavour: 'It appeared on the map three nights ago. It has always been on the ground.', difficulty: 'epic', duration: 16 * HOUR, goldMultiplier: 2.6 },
-      { name: 'The Watchers in the Dark Between Stars', flavour: 'They have been counting something. You do not want to know what.', difficulty: 'legendary', duration: 20 * HOUR, goldMultiplier: 3.2 },
-      { name: 'The Court of the Unmade King', flavour: 'He ruled before the first kingdom. He intends to rule after the last.', difficulty: 'legendary', duration: 24 * HOUR, goldMultiplier: 3.6 },
-      { name: 'The Breaking of the Vigil', flavour: 'Whatever has been holding it back is tired. So are you. Keep going anyway.', difficulty: 'legendary', duration: 28 * HOUR, goldMultiplier: 4.0 },
-      { name: 'The World-Ender', flavour: 'It does not have a name. It has never needed one. This ends here, one way or the other.', difficulty: 'legendary', duration: 32 * HOUR, goldMultiplier: 5.0 },
+      { name: 'The Road That Should Not Exist', flavour: "Three nights ago, a caravan guard on the old coast road swore the ground opened under a full moon and closed again by dawn, leaving a road where there hadn't been one — cutting dead straight into hill country no surveyor has ever mapped. By morning, three cartographers in three different towns had drawn the same route onto their charts without comparing notes, each one certain they'd surveyed it before, decades ago, under a different name, before a war that hasn't happened yet. The guild's advance rider stands at its mouth now, torch raised, looking down a road paved in stone too old and too smooth for anyone currently alive to have laid it. It has always been on the ground. It just hadn't been found yet. It did not need a harbor to arrive by, or a column to march down it. It only needed the guild close enough to bother appearing for.", difficulty: 'epic', duration: 16 * HOUR, goldMultiplier: 2.6 },
+      { name: 'The Watchers in the Dark Between Stars', flavour: "The road climbs past the treeline and past the sky as anyone has ever charted it — stars in configurations that answer to no constellation, counted aloud in a language built for a mouth nobody here has. Six shapes stand at the road's end, tall as siege engines and thin as famine, unmoving, each one marking something on the empty air that leaves no mark anyone living can see. They do not turn to look as the guild approaches. They have been counting for longer than the road has existed, and whatever number they are working toward, it is close. It is very close. They are not the World-Ender's to command — if anything, the arrangement runs the other way — and this is not the only tally they keep. Whatever debt is being counted down here is one of several, on fronts this guild has never heard of, and, with luck, never will.", difficulty: 'legendary', duration: 20 * HOUR, goldMultiplier: 3.2 },
+      { name: 'The Court of the Unmade King', flavour: "Past the Watchers the road stops being a road at all and becomes a hall that isn't holding a shape so much as remembering several — pillars flickering between marble and bone and nothing, a floor that is every battlefield it has ever hosted, layered on top of itself all at once. On a throne assembled from the wreckage of every crown it has ever replaced sits something that at least eight vanished empires once called the first mistake, and stopped teaching children about long before any of them fell. It watches the guild arrive with the patient boredom of a thing that has watched a very great many guilds arrive, and outlasted every one of them.", difficulty: 'legendary', duration: 24 * HOUR, goldMultiplier: 3.6 },
+      { name: 'The Breaking of the Vigil', flavour: 'Below the throne room, older than the throne room, a wall of pale and thinning light holds a line that has not moved since before "moving" had a word for it — tended by things too exhausted to have kept their faces. Whatever has stood this post does not so much ask for help as simply stop pretending it does not need it anymore. The guild braces the failing wall with whatever thirty-four hard-earned levels can buy, shoulder to shoulder with things that stopped being anything nameable a very long time ago. It is not enough on its own. It has to be enough anyway.', difficulty: 'legendary', duration: 28 * HOUR, goldMultiplier: 4.0 },
+      { name: 'The World-Ender', flavour: "Past the breaking vigil there is no more architecture, no more road, no more sky — only a shape the size of a held breath, waiting exactly where it has always waited, patient in precisely the way the old sailors' charts warned about and the scholars refused for three centuries to believe. It does not introduce itself. It has never needed to. Whatever happens next will be the last thing every one of the five expeditions before this one ever saw — or it will be the first thing one of them survived, and there will finally be someone left to write down the difference.", difficulty: 'legendary', duration: 32 * HOUR, goldMultiplier: 5.0 },
     ],
   },
   {
@@ -448,10 +461,23 @@ export const QUEST_CHAINS: ChainDef[] = [
     id: 'last_god',
     name: 'Requiem for the Last God',
     description:
-      'The deepest expedition the guild has ever chartered. There is no patron this time — nobody ' +
-      'left to pay for it. The guild has stared down a nameless thing at the edge of the world and ' +
-      'a king who would not stay buried; neither prepared anyone for this. You are doing this ' +
-      'because someone has to, and everyone else already tried.',
+      "There is no patron for this one — nobody left willing to pay for something they cannot be " +
+      "talked out of fearing. The first thread turned up in the wreck of the Court of the Unmade " +
+      "King, months later than anyone expected to find anything there at all: a single word, " +
+      "carved into the underside of a throne older than the throne itself, in a script nobody " +
+      "currently living can read and every hero who saw it somehow understood anyway. It matched " +
+      "something the Watchers in the dark between stars were counting, in the last moment before " +
+      "the World-Ender stopped them counting anything ever again. The heading it resolves to is " +
+      "not uncharted — it has been sailed before, more than once, by guilds desperate or proud " +
+      "enough to try. Overland ritual circles, doomed pilgrimages on foot, ships that should " +
+      "never have survived the crossing: every method has already been attempted, including the " +
+      "one this guild is about to use. What lies ahead proves the destination can be reached. It " +
+      "does not prove anyone reaches it twice. Whatever waits at the end of this heading is not " +
+      "another thing like the World-Ender — it is older in a different way, the kind of old that " +
+      "used to have a name, and worshippers, and a purpose, before all three ran out. Two " +
+      "capstones deep, and both of them, it turns out, were footnotes. You are doing this because " +
+      "someone has to, and everyone who might have talked you out of it already tried, and " +
+      "already failed, and is not around anymore to say so.",
     reqLevel: 55,
     rewardGold: 90000,
     rewardItems: ['the_last_ember'],
@@ -459,10 +485,10 @@ export const QUEST_CHAINS: ChainDef[] = [
     title: 'Requiem-Bearer',
     epilogue: 'There is a difference between winning and being the one left standing when it is over. The guild is still deciding which of those this was.',
     stages: [
-      { name: 'The Last Map', flavour: 'Every cartographer who charted this route stopped charting anything afterward.', difficulty: 'legendary', duration: 24 * HOUR, goldMultiplier: 4.0 },
-      { name: 'The Field of Failed Guilds', flavour: 'Banners, still standing, none of them yours. Yet.', difficulty: 'legendary', duration: 28 * HOUR, goldMultiplier: 4.5 },
-      { name: 'The Silence Where Prayer Used to Work', flavour: 'Nothing answers here anymore. That used to be a comfort to something.', difficulty: 'legendary', duration: 32 * HOUR, goldMultiplier: 5.0 },
-      { name: 'What Is Left of It', flavour: 'Not a battle. A kindness, if you can call it that. Someone has to finish the story.', difficulty: 'legendary', duration: 36 * HOUR, goldMultiplier: 6.0 },
+      { name: 'The Last Map', flavour: "No cartographer drew this one — the guild's navigator plots it instead, working from seven salvaged fragments, four extracted confessions, and the coordinates carved beneath that throne, laying each reading over the last by lamplight until they finally agree on a single heading running past every charted water anyone has ever sailed. The ship is provisioned for the crossing and nothing past it, because nobody has ever needed to provision for a return leg. When the heading resolves, the navigator sets down her instruments very carefully, and does not pick them up again for the rest of the voyage.", difficulty: 'legendary', duration: 24 * HOUR, goldMultiplier: 4.0 },
+      { name: 'The Field of Failed Guilds', flavour: "The ship makes landfall on a shore no chart accounted for, and this is what's waiting just past the tideline. None of these wrecks share a single route, and that's the closest thing to comfort the Field offers: everyone who's tried has tried differently, and everyone still ended up here anyway. Waterlogged banners driven into the sand beside hulls that were never built to survive the crossing that got them here. Half-collapsed ritual circles, dragged the last mile by hands that didn't have much dragging left in them. Centuries of it, every method including the one this guild just used, and not one banner in the Field belongs to a guild that walked away afterward.", difficulty: 'legendary', duration: 28 * HOUR, goldMultiplier: 4.5 },
+      { name: 'The Silence Where Prayer Used to Work', flavour: 'Inland from the wrecks, past where even the tide stops reaching, an altar older than any faith currently practiced stands at the center of a ring of kneeling dead — not sacrifices, not casualties. Pilgrims. Every one of them came here on purpose, in their final days, exactly as the old rites instructed: to be walked the last mile in person, by the god that used to do the walking. Their robes have gone to dust around bones that never once fell over, because nobody ever came to lead them anywhere. Something did answer, in the end — faint, and slow, and barely enough of itself left to be recognized as the thing they\'d prayed to their whole lives. It just wasn\'t enough to finish what it was there for.', difficulty: 'legendary', duration: 32 * HOUR, goldMultiplier: 5.0 },
+      { name: 'What Is Left of It', flavour: "Beyond the altar, past the pilgrims still waiting to be led somewhere, what's left of the Last God does not rise to meet the guild, and does not need to. It was never a god people feared into worship — it was the one they sought out on purpose, at the very end, to be walked the last mile in person. It is enormous, and it has been dying since long before anything currently alive was born, slowly starving on belief nobody living remembers how to give it. There is no one left to walk it anywhere. So the guild does — the only way anyone still can. This was never going to be the fight anybody feared. It is the last mile, walked the other direction, for once.", difficulty: 'legendary', duration: 36 * HOUR, goldMultiplier: 6.0 },
     ],
   },
 ];
