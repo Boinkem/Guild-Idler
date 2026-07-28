@@ -1,0 +1,77 @@
+diff --git a/src/ui/panels/LoreTab.tsx b/src/ui/panels/LoreTab.tsx
+deleted file mode 100644
+index 08e2e88..0000000
+--- a/src/ui/panels/LoreTab.tsx
++++ /dev/null
+@@ -1,71 +0,0 @@
+-import { useEngine } from '../useEngine';
+-import { QUEST_CHAINS } from '../../game/data/quests';
+-import { currentGuildRank, nextGuildRank } from '../../game/data/guildRank';
+-
+-/** Chains in level order -- matches the ordering used throughout the lore reference doc. */
+-const ORDERED_CHAINS = [...QUEST_CHAINS].sort((a, b) => a.reqLevel - b.reqLevel);
+-
+-export function LoreTab() {
+-  const engine = useEngine();
+-  const state = engine.state;
+-  const rank = currentGuildRank(state);
+-  const next = nextGuildRank(state);
+-  const completedCount = state.completedChains.length;
+-
+-  return (
+-    <>
+-      <h2>Lore</h2>
+-      <p className="subtitle">The stories the guild has actually finished living.</p>
+-
+-      <div className="card" style={{ marginBottom: 16 }}>
+-        <div className="spread">
+-          <span className="card-title">Guild Rank</span>
+-          <b className="gold-text">{rank.name}</b>
+-        </div>
+-        <p className="card-flavour">{rank.blurb}</p>
+-        {next && (
+-          <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+-            Next: {next.name} — complete a chain at level {next.minReqLevel} or higher.
+-          </p>
+-        )}
+-      </div>
+-
+-      <div className="section-heading">
+-        Completed Chains ({completedCount}/{ORDERED_CHAINS.length})
+-      </div>
+-      <div className="grid two">
+-        {ORDERED_CHAINS.map((chain) => {
+-          const unlocked = state.completedChains.includes(chain.id);
+-          return (
+-            <div
+-              key={chain.id}
+-              className={`card achievement-card ${unlocked ? 'unlocked' : ''}`}
+-              style={{ marginBottom: 0 }}
+-            >
+-              <div className="card-title" style={{ fontSize: 12 }}>
+-                {unlocked ? '📖' : '🔒'} {unlocked ? chain.name : '???'}
+-              </div>
+-              {unlocked ? (
+-                <>
+-                  <p className="tiny muted" style={{ margin: '4px 0 0' }}>{chain.description}</p>
+-                  {chain.title && (
+-                    <p className="tiny" style={{ margin: '4px 0 0', color: 'var(--brass)' }}>
+-                      Title earned: {chain.title}
+-                    </p>
+-                  )}
+-                  {chain.epilogue && (
+-                    <p className="tiny" style={{ margin: '6px 0 0', fontStyle: 'italic' }}>{chain.epilogue}</p>
+-                  )}
+-                </>
+-              ) : (
+-                <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+-                  Complete this chain to unlock its story.
+-                </p>
+-              )}
+-            </div>
+-          );
+-        })}
+-      </div>
+-    </>
+-  );
+-}
