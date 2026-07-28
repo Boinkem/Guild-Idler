@@ -1,0 +1,288 @@
+diff --git a/src/game/data/guildRank.ts b/src/game/data/guildRank.ts
+new file mode 100644
+index 0000000..efce346
+--- /dev/null
++++ b/src/game/data/guildRank.ts
+@@ -0,0 +1,86 @@
++import { GameState } from '../types';
++import { QUEST_CHAINS } from './quests';
++
++export interface GuildRankTier {
++  id: string;
++  name: string;
++  /** Minimum effective level (see effectiveGuildLevel) needed to reach this tier. */
++  minLevel: number;
++  blurb: string;
++}
++
++/**
++ * Guild-wide rank, distinct from a hero's individual `ascension` count or the
++ * per-hero level-color tiers in power.ts. Thresholds are mapped onto the
++ * existing QUEST_CHAINS reqLevel curve: "Actors of Greater Calls" lands on
++ * proving_the_bastion (reqLevel 16), the chain where the guild stops being
++ * purely freelance; "Ascended" triggers at reqLevel 34, matching the first
++ * capstone chain (world_ender).
++ */
++export const GUILD_RANK_TIERS: GuildRankTier[] = [
++  {
++    id: 'freelance_operators', name: 'Freelance Operators', minLevel: 0,
++    blurb: 'Whatever is on the board, whoever is free to take it.',
++  },
++  {
++    id: 'professional_contractors', name: 'Professional Contractors', minLevel: 8,
++    blurb: 'Reputable enough that the work keeps finding the guild first.',
++  },
++  {
++    id: 'actors_of_greater_calls', name: 'Actors of Greater Calls', minLevel: 15,
++    blurb: 'Asked directly, now, rather than posted to a board.',
++  },
++  {
++    id: 'realms_influence', name: "A Realm's Influence", minLevel: 18,
++    blurb: 'Territory held, not just visited.',
++  },
++  {
++    id: 'realms_protector', name: "A Realm's Protector", minLevel: 32,
++    blurb: 'The thing standing between the Reach and what comes for it.',
++  },
++  {
++    id: 'ascended', name: 'Ascended', minLevel: 34,
++    blurb: 'Known throughout, for reasons nobody has to explain twice.',
++  },
++];
++
++/** Highest chain reqLevel among all completed chains, or 0 if none completed yet. */
++function highestCompletedReqLevel(state: GameState): number {
++  let highest = 0;
++  for (const id of state.completedChains) {
++    const chain = QUEST_CHAINS.find((c) => c.id === id);
++    if (chain && chain.reqLevel > highest) highest = chain.reqLevel;
++  }
++  return highest;
++}
++
++/**
++ * The level used to place the guild in a rank tier. Combines two signals so
++ * "Ascended" can trigger the moment a hero reaches capstone level (matching
++ * "starts doing capstone quests", not "finishes one") while never regressing
++ * once a chain has actually been completed at that tier: completedChains
++ * only ever grows, so it acts as a floor even if the hero who reached that
++ * level later retires and resets.
++ */
++export function effectiveGuildLevel(state: GameState): number {
++  const chainLevel = highestCompletedReqLevel(state);
++  const heroLevel = state.heroes.reduce((max, h) => Math.max(max, h.level), 0);
++  return Math.max(chainLevel, heroLevel);
++}
++
++/** The guild's current rank tier. */
++export function currentGuildRank(state: GameState): GuildRankTier {
++  const level = effectiveGuildLevel(state);
++  let rank = GUILD_RANK_TIERS[0];
++  for (const tier of GUILD_RANK_TIERS) {
++    if (level >= tier.minLevel) rank = tier;
++  }
++  return rank;
++}
++
++/** The next tier up, or null if already at the highest (Ascended). */
++export function nextGuildRank(state: GameState): GuildRankTier | null {
++  const current = currentGuildRank(state);
++  const index = GUILD_RANK_TIERS.findIndex((t) => t.id === current.id);
++  return GUILD_RANK_TIERS[index + 1] ?? null;
++}
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 2a8b923..bbbce33 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -426,6 +426,19 @@ export class GameEngine {
+     this.setFocusedHero(heroes[nextIndex].id);
+   }
+ 
++  /**
++   * Sets or renames the guild. Trimmed and length-capped since this will
++   * eventually show on a leaderboard; empty/whitespace-only input is a no-op
++   * rather than clearing the name back out.
++   */
++  setGuildName(name: string) {
++    const trimmed = name.trim().slice(0, 24);
++    if (!trimmed) return;
++    this.state.guildName = trimmed;
++    this.notify();
++    void this.saveNow();
++  }
++
+   /** What the corner sprite should be doing right now. */
+   get companionStatus(): 'idle' | 'questing' | 'injured' | 'ready' {
+     const heroes = this.state.heroes;
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 6c518ca..e00e26e 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -88,6 +88,7 @@ export function createInitialState(now = Date.now()): GameState {
+     lastPrestigeAt: null,
+     unlockedAchievements: {},
+     vendorLevels: { blacksmith: 0, alchemist: 0, enchanter: 0 },
++    guildName: '',
+   };
+ }
+ 
+@@ -219,6 +220,11 @@ const MIGRATIONS: Record<number, Migration> = {
+     }
+     return { ...save, version: 11, vendorLevels };
+   },
++  11: (save) => ({
++    ...save,
++    version: 12,
++    guildName: (save.guildName as string | undefined) ?? '',
++  }),
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 8c34b35..8d1a500 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 11;
++export const SAVE_VERSION = 12;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -370,4 +370,11 @@ export interface GameState {
+   unlockedAchievements: Record<string, number>;
+   /** How far each vendor's relationship has been invested in — gates how many of their upgrades are visible. */
+   vendorLevels: Record<VendorId, number>;
++  /**
++   * Player-chosen name for the guild itself, distinct from any hero's name.
++   * Empty string means never set — the naming prompt is shown once on the
++   * Dashboard until the player picks one. Editable afterward from the same
++   * spot.
++   */
++  guildName: string;
+ }
+diff --git a/src/ui/panels/DashboardPanel.tsx b/src/ui/panels/DashboardPanel.tsx
+index 87ba05a..8a72f79 100644
+--- a/src/ui/panels/DashboardPanel.tsx
++++ b/src/ui/panels/DashboardPanel.tsx
+@@ -1,9 +1,11 @@
++import { useState } from 'react';
+ import type { ReactNode } from 'react';
+ import { useEngine } from '../useEngine';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import { VENDORS, vendorUpgrades, xpForLevel } from '../../game/data/progression';
+ import { AchievementManager } from '../../game/managers/AchievementManager';
+ import { guildPowerLevel, levelTierColor, levelTierName } from '../../game/power';
++import { currentGuildRank, nextGuildRank } from '../../game/data/guildRank';
+ import { formatGold } from '../../game/util';
+ 
+ function Ring({
+@@ -31,14 +33,65 @@ export function DashboardPanel() {
+   const engine = useEngine();
+   const state = engine.state;
+   const power = guildPowerLevel(state);
++  const rank = currentGuildRank(state);
++  const next = nextGuildRank(state);
+   const achProgress = AchievementManager.progress(state);
+   const guildAgeDays = Math.max(0, Math.floor((Date.now() - state.createdAt) / (24 * 3600000)));
+ 
++  const [editingName, setEditingName] = useState(false);
++  const [nameDraft, setNameDraft] = useState(state.guildName);
++
++  const saveName = () => {
++    engine.setGuildName(nameDraft);
++    setEditingName(false);
++  };
++
+   return (
+     <>
+       <h2>The Guild</h2>
+       <p className="subtitle">Everything the guild has built, at a glance.</p>
+ 
++      <div className="card">
++        {editingName || !state.guildName ? (
++          <div className="row" style={{ gap: 8 }}>
++            <input
++              type="text"
++              value={nameDraft}
++              placeholder="Name your guild"
++              maxLength={24}
++              autoFocus
++              onChange={(e) => setNameDraft(e.target.value)}
++              onKeyDown={(e) => { if (e.key === 'Enter') saveName(); }}
++              style={{
++                flex: 1, background: 'var(--panel2)', border: '1px solid var(--panel3)',
++                color: 'var(--text)', padding: '7px 8px',
++              }}
++            />
++            <button onClick={saveName}>Save</button>
++          </div>
++        ) : (
++          <div className="spread">
++            <span className="card-title">{state.guildName}</span>
++            <button
++              className="btn-ghost"
++              onClick={() => { setNameDraft(state.guildName); setEditingName(true); }}
++            >
++              Rename
++            </button>
++          </div>
++        )}
++        <div className="spread" style={{ marginTop: 6 }}>
++          <span className="tiny muted">Guild Rank</span>
++          <b className="gold-text">{rank.name}</b>
++        </div>
++        <p className="tiny muted" style={{ margin: '2px 0 0' }}>{rank.blurb}</p>
++        {next && (
++          <p className="tiny muted" style={{ margin: '4px 0 0' }}>
++            Next: {next.name} — reach level {next.minLevel} or complete a chain at that level.
++          </p>
++        )}
++      </div>
++
+       <div className="card power-card">
+         <div className="tiny muted" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>Guild Power</div>
+         <div className="power-number">{power.toLocaleString()}</div>
+diff --git a/src/ui/panels/LorePanel.tsx b/src/ui/panels/LorePanel.tsx
+index 35655c7..57065e6 100644
+--- a/src/ui/panels/LorePanel.tsx
++++ b/src/ui/panels/LorePanel.tsx
+@@ -1,6 +1,7 @@
+ import { useState } from 'react';
+ import type { MouseEvent } from 'react';
+ import { QUEST_CHAINS, ChainDef } from '../../game/data/quests';
++import { currentGuildRank, nextGuildRank } from '../../game/data/guildRank';
+ import { useEngine } from '../useEngine';
+ 
+ /** Shared summary/expand toggle button, matching the Heroes tab pattern. */
+@@ -93,11 +94,28 @@ export function LorePanel() {
+   const discoveredIds = new Set([...completed.map((c) => c.id), ...inProgress.map((x) => x.chain.id)]);
+   const undiscovered = QUEST_CHAINS.length - discoveredIds.size;
+ 
++  const rank = currentGuildRank(state);
++  const next = nextGuildRank(state);
++
+   return (
+     <>
+       <h2>Lore</h2>
+       <p className="subtitle">Every contract tells a small story. This is the guild's record of the ones worth remembering.</p>
+ 
++      <div className="card" style={{ marginBottom: 16 }}>
++        <div className="spread">
++          <span className="card-title">
++            {state.guildName || 'This guild'} — {rank.name}
++          </span>
++        </div>
++        <p className="tiny muted" style={{ margin: '4px 0 0' }}>{rank.blurb}</p>
++        {next && (
++          <p className="tiny muted" style={{ margin: '4px 0 0' }}>
++            Next: {next.name} — reach level {next.minLevel} or complete a chain at that level.
++          </p>
++        )}
++      </div>
++
+       {inProgress.length > 0 && (
+         <>
+           <div className="section-heading">Still unfolding</div>

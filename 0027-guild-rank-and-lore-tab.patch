@@ -1,0 +1,158 @@
+diff --git a/src/game/data/guildRank.ts b/src/game/data/guildRank.ts
+new file mode 100644
+index 0000000..d03ff30
+--- /dev/null
++++ b/src/game/data/guildRank.ts
+@@ -0,0 +1,75 @@
++import { GameState } from '../types';
++import { QUEST_CHAINS } from './quests';
++
++export interface GuildRankTier {
++  id: string;
++  name: string;
++  /** Minimum reqLevel among completed chains needed to reach this tier. */
++  minReqLevel: number;
++  blurb: string;
++}
++
++/**
++ * Guild-wide rank, distinct from a hero's individual `ascension` count.
++ * Derived from the highest reqLevel among completed quest chains, since that
++ * persists across hero retirements/resets the same way `completedChains`
++ * does -- unlike hero level, which resets to 1 on prestige.
++ *
++ * Thresholds are mapped onto the existing QUEST_CHAINS reqLevel curve:
++ * "Actors of Greater Calls" lands on proving_the_bastion (reqLevel 16), the
++ * chain where the guild stops being purely freelance; "Ascended" triggers on
++ * unlocking (not completing) the first capstone tier at reqLevel 34.
++ */
++export const GUILD_RANK_TIERS: GuildRankTier[] = [
++  {
++    id: 'freelance_operators', name: 'Freelance Operators', minReqLevel: 0,
++    blurb: 'Whatever is on the board, whoever is free to take it.',
++  },
++  {
++    id: 'professional_contractors', name: 'Professional Contractors', minReqLevel: 8,
++    blurb: 'Reputable enough that the work keeps finding the guild first.',
++  },
++  {
++    id: 'actors_of_greater_calls', name: 'Actors of Greater Calls', minReqLevel: 15,
++    blurb: 'Asked directly, now, rather than posted to a board.',
++  },
++  {
++    id: 'realms_influence', name: "A Realm's Influence", minReqLevel: 18,
++    blurb: 'Territory held, not just visited.',
++  },
++  {
++    id: 'realms_protector', name: "A Realm's Protector", minReqLevel: 32,
++    blurb: 'The thing standing between the Reach and what comes for it.',
++  },
++  {
++    id: 'ascended', name: 'Ascended', minReqLevel: 34,
++    blurb: 'Known throughout, for reasons nobody has to explain twice.',
++  },
++];
++
++/** Highest chain reqLevel among all completed chains, or 0 if none completed yet. */
++export function highestCompletedReqLevel(state: GameState): number {
++  let highest = 0;
++  for (const id of state.completedChains) {
++    const chain = QUEST_CHAINS.find((c) => c.id === id);
++    if (chain && chain.reqLevel > highest) highest = chain.reqLevel;
++  }
++  return highest;
++}
++
++/** The guild's current rank tier, derived from completed chains. */
++export function currentGuildRank(state: GameState): GuildRankTier {
++  const level = highestCompletedReqLevel(state);
++  let rank = GUILD_RANK_TIERS[0];
++  for (const tier of GUILD_RANK_TIERS) {
++    if (level >= tier.minReqLevel) rank = tier;
++  }
++  return rank;
++}
++
++/** The next tier up, or null if already at the highest (Ascended). */
++export function nextGuildRank(state: GameState): GuildRankTier | null {
++  const current = currentGuildRank(state);
++  const index = GUILD_RANK_TIERS.findIndex((t) => t.id === current.id);
++  return GUILD_RANK_TIERS[index + 1] ?? null;
++}
+diff --git a/src/ui/panels/LoreTab.tsx b/src/ui/panels/LoreTab.tsx
+new file mode 100644
+index 0000000..08e2e88
+--- /dev/null
++++ b/src/ui/panels/LoreTab.tsx
+@@ -0,0 +1,71 @@
++import { useEngine } from '../useEngine';
++import { QUEST_CHAINS } from '../../game/data/quests';
++import { currentGuildRank, nextGuildRank } from '../../game/data/guildRank';
++
++/** Chains in level order -- matches the ordering used throughout the lore reference doc. */
++const ORDERED_CHAINS = [...QUEST_CHAINS].sort((a, b) => a.reqLevel - b.reqLevel);
++
++export function LoreTab() {
++  const engine = useEngine();
++  const state = engine.state;
++  const rank = currentGuildRank(state);
++  const next = nextGuildRank(state);
++  const completedCount = state.completedChains.length;
++
++  return (
++    <>
++      <h2>Lore</h2>
++      <p className="subtitle">The stories the guild has actually finished living.</p>
++
++      <div className="card" style={{ marginBottom: 16 }}>
++        <div className="spread">
++          <span className="card-title">Guild Rank</span>
++          <b className="gold-text">{rank.name}</b>
++        </div>
++        <p className="card-flavour">{rank.blurb}</p>
++        {next && (
++          <p className="tiny muted" style={{ margin: '4px 0 0' }}>
++            Next: {next.name} — complete a chain at level {next.minReqLevel} or higher.
++          </p>
++        )}
++      </div>
++
++      <div className="section-heading">
++        Completed Chains ({completedCount}/{ORDERED_CHAINS.length})
++      </div>
++      <div className="grid two">
++        {ORDERED_CHAINS.map((chain) => {
++          const unlocked = state.completedChains.includes(chain.id);
++          return (
++            <div
++              key={chain.id}
++              className={`card achievement-card ${unlocked ? 'unlocked' : ''}`}
++              style={{ marginBottom: 0 }}
++            >
++              <div className="card-title" style={{ fontSize: 12 }}>
++                {unlocked ? '📖' : '🔒'} {unlocked ? chain.name : '???'}
++              </div>
++              {unlocked ? (
++                <>
++                  <p className="tiny muted" style={{ margin: '4px 0 0' }}>{chain.description}</p>
++                  {chain.title && (
++                    <p className="tiny" style={{ margin: '4px 0 0', color: 'var(--brass)' }}>
++                      Title earned: {chain.title}
++                    </p>
++                  )}
++                  {chain.epilogue && (
++                    <p className="tiny" style={{ margin: '6px 0 0', fontStyle: 'italic' }}>{chain.epilogue}</p>
++                  )}
++                </>
++              ) : (
++                <p className="tiny muted" style={{ margin: '4px 0 0' }}>
++                  Complete this chain to unlock its story.
++                </p>
++              )}
++            </div>
++          );
++        })}
++      </div>
++    </>
++  );
++}
