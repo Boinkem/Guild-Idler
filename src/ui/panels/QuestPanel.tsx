@@ -168,7 +168,7 @@ export function QuestPanel() {
             )}
 
             {isAssigning ? (
-              <div className="row wrap" style={{ marginTop: 8, gap: 6 }} onClick={(e) => e.stopPropagation()}>
+              <div className="row wrap end" style={{ marginTop: 8, gap: 6 }} onClick={(e) => e.stopPropagation()}>
                 {idleHeroes.map((h) => {
                   const eligible = h.level >= offer.reqLevel;
                   return (
