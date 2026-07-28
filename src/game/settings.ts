@@ -23,6 +23,17 @@ export type ThemeId = 'candlelit' | 'midnight' | 'parchment' | 'forest' | 'high_
  */
 export type StyleId = 'adventure' | 'modern';
 
+/**
+ * 'themed' keeps the pixel display face and monospace body text -- the
+ * original tavern look. 'readable' swaps both --font-display and --font-body
+ * for a standard system sans-serif via [data-font='readable'] in app.css,
+ * for anyone who finds long quest/lore text harder to read in monospace.
+ * Independent of styleId on purpose -- style is chrome (corners, pills),
+ * this is purely typeface, and the two shouldn't be forced to change
+ * together.
+ */
+export type FontId = 'themed' | 'readable';
+
 export interface Theme {
   id: ThemeId;
   name: string;
@@ -44,6 +55,8 @@ export interface Settings {
   theme: ThemeId;
   /** Visual chrome: chunky pixel 'adventure' or rounded-pill 'modern'. */
   styleId: StyleId;
+  /** Typeface: pixel/monospace 'themed', or a plain sans-serif 'readable'. */
+  fontId: FontId;
 
   /** Animation speed multiplier; 0 disables idle bobbing entirely. */
   animationSpeed: number;     // 0, 0.5, 1, 1.5
@@ -72,6 +85,7 @@ export const DEFAULT_SETTINGS: Settings = {
   density: 'cozy',
   theme: 'daylight',
   styleId: 'adventure',
+  fontId: 'themed',
   animationSpeed: 1,
   offlineReportOnLaunch: true,
   questResultPopups: true,
@@ -228,6 +242,7 @@ export const SettingsStore = {
     root.style.fontSize = `${16 * settings.fontScale}px`;
     root.dataset.theme = settings.theme;
     root.dataset.style = settings.styleId;
+    root.dataset.font = settings.fontId;
     root.dataset.motion = motion === 0 ? 'off' : 'on';
   },
 };
