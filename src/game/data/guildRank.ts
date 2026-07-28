@@ -7,6 +7,14 @@ export interface GuildRankTier {
   /** Minimum effective level (see effectiveGuildLevel) needed to reach this tier. */
   minLevel: number;
   blurb: string;
+  /**
+   * Reuses the same rarity palette as power.ts's per-hero level tiers, so a
+   * chain's edge glow in the Lore tab reads as the same visual language
+   * used elsewhere rather than introducing a second colour system. Ascended
+   * gets a colour of its own (crimson) rather than reusing "legendary",
+   * since it's meant to read as distinct even from the tier just below it.
+   */
+  color: string;
 }
 
 /**
@@ -21,28 +29,44 @@ export const GUILD_RANK_TIERS: GuildRankTier[] = [
   {
     id: 'freelance_operators', name: 'Freelance Operators', minLevel: 0,
     blurb: 'Whatever is on the board, whoever is free to take it.',
+    color: '#b9ad93',
   },
   {
     id: 'professional_contractors', name: 'Professional Contractors', minLevel: 8,
     blurb: 'Reputable enough that the work keeps finding the guild first.',
+    color: '#79a86b',
   },
   {
     id: 'actors_of_greater_calls', name: 'Actors of Greater Calls', minLevel: 15,
     blurb: 'Asked directly, now, rather than posted to a board.',
+    color: '#5b8fd6',
   },
   {
     id: 'realms_influence', name: "A Realm's Influence", minLevel: 18,
     blurb: 'Territory held, not just visited.',
+    color: '#a874d6',
   },
   {
     id: 'realms_protector', name: "A Realm's Protector", minLevel: 32,
     blurb: 'The thing standing between the Reach and what comes for it.',
+    color: '#d9a441',
   },
   {
     id: 'ascended', name: 'Ascended', minLevel: 34,
     blurb: 'Known throughout, for reasons nobody has to explain twice.',
+    color: '#d64f4f',
   },
 ];
+
+/** The rank tier a given level falls into. Shared by currentGuildRank (the
+ * guild's own level) and the Lore tab (an individual chain's reqLevel). */
+export function rankTierForLevel(level: number): GuildRankTier {
+  let rank = GUILD_RANK_TIERS[0];
+  for (const tier of GUILD_RANK_TIERS) {
+    if (level >= tier.minLevel) rank = tier;
+  }
+  return rank;
+}
 
 /** Highest chain reqLevel among all completed chains, or 0 if none completed yet. */
 function highestCompletedReqLevel(state: GameState): number {
@@ -70,12 +94,7 @@ export function effectiveGuildLevel(state: GameState): number {
 
 /** The guild's current rank tier. */
 export function currentGuildRank(state: GameState): GuildRankTier {
-  const level = effectiveGuildLevel(state);
-  let rank = GUILD_RANK_TIERS[0];
-  for (const tier of GUILD_RANK_TIERS) {
-    if (level >= tier.minLevel) rank = tier;
-  }
-  return rank;
+  return rankTierForLevel(effectiveGuildLevel(state));
 }
 
 /** The next tier up, or null if already at the highest (Ascended). */

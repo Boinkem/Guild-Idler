@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import type { MouseEvent } from 'react';
+import type { MouseEvent, CSSProperties } from 'react';
 import { QUEST_CHAINS, ChainDef } from '../../game/data/quests';
-import { currentGuildRank, nextGuildRank } from '../../game/data/guildRank';
+import { GUILD_RANK_TIERS, currentGuildRank, nextGuildRank, rankTierForLevel } from '../../game/data/guildRank';
+import { outgoingConnections, incomingConnections } from '../../game/data/chainConnections';
 import { useEngine } from '../useEngine';
 
 /** Shared summary/expand toggle button, matching the Heroes tab pattern. */
@@ -13,10 +14,50 @@ function ExpandToggle({ open, onClick }: { open: boolean; onClick: (e: MouseEven
   );
 }
 
-function CompletedEntry({ chain }: { chain: ChainDef }) {
+/**
+ * Background art + tier glow, applied inline. A missing background image
+ * just fails to paint (no CSS error, no broken-image icon), so this rolls
+ * out gradually as art lands in public/lore/chains/<id>.jpg rather than
+ * needing all 18 pieces before any of it shows.
+ */
+function chainCardStyle(chain: ChainDef): CSSProperties {
+  const tier = rankTierForLevel(chain.reqLevel);
+  return {
+    backgroundImage: `linear-gradient(180deg, rgba(20,18,16,0.72), rgba(20,18,16,0.92)), url(./lore/chains/${chain.id}.jpg)`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    borderLeft: `3px solid ${tier.color}`,
+    boxShadow: `0 0 10px ${tier.color}40`,
+  };
+}
+
+function ConnectionTags({ chain, completedIds }: { chain: ChainDef; completedIds: Set<string> }) {
+  const outgoing = outgoingConnections(chain.id, completedIds);
+  const incoming = incomingConnections(chain.id, completedIds);
+  if (outgoing.length === 0 && incoming.length === 0) return null;
+
+  const nameOf = (id: string) => QUEST_CHAINS.find((c) => c.id === id)?.name ?? id;
+
+  return (
+    <div style={{ margin: '4px 0 0' }}>
+      {incoming.map((id) => (
+        <p key={`in-${id}`} className="tiny" style={{ color: 'var(--brass)', margin: '2px 0' }}>
+          ↳ Continues from "{nameOf(id)}"
+        </p>
+      ))}
+      {outgoing.map((id) => (
+        <p key={`out-${id}`} className="tiny" style={{ color: 'var(--brass)', margin: '2px 0' }}>
+          ↳ Continues in "{nameOf(id)}"
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function CompletedEntry({ chain, completedIds }: { chain: ChainDef; completedIds: Set<string> }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="card lore-card lore-completed">
+    <div className="card lore-card lore-completed" style={chainCardStyle(chain)}>
       <div
         className="spread hero-card-summary"
         onClick={() => setOpen((v) => !v)}
@@ -29,10 +70,11 @@ function CompletedEntry({ chain }: { chain: ChainDef }) {
         <span className="tiny gold-text">Lv {chain.reqLevel}</span>
       </div>
       {!open && chain.title && <p className="tiny muted" style={{ margin: '4px 0 0' }}>Grants the title "{chain.title}"</p>}
+      {!open && <ConnectionTags chain={chain} completedIds={completedIds} />}
       {open && (
         <div className="hero-card-details">
           {chain.title && <p className="tiny muted" style={{ margin: '0 0 8px' }}>Grants the title "{chain.title}"</p>}
-          <p className="card-flavour">{chain.epilogue ?? chain.description}</p>
+          <p className="card-flavour">{chain.description}</p>
           <ol className="lore-stage-list">
             {chain.stages.map((s) => (
               <li key={s.name}>
@@ -40,6 +82,15 @@ function CompletedEntry({ chain }: { chain: ChainDef }) {
               </li>
             ))}
           </ol>
+          {chain.epilogue && (
+            <p
+              className="tiny lore-epilogue"
+              style={{ fontStyle: 'italic', borderLeft: '2px solid var(--brass)', paddingLeft: 8, margin: '10px 0 0' }}
+            >
+              {chain.epilogue}
+            </p>
+          )}
+          <ConnectionTags chain={chain} completedIds={completedIds} />
         </div>
       )}
       <ExpandToggle open={open} onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} />
@@ -50,7 +101,7 @@ function CompletedEntry({ chain }: { chain: ChainDef }) {
 function InProgressEntry({ chain, stage }: { chain: ChainDef; stage: number }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="card lore-card lore-in-progress">
+    <div className="card lore-card lore-in-progress" style={chainCardStyle(chain)}>
       <div
         className="spread hero-card-summary"
         onClick={() => setOpen((v) => !v)}
@@ -86,6 +137,8 @@ export function LorePanel() {
     .filter((c) => state.completedChains.includes(c.id))
     .sort((a, b) => a.reqLevel - b.reqLevel);
 
+  const completedIds = new Set(completed.map((c) => c.id));
+
   const inProgress = state.activeChains
     .map((ac) => ({ active: ac, chain: QUEST_CHAINS.find((c) => c.id === ac.chainId) }))
     .filter((x): x is { active: typeof state.activeChains[number]; chain: ChainDef } => !!x.chain)
@@ -96,6 +149,14 @@ export function LorePanel() {
 
   const rank = currentGuildRank(state);
   const next = nextGuildRank(state);
+
+  // Completed chains grouped by the rank tier their own reqLevel falls
+  // into, in tier order -- turns the flat list into a timeline of who the
+  // guild was at each point, rather than one undifferentiated scroll.
+  const groups = GUILD_RANK_TIERS.map((tier) => ({
+    tier,
+    chains: completed.filter((c) => rankTierForLevel(c.reqLevel).id === tier.id),
+  })).filter((g) => g.chains.length > 0);
 
   return (
     <>
@@ -125,11 +186,19 @@ export function LorePanel() {
         </>
       )}
 
-      <div className="section-heading">Completed</div>
-      {completed.length === 0 && (
-        <p className="small muted">No chapters finished yet. Contracts on the board sometimes lead somewhere bigger — keep an eye out.</p>
+      {groups.length === 0 && (
+        <>
+          <div className="section-heading">Completed</div>
+          <p className="small muted">No chapters finished yet. Contracts on the board sometimes lead somewhere bigger — keep an eye out.</p>
+        </>
       )}
-      {completed.map((chain) => <CompletedEntry key={chain.id} chain={chain} />)}
+
+      {groups.map(({ tier, chains }) => (
+        <div key={tier.id}>
+          <div className="section-heading" style={{ color: tier.color }}>{tier.name}</div>
+          {chains.map((chain) => <CompletedEntry key={chain.id} chain={chain} completedIds={completedIds} />)}
+        </div>
+      ))}
 
       {undiscovered > 0 && (
         <p className="tiny muted" style={{ marginTop: 12 }}>
