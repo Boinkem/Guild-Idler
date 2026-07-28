@@ -480,7 +480,10 @@ export const QUEST_CHAINS: ChainDef[] = [
       "already failed, and is not around anymore to say so.",
     reqLevel: 55,
     rewardGold: 90000,
-    rewardItems: ['the_last_ember'],
+    rewardItems: [
+      'the_last_ember', 'requiem_blade', 'requiem_crown', 'requiem_plate',
+      'requiem_signet', 'requiem_grips', 'requiem_striders',
+    ],
     rewardRenown: 20,
     title: 'Requiem-Bearer',
     epilogue: 'There is a difference between winning and being the one left standing when it is over. The guild is still deciding which of those this was.',

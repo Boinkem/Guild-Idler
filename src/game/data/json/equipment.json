@@ -621,7 +621,8 @@
     },
     "stats": {
       "luck": 14
-    }
+    },
+    "setId": "voidforged"
   },
   {
     "id": "stormcaller_axe",
@@ -765,7 +766,8 @@
       "endurance": 10,
       "luck": 10,
       "wisdom": 10
-    }
+    },
+    "setId": "requiem"
   },
   {
     "id": "cellar_dwellers_tooth",
@@ -833,7 +835,8 @@
     "stats": {
       "strength": 14,
       "wisdom": 4
-    }
+    },
+    "setId": "ashen_hand"
   },
   {
     "id": "bulwark_of_the_war_saint",
@@ -851,7 +854,8 @@
     "stats": {
       "endurance": 14,
       "wisdom": 4
-    }
+    },
+    "setId": "ashen_hand"
   },
   {
     "id": "ashwoven_charm",
@@ -902,5 +906,243 @@
       "wisdom": 5,
       "endurance": 3
     }
+  },
+  {
+    "id": "travelers_band",
+    "name": "Traveler's Band",
+    "slot": "ring",
+    "rarity": "uncommon",
+    "reqLevel": 3,
+    "maxDurability": 65,
+    "value": 110,
+    "mods": {
+      "speed": 5,
+      "gold": 4
+    },
+    "stats": {
+      "luck": 2
+    }
+  },
+  {
+    "id": "gauntlets_of_the_ashen_hand",
+    "name": "Gauntlets of the Ashen Hand",
+    "slot": "gloves",
+    "rarity": "legendary",
+    "reqLevel": 32,
+    "maxDurability": 220,
+    "value": 9500,
+    "mods": {
+      "success": 8,
+      "gold": 14,
+      "injuryResist": 6
+    },
+    "stats": {
+      "strength": 6,
+      "wisdom": 3
+    },
+    "setId": "ashen_hand"
+  },
+  {
+    "id": "boots_of_the_ashen_hand",
+    "name": "Boots of the Ashen Hand",
+    "slot": "boots",
+    "rarity": "legendary",
+    "reqLevel": 32,
+    "maxDurability": 210,
+    "value": 9400,
+    "mods": {
+      "speed": 20,
+      "injuryResist": 10
+    },
+    "stats": {
+      "endurance": 8
+    },
+    "setId": "ashen_hand"
+  },
+  {
+    "id": "voidforged_gauntlets",
+    "name": "Voidforged Gauntlets",
+    "slot": "gloves",
+    "rarity": "legendary",
+    "reqLevel": 36,
+    "maxDurability": 250,
+    "value": 12000,
+    "mods": {
+      "gold": 18,
+      "loot": 12,
+      "success": 10
+    },
+    "stats": {
+      "luck": 8,
+      "strength": 6
+    },
+    "setId": "voidforged"
+  },
+  {
+    "id": "voidforged_treads",
+    "name": "Voidforged Treads",
+    "slot": "boots",
+    "rarity": "legendary",
+    "reqLevel": 36,
+    "maxDurability": 250,
+    "value": 12200,
+    "mods": {
+      "speed": 18,
+      "success": 8
+    },
+    "stats": {
+      "endurance": 10
+    },
+    "setId": "voidforged"
+  },
+  {
+    "id": "empyrean_grips",
+    "name": "Empyrean Grips",
+    "slot": "gloves",
+    "rarity": "legendary",
+    "reqLevel": 45,
+    "maxDurability": 290,
+    "value": 17500,
+    "mods": {
+      "gold": 26,
+      "loot": 16,
+      "success": 14
+    },
+    "stats": {
+      "luck": 12,
+      "strength": 8
+    },
+    "setId": "empyrean"
+  },
+  {
+    "id": "empyrean_striders",
+    "name": "Empyrean Striders",
+    "slot": "boots",
+    "rarity": "legendary",
+    "reqLevel": 45,
+    "maxDurability": 300,
+    "value": 17800,
+    "mods": {
+      "speed": 26,
+      "success": 12,
+      "injuryResist": 10
+    },
+    "stats": {
+      "endurance": 12
+    },
+    "setId": "empyrean"
+  },
+  {
+    "id": "requiem_blade",
+    "name": "Requiem Edge",
+    "slot": "weapon",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 350,
+    "value": 30000,
+    "mods": {
+      "success": 28,
+      "gold": 24,
+      "loot": 14,
+      "speed": 12
+    },
+    "stats": {
+      "strength": 24,
+      "luck": 6
+    },
+    "setId": "requiem"
+  },
+  {
+    "id": "requiem_crown",
+    "name": "Requiem Circlet",
+    "slot": "helmet",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 330,
+    "value": 28000,
+    "mods": {
+      "success": 22,
+      "injuryResist": 30,
+      "xp": 30
+    },
+    "stats": {
+      "wisdom": 18,
+      "endurance": 9
+    },
+    "setId": "requiem"
+  },
+  {
+    "id": "requiem_plate",
+    "name": "Requiem Vestments",
+    "slot": "chest",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 380,
+    "value": 32000,
+    "mods": {
+      "injuryResist": 38,
+      "success": 20,
+      "durability": 35
+    },
+    "stats": {
+      "endurance": 24,
+      "strength": 8
+    },
+    "setId": "requiem"
+  },
+  {
+    "id": "requiem_signet",
+    "name": "Requiem Signet",
+    "slot": "ring",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 300,
+    "value": 26000,
+    "mods": {
+      "loot": 20,
+      "gold": 30,
+      "speed": 14
+    },
+    "stats": {
+      "luck": 18
+    },
+    "setId": "requiem"
+  },
+  {
+    "id": "requiem_grips",
+    "name": "Requiem Grasp",
+    "slot": "gloves",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 340,
+    "value": 27000,
+    "mods": {
+      "gold": 32,
+      "loot": 22,
+      "success": 18
+    },
+    "stats": {
+      "luck": 16,
+      "strength": 10
+    },
+    "setId": "requiem"
+  },
+  {
+    "id": "requiem_striders",
+    "name": "Requiem Stride",
+    "slot": "boots",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 340,
+    "value": 27500,
+    "mods": {
+      "speed": 32,
+      "success": 16,
+      "injuryResist": 14
+    },
+    "stats": {
+      "endurance": 16
+    },
+    "setId": "requiem"
   }
 ]

@@ -36,21 +36,60 @@ export const ITEM_SETS: ItemSet[] = [
     ],
   },
   {
+    id: 'ashen_hand',
+    name: 'Ashen Hand Set',
+    // sword_of_the_ashen_hand and bulwark_of_the_war_saint were the_pale_rider's
+    // reward pair but had no setId at all until now -- every other chain reward
+    // pair (Dragon, Voidforged, Empyrean) got real set treatment, this one just
+    // hadn't yet. Two new pieces (gloves, boots) round it out to a full 4-piece set.
+    pieces: ['sword_of_the_ashen_hand', 'bulwark_of_the_war_saint', 'gauntlets_of_the_ashen_hand', 'boots_of_the_ashen_hand'],
+    bonuses: [
+      { count: 2, mods: { success: 8, injuryResist: 12 }, label: 'Sworn Oath' },
+      { count: 3, mods: { success: 14, injuryResist: 20, gold: 10 }, label: "Paladin's Bulwark" },
+      { count: 4, mods: { success: 22, injuryResist: 30, gold: 15, speed: 10 }, label: "The Ashen Hand's Champion" },
+    ],
+  },
+  {
     id: 'voidforged',
     name: 'Voidforged Set',
-    pieces: ['voidforged_blade', 'voidforged_crown', 'voidforged_plate'],
+    // voidforged_signet existed already but was missing from this list despite
+    // clearly belonging -- fixed. Gauntlets and treads are new, filling what
+    // was otherwise a total absence of legendary gloves/boots in the game.
+    pieces: ['voidforged_blade', 'voidforged_crown', 'voidforged_plate', 'voidforged_signet', 'voidforged_gauntlets', 'voidforged_treads'],
     bonuses: [
       { count: 2, mods: { success: 10, loot: 8 }, label: 'Between Worlds' },
       { count: 3, mods: { success: 18, gold: 30, loot: 15, injuryResist: 15, xp: 25 }, label: 'Unmade' },
+      { count: 4, mods: { success: 22, gold: 35, loot: 18 }, label: 'Signet-Bound' },
+      { count: 5, mods: { success: 28, gold: 45, loot: 24, injuryResist: 18 }, label: 'Fully Unmade' },
+      { count: 6, mods: { success: 36, gold: 60, loot: 32, injuryResist: 25, xp: 30, speed: 15 }, label: 'One With the Void' },
     ],
   },
   {
     id: 'empyrean',
     name: 'Empyrean Set',
-    pieces: ['empyrean_blade', 'empyrean_halo', 'empyrean_aegis'],
+    pieces: ['empyrean_blade', 'empyrean_halo', 'empyrean_aegis', 'empyrean_grips', 'empyrean_striders'],
     bonuses: [
       { count: 2, mods: { success: 14, injuryResist: 14 }, label: 'Ascendant' },
       { count: 3, mods: { success: 24, gold: 40, loot: 22, injuryResist: 20, xp: 35, speed: 12 }, label: 'Beyond the Vault of Heaven' },
+      { count: 4, mods: { success: 30, gold: 50, loot: 28, injuryResist: 25 }, label: 'Choir Ascendant' },
+      { count: 5, mods: { success: 40, gold: 60, loot: 35, injuryResist: 30, xp: 45, speed: 18 }, label: 'Beyond the Vault, Whole' },
+    ],
+  },
+  {
+    id: 'requiem',
+    name: 'Requiem Set',
+    // The full last_god capstone reward -- all seven slots, so finishing the
+    // game's final chain outfits a hero completely rather than handing over
+    // one amulet and calling it done. The 7-piece bonus label echoes the
+    // chain's own final stage name on purpose.
+    pieces: [
+      'the_last_ember', 'requiem_blade', 'requiem_crown', 'requiem_plate',
+      'requiem_signet', 'requiem_grips', 'requiem_striders',
+    ],
+    bonuses: [
+      { count: 2, mods: { success: 16, injuryResist: 20 }, label: 'Requiem Begun' },
+      { count: 4, mods: { success: 28, gold: 40, loot: 20, injuryResist: 30 }, label: "Requiem-Bearer's Due" },
+      { count: 7, mods: { success: 45, gold: 70, loot: 40, injuryResist: 45, xp: 50, speed: 20 }, label: 'What Is Left of It' },
     ],
   },
 ];
