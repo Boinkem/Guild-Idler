@@ -1,0 +1,23 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index 7607d0d..735850b 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -46,6 +46,18 @@ export function App() {
+     void window.littleKnight?.setWindowMode(next);
+   }, []);
+ 
++  // The naming modal needs real screen space to render in -- if it shows up
++  // while the app is still in the tiny idle-companion window (the default
++  // on boot), it's visually trapped inside that window's actual OS-level
++  // dimensions, not just visually cramped. Force the full menu size the
++  // moment an unnamed guild is detected, same mechanism changeMode already
++  // uses, rather than trying to make the modal itself bigger than the
++  // window it's stuck in.
++  useEffect(() => {
++    if (!engine) return;
++    if (engine.state.guildName === '') changeMode('menu');
++  }, [engine, changeMode]);
++
+   if (!engine) return <div className="loading">Waking the knight…</div>;
+ 
+   return (
