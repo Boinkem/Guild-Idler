@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { MouseEvent } from 'react';
 import { QUEST_CHAINS, ChainDef } from '../../game/data/quests';
+import { currentGuildRank, nextGuildRank } from '../../game/data/guildRank';
 import { useEngine } from '../useEngine';
 
 /** Shared summary/expand toggle button, matching the Heroes tab pattern. */
@@ -93,10 +94,27 @@ export function LorePanel() {
   const discoveredIds = new Set([...completed.map((c) => c.id), ...inProgress.map((x) => x.chain.id)]);
   const undiscovered = QUEST_CHAINS.length - discoveredIds.size;
 
+  const rank = currentGuildRank(state);
+  const next = nextGuildRank(state);
+
   return (
     <>
       <h2>Lore</h2>
       <p className="subtitle">Every contract tells a small story. This is the guild's record of the ones worth remembering.</p>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="spread">
+          <span className="card-title">
+            {state.guildName || 'This guild'} — {rank.name}
+          </span>
+        </div>
+        <p className="tiny muted" style={{ margin: '4px 0 0' }}>{rank.blurb}</p>
+        {next && (
+          <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+            Next: {next.name} — reach level {next.minLevel} or complete a chain at that level.
+          </p>
+        )}
+      </div>
 
       {inProgress.length > 0 && (
         <>

@@ -422,6 +422,19 @@ export class GameEngine {
     this.setFocusedHero(heroes[nextIndex].id);
   }
 
+  /**
+   * Sets or renames the guild. Trimmed and length-capped since this will
+   * eventually show on a leaderboard; empty/whitespace-only input is a no-op
+   * rather than clearing the name back out.
+   */
+  setGuildName(name: string) {
+    const trimmed = name.trim().slice(0, 24);
+    if (!trimmed) return;
+    this.state.guildName = trimmed;
+    this.notify();
+    void this.saveNow();
+  }
+
   /** What the corner sprite should be doing right now. */
   get companionStatus(): 'idle' | 'questing' | 'injured' | 'ready' {
     const heroes = this.state.heroes;

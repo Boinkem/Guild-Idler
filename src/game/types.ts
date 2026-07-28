@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 11;
+export const SAVE_VERSION = 12;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -377,4 +377,11 @@ export interface GameState {
   unlockedAchievements: Record<string, number>;
   /** How far each vendor's relationship has been invested in — gates how many of their upgrades are visible. */
   vendorLevels: Record<VendorId, number>;
+  /**
+   * Player-chosen name for the guild itself, distinct from any hero's name.
+   * Empty string means never set — the naming prompt is shown once on the
+   * Dashboard until the player picks one. Editable afterward from the same
+   * spot.
+   */
+  guildName: string;
 }

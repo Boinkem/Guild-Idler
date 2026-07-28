@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { useEngine } from '../useEngine';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { VENDORS, vendorUpgrades, xpForLevel } from '../../game/data/progression';
 import { AchievementManager } from '../../game/managers/AchievementManager';
 import { guildPowerLevel, levelTierColor, levelTierName } from '../../game/power';
+import { currentGuildRank, nextGuildRank } from '../../game/data/guildRank';
 import { formatGold } from '../../game/util';
 
 function Ring({
@@ -31,13 +33,64 @@ export function DashboardPanel() {
   const engine = useEngine();
   const state = engine.state;
   const power = guildPowerLevel(state);
+  const rank = currentGuildRank(state);
+  const next = nextGuildRank(state);
   const achProgress = AchievementManager.progress(state);
   const guildAgeDays = Math.max(0, Math.floor((Date.now() - state.createdAt) / (24 * 3600000)));
+
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(state.guildName);
+
+  const saveName = () => {
+    engine.setGuildName(nameDraft);
+    setEditingName(false);
+  };
 
   return (
     <>
       <h2>The Guild</h2>
       <p className="subtitle">Everything the guild has built, at a glance.</p>
+
+      <div className="card">
+        {editingName || !state.guildName ? (
+          <div className="row" style={{ gap: 8 }}>
+            <input
+              type="text"
+              value={nameDraft}
+              placeholder="Name your guild"
+              maxLength={24}
+              autoFocus
+              onChange={(e) => setNameDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') saveName(); }}
+              style={{
+                flex: 1, background: 'var(--panel2)', border: '1px solid var(--panel3)',
+                color: 'var(--text)', padding: '7px 8px',
+              }}
+            />
+            <button onClick={saveName}>Save</button>
+          </div>
+        ) : (
+          <div className="spread">
+            <span className="card-title">{state.guildName}</span>
+            <button
+              className="btn-ghost"
+              onClick={() => { setNameDraft(state.guildName); setEditingName(true); }}
+            >
+              Rename
+            </button>
+          </div>
+        )}
+        <div className="spread" style={{ marginTop: 6 }}>
+          <span className="tiny muted">Guild Rank</span>
+          <b className="gold-text">{rank.name}</b>
+        </div>
+        <p className="tiny muted" style={{ margin: '2px 0 0' }}>{rank.blurb}</p>
+        {next && (
+          <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+            Next: {next.name} — reach level {next.minLevel} or complete a chain at that level.
+          </p>
+        )}
+      </div>
 
       <div className="card power-card">
         <div className="tiny muted" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>Guild Power</div>

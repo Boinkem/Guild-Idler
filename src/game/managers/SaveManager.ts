@@ -88,6 +88,7 @@ export function createInitialState(now = Date.now()): GameState {
     lastPrestigeAt: null,
     unlockedAchievements: {},
     vendorLevels: { blacksmith: 0, alchemist: 0, enchanter: 0 },
+    guildName: '',
   };
 }
 
@@ -219,6 +220,11 @@ const MIGRATIONS: Record<number, Migration> = {
     }
     return { ...save, version: 11, vendorLevels };
   },
+  11: (save) => ({
+    ...save,
+    version: 12,
+    guildName: (save.guildName as string | undefined) ?? '',
+  }),
 };
 
 export const SaveManager = {
