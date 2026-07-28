@@ -1,0 +1,135 @@
+diff --git a/src/game/data/quests.ts b/src/game/data/quests.ts
+index 415323f..74339a6 100644
+--- a/src/game/data/quests.ts
++++ b/src/game/data/quests.ts
+@@ -50,7 +50,11 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
+     // neither fast nor properly idle-friendly.
+     minDuration: 1 * HOUR, maxDuration: 2 * HOUR,
+     burstChance: 45, burstMinDuration: 90 * 1000, burstMaxDuration: 8 * MINUTE,
+-    burstMinGold: 8, burstMaxGold: 16, burstMinXp: 10, burstMaxXp: 20,
++    // Base burst numbers, before the per-run level taper applied in
++    // QuestManager.generateOffer -- reduced somewhat from their original
++    // values on their own (10/20 xp, 8/16 gold), which measured out to
++    // roughly 10-15x the normal per-hour rate for a hero at reqLevel 1.
++    burstMinGold: 6, burstMaxGold: 12, burstMinXp: 8, burstMaxXp: 14,
+     minGold: 8, maxGold: 25, xpMultiplier: 1, lootChance: 12,
+     reqLevel: 1, weight: 30, color: '#79a86b',
+   },
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 8ee53b3..939ce3f 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -322,6 +322,33 @@ export class GameEngine {
+     }
+     this.state.lastSeen = Math.max(0, this.state.lastSeen - ms);
+     this.catchUpOffline();
++    // catchUpOffline resolves due quests but never touches the board --
++    // refreshWorld's own regeneration is keyed to a real-wall-clock 30-min
++    // window, which usually hasn't rolled over during a *simulated* skip.
++    // Auto-Chain can burn through an entire unrefreshed board well before
++    // that window naturally ticks over, especially across a multi-day/week
++    // skip where hero levels (and so board eligibility) have moved a lot.
++    // Force it here so post-skip levels are reflected immediately rather
++    // than needing a manual refresh afterward.
++    this.forceRefreshBoard(Date.now());
++    this.notify();
++    void this.saveNow();
++  }
++
++  /**
++   * Forces the quest board to regenerate right now, bypassing the normal
++   * 30-min real-time window check -- for restocking a board Auto-Chain has
++   * emptied out during testing, without waiting for or faking more time to
++   * pass. Also used internally by testSkipTime for the same reason.
++   */
++  private forceRefreshBoard(now: number) {
++    this.state.boardRefreshedAt = -1;
++    this.refreshWorld(now);
++  }
++
++  testRefreshBoard() {
++    if (!TESTING_TOOLS_ENABLED) return;
++    this.forceRefreshBoard(Date.now());
+     this.notify();
+     void this.saveNow();
+   }
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index c49b225..2e7bfc1 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -19,6 +19,25 @@ export const BOARD_REFRESH_MS = 30 * MINUTE;
+ export const MIN_SUCCESS = 5;
+ export const MAX_SUCCESS = 95;
+ 
++/**
++ * Burst quests (short 90s-8min offers rolled instead of the normal duration
++ * range -- see DIFFICULTIES.burstChance) keep their full reward at very low
++ * levels, on purpose: they exist for the fast, satisfying "start a quest and
++ * immediately get to see it pay off" loop hook early on. Without a taper,
++ * that same flat reward stays a flat-rate exploit deep into the game (a
++ * 90-second quest paying out at 10-15x the normal per-hour rate regardless
++ * of level). BURST_TAPER_FLOOR is the reward multiplier once fully tapered,
++ * not zero -- a burst quest should still feel like a nice quick top-up at
++ * high level, just not a strategy.
++ */
++const BURST_TAPER_FLOOR = 0.2;
++const BURST_TAPER_LEVELS = 30;
++
++function burstTaper(topLevel: number): number {
++  const t = clamp((topLevel - 1) / BURST_TAPER_LEVELS, 0, 1);
++  return 1 - t * (1 - BURST_TAPER_FLOOR);
++}
++
+ export const CHAIN_BY_ID: Record<string, ChainDef> = Object.fromEntries(QUEST_CHAINS.map((c) => [c.id, c]));
+ 
+ function lootTableFor(difficulty: Difficulty, rng: Rng): { defId: string; chance: number }[] {
+@@ -46,7 +65,7 @@ export const QuestManager = {
+     const offers: QuestOffer[] = [];
+     for (let i = 0; i < BOARD_SIZE; i++) {
+       const difficulty = rng.weighted(available.map((d) => ({ item: d, weight: DIFFICULTIES[d].weight })));
+-      offers.push(QuestManager.generateOffer(difficulty, rng, `q:${window}:${i}`));
++      offers.push(QuestManager.generateOffer(difficulty, rng, `q:${window}:${i}`, topLevel));
+     }
+ 
+     // Chain stages are appended when a chain is running or available.
+@@ -63,7 +82,7 @@ export const QuestManager = {
+     return offers;
+   },
+ 
+-  generateOffer(difficulty: Difficulty, rng: Rng, seedTag: string): QuestOffer {
++  generateOffer(difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number): QuestOffer {
+     const cfg = DIFFICULTIES[difficulty];
+     const tierIndex = DIFFICULTY_ORDER.indexOf(difficulty);
+     const eligible = QUEST_TEMPLATES.filter((t) => {
+@@ -88,10 +107,11 @@ export const QuestManager = {
+     const duration = rng.int(durMin, durMax);
+     const span = durMax - durMin;
+     const t = span > 0 ? (duration - durMin) / span : 1;
+-    const goldMin = useBurst ? cfg.burstMinGold! : cfg.minGold;
+-    const goldMax = useBurst ? cfg.burstMaxGold! : cfg.maxGold;
+-    const xpMin = useBurst ? cfg.burstMinXp! : 18;
+-    const xpMax = useBurst ? cfg.burstMaxXp! : 30;
++    const taper = useBurst ? burstTaper(topLevel) : 1;
++    const goldMin = useBurst ? cfg.burstMinGold! * taper : cfg.minGold;
++    const goldMax = useBurst ? cfg.burstMaxGold! * taper : cfg.maxGold;
++    const xpMin = useBurst ? cfg.burstMinXp! * taper : 18;
++    const xpMax = useBurst ? cfg.burstMaxXp! * taper : 30;
+     const rewardGold = Math.max(1, Math.round(goldMin + t * (goldMax - goldMin)));
+     const rewardXp = Math.floor((xpMin + t * (xpMax - xpMin)) * cfg.xpMultiplier);
+ 
+diff --git a/src/ui/panels/TestingPanel.tsx b/src/ui/panels/TestingPanel.tsx
+index 92704d1..da55151 100644
+--- a/src/ui/panels/TestingPanel.tsx
++++ b/src/ui/panels/TestingPanel.tsx
+@@ -31,6 +31,11 @@ export function TestingPanel() {
+         <button onClick={() => engine.testSkipTime(7 * 24 * HOUR)}>+1 week</button>
+         <button onClick={() => engine.testSkipTime(30 * 24 * HOUR)}>+1 month</button>
+       </div>
++      <p className="tiny muted" style={{ marginTop: 6 }}>
++        Skips now force a board refresh automatically. Use this on its own if Auto-Chain has
++        emptied the board and you don't want to skip more time to restock it.
++      </p>
++      <button style={{ marginTop: 4 }} onClick={() => engine.testRefreshBoard()}>Refresh quest board now</button>
+ 
+       <div className="section-heading">Currency</div>
+       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>

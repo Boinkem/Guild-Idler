@@ -50,7 +50,11 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
     // neither fast nor properly idle-friendly.
     minDuration: 1 * HOUR, maxDuration: 2 * HOUR,
     burstChance: 45, burstMinDuration: 90 * 1000, burstMaxDuration: 8 * MINUTE,
-    burstMinGold: 8, burstMaxGold: 16, burstMinXp: 10, burstMaxXp: 20,
+    // Base burst numbers, before the per-run level taper applied in
+    // QuestManager.generateOffer -- reduced somewhat from their original
+    // values on their own (10/20 xp, 8/16 gold), which measured out to
+    // roughly 10-15x the normal per-hour rate for a hero at reqLevel 1.
+    burstMinGold: 6, burstMaxGold: 12, burstMinXp: 8, burstMaxXp: 14,
     minGold: 8, maxGold: 25, xpMultiplier: 1, lootChance: 12,
     reqLevel: 1, weight: 30, color: '#79a86b',
   },

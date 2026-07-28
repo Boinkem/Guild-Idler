@@ -19,6 +19,25 @@ export const BOARD_REFRESH_MS = 30 * MINUTE;
 export const MIN_SUCCESS = 5;
 export const MAX_SUCCESS = 95;
 
+/**
+ * Burst quests (short 90s-8min offers rolled instead of the normal duration
+ * range -- see DIFFICULTIES.burstChance) keep their full reward at very low
+ * levels, on purpose: they exist for the fast, satisfying "start a quest and
+ * immediately get to see it pay off" loop hook early on. Without a taper,
+ * that same flat reward stays a flat-rate exploit deep into the game (a
+ * 90-second quest paying out at 10-15x the normal per-hour rate regardless
+ * of level). BURST_TAPER_FLOOR is the reward multiplier once fully tapered,
+ * not zero -- a burst quest should still feel like a nice quick top-up at
+ * high level, just not a strategy.
+ */
+const BURST_TAPER_FLOOR = 0.2;
+const BURST_TAPER_LEVELS = 30;
+
+function burstTaper(topLevel: number): number {
+  const t = clamp((topLevel - 1) / BURST_TAPER_LEVELS, 0, 1);
+  return 1 - t * (1 - BURST_TAPER_FLOOR);
+}
+
 export const CHAIN_BY_ID: Record<string, ChainDef> = Object.fromEntries(QUEST_CHAINS.map((c) => [c.id, c]));
 
 function lootTableFor(difficulty: Difficulty, rng: Rng): { defId: string; chance: number }[] {
@@ -46,7 +65,7 @@ export const QuestManager = {
     const offers: QuestOffer[] = [];
     for (let i = 0; i < BOARD_SIZE; i++) {
       const difficulty = rng.weighted(available.map((d) => ({ item: d, weight: DIFFICULTIES[d].weight })));
-      offers.push(QuestManager.generateOffer(difficulty, rng, `q:${window}:${i}`));
+      offers.push(QuestManager.generateOffer(difficulty, rng, `q:${window}:${i}`, topLevel));
     }
 
     // Chain stages are appended when a chain is running or available.
@@ -63,7 +82,7 @@ export const QuestManager = {
     return offers;
   },
 
-  generateOffer(difficulty: Difficulty, rng: Rng, seedTag: string): QuestOffer {
+  generateOffer(difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number): QuestOffer {
     const cfg = DIFFICULTIES[difficulty];
     const tierIndex = DIFFICULTY_ORDER.indexOf(difficulty);
     const eligible = QUEST_TEMPLATES.filter((t) => {
@@ -88,10 +107,11 @@ export const QuestManager = {
     const duration = rng.int(durMin, durMax);
     const span = durMax - durMin;
     const t = span > 0 ? (duration - durMin) / span : 1;
-    const goldMin = useBurst ? cfg.burstMinGold! : cfg.minGold;
-    const goldMax = useBurst ? cfg.burstMaxGold! : cfg.maxGold;
-    const xpMin = useBurst ? cfg.burstMinXp! : 18;
-    const xpMax = useBurst ? cfg.burstMaxXp! : 30;
+    const taper = useBurst ? burstTaper(topLevel) : 1;
+    const goldMin = useBurst ? cfg.burstMinGold! * taper : cfg.minGold;
+    const goldMax = useBurst ? cfg.burstMaxGold! * taper : cfg.maxGold;
+    const xpMin = useBurst ? cfg.burstMinXp! * taper : 18;
+    const xpMax = useBurst ? cfg.burstMaxXp! * taper : 30;
     const rewardGold = Math.max(1, Math.round(goldMin + t * (goldMax - goldMin)));
     const rewardXp = Math.floor((xpMin + t * (xpMax - xpMin)) * cfg.xpMultiplier);
 

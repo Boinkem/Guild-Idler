@@ -317,6 +317,33 @@ export class GameEngine {
     }
     this.state.lastSeen = Math.max(0, this.state.lastSeen - ms);
     this.catchUpOffline();
+    // catchUpOffline resolves due quests but never touches the board --
+    // refreshWorld's own regeneration is keyed to a real-wall-clock 30-min
+    // window, which usually hasn't rolled over during a *simulated* skip.
+    // Auto-Chain can burn through an entire unrefreshed board well before
+    // that window naturally ticks over, especially across a multi-day/week
+    // skip where hero levels (and so board eligibility) have moved a lot.
+    // Force it here so post-skip levels are reflected immediately rather
+    // than needing a manual refresh afterward.
+    this.forceRefreshBoard(Date.now());
+    this.notify();
+    void this.saveNow();
+  }
+
+  /**
+   * Forces the quest board to regenerate right now, bypassing the normal
+   * 30-min real-time window check -- for restocking a board Auto-Chain has
+   * emptied out during testing, without waiting for or faking more time to
+   * pass. Also used internally by testSkipTime for the same reason.
+   */
+  private forceRefreshBoard(now: number) {
+    this.state.boardRefreshedAt = -1;
+    this.refreshWorld(now);
+  }
+
+  testRefreshBoard() {
+    if (!TESTING_TOOLS_ENABLED) return;
+    this.forceRefreshBoard(Date.now());
     this.notify();
     void this.saveNow();
   }

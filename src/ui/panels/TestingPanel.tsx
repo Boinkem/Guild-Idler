@@ -31,6 +31,11 @@ export function TestingPanel() {
         <button onClick={() => engine.testSkipTime(7 * 24 * HOUR)}>+1 week</button>
         <button onClick={() => engine.testSkipTime(30 * 24 * HOUR)}>+1 month</button>
       </div>
+      <p className="tiny muted" style={{ marginTop: 6 }}>
+        Skips now force a board refresh automatically. Use this on its own if Auto-Chain has
+        emptied the board and you don't want to skip more time to restock it.
+      </p>
+      <button style={{ marginTop: 4 }} onClick={() => engine.testRefreshBoard()}>Refresh quest board now</button>
 
       <div className="section-heading">Currency</div>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
