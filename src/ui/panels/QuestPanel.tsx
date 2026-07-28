@@ -26,17 +26,16 @@ export function QuestPanel() {
     });
   };
 
-  // Which quest card currently has its hero picker open, if any. Only one
-  // at a time -- opening a new one closes whichever was already open, so
-  // the board never ends up with several picker rows expanded together.
-  const [assigning, setAssigning] = useState<string | null>(null);
+  // Which quest card currently has its hero picker open, and which hero is
+  // currently selected within it (not yet sent). Only one card's picker at
+  // a time -- opening a new one closes whichever was already open.
+  const [assigning, setAssigning] = useState<{ offerId: string; heroId: string } | null>(null);
 
-  // The old design had a persistent "pick a hero first" row above the whole
-  // board -- that row, not the per-card buttons, was the actual clutter.
-  // Assigning is now a per-card action instead. Preview stats still need
-  // *some* hero to preview against before a pick is made, so they're shown
-  // relative to the first idle hero rather than exposing that choice as its
-  // own always-visible selector.
+  // Preview stats need *some* hero to preview against before a card's
+  // picker is even opened. Once a picker is open, the stats below switch to
+  // whichever hero is actually selected in it -- success/duration are hero-
+  // stat-dependent, so showing one hero's odds while a different hero is
+  // selected would be actively misleading, not just imprecise.
   const previewHero = idleHeroes[0] ?? state.heroes[0];
 
   const owned = InventoryManager.owned(state).filter((e) => !e.def.effect.healInjury);
@@ -121,11 +120,13 @@ export function QuestPanel() {
 
       {board.map((offer) => {
         const cfg = DIFFICULTIES[offer.difficulty];
-        const chance = QuestManager.previewSuccess(engine.state, previewHero, offer, loadout, now);
-        const duration = QuestManager.previewDuration(engine.state, previewHero, offer, now);
-        const chain = offer.chain ? CHAIN_BY_ID[offer.chain.chainId] : undefined;
         const isOpen = expanded.has(offer.id);
-        const isAssigning = assigning === offer.id;
+        const isAssigning = assigning?.offerId === offer.id;
+        const pickedHero = isAssigning ? state.heroes.find((h) => h.id === assigning!.heroId) : undefined;
+        const statHero = pickedHero ?? previewHero;
+        const chance = QuestManager.previewSuccess(engine.state, statHero, offer, loadout, now);
+        const duration = QuestManager.previewDuration(engine.state, statHero, offer, now);
+        const chain = offer.chain ? CHAIN_BY_ID[offer.chain.chainId] : undefined;
         const anyEligible = idleHeroes.some((h) => h.level >= offer.reqLevel);
 
         return (
@@ -148,6 +149,9 @@ export function QuestPanel() {
             </div>
 
             <div className="stat-row" style={{ margin: '6px 0' }}>
+              {isAssigning && (
+                <span className="muted">{pickedHero ? pickedHero.name : 'Pick a hero'}</span>
+              )}
               <span>Success <b className={chance >= 60 ? 'good' : chance >= 35 ? '' : 'bad'}>{Math.round(chance)}%</b></span>
               <span>Time <b>{formatDuration(duration)}</b></span>
               <span>Gold <b className="gold-text">{formatGold(offer.rewardGold)}</b></span>
@@ -171,19 +175,27 @@ export function QuestPanel() {
               <div className="row wrap end" style={{ marginTop: 8, gap: 6 }} onClick={(e) => e.stopPropagation()}>
                 {idleHeroes.map((h) => {
                   const eligible = h.level >= offer.reqLevel;
+                  const selected = assigning?.heroId === h.id;
                   return (
                     <button
                       key={h.id}
-                      className="chip"
+                      className={`chip ${selected ? 'on' : ''}`}
                       disabled={!eligible}
                       title={eligible ? undefined : `Requires level ${offer.reqLevel}`}
-                      onClick={() => send(offer, h.id)}
+                      onClick={() => setAssigning({ offerId: offer.id, heroId: h.id })}
                     >
                       {h.name} · Lv {h.level}{h.injuries.length > 0 ? ' ⚑' : ''}
                     </button>
                   );
                 })}
                 <button className="btn-ghost" onClick={() => setAssigning(null)}>Cancel</button>
+                <button
+                  className="btn-primary"
+                  disabled={!pickedHero}
+                  onClick={() => pickedHero && send(offer, pickedHero.id)}
+                >
+                  {pickedHero ? `Send ${pickedHero.name}` : 'Pick a hero'}
+                </button>
               </div>
             ) : (
               <div className="row end" style={{ marginTop: 4, gap: 8 }}>
@@ -198,7 +210,10 @@ export function QuestPanel() {
                     {!anyEligible && <span className="tiny muted">Requires level {offer.reqLevel}</span>}
                     <button
                       className="btn-primary"
-                      onClick={(e) => { e.stopPropagation(); setAssigning(offer.id); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAssigning({ offerId: offer.id, heroId: previewHero.id });
+                      }}
                     >
                       Assign hero
                     </button>
