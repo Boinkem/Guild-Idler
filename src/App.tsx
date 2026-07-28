@@ -3,6 +3,7 @@ import { GameEngine } from './game/engine';
 import { EngineContext } from './ui/useEngine';
 import { IdleView } from './ui/IdleView';
 import { MenuWindow } from './ui/MenuWindow';
+import { GuildNamingModal } from './ui/GuildNamingModal';
 import { OfflineReportModal } from './ui/OfflineReportModal';
 import { QuestResultModal } from './ui/QuestResultModal';
 import { Toast } from './ui/Toast';
@@ -52,8 +53,13 @@ export function App() {
       {mode === 'idle'
         ? <IdleView onOpenMenu={() => changeMode('menu')} />
         : <MenuWindow onClose={() => changeMode('idle')} />}
-      <OfflineReportModal />
-      <QuestResultModal />
+      <GuildNamingModal />
+      {engine.state.guildName !== '' && (
+        <>
+          <OfflineReportModal />
+          <QuestResultModal />
+        </>
+      )}
       <Toast />
     </EngineContext.Provider>
   );
