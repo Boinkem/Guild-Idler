@@ -1,0 +1,40 @@
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 109ffb6..c49b225 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -130,18 +130,26 @@ export const QuestManager = {
+   },
+ 
+   /**
+-   * Picks the best quest currently on offer for a hero — same heuristic used
+-   * throughout the balance simulations elsewhere in this project: continue
+-   * an active chain's next stage if one is available, otherwise the
+-   * highest-paying quest at 50%+ odds, otherwise the best odds available
+-   * rather than stalling. Used by Auto-Chain to pick a hero's next contract
+-   * without the player choosing it themselves.
++   * Picks the best quest currently on offer for a hero — the highest-paying
++   * quest at 50%+ odds, otherwise the best odds available rather than
++   * stalling. Used by Auto-Chain to pick a hero's next contract without the
++   * player choosing it themselves.
++   *
++   * Chain offers are deliberately excluded, always. ActiveChain has no
++   * per-hero ownership (any hero can advance any chain's stage), so "only
++   * auto-continue a chain this specific hero already started" isn't
++   * something the data model can express -- and without that guard, every
++   * idle hero's auto-continue independently grabbed the first chain offer
++   * it saw, which is how multiple heroes ended up piling into the same
++   * handful of chains instead of a spread of ordinary board contracts.
++   * Chain progression -- first stage or last -- always goes through the
++   * manual Assign Hero flow instead, on purpose: these are the quests with
++   * real narrative weight, and shouldn't start or advance without the
++   * player noticing.
+    */
+   pickBestQuest(state: GameState, hero: Hero, now: number): QuestOffer | null {
+-    const eligible = state.questBoard.filter((o) => hero.level >= o.reqLevel);
++    const eligible = state.questBoard.filter((o) => hero.level >= o.reqLevel && !o.chain);
+     if (eligible.length === 0) return null;
+-    const chainQuest = eligible.find((o) => o.chain);
+-    if (chainQuest) return chainQuest;
+     const scored = eligible.map((o) => ({ o, p: QuestManager.previewSuccess(state, hero, o, [], now) }));
+     const viable = scored.filter((e) => e.p >= 50).sort((a, b) => b.o.rewardGold - a.o.rewardGold);
+     if (viable.length > 0) return viable[0].o;
