@@ -1,7 +1,7 @@
 import { ActiveQuest, GameState, Hero, HeroClass, QuestOffer, QuestResult } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
-import { QuestManager, BOARD_REFRESH_MS } from './managers/QuestManager';
+import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
 import { ShopManager } from './managers/ShopManager';
 import { SaveManager, SaveAdapter, defaultAdapter, createInitialState } from './managers/SaveManager';
 import { EquipmentManager } from './managers/EquipmentManager';
@@ -11,6 +11,7 @@ import { PrestigeManager } from './managers/PrestigeManager';
 import { ModifierManager } from './managers/ModifierManager';
 import { AchievementManager } from './managers/AchievementManager';
 import { SKIN_BY_ID, SKIN_PRICE, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
+import { EQUIPMENT_BY_ID, SET_BY_ID } from './data/equipment';
 import { playSound } from './sound';
 import { TESTING_TOOLS_ENABLED } from './testingTools';
 
@@ -22,6 +23,17 @@ export interface OfflineReport {
   results: QuestResult[];
   goldGained: number;
   xpGained: number;
+}
+
+/** Data for the "Story Chain Complete" overlay -- transient like lastResult
+ *  and offlineReport, not part of GameState/the save. */
+export interface ChainCelebration {
+  chainId: string;
+  chainName: string;
+  title?: string;
+  rewardGold: number;
+  rewardRenown: number;
+  items: { defId: string; name: string; rarity: string }[];
 }
 
 type Listener = () => void;
@@ -36,6 +48,13 @@ export class GameEngine {
   offlineReport: OfflineReport | null = null;
   lastResult: QuestResult | null = null;
   toast: string | null = null;
+  /**
+   * Set the moment a chain's final stage resolves successfully, cleared by
+   * dismissChainCelebration. Separate from lastResult -- a chain completion
+   * gets its own full "Story Chain Complete" overlay (see ChainCompleteModal)
+   * rather than being folded into the regular per-quest result card.
+   */
+  completedChainCelebration: ChainCelebration | null = null;
   /**
    * Transient (unsaved) request to open the menu on a specific tab -- e.g.
    * "View in Lore" on a chain-completion result. Not part of GameState since
@@ -142,6 +161,11 @@ export class GameEngine {
     this.notify();
   }
 
+  dismissChainCelebration() {
+    this.completedChainCelebration = null;
+    this.notify();
+  }
+
   /* ------------------------------ lifecycle ---------------------------- */
 
   start() {
@@ -179,8 +203,25 @@ export class GameEngine {
       // completion is a bigger deal than a routine level-up, which is a
       // bigger deal than a plain success. Offline catch-up never reaches
       // here, so this only fires for quests you were actually watching.
-      if (result.chainAdvanced?.completed) playSound('chain_complete');
-      else if (result.loot.some((l) => l.rarity === 'legendary')) playSound('legendary_drop');
+      if (result.chainAdvanced?.completed) {
+        playSound('chain_complete');
+        const chain = CHAIN_BY_ID[result.chainAdvanced.chainId];
+        if (chain) {
+          this.completedChainCelebration = {
+            chainId: chain.id,
+            chainName: chain.name,
+            title: chain.title,
+            rewardGold: chain.rewardGold,
+            rewardRenown: chain.rewardRenown,
+            items: chain.rewardItems
+              .map((defId) => {
+                const def = EQUIPMENT_BY_ID[defId];
+                return def ? { defId, name: def.name, rarity: def.rarity } : null;
+              })
+              .filter((x): x is { defId: string; name: string; rarity: string } => x !== null),
+          };
+        }
+      } else if (result.loot.some((l) => l.rarity === 'legendary')) playSound('legendary_drop');
       else if (result.levelsGained > 0) playSound('level_up');
       else playSound(result.success ? 'quest_success' : 'quest_fail');
       this.reportAchievements(AchievementManager.checkAll(this.state, now));
@@ -523,8 +564,39 @@ export class GameEngine {
     if (!hero || !item) return;
     const error = EquipmentManager.equip(this.state, hero, item);
     if (error) return this.say(error);
+    this.checkSetBonusMilestones(hero);
     this.notify();
     void this.saveNow();
+  }
+
+  /**
+   * Fires a one-time flashy toast the first time any hero crosses a new
+   * set-bonus piece-count threshold (e.g. first hero to hit 3/3 Voidforged).
+   * Only checked on equip, never unequip -- crossing a threshold is only
+   * ever something that happens by adding a piece, and re-notifying every
+   * time someone swaps gear in and out would just be noise. Tracked in
+   * state.notifiedSetBonuses so it only ever fires once per save, regardless
+   * of how many times a hero re-equips into and back out of a set.
+   */
+  private checkSetBonusMilestones(hero: Hero) {
+    const setCounts: Record<string, number> = {};
+    for (const item of Object.values(hero.equipment)) {
+      if (!item) continue;
+      const def = EQUIPMENT_BY_ID[item.defId];
+      if (def?.setId) setCounts[def.setId] = (setCounts[def.setId] ?? 0) + 1;
+    }
+    for (const [setId, count] of Object.entries(setCounts)) {
+      const set = SET_BY_ID[setId];
+      if (!set) continue;
+      for (const bonus of set.bonuses) {
+        if (count < bonus.count) continue;
+        const key = `${setId}:${bonus.count}`;
+        if (this.state.notifiedSetBonuses.includes(key)) continue;
+        this.state.notifiedSetBonuses.push(key);
+        playSound('legendary_drop');
+        this.say(`${set.name} — ${bonus.label} unlocked!`);
+      }
+    }
   }
 
   unequip(heroId: string, slot: Parameters<typeof EquipmentManager.unequip>[2]) {

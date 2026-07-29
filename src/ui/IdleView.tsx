@@ -145,6 +145,12 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
       : 'While you were away: nothing finished yet →'
     : null;
 
+  // Same compact-banner-instead-of-cropped-modal treatment as awayBanner
+  // above -- the full celebration (ChainCompleteModal) only renders once
+  // the menu is open and properly sized.
+  const celebration = engine.completedChainCelebration;
+  const chainBanner = celebration ? `Story Chain Complete: ${celebration.chainName} →` : null;
+
   return (
     <div className={`idle-root ${locked ? '' : 'unlocked'}`}>
       <div className="idle-stage">
@@ -208,6 +214,9 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
         {otherHint && <div className="idle-status muted">{otherHint}</div>}
         {awayBanner && (
           <button className="idle-away-banner" onClick={onOpenMenu}>{awayBanner}</button>
+        )}
+        {chainBanner && (
+          <button className="idle-away-banner idle-chain-banner" onClick={onOpenMenu}>{chainBanner}</button>
         )}
 
         <div className="idle-actions">

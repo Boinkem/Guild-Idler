@@ -4,7 +4,8 @@ import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { DIFFICULTIES } from '../../game/data/quests';
 import { CONSUMABLE_BY_ID } from '../../game/data/items';
-import { formatDuration, formatGold, RARITY_COLOR } from '../../game/util';
+import { formatDuration, formatGold } from '../../game/util';
+import { RarityPill } from '../RarityPill';
 
 export function QuestPanel() {
   const engine = useEngine();
@@ -161,10 +162,11 @@ export function QuestPanel() {
             {isOpen && (
               <>
                 <p className="card-flavour">{chain ? `${chain.description} — ${offer.flavour}` : offer.flavour}</p>
-                <div className="row wrap quest-popout-loot">
+                <div className="row wrap quest-popout-loot" style={{ gap: 6, alignItems: 'center' }}>
                   {QuestManager.lootPreview(offer).map((entry) => (
-                    <span key={entry.name} className="tiny" style={{ color: RARITY_COLOR[entry.rarity] }}>
-                      ◇ {entry.name}
+                    <span key={entry.name} className="row" style={{ gap: 4, alignItems: 'center' }}>
+                      <span className="tiny">{entry.name}</span>
+                      <RarityPill rarity={entry.rarity} />
                     </span>
                   ))}
                 </div>

@@ -5,7 +5,8 @@ import { QuestResult } from '../game/types';
 import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
 import { playSound } from '../game/sound';
-import { formatGold, RARITY_COLOR } from '../game/util';
+import { formatGold } from '../game/util';
+import { RarityPill } from './RarityPill';
 
 /** How long the pop-out + coin/XP burst plays before the modal actually
  * unmounts. Matches the CSS: modal-pop-out is 320ms, collect-fly is 750ms
@@ -98,7 +99,10 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; 
           <>
             <div className="section-heading">Loot</div>
             {result.loot.map((item) => (
-              <div key={item.defId} style={{ color: RARITY_COLOR[item.rarity], fontSize: 11 }}>◇ {item.name}</div>
+              <div key={item.defId} className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 2 }}>
+                <span style={{ fontSize: 11 }}>{item.name}</span>
+                <RarityPill rarity={item.rarity} />
+              </div>
             ))}
           </>
         )}

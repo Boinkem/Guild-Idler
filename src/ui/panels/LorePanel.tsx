@@ -23,7 +23,13 @@ function ExpandToggle({ open, onClick }: { open: boolean; onClick: (e: MouseEven
 function chainCardStyle(chain: ChainDef): CSSProperties {
   const tier = rankTierForLevel(chain.reqLevel);
   return {
-    backgroundImage: `linear-gradient(180deg, rgba(20,18,16,0.72), rgba(20,18,16,0.92)), url(./lore/chains/${chain.id}.jpg)`,
+    // Scrim pushed much closer to opaque than the original 0.72/0.92 --
+    // these cards were reading as visibly more transparent than every other
+    // card in the app, which made text harder to read by comparison, not
+    // just in isolation. Art is now a faint texture rather than a
+    // competing background; still rolls out gracefully if the file is
+    // missing, same as before.
+    backgroundImage: `linear-gradient(180deg, rgba(20,18,16,0.93), rgba(20,18,16,0.97)), url(./lore/chains/${chain.id}.jpg)`,
     backgroundSize: 'cover',
     backgroundPosition: 'center',
     borderLeft: `3px solid ${tier.color}`,

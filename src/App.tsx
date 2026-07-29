@@ -6,6 +6,7 @@ import { MenuWindow } from './ui/MenuWindow';
 import { GuildNamingModal } from './ui/GuildNamingModal';
 import { OfflineReportModal } from './ui/OfflineReportModal';
 import { QuestResultModal } from './ui/QuestResultModal';
+import { ChainCompleteModal } from './ui/ChainCompleteModal';
 import { Toast } from './ui/Toast';
 
 export type ViewMode = 'idle' | 'menu';
@@ -77,6 +78,7 @@ export function App() {
               opens the menu on click. */}
           <OfflineReportModal active={mode === 'menu'} />
           <QuestResultModal onViewLore={() => changeMode('menu')} />
+          <ChainCompleteModal active={mode === 'menu'} onViewLore={() => changeMode('menu')} />
         </>
       )}
       <Toast />

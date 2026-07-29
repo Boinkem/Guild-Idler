@@ -2,7 +2,7 @@ diff --git a/src/App.tsx b/src/App.tsx
 index 735850b..a98b9ff 100644
 --- a/src/App.tsx
 +++ b/src/App.tsx
-@@ -6,6 +6,7 @@ import { MenuWindow } from './ui/MenuWindow';
+@@ -6,6 +6,7 @@
  import { GuildNamingModal } from './ui/GuildNamingModal';
  import { OfflineReportModal } from './ui/OfflineReportModal';
  import { QuestResultModal } from './ui/QuestResultModal';
@@ -10,9 +10,9 @@ index 735850b..a98b9ff 100644
  import { Toast } from './ui/Toast';
  
  export type ViewMode = 'idle' | 'menu';
-@@ -70,6 +71,7 @@ export function App() {
-         <>
-           <OfflineReportModal />
+@@ -77,6 +78,7 @@
+               opens the menu on click. */}
+           <OfflineReportModal active={mode === 'menu'} />
            <QuestResultModal onViewLore={() => changeMode('menu')} />
 +          <ChainCompleteModal active={mode === 'menu'} onViewLore={() => changeMode('menu')} />
          </>
@@ -157,21 +157,21 @@ diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
 index 7532439..b02699c 100644
 --- a/src/game/managers/SaveManager.ts
 +++ b/src/game/managers/SaveManager.ts
-@@ -88,6 +88,7 @@ export function createInitialState(now = Date.now()): GameState {
-     lastPrestigeAt: null,
+@@ -89,6 +89,7 @@
      unlockedAchievements: {},
      vendorLevels: { blacksmith: 0, alchemist: 0, enchanter: 0 },
+     guildName: '',
 +    notifiedSetBonuses: [],
    };
  }
  
-@@ -240,6 +241,11 @@ const MIGRATIONS: Record<number, Migration> = {
+@@ -246,6 +247,11 @@
      }
-     return { ...save, version: 12, heroes };
+     return { ...save, version: 13, heroes };
    },
-+  12: (save) => ({
++  13: (save) => ({
 +    ...save,
-+    version: 13,
++    version: 14,
 +    notifiedSetBonuses: (save.notifiedSetBonuses as string[] | undefined) ?? [],
 +  }),
  };
@@ -185,15 +185,15 @@ index c362cb9..b98cd37 100644
   * Every manager reads and writes the same GameState shape defined here.
   * ========================================================================= */
  
--export const SAVE_VERSION = 12;
-+export const SAVE_VERSION = 13;
+-export const SAVE_VERSION = 13;
++export const SAVE_VERSION = 14;
  
  export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
  
-@@ -377,4 +377,10 @@ export interface GameState {
-   unlockedAchievements: Record<string, number>;
-   /** How far each vendor's relationship has been invested in — gates how many of their upgrades are visible. */
-   vendorLevels: Record<VendorId, number>;
+@@ -391,4 +391,10 @@
+    * spot.
+    */
+   guildName: string;
 +  /**
 +   * "setId:count" keys for every set-bonus threshold that's already
 +   * triggered its one-time toast (see GameEngine.checkSetBonusMilestones).
@@ -205,7 +205,7 @@ diff --git a/src/styles/app.css b/src/styles/app.css
 index ed67be1..41f3648 100644
 --- a/src/styles/app.css
 +++ b/src/styles/app.css
-@@ -89,6 +89,32 @@
+@@ -102,6 +102,32 @@
  }
  .item-card-details { padding: 0 8px 8px; }
  
@@ -235,9 +235,9 @@ index ed67be1..41f3648 100644
 +   without introducing a whole new component -- same shape, warmer accent. */
 +.idle-chain-banner { border-color: var(--violet); color: var(--violet); }
 +
- /*
-  * Settings > Appearance > Font > Readable. Independent of --style (chrome)
-  * on purpose -- this only swaps the typeface, leaving corners/pills/layout
+ * { box-sizing: border-box; }
+ 
+ html, body, #root {
 diff --git a/src/ui/ChainCompleteModal.tsx b/src/ui/ChainCompleteModal.tsx
 new file mode 100644
 index 0000000..d3892be

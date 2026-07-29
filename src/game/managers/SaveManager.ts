@@ -89,6 +89,7 @@ export function createInitialState(now = Date.now()): GameState {
     unlockedAchievements: {},
     vendorLevels: { blacksmith: 0, alchemist: 0, enchanter: 0 },
     guildName: '',
+    notifiedSetBonuses: [],
   };
 }
 
@@ -246,6 +247,11 @@ const MIGRATIONS: Record<number, Migration> = {
     }
     return { ...save, version: 13, heroes };
   },
+  13: (save) => ({
+    ...save,
+    version: 14,
+    notifiedSetBonuses: (save.notifiedSetBonuses as string[] | undefined) ?? [],
+  }),
 };
 
 export const SaveManager = {

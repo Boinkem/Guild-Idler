@@ -71,7 +71,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         }}
       />
       <header className="titlebar" style={{ position: 'relative' }}>
-        <h1>Guild Idler</h1>
+        <h1>{engine.state.guildName || 'Guild Idler'}</h1>
         <div className="resources">
           <span className="gold">◆ {formatGold(engine.state.gold)} / {formatGold(engine.goldStorage)}</span>
           <span className="renown">✦ {engine.state.renown} renown</span>

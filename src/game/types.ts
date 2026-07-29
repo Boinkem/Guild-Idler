@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 13;
+export const SAVE_VERSION = 14;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -391,4 +391,10 @@ export interface GameState {
    * spot.
    */
   guildName: string;
+  /**
+   * "setId:count" keys for every set-bonus threshold that's already
+   * triggered its one-time toast (see GameEngine.checkSetBonusMilestones).
+   * Prevents re-notifying every time a piece is unequipped and re-equipped.
+   */
+  notifiedSetBonuses: string[];
 }

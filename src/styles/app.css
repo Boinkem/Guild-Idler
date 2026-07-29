@@ -102,6 +102,32 @@
 }
 .item-card-details { padding: 0 8px 8px; }
 
+/*
+ * Story Chain Complete overlay -- deliberately reads as a bigger event than
+ * the regular QuestResultModal. Border/glow colour comes from the guild
+ * rank tier the completed chain's own reqLevel falls into (see
+ * ChainCompleteModal.tsx), so a capstone completion visually stands apart
+ * from an early chain finishing.
+ */
+.chain-complete-overlay { z-index: 12; }
+.chain-complete-modal {
+  max-width: 480px;
+  border-width: 2px;
+  text-align: center;
+}
+.chain-complete-kicker {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--brass);
+}
+.chain-complete-modal .stat-row { justify-content: center; }
+.chain-complete-modal .row.wrap { justify-content: center; }
+
+/* Distinguishes the chain-complete idle banner from the plain away-banner
+   without introducing a whole new component -- same shape, warmer accent. */
+.idle-chain-banner { border-color: var(--violet); color: var(--violet); }
+
 * { box-sizing: border-box; }
 
 html, body, #root {
