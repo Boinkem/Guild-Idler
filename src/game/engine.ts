@@ -1,4 +1,4 @@
-import { ActiveQuest, GameState, Hero, HeroClass, QuestOffer, QuestResult } from './types';
+import { ActiveQuest, GameState, Hero, HeroClass, QuestOffer, QuestResult, Rarity } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -33,7 +33,7 @@ export interface ChainCelebration {
   title?: string;
   rewardGold: number;
   rewardRenown: number;
-  items: { defId: string; name: string; rarity: string }[];
+  items: { defId: string; name: string; rarity: Rarity }[];
 }
 
 type Listener = () => void;
@@ -218,7 +218,7 @@ export class GameEngine {
                 const def = EQUIPMENT_BY_ID[defId];
                 return def ? { defId, name: def.name, rarity: def.rarity } : null;
               })
-              .filter((x): x is { defId: string; name: string; rarity: string } => x !== null),
+              .filter((x): x is { defId: string; name: string; rarity: Rarity } => x !== null),
           };
         }
       } else if (result.loot.some((l) => l.rarity === 'legendary')) playSound('legendary_drop');
