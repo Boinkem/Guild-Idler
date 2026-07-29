@@ -390,6 +390,26 @@ export const QUEST_CHAINS: ChainDef[] = [
     ],
   },
   {
+    id: 'third_crown',
+    name: 'The Third Crown',
+    description:
+      "One of the goblin king's three crowns didn't come from a warband or a noble house — it came " +
+      "from a toll gate on the Blackford road, from a lord nobody remembers losing his own crown in " +
+      "the first place. He was reported dead the same season it went missing. He was not. Whoever he " +
+      "is now, he's had a long time to plan what comes next.",
+    reqLevel: 7,
+    rewardGold: 600,
+    rewardItems: ['tollkeepers_signet'],
+    rewardRenown: 1,
+    title: 'Ridge-Watcher',
+    epilogue: "The crown's true owner isn't dead, isn't landless, and isn't finished. Whatever he's building at Blackford Ridge, it's bigger than a toll gate — and it isn't the guild's job to scout it a second time.",
+    stages: [
+      { name: 'The Toll That Should Not Exist', flavour: "A gate's gone up on the Blackford road again, run by men who were farmers a season ago and answer to someone who very much was not.", difficulty: 'normal', duration: 3 * HOUR, goldMultiplier: 1.3 },
+      { name: 'What the Crown Left Behind', flavour: 'Records in the old toll house name a lord who lost everything the same season the goblin king got his third crown. He was reported dead. He was not.', difficulty: 'normal', duration: 4 * HOUR, goldMultiplier: 1.5 },
+      { name: 'The Company He Kept', flavour: "Eighty men in ranks, a granary that didn't grow the grain to fill it, and a chain of command two deep. A dispossessed lord doesn't build this alone, and he isn't planning to stay dispossessed.", difficulty: 'hard', duration: 5 * HOUR, goldMultiplier: 1.8 },
+    ],
+  },
+  {
     id: 'hollow_choir',
     name: 'The Hollow Choir',
     description:

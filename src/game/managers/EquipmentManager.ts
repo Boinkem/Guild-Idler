@@ -26,14 +26,26 @@ export const EquipmentManager = {
     return item.durability <= 0;
   },
 
-  /** Gold to fully repair. Scales with rarity and missing durability. */
+  /**
+   * Gold to fully repair. Scales with rarity and missing durability.
+   *
+   * perPoint dropped from 1.2 to 0.6, and the workshop discount now starts
+   * at 15% even at Workshop level 0 (capping at 50% at max level, up from a
+   * 0%-40% range) -- combined, roughly a 55-58% reduction throughout the
+   * curve. Wear applies independently to every equipped slot (up to 7) on
+   * every quest, so at the original rate a hero's full repair bill could
+   * outpace Easy-tier gold income entirely, especially after 0039 deliberately
+   * lowered early gold to fix the 95%-success-ceiling problem. This is
+   * purely a spending-side fix -- durability still matters, it just no
+   * longer eats the whole paycheck.
+   */
   repairCost(item: EquipmentItem, workshopLevel: number): number {
     const def = EQUIPMENT_BY_ID[item.defId];
     if (!def) return 0;
     const missing = EquipmentManager.maxDurability(item) - item.durability;
     if (missing <= 0) return 0;
-    const perPoint = 1.2 * RARITY_PRICE_MULT[def.rarity] * (1 + item.plus * 0.2);
-    const discount = 1 - Math.min(0.4, workshopLevel * 0.04);
+    const perPoint = 0.6 * RARITY_PRICE_MULT[def.rarity] * (1 + item.plus * 0.2);
+    const discount = 1 - Math.min(0.5, 0.15 + workshopLevel * 0.035);
     return Math.max(1, Math.ceil(missing * perPoint * discount));
   },
 

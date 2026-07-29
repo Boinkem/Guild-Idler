@@ -1,5 +1,18 @@
 [
   {
+    "id": "blackford_keep",
+    "name": "The Siege of Blackford Keep",
+    "description": "The lord who lost a crown at Blackford Ridge has spent a season turning a toll gate into a real holding. He has no crown to show for it and no plans to stay uncrowned much longer -- and unlike the goblin king, who's already answered for one theft, this one still doesn't know exactly who's been quietly deciding his fate all along.",
+    "epilogue": "The Uncrowned's second army fared no better than his first. He still doesn't have his crown back. He still doesn't know the guild is the reason why.",
+    "reqLevel": 8,
+    "encounterIds": [
+      "blackford_outer_palisade",
+      "blackford_right_hand",
+      "blackford_uncrowned"
+    ],
+    "unlocksRaidId": "bonewrought_vault"
+  },
+  {
     "id": "bonewrought_vault",
     "name": "The Bonewrought Vault",
     "description": "Something has been raising the dead again -- not in ones and twos this time, but by the vaultful. Whatever is sealed inside is worth enough to a foot soldier's worth of risen guards to still be defending it centuries later. This isn't a job for one hero. Bring the guild.",

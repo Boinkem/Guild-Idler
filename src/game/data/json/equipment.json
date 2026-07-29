@@ -1144,5 +1144,21 @@
       "endurance": 16
     },
     "setId": "requiem"
+  },
+  {
+    "id": "tollkeepers_signet",
+    "name": "Tollkeeper's Signet",
+    "slot": "ring",
+    "rarity": "uncommon",
+    "reqLevel": 7,
+    "maxDurability": 75,
+    "value": 150,
+    "mods": {
+      "success": 5,
+      "gold": 8
+    },
+    "stats": {
+      "luck": 3
+    }
   }
 ]

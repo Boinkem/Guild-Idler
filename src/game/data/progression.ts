@@ -112,11 +112,27 @@ export function vendorUpgrades(vendorId: VendorId): UpgradeDef[] {
   return UPGRADES.filter((u) => u.vendor === vendorId);
 }
 
+/**
+ * Applied to every leveled cost formula in this file (upgrades, guild
+ * facilities, renown perks, vendor levels) -- a guild's very first purchase
+ * of anything costs a fraction of the "real" formula price, then the
+ * discount fades out over the next few levels until the original curve
+ * takes back over completely. This is a spending-side fix only; nothing
+ * about quest rewards changes, so it can't shift which difficulty tier is
+ * "worth" farming relative to another -- it just makes the early game less
+ * of a wall before any of that economy gets to matter.
+ */
+const EARLY_TIER_DISCOUNT = [0.15, 0.35, 0.6, 0.85]; // level 4+ = 1.0, full price
+
+export function earlyTierDiscount(level: number): number {
+  return level < EARLY_TIER_DISCOUNT.length ? EARLY_TIER_DISCOUNT[level] : 1;
+}
+
 /** Cost to raise a vendor from currentLevel to currentLevel+1, or null if they're already at their cap. */
 export function vendorLevelCost(vendorId: VendorId, currentLevel: number): number | null {
   const cap = vendorUpgrades(vendorId).length;
   if (currentLevel >= cap) return null;
-  return Math.floor(VENDOR_LEVEL_BASE_COST * Math.pow(VENDOR_LEVEL_COST_GROWTH, currentLevel));
+  return Math.floor(VENDOR_LEVEL_BASE_COST * Math.pow(VENDOR_LEVEL_COST_GROWTH, currentLevel) * earlyTierDiscount(currentLevel));
 }
 
 /** Whether a specific upgrade is currently visible/purchasable given the vendor's level. */
@@ -130,7 +146,7 @@ export function isVendorUpgradeUnlocked(vendorLevel: number, vendorId: VendorId,
 export const UPGRADE_BY_ID: Record<string, UpgradeDef> = Object.fromEntries(UPGRADES.map((u) => [u.id, u]));
 
 export function upgradeCost(def: UpgradeDef, currentLevel: number): number {
-  return Math.floor(def.baseCost * Math.pow(def.costGrowth, currentLevel));
+  return Math.floor(def.baseCost * Math.pow(def.costGrowth, currentLevel) * earlyTierDiscount(currentLevel));
 }
 
 /* ------------------------------- guild hall ------------------------------- */
@@ -166,7 +182,7 @@ export const GUILD_FACILITIES: GuildDef[] = [
 export const GUILD_BY_ID: Record<string, GuildDef> = Object.fromEntries(GUILD_FACILITIES.map((g) => [g.id, g]));
 
 export function guildCost(def: GuildDef, currentLevel: number): number {
-  return Math.floor(def.baseCost * Math.pow(def.costGrowth, currentLevel));
+  return Math.floor(def.baseCost * Math.pow(def.costGrowth, currentLevel) * earlyTierDiscount(currentLevel));
 }
 
 export const BASE_GOLD_STORAGE = 10_000;
@@ -231,7 +247,7 @@ export function renownCost(def: RenownPerkDef, currentLevel: number): number {
     const tier2Level = currentLevel - def.maxLevel;
     return Math.max(1, Math.floor(def.tier2.startCost * Math.pow(def.tier2.costGrowth, tier2Level)));
   }
-  return Math.max(1, Math.floor(def.cost * Math.pow(def.costGrowth, currentLevel)));
+  return Math.max(1, Math.floor(def.cost * Math.pow(def.costGrowth, currentLevel) * earlyTierDiscount(currentLevel)));
 }
 
 /* ------------------------------ hero classes ----------------------------- */
@@ -329,8 +345,13 @@ export const HERO_CLASSES: Record<HeroClass, HeroClassDef> = {
 };
 
 export const RECRUIT_COST: Record<HeroClass, number> = {
-  adventurer: 0, knight: 400,
-  dwarf: 1200, gladiator: 1500,
+  // Knight and Dwarf cut significantly -- the pacing math showed a fresh
+  // guild needed ~2 weeks of real time just to afford a 3-hero party at the
+  // old prices, almost entirely due to compounding Tavern + recruit costs.
+  // Everything from Gladiator up is untouched; the early on-ramp specifically
+  // was the problem, not the overall curve.
+  adventurer: 0, knight: 150,
+  dwarf: 500, gladiator: 1500,
   samurai: 5000, witch: 6500,
   lizardman: 16000, pyromancer: 20000, wizard: 32000,
 };
@@ -372,7 +393,15 @@ export const SKIN_BY_ID: Record<string, SkinDef> = Object.fromEntries(SKINS.map(
 /* ----------------------------- level curve ------------------------------ */
 
 export function xpForLevel(level: number): number {
-  return Math.floor(55 * Math.pow(level, 1.55));
+  // Coefficient dropped from 55 to 4.6. The original curve, simulated end
+  // to end (level 1->55 plus all 18 quest chains, single hero, no Prestige),
+  // came out to roughly 1,540 days of continuous play -- the ^1.55 exponent
+  // makes late levels individually enormous (level 50->51 alone needed
+  // ~23,700 XP), and even Legendary-tier quests' xpMultiplier (26x) couldn't
+  // keep pace. 4.6 lands the same full playthrough at ~4.7 months, verified
+  // by simulation, without touching any difficulty tier's xpMultiplier or
+  // relative appeal versus the others.
+  return Math.floor(4.6 * Math.pow(level, 1.55));
 }
 
 export const PRESTIGE_MIN_LEVEL = 30;

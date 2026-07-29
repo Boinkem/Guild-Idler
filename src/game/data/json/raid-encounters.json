@@ -38,5 +38,45 @@
       "gravewatchers_band@5",
       "choir_mask@5"
     ]
+  },
+  {
+    "id": "blackford_outer_palisade",
+    "name": "The Outer Palisade",
+    "flavour": "Sharpened stakes, a rope bridge, and men who know exactly which gaps in the wall to defend. Someone taught them this.",
+    "baseSuccess": 65,
+    "durationHours": 2,
+    "rewardGold": 400,
+    "rewardXp": 80,
+    "loot": [
+      "copper_band@12",
+      "work_gloves@10"
+    ]
+  },
+  {
+    "id": "blackford_right_hand",
+    "name": "The Uncrowned's Right Hand",
+    "flavour": "Not the one giving the big speeches. The one the big speeches are actually about -- calm, precise, and clearly used to being obeyed.",
+    "baseSuccess": 55,
+    "durationHours": 3,
+    "rewardGold": 650,
+    "rewardXp": 130,
+    "loot": [
+      "knights_blade@6",
+      "iron_helm@8"
+    ]
+  },
+  {
+    "id": "blackford_uncrowned",
+    "name": "The Uncrowned",
+    "flavour": "He was a smallholder eighteen months ago, before he lost everything to a goblin with a taste for crowns. Whatever's left of him now doesn't plan on losing twice.",
+    "baseSuccess": 45,
+    "durationHours": 4,
+    "rewardGold": 1000,
+    "rewardXp": 200,
+    "loot": [
+      "chainmail@6",
+      "ranger_boots@6",
+      "tollkeepers_signet@4"
+    ]
   }
 ]
