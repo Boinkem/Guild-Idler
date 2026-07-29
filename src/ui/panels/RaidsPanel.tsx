@@ -248,7 +248,8 @@ export function RaidsPanel() {
         Multi-hero expeditions. Big rewards, long odds, and everyone comes home a little worse for wear -- win or lose.
       </p>
 
-      {state.activeRaid ? <ActiveRaidCard /> : RAIDS.map((r) => <RaidCard key={r.id} raidId={r.id} />)}
+      {state.activeRaid && <ActiveRaidCard />}
+      {RAIDS.filter((r) => r.id !== state.activeRaid?.raidId).map((r) => <RaidCard key={r.id} raidId={r.id} />)}
     </>
   );
 }
