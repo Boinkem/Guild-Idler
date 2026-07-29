@@ -8,7 +8,7 @@
  * here with no frontend changes needed.
  */
 
-const state = { schema: null, kind: null, rows: [], dirty: false };
+const state = { schema: null, kind: null, rows: [], dirty: false, icons: null };
 
 const tabsEl = document.getElementById('tabs');
 const appEl = document.getElementById('app');
@@ -78,6 +78,11 @@ function displayColumns(schema) {
 function renderTable() {
   const schema = state.schema[state.kind];
   const cols = displayColumns(schema);
+  // The icon field (if this content type has one) gets its own leading
+  // thumbnail column in the table, separate from the generic text-cell
+  // columns above -- a name/rarity/etc. row is still useful as plain text,
+  // but "which icon is this assigned" is only really legible as an image.
+  const iconKey = Object.entries(schema.fields).find(([, spec]) => spec.picker === 'icon')?.[0];
 
   const toolbar = document.createElement('div');
   toolbar.className = 'toolbar';
@@ -89,24 +94,29 @@ function renderTable() {
 
   const table = document.createElement('table');
   const thead = document.createElement('thead');
-  thead.innerHTML = `<tr>${cols.map((c) => `<th>${c}</th>`).join('')}<th></th></tr>`;
+  thead.innerHTML = `<tr>${iconKey ? '<th></th>' : ''}${cols.map((c) => `<th>${c}</th>`).join('')}<th></th></tr>`;
   const tbody = document.createElement('tbody');
 
   if (state.rows.length === 0) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="${cols.length + 1}"><div class="empty">Nothing here yet.</div></td>`;
+    tr.innerHTML = `<td colspan="${cols.length + (iconKey ? 2 : 1)}"><div class="empty">Nothing here yet.</div></td>`;
     tbody.appendChild(tr);
   }
 
   state.rows.forEach((row, index) => {
     const tr = document.createElement('tr');
+    const iconCell = iconKey
+      ? `<td class="icon-cell">${row[iconKey]
+          ? `<img src="/item-icons/${escapeHtml(row[iconKey])}" alt="" class="table-icon" />`
+          : '<span class="table-icon-empty">—</span>'}</td>`
+      : '';
     const cells = cols.map((c) => {
       let val = row[c];
       if (Array.isArray(val)) val = val.slice(0, 2).join(', ') + (val.length > 2 ? '…' : '');
       const cls = c === 'rarity' ? `rarity-${val}` : c === 'kind' ? `kind-${val}` : '';
       return `<td class="${cls}">${val ?? ''}</td>`;
     }).join('');
-    tr.innerHTML = `${cells}<td class="actions">
+    tr.innerHTML = `${iconCell}${cells}<td class="actions">
       <button data-edit="${index}">Edit</button>
       <button data-dup="${index}">Duplicate</button>
       <button class="danger" data-del="${index}">Delete</button>
@@ -147,6 +157,12 @@ function deleteRow(index) {
 
 function fieldControl(spec, key, value) {
   const id = `f_${key}`;
+  if (spec.picker === 'icon') {
+    // Just a container here -- renderIconField fills it in and wires the
+    // buttons once it's actually attached to the DOM (see wireIconFields,
+    // called alongside wireListInput in openEditor).
+    return `<div class="icon-field" id="${id}" data-value="${escapeHtml(value ?? '')}"></div>`;
+  }
   if (spec.type === 'string' && (key === 'description' || key === 'flavour')) {
     return `<textarea id="${id}">${escapeHtml(value ?? '')}</textarea>`;
   }
@@ -203,6 +219,92 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+/* ----------------------------------------------------------- icon field --- */
+// Fetched once and cached for the session -- the icon set only changes when
+// someone drops new files into public/item-icons/, which means restarting
+// this tool anyway, so there's no need to re-fetch on every editor open.
+async function ensureIcons() {
+  if (state.icons) return state.icons;
+  state.icons = await api('/api/icons');
+  return state.icons;
+}
+
+/** Fills in and wires an .icon-field container. Called on initial render and
+ *  again every time the value changes (pick or clear), rather than trying to
+ *  patch the DOM in place -- the control is small enough that a full re-render
+ *  is simpler and hard to get subtly wrong. */
+function renderIconField(field) {
+  const value = field.dataset.value || '';
+  field.innerHTML = `
+    <div class="icon-preview">
+      ${value ? `<img src="/item-icons/${escapeHtml(value)}" alt="" />` : '<span class="icon-preview-empty">?</span>'}
+    </div>
+    <div class="icon-field-controls">
+      <span class="icon-field-name">${value ? escapeHtml(value) : 'No icon assigned'}</span>
+      <button type="button" data-choose-icon>${value ? 'Change' : 'Choose icon'}</button>
+      ${value ? '<button type="button" class="remove" data-clear-icon>Clear</button>' : ''}
+    </div>`;
+
+  field.querySelector('[data-choose-icon]').onclick = async () => {
+    const folders = await ensureIcons();
+    openIconPicker(folders, field.dataset.value, (chosen) => {
+      field.dataset.value = chosen;
+      renderIconField(field);
+    });
+  };
+  const clearBtn = field.querySelector('[data-clear-icon]');
+  if (clearBtn) clearBtn.onclick = () => { field.dataset.value = ''; renderIconField(field); };
+}
+
+function wireIconFields(container) {
+  container.querySelectorAll('.icon-field').forEach((field) => renderIconField(field));
+}
+
+/** A grid of every available icon, grouped by folder, in an overlay of its
+ *  own on top of the editor overlay. Picking one or cancelling both just
+ *  remove this overlay -- the underlying editor is untouched either way. */
+function openIconPicker(folders, currentValue, onPick) {
+  const overlay = document.createElement('div');
+  overlay.className = 'editor-overlay icon-picker-overlay';
+  const panel = document.createElement('div');
+  panel.className = 'editor icon-picker';
+
+  const sectionsHtml = folders.length === 0
+    ? '<p class="tiny muted">No icons found in public/item-icons/. Drop image files into its subfolders (weapons, armor, shields, potions, crafting, food, accessories, misc) and reopen this picker.</p>'
+    : folders.map((f) => `
+        <div class="icon-picker-section">
+          <div class="icon-picker-folder">${escapeHtml(f.name)} (${f.files.length})</div>
+          <div class="icon-picker-grid">
+            ${f.files.map((file) => {
+              const rel = `${f.name}/${file}`;
+              const selected = rel === currentValue;
+              return `<button type="button" class="icon-picker-item ${selected ? 'selected' : ''}" data-icon="${escapeHtml(rel)}" title="${escapeHtml(rel)}">
+                <img src="/item-icons/${escapeHtml(rel)}" alt="" loading="lazy" />
+              </button>`;
+            }).join('')}
+          </div>
+        </div>`).join('');
+
+  panel.innerHTML = `
+    <h2>Choose an icon</h2>
+    <div class="icon-picker-body">${sectionsHtml}</div>
+    <div class="editor-actions">
+      <button id="iconPickerCancel">Cancel</button>
+    </div>`;
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  panel.querySelectorAll('[data-icon]').forEach((btn) => {
+    btn.onclick = () => {
+      onPick(btn.dataset.icon);
+      overlay.remove();
+    };
+  });
+  panel.querySelector('#iconPickerCancel').onclick = () => overlay.remove();
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+}
+
 function wireListInput(container) {
   container.querySelectorAll('[data-add-item]').forEach((btn) => {
     btn.onclick = () => {
@@ -220,6 +322,7 @@ function wireListInput(container) {
 
 function readField(spec, key) {
   const el = document.getElementById(`f_${key}`);
+  if (spec.picker === 'icon') return el.dataset.value || '';
   if (spec.type === 'string' || spec.type === 'enum') return el.value;
   if (spec.type === 'number') return parseFloat(el.value) || 0;
   if (spec.type === 'boolean') return el.checked;
@@ -271,6 +374,7 @@ function openEditor(index) {
   overlay.appendChild(editor);
   document.body.appendChild(overlay);
   wireListInput(editor);
+  wireIconFields(editor);
 
   editor.querySelector('#cancelBtn').onclick = () => overlay.remove();
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };

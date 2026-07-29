@@ -1,0 +1,441 @@
+diff --git a/src/game/data/json/equipment.json b/src/game/data/json/equipment.json
+index 331e063..d1f7312 100644
+--- a/src/game/data/json/equipment.json
++++ b/src/game/data/json/equipment.json
+@@ -729,7 +729,7 @@
+   {
+     "id": "empyrean_aegis",
+     "name": "Empyrean Aegis",
+-    "slot": "chest",
++    "slot": "shield",
+     "rarity": "legendary",
+     "reqLevel": 45,
+     "maxDurability": 320,
+@@ -838,7 +838,7 @@
+   {
+     "id": "bulwark_of_the_war_saint",
+     "name": "Bulwark of the War Saint",
+-    "slot": "chest",
++    "slot": "shield",
+     "rarity": "legendary",
+     "reqLevel": 32,
+     "maxDurability": 240,
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 4662736..7532439 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -219,6 +219,27 @@ const MIGRATIONS: Record<number, Migration> = {
+     }
+     return { ...save, version: 11, vendorLevels };
+   },
++  11: (save) => {
++    // bulwark_of_the_war_saint and empyrean_aegis moved from the "chest"
++    // slot to a genuine new "shield" slot. A hero with either equipped has
++    // it sitting under the old key -- Hero.equipment is keyed by slot, so
++    // without this it would go stale (the item def now says shield, but
++    // nothing looks under that key for it). Only equipped items need this;
++    // stash/shop entries just reference a defId and pick up the new slot
++    // automatically via EQUIPMENT_BY_ID, no per-item migration needed there.
++    const RECLASSIFIED_TO_SHIELD = new Set(['bulwark_of_the_war_saint', 'empyrean_aegis']);
++    const heroes = Array.isArray(save.heroes) ? save.heroes as Record<string, unknown>[] : [];
++    for (const h of heroes) {
++      const equipment = (h.equipment as Record<string, { defId?: string }> | undefined) ?? {};
++      const chestItem = equipment.chest;
++      if (chestItem && RECLASSIFIED_TO_SHIELD.has(chestItem.defId ?? '')) {
++        equipment.shield = chestItem;
++        delete equipment.chest;
++      }
++      h.equipment = equipment;
++    }
++    return { ...save, version: 12, heroes };
++  },
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index ac1ea47..c362cb9 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,13 +3,13 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 11;
++export const SAVE_VERSION = 12;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+ export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+ 
+-export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'gloves' | 'boots' | 'ring' | 'amulet';
++export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'shield' | 'gloves' | 'boots' | 'ring' | 'amulet';
+ 
+ export type HeroClass = 'adventurer' | 'knight' | 'gladiator' | 'samurai' | 'witch' | 'pyromancer' | 'lizardman' | 'wizard' | 'dwarf';
+ 
+@@ -79,6 +79,13 @@ export interface EquipmentDef {
+   setId?: string;
+   /** Base shop price; loot value is derived from it. */
+   value: number;
++  /**
++   * Relative path under public/item-icons/ (e.g. "weapons/sword_03.png"),
++   * assigned manually via the devtool's Icon Library. Optional -- items
++   * without one fall back to a per-slot placeholder glyph in the UI, so this
++   * can be filled in gradually rather than all at once.
++   */
++  icon?: string;
+ }
+ 
+ /** A concrete item the player owns. */
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 89f0653..8b87551 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -34,6 +34,61 @@
+   --anim-speed: 1;
+ }
+ 
++/*
++ * Inventory icon cards -- replaces the old text-only slot/stash rows.
++ * Collapsed: icon + name + rarity pill. Expanded (.open): mods, durability,
++ * and the repair/refine/remove or equip/sell actions. A missing item.icon
++ * just shows the per-slot emoji fallback (see EquipmentPanel.tsx) rather
++ * than a broken <img>, so this rolls out gradually as icons are assigned.
++ */
++.item-card-grid {
++  display: grid;
++  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
++  gap: 8px;
++  margin-bottom: 14px;
++}
++.item-card {
++  border: 1px solid var(--panel-3);
++  background: var(--panel-2);
++}
++.item-card.empty { opacity: 0.6; }
++.item-card-summary {
++  display: flex;
++  align-items: center;
++  gap: 10px;
++  padding: 8px;
++  cursor: pointer;
++}
++.item-card.empty .item-card-summary { cursor: default; }
++.item-icon {
++  flex: none;
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  background: var(--panel-3);
++  border: 1px solid var(--edge);
++}
++.item-icon img { width: 70%; height: 70%; image-rendering: pixelated; }
++.item-card-body { min-width: 0; flex: 1; }
++.item-card-name {
++  font-size: 11px;
++  font-weight: 700;
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++.rarity-pill {
++  display: inline-block;
++  font-size: 9px;
++  text-transform: uppercase;
++  letter-spacing: 0.04em;
++  padding: 1px 6px;
++  border: 1px solid;
++  border-radius: 2px;
++  margin-top: 3px;
++}
++.item-card-details { padding: 0 8px 8px; }
++
+ * { box-sizing: border-box; }
+ 
+ html, body, #root {
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 07e08fc..9bf37d3 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -1,36 +1,178 @@
+ import { useState } from 'react';
+ import { useEngine } from '../useEngine';
+ import { useSettings } from '../useSettings';
++import { GameEngine } from '../../game/engine';
+ import { EquipmentManager, MAX_PLUS } from '../../game/managers/EquipmentManager';
+ import { EQUIPMENT_BY_ID, ITEM_SETS } from '../../game/data/equipment';
+-import { EquipSlot, EquipmentItem } from '../../game/types';
++import { EquipSlot, EquipmentItem, Hero, Rarity } from '../../game/types';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { describeMods, formatGold, RARITY_COLOR } from '../../game/util';
+ 
+-const SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'gloves', 'boots', 'ring', 'amulet'];
++const SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet'];
+ 
+-function ItemLine({ item, showBars = true }: { item: EquipmentItem; showBars?: boolean }) {
+-  const def = EQUIPMENT_BY_ID[item.defId];
+-  if (!def) return null;
++/**
++ * Emoji placeholder per slot, shown whenever an item has no icon assigned
++ * yet -- devtool icon assignment is manual and ongoing (55+ items), so most
++ * won't have one right away. Same "always show something legible, never a
++ * broken image" approach used elsewhere for missing art.
++ */
++const SLOT_FALLBACK: Record<EquipSlot, string> = {
++  weapon: '⚔️', helmet: '🪖', chest: '🎽', shield: '🛡️',
++  gloves: '🧤', boots: '👢', ring: '💍', amulet: '📿',
++};
++
++function ItemIcon({ slot, icon, size = 40 }: { slot: EquipSlot; icon?: string; size?: number }) {
++  return (
++    <div className="item-icon" style={{ width: size, height: size, fontSize: Math.round(size * 0.55) }}>
++      {icon
++        ? <img src={`./item-icons/${icon}`} alt="" />
++        : <span aria-hidden="true">{SLOT_FALLBACK[slot]}</span>}
++    </div>
++  );
++}
++
++function RarityPill({ rarity }: { rarity: Rarity }) {
++  return (
++    <span className="rarity-pill" style={{ color: RARITY_COLOR[rarity], borderColor: RARITY_COLOR[rarity] }}>
++      {rarity}
++    </span>
++  );
++}
++
++function DurabilityBar({ item }: { item: EquipmentItem }) {
+   const max = EquipmentManager.maxDurability(item);
+   const ratio = item.durability / max;
+   return (
+     <>
+-      <div style={{ color: RARITY_COLOR[def.rarity], fontSize: 11, fontWeight: 700 }}>
+-        {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
++      <div className={`bar dura ${ratio < 0.25 ? 'low' : ''}`} style={{ marginTop: 4 }}>
++        <span style={{ width: `${ratio * 100}%` }} />
+       </div>
+-      <div className="tiny muted">{describeMods(def.mods).join(' · ') || 'No bonuses'}</div>
+-      {showBars && (
+-        <>
+-          <div className={`bar dura ${ratio < 0.25 ? 'low' : ''}`} style={{ marginTop: 4 }}>
+-            <span style={{ width: `${ratio * 100}%` }} />
++      <div className="tiny muted">
++        {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${max}`}
++      </div>
++    </>
++  );
++}
++
++/** A single worn-gear slot. Collapsed shows just the icon, name, and rarity
++ *  pill; clicking expands to the full mod breakdown, durability, and the
++ *  repair/refine/remove actions -- same collapse-by-default pattern used on
++ *  the Quest Board and Lore tab. */
++function SlotCard({
++  slot, item, workshop, hero, engine,
++}: { slot: EquipSlot; item: EquipmentItem | undefined; workshop: number; hero: Hero; engine: GameEngine }) {
++  const [open, setOpen] = useState(false);
++  const def = item ? EQUIPMENT_BY_ID[item.defId] : undefined;
++
++  if (!item || !def) {
++    return (
++      <div className="item-card empty">
++        <ItemIcon slot={slot} />
++        <div className="item-card-body">
++          <div className="slot-name">{slot}</div>
++          <div className="tiny muted">Empty</div>
++        </div>
++      </div>
++    );
++  }
++
++  return (
++    <div className={`item-card ${open ? 'open' : ''}`}>
++      <div
++        className="item-card-summary"
++        onClick={() => setOpen((v) => !v)}
++        role="button"
++        tabIndex={0}
++        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
++      >
++        <ItemIcon slot={def.slot} icon={def.icon} />
++        <div className="item-card-body">
++          <div className="item-card-name">{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
++          <RarityPill rarity={def.rarity} />
++        </div>
++      </div>
++      {open && (
++        <div className="item-card-details">
++          <div className="tiny muted">{slot} · requires level {def.reqLevel}</div>
++          <div className="tiny muted" style={{ marginTop: 2 }}>{describeMods(def.mods).join(' · ') || 'No bonuses'}</div>
++          <DurabilityBar item={item} />
++          <div className="row wrap" style={{ marginTop: 6 }}>
++            <button
++              style={{ minHeight: 24, padding: '3px 6px' }}
++              onClick={() => engine.repair(item.uid)}
++              disabled={EquipmentManager.repairCost(item, workshop) === 0}
++            >
++              Repair {formatGold(EquipmentManager.repairCost(item, workshop))}
++            </button>
++            <button
++              style={{ minHeight: 24, padding: '3px 6px' }}
++              onClick={() => engine.upgradeItem(item.uid)}
++              disabled={item.plus >= MAX_PLUS}
++            >
++              Refine {formatGold(EquipmentManager.upgradeCost(item, workshop))}
++            </button>
++            <button
++              style={{ minHeight: 24, padding: '3px 6px' }}
++              onClick={() => engine.unequip(hero.id, slot)}
++            >
++              Remove
++            </button>
+           </div>
+-          <div className="tiny muted">
+-            {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${max}`}
++        </div>
++      )}
++    </div>
++  );
++}
++
++/** A single stash item, same collapsed-card pattern as SlotCard. */
++function StashCard({
++  item, hero, confirmSell, engine,
++}: { item: EquipmentItem; hero: Hero; confirmSell: boolean; engine: GameEngine }) {
++  const [open, setOpen] = useState(false);
++  const def = EQUIPMENT_BY_ID[item.defId];
++  if (!def) return null;
++  const canEquip = EquipmentManager.canEquip(hero, item);
++
++  return (
++    <div className={`item-card ${open ? 'open' : ''}`}>
++      <div
++        className="item-card-summary"
++        onClick={() => setOpen((v) => !v)}
++        role="button"
++        tabIndex={0}
++        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
++      >
++        <ItemIcon slot={def.slot} icon={def.icon} />
++        <div className="item-card-body">
++          <div className="item-card-name">{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
++          <RarityPill rarity={def.rarity} />
++        </div>
++      </div>
++      {open && (
++        <div className="item-card-details">
++          <div className="tiny muted">{def.slot} · requires level {def.reqLevel}</div>
++          <div className="tiny muted" style={{ marginTop: 2 }}>{describeMods(def.mods).join(' · ') || 'No bonuses'}</div>
++          <DurabilityBar item={item} />
++          <div className="row wrap" style={{ marginTop: 6 }}>
++            <button
++              className="btn-primary"
++              style={{ minHeight: 26 }}
++              disabled={!canEquip.ok}
++              onClick={() => engine.equip(hero.id, item.uid)}
++              title={canEquip.reason}
++            >
++              Equip on {hero.name}
++            </button>
++            <button
++              style={{ minHeight: 26 }}
++              onClick={() => { if (!confirmSell || confirm('Sell this item?')) engine.sellItem(item.uid); }}
++            >
++              Sell {formatGold(EquipmentManager.sellValue(item))}
++            </button>
+           </div>
+-        </>
++        </div>
+       )}
+-    </>
++    </div>
+   );
+ }
+ 
+@@ -65,44 +207,10 @@ export function EquipmentPanel() {
+         </button>
+       </div>
+ 
+-      <div className="slot-grid">
+-        {SLOTS.map((slot) => {
+-          const item = hero.equipment[slot];
+-          return (
+-            <div key={slot} className={`slot ${item ? '' : 'empty'}`}>
+-              <div className="slot-name">{slot}</div>
+-              {item ? (
+-                <>
+-                  <ItemLine item={item} />
+-                  <div className="row wrap" style={{ marginTop: 6 }}>
+-                    <button
+-                      style={{ minHeight: 24, padding: '3px 6px' }}
+-                      onClick={() => engine.repair(item.uid)}
+-                      disabled={EquipmentManager.repairCost(item, workshop) === 0}
+-                    >
+-                      Repair {formatGold(EquipmentManager.repairCost(item, workshop))}
+-                    </button>
+-                    <button
+-                      style={{ minHeight: 24, padding: '3px 6px' }}
+-                      onClick={() => engine.upgradeItem(item.uid)}
+-                      disabled={item.plus >= MAX_PLUS}
+-                    >
+-                      Refine {formatGold(EquipmentManager.upgradeCost(item, workshop))}
+-                    </button>
+-                    <button
+-                      style={{ minHeight: 24, padding: '3px 6px' }}
+-                      onClick={() => engine.unequip(hero.id, slot)}
+-                    >
+-                      Remove
+-                    </button>
+-                  </div>
+-                </>
+-              ) : (
+-                <div className="tiny muted" style={{ marginTop: 4 }}>Empty</div>
+-              )}
+-            </div>
+-          );
+-        })}
++      <div className="item-card-grid">
++        {SLOTS.map((slot) => (
++          <SlotCard key={slot} slot={slot} item={hero.equipment[slot]} workshop={workshop} hero={hero} engine={engine} />
++        ))}
+       </div>
+ 
+       <div className="section-heading">Consumables</div>
+@@ -120,34 +228,10 @@ export function EquipmentPanel() {
+ 
+       <div className="section-heading">Stash ({state.stash.length})</div>
+       {state.stash.length === 0 && <p className="small muted">Nothing spare. Loot drops from successful quests.</p>}
+-      <div className="grid two">
+-        {state.stash.map((item) => {
+-          const def = EQUIPMENT_BY_ID[item.defId];
+-          if (!def) return null;
+-          const canEquip = EquipmentManager.canEquip(hero, item);
+-          return (
+-            <div key={item.uid} className="card" style={{ marginBottom: 0 }}>
+-              <ItemLine item={item} />
+-              <div className="tiny muted" style={{ marginTop: 4 }}>
+-                {def.slot} · requires level {def.reqLevel}
+-              </div>
+-              <div className="row wrap" style={{ marginTop: 6 }}>
+-                <button
+-                  className="btn-primary"
+-                  style={{ minHeight: 26 }}
+-                  disabled={!canEquip.ok}
+-                  onClick={() => engine.equip(hero.id, item.uid)}
+-                  title={canEquip.reason}
+-                >
+-                  Equip on {hero.name}
+-                </button>
+-                <button style={{ minHeight: 26 }} onClick={() => { if (!settings.confirmSell || confirm(`Sell this item?`)) engine.sellItem(item.uid); }}>
+-                  Sell {formatGold(EquipmentManager.sellValue(item))}
+-                </button>
+-              </div>
+-            </div>
+-          );
+-        })}
++      <div className="item-card-grid">
++        {state.stash.map((item) => (
++          <StashCard key={item.uid} item={item} hero={hero} confirmSell={settings.confirmSell} engine={engine} />
++        ))}
+       </div>
+ 
+       <div className="section-heading">Collection</div>

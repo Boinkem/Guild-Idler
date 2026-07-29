@@ -1,0 +1,348 @@
+diff --git a/public/item-icons/accessories/.gitkeep b/public/item-icons/accessories/.gitkeep
+new file mode 100644
+index 0000000..e69de29
+diff --git a/public/item-icons/armor/.gitkeep b/public/item-icons/armor/.gitkeep
+new file mode 100644
+index 0000000..e69de29
+diff --git a/public/item-icons/crafting/.gitkeep b/public/item-icons/crafting/.gitkeep
+new file mode 100644
+index 0000000..e69de29
+diff --git a/public/item-icons/food/.gitkeep b/public/item-icons/food/.gitkeep
+new file mode 100644
+index 0000000..e69de29
+diff --git a/public/item-icons/misc/.gitkeep b/public/item-icons/misc/.gitkeep
+new file mode 100644
+index 0000000..e69de29
+diff --git a/public/item-icons/potions/.gitkeep b/public/item-icons/potions/.gitkeep
+new file mode 100644
+index 0000000..e69de29
+diff --git a/public/item-icons/shields/.gitkeep b/public/item-icons/shields/.gitkeep
+new file mode 100644
+index 0000000..e69de29
+diff --git a/public/item-icons/weapons/.gitkeep b/public/item-icons/weapons/.gitkeep
+new file mode 100644
+index 0000000..e69de29
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index e64955d..e49fb54 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -8,7 +8,7 @@
+  * here with no frontend changes needed.
+  */
+ 
+-const state = { schema: null, kind: null, rows: [], dirty: false };
++const state = { schema: null, kind: null, rows: [], dirty: false, icons: null };
+ 
+ const tabsEl = document.getElementById('tabs');
+ const appEl = document.getElementById('app');
+@@ -78,6 +78,11 @@ function displayColumns(schema) {
+ function renderTable() {
+   const schema = state.schema[state.kind];
+   const cols = displayColumns(schema);
++  // The icon field (if this content type has one) gets its own leading
++  // thumbnail column in the table, separate from the generic text-cell
++  // columns above -- a name/rarity/etc. row is still useful as plain text,
++  // but "which icon is this assigned" is only really legible as an image.
++  const iconKey = Object.entries(schema.fields).find(([, spec]) => spec.picker === 'icon')?.[0];
+ 
+   const toolbar = document.createElement('div');
+   toolbar.className = 'toolbar';
+@@ -89,24 +94,29 @@ function renderTable() {
+ 
+   const table = document.createElement('table');
+   const thead = document.createElement('thead');
+-  thead.innerHTML = `<tr>${cols.map((c) => `<th>${c}</th>`).join('')}<th></th></tr>`;
++  thead.innerHTML = `<tr>${iconKey ? '<th></th>' : ''}${cols.map((c) => `<th>${c}</th>`).join('')}<th></th></tr>`;
+   const tbody = document.createElement('tbody');
+ 
+   if (state.rows.length === 0) {
+     const tr = document.createElement('tr');
+-    tr.innerHTML = `<td colspan="${cols.length + 1}"><div class="empty">Nothing here yet.</div></td>`;
++    tr.innerHTML = `<td colspan="${cols.length + (iconKey ? 2 : 1)}"><div class="empty">Nothing here yet.</div></td>`;
+     tbody.appendChild(tr);
+   }
+ 
+   state.rows.forEach((row, index) => {
+     const tr = document.createElement('tr');
++    const iconCell = iconKey
++      ? `<td class="icon-cell">${row[iconKey]
++          ? `<img src="/item-icons/${escapeHtml(row[iconKey])}" alt="" class="table-icon" />`
++          : '<span class="table-icon-empty">—</span>'}</td>`
++      : '';
+     const cells = cols.map((c) => {
+       let val = row[c];
+       if (Array.isArray(val)) val = val.slice(0, 2).join(', ') + (val.length > 2 ? '…' : '');
+       const cls = c === 'rarity' ? `rarity-${val}` : c === 'kind' ? `kind-${val}` : '';
+       return `<td class="${cls}">${val ?? ''}</td>`;
+     }).join('');
+-    tr.innerHTML = `${cells}<td class="actions">
++    tr.innerHTML = `${iconCell}${cells}<td class="actions">
+       <button data-edit="${index}">Edit</button>
+       <button data-dup="${index}">Duplicate</button>
+       <button class="danger" data-del="${index}">Delete</button>
+@@ -147,6 +157,12 @@ function deleteRow(index) {
+ 
+ function fieldControl(spec, key, value) {
+   const id = `f_${key}`;
++  if (spec.picker === 'icon') {
++    // Just a container here -- renderIconField fills it in and wires the
++    // buttons once it's actually attached to the DOM (see wireIconFields,
++    // called alongside wireListInput in openEditor).
++    return `<div class="icon-field" id="${id}" data-value="${escapeHtml(value ?? '')}"></div>`;
++  }
+   if (spec.type === 'string' && (key === 'description' || key === 'flavour')) {
+     return `<textarea id="${id}">${escapeHtml(value ?? '')}</textarea>`;
+   }
+@@ -203,6 +219,92 @@ function escapeHtml(s) {
+   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+ }
+ 
++/* ----------------------------------------------------------- icon field --- */
++// Fetched once and cached for the session -- the icon set only changes when
++// someone drops new files into public/item-icons/, which means restarting
++// this tool anyway, so there's no need to re-fetch on every editor open.
++async function ensureIcons() {
++  if (state.icons) return state.icons;
++  state.icons = await api('/api/icons');
++  return state.icons;
++}
++
++/** Fills in and wires an .icon-field container. Called on initial render and
++ *  again every time the value changes (pick or clear), rather than trying to
++ *  patch the DOM in place -- the control is small enough that a full re-render
++ *  is simpler and hard to get subtly wrong. */
++function renderIconField(field) {
++  const value = field.dataset.value || '';
++  field.innerHTML = `
++    <div class="icon-preview">
++      ${value ? `<img src="/item-icons/${escapeHtml(value)}" alt="" />` : '<span class="icon-preview-empty">?</span>'}
++    </div>
++    <div class="icon-field-controls">
++      <span class="icon-field-name">${value ? escapeHtml(value) : 'No icon assigned'}</span>
++      <button type="button" data-choose-icon>${value ? 'Change' : 'Choose icon'}</button>
++      ${value ? '<button type="button" class="remove" data-clear-icon>Clear</button>' : ''}
++    </div>`;
++
++  field.querySelector('[data-choose-icon]').onclick = async () => {
++    const folders = await ensureIcons();
++    openIconPicker(folders, field.dataset.value, (chosen) => {
++      field.dataset.value = chosen;
++      renderIconField(field);
++    });
++  };
++  const clearBtn = field.querySelector('[data-clear-icon]');
++  if (clearBtn) clearBtn.onclick = () => { field.dataset.value = ''; renderIconField(field); };
++}
++
++function wireIconFields(container) {
++  container.querySelectorAll('.icon-field').forEach((field) => renderIconField(field));
++}
++
++/** A grid of every available icon, grouped by folder, in an overlay of its
++ *  own on top of the editor overlay. Picking one or cancelling both just
++ *  remove this overlay -- the underlying editor is untouched either way. */
++function openIconPicker(folders, currentValue, onPick) {
++  const overlay = document.createElement('div');
++  overlay.className = 'editor-overlay icon-picker-overlay';
++  const panel = document.createElement('div');
++  panel.className = 'editor icon-picker';
++
++  const sectionsHtml = folders.length === 0
++    ? '<p class="tiny muted">No icons found in public/item-icons/. Drop image files into its subfolders (weapons, armor, shields, potions, crafting, food, accessories, misc) and reopen this picker.</p>'
++    : folders.map((f) => `
++        <div class="icon-picker-section">
++          <div class="icon-picker-folder">${escapeHtml(f.name)} (${f.files.length})</div>
++          <div class="icon-picker-grid">
++            ${f.files.map((file) => {
++              const rel = `${f.name}/${file}`;
++              const selected = rel === currentValue;
++              return `<button type="button" class="icon-picker-item ${selected ? 'selected' : ''}" data-icon="${escapeHtml(rel)}" title="${escapeHtml(rel)}">
++                <img src="/item-icons/${escapeHtml(rel)}" alt="" loading="lazy" />
++              </button>`;
++            }).join('')}
++          </div>
++        </div>`).join('');
++
++  panel.innerHTML = `
++    <h2>Choose an icon</h2>
++    <div class="icon-picker-body">${sectionsHtml}</div>
++    <div class="editor-actions">
++      <button id="iconPickerCancel">Cancel</button>
++    </div>`;
++
++  overlay.appendChild(panel);
++  document.body.appendChild(overlay);
++
++  panel.querySelectorAll('[data-icon]').forEach((btn) => {
++    btn.onclick = () => {
++      onPick(btn.dataset.icon);
++      overlay.remove();
++    };
++  });
++  panel.querySelector('#iconPickerCancel').onclick = () => overlay.remove();
++  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
++}
++
+ function wireListInput(container) {
+   container.querySelectorAll('[data-add-item]').forEach((btn) => {
+     btn.onclick = () => {
+@@ -220,6 +322,7 @@ function wireListInput(container) {
+ 
+ function readField(spec, key) {
+   const el = document.getElementById(`f_${key}`);
++  if (spec.picker === 'icon') return el.dataset.value || '';
+   if (spec.type === 'string' || spec.type === 'enum') return el.value;
+   if (spec.type === 'number') return parseFloat(el.value) || 0;
+   if (spec.type === 'boolean') return el.checked;
+@@ -272,6 +375,7 @@ function openEditor(index) {
+   overlay.appendChild(editor);
+   document.body.appendChild(overlay);
+   wireListInput(editor);
++  wireIconFields(editor);
+ 
+   editor.querySelector('#cancelBtn').onclick = () => overlay.remove();
+   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+diff --git a/tools/devtool/public/style.css b/tools/devtool/public/style.css
+index f93c6fa..f363a38 100644
+--- a/tools/devtool/public/style.css
++++ b/tools/devtool/public/style.css
+@@ -86,6 +86,41 @@ td.actions button { padding: 4px 8px; font-size: 11px; margin-right: 4px; }
+ 
+ .empty { color: var(--muted); font-size: 12px; padding: 20px 0; text-align: center; }
+ 
++/* --------------------------------- icons ---------------------------------- */
++
++.icon-field { display: flex; align-items: center; gap: 10px; }
++.icon-preview {
++  width: 40px; height: 40px; flex: none;
++  background: var(--panel2); border: 1px solid var(--panel3);
++  display: flex; align-items: center; justify-content: center;
++}
++.icon-preview img { width: 32px; height: 32px; image-rendering: pixelated; }
++.icon-preview-empty { color: var(--muted); font-size: 16px; }
++.icon-field-controls { display: flex; flex-direction: column; gap: 4px; }
++.icon-field-name { font-size: 11px; color: var(--muted); word-break: break-all; }
++.icon-field-controls button { padding: 4px 8px; font-size: 11px; align-self: flex-start; }
++
++.icon-picker { max-width: 720px; max-height: 80vh; overflow-y: auto; }
++.icon-picker-body { margin-bottom: 8px; }
++.icon-picker-section { margin-bottom: 16px; }
++.icon-picker-folder {
++  font-size: 11px; color: var(--muted); text-transform: uppercase;
++  letter-spacing: 0.05em; margin-bottom: 6px;
++}
++.icon-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; }
++.icon-picker-item {
++  width: 48px; height: 48px; padding: 4px;
++  background: var(--panel2); border: 1px solid var(--panel3); cursor: pointer;
++  display: flex; align-items: center; justify-content: center;
++}
++.icon-picker-item:hover { border-color: var(--muted); }
++.icon-picker-item.selected { border-color: var(--brass); background: var(--panel3); }
++.icon-picker-item img { width: 32px; height: 32px; image-rendering: pixelated; }
++
++td.icon-cell { width: 1%; padding-right: 0; }
++.table-icon { width: 24px; height: 24px; image-rendering: pixelated; vertical-align: middle; display: block; }
++.table-icon-empty { color: var(--muted); }
++
+ /* -------------------------------- patches -------------------------------- */
+ 
+ .patch-git-status {
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 91a6320..d0df6fa 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -29,6 +29,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
+ const ROOT = path.resolve(__dirname, '..', '..');
+ const DATA_DIR = path.join(ROOT, 'src', 'game', 'data', 'json');
+ const PUBLIC_DIR = path.join(__dirname, 'public');
++// Pixel-art item icons, organised into subfolders by category (weapons,
++// armor, shields, etc.) -- lives in the main project's own public/ folder,
++// not the devtool's, so the game itself can serve these too later.
++const ICONS_DIR = path.join(ROOT, 'public', 'item-icons');
+ const PORT = 5175;
+ 
+ /* --------------------------------------------------------------- schema --- */
+@@ -69,6 +73,10 @@ const SCHEMAS = {
+       mods: { type: 'mods', required: false },
+       stats: { type: 'stats', required: false },
+       setId: { type: 'string', required: false },
++      // `picker: 'icon'` is a frontend hint only -- server-side this
++      // validates as a plain optional string (a relative path under
++      // ICONS_DIR, e.g. "weapons/sword_03.png"), same as setId above.
++      icon: { type: 'string', required: false, picker: 'icon' },
+     },
+   },
+   'consumables': {
+@@ -311,6 +319,38 @@ async function listGitTags() {
+   return result.ok ? result.stdout.split('\n').filter(Boolean).slice(0, 10) : [];
+ }
+ 
++/* -------------------------------------------------------------- icons --- */
++// Icons are just files on disk, grouped by whatever subfolder they sit in
++// under public/item-icons/ -- no manifest to keep in sync, drop a file in a
++// folder and it shows up in the picker on next open. Only real image
++// extensions are listed, so stray .gitkeep placeholders (used to make the
++// empty category folders exist in git, which doesn't track empty dirs) or
++// any other clutter never shows up as a broken thumbnail.
++const ICON_EXTENSIONS = /\.(png|jpg|jpeg|webp|gif)$/i;
++
++async function listIcons() {
++  let topEntries;
++  try {
++    topEntries = await fs.readdir(ICONS_DIR, { withFileTypes: true });
++  } catch {
++    return [];
++  }
++  const folders = [];
++  for (const entry of topEntries) {
++    if (!entry.isDirectory()) continue;
++    const folderPath = path.join(ICONS_DIR, entry.name);
++    let files;
++    try {
++      files = (await fs.readdir(folderPath)).filter((f) => ICON_EXTENSIONS.test(f));
++    } catch {
++      continue;
++    }
++    if (files.length > 0) folders.push({ name: entry.name, files: files.sort() });
++  }
++  folders.sort((a, b) => a.name.localeCompare(b.name));
++  return folders;
++}
++
+ /* ------------------------------- dev server -------------------------------- */
+ // `npm run dev` doesn't exit — it starts Vite and Electron and runs until
+ // stopped. That's a different shape from check/apply/commit/build (which run
+@@ -492,6 +532,32 @@ const server = http.createServer(async (req, res) => {
+     return json(res, 200, devServerStatus());
+   }
+ 
++  if (url.pathname === '/api/icons' && req.method === 'GET') {
++    return json(res, 200, await listIcons());
++  }
++
++  // Serves the actual icon image bytes for <img> previews in the picker and
++  // table thumbnails. Same path-traversal guard as serveStatic below, just
++  // rooted at ICONS_DIR instead of PUBLIC_DIR since these live outside the
++  // devtool's own public/ folder.
++  if (url.pathname.startsWith('/item-icons/')) {
++    const rel = decodeURIComponent(url.pathname.slice('/item-icons/'.length)).split('?')[0];
++    const filePath = path.join(ICONS_DIR, rel);
++    if (!filePath.startsWith(ICONS_DIR)) { res.writeHead(403); res.end(); return; }
++    try {
++      const body = await fs.readFile(filePath);
++      const ext = path.extname(filePath).toLowerCase();
++      const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' }[ext]
++        ?? 'application/octet-stream';
++      res.writeHead(200, { 'Content-Type': mime });
++      res.end(body);
++    } catch {
++      res.writeHead(404);
++      res.end('Not found');
++    }
++    return;
++  }
++
+   const match = url.pathname.match(/^\/api\/data\/([\w-]+)$/);
+   if (match) {
+     const kind = match[1];

@@ -84,6 +84,41 @@ td.actions button { padding: 4px 8px; font-size: 11px; margin-right: 4px; }
 
 .empty { color: var(--muted); font-size: 12px; padding: 20px 0; text-align: center; }
 
+/* --------------------------------- icons ---------------------------------- */
+
+.icon-field { display: flex; align-items: center; gap: 10px; }
+.icon-preview {
+  width: 40px; height: 40px; flex: none;
+  background: var(--panel2); border: 1px solid var(--panel3);
+  display: flex; align-items: center; justify-content: center;
+}
+.icon-preview img { width: 32px; height: 32px; image-rendering: pixelated; }
+.icon-preview-empty { color: var(--muted); font-size: 16px; }
+.icon-field-controls { display: flex; flex-direction: column; gap: 4px; }
+.icon-field-name { font-size: 11px; color: var(--muted); word-break: break-all; }
+.icon-field-controls button { padding: 4px 8px; font-size: 11px; align-self: flex-start; }
+
+.icon-picker { max-width: 720px; max-height: 80vh; overflow-y: auto; }
+.icon-picker-body { margin-bottom: 8px; }
+.icon-picker-section { margin-bottom: 16px; }
+.icon-picker-folder {
+  font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 0.05em; margin-bottom: 6px;
+}
+.icon-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; }
+.icon-picker-item {
+  width: 48px; height: 48px; padding: 4px;
+  background: var(--panel2); border: 1px solid var(--panel3); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.icon-picker-item:hover { border-color: var(--muted); }
+.icon-picker-item.selected { border-color: var(--brass); background: var(--panel3); }
+.icon-picker-item img { width: 32px; height: 32px; image-rendering: pixelated; }
+
+td.icon-cell { width: 1%; padding-right: 0; }
+.table-icon { width: 24px; height: 24px; image-rendering: pixelated; vertical-align: middle; display: block; }
+.table-icon-empty { color: var(--muted); }
+
 /* -------------------------------- patches -------------------------------- */
 
 .patch-git-status {

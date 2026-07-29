@@ -30,6 +30,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..');
 const DATA_DIR = path.join(ROOT, 'src', 'game', 'data', 'json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
+// Pixel-art item icons, organised into subfolders by category (weapons,
+// armor, shields, etc.) -- lives in the main project's own public/ folder,
+// not the devtool's, so the game itself can serve these too later.
+const ICONS_DIR = path.join(ROOT, 'public', 'item-icons');
 const PORT = 5175;
 
 /* --------------------------------------------------------------- schema --- */
@@ -70,6 +74,10 @@ const SCHEMAS = {
       mods: { type: 'mods', required: false },
       stats: { type: 'stats', required: false },
       setId: { type: 'string', required: false },
+      // `picker: 'icon'` is a frontend hint only -- server-side this
+      // validates as a plain optional string (a relative path under
+      // ICONS_DIR, e.g. "weapons/sword_03.png"), same as setId above.
+      icon: { type: 'string', required: false, picker: 'icon' },
     },
   },
   'consumables': {
@@ -312,6 +320,38 @@ async function listGitTags() {
   return result.ok ? result.stdout.split('\n').filter(Boolean).slice(0, 10) : [];
 }
 
+/* -------------------------------------------------------------- icons --- */
+// Icons are just files on disk, grouped by whatever subfolder they sit in
+// under public/item-icons/ -- no manifest to keep in sync, drop a file in a
+// folder and it shows up in the picker on next open. Only real image
+// extensions are listed, so stray .gitkeep placeholders (used to make the
+// empty category folders exist in git, which doesn't track empty dirs) or
+// any other clutter never shows up as a broken thumbnail.
+const ICON_EXTENSIONS = /\.(png|jpg|jpeg|webp|gif)$/i;
+
+async function listIcons() {
+  let topEntries;
+  try {
+    topEntries = await fs.readdir(ICONS_DIR, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const folders = [];
+  for (const entry of topEntries) {
+    if (!entry.isDirectory()) continue;
+    const folderPath = path.join(ICONS_DIR, entry.name);
+    let files;
+    try {
+      files = (await fs.readdir(folderPath)).filter((f) => ICON_EXTENSIONS.test(f));
+    } catch {
+      continue;
+    }
+    if (files.length > 0) folders.push({ name: entry.name, files: files.sort() });
+  }
+  folders.sort((a, b) => a.name.localeCompare(b.name));
+  return folders;
+}
+
 /* ------------------------------- dev server -------------------------------- */
 // `npm run dev` doesn't exit — it starts Vite and Electron and runs until
 // stopped. That's a different shape from check/apply/commit/build (which run
@@ -492,6 +532,32 @@ const server = http.createServer(async (req, res) => {
 
   if (url.pathname === '/api/dev/status' && req.method === 'GET') {
     return json(res, 200, devServerStatus());
+  }
+
+  if (url.pathname === '/api/icons' && req.method === 'GET') {
+    return json(res, 200, await listIcons());
+  }
+
+  // Serves the actual icon image bytes for <img> previews in the picker and
+  // table thumbnails. Same path-traversal guard as serveStatic below, just
+  // rooted at ICONS_DIR instead of PUBLIC_DIR since these live outside the
+  // devtool's own public/ folder.
+  if (url.pathname.startsWith('/item-icons/')) {
+    const rel = decodeURIComponent(url.pathname.slice('/item-icons/'.length)).split('?')[0];
+    const filePath = path.join(ICONS_DIR, rel);
+    if (!filePath.startsWith(ICONS_DIR)) { res.writeHead(403); res.end(); return; }
+    try {
+      const body = await fs.readFile(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' }[ext]
+        ?? 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': mime });
+      res.end(body);
+    } catch {
+      res.writeHead(404);
+      res.end('Not found');
+    }
+    return;
   }
 
   const match = url.pathname.match(/^\/api\/data\/([\w-]+)$/);
