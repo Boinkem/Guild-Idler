@@ -86,6 +86,8 @@ function RaidCard({ raidId }: { raidId: string }) {
   const idleHeroes = state.heroes.filter((h) => h.status !== 'questing');
   const cfg = difficulty ? RAID_DIFFICULTIES[difficulty] : null;
 
+  const [confirming, setConfirming] = useState(false);
+
   const toggleHero = (heroId: string) => {
     setSelectedHeroIds((current) => {
       if (current.includes(heroId)) return current.filter((id) => id !== heroId);
@@ -99,17 +101,15 @@ function RaidCard({ raidId }: { raidId: string }) {
     setSelectedHeroIds([]);
   };
 
-  const commit = () => {
+  const askToCommit = () => {
     if (!difficulty || !cfg || selectedHeroIds.length !== cfg.partySize) return;
-    const names = selectedHeroIds
-      .map((id) => state.heroes.find((h) => h.id === id)?.name)
-      .filter(Boolean)
-      .join(', ');
-    const confirmed = confirm(
-      `Send ${names} on ${raid.name} (${difficulty})?\n\nThe whole party is committed until the raid resolves -- there's no early retreat.`,
-    );
-    if (!confirmed) return;
+    setConfirming(true);
+  };
+
+  const confirmCommit = () => {
+    if (!difficulty) return;
     engine.startRaid(raid.id, difficulty, selectedHeroIds);
+    setConfirming(false);
     setOpen(false);
     setDifficulty(null);
     setSelectedHeroIds([]);
@@ -185,12 +185,36 @@ function RaidCard({ raidId }: { raidId: string }) {
                 <span className="tiny muted" style={{ marginRight: 'auto' }}>
                   {selectedHeroIds.length}/{cfg.partySize} selected
                 </span>
-                <button className="btn-primary" disabled={selectedHeroIds.length !== cfg.partySize} onClick={commit}>
+                <button className="btn-primary" disabled={selectedHeroIds.length !== cfg.partySize} onClick={askToCommit}>
                   Send the guild
                 </button>
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {confirming && cfg && difficulty && (
+        <div className="overlay" onClick={() => setConfirming(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Send the guild?</h3>
+            <p className="small muted" style={{ marginTop: 0 }}>
+              {raid.name} — {difficulty[0].toUpperCase()}{difficulty.slice(1)}
+            </p>
+            <div className="row wrap" style={{ gap: 6, margin: '10px 0' }}>
+              {selectedHeroIds.map((id) => {
+                const h = state.heroes.find((hero) => hero.id === id);
+                return h ? <span key={id} className="chip on">{h.name} · Lv {h.level}</span> : null;
+              })}
+            </div>
+            <p className="small bad" style={{ margin: '0 0 4px' }}>
+              The whole party is committed until the raid resolves — there's no early retreat.
+            </p>
+            <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+              <button onClick={() => setConfirming(false)}>Cancel</button>
+              <button className="btn-primary" onClick={confirmCommit}>Send them</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

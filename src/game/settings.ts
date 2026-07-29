@@ -34,6 +34,18 @@ export type StyleId = 'adventure' | 'modern';
  */
 export type FontId = 'themed' | 'readable';
 
+/**
+ * Optional backing plate behind the whole idle companion -- off by default
+ * so nobody's current look changes without opting in. Deliberately a plain
+ * background fill with no padding or outset shadow/outline: this is a
+ * small floating Electron window likely sized tight to its content, so
+ * anything drawn past the existing box risks silently getting clipped by
+ * the window bounds. 'subtle' softly lifts the character off a busy
+ * desktop; 'strong' is a real bordered panel for guaranteed readability
+ * regardless of wallpaper.
+ */
+export type CompanionBackdropId = 'off' | 'subtle' | 'strong';
+
 export interface Theme {
   id: ThemeId;
   name: string;
@@ -57,6 +69,8 @@ export interface Settings {
   styleId: StyleId;
   /** Typeface: pixel/monospace 'themed', or a plain sans-serif 'readable'. */
   fontId: FontId;
+  /** Optional backing plate behind the idle companion, for readability over busy wallpaper. */
+  companionBackdrop: CompanionBackdropId;
 
   /** Animation speed multiplier; 0 disables idle bobbing entirely. */
   animationSpeed: number;     // 0, 0.5, 1, 1.5
@@ -82,10 +96,11 @@ export const DEFAULT_SETTINGS: Settings = {
   version: SETTINGS_VERSION,
   fontScale: 1.35,
   spriteScale: 1,
-  density: 'cozy',
-  theme: 'daylight',
+  density: 'compact',
+  theme: 'candlelit',
   styleId: 'adventure',
-  fontId: 'themed',
+  fontId: 'readable',
+  companionBackdrop: 'off',
   animationSpeed: 1,
   offlineReportOnLaunch: true,
   questResultPopups: true,
@@ -243,6 +258,7 @@ export const SettingsStore = {
     root.dataset.theme = settings.theme;
     root.dataset.style = settings.styleId;
     root.dataset.font = settings.fontId;
+    root.dataset.companionBackdrop = settings.companionBackdrop;
     root.dataset.motion = motion === 0 ? 'off' : 'on';
   },
 };

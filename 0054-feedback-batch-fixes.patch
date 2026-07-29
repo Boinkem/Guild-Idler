@@ -1,0 +1,217 @@
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index a8ff3ed..673bafd 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -766,6 +766,13 @@ export class GameEngine {
+   }
+ 
+   recruit(heroClass: HeroClass) {
++    // Checked here rather than relying on GuildManager's own error, so the
++    // message can point at the actual fix (upgrades or a Renown perk)
++    // instead of a generic "no room" -- this is exactly the kind of thing
++    // a player new to the systems wouldn't otherwise know to go looking for.
++    if (this.state.heroes.length >= this.heroSlots) {
++      return this.say("The guild is out of hero slots. Expand the roster via Guild Hall upgrades or a Renown perk.");
++    }
+     const error = GuildManager.recruit(this.state, heroClass, createRng(uid('recruit')));
+     if (error) return this.say(error);
+     this.say('A new hero joins the guild.');
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 2e7bfc1..d58fc06 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -68,6 +68,17 @@ export const QuestManager = {
+       offers.push(QuestManager.generateOffer(difficulty, rng, `q:${window}:${i}`, topLevel));
+     }
+ 
++    // With only one hero, there's no second pair of hands to fall back on
++    // while waiting out a long quest -- and the burst roll (see
++    // generateOffer) is random, so a genuinely unlucky board could hand a
++    // solo player nothing under a couple of hours until the next refresh.
++    // Force one guaranteed short Easy offer onto the board in that case,
++    // replacing the last slot rather than adding a 7th, so a fresh guild
++    // always has *something* to send within a few minutes.
++    if (state.heroes.length <= 1 && !offers.some((o) => o.difficulty === 'easy' && o.duration <= 5 * MINUTE)) {
++      offers[offers.length - 1] = QuestManager.generateOffer('easy', rng, `q:${window}:guaranteed`, topLevel, true);
++    }
++
+     // Chain stages are appended when a chain is running or available.
+     if (ModifierManager.hasUnlock(state, 'chains')) {
+       for (const chain of QUEST_CHAINS) {
+@@ -82,7 +93,7 @@ export const QuestManager = {
+     return offers;
+   },
+ 
+-  generateOffer(difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number): QuestOffer {
++  generateOffer(difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number, forceBurst = false): QuestOffer {
+     const cfg = DIFFICULTIES[difficulty];
+     const tierIndex = DIFFICULTY_ORDER.indexOf(difficulty);
+     const eligible = QUEST_TEMPLATES.filter((t) => {
+@@ -101,7 +112,7 @@ export const QuestManager = {
+     // a proportional slice of the full range, which measured out to 1-2 XP
+     // per burst quest — mathematically fair, but reads as insulting rather
+     // than the "numbers going up" feeling this is supposed to deliver.
+-    const useBurst = cfg.burstChance !== undefined && rng.chance(cfg.burstChance);
++    const useBurst = forceBurst || (cfg.burstChance !== undefined && rng.chance(cfg.burstChance));
+     const durMin = useBurst ? cfg.burstMinDuration! : cfg.minDuration;
+     const durMax = useBurst ? cfg.burstMaxDuration! : cfg.maxDuration;
+     const duration = rng.int(durMin, durMax);
+diff --git a/src/game/settings.ts b/src/game/settings.ts
+index 0f4be1e..47e984e 100644
+--- a/src/game/settings.ts
++++ b/src/game/settings.ts
+@@ -34,6 +34,18 @@ export type StyleId = 'adventure' | 'modern';
+  */
+ export type FontId = 'themed' | 'readable';
+ 
++/**
++ * Optional backing plate behind the whole idle companion -- off by default
++ * so nobody's current look changes without opting in. Deliberately a plain
++ * background fill with no padding or outset shadow/outline: this is a
++ * small floating Electron window likely sized tight to its content, so
++ * anything drawn past the existing box risks silently getting clipped by
++ * the window bounds. 'subtle' softly lifts the character off a busy
++ * desktop; 'strong' is a real bordered panel for guaranteed readability
++ * regardless of wallpaper.
++ */
++export type CompanionBackdropId = 'off' | 'subtle' | 'strong';
++
+ export interface Theme {
+   id: ThemeId;
+   name: string;
+@@ -57,6 +69,8 @@ export interface Settings {
+   styleId: StyleId;
+   /** Typeface: pixel/monospace 'themed', or a plain sans-serif 'readable'. */
+   fontId: FontId;
++  /** Optional backing plate behind the idle companion, for readability over busy wallpaper. */
++  companionBackdrop: CompanionBackdropId;
+ 
+   /** Animation speed multiplier; 0 disables idle bobbing entirely. */
+   animationSpeed: number;     // 0, 0.5, 1, 1.5
+@@ -82,10 +96,11 @@ export const DEFAULT_SETTINGS: Settings = {
+   version: SETTINGS_VERSION,
+   fontScale: 1.35,
+   spriteScale: 1,
+-  density: 'cozy',
+-  theme: 'daylight',
++  density: 'compact',
++  theme: 'candlelit',
+   styleId: 'adventure',
+-  fontId: 'themed',
++  fontId: 'readable',
++  companionBackdrop: 'off',
+   animationSpeed: 1,
+   offlineReportOnLaunch: true,
+   questResultPopups: true,
+@@ -243,6 +258,7 @@ export const SettingsStore = {
+     root.dataset.theme = settings.theme;
+     root.dataset.style = settings.styleId;
+     root.dataset.font = settings.fontId;
++    root.dataset.companionBackdrop = settings.companionBackdrop;
+     root.dataset.motion = motion === 0 ? 'off' : 'on';
+   },
+ };
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 3a98f20..203609d 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -134,14 +134,17 @@
+  * same reasoning as everywhere else this session.
+  */
+ .raid-diff-circle {
+-  width: 40px;
+-  height: 40px;
++  /* Roughly tripled from the original 40px -- these were reported as very
++     hard to hit/read at the old size, and they're a one-per-raid choice
++     that deserves real presence, not a tiny button among many. */
++  width: 110px;
++  height: 110px;
+   border-radius: 50%;
+-  border-width: 2px;
++  border-width: 3px;
+   border-style: solid;
+   background: var(--panel-2);
+   font-weight: 700;
+-  font-size: 14px;
++  font-size: 28px;
+   cursor: pointer;
+   display: flex;
+   align-items: center;
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index 8159661..eef15b8 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -86,6 +86,8 @@ function RaidCard({ raidId }: { raidId: string }) {
+   const idleHeroes = state.heroes.filter((h) => h.status !== 'questing');
+   const cfg = difficulty ? RAID_DIFFICULTIES[difficulty] : null;
+ 
++  const [confirming, setConfirming] = useState(false);
++
+   const toggleHero = (heroId: string) => {
+     setSelectedHeroIds((current) => {
+       if (current.includes(heroId)) return current.filter((id) => id !== heroId);
+@@ -99,17 +101,15 @@ function RaidCard({ raidId }: { raidId: string }) {
+     setSelectedHeroIds([]);
+   };
+ 
+-  const commit = () => {
++  const askToCommit = () => {
+     if (!difficulty || !cfg || selectedHeroIds.length !== cfg.partySize) return;
+-    const names = selectedHeroIds
+-      .map((id) => state.heroes.find((h) => h.id === id)?.name)
+-      .filter(Boolean)
+-      .join(', ');
+-    const confirmed = confirm(
+-      `Send ${names} on ${raid.name} (${difficulty})?\n\nThe whole party is committed until the raid resolves -- there's no early retreat.`,
+-    );
+-    if (!confirmed) return;
++    setConfirming(true);
++  };
++
++  const confirmCommit = () => {
++    if (!difficulty) return;
+     engine.startRaid(raid.id, difficulty, selectedHeroIds);
++    setConfirming(false);
+     setOpen(false);
+     setDifficulty(null);
+     setSelectedHeroIds([]);
+@@ -185,7 +185,7 @@ function RaidCard({ raidId }: { raidId: string }) {
+                 <span className="tiny muted" style={{ marginRight: 'auto' }}>
+                   {selectedHeroIds.length}/{cfg.partySize} selected
+                 </span>
+-                <button className="btn-primary" disabled={selectedHeroIds.length !== cfg.partySize} onClick={commit}>
++                <button className="btn-primary" disabled={selectedHeroIds.length !== cfg.partySize} onClick={askToCommit}>
+                   Send the guild
+                 </button>
+               </div>
+@@ -193,6 +193,30 @@ function RaidCard({ raidId }: { raidId: string }) {
+           )}
+         </div>
+       )}
++
++      {confirming && cfg && difficulty && (
++        <div className="overlay" onClick={() => setConfirming(false)}>
++          <div className="modal" onClick={(e) => e.stopPropagation()}>
++            <h3>Send the guild?</h3>
++            <p className="small muted" style={{ marginTop: 0 }}>
++              {raid.name} — {difficulty[0].toUpperCase()}{difficulty.slice(1)}
++            </p>
++            <div className="row wrap" style={{ gap: 6, margin: '10px 0' }}>
++              {selectedHeroIds.map((id) => {
++                const h = state.heroes.find((hero) => hero.id === id);
++                return h ? <span key={id} className="chip on">{h.name} · Lv {h.level}</span> : null;
++              })}
++            </div>
++            <p className="small bad" style={{ margin: '0 0 4px' }}>
++              The whole party is committed until the raid resolves — there's no early retreat.
++            </p>
++            <div className="row end" style={{ marginTop: 14, gap: 8 }}>
++              <button onClick={() => setConfirming(false)}>Cancel</button>
++              <button className="btn-primary" onClick={confirmCommit}>Send them</button>
++            </div>
++          </div>
++        </div>
++      )}
+     </div>
+   );
+ }

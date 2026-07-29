@@ -766,6 +766,13 @@ export class GameEngine {
   }
 
   recruit(heroClass: HeroClass) {
+    // Checked here rather than relying on GuildManager's own error, so the
+    // message can point at the actual fix (upgrades or a Renown perk)
+    // instead of a generic "no room" -- this is exactly the kind of thing
+    // a player new to the systems wouldn't otherwise know to go looking for.
+    if (this.state.heroes.length >= this.heroSlots) {
+      return this.say("The guild is out of hero slots. Expand the roster via Guild Hall upgrades or a Renown perk.");
+    }
     const error = GuildManager.recruit(this.state, heroClass, createRng(uid('recruit')));
     if (error) return this.say(error);
     this.say('A new hero joins the guild.');

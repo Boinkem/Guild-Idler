@@ -68,6 +68,17 @@ export const QuestManager = {
       offers.push(QuestManager.generateOffer(difficulty, rng, `q:${window}:${i}`, topLevel));
     }
 
+    // With only one hero, there's no second pair of hands to fall back on
+    // while waiting out a long quest -- and the burst roll (see
+    // generateOffer) is random, so a genuinely unlucky board could hand a
+    // solo player nothing under a couple of hours until the next refresh.
+    // Force one guaranteed short Easy offer onto the board in that case,
+    // replacing the last slot rather than adding a 7th, so a fresh guild
+    // always has *something* to send within a few minutes.
+    if (state.heroes.length <= 1 && !offers.some((o) => o.difficulty === 'easy' && o.duration <= 5 * MINUTE)) {
+      offers[offers.length - 1] = QuestManager.generateOffer('easy', rng, `q:${window}:guaranteed`, topLevel, true);
+    }
+
     // Chain stages are appended when a chain is running or available.
     if (ModifierManager.hasUnlock(state, 'chains')) {
       for (const chain of QUEST_CHAINS) {
@@ -82,7 +93,7 @@ export const QuestManager = {
     return offers;
   },
 
-  generateOffer(difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number): QuestOffer {
+  generateOffer(difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number, forceBurst = false): QuestOffer {
     const cfg = DIFFICULTIES[difficulty];
     const tierIndex = DIFFICULTY_ORDER.indexOf(difficulty);
     const eligible = QUEST_TEMPLATES.filter((t) => {
@@ -101,7 +112,7 @@ export const QuestManager = {
     // a proportional slice of the full range, which measured out to 1-2 XP
     // per burst quest — mathematically fair, but reads as insulting rather
     // than the "numbers going up" feeling this is supposed to deliver.
-    const useBurst = cfg.burstChance !== undefined && rng.chance(cfg.burstChance);
+    const useBurst = forceBurst || (cfg.burstChance !== undefined && rng.chance(cfg.burstChance));
     const durMin = useBurst ? cfg.burstMinDuration! : cfg.minDuration;
     const durMax = useBurst ? cfg.burstMaxDuration! : cfg.maxDuration;
     const duration = rng.int(durMin, durMax);
