@@ -1,71 +1,5 @@
-diff --git a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
-index 1075334..c07b8b7 100644
---- a/src/game/managers/RaidManager.ts
-+++ b/src/game/managers/RaidManager.ts
-@@ -166,6 +166,9 @@ export const RaidManager = {
-     if (fullClear && raid && !state.completedRaids.includes(raid.id)) {
-       state.completedRaids.push(raid.id);
-     }
-+    if (fullClear && !state.completedRaidDifficulties.includes(active.difficulty)) {
-+      state.completedRaidDifficulties.push(active.difficulty);
-+    }
- 
-     // Independent per-hero injury rolls regardless of how far the raid got --
-     // everyone who went in shares the risk, not just whoever caused a stop.
-diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
-index 47b2aea..08d239f 100644
---- a/src/game/managers/SaveManager.ts
-+++ b/src/game/managers/SaveManager.ts
-@@ -91,6 +91,7 @@ export function createInitialState(now = Date.now()): GameState {
-     notifiedSetBonuses: [],
-     activeRaid: null,
-     completedRaids: [],
-+    completedRaidDifficulties: [],
-     raidLog: [],
-   };
- }
-@@ -256,6 +257,11 @@ const MIGRATIONS: Record<number, Migration> = {
-     completedRaids: (save.completedRaids as string[] | undefined) ?? [],
-     raidLog: (save.raidLog as unknown[] | undefined) ?? [],
-   }),
-+  14: (save) => ({
-+    ...save,
-+    version: 15,
-+    completedRaidDifficulties: (save.completedRaidDifficulties as string[] | undefined) ?? [],
-+  }),
- };
- 
- export const SaveManager = {
-diff --git a/src/game/types.ts b/src/game/types.ts
-index 020e94e..8e1f34a 100644
---- a/src/game/types.ts
-+++ b/src/game/types.ts
-@@ -3,7 +3,7 @@
-  * Every manager reads and writes the same GameState shape defined here.
-  * ========================================================================= */
- 
--export const SAVE_VERSION = 14;
-+export const SAVE_VERSION = 15;
- 
- export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
- 
-@@ -440,6 +440,14 @@ export interface GameState {
-   activeRaid: ActiveRaid | null;
-   /** Raid ids (any difficulty) that have been full-cleared at least once -- gates unlockNextRaidId progression. */
-   completedRaids: string[];
-+  /**
-+   * Difficulties (any raid) that have ever been full-cleared -- separate
-+   * from completedRaids since achievements care about "cleared a Mythic",
-+   * not "cleared this specific raid at Mythic". Persisted rather than
-+   * derived from raidLog, since that's capped and could evict the
-+   * evidence; this never shrinks.
-+   */
-+  completedRaidDifficulties: RaidDifficulty[];
-   /** Recent raid outcomes, most recent first. Capped the same way `log` is. */
-   raidLog: RaidResult[];
-   upgrades: Record<string, number>;
 diff --git a/src/game/data/json/achievements.json b/src/game/data/json/achievements.json
-index 26b0086..4c5b6db 100644
+index f55428e..3c1d591 100644
 --- a/src/game/data/json/achievements.json
 +++ b/src/game/data/json/achievements.json
 @@ -64,5 +64,29 @@
@@ -99,16 +33,20 @@ index 26b0086..4c5b6db 100644
    }
  ]
 diff --git a/src/game/managers/AchievementManager.ts b/src/game/managers/AchievementManager.ts
-index b555dba..64a8438 100644
+index 8ee7ebb..8bd416a 100644
 --- a/src/game/managers/AchievementManager.ts
 +++ b/src/game/managers/AchievementManager.ts
-@@ -35,6 +35,13 @@ const CHECKS: Record<string, Check> = {
+@@ -45,6 +45,17 @@ const CHECKS: Record<string, Check> = {
      const purchasable = SKINS.filter((s) => s.cost > 0).map((s) => s.id);
      return purchasable.every((id) => (state.unlockedSkins ?? []).includes(id));
    },
++
 +  RAID_NORMAL_CLEARED: (state) => (state.completedRaidDifficulties ?? []).includes('normal'),
++
 +  RAID_HEROIC_CLEARED: (state) => (state.completedRaidDifficulties ?? []).includes('heroic'),
++
 +  RAID_MYTHIC_CLEARED: (state) => (state.completedRaidDifficulties ?? []).includes('mythic'),
++
 +  RAID_ALL_DIFFICULTIES: (state) => {
 +    const cleared = new Set(state.completedRaidDifficulties ?? []);
 +    return cleared.has('normal') && cleared.has('heroic') && cleared.has('mythic');
@@ -116,3 +54,69 @@ index b555dba..64a8438 100644
  };
  
  export const AchievementManager = {
+diff --git a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
+index 1075334..c07b8b7 100644
+--- a/src/game/managers/RaidManager.ts
++++ b/src/game/managers/RaidManager.ts
+@@ -166,6 +166,9 @@ export const RaidManager = {
+     if (fullClear && raid && !state.completedRaids.includes(raid.id)) {
+       state.completedRaids.push(raid.id);
+     }
++    if (fullClear && !state.completedRaidDifficulties.includes(active.difficulty)) {
++      state.completedRaidDifficulties.push(active.difficulty);
++    }
+ 
+     // Independent per-hero injury rolls regardless of how far the raid got --
+     // everyone who went in shares the risk, not just whoever caused a stop.
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index db23c5a..98f61a7 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -93,6 +93,7 @@ export function createInitialState(now = Date.now()): GameState {
+     activeRaid: null,
+     completedRaids: [],
+     raidLog: [],
++    completedRaidDifficulties: [],
+   };
+ }
+ 
+@@ -262,6 +263,11 @@ const MIGRATIONS: Record<number, Migration> = {
+     completedRaids: (save.completedRaids as string[] | undefined) ?? [],
+     raidLog: (save.raidLog as unknown[] | undefined) ?? [],
+   }),
++  15: (save) => ({
++    ...save,
++    version: 16,
++    completedRaidDifficulties: (save.completedRaidDifficulties as string[] | undefined) ?? [],
++  }),
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 0807c1a..6e498a6 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 15;
++export const SAVE_VERSION = 16;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -447,6 +447,14 @@ export interface GameState {
+   completedRaids: string[];
+   /** Recent raid outcomes, most recent first. Capped the same way `log` is. */
+   raidLog: RaidResult[];
++  /**
++   * Difficulties (any raid) that have ever been full-cleared -- separate
++   * from completedRaids since achievements care about "cleared a Mythic",
++   * not "cleared this specific raid at Mythic". Persisted rather than
++   * derived from raidLog, since that's capped and could evict the
++   * evidence; this never shrinks.
++   */
++  completedRaidDifficulties: RaidDifficulty[];
+ 
+   upgrades: Record<string, number>;
+   guild: Record<GuildFacility, number>;

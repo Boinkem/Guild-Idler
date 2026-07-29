@@ -1,0 +1,14 @@
+[
+  {
+    "id": "bonewrought_vault",
+    "name": "The Bonewrought Vault",
+    "description": "Something has been raising the dead again -- not in ones and twos this time, but by the vaultful. Whatever is sealed inside is worth enough to a foot soldier's worth of risen guards to still be defending it centuries later. This isn't a job for one hero. Bring the guild.",
+    "epilogue": "The vault held, in the end, for whoever the guild actually was. What was raised here goes quiet again -- for now. Whatever forced open a road between the dead and the living to make this happen in the first place is still out there, and it wasn't inconvenienced by any of this.",
+    "reqLevel": 22,
+    "encounterIds": [
+      "bonewrought_outer_wardens",
+      "bonewrought_choir_of_bones",
+      "bonewrought_vault_keeper"
+    ]
+  }
+]

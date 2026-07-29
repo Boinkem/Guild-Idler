@@ -69,6 +69,12 @@ export const UPGRADES: UpgradeDef[] = [
     baseCost: 3500, costGrowth: 2.3, maxLevel: 4,
     modsPerLevel: {}, unlocks: 'autoChain',
   },
+  {
+    id: 'raid_charter', name: 'Raid Charter',
+    description: 'A standing agreement to send the guild in force, not just a hero at a time. Unlocks multi-hero raids -- longer, harder, and paid out per encounter cleared rather than all at once.',
+    baseCost: 15000, costGrowth: 1, maxLevel: 1,
+    modsPerLevel: {}, unlocks: 'raids',
+  },
 ];
 
 /**

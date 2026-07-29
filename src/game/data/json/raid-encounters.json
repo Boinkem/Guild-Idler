@@ -1,0 +1,42 @@
+[
+  {
+    "id": "bonewrought_outer_wardens",
+    "name": "The Outer Wardens",
+    "flavour": "They were guards once, and never really stopped -- the vault doesn't know they're dead, and neither, it seems, do they.",
+    "baseSuccess": 68,
+    "durationHours": 2,
+    "rewardGold": 800,
+    "rewardXp": 150,
+    "loot": [
+      "gravewatchers_band@10",
+      "ashwoven_charm@8"
+    ]
+  },
+  {
+    "id": "bonewrought_choir_of_bones",
+    "name": "The Choir of Bones",
+    "flavour": "Dozens of throats, one note, held far longer than breath should allow -- because none of them are breathing.",
+    "baseSuccess": 58,
+    "durationHours": 3,
+    "rewardGold": 1400,
+    "rewardXp": 260,
+    "loot": [
+      "choir_mask@6",
+      "silenced_bell@6"
+    ]
+  },
+  {
+    "id": "bonewrought_vault_keeper",
+    "name": "The Vault-Keeper",
+    "flavour": "Still at its post. Still counting whoever comes through the door. The count has been wrong for a very long time.",
+    "baseSuccess": 48,
+    "durationHours": 4,
+    "rewardGold": 2600,
+    "rewardXp": 480,
+    "loot": [
+      "dragon_helm@4",
+      "gravewatchers_band@5",
+      "choir_mask@5"
+    ]
+  }
+]

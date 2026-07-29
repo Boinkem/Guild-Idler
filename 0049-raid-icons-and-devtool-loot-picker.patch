@@ -66,7 +66,7 @@ index 4c1ba61..e3a7a5d 100644
    );
  }
 diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
-index e49fb54..9d3bef6 100644
+index 4f87576..ce038f1 100644
 --- a/tools/devtool/public/app.js
 +++ b/tools/devtool/public/app.js
 @@ -8,7 +8,7 @@
@@ -229,7 +229,7 @@ index e49fb54..9d3bef6 100644
    if (spec.type === 'string' || spec.type === 'enum') return el.value;
    if (spec.type === 'number') return parseFloat(el.value) || 0;
    if (spec.type === 'boolean') return el.checked;
-@@ -376,6 +506,7 @@ function openEditor(index) {
+@@ -375,6 +505,7 @@ function openEditor(index) {
    document.body.appendChild(overlay);
    wireListInput(editor);
    wireIconFields(editor);
@@ -238,10 +238,10 @@ index e49fb54..9d3bef6 100644
    editor.querySelector('#cancelBtn').onclick = () => overlay.remove();
    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 diff --git a/tools/devtool/public/style.css b/tools/devtool/public/style.css
-index f363a38..60eee09 100644
+index d67c15e..47625e9 100644
 --- a/tools/devtool/public/style.css
 +++ b/tools/devtool/public/style.css
-@@ -121,6 +121,31 @@ td.icon-cell { width: 1%; padding-right: 0; }
+@@ -119,6 +119,31 @@ td.icon-cell { width: 1%; padding-right: 0; }
  .table-icon { width: 24px; height: 24px; image-rendering: pixelated; vertical-align: middle; display: block; }
  .table-icon-empty { color: var(--muted); }
  
@@ -274,15 +274,13 @@ index f363a38..60eee09 100644
  
  .patch-git-status {
 diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
-index 73e8581..0db31c4 100644
+index cf12f5e..c8a1329 100644
 --- a/tools/devtool/server.mjs
 +++ b/tools/devtool/server.mjs
-@@ -139,9 +139,11 @@ const SCHEMAS = {
-       rewardGold: { type: 'number', required: true },
-       rewardXp: { type: 'number', required: true },
+@@ -142,7 +142,11 @@ const SCHEMAS = {
        // "defId@chance" strings, e.g. "dragon_blade@6" -- reuses the plain
--      // string-list editor rather than needing a new field type for a
--      // repeatable {defId, chance} shape.
+       // string-list editor rather than needing a new field type for a
+       // repeatable {defId, chance} shape.
 -      loot: { type: 'string[]', required: false },
 +      // "defId@chance" strings, e.g. "dragon_blade@6" -- still the on-disk
 +      // shape, but the frontend now renders this as a real item picker

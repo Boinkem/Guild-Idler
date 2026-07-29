@@ -90,6 +90,9 @@ export function createInitialState(now = Date.now()): GameState {
     vendorLevels: { blacksmith: 0, alchemist: 0, enchanter: 0 },
     guildName: '',
     notifiedSetBonuses: [],
+    activeRaid: null,
+    completedRaids: [],
+    raidLog: [],
   };
 }
 
@@ -251,6 +254,13 @@ const MIGRATIONS: Record<number, Migration> = {
     ...save,
     version: 14,
     notifiedSetBonuses: (save.notifiedSetBonuses as string[] | undefined) ?? [],
+  }),
+  14: (save) => ({
+    ...save,
+    version: 15,
+    activeRaid: (save.activeRaid as unknown) ?? null,
+    completedRaids: (save.completedRaids as string[] | undefined) ?? [],
+    raidLog: (save.raidLog as unknown[] | undefined) ?? [],
   }),
 };
 

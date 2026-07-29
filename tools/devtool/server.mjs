@@ -122,6 +122,45 @@ const SCHEMAS = {
       minDifficulty: { type: 'enum', required: false, options: ['easy', 'normal', 'hard', 'epic', 'legendary'] },
     },
   },
+  'raid-encounters': {
+    file: 'raid-encounters.json',
+    label: 'Raid Encounters',
+    idField: 'id',
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      name: { type: 'string', required: true },
+      flavour: { type: 'string', required: true },
+      baseSuccess: { type: 'number', required: true },
+      // Milliseconds under the hood (matches every other duration in this
+      // game), but hours is a far more workable unit to type into a form.
+      // Same convention injuries.json already uses (durationHours ->
+      // durationMs) -- the conversion happens in raids.ts at load time, not
+      // in this devtool, so this field is just a plain number here.
+      durationHours: { type: 'number', required: true },
+      rewardGold: { type: 'number', required: true },
+      rewardXp: { type: 'number', required: true },
+      // "defId@chance" strings, e.g. "dragon_blade@6" -- reuses the plain
+      // string-list editor rather than needing a new field type for a
+      // repeatable {defId, chance} shape.
+      loot: { type: 'string[]', required: false },
+    },
+  },
+  'raids': {
+    file: 'raids.json',
+    label: 'Raids',
+    idField: 'id',
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      name: { type: 'string', required: true },
+      description: { type: 'string', required: true },
+      epilogue: { type: 'string', required: true },
+      reqLevel: { type: 'number', required: true },
+      // Ordered list of raid-encounter ids -- resolved sequentially in the
+      // order they're listed here, stopping at the first failed encounter.
+      encounterIds: { type: 'string[]', required: true },
+      unlocksRaidId: { type: 'string', required: false },
+    },
+  },
   'achievements': {
     file: 'achievements.json',
     label: 'Achievements',

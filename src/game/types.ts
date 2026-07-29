@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 14;
+export const SAVE_VERSION = 15;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -231,6 +231,91 @@ export interface ActiveChain {
   failedStages: number;
 }
 
+/* -------------------------------- raids -------------------------------- */
+
+export type RaidDifficulty = 'normal' | 'heroic' | 'mythic';
+
+export interface RaidEncounterDef {
+  id: string;
+  name: string;
+  flavour: string;
+  /** Baseline success chance before difficulty penalty and party modifiers. */
+  baseSuccess: number;
+  /** Milliseconds -- this encounter's own slice of the raid's total duration. */
+  duration: number;
+  rewardGold: number;
+  rewardXp: number;
+  /**
+   * "defId@chance" strings, e.g. "dragon_blade@6" -- reuses the devtool's
+   * existing plain string-list editor rather than needing a new field type
+   * for a repeatable {defId, chance} shape. Parsed via parseLootEntry.
+   */
+  loot: string[];
+}
+
+export interface RaidDef {
+  id: string;
+  name: string;
+  /** Prologue, shown before starting and in the Lore tab. */
+  description: string;
+  epilogue: string;
+  reqLevel: number;
+  /** Ordered encounter ids -- resolved sequentially, stopping at the first failure. */
+  encounterIds: string[];
+  /** Completing this raid at any difficulty unlocks this one next, if set. */
+  unlocksRaidId?: string;
+}
+
+export interface RaidDifficultyConfig {
+  difficulty: RaidDifficulty;
+  /** Exact party size required -- not a minimum. */
+  partySize: number;
+  /** Flat percentage points subtracted from every encounter's success chance at this difficulty. */
+  successPenalty: number;
+  /** Multiplies gold/xp rewards; loot chance is untouched by difficulty on purpose (more attempts, not better odds, is Normal's compensation). */
+  rewardMultiplier: number;
+}
+
+/** A raid attempt in progress. Locked in at commit time, resolved encounter by encounter. */
+export interface ActiveRaid {
+  raidId: string;
+  difficulty: RaidDifficulty;
+  heroIds: string[];
+  startedAt: number;
+  endsAt: number;
+  /** Which encounter (index into RaidDef.encounterIds) is currently in progress. */
+  currentEncounter: number;
+  /**
+   * Success chance for the whole run, locked in once at commit time using
+   * the weakest-link party calculation -- not recomputed per encounter,
+   * since the party doesn't change mid-raid. Each encounter still rolls
+   * independently against (its own baseSuccess - difficulty penalty + this).
+   */
+  partySuccessBonus: number;
+}
+
+export interface RaidLootDrop {
+  defId: string;
+  name: string;
+  rarity: Rarity;
+  encounterId: string;
+}
+
+export interface RaidResult {
+  raidId: string;
+  raidName: string;
+  difficulty: RaidDifficulty;
+  heroIds: string[];
+  encountersCleared: number;
+  totalEncounters: number;
+  fullClear: boolean;
+  gold: number;
+  xp: number;
+  loot: RaidLootDrop[];
+  injuries: { heroId: string; heroName: string; injury: Injury }[];
+  resolvedAt: number;
+}
+
 /* -------------------------- progression -------------------------- */
 
 export type VendorId = 'blacksmith' | 'alchemist' | 'enchanter';
@@ -243,7 +328,7 @@ export interface UpgradeDef {
   costGrowth: number;
   maxLevel: number;
   modsPerLevel: Partial<Modifiers>;
-  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain';
+  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids';
   /**
    * Which vendor offers this upgrade. Undefined means it's a general guild
    * upgrade with no vendor attached (unlocks like Guild Charter or Black
@@ -356,6 +441,12 @@ export interface GameState {
   activeQuests: ActiveQuest[];
   activeChains: ActiveChain[];
   completedChains: string[];
+  /** The single raid attempt in progress, if any -- only one at a time, same as how a hero can only be on one quest. */
+  activeRaid: ActiveRaid | null;
+  /** Raid ids (any difficulty) that have been full-cleared at least once -- gates unlockNextRaidId progression. */
+  completedRaids: string[];
+  /** Recent raid outcomes, most recent first. Capped the same way `log` is. */
+  raidLog: RaidResult[];
 
   upgrades: Record<string, number>;
   guild: Record<GuildFacility, number>;

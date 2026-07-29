@@ -1,3 +1,130 @@
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 75f34f7..2ef395b 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -1,7 +1,8 @@
+-import { ActiveQuest, GameState, Hero, HeroClass, QuestOffer, QuestResult } from './types';
++import { ActiveQuest, GameState, Hero, HeroClass, QuestOffer, QuestResult, RaidDifficulty, RaidResult } from './types';
+ import { createRng, uid } from './rng';
+ import { HeroManager } from './managers/HeroManager';
+ import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
++import { RaidManager } from './managers/RaidManager';
+ import { ShopManager } from './managers/ShopManager';
+ import { SaveManager, SaveAdapter, defaultAdapter, createInitialState } from './managers/SaveManager';
+ import { EquipmentManager } from './managers/EquipmentManager';
+@@ -12,6 +13,7 @@ import { ModifierManager } from './managers/ModifierManager';
+ import { AchievementManager } from './managers/AchievementManager';
+ import { SKIN_BY_ID, SKIN_PRICE, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
+ import { EQUIPMENT_BY_ID, SET_BY_ID } from './data/equipment';
++import { RAID_BY_ID } from './data/raids';
+ import { playSound } from './sound';
+ import { TESTING_TOOLS_ENABLED } from './testingTools';
+ 
+@@ -21,6 +23,7 @@ const AUTOSAVE_MS = 15_000;
+ export interface OfflineReport {
+   elapsedMs: number;
+   results: QuestResult[];
++  raidResults: RaidResult[];
+   goldGained: number;
+   xpGained: number;
+ }
+@@ -47,6 +50,7 @@ export class GameEngine {
+   state: GameState;
+   offlineReport: OfflineReport | null = null;
+   lastResult: QuestResult | null = null;
++  lastRaidResult: RaidResult | null = null;
+   toast: string | null = null;
+   /**
+    * Set the moment a chain's final stage resolves successfully, cleared by
+@@ -161,6 +165,11 @@ export class GameEngine {
+     this.notify();
+   }
+ 
++  dismissRaidResult() {
++    this.lastRaidResult = null;
++    this.notify();
++  }
++
+   dismissChainCelebration() {
+     this.completedChainCelebration = null;
+     this.notify();
+@@ -242,6 +251,14 @@ export class GameEngine {
+       }
+     }
+ 
++    if (this.state.activeRaid && this.state.activeRaid.endsAt <= now) {
++      const raidResult = RaidManager.resolve(this.state, this.state.activeRaid, now);
++      this.lastRaidResult = raidResult;
++      changed = true;
++      playSound(raidResult.fullClear ? 'chain_complete' : raidResult.encountersCleared > 0 ? 'quest_success' : 'quest_fail');
++      this.reportAchievements(AchievementManager.checkAll(this.state, now));
++    }
++
+     if (this.refreshWorld(now)) changed = true;
+ 
+     if (now - this.lastSave >= AUTOSAVE_MS) {
+@@ -286,6 +303,7 @@ export class GameEngine {
+     if (elapsed < 60_000) return;
+ 
+     const results: QuestResult[] = [];
++    const raidResults: RaidResult[] = [];
+     // Auto-Chain can inject a newly-started quest into this same pass — if
+     // it also ends before `now`, it needs resolving in this same offline
+     // catch-up rather than waiting for the next time the app opens. Capped
+@@ -313,15 +331,28 @@ export class GameEngine {
+     }
+     for (const hero of this.state.heroes) HeroManager.pruneInjuries(hero, now);
+ 
++    // A raid resolves as a single event when its total duration has
++    // elapsed, same as the loop above does for individual quests -- only
++    // ever one active at a time, so no guard loop needed here.
++    if (this.state.activeRaid && this.state.activeRaid.endsAt <= now) {
++      const raidEndsAt = this.state.activeRaid.endsAt;
++      const raidResult = RaidManager.resolve(this.state, this.state.activeRaid, raidEndsAt);
++      raidResults.push(raidResult);
++      for (const id of AchievementManager.checkAll(this.state, raidEndsAt)) {
++        void window.littleKnight?.unlockAchievement(id);
++      }
++    }
++
+     this.state.stats.offlineTimeMs += elapsed;
+     this.state.lastSeen = now;
+ 
+-    if (results.length > 0 || elapsed > 5 * 60_000) {
++    if (results.length > 0 || raidResults.length > 0 || elapsed > 5 * 60_000) {
+       this.offlineReport = {
+         elapsedMs: elapsed,
+         results,
+-        goldGained: results.reduce((sum, r) => sum + r.gold, 0),
+-        xpGained: results.reduce((sum, r) => sum + r.xp, 0),
++        raidResults,
++        goldGained: results.reduce((sum, r) => sum + r.gold, 0) + raidResults.reduce((sum, r) => sum + r.gold, 0),
++        xpGained: results.reduce((sum, r) => sum + r.xp, 0) + raidResults.reduce((sum, r) => sum + r.xp, 0),
+       };
+     }
+   }
+@@ -558,6 +589,21 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /**
++   * Commits a party to a raid. Deliberately no Auto-Chain interaction at
++   * all -- raids never auto-continue into anything, on purpose, same
++   * reasoning as chain quests being excluded from pickBestQuest: this is a
++   * deliberate, noticed commitment, not something that should ever start
++   * without the player choosing it.
++   */
++  startRaid(raidId: string, difficulty: RaidDifficulty, heroIds: string[]) {
++    const { error } = RaidManager.start(this.state, raidId, difficulty, heroIds, Date.now());
++    if (error) return this.say(error);
++    playSound('depart');
++    this.say(`The guild marches on ${RAID_BY_ID[raidId]?.name ?? 'the raid'}. ${heroIds.length} strong.`);
++    void this.saveNow();
++  }
++
+   equip(heroId: string, itemUid: string) {
+     const hero = this.hero(heroId);
+     const item = this.state.stash.find((i) => i.uid === itemUid);
 diff --git a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
 new file mode 100644
 index 0000000..1075334
@@ -212,130 +339,3 @@ index 0000000..1075334
 +    return result;
 +  },
 +};
-diff --git a/src/game/engine.ts b/src/game/engine.ts
-index b475bb8..0c6ec51 100644
---- a/src/game/engine.ts
-+++ b/src/game/engine.ts
-@@ -1,7 +1,8 @@
--import { ActiveQuest, GameState, Hero, HeroClass, QuestOffer, QuestResult } from './types';
-+import { ActiveQuest, GameState, Hero, HeroClass, QuestOffer, QuestResult, RaidDifficulty, RaidResult } from './types';
- import { createRng, uid } from './rng';
- import { HeroManager } from './managers/HeroManager';
- import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
-+import { RaidManager } from './managers/RaidManager';
- import { ShopManager } from './managers/ShopManager';
- import { SaveManager, SaveAdapter, defaultAdapter, createInitialState } from './managers/SaveManager';
- import { EquipmentManager } from './managers/EquipmentManager';
-@@ -12,6 +13,7 @@ import { ModifierManager } from './managers/ModifierManager';
- import { AchievementManager } from './managers/AchievementManager';
- import { SKIN_BY_ID, SKIN_PRICE, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
- import { EQUIPMENT_BY_ID, SET_BY_ID } from './data/equipment';
-+import { RAID_BY_ID } from './data/raids';
- import { playSound } from './sound';
- import { TESTING_TOOLS_ENABLED } from './testingTools';
- 
-@@ -21,6 +23,7 @@ const AUTOSAVE_MS = 15_000;
- export interface OfflineReport {
-   elapsedMs: number;
-   results: QuestResult[];
-+  raidResults: RaidResult[];
-   goldGained: number;
-   xpGained: number;
- }
-@@ -47,6 +50,7 @@ export class GameEngine {
-   state: GameState;
-   offlineReport: OfflineReport | null = null;
-   lastResult: QuestResult | null = null;
-+  lastRaidResult: RaidResult | null = null;
-   toast: string | null = null;
-   /**
-    * Set the moment a chain's final stage resolves successfully, cleared by
-@@ -162,6 +166,11 @@ export class GameEngine {
-     this.notify();
-   }
- 
-+  dismissRaidResult() {
-+    this.lastRaidResult = null;
-+    this.notify();
-+  }
-+
-   dismissChainCelebration() {
-     this.completedChainCelebration = null;
-     this.notify();
-@@ -244,6 +253,14 @@ export class GameEngine {
-       }
-     }
- 
-+    if (this.state.activeRaid && this.state.activeRaid.endsAt <= now) {
-+      const raidResult = RaidManager.resolve(this.state, this.state.activeRaid, now);
-+      this.lastRaidResult = raidResult;
-+      changed = true;
-+      playSound(raidResult.fullClear ? 'chain_complete' : raidResult.encountersCleared > 0 ? 'quest_success' : 'quest_fail');
-+      this.reportAchievements(AchievementManager.checkAll(this.state, now));
-+    }
-+
-     if (this.refreshWorld(now)) changed = true;
- 
-     if (now - this.lastSave >= AUTOSAVE_MS) {
-@@ -288,6 +305,7 @@ export class GameEngine {
-     if (elapsed < 60_000) return;
- 
-     const results: QuestResult[] = [];
-+    const raidResults: RaidResult[] = [];
- 
-     // Auto-Chain can inject a newly-started quest into this same pass — if
-     // it also ends before `now`, it needs resolving in this same offline
-@@ -318,15 +336,28 @@ export class GameEngine {
- 
-     for (const hero of this.state.heroes) HeroManager.pruneInjuries(hero, now);
- 
-+    // A raid resolves as a single event when its total duration has
-+    // elapsed, same as the loop above does for individual quests -- only
-+    // ever one active at a time, so no guard loop needed here.
-+    if (this.state.activeRaid && this.state.activeRaid.endsAt <= now) {
-+      const raidEndsAt = this.state.activeRaid.endsAt;
-+      const raidResult = RaidManager.resolve(this.state, this.state.activeRaid, raidEndsAt);
-+      raidResults.push(raidResult);
-+      for (const id of AchievementManager.checkAll(this.state, raidEndsAt)) {
-+        void window.littleKnight?.unlockAchievement(id);
-+      }
-+    }
-+
-     this.state.stats.offlineTimeMs += elapsed;
-     this.state.lastSeen = now;
- 
--    if (results.length > 0 || elapsed > 5 * 60_000) {
-+    if (results.length > 0 || raidResults.length > 0 || elapsed > 5 * 60_000) {
-       this.offlineReport = {
-         elapsedMs: elapsed,
-         results,
--        goldGained: results.reduce((sum, r) => sum + r.gold, 0),
--        xpGained: results.reduce((sum, r) => sum + r.xp, 0),
-+        raidResults,
-+        goldGained: results.reduce((sum, r) => sum + r.gold, 0) + raidResults.reduce((sum, r) => sum + r.gold, 0),
-+        xpGained: results.reduce((sum, r) => sum + r.xp, 0) + raidResults.reduce((sum, r) => sum + r.xp, 0),
-       };
-     }
-   }
-@@ -562,6 +593,21 @@ export class GameEngine {
-     void this.saveNow();
-   }
- 
-+  /**
-+   * Commits a party to a raid. Deliberately no Auto-Chain interaction at
-+   * all -- raids never auto-continue into anything, on purpose, same
-+   * reasoning as chain quests being excluded from pickBestQuest: this is a
-+   * deliberate, noticed commitment, not something that should ever start
-+   * without the player choosing it.
-+   */
-+  startRaid(raidId: string, difficulty: RaidDifficulty, heroIds: string[]) {
-+    const { error } = RaidManager.start(this.state, raidId, difficulty, heroIds, Date.now());
-+    if (error) return this.say(error);
-+    playSound('depart');
-+    this.say(`The guild marches on ${RAID_BY_ID[raidId]?.name ?? 'the raid'}. ${heroIds.length} strong.`);
-+    void this.saveNow();
-+  }
-+
-   equip(heroId: string, itemUid: string) {
-     const hero = this.hero(heroId);
-     const item = this.state.stash.find((i) => i.uid === itemUid);

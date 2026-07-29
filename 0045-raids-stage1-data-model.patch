@@ -1,6 +1,6 @@
 diff --git a/src/game/data/json/raid-encounters.json b/src/game/data/json/raid-encounters.json
 new file mode 100644
-index 0000000..707b6b7
+index 0000000..6ee5c59
 --- /dev/null
 +++ b/src/game/data/json/raid-encounters.json
 @@ -0,0 +1,42 @@
@@ -48,7 +48,7 @@ index 0000000..707b6b7
 +]
 diff --git a/src/game/data/json/raids.json b/src/game/data/json/raids.json
 new file mode 100644
-index 0000000..24acfcc
+index 0000000..0948d4c
 --- /dev/null
 +++ b/src/game/data/json/raids.json
 @@ -0,0 +1,14 @@
@@ -176,12 +176,12 @@ index e0f9ab8..408c241 100644
        const def = UPGRADE_BY_ID[id];
        return !!def && def.unlocks === unlock && level > 0;
 diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
-index b02699c..47b2aea 100644
+index 640102e..db23c5a 100644
 --- a/src/game/managers/SaveManager.ts
 +++ b/src/game/managers/SaveManager.ts
-@@ -89,6 +89,9 @@ export function createInitialState(now = Date.now()): GameState {
-     unlockedAchievements: {},
+@@ -90,6 +90,9 @@ export function createInitialState(now = Date.now()): GameState {
      vendorLevels: { blacksmith: 0, alchemist: 0, enchanter: 0 },
+     guildName: '',
      notifiedSetBonuses: [],
 +    activeRaid: null,
 +    completedRaids: [],
@@ -189,13 +189,13 @@ index b02699c..47b2aea 100644
    };
  }
  
-@@ -246,6 +249,13 @@ const MIGRATIONS: Record<number, Migration> = {
-     version: 13,
+@@ -252,6 +255,13 @@ const MIGRATIONS: Record<number, Migration> = {
+     version: 14,
      notifiedSetBonuses: (save.notifiedSetBonuses as string[] | undefined) ?? [],
    }),
-+  13: (save) => ({
++  14: (save) => ({
 +    ...save,
-+    version: 14,
++    version: 15,
 +    activeRaid: (save.activeRaid as unknown) ?? null,
 +    completedRaids: (save.completedRaids as string[] | undefined) ?? [],
 +    raidLog: (save.raidLog as unknown[] | undefined) ?? [],
@@ -204,19 +204,19 @@ index b02699c..47b2aea 100644
  
  export const SaveManager = {
 diff --git a/src/game/types.ts b/src/game/types.ts
-index b98cd37..020e94e 100644
+index 04ebfa4..0807c1a 100644
 --- a/src/game/types.ts
 +++ b/src/game/types.ts
 @@ -3,7 +3,7 @@
   * Every manager reads and writes the same GameState shape defined here.
   * ========================================================================= */
  
--export const SAVE_VERSION = 13;
-+export const SAVE_VERSION = 14;
+-export const SAVE_VERSION = 14;
++export const SAVE_VERSION = 15;
  
  export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
  
-@@ -230,6 +230,91 @@ export interface ActiveChain {
+@@ -231,6 +231,91 @@ export interface ActiveChain {
    failedStages: number;
  }
  
@@ -308,7 +308,7 @@ index b98cd37..020e94e 100644
  /* -------------------------- progression -------------------------- */
  
  export type VendorId = 'blacksmith' | 'alchemist' | 'enchanter';
-@@ -242,7 +327,7 @@ export interface UpgradeDef {
+@@ -243,7 +328,7 @@ export interface UpgradeDef {
    costGrowth: number;
    maxLevel: number;
    modsPerLevel: Partial<Modifiers>;
@@ -317,7 +317,7 @@ index b98cd37..020e94e 100644
    /**
     * Which vendor offers this upgrade. Undefined means it's a general guild
     * upgrade with no vendor attached (unlocks like Guild Charter or Black
-@@ -351,6 +436,12 @@ export interface GameState {
+@@ -356,6 +441,12 @@ export interface GameState {
    activeQuests: ActiveQuest[];
    activeChains: ActiveChain[];
    completedChains: string[];
@@ -327,14 +327,14 @@ index b98cd37..020e94e 100644
 +  completedRaids: string[];
 +  /** Recent raid outcomes, most recent first. Capped the same way `log` is. */
 +  raidLog: RaidResult[];
+ 
    upgrades: Record<string, number>;
    guild: Record<GuildFacility, number>;
-   renownPerks: Record<string, number>;
 diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
-index d0df6fa..73e8581 100644
+index 3f0e1c6..cf12f5e 100644
 --- a/tools/devtool/server.mjs
 +++ b/tools/devtool/server.mjs
-@@ -121,6 +121,45 @@ const SCHEMAS = {
+@@ -122,6 +122,45 @@ const SCHEMAS = {
        minDifficulty: { type: 'enum', required: false, options: ['easy', 'normal', 'hard', 'epic', 'legendary'] },
      },
    },
