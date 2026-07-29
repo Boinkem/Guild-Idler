@@ -119,6 +119,31 @@ td.icon-cell { width: 1%; padding-right: 0; }
 .table-icon { width: 24px; height: 24px; image-rendering: pixelated; vertical-align: middle; display: block; }
 .table-icon-empty { color: var(--muted); }
 
+/* ----------------------------- loot table field ---------------------------- */
+
+.loot-rows { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.loot-row {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--panel2); border: 1px solid var(--panel3);
+  padding: 6px 8px;
+}
+.loot-row-name { flex: 1; font-size: 12px; }
+.loot-row-chance { width: 60px; background: var(--panel); border: 1px solid var(--panel3); color: var(--text); padding: 4px; }
+.loot-row .remove { padding: 4px 8px; }
+
+.loot-picker-grid { display: flex; flex-direction: column; gap: 4px; }
+.loot-picker-item {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--panel2); border: 1px solid var(--panel3);
+  padding: 6px 8px; cursor: pointer; text-align: left;
+}
+.loot-picker-item:hover { border-color: var(--brass); }
+.loot-picker-thumb { width: 24px; height: 24px; image-rendering: pixelated; flex: none; }
+.loot-picker-thumb-empty {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--panel); border: 1px solid var(--panel3); color: var(--muted); font-size: 12px;
+}
+
 /* -------------------------------- patches -------------------------------- */
 
 .patch-git-status {

@@ -49,6 +49,20 @@ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
 
 export const RAID_DIFFICULTY_ORDER: RaidDifficulty[] = ['normal', 'heroic', 'mythic'];
 
+/**
+ * Badge icons for the N/H/M difficulty circles. Lives in its own
+ * public/raid-icons/ folder, separate from public/item-icons/, since these
+ * are fixed UI chrome (exactly three, never devtool-edited) rather than
+ * per-item art assigned one at a time. Falls back to the plain letter
+ * label in the UI if the file is missing -- see DifficultyCircle in
+ * RaidsPanel.tsx.
+ */
+export const RAID_DIFFICULTY_ICON: Record<RaidDifficulty, string> = {
+  normal: './raid-icons/normal.png',
+  heroic: './raid-icons/heroic.png',
+  mythic: './raid-icons/mythic.png',
+};
+
 /** Parses a "defId@chance" loot entry into its two parts. Malformed entries
  *  (missing the @, or a non-numeric chance) are dropped rather than
  *  throwing, so one bad devtool edit can't break the whole raid. */

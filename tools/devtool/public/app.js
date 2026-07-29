@@ -8,7 +8,7 @@
  * here with no frontend changes needed.
  */
 
-const state = { schema: null, kind: null, rows: [], dirty: false, icons: null };
+const state = { schema: null, kind: null, rows: [], dirty: false, icons: null, equipmentList: null };
 
 const tabsEl = document.getElementById('tabs');
 const appEl = document.getElementById('app');
@@ -163,6 +163,13 @@ function fieldControl(spec, key, value) {
     // called alongside wireListInput in openEditor).
     return `<div class="icon-field" id="${id}" data-value="${escapeHtml(value ?? '')}"></div>`;
   }
+  if (spec.picker === 'lootTable') {
+    // Same deferred-render approach as the icon field -- a bare container,
+    // filled in by renderLootField once it's attached to the DOM (needs an
+    // async fetch of the equipment list first, which can't happen while
+    // building this HTML string synchronously).
+    return `<div class="loot-field" id="${id}" data-value='${escapeHtml(JSON.stringify(value ?? []))}'></div>`;
+  }
   if (spec.type === 'string' && (key === 'description' || key === 'flavour')) {
     return `<textarea id="${id}">${escapeHtml(value ?? '')}</textarea>`;
   }
@@ -260,6 +267,128 @@ function wireIconFields(container) {
   container.querySelectorAll('.icon-field').forEach((field) => renderIconField(field));
 }
 
+/* ---------------------------------------------------------- loot field --- */
+// Fetched once and cached for the session, same reasoning as ensureIcons --
+// the equipment list only changes via this same devtool, which means a
+// restart anyway.
+async function ensureEquipmentList() {
+  if (state.equipmentList) return state.equipmentList;
+  const { data } = await api('/api/data/equipment');
+  state.equipmentList = data;
+  return state.equipmentList;
+}
+
+/**
+ * Renders a loot-table field: a list of {item, chance%, remove} rows plus
+ * an "+ Add item" button that opens a full equipment picker. Entries are
+ * kept as {defId, chance} objects in a closure while editing (much easier
+ * to manipulate than re-parsing "defId@chance" strings on every change),
+ * and only flattened back to that on-disk string format when readField()
+ * asks for the final value via the getter stashed on the element.
+ */
+async function renderLootField(field) {
+  const equipment = await ensureEquipmentList();
+  const byId = Object.fromEntries(equipment.map((e) => [e.id, e]));
+  const nameOf = (defId) => byId[defId]?.name ?? defId;
+  const rarityOf = (defId) => byId[defId]?.rarity ?? '';
+
+  let entries;
+  try {
+    entries = JSON.parse(field.dataset.value || '[]').map((raw) => {
+      const at = String(raw).lastIndexOf('@');
+      return at > 0
+        ? { defId: raw.slice(0, at), chance: Number(raw.slice(at + 1)) || 0 }
+        : { defId: raw, chance: 5 };
+    });
+  } catch {
+    entries = [];
+  }
+
+  const draw = () => {
+    field.innerHTML = `
+      <div class="loot-rows">
+        ${entries.length === 0 ? '<p class="tiny muted">No loot yet.</p>' : entries.map((e, i) => `
+          <div class="loot-row">
+            <span class="loot-row-name rarity-${rarityOf(e.defId)}">${escapeHtml(nameOf(e.defId))}</span>
+            <input type="number" step="any" class="loot-row-chance" data-i="${i}" value="${e.chance}" />
+            <span class="tiny muted">%</span>
+            <button type="button" class="remove" data-remove-loot="${i}">&minus;</button>
+          </div>
+        `).join('')}
+      </div>
+      <button type="button" data-add-loot>+ Add item</button>
+    `;
+    field.querySelectorAll('[data-remove-loot]').forEach((btn) => {
+      btn.onclick = () => { entries.splice(+btn.dataset.removeLoot, 1); draw(); };
+    });
+    field.querySelectorAll('.loot-row-chance').forEach((input) => {
+      input.oninput = () => { entries[+input.dataset.i].chance = parseFloat(input.value) || 0; };
+    });
+    field.querySelector('[data-add-loot]').onclick = () => {
+      openLootPicker(equipment, (defId) => { entries.push({ defId, chance: 5 }); draw(); });
+    };
+  };
+
+  draw();
+  // readField() reads this rather than re-deriving from the DOM, since
+  // chance values live in the `entries` closure, not (only) in the inputs.
+  field.__getLootValue = () => entries.map((e) => `${e.defId}@${e.chance}`);
+}
+
+function wireLootFields(container) {
+  container.querySelectorAll('.loot-field').forEach((field) => { void renderLootField(field); });
+}
+
+/** Equipment picker for loot tables -- grouped by slot, shows an icon
+ *  thumbnail when the item has one assigned, same visual language as the
+ *  icon picker itself. */
+function openLootPicker(equipment, onPick) {
+  const overlay = document.createElement('div');
+  overlay.className = 'editor-overlay icon-picker-overlay';
+  const panel = document.createElement('div');
+  panel.className = 'editor icon-picker';
+
+  const bySlot = {};
+  for (const item of equipment) {
+    (bySlot[item.slot] ??= []).push(item);
+  }
+
+  const sectionsHtml = Object.entries(bySlot).map(([slot, items]) => `
+    <div class="icon-picker-section">
+      <div class="icon-picker-folder">${escapeHtml(slot)} (${items.length})</div>
+      <div class="loot-picker-grid">
+        ${items.map((item) => `
+          <button type="button" class="loot-picker-item" data-def-id="${escapeHtml(item.id)}" title="${escapeHtml(item.id)}">
+            ${item.icon
+              ? `<img src="/item-icons/${escapeHtml(item.icon)}" alt="" class="loot-picker-thumb" />`
+              : '<span class="loot-picker-thumb loot-picker-thumb-empty">?</span>'}
+            <span class="tiny rarity-${item.rarity}">${escapeHtml(item.name)}</span>
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  panel.innerHTML = `
+    <h2>Add loot</h2>
+    <div class="icon-picker-body">${sectionsHtml}</div>
+    <div class="editor-actions">
+      <button id="lootPickerCancel">Cancel</button>
+    </div>`;
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  panel.querySelectorAll('[data-def-id]').forEach((btn) => {
+    btn.onclick = () => {
+      onPick(btn.dataset.defId);
+      overlay.remove();
+    };
+  });
+  panel.querySelector('#lootPickerCancel').onclick = () => overlay.remove();
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+}
+
 /** A grid of every available icon, grouped by folder, in an overlay of its
  *  own on top of the editor overlay. Picking one or cancelling both just
  *  remove this overlay -- the underlying editor is untouched either way. */
@@ -323,6 +452,7 @@ function wireListInput(container) {
 function readField(spec, key) {
   const el = document.getElementById(`f_${key}`);
   if (spec.picker === 'icon') return el.dataset.value || '';
+  if (spec.picker === 'lootTable') return el.__getLootValue ? el.__getLootValue() : [];
   if (spec.type === 'string' || spec.type === 'enum') return el.value;
   if (spec.type === 'number') return parseFloat(el.value) || 0;
   if (spec.type === 'boolean') return el.checked;
@@ -375,6 +505,7 @@ function openEditor(index) {
   document.body.appendChild(overlay);
   wireListInput(editor);
   wireIconFields(editor);
+  wireLootFields(editor);
 
   editor.querySelector('#cancelBtn').onclick = () => overlay.remove();
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };

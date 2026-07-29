@@ -142,7 +142,11 @@ const SCHEMAS = {
       // "defId@chance" strings, e.g. "dragon_blade@6" -- reuses the plain
       // string-list editor rather than needing a new field type for a
       // repeatable {defId, chance} shape.
-      loot: { type: 'string[]', required: false },
+      // "defId@chance" strings, e.g. "dragon_blade@6" -- still the on-disk
+      // shape, but the frontend now renders this as a real item picker
+      // (browsing /api/data/equipment) instead of a plain text-list editor.
+      // See renderLootField in app.js.
+      loot: { type: 'string[]', required: false, picker: 'lootTable' },
     },
   },
   'raids': {

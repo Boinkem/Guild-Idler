@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useEngine } from '../useEngine';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import {
-  RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, isRaidUnlocked, parseLootEntry,
+  RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON, isRaidUnlocked, parseLootEntry,
 } from '../../game/data/raids';
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
 import { RaidDifficulty } from '../../game/types';
@@ -43,6 +43,7 @@ function DifficultyCircle({
   difficulty, active, onClick,
 }: { difficulty: RaidDifficulty; active: boolean; onClick: () => void }) {
   const color = DIFFICULTY_COLOR[difficulty];
+  const [imgFailed, setImgFailed] = useState(false);
   return (
     <button
       className={`raid-diff-circle ${active ? 'active' : ''}`}
@@ -50,7 +51,16 @@ function DifficultyCircle({
       onClick={onClick}
       title={`${difficulty[0].toUpperCase()}${difficulty.slice(1)} -- ${RAID_DIFFICULTIES[difficulty].partySize} heroes`}
     >
-      {DIFFICULTY_LABEL[difficulty]}
+      {!imgFailed ? (
+        <img
+          src={RAID_DIFFICULTY_ICON[difficulty]}
+          alt=""
+          onError={() => setImgFailed(true)}
+          style={{ width: '70%', height: '70%', objectFit: 'contain' }}
+        />
+      ) : (
+        DIFFICULTY_LABEL[difficulty]
+      )}
     </button>
   );
 }
