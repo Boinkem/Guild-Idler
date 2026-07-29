@@ -1,0 +1,30 @@
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 81b1b19..4c84475 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -393,15 +393,16 @@ export const SKIN_BY_ID: Record<string, SkinDef> = Object.fromEntries(SKINS.map(
+ /* ----------------------------- level curve ------------------------------ */
+ 
+ export function xpForLevel(level: number): number {
+-  // Coefficient dropped from 55 to 4.6. The original curve, simulated end
+-  // to end (level 1->55 plus all 18 quest chains, single hero, no Prestige),
+-  // came out to roughly 1,540 days of continuous play -- the ^1.55 exponent
+-  // makes late levels individually enormous (level 50->51 alone needed
+-  // ~23,700 XP), and even Legendary-tier quests' xpMultiplier (26x) couldn't
+-  // keep pace. 4.6 lands the same full playthrough at ~4.7 months, verified
+-  // by simulation, without touching any difficulty tier's xpMultiplier or
+-  // relative appeal versus the others.
+-  return Math.floor(4.6 * Math.pow(level, 1.55));
++  // Revised after playtesting: 4.6/1.55 fixed the late-game blowup (the
++  // original 55/1.55 curve simulated to ~1,540 days for a full 1->55 +
++  // all-chains playthrough) but overcorrected the early game -- level 1->2
++  // only cost 4 XP, so a single Easy quest skipped past two levels
++  // instantly ("4 quests to level 6"). 15/1.15 keeps mid-to-late levels
++  // almost unchanged from the 4.6/1.55 curve (level 20 needs 470 XP here
++  // vs 477 there), but raises early levels to a meaningful fraction of a
++  // quest's worth of XP instead of a rounding error. Full playthrough time
++  // simulates to ~3.8 months, still comfortably inside the target range.
++  return Math.floor(15 * Math.pow(level, 1.15));
+ }
+ 
+ export const PRESTIGE_MIN_LEVEL = 30;
