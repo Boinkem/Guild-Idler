@@ -1,10 +1,10 @@
 diff --git a/src/game/engine.ts b/src/game/engine.ts
-index 75f34f7..2ef395b 100644
+index 89c0cff..a8ff3ed 100644
 --- a/src/game/engine.ts
 +++ b/src/game/engine.ts
 @@ -1,7 +1,8 @@
--import { ActiveQuest, GameState, Hero, HeroClass, QuestOffer, QuestResult } from './types';
-+import { ActiveQuest, GameState, Hero, HeroClass, QuestOffer, QuestResult, RaidDifficulty, RaidResult } from './types';
+-import { ActiveQuest, GameState, Hero, HeroClass, QuestOffer, QuestResult, Rarity } from './types';
++import { ActiveQuest, GameState, Hero, HeroClass, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult } from './types';
  import { createRng, uid } from './rng';
  import { HeroManager } from './managers/HeroManager';
  import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
