@@ -47,6 +47,61 @@
   --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
+/*
+ * Inventory icon cards -- replaces the old text-only slot/stash rows.
+ * Collapsed: icon + name + rarity pill. Expanded (.open): mods, durability,
+ * and the repair/refine/remove or equip/sell actions. A missing item.icon
+ * just shows the per-slot emoji fallback (see EquipmentPanel.tsx) rather
+ * than a broken <img>, so this rolls out gradually as icons are assigned.
+ */
+.item-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.item-card {
+  border: 1px solid var(--panel-3);
+  background: var(--panel-2);
+}
+.item-card.empty { opacity: 0.6; }
+.item-card-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  cursor: pointer;
+}
+.item-card.empty .item-card-summary { cursor: default; }
+.item-icon {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel-3);
+  border: 1px solid var(--edge);
+}
+.item-icon img { width: 70%; height: 70%; image-rendering: pixelated; }
+.item-card-body { min-width: 0; flex: 1; }
+.item-card-name {
+  font-size: 11px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rarity-pill {
+  display: inline-block;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border: 1px solid;
+  border-radius: 2px;
+  margin-top: 3px;
+}
+.item-card-details { padding: 0 8px 8px; }
+
 * { box-sizing: border-box; }
 
 html, body, #root {

@@ -24,11 +24,11 @@ diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
 index 4662736..7532439 100644
 --- a/src/game/managers/SaveManager.ts
 +++ b/src/game/managers/SaveManager.ts
-@@ -219,6 +219,27 @@ const MIGRATIONS: Record<number, Migration> = {
-     }
-     return { ...save, version: 11, vendorLevels };
-   },
-+  11: (save) => {
+@@ -225,6 +225,27 @@
+     version: 12,
+     guildName: (save.guildName as string | undefined) ?? '',
+   }),
++  12: (save) => {
 +    // bulwark_of_the_war_saint and empyrean_aegis moved from the "chest"
 +    // slot to a genuine new "shield" slot. A hero with either equipped has
 +    // it sitting under the old key -- Hero.equipment is keyed by slot, so
@@ -47,7 +47,7 @@ index 4662736..7532439 100644
 +      }
 +      h.equipment = equipment;
 +    }
-+    return { ...save, version: 12, heroes };
++    return { ...save, version: 13, heroes };
 +  },
  };
  
@@ -60,8 +60,8 @@ index ac1ea47..c362cb9 100644
   * Every manager reads and writes the same GameState shape defined here.
   * ========================================================================= */
  
--export const SAVE_VERSION = 11;
-+export const SAVE_VERSION = 12;
+-export const SAVE_VERSION = 12;
++export const SAVE_VERSION = 13;
  
  export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
  
@@ -72,7 +72,7 @@ index ac1ea47..c362cb9 100644
  
  export type HeroClass = 'adventurer' | 'knight' | 'gladiator' | 'samurai' | 'witch' | 'pyromancer' | 'lizardman' | 'wizard' | 'dwarf';
  
-@@ -79,6 +79,13 @@ export interface EquipmentDef {
+@@ -80,6 +80,13 @@
    setId?: string;
    /** Base shop price; loot value is derived from it. */
    value: number;
@@ -90,8 +90,8 @@ diff --git a/src/styles/app.css b/src/styles/app.css
 index 89f0653..8b87551 100644
 --- a/src/styles/app.css
 +++ b/src/styles/app.css
-@@ -34,6 +34,61 @@
-   --anim-speed: 1;
+@@ -47,6 +47,61 @@
+   --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
  }
  
 +/*

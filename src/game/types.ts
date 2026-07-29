@@ -3,13 +3,13 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 12;
+export const SAVE_VERSION = 13;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
-export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'gloves' | 'boots' | 'ring' | 'amulet';
+export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'shield' | 'gloves' | 'boots' | 'ring' | 'amulet';
 
 export type HeroClass = 'adventurer' | 'knight' | 'gladiator' | 'samurai' | 'witch' | 'pyromancer' | 'lizardman' | 'wizard' | 'dwarf';
 
@@ -80,6 +80,13 @@ export interface EquipmentDef {
   setId?: string;
   /** Base shop price; loot value is derived from it. */
   value: number;
+  /**
+   * Relative path under public/item-icons/ (e.g. "weapons/sword_03.png"),
+   * assigned manually via the devtool's Icon Library. Optional -- items
+   * without one fall back to a per-slot placeholder glyph in the UI, so this
+   * can be filled in gradually rather than all at once.
+   */
+  icon?: string;
 }
 
 /** A concrete item the player owns. */

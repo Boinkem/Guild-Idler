@@ -730,7 +730,7 @@
   {
     "id": "empyrean_aegis",
     "name": "Empyrean Aegis",
-    "slot": "chest",
+    "slot": "shield",
     "rarity": "legendary",
     "reqLevel": 45,
     "maxDurability": 320,
@@ -841,7 +841,7 @@
   {
     "id": "bulwark_of_the_war_saint",
     "name": "Bulwark of the War Saint",
-    "slot": "chest",
+    "slot": "shield",
     "rarity": "legendary",
     "reqLevel": 32,
     "maxDurability": 240,

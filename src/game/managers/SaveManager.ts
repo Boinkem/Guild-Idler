@@ -225,6 +225,27 @@ const MIGRATIONS: Record<number, Migration> = {
     version: 12,
     guildName: (save.guildName as string | undefined) ?? '',
   }),
+  12: (save) => {
+    // bulwark_of_the_war_saint and empyrean_aegis moved from the "chest"
+    // slot to a genuine new "shield" slot. A hero with either equipped has
+    // it sitting under the old key -- Hero.equipment is keyed by slot, so
+    // without this it would go stale (the item def now says shield, but
+    // nothing looks under that key for it). Only equipped items need this;
+    // stash/shop entries just reference a defId and pick up the new slot
+    // automatically via EQUIPMENT_BY_ID, no per-item migration needed there.
+    const RECLASSIFIED_TO_SHIELD = new Set(['bulwark_of_the_war_saint', 'empyrean_aegis']);
+    const heroes = Array.isArray(save.heroes) ? save.heroes as Record<string, unknown>[] : [];
+    for (const h of heroes) {
+      const equipment = (h.equipment as Record<string, { defId?: string }> | undefined) ?? {};
+      const chestItem = equipment.chest;
+      if (chestItem && RECLASSIFIED_TO_SHIELD.has(chestItem.defId ?? '')) {
+        equipment.shield = chestItem;
+        delete equipment.chest;
+      }
+      h.equipment = equipment;
+    }
+    return { ...save, version: 13, heroes };
+  },
 };
 
 export const SaveManager = {
