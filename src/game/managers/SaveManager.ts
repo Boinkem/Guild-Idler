@@ -93,6 +93,7 @@ export function createInitialState(now = Date.now()): GameState {
     activeRaid: null,
     completedRaids: [],
     raidLog: [],
+    completedRaidDifficulties: [],
   };
 }
 
@@ -261,6 +262,11 @@ const MIGRATIONS: Record<number, Migration> = {
     activeRaid: (save.activeRaid as unknown) ?? null,
     completedRaids: (save.completedRaids as string[] | undefined) ?? [],
     raidLog: (save.raidLog as unknown[] | undefined) ?? [],
+  }),
+  15: (save) => ({
+    ...save,
+    version: 16,
+    completedRaidDifficulties: (save.completedRaidDifficulties as string[] | undefined) ?? [],
   }),
 };
 

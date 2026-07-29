@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 15;
+export const SAVE_VERSION = 16;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -447,6 +447,14 @@ export interface GameState {
   completedRaids: string[];
   /** Recent raid outcomes, most recent first. Capped the same way `log` is. */
   raidLog: RaidResult[];
+  /**
+   * Difficulties (any raid) that have ever been full-cleared -- separate
+   * from completedRaids since achievements care about "cleared a Mythic",
+   * not "cleared this specific raid at Mythic". Persisted rather than
+   * derived from raidLog, since that's capped and could evict the
+   * evidence; this never shrinks.
+   */
+  completedRaidDifficulties: RaidDifficulty[];
 
   upgrades: Record<string, number>;
   guild: Record<GuildFacility, number>;

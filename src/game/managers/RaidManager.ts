@@ -166,6 +166,9 @@ export const RaidManager = {
     if (fullClear && raid && !state.completedRaids.includes(raid.id)) {
       state.completedRaids.push(raid.id);
     }
+    if (fullClear && !state.completedRaidDifficulties.includes(active.difficulty)) {
+      state.completedRaidDifficulties.push(active.difficulty);
+    }
 
     // Independent per-hero injury rolls regardless of how far the raid got --
     // everyone who went in shares the risk, not just whoever caused a stop.

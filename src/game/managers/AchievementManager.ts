@@ -45,6 +45,17 @@ const CHECKS: Record<string, Check> = {
     const purchasable = SKINS.filter((s) => s.cost > 0).map((s) => s.id);
     return purchasable.every((id) => (state.unlockedSkins ?? []).includes(id));
   },
+
+  RAID_NORMAL_CLEARED: (state) => (state.completedRaidDifficulties ?? []).includes('normal'),
+
+  RAID_HEROIC_CLEARED: (state) => (state.completedRaidDifficulties ?? []).includes('heroic'),
+
+  RAID_MYTHIC_CLEARED: (state) => (state.completedRaidDifficulties ?? []).includes('mythic'),
+
+  RAID_ALL_DIFFICULTIES: (state) => {
+    const cleared = new Set(state.completedRaidDifficulties ?? []);
+    return cleared.has('normal') && cleared.has('heroic') && cleared.has('mythic');
+  },
 };
 
 export const AchievementManager = {

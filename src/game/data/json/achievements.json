@@ -64,5 +64,29 @@
     "name": "Complete Wardrobe",
     "description": "Unlock every livery.",
     "hidden": false
+  },
+  {
+    "id": "RAID_NORMAL_CLEARED",
+    "name": "The Guild Marches",
+    "description": "Full-clear a raid on Normal difficulty.",
+    "hidden": false
+  },
+  {
+    "id": "RAID_HEROIC_CLEARED",
+    "name": "Heroic Effort",
+    "description": "Full-clear a raid on Heroic difficulty.",
+    "hidden": false
+  },
+  {
+    "id": "RAID_MYTHIC_CLEARED",
+    "name": "Mythic Reckoning",
+    "description": "Full-clear a raid on Mythic difficulty.",
+    "hidden": false
+  },
+  {
+    "id": "RAID_ALL_DIFFICULTIES",
+    "name": "Every Banner Flying",
+    "description": "Full-clear a raid at every difficulty -- Normal, Heroic, and Mythic.",
+    "hidden": false
   }
 ]
