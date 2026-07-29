@@ -3,6 +3,7 @@ import type { MouseEvent, CSSProperties } from 'react';
 import { QUEST_CHAINS, ChainDef } from '../../game/data/quests';
 import { GUILD_RANK_TIERS, currentGuildRank, nextGuildRank, rankTierForLevel } from '../../game/data/guildRank';
 import { outgoingConnections, incomingConnections } from '../../game/data/chainConnections';
+import { RAIDS, RAID_ENCOUNTER_BY_ID, isRaidUnlocked } from '../../game/data/raids';
 import { useEngine } from '../useEngine';
 
 /** Shared summary/expand toggle button, matching the Heroes tab pattern. */
@@ -135,7 +136,7 @@ function InProgressEntry({ chain, stage }: { chain: ChainDef; stage: number }) {
   );
 }
 
-export function LorePanel() {
+function StoryQuestsTab() {
   const engine = useEngine();
   const state = engine.state;
 
@@ -153,9 +154,6 @@ export function LorePanel() {
   const discoveredIds = new Set([...completed.map((c) => c.id), ...inProgress.map((x) => x.chain.id)]);
   const undiscovered = QUEST_CHAINS.length - discoveredIds.size;
 
-  const rank = currentGuildRank(state);
-  const next = nextGuildRank(state);
-
   // Completed chains grouped by the rank tier their own reqLevel falls
   // into, in tier order -- turns the flat list into a timeline of who the
   // guild was at each point, rather than one undifferentiated scroll.
@@ -166,23 +164,6 @@ export function LorePanel() {
 
   return (
     <>
-      <h2>Lore</h2>
-      <p className="subtitle">Every contract tells a small story. This is the guild's record of the ones worth remembering.</p>
-
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="spread">
-          <span className="card-title">
-            {state.guildName || 'This guild'} — {rank.name}
-          </span>
-        </div>
-        <p className="tiny muted" style={{ margin: '4px 0 0' }}>{rank.blurb}</p>
-        {next && (
-          <p className="tiny muted" style={{ margin: '4px 0 0' }}>
-            Next: {next.name} — reach level {next.minLevel} or complete a chain at that level.
-          </p>
-        )}
-      </div>
-
       {inProgress.length > 0 && (
         <>
           <div className="section-heading">Still unfolding</div>
@@ -211,6 +192,157 @@ export function LorePanel() {
           {undiscovered} more {undiscovered === 1 ? 'story' : 'stories'} out there, waiting to be found.
         </p>
       )}
+    </>
+  );
+}
+
+function RaidCompletedEntry({ raidId }: { raidId: string }) {
+  const [open, setOpen] = useState(false);
+  const raid = RAIDS.find((r) => r.id === raidId);
+  if (!raid) return null;
+  return (
+    <div className="card lore-card lore-completed">
+      <div
+        className="spread hero-card-summary"
+        onClick={() => setOpen((v) => !v)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
+      >
+        <span className="card-title hero-card-name">{raid.name}</span>
+        <span className="tiny gold-text">Lv {raid.reqLevel}</span>
+      </div>
+      {open && (
+        <div className="hero-card-details">
+          <p className="card-flavour">{raid.description}</p>
+          <ol className="lore-stage-list">
+            {raid.encounterIds.map((id) => {
+              const enc = RAID_ENCOUNTER_BY_ID[id];
+              if (!enc) return null;
+              return (
+                <li key={id}>
+                  <b>{enc.name}.</b> <span className="muted">{enc.flavour}</span>
+                </li>
+              );
+            })}
+          </ol>
+          {raid.epilogue && (
+            <p
+              className="tiny lore-epilogue"
+              style={{ fontStyle: 'italic', borderLeft: '2px solid var(--brass)', paddingLeft: 8, margin: '10px 0 0' }}
+            >
+              {raid.epilogue}
+            </p>
+          )}
+        </div>
+      )}
+      <ExpandToggle open={open} onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} />
+    </div>
+  );
+}
+
+function RaidInProgressEntry() {
+  const engine = useEngine();
+  const active = engine.state.activeRaid;
+  const [open, setOpen] = useState(false);
+  if (!active) return null;
+  const raid = RAIDS.find((r) => r.id === active.raidId);
+  if (!raid) return null;
+
+  return (
+    <div className="card lore-card lore-in-progress">
+      <div
+        className="spread hero-card-summary"
+        onClick={() => setOpen((v) => !v)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
+      >
+        <span className="card-title hero-card-name">{raid.name}</span>
+        <span className="tiny muted">underway — {active.difficulty}</span>
+      </div>
+      {open && (
+        <div className="hero-card-details">
+          <p className="card-flavour">{raid.description}</p>
+          <p className="tiny muted">The rest of this one is still being written.</p>
+        </div>
+      )}
+      <ExpandToggle open={open} onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} />
+    </div>
+  );
+}
+
+function StoryRaidsTab() {
+  const engine = useEngine();
+  const state = engine.state;
+
+  const completed = RAIDS.filter((r) => state.completedRaids.includes(r.id)).sort((a, b) => a.reqLevel - b.reqLevel);
+  const undiscovered = RAIDS.filter((r) => !isRaidUnlocked(r.id, state.completedRaids)).length;
+
+  return (
+    <>
+      {state.activeRaid && (
+        <>
+          <div className="section-heading">Underway</div>
+          <RaidInProgressEntry />
+        </>
+      )}
+
+      <div className="section-heading">Completed</div>
+      {completed.length === 0 ? (
+        <p className="small muted">No raid has been cleared yet. These need the whole guild, not just one hero — see the Raids tab.</p>
+      ) : (
+        completed.map((r) => <RaidCompletedEntry key={r.id} raidId={r.id} />)
+      )}
+
+      {undiscovered > 0 && (
+        <p className="tiny muted" style={{ marginTop: 12 }}>
+          {undiscovered} more raid{undiscovered === 1 ? '' : 's'} still locked away.
+        </p>
+      )}
+    </>
+  );
+}
+
+export function LorePanel() {
+  const engine = useEngine();
+  const state = engine.state;
+  const [subTab, setSubTab] = useState<'quests' | 'raids'>('quests');
+
+  const rank = currentGuildRank(state);
+  const next = nextGuildRank(state);
+
+  return (
+    <>
+      <h2>Lore</h2>
+      <p className="subtitle">Every contract tells a small story. This is the guild's record of the ones worth remembering.</p>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="spread">
+          <span className="card-title">
+            {state.guildName || 'This guild'} — {rank.name}
+          </span>
+        </div>
+        <p className="tiny muted" style={{ margin: '4px 0 0' }}>{rank.blurb}</p>
+        {next && (
+          <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+            Next: {next.name} — reach level {next.minLevel} or complete a chain at that level.
+          </p>
+        )}
+      </div>
+
+      <div className="row" style={{ gap: 8, marginBottom: 14 }}>
+        <button className={subTab === 'quests' ? 'btn-primary' : ''} onClick={() => setSubTab('quests')}>
+          Story Quests
+        </button>
+        <button className={subTab === 'raids' ? 'btn-primary' : ''} onClick={() => setSubTab('raids')}>
+          Story Raids
+        </button>
+      </div>
+
+      {subTab === 'quests' ? <StoryQuestsTab /> : <StoryRaidsTab />}
     </>
   );
 }

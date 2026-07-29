@@ -151,6 +151,16 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
   const celebration = engine.completedChainCelebration;
   const chainBanner = celebration ? `Story Chain Complete: ${celebration.chainName} →` : null;
 
+  // Same compact-banner-instead-of-cropped-modal treatment as awayBanner
+  // above -- the full result (RaidResultModal) only renders once the menu
+  // is open and properly sized.
+  const raidResult = engine.lastRaidResult;
+  const raidBanner = raidResult
+    ? raidResult.fullClear
+      ? `Raid cleared: ${raidResult.raidName} →`
+      : `Raid ended: ${raidResult.raidName} (${raidResult.encountersCleared}/${raidResult.totalEncounters}) →`
+    : null;
+
   return (
     <div className={`idle-root ${locked ? '' : 'unlocked'}`}>
       <div className="idle-stage">
@@ -217,6 +227,9 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
         )}
         {chainBanner && (
           <button className="idle-away-banner idle-chain-banner" onClick={onOpenMenu}>{chainBanner}</button>
+        )}
+        {raidBanner && (
+          <button className="idle-away-banner idle-chain-banner" onClick={onOpenMenu}>{raidBanner}</button>
         )}
 
         <div className="idle-actions">

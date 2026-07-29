@@ -8,6 +8,7 @@ import { ShopPanel } from './panels/ShopPanel';
 import { UpgradesPanel } from './panels/UpgradesPanel';
 import { GuildPanel } from './panels/GuildPanel';
 import { LorePanel } from './panels/LorePanel';
+import { RaidsPanel } from './panels/RaidsPanel';
 import { DashboardPanel } from './panels/DashboardPanel';
 import { StatsPanel } from './panels/StatsPanel';
 import { PrestigePanel } from './panels/PrestigePanel';
@@ -23,6 +24,7 @@ const TABS = [
   { id: 'shop', label: 'Shop', Panel: ShopPanel },
   { id: 'upgrades', label: 'Upgrades', Panel: UpgradesPanel },
   { id: 'guild', label: 'Guild Hall', Panel: GuildPanel },
+  { id: 'raids', label: 'Raids', Panel: RaidsPanel },
   { id: 'lore', label: 'Lore', Panel: LorePanel },
   { id: 'stats', label: 'Statistics', Panel: StatsPanel },
   { id: 'prestige', label: 'Prestige', Panel: PrestigePanel },
@@ -63,7 +65,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         aria-hidden="true"
         style={{
           position: 'absolute', inset: 0,
-          backgroundImage: 'url(./lore/guild-hall-bg.jpg)',
+          backgroundImage: `url(${tab === 'raids' ? './lore/raids-bg.jpg' : './lore/guild-hall-bg.jpg'})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           opacity: 0.35,

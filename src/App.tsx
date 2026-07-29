@@ -7,6 +7,7 @@ import { GuildNamingModal } from './ui/GuildNamingModal';
 import { OfflineReportModal } from './ui/OfflineReportModal';
 import { QuestResultModal } from './ui/QuestResultModal';
 import { ChainCompleteModal } from './ui/ChainCompleteModal';
+import { RaidResultModal } from './ui/RaidResultModal';
 import { Toast } from './ui/Toast';
 
 export type ViewMode = 'idle' | 'menu';
@@ -79,6 +80,7 @@ export function App() {
           <OfflineReportModal active={mode === 'menu'} />
           <QuestResultModal onViewLore={() => changeMode('menu')} />
           <ChainCompleteModal active={mode === 'menu'} onViewLore={() => changeMode('menu')} />
+          <RaidResultModal active={mode === 'menu'} onViewLore={() => changeMode('menu')} />
         </>
       )}
       <Toast />

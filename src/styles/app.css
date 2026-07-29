@@ -128,6 +128,34 @@
    without introducing a whole new component -- same shape, warmer accent. */
 .idle-chain-banner { border-color: var(--violet); color: var(--violet); }
 
+/*
+ * Raids -- difficulty circles (N/H/M) and the raid card treatment. Circles
+ * reuse RARITY_COLOR (uncommon/rare/epic) rather than a new colour system,
+ * same reasoning as everywhere else this session.
+ */
+.raid-diff-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border-width: 2px;
+  border-style: solid;
+  background: var(--panel-2);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.raid-diff-circle:hover { filter: brightness(1.15); }
+.raid-card.locked { opacity: 0.6; }
+.raid-card.active { border-left: 3px solid var(--brass); }
+
+/* Raid Result modal, full-clear treatment -- a raid worth committing hours
+   to deserves a slightly bigger visual moment when it actually pays off. */
+.modal.raid-full-clear { border-color: var(--brass); border-width: 2px; }
+
 * { box-sizing: border-box; }
 
 html, body, #root {
