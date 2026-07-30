@@ -110,15 +110,19 @@ async function createWindow() {
   });
 
   // 'floating' only sits above normal windows, not exclusive-fullscreen
-  // apps/games -- 'screen-saver' is Electron's highest level and is what
-  // actually beats a fullscreen game's window. visibleOnFullScreen was also
-  // explicitly false, which on macOS keeps the companion out of a fullscreen
-  // app's own Space entirely; flipping it to true closes that gap too. Note
-  // this still can't defeat a game running in true DirectX/GPU-exclusive
-  // fullscreen (as opposed to the far more common borderless-windowed) --
-  // that mode bypasses the OS window manager entirely, which no window flag
-  // from any app can override.
-  win.setAlwaysOnTop(alwaysOnTop, 'screen-saver');
+  // apps/games. 'screen-saver' (Electron's highest level) fixes that in
+  // principle, but on Windows it's a known bad combination with a
+  // transparent + frameless window specifically -- the DWM compositor can
+  // fail to composite a layered window at that level at all, making it
+  // invisible everywhere, not just behind other apps (confirmed: this is
+  // exactly what happened on first try). 'pop-up-menu' is one level down --
+  // still well above ordinary windows and most borderless-fullscreen games,
+  // without that specific transparent-window rendering bug. Note this still
+  // can't defeat a game running in true DirectX/GPU-exclusive fullscreen
+  // (as opposed to the far more common borderless-windowed) -- that mode
+  // bypasses the OS window manager entirely, which no window flag from any
+  // app can override.
+  win.setAlwaysOnTop(alwaysOnTop, 'pop-up-menu');
   // Keep the companion visible when the user switches virtual desktops,
   // fullscreen ones included.
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -151,7 +155,7 @@ function createTray() {
       checked: alwaysOnTop,
       click: (item) => {
         alwaysOnTop = item.checked;
-        win?.setAlwaysOnTop(alwaysOnTop, 'screen-saver');
+        win?.setAlwaysOnTop(alwaysOnTop, 'pop-up-menu');
         void writeSettings({ alwaysOnTop });
       },
     },
@@ -232,7 +236,7 @@ ipcMain.handle('window:setMode', (_e, mode: 'idle' | 'menu') => {
 
 ipcMain.handle('window:setAlwaysOnTop', (_e, value: boolean) => {
   alwaysOnTop = value;
-  win?.setAlwaysOnTop(value, 'screen-saver');
+  win?.setAlwaysOnTop(value, 'pop-up-menu');
   void writeSettings({ alwaysOnTop: value });
   return value;
 });

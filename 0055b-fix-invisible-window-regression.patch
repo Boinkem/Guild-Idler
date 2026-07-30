@@ -1,0 +1,49 @@
+diff --git a/electron/main.ts b/electron/main.ts
+index fb37c8a..ff88393 100644
+--- a/electron/main.ts
++++ b/electron/main.ts
+@@ -109,9 +109,23 @@ async function createWindow() {
+     },
+   });
+ 
+-  win.setAlwaysOnTop(alwaysOnTop, 'floating');
+-  // Keep the companion visible when the user switches virtual desktops.
+-  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
++  // 'floating' only sits above normal windows, not exclusive-fullscreen
++  // apps/games. 'screen-saver' (Electron's highest level) fixes that in
++  // principle, but on Windows it's a known bad combination with a
++  // transparent + frameless window specifically -- the DWM compositor can
++  // fail to composite a layered window at that level at all, making it
++  // invisible everywhere, not just behind other apps (confirmed: this is
++  // exactly what happened on first try). 'pop-up-menu' is one level down --
++  // still well above ordinary windows and most borderless-fullscreen games,
++  // without that specific transparent-window rendering bug. Note this still
++  // can't defeat a game running in true DirectX/GPU-exclusive fullscreen
++  // (as opposed to the far more common borderless-windowed) -- that mode
++  // bypasses the OS window manager entirely, which no window flag from any
++  // app can override.
++  win.setAlwaysOnTop(alwaysOnTop, 'pop-up-menu');
++  // Keep the companion visible when the user switches virtual desktops,
++  // fullscreen ones included.
++  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+ 
+   if (process.env.VITE_DEV_SERVER_URL) {
+     await win.loadURL(process.env.VITE_DEV_SERVER_URL);
+@@ -141,7 +155,7 @@ function createTray() {
+       checked: alwaysOnTop,
+       click: (item) => {
+         alwaysOnTop = item.checked;
+-        win?.setAlwaysOnTop(alwaysOnTop, 'floating');
++        win?.setAlwaysOnTop(alwaysOnTop, 'pop-up-menu');
+         void writeSettings({ alwaysOnTop });
+       },
+     },
+@@ -222,7 +236,7 @@ ipcMain.handle('window:setMode', (_e, mode: 'idle' | 'menu') => {
+ 
+ ipcMain.handle('window:setAlwaysOnTop', (_e, value: boolean) => {
+   alwaysOnTop = value;
+-  win?.setAlwaysOnTop(value, 'floating');
++  win?.setAlwaysOnTop(value, 'pop-up-menu');
+   void writeSettings({ alwaysOnTop: value });
+   return value;
+ });
