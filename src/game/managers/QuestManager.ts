@@ -396,17 +396,28 @@ export const QuestManager = {
   },
 
   /**
-   * Chance included now (it was silently dropped before, even though it's
-   * right there on LootRoll) -- these are independent per-item rolls on
-   * success, same as any other quest, chain stage or not. Not to be
-   * confused with a chain's own completion reward, which is guaranteed --
-   * see chainCompletionPreview.
+   * Renamed from lootPreview and given real hero context -- the previous
+   * version showed each entry's raw, unmodified LootRoll.chance, which is
+   * NOT what actually gets rolled at resolution. The real roll (see
+   * resolve() below) is entry.chance * (1 + (difficulty's own lootChance +
+   * the hero's total loot modifier) / 100), clamped to 90 -- e.g. an EPIC
+   * quest alone contributes +45 before the hero's stats/gear/upgrades even
+   * factor in. Mirrors previewSuccess/previewDuration's exact mod-stacking
+   * (hero mods + account-wide mods + consumable loadout) so what's shown
+   * here is what that specific hero would actually get, not a generic
+   * unmodified number that understates the real odds.
    */
-  lootPreview(offer: QuestOffer): { name: string; rarity: Rarity; chance: number }[] {
+  previewLoot(
+    state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number,
+  ): { name: string; rarity: Rarity; chance: number }[] {
+    const loadout = InventoryManager.loadoutEffects(consumables);
+    const mods = sumMods(HeroManager.heroMods(hero, now), ModifierManager.global(state), loadout.mods);
+    const lootChance = DIFFICULTIES[offer.difficulty].lootChance + mods.loot;
     return offer.loot
       .map((entry) => {
         const def = EQUIPMENT_BY_ID[entry.defId];
-        return def ? { name: def.name, rarity: def.rarity, chance: entry.chance } : null;
+        if (!def) return null;
+        return { name: def.name, rarity: def.rarity, chance: Math.min(90, entry.chance * (1 + lootChance / 100)) };
       })
       .filter((x): x is { name: string; rarity: Rarity; chance: number } => x !== null);
   },

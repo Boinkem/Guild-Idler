@@ -162,11 +162,11 @@ export function QuestPanel() {
             {isOpen && (
               <>
                 <p className="card-flavour">{chain ? `${chain.description} — ${offer.flavour}` : offer.flavour}</p>
-                {QuestManager.lootPreview(offer).length > 0 && (
+                {QuestManager.previewLoot(engine.state, statHero, offer, loadout, now).length > 0 && (
                   <>
                     <div className="tiny muted" style={{ marginBottom: 2 }}>Chance to find</div>
                     <div className="row wrap quest-popout-loot" style={{ gap: 6, alignItems: 'center' }}>
-                      {QuestManager.lootPreview(offer).map((entry) => (
+                      {QuestManager.previewLoot(engine.state, statHero, offer, loadout, now).map((entry) => (
                         <span key={entry.name} className="row" style={{ gap: 4, alignItems: 'center' }}>
                           <span className="tiny">{entry.name}</span>
                           <span className="tiny muted">{Math.round(entry.chance)}%</span>
