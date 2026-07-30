@@ -147,7 +147,10 @@ export const RaidManager = {
       for (const entry of encounter.loot) {
         const parsed = parseLootEntry(entry);
         if (!parsed) continue;
-        if (!rng.chance(Math.min(90, parsed.chance * (1 + economy.loot / 100)))) continue;
+        // diffCfg.lootBonus is new -- harder raid tiers now trade success
+        // for better odds too, not just bigger gold/xp (see
+        // RaidDifficultyConfig.lootBonus for the reasoning).
+        if (!rng.chance(Math.min(90, parsed.chance * (1 + (economy.loot + diffCfg.lootBonus) / 100)))) continue;
         const def = EQUIPMENT_BY_ID[parsed.defId];
         const item = EquipmentManager.instantiate(parsed.defId);
         if (!def || !item) continue;

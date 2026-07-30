@@ -42,9 +42,15 @@ export const RAID_BY_ID: Record<string, RaidDef> = Object.fromEntries(RAIDS.map(
  * regardless of which quest it's attached to.
  */
 export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
-  normal: { difficulty: 'normal', partySize: 3, successPenalty: 0, rewardMultiplier: 1 },
-  heroic: { difficulty: 'heroic', partySize: 6, successPenalty: 12, rewardMultiplier: 2.2 },
-  mythic: { difficulty: 'mythic', partySize: 9, successPenalty: 24, rewardMultiplier: 4 },
+  // successPenalty raised (12->20, 24->50) and lootBonus introduced --
+  // Mythic in particular is meant to be genuinely brutal, not just "harder
+  // than Heroic": a 50-point penalty can push an encounter's baseline
+  // success below the floor before the party's own bonus even applies.
+  // The 9-hero party bonus is the intended counterweight, not a numbers
+  // mistake -- confirmed as the deliberate design, not something to soften.
+  normal: { difficulty: 'normal', partySize: 3, successPenalty: 0, rewardMultiplier: 1, lootBonus: 0 },
+  heroic: { difficulty: 'heroic', partySize: 6, successPenalty: 20, rewardMultiplier: 2.2, lootBonus: 5 },
+  mythic: { difficulty: 'mythic', partySize: 9, successPenalty: 50, rewardMultiplier: 4, lootBonus: 15 },
 };
 
 export const RAID_DIFFICULTY_ORDER: RaidDifficulty[] = ['normal', 'heroic', 'mythic'];

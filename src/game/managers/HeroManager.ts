@@ -97,15 +97,44 @@ export const HeroManager = {
    * Stats convert to modifiers on a deliberately gentle curve so that gear and
    * upgrades stay relevant deep into the game.
    */
+  /**
+   * loot is deliberately absent here now -- Luck's contribution to rare-loot
+   * odds moved to its own function (personalLootBonus below), applied as a
+   * separate multiplicative stage rather than summed into this pool. It
+   * used to be diluted into the same additive total as the difficulty
+   * tier's own flat lootChance and every account-wide bonus combined --
+   * two heroes with wildly different Luck investment (27 vs 79, confirmed
+   * directly) came out within a rounding error of each other, because a
+   * ~4-point gap barely registers inside a 120+ point sum. Equipment,
+   * guild, and renown loot bonuses still flow through the normal Modifiers
+   * pool same as before; only the Luck *stat's* own contribution moved.
+   *
+   * speed's curve was also raised (0.5 exponent/0.6 coefficient -> 0.7/1.3)
+   * for the same underlying reason -- even a heavily-invested 93 Endurance
+   * only saved ~10 minutes off a 3-hour quest under the old curve.
+   */
   statMods(stats: Stats): Partial<Modifiers> {
     return {
       success: Math.sqrt(stats.strength) * 1.6 + Math.sqrt(stats.endurance) * 0.8,
       gold: Math.sqrt(stats.luck) * 2.2,
-      loot: Math.sqrt(stats.luck) * 1.1,
       xp: Math.sqrt(stats.wisdom) * 2.6,
       injuryResist: Math.sqrt(stats.endurance) * 2.0,
-      speed: Math.sqrt(stats.endurance) * 0.6,
+      speed: Math.pow(stats.endurance, 0.7) * 1.3,
     };
+  },
+
+  /**
+   * Luck's own rare-loot contribution, applied as an independent
+   * multiplicative stage on top of (difficulty tier + every account-wide
+   * loot bonus) rather than summed into the same pool as those -- see the
+   * comment on statMods above for why. Curve tuned so a balanced-stat
+   * level-55 hero (~40 Luck) lands close to a 10% legendary chance on an
+   * Epic-tier quest, while a genuinely Luck-dumped build still comes out
+   * meaningfully (~2x) ahead of one that mostly ignored it, and even an
+   * extreme min-max build stays well short of the 90% clamp.
+   */
+  personalLootBonus(stats: Stats): number {
+    return Math.pow(stats.luck, 0.9) * 7.2;
   },
 
   equipmentMods(hero: Hero): Partial<Modifiers> {

@@ -283,8 +283,16 @@ export interface RaidDifficultyConfig {
   partySize: number;
   /** Flat percentage points subtracted from every encounter's success chance at this difficulty. */
   successPenalty: number;
-  /** Multiplies gold/xp rewards; loot chance is untouched by difficulty on purpose (more attempts, not better odds, is Normal's compensation). */
+  /** Multiplies gold/xp rewards. */
   rewardMultiplier: number;
+  /**
+   * Flat percentage points added to every loot roll at this difficulty --
+   * reversed from the original design (which deliberately left loot chance
+   * untouched by difficulty, treating more attempts at Normal as the real
+   * compensation). Harder tiers now trade success for better odds too, not
+   * just bigger gold/xp.
+   */
+  lootBonus: number;
 }
 
 /** A raid attempt in progress. Locked in at commit time, resolved encounter by encounter. */

@@ -5,9 +5,18 @@ export const RARITY_WEIGHT: Record<Rarity, number> = {
   common: 100, uncommon: 45, rare: 16, epic: 5, legendary: 1,
 };
 
-/** Base per-item drop chance, before the hero's rare-loot bonus. */
+/**
+ * Base per-item drop chance, before the difficulty tier's own bonus, any
+ * account-wide loot bonus, and the hero's personal Luck-derived bonus (see
+ * HeroManager.personalLootBonus). Legendary raised from 0.4 to 1.5 --
+ * multiplier tuning alone couldn't reach a reasonable target for a
+ * balanced-stat hero (getting from 0.4% to ~10% needs roughly a 25x total
+ * multiplier, which no percentage-based curve can deliver without also
+ * making a maxed build hit the 90% clamp trivially). Every other rarity's
+ * base is untouched.
+ */
 export const RARITY_LOOT_CHANCE: Record<Rarity, number> = {
-  common: 30, uncommon: 14, rare: 5, epic: 1.6, legendary: 0.4,
+  common: 30, uncommon: 14, rare: 5, epic: 1.6, legendary: 1.5,
 };
 
 export const RARITY_PRICE_MULT: Record<Rarity, number> = {

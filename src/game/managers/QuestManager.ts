@@ -273,9 +273,19 @@ export const QuestManager = {
     if (success) {
       gold = Math.floor(quest.offer.rewardGold * quest.goldMultiplier * (1 + events.goldPct)) + events.flatGold;
       xp = Math.floor(quest.offer.rewardXp * quest.xpMultiplier * (1 + events.xpPct));
+      // Two separate multiplicative stages now, not one combined additive
+      // sum -- quest.lootBonus (difficulty + equipment + guild/renown, all
+      // account-wide) still applies as before, but the hero's own Luck
+      // stat is applied as its own independent stage via
+      // personalLootBonus, recomputed fresh here from current stats rather
+      // than locked in at departure (no ActiveQuest schema change needed;
+      // stats essentially never change mid-quest in practice). See
+      // HeroManager.personalLootBonus for why this moved.
       const lootChance = cfg.lootChance + quest.lootBonus + events.lootDelta;
+      const personalLoot = hero ? HeroManager.personalLootBonus(HeroManager.totalStats(hero)) : 0;
       for (const entry of quest.offer.loot) {
-        if (rng.chance(Math.min(90, entry.chance * (1 + lootChance / 100)))) {
+        const chance = Math.min(90, entry.chance * (1 + lootChance / 100) * (1 + personalLoot / 100));
+        if (rng.chance(chance)) {
           const def = EQUIPMENT_BY_ID[entry.defId];
           if (def) loot.push({ defId: def.id, name: def.name, rarity: def.rarity });
         }
@@ -413,11 +423,15 @@ export const QuestManager = {
     const loadout = InventoryManager.loadoutEffects(consumables);
     const mods = sumMods(HeroManager.heroMods(hero, now), ModifierManager.global(state), loadout.mods);
     const lootChance = DIFFICULTIES[offer.difficulty].lootChance + mods.loot;
+    // Mirrors resolve()'s own two-stage math exactly -- see the comment
+    // there and on HeroManager.personalLootBonus.
+    const personalLoot = HeroManager.personalLootBonus(HeroManager.totalStats(hero));
     return offer.loot
       .map((entry) => {
         const def = EQUIPMENT_BY_ID[entry.defId];
         if (!def) return null;
-        return { name: def.name, rarity: def.rarity, chance: Math.min(90, entry.chance * (1 + lootChance / 100)) };
+        const chance = Math.min(90, entry.chance * (1 + lootChance / 100) * (1 + personalLoot / 100));
+        return { name: def.name, rarity: def.rarity, chance };
       })
       .filter((x): x is { name: string; rarity: Rarity; chance: number } => x !== null);
   },
