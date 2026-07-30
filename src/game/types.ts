@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 16;
+export const SAVE_VERSION = 17;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -222,6 +222,17 @@ export interface QuestResult {
   brokenItems: string[];
   levelsGained: number;
   chainAdvanced?: { chainId: string; stage: number; totalStages: number; completed: boolean };
+}
+
+/**
+ * Every notification the guild has ever received, archived automatically
+ * the moment it's toasted (see GameEngine.say) -- this is the persistent
+ * "Notifications" half of the Guide tab. Capped like `log`/`raidLog`.
+ */
+export interface NotificationEntry {
+  id: string;
+  message: string;
+  timestamp: number;
 }
 
 export interface ActiveChain {
@@ -496,4 +507,11 @@ export interface GameState {
    * Prevents re-notifying every time a piece is unequipped and re-equipped.
    */
   notifiedSetBonuses: string[];
+  /** Every toast ever fired, newest first, capped at 100. */
+  notifications: NotificationEntry[];
+  /**
+   * Ids of one-time "how to" guidance topics already shown (see
+   * GuidanceManager) -- once a topic's fired, it never fires again.
+   */
+  seenGuidance: string[];
 }

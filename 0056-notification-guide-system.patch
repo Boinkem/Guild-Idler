@@ -1,0 +1,484 @@
+diff --git a/src/game/data/guideTopics.ts b/src/game/data/guideTopics.ts
+new file mode 100644
+index 0000000..f64793c
+--- /dev/null
++++ b/src/game/data/guideTopics.ts
+@@ -0,0 +1,43 @@
++/**
++ * Static reference content for the Guide tab's "How To" section -- not
++ * generated from events, unlike the notification log. Same "grows over
++ * time, not complete on day one" expectation as GuidanceManager's topics.
++ */
++export interface GuideTopic {
++  id: string;
++  title: string;
++  body: string;
++}
++
++export const GUIDE_TOPICS: GuideTopic[] = [
++  {
++    id: 'stats',
++    title: 'Stat Points',
++    body: 'Every level grants a stat point. Spend it in the Heroes tab -- Strength and Endurance push success chance, Luck pushes gold and loot, Wisdom pushes XP.',
++  },
++  {
++    id: 'recruiting',
++    title: 'Recruiting',
++    body: 'New heroes cost gold and a free hero slot. Slots come from Tavern upgrades (Guild Hall) or the Extra Banner Renown perk.',
++  },
++  {
++    id: 'equipment',
++    title: 'Equipment',
++    body: 'Gear drops from quests and sits in the stash until equipped. Durability wears down with use -- repair it from the Inventory tab before it breaks.',
++  },
++  {
++    id: 'chains',
++    title: 'Quest Chains',
++    body: "Some contracts are the first stage of a longer story. They show up on the board like any other quest -- finishing one reveals the next stage next time it appears.",
++  },
++  {
++    id: 'raids',
++    title: 'Raids',
++    body: 'Raids need a full, exact-size party -- Normal needs 3 heroes, Heroic 6, Mythic 9. They pay out per encounter cleared, so a partial run still earns something.',
++  },
++  {
++    id: 'prestige',
++    title: 'Prestige',
++    body: "Retiring a high-level hero grants Renown -- permanent, account-wide bonuses that carry across every future hero. It's the long-term progression path once levelling alone starts to slow.",
++  },
++];
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 673bafd..1d9e4f4 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -11,6 +11,7 @@ import { GuildManager } from './managers/GuildManager';
+ import { PrestigeManager } from './managers/PrestigeManager';
+ import { ModifierManager } from './managers/ModifierManager';
+ import { AchievementManager } from './managers/AchievementManager';
++import { GuidanceManager, GuidanceTopic } from './managers/GuidanceManager';
+ import { SKIN_BY_ID, SKIN_PRICE, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
+ import { EQUIPMENT_BY_ID, SET_BY_ID } from './data/equipment';
+ import { RAID_BY_ID } from './data/raids';
+@@ -51,7 +52,18 @@ export class GameEngine {
+   offlineReport: OfflineReport | null = null;
+   lastResult: QuestResult | null = null;
+   lastRaidResult: RaidResult | null = null;
+-  toast: string | null = null;
++  /**
++   * Queued rather than a single overwritable value -- simultaneous events
++   * (a quest finishing right as it unlocks something) now show one after
++   * another instead of the second silently clobbering the first. `toast`
++   * stays a plain getter reading the front of the queue, so Toast.tsx
++   * needs zero changes: `engine.toast` behaves exactly as it always has,
++   * it just advances instead of going straight to null.
++   */
++  private toastQueue: string[] = [];
++  get toast(): string | null {
++    return this.toastQueue[0] ?? null;
++  }
+   /**
+    * Set the moment a chain's final stage resolves successfully, cleared by
+    * dismissChainCelebration. Separate from lastResult -- a chain completion
+@@ -98,11 +110,28 @@ export class GameEngine {
+     for (const listener of this.listeners) listener();
+   }
+ 
++  /** Archives every message into the persistent notification log, capped
++   *  at 100, regardless of whether the toast queue is currently empty. */
++  private archive(message: string) {
++    this.state.notifications.unshift({ id: uid('note'), message, timestamp: Date.now() });
++    if (this.state.notifications.length > 100) this.state.notifications.length = 100;
++  }
++
+   private say(message: string) {
+-    this.toast = message;
++    this.archive(message);
++    this.toastQueue.push(message);
+     this.notify();
+   }
+ 
++  /** Fires every message a newly-triggered guidance topic has, in order,
++   *  onto the same toast queue -- see GuidanceManager for the topics
++   *  themselves. */
++  private reportGuidance(topics: GuidanceTopic[]) {
++    for (const topic of topics) {
++      for (const message of topic.messages) this.say(message);
++    }
++  }
++
+   /** Sound, toast, and the Steam stub, for every achievement id that just unlocked. */
+   private reportAchievements(ids: string[]) {
+     if (ids.length === 0) return;
+@@ -151,7 +180,7 @@ export class GameEngine {
+   }
+ 
+   clearToast() {
+-    this.toast = null;
++    this.toastQueue.shift();
+     this.notify();
+   }
+ 
+@@ -234,6 +263,7 @@ export class GameEngine {
+       else if (result.levelsGained > 0) playSound('level_up');
+       else playSound(result.success ? 'quest_success' : 'quest_fail');
+       this.reportAchievements(AchievementManager.checkAll(this.state, now));
++      this.reportGuidance(GuidanceManager.checkAll(this.state));
+ 
+       const chainHero = this.state.heroes.find((h) => h.id === quest.heroId);
+       if (chainHero) {
+@@ -257,6 +287,7 @@ export class GameEngine {
+       changed = true;
+       playSound(raidResult.fullClear ? 'chain_complete' : raidResult.encountersCleared > 0 ? 'quest_success' : 'quest_fail');
+       this.reportAchievements(AchievementManager.checkAll(this.state, now));
++      this.reportGuidance(GuidanceManager.checkAll(this.state));
+     }
+ 
+     if (this.refreshWorld(now)) changed = true;
+@@ -325,6 +356,13 @@ export class GameEngine {
+       for (const id of AchievementManager.checkAll(this.state, quest.endsAt)) {
+         void window.littleKnight?.unlockAchievement(id);
+       }
++      // Guidance topics still get marked seen and archived to the log for
++      // progress made offline -- same "quietly, no toast" treatment as
++      // achievements above, so reopening the app after a long stretch away
++      // doesn't dump a wall of tutorial toasts all at once.
++      for (const topic of GuidanceManager.checkAll(this.state)) {
++        for (const message of topic.messages) this.archive(message);
++      }
+ 
+       const hero = this.state.heroes.find((h) => h.id === quest.heroId);
+       if (hero) this.tryContinueAutoChain(hero, quest.endsAt);
+@@ -341,6 +379,9 @@ export class GameEngine {
+       for (const id of AchievementManager.checkAll(this.state, raidEndsAt)) {
+         void window.littleKnight?.unlockAchievement(id);
+       }
++      for (const topic of GuidanceManager.checkAll(this.state)) {
++        for (const message of topic.messages) this.archive(message);
++      }
+     }
+ 
+     this.state.stats.offlineTimeMs += elapsed;
+@@ -468,6 +509,7 @@ export class GameEngine {
+     const result = QuestManager.resolve(this.state, quest, quest.endsAt);
+     this.lastResult = result;
+     this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
++    this.reportGuidance(GuidanceManager.checkAll(this.state));
+     this.notify();
+     void this.saveNow();
+   }
+@@ -479,6 +521,7 @@ export class GameEngine {
+       this.lastResult = result;
+     }
+     this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
++    this.reportGuidance(GuidanceManager.checkAll(this.state));
+     this.notify();
+     void this.saveNow();
+   }
+@@ -715,6 +758,7 @@ export class GameEngine {
+     playSound('purchase');
+     this.say('The contact melts back into the crowd. Added to the stash.');
+     this.reportAchievements(AchievementManager.checkAll(this.state));
++    this.reportGuidance(GuidanceManager.checkAll(this.state));
+     void this.saveNow();
+   }
+ 
+@@ -777,6 +821,7 @@ export class GameEngine {
+     if (error) return this.say(error);
+     this.say('A new hero joins the guild.');
+     this.reportAchievements(AchievementManager.checkAll(this.state));
++    this.reportGuidance(GuidanceManager.checkAll(this.state));
+     void this.saveNow();
+   }
+ 
+@@ -796,6 +841,7 @@ export class GameEngine {
+     playSound(outcome.streak > 3 ? 'chain_complete' : 'level_up');
+     this.say(`${hero.name} retires a legend. +${outcome.renownGained} Heroic Renown.${streakNote}`);
+     this.reportAchievements(AchievementManager.checkAll(this.state));
++    this.reportGuidance(GuidanceManager.checkAll(this.state));
+     void this.saveNow();
+   }
+ 
+@@ -820,6 +866,7 @@ export class GameEngine {
+     this.state.unlockedSkins.push(skinId);
+     this.say(`${def.name} livery unlocked for the whole guild.`);
+     this.reportAchievements(AchievementManager.checkAll(this.state));
++    this.reportGuidance(GuidanceManager.checkAll(this.state));
+     void this.saveNow();
+   }
+ 
+diff --git a/src/game/managers/GuidanceManager.ts b/src/game/managers/GuidanceManager.ts
+new file mode 100644
+index 0000000..c15bbd9
+--- /dev/null
++++ b/src/game/managers/GuidanceManager.ts
+@@ -0,0 +1,81 @@
++import { GameState } from '../types';
++import { ModifierManager } from './ModifierManager';
++
++/**
++ * A one-time "how to" nudge, tied to a real state condition. Fires exactly
++ * once ever, chained onto the toast queue as one or more messages in order
++ * (see GameEngine.reportGuidance) -- e.g. "Level up!" followed immediately
++ * by "you can spend that stat point in the Heroes tab" as two toasts back
++ * to back, rather than one crowded message.
++ *
++ * This is deliberately a starter set covering the first few levels and
++ * upgrades, not an exhaustive one -- same expectation as ACHIEVEMENTS:
++ * meant to grow incrementally over time, not be complete on day one.
++ */
++export interface GuidanceTopic {
++  id: string;
++  messages: string[];
++}
++
++const TOPICS: GuidanceTopic[] = [
++  {
++    id: 'first_level_up',
++    messages: [
++      'Level up! Your hero grows a little stronger with every quest.',
++      "You've also earned a stat point to spend -- visit the Heroes tab to assign it.",
++    ],
++  },
++  {
++    id: 'first_equipment_found',
++    messages: ["New gear! Anything you find sits in the stash until you equip it -- check the Inventory tab."],
++  },
++  {
++    id: 'first_chain_seen',
++    messages: ["Some contracts continue into a bigger story across several stages -- these show up right on the Quest Board like any other."],
++  },
++  {
++    id: 'hero_slots_full',
++    messages: ["Every hero slot is full. Recruiting costs gold, but the slots themselves come from Guild Hall upgrades or a Renown perk."],
++  },
++  {
++    id: 'raids_unlocked',
++    messages: ["Raids are open -- multi-hero expeditions with bigger rewards and longer odds. You'll need a full, exact-size party before sending one out."],
++  },
++];
++
++type Check = (state: GameState) => boolean;
++
++const CHECKS: Record<string, Check> = {
++  first_level_up: (state) => state.heroes.some((h) => h.level >= 2),
++  first_equipment_found: (state) => state.discoveredItems.length >= 1,
++  first_chain_seen: (state) => state.questBoard.some((o) => o.chain !== undefined),
++  hero_slots_full: (state) => state.heroes.length >= ModifierManager.heroSlots(state),
++  raids_unlocked: (state) => ModifierManager.hasUnlock(state, 'raids'),
++};
++
++export const GuidanceManager = {
++  isSeen(state: GameState, id: string): boolean {
++    return state.seenGuidance.includes(id);
++  },
++
++  /**
++   * Same reasoning as AchievementManager.checkAll: cheap, state-only reads,
++   * safe to call after any action that could plausibly satisfy one rather
++   * than needing to know which specific action maps to which topic.
++   */
++  checkAll(state: GameState): GuidanceTopic[] {
++    const triggered: GuidanceTopic[] = [];
++    for (const topic of TOPICS) {
++      if (GuidanceManager.isSeen(state, topic.id)) continue;
++      const check = CHECKS[topic.id];
++      if (!check || !check(state)) continue;
++      state.seenGuidance.push(topic.id);
++      triggered.push(topic);
++    }
++    return triggered;
++  },
++
++  list() {
++    return TOPICS;
++  },
++};
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 98f61a7..7614aa0 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -94,6 +94,8 @@ export function createInitialState(now = Date.now()): GameState {
+     completedRaids: [],
+     raidLog: [],
+     completedRaidDifficulties: [],
++    notifications: [],
++    seenGuidance: [],
+   };
+ }
+ 
+@@ -268,6 +270,12 @@ const MIGRATIONS: Record<number, Migration> = {
+     version: 16,
+     completedRaidDifficulties: (save.completedRaidDifficulties as string[] | undefined) ?? [],
+   }),
++  16: (save) => ({
++    ...save,
++    version: 17,
++    notifications: (save.notifications as unknown[] | undefined) ?? [],
++    seenGuidance: (save.seenGuidance as string[] | undefined) ?? [],
++  }),
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 6e498a6..f599034 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 16;
++export const SAVE_VERSION = 17;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -224,6 +224,17 @@ export interface QuestResult {
+   chainAdvanced?: { chainId: string; stage: number; totalStages: number; completed: boolean };
+ }
+ 
++/**
++ * Every notification the guild has ever received, archived automatically
++ * the moment it's toasted (see GameEngine.say) -- this is the persistent
++ * "Notifications" half of the Guide tab. Capped like `log`/`raidLog`.
++ */
++export interface NotificationEntry {
++  id: string;
++  message: string;
++  timestamp: number;
++}
++
+ export interface ActiveChain {
+   chainId: string;
+   stage: number;
+@@ -496,4 +507,11 @@ export interface GameState {
+    * Prevents re-notifying every time a piece is unequipped and re-equipped.
+    */
+   notifiedSetBonuses: string[];
++  /** Every toast ever fired, newest first, capped at 100. */
++  notifications: NotificationEntry[];
++  /**
++   * Ids of one-time "how to" guidance topics already shown (see
++   * GuidanceManager) -- once a topic's fired, it never fires again.
++   */
++  seenGuidance: string[];
+ }
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 203609d..28e7c16 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -687,6 +687,19 @@ button:focus-visible, [tabindex]:focus-visible {
+   text-align: center;
+ }
+ 
++/* -------------------------------- guide -------------------------------- */
++
++.notif-list { display: flex; flex-direction: column; gap: 2px; }
++.notif-row {
++  display: flex;
++  justify-content: space-between;
++  align-items: baseline;
++  gap: 12px;
++  padding: 7px 10px;
++  border-bottom: 1px solid var(--panel-3);
++}
++.notif-row:last-child { border-bottom: none; }
++
+ .loading {
+   height: 100%;
+   display: grid;
+diff --git a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+index bd59fcc..0208085 100644
+--- a/src/ui/MenuWindow.tsx
++++ b/src/ui/MenuWindow.tsx
+@@ -6,7 +6,8 @@ import { HeroesPanel } from './panels/HeroesPanel';
+ import { EquipmentPanel } from './panels/EquipmentPanel';
+ import { ShopPanel } from './panels/ShopPanel';
+ import { UpgradesPanel } from './panels/UpgradesPanel';
+-import { GuildPanel } from './panels/GuildPanel';
++import { GuildPanel } from './panels/GuildPanel';
++import { GuidePanel } from './panels/GuidePanel';
+ import { LorePanel } from './panels/LorePanel';
+ import { RaidsPanel } from './panels/RaidsPanel';
+ import { DashboardPanel } from './panels/DashboardPanel';
+@@ -18,6 +19,7 @@ import { TESTING_TOOLS_ENABLED } from '../game/testingTools';
+ 
+ const TABS = [
+   { id: 'dashboard', label: 'The Guild', Panel: DashboardPanel },
++  { id: 'guide', label: 'Guide', Panel: GuidePanel },
+   { id: 'quests', label: 'Quests', Panel: QuestPanel },
+   { id: 'heroes', label: 'Heroes', Panel: HeroesPanel },
+   { id: 'equipment', label: 'Inventory', Panel: EquipmentPanel },
+diff --git a/src/ui/panels/GuidePanel.tsx b/src/ui/panels/GuidePanel.tsx
+new file mode 100644
+index 0000000..e8a3514
+--- /dev/null
++++ b/src/ui/panels/GuidePanel.tsx
+@@ -0,0 +1,68 @@
++import { useState } from 'react';
++import { useEngine } from '../useEngine';
++import { GUIDE_TOPICS } from '../../game/data/guideTopics';
++
++function timeAgo(ts: number, now: number): string {
++  const diffMin = Math.floor((now - ts) / 60000);
++  if (diffMin < 1) return 'just now';
++  if (diffMin < 60) return `${diffMin}m ago`;
++  const hours = Math.floor(diffMin / 60);
++  if (hours < 24) return `${hours}h ago`;
++  return `${Math.floor(hours / 24)}d ago`;
++}
++
++function NotificationsTab() {
++  const engine = useEngine();
++  const notifications = engine.state.notifications;
++  const now = Date.now();
++
++  if (notifications.length === 0) {
++    return <p className="small muted">Nothing yet. Everything that happens in the guild gets logged here.</p>;
++  }
++
++  return (
++    <div className="notif-list">
++      {notifications.map((n) => (
++        <div key={n.id} className="notif-row">
++          <span className="tiny">{n.message}</span>
++          <span className="tiny muted">{timeAgo(n.timestamp, now)}</span>
++        </div>
++      ))}
++    </div>
++  );
++}
++
++function HowToTab() {
++  return (
++    <>
++      {GUIDE_TOPICS.map((topic) => (
++        <div key={topic.id} className="card" style={{ marginBottom: 10 }}>
++          <div className="card-title">{topic.title}</div>
++          <p className="small muted" style={{ marginTop: 4 }}>{topic.body}</p>
++        </div>
++      ))}
++    </>
++  );
++}
++
++export function GuidePanel() {
++  const [subTab, setSubTab] = useState<'notifications' | 'howto'>('notifications');
++
++  return (
++    <>
++      <h2>Guide</h2>
++      <p className="subtitle">A running log of what's happened, and a quick reference for how everything works.</p>
++
++      <div className="row" style={{ gap: 8, marginBottom: 14 }}>
++        <button className={subTab === 'notifications' ? 'btn-primary' : ''} onClick={() => setSubTab('notifications')}>
++          Notifications
++        </button>
++        <button className={subTab === 'howto' ? 'btn-primary' : ''} onClick={() => setSubTab('howto')}>
++          How To
++        </button>
++      </div>
++
++      {subTab === 'notifications' ? <NotificationsTab /> : <HowToTab />}
++    </>
++  );
++}

@@ -687,6 +687,19 @@ button:focus-visible, [tabindex]:focus-visible {
   text-align: center;
 }
 
+/* -------------------------------- guide -------------------------------- */
+
+.notif-list { display: flex; flex-direction: column; gap: 2px; }
+.notif-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--panel-3);
+}
+.notif-row:last-child { border-bottom: none; }
+
 .loading {
   height: 100%;
   display: grid;

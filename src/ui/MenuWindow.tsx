@@ -7,6 +7,7 @@ import { EquipmentPanel } from './panels/EquipmentPanel';
 import { ShopPanel } from './panels/ShopPanel';
 import { UpgradesPanel } from './panels/UpgradesPanel';
 import { GuildPanel } from './panels/GuildPanel';
+import { GuidePanel } from './panels/GuidePanel';
 import { LorePanel } from './panels/LorePanel';
 import { RaidsPanel } from './panels/RaidsPanel';
 import { DashboardPanel } from './panels/DashboardPanel';
@@ -18,6 +19,7 @@ import { TESTING_TOOLS_ENABLED } from '../game/testingTools';
 
 const TABS = [
   { id: 'dashboard', label: 'The Guild', Panel: DashboardPanel },
+  { id: 'guide', label: 'Guide', Panel: GuidePanel },
   { id: 'quests', label: 'Quests', Panel: QuestPanel },
   { id: 'heroes', label: 'Heroes', Panel: HeroesPanel },
   { id: 'equipment', label: 'Inventory', Panel: EquipmentPanel },

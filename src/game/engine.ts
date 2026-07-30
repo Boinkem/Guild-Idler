@@ -11,6 +11,7 @@ import { GuildManager } from './managers/GuildManager';
 import { PrestigeManager } from './managers/PrestigeManager';
 import { ModifierManager } from './managers/ModifierManager';
 import { AchievementManager } from './managers/AchievementManager';
+import { GuidanceManager, GuidanceTopic } from './managers/GuidanceManager';
 import { SKIN_BY_ID, SKIN_PRICE, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
 import { EQUIPMENT_BY_ID, SET_BY_ID } from './data/equipment';
 import { RAID_BY_ID } from './data/raids';
@@ -51,7 +52,18 @@ export class GameEngine {
   offlineReport: OfflineReport | null = null;
   lastResult: QuestResult | null = null;
   lastRaidResult: RaidResult | null = null;
-  toast: string | null = null;
+  /**
+   * Queued rather than a single overwritable value -- simultaneous events
+   * (a quest finishing right as it unlocks something) now show one after
+   * another instead of the second silently clobbering the first. `toast`
+   * stays a plain getter reading the front of the queue, so Toast.tsx
+   * needs zero changes: `engine.toast` behaves exactly as it always has,
+   * it just advances instead of going straight to null.
+   */
+  private toastQueue: string[] = [];
+  get toast(): string | null {
+    return this.toastQueue[0] ?? null;
+  }
   /**
    * Set the moment a chain's final stage resolves successfully, cleared by
    * dismissChainCelebration. Separate from lastResult -- a chain completion
@@ -98,9 +110,26 @@ export class GameEngine {
     for (const listener of this.listeners) listener();
   }
 
+  /** Archives every message into the persistent notification log, capped
+   *  at 100, regardless of whether the toast queue is currently empty. */
+  private archive(message: string) {
+    this.state.notifications.unshift({ id: uid('note'), message, timestamp: Date.now() });
+    if (this.state.notifications.length > 100) this.state.notifications.length = 100;
+  }
+
   private say(message: string) {
-    this.toast = message;
+    this.archive(message);
+    this.toastQueue.push(message);
     this.notify();
+  }
+
+  /** Fires every message a newly-triggered guidance topic has, in order,
+   *  onto the same toast queue -- see GuidanceManager for the topics
+   *  themselves. */
+  private reportGuidance(topics: GuidanceTopic[]) {
+    for (const topic of topics) {
+      for (const message of topic.messages) this.say(message);
+    }
   }
 
   /** Sound, toast, and the Steam stub, for every achievement id that just unlocked. */
@@ -151,7 +180,7 @@ export class GameEngine {
   }
 
   clearToast() {
-    this.toast = null;
+    this.toastQueue.shift();
     this.notify();
   }
 
@@ -234,6 +263,7 @@ export class GameEngine {
       else if (result.levelsGained > 0) playSound('level_up');
       else playSound(result.success ? 'quest_success' : 'quest_fail');
       this.reportAchievements(AchievementManager.checkAll(this.state, now));
+      this.reportGuidance(GuidanceManager.checkAll(this.state));
 
       const chainHero = this.state.heroes.find((h) => h.id === quest.heroId);
       if (chainHero) {
@@ -257,6 +287,7 @@ export class GameEngine {
       changed = true;
       playSound(raidResult.fullClear ? 'chain_complete' : raidResult.encountersCleared > 0 ? 'quest_success' : 'quest_fail');
       this.reportAchievements(AchievementManager.checkAll(this.state, now));
+      this.reportGuidance(GuidanceManager.checkAll(this.state));
     }
 
     if (this.refreshWorld(now)) changed = true;
@@ -325,6 +356,13 @@ export class GameEngine {
       for (const id of AchievementManager.checkAll(this.state, quest.endsAt)) {
         void window.littleKnight?.unlockAchievement(id);
       }
+      // Guidance topics still get marked seen and archived to the log for
+      // progress made offline -- same "quietly, no toast" treatment as
+      // achievements above, so reopening the app after a long stretch away
+      // doesn't dump a wall of tutorial toasts all at once.
+      for (const topic of GuidanceManager.checkAll(this.state)) {
+        for (const message of topic.messages) this.archive(message);
+      }
 
       const hero = this.state.heroes.find((h) => h.id === quest.heroId);
       if (hero) this.tryContinueAutoChain(hero, quest.endsAt);
@@ -340,6 +378,9 @@ export class GameEngine {
       raidResults.push(raidResult);
       for (const id of AchievementManager.checkAll(this.state, raidEndsAt)) {
         void window.littleKnight?.unlockAchievement(id);
+      }
+      for (const topic of GuidanceManager.checkAll(this.state)) {
+        for (const message of topic.messages) this.archive(message);
       }
     }
 
@@ -468,6 +509,7 @@ export class GameEngine {
     const result = QuestManager.resolve(this.state, quest, quest.endsAt);
     this.lastResult = result;
     this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+    this.reportGuidance(GuidanceManager.checkAll(this.state));
     this.notify();
     void this.saveNow();
   }
@@ -479,6 +521,7 @@ export class GameEngine {
       this.lastResult = result;
     }
     this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+    this.reportGuidance(GuidanceManager.checkAll(this.state));
     this.notify();
     void this.saveNow();
   }
@@ -715,6 +758,7 @@ export class GameEngine {
     playSound('purchase');
     this.say('The contact melts back into the crowd. Added to the stash.');
     this.reportAchievements(AchievementManager.checkAll(this.state));
+    this.reportGuidance(GuidanceManager.checkAll(this.state));
     void this.saveNow();
   }
 
@@ -777,6 +821,7 @@ export class GameEngine {
     if (error) return this.say(error);
     this.say('A new hero joins the guild.');
     this.reportAchievements(AchievementManager.checkAll(this.state));
+    this.reportGuidance(GuidanceManager.checkAll(this.state));
     void this.saveNow();
   }
 
@@ -796,6 +841,7 @@ export class GameEngine {
     playSound(outcome.streak > 3 ? 'chain_complete' : 'level_up');
     this.say(`${hero.name} retires a legend. +${outcome.renownGained} Heroic Renown.${streakNote}`);
     this.reportAchievements(AchievementManager.checkAll(this.state));
+    this.reportGuidance(GuidanceManager.checkAll(this.state));
     void this.saveNow();
   }
 
@@ -820,6 +866,7 @@ export class GameEngine {
     this.state.unlockedSkins.push(skinId);
     this.say(`${def.name} livery unlocked for the whole guild.`);
     this.reportAchievements(AchievementManager.checkAll(this.state));
+    this.reportGuidance(GuidanceManager.checkAll(this.state));
     void this.saveNow();
   }
 
