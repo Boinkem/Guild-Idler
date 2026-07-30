@@ -184,6 +184,18 @@ export class GameEngine {
     this.notify();
   }
 
+  /**
+   * Public entry point for a UI-triggered informational toast that isn't
+   * tied to a specific game action -- everything else reaches the queue
+   * through the private say() called internally by recruit/repair/start
+   * quest/etc. This is for things like "discover this item first" on an
+   * undiscovered raid loot entry, which isn't really an "action" with a
+   * success/failure outcome, just a nudge.
+   */
+  showToast(message: string) {
+    this.say(message);
+  }
+
   dismissOfflineReport() {
     this.offlineReport = null;
     this.notify();

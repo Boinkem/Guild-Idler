@@ -1,0 +1,50 @@
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 1d9e4f4..aad690c 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -184,6 +184,18 @@ export class GameEngine {
+     this.notify();
+   }
+ 
++  /**
++   * Public entry point for a UI-triggered informational toast that isn't
++   * tied to a specific game action -- everything else reaches the queue
++   * through the private say() called internally by recruit/repair/start
++   * quest/etc. This is for things like "discover this item first" on an
++   * undiscovered raid loot entry, which isn't really an "action" with a
++   * success/failure outcome, just a nudge.
++   */
++  showToast(message: string) {
++    this.say(message);
++  }
++
+   dismissOfflineReport() {
+     this.offlineReport = null;
+     this.notify();
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 57d15b1..8c617cb 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -159,6 +159,22 @@
+    to deserves a slightly bigger visual moment when it actually pays off. */
+ .modal.raid-full-clear { border-color: var(--brass); border-width: 2px; }
+ 
++/* Loot entries in a raid encounter's preview -- plain button reset so they
++   read the same as the old static text, but are actually clickable now:
++   a discovered item opens its detail overlay, an undiscovered one gets a
++   toast telling you to go find it first. */
++.loot-chip {
++  display: inline-flex;
++  align-items: center;
++  gap: 4px;
++  background: none;
++  border: none;
++  padding: 0;
++  font: inherit;
++  cursor: pointer;
++}
++.loot-chip:hover .tiny { color: var(--brass); }
++
+ * { box-sizing: border-box; }
+ 
+ html, body, #root {

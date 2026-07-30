@@ -159,6 +159,22 @@
    to deserves a slightly bigger visual moment when it actually pays off. */
 .modal.raid-full-clear { border-color: var(--brass); border-width: 2px; }
 
+/* Loot entries in a raid encounter's preview -- plain button reset so they
+   read the same as the old static text, but are actually clickable now:
+   a discovered item opens its detail overlay, an undiscovered one gets a
+   toast telling you to go find it first. */
+.loot-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.loot-chip:hover .tiny { color: var(--brass); }
+
 * { box-sizing: border-box; }
 
 html, body, #root {
