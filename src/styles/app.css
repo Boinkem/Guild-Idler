@@ -518,7 +518,7 @@ button:focus-visible, [tabindex]:focus-visible {
 .card.hard { border-left-color: #c98b3a; }
 .card.epic { border-left-color: var(--violet); }
 .card.legendary { border-left-color: var(--brass); }
-.card.chain { border-left-color: var(--blood); background: linear-gradient(90deg, rgba(163, 58, 58, 0.14), transparent 60%); }
+.card.chain { border-left-color: var(--blood); }
 
 .card-head { display: flex; align-items: baseline; gap: 8px; }
 .card-title { font-size: 0.8125rem; font-weight: 700; }

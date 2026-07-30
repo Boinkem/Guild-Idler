@@ -395,10 +395,37 @@ export const QuestManager = {
     return result;
   },
 
-  lootPreview(offer: QuestOffer): { name: string; rarity: Rarity }[] {
+  /**
+   * Chance included now (it was silently dropped before, even though it's
+   * right there on LootRoll) -- these are independent per-item rolls on
+   * success, same as any other quest, chain stage or not. Not to be
+   * confused with a chain's own completion reward, which is guaranteed --
+   * see chainCompletionPreview.
+   */
+  lootPreview(offer: QuestOffer): { name: string; rarity: Rarity; chance: number }[] {
     return offer.loot
-      .map((entry) => EQUIPMENT_BY_ID[entry.defId])
-      .filter((def): def is NonNullable<typeof def> => !!def)
-      .map((def) => ({ name: def.name, rarity: def.rarity }));
+      .map((entry) => {
+        const def = EQUIPMENT_BY_ID[entry.defId];
+        return def ? { name: def.name, rarity: def.rarity, chance: entry.chance } : null;
+      })
+      .filter((x): x is { name: string; rarity: Rarity; chance: number } => x !== null);
+  },
+
+  /**
+   * A chain's own reward -- gold, renown, and named items -- is granted in
+   * full the moment the final stage succeeds, with no roll at all (see the
+   * `completed` branch in resolve() below). This has never been previewable
+   * anywhere before; used on a chain's final-stage board card to show what's
+   * actually guaranteed, separate from that stage's own chance-based loot.
+   */
+  chainCompletionPreview(chain: ChainDef): { rewardGold: number; rewardRenown: number; items: { name: string; rarity: Rarity }[] } {
+    return {
+      rewardGold: chain.rewardGold,
+      rewardRenown: chain.rewardRenown,
+      items: chain.rewardItems
+        .map((defId) => EQUIPMENT_BY_ID[defId])
+        .filter((def): def is NonNullable<typeof def> => !!def)
+        .map((def) => ({ name: def.name, rarity: def.rarity })),
+    };
   },
 };

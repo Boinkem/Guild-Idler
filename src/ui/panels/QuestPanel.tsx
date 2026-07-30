@@ -162,14 +162,46 @@ export function QuestPanel() {
             {isOpen && (
               <>
                 <p className="card-flavour">{chain ? `${chain.description} — ${offer.flavour}` : offer.flavour}</p>
-                <div className="row wrap quest-popout-loot" style={{ gap: 6, alignItems: 'center' }}>
-                  {QuestManager.lootPreview(offer).map((entry) => (
-                    <span key={entry.name} className="row" style={{ gap: 4, alignItems: 'center' }}>
-                      <span className="tiny">{entry.name}</span>
-                      <RarityPill rarity={entry.rarity} />
-                    </span>
-                  ))}
-                </div>
+                {QuestManager.lootPreview(offer).length > 0 && (
+                  <>
+                    <div className="tiny muted" style={{ marginBottom: 2 }}>Chance to find</div>
+                    <div className="row wrap quest-popout-loot" style={{ gap: 6, alignItems: 'center' }}>
+                      {QuestManager.lootPreview(offer).map((entry) => (
+                        <span key={entry.name} className="row" style={{ gap: 4, alignItems: 'center' }}>
+                          <span className="tiny">{entry.name}</span>
+                          <span className="tiny muted">{Math.round(entry.chance)}%</span>
+                          <RarityPill rarity={entry.rarity} />
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {/* Only the final stage of a chain actually pays out the chain's
+                    own guaranteed reward -- earlier stages just have their own
+                    chance-based loot above, same as any other quest. Shown
+                    separately and unambiguously as "guaranteed", not a % roll. */}
+                {chain && offer.chain && offer.chain.stage + 1 === offer.chain.totalStages && (() => {
+                  const completion = QuestManager.chainCompletionPreview(chain);
+                  return (
+                    <>
+                      <div className="tiny muted" style={{ marginTop: 8, marginBottom: 2 }}>
+                        Guaranteed on completion
+                      </div>
+                      <div className="row wrap" style={{ gap: 6, alignItems: 'center' }}>
+                        <span className="tiny gold-text">+{formatGold(completion.rewardGold)} gold</span>
+                        {completion.rewardRenown > 0 && (
+                          <span className="tiny" style={{ color: 'var(--violet)' }}>+{completion.rewardRenown} renown</span>
+                        )}
+                        {completion.items.map((item) => (
+                          <span key={item.name} className="row" style={{ gap: 4, alignItems: 'center' }}>
+                            <span className="tiny">{item.name}</span>
+                            <RarityPill rarity={item.rarity} />
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  );
+                })()}
               </>
             )}
 

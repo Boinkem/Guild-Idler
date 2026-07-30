@@ -1,0 +1,118 @@
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index d58fc06..e17fa28 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -395,10 +395,37 @@ export const QuestManager = {
+     return result;
+   },
+ 
+-  lootPreview(offer: QuestOffer): { name: string; rarity: Rarity }[] {
++  /**
++   * Chance included now (it was silently dropped before, even though it's
++   * right there on LootRoll) -- these are independent per-item rolls on
++   * success, same as any other quest, chain stage or not. Not to be
++   * confused with a chain's own completion reward, which is guaranteed --
++   * see chainCompletionPreview.
++   */
++  lootPreview(offer: QuestOffer): { name: string; rarity: Rarity; chance: number }[] {
+     return offer.loot
+-      .map((entry) => EQUIPMENT_BY_ID[entry.defId])
+-      .filter((def): def is NonNullable<typeof def> => !!def)
+-      .map((def) => ({ name: def.name, rarity: def.rarity }));
++      .map((entry) => {
++        const def = EQUIPMENT_BY_ID[entry.defId];
++        return def ? { name: def.name, rarity: def.rarity, chance: entry.chance } : null;
++      })
++      .filter((x): x is { name: string; rarity: Rarity; chance: number } => x !== null);
++  },
++
++  /**
++   * A chain's own reward -- gold, renown, and named items -- is granted in
++   * full the moment the final stage succeeds, with no roll at all (see the
++   * `completed` branch in resolve() below). This has never been previewable
++   * anywhere before; used on a chain's final-stage board card to show what's
++   * actually guaranteed, separate from that stage's own chance-based loot.
++   */
++  chainCompletionPreview(chain: ChainDef): { rewardGold: number; rewardRenown: number; items: { name: string; rarity: Rarity }[] } {
++    return {
++      rewardGold: chain.rewardGold,
++      rewardRenown: chain.rewardRenown,
++      items: chain.rewardItems
++        .map((defId) => EQUIPMENT_BY_ID[defId])
++        .filter((def): def is NonNullable<typeof def> => !!def)
++        .map((def) => ({ name: def.name, rarity: def.rarity })),
++    };
+   },
+ };
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 28e7c16..57d15b1 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -518,7 +518,7 @@ button:focus-visible, [tabindex]:focus-visible {
+ .card.hard { border-left-color: #c98b3a; }
+ .card.epic { border-left-color: var(--violet); }
+ .card.legendary { border-left-color: var(--brass); }
+-.card.chain { border-left-color: var(--blood); background: linear-gradient(90deg, rgba(163, 58, 58, 0.14), transparent 60%); }
++.card.chain { border-left-color: var(--blood); }
+ 
+ .card-head { display: flex; align-items: baseline; gap: 8px; }
+ .card-title { font-size: 0.8125rem; font-weight: 700; }
+diff --git a/src/ui/panels/QuestPanel.tsx b/src/ui/panels/QuestPanel.tsx
+index ddd51ff..dd5131f 100644
+--- a/src/ui/panels/QuestPanel.tsx
++++ b/src/ui/panels/QuestPanel.tsx
+@@ -162,14 +162,46 @@ export function QuestPanel() {
+             {isOpen && (
+               <>
+                 <p className="card-flavour">{chain ? `${chain.description} — ${offer.flavour}` : offer.flavour}</p>
+-                <div className="row wrap quest-popout-loot" style={{ gap: 6, alignItems: 'center' }}>
+-                  {QuestManager.lootPreview(offer).map((entry) => (
+-                    <span key={entry.name} className="row" style={{ gap: 4, alignItems: 'center' }}>
+-                      <span className="tiny">{entry.name}</span>
+-                      <RarityPill rarity={entry.rarity} />
+-                    </span>
+-                  ))}
+-                </div>
++                {QuestManager.lootPreview(offer).length > 0 && (
++                  <>
++                    <div className="tiny muted" style={{ marginBottom: 2 }}>Chance to find</div>
++                    <div className="row wrap quest-popout-loot" style={{ gap: 6, alignItems: 'center' }}>
++                      {QuestManager.lootPreview(offer).map((entry) => (
++                        <span key={entry.name} className="row" style={{ gap: 4, alignItems: 'center' }}>
++                          <span className="tiny">{entry.name}</span>
++                          <span className="tiny muted">{Math.round(entry.chance)}%</span>
++                          <RarityPill rarity={entry.rarity} />
++                        </span>
++                      ))}
++                    </div>
++                  </>
++                )}
++                {/* Only the final stage of a chain actually pays out the chain's
++                    own guaranteed reward -- earlier stages just have their own
++                    chance-based loot above, same as any other quest. Shown
++                    separately and unambiguously as "guaranteed", not a % roll. */}
++                {chain && offer.chain && offer.chain.stage + 1 === offer.chain.totalStages && (() => {
++                  const completion = QuestManager.chainCompletionPreview(chain);
++                  return (
++                    <>
++                      <div className="tiny muted" style={{ marginTop: 8, marginBottom: 2 }}>
++                        Guaranteed on completion
++                      </div>
++                      <div className="row wrap" style={{ gap: 6, alignItems: 'center' }}>
++                        <span className="tiny gold-text">+{formatGold(completion.rewardGold)} gold</span>
++                        {completion.rewardRenown > 0 && (
++                          <span className="tiny" style={{ color: 'var(--violet)' }}>+{completion.rewardRenown} renown</span>
++                        )}
++                        {completion.items.map((item) => (
++                          <span key={item.name} className="row" style={{ gap: 4, alignItems: 'center' }}>
++                            <span className="tiny">{item.name}</span>
++                            <RarityPill rarity={item.rarity} />
++                          </span>
++                        ))}
++                      </div>
++                    </>
++                  );
++                })()}
+               </>
+             )}
+ 
