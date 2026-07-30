@@ -1,0 +1,148 @@
+diff --git a/src/game/data/raids.ts b/src/game/data/raids.ts
+index 30ddcd9..96d921e 100644
+--- a/src/game/data/raids.ts
++++ b/src/game/data/raids.ts
+@@ -48,9 +48,12 @@ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
+   // success below the floor before the party's own bonus even applies.
+   // The 9-hero party bonus is the intended counterweight, not a numbers
+   // mistake -- confirmed as the deliberate design, not something to soften.
+-  normal: { difficulty: 'normal', partySize: 3, successPenalty: 0, rewardMultiplier: 1, lootBonus: 0 },
+-  heroic: { difficulty: 'heroic', partySize: 6, successPenalty: 20, rewardMultiplier: 2.2, lootBonus: 5 },
+-  mythic: { difficulty: 'mythic', partySize: 9, successPenalty: 50, rewardMultiplier: 4, lootBonus: 15 },
++  // durationMultiplier: harder tiers take longer too -- normal 2h becomes
++  // 2.3h at Heroic, 2.6h at Mythic (i.e. x1.15 / x1.3), matching the given
++  // example exactly.
++  normal: { difficulty: 'normal', partySize: 3, successPenalty: 0, rewardMultiplier: 1, lootBonus: 0, durationMultiplier: 1 },
++  heroic: { difficulty: 'heroic', partySize: 6, successPenalty: 20, rewardMultiplier: 2.2, lootBonus: 5, durationMultiplier: 1.15 },
++  mythic: { difficulty: 'mythic', partySize: 9, successPenalty: 50, rewardMultiplier: 4, lootBonus: 15, durationMultiplier: 1.3 },
+ };
+ 
+ export const RAID_DIFFICULTY_ORDER: RaidDifficulty[] = ['normal', 'heroic', 'mythic'];
+diff --git a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
+index 75db019..22990c1 100644
+--- a/src/game/managers/RaidManager.ts
++++ b/src/game/managers/RaidManager.ts
+@@ -1,5 +1,5 @@
+ import {
+-  ActiveRaid, GameState, Hero, RaidDifficulty, RaidLootDrop, RaidResult,
++  ActiveRaid, GameState, Hero, Modifiers, RaidDifficulty, RaidLootDrop, RaidResult,
+ } from '../types';
+ import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, lootForDifficulty } from '../data/raids';
+ import { EQUIPMENT_BY_ID } from '../data/equipment';
+@@ -35,13 +35,32 @@ export const RaidManager = {
+    * the party instead -- these aren't a pass/fail gate the way success is,
+    * just a shared payout, so there's no reason to punish a party for one
+    * hero being behind on gear the way the success calculation does.
++   *
++   * speed is deliberately computed differently from the other three: it
++   * excludes ModifierManager.global (guild/vendor/renown upgrades), using
++   * only each hero's own personal speed (stats + equipment). Quest-speed
++   * upgrades like Mounted Travel were silently also collapsing raid
++   * duration to its 25% floor by default -- a maxed Mounted Travel (+60%)
++   * alone gets most of the way there before any hero-specific investment
++   * even factors in. Raids are meant to have their own separate speed
++   * levers eventually (dedicated Raid Upgrades, not yet built); until then,
++   * raid duration only responds to the party's own stats/gear, not the
++   * guild's general quest infrastructure. gold/xp/loot are unaffected and
++   * still include account-wide bonuses as before.
+    */
+   partyEconomyMods(state: GameState, heroes: Hero[], now: number) {
+     const zero = { gold: 0, xp: 0, loot: 0, speed: 0 };
+     if (heroes.length === 0) return zero;
+-    const all = heroes.map((h) => sumMods(HeroManager.heroMods(h, now), ModifierManager.global(state)));
+-    const avg = (key: 'gold' | 'xp' | 'loot' | 'speed') => all.reduce((sum, m) => sum + (m[key] ?? 0), 0) / all.length;
+-    return { gold: avg('gold'), xp: avg('xp'), loot: avg('loot'), speed: avg('speed') };
++    const withGlobal = heroes.map((h) => sumMods(HeroManager.heroMods(h, now), ModifierManager.global(state)));
++    const personalOnly = heroes.map((h) => HeroManager.heroMods(h, now));
++    const avg = (arr: Modifiers[], key: keyof Modifiers) =>
++      arr.reduce((sum, m) => sum + (m[key] ?? 0), 0) / arr.length;
++    return {
++      gold: avg(withGlobal, 'gold'),
++      xp: avg(withGlobal, 'xp'),
++      loot: avg(withGlobal, 'loot'),
++      speed: avg(personalOnly, 'speed'),
++    };
+   },
+ 
+   /** Preview odds for one specific encounter, given a prospective party -- used by the UI before committing. */
+@@ -56,15 +75,21 @@ export const RaidManager = {
+     return clamp(encounter.baseSuccess - penalty + bonus, MIN_SUCCESS, MAX_SUCCESS);
+   },
+ 
+-  /** Total raid duration for a prospective party, after the party's averaged speed contribution. */
+-  previewDuration(state: GameState, heroIds: string[], raidId: string, now: number): number {
++  /**
++   * Total raid duration for a prospective party at a given difficulty --
++   * the tier's own durationMultiplier applies first (harder tiers take
++   * longer, independent of party build), then the party's own speed
++   * contribution (personal only, see partyEconomyMods) on top.
++   */
++  previewDuration(state: GameState, heroIds: string[], raidId: string, difficulty: RaidDifficulty, now: number): number {
+     const raid = RAID_BY_ID[raidId];
+     if (!raid) return 0;
+     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)).filter((h): h is Hero => !!h);
+     const speed = RaidManager.partyEconomyMods(state, heroes, now).speed;
+     const factor = clamp(1 - speed / 100, 0.25, 1.75);
+     const total = raid.encounterIds.reduce((sum, id) => sum + (RAID_ENCOUNTER_BY_ID[id]?.duration ?? 0), 0);
+-    return Math.max(MINUTE, Math.floor(total * factor));
++    const tierScaled = total * RAID_DIFFICULTIES[difficulty].durationMultiplier;
++    return Math.max(MINUTE, Math.floor(tierScaled * factor));
+   },
+ 
+   /** Validates a prospective raid commit without side effects. */
+@@ -96,7 +121,7 @@ export const RaidManager = {
+ 
+     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)!);
+     const partySuccessBonus = RaidManager.partySuccessBonus(state, heroes, now);
+-    const duration = RaidManager.previewDuration(state, heroIds, raidId, now);
++    const duration = RaidManager.previewDuration(state, heroIds, raidId, difficulty, now);
+ 
+     const active: ActiveRaid = {
+       raidId, difficulty, heroIds,
+diff --git a/src/game/types.ts b/src/game/types.ts
+index dc56082..dd3438f 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -303,6 +303,17 @@ export interface RaidDifficultyConfig {
+    * just bigger gold/xp.
+    */
+   lootBonus: number;
++  /**
++   * Multiplies total raid duration -- harder tiers take longer too, not
++   * just riskier and better-paying. Applied before the party's own speed
++   * factor, which (for raids specifically) no longer includes account-wide
++   * quest-speed upgrades like Mounted Travel -- see partyEconomyMods in
++   * RaidManager. Guild-wide speed investment collapsing a 9-hour raid to
++   * its 25% floor by default wasn't the intended interaction; raids are
++   * meant to have their own separate speed levers eventually (dedicated
++   * Raid Upgrades), not inherit quest ones for free.
++   */
++  durationMultiplier: number;
+ }
+ 
+ /** A raid attempt in progress. Locked in at commit time, resolved encounter by encounter. */
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index ed825b4..4583639 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -134,7 +134,7 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId:
+     ? selectedHeroIds
+     : idleHeroes.slice(0, cfg?.partySize ?? 0).map((h) => h.id);
+   const previewDuration = difficulty && previewHeroIds.length > 0
+-    ? RaidManager.previewDuration(state, previewHeroIds, raid.id, now)
++    ? RaidManager.previewDuration(state, previewHeroIds, raid.id, difficulty, now)
+     : null;
+ 
+   const [confirming, setConfirming] = useState(false);
+@@ -198,7 +198,10 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId:
+                   {encSuccess !== null && (
+                     <div className="tiny muted" style={{ marginTop: 2 }}>
+                       Success <b className={encSuccess >= 60 ? 'good' : encSuccess >= 35 ? '' : 'bad'}>{Math.round(encSuccess)}%</b>
+-                      {' · '}Time <b>{formatDuration(enc.duration)}</b>
++                      {/* Difficulty-scaled (harder tiers take longer per encounter too),
++                          but not party-speed-adjusted -- that adjustment only shows in
++                          the aggregate "Total time" below, same as before. */}
++                      {' · '}Time <b>{formatDuration(enc.duration * (difficulty ? RAID_DIFFICULTIES[difficulty].durationMultiplier : 1))}</b>
+                     </div>
+                   )}
+                   <LootPreview encounterId={id} difficulty={difficulty} onShowItem={onShowItem} />

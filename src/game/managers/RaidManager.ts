@@ -1,5 +1,5 @@
 import {
-  ActiveRaid, GameState, Hero, RaidDifficulty, RaidLootDrop, RaidResult,
+  ActiveRaid, GameState, Hero, Modifiers, RaidDifficulty, RaidLootDrop, RaidResult,
 } from '../types';
 import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, lootForDifficulty } from '../data/raids';
 import { EQUIPMENT_BY_ID } from '../data/equipment';
@@ -35,13 +35,32 @@ export const RaidManager = {
    * the party instead -- these aren't a pass/fail gate the way success is,
    * just a shared payout, so there's no reason to punish a party for one
    * hero being behind on gear the way the success calculation does.
+   *
+   * speed is deliberately computed differently from the other three: it
+   * excludes ModifierManager.global (guild/vendor/renown upgrades), using
+   * only each hero's own personal speed (stats + equipment). Quest-speed
+   * upgrades like Mounted Travel were silently also collapsing raid
+   * duration to its 25% floor by default -- a maxed Mounted Travel (+60%)
+   * alone gets most of the way there before any hero-specific investment
+   * even factors in. Raids are meant to have their own separate speed
+   * levers eventually (dedicated Raid Upgrades, not yet built); until then,
+   * raid duration only responds to the party's own stats/gear, not the
+   * guild's general quest infrastructure. gold/xp/loot are unaffected and
+   * still include account-wide bonuses as before.
    */
   partyEconomyMods(state: GameState, heroes: Hero[], now: number) {
     const zero = { gold: 0, xp: 0, loot: 0, speed: 0 };
     if (heroes.length === 0) return zero;
-    const all = heroes.map((h) => sumMods(HeroManager.heroMods(h, now), ModifierManager.global(state)));
-    const avg = (key: 'gold' | 'xp' | 'loot' | 'speed') => all.reduce((sum, m) => sum + (m[key] ?? 0), 0) / all.length;
-    return { gold: avg('gold'), xp: avg('xp'), loot: avg('loot'), speed: avg('speed') };
+    const withGlobal = heroes.map((h) => sumMods(HeroManager.heroMods(h, now), ModifierManager.global(state)));
+    const personalOnly = heroes.map((h) => HeroManager.heroMods(h, now));
+    const avg = (arr: Modifiers[], key: keyof Modifiers) =>
+      arr.reduce((sum, m) => sum + (m[key] ?? 0), 0) / arr.length;
+    return {
+      gold: avg(withGlobal, 'gold'),
+      xp: avg(withGlobal, 'xp'),
+      loot: avg(withGlobal, 'loot'),
+      speed: avg(personalOnly, 'speed'),
+    };
   },
 
   /** Preview odds for one specific encounter, given a prospective party -- used by the UI before committing. */
@@ -56,15 +75,21 @@ export const RaidManager = {
     return clamp(encounter.baseSuccess - penalty + bonus, MIN_SUCCESS, MAX_SUCCESS);
   },
 
-  /** Total raid duration for a prospective party, after the party's averaged speed contribution. */
-  previewDuration(state: GameState, heroIds: string[], raidId: string, now: number): number {
+  /**
+   * Total raid duration for a prospective party at a given difficulty --
+   * the tier's own durationMultiplier applies first (harder tiers take
+   * longer, independent of party build), then the party's own speed
+   * contribution (personal only, see partyEconomyMods) on top.
+   */
+  previewDuration(state: GameState, heroIds: string[], raidId: string, difficulty: RaidDifficulty, now: number): number {
     const raid = RAID_BY_ID[raidId];
     if (!raid) return 0;
     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)).filter((h): h is Hero => !!h);
     const speed = RaidManager.partyEconomyMods(state, heroes, now).speed;
     const factor = clamp(1 - speed / 100, 0.25, 1.75);
     const total = raid.encounterIds.reduce((sum, id) => sum + (RAID_ENCOUNTER_BY_ID[id]?.duration ?? 0), 0);
-    return Math.max(MINUTE, Math.floor(total * factor));
+    const tierScaled = total * RAID_DIFFICULTIES[difficulty].durationMultiplier;
+    return Math.max(MINUTE, Math.floor(tierScaled * factor));
   },
 
   /** Validates a prospective raid commit without side effects. */
@@ -96,7 +121,7 @@ export const RaidManager = {
 
     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)!);
     const partySuccessBonus = RaidManager.partySuccessBonus(state, heroes, now);
-    const duration = RaidManager.previewDuration(state, heroIds, raidId, now);
+    const duration = RaidManager.previewDuration(state, heroIds, raidId, difficulty, now);
 
     const active: ActiveRaid = {
       raidId, difficulty, heroIds,

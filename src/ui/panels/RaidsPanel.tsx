@@ -134,7 +134,7 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: 
     ? selectedHeroIds
     : idleHeroes.slice(0, cfg?.partySize ?? 0).map((h) => h.id);
   const previewDuration = difficulty && previewHeroIds.length > 0
-    ? RaidManager.previewDuration(state, previewHeroIds, raid.id, now)
+    ? RaidManager.previewDuration(state, previewHeroIds, raid.id, difficulty, now)
     : null;
 
   const [confirming, setConfirming] = useState(false);
@@ -198,7 +198,10 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: 
                   {encSuccess !== null && (
                     <div className="tiny muted" style={{ marginTop: 2 }}>
                       Success <b className={encSuccess >= 60 ? 'good' : encSuccess >= 35 ? '' : 'bad'}>{Math.round(encSuccess)}%</b>
-                      {' · '}Time <b>{formatDuration(enc.duration)}</b>
+                      {/* Difficulty-scaled (harder tiers take longer per encounter too),
+                          but not party-speed-adjusted -- that adjustment only shows in
+                          the aggregate "Total time" below, same as before. */}
+                      {' · '}Time <b>{formatDuration(enc.duration * (difficulty ? RAID_DIFFICULTIES[difficulty].durationMultiplier : 1))}</b>
                     </div>
                   )}
                   <LootPreview encounterId={id} difficulty={difficulty} onShowItem={onShowItem} />

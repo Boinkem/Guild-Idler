@@ -303,6 +303,17 @@ export interface RaidDifficultyConfig {
    * just bigger gold/xp.
    */
   lootBonus: number;
+  /**
+   * Multiplies total raid duration -- harder tiers take longer too, not
+   * just riskier and better-paying. Applied before the party's own speed
+   * factor, which (for raids specifically) no longer includes account-wide
+   * quest-speed upgrades like Mounted Travel -- see partyEconomyMods in
+   * RaidManager. Guild-wide speed investment collapsing a 9-hour raid to
+   * its 25% floor by default wasn't the intended interaction; raids are
+   * meant to have their own separate speed levers eventually (dedicated
+   * Raid Upgrades), not inherit quest ones for free.
+   */
+  durationMultiplier: number;
 }
 
 /** A raid attempt in progress. Locked in at commit time, resolved encounter by encounter. */

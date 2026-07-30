@@ -48,9 +48,12 @@ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
   // success below the floor before the party's own bonus even applies.
   // The 9-hero party bonus is the intended counterweight, not a numbers
   // mistake -- confirmed as the deliberate design, not something to soften.
-  normal: { difficulty: 'normal', partySize: 3, successPenalty: 0, rewardMultiplier: 1, lootBonus: 0 },
-  heroic: { difficulty: 'heroic', partySize: 6, successPenalty: 20, rewardMultiplier: 2.2, lootBonus: 5 },
-  mythic: { difficulty: 'mythic', partySize: 9, successPenalty: 50, rewardMultiplier: 4, lootBonus: 15 },
+  // durationMultiplier: harder tiers take longer too -- normal 2h becomes
+  // 2.3h at Heroic, 2.6h at Mythic (i.e. x1.15 / x1.3), matching the given
+  // example exactly.
+  normal: { difficulty: 'normal', partySize: 3, successPenalty: 0, rewardMultiplier: 1, lootBonus: 0, durationMultiplier: 1 },
+  heroic: { difficulty: 'heroic', partySize: 6, successPenalty: 20, rewardMultiplier: 2.2, lootBonus: 5, durationMultiplier: 1.15 },
+  mythic: { difficulty: 'mythic', partySize: 9, successPenalty: 50, rewardMultiplier: 4, lootBonus: 15, durationMultiplier: 1.3 },
 };
 
 export const RAID_DIFFICULTY_ORDER: RaidDifficulty[] = ['normal', 'heroic', 'mythic'];
