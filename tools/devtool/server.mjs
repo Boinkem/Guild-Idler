@@ -147,6 +147,11 @@ const SCHEMAS = {
       // (browsing /api/data/equipment) instead of a plain text-list editor.
       // See renderLootField in app.js.
       loot: { type: 'string[]', required: false, picker: 'lootTable' },
+      // Optional -- an encounter with nothing here just uses `loot` at
+      // every difficulty, same as before tiered pools existed. Same
+      // picker, so filling these in is exactly as easy as the base list.
+      lootHeroic: { type: 'string[]', required: false, picker: 'lootTable' },
+      lootMythic: { type: 'string[]', required: false, picker: 'lootTable' },
     },
   },
   'raids': {

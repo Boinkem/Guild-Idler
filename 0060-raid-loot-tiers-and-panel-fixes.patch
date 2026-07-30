@@ -1,0 +1,2899 @@
+diff --git a/src/game/data/json/equipment.json b/src/game/data/json/equipment.json
+index 562a262..2da6aad 100644
+--- a/src/game/data/json/equipment.json
++++ b/src/game/data/json/equipment.json
+@@ -1160,5 +1160,379 @@
+     "stats": {
+       "luck": 3
+     }
++  },
++  {
++    "id": "gravewatchers_band_heroic",
++    "name": "Gravewatcher's Band (Heroic)",
++    "slot": "ring",
++    "rarity": "epic",
++    "reqLevel": 19,
++    "maxDurability": 247,
++    "value": 2535,
++    "mods": {
++      "injuryResist": 18,
++      "success": 8,
++      "loot": 6
++    },
++    "stats": {
++      "wisdom": 6,
++      "endurance": 4
++    }
++  },
++  {
++    "id": "gravewatchers_band_mythic",
++    "name": "Gravewatcher's Band (Mythic)",
++    "slot": "ring",
++    "rarity": "epic",
++    "reqLevel": 19,
++    "maxDurability": 321,
++    "value": 3296,
++    "mods": {
++      "injuryResist": 24,
++      "success": 10,
++      "loot": 8
++    },
++    "stats": {
++      "wisdom": 8,
++      "endurance": 5
++    }
++  },
++  {
++    "id": "ashwoven_charm_heroic",
++    "name": "Ashwoven Charm (Heroic)",
++    "slot": "amulet",
++    "rarity": "rare",
++    "reqLevel": 11,
++    "maxDurability": 169,
++    "value": 650,
++    "mods": {
++      "success": 8,
++      "injuryResist": 10
++    },
++    "stats": {
++      "wisdom": 5
++    }
++  },
++  {
++    "id": "ashwoven_charm_mythic",
++    "name": "Ashwoven Charm (Mythic)",
++    "slot": "amulet",
++    "rarity": "rare",
++    "reqLevel": 11,
++    "maxDurability": 220,
++    "value": 845,
++    "mods": {
++      "success": 10,
++      "injuryResist": 14
++    },
++    "stats": {
++      "wisdom": 7
++    }
++  },
++  {
++    "id": "choir_mask_heroic",
++    "name": "Mask of the Hollow Choir (Heroic)",
++    "slot": "helmet",
++    "rarity": "epic",
++    "reqLevel": 24,
++    "maxDurability": 162,
++    "value": 2990,
++    "mods": {
++      "xp": 26,
++      "loot": 13,
++      "injuryResist": 8
++    },
++    "stats": {
++      "wisdom": 12
++    }
++  },
++  {
++    "id": "choir_mask_mythic",
++    "name": "Mask of the Hollow Choir (Mythic)",
++    "slot": "helmet",
++    "rarity": "epic",
++    "reqLevel": 24,
++    "maxDurability": 211,
++    "value": 3887,
++    "mods": {
++      "xp": 34,
++      "loot": 17,
++      "injuryResist": 10
++    },
++    "stats": {
++      "wisdom": 15
++    }
++  },
++  {
++    "id": "silenced_bell_heroic",
++    "name": "The Silenced Bell (Heroic)",
++    "slot": "amulet",
++    "rarity": "epic",
++    "reqLevel": 24,
++    "maxDurability": 169,
++    "value": 3120,
++    "mods": {
++      "success": 13,
++      "gold": 26
++    },
++    "stats": {
++      "wisdom": 8,
++      "luck": 6
++    }
++  },
++  {
++    "id": "silenced_bell_mythic",
++    "name": "The Silenced Bell (Mythic)",
++    "slot": "amulet",
++    "rarity": "epic",
++    "reqLevel": 24,
++    "maxDurability": 220,
++    "value": 4056,
++    "mods": {
++      "success": 17,
++      "gold": 34
++    },
++    "stats": {
++      "wisdom": 10,
++      "luck": 8
++    }
++  },
++  {
++    "id": "dragon_helm_heroic",
++    "name": "Dragonscale Helm (Heroic)",
++    "slot": "helmet",
++    "rarity": "legendary",
++    "reqLevel": 25,
++    "maxDurability": 247,
++    "value": 8320,
++    "mods": {
++      "injuryResist": 26,
++      "success": 10
++    },
++    "stats": {
++      "endurance": 12
++    }
++  },
++  {
++    "id": "dragon_helm_mythic",
++    "name": "Dragonscale Helm (Mythic)",
++    "slot": "helmet",
++    "rarity": "legendary",
++    "reqLevel": 25,
++    "maxDurability": 321,
++    "value": 10816,
++    "mods": {
++      "injuryResist": 34,
++      "success": 14
++    },
++    "stats": {
++      "endurance": 15
++    }
++  },
++  {
++    "id": "copper_band_heroic",
++    "name": "Copper Band (Heroic)",
++    "slot": "ring",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 78,
++    "value": 39,
++    "mods": {
++      "loot": 1
++    }
++  },
++  {
++    "id": "copper_band_mythic",
++    "name": "Copper Band (Mythic)",
++    "slot": "ring",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 101,
++    "value": 51,
++    "mods": {
++      "loot": 2
++    }
++  },
++  {
++    "id": "work_gloves_heroic",
++    "name": "Work Gloves (Heroic)",
++    "slot": "gloves",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 39,
++    "value": 26,
++    "mods": {
++      "gold": 4
++    }
++  },
++  {
++    "id": "work_gloves_mythic",
++    "name": "Work Gloves (Mythic)",
++    "slot": "gloves",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 51,
++    "value": 34,
++    "mods": {
++      "gold": 5
++    }
++  },
++  {
++    "id": "knights_blade_heroic",
++    "name": "Knight's Blade (Heroic)",
++    "slot": "weapon",
++    "rarity": "uncommon",
++    "reqLevel": 5,
++    "maxDurability": 91,
++    "value": 208,
++    "mods": {
++      "success": 6,
++      "gold": 5
++    },
++    "stats": {
++      "strength": 4
++    }
++  },
++  {
++    "id": "knights_blade_mythic",
++    "name": "Knight's Blade (Mythic)",
++    "slot": "weapon",
++    "rarity": "uncommon",
++    "reqLevel": 5,
++    "maxDurability": 118,
++    "value": 270,
++    "mods": {
++      "success": 8,
++      "gold": 7
++    },
++    "stats": {
++      "strength": 5
++    }
++  },
++  {
++    "id": "iron_helm_heroic",
++    "name": "Iron Helm (Heroic)",
++    "slot": "helmet",
++    "rarity": "uncommon",
++    "reqLevel": 4,
++    "maxDurability": 78,
++    "value": 182,
++    "mods": {
++      "injuryResist": 9,
++      "success": 3
++    },
++    "stats": {
++      "endurance": 3
++    }
++  },
++  {
++    "id": "iron_helm_mythic",
++    "name": "Iron Helm (Mythic)",
++    "slot": "helmet",
++    "rarity": "uncommon",
++    "reqLevel": 4,
++    "maxDurability": 101,
++    "value": 237,
++    "mods": {
++      "injuryResist": 12,
++      "success": 3
++    },
++    "stats": {
++      "endurance": 3
++    }
++  },
++  {
++    "id": "chainmail_heroic",
++    "name": "Chainmail Hauberk (Heroic)",
++    "slot": "chest",
++    "rarity": "uncommon",
++    "reqLevel": 6,
++    "maxDurability": 98,
++    "value": 273,
++    "mods": {
++      "injuryResist": 12,
++      "success": 4
++    },
++    "stats": {
++      "endurance": 4
++    }
++  },
++  {
++    "id": "chainmail_mythic",
++    "name": "Chainmail Hauberk (Mythic)",
++    "slot": "chest",
++    "rarity": "uncommon",
++    "reqLevel": 6,
++    "maxDurability": 127,
++    "value": 355,
++    "mods": {
++      "injuryResist": 15,
++      "success": 5
++    },
++    "stats": {
++      "endurance": 5
++    }
++  },
++  {
++    "id": "ranger_boots_heroic",
++    "name": "Ranger Boots (Heroic)",
++    "slot": "boots",
++    "rarity": "uncommon",
++    "reqLevel": 4,
++    "maxDurability": 75,
++    "value": 176,
++    "mods": {
++      "speed": 9
++    },
++    "stats": {
++      "endurance": 3
++    }
++  },
++  {
++    "id": "ranger_boots_mythic",
++    "name": "Ranger Boots (Mythic)",
++    "slot": "boots",
++    "rarity": "uncommon",
++    "reqLevel": 4,
++    "maxDurability": 98,
++    "value": 228,
++    "mods": {
++      "speed": 12
++    },
++    "stats": {
++      "endurance": 3
++    }
++  },
++  {
++    "id": "tollkeepers_signet_heroic",
++    "name": "Tollkeeper's Signet (Heroic)",
++    "slot": "ring",
++    "rarity": "uncommon",
++    "reqLevel": 7,
++    "maxDurability": 98,
++    "value": 195,
++    "mods": {
++      "success": 6,
++      "gold": 10
++    },
++    "stats": {
++      "luck": 4
++    }
++  },
++  {
++    "id": "tollkeepers_signet_mythic",
++    "name": "Tollkeeper's Signet (Mythic)",
++    "slot": "ring",
++    "rarity": "uncommon",
++    "reqLevel": 7,
++    "maxDurability": 127,
++    "value": 254,
++    "mods": {
++      "success": 8,
++      "gold": 14
++    },
++    "stats": {
++      "luck": 5
++    }
+   }
+ ]
+diff --git a/src/game/data/json/raid-encounters.json b/src/game/data/json/raid-encounters.json
+index 3dd23ea..8e9979d 100644
+--- a/src/game/data/json/raid-encounters.json
++++ b/src/game/data/json/raid-encounters.json
+@@ -10,6 +10,14 @@
+     "loot": [
+       "gravewatchers_band@10",
+       "ashwoven_charm@8"
++    ],
++    "lootHeroic": [
++      "gravewatchers_band_heroic@10",
++      "ashwoven_charm_heroic@8"
++    ],
++    "lootMythic": [
++      "gravewatchers_band_mythic@10",
++      "ashwoven_charm_mythic@8"
+     ]
+   },
+   {
+@@ -23,6 +31,14 @@
+     "loot": [
+       "choir_mask@6",
+       "silenced_bell@6"
++    ],
++    "lootHeroic": [
++      "choir_mask_heroic@6",
++      "silenced_bell_heroic@6"
++    ],
++    "lootMythic": [
++      "choir_mask_mythic@6",
++      "silenced_bell_mythic@6"
+     ]
+   },
+   {
+@@ -37,6 +53,16 @@
+       "dragon_helm@4",
+       "gravewatchers_band@5",
+       "choir_mask@5"
++    ],
++    "lootHeroic": [
++      "dragon_helm_heroic@4",
++      "gravewatchers_band_heroic@5",
++      "choir_mask_heroic@5"
++    ],
++    "lootMythic": [
++      "dragon_helm_mythic@4",
++      "gravewatchers_band_mythic@5",
++      "choir_mask_mythic@5"
+     ]
+   },
+   {
+@@ -50,6 +76,14 @@
+     "loot": [
+       "copper_band@12",
+       "work_gloves@10"
++    ],
++    "lootHeroic": [
++      "copper_band_heroic@12",
++      "work_gloves_heroic@10"
++    ],
++    "lootMythic": [
++      "copper_band_mythic@12",
++      "work_gloves_mythic@10"
+     ]
+   },
+   {
+@@ -63,6 +97,14 @@
+     "loot": [
+       "knights_blade@6",
+       "iron_helm@8"
++    ],
++    "lootHeroic": [
++      "knights_blade_heroic@6",
++      "iron_helm_heroic@8"
++    ],
++    "lootMythic": [
++      "knights_blade_mythic@6",
++      "iron_helm_mythic@8"
+     ]
+   },
+   {
+@@ -77,6 +119,16 @@
+       "chainmail@6",
+       "ranger_boots@6",
+       "tollkeepers_signet@4"
++    ],
++    "lootHeroic": [
++      "chainmail_heroic@6",
++      "ranger_boots_heroic@6",
++      "tollkeepers_signet_heroic@4"
++    ],
++    "lootMythic": [
++      "chainmail_mythic@6",
++      "ranger_boots_mythic@6",
++      "tollkeepers_signet_mythic@4"
+     ]
+   }
+ ]
+diff --git a/src/game/data/raids.ts b/src/game/data/raids.ts
+index fa16c24..30ddcd9 100644
+--- a/src/game/data/raids.ts
++++ b/src/game/data/raids.ts
+@@ -81,6 +81,17 @@ export function parseLootEntry(entry: string): { defId: string; chance: number }
+   return { defId, chance };
+ }
+ 
++/** The loot pool actually in play for a given difficulty -- lootHeroic/
++ *  lootMythic if the encounter defines one, otherwise the same base `loot`
++ *  every difficulty used before tiered pools existed. Used identically by
++ *  both the real roll (RaidManager.resolve) and the UI preview, so what's
++ *  shown always matches what can actually drop. */
++export function lootForDifficulty(encounter: RaidEncounterDef, difficulty: RaidDifficulty): string[] {
++  if (difficulty === 'heroic') return encounter.lootHeroic ?? encounter.loot;
++  if (difficulty === 'mythic') return encounter.lootMythic ?? encounter.loot;
++  return encounter.loot;
++}
++
+ /** Raids visible in the UI: this one, plus any not-yet-reached raid another
+  *  completed raid points at via unlocksRaidId -- shown greyed-out with the
+  *  name/rewards hidden until actually unlocked, same "???" treatment used
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+new file mode 100644
+index 0000000..aad690c
+--- /dev/null
++++ b/src/game/engine.ts
+@@ -0,0 +1,915 @@
++import { ActiveQuest, GameState, Hero, HeroClass, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult } from './types';
++import { createRng, uid } from './rng';
++import { HeroManager } from './managers/HeroManager';
++import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
++import { RaidManager } from './managers/RaidManager';
++import { ShopManager } from './managers/ShopManager';
++import { SaveManager, SaveAdapter, defaultAdapter, createInitialState } from './managers/SaveManager';
++import { EquipmentManager } from './managers/EquipmentManager';
++import { InventoryManager } from './managers/InventoryManager';
++import { GuildManager } from './managers/GuildManager';
++import { PrestigeManager } from './managers/PrestigeManager';
++import { ModifierManager } from './managers/ModifierManager';
++import { AchievementManager } from './managers/AchievementManager';
++import { GuidanceManager, GuidanceTopic } from './managers/GuidanceManager';
++import { SKIN_BY_ID, SKIN_PRICE, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
++import { EQUIPMENT_BY_ID, SET_BY_ID } from './data/equipment';
++import { RAID_BY_ID } from './data/raids';
++import { playSound } from './sound';
++import { TESTING_TOOLS_ENABLED } from './testingTools';
++
++const TICK_MS = 1000;
++const AUTOSAVE_MS = 15_000;
++
++export interface OfflineReport {
++  elapsedMs: number;
++  results: QuestResult[];
++  raidResults: RaidResult[];
++  goldGained: number;
++  xpGained: number;
++}
++
++/** Data for the "Story Chain Complete" overlay -- transient like lastResult
++ *  and offlineReport, not part of GameState/the save. */
++export interface ChainCelebration {
++  chainId: string;
++  chainName: string;
++  title?: string;
++  rewardGold: number;
++  rewardRenown: number;
++  items: { defId: string; name: string; rarity: Rarity }[];
++}
++
++type Listener = () => void;
++
++/**
++ * The engine owns the single mutable GameState. React never mutates it directly;
++ * it calls actions here and re-renders on notify(). Keeping mutation in one
++ * place makes offline catch-up and live play share exactly the same code path.
++ */
++export class GameEngine {
++  state: GameState;
++  offlineReport: OfflineReport | null = null;
++  lastResult: QuestResult | null = null;
++  lastRaidResult: RaidResult | null = null;
++  /**
++   * Queued rather than a single overwritable value -- simultaneous events
++   * (a quest finishing right as it unlocks something) now show one after
++   * another instead of the second silently clobbering the first. `toast`
++   * stays a plain getter reading the front of the queue, so Toast.tsx
++   * needs zero changes: `engine.toast` behaves exactly as it always has,
++   * it just advances instead of going straight to null.
++   */
++  private toastQueue: string[] = [];
++  get toast(): string | null {
++    return this.toastQueue[0] ?? null;
++  }
++  /**
++   * Set the moment a chain's final stage resolves successfully, cleared by
++   * dismissChainCelebration. Separate from lastResult -- a chain completion
++   * gets its own full "Story Chain Complete" overlay (see ChainCompleteModal)
++   * rather than being folded into the regular per-quest result card.
++   */
++  completedChainCelebration: ChainCelebration | null = null;
++  /**
++   * Transient (unsaved) request to open the menu on a specific tab -- e.g.
++   * "View in Lore" on a chain-completion result. Not part of GameState since
++   * it's a one-shot UI intent, not save data. Consumed once by MenuWindow on
++   * mount, same pattern as lastResult/toast being read-then-cleared.
++   */
++  requestedTab: string | null = null;
++
++  private listeners = new Set<Listener>();
++  private timer: number | null = null;
++  private lastTick = Date.now();
++  private lastSave = 0;
++  private adapter: SaveAdapter;
++
++  constructor(state: GameState, adapter: SaveAdapter = defaultAdapter()) {
++    this.state = state;
++    this.adapter = adapter;
++  }
++
++  static async boot(adapter: SaveAdapter = defaultAdapter()): Promise<GameEngine> {
++    const { state, isNew } = await SaveManager.load(adapter);
++    const engine = new GameEngine(state, adapter);
++    if (!isNew) engine.catchUpOffline();
++    engine.refreshWorld(Date.now());
++    engine.start();
++    return engine;
++  }
++
++  /* --------------------------- subscriptions --------------------------- */
++
++  subscribe(listener: Listener): () => void {
++    this.listeners.add(listener);
++    return () => this.listeners.delete(listener);
++  }
++
++  private notify() {
++    for (const listener of this.listeners) listener();
++  }
++
++  /** Archives every message into the persistent notification log, capped
++   *  at 100, regardless of whether the toast queue is currently empty. */
++  private archive(message: string) {
++    this.state.notifications.unshift({ id: uid('note'), message, timestamp: Date.now() });
++    if (this.state.notifications.length > 100) this.state.notifications.length = 100;
++  }
++
++  private say(message: string) {
++    this.archive(message);
++    this.toastQueue.push(message);
++    this.notify();
++  }
++
++  /** Fires every message a newly-triggered guidance topic has, in order,
++   *  onto the same toast queue -- see GuidanceManager for the topics
++   *  themselves. */
++  private reportGuidance(topics: GuidanceTopic[]) {
++    for (const topic of topics) {
++      for (const message of topic.messages) this.say(message);
++    }
++  }
++
++  /** Sound, toast, and the Steam stub, for every achievement id that just unlocked. */
++  private reportAchievements(ids: string[]) {
++    if (ids.length === 0) return;
++    for (const id of ids) {
++      const def = AchievementManager.list().find((a) => a.id === id);
++      playSound('achievement');
++      this.say(`Achievement unlocked: ${def?.name ?? id}`);
++      void window.littleKnight?.unlockAchievement(id);
++    }
++  }
++
++  /**
++   * Called right after a quest resolves for a hero with an active Auto-Chain
++   * streak. Either starts the next quest and extends the streak, or ends it
++   * (cap reached, upgrade somehow no longer active, or nothing eligible on
++   * the board) and resets the hero's counters. Shared by live tick() and
++   * offline catch-up — offline continuation works the same way, just without
++   * the toast/sound treatment live play gets, and using generateBoard's own
++   * time-seeded determinism to reproduce what the board would have shown at
++   * that historical moment rather than needing a separate simulation.
++   */
++  private tryContinueAutoChain(hero: Hero, now: number): { continued: boolean; completedCount: number; target: number } | null {
++    if (hero.autoChainTarget === null) return null;
++    const target = hero.autoChainTarget;
++
++    const giveUp = (): { continued: boolean; completedCount: number; target: number } => {
++      const completedCount = hero.autoChainCount;
++      hero.autoChainTarget = null;
++      hero.autoChainCount = 0;
++      return { continued: false, completedCount, target };
++    };
++
++    if (hero.autoChainCount >= target) return giveUp();
++    const level = this.state.upgrades['auto_chain'] ?? 0;
++    if (level <= 0) return giveUp();
++
++    this.state.questBoard = QuestManager.generateBoard(this.state, now);
++    const offer = QuestManager.pickBestQuest(this.state, hero, now);
++    if (!offer) return giveUp();
++
++    const { error } = QuestManager.start(this.state, hero, offer, [], now);
++    if (error) return giveUp();
++
++    hero.autoChainCount += 1;
++    return { continued: true, completedCount: hero.autoChainCount, target };
++  }
++
++  clearToast() {
++    this.toastQueue.shift();
++    this.notify();
++  }
++
++  /**
++   * Public entry point for a UI-triggered informational toast that isn't
++   * tied to a specific game action -- everything else reaches the queue
++   * through the private say() called internally by recruit/repair/start
++   * quest/etc. This is for things like "discover this item first" on an
++   * undiscovered raid loot entry, which isn't really an "action" with a
++   * success/failure outcome, just a nudge.
++   */
++  showToast(message: string) {
++    this.say(message);
++  }
++
++  dismissOfflineReport() {
++    this.offlineReport = null;
++    this.notify();
++  }
++
++  dismissResult() {
++    this.lastResult = null;
++    this.notify();
++  }
++
++  dismissRaidResult() {
++    this.lastRaidResult = null;
++    this.notify();
++  }
++
++  dismissChainCelebration() {
++    this.completedChainCelebration = null;
++    this.notify();
++  }
++
++  /* ------------------------------ lifecycle ---------------------------- */
++
++  start() {
++    if (this.timer !== null) return;
++    this.lastTick = Date.now();
++    this.timer = window.setInterval(() => this.tick(), TICK_MS);
++  }
++
++  stop() {
++    if (this.timer !== null) window.clearInterval(this.timer);
++    this.timer = null;
++  }
++
++  private tick() {
++    const now = Date.now();
++    const delta = now - this.lastTick;
++    this.lastTick = now;
++
++    this.state.stats.playTimeMs += Math.max(0, Math.min(delta, TICK_MS * 5));
++    this.state.lastSeen = now;
++
++    let changed = false;
++    for (const hero of this.state.heroes) {
++      const before = hero.injuries.length;
++      HeroManager.pruneInjuries(hero, now);
++      if (hero.injuries.length !== before) changed = true;
++    }
++
++    const due = this.state.activeQuests.filter((q) => q.endsAt <= now);
++    for (const quest of due) {
++      const result = QuestManager.resolve(this.state, quest, quest.endsAt);
++      this.lastResult = result;
++      changed = true;
++      // Biggest news first, and only one cue per resolution — a chain
++      // completion is a bigger deal than a routine level-up, which is a
++      // bigger deal than a plain success. Offline catch-up never reaches
++      // here, so this only fires for quests you were actually watching.
++      if (result.chainAdvanced?.completed) {
++        playSound('chain_complete');
++        const chain = CHAIN_BY_ID[result.chainAdvanced.chainId];
++        if (chain) {
++          this.completedChainCelebration = {
++            chainId: chain.id,
++            chainName: chain.name,
++            title: chain.title,
++            rewardGold: chain.rewardGold,
++            rewardRenown: chain.rewardRenown,
++            items: chain.rewardItems
++              .map((defId) => {
++                const def = EQUIPMENT_BY_ID[defId];
++                return def ? { defId, name: def.name, rarity: def.rarity } : null;
++              })
++              .filter((x): x is { defId: string; name: string; rarity: Rarity } => x !== null),
++          };
++        }
++      } else if (result.loot.some((l) => l.rarity === 'legendary')) playSound('legendary_drop');
++      else if (result.levelsGained > 0) playSound('level_up');
++      else playSound(result.success ? 'quest_success' : 'quest_fail');
++      this.reportAchievements(AchievementManager.checkAll(this.state, now));
++      this.reportGuidance(GuidanceManager.checkAll(this.state));
++
++      const chainHero = this.state.heroes.find((h) => h.id === quest.heroId);
++      if (chainHero) {
++        const chainResult = this.tryContinueAutoChain(chainHero, now);
++        if (chainResult) {
++          if (chainResult.continued) {
++            playSound('depart');
++            this.say(`${chainHero.name} keeps going — ${chainResult.completedCount}/${chainResult.target} in this streak.`);
++          } else {
++            playSound('chain_complete');
++            const n = chainResult.completedCount;
++            this.say(`${chainHero.name} has chained ${n} quest${n === 1 ? '' : 's'} and is waiting for new orders.`);
++          }
++        }
++      }
++    }
++
++    if (this.state.activeRaid && this.state.activeRaid.endsAt <= now) {
++      const raidResult = RaidManager.resolve(this.state, this.state.activeRaid, now);
++      this.lastRaidResult = raidResult;
++      changed = true;
++      playSound(raidResult.fullClear ? 'chain_complete' : raidResult.encountersCleared > 0 ? 'quest_success' : 'quest_fail');
++      this.reportAchievements(AchievementManager.checkAll(this.state, now));
++      this.reportGuidance(GuidanceManager.checkAll(this.state));
++    }
++
++    if (this.refreshWorld(now)) changed = true;
++
++    if (now - this.lastSave >= AUTOSAVE_MS) {
++      this.lastSave = now;
++      void SaveManager.save(this.adapter, this.state);
++    }
++
++    // Timers tick every second regardless, so always notify.
++    this.notify();
++    if (changed) void SaveManager.save(this.adapter, this.state);
++  }
++
++  /** Regenerates the quest board and shop when their windows roll over. */
++  private refreshWorld(now: number): boolean {
++    let changed = false;
++    const window = Math.floor(now / BOARD_REFRESH_MS);
++    if (this.state.boardRefreshedAt !== window || this.state.questBoard.length === 0) {
++      this.state.boardRefreshedAt = window;
++      const active = new Set(this.state.activeQuests.map((q) => q.offer.id));
++      this.state.questBoard = QuestManager.generateBoard(this.state, now).filter((o) => !active.has(o.id));
++      changed = true;
++    }
++    if (ShopManager.needsRefresh(this.state, now) || this.state.shop.equipment.length === 0) {
++      ShopManager.refresh(this.state, now, true);
++      changed = true;
++    }
++    if (ModifierManager.hasUnlock(this.state, 'blackMarket')
++      && (ShopManager.blackMarketNeedsRefresh(this.state, now) || this.state.blackMarket.equipment.length === 0)) {
++      ShopManager.refreshBlackMarket(this.state, now, true);
++      changed = true;
++    }
++    return changed;
++  }
++
++  /**
++   * Resolves everything that finished while the app was closed. Quests resolve
++   * in chronological order so chains advance correctly across multiple stages.
++   */
++  catchUpOffline() {
++    const now = Date.now();
++    const elapsed = Math.max(0, now - this.state.lastSeen);
++    if (elapsed < 60_000) return;
++
++    const results: QuestResult[] = [];
++    const raidResults: RaidResult[] = [];
++    // Auto-Chain can inject a newly-started quest into this same pass — if
++    // it also ends before `now`, it needs resolving in this same offline
++    // catch-up rather than waiting for the next time the app opens. Capped
++    // generously as a pure safety net: a streak stops itself at its target
++    // and needs a manual send to resume, so no single hero can ever produce
++    // more than ~10 (the highest tier) extra iterations from this regardless
++    // of how long the offline gap was.
++    let guard = 0;
++    while (guard++ < 500) {
++      const due = this.state.activeQuests.filter((q) => q.endsAt <= now).sort((a, b) => a.endsAt - b.endsAt);
++      if (due.length === 0) break;
++      const quest = due[0];
++      const result = QuestManager.resolve(this.state, quest, quest.endsAt);
++      results.push(result);
++      // Unlocks still register (and Steam still gets notified) for progress
++      // made while the app was closed — just quietly, without the toast/sound
++      // treatment live play gets, since a barrage of those on launch would be
++      // more annoying than celebratory.
++      for (const id of AchievementManager.checkAll(this.state, quest.endsAt)) {
++        void window.littleKnight?.unlockAchievement(id);
++      }
++      // Guidance topics still get marked seen and archived to the log for
++      // progress made offline -- same "quietly, no toast" treatment as
++      // achievements above, so reopening the app after a long stretch away
++      // doesn't dump a wall of tutorial toasts all at once.
++      for (const topic of GuidanceManager.checkAll(this.state)) {
++        for (const message of topic.messages) this.archive(message);
++      }
++
++      const hero = this.state.heroes.find((h) => h.id === quest.heroId);
++      if (hero) this.tryContinueAutoChain(hero, quest.endsAt);
++    }
++    for (const hero of this.state.heroes) HeroManager.pruneInjuries(hero, now);
++
++    // A raid resolves as a single event when its total duration has
++    // elapsed, same as the loop above does for individual quests -- only
++    // ever one active at a time, so no guard loop needed here.
++    if (this.state.activeRaid && this.state.activeRaid.endsAt <= now) {
++      const raidEndsAt = this.state.activeRaid.endsAt;
++      const raidResult = RaidManager.resolve(this.state, this.state.activeRaid, raidEndsAt);
++      raidResults.push(raidResult);
++      for (const id of AchievementManager.checkAll(this.state, raidEndsAt)) {
++        void window.littleKnight?.unlockAchievement(id);
++      }
++      for (const topic of GuidanceManager.checkAll(this.state)) {
++        for (const message of topic.messages) this.archive(message);
++      }
++    }
++
++    this.state.stats.offlineTimeMs += elapsed;
++    this.state.lastSeen = now;
++
++    if (results.length > 0 || raidResults.length > 0 || elapsed > 5 * 60_000) {
++      this.offlineReport = {
++        elapsedMs: elapsed,
++        results,
++        raidResults,
++        goldGained: results.reduce((sum, r) => sum + r.gold, 0) + raidResults.reduce((sum, r) => sum + r.gold, 0),
++        xpGained: results.reduce((sum, r) => sum + r.xp, 0) + raidResults.reduce((sum, r) => sum + r.xp, 0),
++      };
++    }
++  }
++
++  saveNow() {
++    return SaveManager.save(this.adapter, this.state);
++  }
++
++  // --- TESTING TOOLS (delete this block to remove) ---
++  // Gated by TESTING_TOOLS_ENABLED at the UI level (MenuWindow only shows the
++  // tab when it's true) and again here, so these no-op even if somehow
++  // called directly. Everything testing-related in this file lives in this
++  // one fenced block.
++
++  /**
++   * Rewinds lastSeen and runs the real offline catch-up on it — the exact
++   * same event-driven logic (including Auto-Chain continuation) that a
++   * genuine multi-day absence would trigger, just without waiting. This is
++   * deliberately not an "instantly win" cheat: a tester skipping a month
++   * sees what a month of real play would actually have produced.
++   */
++  testSkipTime(ms: number) {
++    if (!TESTING_TOOLS_ENABLED) return;
++    // endsAt on an active quest is an absolute real-world timestamp fixed at
++    // departure, independent of lastSeen -- rewinding lastSeen alone updates
++    // the offline-report bookkeeping but does nothing to make an in-flight
++    // quest actually due. Verified this directly: an early version of this
++    // method reported a correct 24h elapsed gap while resolving zero quests,
++    // because the quest's own endsAt hadn't moved. Shifting every active
++    // quest's endsAt back by the same amount is what actually makes time-
++    // based completion trigger.
++    for (const quest of this.state.activeQuests) {
++      quest.endsAt -= ms;
++    }
++    this.state.lastSeen = Math.max(0, this.state.lastSeen - ms);
++    this.catchUpOffline();
++    // catchUpOffline resolves due quests but never touches the board --
++    // refreshWorld's own regeneration is keyed to a real-wall-clock 30-min
++    // window, which usually hasn't rolled over during a *simulated* skip.
++    // Auto-Chain can burn through an entire unrefreshed board well before
++    // that window naturally ticks over, especially across a multi-day/week
++    // skip where hero levels (and so board eligibility) have moved a lot.
++    // Force it here so post-skip levels are reflected immediately rather
++    // than needing a manual refresh afterward.
++    this.forceRefreshBoard(Date.now());
++    this.notify();
++    void this.saveNow();
++  }
++
++  /**
++   * Forces the quest board to regenerate right now, bypassing the normal
++   * 30-min real-time window check -- for restocking a board Auto-Chain has
++   * emptied out during testing, without waiting for or faking more time to
++   * pass. Also used internally by testSkipTime for the same reason.
++   */
++  private forceRefreshBoard(now: number) {
++    this.state.boardRefreshedAt = -1;
++    this.refreshWorld(now);
++  }
++
++  testRefreshBoard() {
++    if (!TESTING_TOOLS_ENABLED) return;
++    this.forceRefreshBoard(Date.now());
++    this.notify();
++    void this.saveNow();
++  }
++
++  testAddGold(amount: number) {
++    if (!TESTING_TOOLS_ENABLED) return;
++    this.state.gold = Math.max(0, this.state.gold + amount);
++    this.notify();
++    void this.saveNow();
++  }
++
++  testAddRenown(amount: number) {
++    if (!TESTING_TOOLS_ENABLED) return;
++    this.state.renown = Math.max(0, this.state.renown + amount);
++    this.notify();
++    void this.saveNow();
++  }
++
++  /**
++   * Jumps a hero straight to a target level, for reaching level-gated
++   * content without playing through everything below it. Reuses
++   * HeroManager.grantXp rather than setting hero.level directly, so stat
++   * growth per level stays exactly consistent with normal play — granting
++   * precisely the cumulative XP needed lands exactly on the target level
++   * with the same stats a hero who actually earned it would have.
++   */
++  testSetHeroLevel(heroId: string, targetLevel: number) {
++    if (!TESTING_TOOLS_ENABLED) return;
++    const hero = this.hero(heroId);
++    if (!hero || targetLevel <= hero.level) return;
++    let needed = -hero.xp; // cancel out whatever partial xp they already have
++    for (let lvl = hero.level; lvl < targetLevel; lvl++) needed += xpForLevel(lvl);
++    HeroManager.grantXp(hero, Math.max(0, needed));
++    this.notify();
++    void this.saveNow();
++  }
++
++  testHealAllInjuries() {
++    if (!TESTING_TOOLS_ENABLED) return;
++    for (const hero of this.state.heroes) hero.injuries = [];
++    this.notify();
++    void this.saveNow();
++  }
++
++  /** Resolves a hero's active quest immediately, using its own already-locked-in odds — not a guaranteed win, just not waiting for the clock. */
++  testCompleteActiveQuest(heroId: string) {
++    if (!TESTING_TOOLS_ENABLED) return;
++    const quest = this.state.activeQuests.find((q) => q.heroId === heroId);
++    if (!quest) return;
++    const result = QuestManager.resolve(this.state, quest, quest.endsAt);
++    this.lastResult = result;
++    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
++    this.reportGuidance(GuidanceManager.checkAll(this.state));
++    this.notify();
++    void this.saveNow();
++  }
++
++  testCompleteAllActiveQuests() {
++    if (!TESTING_TOOLS_ENABLED) return;
++    for (const quest of [...this.state.activeQuests]) {
++      const result = QuestManager.resolve(this.state, quest, quest.endsAt);
++      this.lastResult = result;
++    }
++    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
++    this.reportGuidance(GuidanceManager.checkAll(this.state));
++    this.notify();
++    void this.saveNow();
++  }
++
++  // --- end testing tools ---
++
++  /* -------------------------------- queries ---------------------------- */
++
++  hero(id: string): Hero | undefined {
++    return this.state.heroes.find((h) => h.id === id);
++  }
++
++  activeQuestFor(heroId: string): ActiveQuest | undefined {
++    return this.state.activeQuests.find((q) => q.heroId === heroId);
++  }
++
++  get primaryHero(): Hero {
++    return this.state.heroes[0];
++  }
++
++  /**
++   * The hero the desktop companion shows. Follows whoever was most recently
++   * sent on a quest (set by startQuest below), falling back to heroes[0] if
++   * that hero no longer exists — e.g. after a hard reset.
++   */
++  get displayedHero(): Hero {
++    const focused = this.state.focusedHeroId
++      ? this.state.heroes.find((h) => h.id === this.state.focusedHeroId)
++      : undefined;
++    return focused ?? this.state.heroes[0];
++  }
++
++  /** Manually focus a specific hero, e.g. from the Heroes panel or the widget's cycle arrows. */
++  setFocusedHero(heroId: string) {
++    if (!this.state.heroes.some((h) => h.id === heroId)) return;
++    this.state.focusedHeroId = heroId;
++    this.notify();
++    void this.saveNow();
++  }
++
++  /** Cycles the companion to the next (or previous) hero in roster order. */
++  cycleFocusedHero(direction: 1 | -1 = 1) {
++    const heroes = this.state.heroes;
++    if (heroes.length <= 1) return;
++    const currentIndex = heroes.findIndex((h) => h.id === this.displayedHero.id);
++    const nextIndex = (currentIndex + direction + heroes.length) % heroes.length;
++    this.setFocusedHero(heroes[nextIndex].id);
++  }
++
++  /**
++   * Sets or renames the guild. Trimmed and length-capped since this will
++   * eventually show on a leaderboard; empty/whitespace-only input is a no-op
++   * rather than clearing the name back out.
++   */
++  setGuildName(name: string) {
++    const trimmed = name.trim().slice(0, 24);
++    if (!trimmed) return;
++    this.state.guildName = trimmed;
++    this.notify();
++    void this.saveNow();
++  }
++
++  /** Requests that the menu open (or switch) to a specific tab id. */
++  requestTab(id: string) {
++    this.requestedTab = id;
++  }
++
++  /** Reads and clears the pending tab request. Called once by MenuWindow on mount. */
++  consumeRequestedTab(): string | null {
++    const id = this.requestedTab;
++    this.requestedTab = null;
++    return id;
++  }
++
++  /** What the corner sprite should be doing right now. */
++  get companionStatus(): 'idle' | 'questing' | 'injured' | 'ready' {
++    const heroes = this.state.heroes;
++    if (heroes.some((h) => h.status === 'questing')) return 'questing';
++    if (heroes.some((h) => h.injuries.length > 0)) return 'injured';
++    if (this.state.questBoard.length > 0) return 'ready';
++    return 'idle';
++  }
++
++  /* -------------------------------- actions ---------------------------- */
++
++  startQuest(heroId: string, offer: QuestOffer, consumables: string[]) {
++    const hero = this.hero(heroId);
++    if (!hero) return;
++    const { error } = QuestManager.start(this.state, hero, offer, consumables, Date.now());
++    if (error) return this.say(error);
++    this.state.focusedHeroId = heroId;
++
++    // A manual send always (re)starts a fresh Auto-Chain streak if the
++    // upgrade is owned — choosing to send by hand again implicitly abandons
++    // whatever streak state was there before.
++    const level = this.state.upgrades['auto_chain'] ?? 0;
++    if (level > 0) {
++      const range = AUTO_CHAIN_RANGES[level];
++      hero.autoChainTarget = range.min + Math.floor(Math.random() * (range.max - range.min + 1));
++      hero.autoChainCount = 1;
++    } else {
++      hero.autoChainTarget = null;
++      hero.autoChainCount = 0;
++    }
++
++    playSound('depart');
++    this.say(`${hero.name} sets out: ${offer.name}`);
++    void this.saveNow();
++  }
++
++  /**
++   * Commits a party to a raid. Deliberately no Auto-Chain interaction at
++   * all -- raids never auto-continue into anything, on purpose, same
++   * reasoning as chain quests being excluded from pickBestQuest: this is a
++   * deliberate, noticed commitment, not something that should ever start
++   * without the player choosing it.
++   */
++  startRaid(raidId: string, difficulty: RaidDifficulty, heroIds: string[]) {
++    const { error } = RaidManager.start(this.state, raidId, difficulty, heroIds, Date.now());
++    if (error) return this.say(error);
++    playSound('depart');
++    this.say(`The guild marches on ${RAID_BY_ID[raidId]?.name ?? 'the raid'}. ${heroIds.length} strong.`);
++    void this.saveNow();
++  }
++
++  equip(heroId: string, itemUid: string) {
++    const hero = this.hero(heroId);
++    const item = this.state.stash.find((i) => i.uid === itemUid);
++    if (!hero || !item) return;
++    const error = EquipmentManager.equip(this.state, hero, item);
++    if (error) return this.say(error);
++    this.checkSetBonusMilestones(hero);
++    this.notify();
++    void this.saveNow();
++  }
++
++  /**
++   * Fires a one-time flashy toast the first time any hero crosses a new
++   * set-bonus piece-count threshold (e.g. first hero to hit 3/3 Voidforged).
++   * Only checked on equip, never unequip -- crossing a threshold is only
++   * ever something that happens by adding a piece, and re-notifying every
++   * time someone swaps gear in and out would just be noise. Tracked in
++   * state.notifiedSetBonuses so it only ever fires once per save, regardless
++   * of how many times a hero re-equips into and back out of a set.
++   */
++  private checkSetBonusMilestones(hero: Hero) {
++    const setCounts: Record<string, number> = {};
++    for (const item of Object.values(hero.equipment)) {
++      if (!item) continue;
++      const def = EQUIPMENT_BY_ID[item.defId];
++      if (def?.setId) setCounts[def.setId] = (setCounts[def.setId] ?? 0) + 1;
++    }
++    for (const [setId, count] of Object.entries(setCounts)) {
++      const set = SET_BY_ID[setId];
++      if (!set) continue;
++      for (const bonus of set.bonuses) {
++        if (count < bonus.count) continue;
++        const key = `${setId}:${bonus.count}`;
++        if (this.state.notifiedSetBonuses.includes(key)) continue;
++        this.state.notifiedSetBonuses.push(key);
++        playSound('legendary_drop');
++        this.say(`${set.name} — ${bonus.label} unlocked!`);
++      }
++    }
++  }
++
++  unequip(heroId: string, slot: Parameters<typeof EquipmentManager.unequip>[2]) {
++    const hero = this.hero(heroId);
++    if (!hero) return;
++    const error = EquipmentManager.unequip(this.state, hero, slot);
++    if (error) return this.say(error);
++    this.notify();
++    void this.saveNow();
++  }
++
++  repair(itemUid: string) {
++    const found = EquipmentManager.allItems(this.state).find((e) => e.item.uid === itemUid);
++    if (!found) return;
++    const error = EquipmentManager.repair(this.state, found.item, this.state.guild.workshop ?? 0);
++    if (error) return this.say(error);
++    this.say('Repaired.');
++    void this.saveNow();
++  }
++
++  repairAll() {
++    const workshop = this.state.guild.workshop ?? 0;
++    let spent = 0;
++    for (const { item } of EquipmentManager.allItems(this.state)) {
++      const cost = EquipmentManager.repairCost(item, workshop);
++      if (cost > 0 && this.state.gold >= cost) {
++        EquipmentManager.repair(this.state, item, workshop);
++        spent += cost;
++      }
++    }
++    this.say(spent > 0 ? `Repaired everything for ${spent} gold.` : 'Nothing needed repairing.');
++    void this.saveNow();
++  }
++
++  upgradeItem(itemUid: string) {
++    const found = EquipmentManager.allItems(this.state).find((e) => e.item.uid === itemUid);
++    if (!found) return;
++    const error = EquipmentManager.upgrade(this.state, found.item, this.state.guild.workshop ?? 0);
++    if (error) return this.say(error);
++    this.say(`Refined to +${found.item.plus}.`);
++    void this.saveNow();
++  }
++
++  sellItem(itemUid: string) {
++    const error = ShopManager.sell(this.state, itemUid);
++    if (error) return this.say(error);
++    this.say('Sold.');
++    void this.saveNow();
++  }
++
++  buyConsumable(defId: string, amount = 1) {
++    const error = InventoryManager.buy(this.state, defId, amount);
++    if (error) return this.say(error);
++    playSound('purchase');
++    this.notify();
++    void this.saveNow();
++  }
++
++  buyShopEquipment(shopUid: string) {
++    const error = ShopManager.buyEquipment(this.state, shopUid);
++    if (error) return this.say(error);
++    playSound('purchase');
++    this.say('Added to the stash.');
++    void this.saveNow();
++  }
++
++  buyBlackMarketEquipment(shopUid: string) {
++    const error = ShopManager.buyBlackMarketEquipment(this.state, shopUid);
++    if (error) return this.say(error);
++    playSound('purchase');
++    this.say('The contact melts back into the crowd. Added to the stash.');
++    this.reportAchievements(AchievementManager.checkAll(this.state));
++    this.reportGuidance(GuidanceManager.checkAll(this.state));
++    void this.saveNow();
++  }
++
++  useConsumable(heroId: string, defId: string) {
++    const hero = this.hero(heroId);
++    if (!hero) return;
++    const error = InventoryManager.useOnHero(this.state, hero, defId);
++    if (error) return this.say(error);
++    this.say(`${hero.name} is patched up.`);
++    void this.saveNow();
++  }
++
++  treatInjury(heroId: string, injuryId: string) {
++    const hero = this.hero(heroId);
++    if (!hero) return;
++    const injury = hero.injuries.find((i) => i.id === injuryId);
++    if (!injury) return;
++    if (this.state.gold < injury.treatmentCost) return this.say('Not enough gold for treatment.');
++    this.state.gold -= injury.treatmentCost;
++    this.state.stats.goldSpent += injury.treatmentCost;
++    hero.injuries = hero.injuries.filter((i) => i !== injury);
++    this.say(`${hero.name} is treated for ${injury.name.toLowerCase()}.`);
++    void this.saveNow();
++  }
++
++  buyUpgrade(id: string) {
++    const error = GuildManager.buyUpgrade(this.state, id);
++    if (error) return this.say(error);
++    playSound('purchase');
++    this.notify();
++    void this.saveNow();
++  }
++
++  levelUpVendor(vendorId: Parameters<typeof GuildManager.levelUpVendor>[1]) {
++    const error = GuildManager.levelUpVendor(this.state, vendorId);
++    if (error) return this.say(error);
++    playSound('purchase');
++    const def = GuildManager.vendors().find((v) => v.id === vendorId);
++    this.say(`${def?.name ?? 'The vendor'} has more to offer now.`);
++    void this.saveNow();
++  }
++
++  upgradeFacility(id: Parameters<typeof GuildManager.upgradeFacility>[1]) {
++    const error = GuildManager.upgradeFacility(this.state, id);
++    if (error) return this.say(error);
++    playSound('purchase');
++    this.notify();
++    void this.saveNow();
++  }
++
++  recruit(heroClass: HeroClass) {
++    // Checked here rather than relying on GuildManager's own error, so the
++    // message can point at the actual fix (upgrades or a Renown perk)
++    // instead of a generic "no room" -- this is exactly the kind of thing
++    // a player new to the systems wouldn't otherwise know to go looking for.
++    if (this.state.heroes.length >= this.heroSlots) {
++      return this.say("The guild is out of hero slots. Expand the roster via Guild Hall upgrades or a Renown perk.");
++    }
++    const error = GuildManager.recruit(this.state, heroClass, createRng(uid('recruit')));
++    if (error) return this.say(error);
++    this.say('A new hero joins the guild.');
++    this.reportAchievements(AchievementManager.checkAll(this.state));
++    this.reportGuidance(GuidanceManager.checkAll(this.state));
++    void this.saveNow();
++  }
++
++  buyPerk(id: string) {
++    const error = PrestigeManager.buyPerk(this.state, id);
++    if (error) return this.say(error);
++    this.notify();
++    void this.saveNow();
++  }
++
++  retire(heroId: string) {
++    const hero = this.hero(heroId);
++    if (!hero) return;
++    const outcome = PrestigeManager.retire(this.state, hero, createRng(uid('retire')), Date.now());
++    if ('error' in outcome) return this.say(outcome.error);
++    const streakNote = outcome.streak > 1 ? ` Streak ×${outcome.streak}!` : '';
++    playSound(outcome.streak > 3 ? 'chain_complete' : 'level_up');
++    this.say(`${hero.name} retires a legend. +${outcome.renownGained} Heroic Renown.${streakNote}`);
++    this.reportAchievements(AchievementManager.checkAll(this.state));
++    this.reportGuidance(GuidanceManager.checkAll(this.state));
++    void this.saveNow();
++  }
++
++  allocateStat(heroId: string, stat: keyof Hero['stats']) {
++    const hero = this.hero(heroId);
++    if (!hero || hero.statPoints <= 0) return;
++    hero.statPoints -= 1;
++    hero.stats[stat] += 1;
++    this.notify();
++    void this.saveNow();
++  }
++
++  /** Buys a skin for the guild (usable by any hero of any class). */
++  buySkin(skinId: string) {
++    if (this.state.unlockedSkins.includes(skinId)) return this.say('Already owned.');
++    const def = SKIN_BY_ID[skinId];
++    if (!def) return this.say('Unknown skin.');
++    if (this.state.gold < def.cost) return this.say('Not enough gold.');
++    playSound('purchase');
++    this.state.gold -= def.cost;
++    this.state.stats.goldSpent += def.cost;
++    this.state.unlockedSkins.push(skinId);
++    this.say(`${def.name} livery unlocked for the whole guild.`);
++    this.reportAchievements(AchievementManager.checkAll(this.state));
++    this.reportGuidance(GuidanceManager.checkAll(this.state));
++    void this.saveNow();
++  }
++
++  /** Applies an owned skin to one hero. Free once unlocked. */
++  setHeroSkin(heroId: string, skinId: string) {
++    const hero = this.hero(heroId);
++    if (!hero) return;
++    if (skinId !== 'original' && !this.state.unlockedSkins.includes(skinId)) {
++      return this.say('That livery is not unlocked yet.');
++    }
++    hero.skin = skinId as typeof hero.skin;
++    this.notify();
++    void this.saveNow();
++  }
++
++  get skinPrice() { return SKIN_PRICE; }
++
++  hardReset() {
++    this.state = createInitialState();
++    this.offlineReport = null;
++    this.lastResult = null;
++    this.refreshWorld(Date.now());
++    this.say('A new guild opens its doors.');
++    void this.saveNow();
++  }
++
++  get goldStorage() {
++    return ModifierManager.goldStorage(this.state);
++  }
++
++  get heroSlots() {
++    return ModifierManager.heroSlots(this.state);
++  }
++}
+diff --git a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
+index 6ac3dda..75db019 100644
+--- a/src/game/managers/RaidManager.ts
++++ b/src/game/managers/RaidManager.ts
+@@ -1,7 +1,7 @@
+ import {
+   ActiveRaid, GameState, Hero, RaidDifficulty, RaidLootDrop, RaidResult,
+ } from '../types';
+-import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry } from '../data/raids';
++import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, lootForDifficulty } from '../data/raids';
+ import { EQUIPMENT_BY_ID } from '../data/equipment';
+ import { MIN_SUCCESS, MAX_SUCCESS } from './QuestManager';
+ import { HeroManager } from './HeroManager';
+@@ -144,7 +144,7 @@ export const RaidManager = {
+       gold += Math.floor(encounter.rewardGold * diffCfg.rewardMultiplier * (1 + economy.gold / 100));
+       xp += Math.floor(encounter.rewardXp * diffCfg.rewardMultiplier * (1 + economy.xp / 100));
+ 
+-      for (const entry of encounter.loot) {
++      for (const entry of lootForDifficulty(encounter, active.difficulty)) {
+         const parsed = parseLootEntry(entry);
+         if (!parsed) continue;
+         // diffCfg.lootBonus is new -- harder raid tiers now trade success
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 4535533..dc56082 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -262,6 +262,16 @@ export interface RaidEncounterDef {
+    * for a repeatable {defId, chance} shape. Parsed via parseLootEntry.
+    */
+   loot: string[];
++  /**
++   * Difficulty-specific loot pools, WoW-style -- Heroic/Mythic rolls point
++   * at genuinely different (usually stat-boosted) item variants rather than
++   * just the same items at a better chance. Optional and independent, so
++   * this can roll out encounter by encounter: a tier with no list here
++   * falls back to `loot`, the same pool every difficulty used before this
++   * existed. See lootForDifficulty in raids.ts.
++   */
++  lootHeroic?: string[];
++  lootMythic?: string[];
+ }
+ 
+ export interface RaidDef {
+diff --git a/src/styles/app.css b/src/styles/app.css
+new file mode 100644
+index 0000000..8c617cb
+--- /dev/null
++++ b/src/styles/app.css
+@@ -0,0 +1,1232 @@
++/* =========================================================================
++   Guild Idler — visual system
++   Palette: candlelit guild hall. Deep plum shadow, oiled parchment, brass.
++   Type: a chunky pixel/mono display face for headings, a readable mono body.
++   ========================================================================= */
++
++:root {
++  --night: #171320;
++  --panel: #221c2e;
++  --panel-2: #2b2338;
++  --panel-3: #362c46;
++  --edge: #0e0b14;
++  --parchment: #f3e6c8;
++  --ink: #2a2233;
++  --muted: #a294b5;
++  --brass: #d9a441;
++  --brass-dim: #8c6a2a;
++  --moss: #79a86b;
++  --blood: #a33a3a;
++  --sky: #5b8fd6;
++  --violet: #a874d6;
++
++  --font-display: 'Silkscreen', 'Press Start 2P', 'Courier New', ui-monospace, monospace;
++  --font-body: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
++
++  --radius: 2px;
++  --tap: 34px;
++
++  /* Driven by the settings panel at runtime; these are the fallbacks. */
++  --font-scale: 1;
++  --sprite-scale: 1;
++  --card-pad: 10px 12px;
++  --density-scale: 1;
++  --anim-speed: 1;
++}
++
++/*
++ * Settings > Appearance > Font > Readable. Independent of --style (chrome)
++ * on purpose -- this only swaps the typeface, leaving corners/pills/layout
++ * untouched. --font-body in particular matters here: it's applied to the
++ * whole document via `body { font-family: var(--font-body); }` below, so
++ * every quest description, lore epilogue, and button label reads in this
++ * instead of the default monospace.
++ */
++[data-font='readable'] {
++  --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
++  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
++}
++
++/*
++ * Inventory icon cards -- replaces the old text-only slot/stash rows.
++ * Collapsed: icon + name + rarity pill. Expanded (.open): mods, durability,
++ * and the repair/refine/remove or equip/sell actions. A missing item.icon
++ * just shows the per-slot emoji fallback (see EquipmentPanel.tsx) rather
++ * than a broken <img>, so this rolls out gradually as icons are assigned.
++ */
++.item-card-grid {
++  display: grid;
++  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
++  gap: 8px;
++  margin-bottom: 14px;
++}
++.item-card {
++  border: 1px solid var(--panel-3);
++  background: var(--panel-2);
++}
++.item-card.empty { opacity: 0.6; }
++.item-card-summary {
++  display: flex;
++  align-items: center;
++  gap: 10px;
++  padding: 8px;
++  cursor: pointer;
++}
++.item-card.empty .item-card-summary { cursor: default; }
++.item-icon {
++  flex: none;
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  background: var(--panel-3);
++  border: 1px solid var(--edge);
++}
++.item-icon img { width: 70%; height: 70%; image-rendering: pixelated; }
++.item-card-body { min-width: 0; flex: 1; }
++.item-card-name {
++  font-size: 11px;
++  font-weight: 700;
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++.rarity-pill {
++  display: inline-block;
++  font-size: 9px;
++  text-transform: uppercase;
++  letter-spacing: 0.04em;
++  padding: 1px 6px;
++  border: 1px solid;
++  border-radius: 2px;
++  margin-top: 3px;
++}
++.item-card-details { padding: 0 8px 8px; }
++
++/*
++ * Story Chain Complete overlay -- deliberately reads as a bigger event than
++ * the regular QuestResultModal. Border/glow colour comes from the guild
++ * rank tier the completed chain's own reqLevel falls into (see
++ * ChainCompleteModal.tsx), so a capstone completion visually stands apart
++ * from an early chain finishing.
++ */
++.chain-complete-overlay { z-index: 12; }
++.chain-complete-modal {
++  max-width: 480px;
++  border-width: 2px;
++  text-align: center;
++}
++.chain-complete-kicker {
++  font-size: 11px;
++  text-transform: uppercase;
++  letter-spacing: 0.12em;
++  color: var(--brass);
++}
++.chain-complete-modal .stat-row { justify-content: center; }
++.chain-complete-modal .row.wrap { justify-content: center; }
++
++/* Distinguishes the chain-complete idle banner from the plain away-banner
++   without introducing a whole new component -- same shape, warmer accent. */
++.idle-chain-banner { border-color: var(--violet); color: var(--violet); }
++
++/*
++ * Raids -- difficulty circles (N/H/M) and the raid card treatment. Circles
++ * reuse RARITY_COLOR (uncommon/rare/epic) rather than a new colour system,
++ * same reasoning as everywhere else this session.
++ */
++.raid-diff-circle {
++  /* Roughly tripled from the original 40px -- these were reported as very
++     hard to hit/read at the old size, and they're a one-per-raid choice
++     that deserves real presence, not a tiny button among many. */
++  width: 110px;
++  height: 110px;
++  border-radius: 50%;
++  border-width: 3px;
++  border-style: solid;
++  background: var(--panel-2);
++  font-weight: 700;
++  font-size: 28px;
++  cursor: pointer;
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  padding: 0;
++}
++.raid-diff-circle:hover { filter: brightness(1.15); }
++.raid-card.locked { opacity: 0.6; }
++.raid-card.active { border-left: 3px solid var(--brass); }
++
++/* Raid Result modal, full-clear treatment -- a raid worth committing hours
++   to deserves a slightly bigger visual moment when it actually pays off. */
++.modal.raid-full-clear { border-color: var(--brass); border-width: 2px; }
++
++/* Loot entries in a raid encounter's preview -- plain button reset so they
++   read the same as the old static text, but are actually clickable now:
++   a discovered item opens its detail overlay, an undiscovered one gets a
++   toast telling you to go find it first. */
++.loot-chip {
++  display: inline-flex;
++  align-items: center;
++  gap: 4px;
++  background: none;
++  border: none;
++  padding: 0;
++  font: inherit;
++  cursor: pointer;
++}
++.loot-chip:hover .tiny { color: var(--brass); }
++
++* { box-sizing: border-box; }
++
++html, body, #root {
++  height: 100%;
++  margin: 0;
++  background: transparent;
++  overflow: hidden;
++}
++
++body {
++  font-family: var(--font-body);
++  color: var(--parchment);
++  -webkit-font-smoothing: antialiased;
++  user-select: none;
++  cursor: default;
++}
++
++button {
++  font-family: inherit;
++  font-size: 0.6875rem;
++  color: var(--parchment);
++  background: var(--panel-2);
++  border: 1px solid var(--edge);
++  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
++  padding: calc(7px * var(--density-scale)) calc(10px * var(--density-scale));
++  min-height: calc(var(--tap) * max(0.85, var(--density-scale)));
++  border-radius: var(--radius);
++  cursor: pointer;
++  transition: background 90ms linear, transform 90ms linear;
++}
++
++button:hover:not(:disabled) { background: var(--panel-3); }
++button:active:not(:disabled) { transform: translateY(1px); }
++button:disabled { opacity: 0.4; cursor: not-allowed; }
++button:focus-visible, [tabindex]:focus-visible {
++  outline: 2px solid var(--brass);
++  outline-offset: 1px;
++}
++
++.btn-primary {
++  background: var(--brass-dim);
++  border-color: var(--brass);
++  color: #fff8e6;
++  font-weight: 700;
++}
++.btn-primary:hover:not(:disabled) { background: var(--brass); color: var(--ink); }
++
++.btn-ghost { background: transparent; border-color: var(--panel-3); }
++
++/* ------------------------------ idle companion ------------------------------ */
++
++.idle-root {
++  height: 100%;
++  display: flex;
++  flex-direction: column;
++  justify-content: flex-end;
++  align-items: center;
++  padding-bottom: 6px;
++  -webkit-app-region: no-drag;
++}
++
++/*
++ * Only draggable once explicitly unlocked — see the lock toggle in IdleView.
++ * .idle-stage covers almost the entire visible companion (sprite, plate,
++ * status text), so it has to opt back into "drag" itself when unlocked, or
++ * there is nothing left to grab -- the 6px of outer padding alone is not
++ * enough to reliably click.
++ *
++ * .knight-button (the sprite itself) is deliberately INCLUDED in the drag
++ * region here, not excluded -- Chromium still fires its onClick on a plain
++ * mouse-down/up with no movement, and only treats it as a window drag once
++ * the cursor actually moves, so "click the knight to open the guild" and
++ * "click-and-drag the knight to move the window" both keep working. This
++ * was the actual bug: an earlier version blanket-applied no-drag to every
++ * button, which included the knight and made the sprite itself the one
++ * thing in this window you couldn't grab.
++ *
++ * The small utility controls (lock/hide/open-guild, carousel arrows) stay
++ * no-drag on purpose, since those are meant to be pure clicks even mid-drag.
++ */
++.idle-root.unlocked,
++.idle-root.unlocked .idle-stage,
++.idle-root.unlocked .idle-plate,
++.idle-root.unlocked .idle-status,
++.idle-root.unlocked .knight-shadow,
++.idle-root.unlocked .knight-button {
++  -webkit-app-region: drag;
++}
++.idle-root.unlocked .idle-actions button,
++.idle-root.unlocked .carousel-arrow {
++  -webkit-app-region: no-drag;
++}
++
++/*
++ * -webkit-app-region: drag above has zero visual effect on its own -- a
++ * player toggling "unlocked" had no way to tell it did anything until they
++ * tried dragging and got lucky. This makes the draggable state genuinely
++ * unmistakable: a dashed brass outline around the whole companion plus a
++ * darkened backing, both removed the instant it's locked again.
++ */
++.idle-root.unlocked .idle-stage {
++  outline: 2px dashed var(--brass);
++  outline-offset: 6px;
++  background: color-mix(in srgb, var(--night) 40%, transparent);
++  border-radius: 10px;
++}
++
++/*
++ * Optional backdrop behind the companion (Settings > Knight > Companion
++ * Backdrop). Off by default. Deliberately a plain background fill on the
++ * existing box -- no padding, no outset shadow/outline -- since this is a
++ * small floating window likely sized tight to its content, and anything
++ * drawn past that boundary risks getting clipped rather than actually
++ * showing. Stacks fine with the unlocked-drag outline above; they're
++ * independent states.
++ */
++[data-companion-backdrop='subtle'] .idle-stage {
++  background: color-mix(in srgb, var(--night) 25%, transparent);
++  border-radius: 14px;
++}
++[data-companion-backdrop='strong'] .idle-stage {
++  background: color-mix(in srgb, var(--night) 65%, transparent);
++  border: 1px solid var(--edge);
++  border-radius: 14px;
++}
++
++.idle-stage {
++  position: relative;
++  display: flex;
++  flex-direction: column;
++  align-items: center;
++  -webkit-app-region: no-drag;
++}
++
++.knight-button {
++  position: relative;
++  background: none;
++  border: none;
++  box-shadow: none;
++  padding: 0;
++  min-height: 0;
++  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.45));
++  animation: bob calc(2.4s / max(var(--anim-speed), 0.001)) steps(2, end) infinite;
++}
++.knight-button:hover { background: none; transform: none; }
++
++.knight-button.walking { animation: walk-bob 0.5s steps(2, end) infinite; }
++.knight-button.departing { animation: depart 900ms ease-in forwards; }
++.knight-button.returning { animation: arrive 900ms ease-out both; }
++
++@keyframes bob {
++  0%, 100% { transform: translateY(0); }
++  50% { transform: translateY(-2px); }
++}
++@keyframes walk-bob {
++  0%, 100% { transform: translateY(0); }
++  50% { transform: translateY(-3px); }
++}
++@keyframes depart {
++  0% { transform: translateX(0); opacity: 1; }
++  100% { transform: translateX(-90px); opacity: 0; }
++}
++@keyframes arrive {
++  0% { transform: translateX(-90px); opacity: 0; }
++  100% { transform: translateX(0); opacity: 1; }
++}
++
++.quest-mark {
++  animation: float calc(1.6s / max(var(--anim-speed), 0.001)) ease-in-out infinite;
++  filter: drop-shadow(0 0 6px rgba(217, 164, 65, 0.6));
++}
++@keyframes float {
++  0%, 100% { transform: translateY(0); }
++  50% { transform: translateY(-4px); }
++}
++
++.knight-shadow {
++  width: 58px; height: 7px;
++  margin-top: -4px;
++  background: rgba(0, 0, 0, 0.4);
++  border-radius: 50%;
++  filter: blur(1px);
++}
++
++.idle-plate {
++  margin-top: 8px;
++  display: flex;
++  gap: 8px;
++  align-items: center;
++  /*
++   * Was a hardcoded dark rgba() regardless of theme. On a light theme (e.g.
++   * Old Parchment, Daylight) the text here is dark ink, so a permanently
++   * dark plate made it unreadable over a bright desktop -- this is the
++   * "parchment doesn't translate on desktop" issue. color-mix ties the tint
++   * to the active theme's own --night value, so light themes get a light
++   * plate and dark themes keep the original look.
++   */
++  background: color-mix(in srgb, var(--night) 22%, transparent);
++  border: 1px solid color-mix(in srgb, var(--edge) 35%, transparent);
++  transition: background 160ms ease, border-color 160ms ease;
++  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
++  padding: 5px 9px;
++  font-size: 0.625rem;
++  letter-spacing: 0.02em;
++  -webkit-app-region: no-drag;
++}
++
++.idle-plate .gold { color: var(--brass); }
++.idle-plate .lvl { color: var(--sky); }
++.idle-status {
++  font-size: 0.5625rem;
++  color: var(--muted);
++  margin-top: 4px;
++  max-width: 220px;
++  text-align: center;
++  /* Same theme-aware tint as .idle-plate -- this used to be bare text
++     directly over the desktop, which was hard to read over busy or light
++     wallpaper. */
++  background: color-mix(in srgb, var(--night) 22%, transparent);
++  border: 1px solid color-mix(in srgb, var(--edge) 35%, transparent);
++  padding: 3px 8px;
++  -webkit-app-region: no-drag;
++}
++
++.idle-away-banner {
++  font-size: 0.5625rem;
++  color: var(--brass);
++  margin-top: 4px;
++  max-width: 220px;
++  text-align: center;
++  background: color-mix(in srgb, var(--night) 30%, transparent);
++  border: 1px solid var(--brass-dim);
++  padding: 4px 8px;
++  cursor: pointer;
++  -webkit-app-region: no-drag;
++}
++.idle-away-banner:hover { border-color: var(--brass); }
++
++.idle-actions { display: flex; gap: 4px; margin-top: 6px; -webkit-app-region: no-drag; }
++.idle-actions button { font-size: 0.5625rem; padding: 4px 7px; min-height: 24px; }
++
++/* --------------------------------- menu --------------------------------- */
++
++.menu-root {
++  height: 100%;
++  display: flex;
++  flex-direction: column;
++  background: var(--night);
++  border: 1px solid var(--edge);
++  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
++}
++
++.titlebar {
++  -webkit-app-region: drag;
++  display: flex;
++  align-items: center;
++  gap: 10px;
++  padding: 8px 10px;
++  background: linear-gradient(var(--panel-2), var(--panel));
++  border-bottom: 1px solid var(--edge);
++}
++
++.titlebar h1 {
++  font-family: var(--font-display);
++  font-size: 0.8125rem;
++  margin: 0;
++  letter-spacing: 0.08em;
++  color: var(--brass);
++}
++
++.titlebar .spacer { flex: 1; }
++.titlebar button { -webkit-app-region: no-drag; }
++
++.resources { display: flex; gap: 12px; font-size: 0.6875rem; -webkit-app-region: no-drag; }
++.resources .gold { color: var(--brass); }
++.resources .renown { color: var(--violet); }
++
++.menu-body { flex: 1; display: flex; min-height: 0; }
++
++.tabs {
++  width: 132px;
++  flex: none;
++  display: flex;
++  flex-direction: column;
++  gap: 2px;
++  padding: 8px 6px;
++  background: var(--panel);
++  border-right: 1px solid var(--edge);
++  overflow-y: auto;
++}
++
++.tabs button {
++  text-align: left;
++  background: transparent;
++  border: 1px solid transparent;
++  box-shadow: none;
++  font-size: 0.6875rem;
++  padding: 6px 8px;
++}
++.tabs button:hover { background: var(--panel-2); }
++.tabs button[aria-current='true'] {
++  background: var(--panel-3);
++  border-color: var(--brass-dim);
++  color: var(--brass);
++}
++.tabs .tab-badge {
++  float: right;
++  color: var(--moss);
++  font-size: 0.625rem;
++}
++
++.panel {
++  flex: 1;
++  min-width: 0;
++  overflow-y: auto;
++  padding: 14px 16px 24px;
++}
++
++.panel h2 {
++  font-family: var(--font-display);
++  font-size: 0.875rem;
++  letter-spacing: 0.06em;
++  margin: 0 0 2px;
++  color: var(--parchment);
++}
++
++.panel .subtitle {
++  color: var(--muted);
++  font-size: 0.625rem;
++  margin: 0 0 14px;
++}
++
++.section-heading {
++  font-family: var(--font-display);
++  font-size: 0.6875rem;
++  color: var(--brass);
++  letter-spacing: 0.08em;
++  margin: calc(18px * var(--density-scale)) 0 calc(8px * var(--density-scale));
++  border-bottom: 1px solid var(--panel-3);
++  padding-bottom: 4px;
++}
++
++/* --------------------------------- cards --------------------------------- */
++
++.card {
++  position: relative;
++  background: var(--panel);
++  border: 1px solid var(--edge);
++  border-left: 3px solid var(--panel-3);
++  padding: var(--card-pad);
++  margin-bottom: 8px;
++  overflow: hidden;
++}
++
++.card.easy { border-left-color: var(--moss); }
++.card.normal { border-left-color: var(--sky); }
++.card.hard { border-left-color: #c98b3a; }
++.card.epic { border-left-color: var(--violet); }
++.card.legendary { border-left-color: var(--brass); }
++.card.chain { border-left-color: var(--blood); }
++
++.card-head { display: flex; align-items: baseline; gap: 8px; }
++.card-title { font-size: 0.8125rem; font-weight: 700; }
++.card-flavour { color: var(--muted); font-size: 0.625rem; margin: 4px 0 8px; font-style: italic; }
++
++/* Quest board titles read as the most important line on the busiest panel in
++   the app -- bumped further above the general card-title size. */
++.quest-title { font-size: 0.9375rem; }
++
++.tag {
++  font-size: 0.6875rem;
++  padding: 2px 7px;
++  border: 1px solid currentColor;
++  letter-spacing: 0.06em;
++  text-transform: uppercase;
++}
++
++.stat-row { display: flex; flex-wrap: wrap; gap: 10px; font-size: 0.625rem; color: var(--muted); }
++.stat-row b { color: var(--parchment); font-weight: 700; }
++
++.grid { display: grid; gap: calc(8px * var(--density-scale)); }
++.grid.two { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
++.grid.three { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
++
++.row { display: flex; gap: calc(8px * var(--density-scale)); align-items: center; }
++.row.wrap { flex-wrap: wrap; }
++.row.end { justify-content: flex-end; }
++.spread { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
++
++.bar {
++  height: 6px;
++  background: var(--edge);
++  border: 1px solid #000;
++  overflow: hidden;
++}
++.bar > span { display: block; height: 100%; background: var(--moss); }
++.bar.xp > span { background: var(--sky); }
++.bar.dura > span { background: var(--brass); }
++.bar.dura.low > span { background: var(--blood); }
++
++.muted { color: var(--muted); }
++.good { color: var(--moss); }
++.bad { color: var(--blood); }
++.gold-text { color: var(--brass); }
++.small { font-size: 0.625rem; }
++.tiny { font-size: 0.5625rem; }
++
++.chip {
++  display: inline-flex;
++  align-items: center;
++  gap: 4px;
++  font-size: 0.625rem;
++  padding: 3px 6px;
++  border: 1px solid var(--panel-3);
++  background: var(--panel-2);
++}
++.chip.on { border-color: var(--brass); color: var(--brass); }
++
++.slot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
++.slot {
++  border: 1px solid var(--panel-3);
++  background: var(--panel);
++  padding: 7px 8px;
++  font-size: 0.625rem;
++}
++.slot .slot-name { color: var(--muted); font-size: 0.5625rem; text-transform: uppercase; letter-spacing: 0.08em; }
++.slot.empty { border-style: dashed; opacity: 0.65; }
++
++/* --------------------------------- modals --------------------------------- */
++
++.overlay {
++  position: fixed;
++  inset: 0;
++  background: rgba(10, 8, 14, 0.82);
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  padding: 24px;
++  z-index: 40;
++}
++
++.modal {
++  position: relative;
++  background: var(--panel);
++  border: 1px solid var(--brass-dim);
++  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.7);
++  max-width: 460px;
++  width: 100%;
++  max-height: 100%;
++  overflow-y: auto;
++  padding: 16px;
++  animation: modal-pop-in 240ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
++}
++
++@keyframes modal-pop-in {
++  0% { transform: scale(0.85); opacity: 0; }
++  60% { transform: scale(1.03); opacity: 1; }
++  100% { transform: scale(1); opacity: 1; }
++}
++
++/* Overflow is switched to visible only for the ~300ms exit, so the coin/XP
++   burst below can fly past the card edge instead of being clipped by the
++   scroll container. */
++.modal.dismissing {
++  overflow: visible;
++  animation: modal-pop-out 320ms cubic-bezier(0.4, 0, 1, 1) forwards;
++}
++@keyframes modal-pop-out {
++  0% { transform: scale(1); opacity: 1; }
++  100% { transform: scale(0.92); opacity: 0; }
++}
++
++.collect-burst {
++  position: absolute;
++  left: 50%;
++  bottom: 46px;
++  width: 0;
++  height: 0;
++  pointer-events: none;
++  z-index: 6;
++}
++.collect-particle {
++  position: absolute;
++  left: 0;
++  top: 0;
++  font-family: var(--font-display);
++  font-size: 0.9375rem;
++  font-weight: bold;
++  white-space: nowrap;
++  opacity: 0;
++  animation: collect-fly 750ms ease-out forwards;
++}
++.collect-particle.coin {
++  color: var(--brass);
++  text-shadow: 0 0 8px color-mix(in srgb, var(--brass) 70%, transparent);
++}
++.collect-particle.xp {
++  color: var(--sky);
++  text-shadow: 0 0 8px color-mix(in srgb, var(--sky) 70%, transparent);
++}
++@keyframes collect-fly {
++  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
++  15% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
++  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.85) rotate(var(--rot)); }
++}
++
++.modal h3 {
++  font-family: var(--font-display);
++  font-size: 0.8125rem;
++  margin: 0 0 4px;
++  color: var(--brass);
++  letter-spacing: 0.06em;
++}
++
++.toast {
++  position: fixed;
++  left: 50%;
++  bottom: 14px;
++  transform: translateX(-50%);
++  background: var(--panel-2);
++  border: 1px solid var(--brass-dim);
++  padding: 7px 12px;
++  font-size: 0.625rem;
++  z-index: 50;
++  max-width: 90%;
++  text-align: center;
++}
++
++/* -------------------------------- guide -------------------------------- */
++
++.notif-list { display: flex; flex-direction: column; gap: 2px; }
++.notif-row {
++  display: flex;
++  justify-content: space-between;
++  align-items: baseline;
++  gap: 12px;
++  padding: 7px 10px;
++  border-bottom: 1px solid var(--panel-3);
++}
++.notif-row:last-child { border-bottom: none; }
++
++.loading {
++  height: 100%;
++  display: grid;
++  place-items: center;
++  color: var(--muted);
++  font-size: 0.6875rem;
++}
++
++@media (prefers-reduced-motion: reduce) {
++  *, *::before, *::after {
++    animation-duration: 0.001ms !important;
++    animation-iteration-count: 1 !important;
++    transition-duration: 0.001ms !important;
++  }
++}
++
++:root[data-motion='off'] *,
++:root[data-motion='off'] *::before,
++:root[data-motion='off'] *::after {
++  animation-duration: 0.001ms !important;
++  animation-iteration-count: 1 !important;
++  transition-duration: 0.001ms !important;
++}
++
++/* -------------------------------- settings -------------------------------- */
++
++.setting-row {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 16px;
++  padding: 10px 0;
++  border-bottom: 1px solid var(--panel-2);
++}
++.setting-label { font-size: 0.75rem; }
++.setting-control { flex: none; }
++
++input[type='range'] {
++  width: 180px;
++  accent-color: var(--brass);
++  cursor: pointer;
++}
++
++.segmented { display: inline-flex; border: 1px solid var(--edge); }
++.segmented .seg {
++  border: none;
++  border-right: 1px solid var(--edge);
++  min-height: 30px;
++  padding: 5px 10px;
++  background: var(--panel);
++}
++.segmented .seg:last-child { border-right: none; }
++.segmented .seg.on { background: var(--brass-dim); color: #fff8e6; }
++
++.toggle {
++  width: 46px; height: 26px;
++  border-radius: 13px;
++  background: var(--panel-3);
++  border: 1px solid var(--edge);
++  padding: 0;
++  position: relative;
++  min-height: 0;
++}
++.toggle .knob {
++  position: absolute; top: 2px; left: 2px;
++  width: 20px; height: 20px;
++  border-radius: 50%;
++  background: var(--muted);
++  transition: transform 120ms ease, background 120ms ease;
++}
++.toggle.on { background: var(--brass-dim); border-color: var(--brass); }
++.toggle.on .knob { transform: translateX(20px); background: var(--parchment); }
++
++.theme-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; width: 380px; max-width: 60vw; }
++.theme-swatch {
++  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
++  text-align: left; font-size: 0.6875rem; padding: 8px;
++}
++.theme-swatch.on { border-color: var(--brass); color: var(--brass); }
++.theme-dots { display: inline-flex; gap: 3px; }
++.theme-dots span { width: 14px; height: 14px; border: 1px solid var(--edge); }
++
++.sprite-preview {
++  display: grid; place-items: center;
++  min-width: 90px; min-height: 70px;
++  border: 1px dashed var(--panel-3);
++  background: var(--panel);
++}
++
++::-webkit-scrollbar { width: 8px; }
++::-webkit-scrollbar-thumb { background: var(--panel-3); }
++::-webkit-scrollbar-track { background: transparent; }
++
++/* --------------------------------- skins ---------------------------------- */
++
++.skin-chip {
++  display: inline-flex; align-items: center; gap: 5px;
++  font-size: 0.5625rem; padding: 3px 6px; min-height: 22px;
++  background: var(--panel-2); border: 1px solid var(--panel-3);
++}
++.skin-chip.on { border-color: var(--brass); color: var(--brass); }
++.skin-chip:disabled { opacity: 0.4; }
++.skin-dots { display: inline-flex; gap: 2px; }
++.skin-dots span { width: 9px; height: 9px; border: 1px solid var(--edge); }
++
++/* -------------------------------- carousel -------------------------------- */
++
++.hero-carousel {
++  display: flex;
++  align-items: center;
++  gap: 2px;
++  -webkit-app-region: no-drag;
++}
++
++.carousel-arrow {
++  background: none;
++  border: none;
++  box-shadow: none;
++  min-height: 0;
++  padding: 4px 2px;
++  font-size: 1rem;
++  line-height: 1;
++  color: var(--muted);
++  opacity: 0.55;
++  transition: opacity 90ms linear, color 90ms linear;
++}
++.carousel-arrow:hover {
++  background: none;
++  opacity: 1;
++  color: var(--brass);
++  transform: none;
++}
++
++/* ------------------------------ black market ------------------------------ */
++
++.black-market-item {
++  border-left-color: var(--violet);
++  background: linear-gradient(90deg, rgba(168, 116, 214, 0.10), transparent 60%);
++}
++
++/* --------------------------------- titles ---------------------------------- */
++
++.hero-title {
++  display: block;
++  font-size: 0.5625rem;
++  color: var(--brass);
++  text-transform: uppercase;
++  letter-spacing: 0.06em;
++  font-weight: normal;
++}
++
++/* ------------------------------ renown tiers ------------------------------ */
++
++.renown-tier2 {
++  border-left-color: var(--violet);
++  background: linear-gradient(90deg, rgba(168, 116, 214, 0.08), transparent 60%);
++}
++
++/* ------------------------------ achievements ------------------------------ */
++
++.achievement-card { opacity: 0.55; }
++.achievement-card.unlocked { opacity: 1; border-left-color: var(--brass); }
++
++/* ----------------------------- hover reveal ------------------------------- */
++
++.idle-stage:hover .idle-plate,
++.idle-stage:hover .idle-status {
++  background: color-mix(in srgb, var(--night) 92%, transparent);
++  border-color: var(--edge);
++}
++
++/* ------------------------------ floating reward ---------------------------- */
++
++.floating-reward {
++  position: absolute;
++  top: -6px;
++  left: 50%;
++  transform: translateX(-50%);
++  display: flex;
++  flex-direction: column;
++  align-items: center;
++  gap: 2px;
++  pointer-events: none;
++  animation: float-up 2.2s ease-out forwards;
++  z-index: 5;
++}
++.floating-xp {
++  font-family: var(--font-display);
++  font-size: 0.75rem;
++  color: var(--sky);
++  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8), 0 0 8px rgba(91, 143, 214, 0.5);
++  white-space: nowrap;
++}
++.floating-gold {
++  font-family: var(--font-display);
++  font-size: 0.6875rem;
++  color: var(--brass);
++  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8), 0 0 8px rgba(217, 164, 65, 0.5);
++  white-space: nowrap;
++}
++@keyframes float-up {
++  0% { transform: translate(-50%, 0); opacity: 0; }
++  15% { opacity: 1; }
++  75% { opacity: 1; }
++  100% { transform: translate(-50%, -34px); opacity: 0; }
++}
++
++/* --------------------------------- vendors --------------------------------- */
++
++.vendor-tabs button {
++  flex: 1;
++  min-height: 30px;
++  padding: 6px 8px;
++  font-size: 0.6875rem;
++}
++.vendor-tabs button.active {
++  background: var(--brass);
++  color: var(--night);
++  border-color: var(--brass);
++}
++
++.vendor-card {
++  background: linear-gradient(90deg, rgba(217, 164, 65, 0.08), transparent 60%);
++  border-left-color: var(--brass);
++}
++
++.locked-upgrade {
++  opacity: 0.5;
++  border-style: dashed;
++}
++
++/* ---------------------------------- lore ----------------------------------- */
++
++.lore-card { margin-bottom: 10px; }
++.lore-completed { border-left-color: var(--brass); }
++.lore-in-progress { border-left-color: var(--sky); border-style: dashed; }
++.lore-stage-list {
++  margin: 6px 0 0;
++  padding-left: 18px;
++  font-size: 0.6875rem;
++  line-height: 1.5;
++}
++.lore-stage-list li { margin-bottom: 4px; }
++.lore-card details summary { cursor: pointer; }
++.lore-card details[open] summary { margin-bottom: 4px; }
++
++/* -------------------------------- dashboard -------------------------------- */
++
++.power-card {
++  text-align: center;
++  background: radial-gradient(ellipse at top, rgba(217, 164, 65, 0.12), transparent 70%);
++  border-left-color: var(--brass);
++}
++.power-number {
++  font-family: var(--font-display);
++  font-size: 2.2rem;
++  color: var(--brass);
++  text-shadow: 0 0 16px rgba(217, 164, 65, 0.45);
++  line-height: 1.1;
++}
++
++.dashboard-grid {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 16px;
++  margin-bottom: 8px;
++}
++.dashboard-item {
++  display: flex;
++  flex-direction: column;
++  align-items: center;
++  width: 76px;
++}
++
++.progress-ring {
++  border-radius: 50%;
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  transition: box-shadow 200ms ease;
++}
++.progress-ring-inner {
++  width: 78%;
++  height: 78%;
++  border-radius: 50%;
++  background: var(--panel);
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  font-family: var(--font-display);
++  font-weight: bold;
++  font-size: 1rem;
++}
++
++.dashboard-stat-number {
++  font-family: var(--font-display);
++  font-size: 1.375rem;
++  color: var(--parchment);
++}
++
++/* ------------------------------ reward burst ------------------------------- */
++
++.reward-burst {
++  display: flex;
++  gap: 18px;
++  justify-content: center;
++  align-items: baseline;
++  margin: 12px 0;
++}
++.burst-xp, .burst-gold {
++  font-family: var(--font-display);
++  font-size: 1.375rem;
++  animation: burst-pop 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
++}
++.burst-xp { color: var(--moss); text-shadow: 0 0 14px rgba(121, 168, 107, 0.5); }
++.burst-gold { color: var(--brass); text-shadow: 0 0 14px rgba(217, 164, 65, 0.5); animation-delay: 80ms; }
++.burst-levelup {
++  text-align: center;
++  font-size: 0.875rem;
++  font-weight: bold;
++  animation: burst-pop 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
++  animation-delay: 160ms;
++}
++@keyframes burst-pop {
++  0% { transform: scale(0.4); opacity: 0; }
++  60% { transform: scale(1.15); opacity: 1; }
++  100% { transform: scale(1); opacity: 1; }
++}
++
++/* --------------------------- purchase pulse --------------------------- */
++
++.purchase-pulse {
++  display: inline-block;
++  animation: purchase-pulse 500ms ease-out;
++}
++@keyframes purchase-pulse {
++  0% { transform: scale(1.5); color: var(--brass); text-shadow: 0 0 12px rgba(217, 164, 65, 0.7); }
++  100% { transform: scale(1); }
++}
++
++/* ------------------------------ max-level flash ---------------------------- */
++/* "Fully upgraded X" -- a brief card flash with stars poofing up and out,
++   triggered once when an upgrade or vendor first reaches its cap. See the
++   useMaxFlash hook in UpgradesPanel.tsx. */
++
++.max-flash-layer {
++  position: absolute;
++  inset: 0;
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  text-align: center;
++  pointer-events: none;
++  z-index: 3;
++  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--brass) 35%, transparent), transparent 70%);
++  animation: max-flash-bg 1400ms ease-out forwards;
++}
++
++.max-flash-text {
++  font-family: var(--font-display);
++  font-size: 0.75rem;
++  padding: 0 10px;
++  color: var(--brass);
++  text-shadow: 0 0 10px color-mix(in srgb, var(--brass) 80%, transparent), 0 2px 3px rgba(0, 0, 0, 0.8);
++  letter-spacing: 0.06em;
++  text-transform: uppercase;
++  animation: max-flash-text 1400ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
++}
++
++@keyframes max-flash-bg {
++  0% { opacity: 0; }
++  14% { opacity: 1; }
++  70% { opacity: 1; }
++  100% { opacity: 0; }
++}
++
++@keyframes max-flash-text {
++  0% { transform: scale(0.5); opacity: 0; }
++  25% { transform: scale(1.1); opacity: 1; }
++  40% { transform: scale(1); opacity: 1; }
++  85% { transform: scale(1); opacity: 1; }
++  100% { transform: scale(1); opacity: 0; }
++}
++
++.max-flash-star {
++  position: absolute;
++  left: 50%;
++  top: 50%;
++  font-size: 0.875rem;
++  color: var(--brass);
++  text-shadow: 0 0 6px color-mix(in srgb, var(--brass) 80%, transparent);
++  opacity: 0;
++  animation: star-poof 1300ms ease-out forwards;
++}
++
++@keyframes star-poof {
++  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(0deg); }
++  18% { opacity: 1; }
++  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.05) rotate(var(--rot)); }
++}
++
++/* --------------------------------- toast ------------------------------------ */
++/* A quick golden pop whenever the toast text changes -- the visual half of
++   the existing purchase/action sound cue, not just a silent text swap. */
++
++.toast-pop {
++  animation: toast-pop 380ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
++}
++
++@keyframes toast-pop {
++  0% { transform: translateX(-50%) scale(0.85); box-shadow: 0 0 0 rgba(217, 164, 65, 0); }
++  40% { transform: translateX(-50%) scale(1.04); box-shadow: 0 0 16px color-mix(in srgb, var(--brass) 55%, transparent); }
++  100% { transform: translateX(-50%) scale(1); box-shadow: 0 0 0 rgba(217, 164, 65, 0); }
++}
++
++/* ------------------------------- hero cards -------------------------------- */
++/* Condensed by default -- one hero is one summary row instead of half a
++   screen -- with a details toggle for stats/mods/injuries/livery. */
++
++.hero-card-summary {
++  cursor: pointer;
++}
++.hero-card-summary:hover .hero-card-name { color: var(--brass); }
++
++.hero-card-expand {
++  min-height: 0;
++  padding: 3px 8px;
++  font-size: 0.6875rem;
++  flex: none;
++}
++
++.hero-card-details {
++  margin-top: 10px;
++  padding-top: 10px;
++  border-top: 1px solid var(--panel-3);
++}
++
++/* --------------------------- quest board cards ------------------------------ */
++/* Condensed by default, same click-to-expand pattern as hero cards -- only
++   the title/tag header row is the toggle, so it doesn't fight the Send
++   button's own click. */
++
++.quest-popout-loot { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
++
++/* ============================================================================
++   Style: Modern
++   A softer, rounded-pill overlay toggled from Settings > Appearance > Style.
++   Same layout, same classes, same data -- only the chrome changes, entirely
++   through this block, so no component needed to change to support it.
++   ============================================================================ */
++
++[data-style='modern'] {
++  --radius: 14px;
++}
++
++[data-style='modern'] button {
++  border-radius: 999px;
++  border-color: transparent;
++  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
++}
++[data-style='modern'] button:active:not(:disabled) { transform: translateY(1px) scale(0.98); }
++
++[data-style='modern'] .btn-primary {
++  box-shadow: 0 2px 8px color-mix(in srgb, var(--brass) 35%, transparent);
++}
++[data-style='modern'] .btn-ghost {
++  background: var(--panel-2);
++  box-shadow: none;
++}
++
++[data-style='modern'] .card {
++  border-radius: 16px;
++  border-left-width: 5px;
++  border-color: var(--panel-3);
++  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
++}
++
++/*
++ * Full "pill" (999px) is only for small, single-line controls. A whole card
++ * -- quest-card included -- is not a pill; it went in here once and the
++ * stadium curve on a tall rectangle clipped the text in its own corners.
++ * Cards get the modest 16px radius above instead, same as every other card.
++ */
++[data-style='modern'] .tag,
++[data-style='modern'] .chip,
++[data-style='modern'] .skin-chip,
++[data-style='modern'] .toggle,
++[data-style='modern'] .toast,
++[data-style='modern'] .idle-plate,
++[data-style='modern'] .idle-status,
++[data-style='modern'] .hero-card-expand,
++[data-style='modern'] .vendor-tabs button,
++[data-style='modern'] .tabs button {
++  border-radius: 999px;
++}
++
++[data-style='modern'] .segmented {
++  border-radius: 999px;
++  overflow: hidden;
++  border-color: var(--panel-3);
++}
++[data-style='modern'] .segmented .seg { border-radius: 0; }
++
++[data-style='modern'] .bar { border-radius: 999px; }
++[data-style='modern'] .bar > span { border-radius: 999px; }
++
++[data-style='modern'] .modal {
++  border-radius: 20px;
++  border-color: var(--panel-3);
++}
++
++[data-style='modern'] .menu-root { border-radius: 10px; overflow: hidden; }
++
++[data-style='modern'] .knight-button { border-radius: 0; box-shadow: none; }
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index 62b62c1..ed825b4 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -1,13 +1,15 @@
+ import { useState } from 'react';
+-import { useEngine } from '../useEngine';
++import { useEngine, useNow } from '../useEngine';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
++import { RaidManager } from '../../game/managers/RaidManager';
+ import {
+-  RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON, isRaidUnlocked, parseLootEntry,
++  RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON,
++  isRaidUnlocked, parseLootEntry, lootForDifficulty,
+ } from '../../game/data/raids';
+ import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
+ import { RaidDifficulty } from '../../game/types';
+ import { RarityPill } from '../RarityPill';
+-import { formatDuration, RARITY_COLOR } from '../../game/util';
++import { formatDuration, describeMods, RARITY_COLOR } from '../../game/util';
+ 
+ const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', mythic: 'M' };
+ /** Reuses the existing rarity palette rather than inventing a new colour
+@@ -17,28 +19,64 @@ const DIFFICULTY_COLOR: Record<RaidDifficulty, string> = {
+   normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, mythic: RARITY_COLOR.epic,
+ };
+ 
+-function LootPreview({ encounterId }: { encounterId: string }) {
++function LootPreview({
++  encounterId, difficulty, onShowItem,
++}: { encounterId: string; difficulty: RaidDifficulty | null; onShowItem: (defId: string) => void }) {
+   const engine = useEngine();
+   const encounter = RAID_ENCOUNTER_BY_ID[encounterId];
+-  if (!encounter || encounter.loot.length === 0) return null;
++  if (!encounter) return null;
++  // Falls back to Normal's pool for the preview before a difficulty is even
++  // picked -- lootForDifficulty is the same helper the actual roll uses, so
++  // what's shown here always matches what that tier can actually drop.
++  const pool = lootForDifficulty(encounter, difficulty ?? 'normal');
++  if (pool.length === 0) return null;
+   return (
+     <div className="row wrap" style={{ gap: 6, marginTop: 4 }}>
+-      {encounter.loot.map((entry) => {
+-        const parsed = parseLootEntry(entry);
++      {pool.map((entryStr) => {
++        const parsed = parseLootEntry(entryStr);
+         if (!parsed) return null;
+         const def = EQUIPMENT_BY_ID[parsed.defId];
+         const discovered = engine.state.discoveredItems.includes(parsed.defId);
+         return (
+-          <span key={parsed.defId} className="row" style={{ gap: 4, alignItems: 'center' }}>
++          <button
++            key={parsed.defId}
++            type="button"
++            className="loot-chip"
++            onClick={(e) => {
++              e.stopPropagation();
++              if (discovered && def) onShowItem(parsed.defId);
++              else engine.showToast('Discover this item first.');
++            }}
++          >
+             <span className="tiny muted">{discovered && def ? def.name : '???'}</span>
+             {discovered && def && <RarityPill rarity={def.rarity} />}
+-          </span>
++          </button>
+         );
+       })}
+     </div>
+   );
+ }
+ 
++/** Shared across every raid card -- clicking a discovered loot entry opens
++ *  this instead of each card managing its own overlay state. */
++function ItemDetailOverlay({ defId, onClose }: { defId: string; onClose: () => void }) {
++  const def = EQUIPMENT_BY_ID[defId];
++  if (!def) return null;
++  return (
++    <div className="overlay" onClick={onClose}>
++      <div className="modal" onClick={(e) => e.stopPropagation()}>
++        <h3>{def.name}</h3>
++        <RarityPill rarity={def.rarity} />
++        <p className="tiny muted" style={{ marginTop: 8 }}>{def.slot} · requires level {def.reqLevel}</p>
++        <p className="small" style={{ marginTop: 8 }}>{describeMods(def.mods).join(' · ') || 'No bonuses'}</p>
++        <div className="row end" style={{ marginTop: 14 }}>
++          <button className="btn-primary" onClick={onClose}>Close</button>
++        </div>
++      </div>
++    </div>
++  );
++}
++
+ function DifficultyCircle({
+   difficulty, active, onClick,
+ }: { difficulty: RaidDifficulty; active: boolean; onClick: () => void }) {
+@@ -65,8 +103,9 @@ function DifficultyCircle({
+   );
+ }
+ 
+-function RaidCard({ raidId }: { raidId: string }) {
++function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: string) => void }) {
+   const engine = useEngine();
++  const now = useNow();
+   const state = engine.state;
+   const raid = RAIDS.find((r) => r.id === raidId)!;
+   const unlocked = isRaidUnlocked(raidId, state.completedRaids);
+@@ -86,6 +125,18 @@ function RaidCard({ raidId }: { raidId: string }) {
+   const idleHeroes = state.heroes.filter((h) => h.status !== 'questing');
+   const cfg = difficulty ? RAID_DIFFICULTIES[difficulty] : null;
+ 
++  // Odds/duration need *some* party to preview against before any hero is
++  // actually picked -- falls back to the first N idle heroes (matching
++  // this tier's exact party size), same "preview against a plausible
++  // default, switch to the real selection once one exists" pattern the
++  // Quest Board already uses for its own success/duration preview.
++  const previewHeroIds = selectedHeroIds.length > 0
++    ? selectedHeroIds
++    : idleHeroes.slice(0, cfg?.partySize ?? 0).map((h) => h.id);
++  const previewDuration = difficulty && previewHeroIds.length > 0
++    ? RaidManager.previewDuration(state, previewHeroIds, raid.id, now)
++    : null;
++
+   const [confirming, setConfirming] = useState(false);
+ 
+   const toggleHero = (heroId: string) => {
+@@ -138,15 +189,30 @@ function RaidCard({ raidId }: { raidId: string }) {
+             {raid.encounterIds.map((id) => {
+               const enc = RAID_ENCOUNTER_BY_ID[id];
+               if (!enc) return null;
++              const encSuccess = difficulty && previewHeroIds.length > 0
++                ? RaidManager.previewEncounterSuccess(state, previewHeroIds, difficulty, id, now)
++                : null;
+               return (
+                 <li key={id}>
+                   <b>{enc.name}.</b> <span className="muted">{enc.flavour}</span>
+-                  <LootPreview encounterId={id} />
++                  {encSuccess !== null && (
++                    <div className="tiny muted" style={{ marginTop: 2 }}>
++                      Success <b className={encSuccess >= 60 ? 'good' : encSuccess >= 35 ? '' : 'bad'}>{Math.round(encSuccess)}%</b>
++                      {' · '}Time <b>{formatDuration(enc.duration)}</b>
++                    </div>
++                  )}
++                  <LootPreview encounterId={id} difficulty={difficulty} onShowItem={onShowItem} />
+                 </li>
+               );
+             })}
+           </ol>
+ 
++          {previewDuration !== null && (
++            <p className="tiny muted" style={{ marginTop: 4 }}>
++              Total time (this party): <b>{formatDuration(previewDuration)}</b>
++            </p>
++          )}
++
+           <div className="section-heading">Difficulty</div>
+           <div className="row" style={{ gap: 10 }}>
+             {RAID_DIFFICULTY_ORDER.map((d) => (
+@@ -252,6 +318,7 @@ export function RaidsPanel() {
+   const engine = useEngine();
+   const state = engine.state;
+   const hasRaids = ModifierManager.hasUnlock(state, 'raids');
++  const [itemDetail, setItemDetail] = useState<string | null>(null);
+ 
+   if (!hasRaids) {
+     return (
+@@ -273,7 +340,11 @@ export function RaidsPanel() {
+       </p>
+ 
+       {state.activeRaid && <ActiveRaidCard />}
+-      {RAIDS.filter((r) => r.id !== state.activeRaid?.raidId).map((r) => <RaidCard key={r.id} raidId={r.id} />)}
++      {RAIDS.filter((r) => r.id !== state.activeRaid?.raidId).map((r) => (
++        <RaidCard key={r.id} raidId={r.id} onShowItem={setItemDetail} />
++      ))}
++
++      {itemDetail && <ItemDetailOverlay defId={itemDetail} onClose={() => setItemDetail(null)} />}
+     </>
+   );
+ }
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index c8a1329..525f96d 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -147,6 +147,11 @@ const SCHEMAS = {
+       // (browsing /api/data/equipment) instead of a plain text-list editor.
+       // See renderLootField in app.js.
+       loot: { type: 'string[]', required: false, picker: 'lootTable' },
++      // Optional -- an encounter with nothing here just uses `loot` at
++      // every difficulty, same as before tiered pools existed. Same
++      // picker, so filling these in is exactly as easy as the base list.
++      lootHeroic: { type: 'string[]', required: false, picker: 'lootTable' },
++      lootMythic: { type: 'string[]', required: false, picker: 'lootTable' },
+     },
+   },
+   'raids': {

@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import { useEngine } from '../useEngine';
+import { useEngine, useNow } from '../useEngine';
 import { ModifierManager } from '../../game/managers/ModifierManager';
+import { RaidManager } from '../../game/managers/RaidManager';
 import {
-  RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON, isRaidUnlocked, parseLootEntry,
+  RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON,
+  isRaidUnlocked, parseLootEntry, lootForDifficulty,
 } from '../../game/data/raids';
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
 import { RaidDifficulty } from '../../game/types';
 import { RarityPill } from '../RarityPill';
-import { formatDuration, RARITY_COLOR } from '../../game/util';
+import { formatDuration, describeMods, RARITY_COLOR } from '../../game/util';
 
 const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', mythic: 'M' };
 /** Reuses the existing rarity palette rather than inventing a new colour
@@ -17,24 +19,60 @@ const DIFFICULTY_COLOR: Record<RaidDifficulty, string> = {
   normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, mythic: RARITY_COLOR.epic,
 };
 
-function LootPreview({ encounterId }: { encounterId: string }) {
+function LootPreview({
+  encounterId, difficulty, onShowItem,
+}: { encounterId: string; difficulty: RaidDifficulty | null; onShowItem: (defId: string) => void }) {
   const engine = useEngine();
   const encounter = RAID_ENCOUNTER_BY_ID[encounterId];
-  if (!encounter || encounter.loot.length === 0) return null;
+  if (!encounter) return null;
+  // Falls back to Normal's pool for the preview before a difficulty is even
+  // picked -- lootForDifficulty is the same helper the actual roll uses, so
+  // what's shown here always matches what that tier can actually drop.
+  const pool = lootForDifficulty(encounter, difficulty ?? 'normal');
+  if (pool.length === 0) return null;
   return (
     <div className="row wrap" style={{ gap: 6, marginTop: 4 }}>
-      {encounter.loot.map((entry) => {
-        const parsed = parseLootEntry(entry);
+      {pool.map((entryStr) => {
+        const parsed = parseLootEntry(entryStr);
         if (!parsed) return null;
         const def = EQUIPMENT_BY_ID[parsed.defId];
         const discovered = engine.state.discoveredItems.includes(parsed.defId);
         return (
-          <span key={parsed.defId} className="row" style={{ gap: 4, alignItems: 'center' }}>
+          <button
+            key={parsed.defId}
+            type="button"
+            className="loot-chip"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (discovered && def) onShowItem(parsed.defId);
+              else engine.showToast('Discover this item first.');
+            }}
+          >
             <span className="tiny muted">{discovered && def ? def.name : '???'}</span>
             {discovered && def && <RarityPill rarity={def.rarity} />}
-          </span>
+          </button>
         );
       })}
+    </div>
+  );
+}
+
+/** Shared across every raid card -- clicking a discovered loot entry opens
+ *  this instead of each card managing its own overlay state. */
+function ItemDetailOverlay({ defId, onClose }: { defId: string; onClose: () => void }) {
+  const def = EQUIPMENT_BY_ID[defId];
+  if (!def) return null;
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3>{def.name}</h3>
+        <RarityPill rarity={def.rarity} />
+        <p className="tiny muted" style={{ marginTop: 8 }}>{def.slot} · requires level {def.reqLevel}</p>
+        <p className="small" style={{ marginTop: 8 }}>{describeMods(def.mods).join(' · ') || 'No bonuses'}</p>
+        <div className="row end" style={{ marginTop: 14 }}>
+          <button className="btn-primary" onClick={onClose}>Close</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -65,8 +103,9 @@ function DifficultyCircle({
   );
 }
 
-function RaidCard({ raidId }: { raidId: string }) {
+function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: string) => void }) {
   const engine = useEngine();
+  const now = useNow();
   const state = engine.state;
   const raid = RAIDS.find((r) => r.id === raidId)!;
   const unlocked = isRaidUnlocked(raidId, state.completedRaids);
@@ -85,6 +124,18 @@ function RaidCard({ raidId }: { raidId: string }) {
 
   const idleHeroes = state.heroes.filter((h) => h.status !== 'questing');
   const cfg = difficulty ? RAID_DIFFICULTIES[difficulty] : null;
+
+  // Odds/duration need *some* party to preview against before any hero is
+  // actually picked -- falls back to the first N idle heroes (matching
+  // this tier's exact party size), same "preview against a plausible
+  // default, switch to the real selection once one exists" pattern the
+  // Quest Board already uses for its own success/duration preview.
+  const previewHeroIds = selectedHeroIds.length > 0
+    ? selectedHeroIds
+    : idleHeroes.slice(0, cfg?.partySize ?? 0).map((h) => h.id);
+  const previewDuration = difficulty && previewHeroIds.length > 0
+    ? RaidManager.previewDuration(state, previewHeroIds, raid.id, now)
+    : null;
 
   const [confirming, setConfirming] = useState(false);
 
@@ -138,14 +189,29 @@ function RaidCard({ raidId }: { raidId: string }) {
             {raid.encounterIds.map((id) => {
               const enc = RAID_ENCOUNTER_BY_ID[id];
               if (!enc) return null;
+              const encSuccess = difficulty && previewHeroIds.length > 0
+                ? RaidManager.previewEncounterSuccess(state, previewHeroIds, difficulty, id, now)
+                : null;
               return (
                 <li key={id}>
                   <b>{enc.name}.</b> <span className="muted">{enc.flavour}</span>
-                  <LootPreview encounterId={id} />
+                  {encSuccess !== null && (
+                    <div className="tiny muted" style={{ marginTop: 2 }}>
+                      Success <b className={encSuccess >= 60 ? 'good' : encSuccess >= 35 ? '' : 'bad'}>{Math.round(encSuccess)}%</b>
+                      {' · '}Time <b>{formatDuration(enc.duration)}</b>
+                    </div>
+                  )}
+                  <LootPreview encounterId={id} difficulty={difficulty} onShowItem={onShowItem} />
                 </li>
               );
             })}
           </ol>
+
+          {previewDuration !== null && (
+            <p className="tiny muted" style={{ marginTop: 4 }}>
+              Total time (this party): <b>{formatDuration(previewDuration)}</b>
+            </p>
+          )}
 
           <div className="section-heading">Difficulty</div>
           <div className="row" style={{ gap: 10 }}>
@@ -252,6 +318,7 @@ export function RaidsPanel() {
   const engine = useEngine();
   const state = engine.state;
   const hasRaids = ModifierManager.hasUnlock(state, 'raids');
+  const [itemDetail, setItemDetail] = useState<string | null>(null);
 
   if (!hasRaids) {
     return (
@@ -273,7 +340,11 @@ export function RaidsPanel() {
       </p>
 
       {state.activeRaid && <ActiveRaidCard />}
-      {RAIDS.filter((r) => r.id !== state.activeRaid?.raidId).map((r) => <RaidCard key={r.id} raidId={r.id} />)}
+      {RAIDS.filter((r) => r.id !== state.activeRaid?.raidId).map((r) => (
+        <RaidCard key={r.id} raidId={r.id} onShowItem={setItemDetail} />
+      ))}
+
+      {itemDetail && <ItemDetailOverlay defId={itemDetail} onClose={() => setItemDetail(null)} />}
     </>
   );
 }

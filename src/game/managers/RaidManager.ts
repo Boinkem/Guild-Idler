@@ -1,7 +1,7 @@
 import {
   ActiveRaid, GameState, Hero, RaidDifficulty, RaidLootDrop, RaidResult,
 } from '../types';
-import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry } from '../data/raids';
+import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, lootForDifficulty } from '../data/raids';
 import { EQUIPMENT_BY_ID } from '../data/equipment';
 import { MIN_SUCCESS, MAX_SUCCESS } from './QuestManager';
 import { HeroManager } from './HeroManager';
@@ -144,7 +144,7 @@ export const RaidManager = {
       gold += Math.floor(encounter.rewardGold * diffCfg.rewardMultiplier * (1 + economy.gold / 100));
       xp += Math.floor(encounter.rewardXp * diffCfg.rewardMultiplier * (1 + economy.xp / 100));
 
-      for (const entry of encounter.loot) {
+      for (const entry of lootForDifficulty(encounter, active.difficulty)) {
         const parsed = parseLootEntry(entry);
         if (!parsed) continue;
         // diffCfg.lootBonus is new -- harder raid tiers now trade success

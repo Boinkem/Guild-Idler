@@ -262,6 +262,16 @@ export interface RaidEncounterDef {
    * for a repeatable {defId, chance} shape. Parsed via parseLootEntry.
    */
   loot: string[];
+  /**
+   * Difficulty-specific loot pools, WoW-style -- Heroic/Mythic rolls point
+   * at genuinely different (usually stat-boosted) item variants rather than
+   * just the same items at a better chance. Optional and independent, so
+   * this can roll out encounter by encounter: a tier with no list here
+   * falls back to `loot`, the same pool every difficulty used before this
+   * existed. See lootForDifficulty in raids.ts.
+   */
+  lootHeroic?: string[];
+  lootMythic?: string[];
 }
 
 export interface RaidDef {

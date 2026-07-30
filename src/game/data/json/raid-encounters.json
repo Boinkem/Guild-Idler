@@ -10,6 +10,14 @@
     "loot": [
       "gravewatchers_band@10",
       "ashwoven_charm@8"
+    ],
+    "lootHeroic": [
+      "gravewatchers_band_heroic@10",
+      "ashwoven_charm_heroic@8"
+    ],
+    "lootMythic": [
+      "gravewatchers_band_mythic@10",
+      "ashwoven_charm_mythic@8"
     ]
   },
   {
@@ -23,6 +31,14 @@
     "loot": [
       "choir_mask@6",
       "silenced_bell@6"
+    ],
+    "lootHeroic": [
+      "choir_mask_heroic@6",
+      "silenced_bell_heroic@6"
+    ],
+    "lootMythic": [
+      "choir_mask_mythic@6",
+      "silenced_bell_mythic@6"
     ]
   },
   {
@@ -37,6 +53,16 @@
       "dragon_helm@4",
       "gravewatchers_band@5",
       "choir_mask@5"
+    ],
+    "lootHeroic": [
+      "dragon_helm_heroic@4",
+      "gravewatchers_band_heroic@5",
+      "choir_mask_heroic@5"
+    ],
+    "lootMythic": [
+      "dragon_helm_mythic@4",
+      "gravewatchers_band_mythic@5",
+      "choir_mask_mythic@5"
     ]
   },
   {
@@ -50,6 +76,14 @@
     "loot": [
       "copper_band@12",
       "work_gloves@10"
+    ],
+    "lootHeroic": [
+      "copper_band_heroic@12",
+      "work_gloves_heroic@10"
+    ],
+    "lootMythic": [
+      "copper_band_mythic@12",
+      "work_gloves_mythic@10"
     ]
   },
   {
@@ -63,6 +97,14 @@
     "loot": [
       "knights_blade@6",
       "iron_helm@8"
+    ],
+    "lootHeroic": [
+      "knights_blade_heroic@6",
+      "iron_helm_heroic@8"
+    ],
+    "lootMythic": [
+      "knights_blade_mythic@6",
+      "iron_helm_mythic@8"
     ]
   },
   {
@@ -77,6 +119,16 @@
       "chainmail@6",
       "ranger_boots@6",
       "tollkeepers_signet@4"
+    ],
+    "lootHeroic": [
+      "chainmail_heroic@6",
+      "ranger_boots_heroic@6",
+      "tollkeepers_signet_heroic@4"
+    ],
+    "lootMythic": [
+      "chainmail_mythic@6",
+      "ranger_boots_mythic@6",
+      "tollkeepers_signet_mythic@4"
     ]
   }
 ]

@@ -81,6 +81,17 @@ export function parseLootEntry(entry: string): { defId: string; chance: number }
   return { defId, chance };
 }
 
+/** The loot pool actually in play for a given difficulty -- lootHeroic/
+ *  lootMythic if the encounter defines one, otherwise the same base `loot`
+ *  every difficulty used before tiered pools existed. Used identically by
+ *  both the real roll (RaidManager.resolve) and the UI preview, so what's
+ *  shown always matches what can actually drop. */
+export function lootForDifficulty(encounter: RaidEncounterDef, difficulty: RaidDifficulty): string[] {
+  if (difficulty === 'heroic') return encounter.lootHeroic ?? encounter.loot;
+  if (difficulty === 'mythic') return encounter.lootMythic ?? encounter.loot;
+  return encounter.loot;
+}
+
 /** Raids visible in the UI: this one, plus any not-yet-reached raid another
  *  completed raid points at via unlocksRaidId -- shown greyed-out with the
  *  name/rewards hidden until actually unlocked, same "???" treatment used

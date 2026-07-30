@@ -1160,5 +1160,379 @@
     "stats": {
       "luck": 3
     }
+  },
+  {
+    "id": "gravewatchers_band_heroic",
+    "name": "Gravewatcher's Band (Heroic)",
+    "slot": "ring",
+    "rarity": "epic",
+    "reqLevel": 19,
+    "maxDurability": 247,
+    "value": 2535,
+    "mods": {
+      "injuryResist": 18,
+      "success": 8,
+      "loot": 6
+    },
+    "stats": {
+      "wisdom": 6,
+      "endurance": 4
+    }
+  },
+  {
+    "id": "gravewatchers_band_mythic",
+    "name": "Gravewatcher's Band (Mythic)",
+    "slot": "ring",
+    "rarity": "epic",
+    "reqLevel": 19,
+    "maxDurability": 321,
+    "value": 3296,
+    "mods": {
+      "injuryResist": 24,
+      "success": 10,
+      "loot": 8
+    },
+    "stats": {
+      "wisdom": 8,
+      "endurance": 5
+    }
+  },
+  {
+    "id": "ashwoven_charm_heroic",
+    "name": "Ashwoven Charm (Heroic)",
+    "slot": "amulet",
+    "rarity": "rare",
+    "reqLevel": 11,
+    "maxDurability": 169,
+    "value": 650,
+    "mods": {
+      "success": 8,
+      "injuryResist": 10
+    },
+    "stats": {
+      "wisdom": 5
+    }
+  },
+  {
+    "id": "ashwoven_charm_mythic",
+    "name": "Ashwoven Charm (Mythic)",
+    "slot": "amulet",
+    "rarity": "rare",
+    "reqLevel": 11,
+    "maxDurability": 220,
+    "value": 845,
+    "mods": {
+      "success": 10,
+      "injuryResist": 14
+    },
+    "stats": {
+      "wisdom": 7
+    }
+  },
+  {
+    "id": "choir_mask_heroic",
+    "name": "Mask of the Hollow Choir (Heroic)",
+    "slot": "helmet",
+    "rarity": "epic",
+    "reqLevel": 24,
+    "maxDurability": 162,
+    "value": 2990,
+    "mods": {
+      "xp": 26,
+      "loot": 13,
+      "injuryResist": 8
+    },
+    "stats": {
+      "wisdom": 12
+    }
+  },
+  {
+    "id": "choir_mask_mythic",
+    "name": "Mask of the Hollow Choir (Mythic)",
+    "slot": "helmet",
+    "rarity": "epic",
+    "reqLevel": 24,
+    "maxDurability": 211,
+    "value": 3887,
+    "mods": {
+      "xp": 34,
+      "loot": 17,
+      "injuryResist": 10
+    },
+    "stats": {
+      "wisdom": 15
+    }
+  },
+  {
+    "id": "silenced_bell_heroic",
+    "name": "The Silenced Bell (Heroic)",
+    "slot": "amulet",
+    "rarity": "epic",
+    "reqLevel": 24,
+    "maxDurability": 169,
+    "value": 3120,
+    "mods": {
+      "success": 13,
+      "gold": 26
+    },
+    "stats": {
+      "wisdom": 8,
+      "luck": 6
+    }
+  },
+  {
+    "id": "silenced_bell_mythic",
+    "name": "The Silenced Bell (Mythic)",
+    "slot": "amulet",
+    "rarity": "epic",
+    "reqLevel": 24,
+    "maxDurability": 220,
+    "value": 4056,
+    "mods": {
+      "success": 17,
+      "gold": 34
+    },
+    "stats": {
+      "wisdom": 10,
+      "luck": 8
+    }
+  },
+  {
+    "id": "dragon_helm_heroic",
+    "name": "Dragonscale Helm (Heroic)",
+    "slot": "helmet",
+    "rarity": "legendary",
+    "reqLevel": 25,
+    "maxDurability": 247,
+    "value": 8320,
+    "mods": {
+      "injuryResist": 26,
+      "success": 10
+    },
+    "stats": {
+      "endurance": 12
+    }
+  },
+  {
+    "id": "dragon_helm_mythic",
+    "name": "Dragonscale Helm (Mythic)",
+    "slot": "helmet",
+    "rarity": "legendary",
+    "reqLevel": 25,
+    "maxDurability": 321,
+    "value": 10816,
+    "mods": {
+      "injuryResist": 34,
+      "success": 14
+    },
+    "stats": {
+      "endurance": 15
+    }
+  },
+  {
+    "id": "copper_band_heroic",
+    "name": "Copper Band (Heroic)",
+    "slot": "ring",
+    "rarity": "common",
+    "reqLevel": 1,
+    "maxDurability": 78,
+    "value": 39,
+    "mods": {
+      "loot": 1
+    }
+  },
+  {
+    "id": "copper_band_mythic",
+    "name": "Copper Band (Mythic)",
+    "slot": "ring",
+    "rarity": "common",
+    "reqLevel": 1,
+    "maxDurability": 101,
+    "value": 51,
+    "mods": {
+      "loot": 2
+    }
+  },
+  {
+    "id": "work_gloves_heroic",
+    "name": "Work Gloves (Heroic)",
+    "slot": "gloves",
+    "rarity": "common",
+    "reqLevel": 1,
+    "maxDurability": 39,
+    "value": 26,
+    "mods": {
+      "gold": 4
+    }
+  },
+  {
+    "id": "work_gloves_mythic",
+    "name": "Work Gloves (Mythic)",
+    "slot": "gloves",
+    "rarity": "common",
+    "reqLevel": 1,
+    "maxDurability": 51,
+    "value": 34,
+    "mods": {
+      "gold": 5
+    }
+  },
+  {
+    "id": "knights_blade_heroic",
+    "name": "Knight's Blade (Heroic)",
+    "slot": "weapon",
+    "rarity": "uncommon",
+    "reqLevel": 5,
+    "maxDurability": 91,
+    "value": 208,
+    "mods": {
+      "success": 6,
+      "gold": 5
+    },
+    "stats": {
+      "strength": 4
+    }
+  },
+  {
+    "id": "knights_blade_mythic",
+    "name": "Knight's Blade (Mythic)",
+    "slot": "weapon",
+    "rarity": "uncommon",
+    "reqLevel": 5,
+    "maxDurability": 118,
+    "value": 270,
+    "mods": {
+      "success": 8,
+      "gold": 7
+    },
+    "stats": {
+      "strength": 5
+    }
+  },
+  {
+    "id": "iron_helm_heroic",
+    "name": "Iron Helm (Heroic)",
+    "slot": "helmet",
+    "rarity": "uncommon",
+    "reqLevel": 4,
+    "maxDurability": 78,
+    "value": 182,
+    "mods": {
+      "injuryResist": 9,
+      "success": 3
+    },
+    "stats": {
+      "endurance": 3
+    }
+  },
+  {
+    "id": "iron_helm_mythic",
+    "name": "Iron Helm (Mythic)",
+    "slot": "helmet",
+    "rarity": "uncommon",
+    "reqLevel": 4,
+    "maxDurability": 101,
+    "value": 237,
+    "mods": {
+      "injuryResist": 12,
+      "success": 3
+    },
+    "stats": {
+      "endurance": 3
+    }
+  },
+  {
+    "id": "chainmail_heroic",
+    "name": "Chainmail Hauberk (Heroic)",
+    "slot": "chest",
+    "rarity": "uncommon",
+    "reqLevel": 6,
+    "maxDurability": 98,
+    "value": 273,
+    "mods": {
+      "injuryResist": 12,
+      "success": 4
+    },
+    "stats": {
+      "endurance": 4
+    }
+  },
+  {
+    "id": "chainmail_mythic",
+    "name": "Chainmail Hauberk (Mythic)",
+    "slot": "chest",
+    "rarity": "uncommon",
+    "reqLevel": 6,
+    "maxDurability": 127,
+    "value": 355,
+    "mods": {
+      "injuryResist": 15,
+      "success": 5
+    },
+    "stats": {
+      "endurance": 5
+    }
+  },
+  {
+    "id": "ranger_boots_heroic",
+    "name": "Ranger Boots (Heroic)",
+    "slot": "boots",
+    "rarity": "uncommon",
+    "reqLevel": 4,
+    "maxDurability": 75,
+    "value": 176,
+    "mods": {
+      "speed": 9
+    },
+    "stats": {
+      "endurance": 3
+    }
+  },
+  {
+    "id": "ranger_boots_mythic",
+    "name": "Ranger Boots (Mythic)",
+    "slot": "boots",
+    "rarity": "uncommon",
+    "reqLevel": 4,
+    "maxDurability": 98,
+    "value": 228,
+    "mods": {
+      "speed": 12
+    },
+    "stats": {
+      "endurance": 3
+    }
+  },
+  {
+    "id": "tollkeepers_signet_heroic",
+    "name": "Tollkeeper's Signet (Heroic)",
+    "slot": "ring",
+    "rarity": "uncommon",
+    "reqLevel": 7,
+    "maxDurability": 98,
+    "value": 195,
+    "mods": {
+      "success": 6,
+      "gold": 10
+    },
+    "stats": {
+      "luck": 4
+    }
+  },
+  {
+    "id": "tollkeepers_signet_mythic",
+    "name": "Tollkeeper's Signet (Mythic)",
+    "slot": "ring",
+    "rarity": "uncommon",
+    "reqLevel": 7,
+    "maxDurability": 127,
+    "value": 254,
+    "mods": {
+      "success": 8,
+      "gold": 14
+    },
+    "stats": {
+      "luck": 5
+    }
   }
 ]
