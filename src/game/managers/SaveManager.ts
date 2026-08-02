@@ -96,6 +96,7 @@ export function createInitialState(now = Date.now()): GameState {
     completedRaidDifficulties: [],
     notifications: [],
     seenGuidance: [],
+    raidUpgrades: {},
   };
 }
 
@@ -275,6 +276,11 @@ const MIGRATIONS: Record<number, Migration> = {
     version: 17,
     notifications: (save.notifications as unknown[] | undefined) ?? [],
     seenGuidance: (save.seenGuidance as string[] | undefined) ?? [],
+  }),
+  17: (save) => ({
+    ...save,
+    version: 18,
+    raidUpgrades: (save.raidUpgrades as Record<string, number> | undefined) ?? {},
   }),
 };
 

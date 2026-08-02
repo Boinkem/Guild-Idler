@@ -804,6 +804,14 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  buyRaidUpgrade(id: string) {
+    const error = GuildManager.buyRaidUpgrade(this.state, id);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.notify();
+    void this.saveNow();
+  }
+
   levelUpVendor(vendorId: Parameters<typeof GuildManager.levelUpVendor>[1]) {
     const error = GuildManager.levelUpVendor(this.state, vendorId);
     if (error) return this.say(error);
