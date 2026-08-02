@@ -1,4 +1,5 @@
 import { RaidDef, RaidDifficulty, RaidDifficultyConfig, RaidEncounterDef } from '../types';
+import { Tuning } from '../tuning';
 
 /**
  * Raids and their encounters live in json/*.json, same reasoning as
@@ -51,9 +52,26 @@ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
   // durationMultiplier: harder tiers take longer too -- normal 2h becomes
   // 2.3h at Heroic, 2.6h at Mythic (i.e. x1.15 / x1.3), matching the given
   // example exactly.
+  // Normal's own numbers are all baseline zero-points (no penalty, x1
+  // everything) rather than meaningfully "tunable" values, so they stay
+  // literal here. Heroic/Mythic's four fields each read from the tuning
+  // registry instead -- editable live via the devtool's Tuning tab. See
+  // tuning.ts and tuning.json.
   normal: { difficulty: 'normal', partySize: 3, successPenalty: 0, rewardMultiplier: 1, lootBonus: 0, durationMultiplier: 1 },
-  heroic: { difficulty: 'heroic', partySize: 6, successPenalty: 20, rewardMultiplier: 2.2, lootBonus: 5, durationMultiplier: 1.15 },
-  mythic: { difficulty: 'mythic', partySize: 9, successPenalty: 50, rewardMultiplier: 4, lootBonus: 15, durationMultiplier: 1.3 },
+  heroic: {
+    difficulty: 'heroic', partySize: 6,
+    successPenalty: Tuning.get('raid_difficulty.heroic.successPenalty'),
+    rewardMultiplier: Tuning.get('raid_difficulty.heroic.rewardMultiplier'),
+    lootBonus: Tuning.get('raid_difficulty.heroic.lootBonus'),
+    durationMultiplier: Tuning.get('raid_difficulty.heroic.durationMultiplier'),
+  },
+  mythic: {
+    difficulty: 'mythic', partySize: 9,
+    successPenalty: Tuning.get('raid_difficulty.mythic.successPenalty'),
+    rewardMultiplier: Tuning.get('raid_difficulty.mythic.rewardMultiplier'),
+    lootBonus: Tuning.get('raid_difficulty.mythic.lootBonus'),
+    durationMultiplier: Tuning.get('raid_difficulty.mythic.durationMultiplier'),
+  },
 };
 
 export const RAID_DIFFICULTY_ORDER: RaidDifficulty[] = ['normal', 'heroic', 'mythic'];

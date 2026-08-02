@@ -170,6 +170,27 @@ const SCHEMAS = {
       unlocksRaidId: { type: 'string', required: false },
     },
   },
+  'tuning': {
+    file: 'tuning.json',
+    label: 'Tuning',
+    idField: 'id',
+    // Flat scalar registry (see src/game/tuning.ts) -- fully generic, gets
+    // a working editor for free from the same system every other content
+    // type uses. Deliberately reuses this rather than building a bespoke
+    // tuning UI for the first pass; a denser dedicated view (search,
+    // grouped by category, current-vs-default at a glance) is a natural
+    // follow-up once the underlying pattern is proven out with real use.
+    fields: {
+      id: { type: 'string', required: true },
+      label: { type: 'string', required: true },
+      category: { type: 'string', required: true },
+      value: { type: 'number', required: true },
+      default: { type: 'number', required: true },
+      min: { type: 'number', required: false },
+      max: { type: 'number', required: false },
+      description: { type: 'string', required: true },
+    },
+  },
   'achievements': {
     file: 'achievements.json',
     label: 'Achievements',

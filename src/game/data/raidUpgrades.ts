@@ -1,4 +1,5 @@
 import { RaidUpgradeDef } from '../types';
+import { Tuning } from '../tuning';
 
 /**
  * A dedicated upgrade tree affecting raids only, fully separate from the
@@ -19,13 +20,16 @@ export const RAID_UPGRADES: RaidUpgradeDef[] = [
     id: 'raid_speed',
     name: 'Raid Speed',
     description: 'Faster marches, tighter logistics -- shaves real time off every raid, regardless of difficulty.',
-    modsPerLevel: { speed: 8 },
-    goldBaseCost: 6000,
-    goldCostGrowth: 1.9,
-    goldTierMaxLevel: 4,
-    renownBaseCost: 8,
-    renownCostGrowth: 1.35,
-    maxLevel: 10,
+    // Every numeric field here reads from the tuning registry
+    // (tuning.json) rather than being a literal -- editable live via the
+    // devtool's Tuning tab without touching this file. See tuning.ts.
+    modsPerLevel: { speed: Tuning.get('raid_speed.speedPerLevel') },
+    goldBaseCost: Tuning.get('raid_speed.goldBaseCost'),
+    goldCostGrowth: Tuning.get('raid_speed.goldCostGrowth'),
+    goldTierMaxLevel: Tuning.get('raid_speed.goldTierMaxLevel'),
+    renownBaseCost: Tuning.get('raid_speed.renownBaseCost'),
+    renownCostGrowth: Tuning.get('raid_speed.renownCostGrowth'),
+    maxLevel: Tuning.get('raid_speed.maxLevel'),
   },
 ];
 
