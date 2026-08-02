@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 17;
+export const SAVE_VERSION = 18;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -316,6 +316,38 @@ export interface RaidDifficultyConfig {
   durationMultiplier: number;
 }
 
+/**
+ * The raid-only upgrade lever left deliberately empty by 0061 -- a
+ * dedicated Raid Guild Upgrade tree, fully separate from the general
+ * quest UpgradeDef/GuildDef/RenownPerkDef trees (state.upgrades,
+ * state.guild, state.renownPerks). Applied via ModifierManager.raid(),
+ * never ModifierManager.global() -- raids intentionally don't inherit
+ * quest-side progression for free.
+ *
+ * Same two-currency shape as RenownPerkDef's tier2 (same upgrade, cost
+ * curve changes after a level threshold), extended to also switch
+ * *currency*, not just growth rate: levels 1..goldTierMaxLevel cost gold
+ * on the usual baseCost*growth^level curve; every level after that costs
+ * Renown instead, on its own independent curve. Ties raid power to the
+ * prestige loop for the higher tiers, while staying gold-affordable (like
+ * everything else early) at the entry point.
+ */
+export interface RaidUpgradeDef {
+  id: string;
+  name: string;
+  description: string;
+  /** Per raid-upgrade level, applied via ModifierManager.raid(). */
+  modsPerLevel: Partial<Modifiers>;
+  goldBaseCost: number;
+  goldCostGrowth: number;
+  /** Levels 0..goldTierMaxLevel-1 cost gold; goldTierMaxLevel is also where the Renown tier's own level-0 begins. */
+  goldTierMaxLevel: number;
+  renownBaseCost: number;
+  renownCostGrowth: number;
+  /** Absolute level cap across both tiers combined. */
+  maxLevel: number;
+}
+
 /** A raid attempt in progress. Locked in at commit time, resolved encounter by encounter. */
 export interface ActiveRaid {
   raidId: string;
@@ -543,4 +575,6 @@ export interface GameState {
    * GuidanceManager) -- once a topic's fired, it never fires again.
    */
   seenGuidance: string[];
+  /** Levels bought in the dedicated Raid Guild Upgrade tree -- see RaidUpgradeDef. */
+  raidUpgrades: Record<string, number>;
 }

@@ -2,6 +2,7 @@ import {
   GUILD_BY_ID, GUILD_FACILITIES, HERO_CLASSES, RECRUIT_COST, UPGRADE_BY_ID, UPGRADES, VENDORS,
   guildCost, upgradeCost, vendorLevelCost, isVendorUpgradeUnlocked,
 } from '../data/progression';
+import { RAID_UPGRADES, RAID_UPGRADE_BY_ID, raidUpgradeCost } from '../data/raidUpgrades';
 import { GameState, GuildFacility, HeroClass, VendorId } from '../types';
 import { Rng } from '../rng';
 import { HeroManager } from './HeroManager';
@@ -118,5 +119,44 @@ export const GuildManager = {
     state.heroes.push(HeroManager.create(heroClass, rng));
     if (!state.roster.includes(heroClass)) state.roster.push(heroClass);
     return null;
+  },
+
+  /* --------------------------- raid upgrades --------------------------- */
+  // Fully separate tree from the general upgrades above -- see
+  // RaidUpgradeDef and ModifierManager.raidMods. Same buy/cost shape as
+  // upgradeLevel/nextUpgradeCost/buyUpgrade, but reading state.raidUpgrades
+  // instead of state.upgrades, and the cost can be gold or Renown depending
+  // on which tier the next level falls in.
+
+  raidUpgradeLevel(state: GameState, id: string): number {
+    return state.raidUpgrades[id] ?? 0;
+  },
+
+  nextRaidUpgradeCost(state: GameState, id: string): { cost: number; currency: 'gold' | 'renown' } | null {
+    const def = RAID_UPGRADE_BY_ID[id];
+    if (!def) return null;
+    return raidUpgradeCost(def, GuildManager.raidUpgradeLevel(state, id));
+  },
+
+  buyRaidUpgrade(state: GameState, id: string): string | null {
+    const def = RAID_UPGRADE_BY_ID[id];
+    if (!def) return 'Unknown raid upgrade.';
+    const level = GuildManager.raidUpgradeLevel(state, id);
+    const next = raidUpgradeCost(def, level);
+    if (!next) return 'Already at maximum.';
+    if (next.currency === 'gold') {
+      if (state.gold < next.cost) return 'Not enough gold.';
+      state.gold -= next.cost;
+      state.stats.goldSpent += next.cost;
+    } else {
+      if (state.renown < next.cost) return 'Not enough renown.';
+      state.renown -= next.cost;
+    }
+    state.raidUpgrades[id] = level + 1;
+    return null;
+  },
+
+  raidUpgrades() {
+    return RAID_UPGRADES;
   },
 };

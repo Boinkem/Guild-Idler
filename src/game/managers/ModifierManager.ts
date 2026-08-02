@@ -1,4 +1,5 @@
 import { GUILD_BY_ID, RENOWN_BY_ID, UPGRADE_BY_ID, BASE_GOLD_STORAGE } from '../data/progression';
+import { RAID_UPGRADE_BY_ID } from '../data/raidUpgrades';
 import { GameState, Modifiers } from '../types';
 import { scaleMods, sumMods } from '../util';
 
@@ -29,6 +30,22 @@ export const ModifierManager = {
     return sumMods(
       ...Object.entries(state.renownPerks).map(([id, level]) => {
         const def = RENOWN_BY_ID[id];
+        return def ? scaleMods(def.modsPerLevel, level) : {};
+      }),
+    );
+  },
+
+  /**
+   * Raid-only bonuses -- deliberately NOT folded into global(). This is
+   * the dedicated channel RAID_UPGRADES writes into; RaidManager reads
+   * this separately (see partyEconomyMods), so raid progression never
+   * silently inherits quest-side upgrades (Mounted Travel etc.) the way it
+   * did before 0061, and quest progression never inherits raid ones either.
+   */
+  raidMods(state: GameState): Partial<Modifiers> {
+    return sumMods(
+      ...Object.entries(state.raidUpgrades).map(([id, level]) => {
+        const def = RAID_UPGRADE_BY_ID[id];
         return def ? scaleMods(def.modsPerLevel, level) : {};
       }),
     );

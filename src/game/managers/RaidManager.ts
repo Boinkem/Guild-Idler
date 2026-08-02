@@ -52,14 +52,18 @@ export const RaidManager = {
     const zero = { gold: 0, xp: 0, loot: 0, speed: 0 };
     if (heroes.length === 0) return zero;
     const withGlobal = heroes.map((h) => sumMods(HeroManager.heroMods(h, now), ModifierManager.global(state)));
-    const personalOnly = heroes.map((h) => HeroManager.heroMods(h, now));
+    // speed = personal (stats + gear) + the dedicated Raid Guild Upgrade
+    // channel (ModifierManager.raidMods) -- still never global(), so quest
+    // upgrades like Mounted Travel still don't touch raid duration. This is
+    // the lever RAID_UPGRADES writes into.
+    const raidOnly = heroes.map((h) => sumMods(HeroManager.heroMods(h, now), ModifierManager.raidMods(state)));
     const avg = (arr: Modifiers[], key: keyof Modifiers) =>
       arr.reduce((sum, m) => sum + (m[key] ?? 0), 0) / arr.length;
     return {
       gold: avg(withGlobal, 'gold'),
       xp: avg(withGlobal, 'xp'),
       loot: avg(withGlobal, 'loot'),
-      speed: avg(personalOnly, 'speed'),
+      speed: avg(raidOnly, 'speed'),
     };
   },
 

@@ -2,14 +2,15 @@ import { useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { RaidManager } from '../../game/managers/RaidManager';
+import { GuildManager } from '../../game/managers/GuildManager';
 import {
   RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON,
   isRaidUnlocked, parseLootEntry, lootForDifficulty,
 } from '../../game/data/raids';
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
-import { RaidDifficulty } from '../../game/types';
+import { RaidDifficulty, RaidUpgradeDef } from '../../game/types';
 import { RarityPill } from '../RarityPill';
-import { formatDuration, describeMods, RARITY_COLOR } from '../../game/util';
+import { formatDuration, describeMods, formatGold, RARITY_COLOR } from '../../game/util';
 
 const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', mythic: 'M' };
 /** Reuses the existing rarity palette rather than inventing a new colour
@@ -59,6 +60,72 @@ function LootPreview({
 
 /** Shared across every raid card -- clicking a discovered loot entry opens
  *  this instead of each card managing its own overlay state. */
+function RaidUpgradeCard({ def }: { def: RaidUpgradeDef }) {
+  const engine = useEngine();
+  const state = engine.state;
+  const level = GuildManager.raidUpgradeLevel(state, def.id);
+  const next = GuildManager.nextRaidUpgradeCost(state, def.id);
+  const maxed = next === null;
+  const afford = next ? (next.currency === 'gold' ? state.gold >= next.cost : state.renown >= next.cost) : false;
+
+  return (
+    <div className="card" style={{ marginBottom: 0 }}>
+      <div className="spread">
+        <span className="card-title">{def.name}</span>
+        <span className="small muted">{level}/{def.maxLevel}</span>
+      </div>
+      <p className="card-flavour">{def.description}</p>
+      <div className="stat-row" style={{ marginBottom: 8 }}>
+        {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
+      </div>
+      <button className="btn-primary" disabled={maxed || !afford} onClick={() => engine.buyRaidUpgrade(def.id)}>
+        {maxed
+          ? 'Fully upgraded'
+          : next!.currency === 'gold'
+            ? `Buy · ${formatGold(next!.cost)}`
+            : `Buy · ${next!.cost} renown`}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Embedded directly in the Raids tab rather than the general Upgrades
+ * panel -- raids have been treated as their own separable system all
+ * along (own tab, own background, own resolution engine), and this tree
+ * only ever affects raids, so it lives where it matters rather than
+ * getting buried among quest-side upgrades.
+ */
+function RaidUpgradesSection() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="card" style={{ marginBottom: 12 }}>
+      <div
+        className="spread hero-card-summary"
+        onClick={() => setOpen((v) => !v)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
+      >
+        <span className="card-title hero-card-name">Raid Upgrades</span>
+        <span className="tiny muted">{open ? 'Less ▲' : 'More ▼'}</span>
+      </div>
+      {open && (
+        <div className="hero-card-details">
+          <p className="tiny muted" style={{ marginBottom: 8 }}>
+            Raid-only bonuses -- these never affect regular quests, and quest upgrades never affect raids either.
+            Early levels cost gold; deeper levels cost Renown.
+          </p>
+          <div className="grid two">
+            {GuildManager.raidUpgrades().map((def) => <RaidUpgradeCard key={def.id} def={def} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ItemDetailOverlay({ defId, onClose }: { defId: string; onClose: () => void }) {
   const def = EQUIPMENT_BY_ID[defId];
   if (!def) return null;
@@ -341,6 +408,8 @@ export function RaidsPanel() {
       <p className="subtitle">
         Multi-hero expeditions. Big rewards, long odds, and everyone comes home a little worse for wear -- win or lose.
       </p>
+
+      <RaidUpgradesSection />
 
       {state.activeRaid && <ActiveRaidCard />}
       {RAIDS.filter((r) => r.id !== state.activeRaid?.raidId).map((r) => (
