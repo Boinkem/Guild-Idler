@@ -1,5 +1,5 @@
 import { RaidDef, RaidDifficulty, RaidDifficultyConfig, RaidEncounterDef } from '../types';
-import { Tuning } from '../tuning';
+import { Tuning } from './tuning';
 
 /**
  * Raids and their encounters live in json/*.json, same reasoning as

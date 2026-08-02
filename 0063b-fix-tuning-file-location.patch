@@ -1,0 +1,26 @@
+diff --git a/src/game/data/raidUpgrades.ts b/src/game/data/raidUpgrades.ts
+index 7f38652..5150bc3 100644
+--- a/src/game/data/raidUpgrades.ts
++++ b/src/game/data/raidUpgrades.ts
+@@ -1,5 +1,5 @@
+ import { RaidUpgradeDef } from '../types';
+-import { Tuning } from '../tuning';
++import { Tuning } from './tuning';
+ 
+ /**
+  * A dedicated upgrade tree affecting raids only, fully separate from the
+diff --git a/src/game/data/raids.ts b/src/game/data/raids.ts
+index 36f8cce..f1c2022 100644
+--- a/src/game/data/raids.ts
++++ b/src/game/data/raids.ts
+@@ -1,5 +1,5 @@
+ import { RaidDef, RaidDifficulty, RaidDifficultyConfig, RaidEncounterDef } from '../types';
+-import { Tuning } from '../tuning';
++import { Tuning } from './tuning';
+ 
+ /**
+  * Raids and their encounters live in json/*.json, same reasoning as
+diff --git a/src/game/tuning.ts b/src/game/data/tuning.ts
+similarity index 100%
+rename from src/game/tuning.ts
+rename to src/game/data/tuning.ts

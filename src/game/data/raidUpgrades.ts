@@ -1,5 +1,5 @@
 import { RaidUpgradeDef } from '../types';
-import { Tuning } from '../tuning';
+import { Tuning } from './tuning';
 
 /**
  * A dedicated upgrade tree affecting raids only, fully separate from the
