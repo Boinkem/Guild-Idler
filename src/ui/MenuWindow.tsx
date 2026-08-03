@@ -76,9 +76,30 @@ const META_GROUP = {
   ],
 } as const;
 
-const TAB_GROUPS = [DASHBOARD_GROUP, GUILD_GROUP, ADVENTURE_GROUP, PROGRESSION_GROUP, META_GROUP];
+// TabId built from each group's OWN literal type individually, not by
+// indexing into a combined array -- combining differently-shaped readonly
+// tuples into one array and asking TS to infer *that* array's element type
+// hits the same "tries to force one common tuple shape" problem as the
+// outer `as const` did, just one level later. Deriving the union directly
+// from each still-precisely-typed group sidesteps it entirely.
+type TabId =
+  | (typeof DASHBOARD_GROUP)['tabs'][number]['id']
+  | (typeof GUILD_GROUP)['tabs'][number]['id']
+  | (typeof ADVENTURE_GROUP)['tabs'][number]['id']
+  | (typeof PROGRESSION_GROUP)['tabs'][number]['id']
+  | (typeof META_GROUP)['tabs'][number]['id'];
 
-type TabId = (typeof TAB_GROUPS)[number]['tabs'][number]['id'];
+interface TabGroup {
+  label: string | null;
+  tabs: readonly { id: TabId; label: string; Panel: () => JSX.Element }[];
+}
+
+// Explicit TabGroup[] annotation here, rather than letting TS infer the
+// array's type from the literal -- this is what actually breaks the
+// inference problem: each group widens to fit the given interface instead
+// of TS trying to compute a common shape across all five on its own.
+const TAB_GROUPS: TabGroup[] = [DASHBOARD_GROUP, GUILD_GROUP, ADVENTURE_GROUP, PROGRESSION_GROUP, META_GROUP];
+
 /** Flattened purely for runtime lookup (finding the active Panel) -- the
  *  grouped structure above is what actually drives rendering and typing. */
 const ALL_TABS = TAB_GROUPS.flatMap((g) => g.tabs);
