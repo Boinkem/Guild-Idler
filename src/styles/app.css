@@ -1120,6 +1120,24 @@ input[type='range'] {
   100% { transform: scale(1); }
 }
 
+/* ------------------------------ retire burst ------------------------------- */
+/* Retirement gets no dedicated overlay -- a brief inline burst on the
+   specific hero's own card instead, same reward-burst language (reusing
+   burst-pop) but sized and positioned for a card corner rather than a
+   modal center. This was previously the single biggest currency-earning
+   action in the game with zero feedback of any kind. */
+.retire-burst {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--violet);
+  text-shadow: 0 0 10px rgba(168, 116, 214, 0.5);
+  animation: burst-pop 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  pointer-events: none;
+}
+
 /* ------------------------------ max-level flash ---------------------------- */
 /* "Fully upgraded X" -- a brief card flash with stars poofing up and out,
    triggered once when an upgrade or vendor first reaches its cap. See the

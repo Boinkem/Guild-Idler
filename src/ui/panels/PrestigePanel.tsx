@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { PrestigeManager } from '../../game/managers/PrestigeManager';
@@ -10,6 +11,15 @@ export function PrestigePanel() {
   const { settings } = useSettings();
   const now = useNow();
   const state = engine.state;
+
+  // Retirement has no dedicated overlay -- a brief inline burst on the
+  // specific hero's card instead, matching the reward-burst treatment
+  // elsewhere but sized for a card rather than a modal. Amount is captured
+  // at click time rather than read back afterward, since engine.retire()
+  // immediately resets the hero to level 1 -- by the time this re-renders,
+  // `preview.total` for that hero id would already be recomputed against
+  // the now-reset hero and show the wrong (tiny) number.
+  const [justRetired, setJustRetired] = useState<{ heroId: string; amount: number; key: number } | null>(null);
 
   const streakActive = state.lastPrestigeAt !== null
     && now - state.lastPrestigeAt <= PRESTIGE_STREAK_WINDOW_MS;
@@ -60,7 +70,12 @@ export function PrestigePanel() {
         const preview = PrestigeManager.streakPreview(state, hero, now);
         const rank = PrestigeManager.rankFor(hero);
         return (
-          <div key={hero.id} className="spread card">
+          <div key={hero.id} className="spread card" style={{ position: 'relative' }}>
+            {justRetired?.heroId === hero.id && (
+              <span key={justRetired.key} className="retire-burst" aria-hidden="true">
+                +{justRetired.amount} ✦
+              </span>
+            )}
             <div>
               <div className="card-title">
                 {rank && <span className="hero-title">{rank}</span>}
@@ -79,6 +94,8 @@ export function PrestigePanel() {
               onClick={() => {
                 if (!settings.confirmRetire
                   || confirm(`Retire ${hero.name}? They return to level 1 and the guild gains ${preview.total} renown.`)) {
+                  setJustRetired({ heroId: hero.id, amount: preview.total, key: Date.now() });
+                  window.setTimeout(() => setJustRetired(null), 2200);
                   engine.retire(hero.id);
                 }
               }}
@@ -105,7 +122,7 @@ export function PrestigePanel() {
                   {def.name}
                   {inTier2 && <span className="tag" style={{ color: 'var(--violet)', marginLeft: 6 }}>Tier II</span>}
                 </span>
-                <span className="small muted">{level}/{cap}</span>
+                <span key={level} className="small muted purchase-pulse">{level}/{cap}</span>
               </div>
               <p className="card-flavour">
                 {justUnlocked && def.tier2 ? def.tier2.unlockFlavour : def.description}

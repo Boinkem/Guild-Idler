@@ -1,27 +1,81 @@
+import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
+import { GameEngine } from '../game/engine';
+import { RaidResult } from '../game/types';
 import { useEngine } from './useEngine';
+import { playSound } from '../game/sound';
 import { RarityPill } from './RarityPill';
 import { formatGold } from '../game/util';
+
+/** Same dismiss timing as QuestResultModal, for the same reason -- gives the
+ *  longest particle time to finish fading rather than getting cut off. */
+const DISMISS_DELAY_MS = 640;
+
+const COIN_PARTICLES = [
+  { dx: -46, dy: -92, rot: -18, delay: 0 },
+  { dx: -6, dy: -112, rot: 8, delay: 50 },
+  { dx: 40, dy: -88, rot: 20, delay: 20 },
+  { dx: 62, dy: -60, rot: 26, delay: 110 },
+  { dx: -60, dy: -55, rot: -24, delay: 90 },
+];
+const XP_PARTICLES = [
+  { dx: -22, dy: -104, rot: -10, delay: 30 },
+  { dx: 24, dy: -100, rot: 12, delay: 70 },
+  { dx: 2, dy: -118, rot: 2, delay: 130 },
+];
 
 /**
  * Shown when a raid resolves. Always mounted regardless of view mode, only
  * renders while `active` (menu open, properly sized) -- same reasoning as
  * every other transient result modal this session; IdleView shows a
  * compact banner instead and opens the menu on click.
+ *
+ * Brought up to QuestResultModal's own standard as part of a wider pass --
+ * raids are the single biggest time commitment in the game and had
+ * meaningfully less payoff feedback than an ordinary quest, which read as
+ * backwards. Same split (outer decide-to-show, inner keyed card) and same
+ * particle burst, just keyed on raidId+resolvedAt instead of a questId --
+ * raids can't overlap the way Auto-Chain quests can (only one at a time,
+ * hours long), so the remount-safety this key provides is cheap insurance
+ * rather than a fix for a real collision case here.
  */
 export function RaidResultModal({ active, onViewLore }: { active: boolean; onViewLore: () => void }) {
   const engine = useEngine();
   const result = engine.lastRaidResult;
   if (!active || !result) return null;
 
+  return (
+    <RaidResultCard key={`${result.raidId}-${result.resolvedAt}`} result={result} engine={engine} onViewLore={onViewLore} />
+  );
+}
+
+function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; engine: GameEngine; onViewLore: () => void }) {
+  const [dismissing, setDismissing] = useState(false);
+  const timeoutRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
+  }, []);
+
+  const handleDismiss = () => {
+    if (dismissing) return;
+    setDismissing(true);
+    playSound('collect');
+    timeoutRef.current = window.setTimeout(() => engine.dismissRaidResult(), DISMISS_DELAY_MS);
+  };
+
   const viewLore = () => {
     engine.requestTab('lore');
     onViewLore();
-    engine.dismissRaidResult();
+    handleDismiss();
   };
 
   return (
-    <div className="overlay">
-      <div className={`modal ${result.fullClear ? 'raid-full-clear' : ''}`}>
+    <div className="overlay" onClick={handleDismiss}>
+      <div
+        className={`modal ${result.fullClear ? 'raid-full-clear' : ''} ${dismissing ? 'dismissing' : ''}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         <h3>{result.raidName} — {result.difficulty[0].toUpperCase()}{result.difficulty.slice(1)}</h3>
         <p className={`small ${result.fullClear ? 'good' : result.encountersCleared > 0 ? '' : 'bad'}`} style={{ marginTop: 0 }}>
           {result.fullClear
@@ -31,9 +85,9 @@ export function RaidResultModal({ active, onViewLore }: { active: boolean; onVie
               : 'The party was turned back at the first encounter.'}
         </p>
 
-        <div className="stat-row" style={{ margin: '10px 0' }}>
-          <span className="gold-text">+{formatGold(result.gold)} gold</span>
-          <span>+{result.xp} xp</span>
+        <div className="reward-burst">
+          {result.xp > 0 && <span className="burst-xp">+{result.xp} XP</span>}
+          {result.gold > 0 && <span className="burst-gold">+{formatGold(result.gold)} gold</span>}
         </div>
 
         {result.loot.length > 0 && (
@@ -60,9 +114,34 @@ export function RaidResultModal({ active, onViewLore }: { active: boolean; onVie
         )}
 
         <div className="row end" style={{ marginTop: 12, gap: 8 }}>
-          <button onClick={() => engine.dismissRaidResult()}>Close</button>
-          <button className="btn-primary" onClick={viewLore}>View in Lore</button>
+          <button onClick={handleDismiss} disabled={dismissing}>Close</button>
+          <button className="btn-primary" onClick={viewLore} disabled={dismissing}>View in Lore</button>
         </div>
+
+        {/* Same particle burst as QuestResultModal, same reasoning -- only
+            shows the kinds of reward actually earned. */}
+        {dismissing && (
+          <div className="collect-burst" aria-hidden="true">
+            {result.gold > 0 && COIN_PARTICLES.map((p, i) => (
+              <span
+                key={`coin-${i}`}
+                className="collect-particle coin"
+                style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, animationDelay: `${p.delay}ms` } as CSSProperties}
+              >
+                ◆
+              </span>
+            ))}
+            {result.xp > 0 && XP_PARTICLES.map((p, i) => (
+              <span
+                key={`xp-${i}`}
+                className="collect-particle xp"
+                style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, animationDelay: `${p.delay}ms` } as CSSProperties}
+              >
+                ✦
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

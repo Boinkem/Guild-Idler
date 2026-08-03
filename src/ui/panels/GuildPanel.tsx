@@ -36,7 +36,7 @@ export function GuildPanel() {
             <div key={def.id} className="card" style={{ marginBottom: 0 }}>
               <div className="spread">
                 <span className="card-title">{def.name}</span>
-                <span className="small muted">Level {level}/{def.maxLevel}</span>
+                <span key={level} className="small muted purchase-pulse">Level {level}/{def.maxLevel}</span>
               </div>
               <p className="card-flavour">{def.description}</p>
               <div className="stat-row" style={{ marginBottom: 8 }}>

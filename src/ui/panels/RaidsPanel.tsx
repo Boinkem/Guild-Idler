@@ -10,6 +10,7 @@ import {
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
 import { RaidDifficulty, RaidUpgradeDef } from '../../game/types';
 import { RarityPill } from '../RarityPill';
+import { MaxFlash, useMaxFlash } from '../maxFlash';
 import { formatDuration, describeMods, formatGold, RARITY_COLOR } from '../../game/util';
 
 const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', mythic: 'M' };
@@ -67,12 +68,17 @@ function RaidUpgradeCard({ def }: { def: RaidUpgradeDef }) {
   const next = GuildManager.nextRaidUpgradeCost(state, def.id);
   const maxed = next === null;
   const afford = next ? (next.currency === 'gold' ? state.gold >= next.cost : state.renown >= next.cost) : false;
+  // Same purchase-pulse + MaxFlash treatment UpgradesPanel/GuildPanel already
+  // have for their own upgrade cards -- this was the one "buy an upgrade"
+  // surface in the game missing it entirely.
+  const { flashes, dismiss } = useMaxFlash([{ id: def.id, name: def.name, level, maxLevel: def.maxLevel }]);
+  const flash = flashes[def.id];
 
   return (
     <div className="card" style={{ marginBottom: 0 }}>
       <div className="spread">
         <span className="card-title">{def.name}</span>
-        <span className="small muted">{level}/{def.maxLevel}</span>
+        <span key={level} className="small muted purchase-pulse">{level}/{def.maxLevel}</span>
       </div>
       <p className="card-flavour">{def.description}</p>
       <div className="stat-row" style={{ marginBottom: 8 }}>
@@ -85,6 +91,7 @@ function RaidUpgradeCard({ def }: { def: RaidUpgradeDef }) {
             ? `Buy · ${formatGold(next!.cost)}`
             : `Buy · ${next!.cost} renown`}
       </button>
+      {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
     </div>
   );
 }
