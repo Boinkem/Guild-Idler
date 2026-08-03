@@ -17,24 +17,64 @@ import { SettingsPanel } from './panels/SettingsPanel';
 import { TestingPanel } from './panels/TestingPanel';
 import { TESTING_TOOLS_ENABLED } from '../game/testingTools';
 
-const TABS = [
-  { id: 'dashboard', label: 'The Guild', Panel: DashboardPanel },
-  { id: 'guide', label: 'Guide', Panel: GuidePanel },
-  { id: 'quests', label: 'Quests', Panel: QuestPanel },
-  { id: 'heroes', label: 'Heroes', Panel: HeroesPanel },
-  { id: 'equipment', label: 'Inventory', Panel: EquipmentPanel },
-  { id: 'shop', label: 'Shop', Panel: ShopPanel },
-  { id: 'upgrades', label: 'Upgrades', Panel: UpgradesPanel },
-  { id: 'guild', label: 'Guild Hall', Panel: GuildPanel },
-  { id: 'raids', label: 'Raids', Panel: RaidsPanel },
-  { id: 'lore', label: 'Lore', Panel: LorePanel },
-  { id: 'stats', label: 'Statistics', Panel: StatsPanel },
-  { id: 'prestige', label: 'Prestige', Panel: PrestigePanel },
-  { id: 'settings', label: 'Settings', Panel: SettingsPanel },
-  ...(TESTING_TOOLS_ENABLED ? [{ id: 'testing', label: 'Testing', Panel: TestingPanel }] as const : []),
+/**
+ * Grouped rather than one flat 13-entry list -- the nav had grown past the
+ * point a plain list stays scannable. Dashboard stays pinned/ungrouped
+ * (it's home, not a category); everything else clusters by what kind of
+ * session moment it belongs to. Guide sits with Adventure rather than off
+ * alone, since it's reference material *for* those systems specifically,
+ * not a general-purpose destination. Statistics and Settings pair up as
+ * the two "not actively playing" destinations.
+ *
+ * Kept as one const-asserted structure (not a runtime-built one) so TabId
+ * below stays derived from the literal ids rather than widened to `string`.
+ */
+const TAB_GROUPS = [
+  {
+    label: null,
+    tabs: [
+      { id: 'dashboard', label: 'The Guild', Panel: DashboardPanel },
+    ],
+  },
+  {
+    label: 'Guild',
+    tabs: [
+      { id: 'heroes', label: 'Heroes', Panel: HeroesPanel },
+      { id: 'equipment', label: 'Inventory', Panel: EquipmentPanel },
+      { id: 'shop', label: 'Shop', Panel: ShopPanel },
+      { id: 'guild', label: 'Guild Hall', Panel: GuildPanel },
+    ],
+  },
+  {
+    label: 'Adventure',
+    tabs: [
+      { id: 'quests', label: 'Quests', Panel: QuestPanel },
+      { id: 'raids', label: 'Raids', Panel: RaidsPanel },
+      { id: 'lore', label: 'Lore', Panel: LorePanel },
+      { id: 'guide', label: 'Guide', Panel: GuidePanel },
+    ],
+  },
+  {
+    label: 'Progression',
+    tabs: [
+      { id: 'upgrades', label: 'Upgrades', Panel: UpgradesPanel },
+      { id: 'prestige', label: 'Prestige', Panel: PrestigePanel },
+    ],
+  },
+  {
+    label: 'Meta',
+    tabs: [
+      { id: 'stats', label: 'Statistics', Panel: StatsPanel },
+      { id: 'settings', label: 'Settings', Panel: SettingsPanel },
+      ...(TESTING_TOOLS_ENABLED ? [{ id: 'testing', label: 'Testing', Panel: TestingPanel }] as const : []),
+    ],
+  },
 ] as const;
 
-type TabId = (typeof TABS)[number]['id'];
+type TabId = (typeof TAB_GROUPS)[number]['tabs'][number]['id'];
+/** Flattened purely for runtime lookup (finding the active Panel) -- the
+ *  grouped structure above is what actually drives rendering and typing. */
+const ALL_TABS = TAB_GROUPS.flatMap((g) => g.tabs);
 
 export function MenuWindow({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
@@ -51,7 +91,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const Panel = TABS.find((t) => t.id === tab)!.Panel;
+  const Panel = ALL_TABS.find((t) => t.id === tab)!.Panel;
   const idleHeroes = engine.state.heroes.filter((h) => h.status !== 'questing').length;
 
   return (
@@ -95,15 +135,20 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
 
       <div className="menu-body" style={{ position: 'relative' }}>
         <nav className="tabs" aria-label="Guild sections">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              aria-current={t.id === tab}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-              {t.id === 'quests' && idleHeroes > 0 ? <span className="tab-badge">{idleHeroes}</span> : null}
-            </button>
+          {TAB_GROUPS.map((group, gi) => (
+            <div key={group.label ?? `pinned-${gi}`} className="tabs-group">
+              {group.label && <div className="tabs-group-label">{group.label}</div>}
+              {group.tabs.map((t) => (
+                <button
+                  key={t.id}
+                  aria-current={t.id === tab}
+                  onClick={() => setTab(t.id)}
+                >
+                  {t.label}
+                  {t.id === 'quests' && idleHeroes > 0 ? <span className="tab-badge">{idleHeroes}</span> : null}
+                </button>
+              ))}
+            </div>
           ))}
         </nav>
         <main className="panel">

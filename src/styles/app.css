@@ -466,6 +466,18 @@ button:focus-visible, [tabindex]:focus-visible {
   overflow-y: auto;
 }
 
+.tabs-group { display: flex; flex-direction: column; gap: 2px; }
+.tabs-group:not(:first-child) { margin-top: 10px; }
+.tabs-group-label {
+  font-size: 0.5625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  padding: 4px 8px 3px;
+  border-bottom: 1px solid var(--edge);
+  margin-bottom: 2px;
+}
+
 .tabs button {
   text-align: left;
   background: transparent;
