@@ -321,7 +321,10 @@ export function LorePanel() {
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="spread">
-          <span className="card-title">
+          <span
+            className="card-title"
+            title="Your guild's standing among all who work the Reach."
+          >
             {state.guildName || 'This guild'} — {rank.name}
           </span>
         </div>

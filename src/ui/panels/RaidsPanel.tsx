@@ -50,7 +50,9 @@ function LootPreview({
               else engine.showToast('Discover this item first.');
             }}
           >
-            <span className="tiny muted">{discovered && def ? def.name : '???'}</span>
+            <span className={`tiny ${discovered && def ? '' : 'muted'}`} style={{ color: discovered && def ? RARITY_COLOR[def.rarity] : undefined }}>
+              {discovered && def ? def.name : '???'}
+            </span>
             {discovered && def && <RarityPill rarity={def.rarity} />}
           </button>
         );

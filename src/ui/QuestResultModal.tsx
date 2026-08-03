@@ -5,7 +5,7 @@ import { QuestResult } from '../game/types';
 import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
 import { playSound } from '../game/sound';
-import { formatGold } from '../game/util';
+import { formatGold, RARITY_COLOR } from '../game/util';
 import { RarityPill } from './RarityPill';
 
 /** How long the pop-out + coin/XP burst plays before the modal actually
@@ -100,7 +100,7 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; 
             <div className="section-heading">Loot</div>
             {result.loot.map((item) => (
               <div key={item.defId} className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 2 }}>
-                <span style={{ fontSize: 11 }}>{item.name}</span>
+                <span style={{ fontSize: 11, color: RARITY_COLOR[item.rarity] }}>{item.name}</span>
                 <RarityPill rarity={item.rarity} />
               </div>
             ))}

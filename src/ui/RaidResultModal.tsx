@@ -5,7 +5,7 @@ import { RaidResult } from '../game/types';
 import { useEngine } from './useEngine';
 import { playSound } from '../game/sound';
 import { RarityPill } from './RarityPill';
-import { formatGold } from '../game/util';
+import { formatGold, RARITY_COLOR } from '../game/util';
 
 /** Same dismiss timing as QuestResultModal, for the same reason -- gives the
  *  longest particle time to finish fading rather than getting cut off. */
@@ -96,7 +96,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
             <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
               {result.loot.map((item, i) => (
                 <span key={`${item.defId}-${i}`} className="row" style={{ gap: 4, alignItems: 'center' }}>
-                  <span className="tiny">{item.name}</span>
+                  <span className="tiny" style={{ color: RARITY_COLOR[item.rarity] }}>{item.name}</span>
                   <RarityPill rarity={item.rarity} />
                 </span>
               ))}

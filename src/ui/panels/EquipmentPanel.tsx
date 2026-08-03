@@ -87,7 +87,7 @@ function SlotCard({
       >
         <ItemIcon slot={def.slot} icon={def.icon} />
         <div className="item-card-body">
-          <div className="item-card-name">{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
+          <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
           <RarityPill rarity={def.rarity} />
         </div>
       </div>
@@ -144,7 +144,7 @@ function StashCard({
       >
         <ItemIcon slot={def.slot} icon={def.icon} />
         <div className="item-card-body">
-          <div className="item-card-name">{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
+          <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
           <RarityPill rarity={def.rarity} />
         </div>
       </div>

@@ -1,0 +1,97 @@
+diff --git a/src/ui/QuestResultModal.tsx b/src/ui/QuestResultModal.tsx
+index 2bcf4bf..c8d0a37 100644
+--- a/src/ui/QuestResultModal.tsx
++++ b/src/ui/QuestResultModal.tsx
+@@ -5,7 +5,7 @@ import { QuestResult } from '../game/types';
+ import { useEngine } from './useEngine';
+ import { useSettings } from './useSettings';
+ import { playSound } from '../game/sound';
+-import { formatGold } from '../game/util';
++import { formatGold, RARITY_COLOR } from '../game/util';
+ import { RarityPill } from './RarityPill';
+ 
+ /** How long the pop-out + coin/XP burst plays before the modal actually
+@@ -100,7 +100,7 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult;
+             <div className="section-heading">Loot</div>
+             {result.loot.map((item) => (
+               <div key={item.defId} className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 2 }}>
+-                <span style={{ fontSize: 11 }}>{item.name}</span>
++                <span style={{ fontSize: 11, color: RARITY_COLOR[item.rarity] }}>{item.name}</span>
+                 <RarityPill rarity={item.rarity} />
+               </div>
+             ))}
+diff --git a/src/ui/RaidResultModal.tsx b/src/ui/RaidResultModal.tsx
+index 5d51c0b..1227524 100644
+--- a/src/ui/RaidResultModal.tsx
++++ b/src/ui/RaidResultModal.tsx
+@@ -5,7 +5,7 @@ import { RaidResult } from '../game/types';
+ import { useEngine } from './useEngine';
+ import { playSound } from '../game/sound';
+ import { RarityPill } from './RarityPill';
+-import { formatGold } from '../game/util';
++import { formatGold, RARITY_COLOR } from '../game/util';
+ 
+ /** Same dismiss timing as QuestResultModal, for the same reason -- gives the
+  *  longest particle time to finish fading rather than getting cut off. */
+@@ -96,7 +96,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
+             <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
+               {result.loot.map((item, i) => (
+                 <span key={`${item.defId}-${i}`} className="row" style={{ gap: 4, alignItems: 'center' }}>
+-                  <span className="tiny">{item.name}</span>
++                  <span className="tiny" style={{ color: RARITY_COLOR[item.rarity] }}>{item.name}</span>
+                   <RarityPill rarity={item.rarity} />
+                 </span>
+               ))}
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 9bf37d3..d02a852 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -87,7 +87,7 @@ function SlotCard({
+       >
+         <ItemIcon slot={def.slot} icon={def.icon} />
+         <div className="item-card-body">
+-          <div className="item-card-name">{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
++          <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
+           <RarityPill rarity={def.rarity} />
+         </div>
+       </div>
+@@ -144,7 +144,7 @@ function StashCard({
+       >
+         <ItemIcon slot={def.slot} icon={def.icon} />
+         <div className="item-card-body">
+-          <div className="item-card-name">{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
++          <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
+           <RarityPill rarity={def.rarity} />
+         </div>
+       </div>
+diff --git a/src/ui/panels/LorePanel.tsx b/src/ui/panels/LorePanel.tsx
+index 132c6fd..513612e 100644
+--- a/src/ui/panels/LorePanel.tsx
++++ b/src/ui/panels/LorePanel.tsx
+@@ -321,7 +321,10 @@ export function LorePanel() {
+ 
+       <div className="card" style={{ marginBottom: 16 }}>
+         <div className="spread">
+-          <span className="card-title">
++          <span
++            className="card-title"
++            title="Your guild's standing among all who work the Reach."
++          >
+             {state.guildName || 'This guild'} — {rank.name}
+           </span>
+         </div>
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index 6af02af..1bcfa4d 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -50,7 +50,9 @@ function LootPreview({
+               else engine.showToast('Discover this item first.');
+             }}
+           >
+-            <span className="tiny muted">{discovered && def ? def.name : '???'}</span>
++            <span className={`tiny ${discovered && def ? '' : 'muted'}`} style={{ color: discovered && def ? RARITY_COLOR[def.rarity] : undefined }}>
++              {discovered && def ? def.name : '???'}
++            </span>
+             {discovered && def && <RarityPill rarity={def.rarity} />}
+           </button>
+         );
