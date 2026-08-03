@@ -90,7 +90,7 @@ export function HeroesPanel() {
                 className="btn-ghost hero-card-expand"
                 onClick={(e) => { e.stopPropagation(); toggleExpanded(hero.id); }}
               >
-                {isOpen ? 'Hide details ▲' : 'Details ▼'}
+                {isOpen ? 'Less ▲' : 'More ▼'}
               </button>
             </div>
 

@@ -237,7 +237,7 @@ export function QuestPanel() {
                   className="btn-ghost hero-card-expand"
                   onClick={(e) => { e.stopPropagation(); toggleExpanded(offer.id); }}
                 >
-                  {isOpen ? 'Less ▲' : 'Details ▼'}
+                  {isOpen ? 'Less ▲' : 'More ▼'}
                 </button>
                 {idleHeroes.length > 0 && (
                   <>
