@@ -92,7 +92,10 @@ export function DashboardPanel() {
         )}
       </div>
 
-      <div className="card power-card">
+      <div
+        className="card power-card"
+        title="Combines hero stats, ascension, Renown, vendor relationships, guild upgrades, and completed story chains into one number."
+      >
         <div className="tiny muted" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>Guild Power</div>
         <div className="power-number">{power.toLocaleString()}</div>
         <div className="stat-row" style={{ marginTop: 6 }}>

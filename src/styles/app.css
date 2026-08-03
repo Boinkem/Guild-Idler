@@ -343,12 +343,25 @@ button:focus-visible, [tabindex]:focus-visible {
 }
 
 .quest-mark {
+  /* Absolutely positioned rather than sitting in normal flow -- it used to
+     be a plain flex-column sibling directly above the hero carousel with
+     no reserved gap, so a taller class's headgear (a wizard's pointed hat,
+     confirmed directly) crowded right up against it, making the icon read
+     as gone or barely visible for several classes. Pinning it to a fixed
+     spot on .idle-stage (already position:relative) decouples it from
+     whatever height any given hero's sprite actually renders at.
+   */
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
   animation: float calc(1.6s / max(var(--anim-speed), 0.001)) ease-in-out infinite;
   filter: drop-shadow(0 0 6px rgba(217, 164, 65, 0.6));
 }
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-4px); }
 }
 
 .knight-shadow {
@@ -890,11 +903,31 @@ input[type='range'] {
 .hero-carousel {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 2px;
   -webkit-app-region: no-drag;
+  /*
+   * Fixed height + absolutely-positioned arrows, rather than align-items:
+   * center reacting to whatever height the current hero's sprite button
+   * actually renders at. That's the likely cause of the arrows visibly
+   * shifting position when cycling between heroes -- centering to a
+   * variable sibling means any per-class rendering difference (however
+   * small) moves the arrows. Pinning them to a fixed spot on a fixed-height
+   * container makes their position identical across every hero, full stop.
+   * Height covers the default 120px sprite with some headroom; very large
+   * spriteScale settings (up to 1.75x = 210px) may extend past this box,
+   * which is fine -- overflow stays visible, only the arrows' own position
+   * is meant to be pinned here, not the sprite's max size.
+   */
+  position: relative;
+  height: 130px;
+  overflow: visible;
 }
 
 .carousel-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
   background: none;
   border: none;
   box-shadow: none;
@@ -906,11 +939,13 @@ input[type='range'] {
   opacity: 0.55;
   transition: opacity 90ms linear, color 90ms linear;
 }
+.carousel-arrow:first-child { left: -2px; }
+.carousel-arrow:last-child { right: -2px; }
 .carousel-arrow:hover {
   background: none;
   opacity: 1;
   color: var(--brass);
-  transform: none;
+  transform: translateY(-50%);
 }
 
 /* ------------------------------ black market ------------------------------ */
