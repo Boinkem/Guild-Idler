@@ -4,7 +4,7 @@ import { useSettings } from '../useSettings';
 import { PrestigeManager } from '../../game/managers/PrestigeManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { PRESTIGE_MIN_LEVEL, PRESTIGE_STREAK_WINDOW_MS, renownEffectiveMaxLevel } from '../../game/data/progression';
-import { describeMods, formatDuration } from '../../game/util';
+import { describeMods, formatDuration, formatNumber } from '../../game/util';
 
 export function PrestigePanel() {
   const engine = useEngine();
@@ -38,7 +38,7 @@ export function PrestigePanel() {
       <div className="card">
         <div className="spread">
           <span className="card-title">Heroic Renown</span>
-          <b style={{ color: 'var(--violet)' }}>✦ {state.renown}</b>
+          <b style={{ color: 'var(--violet)' }}>✦ {formatNumber(state.renown)}</b>
         </div>
         <div className="stat-row" style={{ marginTop: 6 }}>
           {describeMods(ModifierManager.renownMods(state)).map((line) => <span key={line}>{line}</span>)}
@@ -84,7 +84,7 @@ export function PrestigePanel() {
               </div>
               <div className="tiny muted">
                 Level {hero.level} · {hero.questsCompleted} quests · would grant{' '}
-                <b className="gold-text">✦ {preview.total}</b>
+                <b className="gold-text">✦ {formatNumber(preview.total)}</b>
                 {preview.bonusPct > 0 && <span> (base {PrestigeManager.renownPreview(hero)} + streak {preview.bonusPct}%)</span>}
               </div>
             </div>
@@ -93,7 +93,7 @@ export function PrestigePanel() {
               disabled={!eligible}
               onClick={() => {
                 if (!settings.confirmRetire
-                  || confirm(`Retire ${hero.name}? They return to level 1 and the guild gains ${preview.total} renown.`)) {
+                  || confirm(`Retire ${hero.name}? They return to level 1 and the guild gains ${formatNumber(preview.total)} renown.`)) {
                   setJustRetired({ heroId: hero.id, amount: preview.total, key: Date.now() });
                   window.setTimeout(() => setJustRetired(null), 2200);
                   engine.retire(hero.id);
@@ -136,7 +136,7 @@ export function PrestigePanel() {
                 disabled={maxed || state.renown < cost}
                 onClick={() => engine.buyPerk(def.id)}
               >
-                {maxed ? 'Maxed' : `Buy · ✦ ${cost}`}
+                {maxed ? 'Maxed' : `Buy · ✦ ${formatNumber(cost)}`}
               </button>
             </div>
           );

@@ -6,7 +6,7 @@ import { VENDORS, vendorUpgrades, xpForLevel } from '../../game/data/progression
 import { AchievementManager } from '../../game/managers/AchievementManager';
 import { guildPowerLevel, levelTierColor, levelTierName } from '../../game/power';
 import { currentGuildRank, nextGuildRank } from '../../game/data/guildRank';
-import { formatGold } from '../../game/util';
+import { formatGold, formatNumber } from '../../game/util';
 
 function Ring({
   progress, color, size, children, title,
@@ -97,7 +97,7 @@ export function DashboardPanel() {
         <div className="power-number">{power.toLocaleString()}</div>
         <div className="stat-row" style={{ marginTop: 6 }}>
           <span className="gold-text">◆ {formatGold(state.gold)}</span>
-          <span style={{ color: 'var(--violet)' }}>✦ {state.renown} renown</span>
+          <span style={{ color: 'var(--violet)' }}>✦ {formatNumber(state.renown)} renown</span>
           <span className="muted">Day {guildAgeDays}</span>
         </div>
       </div>

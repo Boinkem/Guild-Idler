@@ -35,12 +35,26 @@ export const RARITY_COLOR: Record<Rarity, string> = {
   legendary: '#d9a441',
 };
 
-export function formatGold(value: number): string {
+/**
+ * Generic large-number abbreviation -- formatGold's own logic was never
+ * actually gold-specific. Extracted so Renown (which can genuinely reach
+ * 5-6 digits after many retirements) gets the same treatment instead of
+ * showing as a big raw number right next to a neatly-abbreviated gold
+ * value -- confirmed as a real inconsistency, not a hypothetical one.
+ */
+export function formatNumber(value: number): string {
   const n = Math.floor(value);
   if (n < 10_000) return n.toLocaleString();
   if (n < 1_000_000) return `${(n / 1000).toFixed(1)}k`;
   if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
   return `${(n / 1_000_000_000).toFixed(2)}B`;
+}
+
+/** Alias kept for gold-specific call sites and clarity -- identical
+ *  formatting to formatNumber. Renown and any other large currency should
+ *  use formatNumber directly rather than calling this on non-gold values. */
+export function formatGold(value: number): string {
+  return formatNumber(value);
 }
 
 export function formatDuration(ms: number): string {

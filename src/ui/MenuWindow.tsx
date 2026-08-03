@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useEngine } from './useEngine';
-import { formatGold } from '../game/util';
+import { formatGold, formatNumber } from '../game/util';
 import { QuestPanel } from './panels/QuestPanel';
 import { HeroesPanel } from './panels/HeroesPanel';
 import { EquipmentPanel } from './panels/EquipmentPanel';
@@ -146,7 +146,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         <h1>{engine.state.guildName || 'Guild Idler'}</h1>
         <div className="resources">
           <span className="gold">◆ {formatGold(engine.state.gold)} / {formatGold(engine.goldStorage)}</span>
-          <span className="renown">✦ {engine.state.renown} renown</span>
+          <span className="renown">✦ {formatNumber(engine.state.renown)} renown</span>
         </div>
         <div className="spacer" />
         <button

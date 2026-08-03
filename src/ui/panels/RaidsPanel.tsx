@@ -11,7 +11,7 @@ import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
 import { RaidDifficulty, RaidUpgradeDef } from '../../game/types';
 import { RarityPill } from '../RarityPill';
 import { MaxFlash, useMaxFlash } from '../maxFlash';
-import { formatDuration, describeMods, formatGold, RARITY_COLOR } from '../../game/util';
+import { formatDuration, describeMods, formatGold, formatNumber, RARITY_COLOR } from '../../game/util';
 
 const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', mythic: 'M' };
 /** Reuses the existing rarity palette rather than inventing a new colour
@@ -91,7 +91,7 @@ function RaidUpgradeCard({ def }: { def: RaidUpgradeDef }) {
           ? 'Fully upgraded'
           : next!.currency === 'gold'
             ? `Buy · ${formatGold(next!.cost)}`
-            : `Buy · ${next!.cost} renown`}
+            : `Buy · ${formatNumber(next!.cost)} renown`}
       </button>
       {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
     </div>
