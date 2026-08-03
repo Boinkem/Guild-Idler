@@ -311,6 +311,7 @@ button:focus-visible, [tabindex]:focus-visible {
 
 .knight-button {
   position: relative;
+  z-index: 1;
   background: none;
   border: none;
   box-shadow: none;
@@ -907,27 +908,34 @@ input[type='range'] {
   gap: 2px;
   -webkit-app-region: no-drag;
   /*
-   * Fixed height + absolutely-positioned arrows, rather than align-items:
-   * center reacting to whatever height the current hero's sprite button
-   * actually renders at. That's the likely cause of the arrows visibly
-   * shifting position when cycling between heroes -- centering to a
-   * variable sibling means any per-class rendering difference (however
-   * small) moves the arrows. Pinning them to a fixed spot on a fixed-height
-   * container makes their position identical across every hero, full stop.
-   * Height covers the default 120px sprite with some headroom; very large
-   * spriteScale settings (up to 1.75x = 210px) may extend past this box,
-   * which is fine -- overflow stays visible, only the arrows' own position
-   * is meant to be pinned here, not the sprite's max size.
+   * Fixed height AND width, both explicit -- the first pass only fixed
+   * height, which shrank the row's width down to just the sprite (since
+   * out-of-flow arrows no longer contribute to flex sizing). That put the
+   * arrows right at the sprite's own edge instead of clearly outside it,
+   * and with no explicit z-index, the left arrow (earlier in DOM order)
+   * could paint underneath the sprite button where they overlapped --
+   * confirmed directly, not a hypothetical. A fixed width wide enough for
+   * the largest sprite plus real clearance on both sides, combined with
+   * z-index below, actually fixes both symptoms this time.
    */
   position: relative;
   height: 130px;
+  width: 220px;
   overflow: visible;
+  /* Reserves the vertical space the quest-mark used to get "for free" by
+     sitting in normal flow above this row -- removing it from flow (see
+     .quest-mark below) also removed that reserved space, which is why the
+     sprite shifted up into where the icon used to have clearance. This
+     restores the original spacing explicitly instead of leaving it to
+     flow that no longer exists. */
+  margin-top: 40px;
 }
 
 .carousel-arrow {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
+  z-index: 3;
   background: none;
   border: none;
   box-shadow: none;
@@ -939,8 +947,8 @@ input[type='range'] {
   opacity: 0.55;
   transition: opacity 90ms linear, color 90ms linear;
 }
-.carousel-arrow:first-child { left: -2px; }
-.carousel-arrow:last-child { right: -2px; }
+.carousel-arrow:first-child { left: 4px; }
+.carousel-arrow:last-child { right: 4px; }
 .carousel-arrow:hover {
   background: none;
   opacity: 1;
