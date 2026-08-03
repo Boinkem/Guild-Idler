@@ -1,0 +1,211 @@
+diff --git a/src/game/data/balance.ts b/src/game/data/balance.ts
+new file mode 100644
+index 0000000..0b3aa4b
+--- /dev/null
++++ b/src/game/data/balance.ts
+@@ -0,0 +1,68 @@
++import { DIFFICULTIES, DIFFICULTY_ORDER, DifficultyConfig } from './quests';
++import { Difficulty } from '../types';
++import { HOUR } from '../util';
++
++/**
++ * Replaces the old flat burstTaper(topLevel) curve in QuestManager with a
++ * live cap computed directly from DIFFICULTIES, separately for gold and
++ * XP. The flat curve had two confirmed problems: its floor (0.2) never
++ * actually dropped burst below the best unlocked tier until very late,
++ * making burst-spamming the mathematically dominant strategy from level 1
++ * to roughly 25-30; and a single shared curve couldn't correctly gate both
++ * currencies at once, since legendary quests are gold-heavy but XP-light
++ * relative to hard/epic -- tightening the curve for XP purposes measurably
++ * loosened effective gold-farming speed in testing.
++ *
++ * Tying the cap to live tier data instead of a fixed curve also means it
++ * self-corrects if DIFFICULTIES changes later (bump hard's maxGold, the
++ * cap recalculates) without needing to re-derive a curve by hand.
++ */
++
++/** Matches QuestManager.resolve's actual failure payout exactly -- a failed
++ *  quest still pays a fraction of the roll, gold and xp at different rates. */
++const GOLD_FAILURE_MULTIPLIER = 0.15;
++const XP_FAILURE_MULTIPLIER = 0.3;
++
++/** Non-burst quests roll XP from this fixed base range before the tier's
++ *  own xpMultiplier applies -- see QuestManager.generateOffer. */
++const BASE_XP_MIN = 18;
++const BASE_XP_MAX = 30;
++
++function expectedRatePerHour(cfg: DifficultyConfig, kind: 'gold' | 'xp'): number {
++  const avgDurationHours = (cfg.minDuration + cfg.maxDuration) / 2 / HOUR;
++  const successRate = cfg.baseSuccess / 100;
++  const avgReward = kind === 'gold'
++    ? (cfg.minGold + cfg.maxGold) / 2
++    : ((BASE_XP_MIN + BASE_XP_MAX) / 2) * cfg.xpMultiplier;
++  const failureMultiplier = kind === 'gold' ? GOLD_FAILURE_MULTIPLIER : XP_FAILURE_MULTIPLIER;
++  const expectedReward = successRate * avgReward + (1 - successRate) * failureMultiplier * avgReward;
++  return expectedReward / avgDurationHours;
++}
++
++/** Highest difficulty tier currently available to a hero at topLevel --
++ *  same eligibility rule QuestManager.generateBoard already uses
++ *  (topLevel + 2 >= reqLevel, legendary additionally gated by its unlock). */
++export function bestUnlockedTier(topLevel: number, legendaryUnlocked: boolean): Difficulty {
++  let best: Difficulty = 'easy';
++  for (const id of DIFFICULTY_ORDER) {
++    if (id === 'legendary' && !legendaryUnlocked) continue;
++    if (topLevel + 2 >= DIFFICULTIES[id].reqLevel) best = id;
++  }
++  return best;
++}
++
++/** Below this level, burst keeps its full, uncapped reward -- the
++ *  deliberate onboarding hook, confirmed not to be the problem. */
++const MIN_LEVEL_FOR_CAP = 5;
++/** Midpoint of the requested 80-85% range: clearly still worthwhile as a
++ *  quick top-up, never the rational default strategy over the board. */
++const BURST_CAP_FRACTION = 0.825;
++
++export function burstCapsPerHour(topLevel: number, legendaryUnlocked: boolean): { gold: number; xp: number } {
++  if (topLevel < MIN_LEVEL_FOR_CAP) return { gold: Infinity, xp: Infinity };
++  const tier = DIFFICULTIES[bestUnlockedTier(topLevel, legendaryUnlocked)];
++  return {
++    gold: BURST_CAP_FRACTION * expectedRatePerHour(tier, 'gold'),
++    xp: BURST_CAP_FRACTION * expectedRatePerHour(tier, 'xp'),
++  };
++}
+diff --git a/src/game/data/quests.ts b/src/game/data/quests.ts
+index f1b4ede..7984099 100644
+--- a/src/game/data/quests.ts
++++ b/src/game/data/quests.ts
+@@ -73,13 +73,22 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
+   epic: {
+     id: 'epic', label: 'Epic', baseSuccess: 40,
+     minDuration: 6 * HOUR, maxDuration: 12 * HOUR,
+-    minGold: 150, maxGold: 400, xpMultiplier: 11, lootChance: 45,
++    // xpMultiplier raised 11 -> 12. Verified directly: at 11, Epic's xp/hr
++    // (17.0) was actually LOWER than Hard's (17.3) despite requiring a
++    // higher level and harder odds -- the opposite of what progressing
++    // through the tiers should feel like. 12 puts Epic at ~18.6 xp/hr,
++    // clearing Hard with real margin. Gold is unaffected and already
++    // climbs correctly tier over tier.
++    minGold: 150, maxGold: 400, xpMultiplier: 12, lootChance: 45,
+     reqLevel: 15, weight: 14, color: '#a874d6',
+   },
+   legendary: {
+     id: 'legendary', label: 'Legendary', baseSuccess: 25,
+     minDuration: 12 * HOUR, maxDuration: 24 * HOUR,
+-    minGold: 500, maxGold: 2000, xpMultiplier: 26, lootChance: 70,
++    // Same fix, same reasoning -- 26 put Legendary's xp/hr (16.5) below
++    // BOTH Hard and Epic. 30 lands it at ~19.0 xp/hr, now the actual best
++    // in the game, matching its own level requirement and odds.
++    minGold: 500, maxGold: 2000, xpMultiplier: 30, lootChance: 70,
+     reqLevel: 25, weight: 6, color: '#d9a441',
+   },
+ };
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index c650fac..5ccc986 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -3,11 +3,12 @@ import {
+   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES,
+ } from '../data/quests';
+ import { HERO_CLASSES } from '../data/progression';
++import { burstCapsPerHour } from '../data/balance';
+ import {
+   ActiveQuest, Difficulty, GameState, Hero, QuestOffer, QuestResult, Rarity,
+ } from '../types';
+ import { createRng, Rng, uid } from '../rng';
+-import { clamp, MINUTE, sumMods } from '../util';
++import { clamp, HOUR, MINUTE, sumMods } from '../util';
+ import { HeroManager } from './HeroManager';
+ import { EventManager } from './EventManager';
+ import { InventoryManager } from './InventoryManager';
+@@ -19,25 +20,6 @@ export const BOARD_REFRESH_MS = 30 * MINUTE;
+ export const MIN_SUCCESS = 5;
+ export const MAX_SUCCESS = 95;
+ 
+-/**
+- * Burst quests (short 90s-8min offers rolled instead of the normal duration
+- * range -- see DIFFICULTIES.burstChance) keep their full reward at very low
+- * levels, on purpose: they exist for the fast, satisfying "start a quest and
+- * immediately get to see it pay off" loop hook early on. Without a taper,
+- * that same flat reward stays a flat-rate exploit deep into the game (a
+- * 90-second quest paying out at 10-15x the normal per-hour rate regardless
+- * of level). BURST_TAPER_FLOOR is the reward multiplier once fully tapered,
+- * not zero -- a burst quest should still feel like a nice quick top-up at
+- * high level, just not a strategy.
+- */
+-const BURST_TAPER_FLOOR = 0.2;
+-const BURST_TAPER_LEVELS = 30;
+-
+-function burstTaper(topLevel: number): number {
+-  const t = clamp((topLevel - 1) / BURST_TAPER_LEVELS, 0, 1);
+-  return 1 - t * (1 - BURST_TAPER_FLOOR);
+-}
+-
+ export const CHAIN_BY_ID: Record<string, ChainDef> = Object.fromEntries(QUEST_CHAINS.map((c) => [c.id, c]));
+ 
+ function lootTableFor(difficulty: Difficulty, rng: Rng): { defId: string; chance: number }[] {
+@@ -65,7 +47,7 @@ export const QuestManager = {
+     const offers: QuestOffer[] = [];
+     for (let i = 0; i < BOARD_SIZE; i++) {
+       const difficulty = rng.weighted(available.map((d) => ({ item: d, weight: DIFFICULTIES[d].weight })));
+-      offers.push(QuestManager.generateOffer(difficulty, rng, `q:${window}:${i}`, topLevel));
++      offers.push(QuestManager.generateOffer(difficulty, rng, `q:${window}:${i}`, topLevel, false, legendaryUnlocked));
+     }
+ 
+     // With only one hero, there's no second pair of hands to fall back on
+@@ -76,7 +58,7 @@ export const QuestManager = {
+     // replacing the last slot rather than adding a 7th, so a fresh guild
+     // always has *something* to send within a few minutes.
+     if (state.heroes.length <= 1 && !offers.some((o) => o.difficulty === 'easy' && o.duration <= 5 * MINUTE)) {
+-      offers[offers.length - 1] = QuestManager.generateOffer('easy', rng, `q:${window}:guaranteed`, topLevel, true);
++      offers[offers.length - 1] = QuestManager.generateOffer('easy', rng, `q:${window}:guaranteed`, topLevel, true, legendaryUnlocked);
+     }
+ 
+     // Chain stages are appended when a chain is running or available.
+@@ -93,7 +75,10 @@ export const QuestManager = {
+     return offers;
+   },
+ 
+-  generateOffer(difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number, forceBurst = false): QuestOffer {
++  generateOffer(
++    difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number,
++    forceBurst = false, legendaryUnlocked = false,
++  ): QuestOffer {
+     const cfg = DIFFICULTIES[difficulty];
+     const tierIndex = DIFFICULTY_ORDER.indexOf(difficulty);
+     const eligible = QUEST_TEMPLATES.filter((t) => {
+@@ -118,13 +103,26 @@ export const QuestManager = {
+     const duration = rng.int(durMin, durMax);
+     const span = durMax - durMin;
+     const t = span > 0 ? (duration - durMin) / span : 1;
+-    const taper = useBurst ? burstTaper(topLevel) : 1;
+-    const goldMin = useBurst ? cfg.burstMinGold! * taper : cfg.minGold;
+-    const goldMax = useBurst ? cfg.burstMaxGold! * taper : cfg.maxGold;
+-    const xpMin = useBurst ? cfg.burstMinXp! * taper : 18;
+-    const xpMax = useBurst ? cfg.burstMaxXp! * taper : 30;
+-    const rewardGold = Math.max(1, Math.round(goldMin + t * (goldMax - goldMin)));
+-    const rewardXp = Math.floor((xpMin + t * (xpMax - xpMin)) * cfg.xpMultiplier);
++    const goldMin = useBurst ? cfg.burstMinGold! : cfg.minGold;
++    const goldMax = useBurst ? cfg.burstMaxGold! : cfg.maxGold;
++    const xpMin = useBurst ? cfg.burstMinXp! : 18;
++    const xpMax = useBurst ? cfg.burstMaxXp! : 30;
++    let rewardGold = Math.max(1, Math.round(goldMin + t * (goldMax - goldMin)));
++    let rewardXp = Math.floor((xpMin + t * (xpMax - xpMin)) * cfg.xpMultiplier);
++
++    // Burst reward is capped at ~80-85% of whatever the best currently-
++    // unlocked tier pays per hour -- live, computed from DIFFICULTIES
++    // itself rather than a flat decay curve, so it can never silently
++    // become the mathematically dominant strategy the way the old flat
++    // taper did (confirmed directly: its 0.2 floor never actually dropped
++    // burst below the best unlocked tier until very late). Untouched below
++    // level 5 -- the deliberate onboarding hook, confirmed not the problem.
++    if (useBurst) {
++      const durationHours = duration / HOUR;
++      const caps = burstCapsPerHour(topLevel, legendaryUnlocked);
++      rewardGold = Math.min(rewardGold, Math.max(1, Math.round(caps.gold * durationHours)));
++      rewardXp = Math.min(rewardXp, Math.floor(caps.xp * durationHours));
++    }
+ 
+     return {
+       id: `${seedTag}:${difficulty}:${subject.replace(/\s+/g, '_')}`,

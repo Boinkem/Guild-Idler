@@ -3,11 +3,12 @@ import {
   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES,
 } from '../data/quests';
 import { HERO_CLASSES } from '../data/progression';
+import { burstCapsPerHour } from '../data/balance';
 import {
   ActiveQuest, Difficulty, GameState, Hero, QuestOffer, QuestResult, Rarity,
 } from '../types';
 import { createRng, Rng, uid } from '../rng';
-import { clamp, MINUTE, sumMods } from '../util';
+import { clamp, HOUR, MINUTE, sumMods } from '../util';
 import { HeroManager } from './HeroManager';
 import { EventManager } from './EventManager';
 import { InventoryManager } from './InventoryManager';
@@ -18,25 +19,6 @@ export const BOARD_SIZE = 6;
 export const BOARD_REFRESH_MS = 30 * MINUTE;
 export const MIN_SUCCESS = 5;
 export const MAX_SUCCESS = 95;
-
-/**
- * Burst quests (short 90s-8min offers rolled instead of the normal duration
- * range -- see DIFFICULTIES.burstChance) keep their full reward at very low
- * levels, on purpose: they exist for the fast, satisfying "start a quest and
- * immediately get to see it pay off" loop hook early on. Without a taper,
- * that same flat reward stays a flat-rate exploit deep into the game (a
- * 90-second quest paying out at 10-15x the normal per-hour rate regardless
- * of level). BURST_TAPER_FLOOR is the reward multiplier once fully tapered,
- * not zero -- a burst quest should still feel like a nice quick top-up at
- * high level, just not a strategy.
- */
-const BURST_TAPER_FLOOR = 0.2;
-const BURST_TAPER_LEVELS = 30;
-
-function burstTaper(topLevel: number): number {
-  const t = clamp((topLevel - 1) / BURST_TAPER_LEVELS, 0, 1);
-  return 1 - t * (1 - BURST_TAPER_FLOOR);
-}
 
 export const CHAIN_BY_ID: Record<string, ChainDef> = Object.fromEntries(QUEST_CHAINS.map((c) => [c.id, c]));
 
@@ -65,7 +47,7 @@ export const QuestManager = {
     const offers: QuestOffer[] = [];
     for (let i = 0; i < BOARD_SIZE; i++) {
       const difficulty = rng.weighted(available.map((d) => ({ item: d, weight: DIFFICULTIES[d].weight })));
-      offers.push(QuestManager.generateOffer(difficulty, rng, `q:${window}:${i}`, topLevel));
+      offers.push(QuestManager.generateOffer(difficulty, rng, `q:${window}:${i}`, topLevel, false, legendaryUnlocked));
     }
 
     // With only one hero, there's no second pair of hands to fall back on
@@ -76,7 +58,7 @@ export const QuestManager = {
     // replacing the last slot rather than adding a 7th, so a fresh guild
     // always has *something* to send within a few minutes.
     if (state.heroes.length <= 1 && !offers.some((o) => o.difficulty === 'easy' && o.duration <= 5 * MINUTE)) {
-      offers[offers.length - 1] = QuestManager.generateOffer('easy', rng, `q:${window}:guaranteed`, topLevel, true);
+      offers[offers.length - 1] = QuestManager.generateOffer('easy', rng, `q:${window}:guaranteed`, topLevel, true, legendaryUnlocked);
     }
 
     // Chain stages are appended when a chain is running or available.
@@ -93,7 +75,10 @@ export const QuestManager = {
     return offers;
   },
 
-  generateOffer(difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number, forceBurst = false): QuestOffer {
+  generateOffer(
+    difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number,
+    forceBurst = false, legendaryUnlocked = false,
+  ): QuestOffer {
     const cfg = DIFFICULTIES[difficulty];
     const tierIndex = DIFFICULTY_ORDER.indexOf(difficulty);
     const eligible = QUEST_TEMPLATES.filter((t) => {
@@ -118,13 +103,26 @@ export const QuestManager = {
     const duration = rng.int(durMin, durMax);
     const span = durMax - durMin;
     const t = span > 0 ? (duration - durMin) / span : 1;
-    const taper = useBurst ? burstTaper(topLevel) : 1;
-    const goldMin = useBurst ? cfg.burstMinGold! * taper : cfg.minGold;
-    const goldMax = useBurst ? cfg.burstMaxGold! * taper : cfg.maxGold;
-    const xpMin = useBurst ? cfg.burstMinXp! * taper : 18;
-    const xpMax = useBurst ? cfg.burstMaxXp! * taper : 30;
-    const rewardGold = Math.max(1, Math.round(goldMin + t * (goldMax - goldMin)));
-    const rewardXp = Math.floor((xpMin + t * (xpMax - xpMin)) * cfg.xpMultiplier);
+    const goldMin = useBurst ? cfg.burstMinGold! : cfg.minGold;
+    const goldMax = useBurst ? cfg.burstMaxGold! : cfg.maxGold;
+    const xpMin = useBurst ? cfg.burstMinXp! : 18;
+    const xpMax = useBurst ? cfg.burstMaxXp! : 30;
+    let rewardGold = Math.max(1, Math.round(goldMin + t * (goldMax - goldMin)));
+    let rewardXp = Math.floor((xpMin + t * (xpMax - xpMin)) * cfg.xpMultiplier);
+
+    // Burst reward is capped at ~80-85% of whatever the best currently-
+    // unlocked tier pays per hour -- live, computed from DIFFICULTIES
+    // itself rather than a flat decay curve, so it can never silently
+    // become the mathematically dominant strategy the way the old flat
+    // taper did (confirmed directly: its 0.2 floor never actually dropped
+    // burst below the best unlocked tier until very late). Untouched below
+    // level 5 -- the deliberate onboarding hook, confirmed not the problem.
+    if (useBurst) {
+      const durationHours = duration / HOUR;
+      const caps = burstCapsPerHour(topLevel, legendaryUnlocked);
+      rewardGold = Math.min(rewardGold, Math.max(1, Math.round(caps.gold * durationHours)));
+      rewardXp = Math.min(rewardXp, Math.floor(caps.xp * durationHours));
+    }
 
     return {
       id: `${seedTag}:${difficulty}:${subject.replace(/\s+/g, '_')}`,

@@ -73,13 +73,22 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
   epic: {
     id: 'epic', label: 'Epic', baseSuccess: 40,
     minDuration: 6 * HOUR, maxDuration: 12 * HOUR,
-    minGold: 150, maxGold: 400, xpMultiplier: 11, lootChance: 45,
+    // xpMultiplier raised 11 -> 12. Verified directly: at 11, Epic's xp/hr
+    // (17.0) was actually LOWER than Hard's (17.3) despite requiring a
+    // higher level and harder odds -- the opposite of what progressing
+    // through the tiers should feel like. 12 puts Epic at ~18.6 xp/hr,
+    // clearing Hard with real margin. Gold is unaffected and already
+    // climbs correctly tier over tier.
+    minGold: 150, maxGold: 400, xpMultiplier: 12, lootChance: 45,
     reqLevel: 15, weight: 14, color: '#a874d6',
   },
   legendary: {
     id: 'legendary', label: 'Legendary', baseSuccess: 25,
     minDuration: 12 * HOUR, maxDuration: 24 * HOUR,
-    minGold: 500, maxGold: 2000, xpMultiplier: 26, lootChance: 70,
+    // Same fix, same reasoning -- 26 put Legendary's xp/hr (16.5) below
+    // BOTH Hard and Epic. 30 lands it at ~19.0 xp/hr, now the actual best
+    // in the game, matching its own level requirement and odds.
+    minGold: 500, maxGold: 2000, xpMultiplier: 30, lootChance: 70,
     reqLevel: 25, weight: 6, color: '#d9a441',
   },
 };
