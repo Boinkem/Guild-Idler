@@ -65,6 +65,20 @@ export class GameEngine {
     return this.toastQueue[0] ?? null;
   }
   /**
+   * Separate from the toast queue entirely -- an achievement unlock gets
+   * its own dedicated, richer popup (see AchievementPopup.tsx) rather than
+   * a plain text toast, since these are Steam-tracked and meant to read as
+   * a genuinely different kind of moment. Still archived into the Guide's
+   * notification log the same way everything else is (see
+   * reportAchievements below), just not also duplicated as a plain toast.
+   */
+  private achievementQueue: string[] = [];
+  get currentAchievement() {
+    const id = this.achievementQueue[0];
+    if (!id) return null;
+    return AchievementManager.list().find((a) => a.id === id) ?? null;
+  }
+  /**
    * Set the moment a chain's final stage resolves successfully, cleared by
    * dismissChainCelebration. Separate from lastResult -- a chain completion
    * gets its own full "Story Chain Complete" overlay (see ChainCompleteModal)
@@ -132,15 +146,22 @@ export class GameEngine {
     }
   }
 
-  /** Sound, toast, and the Steam stub, for every achievement id that just unlocked. */
+  /**
+   * Sound, the dedicated popup queue, the Guide notification log, and the
+   * Steam stub, for every achievement id that just unlocked. Archives
+   * directly (not via say()) so this doesn't also produce a redundant
+   * plain-text toast on top of the richer popup -- one moment, not two.
+   */
   private reportAchievements(ids: string[]) {
     if (ids.length === 0) return;
     for (const id of ids) {
       const def = AchievementManager.list().find((a) => a.id === id);
       playSound('achievement');
-      this.say(`Achievement unlocked: ${def?.name ?? id}`);
+      this.archive(`Achievement unlocked: ${def?.name ?? id}`);
+      this.achievementQueue.push(id);
       void window.littleKnight?.unlockAchievement(id);
     }
+    this.notify();
   }
 
   /**
@@ -181,6 +202,11 @@ export class GameEngine {
 
   clearToast() {
     this.toastQueue.shift();
+    this.notify();
+  }
+
+  dismissAchievement() {
+    this.achievementQueue.shift();
     this.notify();
   }
 

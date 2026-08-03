@@ -715,6 +715,58 @@ button:focus-visible, [tabindex]:focus-visible {
   text-align: center;
 }
 
+/* --------------------------- achievement popup ------------------------------ */
+/* Deliberately its own richer treatment, not just a bigger toast -- these are
+   Steam-tracked, and the top-right corner (vs. Toast's bottom-center) means
+   the two can never visually collide if both fire close together. */
+
+.achievement-popup {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  max-width: min(280px, 90%);
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: var(--panel-2);
+  border: 1px solid var(--brass);
+  padding: 10px 12px;
+  z-index: 51;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+}
+.achievement-popup-glyph {
+  font-size: 1.5rem;
+  color: var(--brass);
+  line-height: 1;
+  flex: none;
+}
+.achievement-popup-body { min-width: 0; }
+.achievement-popup-kicker {
+  font-size: 0.5625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--brass);
+  margin-bottom: 2px;
+}
+.achievement-popup-name {
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.achievement-popup-desc {
+  font-size: 0.625rem;
+  color: var(--muted);
+}
+
+.achievement-popup-pop {
+  animation: achievement-popup-pop 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+@keyframes achievement-popup-pop {
+  0% { transform: translateX(24px) scale(0.9); opacity: 0; box-shadow: 0 0 0 rgba(217, 164, 65, 0); }
+  40% { transform: translateX(-4px) scale(1.03); opacity: 1; box-shadow: 0 0 20px color-mix(in srgb, var(--brass) 60%, transparent); }
+  100% { transform: translateX(0) scale(1); opacity: 1; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4); }
+}
+
 /* -------------------------------- guide -------------------------------- */
 
 .notif-list { display: flex; flex-direction: column; gap: 2px; }

@@ -8,6 +8,7 @@ import { OfflineReportModal } from './ui/OfflineReportModal';
 import { QuestResultModal } from './ui/QuestResultModal';
 import { ChainCompleteModal } from './ui/ChainCompleteModal';
 import { RaidResultModal } from './ui/RaidResultModal';
+import { AchievementPopup } from './ui/AchievementPopup';
 import { Toast } from './ui/Toast';
 
 export type ViewMode = 'idle' | 'menu';
@@ -84,6 +85,7 @@ export function App() {
         </>
       )}
       <Toast />
+      <AchievementPopup />
     </EngineContext.Provider>
   );
 }
