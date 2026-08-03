@@ -152,290 +152,297 @@ export const QUEST_CHAINS: ChainDef[] = [
   {
     id: 'millers_problem',
     name: "The Miller's Problem",
-    description: "The guild's very first real job. It starts small. It does not stay small for long.",
+    description: "The guild's very first real job, and it looks simple enough from the doorway: a miller, a locked cellar door, and a smell that has been getting worse for a week. It will not stay simple past the first step down.",
     reqLevel: 2,
     rewardGold: 150,
     rewardItems: ['cellar_dwellers_tooth'],
     rewardRenown: 1,
     title: 'First Real Job',
-    epilogue: 'The thing under the mill turned out to be older than anyone in town could explain, and prouder than it had any right to be. It is gone now. The miller still will not go down to the cellar.',
+    epilogue: "Whatever lived under that mill was older than anyone in town could explain, and considerably prouder than it had any right to be. It's gone now, dragged out into daylight it clearly hadn't seen in a very long time. The miller still won't go down to that cellar, and probably never will again.",
     stages: [
-      { name: "The Miller's Cellar", flavour: "Rats, he says. Just rats. He will not go down there himself, though.", difficulty: 'easy', duration: 45 * MINUTE, goldMultiplier: 1.2 },
-      { name: 'Whatever the Rats Were Fleeing', flavour: 'Rats do not usually flee upward. These did.', difficulty: 'easy', duration: 90 * MINUTE, goldMultiplier: 1.3 },
-      { name: 'The Thing Under the Mill', flavour: "It has been down there longer than the mill has. It is patient. Twice, for just a moment, it looks at something that isn't you.", difficulty: 'normal', duration: 150 * MINUTE, goldMultiplier: 1.6 },
+      { name: "The Miller's Cellar", flavour: "The miller wrings his hat in both hands and swears it's just rats -- big ones, loud ones, but rats. He hasn't gone down those cellar stairs himself in three days, and isn't planning to start today either.", difficulty: 'easy', duration: 45 * MINUTE, goldMultiplier: 1.2 },
+      { name: 'Whatever the Rats Were Fleeing', flavour: 'The rats are running the wrong way -- up the stairs, into the mill, anywhere but down -- and rats only run toward danger when whatever they left behind is worse.', difficulty: 'easy', duration: 90 * MINUTE, goldMultiplier: 1.3 },
+      { name: 'The Thing Under the Mill', flavour: "It has waited under this mill longer than the mill has stood, patient in the particular way old things get patient. Twice now it turns its head toward a corner of the cellar that has nothing in it -- nothing you can see, anyway.", difficulty: 'normal', duration: 150 * MINUTE, goldMultiplier: 1.6 },
     ],
   },
   {
     id: 'crows_warning',
     name: "The Crow's Warning",
     description:
-      "Thornhollow isn't burned, it's been searched — room by room, like whatever hit it wanted " +
-      'something specific. Whoever it bit is not staying human for long, and there is no cure ' +
-      'in the town to slow it down. A crow that will not stop following you might be the only ' +
-      'reason one reaches Thornhollow in time.',
+      "Thornhollow hasn't been burned -- it's been searched, room by room, drawer by drawer, like " +
+      "whatever came through wanted something specific and didn't find it the first time. Whoever " +
+      "it bit won't stay human much longer, and there's no cure anywhere in the ruins to slow that " +
+      "down. A crow that refuses to stop following you might be the only reason one arrives in time.",
     reqLevel: 8,
     rewardGold: 900,
     rewardItems: ['crow_feather_charm'],
     rewardRenown: 1,
     title: 'Crow-Friend',
-    epilogue: 'The cure held. Whatever bit the people of Thornhollow, it did not get to keep them. The crow never did explain itself, and never really left either.',
+    epilogue: "The cure held. Whatever bit the people of Thornhollow got its teeth into them and nothing more -- they're still themselves, still filling the same tavern that used to be full. The crow never did explain itself, and it never really left either; it's still around, most days, watching from somewhere just out of reach.",
     stages: [
-      { name: 'Smoke Over Thornhollow', flavour: 'The demons did not raze the town. They were looking for something in it.', difficulty: 'normal', duration: 4 * HOUR, goldMultiplier: 1.4 },
-      { name: 'The Trail North', flavour: 'A crow lands on the ruined gate, looks at you, and does not fly off. It has not left since.', difficulty: 'normal', duration: 5 * HOUR, goldMultiplier: 1.5 },
-      { name: "Greywick's Alchemist", flavour: 'She needs spider venom, fresh, and she needs it before the ones who were bitten stop being people.', difficulty: 'hard', duration: 6 * HOUR, goldMultiplier: 1.7 },
-      { name: 'The Road to IronRest', flavour: 'Four vials, wrapped in cloth, carried like they might still bite.', difficulty: 'hard', duration: 6 * HOUR, goldMultiplier: 1.8 },
+      { name: 'Smoke Over Thornhollow', flavour: "The demons didn't raze this town -- they went through it door by door, upending drawers and tearing up floorboards, looking for something specific and leaving everything else untouched. That's worse than raiding. Raiding you can understand.", difficulty: 'normal', duration: 4 * HOUR, goldMultiplier: 1.4 },
+      { name: 'The Trail North', flavour: "A crow lands on the ruined gate as you leave, tilts its head, and doesn't fly off. It hasn't left your shoulder since -- through two towns and a river crossing -- like it knows exactly where this is going and isn't willing to risk you getting there without it.", difficulty: 'normal', duration: 5 * HOUR, goldMultiplier: 1.5 },
+      { name: "Greywick's Alchemist", flavour: "She's already grinding spider venom before you finish explaining, hands moving faster than her questions. Fresh is the only word that matters here -- the ones who were bitten are still people right now, and every hour past fresh shortens how long that stays true.", difficulty: 'hard', duration: 6 * HOUR, goldMultiplier: 1.7 },
+      { name: 'The Road to IronRest', flavour: "Four vials, wrapped in cloth thick enough that you can't feel them shift, carried the way you'd carry something that might still be alive. Every mile closer to IronRest is a mile further from the ones still waiting to find out if this works.", difficulty: 'hard', duration: 6 * HOUR, goldMultiplier: 1.8 },
     ],
   },
   {
     id: 'harrowers_foot',
     name: "The Harrower's Foot",
     description:
-      'A second village culled the same way as the last one — not burned, not looted. Searched. ' +
-      'Whatever is directing these raids wants something specific, and it is getting closer to finding it.',
+      'A second village has been culled the exact same way as the last one -- not burned, not ' +
+      'looted, searched, drawer by drawer, room by room. Whatever is directing these raids wants ' +
+      'something specific, and every village it empties brings it a little closer to finding it.',
     reqLevel: 11,
     rewardGold: 1300,
     rewardItems: ['ashwoven_charm'],
     rewardRenown: 1,
     title: 'Ash-Reader',
-    epilogue: "The pattern held right up until the demons stopped being able to follow it — someone, somewhere, is directing this. Nobody who fought them today learned who.",
+    epilogue: "The pattern held right up until the demons stopped being able to explain it themselves -- something, somewhere, gave every one of those orders, and nobody who fought them today walked away knowing who.",
     stages: [
-      { name: 'The Pattern in the Ash', flavour: 'Every burned house was searched before it burned. That is not how raiding works. That is how looking works.', difficulty: 'normal', duration: 5 * HOUR, goldMultiplier: 1.5 },
-      { name: 'What the Foot Soldiers Take', flavour: "They do not fight like animals. They fight like they are being watched by someone who will ask what they found.", difficulty: 'hard', duration: 7 * HOUR, goldMultiplier: 1.8 },
+      { name: 'The Pattern in the Ash', flavour: "Every burned house in this village was searched before it burned, and searched thoroughly -- floorboards pried up, cellars emptied, nothing left to chance. That isn't how raiding works. That's how looking works, and looking means someone is still searching for something they haven't found yet.", difficulty: 'normal', duration: 5 * HOUR, goldMultiplier: 1.5 },
+      { name: 'What the Foot Soldiers Take', flavour: "These demons don't fight like animals starving for the next kill -- they fight like soldiers being watched, like something is going to ask them afterward exactly what they found and where. Whatever's giving these orders expects a full report.", difficulty: 'hard', duration: 7 * HOUR, goldMultiplier: 1.8 },
     ],
   },
   {
     id: 'demon_generals_ledger',
     name: "A Demon General's Ledger",
     description:
-      'The foot soldiers answer to something larger — a column of demons moving with real ' +
-      'discipline, led by something that gives orders instead of just following hunger.',
+      "The foot soldiers answer to something bigger than hunger -- a column of demons on the move " +
+      "with real discipline, boots landing in step, led by something that gives orders instead of " +
+      "just following its next meal.",
     reqLevel: 15,
     rewardGold: 2100,
     rewardItems: ['seized_glaive'],
     rewardRenown: 2,
     title: 'Tally-Breaker',
-    epilogue: "The general kept records. Names, dates, places, tallied like inventory. One word appears in the margins more than any other, in a hand that is not the general's own: the Harrower. Nobody at IronRest has heard the name before. People have started asking around anyway.",
+    epilogue: "The general kept records -- meticulous ones, names and dates and places, tallied like a merchant's ledger rather than a monster's trophies. One word appears in the margins more than any other, in handwriting that clearly isn't the general's own: the Harrower. Nobody at IronRest has heard the name before. People have started asking around anyway, quietly, the way you ask about something you're hoping turns out to be nothing.",
     stages: [
-      { name: "The General's Column", flavour: 'It marches in formation. Demons do not march. Something taught it to.', difficulty: 'hard', duration: 9 * HOUR, goldMultiplier: 2.0 },
-      { name: 'The Ledger', flavour: 'It kept count of everyone it took. It was going to keep counting after you, too.', difficulty: 'epic', duration: 12 * HOUR, goldMultiplier: 2.4 },
+      { name: "The General's Column", flavour: "It marches in formation, ranks holding even across broken ground, and demons do not march. Something taught it to -- drilled it, the same way you'd drill a soldier -- and that should worry you more than teeth ever could.", difficulty: 'hard', duration: 9 * HOUR, goldMultiplier: 2.0 },
+      { name: 'The Ledger', flavour: "Names, dates, places -- every village it emptied, tallied like inventory in a hand too neat for a demon to have written it. It was already counting the space where your name would go before you ever arrived.", difficulty: 'epic', duration: 12 * HOUR, goldMultiplier: 2.4 },
     ],
   },
   {
     id: 'what_the_culled_become',
     name: 'What the Culled Become',
     description:
-      "The Harrower's name means nothing yet, but the ledger's tally does — every village it culled has " +
-      'reported graves opening from the inside in the weeks since. The people taken did not stay taken. They came back different.',
+      "The Harrower's name still means nothing to anyone at IronRest, but the ledger's tally means " +
+      "everything -- every single village it culled has reported graves opening from the inside in " +
+      "the weeks since. The people it took didn't stay taken. They came back. They came back different.",
     reqLevel: 19,
     rewardGold: 2800,
     rewardItems: ['gravewatchers_band'],
     rewardRenown: 2,
     title: 'Grave-Watcher',
     epilogue:
-      "Whatever the Harrower takes, it does not keep. It gives back — changed, obedient, still counted. " +
-      'Somewhere in the old barrow-ground east of the culled villages, something that was buried a very long ' +
-      'time ago has started, very quietly, to stir. Nobody has connected the two yet. Somebody should.',
+      "Whatever the Harrower takes, it doesn't keep -- it gives them back, changed, obedient, still " +
+      "somehow counted in that ledger. Somewhere east of the culled villages, in that old " +
+      "barrow-ground, something buried a very long time ago has started, very quietly, to stir. " +
+      "Nobody has connected the two yet. Somebody should, and soon.",
     stages: [
-      { name: 'The Empty Graves', flavour: 'Dug from beneath. No tool marks. No footprints leading away — only toward the old barrow-ground.', difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 2.1 },
-      { name: 'The Harvest', flavour: 'They remember their own names. That is somehow worse than if they did not.', difficulty: 'epic', duration: 13 * HOUR, goldMultiplier: 2.5 },
-      { name: 'Something Older Stirs', flavour: 'The barrow-ground has been quiet for three hundred years. It is not quiet tonight.', difficulty: 'epic', duration: 15 * HOUR, goldMultiplier: 2.7 },
+      { name: 'The Empty Graves', flavour: "Every grave here has been dug from beneath, dirt scattered outward in a ring, no tool marks and no footprints leading away -- only footprints leading toward the old barrow-ground east of town, dozens of them, walking in step like they'd all been given the same destination.", difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 2.1 },
+      { name: 'The Harvest', flavour: "They remember their own names. They answer to them, even, when you say them out loud -- which is somehow so much worse than if they'd forgotten everything, because it means whatever they are now, they know exactly what they used to be.", difficulty: 'epic', duration: 13 * HOUR, goldMultiplier: 2.5 },
+      { name: 'Something Older Stirs', flavour: 'The old barrow-ground has sat quiet for three hundred years, moss grown thick over every stone marker. It is not quiet tonight -- something underneath is moving for the first time in three centuries, and it is not moving slowly.', difficulty: 'epic', duration: 15 * HOUR, goldMultiplier: 2.7 },
     ],
   },
   {
     id: 'proving_the_bastion',
     name: 'Proving the Bastion',
     description:
-      'The Thornhollow cure reached IronRest Bastion exactly as promised, carried the last leg ' +
-      'by the same guild that ran the vials there in the first place. Captain Maeryn Thorne ' +
-      'does not forget a debt like that — and she is long on work that needs trustworthy ' +
-      'hands. Prove useful enough, and she has bigger work in mind.',
+      "The Thornhollow cure reached IronRest Bastion exactly on schedule, carried the last leg by " +
+      "the very guild that ran those vials there in the first place. Captain Maeryn Thorne doesn't " +
+      "forget a debt like that, and she has no shortage of work that needs hands she can actually " +
+      "trust. Prove useful enough, and she has bigger plans in mind.",
     reqLevel: 16,
     rewardGold: 3800,
     rewardItems: ['wardens_signet'],
     rewardRenown: 3,
     title: 'Lord of the Keep',
-    epilogue: 'Captain Thorne kept her word, which surprised exactly no one who had met her. The Keep changed hands quietly, the way most important things do, and the guild has had a home worth defending ever since.',
+    epilogue: "Captain Thorne kept her word, which surprised exactly no one who'd ever dealt with her directly. The Keep changed hands quietly, the way most important things do, and the guild has had a real home -- walls, a gate, and a garrison that answers to them -- ever since.",
     stages: [
-      { name: 'Officers of IronRest', flavour: "Captain Thorne does not say please. She does not need to.", difficulty: 'normal', duration: 6 * HOUR, goldMultiplier: 1.6 },
-      { name: 'Beasts on the Border', flavour: "Whatever is thinning the border patrols, it is not raiders. Raiders don't leave tracks like that.", difficulty: 'hard', duration: 8 * HOUR, goldMultiplier: 1.9 },
-      { name: 'The Fort in the North-West', flavour: "Thorne's terms: take the fort back, and the Keep is yours — so long as IronRest can always call on it.", difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.4 },
-      { name: "The Demon Lord's Throne", flavour: 'Whatever ruled here did not build a throne room to be comfortable. It built one to be seen from.', difficulty: 'legendary', duration: 20 * HOUR, goldMultiplier: 3.2 },
+      { name: 'Officers of IronRest', flavour: "Captain Thorne doesn't say please, doesn't soften an order, and doesn't repeat herself. She's run this Bastion through worse than one guild's growing pains, and she expects you to keep up without being told twice.", difficulty: 'normal', duration: 6 * HOUR, goldMultiplier: 1.6 },
+      { name: 'Beasts on the Border', flavour: "Something is thinning the border patrols one soldier at a time, and it isn't raiders -- raiders don't drag their kills forty feet into the treeline and leave the boots behind, still laced.", difficulty: 'hard', duration: 8 * HOUR, goldMultiplier: 1.9 },
+      { name: 'The Fort in the North-West', flavour: "Thorne's terms are simple: take the fort back from whatever's squatting in it, and the Keep is yours to call home -- so long as IronRest can always call on it when the debt comes due.", difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.4 },
+      { name: "The Demon Lord's Throne", flavour: "Whatever ruled this fort didn't build a throne room to be comfortable. It built one to be seen from every angle at once, by anyone unlucky enough to be standing in it.", difficulty: 'legendary', duration: 20 * HOUR, goldMultiplier: 3.2 },
     ],
   },
   {
     id: 'granite_crossing',
     name: 'Granite Crossing',
     description:
-      'The Keep is yours now, and the war table already has a name pinned to it: Granite ' +
-      "Crossing, home of the west coast's Stone Masons Guild. IronRest has heard nothing from " +
-      'it in weeks.',
+      "The Keep is finally the guild's own, and the war table already has a name pinned to it in " +
+      "Thorne's own hand: Granite Crossing, home of the west coast's Stone Masons Guild. IronRest " +
+      "hasn't heard a word from it in weeks, and silence from a place that busy is never good news.",
     reqLevel: 20,
     rewardGold: 2400,
     rewardItems: ['bulwark_cuirass'],
     rewardRenown: 2,
     title: "Garrick's End",
-    epilogue: "Garrick's raiders scattered the moment he stopped giving orders, which told its own story about what kind of leader he actually was. The Stone Masons Guild has not forgotten who reopened their gate.",
+    epilogue: "Garrick's raiders scattered the moment he stopped giving orders -- which told its own story about exactly what kind of leader he'd actually been. The Stone Masons Guild hasn't forgotten who reopened their gate, and they've made sure everyone downriver knows it too.",
     stages: [
-      { name: 'The Silent Quarry', flavour: 'Garrick and his raiders hold the town gate. The masons hold everything behind it, for now.', difficulty: 'hard', duration: 8 * HOUR, goldMultiplier: 2.0 },
-      { name: "Garrick's Reckoning", flavour: 'He built his camp inside the quarry itself. Stonemasons do not forget who did that.', difficulty: 'epic', duration: 12 * HOUR, goldMultiplier: 2.4 },
+      { name: 'The Silent Quarry', flavour: "Garrick and his raiders have taken the town gate and dug in like they mean to stay a season. The stonemasons hold everything behind it -- for now, and the longer this drags on, the less certain that for now sounds.", difficulty: 'hard', duration: 8 * HOUR, goldMultiplier: 2.0 },
+      { name: "Garrick's Reckoning", flavour: "He pitched his camp inside the quarry itself, right in the working pit, like he wanted the masons to watch him do it. Stonemasons remember who does that to their livelihood, and they remember for a very long time.", difficulty: 'epic', duration: 12 * HOUR, goldMultiplier: 2.4 },
     ],
   },
   {
     id: 'farm_at_the_edge',
     name: 'The Farm at the Edge',
     description:
-      "No word from the border farm in ten days, and IronRest's riders have not come back " +
-      'either. The Keep sends its own this time.',
+      "No word from the border farm in ten days, and now IronRest's own riders haven't come back " +
+      "either. Whatever's out there has stopped being a farmer's problem. The Keep is sending its " +
+      "own this time.",
     reqLevel: 24,
     rewardGold: 3200,
     rewardItems: ['gravekeepers_gloves'],
     rewardRenown: 2,
     title: 'Farmwarden',
-    epilogue: 'Whatever Vayne was turning into, it did not finish. The farmland recovered faster than the stories about what was found in that farmhouse basement did.',
+    epilogue: "Whatever Vayne was turning into, it never got to finish. The farmland recovered faster than the stories about what was actually found in that farmhouse basement, and most people who hear both versions decide they'd rather not ask which one is true.",
     stages: [
-      { name: 'No Word From the Farm', flavour: 'The fields are untouched. The farmhouse is not. Raiders, but dug in like they mean to stay.', difficulty: 'hard', duration: 9 * HOUR, goldMultiplier: 2.1 },
-      { name: 'What Vayne Was Becoming', flavour: "Captain Vayne is mid-ritual when you find her — something is being poured into her, paid for with more than she has left to give.", difficulty: 'epic', duration: 13 * HOUR, goldMultiplier: 2.5 },
+      { name: 'No Word From the Farm', flavour: "The fields stand untouched, crops still ripening in neat rows -- but the farmhouse is anything but untouched. Raiders have dug in around it like they intend to winter there, not pass through.", difficulty: 'hard', duration: 9 * HOUR, goldMultiplier: 2.1 },
+      { name: 'What Vayne Was Becoming', flavour: "Captain Vayne is mid-ritual when you find her, something dark being poured into her a measure at a time, paid for with more of herself than she has left to spend. Whatever this was supposed to make her into, it isn't finished yet -- which might be the only reason there's still time to stop it.", difficulty: 'epic', duration: 13 * HOUR, goldMultiplier: 2.5 },
     ],
   },
   {
     id: 'the_pale_rider',
     name: 'The Pale Rider',
     description:
-      "A squire is waiting at the Keep when you return — sent ahead by the Paladins of the " +
-      'Ashen Hand, who arrive not long after asking for help few others would agree to. They ' +
-      'are hunting something they call the Pale Rider, and they have been losing.',
+      "A squire is waiting at the Keep by the time you return -- sent ahead by the Paladins of " +
+      "the Ashen Hand, who arrive not long after, asking for a kind of help they clearly hate " +
+      "having to ask for. They call it the Pale Rider, and by their own account, they've been " +
+      "losing to it.",
     reqLevel: 32,
     rewardGold: 12000,
     rewardItems: ['sword_of_the_ashen_hand', 'bulwark_of_the_war_saint'],
     rewardRenown: 5,
     title: 'Ashen-Sworn',
-    epilogue: 'He dismounted, in the end. The Paladins of the Ashen Hand do not talk about what that looked like, and nobody has pushed them to.',
+    epilogue: "He dismounted, in the end. The Paladins of the Ashen Hand won't talk about what that actually looked like, and nobody who was there has tried to make them.",
     stages: [
-      { name: "The Ashen Hand's Plea", flavour: 'They do not ask for help easily. That they are asking at all should worry you more than it does.', difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.6 },
-      { name: 'The Road to Saint Aurlias Rest', flavour: 'An old war-cleric built a church there once, long before anyone needed protecting from what sleeps under it now. Hoofprints on this road, and only this road, for eleven miles.', difficulty: 'epic', duration: 16 * HOUR, goldMultiplier: 2.9 },
-      { name: 'The Dead of Saint Aurlias', flavour: 'The graves emptied from the inside, same as everywhere else the Harrower has passed — except these are walking toward the church, not away from it, like something on the other side of that door is calling them home.', difficulty: 'epic', duration: 18 * HOUR, goldMultiplier: 3.1 },
-      { name: 'The Rider in the Nave', flavour: 'He was waiting behind the doors the dead were so eager to reach. He does not dismount. He has not needed to in a very long time.', difficulty: 'legendary', duration: 24 * HOUR, goldMultiplier: 4.0 },
+      { name: "The Ashen Hand's Plea", flavour: "These paladins don't ask for help easily -- years of training see to that. That they're asking at all, standing here in armor that's seen real use, should worry you more than it visibly worries them.", difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.6 },
+      { name: 'The Road to Saint Aurlias Rest', flavour: "An old war-cleric built a church out here once, long before anyone needed protecting from whatever sleeps beneath it now. Hoofprints mark this road and only this road for eleven straight miles, evenly spaced, never breaking stride.", difficulty: 'epic', duration: 16 * HOUR, goldMultiplier: 2.9 },
+      { name: 'The Dead of Saint Aurlias', flavour: "These graves emptied from the inside same as every other place the Harrower has passed through -- except here, the dead are walking toward the church, not away from it, drawn like something behind that door is calling them home by name.", difficulty: 'epic', duration: 18 * HOUR, goldMultiplier: 3.1 },
+      { name: 'The Rider in the Nave', flavour: "He was waiting behind the doors the dead were so eager to reach, seated and unmoving, and he does not dismount. He hasn't needed to in longer than anyone currently breathing has been alive.", difficulty: 'legendary', duration: 24 * HOUR, goldMultiplier: 4.0 },
     ],
   },
   {
     id: 'dragon_hunt',
     name: 'The Dragon Hunt',
-    description: 'Something is burning Emberfell, northernmost of the holdfasts. Four stages, several days, one dragon.',
+    description: 'Something is burning Emberfell, northernmost of the holdfasts, one farmstead at a time. Four stages, several days on the road, and one very large problem waiting at the end of it.',
     reqLevel: 18,
     rewardGold: 4000,
     rewardItems: ['dragon_helm', 'dragon_blade'],
     rewardRenown: 2,
     title: 'Dragonbane',
-    epilogue: "Emberfell does not burn anymore. The dragon's hoard more than covered the cost of rebuilding, which several holdfast elders have pointed out was a strange kind of silver lining.",
+    epilogue: "Emberfell doesn't burn anymore. The dragon's hoard more than covered the cost of rebuilding every farmstead it ever touched, which several holdfast elders have pointed out, only half-joking, is a strange kind of silver lining to a burned town.",
     stages: [
-      { name: 'Follow the Ash Trail', flavour: 'Cold ash, warm ground. It passed here recently.', difficulty: 'hard', duration: 8 * HOUR, goldMultiplier: 1.5 },
-      { name: 'Question the Survivors', flavour: 'They describe wings the width of the valley.', difficulty: 'normal', duration: 6 * HOUR, goldMultiplier: 1.5 },
-      { name: 'Scale the Cinder Pass', flavour: 'The only way up is the way it flies down.', difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2 },
-      { name: 'The Dragon of Emberfell', flavour: 'No retreat from here. Bring everything.', difficulty: 'legendary', duration: 20 * HOUR, goldMultiplier: 3 },
+      { name: 'Follow the Ash Trail', flavour: 'The ash here is cold, but the scorched ground underneath is still warm to the touch. Whatever did this passed through recently -- recently enough that it might still be close.', difficulty: 'hard', duration: 8 * HOUR, goldMultiplier: 1.5 },
+      { name: 'Question the Survivors', flavour: 'Every survivor tells the same story with the same wide-eyed disbelief: wings spanning the whole width of the valley, blotting out the sky before the fire even started falling.', difficulty: 'normal', duration: 6 * HOUR, goldMultiplier: 1.5 },
+      { name: 'Scale the Cinder Pass', flavour: 'The only way up this mountain is the same route the dragon uses to come down -- a narrow, ash-choked pass with no cover and no second path if something goes wrong halfway.', difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2 },
+      { name: 'The Dragon of Emberfell', flavour: "There is no retreat from this ledge, no fallback position, nowhere left to regroup. Bring everything the guild has, because everything is exactly what this is going to take.", difficulty: 'legendary', duration: 20 * HOUR, goldMultiplier: 3 },
     ],
   },
   {
     id: 'lost_kingdom',
     name: 'Lost Kingdom Expedition',
-    description: 'A kingdom that maps forgot. Long roads, older ruins, and a very well-paid patron.',
+    description: 'A kingdom that every map simply forgot to mention. Long roads, older ruins than anyone can date, and a patron paying well enough not to ask too many questions about why.',
     reqLevel: 14,
     rewardGold: 2600,
     rewardItems: ['crown_of_the_lost'],
     rewardRenown: 1,
     title: 'Kingdom-Finder',
-    epilogue: 'The vault gave up what it was built to protect, and the kingdom that built it stayed exactly as lost as it was before — some things are not meant to be found twice.',
+    epilogue: "The vault finally gave up whatever it was built to protect, and the kingdom that built it stayed exactly as lost as it was before anyone found this. Some things, it turns out, were never meant to be found twice -- and this one's going straight back to being a rumor.",
     stages: [
-      { name: 'Chart the Grey Marches', flavour: 'Six days of nothing, then a road that should not exist.', difficulty: 'normal', duration: 10 * HOUR, goldMultiplier: 1.6 },
-      { name: 'Cross the Silent Bridge', flavour: 'It holds. That is the surprising part.', difficulty: 'hard', duration: 12 * HOUR, goldMultiplier: 1.8 },
-      { name: 'Open the Sunken Vault', flavour: 'Whatever they locked away, they locked it well.', difficulty: 'epic', duration: 16 * HOUR, goldMultiplier: 2.4 },
+      { name: 'Chart the Grey Marches', flavour: 'Six straight days of featureless grey nothing, and then, without warning, a stone road that has no business existing this far from anywhere charted.', difficulty: 'normal', duration: 10 * HOUR, goldMultiplier: 1.6 },
+      { name: 'Cross the Silent Bridge', flavour: "It holds your weight without so much as a creak, which is somehow the most unsettling part of a bridge that shouldn't still be standing at all.", difficulty: 'hard', duration: 12 * HOUR, goldMultiplier: 1.8 },
+      { name: 'Open the Sunken Vault', flavour: "Whatever this lost kingdom locked away down here, they locked it away thoroughly -- layers of stone, then steel, then something that isn't quite either, all sealed around whatever waits at the center.", difficulty: 'epic', duration: 16 * HOUR, goldMultiplier: 2.4 },
     ],
   },
   {
     id: 'demon_fortress',
     name: 'Demon Fortress Assault',
-    description: 'The guild is gathering banners. Whoever you send has been asked to lead the breach.',
+    description: "The guild is gathering every banner it can call on. Whoever gets sent has been asked, personally, to lead the breach -- and there won't be a second attempt if this one fails.",
     reqLevel: 22,
     rewardGold: 6500,
     rewardItems: ['dragon_armor', 'amulet_of_fortune'],
     rewardRenown: 3,
     title: 'Hellgate Breaker',
-    epilogue: "The demon lord who held that throne won't be sitting on it again. The gate is open, the wards are broken, and whatever was singing behind them is not where you left it. It got out in the noise. It won't get far — but it isn't here anymore.",
+    epilogue: "The demon lord who held that throne won't be sitting on it again. The gate stands open, the wards lie broken, and whatever was singing behind them isn't where the guild left it -- it got out in the confusion. It won't get far. But it isn't here anymore, either, and that's its own kind of unfinished business.",
     stages: [
-      { name: 'Break the Outer Siege', flavour: 'Ladders, fire, and a very long night.', difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 2 },
-      { name: 'Break the Warding Choir', flavour: 'Nine years unbroken, and thick enough to hold a fortress shut from the inside. You are not here to make it stop — just to make it stop mattering, long enough to get through.', difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.4 },
-      { name: 'The Iron Gate', flavour: 'Held by something that remembers the last siege.', difficulty: 'epic', duration: 18 * HOUR, goldMultiplier: 2.6 },
-      { name: 'Descend to the Throne', flavour: 'One door left. It is already open.', difficulty: 'legendary', duration: 24 * HOUR, goldMultiplier: 3.5 },
+      { name: 'Break the Outer Siege', flavour: "Ladders against the wall, fire in the ditch, and a night that refuses to end fast enough. This is the easy part, and it still costs plenty.", difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 2 },
+      { name: 'Break the Warding Choir', flavour: "Nine years unbroken and thick enough to hold a whole fortress shut from the inside -- you're not here to silence it for good, just to make it stop mattering long enough to get past the gate it's guarding.", difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.4 },
+      { name: 'The Iron Gate', flavour: "Whatever holds this gate remembers the last siege in detail, and it's had years to plan for the next one.", difficulty: 'epic', duration: 18 * HOUR, goldMultiplier: 2.6 },
+      { name: 'Descend to the Throne', flavour: "One door left between the guild and whatever's been ruling behind it. It's already standing open, which is somehow worse than finding it locked.", difficulty: 'legendary', duration: 24 * HOUR, goldMultiplier: 3.5 },
     ],
   },
   {
     id: 'ancient_crown',
     name: 'Search for the Ancient Crown',
-    description: 'Three fragments, three regions, one very persistent rumour.',
+    description: 'Three fragments, three regions, and one rumour persistent enough that half the taverns on the coast have their own version of it by now.',
     reqLevel: 10,
     rewardGold: 1800,
     rewardItems: ['lucky_ring'],
     rewardRenown: 1,
     title: 'Crownbearer',
-    epilogue: 'Three fragments, three very different hiding places, one crown that fits exactly as well as it should. Nobody has explained why it was worth hiding in the first place.',
+    epilogue: "Three fragments, three wildly different hiding places, and a crown that fits together exactly as well as it should. Nobody involved has ever explained why it was worth hiding in three separate corners of the world in the first place -- and at this point, nobody's still asking.",
     stages: [
-      { name: 'The Fragment in the Fen', flavour: 'Wet, cold, and guarded by something patient.', difficulty: 'normal', duration: 8 * HOUR, goldMultiplier: 1.5 },
-      { name: 'The Fragment in the Vault', flavour: 'The banker insists it is a paperweight.', difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 1.8 },
-      { name: 'The Fragment in the Fire', flavour: 'Last seen inside an active forge. Naturally.', difficulty: 'epic', duration: 12 * HOUR, goldMultiplier: 2.2 },
+      { name: 'The Fragment in the Fen', flavour: 'Cold water to the knees, colder mud underneath, and something patient enough to have been guarding this fragment since long before the fen had a name.', difficulty: 'normal', duration: 8 * HOUR, goldMultiplier: 1.5 },
+      { name: 'The Fragment in the Vault', flavour: "The banker insists, with a completely straight face, that it's just a paperweight -- which is exactly the kind of thing someone says about an object they know is worth killing over.", difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 1.8 },
+      { name: 'The Fragment in the Fire', flavour: 'Last reported seen inside an active forge, sitting in coals hot enough to melt steel. Of course it was.', difficulty: 'epic', duration: 12 * HOUR, goldMultiplier: 2.2 },
     ],
   },
   {
     id: 'goblin_warband',
     name: "The Goblin King's Warband",
-    description: 'A goblin chieftain has united three warbands under one crown. Someone should un-unite them.',
+    description: "Three goblin warbands used to raid alone, tripping over each other's territory as often as they hit anything useful. Not anymore. A chieftain with more ambition than sense has welded them into one horde under a single stolen crown, and now they move together, burn together, answer to one voice. Silence that voice, and the horde comes apart at the seams again.",
     reqLevel: 6,
     rewardGold: 550,
     rewardItems: ['warband_cleaver'],
     rewardRenown: 1,
     title: 'Warband-Breaker',
-    epilogue: "Three warbands, one crown, and considerably less unity than the goblin king was hoping for. The crown, it turns out, was stolen from someone else's story entirely — but that is a different job for a different day.",
+    epilogue: "Three warbands, no chieftain, and a very confused horde left leaderless in the hills. But pull that third crown out of the wreckage and look closer -- it never belonged to any warlord. Whoever it actually came from has a far older claim to settle, and hasn't started collecting yet.",
     stages: [
-      { name: 'Scatter the Outriders', flavour: 'They ride ahead of the warband, loud and badly armoured.', difficulty: 'normal', duration: 3 * HOUR, goldMultiplier: 1.3 },
-      { name: "The Chieftain's Camp", flavour: 'He wears three crowns. None of them fit. All of them are stolen.', difficulty: 'hard', duration: 5 * HOUR, goldMultiplier: 1.6 },
+      { name: 'Scatter the Outriders', flavour: "The outriders always give themselves away -- mismatched armor clattering, torches lit hours before dark, laughing about a raid that hasn't happened yet. Cut them down before they reach camp, and the warband rides in blind.", difficulty: 'normal', duration: 3 * HOUR, goldMultiplier: 1.3 },
+      { name: "The Chieftain's Camp", flavour: "The chieftain holds court under three crowns stacked crooked on a head too small for any of them -- trophies, not treasures, each one looted off someone who mattered more than he ever will. He's convinced the wearing makes him a king. He's about to learn exactly how wrong that is, right before the horde scatters without him.", difficulty: 'hard', duration: 5 * HOUR, goldMultiplier: 1.6 },
     ],
   },
   {
     id: 'third_crown',
     name: 'The Third Crown',
     description:
-      "One of the goblin king's three crowns didn't come from a warband or a noble house — it came " +
-      "from a toll gate on the Blackford road, from a lord nobody remembers losing his own crown in " +
-      "the first place. He was reported dead the same season it went missing. He was not. Whoever he " +
-      "is now, he's had a long time to plan what comes next.",
+      "One of the goblin king's three crowns didn't come from a warband or a noble house at all -- " +
+      "it came off a toll gate on the Blackford road, taken from a lord nobody remembers losing his " +
+      "own crown in the first place. He was reported dead that same season. He wasn't. Whoever he " +
+      "is now, he's had a very long time to plan what comes next.",
     reqLevel: 7,
     rewardGold: 600,
     rewardItems: ['tollkeepers_signet'],
     rewardRenown: 1,
     title: 'Ridge-Watcher',
-    epilogue: "The crown's true owner isn't dead, isn't landless, and isn't finished. Whatever he's building at Blackford Ridge, it's bigger than a toll gate — and it isn't the guild's job to scout it a second time.",
+    epilogue: "The crown's true owner isn't dead, isn't landless, and isn't finished -- not by a long stretch. Whatever he's quietly building at Blackford Ridge is bigger than one toll gate, and it isn't the guild's job to go scout it a second time. Not yet, anyway.",
     stages: [
-      { name: 'The Toll That Should Not Exist', flavour: "A gate's gone up on the Blackford road again, run by men who were farmers a season ago and answer to someone who very much was not.", difficulty: 'normal', duration: 3 * HOUR, goldMultiplier: 1.3 },
-      { name: 'What the Crown Left Behind', flavour: 'Records in the old toll house name a lord who lost everything the same season the goblin king got his third crown. He was reported dead. He was not.', difficulty: 'normal', duration: 4 * HOUR, goldMultiplier: 1.5 },
-      { name: 'The Company He Kept', flavour: "Eighty men in ranks, a granary that didn't grow the grain to fill it, and a chain of command two deep. A dispossessed lord doesn't build this alone, and he isn't planning to stay dispossessed.", difficulty: 'hard', duration: 5 * HOUR, goldMultiplier: 1.8 },
+      { name: 'The Toll That Should Not Exist', flavour: "A gate has gone up on the Blackford road again, manned by men who were farming their own fields a season ago and now answer to someone who very much wasn't a farmer.", difficulty: 'normal', duration: 3 * HOUR, goldMultiplier: 1.3 },
+      { name: 'What the Crown Left Behind', flavour: "The old toll house still keeps records, and one name in them belongs to a lord who lost absolutely everything the same season the goblin king acquired his third crown. He was reported dead. He wasn't -- and whoever's keeping these records knows it too.", difficulty: 'normal', duration: 4 * HOUR, goldMultiplier: 1.5 },
+      { name: 'The Company He Kept', flavour: "Eighty men standing in real ranks, a granary stocked with grain it never grew itself, and a chain of command running two officers deep. A dispossessed lord doesn't build an operation like this alone, and he clearly isn't planning on staying dispossessed much longer.", difficulty: 'hard', duration: 5 * HOUR, goldMultiplier: 1.8 },
     ],
   },
   {
     id: 'hollow_choir',
     name: 'The Hollow Choir',
     description:
-      "The guild broke a choir like this once before, at the demon fortress — cracked its wards, " +
-      "cut down the demon lord that kept it caged, and left the voices behind, because voices " +
-      "were never the job. It didn't stay put for long. Something has settled into the old " +
-      "cathedral now, singing like it means to make a home of it. It never breathes.",
+      "The guild broke a choir just like this one once before, at the demon fortress -- cracked " +
+      "its wards, cut down the demon lord keeping it caged, and left the voices behind because " +
+      "voices were never the actual job. It didn't stay put for long. Something has settled into " +
+      "the old cathedral now, singing like it fully intends to make a home of it. It never once " +
+      "pauses to breathe.",
     reqLevel: 26,
     rewardGold: 5200,
     rewardItems: ['choir_mask', 'silenced_bell'],
     rewardRenown: 2,
     title: 'Choir-Silencer',
-    epilogue: 'The singing stopped for real this time — or at least, it has been quiet long enough that most people have stopped flinching at cathedral bells. Most people.',
+    epilogue: "The singing has actually stopped this time -- or at least, it's been quiet long enough that most people have stopped flinching every time a cathedral bell rings out unexpectedly. Most people.",
     stages: [
-      { name: 'Follow the Hymn', flavour: "It carries for miles and never repeats a verse. You've heard the shape of it before — not the tune, the wards underneath it. Whatever was under that fortress has made its new home here. Not for long.", difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 1.8 },
-      { name: 'The Choir Loft', flavour: 'No singers. One thing, fused into the rafters in wet coils of flesh, dozens of mouths opening and closing in turn so the note never has to stop. It sings beautifully. That is somehow the worst part.', difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.2 },
-      { name: 'Silence the Chord', flavour: 'Whatever it is building toward, it is almost finished.', difficulty: 'epic', duration: 18 * HOUR, goldMultiplier: 2.6 },
+      { name: 'Follow the Hymn', flavour: "It carries for miles and never repeats a single verse, and you've heard the shape of this before -- not the melody, but the wards woven underneath it. Whatever escaped that fortress has found itself a new home in these cathedral walls. Not for much longer.", difficulty: 'hard', duration: 10 * HOUR, goldMultiplier: 1.8 },
+      { name: 'The Choir Loft', flavour: "No singers up in the loft -- just one thing, fused into the rafters in wet coils of flesh, dozens of mouths opening and closing in careful sequence so the note never once has to stop. It sings beautifully. That's somehow the most disturbing part of all of it.", difficulty: 'epic', duration: 14 * HOUR, goldMultiplier: 2.2 },
+      { name: 'Silence the Chord', flavour: "Whatever this thing has been building toward this whole time, it's nearly finished -- and finished is very much not what the guild came here to let it be.", difficulty: 'epic', duration: 18 * HOUR, goldMultiplier: 2.6 },
     ],
   },
   {
@@ -474,20 +481,20 @@ export const QUEST_CHAINS: ChainDef[] = [
     id: 'hollow_king',
     name: "The Hollow King's Return",
     description:
-      'For guilds a run or two into prestige. The barrow-ground that stirred quietly for months has ' +
-      'stopped being quiet. The king everyone thought was buried is not staying that way, and the ' +
-      'things escorting him back are worse than he is.',
+      "For guilds a run or two into prestige. The barrow-ground that's been stirring quietly for " +
+      "months has stopped being quiet at all. The king everyone assumed was safely buried isn't " +
+      "staying that way, and whatever's escorting him back out is worse company than he ever was.",
     reqLevel: 45,
     rewardGold: 42000,
     rewardItems: ['empyrean_blade', 'empyrean_halo', 'empyrean_aegis'],
     rewardRenown: 10,
     title: 'Kingslayer Twice Over',
-    epilogue: 'He is buried again, properly this time, under considerably more stone than the last attempt. The court that followed him has not been seen since, which is either good news or the kind of quiet that precedes worse news.',
+    epilogue: "He's buried again, properly this time, under considerably more stone than the last attempt managed. The court that followed him hasn't been seen since -- which is either genuinely good news, or exactly the kind of quiet that comes right before worse news arrives.",
     stages: [
-      { name: 'The Grave Reopens', flavour: 'The seal held for three hundred years. It held for one night less than it needed to.', difficulty: 'epic', duration: 18 * HOUR, goldMultiplier: 2.8 },
-      { name: 'The Procession of the Dead Court', flavour: 'Every advisor he ever executed is walking behind him now, and none of them look angry anymore. That is worse.', difficulty: 'legendary', duration: 22 * HOUR, goldMultiplier: 3.4 },
-      { name: 'The Bridge of Forgotten Oaths', flavour: 'It only holds the weight of those who never broke a promise. Cross carefully.', difficulty: 'legendary', duration: 26 * HOUR, goldMultiplier: 3.8 },
-      { name: 'The Second Coronation', flavour: 'He is almost home. The crown remembers him even if the kingdom does not.', difficulty: 'legendary', duration: 30 * HOUR, goldMultiplier: 4.4 },
+      { name: 'The Grave Reopens', flavour: 'The seal held for three hundred years, stone unmoved, wards unbroken. It held for exactly one night less than it needed to.', difficulty: 'epic', duration: 18 * HOUR, goldMultiplier: 2.8 },
+      { name: 'The Procession of the Dead Court', flavour: 'Every advisor he ever had executed is walking behind him now in perfect procession, and not one of them looks angry about it anymore. That is the part that should worry you.', difficulty: 'legendary', duration: 22 * HOUR, goldMultiplier: 3.4 },
+      { name: 'The Bridge of Forgotten Oaths', flavour: 'This bridge only bears the weight of those who never once broke a promise in their lives. Cross very, very carefully.', difficulty: 'legendary', duration: 26 * HOUR, goldMultiplier: 3.8 },
+      { name: 'The Second Coronation', flavour: "He's nearly home. The crown still remembers the shape of his head, even if the kingdom underneath it has long since forgotten his name.", difficulty: 'legendary', duration: 30 * HOUR, goldMultiplier: 4.4 },
     ],
   },
   {

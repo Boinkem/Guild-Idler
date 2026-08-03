@@ -2,8 +2,8 @@
   {
     "id": "blackford_keep",
     "name": "The Siege of Blackford Keep",
-    "description": "The lord who lost a crown at Blackford Ridge has spent a season turning a toll gate into a real holding. He has no crown to show for it and no plans to stay uncrowned much longer -- and unlike the goblin king, who's already answered for one theft, this one still doesn't know exactly who's been quietly deciding his fate all along.",
-    "epilogue": "The Uncrowned's second army fared no better than his first. He still doesn't have his crown back. He still doesn't know the guild is the reason why.",
+    "description": "The lord who lost a crown at Blackford Ridge has spent an entire season turning a simple toll gate into a real holding, brick by brick. He has no crown to show for any of it and no plans to stay uncrowned much longer -- and unlike the goblin king, who's already answered for one theft, this one still has no idea who's been quietly deciding his fate the whole time.",
+    "epilogue": "The Uncrowned's second army fared no better than his first did. He still doesn't have his crown back. He still has no idea the guild is the reason why.",
     "reqLevel": 8,
     "encounterIds": [
       "blackford_outer_palisade",
@@ -15,8 +15,8 @@
   {
     "id": "bonewrought_vault",
     "name": "The Bonewrought Vault",
-    "description": "Something has been raising the dead again -- not in ones and twos this time, but by the vaultful. Whatever is sealed inside is worth enough to a foot soldier's worth of risen guards to still be defending it centuries later. This isn't a job for one hero. Bring the guild.",
-    "epilogue": "The vault held, in the end, for whoever the guild actually was. What was raised here goes quiet again -- for now. Whatever forced open a road between the dead and the living to make this happen in the first place is still out there, and it wasn't inconvenienced by any of this.",
+    "description": "Something has been raising the dead again -- not one or two this time, but by the vaultful, row after row of them. Whatever's sealed inside is worth enough that a company of risen guards is still defending it centuries later, without pay, without rest, without ever once questioning the order. This isn't a job for one hero. Bring the whole guild.",
+    "epilogue": "The vault held, in the end, for whoever the guild actually turned out to be. What was raised here has gone quiet again -- for now. Whatever tore open a road between the dead and the living to make this happen in the first place is still out there somewhere, and none of this so much as slowed it down.",
     "reqLevel": 22,
     "encounterIds": [
       "bonewrought_outer_wardens",

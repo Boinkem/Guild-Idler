@@ -2,7 +2,7 @@
   {
     "id": "bonewrought_outer_wardens",
     "name": "The Outer Wardens",
-    "flavour": "They were guards once, and never really stopped -- the vault doesn't know they're dead, and neither, it seems, do they.",
+    "flavour": "They were guards once, and they never really stopped being guards -- the vault hasn't told them they're dead, and honestly, neither have they told themselves.",
     "baseSuccess": 68,
     "durationHours": 2,
     "rewardGold": 800,
@@ -23,7 +23,7 @@
   {
     "id": "bonewrought_choir_of_bones",
     "name": "The Choir of Bones",
-    "flavour": "Dozens of throats, one note, held far longer than breath should allow -- because none of them are breathing.",
+    "flavour": "Dozens of throats, one single note, held far longer than any living lungs could manage -- because none of these throats are breathing at all.",
     "baseSuccess": 58,
     "durationHours": 3,
     "rewardGold": 1400,
@@ -44,7 +44,7 @@
   {
     "id": "bonewrought_vault_keeper",
     "name": "The Vault-Keeper",
-    "flavour": "Still at its post. Still counting whoever comes through the door. The count has been wrong for a very long time.",
+    "flavour": "Still at its post after all this time, still counting every soul that comes through that door. The count has been wrong for a very, very long time, and it doesn't seem to notice.",
     "baseSuccess": 48,
     "durationHours": 4,
     "rewardGold": 2600,
@@ -68,7 +68,7 @@
   {
     "id": "blackford_outer_palisade",
     "name": "The Outer Palisade",
-    "flavour": "Sharpened stakes, a rope bridge, and men who know exactly which gaps in the wall to defend. Someone taught them this.",
+    "flavour": "Sharpened stakes, a single rope bridge, and men who know exactly which gaps in that wall to defend. Someone with real training taught them this.",
     "baseSuccess": 65,
     "durationHours": 2,
     "rewardGold": 400,
@@ -89,7 +89,7 @@
   {
     "id": "blackford_right_hand",
     "name": "The Uncrowned's Right Hand",
-    "flavour": "Not the one giving the big speeches. The one the big speeches are actually about -- calm, precise, and clearly used to being obeyed.",
+    "flavour": "Not the one giving the big speeches out front -- the one those speeches are actually about. Calm, precise, and very clearly used to being obeyed without question.",
     "baseSuccess": 55,
     "durationHours": 3,
     "rewardGold": 650,
@@ -110,7 +110,7 @@
   {
     "id": "blackford_uncrowned",
     "name": "The Uncrowned",
-    "flavour": "He was a smallholder eighteen months ago, before he lost everything to a goblin with a taste for crowns. Whatever's left of him now doesn't plan on losing twice.",
+    "flavour": "He was just a smallholder eighteen months ago, before he lost absolutely everything to a goblin with a taste for other people's crowns. Whatever's left of him now has no intention of losing a second time.",
     "baseSuccess": 45,
     "durationHours": 4,
     "rewardGold": 1000,
