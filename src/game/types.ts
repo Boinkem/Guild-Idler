@@ -87,6 +87,16 @@ export interface EquipmentDef {
    * can be filled in gradually rather than all at once.
    */
   icon?: string;
+  /**
+   * True for the Heroic/Mythic tiered variants introduced alongside raid
+   * loot pools -- these only ever exist to be raid loot table entries and
+   * were never meant to be independently purchasable or craftable. Shop
+   * and Black Market stock generation both filter this out; a "Mythic"
+   * common-tier item showing up for sale never made sense in the first
+   * place, since the tier label only means something in the context of
+   * which raid difficulty dropped it.
+   */
+  raidExclusive?: boolean;
 }
 
 /** A concrete item the player owns. */
