@@ -27,7 +27,11 @@ export const ShopManager = {
     const topLevel = Math.max(1, ...state.heroes.map((h) => h.level));
     const rng = createRng(`shop:${window}:${state.createdAt}`);
 
-    const eligible = EQUIPMENT.filter((def) => def.reqLevel <= topLevel + 4);
+    // raidExclusive items (Heroic/Mythic tiered raid loot variants) never
+    // belong in a purchasable pool -- see the comment on EquipmentDef itself
+    // for why. This was the actual bug: nothing here previously excluded
+    // them at all.
+    const eligible = EQUIPMENT.filter((def) => !def.raidExclusive && def.reqLevel <= topLevel + 4);
     const picks = new Set<string>();
     let guard = 0;
     while (picks.size < Math.min(SHOP_EQUIPMENT_SLOTS, eligible.length) && guard++ < 200) {
@@ -67,7 +71,8 @@ export const ShopManager = {
     const window = Math.floor(now / BLACK_MARKET_REFRESH_MS);
     const rng = createRng(`blackmarket:${window}:${state.createdAt}`);
 
-    const eligible = EQUIPMENT.filter((def) => (BLACK_MARKET_RARITIES as readonly string[]).includes(def.rarity));
+    const eligible = EQUIPMENT.filter((def) =>
+      !def.raidExclusive && (BLACK_MARKET_RARITIES as readonly string[]).includes(def.rarity));
     const picks = new Set<string>();
     let guard = 0;
     while (picks.size < Math.min(BLACK_MARKET_SLOTS, eligible.length) && guard++ < 200) {
