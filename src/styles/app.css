@@ -318,7 +318,15 @@ button:focus-visible, [tabindex]:focus-visible {
   padding: 0;
   min-height: 0;
   filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.45));
-  animation: bob calc(2.4s / max(var(--anim-speed), 0.001)) steps(2, end) infinite;
+  /* --anim-speed's fallback (the ", 1" here and on .quest-mark's float
+     below) matters on the very first paint specifically: it's set via a JS
+     effect that runs after React's initial render commits, so without a
+     fallback the calc() is briefly invalid CSS and the whole animation
+     silently fails to apply -- confirmed as the cause of the sprite/quest
+     icon rendering incorrectly on cold launch but not after any later
+     remount (opening then closing the menu unmounts and remounts this
+     entirely, by which point the variable is long since set). */
+  animation: bob calc(2.4s / max(var(--anim-speed, 1), 0.001)) steps(2, end) infinite;
 }
 .knight-button:hover { background: none; transform: none; }
 
@@ -357,7 +365,7 @@ button:focus-visible, [tabindex]:focus-visible {
   left: 50%;
   transform: translateX(-50%);
   z-index: 5;
-  animation: float calc(1.6s / max(var(--anim-speed), 0.001)) ease-in-out infinite;
+  animation: float calc(1.6s / max(var(--anim-speed, 1), 0.001)) ease-in-out infinite;
   filter: drop-shadow(0 0 6px rgba(217, 164, 65, 0.6));
 }
 @keyframes float {
