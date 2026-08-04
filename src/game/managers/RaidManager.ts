@@ -101,7 +101,7 @@ export const RaidManager = {
     if (state.activeRaid) return { ok: false, error: 'The guild already has a raid underway.' };
     const raid = RAID_BY_ID[raidId];
     if (!raid) return { ok: false, error: 'Unknown raid.' };
-    if (!isRaidUnlocked(raidId, state.completedRaids)) return { ok: false, error: 'This raid has not been unlocked yet.' };
+    if (!isRaidUnlocked(raidId, state.completedRaids, state.completedChains)) return { ok: false, error: 'This raid has not been unlocked yet.' };
 
     const cfg = RAID_DIFFICULTIES[difficulty];
     if (heroIds.length !== cfg.partySize) {

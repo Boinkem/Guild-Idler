@@ -495,6 +495,72 @@ export const QUEST_CHAINS: ChainDef[] = [
     ],
   },
   {
+    id: 'last_pilgrimage',
+    name: 'The Last Pilgrimage',
+    description:
+      "Reports keep surfacing along an old road nobody official uses anymore -- travelers who " +
+      "took a wrong turn near a waystone shrine, and didn't walk away from it unmarked. Not " +
+      "robbed. Not killed, usually. Just claimed, somehow -- made to kneel through rites none of " +
+      "them knew and none of them consented to, before whatever was doing it finally let them go. " +
+      "The shrine has stood empty on every map anyone's checked for longer than anyone can say. " +
+      "Whatever's using it isn't empty at all.",
+    reqLevel: 44,
+    rewardGold: 30000,
+    rewardItems: [],
+    rewardRenown: 8,
+    title: "Pilgrim's Herald",
+    epilogue:
+      "There is a name for what the guild found underneath that archive, and it is not a " +
+      "monster's name. It is the name of something that used to matter enormously, to people " +
+      "who no longer exist to say so -- and it is still down there, waiting for a pilgrimage " +
+      "that stopped coming centuries before anyone alive was born to feel guilty about it.",
+    stages: [
+      {
+        name: 'The Waystone',
+        flavour:
+          "Whatever the survivors describe isn't a monster in the way anything else the guild " +
+          "has fought is a monster -- no claws, no roar, nothing that wants to be fought at all. " +
+          "Just something old and confused, pressing strangers through the motions of a rite it " +
+          "clearly still believes someone is meant to receive. It doesn't attack so much as " +
+          "insist. That is somehow worse.",
+        difficulty: 'epic', duration: 18 * HOUR, goldMultiplier: 2.7,
+      },
+      {
+        name: "The Scribes' Silence",
+        flavour:
+          "An order once kept the records here -- every pilgrim's name, every final rite " +
+          "performed, generation after generation, until one day nobody wrote another entry and " +
+          "nobody ever came back to ask why. The building has stood locked exactly the way its " +
+          "last scribe left it. Whatever still moves inside isn't guarding treasure. It's " +
+          "guarding an unfinished ledger, the same way the shrine outside is still trying to " +
+          "finish a rite.",
+        difficulty: 'epic', duration: 20 * HOUR, goldMultiplier: 2.9,
+      },
+      {
+        name: 'What the Archive Remembers',
+        flavour:
+          "Half the pages have gone to dust, and the half that survived don't agree with each " +
+          "other -- names spelled three different ways, dates that contradict, a century of " +
+          "scribes each half-finishing what the last one started. Piece it together anyway, and " +
+          "a shape finally emerges: not abandonment, not betrayal. Just a custom that quietly " +
+          "stopped, the way customs do, one skipped generation at a time, until nobody left " +
+          "alive remembered there had ever been a reason to make the walk at all.",
+        difficulty: 'legendary', duration: 22 * HOUR, goldMultiplier: 3.4,
+      },
+      {
+        name: 'The Road That Still Opens',
+        flavour:
+          "Beneath the archive's last sealed room, a second road begins -- the real one, the " +
+          "one the shrine outside was only ever an echo of. It doesn't lead anywhere on any " +
+          "chart, and it was never going to, not for the pilgrims who stopped coming and not " +
+          "for anyone else either -- except it seems to remember exactly one condition for " +
+          "opening: someone willing to walk it in their place. The guild didn't come looking to " +
+          "volunteer for that. It appears none of that will matter to the road.",
+        difficulty: 'legendary', duration: 24 * HOUR, goldMultiplier: 3.6,
+      },
+    ],
+  },
+  {
     id: 'hollow_king',
     name: "The Hollow King's Return",
     description:
@@ -512,44 +578,6 @@ export const QUEST_CHAINS: ChainDef[] = [
       { name: 'The Procession of the Dead Court', flavour: 'Every advisor he ever had executed is walking behind him now in perfect procession, and not one of them looks angry about it anymore. That is the part that should worry you.', difficulty: 'legendary', duration: 22 * HOUR, goldMultiplier: 3.4 },
       { name: 'The Bridge of Forgotten Oaths', flavour: 'This bridge only bears the weight of those who never once broke a promise in their lives. Cross very, very carefully.', difficulty: 'legendary', duration: 26 * HOUR, goldMultiplier: 3.8 },
       { name: 'The Second Coronation', flavour: "He's nearly home. The crown still remembers the shape of his head, even if the kingdom underneath it has long since forgotten his name.", difficulty: 'legendary', duration: 30 * HOUR, goldMultiplier: 4.4 },
-    ],
-  },
-  {
-    id: 'last_god',
-    requiresChainId: 'world_ender',
-    name: 'Requiem for the Last God',
-    description:
-      "There is no patron for this one — nobody left willing to pay for something they cannot be " +
-      "talked out of fearing. The first thread turned up in the wreck of the Court of the Unmade " +
-      "King, months later than anyone expected to find anything there at all: a single word, " +
-      "carved into the underside of a throne older than the throne itself, in a script nobody " +
-      "currently living can read and every hero who saw it somehow understood anyway. It matched " +
-      "something the Watchers in the dark between stars were counting, in the last moment before " +
-      "the World-Ender stopped them counting anything ever again. The heading it resolves to is " +
-      "not uncharted — it has been sailed before, more than once, by guilds desperate or proud " +
-      "enough to try. Overland ritual circles, doomed pilgrimages on foot, ships that should " +
-      "never have survived the crossing: every method has already been attempted, including the " +
-      "one this guild is about to use. What lies ahead proves the destination can be reached. It " +
-      "does not prove anyone reaches it twice. Whatever waits at the end of this heading is not " +
-      "another thing like the World-Ender — it is older in a different way, the kind of old that " +
-      "used to have a name, and worshippers, and a purpose, before all three ran out. Two " +
-      "capstones deep, and both of them, it turns out, were footnotes. You are doing this because " +
-      "someone has to, and everyone who might have talked you out of it already tried, and " +
-      "already failed, and is not around anymore to say so.",
-    reqLevel: 55,
-    rewardGold: 90000,
-    rewardItems: [
-      'the_last_ember', 'requiem_blade', 'requiem_crown', 'requiem_plate',
-      'requiem_signet', 'requiem_grips', 'requiem_striders',
-    ],
-    rewardRenown: 20,
-    title: 'Requiem-Bearer',
-    epilogue: 'There is a difference between winning and being the one left standing when it is over. The guild is still deciding which of those this was.',
-    stages: [
-      { name: 'The Last Map', flavour: "No cartographer drew this one — the guild's navigator plots it instead, working from seven salvaged fragments, four extracted confessions, and the coordinates carved beneath that throne, laying each reading over the last by lamplight until they finally agree on a single heading running past every charted water anyone has ever sailed. The ship is provisioned for the crossing and nothing past it, because nobody has ever needed to provision for a return leg. When the heading resolves, the navigator sets down her instruments very carefully, and does not pick them up again for the rest of the voyage.", difficulty: 'legendary', duration: 24 * HOUR, goldMultiplier: 4.0 },
-      { name: 'The Field of Failed Guilds', flavour: "The ship makes landfall on a shore no chart accounted for, and this is what's waiting just past the tideline. None of these wrecks share a single route, and that's the closest thing to comfort the Field offers: everyone who's tried has tried differently, and everyone still ended up here anyway. Waterlogged banners driven into the sand beside hulls that were never built to survive the crossing that got them here. Half-collapsed ritual circles, dragged the last mile by hands that didn't have much dragging left in them. Centuries of it, every method including the one this guild just used, and not one banner in the Field belongs to a guild that walked away afterward.", difficulty: 'legendary', duration: 28 * HOUR, goldMultiplier: 4.5 },
-      { name: 'The Silence Where Prayer Used to Work', flavour: 'Inland from the wrecks, past where even the tide stops reaching, an altar older than any faith currently practiced stands at the center of a ring of kneeling dead — not sacrifices, not casualties. Pilgrims. Every one of them came here on purpose, in their final days, exactly as the old rites instructed: to be walked the last mile in person, by the god that used to do the walking. Their robes have gone to dust around bones that never once fell over, because nobody ever came to lead them anywhere. Something did answer, in the end — faint, and slow, and barely enough of itself left to be recognized as the thing they\'d prayed to their whole lives. It just wasn\'t enough to finish what it was there for.', difficulty: 'legendary', duration: 32 * HOUR, goldMultiplier: 5.0 },
-      { name: 'What Is Left of It', flavour: "Beyond the altar, past the pilgrims still waiting to be led somewhere, what's left of the Last God does not rise to meet the guild, and does not need to. It was never a god people feared into worship — it was the one they sought out on purpose, at the very end, to be walked the last mile in person. It is enormous, and it has been dying since long before anything currently alive was born, slowly starving on belief nobody living remembers how to give it. There is no one left to walk it anywhere. So the guild does — the only way anyone still can. This was never going to be the fight anybody feared. It is the last mile, walked the other direction, for once.", difficulty: 'legendary', duration: 36 * HOUR, goldMultiplier: 6.0 },
     ],
   },
 ];

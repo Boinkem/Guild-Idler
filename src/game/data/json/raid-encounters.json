@@ -130,5 +130,45 @@
       "ranger_boots_mythic@6",
       "tollkeepers_signet_mythic@4"
     ]
+  },
+  {
+    "id": "last_god_field_of_failed_guilds",
+    "name": "The Field of Failed Guilds",
+    "flavour": "None of these wrecks share a single route, and that's the closest thing to comfort this shore offers: everyone who's tried has tried differently, and everyone still ended up here anyway. Waterlogged banners driven into sand beside hulls that were never built to survive the crossing that got them here -- centuries of failed pilgrimages, and not one banner in the whole field belongs to a guild that walked away afterward.",
+    "baseSuccess": 55,
+    "durationHours": 4,
+    "rewardGold": 6000,
+    "rewardXp": 900,
+    "loot": [
+      "requiem_signet@12",
+      "requiem_striders@10"
+    ]
+  },
+  {
+    "id": "last_god_silence_where_prayer_used_to_work",
+    "name": "The Silence Where Prayer Used to Work",
+    "flavour": "An altar older than any faith currently practiced stands at the center of a ring of kneeling dead -- pilgrims, every one, who came here on purpose in their final days exactly as the old rites instructed. Something did answer, in the end, faint and slow and barely enough of itself left to recognize -- and what's left of that answer doesn't know the difference anymore between finishing the rite and simply not letting anyone leave.",
+    "baseSuccess": 45,
+    "durationHours": 5,
+    "rewardGold": 9500,
+    "rewardXp": 1400,
+    "loot": [
+      "requiem_grips@8",
+      "requiem_plate@6",
+      "the_last_ember@4"
+    ]
+  },
+  {
+    "id": "last_god_what_is_left_of_it",
+    "name": "What Is Left of It",
+    "flavour": "What's left of the Last God does not rise to meet the guild, and does not entirely need to -- it is enormous, and it has been dying since long before anything currently alive was born, slowly starving on belief nobody living remembers how to give it. It reaches for the guild anyway, the way the shrine reached for strangers, the way the ring of pilgrims still kneels waiting: not out of malice, just out of not being able to tell anymore who it's for. There is no one left to walk it anywhere. So the guild does -- the only way anyone still can, once it finally, mercifully, stops fighting that.",
+    "baseSuccess": 35,
+    "durationHours": 6,
+    "rewardGold": 15000,
+    "rewardXp": 2200,
+    "loot": [
+      "requiem_blade@5",
+      "requiem_crown@4"
+    ]
   }
 ]

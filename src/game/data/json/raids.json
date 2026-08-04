@@ -23,5 +23,18 @@
       "bonewrought_choir_of_bones",
       "bonewrought_vault_keeper"
     ]
+  },
+  {
+    "id": "requiem_last_god",
+    "name": "Requiem for the Last God",
+    "description": "The road the archive spoke of has no fixed heading and never did -- it opens for whoever means to walk it in a dying pilgrim's place, and closes the moment they stop meaning it. It has opened for this guild. Every guild that has taken this same walk before them left something behind to prove it: banners, hulls, ritual circles abandoned mid-rite, scattered across a shore that shouldn't exist on any chart and doesn't need to. Whatever's waiting at the end of that walk hasn't been walked in a very long time, and it does not entirely remember why anyone stopped.",
+    "epilogue": "There is a difference between winning and being the one left standing when it is over. What the guild did at the end of that road wasn't a fight in the way every other fight has been a fight -- it was the last mile, walked the hard way, for something too far gone to make it easy. The guild is still deciding what to call that.",
+    "reqLevel": 55,
+    "encounterIds": [
+      "last_god_field_of_failed_guilds",
+      "last_god_silence_where_prayer_used_to_work",
+      "last_god_what_is_left_of_it"
+    ],
+    "requiresChainId": "last_pilgrimage"
   }
 ]

@@ -117,9 +117,19 @@ export function lootForDifficulty(encounter: RaidEncounterDef, difficulty: RaidD
  *  completed raid points at via unlocksRaidId -- shown greyed-out with the
  *  name/rewards hidden until actually unlocked, same "???" treatment used
  *  for undiscovered quest chains. */
-export function isRaidUnlocked(raidId: string, completedRaids: string[]): boolean {
+export function isRaidUnlocked(raidId: string, completedRaids: string[], completedChains: string[]): boolean {
+  const raid = RAID_BY_ID[raidId];
+  if (!raid) return false;
+
+  // Chain gate checked first and independently -- a raid gated purely by a
+  // chain (no other raid's unlocksRaidId points to it) would otherwise fall
+  // through to the "not gated by anything" raid-index fallback below and be
+  // visible from the very start, which is exactly the bug this guards
+  // against.
+  if (raid.requiresChainId && !completedChains.includes(raid.requiresChainId)) return false;
+
   if (RAIDS.findIndex((r) => r.id === raidId) === 0) return true;
   const unlockedBy = RAIDS.find((r) => r.unlocksRaidId === raidId);
-  if (!unlockedBy) return true; // not gated by anything -- visible from the start
+  if (!unlockedBy) return true; // not gated by another raid -- visible once its own chain gate (if any) clears
   return completedRaids.includes(unlockedBy.id);
 }

@@ -184,7 +184,7 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: 
   const now = useNow();
   const state = engine.state;
   const raid = RAIDS.find((r) => r.id === raidId)!;
-  const unlocked = isRaidUnlocked(raidId, state.completedRaids);
+  const unlocked = isRaidUnlocked(raidId, state.completedRaids, state.completedChains);
   const [open, setOpen] = useState(false);
   const [difficulty, setDifficulty] = useState<RaidDifficulty | null>(null);
   const [selectedHeroIds, setSelectedHeroIds] = useState<string[]>([]);

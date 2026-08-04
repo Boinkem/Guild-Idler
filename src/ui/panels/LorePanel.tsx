@@ -279,7 +279,7 @@ function StoryRaidsTab() {
   const state = engine.state;
 
   const completed = RAIDS.filter((r) => state.completedRaids.includes(r.id)).sort((a, b) => a.reqLevel - b.reqLevel);
-  const undiscovered = RAIDS.filter((r) => !isRaidUnlocked(r.id, state.completedRaids)).length;
+  const undiscovered = RAIDS.filter((r) => !isRaidUnlocked(r.id, state.completedRaids, state.completedChains)).length;
 
   return (
     <>

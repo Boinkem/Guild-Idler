@@ -285,6 +285,14 @@ export interface RaidDef {
   encounterIds: string[];
   /** Completing this raid at any difficulty unlocks this one next, if set. */
   unlocksRaidId?: string;
+  /**
+   * A quest chain that must appear in state.completedChains before this
+   * raid is visible at all -- mirrors ChainDef.requiresChainId's exact
+   * reasoning, just gating a raid on a chain instead of a chain on
+   * another chain. Independent of unlocksRaidId (raid-to-raid); a raid
+   * can be gated by a chain, another raid, both, or neither.
+   */
+  requiresChainId?: string;
 }
 
 export interface RaidDifficultyConfig {
