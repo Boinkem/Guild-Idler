@@ -67,6 +67,12 @@ export const QuestManager = {
         if (state.completedChains.includes(chain.id)) continue;
         if (topLevel < chain.reqLevel) continue;
         const active = state.activeChains.find((c) => c.chainId === chain.id);
+        // Only gates a chain that hasn't been started yet -- an existing
+        // save could already have one of these active from before this
+        // prerequisite existed (level gates alone never guaranteed
+        // completion order), and stranding someone mid-story on a save
+        // migration would be a real regression, not a feature.
+        if (!active && chain.requiresChainId && !state.completedChains.includes(chain.requiresChainId)) continue;
         const stage = active?.stage ?? 0;
         if (stage >= chain.stages.length) continue;
         offers.push(QuestManager.chainOffer(chain, stage, rng));

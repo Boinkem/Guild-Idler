@@ -146,6 +146,16 @@ export interface ChainDef {
   title?: string;
   /** A short narrative recap shown on the Lore tab once this chain is completed. */
   epilogue?: string;
+  /**
+   * A prior chain that must appear in state.completedChains before this one
+   * can ever be offered -- confirmed against the actual prose (each of
+   * these chains directly references the one before it, not just shares a
+   * loose theme), not gated purely on level the way every chain already is.
+   * A gated chain otherwise behaves exactly like a level-gated one: it just
+   * never appears on the board yet, counted the same as any other
+   * undiscovered chain -- no new UI needed for this.
+   */
+  requiresChainId?: string;
 }
 
 export const QUEST_CHAINS: ChainDef[] = [
@@ -188,6 +198,7 @@ export const QUEST_CHAINS: ChainDef[] = [
   },
   {
     id: 'harrowers_foot',
+    requiresChainId: 'crows_warning',
     name: "The Harrower's Foot",
     description:
       'A second village has been culled the exact same way as the last one -- not burned, not ' +
@@ -206,6 +217,7 @@ export const QUEST_CHAINS: ChainDef[] = [
   },
   {
     id: 'demon_generals_ledger',
+    requiresChainId: 'harrowers_foot',
     name: "A Demon General's Ledger",
     description:
       "The foot soldiers answer to something bigger than hunger -- a column of demons on the move " +
@@ -224,6 +236,7 @@ export const QUEST_CHAINS: ChainDef[] = [
   },
   {
     id: 'what_the_culled_become',
+    requiresChainId: 'demon_generals_ledger',
     name: 'What the Culled Become',
     description:
       "The Harrower's name still means nothing to anyone at IronRest, but the ledger's tally means " +
@@ -247,6 +260,7 @@ export const QUEST_CHAINS: ChainDef[] = [
   },
   {
     id: 'proving_the_bastion',
+    requiresChainId: 'demon_generals_ledger',
     name: 'Proving the Bastion',
     description:
       "The Thornhollow cure reached IronRest Bastion exactly on schedule, carried the last leg by " +
@@ -268,6 +282,7 @@ export const QUEST_CHAINS: ChainDef[] = [
   },
   {
     id: 'granite_crossing',
+    requiresChainId: 'proving_the_bastion',
     name: 'Granite Crossing',
     description:
       "The Keep is finally the guild's own, and the war table already has a name pinned to it in " +
@@ -406,6 +421,7 @@ export const QUEST_CHAINS: ChainDef[] = [
   },
   {
     id: 'third_crown',
+    requiresChainId: 'goblin_warband',
     name: 'The Third Crown',
     description:
       "One of the goblin king's three crowns didn't come from a warband or a noble house at all -- " +
@@ -426,6 +442,7 @@ export const QUEST_CHAINS: ChainDef[] = [
   },
   {
     id: 'hollow_choir',
+    requiresChainId: 'demon_fortress',
     name: 'The Hollow Choir',
     description:
       "The guild broke a choir just like this one once before, at the demon fortress -- cracked " +
@@ -499,6 +516,7 @@ export const QUEST_CHAINS: ChainDef[] = [
   },
   {
     id: 'last_god',
+    requiresChainId: 'world_ender',
     name: 'Requiem for the Last God',
     description:
       "There is no patron for this one — nobody left willing to pay for something they cannot be " +
