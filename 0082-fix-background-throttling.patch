@@ -1,0 +1,23 @@
+diff --git a/electron/main.ts b/electron/main.ts
+index 5789d8f..5b75730 100644
+--- a/electron/main.ts
++++ b/electron/main.ts
+@@ -106,6 +106,18 @@ async function createWindow() {
+       preload: path.join(__dirname, 'preload.mjs'),
+       contextIsolation: true,
+       nodeIntegration: false,
++      // Chromium throttles timers and fetches in windows its own occlusion
++      // heuristic decides are "backgrounded" -- a heuristic that gets
++      // confused by exactly this window's configuration (frameless,
++      // transparent, always-on-top at an elevated level, tiny, pinned to a
++      // screen corner). Confirmed as the actual cause of the hero sprite
++      // never loading on cold boot: the manifest fetch it depends on was
++      // getting silently throttled, not slow or broken, and resolving the
++      // moment the window was resized into Guild Hall's normal, centered
++      // shape un-confused Chromium's visibility tracking. This is an
++      // always-on desktop companion by design -- it needs to stay fully
++      // active regardless of what Chromium's occlusion detection assumes.
++      backgroundThrottling: false,
+     },
+   });
+ 
