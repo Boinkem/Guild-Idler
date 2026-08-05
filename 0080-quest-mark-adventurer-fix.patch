@@ -1,0 +1,35 @@
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 11b32e9..404997e 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -942,7 +942,16 @@ input[type='range'] {
+    * removed outright -- some clearance for the quest-mark above is still
+    * worth keeping, just not enough to risk overflowing the window again.
+    */
+-  margin-top: 16px;
++  /* Bumped from 16px -- adventurer-class specifically sits much closer to
++     the top of its own sprite bounding box than most classes (HeroSprite.tsx
++     documents ~97% fill for adventurer/gladiator vs ~80% for knight), so a
++     margin tuned to look right on knight left near-zero clearance for those
++     classes. Paired with shrinking the icon itself (see .quest-mark's scale
++     prop in IdleView.tsx, 3 -> 2.5) rather than only adding more margin --
++     a smaller icon needs less room to read as clearly separate from the
++     sprite, so this buys back clearance without approaching the height
++     budget that caused the sprite to disappear entirely before. */
++  margin-top: 26px;
+ }
+ 
+ .carousel-arrow {
+diff --git a/src/ui/IdleView.tsx b/src/ui/IdleView.tsx
+index e1fdcaa..2961714 100644
+--- a/src/ui/IdleView.tsx
++++ b/src/ui/IdleView.tsx
+@@ -165,7 +165,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+     <div className={`idle-root ${locked ? '' : 'unlocked'}`}>
+       <div className="idle-stage">
+         {!quest && questsReady > 0 && (
+-          <PixelSprite frame={QUEST_MARK} scale={3} className="quest-mark" title="Quests available" />
++          <PixelSprite frame={QUEST_MARK} scale={2.5} className="quest-mark" title="Quests available" />
+         )}
+ 
+         <div className="hero-carousel">

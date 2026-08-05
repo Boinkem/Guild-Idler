@@ -165,7 +165,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
     <div className={`idle-root ${locked ? '' : 'unlocked'}`}>
       <div className="idle-stage">
         {!quest && questsReady > 0 && (
-          <PixelSprite frame={QUEST_MARK} scale={3} className="quest-mark" title="Quests available" />
+          <PixelSprite frame={QUEST_MARK} scale={2.5} className="quest-mark" title="Quests available" />
         )}
 
         <div className="hero-carousel">
