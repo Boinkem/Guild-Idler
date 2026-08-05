@@ -178,7 +178,16 @@
     "baseSuccess": 60,
     "durationHours": 2,
     "rewardGold": 550,
-    "rewardXp": 100
+    "rewardXp": 100,
+    "loot": [
+      "frostfang_claw@10"
+    ],
+    "lootHeroic": [
+      "frostfang_claw_heroic@10"
+    ],
+    "lootMythic": [
+      "frostfang_claw_mythic@10"
+    ]
   },
   {
     "id": "wyrmkeep_wyrm_keepers",
@@ -187,7 +196,19 @@
     "baseSuccess": 52,
     "durationHours": 3,
     "rewardGold": 950,
-    "rewardXp": 180
+    "rewardXp": 180,
+    "loot": [
+      "keepers_warded_charm@9",
+      "frostwalker_treads@9"
+    ],
+    "lootHeroic": [
+      "keepers_warded_charm_heroic@9",
+      "frostwalker_treads_heroic@9"
+    ],
+    "lootMythic": [
+      "keepers_warded_charm_mythic@9",
+      "frostwalker_treads_mythic@9"
+    ]
   },
   {
     "id": "wyrmkeep_frozen_wyrm",
@@ -198,13 +219,16 @@
     "rewardGold": 1800,
     "rewardXp": 340,
     "loot": [
-      "dragon_helm@8"
+      "dragon_helm@8",
+      "frozen_maw_shield@5"
     ],
     "lootHeroic": [
-      "dragon_helm_heroic@8"
+      "dragon_helm_heroic@8",
+      "frozen_maw_shield_heroic@5"
     ],
     "lootMythic": [
-      "dragon_helm_mythic@8"
+      "dragon_helm_mythic@8",
+      "frozen_maw_shield_mythic@5"
     ]
   },
   {
@@ -214,7 +238,16 @@
     "baseSuccess": 58,
     "durationHours": 3,
     "rewardGold": 1100,
-    "rewardXp": 220
+    "rewardXp": 220,
+    "loot": [
+      "cinder_ash_grip@10"
+    ],
+    "lootHeroic": [
+      "cinder_ash_grip_heroic@10"
+    ],
+    "lootMythic": [
+      "cinder_ash_grip_mythic@10"
+    ]
   },
   {
     "id": "gotout_the_last_loyal",
@@ -223,7 +256,16 @@
     "baseSuccess": 48,
     "durationHours": 4,
     "rewardGold": 1900,
-    "rewardXp": 380
+    "rewardXp": 380,
+    "loot": [
+      "loyalists_brand@9"
+    ],
+    "lootHeroic": [
+      "loyalists_brand_heroic@9"
+    ],
+    "lootMythic": [
+      "loyalists_brand_mythic@9"
+    ]
   },
   {
     "id": "gotout_cornered",
@@ -232,6 +274,18 @@
     "baseSuccess": 38,
     "durationHours": 5,
     "rewardGold": 3400,
-    "rewardXp": 620
+    "rewardXp": 620,
+    "loot": [
+      "cornered_fang@5",
+      "desperate_ends_crown@4"
+    ],
+    "lootHeroic": [
+      "cornered_fang_heroic@5",
+      "desperate_ends_crown_heroic@4"
+    ],
+    "lootMythic": [
+      "cornered_fang_mythic@5",
+      "desperate_ends_crown_mythic@4"
+    ]
   }
 ]

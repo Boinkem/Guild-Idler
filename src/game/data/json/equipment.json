@@ -1558,5 +1558,432 @@
       "luck": 5
     },
     "raidExclusive": true
+  },
+  {
+    "id": "frostfang_claw",
+    "name": "Frostfang Claw",
+    "slot": "weapon",
+    "rarity": "epic",
+    "reqLevel": 18,
+    "maxDurability": 150,
+    "value": 1900,
+    "mods": {
+      "success": 10,
+      "speed": 8
+    },
+    "stats": {
+      "strength": 6,
+      "endurance": 3
+    }
+  },
+  {
+    "id": "frostfang_claw_heroic",
+    "name": "Frostfang Claw (Heroic)",
+    "slot": "weapon",
+    "rarity": "epic",
+    "reqLevel": 18,
+    "maxDurability": 195,
+    "value": 2470,
+    "mods": {
+      "success": 13,
+      "speed": 10
+    },
+    "stats": {
+      "strength": 8,
+      "endurance": 4
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "frostfang_claw_mythic",
+    "name": "Frostfang Claw (Mythic)",
+    "slot": "weapon",
+    "rarity": "epic",
+    "reqLevel": 18,
+    "maxDurability": 254,
+    "value": 3211,
+    "mods": {
+      "success": 17,
+      "speed": 14
+    },
+    "stats": {
+      "strength": 10,
+      "endurance": 5
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "keepers_warded_charm",
+    "name": "Keeper's Warded Charm",
+    "slot": "amulet",
+    "rarity": "epic",
+    "reqLevel": 19,
+    "maxDurability": 140,
+    "value": 2100,
+    "mods": {
+      "injuryResist": 14,
+      "success": 8,
+      "gold": 10
+    },
+    "stats": {
+      "wisdom": 6,
+      "endurance": 4
+    }
+  },
+  {
+    "id": "keepers_warded_charm_heroic",
+    "name": "Keeper's Warded Charm (Heroic)",
+    "slot": "amulet",
+    "rarity": "epic",
+    "reqLevel": 19,
+    "maxDurability": 182,
+    "value": 2730,
+    "mods": {
+      "injuryResist": 18,
+      "success": 10,
+      "gold": 13
+    },
+    "stats": {
+      "wisdom": 8,
+      "endurance": 5
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "keepers_warded_charm_mythic",
+    "name": "Keeper's Warded Charm (Mythic)",
+    "slot": "amulet",
+    "rarity": "epic",
+    "reqLevel": 19,
+    "maxDurability": 237,
+    "value": 3549,
+    "mods": {
+      "injuryResist": 24,
+      "success": 14,
+      "gold": 17
+    },
+    "stats": {
+      "wisdom": 10,
+      "endurance": 7
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "frostwalker_treads",
+    "name": "Frostwalker Treads",
+    "slot": "boots",
+    "rarity": "epic",
+    "reqLevel": 19,
+    "maxDurability": 145,
+    "value": 2200,
+    "mods": {
+      "speed": 20,
+      "injuryResist": 8
+    },
+    "stats": {
+      "endurance": 7
+    }
+  },
+  {
+    "id": "frostwalker_treads_heroic",
+    "name": "Frostwalker Treads (Heroic)",
+    "slot": "boots",
+    "rarity": "epic",
+    "reqLevel": 19,
+    "maxDurability": 188,
+    "value": 2860,
+    "mods": {
+      "speed": 26,
+      "injuryResist": 10
+    },
+    "stats": {
+      "endurance": 9
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "frostwalker_treads_mythic",
+    "name": "Frostwalker Treads (Mythic)",
+    "slot": "boots",
+    "rarity": "epic",
+    "reqLevel": 19,
+    "maxDurability": 245,
+    "value": 3718,
+    "mods": {
+      "speed": 34,
+      "injuryResist": 14
+    },
+    "stats": {
+      "endurance": 12
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "frozen_maw_shield",
+    "name": "Frozen Maw",
+    "slot": "shield",
+    "rarity": "legendary",
+    "reqLevel": 20,
+    "maxDurability": 200,
+    "value": 5800,
+    "mods": {
+      "injuryResist": 24,
+      "success": 10
+    },
+    "stats": {
+      "endurance": 11
+    }
+  },
+  {
+    "id": "frozen_maw_shield_heroic",
+    "name": "Frozen Maw (Heroic)",
+    "slot": "shield",
+    "rarity": "legendary",
+    "reqLevel": 20,
+    "maxDurability": 260,
+    "value": 7540,
+    "mods": {
+      "injuryResist": 31,
+      "success": 13
+    },
+    "stats": {
+      "endurance": 14
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "frozen_maw_shield_mythic",
+    "name": "Frozen Maw (Mythic)",
+    "slot": "shield",
+    "rarity": "legendary",
+    "reqLevel": 20,
+    "maxDurability": 338,
+    "value": 9802,
+    "mods": {
+      "injuryResist": 41,
+      "success": 17
+    },
+    "stats": {
+      "endurance": 19
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "cinder_ash_grip",
+    "name": "Grip of Cinder Ash",
+    "slot": "gloves",
+    "rarity": "epic",
+    "reqLevel": 26,
+    "maxDurability": 165,
+    "value": 2350,
+    "mods": {
+      "success": 12,
+      "gold": 14
+    },
+    "stats": {
+      "strength": 7
+    }
+  },
+  {
+    "id": "cinder_ash_grip_heroic",
+    "name": "Grip of Cinder Ash (Heroic)",
+    "slot": "gloves",
+    "rarity": "epic",
+    "reqLevel": 26,
+    "maxDurability": 214,
+    "value": 3055,
+    "mods": {
+      "success": 16,
+      "gold": 18
+    },
+    "stats": {
+      "strength": 9
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "cinder_ash_grip_mythic",
+    "name": "Grip of Cinder Ash (Mythic)",
+    "slot": "gloves",
+    "rarity": "epic",
+    "reqLevel": 26,
+    "maxDurability": 279,
+    "value": 3972,
+    "mods": {
+      "success": 20,
+      "gold": 24
+    },
+    "stats": {
+      "strength": 12
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "loyalists_brand",
+    "name": "The Loyalist's Brand",
+    "slot": "ring",
+    "rarity": "epic",
+    "reqLevel": 26,
+    "maxDurability": 150,
+    "value": 2500,
+    "mods": {
+      "success": 10,
+      "injuryResist": 12,
+      "loot": 6
+    },
+    "stats": {
+      "wisdom": 5,
+      "endurance": 4
+    }
+  },
+  {
+    "id": "loyalists_brand_heroic",
+    "name": "The Loyalist's Brand (Heroic)",
+    "slot": "ring",
+    "rarity": "epic",
+    "reqLevel": 26,
+    "maxDurability": 195,
+    "value": 3250,
+    "mods": {
+      "success": 13,
+      "injuryResist": 16,
+      "loot": 8
+    },
+    "stats": {
+      "wisdom": 6,
+      "endurance": 5
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "loyalists_brand_mythic",
+    "name": "The Loyalist's Brand (Mythic)",
+    "slot": "ring",
+    "rarity": "epic",
+    "reqLevel": 26,
+    "maxDurability": 254,
+    "value": 4225,
+    "mods": {
+      "success": 17,
+      "injuryResist": 20,
+      "loot": 10
+    },
+    "stats": {
+      "wisdom": 8,
+      "endurance": 7
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "cornered_fang",
+    "name": "Cornered Fang",
+    "slot": "weapon",
+    "rarity": "legendary",
+    "reqLevel": 27,
+    "maxDurability": 220,
+    "value": 7000,
+    "mods": {
+      "success": 18,
+      "gold": 14,
+      "loot": 6
+    },
+    "stats": {
+      "strength": 14,
+      "luck": 4
+    }
+  },
+  {
+    "id": "cornered_fang_heroic",
+    "name": "Cornered Fang (Heroic)",
+    "slot": "weapon",
+    "rarity": "legendary",
+    "reqLevel": 27,
+    "maxDurability": 286,
+    "value": 9100,
+    "mods": {
+      "success": 23,
+      "gold": 18,
+      "loot": 8
+    },
+    "stats": {
+      "strength": 18,
+      "luck": 5
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "cornered_fang_mythic",
+    "name": "Cornered Fang (Mythic)",
+    "slot": "weapon",
+    "rarity": "legendary",
+    "reqLevel": 27,
+    "maxDurability": 372,
+    "value": 11830,
+    "mods": {
+      "success": 30,
+      "gold": 24,
+      "loot": 10
+    },
+    "stats": {
+      "strength": 24,
+      "luck": 7
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "desperate_ends_crown",
+    "name": "Crown of a Desperate End",
+    "slot": "helmet",
+    "rarity": "legendary",
+    "reqLevel": 27,
+    "maxDurability": 215,
+    "value": 7400,
+    "mods": {
+      "injuryResist": 26,
+      "success": 12,
+      "xp": 16
+    },
+    "stats": {
+      "endurance": 10,
+      "wisdom": 5
+    }
+  },
+  {
+    "id": "desperate_ends_crown_heroic",
+    "name": "Crown of a Desperate End (Heroic)",
+    "slot": "helmet",
+    "rarity": "legendary",
+    "reqLevel": 27,
+    "maxDurability": 280,
+    "value": 9620,
+    "mods": {
+      "injuryResist": 34,
+      "success": 16,
+      "xp": 21
+    },
+    "stats": {
+      "endurance": 13,
+      "wisdom": 6
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "desperate_ends_crown_mythic",
+    "name": "Crown of a Desperate End (Mythic)",
+    "slot": "helmet",
+    "rarity": "legendary",
+    "reqLevel": 27,
+    "maxDurability": 363,
+    "value": 12506,
+    "mods": {
+      "injuryResist": 44,
+      "success": 20,
+      "xp": 27
+    },
+    "stats": {
+      "endurance": 17,
+      "wisdom": 8
+    },
+    "raidExclusive": true
   }
 ]
