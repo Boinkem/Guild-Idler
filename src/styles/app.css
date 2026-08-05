@@ -737,6 +737,32 @@ button:focus-visible, [tabindex]:focus-visible {
   text-align: center;
 }
 
+/* ---------------------------- onboarding tour ---------------------------- */
+/* z-index deliberately well above everything else in the menu -- this needs
+   to sit on top of the nav, every panel, and any modal a panel might open
+   mid-tour (unlikely, but not worth relying on). The dim-everything-else
+   effect comes free from the spotlight's own oversized box-shadow rather
+   than a separate full-screen overlay layer with a cutout. */
+.onboarding-spotlight {
+  position: fixed;
+  border: 2px solid var(--brass);
+  border-radius: 4px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.75), 0 0 16px var(--brass);
+  pointer-events: none;
+  transition: top 200ms ease, left 200ms ease, width 200ms ease, height 200ms ease;
+  z-index: 300;
+}
+.onboarding-card {
+  position: fixed;
+  z-index: 301;
+  background: var(--panel-2);
+  border: 1px solid var(--brass);
+  border-radius: 4px;
+  padding: 14px;
+  width: 260px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+}
+
 /* --------------------------- achievement popup ------------------------------ */
 /* Deliberately its own richer treatment, not just a bigger toast -- these are
    Steam-tracked, and the top-right corner (vs. Toast's bottom-center) means

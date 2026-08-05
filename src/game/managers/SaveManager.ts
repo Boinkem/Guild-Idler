@@ -100,6 +100,8 @@ export function createInitialState(now = Date.now()): GameState {
     notifications: [],
     seenGuidance: [],
     raidUpgrades: {},
+    seenOnboarding: false,
+    pendingChainDiscovery: false,
   };
 }
 
@@ -292,6 +294,15 @@ const MIGRATIONS: Record<number, Migration> = {
     }
     return { ...save, version: 19, heroes };
   },
+  19: (save) => ({
+    ...save,
+    version: 20,
+    // An existing save is, by definition, already past onboarding -- the
+    // scripted tour is for a genuinely fresh start only, never retrofitted
+    // onto a save that's already been playing.
+    seenOnboarding: true,
+    pendingChainDiscovery: (save.pendingChainDiscovery as boolean | undefined) ?? false,
+  }),
 };
 
 export const SaveManager = {

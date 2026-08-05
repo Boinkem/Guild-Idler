@@ -142,8 +142,37 @@ export class GameEngine {
    *  themselves. */
   private reportGuidance(topics: GuidanceTopic[]) {
     for (const topic of topics) {
+      // The scripted tour's own final beat -- shown as a standalone modal
+      // rather than a toast easy to miss, since this is specifically the
+      // "you found the thing the tour was building toward" moment. Still
+      // archived into the Notifications log exactly like every other
+      // topic (via archive() inside say() normally) -- just archived
+      // directly here instead, since it isn't also going through the
+      // toast queue.
+      if (topic.id === 'first_chain_seen') {
+        for (const message of topic.messages) this.archive(message, topic.targetTab);
+        this.state.pendingChainDiscovery = true;
+        this.notify();
+        continue;
+      }
       for (const message of topic.messages) this.say(message, topic.targetTab);
     }
+  }
+
+  /** Marks the scripted first-run tour as seen -- called identically
+   *  whether the player finishes every step or hits Skip on step one.
+   *  Never shown again either way. */
+  dismissOnboarding() {
+    this.state.seenOnboarding = true;
+    void this.saveNow();
+  }
+
+  /** Dismisses the "you've discovered a quest chain" modal -- the tour's
+   *  own finale, triggered independently of the scripted steps since it
+   *  depends on the board actually rolling a chain, not a fixed step count. */
+  dismissChainDiscovery() {
+    this.state.pendingChainDiscovery = false;
+    void this.saveNow();
   }
 
   /**

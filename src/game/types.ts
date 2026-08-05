@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 19;
+export const SAVE_VERSION = 20;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -614,4 +614,18 @@ export interface GameState {
   seenGuidance: string[];
   /** Levels bought in the dedicated Raid Guild Upgrade tree -- see RaidUpgradeDef. */
   raidUpgrades: Record<string, number>;
+  /** True once the scripted first-run tour (or its Skip button) has been
+   *  seen -- never shown again after that, whether finished or skipped.
+   *  Existing saves are migrated straight to true (already onboarded by
+   *  definition); only a genuinely fresh save starts at false. */
+  seenOnboarding: boolean;
+  /**
+   * Set the moment GuidanceManager's first_chain_seen topic triggers,
+   * instead of that topic going through the normal toast queue like every
+   * other one -- this is the scripted tour's own final beat, shown as a
+   * standalone modal ("you've discovered a quest chain...") rather than a
+   * toast easy to miss. Persisted (not just in-memory) so it reliably
+   * shows even if the app closes before the player notices it.
+   */
+  pendingChainDiscovery: boolean;
 }

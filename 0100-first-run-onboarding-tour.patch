@@ -1,0 +1,347 @@
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index b93f2c1..98b4ef7 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -142,10 +142,39 @@ export class GameEngine {
+    *  themselves. */
+   private reportGuidance(topics: GuidanceTopic[]) {
+     for (const topic of topics) {
++      // The scripted tour's own final beat -- shown as a standalone modal
++      // rather than a toast easy to miss, since this is specifically the
++      // "you found the thing the tour was building toward" moment. Still
++      // archived into the Notifications log exactly like every other
++      // topic (via archive() inside say() normally) -- just archived
++      // directly here instead, since it isn't also going through the
++      // toast queue.
++      if (topic.id === 'first_chain_seen') {
++        for (const message of topic.messages) this.archive(message, topic.targetTab);
++        this.state.pendingChainDiscovery = true;
++        this.notify();
++        continue;
++      }
+       for (const message of topic.messages) this.say(message, topic.targetTab);
+     }
+   }
+ 
++  /** Marks the scripted first-run tour as seen -- called identically
++   *  whether the player finishes every step or hits Skip on step one.
++   *  Never shown again either way. */
++  dismissOnboarding() {
++    this.state.seenOnboarding = true;
++    void this.saveNow();
++  }
++
++  /** Dismisses the "you've discovered a quest chain" modal -- the tour's
++   *  own finale, triggered independently of the scripted steps since it
++   *  depends on the board actually rolling a chain, not a fixed step count. */
++  dismissChainDiscovery() {
++    this.state.pendingChainDiscovery = false;
++    void this.saveNow();
++  }
++
+   /**
+    * Sound, the dedicated popup queue, the Guide notification log, and the
+    * Steam stub, for every achievement id that just unlocked. Archives
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 868d6f4..81258e4 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -100,6 +100,8 @@ export function createInitialState(now = Date.now()): GameState {
+     notifications: [],
+     seenGuidance: [],
+     raidUpgrades: {},
++    seenOnboarding: false,
++    pendingChainDiscovery: false,
+   };
+ }
+ 
+@@ -292,6 +294,15 @@ const MIGRATIONS: Record<number, Migration> = {
+     }
+     return { ...save, version: 19, heroes };
+   },
++  19: (save) => ({
++    ...save,
++    version: 20,
++    // An existing save is, by definition, already past onboarding -- the
++    // scripted tour is for a genuinely fresh start only, never retrofitted
++    // onto a save that's already been playing.
++    seenOnboarding: true,
++    pendingChainDiscovery: (save.pendingChainDiscovery as boolean | undefined) ?? false,
++  }),
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index ebf559b..aea0468 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 19;
++export const SAVE_VERSION = 20;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -613,5 +613,19 @@ export interface GameState {
+    */
+   seenGuidance: string[];
+   /** Levels bought in the dedicated Raid Guild Upgrade tree -- see RaidUpgradeDef. */
+-  raidUpgrades: Record<string, number>;
++  raidUpgrades: Record<string, number>;
++  /** True once the scripted first-run tour (or its Skip button) has been
++   *  seen -- never shown again after that, whether finished or skipped.
++   *  Existing saves are migrated straight to true (already onboarded by
++   *  definition); only a genuinely fresh save starts at false. */
++  seenOnboarding: boolean;
++  /**
++   * Set the moment GuidanceManager's first_chain_seen topic triggers,
++   * instead of that topic going through the normal toast queue like every
++   * other one -- this is the scripted tour's own final beat, shown as a
++   * standalone modal ("you've discovered a quest chain...") rather than a
++   * toast easy to miss. Persisted (not just in-memory) so it reliably
++   * shows even if the app closes before the player notices it.
++   */
++  pendingChainDiscovery: boolean;
+ }
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 404997e..a3bde42 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -737,6 +737,32 @@ button:focus-visible, [tabindex]:focus-visible {
+   text-align: center;
+ }
+ 
++/* ---------------------------- onboarding tour ---------------------------- */
++/* z-index deliberately well above everything else in the menu -- this needs
++   to sit on top of the nav, every panel, and any modal a panel might open
++   mid-tour (unlikely, but not worth relying on). The dim-everything-else
++   effect comes free from the spotlight's own oversized box-shadow rather
++   than a separate full-screen overlay layer with a cutout. */
++.onboarding-spotlight {
++  position: fixed;
++  border: 2px solid var(--brass);
++  border-radius: 4px;
++  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.75), 0 0 16px var(--brass);
++  pointer-events: none;
++  transition: top 200ms ease, left 200ms ease, width 200ms ease, height 200ms ease;
++  z-index: 300;
++}
++.onboarding-card {
++  position: fixed;
++  z-index: 301;
++  background: var(--panel-2);
++  border: 1px solid var(--brass);
++  border-radius: 4px;
++  padding: 14px;
++  width: 260px;
++  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
++}
++
+ /* --------------------------- achievement popup ------------------------------ */
+ /* Deliberately its own richer treatment, not just a bigger toast -- these are
+    Steam-tracked, and the top-right corner (vs. Toast's bottom-center) means
+diff --git a/src/ui/ChainDiscoveryModal.tsx b/src/ui/ChainDiscoveryModal.tsx
+new file mode 100644
+index 0000000..0e486e3
+--- /dev/null
++++ b/src/ui/ChainDiscoveryModal.tsx
+@@ -0,0 +1,26 @@
++/**
++ * The scripted tour's actual finale, even though it isn't one of its fixed
++ * steps -- this fires whenever the board first rolls a quest chain, which
++ * could be immediately or much later depending on what the board happens
++ * to generate. Kept as a plain standalone modal rather than another
++ * spotlight step: the target (a specific quest-board card) is dynamic and
++ * might not even be rendered if the player isn't currently on the Quests
++ * tab, unlike the tour's fixed nav-tab targets.
++ */
++export function ChainDiscoveryModal({ onView, onClose }: { onView: () => void; onClose: () => void }) {
++  return (
++    <div className="overlay" onClick={onClose}>
++      <div className="modal" onClick={(e) => e.stopPropagation()}>
++        <h3>A Quest Chain Awaits</h3>
++        <p className="small" style={{ marginTop: 0 }}>
++          You've discovered a quest chain -- a story that unfolds across several stages, shown right on
++          the Quest Board alongside everything else. Complete one stage, and the next becomes available.
++        </p>
++        <div className="row end" style={{ marginTop: 14, gap: 8 }}>
++          <button onClick={onClose}>Close</button>
++          <button className="btn-primary" onClick={onView}>View on Quest Board</button>
++        </div>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+index c8d0f6a..34b9ddf 100644
+--- a/src/ui/MenuWindow.tsx
++++ b/src/ui/MenuWindow.tsx
+@@ -1,12 +1,14 @@
+ import { useEffect, useState } from 'react';
+ import { useEngine } from './useEngine';
++import { OnboardingTour } from './OnboardingTour';
++import { ChainDiscoveryModal } from './ChainDiscoveryModal';
+ import { formatGold, formatNumber } from '../game/util';
+ import { QuestPanel } from './panels/QuestPanel';
+ import { HeroesPanel } from './panels/HeroesPanel';
+ import { EquipmentPanel } from './panels/EquipmentPanel';
+ import { ShopPanel } from './panels/ShopPanel';
+ import { UpgradesPanel } from './panels/UpgradesPanel';
+-import { GuildPanel } from './panels/GuildPanel';
++import { GuildPanel } from './panels/GuildPanel';
+ import { GuidePanel } from './panels/GuidePanel';
+ import { LorePanel } from './panels/LorePanel';
+ import { RaidsPanel } from './panels/RaidsPanel';
+@@ -182,6 +184,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+               {group.tabs.map((t) => (
+                 <button
+                   key={t.id}
++                  data-tab-id={t.id}
+                   aria-current={t.id === tab}
+                   onClick={() => setTab(t.id)}
+                 >
+@@ -196,6 +199,20 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+           <Panel />
+         </main>
+       </div>
++
++      {!engine.state.seenOnboarding && (
++        <OnboardingTour
++          steps={ALL_TABS.filter((t) => t.id !== 'testing').map((t) => ({ id: t.id, label: t.label }))}
++          onTabChange={(id) => setTab(id as TabId)}
++          onDone={() => engine.dismissOnboarding()}
++        />
++      )}
++      {engine.state.pendingChainDiscovery && (
++        <ChainDiscoveryModal
++          onView={() => { setTab('quests'); engine.dismissChainDiscovery(); }}
++          onClose={() => engine.dismissChainDiscovery()}
++        />
++      )}
+     </div>
+   );
+ }
+diff --git a/src/ui/OnboardingTour.tsx b/src/ui/OnboardingTour.tsx
+new file mode 100644
+index 0000000..9834d47
+--- /dev/null
++++ b/src/ui/OnboardingTour.tsx
+@@ -0,0 +1,116 @@
++import { useEffect, useLayoutEffect, useState } from 'react';
++
++interface Step {
++  id: string;
++  label: string;
++}
++
++interface Rect {
++  top: number;
++  left: number;
++  width: number;
++  height: number;
++}
++
++/** One short line per tab -- deliberately terse, this is a tour, not
++ *  documentation. Falls back to nothing (just the tab's own label shows)
++ *  for any tab id that isn't listed, so a future new tab never breaks
++ *  this rather than needing to be added here first. */
++const STEP_DESCRIPTIONS: Record<string, string> = {
++  dashboard: "Your guild's home base -- a quick overview of heroes, vendors, and progress.",
++  heroes: 'Recruit and manage your heroes here -- stats, gear, and skins.',
++  equipment: 'Everything your guild owns: worn gear, the stash, and consumables.',
++  shop: 'Buy and sell equipment, potions, and rarer black market finds.',
++  guild: 'Upgrade guild facilities -- permanent bonuses that apply to every hero.',
++  quests: 'Send heroes out on contracts here. New ones appear every 30 minutes.',
++  raids: 'Multi-hero expeditions, once your guild is strong enough to field a whole party.',
++  lore: "A record of every story your guild has lived through.",
++  guide: "A running log of what's happened, plus a quick reference for how things work.",
++  upgrades: 'Permanent upgrades, bought once and kept forever.',
++  prestige: 'Retire a hero for Renown, spent on permanent guild-wide perks.',
++  stats: 'Lifetime stats and achievements, if you like keeping score.',
++  settings: 'Appearance, sound, and other preferences.',
++};
++
++function measure(tabId: string): Rect | null {
++  const el = document.querySelector(`[data-tab-id="${tabId}"]`);
++  if (!el) return null;
++  const r = el.getBoundingClientRect();
++  return { top: r.top, left: r.left, width: r.width, height: r.height };
++}
++
++/**
++ * A scripted, one-time first-run tour -- a spotlight box positioned exactly
++ * over each nav tab in turn. The "dim everything else" effect comes free
++ * from a single oversized box-shadow on the spotlight box itself, rather
++ * than a separate full-screen overlay element with a cutout.
++ *
++ * Restarts from the beginning if the app closes mid-tour rather than
++ * resuming a saved step -- seenOnboarding only ever flips true on
++ * completion or Skip, never partway through. The tour is short enough
++ * that this is simpler than persisting resume state and not a real cost.
++ */
++export function OnboardingTour({
++  steps, onTabChange, onDone,
++}: { steps: Step[]; onTabChange: (id: string) => void; onDone: () => void }) {
++  const [index, setIndex] = useState(0);
++  const [rect, setRect] = useState<Rect | null>(null);
++  const step = steps[index];
++
++  useLayoutEffect(() => {
++    if (!step) return undefined;
++    onTabChange(step.id);
++    // One frame's delay so the measurement reflects whatever the panel
++    // switch itself settles into, not a stale layout from the prior step.
++    const raf = requestAnimationFrame(() => setRect(measure(step.id)));
++    return () => cancelAnimationFrame(raf);
++    // Deliberately keyed on index alone -- onTabChange/step are stable in
++    // spirit (same steps array, same callback) even if their references
++    // aren't memoized by the caller.
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [index]);
++
++  useEffect(() => {
++    const recompute = () => setRect(step ? measure(step.id) : null);
++    window.addEventListener('resize', recompute);
++    return () => window.removeEventListener('resize', recompute);
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [index]);
++
++  if (!step) return null;
++
++  const isLast = index === steps.length - 1;
++  const next = () => { if (isLast) onDone(); else setIndex((i) => i + 1); };
++  const back = () => setIndex((i) => Math.max(0, i - 1));
++
++  // Card sits just below the spotlight by default, flipping above it if
++  // that would run off the bottom of the window -- worth checking given
++  // the menu window is user-resizable now, not a fixed size to design for.
++  const cardTop = rect
++    ? (rect.top + rect.height + 160 > window.innerHeight ? rect.top - 150 : rect.top + rect.height + 10)
++    : 40;
++  const cardLeft = rect ? Math.min(Math.max(rect.left, 12), window.innerWidth - 280) : 12;
++
++  return (
++    <>
++      {rect && (
++        <div
++          className="onboarding-spotlight"
++          style={{ top: rect.top - 4, left: rect.left - 4, width: rect.width + 8, height: rect.height + 8 }}
++        />
++      )}
++      <div className="onboarding-card" style={{ top: cardTop, left: cardLeft }}>
++        <div className="tiny muted" style={{ marginBottom: 4 }}>Step {index + 1} of {steps.length}</div>
++        <div className="card-title" style={{ marginBottom: 6 }}>{step.label}</div>
++        <p className="small" style={{ margin: '0 0 12px' }}>{STEP_DESCRIPTIONS[step.id] ?? ''}</p>
++        <div className="row" style={{ gap: 8, justifyContent: 'space-between' }}>
++          <button className="btn-ghost" onClick={onDone}>Skip</button>
++          <div className="row" style={{ gap: 6 }}>
++            {index > 0 && <button className="btn-ghost" onClick={back}>Back</button>}
++            <button className="btn-primary" onClick={next}>{isLast ? 'Done' : 'Next'}</button>
++          </div>
++        </div>
++      </div>
++    </>
++  );
++}

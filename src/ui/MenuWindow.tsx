@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useEngine } from './useEngine';
+import { OnboardingTour } from './OnboardingTour';
+import { ChainDiscoveryModal } from './ChainDiscoveryModal';
 import { formatGold, formatNumber } from '../game/util';
 import { QuestPanel } from './panels/QuestPanel';
 import { HeroesPanel } from './panels/HeroesPanel';
@@ -182,6 +184,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
               {group.tabs.map((t) => (
                 <button
                   key={t.id}
+                  data-tab-id={t.id}
                   aria-current={t.id === tab}
                   onClick={() => setTab(t.id)}
                 >
@@ -196,6 +199,20 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
           <Panel />
         </main>
       </div>
+
+      {!engine.state.seenOnboarding && (
+        <OnboardingTour
+          steps={ALL_TABS.filter((t) => t.id !== 'testing').map((t) => ({ id: t.id, label: t.label }))}
+          onTabChange={(id) => setTab(id as TabId)}
+          onDone={() => engine.dismissOnboarding()}
+        />
+      )}
+      {engine.state.pendingChainDiscovery && (
+        <ChainDiscoveryModal
+          onView={() => { setTab('quests'); engine.dismissChainDiscovery(); }}
+          onClose={() => engine.dismissChainDiscovery()}
+        />
+      )}
     </div>
   );
 }
