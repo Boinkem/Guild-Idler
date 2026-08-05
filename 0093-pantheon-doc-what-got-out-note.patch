@@ -1,0 +1,24 @@
+diff --git a/world-lore-pantheon.md b/world-lore-pantheon.md
+index 052a750..675b43e 100644
+--- a/world-lore-pantheon.md
++++ b/world-lore-pantheon.md
+@@ -342,6 +342,19 @@ Harrower wants something specific" stops being a rumor and starts being a
+ race — every future chain in this thread should escalate toward the
+ Harrower actually finding what it needs, not away from it.
+ 
++**Note (raid content, added after the fact):** `what_got_out` (raid,
++reqLevel 26, unlocked by completing `demon_fortress`) is the first actual
++attempted crossing on record, not another component-hunt — a council of
++demon proxies and at least one less corporeal presence converge on the
++fortress's now-unguarded ruins to finish a working, rather than search for
++a missing piece. The breach doesn't complete; the council scatters before
++the guild reaches it, leaving deliberately open whether it was ever
++unified in the first place or simply hasn't finished trying. It sits
++within the thread's existing 8–32 range (not past it — the real
++confrontation arc is still expected at 34+, per the level-placement
++question below) and should be read as evidence the Harrower is getting
++closer, not as progress toward answering either open question itself.
++
+ **Open design questions for whoever writes this pack:**
+ - How many components total, and does the guild ever get all of them first —
+   or does the whole point become fighting the Harrower *after* it's already
