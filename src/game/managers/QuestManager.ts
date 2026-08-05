@@ -24,7 +24,13 @@ export const CHAIN_BY_ID: Record<string, ChainDef> = Object.fromEntries(QUEST_CH
 
 function lootTableFor(difficulty: Difficulty, rng: Rng): { defId: string; chance: number }[] {
   const rarities = LOOT_RARITY_BY_DIFFICULTY[difficulty] ?? ['common'];
-  const pool = EQUIPMENT.filter((e) => rarities.includes(e.rarity));
+  // raidExclusive (Heroic/Mythic tiered raid variants) filtered out here too
+  // -- this pool predates that flag and was never updated when it was added,
+  // the same gap the shop/black market had before 0075. Confirmed as the
+  // actual cause of Mythic gear turning up in ordinary quest rewards: rarity
+  // alone doesn't distinguish a raid-tier variant from its base item, since
+  // they share the same rarity by design.
+  const pool = EQUIPMENT.filter((e) => rarities.includes(e.rarity) && !e.raidExclusive);
   if (pool.length === 0) return [];
   const picks = rng.shuffle(pool).slice(0, 3);
   return picks.map((def) => ({ defId: def.id, chance: RARITY_LOOT_CHANCE[def.rarity] }));
