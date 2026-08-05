@@ -1,23 +1,37 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useEngine } from './useEngine';
 
 /**
  * Blocking, non-dismissible prompt asking the player to name their guild.
- * Gated purely on state.guildName === '' -- this covers both a brand-new
- * save (created with an empty name) and an old save migrated in before
- * guildName existed (backfilled to '' by the same migration), so no
- * separate "isNew" plumbing is needed to decide when to show it.
+ * Gated purely on state.guildName === '' -- this covers a brand-new save,
+ * an old save migrated in before guildName existed, and a fresh hardReset()
+ * (which recreates initial state, guildName included), so no separate
+ * "isNew" plumbing is needed to decide when to show it.
  *
  * Deliberately has no overlay-click-to-dismiss and no close button -- unlike
  * QuestResultModal/OfflineReportModal, this isn't optional information, it's
  * a one-time setup step. App.tsx also holds the other modals back while this
  * is showing so nothing stacks behind it.
  */
-export function GuildNamingModal() {
+export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => void }) {
   const engine = useEngine();
   const [draft, setDraft] = useState('');
+  const unnamed = engine.state.guildName === '';
 
-  if (engine.state.guildName !== '') return null;
+  // Forces full menu size before this modal has to render at all -- lives
+  // here rather than in App.tsx specifically because this component
+  // reliably re-renders whenever guildName changes (it's a normal
+  // useEngine() consumer reading state directly), which an effect in
+  // App.tsx keyed on [engine, changeMode] could not do: engine.hardReset()
+  // reassigns state internally without ever changing the engine instance
+  // itself, so that effect only ever fired once, on the very first boot.
+  // Confirmed as the actual cause of the naming prompt getting trapped,
+  // unusable, inside the tiny idle-companion window after a reset.
+  useEffect(() => {
+    if (unnamed) onNeedsSpace();
+  }, [unnamed, onNeedsSpace]);
+
+  if (!unnamed) return null;
 
   const trimmed = draft.trim();
 

@@ -56,11 +56,6 @@ export function App() {
   // moment an unnamed guild is detected, same mechanism changeMode already
   // uses, rather than trying to make the modal itself bigger than the
   // window it's stuck in.
-  useEffect(() => {
-    if (!engine) return;
-    if (engine.state.guildName === '') changeMode('menu');
-  }, [engine, changeMode]);
-
   // Tray menu's "Show Guild Hall" -- the one main-process-initiated mode
   // switch. Everywhere else, changeMode is called directly from a click
   // already happening in the renderer.
@@ -73,7 +68,17 @@ export function App() {
       {mode === 'idle'
         ? <IdleView onOpenMenu={() => changeMode('menu')} />
         : <MenuWindow onClose={() => changeMode('idle')} />}
-      <GuildNamingModal />
+      {/* Forcing menu size for an unnamed guild now lives inside
+          GuildNamingModal itself, not here -- this effect used to depend on
+          [engine, changeMode], neither of which changes when hardReset()
+          reassigns engine.state internally (engine stays the same instance
+          the whole app lifetime). That meant it only ever ran once, on the
+          initial null -> instance transition, and silently stopped
+          protecting against the tiny-idle-window trap on every reset after
+          the first. GuildNamingModal already re-renders correctly whenever
+          guildName changes, since it reads it directly as a normal
+          useEngine() consumer -- so the side effect belongs there instead. */}
+      <GuildNamingModal onNeedsSpace={() => changeMode('menu')} />
       {engine.state.guildName !== '' && (
         <>
           {/* Always mounted regardless of mode -- its own auto-dismiss
