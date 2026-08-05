@@ -16,6 +16,19 @@ const api = {
   minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
   quit: (): Promise<void> => ipcRenderer.invoke('window:quit'),
   unlockAchievement: (steamApiName: string): Promise<boolean> => ipcRenderer.invoke('steam:unlockAchievement', steamApiName),
+  /**
+   * The one main-to-renderer direction in this bridge -- everything else is
+   * the renderer asking main to do something. This lets the tray's "Show
+   * Guild Hall" item tell the already-running renderer to switch modes,
+   * since window:setMode only resizes the window and has no way on its own
+   * to change React's own mode state. Returns an unsubscribe function,
+   * matching the standard DOM/React listener-cleanup shape.
+   */
+  onOpenGuildHall: (callback: () => void): (() => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('open-guild-hall', listener);
+    return () => ipcRenderer.removeListener('open-guild-hall', listener);
+  },
 };
 
 contextBridge.exposeInMainWorld('littleKnight', api);

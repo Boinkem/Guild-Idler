@@ -169,6 +169,19 @@ function createTray() {
       },
     },
     { label: 'Show knight', click: () => win?.show() },
+    {
+      label: 'Show Guild Hall',
+      click: () => {
+        // window:setMode's own handler only resizes the window -- it has
+        // no way to change React's mode state on its own, since every
+        // other call to it originates FROM the renderer as a side effect
+        // of a state change that already happened there. This is the one
+        // path that goes the other direction, so it notifies the renderer
+        // instead of trying to duplicate setMode's resize logic here.
+        win?.show();
+        win?.webContents.send('open-guild-hall');
+      },
+    },
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() },
   ]);

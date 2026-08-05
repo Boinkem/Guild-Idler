@@ -61,6 +61,11 @@ export function App() {
     if (engine.state.guildName === '') changeMode('menu');
   }, [engine, changeMode]);
 
+  // Tray menu's "Show Guild Hall" -- the one main-process-initiated mode
+  // switch. Everywhere else, changeMode is called directly from a click
+  // already happening in the renderer.
+  useEffect(() => window.littleKnight?.onOpenGuildHall(() => changeMode('menu')), [changeMode]);
+
   if (!engine) return <div className="loading">Waking the knight…</div>;
 
   return (

@@ -1,0 +1,64 @@
+diff --git a/electron/main.ts b/electron/main.ts
+index ff88393..5789d8f 100644
+--- a/electron/main.ts
++++ b/electron/main.ts
+@@ -169,6 +169,19 @@ function createTray() {
+       },
+     },
+     { label: 'Show knight', click: () => win?.show() },
++    {
++      label: 'Show Guild Hall',
++      click: () => {
++        // window:setMode's own handler only resizes the window -- it has
++        // no way to change React's mode state on its own, since every
++        // other call to it originates FROM the renderer as a side effect
++        // of a state change that already happened there. This is the one
++        // path that goes the other direction, so it notifies the renderer
++        // instead of trying to duplicate setMode's resize logic here.
++        win?.show();
++        win?.webContents.send('open-guild-hall');
++      },
++    },
+     { type: 'separator' },
+     { label: 'Quit', click: () => app.quit() },
+   ]);
+diff --git a/electron/preload.ts b/electron/preload.ts
+index 0e69cf4..3a4d785 100644
+--- a/electron/preload.ts
++++ b/electron/preload.ts
+@@ -16,6 +16,19 @@ const api = {
+   minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
+   quit: (): Promise<void> => ipcRenderer.invoke('window:quit'),
+   unlockAchievement: (steamApiName: string): Promise<boolean> => ipcRenderer.invoke('steam:unlockAchievement', steamApiName),
++  /**
++   * The one main-to-renderer direction in this bridge -- everything else is
++   * the renderer asking main to do something. This lets the tray's "Show
++   * Guild Hall" item tell the already-running renderer to switch modes,
++   * since window:setMode only resizes the window and has no way on its own
++   * to change React's own mode state. Returns an unsubscribe function,
++   * matching the standard DOM/React listener-cleanup shape.
++   */
++  onOpenGuildHall: (callback: () => void): (() => void) => {
++    const listener = () => callback();
++    ipcRenderer.on('open-guild-hall', listener);
++    return () => ipcRenderer.removeListener('open-guild-hall', listener);
++  },
+ };
+ 
+ contextBridge.exposeInMainWorld('littleKnight', api);
+diff --git a/src/App.tsx b/src/App.tsx
+index 88803c4..58058d3 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -61,6 +61,11 @@ export function App() {
+     if (engine.state.guildName === '') changeMode('menu');
+   }, [engine, changeMode]);
+ 
++  // Tray menu's "Show Guild Hall" -- the one main-process-initiated mode
++  // switch. Everywhere else, changeMode is called directly from a click
++  // already happening in the renderer.
++  useEffect(() => window.littleKnight?.onOpenGuildHall(() => changeMode('menu')), [changeMode]);
++
+   if (!engine) return <div className="loading">Waking the knight…</div>;
+ 
+   return (
