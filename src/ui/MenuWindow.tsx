@@ -119,6 +119,19 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // Handles a tab request made AFTER this component already mounted --
+  // the initial useState above only ever reads consumeRequestedTab() once,
+  // at mount, which is correct for "menu opened via a request" but does
+  // nothing for "menu already open, something inside it (e.g. a Guide
+  // notification's Go-to button) wants to switch tabs." engine.requestTab()
+  // now calls notify() specifically so this effect re-runs when a new
+  // request comes in while already mounted, not just on the next mount.
+  useEffect(() => {
+    if (engine.requestedTab) {
+      setTab(engine.consumeRequestedTab() as TabId);
+    }
+  }, [engine, engine.requestedTab]);
+
   const Panel = ALL_TABS.find((t) => t.id === tab)!.Panel;
   const idleHeroes = engine.state.heroes.filter((h) => h.status !== 'questing').length;
 

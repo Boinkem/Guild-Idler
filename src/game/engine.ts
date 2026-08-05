@@ -126,13 +126,13 @@ export class GameEngine {
 
   /** Archives every message into the persistent notification log, capped
    *  at 100, regardless of whether the toast queue is currently empty. */
-  private archive(message: string) {
-    this.state.notifications.unshift({ id: uid('note'), message, timestamp: Date.now() });
+  private archive(message: string, targetTab?: string) {
+    this.state.notifications.unshift({ id: uid('note'), message, timestamp: Date.now(), targetTab });
     if (this.state.notifications.length > 100) this.state.notifications.length = 100;
   }
 
-  private say(message: string) {
-    this.archive(message);
+  private say(message: string, targetTab?: string) {
+    this.archive(message, targetTab);
     this.toastQueue.push(message);
     this.notify();
   }
@@ -142,7 +142,7 @@ export class GameEngine {
    *  themselves. */
   private reportGuidance(topics: GuidanceTopic[]) {
     for (const topic of topics) {
-      for (const message of topic.messages) this.say(message);
+      for (const message of topic.messages) this.say(message, topic.targetTab);
     }
   }
 
@@ -399,7 +399,7 @@ export class GameEngine {
       // achievements above, so reopening the app after a long stretch away
       // doesn't dump a wall of tutorial toasts all at once.
       for (const topic of GuidanceManager.checkAll(this.state)) {
-        for (const message of topic.messages) this.archive(message);
+        for (const message of topic.messages) this.archive(message, topic.targetTab);
       }
 
       const hero = this.state.heroes.find((h) => h.id === quest.heroId);
@@ -418,7 +418,7 @@ export class GameEngine {
         void window.littleKnight?.unlockAchievement(id);
       }
       for (const topic of GuidanceManager.checkAll(this.state)) {
-        for (const message of topic.messages) this.archive(message);
+        for (const message of topic.messages) this.archive(message, topic.targetTab);
       }
     }
 
@@ -625,6 +625,11 @@ export class GameEngine {
   /** Requests that the menu open (or switch) to a specific tab id. */
   requestTab(id: string) {
     this.requestedTab = id;
+    // Needed so MenuWindow can react to a request made while it's already
+    // mounted (e.g. a Guide notification's "Go to" button), not just pick
+    // it up on the next fresh mount -- see MenuWindow's own effect for the
+    // other half of this.
+    this.notify();
   }
 
   /** Reads and clears the pending tab request. Called once by MenuWindow on mount. */
@@ -843,7 +848,7 @@ export class GameEngine {
     if (error) return this.say(error);
     playSound('purchase');
     const def = GuildManager.vendors().find((v) => v.id === vendorId);
-    this.say(`${def?.name ?? 'The vendor'} has more to offer now.`);
+    this.say(`${def?.name ?? 'The vendor'} has more to offer now.`, 'upgrades');
     void this.saveNow();
   }
 

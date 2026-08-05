@@ -243,6 +243,10 @@ export interface NotificationEntry {
   id: string;
   message: string;
   timestamp: number;
+  /** Optional menu tab this notification is actionable from -- rendered as
+   *  a "Go to" button in the Guide tab's Notifications list. Omitted for
+   *  messages with no obvious single destination (most of them). */
+  targetTab?: string;
 }
 
 export interface ActiveChain {

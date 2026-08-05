@@ -15,6 +15,11 @@ import { ModifierManager } from './ModifierManager';
 export interface GuidanceTopic {
   id: string;
   messages: string[];
+  /** Menu tab this topic's advice points at, if there's an obvious single
+   *  destination -- rendered as a "Go to" button wherever the message ends
+   *  up (toast is transient either way; the Guide's Notifications log is
+   *  where this actually matters, since those entries are permanent). */
+  targetTab?: string;
 }
 
 const TOPICS: GuidanceTopic[] = [
@@ -24,22 +29,27 @@ const TOPICS: GuidanceTopic[] = [
       'Level up! Your hero grows a little stronger with every quest.',
       "You've also earned a stat point to spend -- visit the Heroes tab to assign it.",
     ],
+    targetTab: 'heroes',
   },
   {
     id: 'first_equipment_found',
     messages: ["New gear! Anything you find sits in the stash until you equip it -- check the Inventory tab."],
+    targetTab: 'equipment',
   },
   {
     id: 'first_chain_seen',
     messages: ["Some contracts continue into a bigger story across several stages -- these show up right on the Quest Board like any other."],
+    targetTab: 'quests',
   },
   {
     id: 'hero_slots_full',
     messages: ["Every hero slot is full. Recruiting costs gold, but the slots themselves come from Guild Hall upgrades or a Renown perk."],
+    targetTab: 'guild',
   },
   {
     id: 'raids_unlocked',
     messages: ["Raids are open -- multi-hero expeditions with bigger rewards and longer odds. You'll need a full, exact-size party before sending one out."],
+    targetTab: 'raids',
   },
 ];
 

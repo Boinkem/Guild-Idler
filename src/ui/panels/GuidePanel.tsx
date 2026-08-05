@@ -2,6 +2,15 @@ import { useState } from 'react';
 import { useEngine } from '../useEngine';
 import { GUIDE_TOPICS } from '../../game/data/guideTopics';
 
+/** Display labels for the tab ids notifications can point at -- kept local
+ *  and small rather than importing MenuWindow's own tab structure, which
+ *  isn't exported and shouldn't need to be just for this. */
+const TAB_LABELS: Record<string, string> = {
+  dashboard: 'the Guild', heroes: 'Heroes', equipment: 'Inventory', shop: 'Shop',
+  guild: 'Guild Hall', quests: 'Quests', raids: 'Raids', lore: 'Lore', guide: 'Guide',
+  upgrades: 'Upgrades', prestige: 'Prestige', stats: 'Statistics', settings: 'Settings',
+};
+
 function timeAgo(ts: number, now: number): string {
   const diffMin = Math.floor((now - ts) / 60000);
   if (diffMin < 1) return 'just now';
@@ -25,7 +34,18 @@ function NotificationsTab() {
       {notifications.map((n) => (
         <div key={n.id} className="notif-row">
           <span className="tiny">{n.message}</span>
-          <span className="tiny muted">{timeAgo(n.timestamp, now)}</span>
+          <span className="row" style={{ gap: 6, alignItems: 'center' }}>
+            {n.targetTab && (
+              <button
+                className="btn-ghost"
+                style={{ minHeight: 20, padding: '2px 8px', fontSize: '0.625rem' }}
+                onClick={() => engine.requestTab(n.targetTab!)}
+              >
+                Go to {TAB_LABELS[n.targetTab] ?? n.targetTab}
+              </button>
+            )}
+            <span className="tiny muted">{timeAgo(n.timestamp, now)}</span>
+          </span>
         </div>
       ))}
     </div>
