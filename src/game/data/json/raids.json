@@ -53,8 +53,8 @@
   {
     "id": "what_got_out",
     "name": "What Got Out",
-    "description": "It got out in the confusion, and there wasn't a choice -- not with the gate coming down and the wards failing all at once. It hasn't had the will or the followers left to rebuild anything like what it lost. It found somewhere smaller instead. Meaner. Considerably harder to walk into a second time without losing someone.",
-    "epilogue": "This time, there's no gate left standing behind it and nowhere smaller left to run to. Whatever the demon lord was building toward, cornered and half of what it used to be, it never got to finish it. The guild made sure of that personally, this time -- no confusion to slip through, no wards left half-broken to hide behind.",
+    "description": "The demon lord is gone, but the fortress he held is still standing empty -- gate broken, wards down, nobody left to guard whatever else might want it. Word reached the guild slowly: something else moved in behind him, in the confusion, and it isn't interested in ruling anything. It's using the ruin exactly the way it's always wanted to -- as somewhere quiet enough to finish a working nobody's stopped it from starting.",
+    "epilogue": "The breach didn't open -- not all the way, not this time. What was trying to open it scattered the moment the guild reached the chamber, which either means it was never as unified as it looked, or means whatever's on the other side isn't done trying. Either way, the fortress is finally, actually empty. The guild isn't taking bets on how long that lasts.",
     "reqLevel": 26,
     "encounterIds": [
       "gotout_trail_gone_cold",

@@ -1,0 +1,52 @@
+diff --git a/src/game/data/json/raid-encounters.json b/src/game/data/json/raid-encounters.json
+index a7b6005..6a7fc08 100644
+--- a/src/game/data/json/raid-encounters.json
++++ b/src/game/data/json/raid-encounters.json
+@@ -233,8 +233,8 @@
+   },
+   {
+     "id": "gotout_trail_gone_cold",
+-    "name": "The Trail Gone Cold",
+-    "flavour": "Whatever answers used to come easy from a demon lord with a whole fortress to hide behind don't come easy from one with nothing left but a trail. It's a good trail, for what it's worth -- burned villages don't hide themselves. It's just an old one, and getting colder by the week.",
++    "name": "What Still Guards It",
++    "flavour": "Nobody left in this fortress answers to a demon lord anymore, but somebody's still guarding the halls anyway -- paid, threatened, or promised something on the other side of a door none of them will ever get to open themselves.",
+     "baseSuccess": 58,
+     "durationHours": 3,
+     "rewardGold": 1100,
+@@ -251,8 +251,8 @@
+   },
+   {
+     "id": "gotout_the_last_loyal",
+-    "name": "The Last Loyal",
+-    "flavour": "Most of what served it died at the fortress gate or scattered when the wards broke. What's left isn't an army anymore -- it's whoever was desperate or loyal enough to follow a losing cause into somewhere worse than where they started.",
++    "name": "The Council",
++    "flavour": "They don't agree on much -- not the timing, not the cost, not even, it seems, on what exactly is supposed to come through once the breach opens. What they agree on is that an empty fortress with broken wards is the best chance any of them are going to get, and none of them are willing to wait for a better one.",
+     "baseSuccess": 48,
+     "durationHours": 4,
+     "rewardGold": 1900,
+@@ -269,8 +269,8 @@
+   },
+   {
+     "id": "gotout_cornered",
+-    "name": "Cornered",
+-    "flavour": "It ruled a fortress once, with a throne and a gate and a whole choir standing guard. Now it has a cave and nothing left to lose, which turns out to be a considerably more dangerous combination than the throne ever was.",
++    "name": "The Breach",
++    "flavour": "Whatever's coordinating this from the far side of the working hasn't fully arrived -- not yet, not entirely -- but it's close enough to reach through, and reaching is apparently all it needs. The breach doesn't have to finish opening to be a problem. It just has to open enough.",
+     "baseSuccess": 38,
+     "durationHours": 5,
+     "rewardGold": 3400,
+diff --git a/src/game/data/json/raids.json b/src/game/data/json/raids.json
+index ce3fe02..8acaeb2 100644
+--- a/src/game/data/json/raids.json
++++ b/src/game/data/json/raids.json
+@@ -53,8 +53,8 @@
+   {
+     "id": "what_got_out",
+     "name": "What Got Out",
+-    "description": "It got out in the confusion, and there wasn't a choice -- not with the gate coming down and the wards failing all at once. It hasn't had the will or the followers left to rebuild anything like what it lost. It found somewhere smaller instead. Meaner. Considerably harder to walk into a second time without losing someone.",
+-    "epilogue": "This time, there's no gate left standing behind it and nowhere smaller left to run to. Whatever the demon lord was building toward, cornered and half of what it used to be, it never got to finish it. The guild made sure of that personally, this time -- no confusion to slip through, no wards left half-broken to hide behind.",
++    "description": "The demon lord is gone, but the fortress he held is still standing empty -- gate broken, wards down, nobody left to guard whatever else might want it. Word reached the guild slowly: something else moved in behind him, in the confusion, and it isn't interested in ruling anything. It's using the ruin exactly the way it's always wanted to -- as somewhere quiet enough to finish a working nobody's stopped it from starting.",
++    "epilogue": "The breach didn't open -- not all the way, not this time. What was trying to open it scattered the moment the guild reached the chamber, which either means it was never as unified as it looked, or means whatever's on the other side isn't done trying. Either way, the fortress is finally, actually empty. The guild isn't taking bets on how long that lasts.",
+     "reqLevel": 26,
+     "encounterIds": [
+       "gotout_trail_gone_cold",
