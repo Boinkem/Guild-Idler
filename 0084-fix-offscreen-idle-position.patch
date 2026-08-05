@@ -1,0 +1,24 @@
+diff --git a/electron/main.ts b/electron/main.ts
+index 8981e57..14f5760 100644
+--- a/electron/main.ts
++++ b/electron/main.ts
+@@ -85,8 +85,18 @@ async function createWindow() {
+   alwaysOnTop = settings.alwaysOnTop ?? true;
+   companionLocked = settings.locked ?? true;
+ 
++  // Clamped here, not just used raw -- confirmed as the actual root cause of
++  // the companion appearing completely absent (not blank, genuinely
++  // off-screen) on cold boot: a position saved on one display (e.g. an
++  // ultrawide monitor) stays in settings and gets restored verbatim on a
++  // later launch under a different display setup, where it can land
++  // entirely outside any visible screen. The return-to-idle path in
++  // window:setMode already clamped this same kind of position -- this was
++  // the one path that didn't, which is exactly why opening then closing
++  // Guild Hall "fixed" it: that path recomputes and clamps, this one
++  // hadn't.
+   idleBounds = settings.x != null && settings.y != null
+-    ? { x: settings.x, y: settings.y }
++    ? clampToWorkArea(settings.x, settings.y, IDLE_SIZE.width, IDLE_SIZE.height)
+     : bottomRight(IDLE_SIZE.width, IDLE_SIZE.height);
+   currentMode = 'idle';
+ 
