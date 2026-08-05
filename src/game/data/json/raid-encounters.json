@@ -142,6 +142,14 @@
     "loot": [
       "requiem_signet@12",
       "requiem_striders@10"
+    ],
+    "lootHeroic": [
+      "requiem_signet_heroic@12",
+      "requiem_striders_heroic@10"
+    ],
+    "lootMythic": [
+      "requiem_signet_mythic@12",
+      "requiem_striders_mythic@10"
     ]
   },
   {
@@ -156,6 +164,16 @@
       "requiem_grips@8",
       "requiem_plate@6",
       "the_last_ember@4"
+    ],
+    "lootHeroic": [
+      "requiem_grips_heroic@8",
+      "requiem_plate_heroic@6",
+      "the_last_ember_heroic@4"
+    ],
+    "lootMythic": [
+      "requiem_grips_mythic@8",
+      "requiem_plate_mythic@6",
+      "the_last_ember_mythic@4"
     ]
   },
   {
@@ -169,6 +187,14 @@
     "loot": [
       "requiem_blade@5",
       "requiem_crown@4"
+    ],
+    "lootHeroic": [
+      "requiem_blade_heroic@5",
+      "requiem_crown_heroic@4"
+    ],
+    "lootMythic": [
+      "requiem_blade_mythic@5",
+      "requiem_crown_mythic@4"
     ]
   },
   {

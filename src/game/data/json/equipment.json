@@ -1985,5 +1985,277 @@
       "wisdom": 8
     },
     "raidExclusive": true
+  },
+  {
+    "id": "the_last_ember_heroic",
+    "name": "The Last Ember (Heroic)",
+    "slot": "amulet",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 520,
+    "value": 52000,
+    "mods": {
+      "success": 26,
+      "gold": 58,
+      "loot": 26,
+      "xp": 46,
+      "injuryResist": 26
+    },
+    "stats": {
+      "strength": 13,
+      "endurance": 13,
+      "luck": 13,
+      "wisdom": 13
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "the_last_ember_mythic",
+    "name": "The Last Ember (Mythic)",
+    "slot": "amulet",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 676,
+    "value": 67600,
+    "mods": {
+      "success": 34,
+      "gold": 76,
+      "loot": 34,
+      "xp": 59,
+      "injuryResist": 34
+    },
+    "stats": {
+      "strength": 17,
+      "endurance": 17,
+      "luck": 17,
+      "wisdom": 17
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "requiem_blade_heroic",
+    "name": "Requiem Edge (Heroic)",
+    "slot": "weapon",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 455,
+    "value": 39000,
+    "mods": {
+      "success": 36,
+      "gold": 31,
+      "loot": 18,
+      "speed": 16
+    },
+    "stats": {
+      "strength": 31,
+      "luck": 8
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "requiem_blade_mythic",
+    "name": "Requiem Edge (Mythic)",
+    "slot": "weapon",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 592,
+    "value": 50700,
+    "mods": {
+      "success": 47,
+      "gold": 41,
+      "loot": 24,
+      "speed": 20
+    },
+    "stats": {
+      "strength": 41,
+      "luck": 10
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "requiem_crown_heroic",
+    "name": "Requiem Circlet (Heroic)",
+    "slot": "helmet",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 429,
+    "value": 36400,
+    "mods": {
+      "success": 29,
+      "injuryResist": 39,
+      "xp": 39
+    },
+    "stats": {
+      "wisdom": 23,
+      "endurance": 12
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "requiem_crown_mythic",
+    "name": "Requiem Circlet (Mythic)",
+    "slot": "helmet",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 558,
+    "value": 47320,
+    "mods": {
+      "success": 37,
+      "injuryResist": 51,
+      "xp": 51
+    },
+    "stats": {
+      "wisdom": 30,
+      "endurance": 15
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "requiem_plate_heroic",
+    "name": "Requiem Vestments (Heroic)",
+    "slot": "chest",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 494,
+    "value": 41600,
+    "mods": {
+      "injuryResist": 49,
+      "success": 26,
+      "durability": 46
+    },
+    "stats": {
+      "endurance": 31,
+      "strength": 10
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "requiem_plate_mythic",
+    "name": "Requiem Vestments (Mythic)",
+    "slot": "chest",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 642,
+    "value": 54080,
+    "mods": {
+      "injuryResist": 64,
+      "success": 34,
+      "durability": 59
+    },
+    "stats": {
+      "endurance": 41,
+      "strength": 14
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "requiem_signet_heroic",
+    "name": "Requiem Signet (Heroic)",
+    "slot": "ring",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 390,
+    "value": 33800,
+    "mods": {
+      "loot": 26,
+      "gold": 39,
+      "speed": 18
+    },
+    "stats": {
+      "luck": 23
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "requiem_signet_mythic",
+    "name": "Requiem Signet (Mythic)",
+    "slot": "ring",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 507,
+    "value": 43940,
+    "mods": {
+      "loot": 34,
+      "gold": 51,
+      "speed": 24
+    },
+    "stats": {
+      "luck": 30
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "requiem_grips_heroic",
+    "name": "Requiem Grasp (Heroic)",
+    "slot": "gloves",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 442,
+    "value": 35100,
+    "mods": {
+      "gold": 42,
+      "loot": 29,
+      "success": 23
+    },
+    "stats": {
+      "luck": 21,
+      "strength": 13
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "requiem_grips_mythic",
+    "name": "Requiem Grasp (Mythic)",
+    "slot": "gloves",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 575,
+    "value": 45630,
+    "mods": {
+      "gold": 54,
+      "loot": 37,
+      "success": 30
+    },
+    "stats": {
+      "luck": 27,
+      "strength": 17
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "requiem_striders_heroic",
+    "name": "Requiem Stride (Heroic)",
+    "slot": "boots",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 442,
+    "value": 35750,
+    "mods": {
+      "speed": 42,
+      "success": 21,
+      "injuryResist": 18
+    },
+    "stats": {
+      "endurance": 21
+    },
+    "raidExclusive": true
+  },
+  {
+    "id": "requiem_striders_mythic",
+    "name": "Requiem Stride (Mythic)",
+    "slot": "boots",
+    "rarity": "legendary",
+    "reqLevel": 55,
+    "maxDurability": 575,
+    "value": 46475,
+    "mods": {
+      "speed": 54,
+      "success": 27,
+      "injuryResist": 24
+    },
+    "stats": {
+      "endurance": 27
+    },
+    "raidExclusive": true
   }
 ]
