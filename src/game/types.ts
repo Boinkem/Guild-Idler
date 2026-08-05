@@ -422,7 +422,7 @@ export interface UpgradeDef {
   costGrowth: number;
   maxLevel: number;
   modsPerLevel: Partial<Modifiers>;
-  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids';
+  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsMythic';
   /**
    * Which vendor offers this upgrade. Undefined means it's a general guild
    * upgrade with no vendor attached (unlocks like Guild Charter or Black

@@ -71,9 +71,26 @@ export const UPGRADES: UpgradeDef[] = [
   },
   {
     id: 'raid_charter', name: 'Raid Charter',
-    description: 'A standing agreement to send the guild in force, not just a hero at a time. Unlocks multi-hero raids -- longer, harder, and paid out per encounter cleared rather than all at once.',
-    baseCost: 15000, costGrowth: 1, maxLevel: 1,
+    description: 'A standing agreement to send the guild in force, not just a hero at a time. Unlocks Normal-difficulty raids -- longer, harder, and paid out per encounter cleared rather than all at once.',
+    // Cut from 15000 -- this was gating the entire raid system behind a
+    // cost that felt out of step with how early Blackford Keep itself is
+    // (reqLevel 8). Difficulty is now the real gate, via the two upgrades
+    // below, rather than the base Charter price doing double duty as both
+    // "can the guild raid at all" and "can it raid at the hardest tiers."
+    baseCost: 2500, costGrowth: 1, maxLevel: 1,
     modsPerLevel: {}, unlocks: 'raids',
+  },
+  {
+    id: 'raid_heroic_clearance', name: 'Heroic Clearance',
+    description: 'Formal sign-off to run raids at Heroic difficulty -- harsher odds, longer expeditions, and loot worth the extra risk.',
+    baseCost: 20000, costGrowth: 1, maxLevel: 1,
+    modsPerLevel: {}, unlocks: 'raidsHeroic',
+  },
+  {
+    id: 'raid_mythic_clearance', name: 'Mythic Clearance',
+    description: "The guild's word that it can handle Mythic difficulty -- the hardest raiding gets, and the only tier where the very best loot actually drops.",
+    baseCost: 60000, costGrowth: 1, maxLevel: 1,
+    modsPerLevel: {}, unlocks: 'raidsMythic',
   },
 ];
 

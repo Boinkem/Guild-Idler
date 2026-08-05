@@ -22,6 +22,17 @@ const DIFFICULTY_COLOR: Record<RaidDifficulty, string> = {
   normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, mythic: RARITY_COLOR.epic,
 };
 
+/** Which upgrade unlocks each difficulty tier -- Normal comes from the base
+ *  Raid Charter (the same unlock that already gates raids existing at
+ *  all); Heroic and Mythic each need their own separate Clearance upgrade,
+ *  rather than the old single Charter purchase unlocking every tier at once. */
+const DIFFICULTY_UNLOCK: Record<RaidDifficulty, 'raids' | 'raidsHeroic' | 'raidsMythic'> = {
+  normal: 'raids', heroic: 'raidsHeroic', mythic: 'raidsMythic',
+};
+const DIFFICULTY_UNLOCK_LABEL: Record<RaidDifficulty, string> = {
+  normal: 'Raid Charter', heroic: 'Heroic Clearance', mythic: 'Mythic Clearance',
+};
+
 /**
  * Banner strip for a raid card and its detail modal. Same "missing file
  * just fails to paint, no broken-image icon" convention as quest chains'
@@ -231,16 +242,22 @@ function ItemDetailOverlay({ defId, onClose }: { defId: string; onClose: () => v
 }
 
 function DifficultyCircle({
-  difficulty, active, onClick,
-}: { difficulty: RaidDifficulty; active: boolean; onClick: () => void }) {
+  difficulty, active, unlocked, onClick,
+}: { difficulty: RaidDifficulty; active: boolean; unlocked: boolean; onClick: () => void }) {
   const color = DIFFICULTY_COLOR[difficulty];
   const [imgFailed, setImgFailed] = useState(false);
   return (
     <button
-      className={`raid-diff-circle ${active ? 'active' : ''}`}
-      style={{ borderColor: color, color: active ? 'var(--night)' : color, background: active ? color : undefined }}
+      className={`raid-diff-circle ${active ? 'active' : ''} ${unlocked ? '' : 'locked'}`}
+      style={{
+        borderColor: color, color: active ? 'var(--night)' : color, background: active ? color : undefined,
+        opacity: unlocked ? 1 : 0.4,
+      }}
       onClick={onClick}
-      title={`${difficulty[0].toUpperCase()}${difficulty.slice(1)} -- ${RAID_DIFFICULTIES[difficulty].partySize} heroes`}
+      disabled={!unlocked}
+      title={unlocked
+        ? `${difficulty[0].toUpperCase()}${difficulty.slice(1)} -- ${RAID_DIFFICULTIES[difficulty].partySize} heroes`
+        : `Requires the ${DIFFICULTY_UNLOCK_LABEL[difficulty]} upgrade`}
     >
       {!imgFailed ? (
         <img
@@ -362,7 +379,13 @@ function RaidDetailModal({
           <div className="section-heading">Difficulty</div>
           <div className="row" style={{ gap: 10 }}>
             {RAID_DIFFICULTY_ORDER.map((d) => (
-              <DifficultyCircle key={d} difficulty={d} active={difficulty === d} onClick={() => pickDifficulty(d)} />
+              <DifficultyCircle
+                key={d}
+                difficulty={d}
+                active={difficulty === d}
+                unlocked={ModifierManager.hasUnlock(state, DIFFICULTY_UNLOCK[d])}
+                onClick={() => pickDifficulty(d)}
+              />
             ))}
           </div>
 

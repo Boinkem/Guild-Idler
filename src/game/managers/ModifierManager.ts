@@ -74,7 +74,7 @@ export const ModifierManager = {
     return 1 + tavern + perks;
   },
 
-  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids'): boolean {
+  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic'): boolean {
     return Object.entries(state.upgrades).some(([id, level]) => {
       const def = UPGRADE_BY_ID[id];
       return !!def && def.unlocks === unlock && level > 0;
