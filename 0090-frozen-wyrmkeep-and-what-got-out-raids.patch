@@ -1,0 +1,118 @@
+diff --git a/src/game/data/json/raid-encounters.json b/src/game/data/json/raid-encounters.json
+index a72a5a1..ae67b89 100644
+--- a/src/game/data/json/raid-encounters.json
++++ b/src/game/data/json/raid-encounters.json
+@@ -170,5 +170,68 @@
+       "requiem_blade@5",
+       "requiem_crown@4"
+     ]
++  },
++  {
++    "id": "wyrmkeep_hatchling_brood",
++    "name": "The Hatchling Brood",
++    "flavour": "They're young, and young dragons make mistakes -- flying too close, breathing too early, giving away a position a fully grown one never would. That's the only reason this fight is survivable at all. There are a lot of them, and not one of them fights like it's afraid.",
++    "baseSuccess": 60,
++    "durationHours": 2,
++    "rewardGold": 550,
++    "rewardXp": 100
++  },
++  {
++    "id": "wyrmkeep_wyrm_keepers",
++    "name": "The Wyrm Keepers",
++    "flavour": "Not cultists, not worshippers -- keepers, in the plainest sense: people who found a brood too dangerous to kill and decided tending it was safer than the alternative. They've kept this brood fed and hidden for years. They are not going to stop now, and they know exactly where every hatchling is.",
++    "baseSuccess": 52,
++    "durationHours": 3,
++    "rewardGold": 950,
++    "rewardXp": 180
++  },
++  {
++    "id": "wyrmkeep_frozen_wyrm",
++    "name": "The Frozen Wyrm",
++    "flavour": "Old enough to remember when this mountain didn't have a brood in it at all -- old enough, in fact, to have started the whole thing. Ice doesn't slow it down. It's had centuries to stop noticing the cold.",
++    "baseSuccess": 42,
++    "durationHours": 4,
++    "rewardGold": 1800,
++    "rewardXp": 340,
++    "loot": [
++      "dragon_helm@8"
++    ],
++    "lootHeroic": [
++      "dragon_helm_heroic@8"
++    ],
++    "lootMythic": [
++      "dragon_helm_mythic@8"
++    ]
++  },
++  {
++    "id": "gotout_trail_gone_cold",
++    "name": "The Trail Gone Cold",
++    "flavour": "Whatever answers used to come easy from a demon lord with a whole fortress to hide behind don't come easy from one with nothing left but a trail. It's a good trail, for what it's worth -- burned villages don't hide themselves. It's just an old one, and getting colder by the week.",
++    "baseSuccess": 58,
++    "durationHours": 3,
++    "rewardGold": 1100,
++    "rewardXp": 220
++  },
++  {
++    "id": "gotout_the_last_loyal",
++    "name": "The Last Loyal",
++    "flavour": "Most of what served it died at the fortress gate or scattered when the wards broke. What's left isn't an army anymore -- it's whoever was desperate or loyal enough to follow a losing cause into somewhere worse than where they started.",
++    "baseSuccess": 48,
++    "durationHours": 4,
++    "rewardGold": 1900,
++    "rewardXp": 380
++  },
++  {
++    "id": "gotout_cornered",
++    "name": "Cornered",
++    "flavour": "It ruled a fortress once, with a throne and a gate and a whole choir standing guard. Now it has a cave and nothing left to lose, which turns out to be a considerably more dangerous combination than the throne ever was.",
++    "baseSuccess": 38,
++    "durationHours": 5,
++    "rewardGold": 3400,
++    "rewardXp": 620
+   }
+ ]
+diff --git a/src/game/data/json/raids.json b/src/game/data/json/raids.json
+index 394e8df..ce3fe02 100644
+--- a/src/game/data/json/raids.json
++++ b/src/game/data/json/raids.json
+@@ -10,7 +10,7 @@
+       "blackford_right_hand",
+       "blackford_uncrowned"
+     ],
+-    "unlocksRaidId": "bonewrought_vault"
++    "unlocksRaidId": "frozen_wyrmkeep"
+   },
+   {
+     "id": "bonewrought_vault",
+@@ -36,5 +36,31 @@
+       "last_god_what_is_left_of_it"
+     ],
+     "requiresChainId": "last_pilgrimage"
++  },
++  {
++    "id": "frozen_wyrmkeep",
++    "name": "The Frozen Wyrmkeep",
++    "description": "Something has been nesting in the high passes for longer than anyone noticed -- long enough to stop being one dragon and start being a brood. What used to be watched for avalanches gets watched for wings now, and lately there have been considerably more wings than there used to be.",
++    "epilogue": "The brood is gone, and the ice it nested in is already creeping back over what's left of it -- which is, if nothing else, a tidier ending than Emberfell got. Nothing sings about a mountain that quietly stops being a problem. It just stops.",
++    "reqLevel": 18,
++    "encounterIds": [
++      "wyrmkeep_hatchling_brood",
++      "wyrmkeep_wyrm_keepers",
++      "wyrmkeep_frozen_wyrm"
++    ],
++    "unlocksRaidId": "bonewrought_vault"
++  },
++  {
++    "id": "what_got_out",
++    "name": "What Got Out",
++    "description": "It got out in the confusion, and there wasn't a choice -- not with the gate coming down and the wards failing all at once. It hasn't had the will or the followers left to rebuild anything like what it lost. It found somewhere smaller instead. Meaner. Considerably harder to walk into a second time without losing someone.",
++    "epilogue": "This time, there's no gate left standing behind it and nowhere smaller left to run to. Whatever the demon lord was building toward, cornered and half of what it used to be, it never got to finish it. The guild made sure of that personally, this time -- no confusion to slip through, no wards left half-broken to hide behind.",
++    "reqLevel": 26,
++    "encounterIds": [
++      "gotout_trail_gone_cold",
++      "gotout_the_last_loyal",
++      "gotout_cornered"
++    ],
++    "requiresChainId": "demon_fortress"
+   }
+ ]

@@ -10,7 +10,7 @@
       "blackford_right_hand",
       "blackford_uncrowned"
     ],
-    "unlocksRaidId": "bonewrought_vault"
+    "unlocksRaidId": "frozen_wyrmkeep"
   },
   {
     "id": "bonewrought_vault",
@@ -36,5 +36,31 @@
       "last_god_what_is_left_of_it"
     ],
     "requiresChainId": "last_pilgrimage"
+  },
+  {
+    "id": "frozen_wyrmkeep",
+    "name": "The Frozen Wyrmkeep",
+    "description": "Something has been nesting in the high passes for longer than anyone noticed -- long enough to stop being one dragon and start being a brood. What used to be watched for avalanches gets watched for wings now, and lately there have been considerably more wings than there used to be.",
+    "epilogue": "The brood is gone, and the ice it nested in is already creeping back over what's left of it -- which is, if nothing else, a tidier ending than Emberfell got. Nothing sings about a mountain that quietly stops being a problem. It just stops.",
+    "reqLevel": 18,
+    "encounterIds": [
+      "wyrmkeep_hatchling_brood",
+      "wyrmkeep_wyrm_keepers",
+      "wyrmkeep_frozen_wyrm"
+    ],
+    "unlocksRaidId": "bonewrought_vault"
+  },
+  {
+    "id": "what_got_out",
+    "name": "What Got Out",
+    "description": "It got out in the confusion, and there wasn't a choice -- not with the gate coming down and the wards failing all at once. It hasn't had the will or the followers left to rebuild anything like what it lost. It found somewhere smaller instead. Meaner. Considerably harder to walk into a second time without losing someone.",
+    "epilogue": "This time, there's no gate left standing behind it and nowhere smaller left to run to. Whatever the demon lord was building toward, cornered and half of what it used to be, it never got to finish it. The guild made sure of that personally, this time -- no confusion to slip through, no wards left half-broken to hide behind.",
+    "reqLevel": 26,
+    "encounterIds": [
+      "gotout_trail_gone_cold",
+      "gotout_the_last_loyal",
+      "gotout_cornered"
+    ],
+    "requiresChainId": "demon_fortress"
   }
 ]
