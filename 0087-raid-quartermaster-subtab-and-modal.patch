@@ -1,0 +1,224 @@
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index 89d8bd2..3fe1a8a 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -22,6 +22,31 @@ const DIFFICULTY_COLOR: Record<RaidDifficulty, string> = {
+   normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, mythic: RARITY_COLOR.epic,
+ };
+ 
++/**
++ * Banner strip for a raid card and its detail modal. Same "missing file
++ * just fails to paint, no broken-image icon" convention as quest chains'
++ * own art (public/lore/chains/<id>.jpg) -- this rolls out gradually as art
++ * lands in public/lore/raids/<id>.jpg rather than needing every raid's art
++ * before any of it shows. A plain fixed-height strip rather than a full
++ * background wash (unlike chainCardStyle) -- this is meant to read as an
++ * actual header image, not a textured backdrop behind text.
++ */
++function RaidBanner({ raidId }: { raidId: string }) {
++  return (
++    <div
++      aria-hidden="true"
++      style={{
++        backgroundImage: `url(./lore/raids/${raidId}.jpg)`,
++        backgroundSize: 'cover',
++        backgroundPosition: 'center',
++        height: 90,
++        marginBottom: 10,
++        borderRadius: 4,
++      }}
++    />
++  );
++}
++
+ function LootPreview({
+   encounterId, difficulty, onShowItem,
+ }: { encounterId: string; difficulty: RaidDifficulty | null; onShowItem: (defId: string) => void }) {
+@@ -231,24 +256,25 @@ function DifficultyCircle({
+   );
+ }
+ 
+-function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: string) => void }) {
++/**
++ * The full raid detail -- everything that used to live inline inside the
++ * expanded card now lives here instead, completely unchanged in behaviour.
++ * One real difference from the old inline-expand: this unmounts entirely
++ * on close, so difficulty/party selection resets each time it's reopened,
++ * matching how every other modal in this app already behaves (none of
++ * them preserve transient selection state across a dismissal) rather than
++ * the old expand/collapse's incidental persistence.
++ */
++function RaidDetailModal({
++  raidId, onClose, onShowItem,
++}: { raidId: string; onClose: () => void; onShowItem: (defId: string) => void }) {
+   const engine = useEngine();
+   const now = useNow();
+   const state = engine.state;
+   const raid = RAIDS.find((r) => r.id === raidId)!;
+-  const unlocked = isRaidUnlocked(raidId, state.completedRaids, state.completedChains);
+-  const [open, setOpen] = useState(false);
+   const [difficulty, setDifficulty] = useState<RaidDifficulty | null>(null);
+   const [selectedHeroIds, setSelectedHeroIds] = useState<string[]>([]);
+-
+-  if (!unlocked) {
+-    return (
+-      <div className="card raid-card locked">
+-        <div className="card-title">???</div>
+-        <p className="tiny muted">Complete the previous raid to reveal this one.</p>
+-      </div>
+-    );
+-  }
++  const [confirming, setConfirming] = useState(false);
+ 
+   const idleHeroes = state.heroes.filter((h) => h.status !== 'questing');
+   const cfg = difficulty ? RAID_DIFFICULTIES[difficulty] : null;
+@@ -265,8 +291,6 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId:
+     ? RaidManager.previewDuration(state, previewHeroIds, raid.id, difficulty, now)
+     : null;
+ 
+-  const [confirming, setConfirming] = useState(false);
+-
+   const toggleHero = (heroId: string) => {
+     setSelectedHeroIds((current) => {
+       if (current.includes(heroId)) return current.filter((id) => id !== heroId);
+@@ -289,27 +313,18 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId:
+     if (!difficulty) return;
+     engine.startRaid(raid.id, difficulty, selectedHeroIds);
+     setConfirming(false);
+-    setOpen(false);
+-    setDifficulty(null);
+-    setSelectedHeroIds([]);
++    onClose();
+   };
+ 
+   return (
+-    <div className="card raid-card">
+-      <div
+-        className="spread hero-card-summary"
+-        onClick={() => setOpen((v) => !v)}
+-        role="button"
+-        tabIndex={0}
+-        aria-expanded={open}
+-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
+-      >
+-        <span className="card-title hero-card-name">{raid.name}</span>
+-        <span className="tiny gold-text">Lv {raid.reqLevel}</span>
+-      </div>
+-
+-      {open && (
+-        <div className="hero-card-details">
++    <>
++      <div className="overlay" onClick={onClose}>
++        <div className="modal raid-detail-modal" onClick={(e) => e.stopPropagation()}>
++          <RaidBanner raidId={raid.id} />
++          <div className="spread">
++            <span className="card-title hero-card-name">{raid.name}</span>
++            <span className="tiny gold-text">Lv {raid.reqLevel}</span>
++          </div>
+           <p className="card-flavour">{raid.description}</p>
+ 
+           <div className="section-heading">Encounters</div>
+@@ -388,8 +403,12 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId:
+               </div>
+             </div>
+           )}
++
++          <div className="row end" style={{ marginTop: 14 }}>
++            <button onClick={onClose}>Close</button>
++          </div>
+         </div>
+-      )}
++      </div>
+ 
+       {confirming && cfg && difficulty && (
+         <div className="overlay" onClick={() => setConfirming(false)}>
+@@ -414,7 +433,49 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId:
+           </div>
+         </div>
+       )}
+-    </div>
++    </>
++  );
++}
++
++/**
++ * Collapsed summary only -- clicking opens RaidDetailModal rather than
++ * expanding inline. Locked raids stay a plain, non-interactive card (no
++ * modal needed, there's nothing to configure).
++ */
++function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: string) => void }) {
++  const state = useEngine().state;
++  const raid = RAIDS.find((r) => r.id === raidId)!;
++  const unlocked = isRaidUnlocked(raidId, state.completedRaids, state.completedChains);
++  const [showModal, setShowModal] = useState(false);
++
++  if (!unlocked) {
++    return (
++      <div className="card raid-card locked">
++        <div className="card-title">???</div>
++        <p className="tiny muted">Complete the previous raid to reveal this one.</p>
++      </div>
++    );
++  }
++
++  return (
++    <>
++      <div
++        className="card raid-card"
++        onClick={() => setShowModal(true)}
++        role="button"
++        tabIndex={0}
++        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
++      >
++        <RaidBanner raidId={raid.id} />
++        <div className="spread">
++          <span className="card-title hero-card-name">{raid.name}</span>
++          <span className="tiny gold-text">Lv {raid.reqLevel}</span>
++        </div>
++      </div>
++      {showModal && (
++        <RaidDetailModal raidId={raidId} onClose={() => setShowModal(false)} onShowItem={onShowItem} />
++      )}
++    </>
+   );
+ }
+ 
+@@ -450,6 +511,7 @@ export function RaidsPanel() {
+   const state = engine.state;
+   const hasRaids = ModifierManager.hasUnlock(state, 'raids');
+   const [itemDetail, setItemDetail] = useState<string | null>(null);
++  const [subTab, setSubTab] = useState<'raids' | 'quartermaster'>('raids');
+ 
+   if (!hasRaids) {
+     return (
+@@ -470,12 +532,25 @@ export function RaidsPanel() {
+         Multi-hero expeditions. Big rewards, long odds, and everyone comes home a little worse for wear -- win or lose.
+       </p>
+ 
+-      <RaidQuartermasterDen />
++      <div className="row" style={{ gap: 8, marginBottom: 14 }}>
++        <button className={subTab === 'raids' ? 'btn-primary' : ''} onClick={() => setSubTab('raids')}>
++          Raids
++        </button>
++        <button className={subTab === 'quartermaster' ? 'btn-primary' : ''} onClick={() => setSubTab('quartermaster')}>
++          Quartermaster
++        </button>
++      </div>
+ 
+-      {state.activeRaid && <ActiveRaidCard />}
+-      {RAIDS.filter((r) => r.id !== state.activeRaid?.raidId).map((r) => (
+-        <RaidCard key={r.id} raidId={r.id} onShowItem={setItemDetail} />
+-      ))}
++      {subTab === 'raids' ? (
++        <>
++          {state.activeRaid && <ActiveRaidCard />}
++          {RAIDS.filter((r) => r.id !== state.activeRaid?.raidId).map((r) => (
++            <RaidCard key={r.id} raidId={r.id} onShowItem={setItemDetail} />
++          ))}
++        </>
++      ) : (
++        <RaidQuartermasterDen />
++      )}
+ 
+       {itemDetail && <ItemDetailOverlay defId={itemDetail} onClose={() => setItemDetail(null)} />}
+     </>
