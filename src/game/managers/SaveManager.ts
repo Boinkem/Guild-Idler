@@ -24,6 +24,9 @@ declare global {
       minimize(): Promise<void>;
       quit(): Promise<void>;
       unlockAchievement(steamApiName: string): Promise<boolean>;
+      /** Main-to-renderer only -- the tray's "Show Guild Hall" item. See
+       *  preload.ts's own comment on this same method for the full reasoning. */
+      onOpenGuildHall(callback: () => void): () => void;
     };
   }
 }
