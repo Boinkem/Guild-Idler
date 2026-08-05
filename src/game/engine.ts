@@ -650,10 +650,18 @@ export class GameEngine {
 
   /* -------------------------------- actions ---------------------------- */
 
-  startQuest(heroId: string, offer: QuestOffer, consumables: string[]) {
+  /**
+   * The third parameter is accepted but ignored -- kept only so the
+   * existing call site (QuestPanel, which currently passes []) doesn't need
+   * a second edit just for this. Consumables now come from the hero's own
+   * equipped slots (see equipConsumable/unequipConsumable below) instead of
+   * a loadout picked at send time, matching how equipped gear already
+   * works: what's slotted is what gets used, no separate per-send choice.
+   */
+  startQuest(heroId: string, offer: QuestOffer, _consumables?: string[]) {
     const hero = this.hero(heroId);
     if (!hero) return;
-    const { error } = QuestManager.start(this.state, hero, offer, consumables, Date.now());
+    const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], Date.now());
     if (error) return this.say(error);
     this.state.focusedHeroId = heroId;
 
@@ -672,6 +680,31 @@ export class GameEngine {
 
     playSound('depart');
     this.say(`${hero.name} sets out: ${offer.name}`);
+    void this.saveNow();
+  }
+
+  /** Adds a consumable to a hero's equipped slots -- persists until removed
+   *  or consumed by a quest, capped at ModifierManager.consumableSlots. Does
+   *  not touch state.inventory; that deduction still happens at quest-start
+   *  time inside QuestManager.start, same as it always did. */
+  equipConsumable(heroId: string, defId: string) {
+    const hero = this.hero(heroId);
+    if (!hero) return;
+    const current = hero.equippedConsumables ?? [];
+    const maxSlots = ModifierManager.consumableSlots(this.state);
+    if (current.length >= maxSlots) return this.say('No free consumable slots.');
+    hero.equippedConsumables = [...current, defId];
+    void this.saveNow();
+  }
+
+  /** Removes one instance of a consumable from a hero's equipped slots. */
+  unequipConsumable(heroId: string, defId: string) {
+    const hero = this.hero(heroId);
+    if (!hero) return;
+    const current = hero.equippedConsumables ?? [];
+    const index = current.indexOf(defId);
+    if (index === -1) return;
+    hero.equippedConsumables = [...current.slice(0, index), ...current.slice(index + 1)];
     void this.saveNow();
   }
 

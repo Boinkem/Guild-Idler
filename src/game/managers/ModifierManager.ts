@@ -74,6 +74,16 @@ export const ModifierManager = {
     return 1 + tavern + perks;
   },
 
+  /** 1 base, +1 per Potion Belt level (max 2 levels -> 3 total). Same
+   *  "special-purpose field, not a generic mod" shape as heroSlots above. */
+  consumableSlots(state: GameState): number {
+    const bonus = Object.entries(state.upgrades).reduce((sum, [id, level]) => {
+      const def = UPGRADE_BY_ID[id];
+      return sum + (def?.consumableSlotsPerLevel ?? 0) * level;
+    }, 0);
+    return 1 + bonus;
+  },
+
   hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic'): boolean {
     return Object.entries(state.upgrades).some(([id, level]) => {
       const def = UPGRADE_BY_ID[id];

@@ -3,8 +3,10 @@ import { useEngine } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { GameEngine } from '../../game/engine';
 import { EquipmentManager, MAX_PLUS } from '../../game/managers/EquipmentManager';
+import { ModifierManager } from '../../game/managers/ModifierManager';
 import { EQUIPMENT_BY_ID, ITEM_SETS } from '../../game/data/equipment';
-import { EquipSlot, EquipmentItem, Hero, Rarity } from '../../game/types';
+import { CONSUMABLE_BY_ID } from '../../game/data/items';
+import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { describeMods, formatGold, RARITY_COLOR } from '../../game/util';
 
@@ -51,6 +53,128 @@ function DurabilityBar({ item }: { item: EquipmentItem }) {
         {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${max}`}
       </div>
     </>
+  );
+}
+
+/**
+ * Same clickable-detail treatment SlotCard/StashCard already use for gear --
+ * a consumable in the stash used to just be a static chip with a title
+ * tooltip. Now expands to show the real description, matching everything
+ * else in this panel.
+ */
+function ConsumableInfoCard({ def, count }: { def: ConsumableDef; count: number }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={`item-card ${open ? 'open' : ''}`}>
+      <div
+        className="item-card-summary"
+        onClick={() => setOpen((v) => !v)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
+      >
+        <div className="item-icon" style={{ width: 40, height: 40, fontSize: 22, display: 'grid', placeItems: 'center' }}>
+          {def.glyph}
+        </div>
+        <div className="item-card-body">
+          <div className="item-card-name">{def.name} ×{count}</div>
+        </div>
+      </div>
+      {open && (
+        <div className="item-card-details">
+          <div className="tiny muted">{def.description}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A single consumable-equip slot for whichever hero is currently selected --
+ * separate from the gear SLOTS grid above (consumables are used up over a
+ * quest, gear isn't), but placed directly beneath it so it reads as part of
+ * the same "what this hero is carrying" picture. Filled shows the
+ * consumable with an unequip action; empty shows a picker built from
+ * whatever's owned but not already equipped somewhere.
+ */
+function ConsumableSlotCard({
+  hero, equippedDefId, available, engine,
+}: {
+  hero: Hero; equippedDefId: string | undefined;
+  available: { def: ConsumableDef; count: number }[]; engine: GameEngine;
+}) {
+  const [picking, setPicking] = useState(false);
+  const def = equippedDefId ? CONSUMABLE_BY_ID[equippedDefId] : undefined;
+
+  if (def) {
+    return (
+      <div className="item-card">
+        <div className="item-card-summary">
+          <div className="item-icon" style={{ width: 40, height: 40, fontSize: 22, display: 'grid', placeItems: 'center' }}>
+            {def.glyph}
+          </div>
+          <div className="item-card-body">
+            <div className="item-card-name">{def.name}</div>
+            <div className="tiny muted">Equipped on {hero.name}</div>
+          </div>
+        </div>
+        <div className="item-card-details">
+          <div className="tiny muted">{def.description}</div>
+          <button
+            style={{ marginTop: 6, minHeight: 24, padding: '3px 6px' }}
+            onClick={() => engine.unequipConsumable(hero.id, def.id)}
+          >
+            Unequip
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (picking) {
+    return (
+      <div className="item-card open">
+        <div className="item-card-details" style={{ paddingTop: 8 }}>
+          {available.length === 0 ? (
+            <p className="tiny muted">Nothing spare to equip. Buy potions in the Shop.</p>
+          ) : (
+            <div className="row wrap" style={{ gap: 4 }}>
+              {available.map(({ def: d, count }) => (
+                <button
+                  key={d.id}
+                  className="chip"
+                  onClick={() => { engine.equipConsumable(hero.id, d.id); setPicking(false); }}
+                  title={d.description}
+                >
+                  {d.glyph} {d.name} ×{count}
+                </button>
+              ))}
+            </div>
+          )}
+          <button className="btn-ghost" style={{ marginTop: 6, minHeight: 22 }} onClick={() => setPicking(false)}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="item-card empty">
+      <div
+        className="item-card-summary"
+        onClick={() => setPicking(true)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPicking(true); } }}
+      >
+        <div className="item-icon" style={{ width: 40, height: 40, fontSize: 18, display: 'grid', placeItems: 'center' }}>+</div>
+        <div className="item-card-body">
+          <div className="slot-name">consumable</div>
+          <div className="tiny muted">Empty</div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -213,15 +337,33 @@ export function EquipmentPanel() {
         ))}
       </div>
 
+      <div className="section-heading">
+        Consumable Slots ({(hero.equippedConsumables ?? []).length}/{ModifierManager.consumableSlots(state)})
+      </div>
+      <div className="item-card-grid">
+        {Array.from({ length: ModifierManager.consumableSlots(state) }).map((_, i) => {
+          const equipped = hero.equippedConsumables ?? [];
+          // Available to equip here: owned in excess of however many are
+          // already slotted (on this hero or any other) -- prevents
+          // "equipping" the same single potion into two slots at once.
+          const equippedElsewhereCount = (defId: string) =>
+            state.heroes.reduce((sum, other) => sum + (other.equippedConsumables ?? []).filter((id) => id === defId).length, 0);
+          const available = InventoryManager.owned(state).filter(
+            ({ def }) => equippedElsewhereCount(def.id) < InventoryManager.count(state, def.id),
+          );
+          return (
+            <ConsumableSlotCard key={i} hero={hero} equippedDefId={equipped[i]} available={available} engine={engine} />
+          );
+        })}
+      </div>
+
       <div className="section-heading">Consumables</div>
       {InventoryManager.owned(state).length === 0 ? (
         <p className="small muted">None on hand. The Shop sells potions and charms.</p>
       ) : (
-        <div className="row wrap" style={{ marginBottom: 8 }}>
+        <div className="item-card-grid">
           {InventoryManager.owned(state).map(({ def, count }) => (
-            <span key={def.id} className="chip" title={def.description}>
-              {def.glyph} {def.name} ×{count}
-            </span>
+            <ConsumableInfoCard key={def.id} def={def} count={count} />
           ))}
         </div>
       )}

@@ -285,6 +285,13 @@ const MIGRATIONS: Record<number, Migration> = {
     version: 18,
     raidUpgrades: (save.raidUpgrades as Record<string, number> | undefined) ?? {},
   }),
+  18: (save) => {
+    const heroes = Array.isArray(save.heroes) ? save.heroes as Record<string, unknown>[] : [];
+    for (const h of heroes) {
+      h.equippedConsumables = (h.equippedConsumables as string[] | undefined) ?? [];
+    }
+    return { ...save, version: 19, heroes };
+  },
 };
 
 export const SaveManager = {

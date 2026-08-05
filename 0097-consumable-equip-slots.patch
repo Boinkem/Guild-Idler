@@ -1,0 +1,341 @@
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index bbeb5cb..ec3b60f 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -92,6 +92,15 @@ export const UPGRADES: UpgradeDef[] = [
+     baseCost: 60000, costGrowth: 1, maxLevel: 1,
+     modsPerLevel: {}, unlocks: 'raidsMythic',
+   },
++  {
++    id: 'potion_belt', name: 'Potion Belt',
++    description: "Extra loops and pouches on a hero's kit -- room to carry more into a quest without digging through the stash first.",
++    // Base slot count (1) lives in ModifierManager.consumableSlots as the
++    // floor; this upgrade's 2 levels take it to a max of 3, matching the
++    // backlog's "1 base, up to 3 via upgrade" spec exactly.
++    baseCost: 1800, costGrowth: 2.2, maxLevel: 2,
++    modsPerLevel: {}, consumableSlotsPerLevel: 1,
++  },
+ ];
+ 
+ /**
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index e71b42c..b93f2c1 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -650,10 +650,18 @@ export class GameEngine {
+ 
+   /* -------------------------------- actions ---------------------------- */
+ 
+-  startQuest(heroId: string, offer: QuestOffer, consumables: string[]) {
++  /**
++   * The third parameter is accepted but ignored -- kept only so the
++   * existing call site (QuestPanel, which currently passes []) doesn't need
++   * a second edit just for this. Consumables now come from the hero's own
++   * equipped slots (see equipConsumable/unequipConsumable below) instead of
++   * a loadout picked at send time, matching how equipped gear already
++   * works: what's slotted is what gets used, no separate per-send choice.
++   */
++  startQuest(heroId: string, offer: QuestOffer, _consumables?: string[]) {
+     const hero = this.hero(heroId);
+     if (!hero) return;
+-    const { error } = QuestManager.start(this.state, hero, offer, consumables, Date.now());
++    const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], Date.now());
+     if (error) return this.say(error);
+     this.state.focusedHeroId = heroId;
+ 
+@@ -675,6 +683,31 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /** Adds a consumable to a hero's equipped slots -- persists until removed
++   *  or consumed by a quest, capped at ModifierManager.consumableSlots. Does
++   *  not touch state.inventory; that deduction still happens at quest-start
++   *  time inside QuestManager.start, same as it always did. */
++  equipConsumable(heroId: string, defId: string) {
++    const hero = this.hero(heroId);
++    if (!hero) return;
++    const current = hero.equippedConsumables ?? [];
++    const maxSlots = ModifierManager.consumableSlots(this.state);
++    if (current.length >= maxSlots) return this.say('No free consumable slots.');
++    hero.equippedConsumables = [...current, defId];
++    void this.saveNow();
++  }
++
++  /** Removes one instance of a consumable from a hero's equipped slots. */
++  unequipConsumable(heroId: string, defId: string) {
++    const hero = this.hero(heroId);
++    if (!hero) return;
++    const current = hero.equippedConsumables ?? [];
++    const index = current.indexOf(defId);
++    if (index === -1) return;
++    hero.equippedConsumables = [...current.slice(0, index), ...current.slice(index + 1)];
++    void this.saveNow();
++  }
++
+   /**
+    * Commits a party to a raid. Deliberately no Auto-Chain interaction at
+    * all -- raids never auto-continue into anything, on purpose, same
+diff --git a/src/game/managers/ModifierManager.ts b/src/game/managers/ModifierManager.ts
+index 6566876..2f4d774 100644
+--- a/src/game/managers/ModifierManager.ts
++++ b/src/game/managers/ModifierManager.ts
+@@ -74,6 +74,16 @@ export const ModifierManager = {
+     return 1 + tavern + perks;
+   },
+ 
++  /** 1 base, +1 per Potion Belt level (max 2 levels -> 3 total). Same
++   *  "special-purpose field, not a generic mod" shape as heroSlots above. */
++  consumableSlots(state: GameState): number {
++    const bonus = Object.entries(state.upgrades).reduce((sum, [id, level]) => {
++      const def = UPGRADE_BY_ID[id];
++      return sum + (def?.consumableSlotsPerLevel ?? 0) * level;
++    }, 0);
++    return 1 + bonus;
++  },
++
+   hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic'): boolean {
+     return Object.entries(state.upgrades).some(([id, level]) => {
+       const def = UPGRADE_BY_ID[id];
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 0c1f082..868d6f4 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -285,6 +285,13 @@ const MIGRATIONS: Record<number, Migration> = {
+     version: 18,
+     raidUpgrades: (save.raidUpgrades as Record<string, number> | undefined) ?? {},
+   }),
++  18: (save) => {
++    const heroes = Array.isArray(save.heroes) ? save.heroes as Record<string, unknown>[] : [];
++    for (const h of heroes) {
++      h.equippedConsumables = (h.equippedConsumables as string[] | undefined) ?? [];
++    }
++    return { ...save, version: 19, heroes };
++  },
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index dc99d12..ebf559b 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 18;
++export const SAVE_VERSION = 19;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -166,6 +166,16 @@ export interface Hero {
+    * time a fresh streak begins.
+    */
+   autoChainTarget: number | null;
++  /**
++   * Consumable defIds currently slotted on this hero -- persistent, not a
++   * per-send pick. A quest automatically uses whatever's equipped here
++   * rather than needing a loadout chosen at send time (see the Quest Board
++   * rework). Capped at ModifierManager.consumableSlots(state), not a fixed
++   * array size -- optional so existing saves pre-dating this system don't
++   * need HeroManager touched just to add a default; the migration below
++   * backfills it to [] for anything already saved.
++   */
++  equippedConsumables?: string[];
+ }
+ 
+ /* ----------------------------- quests ----------------------------- */
+@@ -432,6 +442,11 @@ export interface UpgradeDef {
+    * ModifierManager.vendorUpgradeIndex.
+    */
+   vendor?: VendorId;
++  /** Grants this many extra hero consumable-equip slots per level -- same
++   *  special-purpose-field pattern as RenownPerkDef.heroSlotsPerLevel and
++   *  GuildFacilityDef.storagePerLevel, since a slot count isn't expressible
++   *  through the generic Modifiers shape. Only Potion Belt uses this. */
++  consumableSlotsPerLevel?: number;
+ }
+ 
+ export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern';
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index d02a852..a9e20dd 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -3,8 +3,10 @@ import { useEngine } from '../useEngine';
+ import { useSettings } from '../useSettings';
+ import { GameEngine } from '../../game/engine';
+ import { EquipmentManager, MAX_PLUS } from '../../game/managers/EquipmentManager';
++import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { EQUIPMENT_BY_ID, ITEM_SETS } from '../../game/data/equipment';
+-import { EquipSlot, EquipmentItem, Hero, Rarity } from '../../game/types';
++import { CONSUMABLE_BY_ID } from '../../game/data/items';
++import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { describeMods, formatGold, RARITY_COLOR } from '../../game/util';
+ 
+@@ -54,6 +56,128 @@ function DurabilityBar({ item }: { item: EquipmentItem }) {
+   );
+ }
+ 
++/**
++ * Same clickable-detail treatment SlotCard/StashCard already use for gear --
++ * a consumable in the stash used to just be a static chip with a title
++ * tooltip. Now expands to show the real description, matching everything
++ * else in this panel.
++ */
++function ConsumableInfoCard({ def, count }: { def: ConsumableDef; count: number }) {
++  const [open, setOpen] = useState(false);
++  return (
++    <div className={`item-card ${open ? 'open' : ''}`}>
++      <div
++        className="item-card-summary"
++        onClick={() => setOpen((v) => !v)}
++        role="button"
++        tabIndex={0}
++        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
++      >
++        <div className="item-icon" style={{ width: 40, height: 40, fontSize: 22, display: 'grid', placeItems: 'center' }}>
++          {def.glyph}
++        </div>
++        <div className="item-card-body">
++          <div className="item-card-name">{def.name} ×{count}</div>
++        </div>
++      </div>
++      {open && (
++        <div className="item-card-details">
++          <div className="tiny muted">{def.description}</div>
++        </div>
++      )}
++    </div>
++  );
++}
++
++/**
++ * A single consumable-equip slot for whichever hero is currently selected --
++ * separate from the gear SLOTS grid above (consumables are used up over a
++ * quest, gear isn't), but placed directly beneath it so it reads as part of
++ * the same "what this hero is carrying" picture. Filled shows the
++ * consumable with an unequip action; empty shows a picker built from
++ * whatever's owned but not already equipped somewhere.
++ */
++function ConsumableSlotCard({
++  hero, equippedDefId, available, engine,
++}: {
++  hero: Hero; equippedDefId: string | undefined;
++  available: { def: ConsumableDef; count: number }[]; engine: GameEngine;
++}) {
++  const [picking, setPicking] = useState(false);
++  const def = equippedDefId ? CONSUMABLE_BY_ID[equippedDefId] : undefined;
++
++  if (def) {
++    return (
++      <div className="item-card">
++        <div className="item-card-summary">
++          <div className="item-icon" style={{ width: 40, height: 40, fontSize: 22, display: 'grid', placeItems: 'center' }}>
++            {def.glyph}
++          </div>
++          <div className="item-card-body">
++            <div className="item-card-name">{def.name}</div>
++            <div className="tiny muted">Equipped on {hero.name}</div>
++          </div>
++        </div>
++        <div className="item-card-details">
++          <div className="tiny muted">{def.description}</div>
++          <button
++            style={{ marginTop: 6, minHeight: 24, padding: '3px 6px' }}
++            onClick={() => engine.unequipConsumable(hero.id, def.id)}
++          >
++            Unequip
++          </button>
++        </div>
++      </div>
++    );
++  }
++
++  if (picking) {
++    return (
++      <div className="item-card open">
++        <div className="item-card-details" style={{ paddingTop: 8 }}>
++          {available.length === 0 ? (
++            <p className="tiny muted">Nothing spare to equip. Buy potions in the Shop.</p>
++          ) : (
++            <div className="row wrap" style={{ gap: 4 }}>
++              {available.map(({ def: d, count }) => (
++                <button
++                  key={d.id}
++                  className="chip"
++                  onClick={() => { engine.equipConsumable(hero.id, d.id); setPicking(false); }}
++                  title={d.description}
++                >
++                  {d.glyph} {d.name} ×{count}
++                </button>
++              ))}
++            </div>
++          )}
++          <button className="btn-ghost" style={{ marginTop: 6, minHeight: 22 }} onClick={() => setPicking(false)}>
++            Cancel
++          </button>
++        </div>
++      </div>
++    );
++  }
++
++  return (
++    <div className="item-card empty">
++      <div
++        className="item-card-summary"
++        onClick={() => setPicking(true)}
++        role="button"
++        tabIndex={0}
++        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPicking(true); } }}
++      >
++        <div className="item-icon" style={{ width: 40, height: 40, fontSize: 18, display: 'grid', placeItems: 'center' }}>+</div>
++        <div className="item-card-body">
++          <div className="slot-name">consumable</div>
++          <div className="tiny muted">Empty</div>
++        </div>
++      </div>
++    </div>
++  );
++}
++
+ /** A single worn-gear slot. Collapsed shows just the icon, name, and rarity
+  *  pill; clicking expands to the full mod breakdown, durability, and the
+  *  repair/refine/remove actions -- same collapse-by-default pattern used on
+@@ -213,15 +337,33 @@ export function EquipmentPanel() {
+         ))}
+       </div>
+ 
++      <div className="section-heading">
++        Consumable Slots ({(hero.equippedConsumables ?? []).length}/{ModifierManager.consumableSlots(state)})
++      </div>
++      <div className="item-card-grid">
++        {Array.from({ length: ModifierManager.consumableSlots(state) }).map((_, i) => {
++          const equipped = hero.equippedConsumables ?? [];
++          // Available to equip here: owned in excess of however many are
++          // already slotted (on this hero or any other) -- prevents
++          // "equipping" the same single potion into two slots at once.
++          const equippedElsewhereCount = (defId: string) =>
++            state.heroes.reduce((sum, other) => sum + (other.equippedConsumables ?? []).filter((id) => id === defId).length, 0);
++          const available = InventoryManager.owned(state).filter(
++            ({ def }) => equippedElsewhereCount(def.id) < InventoryManager.count(state, def.id),
++          );
++          return (
++            <ConsumableSlotCard key={i} hero={hero} equippedDefId={equipped[i]} available={available} engine={engine} />
++          );
++        })}
++      </div>
++
+       <div className="section-heading">Consumables</div>
+       {InventoryManager.owned(state).length === 0 ? (
+         <p className="small muted">None on hand. The Shop sells potions and charms.</p>
+       ) : (
+-        <div className="row wrap" style={{ marginBottom: 8 }}>
++        <div className="item-card-grid">
+           {InventoryManager.owned(state).map(({ def, count }) => (
+-            <span key={def.id} className="chip" title={def.description}>
+-              {def.glyph} {def.name} ×{count}
+-            </span>
++            <ConsumableInfoCard key={def.id} def={def} count={count} />
+           ))}
+         </div>
+       )}

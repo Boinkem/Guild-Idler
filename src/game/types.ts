@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 18;
+export const SAVE_VERSION = 19;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -166,6 +166,16 @@ export interface Hero {
    * time a fresh streak begins.
    */
   autoChainTarget: number | null;
+  /**
+   * Consumable defIds currently slotted on this hero -- persistent, not a
+   * per-send pick. A quest automatically uses whatever's equipped here
+   * rather than needing a loadout chosen at send time (see the Quest Board
+   * rework). Capped at ModifierManager.consumableSlots(state), not a fixed
+   * array size -- optional so existing saves pre-dating this system don't
+   * need HeroManager touched just to add a default; the migration below
+   * backfills it to [] for anything already saved.
+   */
+  equippedConsumables?: string[];
 }
 
 /* ----------------------------- quests ----------------------------- */
@@ -432,6 +442,11 @@ export interface UpgradeDef {
    * ModifierManager.vendorUpgradeIndex.
    */
   vendor?: VendorId;
+  /** Grants this many extra hero consumable-equip slots per level -- same
+   *  special-purpose-field pattern as RenownPerkDef.heroSlotsPerLevel and
+   *  GuildFacilityDef.storagePerLevel, since a slot count isn't expressible
+   *  through the generic Modifiers shape. Only Potion Belt uses this. */
+  consumableSlotsPerLevel?: number;
 }
 
 export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern';

@@ -92,6 +92,15 @@ export const UPGRADES: UpgradeDef[] = [
     baseCost: 60000, costGrowth: 1, maxLevel: 1,
     modsPerLevel: {}, unlocks: 'raidsMythic',
   },
+  {
+    id: 'potion_belt', name: 'Potion Belt',
+    description: "Extra loops and pouches on a hero's kit -- room to carry more into a quest without digging through the stash first.",
+    // Base slot count (1) lives in ModifierManager.consumableSlots as the
+    // floor; this upgrade's 2 levels take it to a max of 3, matching the
+    // backlog's "1 base, up to 3 via upgrade" spec exactly.
+    baseCost: 1800, costGrowth: 2.2, maxLevel: 2,
+    modsPerLevel: {}, consumableSlotsPerLevel: 1,
+  },
 ];
 
 /**
