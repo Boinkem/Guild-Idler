@@ -11,6 +11,7 @@ import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
 import { RaidDifficulty, RaidUpgradeDef } from '../../game/types';
 import { RarityPill } from '../RarityPill';
 import { MaxFlash, useMaxFlash } from '../maxFlash';
+import { RaidRoomSprite, RaidTorchSprite } from '../sprites/RaidRoomSprite';
 import { formatDuration, describeMods, formatGold, formatNumber, RARITY_COLOR } from '../../game/util';
 
 const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', mythic: 'M' };
@@ -98,39 +99,90 @@ function RaidUpgradeCard({ def }: { def: RaidUpgradeDef }) {
   );
 }
 
+const RAID_SPEED_ID = 'raid_speed';
+const RAID_LOOT_ID = 'raid_loot';
+const RAID_RECOVERY_ID = 'raid_recovery';
+
+/**
+ * Maps a raid upgrade's raw level onto one of the 3 room-sprite states.
+ * raid_loot and raid_recovery were built with exactly 3 levels (0-2), so
+ * they map onto their 3 images directly. raid_speed predates this visual
+ * system and spans up to 10 levels on an existing, tuned curve that isn't
+ * worth disturbing just to match 3 images -- it gets banded onto the same
+ * 3 states instead, at the same milestone its own cost curve already
+ * uses: still in the gold tier, or into/past the Renown tier.
+ */
+function roomSpriteLevel(def: RaidUpgradeDef, level: number): number {
+  if (def.id === RAID_SPEED_ID) {
+    if (level <= 0) return 0;
+    return level < def.goldTierMaxLevel ? 1 : 2;
+  }
+  return Math.max(0, Math.min(2, level));
+}
+
 /**
  * Embedded directly in the Raids tab rather than the general Upgrades
  * panel -- raids have been treated as their own separable system all
  * along (own tab, own background, own resolution engine), and this tree
  * only ever affects raids, so it lives where it matters rather than
  * getting buried among quest-side upgrades.
+ *
+ * Replaces the old collapsible "Raid Upgrades" strip with a real room:
+ * a torch reflecting whether the Raid Charter has been bought, and a
+ * weapon rack / skull / shelf that visibly fill in as their matching
+ * upgrade is leveled, rather than a plain progress number doing all the
+ * work. Visual state is purely derivative of existing GuildManager reads
+ * -- nothing new to save.
  */
-function RaidUpgradesSection() {
-  const [open, setOpen] = useState(false);
+function RaidQuartermasterDen() {
+  const engine = useEngine();
+  const state = engine.state;
+  const raidsUnlocked = ModifierManager.hasUnlock(state, 'raids');
+  const defs = GuildManager.raidUpgrades();
+  const speedDef = defs.find((d) => d.id === RAID_SPEED_ID);
+  const lootDef = defs.find((d) => d.id === RAID_LOOT_ID);
+  const recoveryDef = defs.find((d) => d.id === RAID_RECOVERY_ID);
+
   return (
     <div className="card" style={{ marginBottom: 12 }}>
-      <div
-        className="spread hero-card-summary"
-        onClick={() => setOpen((v) => !v)}
-        role="button"
-        tabIndex={0}
-        aria-expanded={open}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
-      >
-        <span className="card-title hero-card-name">Raid Upgrades</span>
-        <span className="tiny muted">{open ? 'Less ▲' : 'More ▼'}</span>
+      <div className="card-title" style={{ marginBottom: 8 }}>The Raid Quartermaster's Den</div>
+      <p className="tiny muted" style={{ marginBottom: 10 }}>
+        Raid-only bonuses -- these never affect regular quests, and quest upgrades never affect raids either.
+        Early levels cost gold; deeper levels cost Renown.
+      </p>
+      <div className="row" style={{ justifyContent: 'center', marginBottom: 10 }}>
+        <RaidTorchSprite
+          lit={raidsUnlocked}
+          height={64}
+          title={raidsUnlocked ? 'Raid Charter purchased' : 'Raid Charter not yet purchased'}
+        />
       </div>
-      {open && (
-        <div className="hero-card-details">
-          <p className="tiny muted" style={{ marginBottom: 8 }}>
-            Raid-only bonuses -- these never affect regular quests, and quest upgrades never affect raids either.
-            Early levels cost gold; deeper levels cost Renown.
-          </p>
-          <div className="grid two">
-            {GuildManager.raidUpgrades().map((def) => <RaidUpgradeCard key={def.id} def={def} />)}
+      <div className="grid two">
+        {speedDef && (
+          <div>
+            <div className="row" style={{ justifyContent: 'center', marginBottom: 6 }}>
+              <RaidRoomSprite kind="rack" level={roomSpriteLevel(speedDef, GuildManager.raidUpgradeLevel(state, speedDef.id))} height={56} title={speedDef.name} />
+            </div>
+            <RaidUpgradeCard def={speedDef} />
           </div>
-        </div>
-      )}
+        )}
+        {lootDef && (
+          <div>
+            <div className="row" style={{ justifyContent: 'center', marginBottom: 6 }}>
+              <RaidRoomSprite kind="skull" level={roomSpriteLevel(lootDef, GuildManager.raidUpgradeLevel(state, lootDef.id))} height={56} title={lootDef.name} />
+            </div>
+            <RaidUpgradeCard def={lootDef} />
+          </div>
+        )}
+        {recoveryDef && (
+          <div>
+            <div className="row" style={{ justifyContent: 'center', marginBottom: 6 }}>
+              <RaidRoomSprite kind="shelf" level={roomSpriteLevel(recoveryDef, GuildManager.raidUpgradeLevel(state, recoveryDef.id))} height={56} title={recoveryDef.name} />
+            </div>
+            <RaidUpgradeCard def={recoveryDef} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -418,7 +470,7 @@ export function RaidsPanel() {
         Multi-hero expeditions. Big rewards, long odds, and everyone comes home a little worse for wear -- win or lose.
       </p>
 
-      <RaidUpgradesSection />
+      <RaidQuartermasterDen />
 
       {state.activeRaid && <ActiveRaidCard />}
       {RAIDS.filter((r) => r.id !== state.activeRaid?.raidId).map((r) => (

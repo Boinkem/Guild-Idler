@@ -31,6 +31,42 @@ export const RAID_UPGRADES: RaidUpgradeDef[] = [
     renownCostGrowth: Tuning.get('raid_speed.renownCostGrowth'),
     maxLevel: Tuning.get('raid_speed.maxLevel'),
   },
+  /**
+   * These two are NOT yet wired into the tuning registry -- hardcoded here
+   * deliberately rather than guessing at tuning.json's structure without
+   * having that file in hand. Moving them onto Tuning.get() calls later is
+   * a small, low-risk follow-up, same mechanical shape as raid_speed above.
+   *
+   * Both are built with exactly 3 levels (0-2) on purpose, to match the
+   * 3-image sprite progression in the Raid Quartermaster's Den 1:1 with no
+   * banding needed -- unlike raid_speed's existing 10-level curve, which
+   * predates this visual system and gets banded onto the same 3 states
+   * instead (see roomSpriteLevel in RaidsPanel.tsx).
+   */
+  {
+    id: 'raid_loot',
+    name: 'Raid Loot',
+    description: 'Better odds and richer hauls from every raid encounter -- the difference between an empty vault and one worth the trip.',
+    modsPerLevel: { loot: 10, gold: 12 },
+    goldBaseCost: 6000,
+    goldCostGrowth: 2.0,
+    goldTierMaxLevel: 1,
+    renownBaseCost: 12,
+    renownCostGrowth: 1.5,
+    maxLevel: 2,
+  },
+  {
+    id: 'raid_recovery',
+    name: 'Raid Recovery',
+    description: 'Better field triage and hardier gear -- heroes come back from raids in noticeably better shape.',
+    modsPerLevel: { injuryResist: 18 },
+    goldBaseCost: 5500,
+    goldCostGrowth: 2.0,
+    goldTierMaxLevel: 1,
+    renownBaseCost: 11,
+    renownCostGrowth: 1.5,
+    maxLevel: 2,
+  },
 ];
 
 export const RAID_UPGRADE_BY_ID: Record<string, RaidUpgradeDef> = Object.fromEntries(
