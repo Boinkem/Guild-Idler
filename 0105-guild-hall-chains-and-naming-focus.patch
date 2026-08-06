@@ -1,0 +1,147 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index e9a5855..0138725 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -27,7 +27,12 @@ guild-wide bonuses, gold storage.
+ **Quest chains** — 19 total. 17 rewritten in the current narrative style
+ (vivid/scene-painting); `world_ender` and the Last God successor content
+ match that style natively. Chain prerequisite gating exists
+-(`requiresChainId`) — 8 confirmed dependencies wired in.
++(`requiresChainId`) — 8 confirmed dependencies wired in. Chain info lives
++only in the Quest tab (Discovered Quests, board-driven) and the Lore tab
++(Story, full history/roadmap) -- `GuildPanel.tsx` had its own leftover
++"Quest chains" list from before the Quest Tab rework, listing every chain
++by name regardless of discovery state; removed (patch 0105) since it was
++both a duplicate and a minor spoiler.
+ 
+ **Raids** — 5 total: Blackford Keep (8) -> The Frozen Wyrmkeep (18) ->
+ Bonewrought Vault (22) -> What Got Out (26, gated by completing the
+@@ -112,6 +117,19 @@ raid fight).
+   `OnboardingTour` and `ChainDiscoveryModal` in `MenuWindow.tsx` now also
+   require `guildName !== ''`, matching the guard App.tsx's own modals
+   already had.
++- ~~Guild-naming modal unresponsive to typing after a hard reset~~ --
++  resolved (patch 0105). The modal itself was fine; its input's plain
++  `autoFocus` prop was losing a focus race specifically on the reset path.
++  "Start a new guild" (StatsPanel) calls `hardReset()` from inside a
++  `window.confirm()` handler, and Chromium is still mid-way through
++  returning window focus from that just-closed native dialog the instant
++  the modal mounts -- a same-tick `.focus()` call (which is all `autoFocus`
++  does) loses that race silently, so the input never actually receives
++  keyboard focus even though it renders correctly. A genuinely fresh save
++  has no preceding `confirm()` call, which is why this only ever showed up
++  after a reset. Fixed by focusing explicitly via a ref, one
++  `requestAnimationFrame` after mount, landing after the dialog's own
++  focus restoration settles.
+ 
+ ---
+ 
+diff --git a/src/ui/GuildNamingModal.tsx b/src/ui/GuildNamingModal.tsx
+index 20d7f71..b15c91d 100644
+--- a/src/ui/GuildNamingModal.tsx
++++ b/src/ui/GuildNamingModal.tsx
+@@ -1,4 +1,4 @@
+-import { useEffect, useState } from 'react';
++import { useEffect, useRef, useState } from 'react';
+ import { useEngine } from './useEngine';
+ 
+ /**
+@@ -17,6 +17,7 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => void })
+   const engine = useEngine();
+   const [draft, setDraft] = useState('');
+   const unnamed = engine.state.guildName === '';
++  const inputRef = useRef<HTMLInputElement>(null);
+ 
+   // Forces full menu size before this modal has to render at all -- lives
+   // here rather than in App.tsx specifically because this component
+@@ -31,6 +32,21 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => void })
+     if (unnamed) onNeedsSpace();
+   }, [unnamed, onNeedsSpace]);
+ 
++  // Explicit, delayed focus instead of the input's own `autoFocus`.
++  // autoFocus fires synchronously in the same tick this modal mounts --
++  // fine for a genuinely fresh save, but "Start a new guild" in StatsPanel
++  // calls hardReset() from inside a window.confirm() handler, and Chromium
++  // is still in the middle of returning window focus from that just-closed
++  // native dialog at that exact instant. A same-tick .focus() call loses
++  // that race silently: the modal renders correctly, but the input never
++  // actually receives keyboard focus, and typing does nothing. One rAF is
++  // enough to land after the dialog's own focus restoration settles.
++  useEffect(() => {
++    if (!unnamed) return undefined;
++    const raf = requestAnimationFrame(() => inputRef.current?.focus());
++    return () => cancelAnimationFrame(raf);
++  }, [unnamed]);
++
+   if (!unnamed) return null;
+ 
+   const trimmed = draft.trim();
+@@ -70,11 +86,11 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => void })
+         <div className="row" style={{ gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 12 }}>
+           <span className="tiny muted">Guild -</span>
+           <input
++            ref={inputRef}
+             type="text"
+             value={draft}
+             placeholder="Ironclad"
+             maxLength={24}
+-            autoFocus
+             onChange={(e) => setDraft(e.target.value)}
+             onKeyDown={(e) => { if (e.key === 'Enter') confirm(); }}
+             style={{
+diff --git a/src/ui/panels/GuildPanel.tsx b/src/ui/panels/GuildPanel.tsx
+index 26fc791..e5e31e7 100644
+--- a/src/ui/panels/GuildPanel.tsx
++++ b/src/ui/panels/GuildPanel.tsx
+@@ -1,8 +1,6 @@
+ import { useEngine } from '../useEngine';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+-import { CHAIN_BY_ID } from '../../game/managers/QuestManager';
+-import { QUEST_CHAINS } from '../../game/data/quests';
+ import { describeMods, formatGold } from '../../game/util';
+ import { MaxFlash, useMaxFlash } from '../maxFlash';
+ 
+@@ -56,42 +54,6 @@ export function GuildPanel() {
+           );
+         })}
+       </div>
+-
+-      <div className="section-heading">Quest chains</div>
+-      {!ModifierManager.hasUnlock(state, 'chains') && (
+-        <p className="small muted">Buy the Guild Charter upgrade to take on multi-day expeditions.</p>
+-      )}
+-      {QUEST_CHAINS.map((chain) => {
+-        const active = state.activeChains.find((c) => c.chainId === chain.id);
+-        const done = state.completedChains.includes(chain.id);
+-        const stage = done ? chain.stages.length : active?.stage ?? 0;
+-        return (
+-          <div key={chain.id} className={`card ${done ? '' : 'chain'}`}>
+-            <div className="spread">
+-              <span className="card-title">{chain.name}</span>
+-              <span className="small muted">
+-                {done ? 'Completed' : `Stage ${stage + 1} of ${chain.stages.length}`}
+-              </span>
+-            </div>
+-            <p className="card-flavour">{chain.description}</p>
+-            <div className="bar" style={{ marginBottom: 6 }}>
+-              <span style={{ width: `${(stage / chain.stages.length) * 100}%` }} />
+-            </div>
+-            <div className="tiny muted">
+-              Requires level {chain.reqLevel} · Completion reward {formatGold(chain.rewardGold)} gold,
+-              {' '}{chain.rewardRenown} renown, and unique gear
+-              {active && active.failedStages > 0 ? ` · ${active.failedStages} failed attempts` : ''}
+-            </div>
+-            <div className="tiny muted" style={{ marginTop: 4 }}>
+-              {CHAIN_BY_ID[chain.id].stages.map((s, i) => (
+-                <span key={s.name} style={{ marginRight: 8, color: i < stage ? 'var(--moss)' : undefined }}>
+-                  {i < stage ? '✔' : '·'} {s.name}
+-                </span>
+-              ))}
+-            </div>
+-          </div>
+-        );
+-      })}
+     </>
+   );
+ }

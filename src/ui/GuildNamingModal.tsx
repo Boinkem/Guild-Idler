@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
 
 /**
@@ -17,6 +17,7 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => void })
   const engine = useEngine();
   const [draft, setDraft] = useState('');
   const unnamed = engine.state.guildName === '';
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Forces full menu size before this modal has to render at all -- lives
   // here rather than in App.tsx specifically because this component
@@ -30,6 +31,21 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => void })
   useEffect(() => {
     if (unnamed) onNeedsSpace();
   }, [unnamed, onNeedsSpace]);
+
+  // Explicit, delayed focus instead of the input's own `autoFocus`.
+  // autoFocus fires synchronously in the same tick this modal mounts --
+  // fine for a genuinely fresh save, but "Start a new guild" in StatsPanel
+  // calls hardReset() from inside a window.confirm() handler, and Chromium
+  // is still in the middle of returning window focus from that just-closed
+  // native dialog at that exact instant. A same-tick .focus() call loses
+  // that race silently: the modal renders correctly, but the input never
+  // actually receives keyboard focus, and typing does nothing. One rAF is
+  // enough to land after the dialog's own focus restoration settles.
+  useEffect(() => {
+    if (!unnamed) return undefined;
+    const raf = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(raf);
+  }, [unnamed]);
 
   if (!unnamed) return null;
 
@@ -70,11 +86,11 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => void })
         <div className="row" style={{ gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 12 }}>
           <span className="tiny muted">Guild -</span>
           <input
+            ref={inputRef}
             type="text"
             value={draft}
             placeholder="Ironclad"
             maxLength={24}
-            autoFocus
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') confirm(); }}
             style={{

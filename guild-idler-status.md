@@ -27,7 +27,12 @@ guild-wide bonuses, gold storage.
 **Quest chains** — 19 total. 17 rewritten in the current narrative style
 (vivid/scene-painting); `world_ender` and the Last God successor content
 match that style natively. Chain prerequisite gating exists
-(`requiresChainId`) — 8 confirmed dependencies wired in.
+(`requiresChainId`) — 8 confirmed dependencies wired in. Chain info lives
+only in the Quest tab (Discovered Quests, board-driven) and the Lore tab
+(Story, full history/roadmap) -- `GuildPanel.tsx` had its own leftover
+"Quest chains" list from before the Quest Tab rework, listing every chain
+by name regardless of discovery state; removed (patch 0105) since it was
+both a duplicate and a minor spoiler.
 
 **Raids** — 5 total: Blackford Keep (8) -> The Frozen Wyrmkeep (18) ->
 Bonewrought Vault (22) -> What Got Out (26, gated by completing the
@@ -112,6 +117,19 @@ raid fight).
   `OnboardingTour` and `ChainDiscoveryModal` in `MenuWindow.tsx` now also
   require `guildName !== ''`, matching the guard App.tsx's own modals
   already had.
+- ~~Guild-naming modal unresponsive to typing after a hard reset~~ --
+  resolved (patch 0105). The modal itself was fine; its input's plain
+  `autoFocus` prop was losing a focus race specifically on the reset path.
+  "Start a new guild" (StatsPanel) calls `hardReset()` from inside a
+  `window.confirm()` handler, and Chromium is still mid-way through
+  returning window focus from that just-closed native dialog the instant
+  the modal mounts -- a same-tick `.focus()` call (which is all `autoFocus`
+  does) loses that race silently, so the input never actually receives
+  keyboard focus even though it renders correctly. A genuinely fresh save
+  has no preceding `confirm()` call, which is why this only ever showed up
+  after a reset. Fixed by focusing explicitly via a ref, one
+  `requestAnimationFrame` after mount, landing after the dialog's own
+  focus restoration settles.
 
 ---
 
