@@ -150,13 +150,14 @@
       "Binding Ward",
       "Curse of Hollowmere",
       "Sealed Gate",
-      "Witch\\'s Pact"
+      "Witch's Pact"
     ],
     "flavour": [
       "The scholars have theories. You have a sword.",
       "Undo it carefully or not at all.",
       "The old words still hold. Barely."
-    ]
+    ],
+    "minDifficulty": "easy"
   },
   {
     "verb": "Raid",
