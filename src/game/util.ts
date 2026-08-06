@@ -1,4 +1,4 @@
-import { Modifiers, Rarity, ZERO_MODS } from './types';
+import { Modifiers, Rarity, Stats, ZERO_MODS } from './types';
 
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;
@@ -95,4 +95,18 @@ export function describeMods(mods: Partial<Modifiers>): string[] {
   return (Object.keys(MOD_LABEL) as (keyof Modifiers)[])
     .filter((key) => (mods[key] ?? 0) !== 0)
     .map((key) => `${MOD_LABEL[key]} ${pct(mods[key] ?? 0)}`);
+}
+
+export const STAT_LABEL: Record<keyof Stats, string> = {
+  strength: 'Strength',
+  endurance: 'Endurance',
+  luck: 'Luck',
+  wisdom: 'Wisdom',
+};
+
+/** Enchanting's own flat (non-percentage) bonuses -- see EquipmentItem.enchantStats. */
+export function describeStats(stats: Partial<Stats>): string[] {
+  return (Object.keys(STAT_LABEL) as (keyof Stats)[])
+    .filter((key) => (stats[key] ?? 0) !== 0)
+    .map((key) => `${STAT_LABEL[key]} +${stats[key]}`);
 }

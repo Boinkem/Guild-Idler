@@ -8,7 +8,7 @@ import { EQUIPMENT_BY_ID, ITEM_SETS } from '../../game/data/equipment';
 import { CONSUMABLE_BY_ID } from '../../game/data/items';
 import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
-import { describeMods, formatGold, RARITY_COLOR } from '../../game/util';
+import { describeMods, describeStats, formatGold, RARITY_COLOR } from '../../game/util';
 
 const SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet'];
 
@@ -229,6 +229,9 @@ function SlotCard({
         <div className="item-card-details">
           <div className="tiny muted">{slot} · requires level {def.reqLevel}</div>
           <div className="tiny muted" style={{ marginTop: 2 }}>{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
+          {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
+            <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
+          )}
           <DurabilityBar item={item} />
           <div className="row wrap" style={{ marginTop: 6 }}>
             <button
@@ -287,6 +290,9 @@ function StashCard({
         <div className="item-card-details">
           <div className="tiny muted">{def.slot} · requires level {def.reqLevel}</div>
           <div className="tiny muted" style={{ marginTop: 2 }}>{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
+          {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
+            <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
+          )}
           <DurabilityBar item={item} />
           <div className="row wrap" style={{ marginTop: 6 }}>
             <button

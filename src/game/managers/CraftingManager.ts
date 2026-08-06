@@ -1,4 +1,4 @@
-import { CraftingRecipeDef, GameState, MaterialId, Modifiers } from '../types';
+import { CraftingRecipeDef, GameState, MaterialId, Modifiers, Stats } from '../types';
 import { CRAFTING_RECIPE_BY_ID } from '../data/craftingRecipes';
 import { EquipmentManager } from './EquipmentManager';
 import { InventoryManager } from './InventoryManager';
@@ -59,6 +59,39 @@ export const CraftingManager = {
       state.materials[materialId] -= amount;
     }
     InventoryManager.add(state, recipe.resultConsumableId, 1);
+    return null;
+  },
+
+  /**
+   * Enchants an item the player already owns (stash or equipped, same
+   * search scope as EquipmentManager.repair uses) with `chosenStats`,
+   * additive with anything it's already been enchanted with -- see
+   * EquipmentItem.enchantStats's own comment for why this adds rather
+   * than replaces, unlike a gear recipe's customMods.
+   */
+  enchantItem(state: GameState, recipeId: string, itemUid: string, chosenStats: (keyof Stats)[]): string | null {
+    const recipe = CRAFTING_RECIPE_BY_ID[recipeId];
+    if (!recipe || recipe.category !== 'enchant') return 'Unknown recipe.';
+    const statsToPick = recipe.statsToPick ?? 0;
+    const statOptions = recipe.statOptions ?? [];
+    if (chosenStats.length !== statsToPick) return `Pick exactly ${statsToPick} stat${statsToPick === 1 ? '' : 's'}.`;
+    if (new Set(chosenStats).size !== chosenStats.length) return 'Each stat can only be picked once.';
+    if (chosenStats.some((s) => !statOptions.includes(s))) return 'One of those stats isn\u2019t available on this recipe.';
+    const found = EquipmentManager.allItems(state).find((e) => e.item.uid === itemUid);
+    if (!found) return 'That item can\u2019t be found.';
+    const afford = CraftingManager.affordability(state, recipe);
+    if (!afford.ok) return afford.reason ?? 'Cannot afford this.';
+
+    const item = found.item;
+    const updated: Partial<Stats> = { ...item.enchantStats };
+    for (const s of chosenStats) updated[s] = (updated[s] ?? 0) + (recipe.statValue ?? 0);
+    item.enchantStats = updated;
+
+    state.gold -= recipe.goldCost;
+    state.stats.goldSpent += recipe.goldCost;
+    for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
+      state.materials[materialId] -= amount;
+    }
     return null;
   },
 };

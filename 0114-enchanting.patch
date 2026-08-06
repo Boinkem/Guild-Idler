@@ -1,0 +1,504 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 6e2da2e..495048e 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -179,6 +179,26 @@ raid fight).
+   this was an unrelated icon edit). Added `shield` to the enum; the
+   frontend dropdown renders straight from this same schema, so one fix
+   covered the missing option and the validation failure together.
++- **Every CSS animation in the game plays instantly, no visible motion at
++  all -- root cause still unknown.** First noticed via Harvest's
++  fall-in/collect-particle effects (patches 0112/0113 chased two real but
++  ultimately unrelated leads there: a hardcoded duration not respecting
++  `--anim-speed`, and an off-screen animation start -- both legitimate
++  fixes, neither was the actual cause). Confirmed NOT specific to Harvest:
++  the pre-existing quest-completion gold/XP particle burst
++  (`QuestResultModal`, `collect-fly`) does the exact same thing --
++  appears/vanishes instantly instead of flying and fading. Confirmed NOT
++  the in-game Settings > Reduce Motion toggle (checked, it's off) and the
++  player doesn't believe a Windows power-saving mode is active. Since
++  every animation-duration in the app funnels through one global
++  mechanism (`@media (prefers-reduced-motion: reduce)` and/or
++  `:root[data-motion='off']`, both forcing `animation-duration: 0.001ms
++  !important` in `app.css`), whatever's triggering this is almost
++  certainly one of those two matching when it shouldn't -- worth checking
++  Windows' Ease of Access > Visual effects > "Show animations" setting
++  specifically (a different toggle from power mode), and/or actually
++  inspecting the live DOM's `:root` for `data-motion`/computed
++  `prefers-reduced-motion` state via DevTools next time this comes up.
+ 
+ ---
+ 
+@@ -254,7 +274,7 @@ loadout picked at send time. One follow-up worth a look next time
+   enough to want its own dedicated pass rather than folding into
+   whatever else is in flight.
+ 
+-### Harvest/Gathering + Crafting -- built (patch 0111)
++### Harvest/Gathering + Crafting -- built (patch 0111, Enchanting added 0114)
+ Started as the one-line "Off-mission engagement" bullet, scoped across a
+ few conversations, then built end to end: types, data, both managers,
+ engine wiring, save migration, and a real UI. `npx tsc --noEmit` and a
+@@ -299,6 +319,27 @@ including migrating a save that predates all of this entirely.
+   your own stat spread" only makes sense for something you keep.
+   Crafting always succeeds (no roll) and costs gold *and* materials --
+   the real sink for Trade Route's gold faucet, not a separate mechanism.
++- **Enchanting**, added alongside Crafting rather than as a separate
++  feature -- a third recipe category (`CraftingRecipeDef.category ===
++  'enchant'`) that modifies an item the player already owns instead of
++  producing a new one. One recipe so far, Minor Sigil (herbs+ore+300g):
++  pick 1 of strength/endurance/luck/wisdom at +3, additive on
++  `EquipmentItem.enchantStats` -- stacks with itself (a second enchant on
++  the same stat adds rather than overwrites) and with the item's own base
++  `stats`, unlike a gear recipe's `customMods` which replaces the def's
++  `mods` outright. `HeroManager.equipmentStats` folds this in
++  automatically. Item search (stash or equipped) reuses
++  `EquipmentManager.allItems`, the same scope `repair()` already uses.
++- **Crafting's UI is now grouped by vendor** -- Blacksmith (gear),
++  Alchemist (consumables), Enchanter (enchanting), each with its own
++  `VendorSprite` header pulled from the existing vendor art system
++  (`public/vendors/`, gitignored/licensed -- renders nothing rather than
++  a broken image if that art isn't present locally, same convention as
++  everywhere else). These are the same three vendors Guild Upgrades
++  already has its own separate relationship with (permanent stat
++  upgrades, gold-only) -- Crafting doesn't touch that vendor-leveling
++  system at all, just borrows their sprites and names for its own,
++  unrelated recipes.
+ - Every numeric knob (spawn interval, despawn window, bonus odds/
+   multiplier, yield, sell price, all four tools' and the Warehouse's cost
+   curves) reads from the tuning registry from day one -- 34 new entries,
+diff --git a/src/game/data/craftingRecipes.ts b/src/game/data/craftingRecipes.ts
+index 5a0d4c4..398d94a 100644
+--- a/src/game/data/craftingRecipes.ts
++++ b/src/game/data/craftingRecipes.ts
+@@ -2,13 +2,15 @@ import { CraftingRecipeDef } from '../types';
+ 
+ /**
+  * Crafting recipes, cross-node by category rather than per-item -- a ring
+- * never needs Fish. Gear recipes are the flagship of the two: they produce
+- * a fresh EquipmentItem with player-chosen customMods (see
+- * EquipmentItem.customMods) instead of a fixed roll, which is the actual
+- * reason to craft rather than just farm or buy -- choice instead of RNG.
+- * Consumable recipes are simpler on purpose: materials+gold standing in
+- * for the shop's gold-only price, no per-craft customization, since
+- * "choose your own stat spread" only makes sense for something you keep.
++ * never needs Fish. Gear recipes produce a fresh EquipmentItem with
++ * player-chosen customMods (see EquipmentItem.customMods) instead of a
++ * fixed roll -- the actual reason to craft rather than just farm or buy,
++ * choice instead of RNG. Consumable recipes are simpler on purpose:
++ * materials+gold standing in for the shop's gold-only price, no
++ * customization, since "choose your own stat spread" only makes sense for
++ * something you keep. Enchant recipes are a third shape again -- they
++ * modify an item the player already owns (additive enchantStats, see
++ * that field's comment in types.ts) rather than producing anything new.
+  *
+  * Both craftable gear bases (guildmade_blade, guildmade_band) live in
+  * equipment.json with an empty `mods` object and `craftable: true` -- see
+@@ -58,6 +60,17 @@ export const CRAFTING_RECIPES: CraftingRecipeDef[] = [
+     goldCost: 25,
+     resultConsumableId: 'healing_potion',
+   },
++  {
++    id: 'enchant_minor_sigil',
++    name: 'Minor Sigil',
++    description: 'A working the Enchanter presses into a piece already carried, rather than anything built from scratch.',
++    category: 'enchant',
++    materialCost: { herbs: 15, ore: 10 },
++    goldCost: 300,
++    statOptions: ['strength', 'endurance', 'luck', 'wisdom'],
++    statsToPick: 1,
++    statValue: 3,
++  },
+ ];
+ 
+ export const CRAFTING_RECIPE_BY_ID: Record<string, CraftingRecipeDef> = Object.fromEntries(
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 800c3be..cf12f0e 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -1,4 +1,4 @@
+-import { ActiveQuest, GameState, Hero, HeroClass, MaterialId, Modifiers, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult } from './types';
++import { ActiveQuest, GameState, Hero, HeroClass, MaterialId, Modifiers, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Stats } from './types';
+ import { createRng, uid } from './rng';
+ import { HeroManager } from './managers/HeroManager';
+ import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
+@@ -984,6 +984,14 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  enchantItem(recipeId: string, itemUid: string, chosenStats: (keyof Stats)[]) {
++    const error = CraftingManager.enchantItem(this.state, recipeId, itemUid, chosenStats);
++    if (error) return this.say(error);
++    playSound('purchase');
++    this.say('The Enchanter\u2019s work takes -- the piece carries it now.');
++    void this.saveNow();
++  }
++
+   recruit(heroClass: HeroClass) {
+     // Checked here rather than relying on GuildManager's own error, so the
+     // message can point at the actual fix (upgrades or a Renown perk)
+diff --git a/src/game/managers/CraftingManager.ts b/src/game/managers/CraftingManager.ts
+index 28fa1b9..1cc3482 100644
+--- a/src/game/managers/CraftingManager.ts
++++ b/src/game/managers/CraftingManager.ts
+@@ -1,4 +1,4 @@
+-import { CraftingRecipeDef, GameState, MaterialId, Modifiers } from '../types';
++import { CraftingRecipeDef, GameState, MaterialId, Modifiers, Stats } from '../types';
+ import { CRAFTING_RECIPE_BY_ID } from '../data/craftingRecipes';
+ import { EquipmentManager } from './EquipmentManager';
+ import { InventoryManager } from './InventoryManager';
+@@ -61,4 +61,37 @@ export const CraftingManager = {
+     InventoryManager.add(state, recipe.resultConsumableId, 1);
+     return null;
+   },
++
++  /**
++   * Enchants an item the player already owns (stash or equipped, same
++   * search scope as EquipmentManager.repair uses) with `chosenStats`,
++   * additive with anything it's already been enchanted with -- see
++   * EquipmentItem.enchantStats's own comment for why this adds rather
++   * than replaces, unlike a gear recipe's customMods.
++   */
++  enchantItem(state: GameState, recipeId: string, itemUid: string, chosenStats: (keyof Stats)[]): string | null {
++    const recipe = CRAFTING_RECIPE_BY_ID[recipeId];
++    if (!recipe || recipe.category !== 'enchant') return 'Unknown recipe.';
++    const statsToPick = recipe.statsToPick ?? 0;
++    const statOptions = recipe.statOptions ?? [];
++    if (chosenStats.length !== statsToPick) return `Pick exactly ${statsToPick} stat${statsToPick === 1 ? '' : 's'}.`;
++    if (new Set(chosenStats).size !== chosenStats.length) return 'Each stat can only be picked once.';
++    if (chosenStats.some((s) => !statOptions.includes(s))) return 'One of those stats isn\u2019t available on this recipe.';
++    const found = EquipmentManager.allItems(state).find((e) => e.item.uid === itemUid);
++    if (!found) return 'That item can\u2019t be found.';
++    const afford = CraftingManager.affordability(state, recipe);
++    if (!afford.ok) return afford.reason ?? 'Cannot afford this.';
++
++    const item = found.item;
++    const updated: Partial<Stats> = { ...item.enchantStats };
++    for (const s of chosenStats) updated[s] = (updated[s] ?? 0) + (recipe.statValue ?? 0);
++    item.enchantStats = updated;
++
++    state.gold -= recipe.goldCost;
++    state.stats.goldSpent += recipe.goldCost;
++    for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
++      state.materials[materialId] -= amount;
++    }
++    return null;
++  },
+ };
+diff --git a/src/game/managers/HeroManager.ts b/src/game/managers/HeroManager.ts
+index 849f092..fb51139 100644
+--- a/src/game/managers/HeroManager.ts
++++ b/src/game/managers/HeroManager.ts
+@@ -66,18 +66,21 @@ export const HeroManager = {
+     return gained;
+   },
+ 
+-  /** Stats coming from equipped, unbroken gear. */
++  /** Stats coming from equipped, unbroken gear -- including any Enchanting on top. */
+   equipmentStats(hero: Hero): Stats {
+     const total: Stats = { strength: 0, endurance: 0, luck: 0, wisdom: 0 };
+     for (const item of Object.values(hero.equipment)) {
+       if (!item || item.durability <= 0) continue;
+       const def = EQUIPMENT_BY_ID[item.defId];
+-      if (!def?.stats) continue;
++      if (!def) continue;
+       const scale = 1 + item.plus * 0.15;
+-      total.strength += (def.stats.strength ?? 0) * scale;
+-      total.endurance += (def.stats.endurance ?? 0) * scale;
+-      total.luck += (def.stats.luck ?? 0) * scale;
+-      total.wisdom += (def.stats.wisdom ?? 0) * scale;
++      const base = def.stats;
++      const enchant = item.enchantStats;
++      if (!base && !enchant) continue;
++      total.strength += ((base?.strength ?? 0) + (enchant?.strength ?? 0)) * scale;
++      total.endurance += ((base?.endurance ?? 0) + (enchant?.endurance ?? 0)) * scale;
++      total.luck += ((base?.luck ?? 0) + (enchant?.luck ?? 0)) * scale;
++      total.wisdom += ((base?.wisdom ?? 0) + (enchant?.wisdom ?? 0)) * scale;
+     }
+     return total;
+   },
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 1ada89f..45d6537 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -135,6 +135,14 @@ export interface EquipmentItem {
+    * whether a given item came from crafting or not beyond that one check.
+    */
+   customMods?: Partial<Modifiers>;
++  /**
++   * Set by Enchanting -- additive on top of whatever the def's own `stats`
++   * already give (unlike customMods, which replaces rather than adds; an
++   * enchantment is a modification of an item you already own, not a fresh
++   * roll, so it stacks with what was already there). See
++   * HeroManager.equipmentStats for where this actually gets applied.
++   */
++  enchantStats?: Partial<Stats>;
+ }
+ 
+ export interface ItemSet {
+@@ -696,7 +704,7 @@ export interface CraftingRecipeDef {
+   id: string;
+   name: string;
+   description: string;
+-  category: 'gear' | 'consumable';
++  category: 'gear' | 'consumable' | 'enchant';
+   materialCost: Partial<Record<MaterialId, number>>;
+   goldCost: number;
+   /** `gear` recipes only -- the craftable EquipmentDef this recipe produces. */
+@@ -709,4 +717,10 @@ export interface CraftingRecipeDef {
+   modValue?: number;
+   /** `consumable` recipes only -- the ConsumableDef this recipe produces. */
+   resultConsumableId?: string;
++  /** `enchant` recipes only -- the eligible stat pool the player picks from. */
++  statOptions?: (keyof Stats)[];
++  /** `enchant` recipes only -- how many of statOptions the player picks. */
++  statsToPick?: number;
++  /** `enchant` recipes only -- fixed strength applied to each picked stat, additive with anything already enchanted. */
++  statValue?: number;
+ }
+diff --git a/src/game/util.ts b/src/game/util.ts
+index 11c728c..2cba2ff 100644
+--- a/src/game/util.ts
++++ b/src/game/util.ts
+@@ -1,4 +1,4 @@
+-import { Modifiers, Rarity, ZERO_MODS } from './types';
++import { Modifiers, Rarity, Stats, ZERO_MODS } from './types';
+ 
+ export const MINUTE = 60_000;
+ export const HOUR = 60 * MINUTE;
+@@ -96,3 +96,17 @@ export function describeMods(mods: Partial<Modifiers>): string[] {
+     .filter((key) => (mods[key] ?? 0) !== 0)
+     .map((key) => `${MOD_LABEL[key]} ${pct(mods[key] ?? 0)}`);
+ }
++
++export const STAT_LABEL: Record<keyof Stats, string> = {
++  strength: 'Strength',
++  endurance: 'Endurance',
++  luck: 'Luck',
++  wisdom: 'Wisdom',
++};
++
++/** Enchanting's own flat (non-percentage) bonuses -- see EquipmentItem.enchantStats. */
++export function describeStats(stats: Partial<Stats>): string[] {
++  return (Object.keys(STAT_LABEL) as (keyof Stats)[])
++    .filter((key) => (stats[key] ?? 0) !== 0)
++    .map((key) => `${STAT_LABEL[key]} +${stats[key]}`);
++}
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index fb2b7cb..12c933a 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -8,7 +8,7 @@ import { EQUIPMENT_BY_ID, ITEM_SETS } from '../../game/data/equipment';
+ import { CONSUMABLE_BY_ID } from '../../game/data/items';
+ import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+-import { describeMods, formatGold, RARITY_COLOR } from '../../game/util';
++import { describeMods, describeStats, formatGold, RARITY_COLOR } from '../../game/util';
+ 
+ const SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet'];
+ 
+@@ -229,6 +229,9 @@ function SlotCard({
+         <div className="item-card-details">
+           <div className="tiny muted">{slot} · requires level {def.reqLevel}</div>
+           <div className="tiny muted" style={{ marginTop: 2 }}>{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
++          {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
++            <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
++          )}
+           <DurabilityBar item={item} />
+           <div className="row wrap" style={{ marginTop: 6 }}>
+             <button
+@@ -287,6 +290,9 @@ function StashCard({
+         <div className="item-card-details">
+           <div className="tiny muted">{def.slot} · requires level {def.reqLevel}</div>
+           <div className="tiny muted" style={{ marginTop: 2 }}>{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
++          {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
++            <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
++          )}
+           <DurabilityBar item={item} />
+           <div className="row wrap" style={{ marginTop: 6 }}>
+             <button
+diff --git a/src/ui/panels/HarvestPanel.tsx b/src/ui/panels/HarvestPanel.tsx
+index aeb2217..4058e91 100644
+--- a/src/ui/panels/HarvestPanel.tsx
++++ b/src/ui/panels/HarvestPanel.tsx
+@@ -8,10 +8,14 @@ import {
+ } from '../../game/data/harvestUpgrades';
+ import { HarvestManager } from '../../game/managers/HarvestManager';
+ import { CraftingManager } from '../../game/managers/CraftingManager';
++import { EquipmentManager } from '../../game/managers/EquipmentManager';
+ import { CRAFTING_RECIPES } from '../../game/data/craftingRecipes';
+-import { CraftingRecipeDef, MaterialId, Modifiers } from '../../game/types';
++import { VENDORS } from '../../game/data/progression';
++import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
++import { CraftingRecipeDef, MaterialId, Modifiers, Stats, VendorId } from '../../game/types';
+ import { formatGold } from '../../game/util';
+ import { MaxFlash, useMaxFlash } from '../maxFlash';
++import { VendorSprite } from '../sprites/VendorSprite';
+ 
+ type SubTab = 'warehouse' | MaterialId;
+ 
+@@ -224,11 +228,35 @@ function WarehouseTab() {
+       <TradeRouteCard />
+ 
+       <div className="section-heading">Crafting</div>
+-      {CRAFTING_RECIPES.map((recipe) => <RecipeCard key={recipe.id} recipe={recipe} />)}
++      <VendorSection vendorId="blacksmith" category="gear" />
++      <VendorSection vendorId="alchemist" category="consumable" />
++      <VendorSection vendorId="enchanter" category="enchant" />
+     </>
+   );
+ }
+ 
++/** One vendor's own little shopfront within Crafting -- sprite, blurb, and that category's recipe cards beneath. */
++function VendorSection({ vendorId, category }: { vendorId: VendorId; category: CraftingRecipeDef['category'] }) {
++  const vendor = VENDORS.find((v) => v.id === vendorId);
++  const recipes = CRAFTING_RECIPES.filter((r) => r.category === category);
++  if (!vendor || recipes.length === 0) return null;
++
++  return (
++    <div style={{ marginBottom: 14 }}>
++      <div className="card vendor-card" style={{ marginBottom: 8 }}>
++        <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
++          <VendorSprite vendor={vendorId} height={56} animate={false} />
++          <div style={{ flex: 1 }}>
++            <div className="card-title">{vendor.name}</div>
++            <p className="card-flavour">{vendor.blurb}</p>
++          </div>
++        </div>
++      </div>
++      {recipes.map((recipe) => <RecipeCard key={recipe.id} recipe={recipe} />)}
++    </div>
++  );
++}
++
+ function TradeRouteCard() {
+   const engine = useEngine();
+   const state = engine.state;
+@@ -273,27 +301,45 @@ function RecipeCard({ recipe }: { recipe: CraftingRecipeDef }) {
+   const engine = useEngine();
+   const state = engine.state;
+   const modsToPick = recipe.modsToPick ?? 0;
+-  const [chosen, setChosen] = useState<(keyof Modifiers)[]>([]);
++  const statsToPick = recipe.statsToPick ?? 0;
++  const [chosenMods, setChosenMods] = useState<(keyof Modifiers)[]>([]);
++  const [chosenStats, setChosenStats] = useState<(keyof Stats)[]>([]);
++  const [targetUid, setTargetUid] = useState('');
+   const afford = CraftingManager.affordability(state, recipe);
+ 
++  const enchantable = recipe.category === 'enchant' ? EquipmentManager.allItems(state) : [];
++
+   function toggleMod(mod: keyof Modifiers) {
+-    setChosen((prev) => {
++    setChosenMods((prev) => {
+       if (prev.includes(mod)) return prev.filter((m) => m !== mod);
+       if (prev.length >= modsToPick) return prev;
+       return [...prev, mod];
+     });
+   }
+ 
++  function toggleStat(stat: keyof Stats) {
++    setChosenStats((prev) => {
++      if (prev.includes(stat)) return prev.filter((s) => s !== stat);
++      if (prev.length >= statsToPick) return prev;
++      return [...prev, stat];
++    });
++  }
++
+   function handleCraft() {
+     if (recipe.category === 'gear') {
+-      engine.craftGear(recipe.id, chosen);
+-      setChosen([]);
++      engine.craftGear(recipe.id, chosenMods);
++      setChosenMods([]);
++    } else if (recipe.category === 'enchant') {
++      engine.enchantItem(recipe.id, targetUid, chosenStats);
++      setChosenStats([]);
+     } else {
+       engine.craftConsumable(recipe.id);
+     }
+   }
+ 
+-  const canCraft = afford.ok && (recipe.category !== 'gear' || chosen.length === modsToPick);
++  const canCraft = afford.ok
++    && (recipe.category !== 'gear' || chosenMods.length === modsToPick)
++    && (recipe.category !== 'enchant' || (chosenStats.length === statsToPick && targetUid !== ''));
+ 
+   return (
+     <div className="card" style={{ marginBottom: 8 }}>
+@@ -305,25 +351,62 @@ function RecipeCard({ recipe }: { recipe: CraftingRecipeDef }) {
+       </div>
+ 
+       {recipe.category === 'gear' && recipe.modOptions && (
+-        <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>
+-          {recipe.modOptions.map((mod) => (
+-            <button
+-              key={mod}
+-              className={chosen.includes(mod) ? 'btn-primary' : 'btn-ghost'}
+-              style={{ minHeight: 24, padding: '3px 8px' }}
+-              onClick={() => toggleMod(mod)}
+-            >
+-              +{recipe.modValue} {mod}
+-            </button>
+-          ))}
+-        </div>
++        <>
++          <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>
++            {recipe.modOptions.map((mod) => (
++              <button
++                key={mod}
++                className={chosenMods.includes(mod) ? 'btn-primary' : 'btn-ghost'}
++                style={{ minHeight: 24, padding: '3px 8px' }}
++                onClick={() => toggleMod(mod)}
++              >
++                +{recipe.modValue} {mod}
++              </button>
++            ))}
++          </div>
++          <p className="tiny muted" style={{ marginBottom: 8 }}>Pick {modsToPick} of the above.</p>
++        </>
+       )}
+-      {recipe.category === 'gear' && (
+-        <p className="tiny muted" style={{ marginBottom: 8 }}>Pick {modsToPick} of the above.</p>
++
++      {recipe.category === 'enchant' && recipe.statOptions && (
++        <>
++          <select
++            value={targetUid}
++            onChange={(e) => setTargetUid(e.target.value)}
++            style={{ width: '100%', marginBottom: 8 }}
++          >
++            <option value="">Choose an item to enchant&hellip;</option>
++            {enchantable.map(({ item, heroId }) => {
++              const def = EQUIPMENT_BY_ID[item.defId];
++              if (!def) return null;
++              const owner = heroId ? state.heroes.find((h) => h.id === heroId)?.name : 'Stash';
++              return (
++                <option key={item.uid} value={item.uid}>
++                  {def.name} ({owner ?? 'Stash'})
++                </option>
++              );
++            })}
++          </select>
++          <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>
++            {recipe.statOptions.map((stat) => (
++              <button
++                key={stat}
++                className={chosenStats.includes(stat) ? 'btn-primary' : 'btn-ghost'}
++                style={{ minHeight: 24, padding: '3px 8px' }}
++                onClick={() => toggleStat(stat)}
++              >
++                +{recipe.statValue} {stat}
++              </button>
++            ))}
++          </div>
++          <p className="tiny muted" style={{ marginBottom: 8 }}>
++            Pick {statsToPick} of the above. Stacks with anything already enchanted on that item.
++          </p>
++        </>
+       )}
+ 
+       <button className="btn-primary" disabled={!canCraft} onClick={handleCraft}>
+-        {afford.ok ? 'Craft' : afford.reason}
++        {afford.ok ? (recipe.category === 'enchant' ? 'Enchant' : 'Craft') : afford.reason}
+       </button>
+     </div>
+   );

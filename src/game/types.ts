@@ -135,6 +135,14 @@ export interface EquipmentItem {
    * whether a given item came from crafting or not beyond that one check.
    */
   customMods?: Partial<Modifiers>;
+  /**
+   * Set by Enchanting -- additive on top of whatever the def's own `stats`
+   * already give (unlike customMods, which replaces rather than adds; an
+   * enchantment is a modification of an item you already own, not a fresh
+   * roll, so it stacks with what was already there). See
+   * HeroManager.equipmentStats for where this actually gets applied.
+   */
+  enchantStats?: Partial<Stats>;
 }
 
 export interface ItemSet {
@@ -696,7 +704,7 @@ export interface CraftingRecipeDef {
   id: string;
   name: string;
   description: string;
-  category: 'gear' | 'consumable';
+  category: 'gear' | 'consumable' | 'enchant';
   materialCost: Partial<Record<MaterialId, number>>;
   goldCost: number;
   /** `gear` recipes only -- the craftable EquipmentDef this recipe produces. */
@@ -709,4 +717,10 @@ export interface CraftingRecipeDef {
   modValue?: number;
   /** `consumable` recipes only -- the ConsumableDef this recipe produces. */
   resultConsumableId?: string;
+  /** `enchant` recipes only -- the eligible stat pool the player picks from. */
+  statOptions?: (keyof Stats)[];
+  /** `enchant` recipes only -- how many of statOptions the player picks. */
+  statsToPick?: number;
+  /** `enchant` recipes only -- fixed strength applied to each picked stat, additive with anything already enchanted. */
+  statValue?: number;
 }

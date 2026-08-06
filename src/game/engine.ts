@@ -1,4 +1,4 @@
-import { ActiveQuest, GameState, Hero, HeroClass, MaterialId, Modifiers, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult } from './types';
+import { ActiveQuest, GameState, Hero, HeroClass, MaterialId, Modifiers, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Stats } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -981,6 +981,14 @@ export class GameEngine {
     if (error) return this.say(error);
     playSound('purchase');
     this.notify();
+    void this.saveNow();
+  }
+
+  enchantItem(recipeId: string, itemUid: string, chosenStats: (keyof Stats)[]) {
+    const error = CraftingManager.enchantItem(this.state, recipeId, itemUid, chosenStats);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.say('The Enchanter\u2019s work takes -- the piece carries it now.');
     void this.saveNow();
   }
 

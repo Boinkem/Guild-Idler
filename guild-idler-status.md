@@ -179,6 +179,26 @@ raid fight).
   this was an unrelated icon edit). Added `shield` to the enum; the
   frontend dropdown renders straight from this same schema, so one fix
   covered the missing option and the validation failure together.
+- **Every CSS animation in the game plays instantly, no visible motion at
+  all -- root cause still unknown.** First noticed via Harvest's
+  fall-in/collect-particle effects (patches 0112/0113 chased two real but
+  ultimately unrelated leads there: a hardcoded duration not respecting
+  `--anim-speed`, and an off-screen animation start -- both legitimate
+  fixes, neither was the actual cause). Confirmed NOT specific to Harvest:
+  the pre-existing quest-completion gold/XP particle burst
+  (`QuestResultModal`, `collect-fly`) does the exact same thing --
+  appears/vanishes instantly instead of flying and fading. Confirmed NOT
+  the in-game Settings > Reduce Motion toggle (checked, it's off) and the
+  player doesn't believe a Windows power-saving mode is active. Since
+  every animation-duration in the app funnels through one global
+  mechanism (`@media (prefers-reduced-motion: reduce)` and/or
+  `:root[data-motion='off']`, both forcing `animation-duration: 0.001ms
+  !important` in `app.css`), whatever's triggering this is almost
+  certainly one of those two matching when it shouldn't -- worth checking
+  Windows' Ease of Access > Visual effects > "Show animations" setting
+  specifically (a different toggle from power mode), and/or actually
+  inspecting the live DOM's `:root` for `data-motion`/computed
+  `prefers-reduced-motion` state via DevTools next time this comes up.
 
 ---
 
@@ -254,7 +274,7 @@ loadout picked at send time. One follow-up worth a look next time
   enough to want its own dedicated pass rather than folding into
   whatever else is in flight.
 
-### Harvest/Gathering + Crafting -- built (patch 0111)
+### Harvest/Gathering + Crafting -- built (patch 0111, Enchanting added 0114)
 Started as the one-line "Off-mission engagement" bullet, scoped across a
 few conversations, then built end to end: types, data, both managers,
 engine wiring, save migration, and a real UI. `npx tsc --noEmit` and a
@@ -299,6 +319,27 @@ including migrating a save that predates all of this entirely.
   your own stat spread" only makes sense for something you keep.
   Crafting always succeeds (no roll) and costs gold *and* materials --
   the real sink for Trade Route's gold faucet, not a separate mechanism.
+- **Enchanting**, added alongside Crafting rather than as a separate
+  feature -- a third recipe category (`CraftingRecipeDef.category ===
+  'enchant'`) that modifies an item the player already owns instead of
+  producing a new one. One recipe so far, Minor Sigil (herbs+ore+300g):
+  pick 1 of strength/endurance/luck/wisdom at +3, additive on
+  `EquipmentItem.enchantStats` -- stacks with itself (a second enchant on
+  the same stat adds rather than overwrites) and with the item's own base
+  `stats`, unlike a gear recipe's `customMods` which replaces the def's
+  `mods` outright. `HeroManager.equipmentStats` folds this in
+  automatically. Item search (stash or equipped) reuses
+  `EquipmentManager.allItems`, the same scope `repair()` already uses.
+- **Crafting's UI is now grouped by vendor** -- Blacksmith (gear),
+  Alchemist (consumables), Enchanter (enchanting), each with its own
+  `VendorSprite` header pulled from the existing vendor art system
+  (`public/vendors/`, gitignored/licensed -- renders nothing rather than
+  a broken image if that art isn't present locally, same convention as
+  everywhere else). These are the same three vendors Guild Upgrades
+  already has its own separate relationship with (permanent stat
+  upgrades, gold-only) -- Crafting doesn't touch that vendor-leveling
+  system at all, just borrows their sprites and names for its own,
+  unrelated recipes.
 - Every numeric knob (spawn interval, despawn window, bonus odds/
   multiplier, yield, sell price, all four tools' and the Warehouse's cost
   curves) reads from the tuning registry from day one -- 34 new entries,

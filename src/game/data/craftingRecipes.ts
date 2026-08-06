@@ -2,13 +2,15 @@ import { CraftingRecipeDef } from '../types';
 
 /**
  * Crafting recipes, cross-node by category rather than per-item -- a ring
- * never needs Fish. Gear recipes are the flagship of the two: they produce
- * a fresh EquipmentItem with player-chosen customMods (see
- * EquipmentItem.customMods) instead of a fixed roll, which is the actual
- * reason to craft rather than just farm or buy -- choice instead of RNG.
- * Consumable recipes are simpler on purpose: materials+gold standing in
- * for the shop's gold-only price, no per-craft customization, since
- * "choose your own stat spread" only makes sense for something you keep.
+ * never needs Fish. Gear recipes produce a fresh EquipmentItem with
+ * player-chosen customMods (see EquipmentItem.customMods) instead of a
+ * fixed roll -- the actual reason to craft rather than just farm or buy,
+ * choice instead of RNG. Consumable recipes are simpler on purpose:
+ * materials+gold standing in for the shop's gold-only price, no
+ * customization, since "choose your own stat spread" only makes sense for
+ * something you keep. Enchant recipes are a third shape again -- they
+ * modify an item the player already owns (additive enchantStats, see
+ * that field's comment in types.ts) rather than producing anything new.
  *
  * Both craftable gear bases (guildmade_blade, guildmade_band) live in
  * equipment.json with an empty `mods` object and `craftable: true` -- see
@@ -57,6 +59,17 @@ export const CRAFTING_RECIPES: CraftingRecipeDef[] = [
     materialCost: { herbs: 10 },
     goldCost: 25,
     resultConsumableId: 'healing_potion',
+  },
+  {
+    id: 'enchant_minor_sigil',
+    name: 'Minor Sigil',
+    description: 'A working the Enchanter presses into a piece already carried, rather than anything built from scratch.',
+    category: 'enchant',
+    materialCost: { herbs: 15, ore: 10 },
+    goldCost: 300,
+    statOptions: ['strength', 'endurance', 'luck', 'wisdom'],
+    statsToPick: 1,
+    statValue: 3,
   },
 ];
 

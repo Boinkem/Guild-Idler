@@ -66,18 +66,21 @@ export const HeroManager = {
     return gained;
   },
 
-  /** Stats coming from equipped, unbroken gear. */
+  /** Stats coming from equipped, unbroken gear -- including any Enchanting on top. */
   equipmentStats(hero: Hero): Stats {
     const total: Stats = { strength: 0, endurance: 0, luck: 0, wisdom: 0 };
     for (const item of Object.values(hero.equipment)) {
       if (!item || item.durability <= 0) continue;
       const def = EQUIPMENT_BY_ID[item.defId];
-      if (!def?.stats) continue;
+      if (!def) continue;
       const scale = 1 + item.plus * 0.15;
-      total.strength += (def.stats.strength ?? 0) * scale;
-      total.endurance += (def.stats.endurance ?? 0) * scale;
-      total.luck += (def.stats.luck ?? 0) * scale;
-      total.wisdom += (def.stats.wisdom ?? 0) * scale;
+      const base = def.stats;
+      const enchant = item.enchantStats;
+      if (!base && !enchant) continue;
+      total.strength += ((base?.strength ?? 0) + (enchant?.strength ?? 0)) * scale;
+      total.endurance += ((base?.endurance ?? 0) + (enchant?.endurance ?? 0)) * scale;
+      total.luck += ((base?.luck ?? 0) + (enchant?.luck ?? 0)) * scale;
+      total.wisdom += ((base?.wisdom ?? 0) + (enchant?.wisdom ?? 0)) * scale;
     }
     return total;
   },
