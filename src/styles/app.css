@@ -72,6 +72,7 @@
   padding: 8px;
   cursor: pointer;
 }
+.item-card:not(.empty):hover { border-color: var(--brass); }
 .item-card.empty .item-card-summary { cursor: default; }
 .item-icon {
   flex: none;
@@ -154,6 +155,11 @@
 .raid-diff-circle:hover { filter: brightness(1.15); }
 .raid-card.locked { opacity: 0.6; }
 .raid-card.active { border-left: 3px solid var(--brass); }
+/* Covers any card that's itself the click target (role="button" directly
+   on .card, not via a nested summary row) -- raid cards, and now the
+   Shop's item cards too. Cards using a nested clickable header instead
+   (quest/lore/hero) are covered by the :has() rule near .card-head. */
+.card[role="button"]:hover { border-color: var(--brass); }
 
 /* Raid Result modal, full-clear treatment -- a raid worth committing hours
    to deserves a slightly bigger visual moment when it actually pays off. */
@@ -587,6 +593,13 @@ button:focus-visible, [tabindex]:focus-visible {
 .card.chain { border-left-color: var(--blood); }
 
 .card-head { display: flex; align-items: baseline; gap: 8px; }
+/* The click target stays just the clickable header row inside
+   (role="button" on .card-head/.hero-card-summary), but the highlight
+   reads across the whole card -- hovering used to only tint a nested
+   name span (.hero-card-name), easy to miss and inconsistent with every
+   other hoverable card in the game. Covers quest, lore, and hero cards
+   in one rule since all three share this same summary-header shape. */
+.card:has(.hero-card-summary:hover) { border-color: var(--brass); }
 .card-title { font-size: 0.8125rem; font-weight: 700; }
 .card-flavour { color: var(--muted); font-size: 0.625rem; margin: 4px 0 8px; font-style: italic; }
 

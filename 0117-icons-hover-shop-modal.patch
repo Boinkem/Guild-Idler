@@ -1,0 +1,521 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 9cbdba4..4e24a1b 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -63,6 +63,20 @@ supported.
+ **UI shell** — grouped navigation, Guide tab (notification log + How-To
+ reference), Settings (theme, density, motion, sound, confirmations),
+ consistent currency feedback across every gold/Renown-spending surface.
++Consumables and Crafting Recipes now support an `icon` field (patch
++0117), same convention and same DevTool picker equipment's icon already
++uses -- falls back to the consumable's own glyph, or a per-category
++emoji for a recipe, when unset. Shop's equipment/consumable/black-market
++cards show that icon now too, and were converted from "everything visible
++at once" to a compact summary that opens a detail modal on click, same
++convention RaidCard/RaidDetailModal already established -- consistent
++with the general direction of not extending cards inline for detail.
++Hover feedback on cards was inconsistent -- quest/lore/hero cards only
++tinted a nested name span, not the card itself; item-card (equipment
++slots, consumables) had none at all. Both now highlight the whole card
++via CSS alone (`:has()` for cards with a nested clickable header,
++`[role="button"]:hover` for cards where the whole card is the click
++target, like raid cards and the new Shop cards).
+ 
+ **Desktop companion window** — a long-standing, now-resolved bug: a
+ position saved under one display configuration (e.g. an ultrawide
+@@ -296,6 +310,21 @@ loadout picked at send time. One follow-up worth a look next time
+   small feature, not a tweak to an existing one. Worth doing, but sizable
+   enough to want its own dedicated pass rather than folding into
+   whatever else is in flight.
++- **Shop -> Vendors restructure -- in progress, staged.** Confirmed
++  shape: Shop renamed to Vendors; its three sections split one per
++  vendor (Blacksmith sells armour, Alchemist sells supplies, Enchanter
++  sells black market -- confirmed, not a guess); the current Upgrades
++  tab's General upgrades move into Guild Hall, its three vendor sections
++  (Blacksmith/Alchemist/Enchanter permanent stat upgrades) move onto
++  each vendor's own new page; each vendor page is sprite+Level Up on
++  top, that vendor's own upgrades beneath, that vendor's store items
++  below that; a button near Level Up opens an overlay for that vendor's
++  own slice of Crafting (gear for Blacksmith, potions/food for
++  Alchemist, enchanting for Enchanter) -- moving Crafting out of the
++  Harvest tab entirely, which was the specific complaint that started
++  this ("very much hidden away"). Patch 0117 did the smaller
++  prerequisite work first (icons, hover consistency, inline-expand ->
++  modal on Shop) -- the actual tab merge/rename/move is still ahead.
+ 
+ ### Harvest/Gathering + Crafting -- built (patch 0111, Enchanting added 0114)
+ Started as the one-line "Off-mission engagement" bullet, scoped across a
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 45d6537..b3fbd72 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -66,6 +66,10 @@ export interface ConsumableDef {
+   description: string;
+   cost: number;
+   glyph: string;
++  /** Relative path under the item-icons folder, same convention as
++   *  EquipmentDef.icon -- falls back to `glyph` when unset, same
++   *  "missing file just fails to paint, never a broken image" rule. */
++  icon?: string;
+   effect: {
+     success?: number;
+     gold?: number;
+@@ -705,6 +709,11 @@ export interface CraftingRecipeDef {
+   name: string;
+   description: string;
+   category: 'gear' | 'consumable' | 'enchant';
++  /** Relative path under the item-icons folder, same convention as
++   *  EquipmentDef.icon/ConsumableDef.icon. No glyph fallback here since
++   *  a recipe isn't itself an item -- falls all the way back to a plain
++   *  emoji per category (see CATEGORY_FALLBACK in HarvestPanel.tsx). */
++  icon?: string;
+   materialCost: Partial<Record<MaterialId, number>>;
+   goldCost: number;
+   /** `gear` recipes only -- the craftable EquipmentDef this recipe produces. */
+diff --git a/src/styles/app.css b/src/styles/app.css
+index e714d4d..c437034 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -72,6 +72,7 @@
+   padding: 8px;
+   cursor: pointer;
+ }
++.item-card:not(.empty):hover { border-color: var(--brass); }
+ .item-card.empty .item-card-summary { cursor: default; }
+ .item-icon {
+   flex: none;
+@@ -154,6 +155,11 @@
+ .raid-diff-circle:hover { filter: brightness(1.15); }
+ .raid-card.locked { opacity: 0.6; }
+ .raid-card.active { border-left: 3px solid var(--brass); }
++/* Covers any card that's itself the click target (role="button" directly
++   on .card, not via a nested summary row) -- raid cards, and now the
++   Shop's item cards too. Cards using a nested clickable header instead
++   (quest/lore/hero) are covered by the :has() rule near .card-head. */
++.card[role="button"]:hover { border-color: var(--brass); }
+ 
+ /* Raid Result modal, full-clear treatment -- a raid worth committing hours
+    to deserves a slightly bigger visual moment when it actually pays off. */
+@@ -587,6 +593,13 @@ button:focus-visible, [tabindex]:focus-visible {
+ .card.chain { border-left-color: var(--blood); }
+ 
+ .card-head { display: flex; align-items: baseline; gap: 8px; }
++/* The click target stays just the clickable header row inside
++   (role="button" on .card-head/.hero-card-summary), but the highlight
++   reads across the whole card -- hovering used to only tint a nested
++   name span (.hero-card-name), easy to miss and inconsistent with every
++   other hoverable card in the game. Covers quest, lore, and hero cards
++   in one rule since all three share this same summary-header shape. */
++.card:has(.hero-card-summary:hover) { border-color: var(--brass); }
+ .card-title { font-size: 0.8125rem; font-weight: 700; }
+ .card-flavour { color: var(--muted); font-size: 0.625rem; margin: 4px 0 8px; font-style: italic; }
+ 
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 12c933a..d130934 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -9,30 +9,10 @@ import { CONSUMABLE_BY_ID } from '../../game/data/items';
+ import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { describeMods, describeStats, formatGold, RARITY_COLOR } from '../../game/util';
++import { ItemIcon, ConsumableIcon } from '../icons';
+ 
+ const SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet'];
+ 
+-/**
+- * Emoji placeholder per slot, shown whenever an item has no icon assigned
+- * yet -- devtool icon assignment is manual and ongoing (55+ items), so most
+- * won't have one right away. Same "always show something legible, never a
+- * broken image" approach used elsewhere for missing art.
+- */
+-const SLOT_FALLBACK: Record<EquipSlot, string> = {
+-  weapon: '⚔️', helmet: '🪖', chest: '🎽', shield: '🛡️',
+-  gloves: '🧤', boots: '👢', ring: '💍', amulet: '📿',
+-};
+-
+-function ItemIcon({ slot, icon, size = 40 }: { slot: EquipSlot; icon?: string; size?: number }) {
+-  return (
+-    <div className="item-icon" style={{ width: size, height: size, fontSize: Math.round(size * 0.55) }}>
+-      {icon
+-        ? <img src={`./item-icons/${icon}`} alt="" />
+-        : <span aria-hidden="true">{SLOT_FALLBACK[slot]}</span>}
+-    </div>
+-  );
+-}
+-
+ function RarityPill({ rarity }: { rarity: Rarity }) {
+   return (
+     <span className="rarity-pill" style={{ color: RARITY_COLOR[rarity], borderColor: RARITY_COLOR[rarity] }}>
+@@ -82,9 +62,7 @@ function ConsumableInfoCard({ def, count }: { def: ConsumableDef; count: number
+         tabIndex={0}
+         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
+       >
+-        <div className="item-icon" style={{ width: 40, height: 40, fontSize: 22, display: 'grid', placeItems: 'center' }}>
+-          {def.glyph}
+-        </div>
++        <ConsumableIcon icon={def.icon} glyph={def.glyph} />
+         <div className="item-card-body">
+           <div className="item-card-name">{def.name} ×{count}</div>
+         </div>
+@@ -119,9 +97,7 @@ function ConsumableSlotCard({
+     return (
+       <div className="item-card">
+         <div className="item-card-summary">
+-          <div className="item-icon" style={{ width: 40, height: 40, fontSize: 22, display: 'grid', placeItems: 'center' }}>
+-            {def.glyph}
+-          </div>
++          <ConsumableIcon icon={def.icon} glyph={def.glyph} />
+           <div className="item-card-body">
+             <div className="item-card-name">{def.name}</div>
+             <div className="tiny muted">Equipped on {hero.name}</div>
+diff --git a/src/ui/panels/HarvestPanel.tsx b/src/ui/panels/HarvestPanel.tsx
+index 4058e91..7b06c65 100644
+--- a/src/ui/panels/HarvestPanel.tsx
++++ b/src/ui/panels/HarvestPanel.tsx
+@@ -16,6 +16,7 @@ import { CraftingRecipeDef, MaterialId, Modifiers, Stats, VendorId } from '../..
+ import { formatGold } from '../../game/util';
+ import { MaxFlash, useMaxFlash } from '../maxFlash';
+ import { VendorSprite } from '../sprites/VendorSprite';
++import { RecipeIcon } from '../icons';
+ 
+ type SubTab = 'warehouse' | MaterialId;
+ 
+@@ -343,8 +344,13 @@ function RecipeCard({ recipe }: { recipe: CraftingRecipeDef }) {
+ 
+   return (
+     <div className="card" style={{ marginBottom: 8 }}>
+-      <div className="card-title">{recipe.name}</div>
+-      <p className="card-flavour">{recipe.description}</p>
++      <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
++        <RecipeIcon icon={recipe.icon} category={recipe.category} />
++        <div style={{ flex: 1 }}>
++          <div className="card-title">{recipe.name}</div>
++          <p className="card-flavour">{recipe.description}</p>
++        </div>
++      </div>
+       <div className="tiny muted" style={{ marginBottom: 6 }}>
+         {Object.entries(recipe.materialCost).map(([id, amount]) => `${amount} ${MATERIAL_BY_ID[id as MaterialId].name}`).join(' + ')}
+         {' + '}{formatGold(recipe.goldCost)} gold
+diff --git a/src/ui/panels/ShopPanel.tsx b/src/ui/panels/ShopPanel.tsx
+index 0ae92e3..03051bb 100644
+--- a/src/ui/panels/ShopPanel.tsx
++++ b/src/ui/panels/ShopPanel.tsx
+@@ -1,3 +1,4 @@
++import { useState } from 'react';
+ import { useEngine, useNow } from '../useEngine';
+ import { useSettings } from '../useSettings';
+ import { ShopManager } from '../../game/managers/ShopManager';
+@@ -5,7 +6,9 @@ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
+ import { CONSUMABLE_BY_ID } from '../../game/data/items';
+ import { EquipmentManager } from '../../game/managers/EquipmentManager';
++import { EquipmentDef, ConsumableDef } from '../../game/types';
+ import { describeMods, formatDuration, formatGold, RARITY_COLOR } from '../../game/util';
++import { ItemIcon, ConsumableIcon } from '../icons';
+ 
+ export function ShopPanel() {
+   const engine = useEngine();
+@@ -24,46 +27,27 @@ export function ShopPanel() {
+       <div className="section-heading">Arms and armour</div>
+       {state.shop.equipment.length === 0 && <p className="small muted">Sold out. Come back after the next delivery.</p>}
+       <div className="grid two">
+-        {state.shop.equipment.map((entry) => {
+-          const def = EQUIPMENT_BY_ID[entry.defId];
+-          if (!def) return null;
+-          return (
+-            <div key={entry.uid} className="card" style={{ marginBottom: 0 }}>
+-              <div style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 11 }}>{def.name}</div>
+-              <div className="tiny muted">{def.slot} · {def.rarity} · requires level {def.reqLevel}</div>
+-              <div className="stat-row" style={{ margin: '6px 0 8px' }}>
+-                {describeMods(def.mods).map((line) => <span key={line}>{line}</span>)}
+-              </div>
+-              <button
+-                className="btn-primary"
+-                disabled={state.gold < entry.price}
+-                onClick={() => engine.buyShopEquipment(entry.uid)}
+-              >
+-                Buy · {formatGold(entry.price)}
+-              </button>
+-            </div>
+-          );
+-        })}
++        {state.shop.equipment.map((entry) => (
++          <EquipmentShopCard
++            key={entry.uid}
++            def={EQUIPMENT_BY_ID[entry.defId]}
++            price={entry.price}
++            canAfford={state.gold >= entry.price}
++            onBuy={() => engine.buyShopEquipment(entry.uid)}
++          />
++        ))}
+       </div>
+ 
+       <div className="section-heading">Supplies</div>
+       <div className="grid three">
+-        {state.shop.consumables.map((entry) => {
+-          const def = CONSUMABLE_BY_ID[entry.defId];
+-          if (!def) return null;
+-          return (
+-            <div key={entry.defId} className="card" style={{ marginBottom: 0 }}>
+-              <div className="card-title">{def.glyph} {def.name}</div>
+-              <p className="card-flavour">{def.description}</p>
+-              <button
+-                disabled={state.gold < def.cost}
+-                onClick={() => engine.buyConsumable(def.id)}
+-              >
+-                Buy · {formatGold(def.cost)}
+-              </button>
+-            </div>
+-          );
+-        })}
++        {state.shop.consumables.map((entry) => (
++          <ConsumableShopCard
++            key={entry.defId}
++            def={CONSUMABLE_BY_ID[entry.defId]}
++            canAfford={state.gold >= (CONSUMABLE_BY_ID[entry.defId]?.cost ?? Infinity)}
++            onBuy={() => engine.buyConsumable(entry.defId)}
++          />
++        ))}
+       </div>
+ 
+       <div className="section-heading">Black Market</div>
+@@ -82,26 +66,16 @@ export function ShopPanel() {
+             <p className="small muted">The contact has nothing worth showing right now.</p>
+           )}
+           <div className="grid two">
+-            {state.blackMarket.equipment.map((entry) => {
+-              const def = EQUIPMENT_BY_ID[entry.defId];
+-              if (!def) return null;
+-              return (
+-                <div key={entry.uid} className="card black-market-item" style={{ marginBottom: 0 }}>
+-                  <div style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 11 }}>{def.name}</div>
+-                  <div className="tiny muted">{def.slot} · {def.rarity} · requires level {def.reqLevel}</div>
+-                  <div className="stat-row" style={{ margin: '6px 0 8px' }}>
+-                    {describeMods(def.mods).map((line) => <span key={line}>{line}</span>)}
+-                  </div>
+-                  <button
+-                    className="btn-primary"
+-                    disabled={state.gold < entry.price}
+-                    onClick={() => engine.buyBlackMarketEquipment(entry.uid)}
+-                  >
+-                    Buy · {formatGold(entry.price)}
+-                  </button>
+-                </div>
+-              );
+-            })}
++            {state.blackMarket.equipment.map((entry) => (
++              <EquipmentShopCard
++                key={entry.uid}
++                def={EQUIPMENT_BY_ID[entry.defId]}
++                price={entry.price}
++                canAfford={state.gold >= entry.price}
++                onBuy={() => engine.buyBlackMarketEquipment(entry.uid)}
++                blackMarket
++              />
++            ))}
+           </div>
+         </>
+       )}
+@@ -114,9 +88,12 @@ export function ShopPanel() {
+           if (!def) return null;
+           return (
+             <div key={item.uid} className="spread card" style={{ marginBottom: 0 }}>
+-              <span style={{ color: RARITY_COLOR[def.rarity], fontSize: 11 }}>
+-                {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
+-              </span>
++              <div className="row" style={{ gap: 8, alignItems: 'center' }}>
++                <ItemIcon slot={def.slot} icon={def.icon} size={28} />
++                <span style={{ color: RARITY_COLOR[def.rarity], fontSize: 11 }}>
++                  {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
++                </span>
++              </div>
+               <button onClick={() => { if (!settings.confirmSell || confirm(`Sell this item?`)) engine.sellItem(item.uid); }}>
+                 Sell · {formatGold(EquipmentManager.sellValue(item))}
+               </button>
+@@ -127,3 +104,118 @@ export function ShopPanel() {
+     </>
+   );
+ }
++
++/**
++ * Collapsed summary (icon, name, price) only -- clicking opens a detail
++ * modal instead of showing slot/rarity/mods inline on every card at once.
++ * Same "click opens an overlay, doesn't extend the card" convention
++ * RaidCard/RaidDetailModal already established.
++ */
++function EquipmentShopCard({
++  def, price, canAfford, onBuy, blackMarket,
++}: {
++  def: EquipmentDef | undefined; price: number; canAfford: boolean; onBuy: () => void; blackMarket?: boolean;
++}) {
++  const [showModal, setShowModal] = useState(false);
++  if (!def) return null;
++
++  return (
++    <>
++      <div
++        className={`card ${blackMarket ? 'black-market-item' : ''}`}
++        style={{ marginBottom: 0 }}
++        onClick={() => setShowModal(true)}
++        role="button"
++        tabIndex={0}
++        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
++      >
++        <div className="row" style={{ gap: 10, alignItems: 'center' }}>
++          <ItemIcon slot={def.slot} icon={def.icon} size={36} />
++          <div style={{ minWidth: 0, flex: 1 }}>
++            <div style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 11 }}>{def.name}</div>
++            <div className="tiny muted">Lv {def.reqLevel} · {formatGold(price)}</div>
++          </div>
++        </div>
++      </div>
++
++      {showModal && (
++        <div className="overlay" onClick={() => setShowModal(false)}>
++          <div className="modal" onClick={(e) => e.stopPropagation()}>
++            <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
++              <ItemIcon slot={def.slot} icon={def.icon} size={48} />
++              <div>
++                <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</span>
++                <div className="tiny muted">{def.slot} · {def.rarity} · requires level {def.reqLevel}</div>
++              </div>
++            </div>
++            <div className="stat-row" style={{ margin: '6px 0 12px' }}>
++              {describeMods(def.mods).map((line) => <span key={line}>{line}</span>)}
++            </div>
++            <div className="row end" style={{ gap: 8 }}>
++              <button onClick={() => setShowModal(false)}>Close</button>
++              <button
++                className="btn-primary"
++                disabled={!canAfford}
++                onClick={() => { onBuy(); setShowModal(false); }}
++              >
++                Buy · {formatGold(price)}
++              </button>
++            </div>
++          </div>
++        </div>
++      )}
++    </>
++  );
++}
++
++function ConsumableShopCard({
++  def, canAfford, onBuy,
++}: {
++  def: ConsumableDef | undefined; canAfford: boolean; onBuy: () => void;
++}) {
++  const [showModal, setShowModal] = useState(false);
++  if (!def) return null;
++
++  return (
++    <>
++      <div
++        className="card"
++        style={{ marginBottom: 0 }}
++        onClick={() => setShowModal(true)}
++        role="button"
++        tabIndex={0}
++        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
++      >
++        <div className="row" style={{ gap: 10, alignItems: 'center' }}>
++          <ConsumableIcon icon={def.icon} glyph={def.glyph} size={36} />
++          <div style={{ minWidth: 0, flex: 1 }}>
++            <div className="card-title">{def.name}</div>
++            <div className="tiny muted">{formatGold(def.cost)}</div>
++          </div>
++        </div>
++      </div>
++
++      {showModal && (
++        <div className="overlay" onClick={() => setShowModal(false)}>
++          <div className="modal" onClick={(e) => e.stopPropagation()}>
++            <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
++              <ConsumableIcon icon={def.icon} glyph={def.glyph} size={48} />
++              <span className="card-title">{def.name}</span>
++            </div>
++            <p className="card-flavour">{def.description}</p>
++            <div className="row end" style={{ gap: 8, marginTop: 8 }}>
++              <button onClick={() => setShowModal(false)}>Close</button>
++              <button
++                className="btn-primary"
++                disabled={!canAfford}
++                onClick={() => { onBuy(); setShowModal(false); }}
++              >
++                Buy · {formatGold(def.cost)}
++              </button>
++            </div>
++          </div>
++        </div>
++      )}
++    </>
++  );
++}
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 65a8884..59b2301 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -101,6 +101,9 @@ const SCHEMAS = {
+       description: { type: 'string', required: true },
+       cost: { type: 'number', required: true },
+       glyph: { type: 'string', required: true },
++      // Falls back to glyph when unset -- same convention equipment's icon
++      // field already uses, same picker.
++      icon: { type: 'string', required: false, picker: 'icon' },
+       effect: { type: 'effect', required: true },
+     },
+   },
+@@ -199,6 +202,7 @@ const SCHEMAS = {
+       name: { type: 'string', required: true },
+       description: { type: 'string', required: true },
+       category: { type: 'enum', required: true, options: ['gear', 'consumable', 'enchant'] },
++      icon: { type: 'string', required: false, picker: 'icon' },
+       materialCost: { type: 'materials', required: true },
+       goldCost: { type: 'number', required: true },
+       // gear only -- an equipment id, ideally one with craftable: true set
+diff --git a/src/ui/icons.tsx b/src/ui/icons.tsx
+new file mode 100644
+index 0000000..1be1484
+--- /dev/null
++++ b/src/ui/icons.tsx
+@@ -0,0 +1,40 @@
++import { EquipSlot } from '../game/types';
++
++/**
++ * Emoji placeholder per slot, shown whenever an item has no icon assigned
++ * yet -- devtool icon assignment is manual and ongoing, so most won't have
++ * one right away. Same "always show something legible, never a broken
++ * image" approach used elsewhere for missing art.
++ */
++const SLOT_FALLBACK: Record<EquipSlot, string> = {
++  weapon: '⚔️', helmet: '🪖', chest: '🎽', shield: '🛡️',
++  gloves: '🧤', boots: '👢', ring: '💍', amulet: '📿',
++};
++
++const CATEGORY_FALLBACK: Record<'gear' | 'consumable' | 'enchant', string> = {
++  gear: '⚔️', consumable: '🧪', enchant: '✨',
++};
++
++function IconBox({ icon, size, fallback }: { icon?: string; size: number; fallback: string }) {
++  return (
++    <div className="item-icon" style={{ width: size, height: size, fontSize: Math.round(size * 0.55) }}>
++      {icon
++        ? <img src={`./item-icons/${icon}`} alt="" />
++        : <span aria-hidden="true">{fallback}</span>}
++    </div>
++  );
++}
++
++export function ItemIcon({ slot, icon, size = 40 }: { slot: EquipSlot; icon?: string; size?: number }) {
++  return <IconBox icon={icon} size={size} fallback={SLOT_FALLBACK[slot]} />;
++}
++
++/** Falls back to the consumable's own glyph (not a generic placeholder) when no icon is assigned. */
++export function ConsumableIcon({ icon, glyph, size = 40 }: { icon?: string; glyph: string; size?: number }) {
++  return <IconBox icon={icon} size={size} fallback={glyph} />;
++}
++
++/** Falls back to a per-category glyph (gear/consumable/enchant) when a recipe has no icon assigned. */
++export function RecipeIcon({ icon, category, size = 40 }: { icon?: string; category: 'gear' | 'consumable' | 'enchant'; size?: number }) {
++  return <IconBox icon={icon} size={size} fallback={CATEGORY_FALLBACK[category]} />;
++}

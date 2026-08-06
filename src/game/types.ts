@@ -66,6 +66,10 @@ export interface ConsumableDef {
   description: string;
   cost: number;
   glyph: string;
+  /** Relative path under the item-icons folder, same convention as
+   *  EquipmentDef.icon -- falls back to `glyph` when unset, same
+   *  "missing file just fails to paint, never a broken image" rule. */
+  icon?: string;
   effect: {
     success?: number;
     gold?: number;
@@ -705,6 +709,11 @@ export interface CraftingRecipeDef {
   name: string;
   description: string;
   category: 'gear' | 'consumable' | 'enchant';
+  /** Relative path under the item-icons folder, same convention as
+   *  EquipmentDef.icon/ConsumableDef.icon. No glyph fallback here since
+   *  a recipe isn't itself an item -- falls all the way back to a plain
+   *  emoji per category (see CATEGORY_FALLBACK in HarvestPanel.tsx). */
+  icon?: string;
   materialCost: Partial<Record<MaterialId, number>>;
   goldCost: number;
   /** `gear` recipes only -- the craftable EquipmentDef this recipe produces. */

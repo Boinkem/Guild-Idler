@@ -16,6 +16,7 @@ import { CraftingRecipeDef, MaterialId, Modifiers, Stats, VendorId } from '../..
 import { formatGold } from '../../game/util';
 import { MaxFlash, useMaxFlash } from '../maxFlash';
 import { VendorSprite } from '../sprites/VendorSprite';
+import { RecipeIcon } from '../icons';
 
 type SubTab = 'warehouse' | MaterialId;
 
@@ -343,8 +344,13 @@ function RecipeCard({ recipe }: { recipe: CraftingRecipeDef }) {
 
   return (
     <div className="card" style={{ marginBottom: 8 }}>
-      <div className="card-title">{recipe.name}</div>
-      <p className="card-flavour">{recipe.description}</p>
+      <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
+        <RecipeIcon icon={recipe.icon} category={recipe.category} />
+        <div style={{ flex: 1 }}>
+          <div className="card-title">{recipe.name}</div>
+          <p className="card-flavour">{recipe.description}</p>
+        </div>
+      </div>
       <div className="tiny muted" style={{ marginBottom: 6 }}>
         {Object.entries(recipe.materialCost).map(([id, amount]) => `${amount} ${MATERIAL_BY_ID[id as MaterialId].name}`).join(' + ')}
         {' + '}{formatGold(recipe.goldCost)} gold

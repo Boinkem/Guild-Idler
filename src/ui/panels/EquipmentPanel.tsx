@@ -9,29 +9,9 @@ import { CONSUMABLE_BY_ID } from '../../game/data/items';
 import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { describeMods, describeStats, formatGold, RARITY_COLOR } from '../../game/util';
+import { ItemIcon, ConsumableIcon } from '../icons';
 
 const SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet'];
-
-/**
- * Emoji placeholder per slot, shown whenever an item has no icon assigned
- * yet -- devtool icon assignment is manual and ongoing (55+ items), so most
- * won't have one right away. Same "always show something legible, never a
- * broken image" approach used elsewhere for missing art.
- */
-const SLOT_FALLBACK: Record<EquipSlot, string> = {
-  weapon: '⚔️', helmet: '🪖', chest: '🎽', shield: '🛡️',
-  gloves: '🧤', boots: '👢', ring: '💍', amulet: '📿',
-};
-
-function ItemIcon({ slot, icon, size = 40 }: { slot: EquipSlot; icon?: string; size?: number }) {
-  return (
-    <div className="item-icon" style={{ width: size, height: size, fontSize: Math.round(size * 0.55) }}>
-      {icon
-        ? <img src={`./item-icons/${icon}`} alt="" />
-        : <span aria-hidden="true">{SLOT_FALLBACK[slot]}</span>}
-    </div>
-  );
-}
 
 function RarityPill({ rarity }: { rarity: Rarity }) {
   return (
@@ -82,9 +62,7 @@ function ConsumableInfoCard({ def, count }: { def: ConsumableDef; count: number 
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
       >
-        <div className="item-icon" style={{ width: 40, height: 40, fontSize: 22, display: 'grid', placeItems: 'center' }}>
-          {def.glyph}
-        </div>
+        <ConsumableIcon icon={def.icon} glyph={def.glyph} />
         <div className="item-card-body">
           <div className="item-card-name">{def.name} ×{count}</div>
         </div>
@@ -119,9 +97,7 @@ function ConsumableSlotCard({
     return (
       <div className="item-card">
         <div className="item-card-summary">
-          <div className="item-icon" style={{ width: 40, height: 40, fontSize: 22, display: 'grid', placeItems: 'center' }}>
-            {def.glyph}
-          </div>
+          <ConsumableIcon icon={def.icon} glyph={def.glyph} />
           <div className="item-card-body">
             <div className="item-card-name">{def.name}</div>
             <div className="tiny muted">Equipped on {hero.name}</div>

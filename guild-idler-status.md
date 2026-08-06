@@ -63,6 +63,20 @@ supported.
 **UI shell** — grouped navigation, Guide tab (notification log + How-To
 reference), Settings (theme, density, motion, sound, confirmations),
 consistent currency feedback across every gold/Renown-spending surface.
+Consumables and Crafting Recipes now support an `icon` field (patch
+0117), same convention and same DevTool picker equipment's icon already
+uses -- falls back to the consumable's own glyph, or a per-category
+emoji for a recipe, when unset. Shop's equipment/consumable/black-market
+cards show that icon now too, and were converted from "everything visible
+at once" to a compact summary that opens a detail modal on click, same
+convention RaidCard/RaidDetailModal already established -- consistent
+with the general direction of not extending cards inline for detail.
+Hover feedback on cards was inconsistent -- quest/lore/hero cards only
+tinted a nested name span, not the card itself; item-card (equipment
+slots, consumables) had none at all. Both now highlight the whole card
+via CSS alone (`:has()` for cards with a nested clickable header,
+`[role="button"]:hover` for cards where the whole card is the click
+target, like raid cards and the new Shop cards).
 
 **Desktop companion window** — a long-standing, now-resolved bug: a
 position saved under one display configuration (e.g. an ultrawide
@@ -311,6 +325,21 @@ loadout picked at send time. One follow-up worth a look next time
   small feature, not a tweak to an existing one. Worth doing, but sizable
   enough to want its own dedicated pass rather than folding into
   whatever else is in flight.
+- **Shop -> Vendors restructure -- in progress, staged.** Confirmed
+  shape: Shop renamed to Vendors; its three sections split one per
+  vendor (Blacksmith sells armour, Alchemist sells supplies, Enchanter
+  sells black market -- confirmed, not a guess); the current Upgrades
+  tab's General upgrades move into Guild Hall, its three vendor sections
+  (Blacksmith/Alchemist/Enchanter permanent stat upgrades) move onto
+  each vendor's own new page; each vendor page is sprite+Level Up on
+  top, that vendor's own upgrades beneath, that vendor's store items
+  below that; a button near Level Up opens an overlay for that vendor's
+  own slice of Crafting (gear for Blacksmith, potions/food for
+  Alchemist, enchanting for Enchanter) -- moving Crafting out of the
+  Harvest tab entirely, which was the specific complaint that started
+  this ("very much hidden away"). Patch 0117 did the smaller
+  prerequisite work first (icons, hover consistency, inline-expand ->
+  modal on Shop) -- the actual tab merge/rename/move is still ahead.
 
 ### Harvest/Gathering + Crafting -- built (patch 0111, Enchanting added 0114)
 Started as the one-line "Off-mission engagement" bullet, scoped across a

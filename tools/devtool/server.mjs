@@ -101,6 +101,9 @@ const SCHEMAS = {
       description: { type: 'string', required: true },
       cost: { type: 'number', required: true },
       glyph: { type: 'string', required: true },
+      // Falls back to glyph when unset -- same convention equipment's icon
+      // field already uses, same picker.
+      icon: { type: 'string', required: false, picker: 'icon' },
       effect: { type: 'effect', required: true },
     },
   },
@@ -199,6 +202,7 @@ const SCHEMAS = {
       name: { type: 'string', required: true },
       description: { type: 'string', required: true },
       category: { type: 'enum', required: true, options: ['gear', 'consumable', 'enchant'] },
+      icon: { type: 'string', required: false, picker: 'icon' },
       materialCost: { type: 'materials', required: true },
       goldCost: { type: 'number', required: true },
       // gear only -- an equipment id, ideally one with craftable: true set
