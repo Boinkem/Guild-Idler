@@ -144,7 +144,9 @@ export const HeroManager = {
       if (!item || item.durability <= 0) continue;
       const def = EQUIPMENT_BY_ID[item.defId];
       if (!def) continue;
-      sources.push(scaleMods(def.mods, 1 + item.plus * 0.15));
+      // Crafted items carry their own chosen mods (EquipmentItem.customMods)
+      // instead of the def's -- see that field's own comment in types.ts.
+      sources.push(scaleMods(item.customMods ?? def.mods, 1 + item.plus * 0.15));
       if (def.setId) setCounts[def.setId] = (setCounts[def.setId] ?? 0) + 1;
     }
     for (const [setId, count] of Object.entries(setCounts)) {

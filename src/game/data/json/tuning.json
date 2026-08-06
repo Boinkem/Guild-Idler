@@ -332,5 +332,318 @@
     "min": 0,
     "max": 20,
     "description": "Flat loot percentage granted per level, guild-wide. heroSlotsPerLevel (+1 hero slot) is a separate, still-hardcoded field -- not included in this pass."
+  },
+  {
+    "id": "harvest.baseSpawnIntervalMs",
+    "label": "Harvest: base spawn interval (ms)",
+    "category": "harvest",
+    "value": 90000,
+    "default": 90000,
+    "min": 5000,
+    "description": "Time between spawns at a node with zero idle heroes and no tool upgrade. 90000 = 90s."
+  },
+  {
+    "id": "harvest.minSpawnIntervalMs",
+    "label": "Harvest: minimum spawn interval (ms)",
+    "category": "harvest",
+    "value": 20000,
+    "default": 20000,
+    "min": 2000,
+    "description": "Soft floor -- idle-hero count and tool level can shrink the interval, but never past this, so a node never spawns faster than one item every 20s regardless of roster size."
+  },
+  {
+    "id": "harvest.spawnReductionPerIdleHeroMs",
+    "label": "Harvest: spawn reduction per idle hero (ms)",
+    "category": "harvest",
+    "value": 8000,
+    "default": 8000,
+    "min": 0,
+    "description": "Shaved off the spawn interval per hero currently not on a quest, before the minimum floor above is applied."
+  },
+  {
+    "id": "harvest.despawnWindowMs",
+    "label": "Harvest: despawn window (ms)",
+    "category": "harvest",
+    "value": 12000,
+    "default": 12000,
+    "min": 2000,
+    "description": "How long a spawned item sits before it despawns unclicked. No penalty for a miss -- it just goes away and the node starts counting down to its next spawn."
+  },
+  {
+    "id": "harvest.bonusChancePercent",
+    "label": "Harvest: bonus glint chance (%)",
+    "category": "harvest",
+    "value": 12,
+    "default": 12,
+    "min": 0,
+    "max": 100,
+    "description": "Chance a given spawn is a bigger, rarer \"bonus\" glint worth harvest.bonusMultiplier times the normal yield."
+  },
+  {
+    "id": "harvest.bonusMultiplier",
+    "label": "Harvest: bonus glint multiplier",
+    "category": "harvest",
+    "value": 3,
+    "default": 3,
+    "min": 1,
+    "max": 10,
+    "description": "Yield multiplier on a bonus glint catch."
+  },
+  {
+    "id": "harvest.baseYieldPerCatch",
+    "label": "Harvest: base yield per catch",
+    "category": "harvest",
+    "value": 1,
+    "default": 1,
+    "min": 1,
+    "description": "Flat, predictable material gained per normal catch before any tool-upgrade bonus. 1:1 to start, scaled later purely by upgrades, not by RNG."
+  },
+  {
+    "id": "harvest.sellPricePerUnit",
+    "label": "Harvest: sell price per unit",
+    "category": "harvest",
+    "value": 4,
+    "default": 4,
+    "min": 0,
+    "description": "Flat gold per material unit sold, once Trade Route is unlocked."
+  },
+  {
+    "id": "harvest.baseWarehouseCapacity",
+    "label": "Harvest: base warehouse capacity",
+    "category": "harvest",
+    "value": 100,
+    "default": 100,
+    "min": 0,
+    "description": "Per-material storage cap at Warehouse level 0. Shared across all four materials -- there's one Warehouse, not four."
+  },
+  {
+    "id": "harvest.warehouse.baseCost",
+    "label": "Warehouse: base cost",
+    "category": "harvest",
+    "value": 300,
+    "default": 300,
+    "min": 0,
+    "description": "Cost of the first Warehouse capacity upgrade."
+  },
+  {
+    "id": "harvest.warehouse.costGrowth",
+    "label": "Warehouse: cost growth",
+    "category": "harvest",
+    "value": 1.75,
+    "default": 1.75,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier applied per level."
+  },
+  {
+    "id": "harvest.warehouse.maxLevel",
+    "label": "Warehouse: max level",
+    "category": "harvest",
+    "value": 10,
+    "default": 10,
+    "min": 1,
+    "description": "Highest level the Warehouse upgrade can reach."
+  },
+  {
+    "id": "harvest.warehouse.capacityPerLevel",
+    "label": "Warehouse: capacity per level",
+    "category": "harvest",
+    "value": 50,
+    "default": 50,
+    "min": 1,
+    "description": "Added to the per-material storage cap per Warehouse level."
+  },
+  {
+    "id": "harvest.tradeRoute.cost",
+    "label": "Trade Route: cost",
+    "category": "harvest",
+    "value": 5000,
+    "default": 5000,
+    "min": 0,
+    "description": "One-time gold cost to unlock selling materials for gold."
+  },
+  {
+    "id": "harvest_tool.ore.baseCost",
+    "label": "Pickaxe (Quarry): base cost",
+    "category": "harvest_tools",
+    "value": 200,
+    "default": 200,
+    "min": 0,
+    "description": "Cost of the first Pickaxe upgrade."
+  },
+  {
+    "id": "harvest_tool.ore.costGrowth",
+    "label": "Pickaxe (Quarry): cost growth",
+    "category": "harvest_tools",
+    "value": 1.7,
+    "default": 1.7,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier applied per level."
+  },
+  {
+    "id": "harvest_tool.ore.maxLevel",
+    "label": "Pickaxe (Quarry): max level",
+    "category": "harvest_tools",
+    "value": 8,
+    "default": 8,
+    "min": 1,
+    "description": "Highest level this tool can reach."
+  },
+  {
+    "id": "harvest_tool.ore.yieldBonusPerLevel",
+    "label": "Pickaxe (Quarry): yield bonus per level",
+    "category": "harvest_tools",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "description": "Added to the Quarry's yield-per-catch per tool level."
+  },
+  {
+    "id": "harvest_tool.ore.spawnBonusMsPerLevel",
+    "label": "Pickaxe (Quarry): spawn speedup per level (ms)",
+    "category": "harvest_tools",
+    "value": 5000,
+    "default": 5000,
+    "min": 0,
+    "description": "Additional spawn-interval reduction per tool level, on top of the idle-hero reduction."
+  },
+  {
+    "id": "harvest_tool.timber.baseCost",
+    "label": "Woodaxe (Woodyard): base cost",
+    "category": "harvest_tools",
+    "value": 200,
+    "default": 200,
+    "min": 0,
+    "description": "Cost of the first Woodaxe upgrade."
+  },
+  {
+    "id": "harvest_tool.timber.costGrowth",
+    "label": "Woodaxe (Woodyard): cost growth",
+    "category": "harvest_tools",
+    "value": 1.7,
+    "default": 1.7,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier applied per level."
+  },
+  {
+    "id": "harvest_tool.timber.maxLevel",
+    "label": "Woodaxe (Woodyard): max level",
+    "category": "harvest_tools",
+    "value": 8,
+    "default": 8,
+    "min": 1,
+    "description": "Highest level this tool can reach."
+  },
+  {
+    "id": "harvest_tool.timber.yieldBonusPerLevel",
+    "label": "Woodaxe (Woodyard): yield bonus per level",
+    "category": "harvest_tools",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "description": "Added to the Woodyard's yield-per-catch per tool level."
+  },
+  {
+    "id": "harvest_tool.timber.spawnBonusMsPerLevel",
+    "label": "Woodaxe (Woodyard): spawn speedup per level (ms)",
+    "category": "harvest_tools",
+    "value": 5000,
+    "default": 5000,
+    "min": 0,
+    "description": "Additional spawn-interval reduction per tool level, on top of the idle-hero reduction."
+  },
+  {
+    "id": "harvest_tool.herbs.baseCost",
+    "label": "Sickle (Herb Garden): base cost",
+    "category": "harvest_tools",
+    "value": 200,
+    "default": 200,
+    "min": 0,
+    "description": "Cost of the first Sickle upgrade."
+  },
+  {
+    "id": "harvest_tool.herbs.costGrowth",
+    "label": "Sickle (Herb Garden): cost growth",
+    "category": "harvest_tools",
+    "value": 1.7,
+    "default": 1.7,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier applied per level."
+  },
+  {
+    "id": "harvest_tool.herbs.maxLevel",
+    "label": "Sickle (Herb Garden): max level",
+    "category": "harvest_tools",
+    "value": 8,
+    "default": 8,
+    "min": 1,
+    "description": "Highest level this tool can reach."
+  },
+  {
+    "id": "harvest_tool.herbs.yieldBonusPerLevel",
+    "label": "Sickle (Herb Garden): yield bonus per level",
+    "category": "harvest_tools",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "description": "Added to the Herb Garden's yield-per-catch per tool level."
+  },
+  {
+    "id": "harvest_tool.herbs.spawnBonusMsPerLevel",
+    "label": "Sickle (Herb Garden): spawn speedup per level (ms)",
+    "category": "harvest_tools",
+    "value": 5000,
+    "default": 5000,
+    "min": 0,
+    "description": "Additional spawn-interval reduction per tool level, on top of the idle-hero reduction."
+  },
+  {
+    "id": "harvest_tool.fish.baseCost",
+    "label": "Net (Fish Weir): base cost",
+    "category": "harvest_tools",
+    "value": 200,
+    "default": 200,
+    "min": 0,
+    "description": "Cost of the first Net upgrade."
+  },
+  {
+    "id": "harvest_tool.fish.costGrowth",
+    "label": "Net (Fish Weir): cost growth",
+    "category": "harvest_tools",
+    "value": 1.7,
+    "default": 1.7,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier applied per level."
+  },
+  {
+    "id": "harvest_tool.fish.maxLevel",
+    "label": "Net (Fish Weir): max level",
+    "category": "harvest_tools",
+    "value": 8,
+    "default": 8,
+    "min": 1,
+    "description": "Highest level this tool can reach."
+  },
+  {
+    "id": "harvest_tool.fish.yieldBonusPerLevel",
+    "label": "Net (Fish Weir): yield bonus per level",
+    "category": "harvest_tools",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "description": "Added to the Fish Weir's yield-per-catch per tool level."
+  },
+  {
+    "id": "harvest_tool.fish.spawnBonusMsPerLevel",
+    "label": "Net (Fish Weir): spawn speedup per level (ms)",
+    "category": "harvest_tools",
+    "value": 5000,
+    "default": 5000,
+    "min": 0,
+    "description": "Additional spawn-interval reduction per tool level, on top of the idle-hero reduction."
   }
 ]

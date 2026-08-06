@@ -90,6 +90,12 @@ here. Patches tab's flow is now Check -> Apply -> Commit -> **Push** (plain
 remote/branch as input); Build/Package/Tag shifted from steps 5/6/7 to
 6/7/8 to make room.
 
+**Harvest/Gathering + Crafting** — new `harvest` tab: idle heroes feed 4
+material nodes (Quarry/Woodyard/Herb Garden/Fish Weir) via a click-the-
+falling-item mechanic, spent on a Warehouse-tab Crafting UI (gear with
+player-chosen mods, or fixed consumables) plus a Trade Route for selling
+surplus. See its own section below for the full built-status writeup.
+
 **World lore** — `world-lore-pantheon.md` is the source of truth for
 gods/pantheon rules. Starved gods can lash out from the starving itself
 (confusion, not malice); Minor vs. Major domain framework in place (Major
@@ -248,84 +254,80 @@ loadout picked at send time. One follow-up worth a look next time
   enough to want its own dedicated pass rather than folding into
   whatever else is in flight.
 
-### Harvest/Gathering + Crafting (scoped from discussion -- not yet built)
-Started as the one-line "Off-mission engagement" bullet that used to live
-above; fleshed out enough across a few conversations that it's got real
-shape now. Answers the same original problem (idle heroes doing nothing)
-plus doubles as the material source the Crafting brainstorm needed.
+### Harvest/Gathering + Crafting -- built (patch 0111)
+Started as the one-line "Off-mission engagement" bullet, scoped across a
+few conversations, then built end to end: types, data, both managers,
+engine wiring, save migration, and a real UI. `npx tsc --noEmit` and a
+full `vite build` both pass clean; the actual spawn/catch/craft/sell loop
+was exercised at runtime (not just typechecked) before calling this done,
+including migrating a save that predates all of this entirely.
 
-**Harvest/Gathering** -- any hero not currently on a quest passively
-feeds this in the background; no assignment step, it just happens.
-Structure is 4 dedicated node tabs plus a Home tab, same split shape
-`RaidsPanel` already uses for Raids vs. the Quartermaster's Den:
-- **Quarry** (ore), **Woodyard** (timber), **Herb Garden** (herbs),
-  **Fish Weir** (fish) -- each its own sub-tab, own outdoor landscape
-  backdrop (same per-tab `backgroundImage` wash `MenuWindow` already does
-  for Raids/Guild Hall), own falling-item scene, one material type per
-  tab.
-- **Home tab = Warehouse** -- stock levels per material, storage cap,
-  descriptions. Likely an interior backdrop rather than outdoor,
-  mirroring the Quartermaster's Den's static-room feel against the
-  Raids tab's outdoor wash. Storage cap is a Warehouse upgrade, same
-  `storagePerLevel` shape Treasury already has.
-- **Per-node scene mechanic**: on a timer, that node's material spawns
-  at a random X at the top, falls, bounces (1-2 decreasing bounces),
-  settles, pulses gently for ~8-12s, then despawns if unclicked -- no
-  penalty for a miss. Click plays the existing collect-particle/
-  floating-text juice already used for gold/xp pickups (`.collect-burst`,
-  `floatingText` in `IdleView.tsx`) with a new material-icon particle
-  skin, rather than new animation code.
-- Flat, predictable yield per catch to start (1:1 baseline); scales later
-  purely via upgrades, not a random roll per catch. A rare "bonus" glint
-  (bigger pulse, worth 2-3x) adds a little surprise on top.
-- **Spawn rate scales with idle hero count** (more idle heroes = shorter
-  interval between spawns), soft-capped so the scene stays readable with
-  a big roster.
-- **Tool upgrade line, one per node** (Pickaxe/Woodaxe/Sickle/Net),
-  gold-cost, same tree shape as Raid Upgrades (own file, own tree, not
-  folded into the general `UPGRADES` list) -- bumps that node's spawn
-  rate/yield/despawn window per level.
-- Every numeric knob here (spawn interval, despawn timer, bonus-glint
-  chance/multiplier, yield-per-catch, tool-upgrade curves) is a strong
-  tuning-registry candidate from day one, not an afterthought -- same
-  category shape `guild_facilities` already established.
+**What's live:**
+- New `harvest` tab (Guild group) -- a Warehouse home sub-tab plus one
+  sub-tab per node (Quarry/Woodyard/Herb Garden/Fish Weir), each with its
+  own falling-item scene (`.harvest-scene` in app.css). Any hero not
+  currently on a quest feeds every node's spawn timer -- no assignment
+  step, and not gated on which sub-tab happens to be open, same as the
+  quest board and shop already tick regardless of which panel you're on.
+- **Per-node mechanic**: on a timer (`HarvestManager.ensureSpawns`,
+  ticked from `GameEngine.refreshWorld`), a material spawns at a random
+  X, falls and settles (`@keyframes harvest-fall`), pulses for ~12s
+  (`harvest.despawnWindowMs`), then despawns unclicked -- no penalty for
+  a miss. Catching it reuses the existing `.collect-burst`/
+  `.collect-particle` juice with a new `material` particle skin, not new
+  animation code. ~12% chance (`harvest.bonusChancePercent`) of a bigger
+  "bonus" glint worth 3x.
+- **Spawn rate** scales with idle hero count and each node's tool level,
+  floored at a minimum (`harvest.minSpawnIntervalMs`) so a big roster
+  can't turn a scene into chaos.
+- **Tool upgrade line** -- Pickaxe/Woodaxe/Sickle/Net, one per node,
+  gold-cost, own file (`data/harvestUpgrades.ts`), same "own tree, not
+  folded into the general list" shape as Raid Upgrades. Warehouse
+  (shared storage cap across all four materials, same `storagePerLevel`
+  shape Treasury already has) lives in the same file.
+- **Trade Route** -- one-time gold upgrade, unlocks selling materials
+  for flat gold per unit.
+- **Crafting**, in the Warehouse tab -- gear recipes (Guildmade Blade:
+  ore+timber; Guildmade Band: ore+timber) let the player pick 2 of 4
+  eligible mod types at a fixed value each, stored on the item itself as
+  `EquipmentItem.customMods` rather than the def's own `mods` (which
+  stays empty on any `craftable: true` def -- see that flag's comment in
+  types.ts). This is the actual reason to craft instead of farming or
+  buying: choice instead of a random roll. Consumable recipes (Trail
+  Rations: fish+herbs; Herbal Tonic: herbs) are simpler on purpose --
+  materials+gold for an existing potion, no customization, since "choose
+  your own stat spread" only makes sense for something you keep.
+  Crafting always succeeds (no roll) and costs gold *and* materials --
+  the real sink for Trade Route's gold faucet, not a separate mechanism.
+- Every numeric knob (spawn interval, despawn window, bonus odds/
+  multiplier, yield, sell price, all four tools' and the Warehouse's cost
+  curves) reads from the tuning registry from day one -- 34 new entries,
+  2 new categories (`harvest`, `harvest_tools`).
+- `guildmade_blade`/`guildmade_band` (the two craftable bases) are
+  filtered out of the shop, black market, and quest loot pools the same
+  way `raidExclusive` items already are, just in the opposite direction
+  -- see `EquipmentDef.craftable`'s comment in types.ts.
+- `EquipmentPanel` shows a "Crafted" badge next to the rarity pill on any
+  item with `customMods` set, and both its mod-list displays now read
+  `item.customMods ?? def.mods`.
+- `SAVE_VERSION` bumped 20 -> 21; migration fills in empty materials/
+  tools/warehouse/trade-route state for any save from before this
+  existed, verified against an actual pre-migration save object at
+  runtime, not just written and assumed correct.
 
-**Selling materials for gold** -- gated behind a **Trade Route** upgrade
-(mirrors Guild Charter/Raid Charter gating a whole feature behind one
-purchase). Deliberately not a free faucet -- pairs with:
-
-**Crafting** -- spends materials *and* gold, which is the actual sink for
-the above (a new faucet needs a real sink, not just a one-time gate
-purchase). Cross-node recipes by category rather than per-item, so
-nothing absurd ends up in a recipe (a ring never needs fish):
-
-| Category | Needs |
-|---|---|
-| Gear | Quarry ore + Woodyard timber |
-| Food consumables | Fish Weir fish + Herb Garden herbs |
-| Potions/flasks | Herb Garden herbs (+ a rare Quarry mineral dust at higher tiers) |
-
-**The actual reason to craft, not just another way to get gear**: shop,
-black-market, and raid loot are all pre-rolled fixed items -- crafting's
-whole value proposition should be *choice* instead of RNG. Likely shape:
-a crafted piece lets the player allocate a fixed pool of stat points
-across a preset set of mod types themselves (or choose N of M available
-mod types at fixed strength), rather than hoping a drop rolls the
-combination they actually wanted. This is the answer to "why craft
-instead of just farming or buying," not a detail to defer -- it needs to
-feel meaningfully different from opening the shop, or the whole system is
-just gear with extra steps.
-
-**Open, not yet decided**: exact recipe costs and tool-upgrade curves;
-Trade Route's own cost and whether it also needs a recurring toll beyond
-crafting demand as a sink; how a stat-allocation UI actually presents
-(sliders? pick-N-of-M chips?); whether crafted items get their own visual
-treatment (a "custom" rarity tier or marker) to read as distinct from
-found gear; art sourcing for the four node landscapes plus the Warehouse
-interior; whether one shared falling-item scene across all unlocked
-materials was considered and rejected in favor of the four-tab version
-(it was -- four distinct tabs, art sourcing isn't the blocker it might
-seem).
+**Known gaps, deliberately not blocking this patch:**
+- **Art.** `public/lore/harvest/<nodeId>.jpg` (4 files) and a Warehouse
+  interior don't exist yet -- same "missing file just fails to paint, no
+  broken-icon" convention as every other banner in this game, so the
+  mechanic works today and art can land whenever it's sourced, same
+  rollout shape quest-chain banners already used.
+- **Quests still exist to fill the same original gap.** Nothing was
+  changed about how a hero coming back from a quest also being available
+  to gather at the same time -- worth a look eventually, but not a blocker.
+- Recipe costs, tool-upgrade curves, and yields are first-pass numbers,
+  not a balance pass -- same "content is a cache, gameplay data confirms
+  the intent" spirit as every other system's initial numbers before
+  actual playtesting.
 
 ### Bigger, still-undecided
 - ~~First-five-minutes onboarding beat~~ -- done. A scripted, one-time tour

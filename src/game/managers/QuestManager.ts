@@ -29,8 +29,11 @@ function lootTableFor(difficulty: Difficulty, rng: Rng): { defId: string; chance
   // the same gap the shop/black market had before 0075. Confirmed as the
   // actual cause of Mythic gear turning up in ordinary quest rewards: rarity
   // alone doesn't distinguish a raid-tier variant from its base item, since
-  // they share the same rarity by design.
-  const pool = EQUIPMENT.filter((e) => rarities.includes(e.rarity) && !e.raidExclusive);
+  // they share the same rarity by design. craftable bases are excluded the
+  // same way -- a Guildmade Blade dropping as ordinary loot, with none of
+  // the customMods a real craft would give it, would just be a worse
+  // version of the same item for no reason.
+  const pool = EQUIPMENT.filter((e) => rarities.includes(e.rarity) && !e.raidExclusive && !e.craftable);
   if (pool.length === 0) return [];
   const picks = rng.shuffle(pool).slice(0, 3);
   return picks.map((def) => ({ defId: def.id, chance: RARITY_LOOT_CHANCE[def.rarity] }));

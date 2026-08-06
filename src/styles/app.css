@@ -715,6 +715,10 @@ button:focus-visible, [tabindex]:focus-visible {
   color: var(--sky);
   text-shadow: 0 0 8px color-mix(in srgb, var(--sky) 70%, transparent);
 }
+.collect-particle.material {
+  color: var(--moss);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--moss) 70%, transparent);
+}
 @keyframes collect-fly {
   0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
   15% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
@@ -1423,3 +1427,78 @@ input[type='range'] {
 [data-style='modern'] .menu-root { border-radius: 10px; overflow: hidden; }
 
 [data-style='modern'] .knight-button { border-radius: 0; box-shadow: none; }
+
+/* ----------------------------- harvest scene ------------------------------ */
+/*
+ * A per-node falling-item scene. Deliberately not the same treatment as
+ * ChainBanner/RaidBanner (a thin header strip above the text) -- this is
+ * the actual gameplay surface for that tab, not decoration behind it, so
+ * it gets real height and its own dedicated backdrop rather than a subtle
+ * wash. Missing art fails the same way every other banner already does:
+ * no image, no broken-icon, just the scene's own dark fallback fill.
+ */
+.harvest-scene {
+  position: relative;
+  height: 280px;
+  border-radius: 6px;
+  border: 1px solid var(--edge);
+  background-color: var(--night);
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.harvest-scene-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-align: center;
+  padding: 0 20px;
+}
+.harvest-item {
+  position: absolute;
+  top: 62%;
+  font-size: 2rem;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
+  transition: opacity 400ms linear;
+  background: none;
+  border: none;
+  padding: 0;
+}
+.harvest-item.fresh {
+  animation: harvest-fall 900ms cubic-bezier(0.3, 0, 0.6, 1) both;
+}
+.harvest-item.settled {
+  animation: harvest-pulse 1.6s ease-in-out infinite;
+}
+.harvest-item.bonus {
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--brass) 80%, transparent))
+    drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
+}
+@keyframes harvest-fall {
+  0% { top: -10%; transform: scale(0.9); }
+  55% { top: 62%; transform: scale(1); }
+  70% { top: 52%; }
+  85% { top: 62%; transform: scale(1); }
+  93% { top: 57%; }
+  100% { top: 62%; transform: scale(1); }
+}
+@keyframes harvest-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+.harvest-stock-row { display: flex; align-items: center; gap: 6px; }
+.harvest-stock-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--panel-3);
+  overflow: hidden;
+}
+.harvest-stock-bar span { display: block; height: 100%; background: var(--moss); }

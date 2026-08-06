@@ -3,13 +3,21 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 20;
+export const SAVE_VERSION = 21;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
 export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'shield' | 'gloves' | 'boots' | 'ring' | 'amulet';
+
+/**
+ * One material per Harvest/Gathering node. Deliberately 1:1 with the node
+ * itself (the Quarry only ever produces ore, etc.) -- see
+ * guild-idler-status.md's "Harvest/Gathering + Crafting" section for the
+ * full design this and everything below it implements.
+ */
+export type MaterialId = 'ore' | 'timber' | 'herbs' | 'fish';
 
 export type HeroClass = 'adventurer' | 'knight' | 'gladiator' | 'samurai' | 'witch' | 'pyromancer' | 'lizardman' | 'wizard' | 'dwarf';
 
@@ -97,6 +105,16 @@ export interface EquipmentDef {
    * which raid difficulty dropped it.
    */
   raidExclusive?: boolean;
+  /**
+   * True for bases that only ever exist as a Crafting result -- never sold,
+   * never dropped as loot. Shop/black-market/loot-table generation all
+   * filter this out the same way raidExclusive already gets filtered from
+   * the opposite direction (a raid-exclusive item never appears in the
+   * shop; a craftable base never appears anywhere BUT crafting). Its own
+   * `mods` here should stay empty -- a crafted instance's real mods live on
+   * the EquipmentItem itself, see customMods below, not the def.
+   */
+  craftable?: boolean;
 }
 
 /** A concrete item the player owns. */
@@ -106,6 +124,17 @@ export interface EquipmentItem {
   durability: number;
   /** Number of times upgraded at the workshop. */
   plus: number;
+  /**
+   * Set only on Crafting results. Overrides the def's own `mods` entirely
+   * (a craftable def's `mods` is always empty, see EquipmentDef.craftable)
+   * with whichever mod types the player picked at craft time, each at the
+   * recipe's fixed strength -- this is the actual point of crafting: choice
+   * instead of a random roll. Every other read of an item's mods
+   * (HeroManager.equipmentMods, EquipmentPanel's display) checks this first
+   * and falls back to the def's mods otherwise, so nothing needs to know
+   * whether a given item came from crafting or not beyond that one check.
+   */
+  customMods?: Partial<Modifiers>;
 }
 
 export interface ItemSet {
@@ -628,4 +657,56 @@ export interface GameState {
    * shows even if the app closes before the player notices it.
    */
   pendingChainDiscovery: boolean;
+
+  /* ------------------------- Harvest/Gathering ------------------------- */
+  /** Current stock of each material, capped by warehouseCapacity(). */
+  materials: Record<MaterialId, number>;
+  /** Per-node spawn/pending-item state -- see HarvestManager. */
+  harvestNodes: Record<MaterialId, HarvestNodeState>;
+  /** Levels bought in the per-node tool upgrade line (Pickaxe/Woodaxe/Sickle/Net). */
+  harvestTools: Record<MaterialId, number>;
+  /** Levels bought in the Warehouse capacity upgrade -- same storagePerLevel shape as Treasury. */
+  warehouseLevel: number;
+  /** True once the Trade Route upgrade is bought -- gates selling materials for gold. */
+  tradeRouteUnlocked: boolean;
+}
+
+/**
+ * One node's live gathering state. `pending` is the falling/settled item
+ * currently on screen in that node's own tab, if any -- null means nothing
+ * has spawned yet since the last catch or despawn. Ticked forward in
+ * GameEngine.refreshWorld the same way the quest board and shop rotations
+ * already are, so a node keeps spawning (and expiring) items even while its
+ * own tab isn't the one open.
+ */
+export interface HarvestNodeState {
+  nextSpawnAt: number;
+  pending: { spawnedAt: number; expiresAt: number; bonus: boolean } | null;
+}
+
+/**
+ * A Crafting recipe. Two shapes depending on `category`: a `gear` recipe
+ * produces a fresh EquipmentItem with player-chosen customMods (see
+ * EquipmentItem.customMods) rather than a fixed roll; a `consumable`
+ * recipe just produces an existing ConsumableDef, materials+gold standing
+ * in for the shop's gold-only price -- no per-craft customization, since
+ * "choose your own stat spread" only makes sense for something you keep.
+ */
+export interface CraftingRecipeDef {
+  id: string;
+  name: string;
+  description: string;
+  category: 'gear' | 'consumable';
+  materialCost: Partial<Record<MaterialId, number>>;
+  goldCost: number;
+  /** `gear` recipes only -- the craftable EquipmentDef this recipe produces. */
+  resultDefId?: string;
+  /** `gear` recipes only -- the eligible mod pool the player picks from. */
+  modOptions?: (keyof Modifiers)[];
+  /** `gear` recipes only -- how many of modOptions the player picks, e.g. 2. */
+  modsToPick?: number;
+  /** `gear` recipes only -- fixed strength applied to each picked mod. */
+  modValue?: number;
+  /** `consumable` recipes only -- the ConsumableDef this recipe produces. */
+  resultConsumableId?: string;
 }

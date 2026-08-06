@@ -41,6 +41,15 @@ function RarityPill({ rarity }: { rarity: Rarity }) {
   );
 }
 
+/** Marks a crafted instance -- orthogonal to rarity, which still governs power tier. */
+function CraftedPill() {
+  return (
+    <span className="rarity-pill" style={{ color: 'var(--brass)', borderColor: 'var(--brass)' }}>
+      crafted
+    </span>
+  );
+}
+
 function DurabilityBar({ item }: { item: EquipmentItem }) {
   const max = EquipmentManager.maxDurability(item);
   const ratio = item.durability / max;
@@ -213,12 +222,13 @@ function SlotCard({
         <div className="item-card-body">
           <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
           <RarityPill rarity={def.rarity} />
+          {item.customMods && <CraftedPill />}
         </div>
       </div>
       {open && (
         <div className="item-card-details">
           <div className="tiny muted">{slot} · requires level {def.reqLevel}</div>
-          <div className="tiny muted" style={{ marginTop: 2 }}>{describeMods(def.mods).join(' · ') || 'No bonuses'}</div>
+          <div className="tiny muted" style={{ marginTop: 2 }}>{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
           <DurabilityBar item={item} />
           <div className="row wrap" style={{ marginTop: 6 }}>
             <button
@@ -270,12 +280,13 @@ function StashCard({
         <div className="item-card-body">
           <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
           <RarityPill rarity={def.rarity} />
+          {item.customMods && <CraftedPill />}
         </div>
       </div>
       {open && (
         <div className="item-card-details">
           <div className="tiny muted">{def.slot} · requires level {def.reqLevel}</div>
-          <div className="tiny muted" style={{ marginTop: 2 }}>{describeMods(def.mods).join(' · ') || 'No bonuses'}</div>
+          <div className="tiny muted" style={{ marginTop: 2 }}>{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
           <DurabilityBar item={item} />
           <div className="row wrap" style={{ marginTop: 6 }}>
             <button

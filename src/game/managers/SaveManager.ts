@@ -1,8 +1,10 @@
-import { GameState, GuildFacility, SAVE_VERSION } from '../types';
+import { GameState, GuildFacility, MaterialId, SAVE_VERSION } from '../types';
 import { createRng } from '../rng';
 import { HeroManager } from './HeroManager';
 import { AchievementManager } from './AchievementManager';
 import { UPGRADES, vendorUpgrades } from '../data/progression';
+import { NODE_ORDER } from '../data/materials';
+import { Tuning } from '../data/tuning';
 
 /** Storage abstraction so the game also runs in a plain browser tab for testing. */
 export interface SaveAdapter {
@@ -102,7 +104,18 @@ export function createInitialState(now = Date.now()): GameState {
     raidUpgrades: {},
     seenOnboarding: false,
     pendingChainDiscovery: false,
+    materials: emptyMaterials(),
+    harvestNodes: Object.fromEntries(
+      NODE_ORDER.map((id) => [id, { nextSpawnAt: now + Tuning.get('harvest.baseSpawnIntervalMs'), pending: null }]),
+    ) as GameState['harvestNodes'],
+    harvestTools: emptyMaterials(),
+    warehouseLevel: 0,
+    tradeRouteUnlocked: false,
   };
+}
+
+function emptyMaterials(): Record<MaterialId, number> {
+  return { ore: 0, timber: 0, herbs: 0, fish: 0 };
 }
 
 /**
@@ -303,6 +316,29 @@ const MIGRATIONS: Record<number, Migration> = {
     seenOnboarding: true,
     pendingChainDiscovery: (save.pendingChainDiscovery as boolean | undefined) ?? false,
   }),
+  20: (save) => {
+    const now = Date.now();
+    const existingMaterials = (save.materials as Record<string, number> | undefined) ?? {};
+    const existingTools = (save.harvestTools as Record<string, number> | undefined) ?? {};
+    const existingNodes = (save.harvestNodes as Record<string, unknown> | undefined) ?? {};
+    const materials: Record<string, number> = {};
+    const harvestTools: Record<string, number> = {};
+    const harvestNodes: Record<string, unknown> = {};
+    for (const id of NODE_ORDER) {
+      materials[id] = existingMaterials[id] ?? 0;
+      harvestTools[id] = existingTools[id] ?? 0;
+      harvestNodes[id] = existingNodes[id] ?? { nextSpawnAt: now + Tuning.get('harvest.baseSpawnIntervalMs'), pending: null };
+    }
+    return {
+      ...save,
+      version: 21,
+      materials,
+      harvestTools,
+      harvestNodes,
+      warehouseLevel: (save.warehouseLevel as number | undefined) ?? 0,
+      tradeRouteUnlocked: (save.tradeRouteUnlocked as boolean | undefined) ?? false,
+    };
+  },
 };
 
 export const SaveManager = {

@@ -1,4 +1,4 @@
-import { ActiveQuest, GameState, Hero, HeroClass, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult } from './types';
+import { ActiveQuest, GameState, Hero, HeroClass, MaterialId, Modifiers, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -12,6 +12,8 @@ import { PrestigeManager } from './managers/PrestigeManager';
 import { ModifierManager } from './managers/ModifierManager';
 import { AchievementManager } from './managers/AchievementManager';
 import { GuidanceManager, GuidanceTopic } from './managers/GuidanceManager';
+import { HarvestManager } from './managers/HarvestManager';
+import { CraftingManager } from './managers/CraftingManager';
 import { SKIN_BY_ID, SKIN_PRICE, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
 import { EQUIPMENT_BY_ID, SET_BY_ID } from './data/equipment';
 import { RAID_BY_ID } from './data/raids';
@@ -388,6 +390,7 @@ export class GameEngine {
       ShopManager.refreshBlackMarket(this.state, now, true);
       changed = true;
     }
+    if (HarvestManager.ensureSpawns(this.state, now)) changed = true;
     return changed;
   }
 
@@ -916,6 +919,65 @@ export class GameEngine {
 
   upgradeFacility(id: Parameters<typeof GuildManager.upgradeFacility>[1]) {
     const error = GuildManager.upgradeFacility(this.state, id);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Catches whatever's pending at a node, if anything -- returns what was gained for the UI's particle feedback. */
+  catchMaterial(nodeId: MaterialId): { gained: number; bonus: boolean } {
+    const result = HarvestManager.catch(this.state, nodeId, Date.now());
+    if (result.gained > 0) {
+      playSound('collect');
+      this.notify();
+      void this.saveNow();
+    }
+    return result;
+  }
+
+  sellMaterial(materialId: MaterialId, amount: number) {
+    const error = HarvestManager.sell(this.state, materialId, amount);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.notify();
+    void this.saveNow();
+  }
+
+  unlockTradeRoute() {
+    const error = HarvestManager.unlockTradeRoute(this.state);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.say('The Trade Route is open -- materials can be sold for gold from here on.', 'upgrades');
+    void this.saveNow();
+  }
+
+  upgradeHarvestTool(nodeId: MaterialId) {
+    const error = HarvestManager.upgradeTool(this.state, nodeId);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.notify();
+    void this.saveNow();
+  }
+
+  upgradeWarehouse() {
+    const error = HarvestManager.upgradeWarehouse(this.state);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.notify();
+    void this.saveNow();
+  }
+
+  craftGear(recipeId: string, chosenMods: (keyof Modifiers)[]) {
+    const error = CraftingManager.craftGear(this.state, recipeId, chosenMods);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.say('A new piece, built to spec, lands in the stash.');
+    void this.saveNow();
+  }
+
+  craftConsumable(recipeId: string) {
+    const error = CraftingManager.craftConsumable(this.state, recipeId);
     if (error) return this.say(error);
     playSound('purchase');
     this.notify();

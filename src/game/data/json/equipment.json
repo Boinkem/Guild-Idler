@@ -12,7 +12,8 @@
     },
     "stats": {
       "strength": 1
-    }
+    },
+    "icon": "weapons/Weapon_01.png"
   },
   {
     "id": "woodcutter_axe",
@@ -27,7 +28,8 @@
     },
     "stats": {
       "strength": 1
-    }
+    },
+    "icon": "weapons/Weapon_25.png"
   },
   {
     "id": "knights_blade",
@@ -43,7 +45,8 @@
     },
     "stats": {
       "strength": 3
-    }
+    },
+    "icon": "weapons/Weapon_03.png"
   },
   {
     "id": "silver_rapier",
@@ -60,7 +63,8 @@
     "stats": {
       "strength": 4,
       "luck": 2
-    }
+    },
+    "icon": "weapons/Weapon_07.png"
   },
   {
     "id": "oathkeeper",
@@ -77,7 +81,8 @@
     "stats": {
       "strength": 7,
       "endurance": 3
-    }
+    },
+    "icon": "weapons/Weapon_09.png"
   },
   {
     "id": "dragon_blade",
@@ -95,7 +100,8 @@
     "stats": {
       "strength": 12
     },
-    "setId": "dragon_slayer"
+    "setId": "dragon_slayer",
+    "icon": "weapons/Weapon_60.png"
   },
   {
     "id": "leather_cap",
@@ -107,7 +113,8 @@
     "value": 25,
     "mods": {
       "injuryResist": 3
-    }
+    },
+    "icon": "armor/Armor_26.png"
   },
   {
     "id": "iron_helm",
@@ -118,12 +125,13 @@
     "maxDurability": 60,
     "value": 140,
     "mods": {
-      "injuryResist": 7,
-      "success": 2
+      "success": 2,
+      "injuryResist": 7
     },
     "stats": {
       "endurance": 2
-    }
+    },
+    "icon": "armor/Armor_24.png"
   },
   {
     "id": "visored_sallet",
@@ -134,12 +142,13 @@
     "maxDurability": 85,
     "value": 470,
     "mods": {
-      "injuryResist": 12,
-      "success": 4
+      "success": 4,
+      "injuryResist": 12
     },
     "stats": {
       "endurance": 4
-    }
+    },
+    "icon": "armor/Armor_31.png"
   },
   {
     "id": "crown_of_the_lost",
@@ -150,13 +159,14 @@
     "maxDurability": 120,
     "value": 2100,
     "mods": {
+      "success": 5,
       "xp": 25,
-      "loot": 5,
-      "success": 5
+      "loot": 5
     },
     "stats": {
       "wisdom": 8
-    }
+    },
+    "icon": "armor/Armor_111.png"
   },
   {
     "id": "dragon_helm",
@@ -167,13 +177,14 @@
     "maxDurability": 190,
     "value": 6400,
     "mods": {
-      "injuryResist": 20,
-      "success": 8
+      "success": 8,
+      "injuryResist": 20
     },
     "stats": {
       "endurance": 9
     },
-    "setId": "dragon_slayer"
+    "setId": "dragon_slayer",
+    "icon": "armor/Armor_40.png"
   },
   {
     "id": "padded_gambeson",
@@ -185,7 +196,8 @@
     "value": 35,
     "mods": {
       "injuryResist": 4
-    }
+    },
+    "icon": "armor/Armor_116.png"
   },
   {
     "id": "chainmail",
@@ -196,12 +208,13 @@
     "maxDurability": 75,
     "value": 210,
     "mods": {
-      "injuryResist": 9,
-      "success": 3
+      "success": 3,
+      "injuryResist": 9
     },
     "stats": {
       "endurance": 3
-    }
+    },
+    "icon": "armor/Armor_03.png"
   },
   {
     "id": "guardplate",
@@ -212,12 +225,13 @@
     "maxDurability": 110,
     "value": 640,
     "mods": {
-      "injuryResist": 14,
-      "success": 5
+      "success": 5,
+      "injuryResist": 14
     },
     "stats": {
       "endurance": 6
-    }
+    },
+    "icon": "armor/Armor_05.png"
   },
   {
     "id": "bulwark_cuirass",
@@ -228,13 +242,14 @@
     "maxDurability": 150,
     "value": 2400,
     "mods": {
-      "injuryResist": 22,
       "success": 8,
+      "injuryResist": 22,
       "durability": 15
     },
     "stats": {
       "endurance": 9
-    }
+    },
+    "icon": "armor/Armor_10.png"
   },
   {
     "id": "dragon_armor",
@@ -245,15 +260,16 @@
     "maxDurability": 220,
     "value": 8200,
     "mods": {
-      "injuryResist": 28,
       "success": 10,
+      "injuryResist": 28,
       "durability": 20
     },
     "stats": {
-      "endurance": 13,
-      "strength": 4
+      "strength": 4,
+      "endurance": 13
     },
-    "setId": "dragon_slayer"
+    "setId": "dragon_slayer",
+    "icon": "armor/Armor_19.png"
   },
   {
     "id": "work_gloves",
@@ -265,7 +281,8 @@
     "value": 20,
     "mods": {
       "gold": 3
-    }
+    },
+    "icon": "armor/Armor_75.png"
   },
   {
     "id": "gauntlets",
@@ -281,7 +298,8 @@
     },
     "stats": {
       "strength": 2
-    }
+    },
+    "icon": "armor/Armor_73.png"
   },
   {
     "id": "thief_wraps",
@@ -297,7 +315,8 @@
     },
     "stats": {
       "luck": 4
-    }
+    },
+    "icon": "armor/Armor_84.png"
   },
   {
     "id": "grasp_of_avarice",
@@ -313,7 +332,8 @@
     },
     "stats": {
       "luck": 8
-    }
+    },
+    "icon": "armor/Armor_71.png"
   },
   {
     "id": "worn_boots",
@@ -325,7 +345,8 @@
     "value": 22,
     "mods": {
       "speed": 3
-    }
+    },
+    "icon": "armor/Armor_54.png"
   },
   {
     "id": "ranger_boots",
@@ -340,7 +361,8 @@
     },
     "stats": {
       "endurance": 2
-    }
+    },
+    "icon": "armor/Armor_53.png"
   },
   {
     "id": "sevenleague_boots",
@@ -356,7 +378,8 @@
     "stats": {
       "endurance": 3,
       "luck": 2
-    }
+    },
+    "icon": "armor/Armor_52.png"
   },
   {
     "id": "windstride_greaves",
@@ -367,12 +390,13 @@
     "maxDurability": 130,
     "value": 2300,
     "mods": {
-      "speed": 22,
-      "success": 4
+      "success": 4,
+      "speed": 22
     },
     "stats": {
       "endurance": 7
-    }
+    },
+    "icon": "armor/Armor_45.png"
   },
   {
     "id": "copper_band",
@@ -384,7 +408,8 @@
     "value": 30,
     "mods": {
       "loot": 1
-    }
+    },
+    "icon": "accessories/Accessory_06.png"
   },
   {
     "id": "lucky_ring",
@@ -395,12 +420,13 @@
     "maxDurability": 100,
     "value": 600,
     "mods": {
-      "loot": 6,
-      "gold": 10
+      "gold": 10,
+      "loot": 6
     },
     "stats": {
       "luck": 6
-    }
+    },
+    "icon": "accessories/Accessory_09.png"
   },
   {
     "id": "signet_of_wardens",
@@ -417,7 +443,8 @@
     "stats": {
       "luck": 5,
       "wisdom": 4
-    }
+    },
+    "icon": "accessories/Accessory_08.png"
   },
   {
     "id": "ring_of_endless_roads",
@@ -428,14 +455,15 @@
     "maxDurability": 210,
     "value": 7600,
     "mods": {
-      "speed": 25,
       "xp": 30,
-      "loot": 8
+      "loot": 8,
+      "speed": 25
     },
     "stats": {
       "luck": 9,
       "wisdom": 8
-    }
+    },
+    "icon": "accessories/Accessory_10.png"
   },
   {
     "id": "bone_charm",
@@ -447,7 +475,8 @@
     "value": 28,
     "mods": {
       "xp": 5
-    }
+    },
+    "icon": "accessories/Accessory_14.png"
   },
   {
     "id": "scholars_pendant",
@@ -462,7 +491,8 @@
     },
     "stats": {
       "wisdom": 3
-    }
+    },
+    "icon": "accessories/Accessory_17.png"
   },
   {
     "id": "amulet_of_fortune",
@@ -478,7 +508,8 @@
     },
     "stats": {
       "luck": 9
-    }
+    },
+    "icon": "accessories/Accessory_11.png"
   },
   {
     "id": "heart_of_the_mountain",
@@ -496,7 +527,8 @@
     "stats": {
       "endurance": 12,
       "wisdom": 6
-    }
+    },
+    "icon": "accessories/Accessory_13.png"
   },
   {
     "id": "warband_cleaver",
@@ -512,7 +544,8 @@
     },
     "stats": {
       "strength": 3
-    }
+    },
+    "icon": "weapons/Weapon_26.png"
   },
   {
     "id": "choir_mask",
@@ -529,7 +562,8 @@
     },
     "stats": {
       "wisdom": 9
-    }
+    },
+    "icon": "armor/Armor_127.png"
   },
   {
     "id": "silenced_bell",
@@ -544,9 +578,10 @@
       "gold": 20
     },
     "stats": {
-      "wisdom": 6,
-      "luck": 5
-    }
+      "luck": 5,
+      "wisdom": 6
+    },
+    "icon": "misc/Misc_25.png"
   },
   {
     "id": "voidforged_blade",
@@ -566,7 +601,8 @@
       "strength": 16,
       "luck": 4
     },
-    "setId": "voidforged"
+    "setId": "voidforged",
+    "icon": "weapons/Weapon_61.png"
   },
   {
     "id": "voidforged_crown",
@@ -578,14 +614,15 @@
     "value": 11800,
     "mods": {
       "success": 14,
-      "injuryResist": 22,
-      "xp": 20
+      "xp": 20,
+      "injuryResist": 22
     },
     "stats": {
-      "wisdom": 12,
-      "endurance": 6
+      "endurance": 6,
+      "wisdom": 12
     },
-    "setId": "voidforged"
+    "setId": "voidforged",
+    "icon": "armor/Armor_36.png"
   },
   {
     "id": "voidforged_plate",
@@ -596,15 +633,16 @@
     "maxDurability": 280,
     "value": 13200,
     "mods": {
-      "injuryResist": 30,
       "success": 12,
+      "injuryResist": 30,
       "durability": 25
     },
     "stats": {
-      "endurance": 16,
-      "strength": 5
+      "strength": 5,
+      "endurance": 16
     },
-    "setId": "voidforged"
+    "setId": "voidforged",
+    "icon": "armor/Armor_15.png"
   },
   {
     "id": "voidforged_signet",
@@ -615,14 +653,15 @@
     "maxDurability": 220,
     "value": 10500,
     "mods": {
-      "loot": 14,
       "gold": 22,
+      "loot": 14,
       "speed": 10
     },
     "stats": {
       "luck": 14
     },
-    "setId": "voidforged"
+    "setId": "voidforged",
+    "icon": "accessories/Accessory_05.png"
   },
   {
     "id": "stormcaller_axe",
@@ -638,7 +677,8 @@
     },
     "stats": {
       "strength": 8
-    }
+    },
+    "icon": "weapons/Weapon_34.png"
   },
   {
     "id": "ashen_greaves",
@@ -649,12 +689,13 @@
     "maxDurability": 140,
     "value": 2250,
     "mods": {
-      "speed": 24,
-      "injuryResist": 8
+      "injuryResist": 8,
+      "speed": 24
     },
     "stats": {
       "endurance": 6
-    }
+    },
+    "icon": "armor/Armor_45.png"
   },
   {
     "id": "gravekeepers_gloves",
@@ -670,7 +711,8 @@
     },
     "stats": {
       "luck": 7
-    }
+    },
+    "icon": "armor/Armor_76.png"
   },
   {
     "id": "wardens_bulwark",
@@ -681,12 +723,13 @@
     "maxDurability": 115,
     "value": 680,
     "mods": {
-      "injuryResist": 16,
-      "success": 5
+      "success": 5,
+      "injuryResist": 16
     },
     "stats": {
       "endurance": 7
-    }
+    },
+    "icon": "armor/Armor_09.png"
   },
   {
     "id": "empyrean_blade",
@@ -706,7 +749,8 @@
       "strength": 20,
       "luck": 5
     },
-    "setId": "empyrean"
+    "setId": "empyrean",
+    "icon": "weapons/Weapon_61.png"
   },
   {
     "id": "empyrean_halo",
@@ -718,14 +762,15 @@
     "value": 17200,
     "mods": {
       "success": 18,
-      "injuryResist": 26,
-      "xp": 26
+      "xp": 26,
+      "injuryResist": 26
     },
     "stats": {
-      "wisdom": 15,
-      "endurance": 7
+      "endurance": 7,
+      "wisdom": 15
     },
-    "setId": "empyrean"
+    "setId": "empyrean",
+    "icon": "armor/Armor_112.png"
   },
   {
     "id": "empyrean_aegis",
@@ -898,14 +943,15 @@
     "maxDurability": 190,
     "value": 1950,
     "mods": {
-      "injuryResist": 14,
       "success": 6,
-      "loot": 5
+      "loot": 5,
+      "injuryResist": 14
     },
     "stats": {
-      "wisdom": 5,
-      "endurance": 3
-    }
+      "endurance": 3,
+      "wisdom": 5
+    },
+    "icon": "accessories/Accessory_10.png"
   },
   {
     "id": "travelers_band",
@@ -916,12 +962,13 @@
     "maxDurability": 65,
     "value": 110,
     "mods": {
-      "speed": 5,
-      "gold": 4
+      "gold": 4,
+      "speed": 5
     },
     "stats": {
       "luck": 2
-    }
+    },
+    "icon": "accessories/Accessory_01.png"
   },
   {
     "id": "gauntlets_of_the_ashen_hand",
@@ -2257,5 +2304,27 @@
       "endurance": 27
     },
     "raidExclusive": true
+  },
+  {
+    "id": "guildmade_blade",
+    "name": "Guildmade Blade",
+    "slot": "weapon",
+    "rarity": "rare",
+    "reqLevel": 12,
+    "maxDurability": 100,
+    "value": 550,
+    "mods": {},
+    "craftable": true
+  },
+  {
+    "id": "guildmade_band",
+    "name": "Guildmade Band",
+    "slot": "ring",
+    "rarity": "rare",
+    "reqLevel": 12,
+    "maxDurability": 100,
+    "value": 550,
+    "mods": {},
+    "craftable": true
   }
 ]

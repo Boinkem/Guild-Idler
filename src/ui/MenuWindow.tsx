@@ -9,6 +9,7 @@ import { EquipmentPanel } from './panels/EquipmentPanel';
 import { ShopPanel } from './panels/ShopPanel';
 import { UpgradesPanel } from './panels/UpgradesPanel';
 import { GuildPanel } from './panels/GuildPanel';
+import { HarvestPanel } from './panels/HarvestPanel';
 import { GuidePanel } from './panels/GuidePanel';
 import { LorePanel } from './panels/LorePanel';
 import { RaidsPanel } from './panels/RaidsPanel';
@@ -51,6 +52,7 @@ const GUILD_GROUP = {
     { id: 'equipment', label: 'Inventory', Panel: EquipmentPanel },
     { id: 'shop', label: 'Shop', Panel: ShopPanel },
     { id: 'guild', label: 'Guild Hall', Panel: GuildPanel },
+    { id: 'harvest', label: 'Harvest', Panel: HarvestPanel },
   ],
 } as const;
 const ADVENTURE_GROUP = {
