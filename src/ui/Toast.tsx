@@ -3,17 +3,19 @@ import { useEngine } from './useEngine';
 
 export function Toast() {
   const engine = useEngine();
-  const message = engine.toast;
+  const toast = engine.toast;
 
   useEffect(() => {
-    if (!message) return;
+    if (!toast) return undefined;
     const id = window.setTimeout(() => engine.clearToast(), 3200);
     return () => window.clearTimeout(id);
-  }, [message, engine]);
+  }, [toast?.seq, engine]);
 
-  if (!message) return null;
-  // Keying on the message text forces a remount whenever it changes, which
-  // restarts the toast-pop animation -- the visual half of the sound cue
-  // that already plays for purchases and other actions.
-  return <div key={message} className="toast toast-pop" role="status">{message}</div>;
+  if (!toast) return null;
+  // Keying on seq (not message text) forces a remount whenever a new toast
+  // arrives, even if it's word-for-word identical to the last one -- same
+  // reasoning as the effect above, and the actual fix: two toasts with the
+  // same text are still two distinct toasts, each needing its own timer
+  // and its own restarted pop-in animation.
+  return <div key={toast.seq} className="toast toast-pop" role="status">{toast.message}</div>;
 }

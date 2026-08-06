@@ -62,8 +62,20 @@ export class GameEngine {
    * needs zero changes: `engine.toast` behaves exactly as it always has,
    * it just advances instead of going straight to null.
    */
-  private toastQueue: string[] = [];
-  get toast(): string | null {
+  private toastQueue: { message: string; seq: number }[] = [];
+  private nextToastSeq = 0;
+  /**
+   * `seq` exists purely so two back-to-back toasts with identical text
+   * (e.g. levelling the same vendor twice in under 3.2s) are still
+   * distinguishable. Toast.tsx's own auto-dismiss effect is keyed on
+   * `[toast, engine]`, and React only re-runs an effect when a dependency
+   * actually changes by value -- if the message text is unchanged, the
+   * effect doesn't re-fire and the OLD timer (already consumed by the
+   * first toast) never gets rescheduled for the second one. Confirmed as
+   * the actual cause of a notification "not going away": it wasn't stuck,
+   * it just never had a timer running for it in the first place.
+   */
+  get toast(): { message: string; seq: number } | null {
     return this.toastQueue[0] ?? null;
   }
   /**
@@ -135,7 +147,7 @@ export class GameEngine {
 
   private say(message: string, targetTab?: string) {
     this.archive(message, targetTab);
-    this.toastQueue.push(message);
+    this.toastQueue.push({ message, seq: this.nextToastSeq++ });
     this.notify();
   }
 

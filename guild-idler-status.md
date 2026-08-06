@@ -222,6 +222,21 @@ raid fight).
   specifically (a different toggle from power mode), and/or actually
   inspecting the live DOM's `:root` for `data-motion`/computed
   `prefers-reduced-motion` state via DevTools next time this comes up.
+- ~~A toast notification sometimes never goes away~~ -- resolved (patch
+  0116). Real React bug, not a UI/CSS issue: `Toast.tsx`'s auto-dismiss
+  effect was keyed on `[message, engine]` -- message text. Two toasts in
+  a row with *identical* text (e.g. levelling the same vendor twice
+  inside the 3.2s display window -- "The Blacksmith has more to offer
+  now." both times) meant the dependency never changed value between
+  them, so React never re-ran the effect for the second one, and no timer
+  ever got scheduled for it. It wasn't stuck; it just never had a
+  dismiss timer running in the first place. `engine.toast` now carries a
+  `seq` alongside the message, incremented on every `say()` call, and
+  both the effect and the remount key use that instead of the text.
+  Verified by simulating the exact duplicate-toast sequence directly
+  against the engine (not just reasoned through): confirmed the two
+  entries now carry distinct seq numbers, which is what actually
+  restores the effect re-firing.
 
 ---
 
