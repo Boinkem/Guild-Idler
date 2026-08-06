@@ -781,15 +781,18 @@
     "maxDurability": 320,
     "value": 19000,
     "mods": {
-      "injuryResist": 34,
       "success": 16,
+      "injuryResist": 34,
       "durability": 30
     },
     "stats": {
-      "endurance": 20,
-      "strength": 6
+      "strength": 6,
+      "endurance": 20
     },
-    "setId": "empyrean"
+    "setId": "empyrean",
+    "icon": "shields/Shield_19.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "the_last_ember",
@@ -802,8 +805,8 @@
     "mods": {
       "success": 20,
       "gold": 45,
-      "loot": 20,
       "xp": 35,
+      "loot": 20,
       "injuryResist": 20
     },
     "stats": {
@@ -812,7 +815,10 @@
       "luck": 10,
       "wisdom": 10
     },
-    "setId": "requiem"
+    "setId": "requiem",
+    "icon": "misc/Misc_27.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "cellar_dwellers_tooth",
@@ -828,7 +834,10 @@
     },
     "stats": {
       "luck": 2
-    }
+    },
+    "icon": "accessories/Accessory_14.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "crow_feather_charm",
@@ -844,7 +853,10 @@
     },
     "stats": {
       "wisdom": 3
-    }
+    },
+    "icon": "misc/Misc_04.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "wardens_signet",
@@ -860,9 +872,12 @@
       "injuryResist": 10
     },
     "stats": {
-      "wisdom": 6,
-      "endurance": 4
-    }
+      "endurance": 4,
+      "wisdom": 6
+    },
+    "icon": "accessories/Accessory_07.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "sword_of_the_ashen_hand",
@@ -881,7 +896,10 @@
       "strength": 14,
       "wisdom": 4
     },
-    "setId": "ashen_hand"
+    "setId": "ashen_hand",
+    "icon": "weapons/Weapon_60.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "bulwark_of_the_war_saint",
@@ -892,15 +910,18 @@
     "maxDurability": 240,
     "value": 9600,
     "mods": {
-      "injuryResist": 30,
       "success": 10,
+      "injuryResist": 30,
       "durability": 20
     },
     "stats": {
       "endurance": 14,
       "wisdom": 4
     },
-    "setId": "ashen_hand"
+    "setId": "ashen_hand",
+    "icon": "shields/Shield_24.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "ashwoven_charm",
@@ -916,7 +937,10 @@
     },
     "stats": {
       "wisdom": 4
-    }
+    },
+    "icon": "accessories/Accessory_15.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "seized_glaive",
@@ -932,7 +956,10 @@
     },
     "stats": {
       "strength": 6
-    }
+    },
+    "icon": "weapons/Weapon_56.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "gravewatchers_band",
@@ -987,7 +1014,10 @@
       "strength": 6,
       "wisdom": 3
     },
-    "setId": "ashen_hand"
+    "setId": "ashen_hand",
+    "icon": "armor/Armor_72.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "boots_of_the_ashen_hand",
@@ -998,13 +1028,16 @@
     "maxDurability": 210,
     "value": 9400,
     "mods": {
-      "speed": 20,
-      "injuryResist": 10
+      "injuryResist": 10,
+      "speed": 20
     },
     "stats": {
       "endurance": 8
     },
-    "setId": "ashen_hand"
+    "setId": "ashen_hand",
+    "icon": "armor/Armor_51.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "voidforged_gauntlets",
@@ -1015,15 +1048,18 @@
     "maxDurability": 250,
     "value": 12000,
     "mods": {
+      "success": 10,
       "gold": 18,
-      "loot": 12,
-      "success": 10
+      "loot": 12
     },
     "stats": {
-      "luck": 8,
-      "strength": 6
+      "strength": 6,
+      "luck": 8
     },
-    "setId": "voidforged"
+    "setId": "voidforged",
+    "icon": "armor/Armor_76.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "voidforged_treads",
@@ -1034,13 +1070,16 @@
     "maxDurability": 250,
     "value": 12200,
     "mods": {
-      "speed": 18,
-      "success": 8
+      "success": 8,
+      "speed": 18
     },
     "stats": {
       "endurance": 10
     },
-    "setId": "voidforged"
+    "setId": "voidforged",
+    "icon": "armor/Armor_55.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "empyrean_grips",
@@ -1051,15 +1090,18 @@
     "maxDurability": 290,
     "value": 17500,
     "mods": {
+      "success": 14,
       "gold": 26,
-      "loot": 16,
-      "success": 14
+      "loot": 16
     },
     "stats": {
-      "luck": 12,
-      "strength": 8
+      "strength": 8,
+      "luck": 12
     },
-    "setId": "empyrean"
+    "setId": "empyrean",
+    "icon": "armor/Armor_77.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "empyrean_striders",
@@ -1070,14 +1112,17 @@
     "maxDurability": 300,
     "value": 17800,
     "mods": {
-      "speed": 26,
       "success": 12,
-      "injuryResist": 10
+      "injuryResist": 10,
+      "speed": 26
     },
     "stats": {
       "endurance": 12
     },
-    "setId": "empyrean"
+    "setId": "empyrean",
+    "icon": "armor/Armor_49.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "requiem_blade",
@@ -1097,7 +1142,10 @@
       "strength": 24,
       "luck": 6
     },
-    "setId": "requiem"
+    "setId": "requiem",
+    "icon": "weapons/Weapon_62.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "requiem_crown",
@@ -1109,14 +1157,17 @@
     "value": 28000,
     "mods": {
       "success": 22,
-      "injuryResist": 30,
-      "xp": 30
+      "xp": 30,
+      "injuryResist": 30
     },
     "stats": {
-      "wisdom": 18,
-      "endurance": 9
+      "endurance": 9,
+      "wisdom": 18
     },
-    "setId": "requiem"
+    "setId": "requiem",
+    "icon": "armor/Armor_36.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "requiem_plate",
@@ -1127,15 +1178,18 @@
     "maxDurability": 380,
     "value": 32000,
     "mods": {
-      "injuryResist": 38,
       "success": 20,
+      "injuryResist": 38,
       "durability": 35
     },
     "stats": {
-      "endurance": 24,
-      "strength": 8
+      "strength": 8,
+      "endurance": 24
     },
-    "setId": "requiem"
+    "setId": "requiem",
+    "icon": "armor/Armor_01.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "requiem_signet",
@@ -1146,14 +1200,17 @@
     "maxDurability": 300,
     "value": 26000,
     "mods": {
-      "loot": 20,
       "gold": 30,
+      "loot": 20,
       "speed": 14
     },
     "stats": {
       "luck": 18
     },
-    "setId": "requiem"
+    "setId": "requiem",
+    "icon": "accessories/Accessory_05.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "requiem_grips",
@@ -1164,15 +1221,18 @@
     "maxDurability": 340,
     "value": 27000,
     "mods": {
+      "success": 18,
       "gold": 32,
-      "loot": 22,
-      "success": 18
+      "loot": 22
     },
     "stats": {
-      "luck": 16,
-      "strength": 10
+      "strength": 10,
+      "luck": 16
     },
-    "setId": "requiem"
+    "setId": "requiem",
+    "icon": "armor/Armor_71.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "requiem_striders",
@@ -1183,14 +1243,17 @@
     "maxDurability": 340,
     "value": 27500,
     "mods": {
-      "speed": 32,
       "success": 16,
-      "injuryResist": 14
+      "injuryResist": 14,
+      "speed": 32
     },
     "stats": {
       "endurance": 16
     },
-    "setId": "requiem"
+    "setId": "requiem",
+    "icon": "armor/Armor_50.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "tollkeepers_signet",
@@ -1206,7 +1269,10 @@
     },
     "stats": {
       "luck": 3
-    }
+    },
+    "icon": "accessories/Accessory_02.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "gravewatchers_band_heroic",
