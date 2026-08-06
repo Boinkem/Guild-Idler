@@ -5,6 +5,7 @@
     "description": "Steadies the hands before a fight. Increases quest success rate.",
     "cost": 25,
     "glyph": "❤",
+    "icon": "potions/Potion_10.png",
     "effect": {
       "success": 5
     }
@@ -15,6 +16,7 @@
     "description": "Steadies the hands before a fight. Increases quest success rate more than a standard healing potion.",
     "cost": 150,
     "glyph": "❤",
+    "icon": "potions/Potion_34.png",
     "effect": {
       "success": 15
     }
@@ -25,6 +27,7 @@
     "description": "Steadies the hands before a fight. Increases quest success rate more than a standard healing potion.",
     "cost": 75,
     "glyph": "❤",
+    "icon": "potions/Potion_42.png",
     "effect": {
       "success": 10
     }
@@ -35,6 +38,7 @@
     "description": "Coins seem to find their way into pockets.",
     "cost": 40,
     "glyph": "✦",
+    "icon": "potions/Potion_12.png",
     "effect": {
       "gold": 40
     }
@@ -45,6 +49,7 @@
     "description": "Coins seem to find their way into pockets.",
     "cost": 75,
     "glyph": "✦",
+    "icon": "potions/Potion_36.png",
     "effect": {
       "gold": 55
     }
@@ -55,6 +60,7 @@
     "description": "A hard swing and a fair price for it.\nIncreases success rate, and gold drops",
     "cost": 75,
     "glyph": "⚔",
+    "icon": "potions/Potion_33.png",
     "effect": {
       "success": 10,
       "gold": 25
@@ -66,6 +72,7 @@
     "description": "Your knight comes home unhurt, win or lose.",
     "cost": 100,
     "glyph": "⛨",
+    "icon": "misc/Misc_75.png",
     "effect": {
       "preventInjury": true
     }
@@ -76,6 +83,7 @@
     "description": "Guarantees a favourable event on the road.",
     "cost": 250,
     "glyph": "☘",
+    "icon": "potions/Potion_45.png",
     "effect": {
       "guaranteedGoodEvent": true
     }
@@ -86,6 +94,7 @@
     "description": "Clears one injury immediately.",
     "cost": 60,
     "glyph": "✚",
+    "icon": "crafting/Crafting_74.png",
     "effect": {
       "healInjury": true
     }
