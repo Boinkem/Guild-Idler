@@ -79,18 +79,27 @@ processes, and killing only the first would leave the others running
 invisibly. Status (🟢 running / ⚪ stopped) is checked on load and after every
 start/stop.
 
-### The patch flow: Check → Apply → Commit
+### The patch flow: Check → Apply → Commit → Push
 
 Select a `.patch` file sitting in the project root or a `patches/` folder,
 then step through **Check** (`git apply --check`, a dry run) → **Apply**
 (`git apply`, actually changes files) → **Commit** (`git add -A && git
-commit`). Each step shows its real output. Nothing auto-chains — a failed
-check doesn't try to apply anyway, a successful apply doesn't auto-commit.
-You press each button.
+commit`) → **Push** (`git push`). Each step shows its real output. Nothing
+auto-chains — a failed check doesn't try to apply anyway, a successful apply
+doesn't auto-commit, a successful commit doesn't auto-push. You press each
+button.
 
-The current git status (branch, clean/dirty, last commit) shows at the top and
-updates after every step. If the working tree isn't clean, it says so — worth
-resolving first, but it won't stop you from proceeding.
+Push is a plain `git push` — no remote or branch is typed in, it relies on
+the current branch already tracking an upstream (the usual case once a repo
+has been pushed once). If it isn't, git says so directly in the output, same
+as any other failed step here. Push also isn't tied to having just committed
+through this same panel — it sends whatever's already committed, so it's the
+right button after committing from the terminal too.
+
+The current git status (branch, clean/dirty, last commit, and the upstream
+Push will target) shows at the top and updates after every step. If the
+working tree isn't clean, it says so — worth resolving first, but it won't
+stop you from proceeding.
 
 ### Build, Package, and Tag — the release steps
 
@@ -98,11 +107,11 @@ These three matter more once you're cutting an actual build for playtesters
 or Steam, and are separate from the patch flow above — use them any time, not
 just right after applying something.
 
-- **Build** (step 5) — `npm run build`. Confirms nothing is broken.
-- **Package** (step 6) — `npm run package`. Runs electron-builder and produces
+- **Build** (step 6) — `npm run build`. Confirms nothing is broken.
+- **Package** (step 7) — `npm run package`. Runs electron-builder and produces
   installers/unpacked builds in `release/` — this is what you'd hand to
   playtesters or upload to Steam. Can take several minutes the first time.
-- **Tag a release version** (step 7) — runs `npm version patch/minor/major`,
+- **Tag a release version** (step 8) — runs `npm version patch/minor/major`,
   which bumps `package.json`, commits, and creates a git tag (`v0.1.10`) in one
   step. **This is deliberately separate from the `000N-name.patch` filenames.**
   A patch filename just identifies one batch of changes between us in this

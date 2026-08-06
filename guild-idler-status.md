@@ -74,6 +74,10 @@ the companion's position already does.
 
 **DevTools** — tuning registry exists but only covers raid coefficients
 so far (15 entries); loot picker, icon assignment tooling also live here.
+Patches tab's flow is now Check -> Apply -> Commit -> **Push** (plain
+`git push`, relies on the branch's existing upstream rather than taking a
+remote/branch as input); Build/Package/Tag shifted from steps 5/6/7 to
+6/7/8 to make room.
 
 **World lore** — `world-lore-pantheon.md` is the source of truth for
 gods/pantheon rules. Starved gods can lash out from the starving itself

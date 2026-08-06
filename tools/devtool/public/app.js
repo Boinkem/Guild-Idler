@@ -665,6 +665,11 @@ function renderPatches() {
         <span><b>Branch:</b> ${escapeHtml(gs?.branch || '?')} &nbsp; <b>Last commit:</b> ${escapeHtml(gs?.lastCommit || '?')}</span>
         <button id="refreshStatusBtn">Refresh</button>
       </div>
+      <div class="tiny muted" style="margin-top:4px;">
+        ${gs?.upstream
+          ? `Pushes to <b>${escapeHtml(gs.upstream)}</b>.`
+          : `No upstream tracking branch configured — Push will fail until one is set (e.g. <code>git push -u origin ${escapeHtml(gs?.branch || 'main')}</code> once from a terminal).`}
+      </div>
       ${gs?.clean
         ? '<div class="tiny" style="margin-top:6px;">Working tree is clean.</div>'
         : `<div class="tiny" style="margin-top:6px; color: var(--brass);">Uncommitted changes present — review before applying a patch on top:</div>
@@ -704,12 +709,21 @@ function renderPatches() {
     </div>
     <div id="commitResult"></div>
 
-    <div class="section-heading">5. Build</div>
+    <div class="section-heading">5. Push</div>
+    <p class="tiny muted">
+      Sends committed history to the upstream branch shown above. Doesn't require having just
+      applied a patch this session — it pushes whatever's already committed, so it's also the
+      right button after committing something outside this flow entirely.
+    </p>
+    <button id="pushBtn">Push</button>
+    <div id="pushResult"></div>
+
+    <div class="section-heading">6. Build</div>
     <p class="tiny muted">Runs <code>npm run build</code> to confirm nothing is broken. Can take a minute.</p>
     <button id="buildBtn">Run build</button>
     <div id="buildResult"></div>
 
-    <div class="section-heading">6. Package into an installer</div>
+    <div class="section-heading">7. Package into an installer</div>
     <p class="tiny muted">
       Runs <code>npm run package</code> — produces installers/unpacked builds in <code>release/</code>.
       This is what you'd upload to Steam or hand to playtesters. Can take several minutes the first time.
@@ -717,7 +731,7 @@ function renderPatches() {
     <button id="packageBtn">Run package</button>
     <div id="packageResult"></div>
 
-    <div class="section-heading">7. Tag a release version</div>
+    <div class="section-heading">8. Tag a release version</div>
     <p class="tiny muted">
       Current version: <b>${escapeHtml(patchState.version || '?')}</b>.
       ${patchState.tags?.length ? `Recent tags: ${patchState.tags.map(escapeHtml).join(', ')}.` : 'No tags yet.'}
@@ -803,6 +817,21 @@ function renderPatches() {
     });
     renderPatches();
     document.getElementById('commitResult').innerHTML = resultBlock(result, 'Commit');
+    if (result.ok) refreshGitStatus();
+  };
+
+  const pushBtn = document.getElementById('pushBtn');
+  if (pushBtn) pushBtn.onclick = async () => {
+    const target = patchState.gitStatus?.upstream || 'the upstream branch';
+    if (!confirm(`Push commits to ${target}?`)) return;
+    pushBtn.disabled = true;
+    pushBtn.textContent = 'Pushing…';
+    const result = await api('/api/patches/push', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+    pushBtn.disabled = false;
+    pushBtn.textContent = 'Push';
+    document.getElementById('pushResult').innerHTML = resultBlock(result, 'Push');
     if (result.ok) refreshGitStatus();
   };
 

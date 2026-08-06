@@ -367,11 +367,17 @@ async function gitStatus() {
   const status = await run('git', ['status', '--porcelain'], GIT_TIMEOUT_MS);
   const log = await run('git', ['log', '-1', '--oneline'], GIT_TIMEOUT_MS);
   const branch = await run('git', ['rev-parse', '--abbrev-ref', 'HEAD'], GIT_TIMEOUT_MS);
+  // No upstream configured is a normal outcome (e.g. a brand-new branch),
+  // not a tool malfunction, so a failure here just means null rather than
+  // getting surfaced as an error -- the Push button's own result block is
+  // where a real "no upstream" failure gets shown, from git itself.
+  const upstream = await run('git', ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], GIT_TIMEOUT_MS);
   return {
     clean: status.ok && status.stdout.trim() === '',
     statusText: status.stdout,
     lastCommit: log.stdout.trim(),
     branch: branch.stdout.trim(),
+    upstream: upstream.ok ? upstream.stdout.trim() : null,
   };
 }
 
@@ -562,6 +568,17 @@ const server = http.createServer(async (req, res) => {
     // regardless of what characters it contains.
     const commit = await run('git', ['commit', '-m', message], GIT_TIMEOUT_MS);
     return json(res, 200, commit);
+  }
+
+  if (url.pathname === '/api/patches/push' && req.method === 'POST') {
+    // Plain `git push`, no remote/branch args -- same "trust git's own
+    // defaults" approach as commit above. Relies on the current branch
+    // already tracking an upstream; if it doesn't, git's own error message
+    // explains that clearly and shows up in the result block same as any
+    // other failed step here, rather than this tool trying to guess a
+    // remote/branch on the user's behalf.
+    const result = await run('git', ['push'], GIT_TIMEOUT_MS);
+    return json(res, 200, result);
   }
 
   if (url.pathname === '/api/patches/build' && req.method === 'POST') {
