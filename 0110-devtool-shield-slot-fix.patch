@@ -1,0 +1,59 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 546357b..6268b4a 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -163,6 +163,16 @@ raid fight).
+   too -- already safe, since it inherits the base `.modal`'s
+   `max-width: 460px` and renders inside `.overlay`'s flex-centered
+   layout, never stretching with window width regardless of this fix.
++- ~~DevTool: any save fails once the shield slot exists~~ -- resolved
++  (patch 0110). `EquipSlot` has always had 8 real slots, but the
++  DevTool's own `SCHEMAS.equipment.slot` enum only listed 7 -- missing
++  `shield` entirely. Since a save re-validates the *whole*
++  `equipment.json` array, not just the entry being edited, this broke
++  every save the instant it reached one of the 5 existing shield items,
++  regardless of what was actually being changed (the report that caught
++  this was an unrelated icon edit). Added `shield` to the enum; the
++  frontend dropdown renders straight from this same schema, so one fix
++  covered the missing option and the validation failure together.
+ 
+ ---
+ 
+@@ -219,6 +229,24 @@ loadout picked at send time. One follow-up worth a look next time
+ ### Deferred systems (queued before the polish/narrative detour started)
+ - Pets.
+ - Freeze slot for the quest board (never got a firm yes/no).
++- **Quest chains in the DevTool, editable like raids are.** Bigger than
++  it sounds -- raids.json/raid-encounters.json are already small, flat,
++  JSON-driven data the DevTool edits directly, but `QUEST_CHAINS` in
++  `quests.ts` is still ~420 lines of literal TS objects, 19 chains, each
++  with an embedded `stages` array of nested objects (name/flavour/
++  difficulty/duration/goldMultiplier per stage) -- not a separate
++  reusable pool the way raid encounters are, and not something the
++  DevTool's current field types (`string[]`, `mods`, `stats`, `effect`,
++  `eventEffects`) already know how to render. Needs: (1) migrating
++  `QUEST_CHAINS` out to `quest-chains.json` (mechanical, scriptable --
++  should convert losslessly, not be hand-retyped, given how much prose
++  is riding on it), with `quests.ts` importing and re-typing it the same
++  way `raids.ts` already does for its own JSON; (2) a new `chainStages`
++  field type in the DevTool (both `server.mjs` validation and an
++  `app.js` repeatable sub-form, add/remove rows) -- structurally its own
++  small feature, not a tweak to an existing one. Worth doing, but sizable
++  enough to want its own dedicated pass rather than folding into
++  whatever else is in flight.
+ 
+ ### Harvest/Gathering + Crafting (scoped from discussion -- not yet built)
+ Started as the one-line "Off-mission engagement" bullet that used to live
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index a57cdea..694326b 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -66,7 +66,7 @@ const SCHEMAS = {
+     fields: {
+       id: { type: 'string', required: true, slug: true },
+       name: { type: 'string', required: true },
+-      slot: { type: 'enum', required: true, options: ['weapon', 'helmet', 'chest', 'gloves', 'boots', 'ring', 'amulet'] },
++      slot: { type: 'enum', required: true, options: ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet'] },
+       rarity: { type: 'enum', required: true, options: ['common', 'uncommon', 'rare', 'epic', 'legendary'] },
+       reqLevel: { type: 'number', required: true },
+       maxDurability: { type: 'number', required: true },
