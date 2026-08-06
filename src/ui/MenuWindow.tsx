@@ -200,14 +200,23 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         </main>
       </div>
 
-      {!engine.state.seenOnboarding && (
+      {/* Both prompts below are gated on the guild already having a name.
+          Without this, a brand-new save (or a hardReset()) lands here with
+          guildName === '' and seenOnboarding === false at the same time --
+          MenuWindow mounts to give GuildNamingModal room to render (see
+          App.tsx), but nothing previously stopped the tour from also
+          starting right then. The tour's z-index is deliberately way above
+          normal modals (see the onboarding-tour comment in app.css), so it
+          won a fight it should never have been in: naming has to resolve
+          first, only then prompts. */}
+      {engine.state.guildName !== '' && !engine.state.seenOnboarding && (
         <OnboardingTour
           steps={ALL_TABS.filter((t) => t.id !== 'testing').map((t) => ({ id: t.id, label: t.label }))}
           onTabChange={(id) => setTab(id as TabId)}
           onDone={() => engine.dismissOnboarding()}
         />
       )}
-      {engine.state.pendingChainDiscovery && (
+      {engine.state.guildName !== '' && engine.state.pendingChainDiscovery && (
         <ChainDiscoveryModal
           onView={() => { setTab('quests'); engine.dismissChainDiscovery(); }}
           onClose={() => engine.dismissChainDiscovery()}

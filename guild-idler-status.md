@@ -101,6 +101,17 @@ raid fight).
   dedicated banner strip above the text, matching the pattern built for
   raid cards -- separates art from text entirely, so it can be fully
   visible with no readability cost.
+- ~~Onboarding tour overlaying the guild-naming modal on a fresh save~~ --
+  resolved (patch 0104). `OnboardingTour` in `MenuWindow.tsx` was gated
+  only on `!seenOnboarding`, with no check for whether the guild had a
+  name yet -- so on a brand-new save (or a hard reset) it started the
+  same moment `GuildNamingModal` needed to show, and the tour's
+  deliberately-very-high z-index (300, meant to sit above any modal a
+  panel might open mid-tour) won the visual fight it should never have
+  been in. Correct order is Start new -> name guild -> prompts. Both
+  `OnboardingTour` and `ChainDiscoveryModal` in `MenuWindow.tsx` now also
+  require `guildName !== ''`, matching the guard App.tsx's own modals
+  already had.
 
 ---
 
