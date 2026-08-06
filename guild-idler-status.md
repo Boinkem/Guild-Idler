@@ -67,7 +67,10 @@ already existed on the return-to-idle path. Also hardened window creation
 generally: shows only once Chromium confirms a real first paint
 (`ready-to-show`) rather than immediately on creation, and disabled
 Chromium's background-throttling heuristic, which doesn't suit an
-always-on-top companion window by design.
+always-on-top companion window by design. The menu window (not the idle
+companion, which stays fixed-size) is now user-resizable, with a 700x480
+floor and a remembered size that persists across launches the same way
+the companion's position already does.
 
 **DevTools** — tuning registry exists but only covers raid coefficients
 so far (15 entries); loot picker, icon assignment tooling also live here.
@@ -82,18 +85,12 @@ raid fight).
 
 ## Known bugs (not yet fixed)
 
-- **Persistent, undismissable guidance message** -- "the blacksmith has
-  more to offer now" (and presumably other similar prompts) has no way to
-  close it. Needs an X to dismiss, and ideally a "Go to" button routing to
-  the relevant tab/vendor -- this should be the general pattern for any
-  guidance message tied to a specific place in the game, not a one-off
-  fix just for this message.
-- **Broken rename modal after a hard reset** -- after resetting a guild,
-  the rename-guild modal opens but doesn't accept text input and can't be
-  closed, effectively softlocking that modal permanently (the menu behind
-  it still functions if you don't click the modal itself, and naming the
-  guild via some other path makes it go away, but this is unintended).
-- ~~Quest chain banner art not rendering in the Lore tab~~ -- resolved.
+- ~~Persistent, undismissable guidance message~~ -- resolved. The "Go to"
+  button pattern (0086) covers every existing GuidanceManager topic plus
+  the vendor level-up message; confirmed the underlying persistence itself
+  was working as designed (Notifications is a permanent log on purpose),
+  not a bug needing a dismiss.
+- ~~Broken rename modal after a hard reset~~ -- resolved.
   Not actually a loading bug: the art was rendering, but scrimmed to
   93-97% opacity as a full-card background (a deliberate earlier
   readability fix), which made it functionally invisible. Replaced with a
@@ -111,29 +108,31 @@ modal conversion (with banner art support, also applied to quest chains'
 Lore cards for consistency -- see Known bugs), the Raid Charter
 restructure, and two new raids (The Frozen Wyrmkeep, What Got Out).
 
-### Quest Tab rework (new)
-- Split "Available Contracts" into two clearly distinct sections --
-  discovered/active quest **chains** vs. actual board **contracts** --
-  since they're different things currently sharing one list and one label.
-- Once split, chain entries can show their key art (same asset the Lore
-  tab uses) directly on the card.
-- An auto-assign / quick-start button, gated on having bought the
-  Auto-Chain upgrade -- one click, send an idle hero on the next eligible
-  bounty.
-- Sort/group board contracts by rarity, ascending.
+### Quest Tab rework -- complete
+Split into "Available Contracts" (board contracts, sorted by difficulty
+tier ascending, with a Quick-assign button gated on owning Auto-Chain) and
+"Discovered Quests" (chain-stage offers, with banner art support) --
+contracts intentionally shown first. Consumables removed from this tab
+entirely, folded into the rework below instead.
 
-### Consumables & equip-slot rework (new)
-- Remove consumables from the Quest Tab display entirely.
-- Inventory's consumables get the same clickable-detail treatment the
-  stash already has (view what it does, not just a bare count).
-- New per-hero consumable-equip slots (separate from gear slots, next to
-  Amulet) -- 1 slot baseline, up to 3 via upgrade.
-- New upgrade: **Potion Belt** -- increases a hero's consumable-slot count.
+### Consumables & equip-slot rework -- complete
+Inventory's consumables are now clickable, same detail-expand treatment
+the stash already has. New per-hero consumable-equip slots live in the
+Equipment tab directly under the gear grid (`Hero.equippedConsumables`,
+1 base slot, up to 3 via the new **Potion Belt** upgrade). Quests now
+automatically use whatever's equipped on the sent hero rather than a
+loadout picked at send time. One follow-up worth a look next time
+`HeroManager.ts` is in hand: `create()` should explicitly initialize
+`equippedConsumables: []` on new heroes for cleanliness -- not required
+(the field is optional and read defensively everywhere), just tidier.
 
 ### Cleanup items
-- Heroic/Mythic tiered loot for the Last God raid (needs `equipment.json`).
-- A hidden achievement for clearing the Last God raid, mirroring
-  `WORLDS_END`'s treatment of `world_ender`.
+- ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid
+  encounter with loot now has all three difficulty tiers.
+- ~~A hidden achievement for clearing the Last God raid~~ -- done
+  (`LAST_GOD_DEFEATED`, "The Last Mile"). Mirrors `WORLDS_END`'s exact
+  treatment, checking `completedRaids` instead of `completedChains` since
+  the Last God moved from a chain to a raid in its own earlier restructure.
 - CSS dead-class scan -- inconclusive last attempt (only had `ui/panels/`,
   not the full `ui/` tree); worth redoing with full scope if it still matters.
 
@@ -144,8 +143,15 @@ restructure, and two new raids (The Frozen Wyrmkeep, What Got Out).
 - Freeze slot for the quest board (never got a firm yes/no).
 
 ### Bigger, still-undecided
-- First-five-minutes onboarding beat -- needs its own design conversation
-  before any building starts.
+- ~~First-five-minutes onboarding beat~~ -- done. A scripted, one-time tour
+  on a genuinely fresh save: a spotlight box over each real nav tab in
+  turn (dimming everything else via one oversized box-shadow, no separate
+  overlay layer), Skip available from step one. Finale is a standalone
+  modal triggered by GuidanceManager's existing `first_chain_seen` topic
+  (rerouted from the toast queue to a proper modal specifically for this),
+  since a chain's actual discovery timing depends on board RNG, not a
+  fixed step count. Existing saves are migrated straight past it --
+  never retrofitted onto anyone already playing.
 - Tuning registry expansion beyond raid coefficients.
 
 ### Platform / distribution
@@ -159,6 +165,13 @@ restructure, and two new raids (The Frozen Wyrmkeep, What Got Out).
 
 ## Brainstorming / not yet committed
 
+- **Class/role based heroes** -- giving hero classes actual mechanical
+  roles (tank/support/dps-style differentiation, or similar) rather than
+  today's flat stat-and-preferred-quest-type distinction. No concrete
+  design yet -- needs its own scoping conversation before anything else
+  (what "role" actually means mechanically here, whether it affects
+  quests/raids/both, whether existing classes get reworked or new ones
+  get added).
 - **The Rememberer** -- a future Minor-domain god concept (memory/being
   forgotten, fades because written record-keeping replaced an oral
   practice). Parked in favor of reworking the Last God instead.
