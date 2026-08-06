@@ -49,7 +49,9 @@ Mythic Clearance (60000g) upgrades gating those tiers specifically --
 difficulty circles in the raid modal reflect and enforce this directly.
 Two raids (Frozen Wyrmkeep, What Got Out) currently ship without unique
 loot on most of their encounters -- needs `equipment.json` to fill in
-properly, same flagged gap as the Last God raid's tiered loot.
+properly. (This used to say "same flagged gap as the Last God raid's
+tiered loot" -- that one's done now, see the struck-through Cleanup item;
+this note was stale.)
 
 **Renown / Prestige** — retirement, renown perks (two-tier, gold-then-
 renown cost curves), prestige streak bonus.
@@ -77,9 +79,13 @@ companion, which stays fixed-size) is now user-resizable, with a 700x480
 floor and a remembered size that persists across launches the same way
 the companion's position already does.
 
-**DevTools** — tuning registry exists but only covers raid coefficients
-so far (15 entries); loot picker, icon assignment tooling also live here.
-Patches tab's flow is now Check -> Apply -> Commit -> **Push** (plain
+**DevTools** — tuning registry now covers raid coefficients (raid_speed's
+cost curve, heroic/mythic difficulty modifiers) plus, as of patch 0107,
+all 5 guild facilities' cost curves and per-level effect strength
+(35 entries total, 3 categories). `raid_loot`/`raid_recovery` are still
+hardcoded in `raidUpgrades.ts` -- explicitly deferred there as a small
+follow-up, not forgotten. Loot picker, icon assignment tooling also live
+here. Patches tab's flow is now Check -> Apply -> Commit -> **Push** (plain
 `git push`, relies on the branch's existing upstream rather than taking a
 remote/branch as input); Build/Package/Tag shifted from steps 5/6/7 to
 6/7/8 to make room.
@@ -226,7 +232,19 @@ loadout picked at send time. One follow-up worth a look next time
   since a chain's actual discovery timing depends on board RNG, not a
   fixed step count. Existing saves are migrated straight past it --
   never retrofitted onto anyone already playing.
-- Tuning registry expansion beyond raid coefficients.
+- ~~Tuning registry expansion beyond raid coefficients~~ -- first batch
+  done (patch 0107): all 5 guild facilities' `baseCost`/`costGrowth`/
+  `maxLevel` and their single `modsPerLevel` effect strength now read
+  from the registry (`guild_facility.<id>.*`, category `guild_facilities`,
+  20 new entries) instead of being literals in `progression.ts` -- same
+  mechanical pattern `raid_speed` already established in
+  `raidUpgrades.ts`. `storagePerLevel`/`heroSlotsPerLevel` deliberately
+  stay hardcoded (structural, not a balance knob). Verified the resolved
+  values are byte-identical to the old literals before this landed.
+  Not yet migrated, if there's appetite for another batch: `UPGRADES`
+  (vendor upgrades) and `RENOWN_PERKS` in the same file, and
+  `raid_loot`/`raid_recovery` in `raidUpgrades.ts` (already flagged
+  there as deferred, same shape as `raid_speed`).
 
 ### Platform / distribution
 - **Steam Cloud saves** -- no code work needed yet. Saves already live at

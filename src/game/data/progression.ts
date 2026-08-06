@@ -1,4 +1,5 @@
 import { GuildDef, HeroClass, Modifiers, QuestTag, RenownPerkDef, Stats, UpgradeDef, VendorId } from '../types';
+import { Tuning } from './tuning';
 
 /* --------------------------- permanent upgrades --------------------------- */
 
@@ -177,31 +178,58 @@ export function upgradeCost(def: UpgradeDef, currentLevel: number): number {
 
 /* ------------------------------- guild hall ------------------------------- */
 
+// Every baseCost/costGrowth/maxLevel and the single modsPerLevel effect
+// strength below reads from the tuning registry (tuning.json) rather than
+// being a literal -- editable live via the devtool's Tuning tab without
+// touching this file. Same "beyond raid coefficients" expansion the
+// backlog flagged, mirroring raid_speed's exact pattern in
+// raidUpgrades.ts. storagePerLevel and heroSlotsPerLevel stay hardcoded
+// deliberately -- structural fields (how many currencies/systems a
+// facility touches), not balance knobs someone tunes live, same
+// distinction raid_speed already draws by leaving its own structural
+// fields (which currency, how many tiers) untouched.
 export const GUILD_FACILITIES: GuildDef[] = [
   {
     id: 'barracks', name: 'Barracks',
     description: 'Training yard and drill sergeant. Every hero fights better.',
-    baseCost: 500, costGrowth: 1.8, maxLevel: 10, modsPerLevel: { success: 3 },
+    baseCost: Tuning.get('guild_facility.barracks.baseCost'),
+    costGrowth: Tuning.get('guild_facility.barracks.costGrowth'),
+    maxLevel: Tuning.get('guild_facility.barracks.maxLevel'),
+    modsPerLevel: { success: Tuning.get('guild_facility.barracks.successPerLevel') },
   },
   {
     id: 'treasury', name: 'Treasury',
     description: 'Raises how much gold the guild can hold at once.',
-    baseCost: 400, costGrowth: 1.7, maxLevel: 12, modsPerLevel: { gold: 4 }, storagePerLevel: 5000,
+    baseCost: Tuning.get('guild_facility.treasury.baseCost'),
+    costGrowth: Tuning.get('guild_facility.treasury.costGrowth'),
+    maxLevel: Tuning.get('guild_facility.treasury.maxLevel'),
+    modsPerLevel: { gold: Tuning.get('guild_facility.treasury.goldPerLevel') },
+    storagePerLevel: 5000,
   },
   {
     id: 'workshop', name: 'Workshop',
     description: 'Gear wears down more slowly and upgrades cost less.',
-    baseCost: 600, costGrowth: 1.85, maxLevel: 10, modsPerLevel: { durability: 8 },
+    baseCost: Tuning.get('guild_facility.workshop.baseCost'),
+    costGrowth: Tuning.get('guild_facility.workshop.costGrowth'),
+    maxLevel: Tuning.get('guild_facility.workshop.maxLevel'),
+    modsPerLevel: { durability: Tuning.get('guild_facility.workshop.durabilityPerLevel') },
   },
   {
     id: 'library', name: 'Library',
     description: 'Maps, bestiaries, and a very patient archivist.',
-    baseCost: 550, costGrowth: 1.8, maxLevel: 10, modsPerLevel: { xp: 12 },
+    baseCost: Tuning.get('guild_facility.library.baseCost'),
+    costGrowth: Tuning.get('guild_facility.library.costGrowth'),
+    maxLevel: Tuning.get('guild_facility.library.maxLevel'),
+    modsPerLevel: { xp: Tuning.get('guild_facility.library.xpPerLevel') },
   },
   {
     id: 'tavern', name: 'Tavern',
     description: 'Where new heroes are found. Each level opens a hero slot.',
-    baseCost: 750, costGrowth: 2.4, maxLevel: 5, modsPerLevel: { loot: 2 }, heroSlotsPerLevel: 1,
+    baseCost: Tuning.get('guild_facility.tavern.baseCost'),
+    costGrowth: Tuning.get('guild_facility.tavern.costGrowth'),
+    maxLevel: Tuning.get('guild_facility.tavern.maxLevel'),
+    modsPerLevel: { loot: Tuning.get('guild_facility.tavern.lootPerLevel') },
+    heroSlotsPerLevel: 1,
   },
 ];
 

@@ -142,5 +142,195 @@
     "min": 0.5,
     "max": 10,
     "description": "Multiplies gold/xp rewards at Mythic difficulty."
+  },
+  {
+    "id": "guild_facility.barracks.baseCost",
+    "label": "Barracks: base cost",
+    "category": "guild_facilities",
+    "value": 500,
+    "default": 500,
+    "min": 0,
+    "description": "Cost of the first (level 0) Barracks upgrade."
+  },
+  {
+    "id": "guild_facility.barracks.costGrowth",
+    "label": "Barracks: cost growth",
+    "category": "guild_facilities",
+    "value": 1.8,
+    "default": 1.8,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier applied per level, before the early-tier discount."
+  },
+  {
+    "id": "guild_facility.barracks.maxLevel",
+    "label": "Barracks: max level",
+    "category": "guild_facilities",
+    "value": 10,
+    "default": 10,
+    "min": 1,
+    "description": "Highest level Barracks can reach."
+  },
+  {
+    "id": "guild_facility.barracks.successPerLevel",
+    "label": "Barracks: success % per level",
+    "category": "guild_facilities",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "max": 20,
+    "description": "Flat success percentage points granted per level, guild-wide."
+  },
+  {
+    "id": "guild_facility.treasury.baseCost",
+    "label": "Treasury: base cost",
+    "category": "guild_facilities",
+    "value": 400,
+    "default": 400,
+    "min": 0,
+    "description": "Cost of the first (level 0) Treasury upgrade."
+  },
+  {
+    "id": "guild_facility.treasury.costGrowth",
+    "label": "Treasury: cost growth",
+    "category": "guild_facilities",
+    "value": 1.7,
+    "default": 1.7,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier applied per level, before the early-tier discount."
+  },
+  {
+    "id": "guild_facility.treasury.maxLevel",
+    "label": "Treasury: max level",
+    "category": "guild_facilities",
+    "value": 12,
+    "default": 12,
+    "min": 1,
+    "description": "Highest level Treasury can reach."
+  },
+  {
+    "id": "guild_facility.treasury.goldPerLevel",
+    "label": "Treasury: gold % per level",
+    "category": "guild_facilities",
+    "value": 4,
+    "default": 4,
+    "min": 0,
+    "max": 20,
+    "description": "Flat gold percentage granted per level, guild-wide. storagePerLevel (gold storage) is a separate, still-hardcoded field -- not included in this pass."
+  },
+  {
+    "id": "guild_facility.workshop.baseCost",
+    "label": "Workshop: base cost",
+    "category": "guild_facilities",
+    "value": 600,
+    "default": 600,
+    "min": 0,
+    "description": "Cost of the first (level 0) Workshop upgrade."
+  },
+  {
+    "id": "guild_facility.workshop.costGrowth",
+    "label": "Workshop: cost growth",
+    "category": "guild_facilities",
+    "value": 1.85,
+    "default": 1.85,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier applied per level, before the early-tier discount."
+  },
+  {
+    "id": "guild_facility.workshop.maxLevel",
+    "label": "Workshop: max level",
+    "category": "guild_facilities",
+    "value": 10,
+    "default": 10,
+    "min": 1,
+    "description": "Highest level Workshop can reach."
+  },
+  {
+    "id": "guild_facility.workshop.durabilityPerLevel",
+    "label": "Workshop: durability % per level",
+    "category": "guild_facilities",
+    "value": 8,
+    "default": 8,
+    "min": 0,
+    "max": 30,
+    "description": "Flat durability percentage granted per level, guild-wide. No reward effect."
+  },
+  {
+    "id": "guild_facility.library.baseCost",
+    "label": "Library: base cost",
+    "category": "guild_facilities",
+    "value": 550,
+    "default": 550,
+    "min": 0,
+    "description": "Cost of the first (level 0) Library upgrade."
+  },
+  {
+    "id": "guild_facility.library.costGrowth",
+    "label": "Library: cost growth",
+    "category": "guild_facilities",
+    "value": 1.8,
+    "default": 1.8,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier applied per level, before the early-tier discount."
+  },
+  {
+    "id": "guild_facility.library.maxLevel",
+    "label": "Library: max level",
+    "category": "guild_facilities",
+    "value": 10,
+    "default": 10,
+    "min": 1,
+    "description": "Highest level Library can reach."
+  },
+  {
+    "id": "guild_facility.library.xpPerLevel",
+    "label": "Library: xp % per level",
+    "category": "guild_facilities",
+    "value": 12,
+    "default": 12,
+    "min": 0,
+    "max": 40,
+    "description": "Flat xp percentage granted per level, guild-wide."
+  },
+  {
+    "id": "guild_facility.tavern.baseCost",
+    "label": "Tavern: base cost",
+    "category": "guild_facilities",
+    "value": 750,
+    "default": 750,
+    "min": 0,
+    "description": "Cost of the first (level 0) Tavern upgrade."
+  },
+  {
+    "id": "guild_facility.tavern.costGrowth",
+    "label": "Tavern: cost growth",
+    "category": "guild_facilities",
+    "value": 2.4,
+    "default": 2.4,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier applied per level, before the early-tier discount."
+  },
+  {
+    "id": "guild_facility.tavern.maxLevel",
+    "label": "Tavern: max level",
+    "category": "guild_facilities",
+    "value": 5,
+    "default": 5,
+    "min": 1,
+    "description": "Highest level Tavern can reach."
+  },
+  {
+    "id": "guild_facility.tavern.lootPerLevel",
+    "label": "Tavern: loot % per level",
+    "category": "guild_facilities",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "max": 20,
+    "description": "Flat loot percentage granted per level, guild-wide. heroSlotsPerLevel (+1 hero slot) is a separate, still-hardcoded field -- not included in this pass."
   }
 ]
