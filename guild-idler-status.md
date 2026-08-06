@@ -130,6 +130,33 @@ raid fight).
   after a reset. Fixed by focusing explicitly via a ref, one
   `requestAnimationFrame` after mount, landing after the dialog's own
   focus restoration settles.
+- ~~Inconsistent card backgrounds -- some fully see-through, some fully
+  opaque~~ -- resolved (patch 0106). Not a per-panel styling drift: `.card`
+  and `.item-card` used a flat 100%-opaque fill ("hard black" against any
+  backdrop), while four specific cards (`.vendor-card`, `.power-card`,
+  `.black-market-item`, `.renown-tier2`) had their own accent-gradient
+  `background` *replacing* `.card`'s fill outright rather than combining
+  with it (equal CSS specificity, later rule in the file wins) -- those
+  four had no dark backing at all, just the accent tint, reading as fully
+  transparent next to every other card's solid fill. Fixed on both ends:
+  `.card`/`.item-card` now use a theme-aware `color-mix(..., 88%,
+  transparent)` fill (12% see-through, matching the existing
+  `.idle-plate`/`.idle-away-banner` idiom) instead of a flat opaque color,
+  and the four gradient-accent cards now layer their tint over that same
+  base instead of replacing it -- every card reads consistently now, with
+  its own accent on top where one exists.
+- ~~Chain/raid banner art stretching unrecognizably on a widened window~~
+  -- resolved (patch 0106). `QuestPanel`/`LorePanel`/`RaidsPanel` stack
+  cards at full panel width with no grid, and each banner strip is a
+  fixed-height box using `backgroundSize: cover` -- past a certain
+  width:height ratio, `cover` zooms in far enough to lose the image
+  entirely. Added `max-width: 720px` to `.card` (picked to be
+  effectively invisible at the default 900px menu window, only engaging
+  once resized notably wider) so a wider window adds margin instead of
+  stretching the card. Checked `.raid-detail-modal`'s own `RaidBanner`
+  too -- already safe, since it inherits the base `.modal`'s
+  `max-width: 460px` and renders inside `.overlay`'s flex-centered
+  layout, never stretching with window width regardless of this fix.
 
 ---
 

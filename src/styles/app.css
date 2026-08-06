@@ -62,7 +62,7 @@
 }
 .item-card {
   border: 1px solid var(--panel-3);
-  background: var(--panel-2);
+  background: color-mix(in srgb, var(--panel-2) 88%, transparent);
 }
 .item-card.empty { opacity: 0.6; }
 .item-card-summary {
@@ -555,9 +555,25 @@ button:focus-visible, [tabindex]:focus-visible {
 
 .card {
   position: relative;
-  background: var(--panel);
+  /* 12% see-through rather than a flat opaque fill -- lets whatever's
+     behind (a panel's own backdrop wash, most commonly) barely show
+     through on every card consistently. color-mix keeps this theme-aware
+     the same way .idle-plate/.idle-away-banner already are, rather than a
+     hardcoded rgba() that would look wrong on a light theme. */
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
   border: 1px solid var(--edge);
   border-left: 3px solid var(--panel-3);
+  /* Cards aren't gridded here (QuestPanel/LorePanel/RaidsPanel just stack
+     them full-panel-width), so without a cap they stretch edge-to-edge on
+     a widened menu window. That's mostly harmless for text, but every
+     chain/raid banner strip below is a fixed-height box with
+     backgroundSize: cover -- past a certain width:height ratio, cover
+     zooms in far enough to lose the image entirely. Capping card width
+     and letting a resized window just add margin, rather than stretch
+     the card itself, keeps banner art (and everything else) at a sane,
+     legible size regardless of how wide the window gets.
+  */
+  max-width: 720px;
   padding: var(--card-pad);
   margin-bottom: 8px;
   overflow: hidden;
@@ -999,7 +1015,14 @@ input[type='range'] {
 
 .black-market-item {
   border-left-color: var(--violet);
-  background: linear-gradient(90deg, rgba(168, 116, 214, 0.10), transparent 60%);
+  /* Was replacing .card's background outright (equal specificity, later in
+     the file wins) rather than combining with it -- this card had no dark
+     backing at all, just the accent tint, which is why it read as fully
+     see-through next to every other card's opaque fill. Layering both
+     backgrounds keeps the violet accent and gives it the same consistent
+     base every other card now has. */
+  background: linear-gradient(90deg, rgba(168, 116, 214, 0.10), transparent 60%),
+    color-mix(in srgb, var(--panel) 88%, transparent);
 }
 
 /* --------------------------------- titles ---------------------------------- */
@@ -1017,7 +1040,9 @@ input[type='range'] {
 
 .renown-tier2 {
   border-left-color: var(--violet);
-  background: linear-gradient(90deg, rgba(168, 116, 214, 0.08), transparent 60%);
+  /* See the .black-market-item comment above -- same issue, same fix. */
+  background: linear-gradient(90deg, rgba(168, 116, 214, 0.08), transparent 60%),
+    color-mix(in srgb, var(--panel) 88%, transparent);
 }
 
 /* ------------------------------ achievements ------------------------------ */
@@ -1084,7 +1109,9 @@ input[type='range'] {
 }
 
 .vendor-card {
-  background: linear-gradient(90deg, rgba(217, 164, 65, 0.08), transparent 60%);
+  /* See the .black-market-item comment near it -- same issue, same fix. */
+  background: linear-gradient(90deg, rgba(217, 164, 65, 0.08), transparent 60%),
+    color-mix(in srgb, var(--panel) 88%, transparent);
   border-left-color: var(--brass);
 }
 
@@ -1112,7 +1139,9 @@ input[type='range'] {
 
 .power-card {
   text-align: center;
-  background: radial-gradient(ellipse at top, rgba(217, 164, 65, 0.12), transparent 70%);
+  /* See the .black-market-item comment further up -- same issue, same fix. */
+  background: radial-gradient(ellipse at top, rgba(217, 164, 65, 0.12), transparent 70%),
+    color-mix(in srgb, var(--panel) 88%, transparent);
   border-left-color: var(--brass);
 }
 .power-number {
