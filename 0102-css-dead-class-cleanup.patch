@@ -1,0 +1,50 @@
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 8007c64..7ad01cb 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -627,16 +627,6 @@ button:focus-visible, [tabindex]:focus-visible {
+ }
+ .chip.on { border-color: var(--brass); color: var(--brass); }
+ 
+-.slot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
+-.slot {
+-  border: 1px solid var(--panel-3);
+-  background: var(--panel);
+-  padding: 7px 8px;
+-  font-size: 0.625rem;
+-}
+-.slot .slot-name { color: var(--muted); font-size: 0.5625rem; text-transform: uppercase; letter-spacing: 0.08em; }
+-.slot.empty { border-style: dashed; opacity: 0.65; }
+-
+ /* --------------------------------- modals --------------------------------- */
+ 
+ .overlay {
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 9675801..6e5b768 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -133,8 +133,22 @@ loadout picked at send time. One follow-up worth a look next time
+   (`LAST_GOD_DEFEATED`, "The Last Mile"). Mirrors `WORLDS_END`'s exact
+   treatment, checking `completedRaids` instead of `completedChains` since
+   the Last God moved from a chain to a raid in its own earlier restructure.
+-- CSS dead-class scan -- inconclusive last attempt (only had `ui/panels/`,
+-  not the full `ui/` tree); worth redoing with full scope if it still matters.
++- ~~CSS dead-class scan~~ -- resolved (patch 0102), redone against the full
++  `ui/` tree plus `app.css`, cross-checked against the live repo rather than
++  just the uploaded files. Only one real dead spot found: `.slot`,
++  `.slot-grid`, and their two descendant rules (`.slot .slot-name`,
++  `.slot.empty`) in `app.css` -- leftover from before the equipment panel's
++  item-card redesign; gear slots have used `.item-card` / `.item-card-grid`
++  for a while and nothing still renders the old classes. Removed. Everything
++  else that looked dead on a naive scan turned out to be a class applied
++  dynamically from a variable rather than a literal string --
++  difficulty-tier classes (`easy`/`normal`/`hard`/`epic`/`legendary`, from
++  `offer.difficulty`) on quest/raid cards, and the knight's animation-state
++  classes (`walking`/`departing`/`returning`) on the desktop companion --
++  plus `.loading`, which lives in `App.tsx` outside the `ui/` tree entirely
++  (the pre-mount "Waking the knight…" screen). None of those are actually
++  unused; a scan that only grep for literal strings will always flag them
++  and should not delete them.
+ 
+ ### Deferred systems (queued before the polish/narrative detour started)
+ - Pets.

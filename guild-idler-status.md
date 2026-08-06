@@ -133,8 +133,22 @@ loadout picked at send time. One follow-up worth a look next time
   (`LAST_GOD_DEFEATED`, "The Last Mile"). Mirrors `WORLDS_END`'s exact
   treatment, checking `completedRaids` instead of `completedChains` since
   the Last God moved from a chain to a raid in its own earlier restructure.
-- CSS dead-class scan -- inconclusive last attempt (only had `ui/panels/`,
-  not the full `ui/` tree); worth redoing with full scope if it still matters.
+- ~~CSS dead-class scan~~ -- resolved (patch 0102), redone against the full
+  `ui/` tree plus `app.css`, cross-checked against the live repo rather than
+  just the uploaded files. Only one real dead spot found: `.slot`,
+  `.slot-grid`, and their two descendant rules (`.slot .slot-name`,
+  `.slot.empty`) in `app.css` -- leftover from before the equipment panel's
+  item-card redesign; gear slots have used `.item-card` / `.item-card-grid`
+  for a while and nothing still renders the old classes. Removed. Everything
+  else that looked dead on a naive scan turned out to be a class applied
+  dynamically from a variable rather than a literal string --
+  difficulty-tier classes (`easy`/`normal`/`hard`/`epic`/`legendary`, from
+  `offer.difficulty`) on quest/raid cards, and the knight's animation-state
+  classes (`walking`/`departing`/`returning`) on the desktop companion --
+  plus `.loading`, which lives in `App.tsx` outside the `ui/` tree entirely
+  (the pre-mount "Waking the knight…" screen). None of those are actually
+  unused; a scan that only grep for literal strings will always flag them
+  and should not delete them.
 
 ### Deferred systems (queued before the polish/narrative detour started)
 - Pets.

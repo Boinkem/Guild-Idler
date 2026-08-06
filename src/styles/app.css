@@ -627,16 +627,6 @@ button:focus-visible, [tabindex]:focus-visible {
 }
 .chip.on { border-color: var(--brass); color: var(--brass); }
 
-.slot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
-.slot {
-  border: 1px solid var(--panel-3);
-  background: var(--panel);
-  padding: 7px 8px;
-  font-size: 0.625rem;
-}
-.slot .slot-name { color: var(--muted); font-size: 0.5625rem; text-transform: uppercase; letter-spacing: 0.08em; }
-.slot.empty { border-style: dashed; opacity: 0.65; }
-
 /* --------------------------------- modals --------------------------------- */
 
 .overlay {
