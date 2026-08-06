@@ -602,7 +602,9 @@
       "luck": 4
     },
     "setId": "voidforged",
-    "icon": "weapons/Weapon_61.png"
+    "icon": "weapons/Voidforgedblade.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "voidforged_crown",
@@ -1283,15 +1285,17 @@
     "maxDurability": 247,
     "value": 2535,
     "mods": {
-      "injuryResist": 18,
       "success": 8,
-      "loot": 6
+      "loot": 6,
+      "injuryResist": 18
     },
     "stats": {
-      "wisdom": 6,
-      "endurance": 4
+      "endurance": 4,
+      "wisdom": 6
     },
-    "raidExclusive": true
+    "icon": "accessories/Accessory_04.png",
+    "raidExclusive": true,
+    "craftable": false
   },
   {
     "id": "gravewatchers_band_mythic",
@@ -1302,15 +1306,17 @@
     "maxDurability": 321,
     "value": 3296,
     "mods": {
-      "injuryResist": 24,
       "success": 10,
-      "loot": 8
+      "loot": 8,
+      "injuryResist": 24
     },
     "stats": {
-      "wisdom": 8,
-      "endurance": 5
+      "endurance": 5,
+      "wisdom": 8
     },
-    "raidExclusive": true
+    "icon": "accessories/Accessory_04.png",
+    "raidExclusive": true,
+    "craftable": false
   },
   {
     "id": "ashwoven_charm_heroic",
@@ -1327,7 +1333,9 @@
     "stats": {
       "wisdom": 5
     },
-    "raidExclusive": true
+    "icon": "accessories/Accessory_15.png",
+    "raidExclusive": true,
+    "craftable": false
   },
   {
     "id": "ashwoven_charm_mythic",
@@ -1344,7 +1352,9 @@
     "stats": {
       "wisdom": 7
     },
-    "raidExclusive": true
+    "icon": "accessories/Accessory_15.png",
+    "raidExclusive": true,
+    "craftable": false
   },
   {
     "id": "choir_mask_heroic",
@@ -2379,7 +2389,8 @@
     "reqLevel": 12,
     "maxDurability": 100,
     "value": 550,
-    "mods": {},
+    "icon": "weapons/Weapon_03.png",
+    "raidExclusive": false,
     "craftable": true
   },
   {
@@ -2390,7 +2401,8 @@
     "reqLevel": 12,
     "maxDurability": 100,
     "value": 550,
-    "mods": {},
+    "icon": "accessories/Accessory_07.png",
+    "raidExclusive": false,
     "craftable": true
   }
 ]
