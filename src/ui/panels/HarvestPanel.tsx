@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useEngine, useNow } from '../useEngine';
-import { MATERIALS, MATERIAL_BY_ID } from '../../game/data/materials';
+import { MATERIALS, MATERIAL_BY_ID, NODE_ORDER } from '../../game/data/materials';
 import {
   HARVEST_TOOL_BY_NODE, TRADE_ROUTE_COST, WAREHOUSE_UPGRADE,
   harvestToolCost, warehouseUpgradeCost,
@@ -15,16 +15,25 @@ import { formatGold } from '../../game/util';
 import { MaxFlash, useMaxFlash } from '../maxFlash';
 import { RecipeIcon } from '../icons';
 
-type SubTab = 'warehouse' | MaterialId;
+type SubTab = 'warehouse' | 'fields';
 
-/** Stable pseudo-random 0-100 position per spawn -- deterministic on
- *  (spawnedAt, nodeId) so it doesn't jitter on every re-render, but still
- *  varies spawn to spawn. Not cryptographic, just needs to look random. */
-function spawnPositionPercent(spawnedAt: number, nodeId: string): number {
+/**
+ * Stable pseudo-random 0-100 position per spawn, remapped into that node's
+ * own lane within the one shared scene -- ore always left-most, then
+ * timber, herbs, fish, matching NODE_ORDER. Four even 25%-wide lanes, a
+ * little padding inside each so nothing sits right on a lane boundary.
+ * Deterministic on (spawnedAt, nodeId) so it doesn't jitter on every
+ * re-render, but still varies spawn to spawn.
+ */
+function spawnPositionPercent(spawnedAt: number, nodeId: MaterialId): number {
+  const laneIndex = NODE_ORDER.indexOf(nodeId);
+  const laneWidth = 100 / NODE_ORDER.length;
+  const laneStart = laneIndex * laneWidth;
   const seed = spawnedAt + nodeId.split('').reduce((sum, c) => sum + c.charCodeAt(0), 0);
   const x = Math.sin(seed) * 10000;
   const frac = x - Math.floor(x);
-  return 12 + frac * 72; // keep clear of the scene's edges
+  const padding = laneWidth * 0.12;
+  return laneStart + padding + frac * (laneWidth - padding * 2);
 }
 
 const BURST_PARTICLES = [
@@ -50,14 +59,12 @@ export function HarvestPanel() {
         <button className={subTab === 'warehouse' ? 'btn-primary' : ''} onClick={() => setSubTab('warehouse')}>
           Warehouse
         </button>
-        {MATERIALS.map((m) => (
-          <button key={m.id} className={subTab === m.id ? 'btn-primary' : ''} onClick={() => setSubTab(m.id)}>
-            {m.nodeName}
-          </button>
-        ))}
+        <button className={subTab === 'fields' ? 'btn-primary' : ''} onClick={() => setSubTab('fields')}>
+          Fields
+        </button>
       </div>
 
-      {subTab === 'warehouse' ? <WarehouseTab /> : <NodeScene key={subTab} nodeId={subTab} />}
+      {subTab === 'warehouse' ? <WarehouseTab /> : <FieldsTab />}
 
       {/* Not gated on which sub-tab is open -- an idle hero should feed
           every node's spawn timer regardless of which one you happen to be
@@ -71,12 +78,39 @@ export function HarvestPanel() {
   );
 }
 
-function NodeScene({ nodeId }: { nodeId: MaterialId }) {
+/**
+ * One shared scene, one background image split into four even blocks
+ * (see the image note in guild-idler-status.md's Harvest section) --
+ * ore drops in the left-most quarter, then timber, herbs, fish, matching
+ * NODE_ORDER left to right. Each node's own falling item, click handling,
+ * and catch-burst are still fully independent (four NodeLane instances),
+ * just positioned within that node's own 25%-wide slice instead of the
+ * full width a dedicated per-node scene used to have.
+ */
+function FieldsTab() {
+  const state = useEngine().state;
+  return (
+    <>
+      <div className="harvest-scene" style={{ backgroundImage: 'url(./lore/harvest/fields.jpg)' }}>
+        {NODE_ORDER.map((nodeId) => <NodeLane key={nodeId} nodeId={nodeId} />)}
+      </div>
+      <div className="row wrap" style={{ gap: 12 }}>
+        {MATERIALS.map((m) => (
+          <span key={m.id} className="tiny muted">
+            {m.name}: {state.materials[m.id]}/{HarvestManager.capacity(state)}
+          </span>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function NodeLane({ nodeId }: { nodeId: MaterialId }) {
   const engine = useEngine();
   const state = engine.state;
-  // 400ms tick -- fast enough that the fade-out near despawn and the
-  // fall/settle transition both read as smooth, without ticking so often
-  // it'd be wasteful for something this low-stakes.
+  // 400ms tick -- fast enough that the fade-out near despawn reads as
+  // smooth, without ticking so often it'd be wasteful for something this
+  // low-stakes.
   const now = useNow(400);
   const [burst, setBurst] = useState<{ key: number; left: number; gained: number; bonus: boolean } | null>(null);
 
@@ -111,52 +145,42 @@ function NodeScene({ nodeId }: { nodeId: MaterialId }) {
 
   return (
     <>
-      <div className="harvest-scene" style={{ backgroundImage: `url(./lore/harvest/${nodeId}.jpg)` }}>
-        {pending ? (
-          <button
-            key={pending.spawnedAt}
-            className={`harvest-item ${isFresh ? 'fresh' : 'settled'} ${pending.bonus ? 'bonus' : ''}`}
-            style={{ left: `${leftPercent}%`, opacity: fadingOpacity }}
-            onClick={handleClick}
-            aria-label={`Collect ${material.name}`}
-          >
-            {material.glyph}
-          </button>
-        ) : (
-          <div className="harvest-scene-empty">Nothing here yet -- check back in a moment.</div>
-        )}
+      {pending && (
+        <button
+          key={pending.spawnedAt}
+          className={`harvest-item ${isFresh ? 'fresh' : 'settled'} ${pending.bonus ? 'bonus' : ''}`}
+          style={{ left: `${leftPercent}%`, opacity: fadingOpacity }}
+          onClick={handleClick}
+          aria-label={`Collect ${material.name}`}
+        >
+          {material.glyph}
+        </button>
+      )}
 
-        {burst && (
-          <div
-            className="collect-burst"
-            aria-hidden="true"
-            style={{ left: `${burst.left}%`, bottom: 'auto', top: '62%' }}
-            key={burst.key}
+      {burst && (
+        <div
+          className="collect-burst"
+          aria-hidden="true"
+          style={{ left: `${burst.left}%`, bottom: 'auto', top: '62%' }}
+          key={burst.key}
+        >
+          <span
+            className="collect-particle material"
+            style={{ '--dx': `${BURST_PARTICLES[0].dx}px`, '--dy': `${BURST_PARTICLES[0].dy}px`, '--rot': `${BURST_PARTICLES[0].rot}deg` } as CSSProperties}
           >
+            +{burst.gained} {material.name}{burst.bonus ? ' bonus!' : ''}
+          </span>
+          {BURST_PARTICLES.slice(1).map((p, i) => (
             <span
+              key={i}
               className="collect-particle material"
-              style={{ '--dx': `${BURST_PARTICLES[0].dx}px`, '--dy': `${BURST_PARTICLES[0].dy}px`, '--rot': `${BURST_PARTICLES[0].rot}deg` } as CSSProperties}
+              style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, animationDelay: `${p.delay}ms` } as CSSProperties}
             >
-              +{burst.gained} {material.name}{burst.bonus ? ' bonus!' : ''}
+              {material.glyph}
             </span>
-            {BURST_PARTICLES.slice(1).map((p, i) => (
-              <span
-                key={i}
-                className="collect-particle material"
-                style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, animationDelay: `${p.delay}ms` } as CSSProperties}
-              >
-                {material.glyph}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <p className="tiny muted">
-        {material.description} In stock: {state.materials[nodeId]}/{HarvestManager.capacity(state)}.
-      </p>
-
-      <ToolUpgradeCard nodeId={nodeId} />
+          ))}
+        </div>
+      )}
     </>
   );
 }
@@ -178,7 +202,7 @@ function ToolUpgradeCard({ nodeId }: { nodeId: MaterialId }) {
         <span key={level} className="small muted purchase-pulse">Level {level}/{tool.maxLevel}</span>
       </div>
       <p className="card-flavour">
-        +{tool.yieldBonusPerLevel} yield and a faster respawn per level.
+        +{tool.yieldBonusPerLevel} yield and a faster respawn per level. ({MATERIAL_BY_ID[nodeId].nodeName})
       </p>
       <button className="btn-primary" disabled={maxed || state.gold < (cost ?? 0)} onClick={() => engine.upgradeHarvestTool(nodeId)}>
         {maxed ? 'Fully upgraded' : `Upgrade · ${formatGold(cost ?? 0)}`}
@@ -224,6 +248,15 @@ function WarehouseTab() {
       </div>
 
       <TradeRouteCard />
+
+      <div className="section-heading">Tools</div>
+      <p className="tiny muted" style={{ marginBottom: 8 }}>
+        Moved here from each node's own view -- one shared spot for every tool upgrade, same as everything
+        else Warehouse-related.
+      </p>
+      <div className="grid two">
+        {NODE_ORDER.map((nodeId) => <ToolUpgradeCard key={nodeId} nodeId={nodeId} />)}
+      </div>
     </>
   );
 }

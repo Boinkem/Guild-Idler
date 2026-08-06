@@ -358,12 +358,12 @@ was exercised at runtime (not just typechecked) before calling this done,
 including migrating a save that predates all of this entirely.
 
 **What's live:**
-- New `harvest` tab (Guild group) -- a Warehouse home sub-tab plus one
-  sub-tab per node (Quarry/Woodyard/Herb Garden/Fish Weir), each with its
-  own falling-item scene (`.harvest-scene` in app.css). Any hero not
-  currently on a quest feeds every node's spawn timer -- no assignment
-  step, and not gated on which sub-tab happens to be open, same as the
-  quest board and shop already tick regardless of which panel you're on.
+- New `harvest` tab (Guild group) -- a Warehouse sub-tab (stock, capacity,
+  Trade Route, Tools) and a combined Fields sub-tab (patch 0119 -- see
+  below for what changed there). Any hero not currently on a quest feeds
+  every node's spawn timer -- no assignment step, and not gated on which
+  sub-tab happens to be open, same as the quest board and shop already
+  tick regardless of which panel you're on.
 - **Per-node mechanic**: on a timer (`HarvestManager.ensureSpawns`,
   ticked from `GameEngine.refreshWorld`), a material spawns at a random
   X, falls and settles (`@keyframes harvest-fall`), pulses for ~12s
@@ -382,8 +382,9 @@ including migrating a save that predates all of this entirely.
   shape Treasury already has) lives in the same file.
 - **Trade Route** -- one-time gold upgrade, unlocks selling materials
   for flat gold per unit.
-- **Crafting**, in the Warehouse tab -- gear recipes (Guildmade Blade:
-  ore+timber; Guildmade Band: ore+timber) let the player pick 2 of 4
+- **Crafting** -- lives on each vendor's own page in Vendors as of patch
+  0118, not in Harvest. Gear recipes (Guildmade Blade: ore+timber;
+  Guildmade Band: ore+timber) let the player pick 2 of 4
   eligible mod types at a fixed value each, stored on the item itself as
   `EquipmentItem.customMods` rather than the def's own `mods` (which
   stays empty on any `craftable: true` def -- see that flag's comment in
@@ -432,11 +433,11 @@ including migrating a save that predates all of this entirely.
   runtime, not just written and assumed correct.
 
 **Known gaps, deliberately not blocking this patch:**
-- **Art.** `public/lore/harvest/<nodeId>.jpg` (4 files) and a Warehouse
-  interior don't exist yet -- same "missing file just fails to paint, no
-  broken-icon" convention as every other banner in this game, so the
-  mechanic works today and art can land whenever it's sourced, same
-  rollout shape quest-chain banners already used.
+- **Art.** ~~`public/lore/harvest/<nodeId>.jpg` (4 files)~~ -- superseded
+  by patch 0119's Fields consolidation below: now just one shared image,
+  `public/lore/harvest/fields.jpg`. A Warehouse interior still doesn't
+  exist. Same "missing file just fails to paint, no broken-icon"
+  convention as every other banner in this game either way.
 - **Quests still exist to fill the same original gap.** Nothing was
   changed about how a hero coming back from a quest also being available
   to gather at the same time -- worth a look eventually, but not a blocker.
@@ -444,6 +445,30 @@ including migrating a save that predates all of this entirely.
   not a balance pass -- same "content is a cache, gameplay data confirms
   the intent" spirit as every other system's initial numbers before
   actual playtesting.
+
+### Harvest Fields consolidation -- done (patch 0119)
+The 4 separate per-node sub-tabs (Quarry/Woodyard/Herb Garden/Fish Weir)
+collapsed into one combined **Fields** sub-tab, replacing them alongside
+the existing **Warehouse** sub-tab (so Harvest is 2 sub-tabs now, not 5).
+One shared scene, one shared background image, sourced as a single image
+pre-split into 4 even vertical blocks rather than 4 separate files --
+**`public/lore/harvest/fields.jpg`** is the exact path and filename the
+game looks for; same "missing file just fails to paint" convention as
+every other banner, so nothing breaks if it isn't there yet. Left to
+right, in `NODE_ORDER`: ore (Quarry), timber (Woodyard), herbs (Herb
+Garden), fish (Fish Weir) -- each node's falling item spawns only inside
+its own 25%-wide lane (`spawnPositionPercent` remapped from a full-width
+random spot to `laneStart + padding` within that node's slice), verified
+at runtime across 20 samples per node that none ever crossed into a
+neighboring lane. All four nodes' spawn/catch/burst logic is still fully
+independent under the hood (`NodeLane`, one instance per node) -- only
+the *display* is shared now, not the mechanic itself.
+
+Tool upgrades (Pickaxe/Woodaxe/Sickle/Net) moved out of each node's own
+view and into the Warehouse sub-tab, under a new "Tools" section --
+consistent with everything else Warehouse-related (capacity, Trade
+Route) living in one administrative spot rather than scattered across
+the tab.
 
 ### Bigger, still-undecided
 - ~~First-five-minutes onboarding beat~~ -- done. A scripted, one-time tour
