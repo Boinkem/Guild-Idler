@@ -2,27 +2,57 @@
   {
     "id": "healing_potion",
     "name": "Healing Potion",
-    "description": "Steadies the hands before a fight.",
+    "description": "Steadies the hands before a fight. Increases quest success rate.",
     "cost": 25,
+    "glyph": "❤",
+    "effect": {
+      "success": 5
+    }
+  },
+  {
+    "id": "supreme_healing_potion",
+    "name": "Supreme Healing Potion",
+    "description": "Steadies the hands before a fight. Increases quest success rate more than a standard healing potion.",
+    "cost": 150,
     "glyph": "❤",
     "effect": {
       "success": 15
     }
   },
   {
-    "id": "lucky_potion",
-    "name": "Lucky Potion",
+    "id": "greater_healing_potion_copy",
+    "name": "Greater Healing Potion",
+    "description": "Steadies the hands before a fight. Increases quest success rate more than a standard healing potion.",
+    "cost": 75,
+    "glyph": "❤",
+    "effect": {
+      "success": 10
+    }
+  },
+  {
+    "id": "minor_lucky_potion",
+    "name": "Minor Lucky Potion",
     "description": "Coins seem to find their way into pockets.",
-    "cost": 50,
+    "cost": 40,
     "glyph": "✦",
     "effect": {
-      "gold": 50
+      "gold": 40
+    }
+  },
+  {
+    "id": "lucky_potion_copy",
+    "name": "Standard Lucky Potion",
+    "description": "Coins seem to find their way into pockets.",
+    "cost": 75,
+    "glyph": "✦",
+    "effect": {
+      "gold": 55
     }
   },
   {
     "id": "strength_potion",
     "name": "Strength Potion",
-    "description": "A hard swing and a fair price for it.",
+    "description": "A hard swing and a fair price for it.\nIncreases success rate, and gold drops",
     "cost": 75,
     "glyph": "⚔",
     "effect": {
