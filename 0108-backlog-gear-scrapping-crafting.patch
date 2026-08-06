@@ -1,0 +1,23 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index a13f036..d3611a5 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -272,3 +272,18 @@ loadout picked at send time. One follow-up worth a look next time
+ - **Steam leaderboards** -- mentioned early as a distinct, larger feature;
+   the Guild Rank tooltip in the Lore tab was deliberately worded to become
+   literally true if this ever ships, without needing a rewrite.
++- **Gear scrapping & Crafting** -- a materials loop as an alternative to
++  the existing straight-to-gold sell (`EquipmentManager.sellValue`,
++  routed through `ShopManager.sell`/`engine.sellItem`): break down
++  unwanted gear into crafting materials instead, then spend those to
++  craft new items or upgrade existing ones. Distinct from repair/refine
++  (EquipmentManager's existing gold-cost durability/plus system on an
++  item you already own) -- this would be materials-based creation, a new
++  resource type, not a modification of one. No concrete design yet --
++  needs its own scoping conversation before anything else: what
++  materials actually look like (rarity-tied? set-specific? universal?),
++  whether scrapping replaces or sits alongside plain selling, whether
++  crafted items are fresh random rolls or guaranteed specific pieces, and
++  how it interacts with the Workshop facility and the shop/black-market
++  rotation -- three systems that already touch gear in their own way and
++  would need to stay coherent with a fourth.
