@@ -88,5 +88,11 @@
     "name": "Every Banner Flying",
     "description": "Full-clear a raid at every difficulty -- Normal, Heroic, and Mythic.",
     "hidden": false
+  },
+  {
+    "id": "LAST_GOD_DEFEATED",
+    "name": "The Last Mile",
+    "description": "Clear Requiem for the Last God.",
+    "hidden": true
   }
 ]

@@ -32,6 +32,11 @@ const CHECKS: Record<string, Check> = {
 
   WORLDS_END: (state) => (state.completedChains ?? []).includes('world_ender'),
 
+  // Same mirrored-treatment as WORLDS_END above, but checking completedRaids
+  // rather than completedChains -- the Last God moved from a quest chain to
+  // a raid in its own restructure, so this is the correct list to check now.
+  LAST_GOD_DEFEATED: (state) => (state.completedRaids ?? []).includes('requiem_last_god'),
+
   ON_A_ROLL: (state) => state.stats.bestPrestigeStreak >= STREAK_FOR_ON_A_ROLL,
 
   FULL_ROSTER: (state) => {
