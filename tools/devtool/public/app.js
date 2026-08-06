@@ -184,7 +184,7 @@ function fieldControl(spec, key, value) {
     const opts = spec.options.map((o) => `<option value="${o}" ${o === value ? 'selected' : ''}>${o}</option>`).join('');
     return `<select id="${id}">${opts}</select>`;
   }
-  if (spec.type === 'string[]') {
+  if (spec.type === 'string[]' || spec.type === 'modKeyList' || spec.type === 'statKeyList') {
     return listInput(id, value ?? []);
   }
   if (spec.type === 'boolean') {
@@ -192,6 +192,7 @@ function fieldControl(spec, key, value) {
   }
   if (spec.type === 'mods') return kvGrid(id, MOD_KEYS, value ?? {}, 'number');
   if (spec.type === 'stats') return kvGrid(id, STAT_KEYS, value ?? {}, 'number');
+  if (spec.type === 'materials') return kvGrid(id, MATERIAL_KEYS, value ?? {}, 'number');
   if (spec.type === 'effect') return kvGrid(id, EFFECT_KEYS, value ?? {}, 'mixed');
   if (spec.type === 'eventEffects') return kvGrid(id, EVENT_EFFECT_KEYS, value ?? {}, 'mixed');
   return `<input type="text" id="${id}" value="${escapeHtml(JSON.stringify(value))}" />`;
@@ -199,6 +200,7 @@ function fieldControl(spec, key, value) {
 
 const MOD_KEYS = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability'];
 const STAT_KEYS = ['strength', 'endurance', 'luck', 'wisdom'];
+const MATERIAL_KEYS = ['ore', 'timber', 'herbs', 'fish'];
 const EFFECT_KEYS = ['success', 'gold', 'preventInjury', 'guaranteedGoodEvent', 'healInjury'];
 const EVENT_EFFECT_KEYS = ['success', 'goldPct', 'flatGold', 'xpPct', 'loot', 'durability', 'delay', 'injury', 'guaranteedLoot'];
 const BOOL_KEYS = new Set(['preventInjury', 'guaranteedGoodEvent', 'healInjury', 'injury']);
@@ -456,10 +458,10 @@ function readField(spec, key) {
   if (spec.type === 'string' || spec.type === 'enum') return el.value;
   if (spec.type === 'number') return parseFloat(el.value) || 0;
   if (spec.type === 'boolean') return el.checked;
-  if (spec.type === 'string[]') {
+  if (spec.type === 'string[]' || spec.type === 'modKeyList' || spec.type === 'statKeyList') {
     return [...el.querySelectorAll('[data-list-item]')].map((i) => i.value.trim()).filter(Boolean);
   }
-  if (['mods', 'stats', 'effect', 'eventEffects'].includes(spec.type)) {
+  if (['mods', 'stats', 'materials', 'effect', 'eventEffects'].includes(spec.type)) {
     const out = {};
     el.querySelectorAll('[data-kv]').forEach((input) => {
       const k = input.dataset.kv;
@@ -489,6 +491,8 @@ function openEditor(index) {
       <label>${key}${spec.required ? ' *' : ''}</label>
       ${fieldControl(spec, key, row[key])}
       ${spec.slug ? '<div class="hint">Used as the internal id. Lowercase, no spaces.</div>' : ''}
+      ${spec.type === 'modKeyList' ? `<div class="hint">One per line, must be one of: ${MOD_KEYS.join(', ')}</div>` : ''}
+      ${spec.type === 'statKeyList' ? `<div class="hint">One per line, must be one of: ${STAT_KEYS.join(', ')}</div>` : ''}
     </div>
   `).join('');
 

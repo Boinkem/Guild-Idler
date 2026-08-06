@@ -80,15 +80,21 @@ floor and a remembered size that persists across launches the same way
 the companion's position already does.
 
 **DevTools** — tuning registry now covers raid coefficients (raid_speed's
-cost curve, heroic/mythic difficulty modifiers) plus, as of patch 0107,
-all 5 guild facilities' cost curves and per-level effect strength
-(35 entries total, 3 categories). `raid_loot`/`raid_recovery` are still
-hardcoded in `raidUpgrades.ts` -- explicitly deferred there as a small
-follow-up, not forgotten. Loot picker, icon assignment tooling also live
-here. Patches tab's flow is now Check -> Apply -> Commit -> **Push** (plain
-`git push`, relies on the branch's existing upstream rather than taking a
-remote/branch as input); Build/Package/Tag shifted from steps 5/6/7 to
-6/7/8 to make room.
+cost curve, heroic/mythic difficulty modifiers), all 5 guild facilities'
+cost curves and per-level effect strength (patch 0107), and all of
+Harvest/Gathering's own knobs (patch 0111) -- spawn/despawn/bonus rates,
+all four tools' and the Warehouse's cost curves. `raid_loot`/
+`raid_recovery` are still hardcoded in `raidUpgrades.ts` -- explicitly
+deferred there as a small follow-up, not forgotten. Loot picker, icon
+assignment tooling also live here. Crafting Recipes (gear/consumable/
+enchant, patch 0115) is now its own DevTool tab -- editable the same way
+equipment/consumables/raids already are, not code. Equipment's schema
+was also missing `raidExclusive`/`craftable` as fields entirely (patch
+0115) -- see Known bugs, this was a real, silent data-loss bug, not just
+a missing nice-to-have. Patches tab's flow is now Check -> Apply ->
+Commit -> **Push** (plain `git push`, relies on the branch's existing
+upstream rather than taking a remote/branch as input); Build/Package/Tag
+shifted from steps 5/6/7 to 6/7/8 to make room.
 
 **Harvest/Gathering + Crafting** — new `harvest` tab: idle heroes feed 4
 material nodes (Quarry/Woodyard/Herb Garden/Fish Weir) via a click-the-
@@ -179,6 +185,23 @@ raid fight).
   this was an unrelated icon edit). Added `shield` to the enum; the
   frontend dropdown renders straight from this same schema, so one fix
   covered the missing option and the validation failure together.
+- ~~DevTool: editing a raidExclusive/craftable item silently drops that
+  flag on save~~ -- resolved (patch 0115). Found while checking whether
+  the DevTool supported the new Harvest/Crafting content, not reported
+  first -- a real, silent data-loss bug rather than just a missing
+  editing convenience. `raidExclusive` and `craftable` both existed on
+  disk (5 shield items aside, dozens of raid-tier loot variants use
+  `raidExclusive`; the two craftable gear bases use `craftable`) but
+  weren't in `SCHEMAS.equipment.fields` at all. The editor's save handler
+  rebuilds each edited entry from scratch out of exactly the fields the
+  schema lists (see `openEditor` in app.js) -- so opening *that specific
+  item's* editor for any reason at all, even an unrelated icon tweak, and
+  saving, would drop the flag it didn't know about. Confirmed precisely
+  with a script simulating the exact old field list against a real item
+  (`gravewatchers_band_heroic`): flag present before, gone after, under
+  the old schema. Added both fields as `boolean` type (already fully
+  supported end to end, just never wired to this schema) -- fixed and
+  now editable via a checkbox, not just fixed silently.
 - **Every CSS animation in the game plays instantly, no visible motion at
   all -- root cause still unknown.** First noticed via Harvest's
   fall-in/collect-particle effects (patches 0112/0113 chased two real but

@@ -1,0 +1,360 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 495048e..9cbdba4 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -80,15 +80,21 @@ floor and a remembered size that persists across launches the same way
+ the companion's position already does.
+ 
+ **DevTools** — tuning registry now covers raid coefficients (raid_speed's
+-cost curve, heroic/mythic difficulty modifiers) plus, as of patch 0107,
+-all 5 guild facilities' cost curves and per-level effect strength
+-(35 entries total, 3 categories). `raid_loot`/`raid_recovery` are still
+-hardcoded in `raidUpgrades.ts` -- explicitly deferred there as a small
+-follow-up, not forgotten. Loot picker, icon assignment tooling also live
+-here. Patches tab's flow is now Check -> Apply -> Commit -> **Push** (plain
+-`git push`, relies on the branch's existing upstream rather than taking a
+-remote/branch as input); Build/Package/Tag shifted from steps 5/6/7 to
+-6/7/8 to make room.
++cost curve, heroic/mythic difficulty modifiers), all 5 guild facilities'
++cost curves and per-level effect strength (patch 0107), and all of
++Harvest/Gathering's own knobs (patch 0111) -- spawn/despawn/bonus rates,
++all four tools' and the Warehouse's cost curves. `raid_loot`/
++`raid_recovery` are still hardcoded in `raidUpgrades.ts` -- explicitly
++deferred there as a small follow-up, not forgotten. Loot picker, icon
++assignment tooling also live here. Crafting Recipes (gear/consumable/
++enchant, patch 0115) is now its own DevTool tab -- editable the same way
++equipment/consumables/raids already are, not code. Equipment's schema
++was also missing `raidExclusive`/`craftable` as fields entirely (patch
++0115) -- see Known bugs, this was a real, silent data-loss bug, not just
++a missing nice-to-have. Patches tab's flow is now Check -> Apply ->
++Commit -> **Push** (plain `git push`, relies on the branch's existing
++upstream rather than taking a remote/branch as input); Build/Package/Tag
++shifted from steps 5/6/7 to 6/7/8 to make room.
+ 
+ **Harvest/Gathering + Crafting** — new `harvest` tab: idle heroes feed 4
+ material nodes (Quarry/Woodyard/Herb Garden/Fish Weir) via a click-the-
+@@ -179,6 +185,23 @@ raid fight).
+   this was an unrelated icon edit). Added `shield` to the enum; the
+   frontend dropdown renders straight from this same schema, so one fix
+   covered the missing option and the validation failure together.
++- ~~DevTool: editing a raidExclusive/craftable item silently drops that
++  flag on save~~ -- resolved (patch 0115). Found while checking whether
++  the DevTool supported the new Harvest/Crafting content, not reported
++  first -- a real, silent data-loss bug rather than just a missing
++  editing convenience. `raidExclusive` and `craftable` both existed on
++  disk (5 shield items aside, dozens of raid-tier loot variants use
++  `raidExclusive`; the two craftable gear bases use `craftable`) but
++  weren't in `SCHEMAS.equipment.fields` at all. The editor's save handler
++  rebuilds each edited entry from scratch out of exactly the fields the
++  schema lists (see `openEditor` in app.js) -- so opening *that specific
++  item's* editor for any reason at all, even an unrelated icon tweak, and
++  saving, would drop the flag it didn't know about. Confirmed precisely
++  with a script simulating the exact old field list against a real item
++  (`gravewatchers_band_heroic`): flag present before, gone after, under
++  the old schema. Added both fields as `boolean` type (already fully
++  supported end to end, just never wired to this schema) -- fixed and
++  now editable via a checkbox, not just fixed silently.
+ - **Every CSS animation in the game plays instantly, no visible motion at
+   all -- root cause still unknown.** First noticed via Harvest's
+   fall-in/collect-particle effects (patches 0112/0113 chased two real but
+diff --git a/src/game/data/craftingRecipes.ts b/src/game/data/craftingRecipes.ts
+index 398d94a..b699da7 100644
+--- a/src/game/data/craftingRecipes.ts
++++ b/src/game/data/craftingRecipes.ts
+@@ -1,4 +1,5 @@
+ import { CraftingRecipeDef } from '../types';
++import craftingRecipesJson from './json/crafting-recipes.json';
+ 
+ /**
+  * Crafting recipes, cross-node by category rather than per-item -- a ring
+@@ -12,66 +13,16 @@ import { CraftingRecipeDef } from '../types';
+  * modify an item the player already owns (additive enchantStats, see
+  * that field's comment in types.ts) rather than producing anything new.
+  *
++ * Lives in json/crafting-recipes.json rather than a literal array here --
++ * editable via tools/devtool (the "Crafting Recipes" tab) without
++ * touching TypeScript, same reasoning as equipment/consumables/raids.
++ *
+  * Both craftable gear bases (guildmade_blade, guildmade_band) live in
+  * equipment.json with an empty `mods` object and `craftable: true` -- see
+  * that flag's own comment in types.ts for why the def itself carries no
+  * mods of its own.
+  */
+-export const CRAFTING_RECIPES: CraftingRecipeDef[] = [
+-  {
+-    id: 'craft_guildmade_blade',
+-    name: 'Guildmade Blade',
+-    description: 'A weapon built to the wielder\u2019s own spec, not whatever the smith happened to have on the rack.',
+-    category: 'gear',
+-    materialCost: { ore: 20, timber: 10 },
+-    goldCost: 400,
+-    resultDefId: 'guildmade_blade',
+-    modOptions: ['success', 'gold', 'xp', 'loot'],
+-    modsToPick: 2,
+-    modValue: 6,
+-  },
+-  {
+-    id: 'craft_guildmade_band',
+-    name: 'Guildmade Band',
+-    description: 'A ring cast and set by the guild\u2019s own hand -- exactly the bonuses asked for, nothing left to chance.',
+-    category: 'gear',
+-    materialCost: { ore: 15, timber: 5 },
+-    goldCost: 350,
+-    resultDefId: 'guildmade_band',
+-    modOptions: ['success', 'gold', 'xp', 'loot'],
+-    modsToPick: 2,
+-    modValue: 6,
+-  },
+-  {
+-    id: 'craft_trail_rations',
+-    name: 'Trail Rations',
+-    description: 'Smoked fish and dried herbs, packed for a hero who won\u2019t be home for dinner.',
+-    category: 'consumable',
+-    materialCost: { fish: 8, herbs: 4 },
+-    goldCost: 20,
+-    resultConsumableId: 'strength_potion',
+-  },
+-  {
+-    id: 'craft_herbal_tonic',
+-    name: 'Herbal Tonic',
+-    description: 'The Herb Garden\u2019s own cure-all, brewed in-house rather than bought off a vendor\u2019s shelf.',
+-    category: 'consumable',
+-    materialCost: { herbs: 10 },
+-    goldCost: 25,
+-    resultConsumableId: 'healing_potion',
+-  },
+-  {
+-    id: 'enchant_minor_sigil',
+-    name: 'Minor Sigil',
+-    description: 'A working the Enchanter presses into a piece already carried, rather than anything built from scratch.',
+-    category: 'enchant',
+-    materialCost: { herbs: 15, ore: 10 },
+-    goldCost: 300,
+-    statOptions: ['strength', 'endurance', 'luck', 'wisdom'],
+-    statsToPick: 1,
+-    statValue: 3,
+-  },
+-];
++export const CRAFTING_RECIPES: CraftingRecipeDef[] = craftingRecipesJson as CraftingRecipeDef[];
+ 
+ export const CRAFTING_RECIPE_BY_ID: Record<string, CraftingRecipeDef> = Object.fromEntries(
+   CRAFTING_RECIPES.map((r) => [r.id, r]),
+diff --git a/src/game/data/json/equipment.json b/src/game/data/json/equipment.json
+index a5a5354..23dc14a 100644
+--- a/src/game/data/json/equipment.json
++++ b/src/game/data/json/equipment.json
+@@ -6,7 +6,7 @@
+     "rarity": "common",
+     "reqLevel": 1,
+     "maxDurability": 40,
+-    "value": 30,
++    "value": 999,
+     "mods": {
+       "success": 2
+     },
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index c4dc76c..4cc713d 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -184,7 +184,7 @@ function fieldControl(spec, key, value) {
+     const opts = spec.options.map((o) => `<option value="${o}" ${o === value ? 'selected' : ''}>${o}</option>`).join('');
+     return `<select id="${id}">${opts}</select>`;
+   }
+-  if (spec.type === 'string[]') {
++  if (spec.type === 'string[]' || spec.type === 'modKeyList' || spec.type === 'statKeyList') {
+     return listInput(id, value ?? []);
+   }
+   if (spec.type === 'boolean') {
+@@ -192,6 +192,7 @@ function fieldControl(spec, key, value) {
+   }
+   if (spec.type === 'mods') return kvGrid(id, MOD_KEYS, value ?? {}, 'number');
+   if (spec.type === 'stats') return kvGrid(id, STAT_KEYS, value ?? {}, 'number');
++  if (spec.type === 'materials') return kvGrid(id, MATERIAL_KEYS, value ?? {}, 'number');
+   if (spec.type === 'effect') return kvGrid(id, EFFECT_KEYS, value ?? {}, 'mixed');
+   if (spec.type === 'eventEffects') return kvGrid(id, EVENT_EFFECT_KEYS, value ?? {}, 'mixed');
+   return `<input type="text" id="${id}" value="${escapeHtml(JSON.stringify(value))}" />`;
+@@ -199,6 +200,7 @@ function fieldControl(spec, key, value) {
+ 
+ const MOD_KEYS = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability'];
+ const STAT_KEYS = ['strength', 'endurance', 'luck', 'wisdom'];
++const MATERIAL_KEYS = ['ore', 'timber', 'herbs', 'fish'];
+ const EFFECT_KEYS = ['success', 'gold', 'preventInjury', 'guaranteedGoodEvent', 'healInjury'];
+ const EVENT_EFFECT_KEYS = ['success', 'goldPct', 'flatGold', 'xpPct', 'loot', 'durability', 'delay', 'injury', 'guaranteedLoot'];
+ const BOOL_KEYS = new Set(['preventInjury', 'guaranteedGoodEvent', 'healInjury', 'injury']);
+@@ -456,10 +458,10 @@ function readField(spec, key) {
+   if (spec.type === 'string' || spec.type === 'enum') return el.value;
+   if (spec.type === 'number') return parseFloat(el.value) || 0;
+   if (spec.type === 'boolean') return el.checked;
+-  if (spec.type === 'string[]') {
++  if (spec.type === 'string[]' || spec.type === 'modKeyList' || spec.type === 'statKeyList') {
+     return [...el.querySelectorAll('[data-list-item]')].map((i) => i.value.trim()).filter(Boolean);
+   }
+-  if (['mods', 'stats', 'effect', 'eventEffects'].includes(spec.type)) {
++  if (['mods', 'stats', 'materials', 'effect', 'eventEffects'].includes(spec.type)) {
+     const out = {};
+     el.querySelectorAll('[data-kv]').forEach((input) => {
+       const k = input.dataset.kv;
+@@ -489,6 +491,8 @@ function openEditor(index) {
+       <label>${key}${spec.required ? ' *' : ''}</label>
+       ${fieldControl(spec, key, row[key])}
+       ${spec.slug ? '<div class="hint">Used as the internal id. Lowercase, no spaces.</div>' : ''}
++      ${spec.type === 'modKeyList' ? `<div class="hint">One per line, must be one of: ${MOD_KEYS.join(', ')}</div>` : ''}
++      ${spec.type === 'statKeyList' ? `<div class="hint">One per line, must be one of: ${STAT_KEYS.join(', ')}</div>` : ''}
+     </div>
+   `).join('');
+ 
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 694326b..65a8884 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -78,6 +78,17 @@ const SCHEMAS = {
+       // validates as a plain optional string (a relative path under
+       // ICONS_DIR, e.g. "weapons/sword_03.png"), same as setId above.
+       icon: { type: 'string', required: false, picker: 'icon' },
++      // Both of these existed on disk (raidExclusive since Heroic/Mythic
++      // raid loot variants were added, craftable since Crafting) but
++      // weren't in this schema -- the editor rebuilds each entry from
++      // scratch out of exactly the fields listed here (see openEditor's
++      // save handler in app.js), so editing *any* field on an item that
++      // had one of these silently dropped it on save. Confirmed the actual
++      // cause, not a hypothetical: this is the same class of bug the
++      // missing shield slot option was, just quieter, since nothing
++      // rejects an entry for losing a field it didn't know about.
++      raidExclusive: { type: 'boolean', required: false },
++      craftable: { type: 'boolean', required: false },
+     },
+   },
+   'consumables': {
+@@ -170,6 +181,42 @@ const SCHEMAS = {
+       unlocksRaidId: { type: 'string', required: false },
+     },
+   },
++  'crafting-recipes': {
++    file: 'crafting-recipes.json',
++    label: 'Crafting Recipes',
++    idField: 'id',
++    // Three shapes in one schema, same "category picks which other fields
++    // matter" pattern the game's own CraftingRecipeDef type uses (see
++    // types.ts) -- a `gear` recipe leaves resultConsumableId/statOptions
++    // etc empty and vice versa. Nothing here enforces that a `gear`
++    // recipe actually fills in resultDefId rather than leaving the whole
++    // thing pointless; same level of trust the rest of this tool already
++    // extends (e.g. nothing stops a raid-encounters entry from listing
++    // loot the shop would never sell). Restart the game after saving to
++    // see a new or edited recipe, same as every other content type.
++    fields: {
++      id: { type: 'string', required: true, slug: true },
++      name: { type: 'string', required: true },
++      description: { type: 'string', required: true },
++      category: { type: 'enum', required: true, options: ['gear', 'consumable', 'enchant'] },
++      materialCost: { type: 'materials', required: true },
++      goldCost: { type: 'number', required: true },
++      // gear only -- an equipment id, ideally one with craftable: true set
++      // on it (see the Equipment tab), so it doesn't also turn up in the
++      // shop/black market/loot rolls with none of the mods a real craft
++      // would give it.
++      resultDefId: { type: 'string', required: false },
++      modOptions: { type: 'modKeyList', required: false },
++      modsToPick: { type: 'number', required: false },
++      modValue: { type: 'number', required: false },
++      // consumable only -- a consumables.json id.
++      resultConsumableId: { type: 'string', required: false },
++      // enchant only.
++      statOptions: { type: 'statKeyList', required: false },
++      statsToPick: { type: 'number', required: false },
++      statValue: { type: 'number', required: false },
++    },
++  },
+   'tuning': {
+     file: 'tuning.json',
+     label: 'Tuning',
+@@ -214,6 +261,7 @@ const MOD_KEYS = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'dur
+ const STAT_KEYS = ['strength', 'endurance', 'luck', 'wisdom'];
+ const EFFECT_KEYS = ['success', 'gold', 'preventInjury', 'guaranteedGoodEvent', 'healInjury'];
+ const EVENT_EFFECT_KEYS = ['success', 'goldPct', 'flatGold', 'xpPct', 'loot', 'durability', 'delay', 'injury', 'guaranteedLoot'];
++const MATERIAL_KEYS = ['ore', 'timber', 'herbs', 'fish'];
+ 
+ function validateEntry(schema, entry, index) {
+   const errors = [];
+@@ -256,6 +304,20 @@ function validateEntry(schema, entry, index) {
+         if (typeof value !== 'object') errors.push(`entry ${index}: "${key}" must be an object`);
+         else for (const k of Object.keys(value)) if (!EVENT_EFFECT_KEYS.includes(k)) errors.push(`entry ${index}: unknown effect key "${k}"`);
+         break;
++      case 'materials':
++        if (typeof value !== 'object') errors.push(`entry ${index}: "${key}" must be an object`);
++        else for (const k of Object.keys(value)) if (!MATERIAL_KEYS.includes(k)) errors.push(`entry ${index}: unknown material "${k}"`);
++        break;
++      case 'modKeyList':
++        if (!Array.isArray(value) || value.some((v) => !MOD_KEYS.includes(v))) {
++          errors.push(`entry ${index}: "${key}" must only contain ${MOD_KEYS.join(', ')}`);
++        }
++        break;
++      case 'statKeyList':
++        if (!Array.isArray(value) || value.some((v) => !STAT_KEYS.includes(v))) {
++          errors.push(`entry ${index}: "${key}" must only contain ${STAT_KEYS.join(', ')}`);
++        }
++        break;
+       case 'boolean':
+         if (typeof value !== 'boolean') errors.push(`entry ${index}: "${key}" must be true or false`);
+         break;
+diff --git a/src/game/data/json/crafting-recipes.json b/src/game/data/json/crafting-recipes.json
+new file mode 100644
+index 0000000..6ef8543
+--- /dev/null
++++ b/src/game/data/json/crafting-recipes.json
+@@ -0,0 +1,55 @@
++[
++  {
++    "id": "craft_guildmade_blade",
++    "name": "Guildmade Blade",
++    "description": "A weapon built to the wielder\u2019s own spec, not whatever the smith happened to have on the rack.",
++    "category": "gear",
++    "materialCost": { "ore": 20, "timber": 10 },
++    "goldCost": 400,
++    "resultDefId": "guildmade_blade",
++    "modOptions": ["success", "gold", "xp", "loot"],
++    "modsToPick": 2,
++    "modValue": 6
++  },
++  {
++    "id": "craft_guildmade_band",
++    "name": "Guildmade Band",
++    "description": "A ring cast and set by the guild\u2019s own hand -- exactly the bonuses asked for, nothing left to chance.",
++    "category": "gear",
++    "materialCost": { "ore": 15, "timber": 5 },
++    "goldCost": 350,
++    "resultDefId": "guildmade_band",
++    "modOptions": ["success", "gold", "xp", "loot"],
++    "modsToPick": 2,
++    "modValue": 6
++  },
++  {
++    "id": "craft_trail_rations",
++    "name": "Trail Rations",
++    "description": "Smoked fish and dried herbs, packed for a hero who won\u2019t be home for dinner.",
++    "category": "consumable",
++    "materialCost": { "fish": 8, "herbs": 4 },
++    "goldCost": 20,
++    "resultConsumableId": "strength_potion"
++  },
++  {
++    "id": "craft_herbal_tonic",
++    "name": "Herbal Tonic",
++    "description": "The Herb Garden\u2019s own cure-all, brewed in-house rather than bought off a vendor\u2019s shelf.",
++    "category": "consumable",
++    "materialCost": { "herbs": 10 },
++    "goldCost": 25,
++    "resultConsumableId": "healing_potion"
++  },
++  {
++    "id": "enchant_minor_sigil",
++    "name": "Minor Sigil",
++    "description": "A working the Enchanter presses into a piece already carried, rather than anything built from scratch.",
++    "category": "enchant",
++    "materialCost": { "herbs": 15, "ore": 10 },
++    "goldCost": 300,
++    "statOptions": ["strength", "endurance", "luck", "wisdom"],
++    "statsToPick": 1,
++    "statValue": 3
++  }
++]

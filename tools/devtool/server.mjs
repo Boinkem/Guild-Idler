@@ -78,6 +78,17 @@ const SCHEMAS = {
       // validates as a plain optional string (a relative path under
       // ICONS_DIR, e.g. "weapons/sword_03.png"), same as setId above.
       icon: { type: 'string', required: false, picker: 'icon' },
+      // Both of these existed on disk (raidExclusive since Heroic/Mythic
+      // raid loot variants were added, craftable since Crafting) but
+      // weren't in this schema -- the editor rebuilds each entry from
+      // scratch out of exactly the fields listed here (see openEditor's
+      // save handler in app.js), so editing *any* field on an item that
+      // had one of these silently dropped it on save. Confirmed the actual
+      // cause, not a hypothetical: this is the same class of bug the
+      // missing shield slot option was, just quieter, since nothing
+      // rejects an entry for losing a field it didn't know about.
+      raidExclusive: { type: 'boolean', required: false },
+      craftable: { type: 'boolean', required: false },
     },
   },
   'consumables': {
@@ -170,6 +181,42 @@ const SCHEMAS = {
       unlocksRaidId: { type: 'string', required: false },
     },
   },
+  'crafting-recipes': {
+    file: 'crafting-recipes.json',
+    label: 'Crafting Recipes',
+    idField: 'id',
+    // Three shapes in one schema, same "category picks which other fields
+    // matter" pattern the game's own CraftingRecipeDef type uses (see
+    // types.ts) -- a `gear` recipe leaves resultConsumableId/statOptions
+    // etc empty and vice versa. Nothing here enforces that a `gear`
+    // recipe actually fills in resultDefId rather than leaving the whole
+    // thing pointless; same level of trust the rest of this tool already
+    // extends (e.g. nothing stops a raid-encounters entry from listing
+    // loot the shop would never sell). Restart the game after saving to
+    // see a new or edited recipe, same as every other content type.
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      name: { type: 'string', required: true },
+      description: { type: 'string', required: true },
+      category: { type: 'enum', required: true, options: ['gear', 'consumable', 'enchant'] },
+      materialCost: { type: 'materials', required: true },
+      goldCost: { type: 'number', required: true },
+      // gear only -- an equipment id, ideally one with craftable: true set
+      // on it (see the Equipment tab), so it doesn't also turn up in the
+      // shop/black market/loot rolls with none of the mods a real craft
+      // would give it.
+      resultDefId: { type: 'string', required: false },
+      modOptions: { type: 'modKeyList', required: false },
+      modsToPick: { type: 'number', required: false },
+      modValue: { type: 'number', required: false },
+      // consumable only -- a consumables.json id.
+      resultConsumableId: { type: 'string', required: false },
+      // enchant only.
+      statOptions: { type: 'statKeyList', required: false },
+      statsToPick: { type: 'number', required: false },
+      statValue: { type: 'number', required: false },
+    },
+  },
   'tuning': {
     file: 'tuning.json',
     label: 'Tuning',
@@ -214,6 +261,7 @@ const MOD_KEYS = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'dur
 const STAT_KEYS = ['strength', 'endurance', 'luck', 'wisdom'];
 const EFFECT_KEYS = ['success', 'gold', 'preventInjury', 'guaranteedGoodEvent', 'healInjury'];
 const EVENT_EFFECT_KEYS = ['success', 'goldPct', 'flatGold', 'xpPct', 'loot', 'durability', 'delay', 'injury', 'guaranteedLoot'];
+const MATERIAL_KEYS = ['ore', 'timber', 'herbs', 'fish'];
 
 function validateEntry(schema, entry, index) {
   const errors = [];
@@ -255,6 +303,20 @@ function validateEntry(schema, entry, index) {
       case 'eventEffects':
         if (typeof value !== 'object') errors.push(`entry ${index}: "${key}" must be an object`);
         else for (const k of Object.keys(value)) if (!EVENT_EFFECT_KEYS.includes(k)) errors.push(`entry ${index}: unknown effect key "${k}"`);
+        break;
+      case 'materials':
+        if (typeof value !== 'object') errors.push(`entry ${index}: "${key}" must be an object`);
+        else for (const k of Object.keys(value)) if (!MATERIAL_KEYS.includes(k)) errors.push(`entry ${index}: unknown material "${k}"`);
+        break;
+      case 'modKeyList':
+        if (!Array.isArray(value) || value.some((v) => !MOD_KEYS.includes(v))) {
+          errors.push(`entry ${index}: "${key}" must only contain ${MOD_KEYS.join(', ')}`);
+        }
+        break;
+      case 'statKeyList':
+        if (!Array.isArray(value) || value.some((v) => !STAT_KEYS.includes(v))) {
+          errors.push(`entry ${index}: "${key}" must only contain ${STAT_KEYS.join(', ')}`);
+        }
         break;
       case 'boolean':
         if (typeof value !== 'boolean') errors.push(`entry ${index}: "${key}" must be true or false`);

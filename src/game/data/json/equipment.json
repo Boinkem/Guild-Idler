@@ -6,7 +6,7 @@
     "rarity": "common",
     "reqLevel": 1,
     "maxDurability": 40,
-    "value": 30,
+    "value": 999,
     "mods": {
       "success": 2
     },
