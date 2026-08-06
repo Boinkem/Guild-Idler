@@ -542,7 +542,7 @@ export function RaidsPanel() {
         <h2>Raids</h2>
         <p className="subtitle">Send the whole guild, not just one hero.</p>
         <p className="small muted">
-          Requires the Raid Charter upgrade -- check the Upgrades tab once the guild can field a real force.
+          Requires the Raid Charter upgrade -- check the Guild Hall tab once the guild can field a real force.
         </p>
       </>
     );

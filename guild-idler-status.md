@@ -325,21 +325,29 @@ loadout picked at send time. One follow-up worth a look next time
   small feature, not a tweak to an existing one. Worth doing, but sizable
   enough to want its own dedicated pass rather than folding into
   whatever else is in flight.
-- **Shop -> Vendors restructure -- in progress, staged.** Confirmed
-  shape: Shop renamed to Vendors; its three sections split one per
-  vendor (Blacksmith sells armour, Alchemist sells supplies, Enchanter
-  sells black market -- confirmed, not a guess); the current Upgrades
-  tab's General upgrades move into Guild Hall, its three vendor sections
-  (Blacksmith/Alchemist/Enchanter permanent stat upgrades) move onto
-  each vendor's own new page; each vendor page is sprite+Level Up on
-  top, that vendor's own upgrades beneath, that vendor's store items
-  below that; a button near Level Up opens an overlay for that vendor's
-  own slice of Crafting (gear for Blacksmith, potions/food for
-  Alchemist, enchanting for Enchanter) -- moving Crafting out of the
-  Harvest tab entirely, which was the specific complaint that started
-  this ("very much hidden away"). Patch 0117 did the smaller
-  prerequisite work first (icons, hover consistency, inline-expand ->
-  modal on Shop) -- the actual tab merge/rename/move is still ahead.
+- ~~Shop -> Vendors restructure~~ -- done (patch 0118). Shop renamed to
+  Vendors; its three sections split one per vendor (Blacksmith sells
+  armour, Alchemist sells supplies, Enchanter sells black market); the
+  old Upgrades tab's General upgrades moved into Guild Hall, its three
+  vendor sections (Blacksmith/Alchemist/Enchanter permanent stat
+  upgrades) moved onto each vendor's own page -- the Upgrades tab itself
+  is gone, fully absorbed into the two. Each vendor page is
+  sprite+Level Up on top, a new Crafting button next to Level Up
+  (opens an overlay filtered to that vendor's own category -- gear for
+  Blacksmith, potions/food for Alchemist, enchanting for Enchanter),
+  that vendor's own upgrades beneath (locked-card treatment for
+  untrained tiers, same as before), that vendor's store items below
+  that. Crafting is out of the Harvest tab entirely now, which was the
+  specific complaint that started this ("very much hidden away").
+  Caught and fixed two real, pre-existing mismatches while moving this,
+  not just relocating the same bugs: the Trade Route unlock toast was
+  pointing its "Go to" button at the (now-removed) Upgrades tab when it
+  should always have pointed at Harvest, where Trade Route actually
+  lives; and the Black Market unlock hint referenced "the Upgrades tab"
+  when Black Market Contact is a General upgrade, now correctly pointing
+  at Guild Hall. Verified vendor/upgrade groupings and the actual
+  buy/level-up flow against the real engine at runtime, not just
+  typechecked.
 
 ### Harvest/Gathering + Crafting -- built (patch 0111, Enchanting added 0114)
 Started as the one-line "Off-mission engagement" bullet, scoped across a

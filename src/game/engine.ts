@@ -925,7 +925,7 @@ export class GameEngine {
     if (error) return this.say(error);
     playSound('purchase');
     const def = GuildManager.vendors().find((v) => v.id === vendorId);
-    this.say(`${def?.name ?? 'The vendor'} has more to offer now.`, 'upgrades');
+    this.say(`${def?.name ?? 'The vendor'} has more to offer now.`, 'vendors');
     void this.saveNow();
   }
 
@@ -960,7 +960,7 @@ export class GameEngine {
     const error = HarvestManager.unlockTradeRoute(this.state);
     if (error) return this.say(error);
     playSound('purchase');
-    this.say('The Trade Route is open -- materials can be sold for gold from here on.', 'upgrades');
+    this.say('The Trade Route is open -- materials can be sold for gold from here on.', 'harvest');
     void this.saveNow();
   }
 

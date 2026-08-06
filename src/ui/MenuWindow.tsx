@@ -6,8 +6,7 @@ import { formatGold, formatNumber } from '../game/util';
 import { QuestPanel } from './panels/QuestPanel';
 import { HeroesPanel } from './panels/HeroesPanel';
 import { EquipmentPanel } from './panels/EquipmentPanel';
-import { ShopPanel } from './panels/ShopPanel';
-import { UpgradesPanel } from './panels/UpgradesPanel';
+import { VendorsPanel } from './panels/VendorsPanel';
 import { GuildPanel } from './panels/GuildPanel';
 import { HarvestPanel } from './panels/HarvestPanel';
 import { GuidePanel } from './panels/GuidePanel';
@@ -50,7 +49,7 @@ const GUILD_GROUP = {
   tabs: [
     { id: 'heroes', label: 'Heroes', Panel: HeroesPanel },
     { id: 'equipment', label: 'Inventory', Panel: EquipmentPanel },
-    { id: 'shop', label: 'Shop', Panel: ShopPanel },
+    { id: 'vendors', label: 'Vendors', Panel: VendorsPanel },
     { id: 'guild', label: 'Guild Hall', Panel: GuildPanel },
     { id: 'harvest', label: 'Harvest', Panel: HarvestPanel },
   ],
@@ -67,7 +66,6 @@ const ADVENTURE_GROUP = {
 const PROGRESSION_GROUP = {
   label: 'Progression',
   tabs: [
-    { id: 'upgrades', label: 'Upgrades', Panel: UpgradesPanel },
     { id: 'prestige', label: 'Prestige', Panel: PrestigePanel },
   ],
 } as const;

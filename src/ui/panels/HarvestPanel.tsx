@@ -9,13 +9,10 @@ import {
 import { HarvestManager } from '../../game/managers/HarvestManager';
 import { CraftingManager } from '../../game/managers/CraftingManager';
 import { EquipmentManager } from '../../game/managers/EquipmentManager';
-import { CRAFTING_RECIPES } from '../../game/data/craftingRecipes';
-import { VENDORS } from '../../game/data/progression';
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
-import { CraftingRecipeDef, MaterialId, Modifiers, Stats, VendorId } from '../../game/types';
+import { CraftingRecipeDef, MaterialId, Modifiers, Stats } from '../../game/types';
 import { formatGold } from '../../game/util';
 import { MaxFlash, useMaxFlash } from '../maxFlash';
-import { VendorSprite } from '../sprites/VendorSprite';
 import { RecipeIcon } from '../icons';
 
 type SubTab = 'warehouse' | MaterialId;
@@ -45,8 +42,8 @@ export function HarvestPanel() {
     <>
       <h2>Harvest</h2>
       <p className="subtitle">
-        Idle heroes gather instead of doing nothing. Click a shiny while it&rsquo;s here, then spend the stock in
-        Crafting, back on the Warehouse tab.
+        Idle heroes gather instead of doing nothing. Click a shiny while it&rsquo;s here, then spend the stock
+        with each vendor's own Crafting, over in Vendors.
       </p>
 
       <div className="row wrap" style={{ gap: 8, marginBottom: 14 }}>
@@ -227,34 +224,7 @@ function WarehouseTab() {
       </div>
 
       <TradeRouteCard />
-
-      <div className="section-heading">Crafting</div>
-      <VendorSection vendorId="blacksmith" category="gear" />
-      <VendorSection vendorId="alchemist" category="consumable" />
-      <VendorSection vendorId="enchanter" category="enchant" />
     </>
-  );
-}
-
-/** One vendor's own little shopfront within Crafting -- sprite, blurb, and that category's recipe cards beneath. */
-function VendorSection({ vendorId, category }: { vendorId: VendorId; category: CraftingRecipeDef['category'] }) {
-  const vendor = VENDORS.find((v) => v.id === vendorId);
-  const recipes = CRAFTING_RECIPES.filter((r) => r.category === category);
-  if (!vendor || recipes.length === 0) return null;
-
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <div className="card vendor-card" style={{ marginBottom: 8 }}>
-        <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
-          <VendorSprite vendor={vendorId} height={56} animate={false} />
-          <div style={{ flex: 1 }}>
-            <div className="card-title">{vendor.name}</div>
-            <p className="card-flavour">{vendor.blurb}</p>
-          </div>
-        </div>
-      </div>
-      {recipes.map((recipe) => <RecipeCard key={recipe.id} recipe={recipe} />)}
-    </div>
   );
 }
 
@@ -298,7 +268,7 @@ function TradeRouteCard() {
   );
 }
 
-function RecipeCard({ recipe }: { recipe: CraftingRecipeDef }) {
+export function RecipeCard({ recipe }: { recipe: CraftingRecipeDef }) {
   const engine = useEngine();
   const state = engine.state;
   const modsToPick = recipe.modsToPick ?? 0;
