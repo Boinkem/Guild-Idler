@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { MATERIALS, MATERIAL_BY_ID } from '../../game/data/materials';
@@ -82,7 +82,20 @@ function NodeScene({ nodeId }: { nodeId: MaterialId }) {
   const node = state.harvestNodes[nodeId];
   const pending = node.pending;
 
-  const isFresh = pending ? now - pending.spawnedAt < 1200 : false;
+  // Whether *this specific* spawn should still play its fall-in animation.
+  // Tied directly to pending.spawnedAt via the effect below rather than
+  // comparing against the periodically-ticking `now` above -- one fewer
+  // moving part, and it can't be thrown off by how those two independent
+  // ticks happen to line up on any given render.
+  const [freshSpawnedAt, setFreshSpawnedAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (!pending) return undefined;
+    setFreshSpawnedAt(pending.spawnedAt);
+    const timeout = window.setTimeout(() => setFreshSpawnedAt((prev) => (prev === pending.spawnedAt ? null : prev)), 1200);
+    return () => window.clearTimeout(timeout);
+  }, [pending?.spawnedAt]);
+  const isFresh = pending ? freshSpawnedAt === pending.spawnedAt : false;
+
   const msLeft = pending ? pending.expiresAt - now : 0;
   const fadingOpacity = pending && msLeft < 1500 ? Math.max(0, msLeft / 1500) : 1;
   const leftPercent = pending ? spawnPositionPercent(pending.spawnedAt, nodeId) : 0;

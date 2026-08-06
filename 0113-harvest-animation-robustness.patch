@@ -1,0 +1,46 @@
+diff --git a/src/styles/app.css b/src/styles/app.css
+index b0e2d19..e714d4d 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -1482,7 +1482,8 @@ input[type='range'] {
+     drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
+ }
+ @keyframes harvest-fall {
+-  0% { top: -10%; transform: scale(0.9); }
++  0% { top: 4%; opacity: 0; transform: scale(0.7); }
++  15% { opacity: 1; }
+   55% { top: 62%; transform: scale(1); }
+   70% { top: 52%; }
+   85% { top: 62%; transform: scale(1); }
+diff --git a/src/ui/panels/HarvestPanel.tsx b/src/ui/panels/HarvestPanel.tsx
+index dfd9dcc..aeb2217 100644
+--- a/src/ui/panels/HarvestPanel.tsx
++++ b/src/ui/panels/HarvestPanel.tsx
+@@ -1,4 +1,4 @@
+-import { useState } from 'react';
++import { useEffect, useState } from 'react';
+ import type { CSSProperties } from 'react';
+ import { useEngine, useNow } from '../useEngine';
+ import { MATERIALS, MATERIAL_BY_ID } from '../../game/data/materials';
+@@ -82,7 +82,20 @@ function NodeScene({ nodeId }: { nodeId: MaterialId }) {
+   const node = state.harvestNodes[nodeId];
+   const pending = node.pending;
+ 
+-  const isFresh = pending ? now - pending.spawnedAt < 1200 : false;
++  // Whether *this specific* spawn should still play its fall-in animation.
++  // Tied directly to pending.spawnedAt via the effect below rather than
++  // comparing against the periodically-ticking `now` above -- one fewer
++  // moving part, and it can't be thrown off by how those two independent
++  // ticks happen to line up on any given render.
++  const [freshSpawnedAt, setFreshSpawnedAt] = useState<number | null>(null);
++  useEffect(() => {
++    if (!pending) return undefined;
++    setFreshSpawnedAt(pending.spawnedAt);
++    const timeout = window.setTimeout(() => setFreshSpawnedAt((prev) => (prev === pending.spawnedAt ? null : prev)), 1200);
++    return () => window.clearTimeout(timeout);
++  }, [pending?.spawnedAt]);
++  const isFresh = pending ? freshSpawnedAt === pending.spawnedAt : false;
++
+   const msLeft = pending ? pending.expiresAt - now : 0;
+   const fadingOpacity = pending && msLeft < 1500 ? Math.max(0, msLeft / 1500) : 1;
+   const leftPercent = pending ? spawnPositionPercent(pending.spawnedAt, nodeId) : 0;
