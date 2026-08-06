@@ -122,7 +122,7 @@ function NodeScene({ nodeId }: { nodeId: MaterialId }) {
               className="collect-particle material"
               style={{ '--dx': `${BURST_PARTICLES[0].dx}px`, '--dy': `${BURST_PARTICLES[0].dy}px`, '--rot': `${BURST_PARTICLES[0].rot}deg` } as CSSProperties}
             >
-              +{burst.gained}{burst.bonus ? ' bonus!' : ''}
+              +{burst.gained} {material.name}{burst.bonus ? ' bonus!' : ''}
             </span>
             {BURST_PARTICLES.slice(1).map((p, i) => (
               <span

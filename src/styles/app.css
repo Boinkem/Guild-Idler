@@ -1472,10 +1472,10 @@ input[type='range'] {
   padding: 0;
 }
 .harvest-item.fresh {
-  animation: harvest-fall 900ms cubic-bezier(0.3, 0, 0.6, 1) both;
+  animation: harvest-fall calc(900ms / max(var(--anim-speed, 1), 0.001)) cubic-bezier(0.3, 0, 0.6, 1) both;
 }
 .harvest-item.settled {
-  animation: harvest-pulse 1.6s ease-in-out infinite;
+  animation: harvest-pulse calc(1.6s / max(var(--anim-speed, 1), 0.001)) ease-in-out infinite;
 }
 .harvest-item.bonus {
   filter: drop-shadow(0 0 10px color-mix(in srgb, var(--brass) 80%, transparent))

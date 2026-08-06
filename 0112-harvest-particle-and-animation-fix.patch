@@ -1,0 +1,30 @@
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 4e4b237..b0e2d19 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -1472,10 +1472,10 @@ input[type='range'] {
+   padding: 0;
+ }
+ .harvest-item.fresh {
+-  animation: harvest-fall 900ms cubic-bezier(0.3, 0, 0.6, 1) both;
++  animation: harvest-fall calc(900ms / max(var(--anim-speed, 1), 0.001)) cubic-bezier(0.3, 0, 0.6, 1) both;
+ }
+ .harvest-item.settled {
+-  animation: harvest-pulse 1.6s ease-in-out infinite;
++  animation: harvest-pulse calc(1.6s / max(var(--anim-speed, 1), 0.001)) ease-in-out infinite;
+ }
+ .harvest-item.bonus {
+   filter: drop-shadow(0 0 10px color-mix(in srgb, var(--brass) 80%, transparent))
+diff --git a/src/ui/panels/HarvestPanel.tsx b/src/ui/panels/HarvestPanel.tsx
+index 596028a..dfd9dcc 100644
+--- a/src/ui/panels/HarvestPanel.tsx
++++ b/src/ui/panels/HarvestPanel.tsx
+@@ -122,7 +122,7 @@ function NodeScene({ nodeId }: { nodeId: MaterialId }) {
+               className="collect-particle material"
+               style={{ '--dx': `${BURST_PARTICLES[0].dx}px`, '--dy': `${BURST_PARTICLES[0].dy}px`, '--rot': `${BURST_PARTICLES[0].rot}deg` } as CSSProperties}
+             >
+-              +{burst.gained}{burst.bonus ? ' bonus!' : ''}
++              +{burst.gained} {material.name}{burst.bonus ? ' bonus!' : ''}
+             </span>
+             {BURST_PARTICLES.slice(1).map((p, i) => (
+               <span
