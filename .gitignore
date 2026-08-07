@@ -10,6 +10,9 @@ public/heroes
 
 # Regenerate with:  python3 tools/import_vendors.py --src <folder> --out public/vendors
 public/vendors
+
+# Regenerate with:  python3 tools/import_pets.py --src <folder with the raw sheets> --out public/pets
+public/pets
 tools/__pycache__
 tools/devtool/public/*.bak
 src/game/data/json/*.bak

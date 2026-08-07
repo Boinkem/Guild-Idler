@@ -200,7 +200,6 @@ Checks run against the compiled game logic:
 
 - *Cloud save* — `SaveAdapter` is already an interface with two implementations; a third talking to a server would not touch game logic.
 - *Guild vs guild leaderboards* — statistics are already tracked comprehensively.
-- *Companion pets or mounts* — would want a new equipment-like slot category rather than reusing `EquipSlot`.
 
 ---
 
@@ -268,4 +267,37 @@ character's art is absent, so a fresh clone without the packs still runs.
 
 The `attack`, `defend`, `jump`, `throw` and `death` sheets are imported and in
 the manifest, ready for quest-result flourishes.
+
+### Pets
+
+Three species so far, each a licensed sprite sheet from a different artist:
+Ember Kit (fox), Rooftail (red panda), Ashwing (crow). Same gitignored,
+regenerate-locally convention as the hero packs.
+
+```bash
+python3 tools/import_pets.py --src <folder with the raw uploaded sheets> --out public/pets
+```
+
+Unlike the hero packs, there's no per-character metadata for these (no
+aseprite JSON, bar the Red Panda's) -- `tools/import_pets.py`'s `ROWS`
+mappings are hand-confirmed against the actual art, not derived. Recolours
+use the exact same lightness-preserving HLS palette swap as
+`tools/recolor.py`, just applied per `Rarity` tier instead of per hero
+class: Common is the pack's own original colouring; Uncommon through
+Legendary each rotate further around the hue wheel and saturate a little
+harder. A pet's rarity IS its recolour tier -- there's no separate skin
+system the way heroes have. Applied to whichever colours a species flags
+as its "fur" group in the script; outlines and neutral highlights stay
+fixed across every tier so the shading structure never degrades. The crow
+is almost entirely black and has no real hue to rotate on its main body
+colour, so only its one near-black shading tone (which does carry a faint
+hue) moves -- the effect reads as an iridescent sheen on higher rarities
+rather than a colour swap, which happens to match how real corvid feathers
+actually catch light.
+
+`PetSprite.tsx` mirrors `HeroSprite.tsx` almost exactly: one shared
+`public/pets/manifest.json` (frame size + animation frame counts per
+species), animations as separate per-tier PNG strips
+(`public/pets/<species>/<rarity>/<animation>.png`), same graceful
+placeholder-then-glyph fallback when art is absent.
 

@@ -1,0 +1,564 @@
+diff -ruN -x public a/.gitignore b/.gitignore
+--- a/.gitignore	2026-08-07 12:04:38.000000000 +0000
++++ b/.gitignore	2026-08-07 12:47:04.000000000 +0000
+@@ -10,6 +10,9 @@
+ 
+ # Regenerate with:  python3 tools/import_vendors.py --src <folder> --out public/vendors
+ public/vendors
++
++# Regenerate with:  python3 tools/import_pets.py --src <folder with the raw sheets> --out public/pets
++public/pets
+ tools/__pycache__
+ tools/devtool/public/*.bak
+ src/game/data/json/*.bak
+diff -ruN -x public a/README.md b/README.md
+--- a/README.md	2026-08-07 12:04:38.000000000 +0000
++++ b/README.md	2026-08-07 12:47:22.000000000 +0000
+@@ -200,7 +200,6 @@
+ 
+ - *Cloud save* — `SaveAdapter` is already an interface with two implementations; a third talking to a server would not touch game logic.
+ - *Guild vs guild leaderboards* — statistics are already tracked comprehensively.
+-- *Companion pets or mounts* — would want a new equipment-like slot category rather than reusing `EquipSlot`.
+ 
+ ---
+ 
+@@ -269,3 +268,36 @@
+ The `attack`, `defend`, `jump`, `throw` and `death` sheets are imported and in
+ the manifest, ready for quest-result flourishes.
+ 
++### Pets
++
++Three species so far, each a licensed sprite sheet from a different artist:
++Ember Kit (fox), Rooftail (red panda), Ashwing (crow). Same gitignored,
++regenerate-locally convention as the hero packs.
++
++```bash
++python3 tools/import_pets.py --src <folder with the raw uploaded sheets> --out public/pets
++```
++
++Unlike the hero packs, there's no per-character metadata for these (no
++aseprite JSON, bar the Red Panda's) -- `tools/import_pets.py`'s `ROWS`
++mappings are hand-confirmed against the actual art, not derived. Recolours
++use the exact same lightness-preserving HLS palette swap as
++`tools/recolor.py`, just applied per `Rarity` tier instead of per hero
++class: Common is the pack's own original colouring; Uncommon through
++Legendary each rotate further around the hue wheel and saturate a little
++harder. A pet's rarity IS its recolour tier -- there's no separate skin
++system the way heroes have. Applied to whichever colours a species flags
++as its "fur" group in the script; outlines and neutral highlights stay
++fixed across every tier so the shading structure never degrades. The crow
++is almost entirely black and has no real hue to rotate on its main body
++colour, so only its one near-black shading tone (which does carry a faint
++hue) moves -- the effect reads as an iridescent sheen on higher rarities
++rather than a colour swap, which happens to match how real corvid feathers
++actually catch light.
++
++`PetSprite.tsx` mirrors `HeroSprite.tsx` almost exactly: one shared
++`public/pets/manifest.json` (frame size + animation frame counts per
++species), animations as separate per-tier PNG strips
++(`public/pets/<species>/<rarity>/<animation>.png`), same graceful
++placeholder-then-glyph fallback when art is absent.
++
+diff -ruN -x public a/src/game/data/json/pets.json b/src/game/data/json/pets.json
+--- a/src/game/data/json/pets.json	2026-08-07 12:04:44.000000000 +0000
++++ b/src/game/data/json/pets.json	2026-08-07 12:46:53.000000000 +0000
+@@ -28,6 +28,20 @@
+     "spriteFolder": "packrat"
+   },
+   {
++    "id": "ashwing",
++    "name": "Ashwing",
++    "description": "A crow that's taken a shine to the guild's rooftops. Turns up wherever something's about to be dropped, forgotten, or fed to it.",
++    "glyph": "\ud83d\udc26\u200d\u2b1b",
++    "spriteFolder": "ashwing"
++  },
++  {
++    "id": "rooftail",
++    "name": "Rooftail",
++    "description": "Spends most of the day curled along a rafter, tail wrapped twice around itself. Comes down for food and almost nothing else.",
++    "glyph": "\ud83d\udc3c",
++    "spriteFolder": "rooftail"
++  },
++  {
+     "id": "tidewhelp",
+     "name": "Tidewhelp",
+     "description": "A pup-sized thing that's more sea-foam than fur. Leaves damp footprints on dry stone for reasons nobody's explained.",
+diff -ruN -x public a/src/ui/panels/HatcheryPanel.tsx b/src/ui/panels/HatcheryPanel.tsx
+--- a/src/ui/panels/HatcheryPanel.tsx	2026-08-07 12:04:44.000000000 +0000
++++ b/src/ui/panels/HatcheryPanel.tsx	2026-08-07 12:46:32.000000000 +0000
+@@ -7,6 +7,7 @@
+ import { EggInstance, MaterialId, Pet } from '../../game/types';
+ import { RarityPill } from '../RarityPill';
+ import { formatMaterial } from '../../game/util';
++import { PetSprite } from '../sprites/PetSprite';
+ 
+ type SubTab = 'home' | 'pets';
+ 
+@@ -14,21 +15,6 @@
+   success: 'Success', gold: 'Gold', xp: 'XP', loot: 'Luck',
+ };
+ 
+-/** Same "real sprite if it loads, glyph if it 404s or was never set"
+- *  convention HarvestGlyph already established for materials. */
+-function PetGlyph({ folder, glyph }: { folder: string; glyph: string }) {
+-  const [failed, setFailed] = useState(false);
+-  if (failed) return <span style={{ fontSize: '1.6rem' }}>{glyph}</span>;
+-  return (
+-    <img
+-      src={`./pets/${folder}/idle.png`}
+-      alt=""
+-      onError={() => setFailed(true)}
+-      style={{ width: 48, height: 48, objectFit: 'contain', imageRendering: 'pixelated' }}
+-    />
+-  );
+-}
+-
+ export function HatcheryPanel() {
+   const engine = useEngine();
+   const state = engine.state;
+@@ -150,7 +136,14 @@
+   return (
+     <div className="card" style={{ marginBottom: 0 }}>
+       <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
+-        <PetGlyph folder={def?.spriteFolder ?? pet.defId} glyph={def?.glyph ?? '\u2753'} />
++        <PetSprite
++          species={def?.spriteFolder ?? pet.defId}
++          rarity={pet.rarity}
++          animation="idle"
++          height={48}
++          title={pet.name}
++          fallback={<span style={{ fontSize: '1.6rem' }}>{def?.glyph ?? '\u2753'}</span>}
++        />
+         <div style={{ flex: 1 }}>
+           {editing ? (
+             <div className="row" style={{ gap: 6 }}>
+diff -ruN -x public a/src/ui/sprites/PetSprite.tsx b/src/ui/sprites/PetSprite.tsx
+--- a/src/ui/sprites/PetSprite.tsx	1970-01-01 00:00:00.000000000 +0000
++++ b/src/ui/sprites/PetSprite.tsx	2026-08-07 12:46:12.000000000 +0000
+@@ -0,0 +1,174 @@
++import { useEffect, useMemo, useRef, useState } from 'react';
++import type { CSSProperties } from 'react';
++import { Rarity } from '../../game/types';
++
++/**
++ * Renders pet sprite packs -- same manifest-driven, per-animation-strip
++ * approach as HeroSprite.tsx, just keyed by species id instead of
++ * HeroClass, and by Rarity instead of HeroSkin (a pet's rarity IS its
++ * recolour tier, see tools/import_pets.py). The art itself is gitignored
++ * (licensed, not redistributable), so this degrades gracefully when absent
++ * -- same convention as every other art asset in this game.
++ *
++ * Generate the art with:
++ *   python3 tools/import_pets.py --src <folder with the raw sheets> --out public/pets
++ */
++
++export type PetAnimation =
++  | 'idle' | 'idle2' | 'movement' | 'sleep' | 'damage'
++  | 'catch' | 'perched' | 'sitting' | 'laying' | 'eating' | 'walking' | 'flying';
++
++interface SpeciesManifest {
++  frameW: number;
++  frameH: number;
++  animations: Partial<Record<PetAnimation, number>>;
++}
++
++type Manifest = Record<string, SpeciesManifest>;
++
++const DEFAULT_FPS: Partial<Record<PetAnimation, number>> = {
++  idle: 6, idle2: 6, movement: 10, sleep: 4, damage: 8, catch: 10,
++  perched: 5, sitting: 6, laying: 4, eating: 8, walking: 6, flying: 10,
++};
++
++let manifestCache: Manifest | null = null;
++let manifestPromise: Promise<Manifest> | null = null;
++
++function loadManifest(): Promise<Manifest> {
++  if (manifestCache) return Promise.resolve(manifestCache);
++  if (!manifestPromise) {
++    manifestPromise = fetch('./pets/manifest.json')
++      .then((r) => (r.ok ? r.json() : {}))
++      .then((m: Manifest) => { manifestCache = m; return m; })
++      .catch(() => { manifestCache = {}; return {}; });
++  }
++  return manifestPromise;
++}
++
++function useManifest(): Manifest | null {
++  const [manifest, setManifest] = useState<Manifest | null>(manifestCache);
++  useEffect(() => {
++    if (manifestCache) { setManifest(manifestCache); return; }
++    let live = true;
++    void loadManifest().then((m) => { if (live) setManifest(m); });
++    return () => { live = false; };
++  }, []);
++  return manifest;
++}
++
++/** Falls back to whichever animation the species actually has, same
++ *  "nearest available" resolution HeroSprite already does for classes with
++ *  a smaller animation set than the samurai's full ten. */
++function resolveAnimation(char: SpeciesManifest, requested: PetAnimation): PetAnimation {
++  if (char.animations[requested]) return requested;
++  if ((requested === 'sitting' || requested === 'laying') && char.animations.sleep) return 'sleep';
++  if (requested === 'perched' && char.animations.idle) return 'idle';
++  if (requested === 'walking' && char.animations.movement) return 'movement';
++  if (requested === 'flying' && char.animations.movement) return 'movement';
++  if (requested === 'eating' && char.animations.catch) return 'catch';
++  return char.animations.idle ? 'idle' : (Object.keys(char.animations)[0] as PetAnimation);
++}
++
++export interface PetSpriteProps {
++  /** PetDef.spriteFolder -- the species id, e.g. 'ember_kit'. */
++  species: string;
++  rarity?: Rarity;
++  animation?: PetAnimation;
++  height?: number;
++  fps?: number;
++  once?: boolean;
++  onComplete?: () => void;
++  flip?: boolean;
++  className?: string;
++  title?: string;
++  /** Fallback shown while the manifest loads or if this species has no art
++   *  yet -- same "glyph until real art exists" convention as everywhere
++   *  else, kept as a prop rather than baked in since callers already know
++   *  their own PetDef.glyph. */
++  fallback?: React.ReactNode;
++}
++
++export function PetSprite({
++  species, rarity = 'common', animation = 'idle', height = 48, fps, once = false,
++  onComplete, flip = false, className, title, fallback,
++}: PetSpriteProps) {
++  const manifest = useManifest();
++  const char = manifest?.[species];
++
++  const resolved = useMemo<PetAnimation | null>(
++    () => (char ? resolveAnimation(char, animation) : null),
++    [char, animation],
++  );
++
++  const frames = (resolved && char?.animations[resolved]) ?? 1;
++  const rate = fps ?? (resolved ? DEFAULT_FPS[resolved] : undefined) ?? 8;
++  const [index, setIndex] = useState(0);
++  const doneRef = useRef(false);
++
++  useEffect(() => { setIndex(0); doneRef.current = false; }, [resolved, species, rarity]);
++
++  useEffect(() => {
++    if (!char || frames <= 1) return;
++    const id = window.setInterval(() => {
++      setIndex((cur) => {
++        const next = cur + 1;
++        if (next >= frames) {
++          if (once) {
++            if (!doneRef.current) { doneRef.current = true; onComplete?.(); }
++            return frames - 1;
++          }
++          return 0;
++        }
++        return next;
++      });
++    }, 1000 / rate);
++    return () => window.clearInterval(id);
++  }, [char, frames, rate, once, onComplete]);
++
++  if (manifest === null) {
++    return <div className={className} style={{ height, width: height }} />;
++  }
++
++  if (!char || !resolved) {
++    return <div className={className} style={{ height, width: height, display: 'grid', placeItems: 'center' }}>{fallback}</div>;
++  }
++
++  const scale = height / char.frameH;
++  const url = `./pets/${species}/${rarity}/${resolved}.png`;
++  const style: CSSProperties = {
++    width: char.frameW * scale,
++    height: char.frameH * scale,
++    backgroundImage: `url(${url})`,
++    backgroundSize: `${char.frameW * frames * scale}px ${char.frameH * scale}px`,
++    backgroundPosition: `-${index * char.frameW * scale}px 0`,
++    backgroundRepeat: 'no-repeat',
++    imageRendering: 'pixelated',
++    transform: flip ? 'scaleX(-1)' : undefined,
++  };
++
++  return (
++    <div className={className} style={style} role={title ? 'img' : 'presentation'} aria-label={title} />
++  );
++}
++
++/** A standalone single-frame extra (crow's crumbs/food/fish) -- not an
++ *  animation, just one recoloured frame. Same manifest/fallback shape,
++ *  minus everything animation-specific. */
++export function PetExtraSprite({
++  species, rarity = 'common', extra, size = 16, className,
++}: { species: string; rarity?: Rarity; extra: string; size?: number; className?: string }) {
++  const manifest = useManifest();
++  const char = manifest?.[species];
++  if (!char) return null;
++  const scale = size / char.frameH;
++  return (
++    <div
++      className={className}
++      style={{
++        width: char.frameW * scale, height: char.frameH * scale,
++        backgroundImage: `url(./pets/${species}/${rarity}/extra_${extra}.png)`,
++        backgroundSize: 'contain', backgroundRepeat: 'no-repeat', imageRendering: 'pixelated',
++      }}
++    />
++  );
++}
+diff -ruN -x public a/tools/import_pets.py b/tools/import_pets.py
+--- a/tools/import_pets.py	1970-01-01 00:00:00.000000000 +0000
++++ b/tools/import_pets.py	2026-08-07 12:45:05.000000000 +0000
+@@ -0,0 +1,248 @@
++#!/usr/bin/env python3
++"""
++Slice pet sprite sheets into per-animation strips, recolour a copy per
++rarity tier, and write public/pets/manifest.json -- same shape and
++conventions as tools/import_characters.py (per-character manifest, sliced
++animation strips) and tools/recolor.py (lightness-preserving HLS palette
++swap, so shading survives byte-for-byte and only hue/saturation move).
++
++Each source sheet is a row-grid (confirmed by hand against the actual art,
++see the ROW comments below -- there's no metadata for these packs the way
++the Red Panda's aseprite JSON has one, so these mappings are this script's
++one real source of truth). ROWS maps animation name -> (row, startCol,
++frameCount) in that species' own frameW x frameH grid.
++
++Usage:
++    python3 tools/import_pets.py --src <folder with the raw sheets> --out public/pets
++"""
++from __future__ import annotations
++
++import argparse
++import colorsys
++import json
++import os
++from typing import Dict, List, Tuple
++
++try:
++    from PIL import Image
++except ImportError:
++    raise SystemExit('Pillow is required:  pip install pillow')
++
++RGB = Tuple[int, int, int]
++
++
++class Livery:
++    def __init__(self, hue_shift: float, sat: float, light: float = 1.0):
++        self.hue_shift = hue_shift  # degrees ADDED to the source hue, not an absolute target
++        self.sat = sat
++        self.light = light
++
++
++# Common is the pack's own original colouring -- identity, not a hue of 0.
++# Each tier after that shifts further around the wheel and saturates a
++# little harder, ending on Legendary's warm/bright "shine". Shared across
++# every species so a rarity always reads the same way regardless of which
++# pet it landed on.
++RARITY_LIVERY: Dict[str, Livery] = {
++    'common': Livery(0, 1.00, 1.00),
++    'uncommon': Livery(40, 1.05, 1.00),
++    'rare': Livery(130, 1.15, 1.00),
++    'epic': Livery(210, 1.25, 1.02),
++    'legendary': Livery(300, 1.35, 1.08),
++}
++
++
++def hex_to_rgb(value: str) -> RGB:
++    v = value.lstrip('#')
++    return (int(v[0:2], 16), int(v[2:4], 16), int(v[4:6], 16))
++
++
++def apply_livery(rgb: RGB, livery: Livery) -> RGB:
++    r, g, b = (c / 255 for c in rgb)
++    h, l, s = colorsys.rgb_to_hls(r, g, b)
++    new_h = (h + livery.hue_shift / 360.0) % 1.0
++    new_s = min(1.0, s * livery.sat)
++    new_l = min(1.0, max(0.0, l * livery.light))
++    r2, g2, b2 = colorsys.hls_to_rgb(new_h, new_l, new_s)
++    return (round(r2 * 255), round(g2 * 255), round(b2 * 255))
++
++
++class PetSpec:
++    def __init__(
++        self, species_id: str, sheet_file: str, frame_w: int, frame_h: int,
++        rows: Dict[str, Tuple[int, int, int]],
++        recolor: List[str], keep: List[str],
++        extras: Dict[str, Tuple[int, int]] | None = None,
++    ):
++        self.species_id = species_id
++        self.sheet_file = sheet_file
++        self.frame_w = frame_w
++        self.frame_h = frame_h
++        # animation -> (row, startCol, frameCount)
++        self.rows = rows
++        self.recolor = [hex_to_rgb(c) for c in recolor]
++        self.keep = [hex_to_rgb(c) for c in keep]
++        # single-frame standalone sprites (e.g. crow's crumbs/fish), not
++        # animations -- (row, col) into the same grid.
++        self.extras = extras or {}
++
++
++# ------------------------------------------------------------------ specs ---
++# Row mappings confirmed by hand against the uploaded sheets (see the
++# conversation this shipped in -- fox's Catch row and crow's Sitting/Laying
++# rows were the two genuinely ambiguous calls, both confirmed directly
++# rather than guessed silently).
++
++FOX = PetSpec(
++    species_id='ember_kit',
++    sheet_file='Fox_Sprite_Sheet.png',
++    frame_w=32, frame_h=32,
++    rows={
++        'idle': (0, 0, 5),
++        'movement': (1, 0, 14),
++        # row 2 (8f, a shorter pounce) is spare/unused -- row 3 is the
++        # fuller pounce-and-bite sequence, confirmed as the real Catch.
++        'catch': (3, 0, 11),
++        'damage': (4, 0, 5),
++        'sleep': (5, 0, 6),
++        'idle2': (6, 0, 7),
++    },
++    recolor=['#9d5021', '#d67941'],  # fur (two tones)
++    keep=['#2f2f2e', '#ffffff', '#b8b8b8', '#4f4f4e', '#3b3b39'],  # outline family + white + tail-tip grey
++)
++
++RED_PANDA = PetSpec(
++    species_id='rooftail',
++    sheet_file='Red_Panda_Sprite_Sheet.png',
++    frame_w=32, frame_h=32,
++    rows={
++        'idle': (0, 0, 8),
++        'idle2': (1, 0, 8),
++        'movement': (2, 0, 8),
++        'sleep': (6, 0, 8),
++    },
++    recolor=['#d67941', '#9d5021', '#694129', '#825235'],  # bright + dark fur tones
++    keep=['#2f2f2e', '#ffffff', '#b8b8b8'],
++)
++
++CROW = PetSpec(
++    species_id='ashwing',
++    sheet_file='Crow.png',
++    frame_w=48, frame_h=48,
++    rows={
++        'perched': (0, 0, 7),
++        # Confirmed: row1 settles into a seated pose (Sitting), row2 flattens
++        # into a fluffed breathing ball (Laying) -- the two were genuinely
++        # ambiguous without this confirmation.
++        'sitting': (1, 0, 7),
++        'laying': (2, 0, 4),  # frames 4-6 of this row are a spare stand-up transition, unused
++        'eating': (3, 0, 7),
++        'walking': (4, 4, 3),
++        # Row 5's col 5 is the baked-in "CAW" text graphic, not a real
++        # frame -- deliberately excluded, not a bug.
++        'flying': (5, 0, 5),
++    },
++    extras={'crumbs': (4, 1), 'food': (4, 2), 'fish': (4, 3)},
++    # The body is near-monochrome (mostly pure black), so the ONE colour
++    # with any real hue (#222034, a dark navy-black) is what actually
++    # carries the recolour -- true black stays pure outline. This produces
++    # a subtle iridescent-sheen effect on higher rarities, which happens to
++    # match how real corvid feathers actually catch colour in light.
++    recolor=['#222034'],
++    keep=['#000000', '#696a6a'],
++)
++
++PETS: List[PetSpec] = [FOX, RED_PANDA, CROW]
++
++
++# -------------------------------------------------------------- recolour ---
++
++def build_map(spec: PetSpec, tier: str) -> Dict[RGB, RGB]:
++    livery = RARITY_LIVERY[tier]
++    mapping: Dict[RGB, RGB] = {}
++    for src in spec.recolor:
++        mapping[src] = apply_livery(src, livery)
++    for src in spec.keep:
++        mapping[src] = src  # identity, but explicit -- never touched by any tier
++    return mapping
++
++
++def recolor_image(img: Image.Image, mapping: Dict[RGB, RGB]) -> Image.Image:
++    img = img.convert('RGBA')
++    out = Image.new('RGBA', img.size)
++    src = img.load()
++    dst = out.load()
++    for y in range(img.size[1]):
++        for x in range(img.size[0]):
++            r, g, b, a = src[x, y]
++            if a == 0:
++                continue
++            key = (r, g, b)
++            nr, ng, nb = mapping.get(key, key)  # unrecognised colours pass through unchanged
++            dst[x, y] = (nr, ng, nb, a)
++    return out
++
++
++def slice_strip(img: Image.Image, spec: PetSpec, row: int, start_col: int, count: int) -> Image.Image:
++    out = Image.new('RGBA', (spec.frame_w * count, spec.frame_h))
++    for i in range(count):
++        box = (
++            (start_col + i) * spec.frame_w, row * spec.frame_h,
++            (start_col + i + 1) * spec.frame_w, (row + 1) * spec.frame_h,
++        )
++        out.paste(img.crop(box), (i * spec.frame_w, 0))
++    return out
++
++
++def main() -> None:
++    ap = argparse.ArgumentParser()
++    ap.add_argument('--src', required=True, help='folder holding the raw uploaded sheets')
++    ap.add_argument('--out', required=True, help='output folder, e.g. public/pets')
++    ap.add_argument('--only', nargs='*', help='limit to these species ids')
++    args = ap.parse_args()
++
++    targets = [p for p in PETS if not args.only or p.species_id in args.only]
++    manifest: Dict[str, dict] = {}
++
++    for spec in targets:
++        src_path = os.path.join(args.src, spec.sheet_file)
++        if not os.path.exists(src_path):
++            print(f'  skip {spec.species_id}: {spec.sheet_file} not found in {args.src}')
++            continue
++        sheet = Image.open(src_path)
++        print(f'{spec.species_id} ({spec.sheet_file}):')
++
++        counts: Dict[str, int] = {}
++        for anim, (row, start_col, count) in spec.rows.items():
++            counts[anim] = count
++            strip = slice_strip(sheet, spec, row, start_col, count)
++            for tier in RARITY_LIVERY:
++                mapping = build_map(spec, tier)
++                recoloured = recolor_image(strip, mapping)
++                dest_dir = os.path.join(args.out, spec.species_id, tier)
++                os.makedirs(dest_dir, exist_ok=True)
++                recoloured.save(os.path.join(dest_dir, f'{anim}.png'), optimize=True)
++            print(f'    {anim}: row {row}, {count} frames -> all 5 rarity tiers')
++
++        for name, (row, col) in spec.extras.items():
++            box = (col * spec.frame_w, row * spec.frame_h, (col + 1) * spec.frame_w, (row + 1) * spec.frame_h)
++            frame = sheet.crop(box)
++            for tier in RARITY_LIVERY:
++                mapping = build_map(spec, tier)
++                recoloured = recolor_image(frame, mapping)
++                dest_dir = os.path.join(args.out, spec.species_id, tier)
++                os.makedirs(dest_dir, exist_ok=True)
++                recoloured.save(os.path.join(dest_dir, f'extra_{name}.png'), optimize=True)
++            print(f'    extra "{name}": row {row} col {col} -> all 5 rarity tiers')
++
++        manifest[spec.species_id] = {'frameW': spec.frame_w, 'frameH': spec.frame_h, 'animations': counts}
++
++    os.makedirs(args.out, exist_ok=True)
++    with open(os.path.join(args.out, 'manifest.json'), 'w') as f:
++        json.dump(manifest, f, indent=2)
++    print(f'\nwrote {os.path.join(args.out, "manifest.json")}')
++    print('done')
++
++
++if __name__ == '__main__':
++    main()

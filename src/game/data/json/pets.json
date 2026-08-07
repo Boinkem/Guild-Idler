@@ -28,6 +28,20 @@
     "spriteFolder": "packrat"
   },
   {
+    "id": "ashwing",
+    "name": "Ashwing",
+    "description": "A crow that's taken a shine to the guild's rooftops. Turns up wherever something's about to be dropped, forgotten, or fed to it.",
+    "glyph": "\ud83d\udc26\u200d\u2b1b",
+    "spriteFolder": "ashwing"
+  },
+  {
+    "id": "rooftail",
+    "name": "Rooftail",
+    "description": "Spends most of the day curled along a rafter, tail wrapped twice around itself. Comes down for food and almost nothing else.",
+    "glyph": "\ud83d\udc3c",
+    "spriteFolder": "rooftail"
+  },
+  {
     "id": "tidewhelp",
     "name": "Tidewhelp",
     "description": "A pup-sized thing that's more sea-foam than fur. Leaves damp footprints on dry stone for reasons nobody's explained.",

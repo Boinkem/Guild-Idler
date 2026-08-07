@@ -7,27 +7,13 @@ import { MATERIALS } from '../../game/data/materials';
 import { EggInstance, MaterialId, Pet } from '../../game/types';
 import { RarityPill } from '../RarityPill';
 import { formatMaterial } from '../../game/util';
+import { PetSprite } from '../sprites/PetSprite';
 
 type SubTab = 'home' | 'pets';
 
 const BONUS_LABEL: Record<string, string> = {
   success: 'Success', gold: 'Gold', xp: 'XP', loot: 'Luck',
 };
-
-/** Same "real sprite if it loads, glyph if it 404s or was never set"
- *  convention HarvestGlyph already established for materials. */
-function PetGlyph({ folder, glyph }: { folder: string; glyph: string }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) return <span style={{ fontSize: '1.6rem' }}>{glyph}</span>;
-  return (
-    <img
-      src={`./pets/${folder}/idle.png`}
-      alt=""
-      onError={() => setFailed(true)}
-      style={{ width: 48, height: 48, objectFit: 'contain', imageRendering: 'pixelated' }}
-    />
-  );
-}
 
 export function HatcheryPanel() {
   const engine = useEngine();
@@ -150,7 +136,14 @@ function PetCard({ pet }: { pet: Pet }) {
   return (
     <div className="card" style={{ marginBottom: 0 }}>
       <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
-        <PetGlyph folder={def?.spriteFolder ?? pet.defId} glyph={def?.glyph ?? '\u2753'} />
+        <PetSprite
+          species={def?.spriteFolder ?? pet.defId}
+          rarity={pet.rarity}
+          animation="idle"
+          height={48}
+          title={pet.name}
+          fallback={<span style={{ fontSize: '1.6rem' }}>{def?.glyph ?? '\u2753'}</span>}
+        />
         <div style={{ flex: 1 }}>
           {editing ? (
             <div className="row" style={{ gap: 6 }}>
