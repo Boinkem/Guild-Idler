@@ -107,6 +107,32 @@ const SCHEMAS = {
       effect: { type: 'effect', required: true },
     },
   },
+  'pets': {
+    file: 'pets.json',
+    label: 'Pets',
+    idField: 'id',
+    // Rarity, bonus type, and bonus magnitude are NOT here on purpose --
+    // those are rolled per-instance at hatch (see PetManager.hatch), not
+    // authored per-species. This schema is purely "what a species looks
+    // like and where it can come from," same split EquipmentDef keeps
+    // between the def (fixed) and EquipmentItem (rolled/instance) shapes.
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      name: { type: 'string', required: true },
+      description: { type: 'string', required: true },
+      glyph: { type: 'string', required: true },
+      // Not an icon-picker field like equipment/consumables -- a pet has a
+      // whole sprite FOLDER (idle.png at minimum, room for more later),
+      // not a single icon file, so this is just a plain folder-name string
+      // matching public/pets/<spriteFolder>/. Missing folder = pure glyph
+      // fallback, same convention as everything else.
+      spriteFolder: { type: 'string', required: true },
+      // True = only obtainable via a dedicated-reward egg (see
+      // EggInstance.dedicatedPetId on the quest/raid loot-assignment side)
+      // -- excluded from the general random hatch pool entirely.
+      dedicatedOnly: { type: 'boolean', required: false },
+    },
+  },
   'events': {
     file: 'events.json',
     label: 'Events',

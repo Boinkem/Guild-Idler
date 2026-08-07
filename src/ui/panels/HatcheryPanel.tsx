@@ -1,0 +1,222 @@
+import { useState } from 'react';
+import { useEngine, useNow } from '../useEngine';
+import { PetManager } from '../../game/managers/PetManager';
+import { ModifierManager } from '../../game/managers/ModifierManager';
+import { PET_BY_ID, hatchXpThreshold } from '../../game/data/pets';
+import { MATERIALS } from '../../game/data/materials';
+import { EggInstance, MaterialId, Pet } from '../../game/types';
+import { RarityPill } from '../RarityPill';
+import { formatMaterial } from '../../game/util';
+
+type SubTab = 'home' | 'pets';
+
+const BONUS_LABEL: Record<string, string> = {
+  success: 'Success', gold: 'Gold', xp: 'XP', loot: 'Luck',
+};
+
+/** Same "real sprite if it loads, glyph if it 404s or was never set"
+ *  convention HarvestGlyph already established for materials. */
+function PetGlyph({ folder, glyph }: { folder: string; glyph: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <span style={{ fontSize: '1.6rem' }}>{glyph}</span>;
+  return (
+    <img
+      src={`./pets/${folder}/idle.png`}
+      alt=""
+      onError={() => setFailed(true)}
+      style={{ width: 48, height: 48, objectFit: 'contain', imageRendering: 'pixelated' }}
+    />
+  );
+}
+
+export function HatcheryPanel() {
+  const engine = useEngine();
+  const state = engine.state;
+  const [subTab, setSubTab] = useState<SubTab>('home');
+
+  return (
+    <>
+      <h2>Hatchery</h2>
+      <p className="subtitle">
+        Eggs incubate as your heroes earn xp anywhere in the guild. Once hatched, a pet can be equipped to
+        lend everyone a small bonus -- keep it happy and fed, or that bonus fades.
+      </p>
+
+      <div className="row wrap" style={{ gap: 8, marginBottom: 14 }}>
+        <button className={subTab === 'home' ? 'btn-primary' : ''} onClick={() => setSubTab('home')}>
+          Nests
+        </button>
+        <button className={subTab === 'pets' ? 'btn-primary' : ''} onClick={() => setSubTab('pets')}>
+          Pets {state.pets.length > 0 ? `(${state.pets.length})` : ''}
+        </button>
+      </div>
+
+      <div
+        aria-hidden="true"
+        className="harvest-scene-bg"
+        style={{
+          position: 'relative', height: 90, marginBottom: 12, borderRadius: 8,
+          backgroundImage: 'url(./lore/hatchery-bg.jpg)', backgroundSize: 'cover', backgroundPosition: 'center',
+        }}
+      />
+
+      {subTab === 'home' ? <NestsTab /> : <PetsTab />}
+    </>
+  );
+}
+
+function NestsTab() {
+  const engine = useEngine();
+  const state = engine.state;
+  const slots = ModifierManager.incubationSlots(state);
+  useNow(5000); // just enough to keep progress bars visibly live
+
+  return (
+    <>
+      <p className="tiny muted" style={{ marginBottom: 10 }}>
+        {state.incubatingEggs.length}/{slots} nests in use. More come from the Nest Expansion upgrade in Guild Hall.
+      </p>
+      {state.incubatingEggs.length === 0 && (
+        <div className="card"><p className="card-flavour">No eggs incubating right now. They arrive as quest and raid rewards.</p></div>
+      )}
+      <div className="grid two">
+        {state.incubatingEggs.map((egg) => <EggCard key={egg.uid} egg={egg} />)}
+      </div>
+    </>
+  );
+}
+
+function EggCard({ egg }: { egg: EggInstance }) {
+  const threshold = hatchXpThreshold(egg.rarity);
+  const pct = Math.min(100, (egg.hatchXp / threshold) * 100);
+  return (
+    <div className="card" style={{ marginBottom: 0 }}>
+      <div className="spread">
+        <span className="card-title">Egg</span>
+        <RarityPill rarity={egg.rarity} />
+      </div>
+      <p className="card-flavour">
+        {egg.dedicatedPetId ? 'A special clutch -- this one has already decided what it will become.' : 'Hatching into something from the general pool.'}
+      </p>
+      <div className="harvest-stock-bar" style={{ marginBottom: 4 }}>
+        <span style={{ width: `${pct}%` }} />
+      </div>
+      <span className="tiny muted">{formatMaterial(egg.hatchXp)}/{formatMaterial(threshold)} xp</span>
+    </div>
+  );
+}
+
+function PetsTab() {
+  const engine = useEngine();
+  const state = engine.state;
+  const petSlots = ModifierManager.petSlots(state);
+
+  return (
+    <>
+      <p className="tiny muted" style={{ marginBottom: 10 }}>
+        {state.equippedPetIds.length}/{petSlots} companion slots filled. More come from the Companion Bond
+        upgrade in Guild Hall.
+      </p>
+      {state.pets.length === 0 && (
+        <div className="card"><p className="card-flavour">No pets hatched yet -- check the Nests tab.</p></div>
+      )}
+      <div className="grid two">
+        {state.pets.map((pet) => <PetCard key={pet.uid} pet={pet} />)}
+      </div>
+    </>
+  );
+}
+
+function PetCard({ pet }: { pet: Pet }) {
+  const engine = useEngine();
+  const state = engine.state;
+  const now = useNow(5000);
+  const def = PET_BY_ID[pet.defId];
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(pet.name);
+  const [feedMaterial, setFeedMaterial] = useState<MaterialId>('ore');
+
+  const happiness = PetManager.currentHappiness(pet, now);
+  const bonus = PetManager.effectiveBonus(pet, now);
+  const level = PetManager.levelForXp(pet.xp);
+  const equipped = state.equippedPetIds.includes(pet.uid);
+  const treatCount = state.inventory.pet_treat ?? 0;
+
+  const saveName = () => {
+    engine.renamePet(pet.uid, draft);
+    setEditing(false);
+  };
+
+  return (
+    <div className="card" style={{ marginBottom: 0 }}>
+      <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
+        <PetGlyph folder={def?.spriteFolder ?? pet.defId} glyph={def?.glyph ?? '\u2753'} />
+        <div style={{ flex: 1 }}>
+          {editing ? (
+            <div className="row" style={{ gap: 6 }}>
+              <input
+                type="text"
+                value={draft}
+                maxLength={24}
+                autoFocus
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveName(); }}
+                style={{ flex: 1, background: 'var(--panel2)', border: '1px solid var(--panel3)', color: 'var(--text)', padding: '4px 6px' }}
+              />
+              <button onClick={saveName}>Save</button>
+            </div>
+          ) : (
+            <div className="spread">
+              <span className="card-title" onClick={() => { setDraft(pet.name); setEditing(true); }} style={{ cursor: 'pointer' }}>
+                {pet.name}
+              </span>
+              <RarityPill rarity={pet.rarity} />
+            </div>
+          )}
+          <p className="tiny muted" style={{ margin: '2px 0' }}>{def?.name ?? 'Unknown species'} -- Level {level}</p>
+        </div>
+      </div>
+
+      <p className="card-flavour">
+        +{bonus.toFixed(1)} {BONUS_LABEL[pet.bonusType] ?? pet.bonusType}
+        {happiness < 100 && <span className="tiny muted"> (scaled down by happiness)</span>}
+      </p>
+
+      <div className="harvest-stock-row" style={{ marginBottom: 8 }}>
+        <span className="tiny muted" style={{ width: 70 }}>Happiness</span>
+        <div className="harvest-stock-bar">
+          <span style={{ width: `${happiness}%` }} />
+        </div>
+        <span className="tiny muted" style={{ width: 40, textAlign: 'right' }}>{Math.round(happiness)}%</span>
+      </div>
+
+      <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>
+        <select
+          value={feedMaterial}
+          onChange={(e) => setFeedMaterial(e.target.value as MaterialId)}
+          style={{ background: 'var(--panel2)', border: '1px solid var(--panel3)', color: 'var(--text)', padding: '4px 6px' }}
+        >
+          {MATERIALS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+        <button className="btn-ghost" style={{ minHeight: 26 }} onClick={() => engine.feedPetMaterial(pet.uid, feedMaterial)}>
+          Feed (5)
+        </button>
+        <button
+          className="btn-ghost"
+          style={{ minHeight: 26 }}
+          disabled={treatCount < 1}
+          onClick={() => engine.feedPetCrafted(pet.uid)}
+        >
+          Feed Treat ({treatCount})
+        </button>
+      </div>
+
+      <button
+        className={equipped ? 'btn-primary' : ''}
+        onClick={() => (equipped ? engine.unequipPet(pet.uid) : engine.equipPet(pet.uid))}
+      >
+        {equipped ? 'Equipped -- unequip' : 'Equip'}
+      </button>
+    </div>
+  );
+}

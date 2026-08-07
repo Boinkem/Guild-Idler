@@ -102,6 +102,22 @@ export const UPGRADES: UpgradeDef[] = [
     baseCost: 1800, costGrowth: 2.2, maxLevel: 2,
     modsPerLevel: {}, consumableSlotsPerLevel: 1,
   },
+  {
+    id: 'nest_expansion', name: 'Nest Expansion',
+    description: "More room in the Hatchery for eggs to incubate at once -- doesn't speed up any single one, just lets more happen in parallel.",
+    // Base (2) lives in pets.baseIncubationSlots via ModifierManager.incubationSlots;
+    // 3 levels take it to a max of 5.
+    baseCost: 1500, costGrowth: 2.0, maxLevel: 3,
+    modsPerLevel: {}, incubationSlotsPerLevel: 1,
+  },
+  {
+    id: 'companion_bond', name: 'Companion Bond',
+    description: 'A second (then third) pet can accompany the guild at once, each contributing its own bonus.',
+    // Same "1 base, more via upgrade" shape as Potion Belt -- base slot (1)
+    // lives in ModifierManager.petSlots as the floor.
+    baseCost: 2200, costGrowth: 2.3, maxLevel: 2,
+    modsPerLevel: {}, petSlotsPerLevel: 1,
+  },
 ];
 
 /**

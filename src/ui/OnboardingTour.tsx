@@ -23,6 +23,7 @@ const STEP_DESCRIPTIONS: Record<string, string> = {
   vendors: 'The Blacksmith, Alchemist, and Enchanter -- buy gear and supplies, or craft your own.',
   guild: 'Guild Hall: permanent facility and general upgrades that apply to every hero.',
   harvest: 'Idle heroes gather materials here too -- click a shiny while it lasts, then spend the stock crafting with a vendor.',
+  hatchery: 'Eggs incubate here, hatching as your heroes earn xp. Hatched pets can be equipped to lend the whole guild a little bonus.',
   quests: 'Send heroes out on contracts here. New ones appear every 30 minutes.',
   raids: 'Multi-hero expeditions, once your guild is strong enough to field a whole party.',
   lore: "A record of every story your guild has lived through.",

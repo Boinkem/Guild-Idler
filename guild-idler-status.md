@@ -112,13 +112,27 @@ was also missing `raidExclusive`/`craftable` as fields entirely (patch
 a missing nice-to-have. Patches tab's flow is now Check -> Apply ->
 Commit -> **Push** (plain `git push`, relies on the branch's existing
 upstream rather than taking a remote/branch as input); Build/Package/Tag
-shifted from steps 5/6/7 to 6/7/8 to make room.
+shifted from steps 5/6/7 to 6/7/8 to make room. New `pets` schema (Pets
+build) needed zero frontend changes -- confirms the schema-driven editor
+generalizes to a genuinely new content type, not just tuning, for free.
 
 **Harvest/Gathering + Crafting** — new `harvest` tab: idle heroes feed 4
 material nodes (Quarry/Woodyard/Herb Garden/Fish Weir) via a click-the-
 falling-item mechanic, spent on a Warehouse-tab Crafting UI (gear with
 player-chosen mods, or fixed consumables) plus a Trade Route for selling
 surplus. See its own section below for the full built-status writeup.
+
+**Pets / Hatchery** — new `hatchery` tab (hidden until the one-time intro
+chain `the_last_clutch` grants it), unlocked via a spotlight prompt reusing
+OnboardingTour. Eggs incubate toward a rarity-based hatch-xp threshold
+(fed by hero xp earned anywhere in the guild), then hatch into a random
+pet with its own rolled bonus type/magnitude. Equipped pets (1 base slot,
+more via the new Companion Bond upgrade) feed their bonus into the
+account-wide modifier pool and gain their own xp, which grows that bonus
+over time; happiness decays lazily and can be restored by feeding raw
+materials or a new craftable Pet Treat. Quest/raid egg-drop wiring and
+companion-sprite rendering are the two pieces still open -- see its own
+section below for the full writeup.
 
 **World lore** — `world-lore-pantheon.md` is the source of truth for
 gods/pantheon rules. Starved gods can lash out from the starving itself
@@ -1186,7 +1200,7 @@ crafting pipeline. `npx tsc --noEmit` and `vite build` both pass clean.
   and should not delete them.
 
 ### Deferred systems (queued before the polish/narrative detour started)
-- Pets -- spec'd, not yet built. See dedicated section below.
+- ~~Pets~~ -- built. See "Pets / Hatchery -- built" below for the full writeup.
 - Freeze slot for the quest board (never got a firm yes/no).
 - **Quest chains in the DevTool, editable like raids are.** Bigger than
   it sounds -- raids.json/raid-encounters.json are already small, flat,
@@ -1351,89 +1365,160 @@ consistent with everything else Warehouse-related (capacity, Trade
 Route) living in one administrative spot rather than scattered across
 the tab.
 
-### Pets -- spec'd (not yet built)
-Fleshed out in a design pass; nothing coded yet. Leans on existing
-patterns throughout rather than inventing new mechanisms where an old one
-already fits.
+### Pets / Hatchery -- built
+The full spec below shipped essentially as designed, with a few decisions
+made concrete along the way (each noted where it resolves an open question
+from the spec pass).
 
 **Acquisition**
-- Eggs drop from quests/raids: a low base chance on any completion, or as
-  a guaranteed/dedicated reward on specific encounters -- DevTool-
-  assignable per quest/raid, same shape as `raidExclusive` loot flagging.
-- A one-time, non-repeatable intro chain ("save the hatchery") grants a
-  starter egg and unlocks the Hatchery tab as its completion reward.
-- Hatchery tab unlock triggers a spotlight/highlight prompt, reusing the
-  existing `OnboardingTour` pattern plus a new `GuidanceManager` topic
-  (e.g. `hatchery_unlocked`) rather than new tour code.
+- One-time, non-repeatable intro chain `the_last_clutch` (reqLevel 5, no
+  `requiresChainId`) grants the Hatchery tab and one starter egg on
+  completion via new `ChainDef.grantsHatchery` -- handled in
+  `QuestManager.resolve`'s existing chain-completion block, right next to
+  the ordinary rewardGold/rewardItems grant. The starter egg is a
+  dedicated-pool egg guaranteed to hatch into `hatchery_hound` (Common
+  rarity), giving the dedicated-pool mechanism (see below) a concrete,
+  flavourful payoff rather than shipping unused.
+- Ordinary eggs are meant to drop from quest/raid loot the same way
+  equipment does -- the drop-table wiring itself (a chance entry on
+  `QuestOffer`/`RaidEncounterDef` pointing at `PetManager.grantEgg`) is
+  the one acquisition piece **not yet connected**; every mechanism it
+  needs (rarity, dedicated-pool flagging, slot-capacity check) is built
+  and ready, see Known gaps below.
+- Hatchery tab visibility is a runtime filter in `MenuWindow.tsx`
+  (`state.hatcheryUnlocked`), not a build-time list -- the one nav tab
+  with a visibility condition at all, everything else always shows.
+  Unlock triggers a one-step reuse of `OnboardingTour` itself (new
+  `pendingHatcherySpotlight` flag, same "standalone moment, not a toast"
+  treatment `pendingChainDiscovery` already gets) rather than a polled
+  `GuidanceManager` topic -- the trigger is deterministic (this exact
+  chain completing), so there was nothing to poll for.
 
 **Eggs & hatching**
-- Eggs carry rarity (reuses the existing equipment rarity tiers).
-- Hatch progress is driven by hero XP earned while incubating -- higher
-  rarity needs more XP, so rarer eggs take longer. *(Open question: does
-  XP from any hero count account-wide, or only a hero the egg is
-  "carried" by? Assumed account-wide for now -- simpler, no extra
-  equip-slot needed pre-hatch.)*
-- Incubation is slot-limited, expandable via upgrade -- same shape as the
-  Potion Belt (1 base, more via a paid unlock).
-- On hatch, rolls a pet from either the general random pool or, if the
-  egg came from a dedicated-reward source, a secondary reward-specific
-  pool -- same two-pool split the loot system already uses elsewhere.
-- Hatchery home sub-tab shows all currently-incubating eggs with progress
-  bars, sprite per egg.
+- Eggs carry `Rarity` (reuses the existing equipment tiers) via
+  `EggInstance`. Hatch progress (`hatchXp`) is driven by hero XP earned
+  anywhere in the guild, added to every incubating egg at once from
+  `QuestManager.resolve` (same call site as `HeroManager.grantXp`) --
+  **resolves the "account-wide vs per-hero" open question as
+  account-wide**, confirmed simplest and avoids needing an egg-carry slot
+  pre-hatch.
+- Incubation is slot-limited (`pets.baseIncubationSlots` = 2, tuning-set),
+  expandable via the new **Nest Expansion** upgrade
+  (`incubationSlotsPerLevel`, 3 levels -> 5 total) -- same
+  `UpgradeDef`-special-field shape Potion Belt already established.
+  `ModifierManager.incubationSlots` reads it the same way
+  `consumableSlots` does.
+- On hatch (`PetManager.hatch`), species rolls from `GENERAL_PET_POOL`
+  (every `PetDef` not flagged `dedicatedOnly`) unless the egg carries a
+  `dedicatedPetId`, in which case that exact species is guaranteed --
+  mirrors the loot system's own two-pool split.
+- A egg beyond capacity is simply not granted (`PetManager.grantEgg`
+  returns false, no queue) -- same trade-off `HarvestManager.catch`
+  already accepts for an overflowing Warehouse, not treated as a bug.
 
 **Pets**
-- Second sub-tab shows owned/active pets -- idle animation, plus any
-  secondary animations if the art provides them. Renders nothing if the
-  sprite file is missing, same convention as every other art asset here.
-- Nameable. Rarity is cosmetic-only for now (recolor/"shiny" tier), not
-  power -- bonus magnitude is a separate random roll on hatch, independent
-  of rarity.
-- Bonus is a modifier (xp/gold/luck/success -- the same types facilities
-  already use) and feeds into the existing additive `sumMods` system.
-- Pets gain XP post-hatch; for now that XP grows the bonus's magnitude
-  over time (no cosmetic leveling yet).
-- **Parked, not committed:** rare color variants of the same pet that
-  carry an added modifier on top of the normal roll, paired with a
-  resource+gold refine/upgrade path (mirroring gear repair/refine) so
-  non-rare pets have their own route to a stronger bonus too, rather than
-  rarity being the only lever. Revisit once the base system is live.
+- `Pet` instances are nameable (24-char cap, same as guild naming),
+  carry the hatching egg's `rarity` as a cosmetic tag only -- confirmed
+  not power-relevant, per the "cosmetic-only for now" decision. The rare-
+  variant-with-its-own-bonus idea stays parked, unbuilt.
+- `PetBonusType` is a 4-key subset of `Modifiers` (`success` / `gold` /
+  `xp` / `loot`) rather than the full set -- `loot` stands in for what the
+  design pass called "luck," since rare-find chance is the closest
+  existing lever to that idea.
+- `baseBonusValue` rolls once at hatch (`pets.baseBonusValueMin/Max`,
+  tuning-set). Post-hatch pet xp grows a flat level via
+  `PetManager.levelForXp` (a simple `xp / pets.xpPerLevel`, deliberately
+  NOT the hero's exponential curve -- pet leveling is meant to read as
+  slow background progress, not something to optimize), adding
+  `pets.bonusGrowthPerLevel` per level on top of the base roll --
+  **resolves "what does post-hatch xp do" exactly as decided: grows
+  bonus magnitude, no cosmetic leveling yet.**
+- Only currently-**equipped** pets gain xp at all
+  (`PetManager.grantEquippedXp`, `pets.xpShareOfQuestXpPercent` of each
+  quest's raw xp reward, split evenly across every equipped pet) -- this
+  is the actual mechanical reason to equip one rather than leaving every
+  hatched pet in a drawer, not spelled out explicitly in the original spec
+  but a natural extension of "equipped pets feed the bonus."
 
 **Equip & adventuring**
-- 1 equipped pet slot base, more via an upgrade -- same shape as Potion
-  Belt.
-- Equipped pet's sprite trails/accompanies the hero sprite wherever the
-  hero sprite renders (desktop companion included).
+- 1 equipped pet slot base, expandable via new **Companion Bond** upgrade
+  (`petSlotsPerLevel`, 2 levels -> 3 total) -- same shape as Potion Belt,
+  read via new `ModifierManager.petSlots`.
+- Equipped pets' combined bonus feeds into `ModifierManager.global()` via
+  new `petMods` (built directly from each equipped pet's own rolled
+  `bonusType`/effective value, not a flat `modsPerLevel` table the way
+  every other mod source works, since each pet rolled its own type at
+  hatch).
+- **Not yet built:** the equipped pet's sprite trailing the hero sprite on
+  the desktop companion / hero-sprite renders. `Pet.defId` and
+  `spriteFolder` exist and are ready to be read from there; the actual
+  companion-window rendering hook is the one adventuring-facing piece
+  still open. Tracked in Known gaps below.
 
 **Happiness & feeding**
-- Each pet has its own happiness bar that decays over time (needs a tick,
-  similar in shape to Harvest's spawn timer).
-- Happiness scales how much of the pet's bonus actually applies -- exact
-  curve TBD, but 0% happiness should not fully zero the bonus out
-  (needs a floor, not a hard cutoff, to avoid a pet feeling "off").
-- Feeding accepts either raw Harvest materials (smaller happiness gain)
-  or crafted pet food (larger gain) -- same farm-or-craft choice Crafting
-  already offers for gear.
+- Happiness is stored lazily -- `Pet.happiness` is the value AS OF
+  `happinessUpdatedAt`, decayed on read via `PetManager.currentHappiness`
+  rather than ticked every second. Same "absolute timestamp, compute on
+  read" approach `Injury.healsAt` already uses, and correct across
+  offline gaps for free with no dedicated tick loop needed (resolves the
+  spec's "needs a tick, like Harvest's spawn timer" note -- turned out not
+  to need one at all).
+- `effectiveBonus` scales the grown bonus by `max(happinessFloorPercent,
+  happiness) / 100` -- confirmed a starved pet keeps contributing at least
+  `pets.happinessFloorPercent` (25% by default) rather than hard-zeroing,
+  per the spec's explicit floor-not-cutoff requirement.
+- Two feed paths, both live: `feedMaterial` (5 units of a chosen raw
+  Harvest material for `pets.feedMaterialHappinessGain`) and `feedCrafted`
+  (1 new **Pet Treat** consumable, craftable via a new
+  `craft_pet_treat` recipe -- fish+herbs+gold, same shape Trail Rations
+  already uses -- for `pets.feedCraftedHappinessGain`, a bigger gain) --
+  matches the "feed raw material or craft pet food for more happiness"
+  decision exactly.
 
 **Content & DevTool**
-- Egg/pet sprites follow the existing "missing file just fails to paint"
-  convention -- no broken-image state, renders once art lands at whatever
-  path convention gets picked (e.g. `public/lore/pets/<petId>`).
-- Hatchery gets its own background image, same banner-art convention as
-  every other tab.
-- New DevTool Pets section: pet defs (name, recolor tier, bonus type/
-  range, sprite path) and egg defs (rarity, hatch-XP threshold, pool
-  reference), plus pet/egg assignment on quest/raid loot tables using the
-  existing loot-picker UI and `raidExclusive`-style dedicated-pool
-  flagging.
-- New tuning registry category (`pets`) for hatch-XP thresholds per
-  rarity, happiness decay rate, happiness->bonus curve, and feed-happiness
-  values per resource type.
+- Pet species live in `json/pets.json` (devtool-editable, new `pets`
+  schema in `server.mjs` -- id/name/description/glyph/spriteFolder/
+  dedicatedOnly, deliberately NOT including rarity/bonus/name-per-instance
+  since those are rolled, not authored). The devtool's schema system is
+  fully generic/JSON-driven, so this needed zero frontend changes.
+- New tuning registry category `pets` (17 entries) covers every numeric
+  knob mentioned in the spec: hatch-xp thresholds per rarity, base
+  incubation slots, bonus roll range, xp-per-level, bonus growth per
+  level, xp-share percent, happiness decay rate, happiness floor, and
+  both feed gains -- all devtool-editable from day one, same as Harvest's
+  own tuning batch.
+- Egg/pet sprites follow the "missing file just fails to paint" rule via
+  a new `PetGlyph` component (same pattern `HarvestGlyph` established) --
+  reads `public/pets/<spriteFolder>/idle.png`, falls back to `PetDef.glyph`
+  on a 404. No real sprite files exist yet; every pet currently renders as
+  its glyph. `public/lore/hatchery-bg.jpg` is the Hatchery tab's own
+  background art path -- also not present yet, same convention either way.
+- `SAVE_VERSION` bumped 22 -> 23; migration backfills
+  `hatcheryUnlocked`/`pendingHatcherySpotlight`/`incubatingEggs`/`pets`/
+  `equippedPetIds` for any pre-existing save. `QuestResult.hatchedPets` is
+  optional rather than migrated, since old log entries predate it entirely
+  and every read already treats a missing value as "nothing hatched."
 
-**Still open**
-- Exact happiness decay rate and happiness->bonus curve.
-- Whether hatch-XP is account-wide or tied to a specific hero.
-- Whether rarity ever becomes bonus-relevant (see "parked" note above) --
-  explicitly not committed.
+**Known gaps, deliberately not blocking this patch:**
+- **Quest/raid egg-drop wiring.** `PetManager.grantEgg` is fully built and
+  tested via the intro chain's own dedicated-egg grant, but nothing yet
+  rolls an ordinary egg drop off a normal quest/raid completion the way
+  equipment loot does. Needs a loot-table-shaped field (mirroring
+  `RaidEncounterDef.loot`'s "defId@chance" convention, likely
+  "rarity@chance" or a dedicated pet-loot list) plus a devtool picker --
+  scoped but not started.
+- **Companion sprite on the desktop window.** Equipped-pet data model is
+  ready; the actual render hook into the idle companion / hero-sprite
+  views isn't built yet.
+- **Art.** No real pet or Hatchery-background art exists yet -- every pet
+  renders as its glyph, `hatchery-bg.jpg` renders nothing. Same "safe to
+  ship before art lands" convention as every other asset in this game.
+- Bonus roll ranges, hatch-xp thresholds, and feed gains are first-pass
+  numbers, not a balance pass -- same "content is a cache, gameplay data
+  confirms the intent" spirit as every other system's initial numbers.
+- The parked "rare pet variants with their own bonus, plus a universal
+  refine/upgrade path" idea from the spec pass is still just an idea --
+  untouched by this build.
 
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**

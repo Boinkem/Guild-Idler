@@ -182,5 +182,22 @@
     "resultConsumableId": "minor_lucky_potion",
     "statsToPick": 0,
     "statValue": 0
+  },
+  {
+    "id": "craft_pet_treat",
+    "name": "Pet Treat",
+    "description": "Fish oil and dried herbs, worked into something a pet will actually want to eat -- a bigger happiness gain than raw scraps.",
+    "category": "consumable",
+    "icon": "food/Food_01.png",
+    "materialCost": {
+      "fish": 6,
+      "herbs": 4
+    },
+    "goldCost": 25,
+    "resultConsumableId": "pet_treat",
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0
   }
 ]

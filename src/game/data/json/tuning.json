@@ -655,5 +655,153 @@
     "min": 0,
     "max": 50,
     "description": "Success-chance penalty applied per level a hero is BELOW a quest's own reqLevel, when they attempt it anyway. Sending on a quest above your level is allowed (only auto-queue/pickBestQuest still restricts itself to quests a hero already qualifies for) -- this is what makes doing so a real trade rather than a free pass. 10 means a hero 3 levels under a quest's reqLevel loses 30 percentage points of success attempting it, on top of everything else. Existing MIN_SUCCESS/MAX_SUCCESS clamps (5-95) still apply, so it's always technically attemptable, never literally impossible or free."
+  },
+  {
+    "id": "pets.egg.common.hatchXpThreshold",
+    "label": "Pets: Common egg hatch XP",
+    "category": "pets",
+    "value": 500,
+    "default": 500,
+    "min": 0,
+    "description": "Total hero XP (earned anywhere in the guild) a Common-rarity egg needs before it hatches."
+  },
+  {
+    "id": "pets.egg.uncommon.hatchXpThreshold",
+    "label": "Pets: Uncommon egg hatch XP",
+    "category": "pets",
+    "value": 1200,
+    "default": 1200,
+    "min": 0,
+    "description": "Total hero XP an Uncommon-rarity egg needs before it hatches."
+  },
+  {
+    "id": "pets.egg.rare.hatchXpThreshold",
+    "label": "Pets: Rare egg hatch XP",
+    "category": "pets",
+    "value": 2500,
+    "default": 2500,
+    "min": 0,
+    "description": "Total hero XP a Rare-rarity egg needs before it hatches."
+  },
+  {
+    "id": "pets.egg.epic.hatchXpThreshold",
+    "label": "Pets: Epic egg hatch XP",
+    "category": "pets",
+    "value": 5000,
+    "default": 5000,
+    "min": 0,
+    "description": "Total hero XP an Epic-rarity egg needs before it hatches."
+  },
+  {
+    "id": "pets.egg.legendary.hatchXpThreshold",
+    "label": "Pets: Legendary egg hatch XP",
+    "category": "pets",
+    "value": 10000,
+    "default": 10000,
+    "min": 0,
+    "description": "Total hero XP a Legendary-rarity egg needs before it hatches."
+  },
+  {
+    "id": "pets.baseIncubationSlots",
+    "label": "Pets: base incubation slots",
+    "category": "pets",
+    "value": 2,
+    "default": 2,
+    "min": 1,
+    "description": "How many eggs can incubate at once before any Nest Expansion levels. A dropped egg beyond capacity is simply not granted -- see PetManager.grantEgg."
+  },
+  {
+    "id": "pets.baseBonusValueMin",
+    "label": "Pets: bonus roll, minimum",
+    "category": "pets",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "description": "Lower bound of a freshly-hatched pet's random baseBonusValue, in the same units as the rolled Modifiers key (flat points for success/loot, % multiplier for gold/xp)."
+  },
+  {
+    "id": "pets.baseBonusValueMax",
+    "label": "Pets: bonus roll, maximum",
+    "category": "pets",
+    "value": 6,
+    "default": 6,
+    "min": 0,
+    "description": "Upper bound of a freshly-hatched pet's random baseBonusValue."
+  },
+  {
+    "id": "pets.xpPerLevel",
+    "label": "Pets: xp needed per pet level",
+    "category": "pets",
+    "value": 300,
+    "default": 300,
+    "min": 1,
+    "description": "Flat xp-per-level curve for pets (deliberately simpler than the hero xpForLevel curve -- see PetManager.levelForXp)."
+  },
+  {
+    "id": "pets.bonusGrowthPerLevel",
+    "label": "Pets: bonus growth per pet level",
+    "category": "pets",
+    "value": 0.5,
+    "default": 0.5,
+    "min": 0,
+    "description": "Added on top of baseBonusValue per pet level -- this is the only thing post-hatch pet xp currently does (see guild-idler-status.md's Pets section)."
+  },
+  {
+    "id": "pets.xpShareOfQuestXpPercent",
+    "label": "Pets: % of quest xp shared to each equipped pet",
+    "category": "pets",
+    "value": 20,
+    "default": 20,
+    "min": 0,
+    "max": 100,
+    "description": "Each currently-equipped pet gains this % of a quest's raw xp reward as its own pet xp, independent of which hero actually went. Benched pets gain nothing -- this is the actual reason to equip one."
+  },
+  {
+    "id": "pets.happinessDecayPerHour",
+    "label": "Pets: happiness decay per hour",
+    "category": "pets",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "description": "Happiness points lost per real hour, computed lazily from happinessUpdatedAt rather than ticked every second -- see PetManager.currentHappiness."
+  },
+  {
+    "id": "pets.happinessFloorPercent",
+    "label": "Pets: minimum effective happiness %",
+    "category": "pets",
+    "value": 25,
+    "default": 25,
+    "min": 0,
+    "max": 100,
+    "description": "A starved pet's bonus is scaled down as happiness falls, but never below this floor -- a neglected pet still contributes something, it just isn't at its best."
+  },
+  {
+    "id": "pets.feedMaterialBatchSize",
+    "label": "Pets: material feed batch size",
+    "category": "pets",
+    "value": 5,
+    "default": 5,
+    "min": 1,
+    "description": "How many units of a chosen raw Harvest material one 'feed' action consumes."
+  },
+  {
+    "id": "pets.feedMaterialHappinessGain",
+    "label": "Pets: happiness gained from raw materials",
+    "category": "pets",
+    "value": 15,
+    "default": 15,
+    "min": 0,
+    "max": 100,
+    "description": "Happiness gained per feedMaterialBatchSize of a raw material -- the cheaper, smaller-gain feed option (see pets.feedCraftedHappinessGain for the crafted alternative)."
+  },
+  {
+    "id": "pets.feedCraftedHappinessGain",
+    "label": "Pets: happiness gained from crafted pet treats",
+    "category": "pets",
+    "value": 40,
+    "default": 40,
+    "min": 0,
+    "max": 100,
+    "description": "Happiness gained per crafted Pet Treat -- the pricier, bigger-gain feed option."
   }
 ]

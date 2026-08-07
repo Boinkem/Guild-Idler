@@ -167,6 +167,15 @@ export interface ChainDef {
    * undiscovered chain -- no new UI needed for this.
    */
   requiresChainId?: string;
+  /**
+   * True for exactly one chain -- the Hatchery's own intro. Completing it
+   * flips state.hatcheryUnlocked, grants one starter egg (via a
+   * dedicated-pool pet, see PET_BY_ID['hatchery_hound']), and triggers the
+   * one-time spotlight prompt on the new tab. Handled in
+   * QuestManager.resolve's chain-completion block, right alongside the
+   * ordinary rewardGold/rewardItems grant.
+   */
+  grantsHatchery?: boolean;
 }
 
 export const QUEST_CHAINS: ChainDef[] = [
@@ -184,6 +193,25 @@ export const QUEST_CHAINS: ChainDef[] = [
       { name: "The Miller's Cellar", flavour: "The miller wrings his hat in both hands and swears it's just rats -- big ones, loud ones, but rats. He hasn't gone down those cellar stairs himself in three days, and isn't planning to start today either.", tag: 'explore', difficulty: 'easy', duration: 45 * MINUTE, goldMultiplier: 1.2 },
       { name: 'Whatever the Rats Were Fleeing', flavour: 'The rats are running the wrong way -- up the stairs, into the mill, anywhere but down -- and rats only run toward danger when whatever they left behind is worse.', tag: 'explore', difficulty: 'easy', duration: 90 * MINUTE, goldMultiplier: 1.3 },
       { name: 'The Thing Under the Mill', flavour: "It has waited under this mill longer than the mill has stood, patient in the particular way old things get patient. Twice now it turns its head toward a corner of the cellar that has nothing in it -- nothing you can see, anyway.", tag: 'combat', difficulty: 'normal', duration: 150 * MINUTE, goldMultiplier: 1.6 },
+    ],
+  },
+  {
+    id: 'the_last_clutch',
+    name: 'The Last Clutch',
+    description:
+      "The old hatchery at the edge of town has been quietly failing for years, and its last keeper is " +
+      "too frail to climb the coop ladder anymore. One clutch of eggs is still warm. Whether that's " +
+      "worth a guild's time is apparently a question with a very short answer.",
+    reqLevel: 5,
+    rewardGold: 400,
+    rewardItems: [],
+    rewardRenown: 1,
+    title: 'Keeper of the Clutch',
+    grantsHatchery: true,
+    epilogue: "The hatchery stands again, propped up with new timber where the old beams had given out. The keeper still comes by most mornings, mostly to make sure nobody's doing it wrong -- and so far, nobody has. Whatever hatches from here on is the guild's own to raise.",
+    stages: [
+      { name: 'The Failing Coop', flavour: "Half the roof's already down, and the keeper won't leave the one nest she still trusts, not even to eat. She doesn't want gold. She wants someone strong enough to carry water and lumber faster than the weather can undo it.", tag: 'escort', difficulty: 'easy', duration: 60 * MINUTE, goldMultiplier: 1.2 },
+      { name: 'What the Coop Was Guarding Against', flavour: "Something's been circling the hatchery at night, testing the fence line the same spot every time -- patient in a way that ordinary vermin never bother being. Whatever it's after, it hasn't given up.", tag: 'defense', difficulty: 'normal', duration: 120 * MINUTE, goldMultiplier: 1.4 },
     ],
   },
   {

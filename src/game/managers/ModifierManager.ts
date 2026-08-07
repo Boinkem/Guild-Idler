@@ -1,7 +1,9 @@
 import { GUILD_BY_ID, RENOWN_BY_ID, UPGRADE_BY_ID, BASE_GOLD_STORAGE } from '../data/progression';
 import { RAID_UPGRADE_BY_ID } from '../data/raidUpgrades';
-import { GameState, Modifiers } from '../types';
+import { BASE_INCUBATION_SLOTS } from '../data/pets';
+import { GameState, Modifiers, PetBonusType } from '../types';
 import { scaleMods, sumMods } from '../util';
+import { PetManager } from './PetManager';
 
 /**
  * Account-wide bonuses. These apply to every hero and are recomputed on demand
@@ -51,11 +53,30 @@ export const ModifierManager = {
     );
   },
 
+  /**
+   * Sum of every currently-equipped pet's effective bonus, each folded
+   * into its own PetBonusType key -- unlike upgrade/guild/renown mods,
+   * this isn't a flat modsPerLevel table (each pet rolled its own type and
+   * magnitude at hatch), so it's built directly here rather than through
+   * scaleMods.
+   */
+  petMods(state: GameState, now = Date.now()): Partial<Modifiers> {
+    const result: Partial<Record<PetBonusType, number>> = {};
+    for (const petId of state.equippedPetIds) {
+      const pet = state.pets.find((p) => p.uid === petId);
+      if (!pet) continue;
+      const value = PetManager.effectiveBonus(pet, now);
+      result[pet.bonusType] = (result[pet.bonusType] ?? 0) + value;
+    }
+    return result;
+  },
+
   global(state: GameState): Modifiers {
     return sumMods(
       ModifierManager.upgradeMods(state),
       ModifierManager.guildMods(state),
       ModifierManager.renownMods(state),
+      ModifierManager.petMods(state),
     );
   },
 
@@ -80,6 +101,24 @@ export const ModifierManager = {
     const bonus = Object.entries(state.upgrades).reduce((sum, [id, level]) => {
       const def = UPGRADE_BY_ID[id];
       return sum + (def?.consumableSlotsPerLevel ?? 0) * level;
+    }, 0);
+    return 1 + bonus;
+  },
+
+  /** Same shape as consumableSlots, for how many eggs can incubate at once. */
+  incubationSlots(state: GameState): number {
+    const bonus = Object.entries(state.upgrades).reduce((sum, [id, level]) => {
+      const def = UPGRADE_BY_ID[id];
+      return sum + (def?.incubationSlotsPerLevel ?? 0) * level;
+    }, 0);
+    return BASE_INCUBATION_SLOTS + bonus;
+  },
+
+  /** Same shape again, for how many pets can be equipped at once. */
+  petSlots(state: GameState): number {
+    const bonus = Object.entries(state.upgrades).reduce((sum, [id, level]) => {
+      const def = UPGRADE_BY_ID[id];
+      return sum + (def?.petSlotsPerLevel ?? 0) * level;
     }, 0);
     return 1 + bonus;
   },

@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 22;
+export const SAVE_VERSION = 23;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -310,6 +310,13 @@ export interface QuestResult {
   brokenItems: string[];
   levelsGained: number;
   chainAdvanced?: { chainId: string; stage: number; totalStages: number; completed: boolean };
+  /** Eggs that finished incubating and hatched as a direct result of this
+   *  quest's xp reward -- see PetManager.addHatchXp, called alongside
+   *  HeroManager.grantXp in QuestManager.resolve. Optional (not backfilled
+   *  by migration) since old QuestResult entries already sitting in
+   *  state.log predate this field entirely -- treat a missing value as
+   *  "nothing hatched," same as every UI read of it already does. */
+  hatchedPets?: { name: string; defId: string }[];
 }
 
 /**
@@ -515,6 +522,13 @@ export interface UpgradeDef {
    *  GuildFacilityDef.storagePerLevel, since a slot count isn't expressible
    *  through the generic Modifiers shape. Only Potion Belt uses this. */
   consumableSlotsPerLevel?: number;
+  /** Grants this many extra Hatchery incubation slots per level -- same
+   *  special-purpose-field shape as consumableSlotsPerLevel above. Only
+   *  Nest Expansion uses this. */
+  incubationSlotsPerLevel?: number;
+  /** Grants this many extra equipped-pet slots per level -- same shape
+   *  again. Only Companion Bond uses this. */
+  petSlotsPerLevel?: number;
 }
 
 export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern';
@@ -721,6 +735,22 @@ export interface GameState {
   warehouseLevel: number;
   /** True once the Trade Route upgrade is bought -- gates selling materials for gold. */
   tradeRouteUnlocked: boolean;
+
+  /* ---------------------------- Pets / Hatchery ---------------------------- */
+  /** True once the intro chain that grants the Hatchery has been completed
+   *  -- gates the Hatchery tab's visibility entirely (see MenuWindow). */
+  hatcheryUnlocked: boolean;
+  /** Set the moment hatcheryUnlocked flips true, same "own standalone
+   *  moment, not a toast" treatment as pendingChainDiscovery -- shown as a
+   *  single-step reuse of OnboardingTour spotlighting the new tab. */
+  pendingHatcherySpotlight: boolean;
+  incubatingEggs: EggInstance[];
+  pets: Pet[];
+  /** Which owned pets currently accompany the guild -- feeds ModifierManager's
+   *  global mods and is the only thing that gains a pet post-hatch xp (see
+   *  PetManager). Capped at ModifierManager.petSlots(state), same
+   *  "array, not a fixed-size struct" shape as Hero.equippedConsumables. */
+  equippedPetIds: string[];
 }
 
 /**
@@ -734,6 +764,92 @@ export interface GameState {
 export interface HarvestNodeState {
   nextSpawnAt: number;
   pending: { spawnedAt: number; expiresAt: number; bonus: boolean } | null;
+}
+
+/* ----------------------------- pets / hatchery ----------------------------- */
+
+/**
+ * Deliberately a small subset of Modifiers, not the full set -- a pet
+ * bonus is meant to read as "a little extra luck/coin/knack," not another
+ * full progression axis. `loot` stands in for what the design doc calls
+ * "luck" (rare-find chance is the closest existing lever to that idea).
+ */
+export type PetBonusType = 'success' | 'gold' | 'xp' | 'loot';
+
+/**
+ * A pet species/template, defined in json/pets.json (devtool-editable, same
+ * pattern as EquipmentDef). Rarity/bonus/name are NOT here -- those are
+ * rolled per-instance on hatch (see Pet below); this is just "what a
+ * Cinderling looks like and where its sprite lives."
+ */
+export interface PetDef {
+  id: string;
+  name: string;
+  description: string;
+  /** Single-glyph fallback, same role as MaterialDef.glyph -- shown until
+   *  real sprite files exist, or if one ever 404s. */
+  glyph: string;
+  /**
+   * Sprites read from `public/pets/<id>/<file>.png` -- idle.png expected,
+   * other filenames (e.g. a second idle variant) are optional and just
+   * won't render if absent. Missing folder entirely = pure glyph fallback,
+   * same "never a broken image" convention as every other art asset here.
+   */
+  spriteFolder: string;
+  /** True if this pet can only hatch from a dedicated-reward egg (see
+   *  EggInstance.dedicatedPetId) -- never rolled by the general pool. */
+  dedicatedOnly?: boolean;
+}
+
+/**
+ * One egg incubating toward a hatch. Rarity sets both how long it takes
+ * (higher rarity = higher hatchXpThreshold, see EGG_TIERS) and the hatched
+ * pet's own cosmetic rarity -- the pet SPECIES is a separate random roll
+ * at hatch time, independent of this.
+ */
+export interface EggInstance {
+  uid: string;
+  rarity: Rarity;
+  /**
+   * Set only for eggs granted as a flagged dedicated-reward drop (see
+   * QuestOffer/RaidEncounterDef pet-loot assignment) -- resolves to this
+   * specific PetDef on hatch instead of a random pick from the general
+   * pool. Undefined for every ordinary egg.
+   */
+  dedicatedPetId?: string;
+  /** Progress toward this egg's own hatchXpThreshold -- see
+   *  PetManager.addHatchXp. Driven by hero XP earned anywhere in the
+   *  guild, not tied to a specific hero (see design notes in
+   *  guild-idler-status.md's Pets section for why). */
+  hatchXp: number;
+  startedAt: number;
+}
+
+/** An owned, already-hatched pet. */
+export interface Pet {
+  uid: string;
+  defId: string;
+  /** Player-given name, defaults to the species name on hatch. */
+  name: string;
+  /** Cosmetic recolour tier only, for now -- does NOT affect bonusValue.
+   *  See guild-idler-status.md's Pets section for the parked idea of
+   *  rare variants eventually carrying their own bonus too. */
+  rarity: Rarity;
+  bonusType: PetBonusType;
+  /** Rolled once at hatch; PetManager.effectiveBonus grows on top of this
+   *  as the pet gains xp, and scales it down by happiness. */
+  baseBonusValue: number;
+  xp: number;
+  /**
+   * Happiness is stored lazily: `happiness` is the value AS OF
+   * happinessUpdatedAt, decaying over real elapsed time from there rather
+   * than being ticked down every second -- see PetManager.currentHappiness.
+   * Same "store an absolute timestamp, compute on read" approach as
+   * Injury.healsAt / HarvestNodeState.nextSpawnAt.
+   */
+  happiness: number;
+  happinessUpdatedAt: number;
+  hatchedAt: number;
 }
 
 /**

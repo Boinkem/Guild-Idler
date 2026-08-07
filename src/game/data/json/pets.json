@@ -1,0 +1,52 @@
+[
+  {
+    "id": "ember_kit",
+    "name": "Ember Kit",
+    "description": "A fox-shaped cinder that never quite goes out. Naps in the hearth ash and follows whoever last fed it.",
+    "glyph": "\ud83e\udd8a",
+    "spriteFolder": "ember_kit"
+  },
+  {
+    "id": "mossback",
+    "name": "Mossback",
+    "description": "Somewhere between a toad and a boulder. Slow, unbothered, and quietly load-bearing.",
+    "glyph": "\ud83d\udc38",
+    "spriteFolder": "mossback"
+  },
+  {
+    "id": "glimmerwing",
+    "name": "Glimmerwing",
+    "description": "A moth the size of a hand, wings that catch light like stained glass. Circles the nearest lantern until it's carried off somewhere darker.",
+    "glyph": "\ud83e\udd8b",
+    "spriteFolder": "glimmerwing"
+  },
+  {
+    "id": "packrat",
+    "name": "Packrat",
+    "description": "Hoards anything shiny it can fit in its cheeks, including things that were not offered.",
+    "glyph": "\ud83d\udc00",
+    "spriteFolder": "packrat"
+  },
+  {
+    "id": "tidewhelp",
+    "name": "Tidewhelp",
+    "description": "A pup-sized thing that's more sea-foam than fur. Leaves damp footprints on dry stone for reasons nobody's explained.",
+    "glyph": "\ud83e\udda6",
+    "spriteFolder": "tidewhelp"
+  },
+  {
+    "id": "wisplet",
+    "name": "Wisplet",
+    "description": "A drifting mote of pale light, barely warm to the touch. Settles on a shoulder and just stays there.",
+    "glyph": "\u2728",
+    "spriteFolder": "wisplet"
+  },
+  {
+    "id": "hatchery_hound",
+    "name": "Hatchery Hound",
+    "description": "Raised alongside the very first clutch the hatchery ever saved -- it still checks every new egg like it's personally responsible for them.",
+    "glyph": "\ud83d\udc15",
+    "spriteFolder": "hatchery_hound",
+    "dedicatedOnly": true
+  }
+]

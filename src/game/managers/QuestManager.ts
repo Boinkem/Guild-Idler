@@ -15,6 +15,7 @@ import { InventoryManager } from './InventoryManager';
 import { Tuning } from '../data/tuning';
 import { EquipmentManager } from './EquipmentManager';
 import { ModifierManager } from './ModifierManager';
+import { PetManager } from './PetManager';
 
 export const BOARD_SIZE = 6;
 export const BOARD_REFRESH_MS = 30 * MINUTE;
@@ -389,7 +390,7 @@ export const QuestManager = {
     const globalMods = ModifierManager.global(state);
     const broken = hero ? EquipmentManager.applyWear(hero, wear, globalMods.durability) : [];
 
-    /* ------------------------------- apply -------------------------------- */
+    /* ----------------------------- apply -------------------------------- */
     let levelsGained = 0;
     if (hero) {
       levelsGained = HeroManager.grantXp(hero, xp);
@@ -398,6 +399,15 @@ export const QuestManager = {
       hero.activeQuestId = null;
       hero.questsCompleted += 1;
     }
+
+    // Hatchery progress and equipped-pet xp both key off the same raw xp
+    // reward as the hero's own grantXp call above, but are account-wide --
+    // an incubating egg or an equipped pet doesn't care which specific
+    // hero earned it. See PetManager for why this lives here rather than
+    // inside HeroManager.grantXp itself (that function only ever sees one
+    // hero, not the full GameState an egg/pet needs).
+    const hatched = PetManager.addHatchXp(state, xp, resolvedAt);
+    PetManager.grantEquippedXp(state, xp);
 
     const storage = ModifierManager.goldStorage(state);
     state.gold = Math.min(storage, state.gold + gold);
@@ -436,6 +446,19 @@ export const QuestManager = {
           state.activeChains = state.activeChains.filter((c) => c.chainId !== chainId);
           state.stats.chainsCompleted += 1;
           if (chain.title && hero) hero.title = chain.title;
+          // The Hatchery's own intro -- see ChainDef.grantsHatchery. The
+          // starter egg is a dedicated-pool egg (always hatches into
+          // hatchery_hound, not a random species) since it's meant to read
+          // as a specific reward for saving THIS hatchery, not a generic
+          // loot roll. grantEgg can still fail if incubation is somehow
+          // already full (it never should be, on a first unlock, but the
+          // check costs nothing) -- either way hatcheryUnlocked and the
+          // spotlight flag still fire, so the tab always appears.
+          if (chain.grantsHatchery) {
+            state.hatcheryUnlocked = true;
+            state.pendingHatcherySpotlight = true;
+            PetManager.grantEgg(state, 'common', 'hatchery_hound', resolvedAt);
+          }
         }
       } else {
         active.failedStages += 1;
@@ -475,6 +498,7 @@ export const QuestManager = {
       brokenItems: broken,
       levelsGained,
       chainAdvanced,
+      hatchedPets: hatched.map((p) => ({ name: p.name, defId: p.defId })),
     };
     state.log.unshift(result);
     if (state.log.length > 60) state.log.length = 60;

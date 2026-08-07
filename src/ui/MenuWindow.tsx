@@ -9,6 +9,7 @@ import { EquipmentPanel } from './panels/EquipmentPanel';
 import { VendorsPanel } from './panels/VendorsPanel';
 import { GuildPanel } from './panels/GuildPanel';
 import { HarvestPanel } from './panels/HarvestPanel';
+import { HatcheryPanel } from './panels/HatcheryPanel';
 import { GuidePanel } from './panels/GuidePanel';
 import { LorePanel } from './panels/LorePanel';
 import { RaidsPanel } from './panels/RaidsPanel';
@@ -52,6 +53,7 @@ const GUILD_GROUP = {
     { id: 'vendors', label: 'Vendors', Panel: VendorsPanel },
     { id: 'guild', label: 'Guild Hall', Panel: GuildPanel },
     { id: 'harvest', label: 'Harvest', Panel: HarvestPanel },
+    { id: 'hatchery', label: 'Hatchery', Panel: HatcheryPanel },
   ],
 } as const;
 const ADVENTURE_GROUP = {
@@ -181,17 +183,24 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
           {TAB_GROUPS.map((group, gi) => (
             <div key={group.label ?? `pinned-${gi}`} className="tabs-group">
               {group.label && <div className="tabs-group-label">{group.label}</div>}
-              {group.tabs.map((t) => (
-                <button
-                  key={t.id}
-                  data-tab-id={t.id}
-                  aria-current={t.id === tab}
-                  onClick={() => setTab(t.id)}
-                >
-                  {t.label}
-                  {t.id === 'quests' && idleHeroes > 0 ? <span className="tab-badge">{idleHeroes}</span> : null}
-                </button>
-              ))}
+              {group.tabs
+                // Hatchery is the one nav entry that doesn't always exist --
+                // hidden entirely until its intro chain completes, rather
+                // than shown-but-locked the way e.g. Raids' own internal
+                // gating works. Every other tab id has no visibility
+                // condition at all, hence the `?? true`.
+                .filter((t) => (t.id === 'hatchery' ? engine.state.hatcheryUnlocked : true))
+                .map((t) => (
+                  <button
+                    key={t.id}
+                    data-tab-id={t.id}
+                    aria-current={t.id === tab}
+                    onClick={() => setTab(t.id)}
+                  >
+                    {t.label}
+                    {t.id === 'quests' && idleHeroes > 0 ? <span className="tab-badge">{idleHeroes}</span> : null}
+                  </button>
+                ))}
             </div>
           ))}
         </nav>
@@ -211,7 +220,12 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
           first, only then prompts. */}
       {engine.state.guildName !== '' && !engine.state.seenOnboarding && (
         <OnboardingTour
-          steps={ALL_TABS.filter((t) => t.id !== 'testing').map((t) => ({ id: t.id, label: t.label }))}
+          // 'hatchery' excluded here too -- a genuinely fresh save never has
+          // it unlocked yet (see the nav filter above), so measuring its
+          // (nonexistent) nav button would just return null and produce a
+          // broken step. It gets its own single-step spotlight instead, the
+          // moment it actually unlocks -- see pendingHatcherySpotlight below.
+          steps={ALL_TABS.filter((t) => t.id !== 'testing' && t.id !== 'hatchery').map((t) => ({ id: t.id, label: t.label }))}
           onTabChange={(id) => setTab(id as TabId)}
           onDone={() => engine.dismissOnboarding()}
         />
@@ -220,6 +234,18 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         <ChainDiscoveryModal
           onView={() => { setTab('quests'); engine.dismissChainDiscovery(); }}
           onClose={() => engine.dismissChainDiscovery()}
+        />
+      )}
+      {/* One-step reuse of the same OnboardingTour spotlight component,
+          fired the moment the Hatchery chain completes rather than as part
+          of the fixed first-run tour above (its timing depends on when the
+          player finishes that chain, not a fixed step count -- same
+          reasoning as pendingChainDiscovery's own standalone modal). */}
+      {engine.state.guildName !== '' && engine.state.pendingHatcherySpotlight && (
+        <OnboardingTour
+          steps={[{ id: 'hatchery', label: 'Hatchery' }]}
+          onTabChange={(id) => setTab(id as TabId)}
+          onDone={() => engine.dismissHatcherySpotlight()}
         />
       )}
     </div>

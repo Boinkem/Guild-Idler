@@ -112,6 +112,11 @@ export function createInitialState(now = Date.now()): GameState {
     harvestTools: emptyMaterials(),
     warehouseLevel: 0,
     tradeRouteUnlocked: false,
+    hatcheryUnlocked: false,
+    pendingHatcherySpotlight: false,
+    incubatingEggs: [],
+    pets: [],
+    equippedPetIds: [],
   };
 }
 
@@ -344,6 +349,15 @@ const MIGRATIONS: Record<number, Migration> = {
     ...save,
     version: 22,
     customConsumables: (save.customConsumables as Record<string, unknown> | undefined) ?? {},
+  }),
+  22: (save) => ({
+    ...save,
+    version: 23,
+    hatcheryUnlocked: (save.hatcheryUnlocked as boolean | undefined) ?? false,
+    pendingHatcherySpotlight: (save.pendingHatcherySpotlight as boolean | undefined) ?? false,
+    incubatingEggs: (save.incubatingEggs as unknown[] | undefined) ?? [],
+    pets: (save.pets as unknown[] | undefined) ?? [],
+    equippedPetIds: (save.equippedPetIds as string[] | undefined) ?? [],
   }),
 };
 

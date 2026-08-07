@@ -13,6 +13,7 @@ import { ModifierManager } from './managers/ModifierManager';
 import { AchievementManager } from './managers/AchievementManager';
 import { GuidanceManager, GuidanceTopic } from './managers/GuidanceManager';
 import { HarvestManager } from './managers/HarvestManager';
+import { PetManager } from './managers/PetManager';
 import { CraftingManager } from './managers/CraftingManager';
 import { SKIN_BY_ID, SKIN_PRICE, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
 import { EQUIPMENT_BY_ID, SET_BY_ID } from './data/equipment';
@@ -389,6 +390,13 @@ export class GameEngine {
       } else if (result.loot.some((l) => l.rarity === 'legendary')) playSound('legendary_drop');
       else if (result.levelsGained > 0) playSound('level_up');
       else playSound(result.success ? 'quest_success' : 'quest_fail');
+      // Independent of the sound-priority chain above -- a hatch can land
+      // on the same resolution as a level-up or even a chain completion,
+      // and deserves its own toast either way rather than being silently
+      // swallowed by whichever cue won.
+      for (const pet of result.hatchedPets ?? []) {
+        this.say(`An egg hatched! Say hello to ${pet.name}.`, 'hatchery');
+      }
       this.reportAchievements(AchievementManager.checkAll(this.state, now));
       this.reportGuidance(GuidanceManager.checkAll(this.state));
 
@@ -1064,6 +1072,52 @@ export class GameEngine {
     const error = HarvestManager.upgradeWarehouse(this.state);
     if (error) return this.say(error);
     playSound('purchase');
+    this.notify();
+    void this.saveNow();
+  }
+
+  /* ------------------------------ Pets / Hatchery ----------------------------- */
+
+  /** Dismisses the one-time "you've unlocked the Hatchery" spotlight --
+   *  same pattern as dismissChainDiscovery above. */
+  dismissHatcherySpotlight() {
+    this.state.pendingHatcherySpotlight = false;
+    void this.saveNow();
+  }
+
+  feedPetMaterial(petUid: string, materialId: MaterialId) {
+    const error = PetManager.feedMaterial(this.state, petUid, materialId);
+    if (error) return this.say(error);
+    playSound('collect');
+    this.notify();
+    void this.saveNow();
+  }
+
+  feedPetCrafted(petUid: string) {
+    const error = PetManager.feedCrafted(this.state, petUid);
+    if (error) return this.say(error);
+    playSound('collect');
+    this.notify();
+    void this.saveNow();
+  }
+
+  equipPet(petUid: string) {
+    const error = PetManager.equip(this.state, petUid);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.notify();
+    void this.saveNow();
+  }
+
+  unequipPet(petUid: string) {
+    PetManager.unequip(this.state, petUid);
+    this.notify();
+    void this.saveNow();
+  }
+
+  renamePet(petUid: string, name: string) {
+    const error = PetManager.rename(this.state, petUid, name);
+    if (error) return this.say(error);
     this.notify();
     void this.saveNow();
   }
