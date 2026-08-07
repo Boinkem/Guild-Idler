@@ -1685,6 +1685,30 @@ button.harvest-item:hover {
 }
 .egg-empty-nest:hover { opacity: 1; background: color-mix(in srgb, var(--panel) 94%, transparent); }
 
+/*
+ * The Hatchery tab's own banner scene -- same aspect-ratio-locked,
+ * full-width, no-crop treatment `.harvest-scene` already established (see
+ * that rule's own comment for why a fixed height + `cover` was the wrong
+ * call: it crops a detailed scene down to a thin sliver the moment the
+ * panel is wider than the art's own ratio). Matches
+ * hatchery-bg.jpg's real 1448x1086 canvas. Purely decorative (no
+ * SlotBox-style interactive hit-targets sitting on top of this one, unlike
+ * Harvest's falling materials or the Crafting scenes), so no dimming
+ * layer needed -- the image is shown at full strength, nothing has to
+ * stay legible on top of it.
+ */
+.hatchery-scene {
+  width: 100%;
+  aspect-ratio: 1448 / 1086;
+  background-size: 100% 100%;
+  background-position: center;
+  border-radius: 6px;
+  border: 1px solid var(--edge);
+  background-color: var(--night);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
 /* The small picker popped open by clicking a slot -- same overlay/modal
    shell as everywhere else in the game, just narrower and listing rows
    instead of one item's own detail (see PickerModal in CraftingStation.tsx). */

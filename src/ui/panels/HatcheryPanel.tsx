@@ -39,14 +39,7 @@ export function HatcheryPanel() {
         </button>
       </div>
 
-      <div
-        aria-hidden="true"
-        className="harvest-scene-bg"
-        style={{
-          position: 'relative', height: 90, marginBottom: 12, borderRadius: 8,
-          backgroundImage: 'url(./lore/hatchery-bg.jpg)', backgroundSize: 'cover', backgroundPosition: 'center',
-        }}
-      />
+      <div className="hatchery-scene" aria-hidden="true" style={{ backgroundImage: 'url(./lore/hatchery-bg.jpg)' }} />
 
       {subTab === 'home' ? <NestsTab /> : <PetsTab />}
     </>
