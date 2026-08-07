@@ -1,0 +1,1229 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index b9311d8..791d273 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -1042,6 +1042,83 @@ than going negative or unsendable; and `pickBestQuest` continues to
+ ignore over-level offers entirely even when they're the only thing on
+ the board. `npx tsc --noEmit` and `vite build` both pass clean.
+ 
++### Equipment pool expansion: new cloak slot, 3 material-tier sets, 4 raid sets -- complete
++The equipment pool below rare tier was confirmed genuinely thin (one
++leather_cap, no set, nothing else) and none of the four earlier raids
++(Requiem for the Last God was the one exception) had any set bonus
++attached to their own themed loot despite dropping real, distinctive
++items for years of play. Two separate pieces of work landed together
++since the second built directly on the first:
++
++**New `cloak` equipment slot.** Added to `EquipSlot` in types.ts, which
++is what actually caught every place it needed to be added -- TypeScript
++won't compile `icons.tsx`'s `SLOT_FALLBACK` (a `Record<EquipSlot,
++string>`) without every slot having a fallback glyph, so that one's
++compiler-enforced, not just remembered. `EquipmentPanel.tsx`'s rendered
++`SLOTS` array needed a manual add (not type-checked, since it's just an
++array literal). The DevTool's own slot enum in `server.mjs` was the
++other must-fix -- this is the *exact* spot that caused the earlier
++"any save fails once the shield slot exists" bug (see Known Bugs
++history), so it was updated proactively this time rather than found the
++hard way again.
++
++**Three full 9-piece material-tier sets** -- Leather (common,
++reqLevel 1), Steel (uncommon, reqLevel 5), Cutpurse's "Thief" (rare,
++reqLevel 10) -- each covering every slot including the new cloak, 24
++new items total. Three pre-existing orphaned items that already fit a
++set perfectly (`leather_cap`, `gauntlets` "Steel Gauntlets",
++`thief_wraps` "Cutpurse's Wraps") were folded in via `setId` rather than
++duplicated. Stat/mod magnitudes calibrated directly against existing
++items at each rarity tier, not invented from scratch. Icons picked from
++confirmed-unused files in the existing `item-icons/` pool.
++
++**Four new raid sets**, assembled entirely from each raid's own already-
++existing drop table -- no new items needed here, just grouping loot that
++was always distinctive but never had a `setId` or bonus attached:
++Blackford Garrison (Blackford Keep, 6pc), Bonewrought Vault (3pc),
++Frozen Wyrmkeep (4pc), What Got Out (4pc). `setId` was applied to a
++piece's Normal *and* Heroic *and* Mythic id alike, not just the base --
++confirmed the set-bonus counting logic in `HeroManager.equipmentMods`
++only cares which slot is filled and what `setId` that specific item
++carries, never which exact difficulty-tier id, so a Heroic ring paired
++with a Normal-tier helmet correctly still counts as 2 pieces toward the
++same set (verified directly, not assumed). `dragon_helm` drops in both
++Bonewrought Vault and Frozen Wyrmkeep but was deliberately left alone --
++it already belongs to the `dragon_slayer` chain-reward set, and pulling
++it into either raid set would have quietly stolen a piece from that one.
++
++**A real bug during this patch, caught before it shipped:** the first
++attempt at adding `setId` to existing items anchored the text insertion
++on "the next `icon:` field after this item's id" -- which silently
++inserted into the *wrong* item whenever the target item had no `icon`
++field of its own (58 items in the pool don't, mostly Heroic/Mythic raid
++variants that inherit their base item's icon). Caught by re-parsing the
++file and checking the actual resulting `setId` on the specific items
++touched, rather than trusting "the script ran without error." Rewrote
++the insertion as a proper bracket-matching function (finds each item's
++exact object span by counting `{`/`}` depth, inserts before that
++object's own closing brace, independent of which fields happen to be
++present) and redid the edit from a clean revert.
++
++Verified thoroughly at runtime, not just typechecked: every set has the
++right piece count covering the right slots exactly once; every piece
++(and its Heroic/Mythic siblings, for the raid sets) resolves to a real
++item whose `setId` round-trips correctly after a fresh JSON re-parse;
++the cloak slot actually equips on a hero end-to-end; a fully-equipped
++set's top bonus tier genuinely shows up in aggregated mods; the
++mixed-Normal/Heroic/Mythic set-counting claim for raid sets specifically
++verified with a live example (Bonewrought's 2pc bonus firing off a
++Heroic ring + Normal helmet); `dragon_helm` confirmed untouched; no id
++collisions anywhere in the pool; none of the new items are accidentally
++`raidExclusive`/`craftable`-flagged. `npx tsc --noEmit` and `vite build`
++both pass clean.
++
++**Noted, not fixed (pre-existing, unrelated to this patch):** the same
++verification pass turned up 13 icon-file collisions already in the
++equipment pool before any of this started (e.g. `voidforged_crown` and
++`requiem_crown` sharing the same icon file) -- confirmed none involve
++anything touched here, flagged as a real but separate cleanup item.
++
+ ### Cleanup items
+ - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid
+   encounter with loot now has all three difficulty tiers.
+@@ -1236,15 +1313,16 @@ the tab.
+ - **Queued from the same conversation as the UX/economy batch above:**
+   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
+     crafted stat/mod bonuses" above for the full writeup.
+-  - **Equipment pool expansion.** Currently thin -- confirmed only one
+-    real leather-tier item (a cap) exists. Ask is a full set each for
+-    leather/steel/thief across every slot, a brand new `cloak` slot type
+-    filling every existing set too, and a dedicated themed set per raid
+-    (5 raids). This is the biggest of the three by far -- a new slot type
+-    alone touches `EquipSlot` in types.ts, the DevTool's schema (see the
+-    "shield slot missing" bug this exact codebase already hit once, same
+-    risk class), every set-bonus table, and icon assignment for
+-    potentially 30+ new items before any stats are even chosen.
++  - ~~Equipment pool expansion~~ -- done, see "Equipment pool expansion:
++    new cloak slot, 3 material-tier sets, 4 raid sets" above for the
++    full writeup. One raid (Requiem for the Last God) already had a set;
++    the new cloak slot fills out every one of the material-tier sets
++    listed there, not every pre-existing set retroactively -- the older
++    chain-reward sets (Dragon Slayer, Ashen Hand, Voidforged, Empyrean,
++    Requiem) were left exactly as they were, since retrofitting a cloak
++    piece into each would mean inventing new lore-specific items for
++    chains that already shipped, a separate ask from what was scoped
++    here.
+   - **Harvest fish -> food generalization.** Broaden the Fish Weir node
+     (and its recipes) to cover berries/red meat/etc, not just fish
+     specifically. Connects to the icon-randomization ask below (Food is
+diff --git a/src/game/data/equipment.ts b/src/game/data/equipment.ts
+index 33c21ae..f4b9bd9 100644
+--- a/src/game/data/equipment.ts
++++ b/src/game/data/equipment.ts
+@@ -101,6 +101,111 @@ export const ITEM_SETS: ItemSet[] = [
+       { count: 7, mods: { success: 45, gold: 70, loot: 40, injuryResist: 45, xp: 50, speed: 20 }, label: 'What Is Left of It' },
+     ],
+   },
++  // Three parallel early/mid-game material-tier sets, one per rarity rung
++  // (common/uncommon/rare) rather than tied to a specific chain or raid --
++  // the equipment pool below rare was previously thin (a single leather_cap
++  // with no set at all), so these exist to give a real, complete
++  // progression a fresh guild can chase before the chain/raid reward sets
++  // above become reachable. All three are full 9-piece sets (every slot,
++  // including the new `cloak` slot) -- three items in each fold in a
++  // pre-existing piece that already fit the theme perfectly but had never
++  // been given a setId (leather_cap, gauntlets, thief_wraps), rather than
++  // creating redundant near-duplicates.
++  {
++    id: 'leather',
++    name: 'Leather Set',
++    pieces: [
++      'leather_dagger', 'leather_cap', 'leather_jerkin', 'leather_buckler',
++      'leather_gloves', 'leather_boots', 'leather_cord_ring', 'leather_talisman', 'leather_cloak',
++    ],
++    bonuses: [
++      { count: 3, mods: { success: 3, injuryResist: 3 }, label: 'Well-Worn' },
++      { count: 6, mods: { success: 6, injuryResist: 6, gold: 5 }, label: 'Broken In' },
++      { count: 9, mods: { success: 10, injuryResist: 10, gold: 8, speed: 8 }, label: 'Head to Toe in Leather' },
++    ],
++  },
++  {
++    id: 'steel',
++    name: 'Steel Set',
++    pieces: [
++      'steel_longsword', 'steel_helm', 'steel_cuirass', 'steel_kite_shield',
++      'gauntlets', 'steel_greaves', 'steel_band', 'steel_locket', 'steel_clasped_cloak',
++    ],
++    bonuses: [
++      { count: 3, mods: { success: 5, injuryResist: 6 }, label: 'Standard Issue' },
++      { count: 6, mods: { success: 10, injuryResist: 12, gold: 8 }, label: "Smith's Pride" },
++      { count: 9, mods: { success: 16, injuryResist: 18, gold: 12, speed: 10 }, label: 'Head to Toe in Steel' },
++    ],
++  },
++  {
++    id: 'thief',
++    name: "Cutpurse's Set",
++    pieces: [
++      'cutpurse_stiletto', 'cutpurse_hood', 'cutpurse_leathers', 'cutpurse_buckler',
++      'thief_wraps', 'cutpurse_softboots', 'cutpurse_signet', 'cutpurse_locket', 'cutpurse_cloak',
++    ],
++    bonuses: [
++      { count: 3, mods: { gold: 10, loot: 4, speed: 5 }, label: 'Light Fingers' },
++      { count: 6, mods: { gold: 20, loot: 10, speed: 10, success: 6 }, label: "Guild of Cutpurses" },
++      { count: 9, mods: { gold: 32, loot: 16, speed: 16, success: 10, injuryResist: 8 }, label: 'Nobody Saw a Thing' },
++    ],
++  },
++  // One set per raid, assembled entirely from that raid's own existing
++  // drop pool rather than new items -- requiem (above) was the only raid
++  // that had this treatment before now; Blackford Keep/Bonewrought
++  // Vault/Frozen Wyrmkeep/What Got Out all dropped real, already-themed
++  // loot with no setId grouping or set bonus attached to any of it.
++  // `setId` is applied to a piece's Normal *and* Heroic *and* Mythic
++  // variant alike (see the matching equipment.json entries) -- the actual
++  // bonus-counting logic in HeroManager.equipmentMods only cares about
++  // which slot is filled and what setId that item carries, never which
++  // exact difficulty-tier id it is, so mixing tiers (e.g. a Heroic ring
++  // with a Normal helmet) still correctly counts toward the same set.
++  // `pieces` below lists one canonical (Normal-tier) id per slot for the
++  // discovery-tracker UI, which is about "found this slot", not "found
++  // every tier of every drop." dragon_helm drops in both Bonewrought
++  // Vault and Frozen Wyrmkeep but is deliberately left out of both --
++  // it already belongs to the dragon_slayer set above and reassigning it
++  // would have pulled a piece out from under that chain reward.
++  {
++    id: 'blackford',
++    name: 'Blackford Garrison Set',
++    pieces: ['knights_blade', 'iron_helm', 'chainmail', 'work_gloves', 'ranger_boots', 'tollkeepers_signet'],
++    bonuses: [
++      { count: 2, mods: { success: 5, injuryResist: 6 }, label: 'Garrison Standard' },
++      { count: 4, mods: { success: 10, injuryResist: 12, gold: 6 }, label: 'Held the Wall' },
++      { count: 6, mods: { success: 16, injuryResist: 18, gold: 10, speed: 8 }, label: 'Siege Veteran' },
++    ],
++  },
++  {
++    id: 'bonewrought',
++    name: 'Bonewrought Vault Set',
++    pieces: ['gravewatchers_band', 'choir_mask', 'silenced_bell'],
++    bonuses: [
++      { count: 2, mods: { success: 10, injuryResist: 12 }, label: 'Vault-Touched' },
++      { count: 3, mods: { success: 18, injuryResist: 22, gold: 12 }, label: 'Choir Silenced' },
++    ],
++  },
++  {
++    id: 'wyrmkeep',
++    name: 'Frozen Wyrmkeep Set',
++    pieces: ['frostfang_claw', 'keepers_warded_charm', 'frostwalker_treads', 'frozen_maw_shield'],
++    bonuses: [
++      { count: 2, mods: { success: 10, speed: 10 }, label: 'Frostbitten' },
++      { count: 3, mods: { success: 18, speed: 16, injuryResist: 10 }, label: "Keeper's Ward" },
++      { count: 4, mods: { success: 26, speed: 22, injuryResist: 16, gold: 12 }, label: 'Wyrmkeep Thawed' },
++    ],
++  },
++  {
++    id: 'what_got_out',
++    name: 'What Got Out Set',
++    pieces: ['cinder_ash_grip', 'loyalists_brand', 'cornered_fang', 'desperate_ends_crown'],
++    bonuses: [
++      { count: 2, mods: { success: 12, gold: 14 }, label: 'Trail Gone Cold' },
++      { count: 3, mods: { success: 20, gold: 24, loot: 8 }, label: 'The Last Loyal' },
++      { count: 4, mods: { success: 30, gold: 34, loot: 14, injuryResist: 12 }, label: 'Cornered' },
++    ],
++  },
+ ];
+ 
+ export const SET_BY_ID: Record<string, ItemSet> = Object.fromEntries(ITEM_SETS.map((s) => [s.id, s]));
+diff --git a/src/game/data/json/equipment.json b/src/game/data/json/equipment.json
+index e73ec7d..bb3d6dd 100644
+--- a/src/game/data/json/equipment.json
++++ b/src/game/data/json/equipment.json
+@@ -46,7 +46,8 @@
+     "stats": {
+       "strength": 3
+     },
+-    "icon": "weapons/Weapon_03.png"
++    "icon": "weapons/Weapon_03.png",
++    "setId": "blackford"
+   },
+   {
+     "id": "silver_rapier",
+@@ -114,7 +115,8 @@
+     "mods": {
+       "injuryResist": 3
+     },
+-    "icon": "armor/Armor_26.png"
++    "icon": "armor/Armor_26.png",
++    "setId": "leather"
+   },
+   {
+     "id": "iron_helm",
+@@ -131,7 +133,8 @@
+     "stats": {
+       "endurance": 2
+     },
+-    "icon": "armor/Armor_24.png"
++    "icon": "armor/Armor_24.png",
++    "setId": "blackford"
+   },
+   {
+     "id": "visored_sallet",
+@@ -214,7 +217,8 @@
+     "stats": {
+       "endurance": 3
+     },
+-    "icon": "armor/Armor_03.png"
++    "icon": "armor/Armor_03.png",
++    "setId": "blackford"
+   },
+   {
+     "id": "guardplate",
+@@ -282,7 +286,8 @@
+     "mods": {
+       "gold": 3
+     },
+-    "icon": "armor/Armor_75.png"
++    "icon": "armor/Armor_75.png",
++    "setId": "blackford"
+   },
+   {
+     "id": "gauntlets",
+@@ -299,7 +304,8 @@
+     "stats": {
+       "strength": 2
+     },
+-    "icon": "armor/Armor_73.png"
++    "icon": "armor/Armor_73.png",
++    "setId": "steel"
+   },
+   {
+     "id": "thief_wraps",
+@@ -316,7 +322,8 @@
+     "stats": {
+       "luck": 4
+     },
+-    "icon": "armor/Armor_84.png"
++    "icon": "armor/Armor_84.png",
++    "setId": "thief"
+   },
+   {
+     "id": "grasp_of_avarice",
+@@ -362,7 +369,8 @@
+     "stats": {
+       "endurance": 2
+     },
+-    "icon": "armor/Armor_53.png"
++    "icon": "armor/Armor_53.png",
++    "setId": "blackford"
+   },
+   {
+     "id": "sevenleague_boots",
+@@ -563,7 +571,8 @@
+     "stats": {
+       "wisdom": 9
+     },
+-    "icon": "armor/Armor_127.png"
++    "icon": "armor/Armor_127.png",
++    "setId": "bonewrought"
+   },
+   {
+     "id": "silenced_bell",
+@@ -581,7 +590,8 @@
+       "luck": 5,
+       "wisdom": 6
+     },
+-    "icon": "misc/Misc_25.png"
++    "icon": "misc/Misc_25.png",
++    "setId": "bonewrought"
+   },
+   {
+     "id": "voidforged_blade",
+@@ -980,7 +990,8 @@
+       "endurance": 3,
+       "wisdom": 5
+     },
+-    "icon": "accessories/Accessory_10.png"
++    "icon": "accessories/Accessory_10.png",
++    "setId": "bonewrought"
+   },
+   {
+     "id": "travelers_band",
+@@ -1274,7 +1285,8 @@
+     },
+     "icon": "accessories/Accessory_02.png",
+     "raidExclusive": false,
+-    "craftable": false
++    "craftable": false,
++    "setId": "blackford"
+   },
+   {
+     "id": "gravewatchers_band_heroic",
+@@ -1295,7 +1307,8 @@
+     },
+     "icon": "accessories/Accessory_04.png",
+     "raidExclusive": true,
+-    "craftable": false
++    "craftable": false,
++    "setId": "bonewrought"
+   },
+   {
+     "id": "gravewatchers_band_mythic",
+@@ -1316,7 +1329,8 @@
+     },
+     "icon": "accessories/Accessory_04.png",
+     "raidExclusive": true,
+-    "craftable": false
++    "craftable": false,
++    "setId": "bonewrought"
+   },
+   {
+     "id": "ashwoven_charm_heroic",
+@@ -1372,7 +1386,8 @@
+     "stats": {
+       "wisdom": 12
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "bonewrought"
+   },
+   {
+     "id": "choir_mask_mythic",
+@@ -1390,7 +1405,8 @@
+     "stats": {
+       "wisdom": 15
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "bonewrought"
+   },
+   {
+     "id": "silenced_bell_heroic",
+@@ -1408,7 +1424,8 @@
+       "wisdom": 8,
+       "luck": 6
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "bonewrought"
+   },
+   {
+     "id": "silenced_bell_mythic",
+@@ -1426,7 +1443,8 @@
+       "wisdom": 10,
+       "luck": 8
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "bonewrought"
+   },
+   {
+     "id": "dragon_helm_heroic",
+@@ -1499,7 +1517,8 @@
+     "mods": {
+       "gold": 4
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "blackford"
+   },
+   {
+     "id": "work_gloves_mythic",
+@@ -1512,7 +1531,8 @@
+     "mods": {
+       "gold": 5
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "blackford"
+   },
+   {
+     "id": "knights_blade_heroic",
+@@ -1529,7 +1549,8 @@
+     "stats": {
+       "strength": 4
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "blackford"
+   },
+   {
+     "id": "knights_blade_mythic",
+@@ -1546,7 +1567,8 @@
+     "stats": {
+       "strength": 5
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "blackford"
+   },
+   {
+     "id": "iron_helm_heroic",
+@@ -1563,7 +1585,8 @@
+     "stats": {
+       "endurance": 3
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "blackford"
+   },
+   {
+     "id": "iron_helm_mythic",
+@@ -1580,7 +1603,8 @@
+     "stats": {
+       "endurance": 3
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "blackford"
+   },
+   {
+     "id": "chainmail_heroic",
+@@ -1597,7 +1621,8 @@
+     "stats": {
+       "endurance": 4
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "blackford"
+   },
+   {
+     "id": "chainmail_mythic",
+@@ -1614,7 +1639,8 @@
+     "stats": {
+       "endurance": 5
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "blackford"
+   },
+   {
+     "id": "ranger_boots_heroic",
+@@ -1630,7 +1656,8 @@
+     "stats": {
+       "endurance": 3
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "blackford"
+   },
+   {
+     "id": "ranger_boots_mythic",
+@@ -1646,7 +1673,8 @@
+     "stats": {
+       "endurance": 3
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "blackford"
+   },
+   {
+     "id": "tollkeepers_signet_heroic",
+@@ -1663,7 +1691,8 @@
+     "stats": {
+       "luck": 4
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "blackford"
+   },
+   {
+     "id": "tollkeepers_signet_mythic",
+@@ -1680,7 +1709,8 @@
+     "stats": {
+       "luck": 5
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "blackford"
+   },
+   {
+     "id": "frostfang_claw",
+@@ -1697,7 +1727,8 @@
+     "stats": {
+       "strength": 6,
+       "endurance": 3
+-    }
++    },
++    "setId": "wyrmkeep"
+   },
+   {
+     "id": "frostfang_claw_heroic",
+@@ -1715,7 +1746,8 @@
+       "strength": 8,
+       "endurance": 4
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "wyrmkeep"
+   },
+   {
+     "id": "frostfang_claw_mythic",
+@@ -1733,7 +1765,8 @@
+       "strength": 10,
+       "endurance": 5
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "wyrmkeep"
+   },
+   {
+     "id": "keepers_warded_charm",
+@@ -1751,7 +1784,8 @@
+     "stats": {
+       "wisdom": 6,
+       "endurance": 4
+-    }
++    },
++    "setId": "wyrmkeep"
+   },
+   {
+     "id": "keepers_warded_charm_heroic",
+@@ -1770,7 +1804,8 @@
+       "wisdom": 8,
+       "endurance": 5
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "wyrmkeep"
+   },
+   {
+     "id": "keepers_warded_charm_mythic",
+@@ -1789,7 +1824,8 @@
+       "wisdom": 10,
+       "endurance": 7
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "wyrmkeep"
+   },
+   {
+     "id": "frostwalker_treads",
+@@ -1805,7 +1841,8 @@
+     },
+     "stats": {
+       "endurance": 7
+-    }
++    },
++    "setId": "wyrmkeep"
+   },
+   {
+     "id": "frostwalker_treads_heroic",
+@@ -1822,7 +1859,8 @@
+     "stats": {
+       "endurance": 9
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "wyrmkeep"
+   },
+   {
+     "id": "frostwalker_treads_mythic",
+@@ -1839,7 +1877,8 @@
+     "stats": {
+       "endurance": 12
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "wyrmkeep"
+   },
+   {
+     "id": "frozen_maw_shield",
+@@ -1855,7 +1894,8 @@
+     },
+     "stats": {
+       "endurance": 11
+-    }
++    },
++    "setId": "wyrmkeep"
+   },
+   {
+     "id": "frozen_maw_shield_heroic",
+@@ -1872,7 +1912,8 @@
+     "stats": {
+       "endurance": 14
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "wyrmkeep"
+   },
+   {
+     "id": "frozen_maw_shield_mythic",
+@@ -1889,7 +1930,8 @@
+     "stats": {
+       "endurance": 19
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "wyrmkeep"
+   },
+   {
+     "id": "cinder_ash_grip",
+@@ -1905,7 +1947,8 @@
+     },
+     "stats": {
+       "strength": 7
+-    }
++    },
++    "setId": "what_got_out"
+   },
+   {
+     "id": "cinder_ash_grip_heroic",
+@@ -1922,7 +1965,8 @@
+     "stats": {
+       "strength": 9
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "what_got_out"
+   },
+   {
+     "id": "cinder_ash_grip_mythic",
+@@ -1939,7 +1983,8 @@
+     "stats": {
+       "strength": 12
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "what_got_out"
+   },
+   {
+     "id": "loyalists_brand",
+@@ -1957,7 +2002,8 @@
+     "stats": {
+       "wisdom": 5,
+       "endurance": 4
+-    }
++    },
++    "setId": "what_got_out"
+   },
+   {
+     "id": "loyalists_brand_heroic",
+@@ -1976,7 +2022,8 @@
+       "wisdom": 6,
+       "endurance": 5
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "what_got_out"
+   },
+   {
+     "id": "loyalists_brand_mythic",
+@@ -1995,7 +2042,8 @@
+       "wisdom": 8,
+       "endurance": 7
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "what_got_out"
+   },
+   {
+     "id": "cornered_fang",
+@@ -2013,7 +2061,8 @@
+     "stats": {
+       "strength": 14,
+       "luck": 4
+-    }
++    },
++    "setId": "what_got_out"
+   },
+   {
+     "id": "cornered_fang_heroic",
+@@ -2032,7 +2081,8 @@
+       "strength": 18,
+       "luck": 5
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "what_got_out"
+   },
+   {
+     "id": "cornered_fang_mythic",
+@@ -2051,7 +2101,8 @@
+       "strength": 24,
+       "luck": 7
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "what_got_out"
+   },
+   {
+     "id": "desperate_ends_crown",
+@@ -2069,7 +2120,8 @@
+     "stats": {
+       "endurance": 10,
+       "wisdom": 5
+-    }
++    },
++    "setId": "what_got_out"
+   },
+   {
+     "id": "desperate_ends_crown_heroic",
+@@ -2088,7 +2140,8 @@
+       "endurance": 13,
+       "wisdom": 6
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "what_got_out"
+   },
+   {
+     "id": "desperate_ends_crown_mythic",
+@@ -2107,7 +2160,8 @@
+       "endurance": 17,
+       "wisdom": 8
+     },
+-    "raidExclusive": true
++    "raidExclusive": true,
++    "setId": "what_got_out"
+   },
+   {
+     "id": "the_last_ember_heroic",
+@@ -2404,5 +2458,402 @@
+     "icon": "accessories/Accessory_07.png",
+     "raidExclusive": false,
+     "craftable": true
++  },
++  {
++    "id": "leather_dagger",
++    "name": "Leatherbound Dagger",
++    "slot": "weapon",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 38,
++    "value": 30,
++    "mods": {
++      "success": 3
++    },
++    "stats": {
++      "strength": 1
++    },
++    "setId": "leather",
++    "icon": "weapons/Weapon_02.png"
++  },
++  {
++    "id": "leather_jerkin",
++    "name": "Leather Jerkin",
++    "slot": "chest",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 42,
++    "value": 32,
++    "mods": {
++      "injuryResist": 4
++    },
++    "setId": "leather",
++    "icon": "armor/Armor_02.png"
++  },
++  {
++    "id": "leather_buckler",
++    "name": "Leather-Strapped Buckler",
++    "slot": "shield",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 40,
++    "value": 30,
++    "mods": {
++      "injuryResist": 3
++    },
++    "setId": "leather",
++    "icon": "shields/Shield_01.png"
++  },
++  {
++    "id": "leather_gloves",
++    "name": "Leather Gloves",
++    "slot": "gloves",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 30,
++    "value": 20,
++    "mods": {
++      "gold": 3
++    },
++    "setId": "leather",
++    "icon": "armor/Armor_04.png"
++  },
++  {
++    "id": "leather_boots",
++    "name": "Leather Boots",
++    "slot": "boots",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 32,
++    "value": 22,
++    "mods": {
++      "speed": 3
++    },
++    "setId": "leather",
++    "icon": "armor/Armor_06.png"
++  },
++  {
++    "id": "leather_cord_ring",
++    "name": "Leather-Cord Ring",
++    "slot": "ring",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 28,
++    "value": 24,
++    "mods": {
++      "gold": 3
++    },
++    "setId": "leather",
++    "icon": "accessories/Accessory_03.png"
++  },
++  {
++    "id": "leather_talisman",
++    "name": "Leather Talisman",
++    "slot": "amulet",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 28,
++    "value": 24,
++    "mods": {
++      "xp": 3
++    },
++    "setId": "leather",
++    "icon": "accessories/Accessory_12.png"
++  },
++  {
++    "id": "leather_cloak",
++    "name": "Leather Cloak",
++    "slot": "cloak",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 34,
++    "value": 26,
++    "mods": {
++      "speed": 3
++    },
++    "setId": "leather",
++    "icon": "armor/Armor_07.png"
++  },
++  {
++    "id": "steel_longsword",
++    "name": "Steel Longsword",
++    "slot": "weapon",
++    "rarity": "uncommon",
++    "reqLevel": 5,
++    "maxDurability": 72,
++    "value": 165,
++    "mods": {
++      "success": 6,
++      "gold": 3
++    },
++    "stats": {
++      "strength": 3
++    },
++    "setId": "steel",
++    "icon": "weapons/Weapon_04.png"
++  },
++  {
++    "id": "steel_helm",
++    "name": "Steel Helm",
++    "slot": "helmet",
++    "rarity": "uncommon",
++    "reqLevel": 5,
++    "maxDurability": 62,
++    "value": 145,
++    "mods": {
++      "success": 2,
++      "injuryResist": 7
++    },
++    "stats": {
++      "endurance": 2
++    },
++    "setId": "steel",
++    "icon": "armor/Armor_08.png"
++  },
++  {
++    "id": "steel_cuirass",
++    "name": "Steel Cuirass",
++    "slot": "chest",
++    "rarity": "uncommon",
++    "reqLevel": 5,
++    "maxDurability": 78,
++    "value": 215,
++    "mods": {
++      "success": 3,
++      "injuryResist": 9
++    },
++    "stats": {
++      "endurance": 3
++    },
++    "setId": "steel",
++    "icon": "armor/Armor_11.png"
++  },
++  {
++    "id": "steel_kite_shield",
++    "name": "Steel Kite Shield",
++    "slot": "shield",
++    "rarity": "uncommon",
++    "reqLevel": 5,
++    "maxDurability": 80,
++    "value": 200,
++    "mods": {
++      "injuryResist": 10
++    },
++    "stats": {
++      "endurance": 2
++    },
++    "setId": "steel",
++    "icon": "shields/Shield_02.png"
++  },
++  {
++    "id": "steel_greaves",
++    "name": "Steel Greaves",
++    "slot": "boots",
++    "rarity": "uncommon",
++    "reqLevel": 5,
++    "maxDurability": 60,
++    "value": 138,
++    "mods": {
++      "speed": 7
++    },
++    "stats": {
++      "endurance": 2
++    },
++    "setId": "steel",
++    "icon": "armor/Armor_12.png"
++  },
++  {
++    "id": "steel_band",
++    "name": "Steel Band",
++    "slot": "ring",
++    "rarity": "uncommon",
++    "reqLevel": 5,
++    "maxDurability": 58,
++    "value": 150,
++    "mods": {
++      "success": 4,
++      "gold": 4
++    },
++    "setId": "steel",
++    "icon": "accessories/Accessory_16.png"
++  },
++  {
++    "id": "steel_locket",
++    "name": "Steel Locket",
++    "slot": "amulet",
++    "rarity": "uncommon",
++    "reqLevel": 5,
++    "maxDurability": 58,
++    "value": 150,
++    "mods": {
++      "xp": 12
++    },
++    "stats": {
++      "wisdom": 2
++    },
++    "setId": "steel",
++    "icon": "accessories/Accessory_18.png"
++  },
++  {
++    "id": "steel_clasped_cloak",
++    "name": "Steel-Clasped Cloak",
++    "slot": "cloak",
++    "rarity": "uncommon",
++    "reqLevel": 5,
++    "maxDurability": 64,
++    "value": 155,
++    "mods": {
++      "injuryResist": 6,
++      "speed": 3
++    },
++    "setId": "steel",
++    "icon": "armor/Armor_100.png"
++  },
++  {
++    "id": "cutpurse_stiletto",
++    "name": "Cutpurse's Stiletto",
++    "slot": "weapon",
++    "rarity": "rare",
++    "reqLevel": 10,
++    "maxDurability": 85,
++    "value": 480,
++    "mods": {
++      "success": 6,
++      "speed": 6
++    },
++    "stats": {
++      "luck": 3,
++      "strength": 2
++    },
++    "setId": "thief",
++    "icon": "weapons/Weapon_05.png"
++  },
++  {
++    "id": "cutpurse_hood",
++    "name": "Cutpurse's Hood",
++    "slot": "helmet",
++    "rarity": "rare",
++    "reqLevel": 10,
++    "maxDurability": 78,
++    "value": 440,
++    "mods": {
++      "gold": 10,
++      "loot": 4
++    },
++    "stats": {
++      "luck": 3
++    },
++    "setId": "thief",
++    "icon": "armor/Armor_101.png"
++  },
++  {
++    "id": "cutpurse_leathers",
++    "name": "Cutpurse's Leathers",
++    "slot": "chest",
++    "rarity": "rare",
++    "reqLevel": 10,
++    "maxDurability": 90,
++    "value": 500,
++    "mods": {
++      "success": 4,
++      "injuryResist": 8
++    },
++    "stats": {
++      "endurance": 3,
++      "luck": 2
++    },
++    "setId": "thief",
++    "icon": "armor/Armor_102.png"
++  },
++  {
++    "id": "cutpurse_buckler",
++    "name": "Cutpurse's Buckler",
++    "slot": "shield",
++    "rarity": "rare",
++    "reqLevel": 10,
++    "maxDurability": 82,
++    "value": 460,
++    "mods": {
++      "speed": 8,
++      "injuryResist": 6
++    },
++    "stats": {
++      "luck": 2
++    },
++    "setId": "thief",
++    "icon": "shields/Shield_03.png"
++  },
++  {
++    "id": "cutpurse_softboots",
++    "name": "Cutpurse's Softboots",
++    "slot": "boots",
++    "rarity": "rare",
++    "reqLevel": 10,
++    "maxDurability": 82,
++    "value": 470,
++    "mods": {
++      "speed": 13
++    },
++    "stats": {
++      "luck": 2,
++      "endurance": 2
++    },
++    "setId": "thief",
++    "icon": "armor/Armor_103.png"
++  },
++  {
++    "id": "cutpurse_signet",
++    "name": "Cutpurse's Signet",
++    "slot": "ring",
++    "rarity": "rare",
++    "reqLevel": 10,
++    "maxDurability": 76,
++    "value": 510,
++    "mods": {
++      "gold": 13,
++      "loot": 5
++    },
++    "stats": {
++      "luck": 5
++    },
++    "setId": "thief",
++    "icon": "accessories/Accessory_19.png"
++  },
++  {
++    "id": "cutpurse_locket",
++    "name": "Cutpurse's Locket",
++    "slot": "amulet",
++    "rarity": "rare",
++    "reqLevel": 10,
++    "maxDurability": 76,
++    "value": 500,
++    "mods": {
++      "xp": 16,
++      "gold": 6
++    },
++    "stats": {
++      "wisdom": 3,
++      "luck": 2
++    },
++    "setId": "thief",
++    "icon": "accessories/Accessory_20.png"
++  },
++  {
++    "id": "cutpurse_cloak",
++    "name": "Cutpurse's Cloak",
++    "slot": "cloak",
++    "rarity": "rare",
++    "reqLevel": 10,
++    "maxDurability": 80,
++    "value": 520,
++    "mods": {
++      "loot": 8,
++      "speed": 6
++    },
++    "stats": {
++      "luck": 4
++    },
++    "setId": "thief",
++    "icon": "armor/Armor_104.png"
+   }
+ ]
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 9e70258..9e85d97 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -9,7 +9,7 @@ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+ export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+ 
+-export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'shield' | 'gloves' | 'boots' | 'ring' | 'amulet';
++export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'shield' | 'gloves' | 'boots' | 'ring' | 'amulet' | 'cloak';
+ 
+ /**
+  * One material per Harvest/Gathering node. Deliberately 1:1 with the node
+diff --git a/src/ui/icons.tsx b/src/ui/icons.tsx
+index 1be1484..0f6ea51 100644
+--- a/src/ui/icons.tsx
++++ b/src/ui/icons.tsx
+@@ -8,7 +8,7 @@ import { EquipSlot } from '../game/types';
+  */
+ const SLOT_FALLBACK: Record<EquipSlot, string> = {
+   weapon: '⚔️', helmet: '🪖', chest: '🎽', shield: '🛡️',
+-  gloves: '🧤', boots: '👢', ring: '💍', amulet: '📿',
++  gloves: '🧤', boots: '👢', ring: '💍', amulet: '📿', cloak: '🧣',
+ };
+ 
+ const CATEGORY_FALLBACK: Record<'gear' | 'consumable' | 'enchant', string> = {
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index a2081ab..1458a7b 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -10,7 +10,7 @@ import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { describeMods, describeStats, formatGold, RARITY_COLOR } from '../../game/util';
+ import { ItemIcon, ConsumableIcon } from '../icons';
+ 
+-const SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet'];
++const SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet', 'cloak'];
+ 
+ function RarityPill({ rarity }: { rarity: Rarity }) {
+   return (
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 59b2301..12486a0 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -66,7 +66,7 @@ const SCHEMAS = {
+     fields: {
+       id: { type: 'string', required: true, slug: true },
+       name: { type: 'string', required: true },
+-      slot: { type: 'enum', required: true, options: ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet'] },
++      slot: { type: 'enum', required: true, options: ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet', 'cloak'] },
+       rarity: { type: 'enum', required: true, options: ['common', 'uncommon', 'rare', 'epic', 'legendary'] },
+       reqLevel: { type: 'number', required: true },
+       maxDurability: { type: 'number', required: true },

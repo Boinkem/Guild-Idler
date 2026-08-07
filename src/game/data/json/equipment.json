@@ -46,7 +46,8 @@
     "stats": {
       "strength": 3
     },
-    "icon": "weapons/Weapon_03.png"
+    "icon": "weapons/Weapon_03.png",
+    "setId": "blackford"
   },
   {
     "id": "silver_rapier",
@@ -114,7 +115,8 @@
     "mods": {
       "injuryResist": 3
     },
-    "icon": "armor/Armor_26.png"
+    "icon": "armor/Armor_26.png",
+    "setId": "leather"
   },
   {
     "id": "iron_helm",
@@ -131,7 +133,8 @@
     "stats": {
       "endurance": 2
     },
-    "icon": "armor/Armor_24.png"
+    "icon": "armor/Armor_24.png",
+    "setId": "blackford"
   },
   {
     "id": "visored_sallet",
@@ -214,7 +217,8 @@
     "stats": {
       "endurance": 3
     },
-    "icon": "armor/Armor_03.png"
+    "icon": "armor/Armor_03.png",
+    "setId": "blackford"
   },
   {
     "id": "guardplate",
@@ -282,7 +286,8 @@
     "mods": {
       "gold": 3
     },
-    "icon": "armor/Armor_75.png"
+    "icon": "armor/Armor_75.png",
+    "setId": "blackford"
   },
   {
     "id": "gauntlets",
@@ -299,7 +304,8 @@
     "stats": {
       "strength": 2
     },
-    "icon": "armor/Armor_73.png"
+    "icon": "armor/Armor_73.png",
+    "setId": "steel"
   },
   {
     "id": "thief_wraps",
@@ -316,7 +322,8 @@
     "stats": {
       "luck": 4
     },
-    "icon": "armor/Armor_84.png"
+    "icon": "armor/Armor_84.png",
+    "setId": "thief"
   },
   {
     "id": "grasp_of_avarice",
@@ -362,7 +369,8 @@
     "stats": {
       "endurance": 2
     },
-    "icon": "armor/Armor_53.png"
+    "icon": "armor/Armor_53.png",
+    "setId": "blackford"
   },
   {
     "id": "sevenleague_boots",
@@ -563,7 +571,8 @@
     "stats": {
       "wisdom": 9
     },
-    "icon": "armor/Armor_127.png"
+    "icon": "armor/Armor_127.png",
+    "setId": "bonewrought"
   },
   {
     "id": "silenced_bell",
@@ -581,7 +590,8 @@
       "luck": 5,
       "wisdom": 6
     },
-    "icon": "misc/Misc_25.png"
+    "icon": "misc/Misc_25.png",
+    "setId": "bonewrought"
   },
   {
     "id": "voidforged_blade",
@@ -980,7 +990,8 @@
       "endurance": 3,
       "wisdom": 5
     },
-    "icon": "accessories/Accessory_10.png"
+    "icon": "accessories/Accessory_10.png",
+    "setId": "bonewrought"
   },
   {
     "id": "travelers_band",
@@ -1274,7 +1285,8 @@
     },
     "icon": "accessories/Accessory_02.png",
     "raidExclusive": false,
-    "craftable": false
+    "craftable": false,
+    "setId": "blackford"
   },
   {
     "id": "gravewatchers_band_heroic",
@@ -1295,7 +1307,8 @@
     },
     "icon": "accessories/Accessory_04.png",
     "raidExclusive": true,
-    "craftable": false
+    "craftable": false,
+    "setId": "bonewrought"
   },
   {
     "id": "gravewatchers_band_mythic",
@@ -1316,7 +1329,8 @@
     },
     "icon": "accessories/Accessory_04.png",
     "raidExclusive": true,
-    "craftable": false
+    "craftable": false,
+    "setId": "bonewrought"
   },
   {
     "id": "ashwoven_charm_heroic",
@@ -1372,7 +1386,8 @@
     "stats": {
       "wisdom": 12
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "bonewrought"
   },
   {
     "id": "choir_mask_mythic",
@@ -1390,7 +1405,8 @@
     "stats": {
       "wisdom": 15
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "bonewrought"
   },
   {
     "id": "silenced_bell_heroic",
@@ -1408,7 +1424,8 @@
       "wisdom": 8,
       "luck": 6
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "bonewrought"
   },
   {
     "id": "silenced_bell_mythic",
@@ -1426,7 +1443,8 @@
       "wisdom": 10,
       "luck": 8
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "bonewrought"
   },
   {
     "id": "dragon_helm_heroic",
@@ -1499,7 +1517,8 @@
     "mods": {
       "gold": 4
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "blackford"
   },
   {
     "id": "work_gloves_mythic",
@@ -1512,7 +1531,8 @@
     "mods": {
       "gold": 5
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "blackford"
   },
   {
     "id": "knights_blade_heroic",
@@ -1529,7 +1549,8 @@
     "stats": {
       "strength": 4
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "blackford"
   },
   {
     "id": "knights_blade_mythic",
@@ -1546,7 +1567,8 @@
     "stats": {
       "strength": 5
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "blackford"
   },
   {
     "id": "iron_helm_heroic",
@@ -1563,7 +1585,8 @@
     "stats": {
       "endurance": 3
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "blackford"
   },
   {
     "id": "iron_helm_mythic",
@@ -1580,7 +1603,8 @@
     "stats": {
       "endurance": 3
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "blackford"
   },
   {
     "id": "chainmail_heroic",
@@ -1597,7 +1621,8 @@
     "stats": {
       "endurance": 4
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "blackford"
   },
   {
     "id": "chainmail_mythic",
@@ -1614,7 +1639,8 @@
     "stats": {
       "endurance": 5
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "blackford"
   },
   {
     "id": "ranger_boots_heroic",
@@ -1630,7 +1656,8 @@
     "stats": {
       "endurance": 3
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "blackford"
   },
   {
     "id": "ranger_boots_mythic",
@@ -1646,7 +1673,8 @@
     "stats": {
       "endurance": 3
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "blackford"
   },
   {
     "id": "tollkeepers_signet_heroic",
@@ -1663,7 +1691,8 @@
     "stats": {
       "luck": 4
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "blackford"
   },
   {
     "id": "tollkeepers_signet_mythic",
@@ -1680,7 +1709,8 @@
     "stats": {
       "luck": 5
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "blackford"
   },
   {
     "id": "frostfang_claw",
@@ -1697,7 +1727,8 @@
     "stats": {
       "strength": 6,
       "endurance": 3
-    }
+    },
+    "setId": "wyrmkeep"
   },
   {
     "id": "frostfang_claw_heroic",
@@ -1715,7 +1746,8 @@
       "strength": 8,
       "endurance": 4
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "wyrmkeep"
   },
   {
     "id": "frostfang_claw_mythic",
@@ -1733,7 +1765,8 @@
       "strength": 10,
       "endurance": 5
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "wyrmkeep"
   },
   {
     "id": "keepers_warded_charm",
@@ -1751,7 +1784,8 @@
     "stats": {
       "wisdom": 6,
       "endurance": 4
-    }
+    },
+    "setId": "wyrmkeep"
   },
   {
     "id": "keepers_warded_charm_heroic",
@@ -1770,7 +1804,8 @@
       "wisdom": 8,
       "endurance": 5
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "wyrmkeep"
   },
   {
     "id": "keepers_warded_charm_mythic",
@@ -1789,7 +1824,8 @@
       "wisdom": 10,
       "endurance": 7
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "wyrmkeep"
   },
   {
     "id": "frostwalker_treads",
@@ -1805,7 +1841,8 @@
     },
     "stats": {
       "endurance": 7
-    }
+    },
+    "setId": "wyrmkeep"
   },
   {
     "id": "frostwalker_treads_heroic",
@@ -1822,7 +1859,8 @@
     "stats": {
       "endurance": 9
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "wyrmkeep"
   },
   {
     "id": "frostwalker_treads_mythic",
@@ -1839,7 +1877,8 @@
     "stats": {
       "endurance": 12
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "wyrmkeep"
   },
   {
     "id": "frozen_maw_shield",
@@ -1855,7 +1894,8 @@
     },
     "stats": {
       "endurance": 11
-    }
+    },
+    "setId": "wyrmkeep"
   },
   {
     "id": "frozen_maw_shield_heroic",
@@ -1872,7 +1912,8 @@
     "stats": {
       "endurance": 14
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "wyrmkeep"
   },
   {
     "id": "frozen_maw_shield_mythic",
@@ -1889,7 +1930,8 @@
     "stats": {
       "endurance": 19
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "wyrmkeep"
   },
   {
     "id": "cinder_ash_grip",
@@ -1905,7 +1947,8 @@
     },
     "stats": {
       "strength": 7
-    }
+    },
+    "setId": "what_got_out"
   },
   {
     "id": "cinder_ash_grip_heroic",
@@ -1922,7 +1965,8 @@
     "stats": {
       "strength": 9
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "what_got_out"
   },
   {
     "id": "cinder_ash_grip_mythic",
@@ -1939,7 +1983,8 @@
     "stats": {
       "strength": 12
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "what_got_out"
   },
   {
     "id": "loyalists_brand",
@@ -1957,7 +2002,8 @@
     "stats": {
       "wisdom": 5,
       "endurance": 4
-    }
+    },
+    "setId": "what_got_out"
   },
   {
     "id": "loyalists_brand_heroic",
@@ -1976,7 +2022,8 @@
       "wisdom": 6,
       "endurance": 5
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "what_got_out"
   },
   {
     "id": "loyalists_brand_mythic",
@@ -1995,7 +2042,8 @@
       "wisdom": 8,
       "endurance": 7
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "what_got_out"
   },
   {
     "id": "cornered_fang",
@@ -2013,7 +2061,8 @@
     "stats": {
       "strength": 14,
       "luck": 4
-    }
+    },
+    "setId": "what_got_out"
   },
   {
     "id": "cornered_fang_heroic",
@@ -2032,7 +2081,8 @@
       "strength": 18,
       "luck": 5
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "what_got_out"
   },
   {
     "id": "cornered_fang_mythic",
@@ -2051,7 +2101,8 @@
       "strength": 24,
       "luck": 7
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "what_got_out"
   },
   {
     "id": "desperate_ends_crown",
@@ -2069,7 +2120,8 @@
     "stats": {
       "endurance": 10,
       "wisdom": 5
-    }
+    },
+    "setId": "what_got_out"
   },
   {
     "id": "desperate_ends_crown_heroic",
@@ -2088,7 +2140,8 @@
       "endurance": 13,
       "wisdom": 6
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "what_got_out"
   },
   {
     "id": "desperate_ends_crown_mythic",
@@ -2107,7 +2160,8 @@
       "endurance": 17,
       "wisdom": 8
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "setId": "what_got_out"
   },
   {
     "id": "the_last_ember_heroic",
@@ -2404,5 +2458,402 @@
     "icon": "accessories/Accessory_07.png",
     "raidExclusive": false,
     "craftable": true
+  },
+  {
+    "id": "leather_dagger",
+    "name": "Leatherbound Dagger",
+    "slot": "weapon",
+    "rarity": "common",
+    "reqLevel": 1,
+    "maxDurability": 38,
+    "value": 30,
+    "mods": {
+      "success": 3
+    },
+    "stats": {
+      "strength": 1
+    },
+    "setId": "leather",
+    "icon": "weapons/Weapon_02.png"
+  },
+  {
+    "id": "leather_jerkin",
+    "name": "Leather Jerkin",
+    "slot": "chest",
+    "rarity": "common",
+    "reqLevel": 1,
+    "maxDurability": 42,
+    "value": 32,
+    "mods": {
+      "injuryResist": 4
+    },
+    "setId": "leather",
+    "icon": "armor/Armor_02.png"
+  },
+  {
+    "id": "leather_buckler",
+    "name": "Leather-Strapped Buckler",
+    "slot": "shield",
+    "rarity": "common",
+    "reqLevel": 1,
+    "maxDurability": 40,
+    "value": 30,
+    "mods": {
+      "injuryResist": 3
+    },
+    "setId": "leather",
+    "icon": "shields/Shield_01.png"
+  },
+  {
+    "id": "leather_gloves",
+    "name": "Leather Gloves",
+    "slot": "gloves",
+    "rarity": "common",
+    "reqLevel": 1,
+    "maxDurability": 30,
+    "value": 20,
+    "mods": {
+      "gold": 3
+    },
+    "setId": "leather",
+    "icon": "armor/Armor_04.png"
+  },
+  {
+    "id": "leather_boots",
+    "name": "Leather Boots",
+    "slot": "boots",
+    "rarity": "common",
+    "reqLevel": 1,
+    "maxDurability": 32,
+    "value": 22,
+    "mods": {
+      "speed": 3
+    },
+    "setId": "leather",
+    "icon": "armor/Armor_06.png"
+  },
+  {
+    "id": "leather_cord_ring",
+    "name": "Leather-Cord Ring",
+    "slot": "ring",
+    "rarity": "common",
+    "reqLevel": 1,
+    "maxDurability": 28,
+    "value": 24,
+    "mods": {
+      "gold": 3
+    },
+    "setId": "leather",
+    "icon": "accessories/Accessory_03.png"
+  },
+  {
+    "id": "leather_talisman",
+    "name": "Leather Talisman",
+    "slot": "amulet",
+    "rarity": "common",
+    "reqLevel": 1,
+    "maxDurability": 28,
+    "value": 24,
+    "mods": {
+      "xp": 3
+    },
+    "setId": "leather",
+    "icon": "accessories/Accessory_12.png"
+  },
+  {
+    "id": "leather_cloak",
+    "name": "Leather Cloak",
+    "slot": "cloak",
+    "rarity": "common",
+    "reqLevel": 1,
+    "maxDurability": 34,
+    "value": 26,
+    "mods": {
+      "speed": 3
+    },
+    "setId": "leather",
+    "icon": "armor/Armor_07.png"
+  },
+  {
+    "id": "steel_longsword",
+    "name": "Steel Longsword",
+    "slot": "weapon",
+    "rarity": "uncommon",
+    "reqLevel": 5,
+    "maxDurability": 72,
+    "value": 165,
+    "mods": {
+      "success": 6,
+      "gold": 3
+    },
+    "stats": {
+      "strength": 3
+    },
+    "setId": "steel",
+    "icon": "weapons/Weapon_04.png"
+  },
+  {
+    "id": "steel_helm",
+    "name": "Steel Helm",
+    "slot": "helmet",
+    "rarity": "uncommon",
+    "reqLevel": 5,
+    "maxDurability": 62,
+    "value": 145,
+    "mods": {
+      "success": 2,
+      "injuryResist": 7
+    },
+    "stats": {
+      "endurance": 2
+    },
+    "setId": "steel",
+    "icon": "armor/Armor_08.png"
+  },
+  {
+    "id": "steel_cuirass",
+    "name": "Steel Cuirass",
+    "slot": "chest",
+    "rarity": "uncommon",
+    "reqLevel": 5,
+    "maxDurability": 78,
+    "value": 215,
+    "mods": {
+      "success": 3,
+      "injuryResist": 9
+    },
+    "stats": {
+      "endurance": 3
+    },
+    "setId": "steel",
+    "icon": "armor/Armor_11.png"
+  },
+  {
+    "id": "steel_kite_shield",
+    "name": "Steel Kite Shield",
+    "slot": "shield",
+    "rarity": "uncommon",
+    "reqLevel": 5,
+    "maxDurability": 80,
+    "value": 200,
+    "mods": {
+      "injuryResist": 10
+    },
+    "stats": {
+      "endurance": 2
+    },
+    "setId": "steel",
+    "icon": "shields/Shield_02.png"
+  },
+  {
+    "id": "steel_greaves",
+    "name": "Steel Greaves",
+    "slot": "boots",
+    "rarity": "uncommon",
+    "reqLevel": 5,
+    "maxDurability": 60,
+    "value": 138,
+    "mods": {
+      "speed": 7
+    },
+    "stats": {
+      "endurance": 2
+    },
+    "setId": "steel",
+    "icon": "armor/Armor_12.png"
+  },
+  {
+    "id": "steel_band",
+    "name": "Steel Band",
+    "slot": "ring",
+    "rarity": "uncommon",
+    "reqLevel": 5,
+    "maxDurability": 58,
+    "value": 150,
+    "mods": {
+      "success": 4,
+      "gold": 4
+    },
+    "setId": "steel",
+    "icon": "accessories/Accessory_16.png"
+  },
+  {
+    "id": "steel_locket",
+    "name": "Steel Locket",
+    "slot": "amulet",
+    "rarity": "uncommon",
+    "reqLevel": 5,
+    "maxDurability": 58,
+    "value": 150,
+    "mods": {
+      "xp": 12
+    },
+    "stats": {
+      "wisdom": 2
+    },
+    "setId": "steel",
+    "icon": "accessories/Accessory_18.png"
+  },
+  {
+    "id": "steel_clasped_cloak",
+    "name": "Steel-Clasped Cloak",
+    "slot": "cloak",
+    "rarity": "uncommon",
+    "reqLevel": 5,
+    "maxDurability": 64,
+    "value": 155,
+    "mods": {
+      "injuryResist": 6,
+      "speed": 3
+    },
+    "setId": "steel",
+    "icon": "armor/Armor_100.png"
+  },
+  {
+    "id": "cutpurse_stiletto",
+    "name": "Cutpurse's Stiletto",
+    "slot": "weapon",
+    "rarity": "rare",
+    "reqLevel": 10,
+    "maxDurability": 85,
+    "value": 480,
+    "mods": {
+      "success": 6,
+      "speed": 6
+    },
+    "stats": {
+      "luck": 3,
+      "strength": 2
+    },
+    "setId": "thief",
+    "icon": "weapons/Weapon_05.png"
+  },
+  {
+    "id": "cutpurse_hood",
+    "name": "Cutpurse's Hood",
+    "slot": "helmet",
+    "rarity": "rare",
+    "reqLevel": 10,
+    "maxDurability": 78,
+    "value": 440,
+    "mods": {
+      "gold": 10,
+      "loot": 4
+    },
+    "stats": {
+      "luck": 3
+    },
+    "setId": "thief",
+    "icon": "armor/Armor_101.png"
+  },
+  {
+    "id": "cutpurse_leathers",
+    "name": "Cutpurse's Leathers",
+    "slot": "chest",
+    "rarity": "rare",
+    "reqLevel": 10,
+    "maxDurability": 90,
+    "value": 500,
+    "mods": {
+      "success": 4,
+      "injuryResist": 8
+    },
+    "stats": {
+      "endurance": 3,
+      "luck": 2
+    },
+    "setId": "thief",
+    "icon": "armor/Armor_102.png"
+  },
+  {
+    "id": "cutpurse_buckler",
+    "name": "Cutpurse's Buckler",
+    "slot": "shield",
+    "rarity": "rare",
+    "reqLevel": 10,
+    "maxDurability": 82,
+    "value": 460,
+    "mods": {
+      "speed": 8,
+      "injuryResist": 6
+    },
+    "stats": {
+      "luck": 2
+    },
+    "setId": "thief",
+    "icon": "shields/Shield_03.png"
+  },
+  {
+    "id": "cutpurse_softboots",
+    "name": "Cutpurse's Softboots",
+    "slot": "boots",
+    "rarity": "rare",
+    "reqLevel": 10,
+    "maxDurability": 82,
+    "value": 470,
+    "mods": {
+      "speed": 13
+    },
+    "stats": {
+      "luck": 2,
+      "endurance": 2
+    },
+    "setId": "thief",
+    "icon": "armor/Armor_103.png"
+  },
+  {
+    "id": "cutpurse_signet",
+    "name": "Cutpurse's Signet",
+    "slot": "ring",
+    "rarity": "rare",
+    "reqLevel": 10,
+    "maxDurability": 76,
+    "value": 510,
+    "mods": {
+      "gold": 13,
+      "loot": 5
+    },
+    "stats": {
+      "luck": 5
+    },
+    "setId": "thief",
+    "icon": "accessories/Accessory_19.png"
+  },
+  {
+    "id": "cutpurse_locket",
+    "name": "Cutpurse's Locket",
+    "slot": "amulet",
+    "rarity": "rare",
+    "reqLevel": 10,
+    "maxDurability": 76,
+    "value": 500,
+    "mods": {
+      "xp": 16,
+      "gold": 6
+    },
+    "stats": {
+      "wisdom": 3,
+      "luck": 2
+    },
+    "setId": "thief",
+    "icon": "accessories/Accessory_20.png"
+  },
+  {
+    "id": "cutpurse_cloak",
+    "name": "Cutpurse's Cloak",
+    "slot": "cloak",
+    "rarity": "rare",
+    "reqLevel": 10,
+    "maxDurability": 80,
+    "value": 520,
+    "mods": {
+      "loot": 8,
+      "speed": 6
+    },
+    "stats": {
+      "luck": 4
+    },
+    "setId": "thief",
+    "icon": "armor/Armor_104.png"
   }
 ]

@@ -66,7 +66,7 @@ const SCHEMAS = {
     fields: {
       id: { type: 'string', required: true, slug: true },
       name: { type: 'string', required: true },
-      slot: { type: 'enum', required: true, options: ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet'] },
+      slot: { type: 'enum', required: true, options: ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet', 'cloak'] },
       rarity: { type: 'enum', required: true, options: ['common', 'uncommon', 'rare', 'epic', 'legendary'] },
       reqLevel: { type: 'number', required: true },
       maxDurability: { type: 'number', required: true },

@@ -101,6 +101,111 @@ export const ITEM_SETS: ItemSet[] = [
       { count: 7, mods: { success: 45, gold: 70, loot: 40, injuryResist: 45, xp: 50, speed: 20 }, label: 'What Is Left of It' },
     ],
   },
+  // Three parallel early/mid-game material-tier sets, one per rarity rung
+  // (common/uncommon/rare) rather than tied to a specific chain or raid --
+  // the equipment pool below rare was previously thin (a single leather_cap
+  // with no set at all), so these exist to give a real, complete
+  // progression a fresh guild can chase before the chain/raid reward sets
+  // above become reachable. All three are full 9-piece sets (every slot,
+  // including the new `cloak` slot) -- three items in each fold in a
+  // pre-existing piece that already fit the theme perfectly but had never
+  // been given a setId (leather_cap, gauntlets, thief_wraps), rather than
+  // creating redundant near-duplicates.
+  {
+    id: 'leather',
+    name: 'Leather Set',
+    pieces: [
+      'leather_dagger', 'leather_cap', 'leather_jerkin', 'leather_buckler',
+      'leather_gloves', 'leather_boots', 'leather_cord_ring', 'leather_talisman', 'leather_cloak',
+    ],
+    bonuses: [
+      { count: 3, mods: { success: 3, injuryResist: 3 }, label: 'Well-Worn' },
+      { count: 6, mods: { success: 6, injuryResist: 6, gold: 5 }, label: 'Broken In' },
+      { count: 9, mods: { success: 10, injuryResist: 10, gold: 8, speed: 8 }, label: 'Head to Toe in Leather' },
+    ],
+  },
+  {
+    id: 'steel',
+    name: 'Steel Set',
+    pieces: [
+      'steel_longsword', 'steel_helm', 'steel_cuirass', 'steel_kite_shield',
+      'gauntlets', 'steel_greaves', 'steel_band', 'steel_locket', 'steel_clasped_cloak',
+    ],
+    bonuses: [
+      { count: 3, mods: { success: 5, injuryResist: 6 }, label: 'Standard Issue' },
+      { count: 6, mods: { success: 10, injuryResist: 12, gold: 8 }, label: "Smith's Pride" },
+      { count: 9, mods: { success: 16, injuryResist: 18, gold: 12, speed: 10 }, label: 'Head to Toe in Steel' },
+    ],
+  },
+  {
+    id: 'thief',
+    name: "Cutpurse's Set",
+    pieces: [
+      'cutpurse_stiletto', 'cutpurse_hood', 'cutpurse_leathers', 'cutpurse_buckler',
+      'thief_wraps', 'cutpurse_softboots', 'cutpurse_signet', 'cutpurse_locket', 'cutpurse_cloak',
+    ],
+    bonuses: [
+      { count: 3, mods: { gold: 10, loot: 4, speed: 5 }, label: 'Light Fingers' },
+      { count: 6, mods: { gold: 20, loot: 10, speed: 10, success: 6 }, label: "Guild of Cutpurses" },
+      { count: 9, mods: { gold: 32, loot: 16, speed: 16, success: 10, injuryResist: 8 }, label: 'Nobody Saw a Thing' },
+    ],
+  },
+  // One set per raid, assembled entirely from that raid's own existing
+  // drop pool rather than new items -- requiem (above) was the only raid
+  // that had this treatment before now; Blackford Keep/Bonewrought
+  // Vault/Frozen Wyrmkeep/What Got Out all dropped real, already-themed
+  // loot with no setId grouping or set bonus attached to any of it.
+  // `setId` is applied to a piece's Normal *and* Heroic *and* Mythic
+  // variant alike (see the matching equipment.json entries) -- the actual
+  // bonus-counting logic in HeroManager.equipmentMods only cares about
+  // which slot is filled and what setId that item carries, never which
+  // exact difficulty-tier id it is, so mixing tiers (e.g. a Heroic ring
+  // with a Normal helmet) still correctly counts toward the same set.
+  // `pieces` below lists one canonical (Normal-tier) id per slot for the
+  // discovery-tracker UI, which is about "found this slot", not "found
+  // every tier of every drop." dragon_helm drops in both Bonewrought
+  // Vault and Frozen Wyrmkeep but is deliberately left out of both --
+  // it already belongs to the dragon_slayer set above and reassigning it
+  // would have pulled a piece out from under that chain reward.
+  {
+    id: 'blackford',
+    name: 'Blackford Garrison Set',
+    pieces: ['knights_blade', 'iron_helm', 'chainmail', 'work_gloves', 'ranger_boots', 'tollkeepers_signet'],
+    bonuses: [
+      { count: 2, mods: { success: 5, injuryResist: 6 }, label: 'Garrison Standard' },
+      { count: 4, mods: { success: 10, injuryResist: 12, gold: 6 }, label: 'Held the Wall' },
+      { count: 6, mods: { success: 16, injuryResist: 18, gold: 10, speed: 8 }, label: 'Siege Veteran' },
+    ],
+  },
+  {
+    id: 'bonewrought',
+    name: 'Bonewrought Vault Set',
+    pieces: ['gravewatchers_band', 'choir_mask', 'silenced_bell'],
+    bonuses: [
+      { count: 2, mods: { success: 10, injuryResist: 12 }, label: 'Vault-Touched' },
+      { count: 3, mods: { success: 18, injuryResist: 22, gold: 12 }, label: 'Choir Silenced' },
+    ],
+  },
+  {
+    id: 'wyrmkeep',
+    name: 'Frozen Wyrmkeep Set',
+    pieces: ['frostfang_claw', 'keepers_warded_charm', 'frostwalker_treads', 'frozen_maw_shield'],
+    bonuses: [
+      { count: 2, mods: { success: 10, speed: 10 }, label: 'Frostbitten' },
+      { count: 3, mods: { success: 18, speed: 16, injuryResist: 10 }, label: "Keeper's Ward" },
+      { count: 4, mods: { success: 26, speed: 22, injuryResist: 16, gold: 12 }, label: 'Wyrmkeep Thawed' },
+    ],
+  },
+  {
+    id: 'what_got_out',
+    name: 'What Got Out Set',
+    pieces: ['cinder_ash_grip', 'loyalists_brand', 'cornered_fang', 'desperate_ends_crown'],
+    bonuses: [
+      { count: 2, mods: { success: 12, gold: 14 }, label: 'Trail Gone Cold' },
+      { count: 3, mods: { success: 20, gold: 24, loot: 8 }, label: 'The Last Loyal' },
+      { count: 4, mods: { success: 30, gold: 34, loot: 14, injuryResist: 12 }, label: 'Cornered' },
+    ],
+  },
 ];
 
 export const SET_BY_ID: Record<string, ItemSet> = Object.fromEntries(ITEM_SETS.map((s) => [s.id, s]));

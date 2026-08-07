@@ -10,7 +10,7 @@ import { InventoryManager } from '../../game/managers/InventoryManager';
 import { describeMods, describeStats, formatGold, RARITY_COLOR } from '../../game/util';
 import { ItemIcon, ConsumableIcon } from '../icons';
 
-const SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet'];
+const SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet', 'cloak'];
 
 function RarityPill({ rarity }: { rarity: Rarity }) {
   return (

@@ -9,7 +9,7 @@ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
-export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'shield' | 'gloves' | 'boots' | 'ring' | 'amulet';
+export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'shield' | 'gloves' | 'boots' | 'ring' | 'amulet' | 'cloak';
 
 /**
  * One material per Harvest/Gathering node. Deliberately 1:1 with the node

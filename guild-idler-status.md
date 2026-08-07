@@ -1042,6 +1042,83 @@ than going negative or unsendable; and `pickBestQuest` continues to
 ignore over-level offers entirely even when they're the only thing on
 the board. `npx tsc --noEmit` and `vite build` both pass clean.
 
+### Equipment pool expansion: new cloak slot, 3 material-tier sets, 4 raid sets -- complete
+The equipment pool below rare tier was confirmed genuinely thin (one
+leather_cap, no set, nothing else) and none of the four earlier raids
+(Requiem for the Last God was the one exception) had any set bonus
+attached to their own themed loot despite dropping real, distinctive
+items for years of play. Two separate pieces of work landed together
+since the second built directly on the first:
+
+**New `cloak` equipment slot.** Added to `EquipSlot` in types.ts, which
+is what actually caught every place it needed to be added -- TypeScript
+won't compile `icons.tsx`'s `SLOT_FALLBACK` (a `Record<EquipSlot,
+string>`) without every slot having a fallback glyph, so that one's
+compiler-enforced, not just remembered. `EquipmentPanel.tsx`'s rendered
+`SLOTS` array needed a manual add (not type-checked, since it's just an
+array literal). The DevTool's own slot enum in `server.mjs` was the
+other must-fix -- this is the *exact* spot that caused the earlier
+"any save fails once the shield slot exists" bug (see Known Bugs
+history), so it was updated proactively this time rather than found the
+hard way again.
+
+**Three full 9-piece material-tier sets** -- Leather (common,
+reqLevel 1), Steel (uncommon, reqLevel 5), Cutpurse's "Thief" (rare,
+reqLevel 10) -- each covering every slot including the new cloak, 24
+new items total. Three pre-existing orphaned items that already fit a
+set perfectly (`leather_cap`, `gauntlets` "Steel Gauntlets",
+`thief_wraps` "Cutpurse's Wraps") were folded in via `setId` rather than
+duplicated. Stat/mod magnitudes calibrated directly against existing
+items at each rarity tier, not invented from scratch. Icons picked from
+confirmed-unused files in the existing `item-icons/` pool.
+
+**Four new raid sets**, assembled entirely from each raid's own already-
+existing drop table -- no new items needed here, just grouping loot that
+was always distinctive but never had a `setId` or bonus attached:
+Blackford Garrison (Blackford Keep, 6pc), Bonewrought Vault (3pc),
+Frozen Wyrmkeep (4pc), What Got Out (4pc). `setId` was applied to a
+piece's Normal *and* Heroic *and* Mythic id alike, not just the base --
+confirmed the set-bonus counting logic in `HeroManager.equipmentMods`
+only cares which slot is filled and what `setId` that specific item
+carries, never which exact difficulty-tier id, so a Heroic ring paired
+with a Normal-tier helmet correctly still counts as 2 pieces toward the
+same set (verified directly, not assumed). `dragon_helm` drops in both
+Bonewrought Vault and Frozen Wyrmkeep but was deliberately left alone --
+it already belongs to the `dragon_slayer` chain-reward set, and pulling
+it into either raid set would have quietly stolen a piece from that one.
+
+**A real bug during this patch, caught before it shipped:** the first
+attempt at adding `setId` to existing items anchored the text insertion
+on "the next `icon:` field after this item's id" -- which silently
+inserted into the *wrong* item whenever the target item had no `icon`
+field of its own (58 items in the pool don't, mostly Heroic/Mythic raid
+variants that inherit their base item's icon). Caught by re-parsing the
+file and checking the actual resulting `setId` on the specific items
+touched, rather than trusting "the script ran without error." Rewrote
+the insertion as a proper bracket-matching function (finds each item's
+exact object span by counting `{`/`}` depth, inserts before that
+object's own closing brace, independent of which fields happen to be
+present) and redid the edit from a clean revert.
+
+Verified thoroughly at runtime, not just typechecked: every set has the
+right piece count covering the right slots exactly once; every piece
+(and its Heroic/Mythic siblings, for the raid sets) resolves to a real
+item whose `setId` round-trips correctly after a fresh JSON re-parse;
+the cloak slot actually equips on a hero end-to-end; a fully-equipped
+set's top bonus tier genuinely shows up in aggregated mods; the
+mixed-Normal/Heroic/Mythic set-counting claim for raid sets specifically
+verified with a live example (Bonewrought's 2pc bonus firing off a
+Heroic ring + Normal helmet); `dragon_helm` confirmed untouched; no id
+collisions anywhere in the pool; none of the new items are accidentally
+`raidExclusive`/`craftable`-flagged. `npx tsc --noEmit` and `vite build`
+both pass clean.
+
+**Noted, not fixed (pre-existing, unrelated to this patch):** the same
+verification pass turned up 13 icon-file collisions already in the
+equipment pool before any of this started (e.g. `voidforged_crown` and
+`requiem_crown` sharing the same icon file) -- confirmed none involve
+anything touched here, flagged as a real but separate cleanup item.
+
 ### Cleanup items
 - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid
   encounter with loot now has all three difficulty tiers.
@@ -1236,15 +1313,16 @@ the tab.
 - **Queued from the same conversation as the UX/economy batch above:**
   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
     crafted stat/mod bonuses" above for the full writeup.
-  - **Equipment pool expansion.** Currently thin -- confirmed only one
-    real leather-tier item (a cap) exists. Ask is a full set each for
-    leather/steel/thief across every slot, a brand new `cloak` slot type
-    filling every existing set too, and a dedicated themed set per raid
-    (5 raids). This is the biggest of the three by far -- a new slot type
-    alone touches `EquipSlot` in types.ts, the DevTool's schema (see the
-    "shield slot missing" bug this exact codebase already hit once, same
-    risk class), every set-bonus table, and icon assignment for
-    potentially 30+ new items before any stats are even chosen.
+  - ~~Equipment pool expansion~~ -- done, see "Equipment pool expansion:
+    new cloak slot, 3 material-tier sets, 4 raid sets" above for the
+    full writeup. One raid (Requiem for the Last God) already had a set;
+    the new cloak slot fills out every one of the material-tier sets
+    listed there, not every pre-existing set retroactively -- the older
+    chain-reward sets (Dragon Slayer, Ashen Hand, Voidforged, Empyrean,
+    Requiem) were left exactly as they were, since retrofitting a cloak
+    piece into each would mean inventing new lore-specific items for
+    chains that already shipped, a separate ask from what was scoped
+    here.
   - **Harvest fish -> food generalization.** Broaden the Fish Weir node
     (and its recipes) to cover berries/red meat/etc, not just fish
     specifically. Connects to the icon-randomization ask below (Food is
