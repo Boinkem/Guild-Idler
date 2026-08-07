@@ -536,6 +536,60 @@ part of what was asked.
 
 `npx tsc --noEmit` and `vite build` both pass clean.
 
+### Crafting/Supplies/Enchanting overlay rework -- complete
+Replaced the plain "list of recipe cards" modal (`RecipeCard` in
+`HarvestPanel.tsx`, opened from each vendor's Crafting button) with a new
+`CraftingStation` component (`src/ui/CraftingStation.tsx`) built around
+three commissioned background scenes -- one per vendor/category, each
+painted with its own three slot frames baked directly into the art.
+Clicking Crafting now opens that vendor's own scene instead of a generic
+modal, and each painted frame is a real click target:
+
+- **Crafting (gear, Blacksmith)** -- top slot picks which recipe
+  (Guildmade Blade or Band); the two bottom slots each pick one bonus,
+  independently, and can't both land on the same bonus (picking the same
+  one in the second slot simply isn't offered).
+- **Supplies (consumable, Alchemist)** -- top slot picks the recipe
+  (Trail Rations or Herbal Tonic); one bottom slot per *distinct*
+  material that recipe actually needs -- Herbal Tonic (herbs only) shows
+  one active slot, Trail Rations (herbs + fish) shows both. Clicking a
+  material slot opens a small picker naming the required material and
+  whether the guild has enough, and confirming it fills that slot --
+  built as a real picker (not an auto-fill) so a future recipe with
+  genuine material alternatives drops in without another UI pass, even
+  though every recipe today only ever offers the one required material.
+- **Enchanting (Enchanter)** -- top slot picks the item to enchant
+  (stash or equipped, same scope as repair already uses); bottom-left
+  picks the sigil (currently just Minor Sigil); bottom-right picks a
+  stat, populated from whichever sigil is selected and disabled until
+  one is.
+
+Every slot shows a plain "+" until filled, and Craft/Enchant only enables
+once everything that recipe actually needs is chosen and affordable --
+same underlying `CraftingManager`/`CraftingRecipeDef` data model as
+before, this only replaces how the choices are made, not what gets sent
+to the engine.
+
+**Art & positioning:** the three scenes live at
+`public/lore/crafting/{gear,consumable,enchant}.jpg` (converted from the
+supplied PNGs to match every other background's jpg convention --
+~880KB total instead of ~6MB losslessly). Unlike the gitignored-licensed
+`public/vendors/` art, these are committed real assets, so there's no
+"missing file" fallback needed the way `VendorSprite` has one. Each
+scene's three slot positions are hand-measured percentages
+(`SLOT_RECTS` in `CraftingStation.tsx`) against the source images' exact
+1402x1122 canvas; the `.craft-scene` container is locked to that same
+aspect ratio via CSS so the percentages stay aligned with the painted
+frames at any window width, rather than drifting the way `cover`-sized
+art would. Verified by rendering each rect back onto its own source
+image and inspecting the result directly, not just computed and trusted
+-- caught and corrected the Enchanting scene's rects on the first pass
+(the other two were on-target immediately).
+
+`RecipeCard` (and its now-orphaned imports in `HarvestPanel.tsx`) removed
+entirely rather than left as dead code, since `VendorsPanel.tsx` was its
+only caller. `npx tsc --noEmit` and `vite build` both pass clean.
+
 ### Cleanup items
 - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid
   encounter with loot now has all three difficulty tiers.

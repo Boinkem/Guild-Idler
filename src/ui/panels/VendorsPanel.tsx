@@ -8,13 +8,12 @@ import { EquipmentManager } from '../../game/managers/EquipmentManager';
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
 import { CONSUMABLE_BY_ID } from '../../game/data/items';
 import { VENDORS, vendorUpgrades } from '../../game/data/progression';
-import { CRAFTING_RECIPES } from '../../game/data/craftingRecipes';
 import { EquipmentDef, ConsumableDef, VendorId, UpgradeDef, CraftingRecipeDef } from '../../game/types';
 import { describeMods, formatDuration, formatGold, RARITY_COLOR } from '../../game/util';
 import { ItemIcon, ConsumableIcon } from '../icons';
 import { VendorSprite } from '../sprites/VendorSprite';
 import { MaxFlash, useMaxFlash } from '../maxFlash';
-import { RecipeCard } from './HarvestPanel';
+import { CraftingStation } from '../CraftingStation';
 
 /** Confirmed pairing, not a guess -- Blacksmith sells armour, Alchemist sells
  *  supplies, Enchanter sells the black market. Same mapping decides which
@@ -140,17 +139,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
       {vendorId === 'enchanter' && <BlackMarketStock now={now} />}
 
       {showCrafting && (
-        <div className="overlay" onClick={() => setShowCrafting(false)}>
-          <div className="modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
-            <div className="spread" style={{ marginBottom: 8 }}>
-              <span className="card-title">{vendorDef.name} — Crafting</span>
-              <button onClick={() => setShowCrafting(false)}>Close</button>
-            </div>
-            {CRAFTING_RECIPES.filter((r) => r.category === VENDOR_CRAFT_CATEGORY[vendorId]).map((recipe) => (
-              <RecipeCard key={recipe.id} recipe={recipe} />
-            ))}
-          </div>
-        </div>
+        <CraftingStation category={VENDOR_CRAFT_CATEGORY[vendorId]} onClose={() => setShowCrafting(false)} />
       )}
     </>
   );

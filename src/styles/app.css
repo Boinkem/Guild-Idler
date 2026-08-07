@@ -1516,3 +1516,84 @@ input[type='range'] {
   overflow: hidden;
 }
 .harvest-stock-bar span { display: block; height: 100%; background: var(--moss); }
+
+/* ----------------------------- crafting station ---------------------------- */
+
+/*
+ * One background scene per category (Crafting/Supplies/Enchanting), each
+ * painted with its own three slot frames already baked into the art.
+ * `aspect-ratio` locks the container to the source images' exact 1402:1122
+ * canvas so the percent-based .craft-slot rects in CraftingStation.tsx
+ * always line up with the painted frames, at any window width -- cover/crop
+ * sizing would drift the two apart the moment the window isn't exactly that
+ * ratio. `background-size: 100% 100%` stretches to fill that exact box
+ * rather than cropping, which is safe precisely because the ratio is locked.
+ */
+.craft-station-modal { max-width: 640px; }
+.craft-scene {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1402 / 1122;
+  background-size: 100% 100%;
+  background-position: center;
+  background-color: var(--night);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* Transparent hit-targets sitting directly over the art's own painted
+   frames -- no visible chrome of their own until filled, so the artwork
+   stays the actual visual, not a UI overlay drawn on top of it. */
+.craft-slot {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 4%;
+  cursor: pointer;
+  color: var(--parchment);
+  transition: background 120ms ease;
+}
+.craft-slot:hover:not(:disabled) { background: rgba(217, 164, 65, 0.14); }
+.craft-slot:disabled { cursor: default; opacity: 0.35; }
+.craft-slot-plus {
+  font-size: 1.6rem;
+  font-family: var(--font-display);
+  color: color-mix(in srgb, var(--parchment) 55%, transparent);
+}
+.craft-slot.filled .craft-slot-plus { display: none; }
+.craft-slot-label {
+  font-size: 0.5625rem;
+  line-height: 1.3;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+/* The small picker popped open by clicking a slot -- same overlay/modal
+   shell as everywhere else in the game, just narrower and listing rows
+   instead of one item's own detail (see PickerModal in CraftingStation.tsx). */
+.craft-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.craft-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--panel-3);
+  border-radius: var(--radius);
+  color: var(--parchment);
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.6875rem;
+}
+.craft-picker-row:hover:not(:disabled) { border-color: var(--brass-dim); }
+.craft-picker-row:disabled { opacity: 0.4; cursor: default; }

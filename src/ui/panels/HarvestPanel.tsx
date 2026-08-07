@@ -7,13 +7,9 @@ import {
   harvestToolCost, warehouseUpgradeCost,
 } from '../../game/data/harvestUpgrades';
 import { HarvestManager } from '../../game/managers/HarvestManager';
-import { CraftingManager } from '../../game/managers/CraftingManager';
-import { EquipmentManager } from '../../game/managers/EquipmentManager';
-import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
-import { CraftingRecipeDef, MaterialId, Modifiers, Stats } from '../../game/types';
+import { MaterialId } from '../../game/types';
 import { formatGold } from '../../game/util';
 import { MaxFlash, useMaxFlash } from '../maxFlash';
-import { RecipeIcon } from '../icons';
 
 type SubTab = 'warehouse' | 'fields';
 
@@ -297,126 +293,6 @@ function TradeRouteCard() {
           </button>
         ))}
       </div>
-    </div>
-  );
-}
-
-export function RecipeCard({ recipe }: { recipe: CraftingRecipeDef }) {
-  const engine = useEngine();
-  const state = engine.state;
-  const modsToPick = recipe.modsToPick ?? 0;
-  const statsToPick = recipe.statsToPick ?? 0;
-  const [chosenMods, setChosenMods] = useState<(keyof Modifiers)[]>([]);
-  const [chosenStats, setChosenStats] = useState<(keyof Stats)[]>([]);
-  const [targetUid, setTargetUid] = useState('');
-  const afford = CraftingManager.affordability(state, recipe);
-
-  const enchantable = recipe.category === 'enchant' ? EquipmentManager.allItems(state) : [];
-
-  function toggleMod(mod: keyof Modifiers) {
-    setChosenMods((prev) => {
-      if (prev.includes(mod)) return prev.filter((m) => m !== mod);
-      if (prev.length >= modsToPick) return prev;
-      return [...prev, mod];
-    });
-  }
-
-  function toggleStat(stat: keyof Stats) {
-    setChosenStats((prev) => {
-      if (prev.includes(stat)) return prev.filter((s) => s !== stat);
-      if (prev.length >= statsToPick) return prev;
-      return [...prev, stat];
-    });
-  }
-
-  function handleCraft() {
-    if (recipe.category === 'gear') {
-      engine.craftGear(recipe.id, chosenMods);
-      setChosenMods([]);
-    } else if (recipe.category === 'enchant') {
-      engine.enchantItem(recipe.id, targetUid, chosenStats);
-      setChosenStats([]);
-    } else {
-      engine.craftConsumable(recipe.id);
-    }
-  }
-
-  const canCraft = afford.ok
-    && (recipe.category !== 'gear' || chosenMods.length === modsToPick)
-    && (recipe.category !== 'enchant' || (chosenStats.length === statsToPick && targetUid !== ''));
-
-  return (
-    <div className="card" style={{ marginBottom: 8 }}>
-      <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
-        <RecipeIcon icon={recipe.icon} category={recipe.category} />
-        <div style={{ flex: 1 }}>
-          <div className="card-title">{recipe.name}</div>
-          <p className="card-flavour">{recipe.description}</p>
-        </div>
-      </div>
-      <div className="tiny muted" style={{ marginBottom: 6 }}>
-        {Object.entries(recipe.materialCost).map(([id, amount]) => `${amount} ${MATERIAL_BY_ID[id as MaterialId].name}`).join(' + ')}
-        {' + '}{formatGold(recipe.goldCost)} gold
-      </div>
-
-      {recipe.category === 'gear' && recipe.modOptions && (
-        <>
-          <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>
-            {recipe.modOptions.map((mod) => (
-              <button
-                key={mod}
-                className={chosenMods.includes(mod) ? 'btn-primary' : 'btn-ghost'}
-                style={{ minHeight: 24, padding: '3px 8px' }}
-                onClick={() => toggleMod(mod)}
-              >
-                +{recipe.modValue} {mod}
-              </button>
-            ))}
-          </div>
-          <p className="tiny muted" style={{ marginBottom: 8 }}>Pick {modsToPick} of the above.</p>
-        </>
-      )}
-
-      {recipe.category === 'enchant' && recipe.statOptions && (
-        <>
-          <select
-            value={targetUid}
-            onChange={(e) => setTargetUid(e.target.value)}
-            style={{ width: '100%', marginBottom: 8 }}
-          >
-            <option value="">Choose an item to enchant&hellip;</option>
-            {enchantable.map(({ item, heroId }) => {
-              const def = EQUIPMENT_BY_ID[item.defId];
-              if (!def) return null;
-              const owner = heroId ? state.heroes.find((h) => h.id === heroId)?.name : 'Stash';
-              return (
-                <option key={item.uid} value={item.uid}>
-                  {def.name} ({owner ?? 'Stash'})
-                </option>
-              );
-            })}
-          </select>
-          <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>
-            {recipe.statOptions.map((stat) => (
-              <button
-                key={stat}
-                className={chosenStats.includes(stat) ? 'btn-primary' : 'btn-ghost'}
-                style={{ minHeight: 24, padding: '3px 8px' }}
-                onClick={() => toggleStat(stat)}
-              >
-                +{recipe.statValue} {stat}
-              </button>
-            ))}
-          </div>
-          <p className="tiny muted" style={{ marginBottom: 8 }}>
-            Pick {statsToPick} of the above. Stacks with anything already enchanted on that item.
-          </p>
-        </>
-      )}
-
-      <button className="btn-primary" disabled={!canCraft} onClick={handleCraft}>
-        {afford.ok ? (recipe.category === 'enchant' ? 'Enchant' : 'Craft') : afford.reason}
-      </button>
     </div>
   );
 }

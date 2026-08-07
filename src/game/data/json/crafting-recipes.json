@@ -63,6 +63,26 @@
     "statValue": 0
   },
   {
+    "id": "craft_trail_meal",
+    "name": "Meal On The Go",
+    "description": "Hearty, Meat n Veg stew. the perfect bowl of hot food for an adventurer",
+    "category": "consumable",
+    "icon": "food/Food_20.png",
+    "materialCost": {
+      "herbs": 10,
+      "fish": 15
+    },
+    "goldCost": 40,
+    "modOptions": [
+      "injuryResist"
+    ],
+    "modsToPick": 0,
+    "modValue": 10,
+    "resultConsumableId": "strength_potion",
+    "statsToPick": 0,
+    "statValue": 0
+  },
+  {
     "id": "craft_herbal_tonic",
     "name": "Herbal Tonic",
     "description": "The Herb Garden’s own cure-all, brewed in-house rather than bought off a vendor’s shelf.",
@@ -99,5 +119,49 @@
     ],
     "statsToPick": 1,
     "statValue": 3
+  },
+  {
+    "id": "enchant_standard_sigil",
+    "name": "Standard Sigil",
+    "description": "A working the Enchanter presses into a piece already carried, rather than anything built from scratch.",
+    "category": "enchant",
+    "icon": "crafting/Crafting_45.png",
+    "materialCost": {
+      "ore": 15,
+      "herbs": 30
+    },
+    "goldCost": 500,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statOptions": [
+      "strength",
+      "endurance",
+      "luck",
+      "wisdom"
+    ],
+    "statsToPick": 2,
+    "statValue": 3
+  },
+  {
+    "id": "enchant_greater_sigil",
+    "name": "Greater Sigil",
+    "description": "A working the Enchanter presses into a piece already carried, rather than anything built from scratch.",
+    "category": "enchant",
+    "icon": "crafting/Crafting_46.png",
+    "materialCost": {
+      "ore": 45,
+      "herbs": 75
+    },
+    "goldCost": 900,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statOptions": [
+      "strength",
+      "endurance",
+      "luck",
+      "wisdom"
+    ],
+    "statsToPick": 2,
+    "statValue": 6
   }
 ]
