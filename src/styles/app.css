@@ -236,6 +236,20 @@ button:focus-visible, [tabindex]:focus-visible {
 
 .btn-ghost { background: transparent; border-color: var(--panel-3); }
 
+/* Crafting/Enchanting/Enhance are deliberately styled apart from every
+   other action button in the game -- --violet is already the game's one
+   consistent purple accent (Renown uses it too), defined per-theme
+   including High Contrast, so this stays legible and on-brand everywhere
+   rather than introducing a new one-off color. */
+.btn-purple {
+  background: color-mix(in srgb, var(--violet) 55%, var(--panel-2));
+  border-color: var(--violet);
+  color: #fff8e6;
+  font-weight: 700;
+}
+.btn-purple:hover:not(:disabled) { background: var(--violet); color: var(--ink); }
+.btn-purple:disabled { opacity: 0.5; }
+
 /* ------------------------------ idle companion ------------------------------ */
 
 .idle-root {

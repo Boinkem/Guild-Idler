@@ -165,8 +165,9 @@ function ConsumableSlotCard({
 
 /** A single worn-gear slot. Collapsed shows just the icon, name, and rarity
  *  pill; clicking expands to the full mod breakdown, durability, and the
- *  repair/refine/remove actions -- same collapse-by-default pattern used on
- *  the Quest Board and Lore tab. */
+ *  refine/remove actions -- same collapse-by-default pattern used on
+ *  the Quest Board and Lore tab. Durability repair itself now lives on the
+ *  Blacksmith's own Enhance station rather than a button here. */
 function SlotCard({
   slot, item, workshop, hero, engine,
 }: { slot: EquipSlot; item: EquipmentItem | undefined; workshop: number; hero: Hero; engine: GameEngine }) {
@@ -210,13 +211,6 @@ function SlotCard({
           )}
           <DurabilityBar item={item} />
           <div className="row wrap" style={{ marginTop: 6 }}>
-            <button
-              style={{ minHeight: 24, padding: '3px 6px' }}
-              onClick={() => engine.repair(item.uid)}
-              disabled={EquipmentManager.repairCost(item, workshop) === 0}
-            >
-              Repair {formatGold(EquipmentManager.repairCost(item, workshop))}
-            </button>
             <button
               style={{ minHeight: 24, padding: '3px 6px' }}
               onClick={() => engine.upgradeItem(item.uid)}

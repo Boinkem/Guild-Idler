@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
-import { MATERIALS, MATERIAL_BY_ID, NODE_ORDER } from '../../game/data/materials';
+import { MATERIALS, MATERIAL_BY_ID, NODE_ORDER, harvestIconFor } from '../../game/data/materials';
 import {
   HARVEST_TOOL_BY_NODE, TRADE_ROUTE_COST, WAREHOUSE_UPGRADE,
   harvestToolCost, warehouseUpgradeCost,
@@ -39,6 +39,27 @@ const BURST_PARTICLES = [
   { dx: 10, dy: -84, rot: 10, delay: 40 },
   { dx: 32, dy: -58, rot: 18, delay: 90 },
 ];
+
+/**
+ * Renders one of `material.icons` (via `harvestIconFor`) if a pool exists
+ * and the chosen file actually loads, otherwise the plain text glyph --
+ * covers both "no icons configured yet" (icon is null) and "icons are
+ * configured but the real files haven't been dropped into
+ * public/harvest-icons/ yet" (the <img> 404s, onError catches it) with the
+ * same fallback, so this is safe to leave wired up before any art exists.
+ */
+function HarvestGlyph({ icon, glyph }: { icon: string | null; glyph: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!icon || failed) return <>{glyph}</>;
+  return (
+    <img
+      src={`./harvest-icons/${icon}`}
+      alt=""
+      onError={() => setFailed(true)}
+      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+    />
+  );
+}
 
 export function HarvestPanel() {
   const engine = useEngine();
@@ -111,7 +132,7 @@ function NodeLane({ nodeId }: { nodeId: MaterialId }) {
   // smooth, without ticking so often it'd be wasteful for something this
   // low-stakes.
   const now = useNow(400);
-  const [burst, setBurst] = useState<{ key: number; left: number; gained: number; bonus: boolean } | null>(null);
+  const [burst, setBurst] = useState<{ key: number; left: number; gained: number; bonus: boolean; icon: string | null } | null>(null);
   const { settings } = useSettings();
 
   const material = MATERIAL_BY_ID[nodeId];
@@ -151,11 +172,12 @@ function NodeLane({ nodeId }: { nodeId: MaterialId }) {
   const msLeft = pending ? pending.expiresAt - now : 0;
   const fadingOpacity = pending && msLeft < 1500 ? Math.max(0, msLeft / 1500) : 1;
   const leftPercent = pending ? spawnPositionPercent(pending.spawnedAt, nodeId) : 0;
+  const icon = pending ? harvestIconFor(nodeId, pending.spawnedAt) : null;
 
   function handleClick() {
     const result = engine.catchMaterial(nodeId);
     if (result.gained > 0) {
-      setBurst({ key: Date.now(), left: leftPercent, gained: result.gained, bonus: result.bonus });
+      setBurst({ key: Date.now(), left: leftPercent, gained: result.gained, bonus: result.bonus, icon });
     }
   }
 
@@ -169,7 +191,7 @@ function NodeLane({ nodeId }: { nodeId: MaterialId }) {
           onClick={handleClick}
           aria-label={`Collect ${material.name}`}
         >
-          {material.glyph}
+          <HarvestGlyph icon={icon} glyph={material.glyph} />
         </button>
       )}
 
@@ -192,7 +214,7 @@ function NodeLane({ nodeId }: { nodeId: MaterialId }) {
               className="collect-particle material"
               style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, animationDelay: `${p.delay}ms` } as CSSProperties}
             >
-              {material.glyph}
+              <HarvestGlyph icon={burst.icon} glyph={material.glyph} />
             </span>
           ))}
         </div>

@@ -14,6 +14,7 @@ import { ItemIcon, ConsumableIcon } from '../icons';
 import { VendorSprite } from '../sprites/VendorSprite';
 import { MaxFlash, useMaxFlash } from '../maxFlash';
 import { CraftingStation } from '../CraftingStation';
+import { EnhanceStation } from '../EnhanceStation';
 
 /** Confirmed pairing, not a guess -- Blacksmith sells armour, Alchemist sells
  *  supplies, Enchanter sells the black market. Same mapping decides which
@@ -49,6 +50,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
   const now = useNow();
   const { settings } = useSettings();
   const [showCrafting, setShowCrafting] = useState(false);
+  const [showEnhance, setShowEnhance] = useState(false);
 
   const vendorDef = VENDORS.find((v) => v.id === vendorId)!;
   const level = GuildManager.vendorLevel(state, vendorId);
@@ -121,7 +123,13 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
               >
                 {maxed ? 'Nothing more to teach' : `Level up · ${formatGold(cost ?? 0)}`}
               </button>
-              <button onClick={() => setShowCrafting(true)}>Crafting</button>
+              <button className="btn-purple" onClick={() => setShowCrafting(true)}>Crafting</button>
+              {/* Durability repair -- moved here from a per-item button
+                  buried in the Inventory tab, gear-specific so it only
+                  makes sense on the Blacksmith's own page. */}
+              {vendorId === 'blacksmith' && (
+                <button className="btn-purple" onClick={() => setShowEnhance(true)}>Enhance</button>
+              )}
             </div>
           </div>
         </div>
@@ -141,6 +149,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
       {showCrafting && (
         <CraftingStation category={VENDOR_CRAFT_CATEGORY[vendorId]} onClose={() => setShowCrafting(false)} />
       )}
+      {showEnhance && <EnhanceStation onClose={() => setShowEnhance(false)} />}
     </>
   );
 }

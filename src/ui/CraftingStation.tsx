@@ -27,7 +27,7 @@ const STATION_TITLE: Record<Category, string> = {
   gear: 'Crafting', consumable: 'Supplies', enchant: 'Enchanting',
 };
 
-interface Rect { left: number; top: number; width: number; height: number; }
+export interface Rect { left: number; top: number; width: number; height: number; }
 
 /**
  * Percent-based slot rects, hand-measured against each background's own
@@ -57,7 +57,7 @@ const SLOT_RECTS: Record<Category, { top: Rect; bottomLeft: Rect; bottomRight: R
 };
 
 /** A single option row inside a slot's picker popup. */
-interface PickerOption {
+export interface PickerOption {
   key: string;
   label: string;
   sublabel?: string;
@@ -67,7 +67,7 @@ interface PickerOption {
 
 /** One clickable frame on the scene -- shows what's picked, or a plain
  *  "+" prompt when empty, and opens `onOpen` (a PickerModal) on click. */
-function SlotBox({
+export function SlotBox({
   rect, filled, disabled, label, onOpen,
 }: {
   rect: Rect; filled: ReactNode | null; disabled?: boolean; label: string; onOpen: () => void;
@@ -99,7 +99,7 @@ function SlotBox({
  *  drives the checked/highlighted look either way, but only matters
  *  visually once closeOnPick is false -- a single-pick popup closes
  *  before the person would ever see it. */
-function PickerModal({
+export function PickerModal({
   title, options, onPick, onClose, closeOnPick = true, selectedKeys,
 }: {
   title: string; options: PickerOption[]; onPick: (key: string) => void; onClose: () => void;
@@ -387,7 +387,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
           </p>
         )}
 
-        <button className="btn-primary" disabled={!canCraft} onClick={handleCraft}>
+        <button className="btn-purple" disabled={!canCraft} onClick={handleCraft}>
           {afford && !afford.ok ? afford.reason : (category === 'enchant' ? 'Enchant' : 'Craft')}
         </button>
       </div>

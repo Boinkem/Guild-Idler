@@ -844,6 +844,87 @@ either quality or actually finishing what's here.
 `npx tsc --noEmit` and `vite build` both pass clean across the whole
 batch.
 
+### Durability repair moved to the Blacksmith's own Enhance station -- complete
+Per direct request: the per-item "Repair" button used to live buried in
+each equipped item's expanded card on the Inventory tab. Removed from
+there and rebuilt as a dedicated station on the Blacksmith's own Vendors
+page, next to Crafting -- same single-click-select-confirm shape as
+Crafting/Enchanting, with commissioned art (`public/lore/crafting/
+enhance.jpg`, converted from the supplied JPG). New `src/ui/
+EnhanceStation.tsx`: one slot (this scene only has one painted frame,
+unlike Crafting/Enchanting's three) -- click it, pick any item (stash or
+equipped, across every hero, same `EquipmentManager.allItems` lookup
+Enchant's own item picker already uses), see its current durability and
+repair cost, confirm. Still calls the exact same `engine.repair()` the
+old button did -- only *where* the action lives changed, not what it
+does. `PickerModal`/`SlotBox`/`Rect` exported from `CraftingStation.tsx`
+so this didn't need to duplicate that popup code.
+
+Left alone, deliberately: the separate "Refine" (+N power upgrade)
+button and the Inventory tab's own top-level "Repair everything" bulk
+action are unrelated mechanics that weren't part of what was asked to
+move.
+
+**Craft/Enchant/Enhance buttons are now purple**, per direct request --
+new `.btn-purple` class built on `--violet` (the game's one existing
+purple accent, already defined per-theme including High Contrast, rather
+than introducing a new one-off color). Applied to both the vendor-page
+trigger buttons (Crafting, Enhance) and the submit buttons inside each
+overlay, so "this is a crafting-family action" reads as one consistent
+visual language rather than blending into every other brass
+`btn-primary` on the page.
+
+Verified at runtime: a damaged test item is found via the same lookup
+the UI relies on, and `engine.repair()` correctly restores it to full
+durability. The single slot's position was hand-measured against the
+actual supplied image and confirmed by drawing the rect back onto the
+source art, same process used for the other three crafting scenes.
+`npx tsc --noEmit` and `vite build` both pass clean.
+
+### Harvest icon randomization -- logic prepped, waiting on real art
+The player described a specific icon-pool naming convention (Ore1-3,
+Wood1-3, herb1-2, Food1-4 -- Food rather than Fish, prepped ahead of the
+planned fish -> broader food-node generalization so it won't need
+renaming again once that lands) for replacing the current text-glyph
+placeholders. Wired the selection logic now rather than waiting for the
+files themselves:
+
+- `MaterialDef` gained an optional `icons?: string[]` pool, populated
+  with exactly the filenames specified (matching their exact casing --
+  `herb1.png`/`herb2.png` lowercase, the rest capitalized, since
+  filesystems can be case-sensitive and it's easier to rename two files
+  than debug a silent case mismatch later).
+- New `harvestIconFor(materialId, spawnedAt)` in `materials.ts` --
+  deterministic pick from the pool, seeded on the spawn's own timestamp
+  (same seeding approach `spawnPositionPercent` already uses), so a given
+  spawn shows the same icon across every re-render rather than flickering
+  between pool entries on each 400ms tick, while still varying spawn to
+  spawn. Returns `null` (glyph fallback) for an empty pool -- always safe
+  to call, no special-casing needed before real files exist.
+- New `HarvestGlyph` component in `HarvestPanel.tsx` renders the picked
+  icon from `public/harvest-icons/<filename>` with an `onError` handler
+  falling back to the plain glyph -- covers both "no pool configured"
+  and "pool configured but that specific file hasn't actually been
+  dropped in yet" (a real 404) with the same graceful fallback, so
+  nothing breaks or shows a broken-image icon in the meantime. Wired into
+  both the falling item itself and its catch-burst particles, sharing
+  the same resolved icon (captured once at catch time) so the icon that
+  fell is the same one that bursts away, not a second independent roll.
+
+Verified directly: every pool matches the specified filenames exactly;
+the picker is stable for a repeated `(materialId, spawnedAt)` pair
+(doesn't re-roll on re-render) but varies across different spawns (500
+draws each sampled well more than one distinct file per pool); every
+picked filename is confirmed to actually belong to that material's own
+pool; and an explicit empty-pool case returns `null` without throwing.
+
+**Not done yet, intentionally:** `public/harvest-icons/` doesn't contain
+any real files -- this patch is the selection logic only, so the folder
+is empty (git doesn't track empty directories; it'll appear once real
+files land there). Drop the actual art in at that path, matching the
+filenames listed above, and it'll pick up automatically with no further
+code changes.
+
 ### Cleanup items
 - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid
   encounter with loot now has all three difficulty tiers.
@@ -1059,14 +1140,11 @@ the tab.
     coming for this but hadn't uploaded them as of this patch, so this
     is logic-and-naming prep at most until they land, not a full
     implementation.
-- **Harvest icon randomization**, prepped but not wired to real files
-  yet -- the player described a specific naming convention (Wood1-3,
-  Food1-4, Ore1-3, Herb1-2, a few icons per harvest category) for
-  replacing the current text-glyph placeholders with real art, picked
-  randomly per spawn. Worth scaffolding the selection logic (a
-  `Record<MaterialId, string[]>` icon-pool lookup, random pick at spawn
-  time same as the loot table pattern) as soon as the files themselves
-  are available -- no point guessing at exact filenames before that.
+- ~~Harvest icon randomization, prepped but not wired to real files
+  yet~~ -- selection logic done, see "Harvest icon randomization" above
+  for the full writeup. Still waiting on the actual art files in
+  `public/harvest-icons/` -- everything picks up automatically once
+  those land, no further code changes needed.
 - ~~First-five-minutes onboarding beat~~ -- done. A scripted, one-time tour
   on a genuinely fresh save: a spotlight box over each real nav tab in
   turn (dimming everything else via one oversized box-shadow, no separate

@@ -15,6 +15,18 @@ export interface MaterialDef {
   description: string;
   /** Single-glyph fallback shown wherever a material icon can't be sourced yet. */
   glyph: string;
+  /**
+   * Pool of real icon filenames for this material, read from
+   * `public/harvest-icons/<filename>` -- one is picked at random per spawn
+   * (see `harvestIconFor` below), so the same node doesn't show the exact
+   * same sprite every single time. Left empty until real art exists; the
+   * glyph above is the fallback for as long as that's true (and stays the
+   * fallback per-spawn too, via `HarvestGlyph` in HarvestPanel.tsx, if a
+   * listed file ever 404s instead of loading). Filenames match exactly
+   * what was specified when this was scaffolded -- rename the files to
+   * match, not this list, if that's ever easier.
+   */
+  icons?: string[];
 }
 
 export const MATERIALS: MaterialDef[] = [
@@ -22,21 +34,29 @@ export const MATERIALS: MaterialDef[] = [
     id: 'ore', name: 'Ore', nodeName: 'Quarry',
     description: 'Raw stone and metal, hauled up from the guild\u2019s own quarry pit.',
     glyph: '\u26cf\ufe0f',
+    icons: ['Ore1.png', 'Ore2.png', 'Ore3.png'],
   },
   {
     id: 'timber', name: 'Timber', nodeName: 'Woodyard',
     description: 'Felled and split lumber, stacked to season by the woodyard.',
     glyph: '\ud83e\udeb5',
+    icons: ['Wood1.png', 'Wood2.png', 'Wood3.png'],
   },
   {
     id: 'herbs', name: 'Herbs', nodeName: 'Herb Garden',
     description: 'Cuttings and roots from the herb garden -- the backbone of every potion.',
     glyph: '\ud83c\udf3f',
+    icons: ['herb1.png', 'herb2.png'],
   },
   {
     id: 'fish', name: 'Fish', nodeName: 'Fish Weir',
     description: 'The day\u2019s catch from the guild\u2019s fish weir, salted for the road.',
     glyph: '\ud83c\udfa3',
+    // Named "Food" rather than "Fish" -- prepped ahead of the planned Fish
+    // Weir -> broader food-node generalization (berries, red meat, etc,
+    // still queued as its own pass, see guild-idler-status.md), so the
+    // icon pool doesn't need renaming again once that lands.
+    icons: ['Food1.png', 'Food2.png', 'Food3.png', 'Food4.png'],
   },
 ];
 
@@ -46,3 +66,21 @@ export const MATERIAL_BY_ID: Record<MaterialId, MaterialDef> = Object.fromEntrie
 
 /** Stable iteration order for anything that needs "all four nodes, always in this order". */
 export const NODE_ORDER: MaterialId[] = ['ore', 'timber', 'herbs', 'fish'];
+
+/**
+ * Deterministic pick from a material's icon pool, seeded on the spawn's
+ * own timestamp -- same seeding approach `spawnPositionPercent` in
+ * HarvestPanel.tsx already uses, so a given spawn shows the same icon
+ * across every re-render (it doesn't flicker between pool entries on each
+ * 400ms tick) while still varying spawn to spawn. Returns null -- meaning
+ * "fall back to the glyph" -- if the pool is empty, so this is always safe
+ * to call even before any real icon files exist.
+ */
+export function harvestIconFor(materialId: MaterialId, spawnedAt: number): string | null {
+  const pool = MATERIAL_BY_ID[materialId].icons;
+  if (!pool || pool.length === 0) return null;
+  const seed = spawnedAt + materialId.split('').reduce((sum, c) => sum + c.charCodeAt(0) * 31, 0);
+  const x = Math.sin(seed) * 10000;
+  const frac = x - Math.floor(x);
+  return pool[Math.floor(frac * pool.length)];
+}
