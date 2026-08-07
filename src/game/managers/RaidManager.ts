@@ -18,11 +18,34 @@ export const RaidManager = {
    * but can't fully cover for one badly-equipped member -- that's the whole
    * point of the model versus a plain average, which would let one strong
    * hero carry a party of otherwise-unprepared ones.
+   *
+   * Each hero's raw contribution is adjusted against `baselineOffset` --
+   * exactly what a bare, zero-investment hero of *that hero's own class*
+   * would carry in heroMods' level/stat-derived terms if it stood right at
+   * the raid's own reqLevel. Same mechanism as
+   * QuestManager.previewSuccess's own baselineOffset, and for the same
+   * reason: heroMods scales off each hero's raw level, so without this a
+   * party exactly at reqLevel with nothing invested still carried the full
+   * "free" bonus of every level it took to get there, and reqLevel barely
+   * gated anything (confirmed directly: a fresh level-55 party hit the 95%
+   * success ceiling on Normal for Requiem for the Last God, the intended
+   * capstone raid). With the offset, `encounter.baseSuccess` is now what
+   * that kind of party actually gets on Normal -- over-leveling, gear,
+   * consumables, and guild-wide upgrades are what move the needle from
+   * there, since all of those raise a hero's *actual* mods above this
+   * now-tier-accurate floor. Heroic/Mythic's own successPenalty values are
+   * unchanged by this -- see the retune note in guild-idler-status.md for
+   * why those needed a fresh look regardless once this landed.
    */
-  partySuccessBonus(state: GameState, heroes: Hero[], now: number): number {
+  partySuccessBonus(state: GameState, heroes: Hero[], now: number, reqLevel: number): number {
     if (heroes.length === 0) return 0;
     const contributions = heroes
-      .map((h) => sumMods(HeroManager.heroMods(h, now), ModifierManager.global(state)).success ?? 0)
+      .map((h) => {
+        const raw = sumMods(HeroManager.heroMods(h, now), ModifierManager.global(state)).success ?? 0;
+        const baselineStats = HeroManager.baselineStats(h.heroClass, reqLevel);
+        const baselineOffset = (HeroManager.statMods(baselineStats).success ?? 0) + reqLevel * 0.4;
+        return raw - baselineOffset;
+      })
       .sort((a, b) => a - b);
     const weakest = contributions[0];
     const rest = contributions.slice(1);
@@ -69,12 +92,13 @@ export const RaidManager = {
 
   /** Preview odds for one specific encounter, given a prospective party -- used by the UI before committing. */
   previewEncounterSuccess(
-    state: GameState, heroIds: string[], difficulty: RaidDifficulty, encounterId: string, now: number,
+    state: GameState, heroIds: string[], raidId: string, difficulty: RaidDifficulty, encounterId: string, now: number,
   ): number {
+    const raid = RAID_BY_ID[raidId];
     const encounter = RAID_ENCOUNTER_BY_ID[encounterId];
-    if (!encounter) return 0;
+    if (!raid || !encounter) return 0;
     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)).filter((h): h is Hero => !!h);
-    const bonus = RaidManager.partySuccessBonus(state, heroes, now);
+    const bonus = RaidManager.partySuccessBonus(state, heroes, now, raid.reqLevel);
     const penalty = RAID_DIFFICULTIES[difficulty].successPenalty;
     return clamp(encounter.baseSuccess - penalty + bonus, MIN_SUCCESS, MAX_SUCCESS);
   },
@@ -124,7 +148,8 @@ export const RaidManager = {
     if (!check.ok) return { error: check.error };
 
     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)!);
-    const partySuccessBonus = RaidManager.partySuccessBonus(state, heroes, now);
+    const raidDef = RAID_BY_ID[raidId]!;
+    const partySuccessBonus = RaidManager.partySuccessBonus(state, heroes, now, raidDef.reqLevel);
     const duration = RaidManager.previewDuration(state, heroIds, raidId, difficulty, now);
 
     const active: ActiveRaid = {

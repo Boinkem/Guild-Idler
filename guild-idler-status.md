@@ -454,55 +454,87 @@ still work, they just never trigger anyone's preferred bonus), but worth
 a look eventually -- either give a class an escort affinity or fold the
 tag into another one.
 
-### Raid success math -- sanity-checked, not changed
-Checked whether `RaidManager` has the same "mods scale off raw level,
-not the challenge's own level" issue the quest-side fix above addressed.
-Short answer: yes, the same underlying mechanism is there
-(`partySuccessBonus` reads `HeroManager.heroMods` directly, same as the
-old quest formula did), but the practical impact is mixed by tier, and
-fixing it properly is a bigger job than the quest-side version was.
+### Quest & raid difficulty retune -- complete
+Follow-up to the reqLevel-anchoring fix -- that patch made reqLevel a
+real gate again, but left the actual target numbers wherever the old
+formula happened to net out (~73%/56% for Normal/Hard quests, and raids
+still using their pre-existing per-encounter baseSuccess values, which
+were never authored with an anchored baseline in mind). This pass sets
+explicit targets and tunes both systems to hit them.
 
-Simulated a fresh, zero-gear party standing exactly at each raid's own
-reqLevel, one raid per existing tier:
+**Quests -- `DIFFICULTIES[tier].baseSuccess` retuned directly:**
 
-| Raid (reqLevel) | Normal (no penalty) | Heroic (-20) | Mythic (-50) |
-|---|---|---|---|
-| Blackford Keep (8) | 60-80% | up to 40% | up to 10% |
-| Frozen Wyrmkeep (18) | 65-83% | up to 45% | up to 15% |
-| Bonewrought Vault (22) | 75-95% | up to 55% | up to 25% |
-| What Got Out (26) | 68-88% | up to 48% | up to 18% |
-| Requiem for the Last God (55) | 85-95% | up to 65% | up to 35% |
+| Tier | Old | New (= target, at reqLevel, no gear) |
+|---|---|---|
+| Easy | 90 | 70 |
+| Normal | 75 | 60 |
+| Hard | 60 | 50 |
+| Epic | 40 | 40 (unchanged) |
+| Legendary | 25 | 30 |
 
-(Ranges are the raid's own three encounters, easiest to hardest, for a
-party that just barely qualifies with nothing invested.)
+The flat `-(tierIndex * 2)` difficulty penalty in `previewSuccess` is
+gone too -- once `baselineOffset` (from the reqLevel-anchoring patch)
+already zeroes the level/stat-derived terms at reqLevel, that penalty
+was only ever subtracting an extra, unexplained amount on top of a
+baseSuccess that already fully encodes the tier. Removing it means
+`baseSuccess` above **is** the actual number a bare hero gets at
+reqLevel, not baseSuccess-minus-something -- one less thing to hold in
+your head when re-tuning later. Verified at runtime: a fresh Adventurer
+exactly at each tier's own reqLevel, zero gear, lands within a couple
+points of 70/60/50/40/30 (the only variance is the same pre-existing
+preferred-tag template bonus ordinary board contracts have always had --
+not new, not a bug). A deliberately large stat investment (+60 effective
+Strength, simulating spent points and gear together) raised a Normal-tier
+hero from 60% to 68.6%, confirming investment still moves the needle from
+the new floor rather than being swamped by it.
 
-**Heroic and Mythic are in reasonable shape** -- the large explicit
-`successPenalty` per tier (confirmed in the code comments as a
-deliberately-tuned, not accidental, number) counteracts the level-scaled
-bonus well enough that the numbers land in a sensible range at every
-level checked, Mythic in particular staying genuinely hard everywhere.
+**Raids -- two changes together, since neither alone would hit the ask:**
 
-**Normal is not** -- same issue quests had: `partySuccessBonus` grows
-with the party's raw level with nothing anchoring it to the raid's own
-reqLevel, and it grows the same way regardless of which raid, so a
-higher-reqLevel raid's Normal difficulty ends up *more* inflated, not
-less (14.7-point bonus at reqLevel 8 vs. 50.3-point bonus at reqLevel
-55). Requiem for the Last God -- the endgame capstone raid -- currently
-hits the 95% success ceiling on Normal for a party that only just
-qualifies, which undersells what's meant to be the hardest fight in the
-game if a player runs it on Normal rather than jumping straight to a
-harder tier.
+1. `RaidManager.partySuccessBonus` now takes the raid's own `reqLevel`
+   and, per hero, subtracts that hero's own class-appropriate
+   `baselineOffset` (same mechanism `QuestManager.previewSuccess`
+   introduced) before applying the existing weakest-link-plus-20%-of-rest
+   formula. `previewEncounterSuccess` gained a `raidId` param to find
+   this reqLevel (its one caller, `RaidsPanel.tsx`, already had `raid.id`
+   in scope); `start()` reads it from `RAID_BY_ID` directly. This is the
+   same fix quests got -- without it, retuning baseSuccess values alone
+   would have just shifted the target without fixing why a fresh
+   at-reqLevel party wasn't landing near it in the first place.
+2. Every raid's three encounter `baseSuccess` values retuned to a
+   uniform **70 / 60 / 50** spread (opening encounter easiest, final
+   boss hardest -- same shape every raid already had, just recentered).
+   All five raids' encounters happened to already be spaced by exactly
+   10 points internally, so recentering their own middle encounter to 60
+   landed every raid on the identical 70/60/50 pattern -- not a
+   coincidence forced into place, just how the existing spread lined up
+   once shifted.
 
-**Why this wasn't just patched the same way:** unlike the quest fix,
-Heroic/Mythic's `successPenalty` values were explicitly tuned against
-the *current*, unanchored bonus curve (per the existing code comments).
-Anchoring `partySuccessBonus` to reqLevel the same way would zero out
-the "free" bonus those penalties were calibrated to offset, which would
-make Heroic/Mythic dramatically harder than intended at every level
-without a matching re-tune of `successPenalty` -- not a follow-up edit,
-a real balance pass with its own playtesting, out of scope for this
-patch. Left alone pending a decision on whether that pass is worth
-doing now or later.
+Verified at runtime: a fresh, zero-gear party standing exactly at
+reqLevel now lands on *exactly* 70% / 60% / 50% for all three encounters,
+on Normal, for all five raids without exception (`bonus` computes to
+0.0 in every case) -- averaging the requested ~60%, with the escalating
+in-raid structure intact. A stat-invested party (+20 effective
+Strength/Endurance per hero) raised the bonus from 0 to +6, confirming
+gear/investment still moves a raid party's odds the same way it does for
+quests.
+
+**Heroic/Mythic `successPenalty` left exactly as specified (-20/-50,
+unchanged)** -- per instruction. Combined with the newly-anchored bonus,
+this now produces a clean, *consistent* curve across every raid rather
+than the old "gets relatively easier at higher reqLevel" drift: Heroic
+lands 50/40/30% and Mythic lands 20/10/5% for a fresh at-reqLevel party,
+identically, on all five raids checked (Blackford Keep through Requiem
+for the Last God). Mythic hitting the 5% floor on a raid's final boss
+for a zero-investment party is a real, intended consequence of keeping
+those penalties as-is on top of a now-lower baseline -- Mythic still
+reads as "bring a genuinely built party," which matches the existing
+design comments calling that difficulty deliberately brutal. Flagging
+plainly in case that reads as too harsh once played rather than
+simulated -- an easy follow-up (soften Mythic's penalty, or leave Heroic
+alone and only touch Mythic) if so, but not changed here since it wasn't
+part of what was asked.
+
+`npx tsc --noEmit` and `vite build` both pass clean.
 
 ### Cleanup items
 - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid

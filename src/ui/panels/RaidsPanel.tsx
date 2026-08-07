@@ -350,7 +350,7 @@ function RaidDetailModal({
               const enc = RAID_ENCOUNTER_BY_ID[id];
               if (!enc) return null;
               const encSuccess = difficulty && previewHeroIds.length > 0
-                ? RaidManager.previewEncounterSuccess(state, previewHeroIds, difficulty, id, now)
+                ? RaidManager.previewEncounterSuccess(state, previewHeroIds, raid.id, difficulty, id, now)
                 : null;
               return (
                 <li key={id}>

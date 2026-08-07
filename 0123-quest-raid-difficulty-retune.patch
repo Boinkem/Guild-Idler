@@ -1,0 +1,453 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 853b99f..582988f 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -454,55 +454,87 @@ still work, they just never trigger anyone's preferred bonus), but worth
+ a look eventually -- either give a class an escort affinity or fold the
+ tag into another one.
+ 
+-### Raid success math -- sanity-checked, not changed
+-Checked whether `RaidManager` has the same "mods scale off raw level,
+-not the challenge's own level" issue the quest-side fix above addressed.
+-Short answer: yes, the same underlying mechanism is there
+-(`partySuccessBonus` reads `HeroManager.heroMods` directly, same as the
+-old quest formula did), but the practical impact is mixed by tier, and
+-fixing it properly is a bigger job than the quest-side version was.
+-
+-Simulated a fresh, zero-gear party standing exactly at each raid's own
+-reqLevel, one raid per existing tier:
+-
+-| Raid (reqLevel) | Normal (no penalty) | Heroic (-20) | Mythic (-50) |
+-|---|---|---|---|
+-| Blackford Keep (8) | 60-80% | up to 40% | up to 10% |
+-| Frozen Wyrmkeep (18) | 65-83% | up to 45% | up to 15% |
+-| Bonewrought Vault (22) | 75-95% | up to 55% | up to 25% |
+-| What Got Out (26) | 68-88% | up to 48% | up to 18% |
+-| Requiem for the Last God (55) | 85-95% | up to 65% | up to 35% |
+-
+-(Ranges are the raid's own three encounters, easiest to hardest, for a
+-party that just barely qualifies with nothing invested.)
+-
+-**Heroic and Mythic are in reasonable shape** -- the large explicit
+-`successPenalty` per tier (confirmed in the code comments as a
+-deliberately-tuned, not accidental, number) counteracts the level-scaled
+-bonus well enough that the numbers land in a sensible range at every
+-level checked, Mythic in particular staying genuinely hard everywhere.
+-
+-**Normal is not** -- same issue quests had: `partySuccessBonus` grows
+-with the party's raw level with nothing anchoring it to the raid's own
+-reqLevel, and it grows the same way regardless of which raid, so a
+-higher-reqLevel raid's Normal difficulty ends up *more* inflated, not
+-less (14.7-point bonus at reqLevel 8 vs. 50.3-point bonus at reqLevel
+-55). Requiem for the Last God -- the endgame capstone raid -- currently
+-hits the 95% success ceiling on Normal for a party that only just
+-qualifies, which undersells what's meant to be the hardest fight in the
+-game if a player runs it on Normal rather than jumping straight to a
+-harder tier.
+-
+-**Why this wasn't just patched the same way:** unlike the quest fix,
+-Heroic/Mythic's `successPenalty` values were explicitly tuned against
+-the *current*, unanchored bonus curve (per the existing code comments).
+-Anchoring `partySuccessBonus` to reqLevel the same way would zero out
+-the "free" bonus those penalties were calibrated to offset, which would
+-make Heroic/Mythic dramatically harder than intended at every level
+-without a matching re-tune of `successPenalty` -- not a follow-up edit,
+-a real balance pass with its own playtesting, out of scope for this
+-patch. Left alone pending a decision on whether that pass is worth
+-doing now or later.
++### Quest & raid difficulty retune -- complete
++Follow-up to the reqLevel-anchoring fix -- that patch made reqLevel a
++real gate again, but left the actual target numbers wherever the old
++formula happened to net out (~73%/56% for Normal/Hard quests, and raids
++still using their pre-existing per-encounter baseSuccess values, which
++were never authored with an anchored baseline in mind). This pass sets
++explicit targets and tunes both systems to hit them.
++
++**Quests -- `DIFFICULTIES[tier].baseSuccess` retuned directly:**
++
++| Tier | Old | New (= target, at reqLevel, no gear) |
++|---|---|---|
++| Easy | 90 | 70 |
++| Normal | 75 | 60 |
++| Hard | 60 | 50 |
++| Epic | 40 | 40 (unchanged) |
++| Legendary | 25 | 30 |
++
++The flat `-(tierIndex * 2)` difficulty penalty in `previewSuccess` is
++gone too -- once `baselineOffset` (from the reqLevel-anchoring patch)
++already zeroes the level/stat-derived terms at reqLevel, that penalty
++was only ever subtracting an extra, unexplained amount on top of a
++baseSuccess that already fully encodes the tier. Removing it means
++`baseSuccess` above **is** the actual number a bare hero gets at
++reqLevel, not baseSuccess-minus-something -- one less thing to hold in
++your head when re-tuning later. Verified at runtime: a fresh Adventurer
++exactly at each tier's own reqLevel, zero gear, lands within a couple
++points of 70/60/50/40/30 (the only variance is the same pre-existing
++preferred-tag template bonus ordinary board contracts have always had --
++not new, not a bug). A deliberately large stat investment (+60 effective
++Strength, simulating spent points and gear together) raised a Normal-tier
++hero from 60% to 68.6%, confirming investment still moves the needle from
++the new floor rather than being swamped by it.
++
++**Raids -- two changes together, since neither alone would hit the ask:**
++
++1. `RaidManager.partySuccessBonus` now takes the raid's own `reqLevel`
++   and, per hero, subtracts that hero's own class-appropriate
++   `baselineOffset` (same mechanism `QuestManager.previewSuccess`
++   introduced) before applying the existing weakest-link-plus-20%-of-rest
++   formula. `previewEncounterSuccess` gained a `raidId` param to find
++   this reqLevel (its one caller, `RaidsPanel.tsx`, already had `raid.id`
++   in scope); `start()` reads it from `RAID_BY_ID` directly. This is the
++   same fix quests got -- without it, retuning baseSuccess values alone
++   would have just shifted the target without fixing why a fresh
++   at-reqLevel party wasn't landing near it in the first place.
++2. Every raid's three encounter `baseSuccess` values retuned to a
++   uniform **70 / 60 / 50** spread (opening encounter easiest, final
++   boss hardest -- same shape every raid already had, just recentered).
++   All five raids' encounters happened to already be spaced by exactly
++   10 points internally, so recentering their own middle encounter to 60
++   landed every raid on the identical 70/60/50 pattern -- not a
++   coincidence forced into place, just how the existing spread lined up
++   once shifted.
++
++Verified at runtime: a fresh, zero-gear party standing exactly at
++reqLevel now lands on *exactly* 70% / 60% / 50% for all three encounters,
++on Normal, for all five raids without exception (`bonus` computes to
++0.0 in every case) -- averaging the requested ~60%, with the escalating
++in-raid structure intact. A stat-invested party (+20 effective
++Strength/Endurance per hero) raised the bonus from 0 to +6, confirming
++gear/investment still moves a raid party's odds the same way it does for
++quests.
++
++**Heroic/Mythic `successPenalty` left exactly as specified (-20/-50,
++unchanged)** -- per instruction. Combined with the newly-anchored bonus,
++this now produces a clean, *consistent* curve across every raid rather
++than the old "gets relatively easier at higher reqLevel" drift: Heroic
++lands 50/40/30% and Mythic lands 20/10/5% for a fresh at-reqLevel party,
++identically, on all five raids checked (Blackford Keep through Requiem
++for the Last God). Mythic hitting the 5% floor on a raid's final boss
++for a zero-investment party is a real, intended consequence of keeping
++those penalties as-is on top of a now-lower baseline -- Mythic still
++reads as "bring a genuinely built party," which matches the existing
++design comments calling that difficulty deliberately brutal. Flagging
++plainly in case that reads as too harsh once played rather than
++simulated -- an easy follow-up (soften Mythic's penalty, or leave Heroic
++alone and only touch Mythic) if so, but not changed here since it wasn't
++part of what was asked.
++
++`npx tsc --noEmit` and `vite build` both pass clean.
+ 
+ ### Cleanup items
+ - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid
+diff --git a/src/game/data/json/raid-encounters.json b/src/game/data/json/raid-encounters.json
+index d538cea..84573e4 100644
+--- a/src/game/data/json/raid-encounters.json
++++ b/src/game/data/json/raid-encounters.json
+@@ -3,7 +3,7 @@
+     "id": "bonewrought_outer_wardens",
+     "name": "The Outer Wardens",
+     "flavour": "They were guards once, and they never really stopped being guards -- They are tied to the vault.. I don't even think they know that they're dead",
+-    "baseSuccess": 68,
++    "baseSuccess": 70,
+     "durationHours": 2,
+     "rewardGold": 800,
+     "rewardXp": 150,
+@@ -24,7 +24,7 @@
+     "id": "bonewrought_choir_of_bones",
+     "name": "The Choir of Bones",
+     "flavour": "Dozens of throats, one single note, held far longer than any living lungs could manage -- because none of these throats are breathing at all.",
+-    "baseSuccess": 58,
++    "baseSuccess": 60,
+     "durationHours": 3,
+     "rewardGold": 1400,
+     "rewardXp": 260,
+@@ -45,7 +45,7 @@
+     "id": "bonewrought_vault_keeper",
+     "name": "The Vault-Keeper",
+     "flavour": "Still at its post after all this time, still counting every soul that comes through that door. The count has been wrong for a very, very long time, and it doesn't seem to notice.",
+-    "baseSuccess": 48,
++    "baseSuccess": 50,
+     "durationHours": 4,
+     "rewardGold": 2600,
+     "rewardXp": 480,
+@@ -69,7 +69,7 @@
+     "id": "blackford_outer_palisade",
+     "name": "The Outer Palisade",
+     "flavour": "Sharpened stakes, a single rope bridge, and men who know exactly which gaps in that wall to defend. Someone with real training taught them this.",
+-    "baseSuccess": 65,
++    "baseSuccess": 70,
+     "durationHours": 2,
+     "rewardGold": 400,
+     "rewardXp": 80,
+@@ -90,7 +90,7 @@
+     "id": "blackford_right_hand",
+     "name": "The Uncrowned's Right Hand",
+     "flavour": "Not the one giving the big speeches out front -- the one those speeches are actually about. Calm, precise, and very clearly used to being obeyed without question.",
+-    "baseSuccess": 55,
++    "baseSuccess": 60,
+     "durationHours": 3,
+     "rewardGold": 650,
+     "rewardXp": 130,
+@@ -111,7 +111,7 @@
+     "id": "blackford_uncrowned",
+     "name": "The Uncrowned",
+     "flavour": "He was just a smallholder eighteen months ago, before he lost absolutely everything to a goblin with a taste for other people's crowns. Whatever's left of him now has no intention of losing a second time.",
+-    "baseSuccess": 45,
++    "baseSuccess": 50,
+     "durationHours": 4,
+     "rewardGold": 1000,
+     "rewardXp": 200,
+@@ -135,7 +135,7 @@
+     "id": "last_god_field_of_failed_guilds",
+     "name": "The Field of Failed Guilds",
+     "flavour": "None of these wrecks share a single route, and that's the closest thing to comfort this shore offers: everyone who's tried has tried differently, and everyone still ended up here anyway. Waterlogged banners driven into sand beside hulls that were never built to survive the crossing that got them here -- centuries of failed pilgrimages, and not one banner in the whole field belongs to a guild that walked away afterward.",
+-    "baseSuccess": 55,
++    "baseSuccess": 70,
+     "durationHours": 4,
+     "rewardGold": 6000,
+     "rewardXp": 900,
+@@ -156,7 +156,7 @@
+     "id": "last_god_silence_where_prayer_used_to_work",
+     "name": "The Silence Where Prayer Used to Work",
+     "flavour": "An altar older than any faith currently practiced stands at the center of a ring of kneeling dead -- pilgrims, every one, who came here on purpose in their final days exactly as the old rites instructed. Something did answer, in the end, faint and slow and barely enough of itself left to recognize -- and what's left of that answer doesn't know the difference anymore between finishing the rite and simply not letting anyone leave.",
+-    "baseSuccess": 45,
++    "baseSuccess": 60,
+     "durationHours": 5,
+     "rewardGold": 9500,
+     "rewardXp": 1400,
+@@ -180,7 +180,7 @@
+     "id": "last_god_what_is_left_of_it",
+     "name": "What Is Left of It",
+     "flavour": "What's left of the Last God does not rise to meet the guild, and does not entirely need to -- it is enormous, and it has been dying since long before anything currently alive was born, slowly starving on belief nobody living remembers how to give it. It reaches for the guild anyway, the way the shrine reached for strangers, the way the ring of pilgrims still kneels waiting: not out of malice, just out of not being able to tell anymore who it's for. There is no one left to walk it anywhere. So the guild does -- the only way anyone still can, once it finally, mercifully, stops fighting that.",
+-    "baseSuccess": 35,
++    "baseSuccess": 50,
+     "durationHours": 6,
+     "rewardGold": 15000,
+     "rewardXp": 2200,
+@@ -201,7 +201,7 @@
+     "id": "wyrmkeep_hatchling_brood",
+     "name": "The Hatchling Brood",
+     "flavour": "They're young, and young dragons make mistakes -- flying too close, breathing too early, giving away a position a fully grown one never would. That's the only reason this fight is survivable at all. There are a lot of them, and not one of them fights like it's afraid.",
+-    "baseSuccess": 60,
++    "baseSuccess": 70,
+     "durationHours": 2,
+     "rewardGold": 550,
+     "rewardXp": 100,
+@@ -219,7 +219,7 @@
+     "id": "wyrmkeep_wyrm_keepers",
+     "name": "The Wyrm Keepers",
+     "flavour": "Not cultists, not worshippers -- keepers, in the plainest sense: people who found a brood too dangerous to kill and decided tending it was safer than the alternative. They've kept this brood fed and hidden for years. They are not going to stop now, and they know exactly where every hatchling is.",
+-    "baseSuccess": 52,
++    "baseSuccess": 60,
+     "durationHours": 3,
+     "rewardGold": 950,
+     "rewardXp": 180,
+@@ -240,7 +240,7 @@
+     "id": "wyrmkeep_frozen_wyrm",
+     "name": "The Frozen Wyrm",
+     "flavour": "Old enough to remember when this mountain didn't have a brood in it at all -- old enough, in fact, to have started the whole thing. Ice doesn't slow it down. It's had centuries to stop noticing the cold.",
+-    "baseSuccess": 42,
++    "baseSuccess": 50,
+     "durationHours": 4,
+     "rewardGold": 1800,
+     "rewardXp": 340,
+@@ -261,7 +261,7 @@
+     "id": "gotout_trail_gone_cold",
+     "name": "What Still Guards It",
+     "flavour": "Nobody left in this fortress answers to a demon lord anymore, but somebody's still guarding the halls anyway -- paid, threatened, or promised something on the other side of a door none of them will ever get to open themselves.",
+-    "baseSuccess": 58,
++    "baseSuccess": 70,
+     "durationHours": 3,
+     "rewardGold": 1100,
+     "rewardXp": 220,
+@@ -279,7 +279,7 @@
+     "id": "gotout_the_last_loyal",
+     "name": "The Council",
+     "flavour": "They don't agree on much -- not the timing, not the cost, not even, it seems, on what exactly is supposed to come through once the breach opens. What they agree on is that an empty fortress with broken wards is the best chance any of them are going to get, and none of them are willing to wait for a better one.",
+-    "baseSuccess": 48,
++    "baseSuccess": 60,
+     "durationHours": 4,
+     "rewardGold": 1900,
+     "rewardXp": 380,
+@@ -297,7 +297,7 @@
+     "id": "gotout_cornered",
+     "name": "The Breach",
+     "flavour": "Whatever's coordinating this from the far side of the working hasn't fully arrived -- not yet, not entirely -- but it's close enough to reach through, and reaching is apparently all it needs. The breach doesn't have to finish opening to be a problem. It just has to open enough.",
+-    "baseSuccess": 38,
++    "baseSuccess": 50,
+     "durationHours": 5,
+     "rewardGold": 3400,
+     "rewardXp": 620,
+diff --git a/src/game/data/quests.ts b/src/game/data/quests.ts
+index 90bdec5..3a18853 100644
+--- a/src/game/data/quests.ts
++++ b/src/game/data/quests.ts
+@@ -43,7 +43,7 @@ export interface DifficultyConfig {
+ 
+ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
+   easy: {
+-    id: 'easy', label: 'Easy', baseSuccess: 90,
++    id: 'easy', label: 'Easy', baseSuccess: 70,
+     // The original 1-2h range stays the norm; a `burst` chance rolls a short
+     // 90s-8min contract instead, giving new players frequent fast turnaround
+     // without diluting the typical Easy quest into something that's usually
+@@ -59,13 +59,13 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
+     reqLevel: 1, weight: 30, color: '#79a86b',
+   },
+   normal: {
+-    id: 'normal', label: 'Normal', baseSuccess: 75,
++    id: 'normal', label: 'Normal', baseSuccess: 60,
+     minDuration: 2 * HOUR, maxDuration: 4 * HOUR,
+     minGold: 25, maxGold: 60, xpMultiplier: 2.4, lootChance: 20,
+     reqLevel: 3, weight: 28, color: '#5b8fd6',
+   },
+   hard: {
+-    id: 'hard', label: 'Hard', baseSuccess: 60,
++    id: 'hard', label: 'Hard', baseSuccess: 50,
+     minDuration: 4 * HOUR, maxDuration: 6 * HOUR,
+     minGold: 60, maxGold: 150, xpMultiplier: 5, lootChance: 30,
+     reqLevel: 8, weight: 22, color: '#c98b3a',
+@@ -83,7 +83,7 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
+     reqLevel: 15, weight: 14, color: '#a874d6',
+   },
+   legendary: {
+-    id: 'legendary', label: 'Legendary', baseSuccess: 25,
++    id: 'legendary', label: 'Legendary', baseSuccess: 30,
+     minDuration: 12 * HOUR, maxDuration: 24 * HOUR,
+     // Same fix, same reasoning -- 26 put Legendary's xp/hr (16.5) below
+     // BOTH Hard and Epic. 30 lands it at ~19.0 xp/hr, now the actual best
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index b0051ad..67581fd 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -208,26 +208,27 @@ export const QuestManager = {
+    * hero's *raw* level -- which used to mean a hero standing exactly at a
+    * quest's own reqLevel, with zero gear or spent stat points, was still
+    * carrying the full "free" bonus of every level it took to get there.
+-   * reqLevel ended up barely gating anything: a fresh level-6 hero on a
+-   * level-6, Normal-tier (75% baseSuccess) chain stage was landing in the
+-   * 80s-90s, not near 75%, and a fresh recruit is only *further* behind
+-   * that curve on the earliest few levels, where the same mechanism now
+-   * helps rather than hurts (see the recruit-difficulty note in
+-   * guild-idler-status.md).
++   * reqLevel ended up barely gating anything.
+    *
+    * `baselineOffset` below is exactly what a bare, zero-investment hero of
+    * this class would carry in these two terms if it were standing right at
+    * offer.reqLevel -- HeroManager.heroMods/statMods themselves are left
+    * untouched (they're also used for the Heroes panel's raw stat display
+    * and for raids, neither of which has this same "gated by reqLevel"
+-   * framing), and only this preview subtracts it. Net effect: a hero
+-   * exactly at reqLevel with nothing invested lands close to the tier's
+-   * own baseSuccess (a small gap remains from the difficulty-tier penalty
+-   * below, and from any class-identity success mod like Samurai's or
+-   * Lizardman's, both intentional). Out-leveling the requirement, or
+-   * investing in stats/gear/upgrades, is what should move the needle from
+-   * there -- and still does, since both raise the hero's *actual* mods
+-   * above this now-nonzero floor.
++   * framing), and only this preview subtracts it.
++   *
++   * With that in place, `DIFFICULTIES[tier].baseSuccess` is now exactly
++   * what a hero standing at reqLevel with nothing invested actually gets
++   * (tuned directly to 70/60/50/40/30 for Easy/Normal/Hard/Epic/Legendary
++   * -- see DIFFICULTIES in quests.ts) -- there's no separate flat
++   * difficulty-tier penalty layered on top anymore; baseSuccess already
++   * fully encodes the tier, so a second penalty was only ever redundant
++   * once reqLevel itself stopped being a formality. Any class-identity
++   * success mod (Samurai's, Lizardman's) still lands a specific class a
++   * little above that baseline, intentionally. Out-leveling the
++   * requirement, or investing in stats/gear/upgrades/consumables, is what
++   * should move the needle from there -- and does, since all of those
++   * raise the hero's *actual* mods above this now-tier-accurate floor.
+    */
+   previewSuccess(state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number): number {
+     const loadout = InventoryManager.loadoutEffects(consumables);
+@@ -244,7 +245,6 @@ export const QuestManager = {
+       ModifierManager.global(state),
+       loadout.mods,
+       { success: preferred },
+-      { success: -(DIFFICULTY_ORDER.indexOf(offer.difficulty) * 2) },
+     );
+     const baselineStats = HeroManager.baselineStats(hero.heroClass, offer.reqLevel);
+     const baselineOffset = (HeroManager.statMods(baselineStats).success ?? 0) + offer.reqLevel * 0.4;
+diff --git a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
+index 17652e7..bc5ab45 100644
+--- a/src/game/managers/RaidManager.ts
++++ b/src/game/managers/RaidManager.ts
+@@ -18,11 +18,34 @@ export const RaidManager = {
+    * but can't fully cover for one badly-equipped member -- that's the whole
+    * point of the model versus a plain average, which would let one strong
+    * hero carry a party of otherwise-unprepared ones.
++   *
++   * Each hero's raw contribution is adjusted against `baselineOffset` --
++   * exactly what a bare, zero-investment hero of *that hero's own class*
++   * would carry in heroMods' level/stat-derived terms if it stood right at
++   * the raid's own reqLevel. Same mechanism as
++   * QuestManager.previewSuccess's own baselineOffset, and for the same
++   * reason: heroMods scales off each hero's raw level, so without this a
++   * party exactly at reqLevel with nothing invested still carried the full
++   * "free" bonus of every level it took to get there, and reqLevel barely
++   * gated anything (confirmed directly: a fresh level-55 party hit the 95%
++   * success ceiling on Normal for Requiem for the Last God, the intended
++   * capstone raid). With the offset, `encounter.baseSuccess` is now what
++   * that kind of party actually gets on Normal -- over-leveling, gear,
++   * consumables, and guild-wide upgrades are what move the needle from
++   * there, since all of those raise a hero's *actual* mods above this
++   * now-tier-accurate floor. Heroic/Mythic's own successPenalty values are
++   * unchanged by this -- see the retune note in guild-idler-status.md for
++   * why those needed a fresh look regardless once this landed.
+    */
+-  partySuccessBonus(state: GameState, heroes: Hero[], now: number): number {
++  partySuccessBonus(state: GameState, heroes: Hero[], now: number, reqLevel: number): number {
+     if (heroes.length === 0) return 0;
+     const contributions = heroes
+-      .map((h) => sumMods(HeroManager.heroMods(h, now), ModifierManager.global(state)).success ?? 0)
++      .map((h) => {
++        const raw = sumMods(HeroManager.heroMods(h, now), ModifierManager.global(state)).success ?? 0;
++        const baselineStats = HeroManager.baselineStats(h.heroClass, reqLevel);
++        const baselineOffset = (HeroManager.statMods(baselineStats).success ?? 0) + reqLevel * 0.4;
++        return raw - baselineOffset;
++      })
+       .sort((a, b) => a - b);
+     const weakest = contributions[0];
+     const rest = contributions.slice(1);
+@@ -69,12 +92,13 @@ export const RaidManager = {
+ 
+   /** Preview odds for one specific encounter, given a prospective party -- used by the UI before committing. */
+   previewEncounterSuccess(
+-    state: GameState, heroIds: string[], difficulty: RaidDifficulty, encounterId: string, now: number,
++    state: GameState, heroIds: string[], raidId: string, difficulty: RaidDifficulty, encounterId: string, now: number,
+   ): number {
++    const raid = RAID_BY_ID[raidId];
+     const encounter = RAID_ENCOUNTER_BY_ID[encounterId];
+-    if (!encounter) return 0;
++    if (!raid || !encounter) return 0;
+     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)).filter((h): h is Hero => !!h);
+-    const bonus = RaidManager.partySuccessBonus(state, heroes, now);
++    const bonus = RaidManager.partySuccessBonus(state, heroes, now, raid.reqLevel);
+     const penalty = RAID_DIFFICULTIES[difficulty].successPenalty;
+     return clamp(encounter.baseSuccess - penalty + bonus, MIN_SUCCESS, MAX_SUCCESS);
+   },
+@@ -124,7 +148,8 @@ export const RaidManager = {
+     if (!check.ok) return { error: check.error };
+ 
+     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)!);
+-    const partySuccessBonus = RaidManager.partySuccessBonus(state, heroes, now);
++    const raidDef = RAID_BY_ID[raidId]!;
++    const partySuccessBonus = RaidManager.partySuccessBonus(state, heroes, now, raidDef.reqLevel);
+     const duration = RaidManager.previewDuration(state, heroIds, raidId, difficulty, now);
+ 
+     const active: ActiveRaid = {
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index f614d4c..8b8eea1 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -350,7 +350,7 @@ function RaidDetailModal({
+               const enc = RAID_ENCOUNTER_BY_ID[id];
+               if (!enc) return null;
+               const encSuccess = difficulty && previewHeroIds.length > 0
+-                ? RaidManager.previewEncounterSuccess(state, previewHeroIds, difficulty, id, now)
++                ? RaidManager.previewEncounterSuccess(state, previewHeroIds, raid.id, difficulty, id, now)
+                 : null;
+               return (
+                 <li key={id}>

@@ -208,26 +208,27 @@ export const QuestManager = {
    * hero's *raw* level -- which used to mean a hero standing exactly at a
    * quest's own reqLevel, with zero gear or spent stat points, was still
    * carrying the full "free" bonus of every level it took to get there.
-   * reqLevel ended up barely gating anything: a fresh level-6 hero on a
-   * level-6, Normal-tier (75% baseSuccess) chain stage was landing in the
-   * 80s-90s, not near 75%, and a fresh recruit is only *further* behind
-   * that curve on the earliest few levels, where the same mechanism now
-   * helps rather than hurts (see the recruit-difficulty note in
-   * guild-idler-status.md).
+   * reqLevel ended up barely gating anything.
    *
    * `baselineOffset` below is exactly what a bare, zero-investment hero of
    * this class would carry in these two terms if it were standing right at
    * offer.reqLevel -- HeroManager.heroMods/statMods themselves are left
    * untouched (they're also used for the Heroes panel's raw stat display
    * and for raids, neither of which has this same "gated by reqLevel"
-   * framing), and only this preview subtracts it. Net effect: a hero
-   * exactly at reqLevel with nothing invested lands close to the tier's
-   * own baseSuccess (a small gap remains from the difficulty-tier penalty
-   * below, and from any class-identity success mod like Samurai's or
-   * Lizardman's, both intentional). Out-leveling the requirement, or
-   * investing in stats/gear/upgrades, is what should move the needle from
-   * there -- and still does, since both raise the hero's *actual* mods
-   * above this now-nonzero floor.
+   * framing), and only this preview subtracts it.
+   *
+   * With that in place, `DIFFICULTIES[tier].baseSuccess` is now exactly
+   * what a hero standing at reqLevel with nothing invested actually gets
+   * (tuned directly to 70/60/50/40/30 for Easy/Normal/Hard/Epic/Legendary
+   * -- see DIFFICULTIES in quests.ts) -- there's no separate flat
+   * difficulty-tier penalty layered on top anymore; baseSuccess already
+   * fully encodes the tier, so a second penalty was only ever redundant
+   * once reqLevel itself stopped being a formality. Any class-identity
+   * success mod (Samurai's, Lizardman's) still lands a specific class a
+   * little above that baseline, intentionally. Out-leveling the
+   * requirement, or investing in stats/gear/upgrades/consumables, is what
+   * should move the needle from there -- and does, since all of those
+   * raise the hero's *actual* mods above this now-tier-accurate floor.
    */
   previewSuccess(state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number): number {
     const loadout = InventoryManager.loadoutEffects(consumables);
@@ -244,7 +245,6 @@ export const QuestManager = {
       ModifierManager.global(state),
       loadout.mods,
       { success: preferred },
-      { success: -(DIFFICULTY_ORDER.indexOf(offer.difficulty) * 2) },
     );
     const baselineStats = HeroManager.baselineStats(hero.heroClass, offer.reqLevel);
     const baselineOffset = (HeroManager.statMods(baselineStats).success ?? 0) + offer.reqLevel * 0.4;

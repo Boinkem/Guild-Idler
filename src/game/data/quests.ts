@@ -43,7 +43,7 @@ export interface DifficultyConfig {
 
 export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
   easy: {
-    id: 'easy', label: 'Easy', baseSuccess: 90,
+    id: 'easy', label: 'Easy', baseSuccess: 70,
     // The original 1-2h range stays the norm; a `burst` chance rolls a short
     // 90s-8min contract instead, giving new players frequent fast turnaround
     // without diluting the typical Easy quest into something that's usually
@@ -59,13 +59,13 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
     reqLevel: 1, weight: 30, color: '#79a86b',
   },
   normal: {
-    id: 'normal', label: 'Normal', baseSuccess: 75,
+    id: 'normal', label: 'Normal', baseSuccess: 60,
     minDuration: 2 * HOUR, maxDuration: 4 * HOUR,
     minGold: 25, maxGold: 60, xpMultiplier: 2.4, lootChance: 20,
     reqLevel: 3, weight: 28, color: '#5b8fd6',
   },
   hard: {
-    id: 'hard', label: 'Hard', baseSuccess: 60,
+    id: 'hard', label: 'Hard', baseSuccess: 50,
     minDuration: 4 * HOUR, maxDuration: 6 * HOUR,
     minGold: 60, maxGold: 150, xpMultiplier: 5, lootChance: 30,
     reqLevel: 8, weight: 22, color: '#c98b3a',
@@ -83,7 +83,7 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
     reqLevel: 15, weight: 14, color: '#a874d6',
   },
   legendary: {
-    id: 'legendary', label: 'Legendary', baseSuccess: 25,
+    id: 'legendary', label: 'Legendary', baseSuccess: 30,
     minDuration: 12 * HOUR, maxDuration: 24 * HOUR,
     // Same fix, same reasoning -- 26 put Legendary's xp/hr (16.5) below
     // BOTH Hard and Epic. 30 lands it at ~19.0 xp/hr, now the actual best
