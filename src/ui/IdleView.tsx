@@ -4,6 +4,7 @@ import { useSettings } from './useSettings';
 import { PixelSprite, QUEST_MARK } from './sprites/PixelSprite';
 import { HeroAnimation, HeroSprite } from './sprites/HeroSprite';
 import { PetSprite } from './sprites/PetSprite';
+import { PetEnlargedModal } from './PetEnlargedModal';
 import { PET_BY_ID } from '../game/data/pets';
 import { formatDuration, formatGold } from '../game/util';
 
@@ -114,6 +115,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
   // frames anyway.
   const equippedPet = engine.state.pets.find((p) => p.uid === engine.state.equippedPetIds[0]);
   const petDef = equippedPet ? PET_BY_ID[equippedPet.defId] : null;
+  const [showPetModal, setShowPetModal] = useState(false);
 
   // "Desktop when back from failed quest -- damage" (fox-specific request,
   // but harmless to request generically -- PetSprite.resolveAnimation just
@@ -254,15 +256,26 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
         <div className="knight-shadow" />
 
         {equippedPet && petDef && (
-          <PetSprite
-            species={petDef.spriteFolder}
-            rarity={equippedPet.rarity}
-            animation={petAnimation}
-            flip={facingReturn}
-            height={Math.round(40 * settings.spriteScale)}
-            title={equippedPet.name}
-            className="pet-companion"
-          />
+          <button
+            type="button"
+            className="pet-companion-button"
+            onClick={() => setShowPetModal(true)}
+            title={`${equippedPet.name} — click to view`}
+            aria-label={`${equippedPet.name} — click to view enlarged`}
+          >
+            <PetSprite
+              species={petDef.spriteFolder}
+              rarity={equippedPet.rarity}
+              animation={petAnimation}
+              flip={facingReturn}
+              height={Math.round(40 * settings.spriteScale)}
+              title={equippedPet.name}
+              fallback={<span style={{ fontSize: '1.4rem' }}>{petDef.glyph}</span>}
+            />
+          </button>
+        )}
+        {showPetModal && equippedPet && (
+          <PetEnlargedModal pet={equippedPet} onClose={() => setShowPetModal(false)} />
         )}
 
         <div className="idle-plate">

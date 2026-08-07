@@ -407,19 +407,29 @@ button:focus-visible, [tabindex]:focus-visible {
   filter: blur(1px);
 }
 
-.pet-companion {
+.pet-companion-button {
   /* Sits beside the hero rather than tracking the depart/arrive translateX
      keyframes -- it stays put through a departure/return rather than
      walking off-screen in sync, a deliberate scope cut rather than an
      oversight (see IdleView.tsx). Still animates its own idle/movement
-     loop the whole time, so it doesn't read as frozen. */
+     loop the whole time, so it doesn't read as frozen. Positioning and the
+     bob animation both live on the button now (not the PetSprite div
+     nested inside it) since the click target needs the same placement the
+     sprite used to have on its own before it became clickable. */
   position: absolute;
   bottom: 22px;
   left: calc(50% + 34px);
   z-index: 1;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  min-height: 0;
+  cursor: pointer;
   filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.4));
   animation: bob calc(2.4s / max(var(--anim-speed, 1), 0.001)) steps(2, end) infinite;
 }
+.pet-companion-button:hover { background: none; transform: none; }
 
 .idle-plate {
   margin-top: 8px;

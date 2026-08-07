@@ -34,25 +34,54 @@ const DEFAULT_FPS: Partial<Record<PetAnimation, number>> = {
 let manifestCache: Manifest | null = null;
 let manifestPromise: Promise<Manifest> | null = null;
 
+function fetchManifest(): Promise<Manifest> {
+  // no-store, not just a plain fetch -- this file changes any time new pet
+  // art lands, and a long-running Electron session (or an ordinary browser
+  // HTTP cache) holding onto a stale response would mean a freshly-added
+  // species never appears without a full app restart. Confirmed as the
+  // actual cause of a newly-added species staying glyph-only after art was
+  // pushed: the pet had been equipped/viewed once before its art existed,
+  // that first (empty-ish) manifest got cached, and nothing ever asked
+  // again.
+  return fetch('./pets/manifest.json', { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : {}))
+    .catch(() => ({}));
+}
+
 function loadManifest(): Promise<Manifest> {
   if (manifestCache) return Promise.resolve(manifestCache);
   if (!manifestPromise) {
-    manifestPromise = fetch('./pets/manifest.json')
-      .then((r) => (r.ok ? r.json() : {}))
-      .then((m: Manifest) => { manifestCache = m; return m; })
-      .catch(() => { manifestCache = {}; return {}; });
+    manifestPromise = fetchManifest().then((m) => {
+      // Only a genuinely non-empty result is cached -- an empty object
+      // means the fetch failed, or the file simply didn't exist yet.
+      // Caching that permanently was the other half of the bug above: it
+      // meant a session that started before ANY pet art existed would
+      // never show ANY pet's real sprite for the rest of that session,
+      // not even ones added later.
+      if (Object.keys(m).length > 0) manifestCache = m;
+      manifestPromise = null; // always allow the next call to retry
+      return m;
+    });
   }
   return manifestPromise;
 }
 
-function useManifest(): Manifest | null {
+/**
+ * Returns the currently-cached manifest, but re-fetches in the background
+ * if the specific species being asked for isn't in it yet -- the actual
+ * fix for "I equipped/viewed this pet before its art existed, and it never
+ * updated." A manifest that HAS the species already is trusted as-is for
+ * the rest of the session (no polling); only a cache miss on the specific
+ * thing being rendered triggers a retry.
+ */
+function useManifest(species: string): Manifest | null {
   const [manifest, setManifest] = useState<Manifest | null>(manifestCache);
   useEffect(() => {
-    if (manifestCache) { setManifest(manifestCache); return; }
+    if (manifestCache && manifestCache[species]) { setManifest(manifestCache); return; }
     let live = true;
     void loadManifest().then((m) => { if (live) setManifest(m); });
     return () => { live = false; };
-  }, []);
+  }, [species]);
   return manifest;
 }
 
@@ -99,7 +128,7 @@ export function PetSprite({
   species, rarity = 'common', animation = 'idle', height = 48, fps, once = false,
   onComplete, flip = false, className, title, fallback,
 }: PetSpriteProps) {
-  const manifest = useManifest();
+  const manifest = useManifest(species);
   const char = manifest?.[species];
 
   const resolved = useMemo<PetAnimation | null>(
@@ -164,7 +193,7 @@ export function PetSprite({
 export function PetExtraSprite({
   species, rarity = 'common', extra, size = 16, className,
 }: { species: string; rarity?: Rarity; extra: string; size?: number; className?: string }) {
-  const manifest = useManifest();
+  const manifest = useManifest(species);
   const char = manifest?.[species];
   if (!char) return null;
   const scale = size / char.frameH;

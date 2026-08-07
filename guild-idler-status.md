@@ -1616,6 +1616,38 @@ from the spec pass).
   departure rather than walking off-screen in sync, a scope cut rather
   than an oversight, still animating its own loop the whole time so it
   doesn't read as frozen.
+- **Two real bugs found in the wild, both fixed.** Reported as "the hound
+  never shows its real sprite" after its art was added and pushed --
+  turned out to be two separate things stacked on top of each other:
+  1. `PetSprite.tsx`'s manifest fetch cached itself in a module-level
+     variable for the rest of the running session, with no way to ever
+     refresh -- fetched once, kept forever, including a genuinely empty
+     `{}` result on a failed/404 fetch, which the cache check treated as
+     "already loaded" just as readily as a real one (an empty object is
+     still truthy). A pet equipped/viewed before its art existed (or a
+     session that started before `manifest.json` did) would poison the
+     cache for that entire session, and even a real update afterward
+     never got picked up. Fixed on both ends: the fetch itself now uses
+     `cache: 'no-store'` (rules out an ordinary HTTP-level staleness
+     layer too, not just the in-memory one), a genuinely empty result is
+     never cached, and `useManifest` now takes the specific species being
+     rendered and triggers a background re-fetch if THAT species isn't in
+     an already-cached manifest -- self-healing the moment new art
+     actually lands, no app restart required.
+  2. Separately, `IdleView`'s own `<PetSprite>` call for the desktop
+     companion never passed a `fallback` prop at all -- so instead of at
+     least showing the species' glyph the way every other `PetSprite`
+     caller does, a pet with no art yet (or hitting bug #1 above) rendered
+     as a literal empty box, not even an emoji. Fixed by passing the same
+     `PetDef.glyph` fallback every other caller already uses.
+- **New: click the desktop companion pet to view it enlarged.** New
+  `PetEnlargedModal.tsx` -- a big (160px) `PetSprite` with Idle/Movement/
+  Sleep buttons to preview whichever animations the species actually has
+  (an unsupported request just falls back the same way `PetSprite` always
+  does). The companion pet is now a real `<button>`
+  (`.pet-companion-button`, replacing the old plain `.pet-companion` div
+  -- positioning and the bob animation both moved onto the button since
+  it's now the actual click target) rather than inert art.
 - **Art -- five assets done, egg sprite sheet still blocked.** Ember Kit
   (fox), Rooftail (red panda), Ashwing (crow), and Hatchery Hound (Saint
   Bernard) all have real animated sprites, recoloured across all 5 rarity

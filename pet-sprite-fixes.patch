@@ -1,0 +1,290 @@
+diff --git bug_a/guild-idler-status.md bug_b/guild-idler-status.md
+index e138b91..17e35e7 100644
+--- bug_a/guild-idler-status.md
++++ bug_b/guild-idler-status.md
+@@ -1616,6 +1616,38 @@ from the spec pass).
+   departure rather than walking off-screen in sync, a scope cut rather
+   than an oversight, still animating its own loop the whole time so it
+   doesn't read as frozen.
++- **Two real bugs found in the wild, both fixed.** Reported as "the hound
++  never shows its real sprite" after its art was added and pushed --
++  turned out to be two separate things stacked on top of each other:
++  1. `PetSprite.tsx`'s manifest fetch cached itself in a module-level
++     variable for the rest of the running session, with no way to ever
++     refresh -- fetched once, kept forever, including a genuinely empty
++     `{}` result on a failed/404 fetch, which the cache check treated as
++     "already loaded" just as readily as a real one (an empty object is
++     still truthy). A pet equipped/viewed before its art existed (or a
++     session that started before `manifest.json` did) would poison the
++     cache for that entire session, and even a real update afterward
++     never got picked up. Fixed on both ends: the fetch itself now uses
++     `cache: 'no-store'` (rules out an ordinary HTTP-level staleness
++     layer too, not just the in-memory one), a genuinely empty result is
++     never cached, and `useManifest` now takes the specific species being
++     rendered and triggers a background re-fetch if THAT species isn't in
++     an already-cached manifest -- self-healing the moment new art
++     actually lands, no app restart required.
++  2. Separately, `IdleView`'s own `<PetSprite>` call for the desktop
++     companion never passed a `fallback` prop at all -- so instead of at
++     least showing the species' glyph the way every other `PetSprite`
++     caller does, a pet with no art yet (or hitting bug #1 above) rendered
++     as a literal empty box, not even an emoji. Fixed by passing the same
++     `PetDef.glyph` fallback every other caller already uses.
++- **New: click the desktop companion pet to view it enlarged.** New
++  `PetEnlargedModal.tsx` -- a big (160px) `PetSprite` with Idle/Movement/
++  Sleep buttons to preview whichever animations the species actually has
++  (an unsupported request just falls back the same way `PetSprite` always
++  does). The companion pet is now a real `<button>`
++  (`.pet-companion-button`, replacing the old plain `.pet-companion` div
++  -- positioning and the bob animation both moved onto the button since
++  it's now the actual click target) rather than inert art.
+ - **Art -- five assets done, egg sprite sheet still blocked.** Ember Kit
+   (fox), Rooftail (red panda), Ashwing (crow), and Hatchery Hound (Saint
+   Bernard) all have real animated sprites, recoloured across all 5 rarity
+diff --git bug_a/src/styles/app.css bug_b/src/styles/app.css
+index 0f4a01e..7a3fcd0 100644
+--- bug_a/src/styles/app.css
++++ bug_b/src/styles/app.css
+@@ -407,19 +407,29 @@ button:focus-visible, [tabindex]:focus-visible {
+   filter: blur(1px);
+ }
+ 
+-.pet-companion {
++.pet-companion-button {
+   /* Sits beside the hero rather than tracking the depart/arrive translateX
+      keyframes -- it stays put through a departure/return rather than
+      walking off-screen in sync, a deliberate scope cut rather than an
+      oversight (see IdleView.tsx). Still animates its own idle/movement
+-     loop the whole time, so it doesn't read as frozen. */
++     loop the whole time, so it doesn't read as frozen. Positioning and the
++     bob animation both live on the button now (not the PetSprite div
++     nested inside it) since the click target needs the same placement the
++     sprite used to have on its own before it became clickable. */
+   position: absolute;
+   bottom: 22px;
+   left: calc(50% + 34px);
+   z-index: 1;
++  background: none;
++  border: none;
++  box-shadow: none;
++  padding: 0;
++  min-height: 0;
++  cursor: pointer;
+   filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.4));
+   animation: bob calc(2.4s / max(var(--anim-speed, 1), 0.001)) steps(2, end) infinite;
+ }
++.pet-companion-button:hover { background: none; transform: none; }
+ 
+ .idle-plate {
+   margin-top: 8px;
+diff --git bug_a/src/ui/IdleView.tsx bug_b/src/ui/IdleView.tsx
+index db01db2..bb69db3 100644
+--- bug_a/src/ui/IdleView.tsx
++++ bug_b/src/ui/IdleView.tsx
+@@ -4,6 +4,7 @@ import { useSettings } from './useSettings';
+ import { PixelSprite, QUEST_MARK } from './sprites/PixelSprite';
+ import { HeroAnimation, HeroSprite } from './sprites/HeroSprite';
+ import { PetSprite } from './sprites/PetSprite';
++import { PetEnlargedModal } from './PetEnlargedModal';
+ import { PET_BY_ID } from '../game/data/pets';
+ import { formatDuration, formatGold } from '../game/util';
+ 
+@@ -114,6 +115,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+   // frames anyway.
+   const equippedPet = engine.state.pets.find((p) => p.uid === engine.state.equippedPetIds[0]);
+   const petDef = equippedPet ? PET_BY_ID[equippedPet.defId] : null;
++  const [showPetModal, setShowPetModal] = useState(false);
+ 
+   // "Desktop when back from failed quest -- damage" (fox-specific request,
+   // but harmless to request generically -- PetSprite.resolveAnimation just
+@@ -254,15 +256,26 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+         <div className="knight-shadow" />
+ 
+         {equippedPet && petDef && (
+-          <PetSprite
+-            species={petDef.spriteFolder}
+-            rarity={equippedPet.rarity}
+-            animation={petAnimation}
+-            flip={facingReturn}
+-            height={Math.round(40 * settings.spriteScale)}
+-            title={equippedPet.name}
+-            className="pet-companion"
+-          />
++          <button
++            type="button"
++            className="pet-companion-button"
++            onClick={() => setShowPetModal(true)}
++            title={`${equippedPet.name} — click to view`}
++            aria-label={`${equippedPet.name} — click to view enlarged`}
++          >
++            <PetSprite
++              species={petDef.spriteFolder}
++              rarity={equippedPet.rarity}
++              animation={petAnimation}
++              flip={facingReturn}
++              height={Math.round(40 * settings.spriteScale)}
++              title={equippedPet.name}
++              fallback={<span style={{ fontSize: '1.4rem' }}>{petDef.glyph}</span>}
++            />
++          </button>
++        )}
++        {showPetModal && equippedPet && (
++          <PetEnlargedModal pet={equippedPet} onClose={() => setShowPetModal(false)} />
+         )}
+ 
+         <div className="idle-plate">
+diff --git bug_b/src/ui/PetEnlargedModal.tsx bug_b/src/ui/PetEnlargedModal.tsx
+new file mode 100644
+index 0000000..847fdb8
+--- /dev/null
++++ bug_b/src/ui/PetEnlargedModal.tsx
+@@ -0,0 +1,65 @@
++import { useState } from 'react';
++import { Pet } from '../game/types';
++import { PET_BY_ID } from '../game/data/pets';
++import { PetSprite, PetAnimation } from './sprites/PetSprite';
++import { RarityPill } from './RarityPill';
++
++const VIEW_OPTIONS: { key: PetAnimation; label: string }[] = [
++  { key: 'idle', label: 'Idle' },
++  { key: 'movement', label: 'Movement' },
++  { key: 'sleep', label: 'Sleep' },
++];
++
++/**
++ * Opened by clicking the equipped pet on the desktop companion -- at 40px
++ * tall there, a species' actual detail (and whether its animation is
++ * playing at all) is hard to make out. Same overlay/modal shell as
++ * everywhere else, just a big PetSprite and a row of animation buttons
++ * rather than a form. Doesn't assume every species has all three -- an
++ * unsupported request just falls back the same way PetSprite always does
++ * (see resolveAnimation), the button still highlights what was actually
++ * asked for either way.
++ */
++export function PetEnlargedModal({ pet, onClose }: { pet: Pet; onClose: () => void }) {
++  const def = PET_BY_ID[pet.defId];
++  const [view, setView] = useState<PetAnimation>('idle');
++
++  return (
++    <div className="overlay" onClick={onClose}>
++      <div className="modal" style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
++        <div className="spread" style={{ marginBottom: 4 }}>
++          <span className="card-title">{pet.name}</span>
++          <button onClick={onClose}>Close</button>
++        </div>
++        <div className="row" style={{ justifyContent: 'center', gap: 6, marginBottom: 8 }}>
++          <span className="tiny muted">{def?.name ?? 'Unknown species'}</span>
++          <RarityPill rarity={pet.rarity} />
++        </div>
++
++        <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0 12px' }}>
++          <PetSprite
++            species={def?.spriteFolder ?? pet.defId}
++            rarity={pet.rarity}
++            animation={view}
++            height={160}
++            title={pet.name}
++            fallback={<span style={{ fontSize: '5rem' }}>{def?.glyph ?? '\u2753'}</span>}
++          />
++        </div>
++
++        <div className="row" style={{ justifyContent: 'center', gap: 6 }}>
++          {VIEW_OPTIONS.map((opt) => (
++            <button
++              key={opt.key}
++              className={view === opt.key ? 'btn-primary' : 'btn-ghost'}
++              style={{ minHeight: 26, fontSize: '0.75rem' }}
++              onClick={() => setView(opt.key)}
++            >
++              {opt.label}
++            </button>
++          ))}
++        </div>
++      </div>
++    </div>
++  );
++}
+diff --git bug_a/src/ui/sprites/PetSprite.tsx bug_b/src/ui/sprites/PetSprite.tsx
+index 6f06010..ce45579 100644
+--- bug_a/src/ui/sprites/PetSprite.tsx
++++ bug_b/src/ui/sprites/PetSprite.tsx
+@@ -34,25 +34,54 @@ const DEFAULT_FPS: Partial<Record<PetAnimation, number>> = {
+ let manifestCache: Manifest | null = null;
+ let manifestPromise: Promise<Manifest> | null = null;
+ 
++function fetchManifest(): Promise<Manifest> {
++  // no-store, not just a plain fetch -- this file changes any time new pet
++  // art lands, and a long-running Electron session (or an ordinary browser
++  // HTTP cache) holding onto a stale response would mean a freshly-added
++  // species never appears without a full app restart. Confirmed as the
++  // actual cause of a newly-added species staying glyph-only after art was
++  // pushed: the pet had been equipped/viewed once before its art existed,
++  // that first (empty-ish) manifest got cached, and nothing ever asked
++  // again.
++  return fetch('./pets/manifest.json', { cache: 'no-store' })
++    .then((r) => (r.ok ? r.json() : {}))
++    .catch(() => ({}));
++}
++
+ function loadManifest(): Promise<Manifest> {
+   if (manifestCache) return Promise.resolve(manifestCache);
+   if (!manifestPromise) {
+-    manifestPromise = fetch('./pets/manifest.json')
+-      .then((r) => (r.ok ? r.json() : {}))
+-      .then((m: Manifest) => { manifestCache = m; return m; })
+-      .catch(() => { manifestCache = {}; return {}; });
++    manifestPromise = fetchManifest().then((m) => {
++      // Only a genuinely non-empty result is cached -- an empty object
++      // means the fetch failed, or the file simply didn't exist yet.
++      // Caching that permanently was the other half of the bug above: it
++      // meant a session that started before ANY pet art existed would
++      // never show ANY pet's real sprite for the rest of that session,
++      // not even ones added later.
++      if (Object.keys(m).length > 0) manifestCache = m;
++      manifestPromise = null; // always allow the next call to retry
++      return m;
++    });
+   }
+   return manifestPromise;
+ }
+ 
+-function useManifest(): Manifest | null {
++/**
++ * Returns the currently-cached manifest, but re-fetches in the background
++ * if the specific species being asked for isn't in it yet -- the actual
++ * fix for "I equipped/viewed this pet before its art existed, and it never
++ * updated." A manifest that HAS the species already is trusted as-is for
++ * the rest of the session (no polling); only a cache miss on the specific
++ * thing being rendered triggers a retry.
++ */
++function useManifest(species: string): Manifest | null {
+   const [manifest, setManifest] = useState<Manifest | null>(manifestCache);
+   useEffect(() => {
+-    if (manifestCache) { setManifest(manifestCache); return; }
++    if (manifestCache && manifestCache[species]) { setManifest(manifestCache); return; }
+     let live = true;
+     void loadManifest().then((m) => { if (live) setManifest(m); });
+     return () => { live = false; };
+-  }, []);
++  }, [species]);
+   return manifest;
+ }
+ 
+@@ -99,7 +128,7 @@ export function PetSprite({
+   species, rarity = 'common', animation = 'idle', height = 48, fps, once = false,
+   onComplete, flip = false, className, title, fallback,
+ }: PetSpriteProps) {
+-  const manifest = useManifest();
++  const manifest = useManifest(species);
+   const char = manifest?.[species];
+ 
+   const resolved = useMemo<PetAnimation | null>(
+@@ -164,7 +193,7 @@ export function PetSprite({
+ export function PetExtraSprite({
+   species, rarity = 'common', extra, size = 16, className,
+ }: { species: string; rarity?: Rarity; extra: string; size?: number; className?: string }) {
+-  const manifest = useManifest();
++  const manifest = useManifest(species);
+   const char = manifest?.[species];
+   if (!char) return null;
+   const scale = size / char.frameH;
