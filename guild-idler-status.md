@@ -405,8 +405,104 @@ not the challenge's own level" architecture likely applies to
 `RaidManager`'s success math too (`heroMods` feeds it directly, same as
 before) -- raids weren't part of this report and have their own
 level/difficulty gating shape, so left alone rather than assumed fixed
-by the same change. Worth its own look if a similar complaint comes in
-about raids.
+by the same change. Confirmed and written up below rather than left as
+a guess.
+
+### Chain stages now carry their own real tag -- complete
+Follow-up to the reqLevel fix above -- while checking why a Gladiator's
+`goblin_warband` number was specifically ~91%+ rather than the ~83%
+every other class was landing on, found that `QuestManager.chainOffer`
+hardcoded every chain stage in the game to `tag: 'explore'`, regardless
+of what the stage was actually about. `ChainStageDef` never had a `tag`
+field at all -- `chainOffer` just picked one value and used it
+everywhere. Net effect: Gladiator/Lizardman/Wizard (the three classes
+with `explore` in their `preferred` list) got their full preferred-quest
+success bonus on literally every story chain in the game,
+unconditionally, while every other class got none, ever, on any chain,
+regardless of what the chain was about.
+
+**Fix:** `ChainStageDef` gained a real `tag: QuestTag` field, and all 61
+stages across all 19 chains were individually tagged against their own
+flavour text (combat/explore/arcane/defense/stealth -- final
+distribution: 26 combat, 19 explore, 10 arcane, 4 defense, 2 stealth;
+`escort` wasn't used for any stage since, separately noted below, no
+hero class currently prefers it anyway, so tagging a stage `escort`
+would never actually grant anyone a bonus). `chainOffer` now reads
+`stageDef.tag` instead of the hardcoded literal, and
+`QuestManager.previewSuccess` no longer special-cases chain offers out
+of the preferred-bonus calculation (that carve-out was only ever a
+stopgap for the hardcoded-tag problem, made in the previous patch before
+this one existed) -- the same `classDef.preferred.includes(offer.tag)`
+check now works correctly for chains and board contracts alike, since
+both carry a tag that actually reflects the content.
+
+Verified at runtime: `goblin_warband` stage 1 is now tagged `combat` (it's
+an ambush on outriders) -- Adventurer/Knight/Gladiator (all
+`combat`-preferring) each get an appropriately-sized bonus off the
+reqLevel-anchored baseline (79-81%, varying by class's own
+`preferredBonus`), rather than only Gladiator getting a bonus and
+everyone else getting none. All 61 stages confirmed to have a valid tag
+(no `undefined`s slipping through). `npx tsc --noEmit` and `vite build`
+both pass clean.
+
+**Noted, not acted on:** no hero class currently lists `escort` in its
+`preferred` tags (`combat`: Adventurer/Knight/Gladiator/Samurai/
+Lizardman, `defense`: Adventurer/Knight/Dwarf, `explore`: Gladiator/
+Lizardman/Wizard, `arcane`: Witch/Pyromancer/Wizard, `stealth`: Witch --
+`escort` has zero). Not a bug exactly (board contracts using that tag
+still work, they just never trigger anyone's preferred bonus), but worth
+a look eventually -- either give a class an escort affinity or fold the
+tag into another one.
+
+### Raid success math -- sanity-checked, not changed
+Checked whether `RaidManager` has the same "mods scale off raw level,
+not the challenge's own level" issue the quest-side fix above addressed.
+Short answer: yes, the same underlying mechanism is there
+(`partySuccessBonus` reads `HeroManager.heroMods` directly, same as the
+old quest formula did), but the practical impact is mixed by tier, and
+fixing it properly is a bigger job than the quest-side version was.
+
+Simulated a fresh, zero-gear party standing exactly at each raid's own
+reqLevel, one raid per existing tier:
+
+| Raid (reqLevel) | Normal (no penalty) | Heroic (-20) | Mythic (-50) |
+|---|---|---|---|
+| Blackford Keep (8) | 60-80% | up to 40% | up to 10% |
+| Frozen Wyrmkeep (18) | 65-83% | up to 45% | up to 15% |
+| Bonewrought Vault (22) | 75-95% | up to 55% | up to 25% |
+| What Got Out (26) | 68-88% | up to 48% | up to 18% |
+| Requiem for the Last God (55) | 85-95% | up to 65% | up to 35% |
+
+(Ranges are the raid's own three encounters, easiest to hardest, for a
+party that just barely qualifies with nothing invested.)
+
+**Heroic and Mythic are in reasonable shape** -- the large explicit
+`successPenalty` per tier (confirmed in the code comments as a
+deliberately-tuned, not accidental, number) counteracts the level-scaled
+bonus well enough that the numbers land in a sensible range at every
+level checked, Mythic in particular staying genuinely hard everywhere.
+
+**Normal is not** -- same issue quests had: `partySuccessBonus` grows
+with the party's raw level with nothing anchoring it to the raid's own
+reqLevel, and it grows the same way regardless of which raid, so a
+higher-reqLevel raid's Normal difficulty ends up *more* inflated, not
+less (14.7-point bonus at reqLevel 8 vs. 50.3-point bonus at reqLevel
+55). Requiem for the Last God -- the endgame capstone raid -- currently
+hits the 95% success ceiling on Normal for a party that only just
+qualifies, which undersells what's meant to be the hardest fight in the
+game if a player runs it on Normal rather than jumping straight to a
+harder tier.
+
+**Why this wasn't just patched the same way:** unlike the quest fix,
+Heroic/Mythic's `successPenalty` values were explicitly tuned against
+the *current*, unanchored bonus curve (per the existing code comments).
+Anchoring `partySuccessBonus` to reqLevel the same way would zero out
+the "free" bonus those penalties were calibrated to offset, which would
+make Heroic/Mythic dramatically harder than intended at every level
+without a matching re-tune of `successPenalty` -- not a follow-up edit,
+a real balance pass with its own playtesting, out of scope for this
+patch. Left alone pending a decision on whether that pass is worth
+doing now or later.
 
 ### Cleanup items
 - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid

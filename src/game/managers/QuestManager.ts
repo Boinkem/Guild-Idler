@@ -162,7 +162,7 @@ export const QuestManager = {
       name: `${chain.name} — ${stageDef.name}`,
       flavour: stageDef.flavour,
       difficulty: stageDef.difficulty,
-      tag: 'explore',
+      tag: stageDef.tag,
       duration: stageDef.duration,
       baseSuccess: cfg.baseSuccess,
       rewardGold: Math.floor(cfg.maxGold * stageDef.goldMultiplier),
@@ -232,15 +232,13 @@ export const QuestManager = {
   previewSuccess(state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number): number {
     const loadout = InventoryManager.loadoutEffects(consumables);
     const classDef = HERO_CLASSES[hero.heroClass];
-    // Chain stages are hardcoded to tag: 'explore' regardless of what the
-    // chain is actually about (see chainOffer above) -- so an explore-
-    // preferring class (Gladiator, Lizardman, Wizard) would otherwise get
-    // its full preferred-quest bonus on literally every story chain in the
-    // game, unconditionally. That's an artifact of the tag, not a real
-    // "this hero is suited to this story" signal, so chain offers never
-    // get a preferred bonus at all -- ordinary board contracts, whose tags
-    // do reflect their actual template, are unaffected.
-    const preferred = (!offer.chain && classDef.preferred.includes(offer.tag)) ? classDef.preferredBonus : 0;
+    // Every chain stage now carries its own authored tag (see
+    // ChainStageDef.tag / chainOffer) rather than the old hardcoded
+    // 'explore' every stage in the game used to share -- so the preferred
+    // bonus applies to chain offers exactly the same way it does to
+    // ordinary board contracts now, matching whatever that specific stage
+    // is actually about.
+    const preferred = classDef.preferred.includes(offer.tag) ? classDef.preferredBonus : 0;
     const mods = sumMods(
       HeroManager.heroMods(hero, now),
       ModifierManager.global(state),
