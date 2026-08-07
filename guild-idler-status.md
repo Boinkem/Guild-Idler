@@ -639,6 +639,64 @@ logic change.
 
 `npx tsc --noEmit` and `vite build` both pass clean.
 
+### Harvest fall animation: two real bugs, plus a persistent glow -- complete
+Report: falling items "barely floated down at all... moved a few pixels
+and stopped." Traced to `NodeLane` in `HarvestPanel.tsx`, not the CSS
+sizing work above -- two genuine, independent bugs in how the `fresh`
+(falling) vs `settled` (landed, idle-pulsing) class got decided:
+
+1. **The JS-side "still falling" window was a hardcoded 1200ms, out of
+   sync with the CSS animation's real, `--anim-speed`-scaled duration**
+   (`.harvest-item.fresh`'s `harvest-fall`:
+   `calc(900ms / max(var(--anim-speed, 1), 0.001))`). At the default 1x
+   speed that's 900ms -- comfortably inside the 1200ms window, so this
+   never showed up in normal play. At Settings > Appearance > Animation
+   speed "Slow" (0.5x, a real labeled option), the CSS duration
+   stretches to 1800ms -- 600ms *longer* than the JS window -- so the
+   class flipped from `fresh` to `settled` while the fall was still
+   mid-flight, yanking the animation off and snapping the item to its
+   settled resting spot early. Confirmed directly from the two formulas
+   side by side, not a guess.
+2. **A one-frame render race on every spawn.** `isFresh` lived in its
+   own `useState`, set by a `useEffect` keyed on `pending.spawnedAt` --
+   so on the very first render where a new `pending` appeared, the
+   effect hadn't run yet and `isFresh` was still `false`, meaning the
+   item's *first paint* used the `settled` class (already at rest,
+   mid-pulse) before flipping to `fresh` (and restarting at the top) a
+   moment later. Combined with bug 1, this made the fall read as barely
+   happening at all in the reported case.
+
+**Fix:** replaced the separate effect+`setTimeout` state with a direct
+computation off the `now` clock `NodeLane` already ticks every 400ms --
+`isFresh = (now - pending.spawnedAt) < fallDurationMs + 300`, where
+`fallDurationMs` mirrors the CSS's own formula exactly (reading
+`settings.animationSpeed`/`reduceMotion` via `useSettings`, the same
+source `SettingsStore.apply` writes `--anim-speed` from). This can't
+fall out of sync with the CSS ever again since it's the same formula,
+and it's correct on the very first render since there's no longer a
+separate piece of state that needs a follow-up render to catch up.
+
+**Also added: a persistent golden glow**, per direct request -- previously
+the only visual cue that a spawn was clickable was the generic
+`button:hover` rule (a plain panel-colored square, invisible until the
+cursor was already on top of it). `.harvest-item` now carries an
+always-on golden `box-shadow` circle (`border-radius: 50%` so the shadow
+reads as a ring rather than hugging the glyph's own rough bounding box),
+brightening further on hover; the rare bonus glint's existing stronger
+glow is unchanged and still reads as the bigger deal. The generic
+`button:hover` background needed an explicit `button.harvest-item:hover`
+override to actually win (same specificity as the generic rule once the
+element type is included, and later in the stylesheet) rather than
+fighting the new glow.
+
+`npx tsc --noEmit` and `vite build` both pass clean. Not verified
+against a real Chromium render in this environment (no browser available
+to drive here) -- the box-shadow mechanic itself was confirmed visually
+via a minimal standalone render, and the timing fix was verified by
+direct comparison of the two duration formulas rather than by eye;
+worth a real in-app look to confirm both land the way they're intended
+to before calling this fully closed.
+
 ### Cleanup items
 - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid
   encounter with loot now has all three difficulty tiers.

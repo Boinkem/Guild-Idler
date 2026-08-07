@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useEngine, useNow } from '../useEngine';
+import { useSettings } from '../useSettings';
 import { MATERIALS, MATERIAL_BY_ID, NODE_ORDER } from '../../game/data/materials';
 import {
   HARVEST_TOOL_BY_NODE, TRADE_ROUTE_COST, WAREHOUSE_UPGRADE,
@@ -109,24 +110,41 @@ function NodeLane({ nodeId }: { nodeId: MaterialId }) {
   // low-stakes.
   const now = useNow(400);
   const [burst, setBurst] = useState<{ key: number; left: number; gained: number; bonus: boolean } | null>(null);
+  const { settings } = useSettings();
 
   const material = MATERIAL_BY_ID[nodeId];
   const node = state.harvestNodes[nodeId];
   const pending = node.pending;
 
-  // Whether *this specific* spawn should still play its fall-in animation.
-  // Tied directly to pending.spawnedAt via the effect below rather than
-  // comparing against the periodically-ticking `now` above -- one fewer
-  // moving part, and it can't be thrown off by how those two independent
-  // ticks happen to line up on any given render.
-  const [freshSpawnedAt, setFreshSpawnedAt] = useState<number | null>(null);
-  useEffect(() => {
-    if (!pending) return undefined;
-    setFreshSpawnedAt(pending.spawnedAt);
-    const timeout = window.setTimeout(() => setFreshSpawnedAt((prev) => (prev === pending.spawnedAt ? null : prev)), 1200);
-    return () => window.clearTimeout(timeout);
-  }, [pending?.spawnedAt]);
-  const isFresh = pending ? freshSpawnedAt === pending.spawnedAt : false;
+  /*
+   * Whether *this specific* spawn should still play its fall-in animation.
+   * Two real bugs lived in the previous version of this (a separate effect
+   * + a hardcoded 1200ms setTimeout to flip it back off):
+   *
+   * 1. That 1200ms was hardcoded, but the CSS animation it's gating
+   *    (`.harvest-item.fresh`'s `harvest-fall`) scales with
+   *    `--anim-speed` (`calc(900ms / max(var(--anim-speed, 1), 0.001))`).
+   *    At the default 1x speed that's 900ms, comfortably inside 1200ms --
+   *    but at Settings > Animation speed "Slow" (0.5x) the real CSS
+   *    duration stretches to 1800ms, so the class flipped from `fresh`
+   *    to `settled` (and the fall animation got yanked mid-flight, right
+   *    as it was easing into its landing bounce) 600ms before the fall
+   *    was actually done playing.
+   * 2. On the very first render where a fresh `pending` appears, the
+   *    effect hasn't run yet, so `isFresh` started out `false` for one
+   *    frame -- the item's first paint used the *settled* (already-at-
+   *    rest, mid-pulse) class, then flipped to `fresh` a moment later,
+   *    which could read as the item never really falling at all.
+   *
+   * Computing this directly from the already-ticking `now` above fixes
+   * both at once: it mirrors the CSS's own duration formula exactly (so
+   * it can never cut the animation short at any speed setting), and it's
+   * correct on the very first render since there's no separate state to
+   * catch up to.
+   */
+  const animSpeed = settings.reduceMotion ? 0 : settings.animationSpeed;
+  const fallDurationMs = 900 / Math.max(animSpeed, 0.001);
+  const isFresh = pending ? (now - pending.spawnedAt) < fallDurationMs + 300 : false;
 
   const msLeft = pending ? pending.expiresAt - now : 0;
   const fadingOpacity = pending && msLeft < 1500 ? Math.max(0, msLeft / 1500) : 1;

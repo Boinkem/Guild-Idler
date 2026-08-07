@@ -1485,11 +1485,29 @@ input[type='range'] {
   line-height: 1;
   cursor: pointer;
   user-select: none;
+  border-radius: 50%;
   filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
-  transition: opacity 400ms linear;
+  /*
+   * Persistent "this is clickable" glow -- previously the only visual cue
+   * at all was the generic `button:hover` rule (a plain panel-color
+   * square, easy to miss against a busy scene, and only ever visible
+   * once the cursor was already on top of the thing it's meant to draw
+   * the eye to in the first place). Golden and always on, so a spawn
+   * reads as interactive the moment it appears.
+   */
+  box-shadow: 0 0 16px 6px color-mix(in srgb, var(--brass) 55%, transparent);
+  transition: opacity 400ms linear, box-shadow 150ms ease;
   background: none;
   border: none;
   padding: 0;
+}
+/* Overrides the generic `button:hover:not(:disabled)` panel-square
+   background with a brighter version of the glow above instead of
+   fighting it -- needs the element type in the selector to actually
+   out-specify that rule, a plain `.harvest-item:hover` alone would lose. */
+button.harvest-item:hover {
+  background: none;
+  box-shadow: 0 0 22px 9px color-mix(in srgb, var(--brass) 75%, transparent);
 }
 .harvest-item.fresh {
   animation: harvest-fall calc(900ms / max(var(--anim-speed, 1), 0.001)) cubic-bezier(0.3, 0, 0.6, 1) both;
@@ -1500,6 +1518,7 @@ input[type='range'] {
 .harvest-item.bonus {
   filter: drop-shadow(0 0 10px color-mix(in srgb, var(--brass) 80%, transparent))
     drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
+  box-shadow: 0 0 22px 9px color-mix(in srgb, var(--brass) 85%, transparent);
 }
 @keyframes harvest-fall {
   0% { top: 4%; opacity: 0; transform: scale(0.7); }
