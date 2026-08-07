@@ -1,5 +1,6 @@
-import { RaidDef, RaidDifficulty, RaidDifficultyConfig, RaidEncounterDef } from '../types';
+import { RaidDef, RaidDifficulty, RaidDifficultyConfig, RaidEncounterDef, Rarity } from '../types';
 import { Tuning } from './tuning';
+import { RARITY_ORDER } from '../util';
 
 /**
  * Raids and their encounters live in json/*.json, same reasoning as
@@ -100,6 +101,21 @@ export function parseLootEntry(entry: string): { defId: string; chance: number }
   const chance = Number(entry.slice(at + 1));
   if (!defId || Number.isNaN(chance)) return null;
   return { defId, chance };
+}
+
+/** Parses a "<rarity>[:<dedicatedPetId>]@chance" eggLoot entry -- same
+ *  malformed-entry-is-dropped-not-thrown safety as parseLootEntry above.
+ *  The rarity half is validated against RARITY_ORDER so a typo'd devtool
+ *  edit (e.g. "rar@5") silently drops instead of granting a bad Rarity
+ *  value into game state. */
+export function parseEggLootEntry(entry: string): { rarity: Rarity; dedicatedPetId?: string; chance: number } | null {
+  const at = entry.lastIndexOf('@');
+  if (at <= 0) return null;
+  const chance = Number(entry.slice(at + 1));
+  if (Number.isNaN(chance)) return null;
+  const [rarityPart, dedicatedPetId] = entry.slice(0, at).split(':');
+  if (!RARITY_ORDER.includes(rarityPart as Rarity)) return null;
+  return { rarity: rarityPart as Rarity, dedicatedPetId: dedicatedPetId || undefined, chance };
 }
 
 /** The loot pool actually in play for a given difficulty -- lootHeroic/

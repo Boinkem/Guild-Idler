@@ -192,6 +192,13 @@ const SCHEMAS = {
       // picker, so filling these in is exactly as easy as the base list.
       lootHeroic: { type: 'string[]', required: false, picker: 'lootTable' },
       lootMythic: { type: 'string[]', required: false, picker: 'lootTable' },
+      // "<rarity>[:<dedicatedPetId>]@chance" strings, e.g. "rare@1" or
+      // "epic:hatchery_hound@0.5" -- same reused string-list shape as loot
+      // above, just no browsable picker (eggs aren't an EQUIPMENT id the
+      // 'lootTable' picker knows how to query) -- plain text-list editing,
+      // same as loot's own original pre-picker form. See
+      // parseEggLootEntry in raids.ts for exactly how this is read.
+      eggLoot: { type: 'string[]', required: false },
     },
   },
   'raids': {

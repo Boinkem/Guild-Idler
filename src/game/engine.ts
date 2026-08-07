@@ -397,6 +397,9 @@ export class GameEngine {
       for (const pet of result.hatchedPets ?? []) {
         this.say(`An egg hatched! Say hello to ${pet.name}.`, 'hatchery');
       }
+      if (result.eggDropped) {
+        this.say(`Found a ${result.eggDropped.rarity} egg! Equip it in the Hatchery to start it incubating.`, 'hatchery');
+      }
       this.reportAchievements(AchievementManager.checkAll(this.state, now));
       this.reportGuidance(GuidanceManager.checkAll(this.state));
 
@@ -1082,6 +1085,20 @@ export class GameEngine {
    *  same pattern as dismissChainDiscovery above. */
   dismissHatcherySpotlight() {
     this.state.pendingHatcherySpotlight = false;
+    void this.saveNow();
+  }
+
+  equipEgg(eggUid: string) {
+    const error = PetManager.equipEgg(this.state, eggUid);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.notify();
+    void this.saveNow();
+  }
+
+  unequipEgg(eggUid: string) {
+    PetManager.unequipEgg(this.state, eggUid);
+    this.notify();
     void this.saveNow();
   }
 

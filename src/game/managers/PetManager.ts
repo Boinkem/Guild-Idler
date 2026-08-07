@@ -9,19 +9,41 @@ const PET_TREAT_ID = 'pet_treat';
 
 export const PetManager = {
   /**
-   * Adds a new incubating egg, if there's a free slot. Silently returns
-   * false (egg not granted) when the Hatchery is full -- there's no queue;
-   * a drop that arrives while every slot is occupied is simply lost, same
-   * trade-off the design doc flags as a known open question rather than a
-   * bug. Callers rolling a low-chance drop should treat this the same way
-   * a maxed-out warehouse already treats a Harvest catch (see
-   * HarvestManager.catch): checked, not guaranteed.
+   * Adds a freshly-dropped or -granted egg to storage (unequipped) --
+   * always succeeds, unbounded, same as EquipmentManager pushing onto
+   * state.stash. An egg does nothing until equipped into a Nest via
+   * equipEgg below; this is a deliberate change from the original
+   * "auto-incubate on grant" behaviour (see the Hatchery/Pets status
+   * writeup) so a drop arriving while every Nest is full is never simply
+   * lost the way it used to be.
    */
-  grantEgg(state: GameState, rarity: Rarity, dedicatedPetId?: string, now = Date.now()): boolean {
-    if (state.incubatingEggs.length >= ModifierManager.incubationSlots(state)) return false;
+  grantEgg(state: GameState, rarity: Rarity, dedicatedPetId?: string, now = Date.now()): void {
     const egg: EggInstance = { uid: uid('egg'), rarity, dedicatedPetId, hatchXp: 0, startedAt: now };
+    state.eggStorage.push(egg);
+  },
+
+  /** Moves an egg from storage into an open Nest slot -- same
+   *  stash-to-hero-slot shape EquipmentManager.equip already uses. Fails
+   *  if every Nest is already occupied; storage itself never fills up, so
+   *  there's no equivalent "displaced item" case to handle. */
+  equipEgg(state: GameState, eggUid: string, now = Date.now()): string | null {
+    const egg = state.eggStorage.find((e) => e.uid === eggUid);
+    if (!egg) return 'No such egg.';
+    if (state.incubatingEggs.length >= ModifierManager.incubationSlots(state)) return 'Every nest is already occupied.';
+    state.eggStorage = state.eggStorage.filter((e) => e.uid !== eggUid);
+    egg.startedAt = now; // re-stamped on equip, not on original grant -- hatch pacing starts from when it actually begins incubating
     state.incubatingEggs.push(egg);
-    return true;
+    return null;
+  },
+
+  /** Moves an egg back to storage, pausing it -- hatchXp already earned is
+   *  kept, not reset, same "unequipping doesn't destroy the item" logic
+   *  as gear. */
+  unequipEgg(state: GameState, eggUid: string): void {
+    const egg = state.incubatingEggs.find((e) => e.uid === eggUid);
+    if (!egg) return;
+    state.incubatingEggs = state.incubatingEggs.filter((e) => e.uid !== eggUid);
+    state.eggStorage.push(egg);
   },
 
   /**

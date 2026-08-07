@@ -1655,6 +1655,36 @@ button.harvest-item:hover {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
+/* Same exact shape as .craft-scene above -- own aspect-ratio since
+   hatchery-select-bg.jpg's own canvas (1448x1086) isn't the same ratio as
+   the crafting scenes (1402x1122). Reuses SlotBox/PickerModal directly
+   from CraftingStation.tsx rather than duplicating that machinery for a
+   single-slot picker -- see EggSelectModal.tsx. */
+.hatchery-select-scene {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1448 / 1086;
+  background-size: 100% 100%;
+  background-position: center;
+  background-color: var(--night);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* An empty Nest slot -- same .card base as a filled one, but a real
+   <button> (click anywhere to open EggSelectModal) with a dashed edge and
+   dimmer text so it reads as "nothing here yet" rather than content. */
+.egg-empty-nest {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  border-style: dashed;
+  border-left-style: dashed;
+  opacity: 0.75;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+.egg-empty-nest:hover { opacity: 1; background: color-mix(in srgb, var(--panel) 94%, transparent); }
+
 /* The small picker popped open by clicking a slot -- same overlay/modal
    shell as everywhere else in the game, just narrower and listing rows
    instead of one item's own detail (see PickerModal in CraftingStation.tsx). */

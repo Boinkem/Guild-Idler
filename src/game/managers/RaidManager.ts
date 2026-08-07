@@ -1,12 +1,13 @@
 import {
   ActiveRaid, GameState, Hero, Modifiers, RaidDifficulty, RaidLootDrop, RaidResult,
 } from '../types';
-import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, lootForDifficulty } from '../data/raids';
+import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty } from '../data/raids';
 import { EQUIPMENT_BY_ID } from '../data/equipment';
 import { MIN_SUCCESS, MAX_SUCCESS } from './QuestManager';
 import { HeroManager } from './HeroManager';
 import { EquipmentManager } from './EquipmentManager';
 import { ModifierManager } from './ModifierManager';
+import { PetManager } from './PetManager';
 import { createRng } from '../rng';
 import { clamp, sumMods, MINUTE } from '../util';
 
@@ -186,6 +187,7 @@ export const RaidManager = {
     let gold = 0;
     let xp = 0;
     const loot: RaidLootDrop[] = [];
+    const eggsFound: RaidResult['eggsFound'] = [];
     const encounterIds = raid?.encounterIds ?? [];
 
     for (const encounterId of encounterIds) {
@@ -213,6 +215,19 @@ export const RaidManager = {
         state.stats.itemsFound += 1;
         if (def.rarity === 'legendary') state.stats.legendaryItemsFound += 1;
         loot.push({ defId: parsed.defId, name: def.name, rarity: def.rarity, encounterId });
+      }
+
+      // Eggs as raid loot -- same devtool-editable "string list, parsed
+      // token@chance" convention as equipment loot just above, just a
+      // different token shape (rarity, optionally a dedicated pet) since
+      // an egg isn't an EquipmentDef. Rolled independently of the
+      // equipment loot loop, same economy.loot/diffCfg.lootBonus scaling.
+      for (const entry of encounter.eggLoot ?? []) {
+        const parsed = parseEggLootEntry(entry);
+        if (!parsed) continue;
+        if (!rng.chance(Math.min(90, parsed.chance * (1 + (economy.loot + diffCfg.lootBonus) / 100)))) continue;
+        PetManager.grantEgg(state, parsed.rarity, parsed.dedicatedPetId, resolvedAt);
+        eggsFound.push({ rarity: parsed.rarity, encounterId });
       }
     }
 
@@ -255,6 +270,7 @@ export const RaidManager = {
       gold,
       xp,
       loot,
+      eggsFound,
       injuries,
       resolvedAt,
     };

@@ -115,6 +115,7 @@ export function createInitialState(now = Date.now()): GameState {
     hatcheryUnlocked: false,
     pendingHatcherySpotlight: false,
     incubatingEggs: [],
+    eggStorage: [],
     pets: [],
     equippedPetIds: [],
   };
@@ -358,6 +359,15 @@ const MIGRATIONS: Record<number, Migration> = {
     incubatingEggs: (save.incubatingEggs as unknown[] | undefined) ?? [],
     pets: (save.pets as unknown[] | undefined) ?? [],
     equippedPetIds: (save.equippedPetIds as string[] | undefined) ?? [],
+  }),
+  23: (save) => ({
+    ...save,
+    version: 24,
+    // Eggs stopped auto-incubating on grant this patch (see PetManager) --
+    // any egg an existing save already has mid-incubation stays exactly
+    // where it is (incubatingEggs is untouched here), it just now also has
+    // an empty storage pool alongside it rather than nothing.
+    eggStorage: (save.eggStorage as unknown[] | undefined) ?? [],
   }),
 };
 

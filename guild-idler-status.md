@@ -124,15 +124,21 @@ surplus. See its own section below for the full built-status writeup.
 
 **Pets / Hatchery** — new `hatchery` tab (hidden until the one-time intro
 chain `the_last_clutch` grants it), unlocked via a spotlight prompt reusing
-OnboardingTour. Eggs incubate toward a rarity-based hatch-xp threshold
-(fed by hero xp earned anywhere in the guild), then hatch into a random
-pet with its own rolled bonus type/magnitude. Equipped pets (1 base slot,
-more via the new Companion Bond upgrade) feed their bonus into the
-account-wide modifier pool and gain their own xp, which grows that bonus
-over time; happiness decays lazily and can be restored by feeding raw
-materials or a new craftable Pet Treat. Quest/raid egg-drop wiring and
-companion-sprite rendering are the two pieces still open -- see its own
-section below for the full writeup.
+OnboardingTour. Eggs drop from quests/raids (or the intro chain's own
+dedicated grant) into unbounded storage, then get manually equipped into
+one of a limited number of Nest slots to start incubating toward a
+rarity-based hatch-xp threshold (fed by hero xp earned anywhere in the
+guild) -- Nests are genuine equip slots, the same relationship the
+equipment stash has to a hero's worn gear, not an auto-start-on-grant
+system anymore. Hatching rolls a random pet with its own bonus type/
+magnitude. Equipped pets (1 base slot, more via the new Companion Bond
+upgrade) feed their bonus into the account-wide modifier pool, gain their
+own xp which grows that bonus over time, and now render live beside the
+hero on the desktop companion; happiness decays lazily and can be restored
+by feeding raw materials or a new craftable Pet Treat. Three real animated
+species (fox/red panda/crow) ship with art across all 5 rarity recolors;
+egg art is still glyph-only, blocked on sourcing the actual transparent
+spritesheet. See its own section below for the full writeup.
 
 **World lore** — `world-lore-pantheon.md` is the source of truth for
 gods/pantheon rules. Starved gods can lash out from the starving itself
@@ -1498,16 +1504,57 @@ from the spec pass).
   `equippedPetIds` for any pre-existing save. `QuestResult.hatchedPets` is
   optional rather than migrated, since old log entries predate it entirely
   and every read already treats a missing value as "nothing hatched."
+  Bumped again 23 -> 24 for the eggStorage/equip-slot change below --
+  existing mid-incubation eggs are left exactly where they are, they just
+  now also have an (initially empty) storage pool alongside them.
 
 **Known gaps, deliberately not blocking this patch:**
-- **Quest/raid egg-drop wiring.** `PetManager.grantEgg` is fully built and
-  tested via the intro chain's own dedicated-egg grant, but nothing yet
-  rolls an ordinary egg drop off a normal quest/raid completion the way
-  equipment loot does. Needs a loot-table-shaped field (mirroring
-  `RaidEncounterDef.loot`'s "defId@chance" convention, likely
-  "rarity@chance" or a dedicated pet-loot list) plus a devtool picker --
-  scoped but not started. Blocked separately on the actual egg spritesheet
-  too -- see Art below.
+- ~~Quest/raid egg-drop wiring~~ -- done, alongside a real design change to
+  how eggs work. **Eggs no longer auto-incubate on grant.** `PetManager.
+  grantEgg` now always adds to a new `state.eggStorage` pool (unbounded,
+  same shape as `state.stash`) instead of dropping straight into a Nest --
+  Nests are now explicitly the Hatchery's own equip slots, exactly the
+  same relationship `state.stash` has to a hero's worn gear. New
+  `PetManager.equipEgg`/`unequipEgg` move an `EggInstance` between the two
+  (unequipping keeps `hatchXp` earned so far, doesn't reset it). This
+  changed on purpose, not as a side effect of drop wiring: with real drops
+  now landing far more often than the one-off intro-chain grant, silently
+  losing an egg to a full Hatchery (the old behaviour) stopped being an
+  edge case and started being a real cost.
+  - Ordinary quests roll an egg drop independently of equipment loot, on
+    success only -- flat % per difficulty tier (`pets.questEggDropChance.
+    *`, 5 new tuning entries), rarity fixed per tier rather than randomised
+    (Easy grants Uncommon, Legendary grants Legendary -- see the tuning
+    descriptions for why Easy doesn't grant Common).
+  - Raid encounters get a new devtool-editable `eggLoot` field on
+    `RaidEncounterDef` -- same reused "string-list, token@chance" shape
+    `loot`/`lootHeroic`/`lootMythic` already use, just a `"<rarity>[:
+    <dedicatedPetId>]@chance"` token instead of a defId, parsed by new
+    `parseEggLootEntry` in `raids.ts`. No `lootTable`-style browsable
+    picker (that picker specifically queries the equipment defId pool,
+    which eggs aren't part of) -- plain text-list editing, same as `loot`
+    itself before that picker existed. This is the actual "assign eggs as
+    loot, like gear" devtool support the original spec asked for.
+  - `QuestResult.eggDropped`/`RaidResult.eggsFound` (both optional, same
+    not-migrated reasoning as `hatchedPets`) surface the drop for a toast,
+    mirroring the hatch celebration already in `engine.ts`.
+- **Egg selection UI -- built, using the new modal background art.**
+  `EggSelectModal.tsx` reuses `CraftingStation.tsx`'s `SlotBox`/
+  `PickerModal`/`Rect` machinery directly rather than duplicating it --
+  same pattern `EnhanceStation.tsx` already established for reusing that
+  file's exports. One hand-measured slot rect (`public/lore/
+  hatchery-select-bg.jpg`'s own painted window, 42.6%/37.3%/14.1%/19.2% of
+  its 1448x1086 canvas) opens a `PickerModal` listing `state.eggStorage`.
+  The Nests tab itself now renders a fixed-count grid (one card per
+  `ModifierManager.incubationSlots(state)`, not just a mapped list of
+  whatever's currently incubating) -- an empty Nest is its own dashed-
+  border clickable card that opens the same modal, a filled one shows
+  progress + an Unequip button. New `EggIcon.tsx` is the static (non-
+  animated) per-rarity icon for storage/selection display specifically --
+  deliberately NOT the `PetSprite` manifest/animation pipeline, since only
+  the one egg actually mid-hatch should ever animate, not every egg
+  sitting in storage. Reads `public/pets/egg/<rarity>/icon.png`, same
+  glyph-fallback convention as everywhere else -- no real icon art yet.
 - ~~Companion sprite on the desktop window~~ -- done. `IdleView` renders
   the first equipped pet beside the hero via the same `PetSprite`
   component the Hatchery uses, requesting the generic `idle`/`movement`
@@ -1519,18 +1566,23 @@ from the spec pass).
   departure rather than walking off-screen in sync, a scope cut rather
   than an oversight, still animating its own loop the whole time so it
   doesn't read as frozen.
-- **Art -- three species done, egg sheet still blocked.** Ember Kit (fox),
-  Rooftail (red panda), and Ashwing (crow) all have real animated sprites
-  now, recoloured across all 5 rarity tiers via a new
-  `tools/import_pets.py` (same lightness-preserving HLS palette-swap
-  technique `tools/recolor.py` already established for heroes, applied
-  per-`Rarity` instead of per-skin). `hatchery-bg.jpg` still renders
-  nothing. The egg sheet is still blocked -- two uploads so far have both
-  turned out to be the asset pack's promo/preview composite (opaque flat
-  background baked in, no real alpha channel), not the actual
-  redistributable spritesheet.png. Needs the real transparent file before
-  any of the incubating-egg/hatch-card visuals in the original spec can
-  be built.
+- **Art -- four assets done, egg sprite sheet still blocked.** Ember Kit
+  (fox), Rooftail (red panda), and Ashwing (crow) all have real animated
+  sprites, recoloured across all 5 rarity tiers via a new `tools/
+  import_pets.py` (same lightness-preserving HLS palette-swap technique
+  `tools/recolor.py` already established for heroes, applied per-`Rarity`
+  instead of per-skin). `public/lore/hatchery-select-bg.jpg` (the egg-
+  equip modal's background) is real now too, hand-measured for its one
+  content-window slot rect -- see EggSelectModal above. `hatchery-bg.jpg`
+  (the Hatchery tab's own background, separate from the select-modal one)
+  still renders nothing. The egg SPRITE sheet is still blocked -- two
+  uploads so far have both turned out to be the asset pack's promo/preview
+  composite (opaque flat background baked in, no real alpha channel), not
+  the actual redistributable spritesheet.png. Needs the real transparent
+  file before the animated hatch-card moment from the original spec can be
+  built; the static per-rarity `EggIcon` (storage/selection display) is
+  unaffected by this and just needs `public/pets/egg/<rarity>/icon.png`
+  whenever that's sourced separately.
 - Bonus roll ranges, hatch-xp thresholds, and feed gains are first-pass
   numbers, not a balance pass -- same "content is a cache, gameplay data
   confirms the intent" spirit as every other system's initial numbers.

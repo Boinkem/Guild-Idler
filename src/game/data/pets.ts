@@ -39,3 +39,10 @@ export function hatchXpThreshold(rarity: Rarity): number {
 
 /** Base incubation slots before any Nest Expansion levels. */
 export const BASE_INCUBATION_SLOTS = Tuning.get('pets.baseIncubationSlots');
+
+/** Flat % chance an ordinary successful quest at this difficulty drops an
+ *  egg into storage -- see the individual tuning entries for why each
+ *  tier's rarity is fixed rather than randomised within a range. */
+export function questEggDropChance(difficulty: string): number {
+  return Tuning.get(`pets.questEggDropChance.${difficulty}`);
+}

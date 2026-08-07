@@ -4,6 +4,7 @@ import {
 } from '../data/quests';
 import { HERO_CLASSES } from '../data/progression';
 import { burstCapsPerHour } from '../data/balance';
+import { questEggDropChance } from '../data/pets';
 import {
   ActiveQuest, Difficulty, GameState, Hero, QuestOffer, QuestResult, Rarity,
 } from '../types';
@@ -346,6 +347,7 @@ export const QuestManager = {
     let gold = 0;
     let xp = 0;
     const loot: QuestResult['loot'] = [];
+    let eggDropped: QuestResult['eggDropped'];
 
     if (success) {
       gold = Math.floor(quest.offer.rewardGold * quest.goldMultiplier * (1 + events.goldPct)) + events.flatGold;
@@ -366,6 +368,17 @@ export const QuestManager = {
           const def = EQUIPMENT_BY_ID[entry.defId];
           if (def) loot.push({ defId: def.id, name: def.name, rarity: def.rarity });
         }
+      }
+      // Ordinary egg drop -- flat per-difficulty chance (not scaled by
+      // lootChance/personalLoot the way equipment is; kept as its own
+      // simple independent roll since eggs aren't part of the equipment-
+      // loot economy at all). Rarity is fixed per difficulty tier -- see
+      // the pets.questEggDropChance.* tuning descriptions for why.
+      if (rng.chance(questEggDropChance(quest.offer.difficulty))) {
+        const rarities = LOOT_RARITY_BY_DIFFICULTY[quest.offer.difficulty] ?? ['common'];
+        const rarity = rarities[rarities.length - 1];
+        PetManager.grantEgg(state, rarity, undefined, resolvedAt);
+        eggDropped = { rarity };
       }
     } else {
       // Failure still pays a small consolation and a little experience.
@@ -499,6 +512,7 @@ export const QuestManager = {
       levelsGained,
       chainAdvanced,
       hatchedPets: hatched.map((p) => ({ name: p.name, defId: p.defId })),
+      eggDropped,
     };
     state.log.unshift(result);
     if (state.log.length > 60) state.log.length = 60;

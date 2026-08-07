@@ -8,6 +8,8 @@ import { EggInstance, MaterialId, Pet } from '../../game/types';
 import { RarityPill } from '../RarityPill';
 import { formatMaterial } from '../../game/util';
 import { PetSprite } from '../sprites/PetSprite';
+import { EggIcon } from '../EggIcon';
+import { EggSelectModal } from '../EggSelectModal';
 
 type SubTab = 'home' | 'pets';
 
@@ -55,39 +57,75 @@ function NestsTab() {
   const engine = useEngine();
   const state = engine.state;
   const slots = ModifierManager.incubationSlots(state);
+  const [pickerOpen, setPickerOpen] = useState(false);
   useNow(5000); // just enough to keep progress bars visibly live
+
+  // Fixed-count slots, not just a mapped list of whatever's in
+  // incubatingEggs -- an empty Nest needs its own clickable card (opens
+  // EggSelectModal) the same way an empty gear slot does, not just absence
+  // from the grid. See GameState.incubatingEggs's own doc comment: Nests
+  // ARE the Hatchery's equip slots, storage is the unequipped pool.
+  const nestSlots = Array.from({ length: slots }, (_, i) => state.incubatingEggs[i] ?? null);
 
   return (
     <>
-      <p className="tiny muted" style={{ marginBottom: 10 }}>
-        {state.incubatingEggs.length}/{slots} nests in use. More come from the Nest Expansion upgrade in Guild Hall.
-      </p>
-      {state.incubatingEggs.length === 0 && (
-        <div className="card"><p className="card-flavour">No eggs incubating right now. They arrive as quest and raid rewards.</p></div>
-      )}
-      <div className="grid two">
-        {state.incubatingEggs.map((egg) => <EggCard key={egg.uid} egg={egg} />)}
+      <div className="spread" style={{ marginBottom: 10 }}>
+        <p className="tiny muted" style={{ margin: 0 }}>
+          {state.incubatingEggs.length}/{slots} nests filled. More come from the Nest Expansion upgrade
+          in Guild Hall.
+        </p>
+        <button className="btn-ghost" style={{ minHeight: 26 }} onClick={() => setPickerOpen(true)}>
+          Storage ({state.eggStorage.length})
+        </button>
       </div>
+
+      <div className="grid two">
+        {nestSlots.map((egg, i) => (egg
+          ? <EggCard key={egg.uid} egg={egg} onUnequip={() => engine.unequipEgg(egg.uid)} />
+          : <EmptyNestCard key={`empty-${i}`} onClick={() => setPickerOpen(true)} />
+        ))}
+      </div>
+
+      {pickerOpen && <EggSelectModal onClose={() => setPickerOpen(false)} />}
     </>
   );
 }
 
-function EggCard({ egg }: { egg: EggInstance }) {
+function EmptyNestCard({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" className="card egg-empty-nest" onClick={onClick} style={{ marginBottom: 0 }}>
+      <span className="card-title">Empty Nest</span>
+      <p className="card-flavour">Equip an egg from storage to start it incubating.</p>
+    </button>
+  );
+}
+
+function EggCard({ egg, onUnequip }: { egg: EggInstance; onUnequip: () => void }) {
   const threshold = hatchXpThreshold(egg.rarity);
   const pct = Math.min(100, (egg.hatchXp / threshold) * 100);
   return (
     <div className="card" style={{ marginBottom: 0 }}>
-      <div className="spread">
-        <span className="card-title">Egg</span>
-        <RarityPill rarity={egg.rarity} />
+      <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
+        <EggIcon rarity={egg.rarity} size={40} />
+        <div style={{ flex: 1 }}>
+          <div className="spread">
+            <span className="card-title">Egg</span>
+            <RarityPill rarity={egg.rarity} />
+          </div>
+          <p className="card-flavour">
+            {egg.dedicatedPetId ? 'A special clutch -- this one has already decided what it will become.' : 'Hatching into something from the general pool.'}
+          </p>
+        </div>
       </div>
-      <p className="card-flavour">
-        {egg.dedicatedPetId ? 'A special clutch -- this one has already decided what it will become.' : 'Hatching into something from the general pool.'}
-      </p>
-      <div className="harvest-stock-bar" style={{ marginBottom: 4 }}>
+      <div className="harvest-stock-bar" style={{ margin: '8px 0 4px' }}>
         <span style={{ width: `${pct}%` }} />
       </div>
-      <span className="tiny muted">{formatMaterial(egg.hatchXp)}/{formatMaterial(threshold)} xp</span>
+      <div className="spread">
+        <span className="tiny muted">{formatMaterial(egg.hatchXp)}/{formatMaterial(threshold)} xp</span>
+        <button className="btn-ghost" style={{ minHeight: 22, fontSize: '0.6875rem' }} onClick={onUnequip}>
+          Unequip
+        </button>
+      </div>
     </div>
   );
 }

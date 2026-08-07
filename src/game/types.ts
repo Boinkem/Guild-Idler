@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 23;
+export const SAVE_VERSION = 24;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -317,6 +317,11 @@ export interface QuestResult {
    *  state.log predate this field entirely -- treat a missing value as
    *  "nothing hatched," same as every UI read of it already does. */
   hatchedPets?: { name: string; defId: string }[];
+  /** An ordinary egg drop rolled this quest, if any -- independent of
+   *  hatchedPets above (a freshly-dropped egg goes to storage, unequipped,
+   *  not straight into a nest -- see PetManager.grantEgg). Same
+   *  optional/not-migrated reasoning as hatchedPets. */
+  eggDropped?: { rarity: Rarity };
 }
 
 /**
@@ -371,6 +376,15 @@ export interface RaidEncounterDef {
    */
   lootHeroic?: string[];
   lootMythic?: string[];
+  /**
+   * "<rarity>[:<dedicatedPetId>]@chance" strings -- same reused-string-list
+   * convention as `loot` above (see parseEggLootEntry), just a different
+   * token shape since an egg roll picks a Rarity (and optionally locks in
+   * a specific dedicated-pool pet) rather than an equipment defId. Rolled
+   * independently of `loot`/lootHeroic/lootMythic, same
+   * economy.loot/diffCfg.lootBonus scaling either way.
+   */
+  eggLoot?: string[];
 }
 
 export interface RaidDef {
@@ -491,6 +505,13 @@ export interface RaidResult {
   gold: number;
   xp: number;
   loot: RaidLootDrop[];
+  /** Eggs rolled off eggLoot entries this run -- separate from loot above
+   *  the same way QuestResult.hatchedPets is separate from QuestResult.loot,
+   *  since an egg isn't an EquipmentDef drop. Optional, not migrated --
+   *  same reasoning as QuestResult.hatchedPets/eggDropped: old raidLog
+   *  entries predate this field, and every read already treats a missing
+   *  value as "nothing found." */
+  eggsFound?: { rarity: Rarity; encounterId: string }[];
   injuries: { heroId: string; heroName: string; injury: Injury }[];
   resolvedAt: number;
 }
@@ -744,7 +765,25 @@ export interface GameState {
    *  moment, not a toast" treatment as pendingChainDiscovery -- shown as a
    *  single-step reuse of OnboardingTour spotlighting the new tab. */
   pendingHatcherySpotlight: boolean;
+  /**
+   * Eggs actively incubating -- the Hatchery's own "equipped" slots,
+   * exactly the same relationship eggStorage has to this that state.stash
+   * has to a hero's worn EquipmentItems. Capped at
+   * ModifierManager.incubationSlots(state); PetManager.equipEgg/unequipEgg
+   * move an EggInstance between here and eggStorage. Only eggs in here
+   * accrue hatchXp (see PetManager.addHatchXp).
+   */
   incubatingEggs: EggInstance[];
+  /**
+   * Eggs owned but not yet equipped into a Nest -- shown with a static
+   * icon (no animation budget spent on eggs sitting in storage; the
+   * animated hatch moment is reserved for the equipped/incubating egg
+   * that's actually about to hatch). Unbounded, same as state.stash.
+   * PetManager.grantEgg always adds here now, never straight into a nest
+   * -- see the Hatchery/Pets status writeup for why this changed from the
+   * original "auto-incubate on grant" behaviour.
+   */
+  eggStorage: EggInstance[];
   pets: Pet[];
   /** Which owned pets currently accompany the guild -- feeds ModifierManager's
    *  global mods and is the only thing that gains a pet post-hatch xp (see
