@@ -2,10 +2,9 @@ import { useState } from 'react';
 import { useEngine } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { GameEngine } from '../../game/engine';
-import { EquipmentManager, MAX_PLUS } from '../../game/managers/EquipmentManager';
+import { EquipmentManager } from '../../game/managers/EquipmentManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { EQUIPMENT_BY_ID, ITEM_SETS } from '../../game/data/equipment';
-import { CONSUMABLE_BY_ID } from '../../game/data/items';
 import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { describeMods, describeStats, formatGold, RARITY_COLOR } from '../../game/util';
@@ -91,7 +90,7 @@ function ConsumableSlotCard({
   available: { def: ConsumableDef; count: number }[]; engine: GameEngine;
 }) {
   const [picking, setPicking] = useState(false);
-  const def = equippedDefId ? CONSUMABLE_BY_ID[equippedDefId] : undefined;
+  const def = equippedDefId ? InventoryManager.resolveDef(engine.state, equippedDefId) : undefined;
 
   if (def) {
     return (
@@ -165,9 +164,11 @@ function ConsumableSlotCard({
 
 /** A single worn-gear slot. Collapsed shows just the icon, name, and rarity
  *  pill; clicking expands to the full mod breakdown, durability, and the
- *  refine/remove actions -- same collapse-by-default pattern used on
- *  the Quest Board and Lore tab. Durability repair itself now lives on the
- *  Blacksmith's own Enhance station rather than a button here. */
+ *  repair/remove actions -- same collapse-by-default pattern used on
+ *  the Quest Board and Lore tab. "Refine" (the +N upgrade, which also
+ *  raises the durability cap) now lives on the Blacksmith's own Enhance
+ *  station instead of a button here -- plain repair (restore to whatever
+ *  the cap already is, no cap increase) stays here as a quick action. */
 function SlotCard({
   slot, item, workshop, hero, engine,
 }: { slot: EquipSlot; item: EquipmentItem | undefined; workshop: number; hero: Hero; engine: GameEngine }) {
@@ -213,10 +214,10 @@ function SlotCard({
           <div className="row wrap" style={{ marginTop: 6 }}>
             <button
               style={{ minHeight: 24, padding: '3px 6px' }}
-              onClick={() => engine.upgradeItem(item.uid)}
-              disabled={item.plus >= MAX_PLUS}
+              onClick={() => engine.repair(item.uid)}
+              disabled={EquipmentManager.repairCost(item, workshop) === 0}
             >
-              Refine {formatGold(EquipmentManager.upgradeCost(item, workshop))}
+              Repair {formatGold(EquipmentManager.repairCost(item, workshop))}
             </button>
             <button
               style={{ minHeight: 24, padding: '3px 6px' }}

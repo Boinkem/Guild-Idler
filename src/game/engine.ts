@@ -1076,8 +1076,8 @@ export class GameEngine {
     void this.saveNow();
   }
 
-  craftConsumable(recipeId: string) {
-    const error = CraftingManager.craftConsumable(this.state, recipeId);
+  craftConsumable(recipeId: string, chosenMods: (keyof Modifiers)[] = []) {
+    const error = CraftingManager.craftConsumable(this.state, recipeId, chosenMods);
     if (error) return this.say(error);
     playSound('purchase');
     this.notify();

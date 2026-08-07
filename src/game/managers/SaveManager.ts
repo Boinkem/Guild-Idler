@@ -66,6 +66,7 @@ export function createInitialState(now = Date.now()): GameState {
     heroSlots: 1,
     roster: ['adventurer'],
     inventory: { healing_potion: 1 },
+    customConsumables: {},
     stash: [],
     questBoard: [],
     boardRefreshedAt: 0,
@@ -339,6 +340,11 @@ const MIGRATIONS: Record<number, Migration> = {
       tradeRouteUnlocked: (save.tradeRouteUnlocked as boolean | undefined) ?? false,
     };
   },
+  21: (save) => ({
+    ...save,
+    version: 22,
+    customConsumables: (save.customConsumables as Record<string, unknown> | undefined) ?? {},
+  }),
 };
 
 export const SaveManager = {

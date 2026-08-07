@@ -231,7 +231,7 @@ export const QuestManager = {
    * raise the hero's *actual* mods above this now-tier-accurate floor.
    */
   previewSuccess(state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number): number {
-    const loadout = InventoryManager.loadoutEffects(consumables);
+    const loadout = InventoryManager.loadoutEffects(state, consumables);
     const classDef = HERO_CLASSES[hero.heroClass];
     // Every chain stage now carries its own authored tag (see
     // ChainStageDef.tag / chainOffer) rather than the old hardcoded
@@ -268,7 +268,7 @@ export const QuestManager = {
       }
     }
 
-    const loadout = InventoryManager.loadoutEffects(consumables);
+    const loadout = InventoryManager.loadoutEffects(state, consumables);
     const classDef = HERO_CLASSES[hero.heroClass];
     const preferred = classDef.preferred.includes(offer.tag) ? classDef.preferredBonus : 0;
     const mods = sumMods(
@@ -469,7 +469,7 @@ export const QuestManager = {
   previewLoot(
     state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number,
   ): { name: string; rarity: Rarity; chance: number }[] {
-    const loadout = InventoryManager.loadoutEffects(consumables);
+    const loadout = InventoryManager.loadoutEffects(state, consumables);
     const mods = sumMods(HeroManager.heroMods(hero, now), ModifierManager.global(state), loadout.mods);
     const lootChance = DIFFICULTIES[offer.difficulty].lootChance + mods.loot;
     // Mirrors resolve()'s own two-stage math exactly -- see the comment

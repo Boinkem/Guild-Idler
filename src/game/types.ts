@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 21;
+export const SAVE_VERSION = 22;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -73,6 +73,20 @@ export interface ConsumableDef {
   effect: {
     success?: number;
     gold?: number;
+    /** xp/loot/injuryResist/speed are only ever populated on a
+     *  custom-crafted variant (see CraftingManager's consumable path) --
+     *  every hand-authored consumable in consumables.json sticks to
+     *  success/gold/preventInjury/guaranteedGoodEvent/healInjury. Same
+     *  units as Modifiers: xp/gold are % multipliers, loot/injuryResist
+     *  are flat percentage points, speed is a % duration reduction. */
+    xp?: number;
+    loot?: number;
+    injuryResist?: number;
+    speed?: number;
+    /** Unused by any current recipe -- included only so the full
+     *  `keyof Modifiers` range types cleanly against this object
+     *  (CraftingManager.craftConsumable indexes it generically). */
+    durability?: number;
     preventInjury?: boolean;
     guaranteedGoodEvent?: boolean;
     healInjury?: boolean;
@@ -597,6 +611,19 @@ export interface GameState {
   roster: HeroClass[];
 
   inventory: Record<string, number>;
+  /**
+   * Runtime-registered consumable variants produced by crafting with a
+   * chosen mod bonus (see CraftingManager's consumable path) -- e.g.
+   * "Trail Rations, but with +10% injury resist baked in" isn't one of
+   * the hand-authored entries in consumables.json, so it's registered
+   * here instead, keyed by a stable id derived from the base consumable
+   * + the exact mod combo chosen (so re-crafting the same combo stacks
+   * onto the same entry rather than spawning duplicates). Checked before
+   * CONSUMABLE_BY_ID everywhere a consumable might be resolved by id --
+   * see InventoryManager.resolveDef, the one place that lookup actually
+   * happens.
+   */
+  customConsumables: Record<string, ConsumableDef>;
   stash: EquipmentItem[];
 
   questBoard: QuestOffer[];

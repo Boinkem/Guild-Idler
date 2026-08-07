@@ -1,8 +1,10 @@
 import { CraftingRecipeDef, GameState, MaterialId, Modifiers, Stats } from '../types';
 import { CRAFTING_RECIPE_BY_ID } from '../data/craftingRecipes';
+import { CONSUMABLE_BY_ID } from '../data/items';
 import { EquipmentManager } from './EquipmentManager';
 import { InventoryManager } from './InventoryManager';
 import { MATERIAL_BY_ID } from '../data/materials';
+import { MOD_LABEL } from '../util';
 
 export const CraftingManager = {
   /** What's still missing to afford a recipe, if anything -- used to grey out the Craft button. */
@@ -46,19 +48,66 @@ export const CraftingManager = {
     return null;
   },
 
-  /** Crafts a `consumable` recipe -- no choices involved, just cost in for a fixed item out. */
-  craftConsumable(state: GameState, recipeId: string): string | null {
+  /**
+   * Crafts a `consumable` recipe. With no chosen mods (the common case --
+   * Trail Rations, Herbal Tonic), this is unchanged from before: cost in,
+   * a stack of the recipe's own `resultConsumableId` out.
+   *
+   * With `chosenMods` (must be exactly recipe.modsToPick entries, each one
+   * of recipe.modOptions -- same validation shape as craftGear), the
+   * output is a distinct crafted *variant* instead: a synthetic id derived
+   * from the base consumable + the exact mod combo, so re-crafting the
+   * same combo stacks onto the same registered entry rather than spawning
+   * duplicates every time. The variant is registered once, in
+   * `state.customConsumables`, cloning the base def's icon/glyph/other
+   * effects and adding the chosen mod bonus on top -- see
+   * InventoryManager.resolveDef, which is what makes a crafted variant
+   * behave identically to a shop consumable everywhere one might be used
+   * (equipped, applied standalone, or spent on a quest).
+   *
+   * `speed` is deliberately not a valid mod option here even though it's
+   * a real Modifiers key -- QuestManager.previewDuration doesn't consult
+   * the consumable loadout at all (a pre-existing gap, not introduced by
+   * this), so a "speed" consumable bonus would silently do nothing. Don't
+   * add it to a recipe's modOptions until that's actually wired up.
+   */
+  craftConsumable(state: GameState, recipeId: string, chosenMods: (keyof Modifiers)[] = []): string | null {
     const recipe = CRAFTING_RECIPE_BY_ID[recipeId];
     if (!recipe || recipe.category !== 'consumable' || !recipe.resultConsumableId) return 'Unknown recipe.';
+    const modsToPick = recipe.modsToPick ?? 0;
+    const modOptions = recipe.modOptions ?? [];
+    if (chosenMods.length !== modsToPick) return `Pick exactly ${modsToPick} bonus${modsToPick === 1 ? '' : 'es'}.`;
+    if (new Set(chosenMods).size !== chosenMods.length) return 'Each bonus can only be picked once.';
+    if (chosenMods.some((m) => !modOptions.includes(m))) return 'One of those bonuses isn\u2019t available on this recipe.';
+    const baseDef = CONSUMABLE_BY_ID[recipe.resultConsumableId];
+    if (!baseDef) return 'That item no longer exists.';
     const afford = CraftingManager.affordability(state, recipe);
     if (!afford.ok) return afford.reason ?? 'Cannot afford this.';
+
+    let resultId = recipe.resultConsumableId;
+    if (chosenMods.length > 0) {
+      const sorted = [...chosenMods].sort();
+      resultId = `${recipe.resultConsumableId}::${sorted.join(',')}`;
+      if (!state.customConsumables[resultId]) {
+        const bonusLabel = sorted.map((m) => `+${recipe.modValue}% ${MOD_LABEL[m]}`).join(', ');
+        state.customConsumables[resultId] = {
+          ...baseDef,
+          id: resultId,
+          name: `${baseDef.name} (${bonusLabel})`,
+          effect: {
+            ...baseDef.effect,
+            ...Object.fromEntries(sorted.map((m) => [m, (baseDef.effect[m] ?? 0) + (recipe.modValue ?? 0)])),
+          },
+        };
+      }
+    }
 
     state.gold -= recipe.goldCost;
     state.stats.goldSpent += recipe.goldCost;
     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
       state.materials[materialId] -= amount;
     }
-    InventoryManager.add(state, recipe.resultConsumableId, 1);
+    InventoryManager.add(state, resultId, 1);
     return null;
   },
 

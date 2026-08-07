@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useEngine } from './useEngine';
-import { EquipmentManager } from '../game/managers/EquipmentManager';
+import { EquipmentManager, MAX_PLUS } from '../game/managers/EquipmentManager';
 import { formatGold } from '../game/util';
 import { ItemIcon } from './icons';
 import { PickerModal, SlotBox } from './CraftingStation';
@@ -16,14 +16,22 @@ import type { PickerOption, Rect } from './CraftingStation';
 const SLOT_RECT: Rect = { left: 40.9, top: 37.0, width: 18.7, height: 23.1 };
 
 /**
- * Durability repair, moved here from a per-item button buried in each
- * equipped item's expanded card on the Inventory tab -- now a dedicated
- * click-select-confirm station on the Blacksmith's own page, matching
- * Crafting's visual pattern with commissioned art (a single slot here,
- * since there's only one real choice: which item). Still calls the exact
- * same `engine.repair` the old per-item button did -- this only moves
- * *where* that action lives, not what it does. The Inventory tab's
- * top-level "Repair everything" bulk button is unrelated and untouched.
+ * The "Refine" (+N) mechanic, moved here from a per-item button buried in
+ * each equipped item's expanded card on the Inventory tab -- now a
+ * dedicated click-select-confirm station on the Blacksmith's own page,
+ * matching Crafting's visual pattern with commissioned art (a single slot
+ * here, since there's only one real choice: which item).
+ *
+ * Correction from an earlier pass: this was originally wired to plain
+ * durability *repair* (`engine.repair`, restoring current durability back
+ * up to whatever the existing cap already was), based on a literal read
+ * of "enhance its durability." What was actually meant was the item's
+ * `plus` upgrade -- `EquipmentManager.upgrade`/`engine.upgradeItem` --
+ * which *raises* the durability cap itself (`maxDurability` scales with
+ * `item.plus`) and tops the item off to that new, higher cap as part of
+ * the same action. Plain repair (restore to whatever the cap already is,
+ * no cap increase) stays as a quick action back on the Inventory tab
+ * instead -- it was never the button being asked to move.
  */
 export function EnhanceStation({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
@@ -36,20 +44,23 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
   const item = found?.item;
   const def = item ? EquipmentManager.def(item) : undefined;
-  const cost = item ? EquipmentManager.repairCost(item, workshop) : 0;
+  const cost = item ? EquipmentManager.upgradeCost(item, workshop) : 0;
   const maxDurability = item ? EquipmentManager.maxDurability(item) : 0;
-  const needsRepair = cost > 0;
+  const maxed = item ? item.plus >= MAX_PLUS : false;
+  // Same formula EquipmentManager.maxDurability itself uses, evaluated one
+  // plus level ahead -- just for the "here's what you'd get" preview line.
+  const nextMaxDurability = def ? Math.floor(def.maxDurability * (1 + ((item?.plus ?? 0) + 1) * 0.1)) : 0;
 
   const options: PickerOption[] = EquipmentManager.allItems(state)
     .map(({ item: i, heroId }): PickerOption | null => {
       const d = EquipmentManager.def(i);
       if (!d) return null;
       const owner = heroId ? state.heroes.find((h) => h.id === heroId)?.name ?? 'Stash' : 'Stash';
-      const full = i.durability >= EquipmentManager.maxDurability(i);
+      const atMax = i.plus >= MAX_PLUS;
       return {
         key: i.uid,
-        label: d.name,
-        sublabel: `${owner} -- ${full ? 'full durability' : `${i.durability}/${EquipmentManager.maxDurability(i)} durability`}`,
+        label: `${d.name}${i.plus > 0 ? ` +${i.plus}` : ''}`,
+        sublabel: `${owner} -- ${atMax ? 'max refinement' : `+${i.plus}/${MAX_PLUS}`}`,
         icon: <ItemIcon slot={d.slot} icon={d.icon} size={64} />,
       };
     })
@@ -57,7 +68,7 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
 
   function handleEnhance() {
     if (!item) return;
-    engine.repair(item.uid);
+    engine.upgradeItem(item.uid);
   }
 
   return (
@@ -80,13 +91,15 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
         {item && def ? (
           <p className="tiny muted" style={{ margin: '8px 0' }}>
             {def.name}{item.plus > 0 ? ` +${item.plus}` : ''} &mdash;{' '}
-            {needsRepair ? `${item.durability}/${maxDurability} durability, ${formatGold(cost)} to fully restore` : 'already at full durability'}
+            {maxed
+              ? 'already at maximum refinement'
+              : `+${item.plus} \u2192 +${item.plus + 1} (durability cap ${maxDurability} \u2192 ${nextMaxDurability}), ${formatGold(cost)}`}
           </p>
         ) : (
-          <p className="tiny muted" style={{ margin: '8px 0' }}>Choose an item to see its condition.</p>
+          <p className="tiny muted" style={{ margin: '8px 0' }}>Choose an item to see its refinement level.</p>
         )}
 
-        <button className="btn-purple" disabled={!item || !needsRepair} onClick={handleEnhance}>
+        <button className="btn-purple" disabled={!item || maxed || state.gold < cost} onClick={handleEnhance}>
           Enhance
         </button>
       </div>

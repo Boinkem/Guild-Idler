@@ -159,11 +159,14 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
   const [targetUid, setTargetUid] = useState('');
   const [chosenStats, setChosenStats] = useState<(keyof Stats)[]>([]);
   // consumable -- which of the recipe's required materials have been
-  // clicked-through/confirmed. Every current recipe has exactly one valid
-  // material per slot, so this is a "reveal, then confirm" tap rather than
-  // a real choice yet -- built to already support a recipe with real
-  // alternatives later without another UI pass.
+  // clicked-through/confirmed (one combined slot covering all of them,
+  // however many there are -- see materialsSlot below), plus an optional
+  // chosen bonus, same modOptions/modsToPick/modValue fields gear recipes
+  // already use, toggled the same multi-select way the enchant stat slot
+  // is (a list, not fixed gear-style slots -- modsToPick is realistically
+  // 0 or 1 for a consumable, not gear's fixed 2).
   const [confirmedMaterials, setConfirmedMaterials] = useState<Set<MaterialId>>(new Set());
+  const [chosenConsumableMods, setChosenConsumableMods] = useState<(keyof Modifiers)[]>([]);
 
   const [openSlot, setOpenSlot] = useState<'top' | 'bottomLeft' | 'bottomRight' | null>(null);
 
@@ -173,6 +176,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
     setModSlot1(null);
     setChosenStats([]);
     setConfirmedMaterials(new Set());
+    setChosenConsumableMods([]);
   }
 
   function reset() {
@@ -182,6 +186,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
     setTargetUid('');
     setChosenStats([]);
     setConfirmedMaterials(new Set());
+    setChosenConsumableMods([]);
   }
 
   const afford = recipe ? CraftingManager.affordability(state, recipe) : null;
@@ -194,13 +199,13 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
   const canCraft = !!recipe && !!afford?.ok
     && (category !== 'gear' || chosenMods.length === modsToPick)
     && (category !== 'enchant' || (chosenStats.length === statsToPick && targetUid !== ''))
-    && (category !== 'consumable' || materialIds.every((id) => confirmedMaterials.has(id)));
+    && (category !== 'consumable' || (materialIds.every((id) => confirmedMaterials.has(id)) && chosenConsumableMods.length === modsToPick));
 
   function handleCraft() {
     if (!recipe) return;
     if (category === 'gear') engine.craftGear(recipe.id, chosenMods);
     else if (category === 'enchant') engine.enchantItem(recipe.id, targetUid, chosenStats);
-    else engine.craftConsumable(recipe.id);
+    else engine.craftConsumable(recipe.id, chosenConsumableMods);
     reset();
   }
 
@@ -274,24 +279,44 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
     </span>
   );
 
-  /* ------------------------- consumable material slots -------------------- */
-  function materialSlot(index: 0 | 1) {
-    const id = materialIds[index];
-    if (!id) return null;
+  /* ------------------------- consumable: materials slot (combined) -------- */
+  const materialsOptions: PickerOption[] = materialIds.map((id) => {
     const material = MATERIAL_BY_ID[id];
     const need = recipe?.materialCost[id] ?? 0;
     const have = state.materials[id] ?? 0;
-    const confirmed = confirmedMaterials.has(id);
     return {
-      id, material, need, have, confirmed,
-      options: [{
-        key: id,
-        label: `${material.name} x${need}`,
-        sublabel: have >= need ? `Have ${have}` : `Need ${need}, have ${have}`,
-        disabled: have < need,
-      }],
+      key: id,
+      label: `${material.name} x${need}`,
+      sublabel: have >= need ? `Have ${have}` : `Need ${need}, have ${have}`,
+      disabled: have < need,
     };
+  });
+  const allMaterialsConfirmed = materialIds.length > 0 && materialIds.every((id) => confirmedMaterials.has(id));
+  const materialsFilled = allMaterialsConfirmed
+    ? <span className="craft-slot-label">{materialIds.map((id) => MATERIAL_BY_ID[id].glyph).join(' ')}</span>
+    : null;
+
+  /* ------------------------- consumable: bonus slot ------------------------ */
+  const consumableModOptions: PickerOption[] = (recipe?.modOptions ?? []).map((m) => ({
+    key: m,
+    label: `+${recipe?.modValue ?? 0}% ${MOD_LABEL[m]}`,
+    disabled: !chosenConsumableMods.includes(m) && chosenConsumableMods.length >= modsToPick,
+  }));
+
+  function toggleConsumableMod(key: string) {
+    const mod = key as keyof Modifiers;
+    setChosenConsumableMods((prev) => {
+      if (prev.includes(mod)) return prev.filter((m) => m !== mod);
+      if (prev.length >= modsToPick) return prev;
+      return [...prev, mod];
+    });
   }
+
+  const consumableModFilled = chosenConsumableMods.length === 0 ? null : (
+    <span className="craft-slot-label">
+      {chosenConsumableMods.map((m) => `+${recipe?.modValue}% ${MOD_LABEL[m]}`).join(', ')}
+    </span>
+  );
 
   const scene = (
     <div className="craft-scene" style={{ backgroundImage: `url(${STATION_BG[category]})` }}>
@@ -341,22 +366,22 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
 
       {category === 'consumable' && (
         <>
-          {[0, 1].map((i) => {
-            const slot = materialSlot(i as 0 | 1);
-            if (!slot) return null;
-            return (
-              <SlotBox
-                key={slot.id}
-                rect={i === 0 ? rects.bottomLeft : rects.bottomRight}
-                filled={slot.confirmed
-                  ? <span className="craft-slot-label">{slot.material.glyph} {slot.material.name}</span>
-                  : null}
-                disabled={!recipe}
-                label={`Select ${slot.material.name}`}
-                onOpen={() => setOpenSlot(i === 0 ? 'bottomLeft' : 'bottomRight')}
-              />
-            );
-          })}
+          <SlotBox
+            rect={rects.bottomLeft}
+            filled={materialsFilled}
+            disabled={!recipe}
+            label="Confirm materials"
+            onOpen={() => setOpenSlot('bottomLeft')}
+          />
+          {modsToPick > 0 && (
+            <SlotBox
+              rect={rects.bottomRight}
+              filled={consumableModFilled}
+              disabled={!recipe}
+              label="Choose a bonus"
+              onOpen={() => setOpenSlot('bottomRight')}
+            />
+          )}
         </>
       )}
     </div>
@@ -427,19 +452,26 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
         />
       )}
 
-      {(openSlot === 'bottomLeft' || openSlot === 'bottomRight') && category === 'consumable' && (() => {
-        const index = openSlot === 'bottomLeft' ? 0 : 1;
-        const slot = materialSlot(index);
-        if (!slot) return null;
-        return (
-          <PickerModal
-            title={`Select ${slot.material.name}`}
-            options={slot.options}
-            onPick={(key) => setConfirmedMaterials((prev) => new Set(prev).add(key as MaterialId))}
-            onClose={() => setOpenSlot(null)}
-          />
-        );
-      })()}
+      {openSlot === 'bottomLeft' && category === 'consumable' && (
+        <PickerModal
+          title="Confirm materials"
+          options={materialsOptions}
+          onPick={(key) => setConfirmedMaterials((prev) => new Set(prev).add(key as MaterialId))}
+          onClose={() => setOpenSlot(null)}
+          closeOnPick={materialIds.length <= 1}
+          selectedKeys={[...confirmedMaterials]}
+        />
+      )}
+      {openSlot === 'bottomRight' && category === 'consumable' && (
+        <PickerModal
+          title={`Choose a bonus (${chosenConsumableMods.length}/${modsToPick})`}
+          options={consumableModOptions}
+          onPick={toggleConsumableMod}
+          onClose={() => setOpenSlot(null)}
+          closeOnPick={modsToPick <= 1}
+          selectedKeys={chosenConsumableMods}
+        />
+      )}
     </div>
   );
 }

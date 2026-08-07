@@ -1,0 +1,853 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index d3e6da0..57c03d1 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -844,42 +844,52 @@ either quality or actually finishing what's here.
+ `npx tsc --noEmit` and `vite build` both pass clean across the whole
+ batch.
+ 
+-### Durability repair moved to the Blacksmith's own Enhance station -- complete
+-Per direct request: the per-item "Repair" button used to live buried in
+-each equipped item's expanded card on the Inventory tab. Removed from
+-there and rebuilt as a dedicated station on the Blacksmith's own Vendors
+-page, next to Crafting -- same single-click-select-confirm shape as
++### "Enhance" station moved to the Blacksmith -- complete (corrected)
++Per direct request: a per-item button used to live buried in each
++equipped item's expanded card on the Inventory tab. Removed from there
++and rebuilt as a dedicated station on the Blacksmith's own Vendors page,
++next to Crafting -- same single-click-select-confirm shape as
+ Crafting/Enchanting, with commissioned art (`public/lore/crafting/
+ enhance.jpg`, converted from the supplied JPG). New `src/ui/
+ EnhanceStation.tsx`: one slot (this scene only has one painted frame,
+ unlike Crafting/Enchanting's three) -- click it, pick any item (stash or
+ equipped, across every hero, same `EquipmentManager.allItems` lookup
+-Enchant's own item picker already uses), see its current durability and
+-repair cost, confirm. Still calls the exact same `engine.repair()` the
+-old button did -- only *where* the action lives changed, not what it
+-does. `PickerModal`/`SlotBox`/`Rect` exported from `CraftingStation.tsx`
+-so this didn't need to duplicate that popup code.
+-
+-Left alone, deliberately: the separate "Refine" (+N power upgrade)
+-button and the Inventory tab's own top-level "Repair everything" bulk
+-action are unrelated mechanics that weren't part of what was asked to
+-move.
+-
+-**Craft/Enchant/Enhance buttons are now purple**, per direct request --
+-new `.btn-purple` class built on `--violet` (the game's one existing
+-purple accent, already defined per-theme including High Contrast, rather
+-than introducing a new one-off color). Applied to both the vendor-page
++Enchant's own item picker already uses), confirm. `PickerModal`/
++`SlotBox`/`Rect` exported from `CraftingStation.tsx` so this didn't need
++to duplicate that popup code.
++
++**Correction, same conversation:** the first pass wired this to plain
++durability *repair* (`engine.repair` -- restores current durability back
++up to whatever the cap already was, no cap change), based on a literal
++reading of "enhance its durability." What was actually meant was the
++existing **"Refine" (+N)** mechanic (`EquipmentManager.upgrade`/
++`engine.upgradeItem`), which *raises the durability cap itself*
++(`maxDurability` scales with `item.plus`) and tops the item off to that
++new, higher cap as part of the same action -- matching "enhance
++[increases] durability limits" exactly once it was spelled out. Swapped
++the station over to call `upgradeItem` instead, gated on `item.plus <
++MAX_PLUS` rather than repair cost, with a preview line showing the
++plus level and durability-cap change (e.g. "+0 -> +1 (durability cap 40
++-> 44)"). Plain repair moved *back* to the Inventory tab's per-item card
++-- it was never the button being asked to move, and un-removing it was
++the other half of this correction.
++
++**Craft/Enchant/Enhance buttons are still purple**, per direct request --
++`.btn-purple` class built on `--violet` (the game's one existing purple
++accent, already defined per-theme including High Contrast, rather than
++introducing a new one-off color). Applied to both the vendor-page
+ trigger buttons (Crafting, Enhance) and the submit buttons inside each
+-overlay, so "this is a crafting-family action" reads as one consistent
+-visual language rather than blending into every other brass
+-`btn-primary` on the page.
+-
+-Verified at runtime: a damaged test item is found via the same lookup
+-the UI relies on, and `engine.repair()` correctly restores it to full
+-durability. The single slot's position was hand-measured against the
+-actual supplied image and confirmed by drawing the rect back onto the
+-source art, same process used for the other three crafting scenes.
+-`npx tsc --noEmit` and `vite build` both pass clean.
++overlay, unaffected by the repair/refine correction above.
++
++Verified at runtime, both before and after the correction: a damaged
++test item is found via the same lookup the UI relies on; after the
++correction, calling the station's action on a fresh item confirmed
++`plus` increases by exactly 1, the durability *cap* itself genuinely
++increases (not just current durability), and the item tops off to that
++new, higher cap. The single slot's position was hand-measured against
++the actual supplied image and confirmed by drawing the rect back onto
++the source art, same process used for the other three crafting scenes.
++`npx tsc --noEmit` and `vite build` both pass clean throughout.
+ 
+ ### Harvest icon randomization -- logic prepped, waiting on real art
+ The player described a specific icon-pool naming convention (Ore1-3,
+@@ -925,6 +935,75 @@ files land there). Drop the actual art in at that path, matching the
+ filenames listed above, and it'll pick up automatically with no further
+ code changes.
+ 
++### Consumables can now carry crafted stat/mod bonuses -- complete
++Per direct request: extend consumable crafting to support the same
++"pick a bonus" flow gear crafting already has. This was flagged as a
++genuine architecture decision in an earlier pass rather than a quick UI
++add-on, and it was -- consumables were tracked as flat counts against a
++*static* registry (`CONSUMABLE_BY_ID`, built once from consumables.json),
++unlike equipment, which has individual instanced items that can each
++carry their own `customMods`. A crafted consumable with a chosen bonus
++needed to behave like a genuinely different item from the plain version
++-- stacking separately, carrying its own name and effect -- without
++becoming a whole new per-unit-instance system the way equipment is.
++
++**The approach:** a *runtime-registered variant*, not a per-unit
++instance. `GameState.customConsumables: Record<string, ConsumableDef>`
++(new, `SAVE_VERSION` 21->22 with a migration) holds crafted variants,
++keyed by a stable id derived from the base consumable + the exact mod
++combo chosen (`baseId::sortedMods`) -- so re-crafting the same combo
++stacks onto the same registered entry instead of spawning a duplicate
++every time, and `state.inventory` keeps working exactly as before (a
++flat count keyed by id, the variant's id is just a longer string than
++usual). `InventoryManager.resolveDef(state, id)` is the one place a
++consumable id actually gets resolved -- checks `customConsumables`
++before falling back to the static table -- and every function that used
++to read `CONSUMABLE_BY_ID` directly now goes through it instead:
++`owned()` (so a crafted variant actually shows up in the equip picker,
++not just accumulates silently in `state.inventory`), `useOnHero()`,
++`loadoutEffects()` (now aggregates the *full* modifier set --
++xp/loot/injuryResist/speed, not just success/gold like before -- since
++`ConsumableDef.effect` gained those fields too, matching `Modifiers`
++completely except deliberately excluding `speed` as a valid recipe
++option: `QuestManager.previewDuration` doesn't consult the consumable
++loadout at all, a pre-existing gap this patch didn't introduce, so a
++"speed" bonus would silently do nothing until that's separately wired
++up), plus the two UI spots that display a consumable by id
++(`EquipmentPanel`'s equipped-slot card, `QuestPanel`'s "Used X" line on
++a quest's log entry).
++
++**`CraftingStation.tsx`'s consumable flow redesigned** to fit an extra
++choice into the same three-slot scene: the old two-boxes-one-per-
++material layout became a single combined "confirm all materials" slot
++(materials picked up priority in the two boxes before; this scales to
++any number of materials instead of being hardcoded to at most two), and
++the second box now shows a "bonus" picker -- but only when the selected
++recipe actually has `modsToPick > 0`, staying hidden entirely for a
++recipe with none (Trail Rations, Herbal Tonic are completely unaffected,
++still exactly as simple as before). The bonus picker reuses the same
++multi-select popup pattern the Enchant stat picker already established
++(stays open across multiple picks when more than one is allowed, closes
++immediately for the common single-pick case).
++
++**Found and fixed real dormant scaffolding while implementing this:**
++`craft_trail_meal` ("Meal On The Go") already had `modOptions:
++["injuryResist"]` and a `modValue` sitting in crafting-recipes.json, but
++`modsToPick` was `0` -- meaning the mod choice was defined but could
++never actually be picked, silently inert. Set to `1`; this is now the
++first real, working example of a mod-bearing consumable recipe.
++
++Verified with two separate runtime scripts, not just typechecked: (1) a
++plain craft with no mods behaves identically to before (adds straight to
++the base stack, registers nothing); (2) crafting with a chosen mod
++registers a distinct variant with the correct name and effect value,
++crafting the *same* combo again stacks onto that same entry rather than
++duplicating, `owned()` surfaces it with the right count, and
++`loadoutEffects()` resolves its bonus correctly; (3) a full craft ->
++equip -> send-on-quest -> resolve cycle confirms the crafted bonus
++actually lands on the quest's own locked-in `injuryResist` value, not
++just in isolated unit checks. `npx tsc --noEmit` and `vite build` both
++pass clean.
++
+ ### Cleanup items
+ - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid
+   encounter with loot now has all three difficulty tiers.
+@@ -1116,14 +1195,9 @@ Route) living in one administrative spot rather than scattered across
+ the tab.
+ 
+ ### Bigger, still-undecided
+-- **Queued from the same conversation as the UX/economy batch above,
+-  deliberately not attempted yet -- each is real design/content work in
+-  its own right:**
+-  - **Consumable stats/mods.** Extend consumables to carry player-chosen
+-    stat/mod bonuses the way craftable gear's `customMods` already does,
+-    rather than being fixed, static items. Needs a schema decision first
+-    (stored per-stack, or does equipping "lock in" a roll like gear
+-    crafting does?) before any code.
++- **Queued from the same conversation as the UX/economy batch above:**
++  - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
++    crafted stat/mod bonuses" above for the full writeup.
+   - **Equipment pool expansion.** Currently thin -- confirmed only one
+     real leather-tier item (a cap) exists. Ask is a full set each for
+     leather/steel/thief across every slot, a brand new `cloak` slot type
+diff --git a/src/game/data/json/crafting-recipes.json b/src/game/data/json/crafting-recipes.json
+index 959a8bb..8206ecc 100644
+--- a/src/game/data/json/crafting-recipes.json
++++ b/src/game/data/json/crafting-recipes.json
+@@ -76,7 +76,7 @@
+     "modOptions": [
+       "injuryResist"
+     ],
+-    "modsToPick": 0,
++    "modsToPick": 1,
+     "modValue": 10,
+     "resultConsumableId": "strength_potion",
+     "statsToPick": 0,
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 9866cff..822c364 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -1076,8 +1076,8 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
+-  craftConsumable(recipeId: string) {
+-    const error = CraftingManager.craftConsumable(this.state, recipeId);
++  craftConsumable(recipeId: string, chosenMods: (keyof Modifiers)[] = []) {
++    const error = CraftingManager.craftConsumable(this.state, recipeId, chosenMods);
+     if (error) return this.say(error);
+     playSound('purchase');
+     this.notify();
+diff --git a/src/game/managers/CraftingManager.ts b/src/game/managers/CraftingManager.ts
+index 1cc3482..616590d 100644
+--- a/src/game/managers/CraftingManager.ts
++++ b/src/game/managers/CraftingManager.ts
+@@ -1,8 +1,10 @@
+ import { CraftingRecipeDef, GameState, MaterialId, Modifiers, Stats } from '../types';
+ import { CRAFTING_RECIPE_BY_ID } from '../data/craftingRecipes';
++import { CONSUMABLE_BY_ID } from '../data/items';
+ import { EquipmentManager } from './EquipmentManager';
+ import { InventoryManager } from './InventoryManager';
+ import { MATERIAL_BY_ID } from '../data/materials';
++import { MOD_LABEL } from '../util';
+ 
+ export const CraftingManager = {
+   /** What's still missing to afford a recipe, if anything -- used to grey out the Craft button. */
+@@ -46,19 +48,66 @@ export const CraftingManager = {
+     return null;
+   },
+ 
+-  /** Crafts a `consumable` recipe -- no choices involved, just cost in for a fixed item out. */
+-  craftConsumable(state: GameState, recipeId: string): string | null {
++  /**
++   * Crafts a `consumable` recipe. With no chosen mods (the common case --
++   * Trail Rations, Herbal Tonic), this is unchanged from before: cost in,
++   * a stack of the recipe's own `resultConsumableId` out.
++   *
++   * With `chosenMods` (must be exactly recipe.modsToPick entries, each one
++   * of recipe.modOptions -- same validation shape as craftGear), the
++   * output is a distinct crafted *variant* instead: a synthetic id derived
++   * from the base consumable + the exact mod combo, so re-crafting the
++   * same combo stacks onto the same registered entry rather than spawning
++   * duplicates every time. The variant is registered once, in
++   * `state.customConsumables`, cloning the base def's icon/glyph/other
++   * effects and adding the chosen mod bonus on top -- see
++   * InventoryManager.resolveDef, which is what makes a crafted variant
++   * behave identically to a shop consumable everywhere one might be used
++   * (equipped, applied standalone, or spent on a quest).
++   *
++   * `speed` is deliberately not a valid mod option here even though it's
++   * a real Modifiers key -- QuestManager.previewDuration doesn't consult
++   * the consumable loadout at all (a pre-existing gap, not introduced by
++   * this), so a "speed" consumable bonus would silently do nothing. Don't
++   * add it to a recipe's modOptions until that's actually wired up.
++   */
++  craftConsumable(state: GameState, recipeId: string, chosenMods: (keyof Modifiers)[] = []): string | null {
+     const recipe = CRAFTING_RECIPE_BY_ID[recipeId];
+     if (!recipe || recipe.category !== 'consumable' || !recipe.resultConsumableId) return 'Unknown recipe.';
++    const modsToPick = recipe.modsToPick ?? 0;
++    const modOptions = recipe.modOptions ?? [];
++    if (chosenMods.length !== modsToPick) return `Pick exactly ${modsToPick} bonus${modsToPick === 1 ? '' : 'es'}.`;
++    if (new Set(chosenMods).size !== chosenMods.length) return 'Each bonus can only be picked once.';
++    if (chosenMods.some((m) => !modOptions.includes(m))) return 'One of those bonuses isn\u2019t available on this recipe.';
++    const baseDef = CONSUMABLE_BY_ID[recipe.resultConsumableId];
++    if (!baseDef) return 'That item no longer exists.';
+     const afford = CraftingManager.affordability(state, recipe);
+     if (!afford.ok) return afford.reason ?? 'Cannot afford this.';
+ 
++    let resultId = recipe.resultConsumableId;
++    if (chosenMods.length > 0) {
++      const sorted = [...chosenMods].sort();
++      resultId = `${recipe.resultConsumableId}::${sorted.join(',')}`;
++      if (!state.customConsumables[resultId]) {
++        const bonusLabel = sorted.map((m) => `+${recipe.modValue}% ${MOD_LABEL[m]}`).join(', ');
++        state.customConsumables[resultId] = {
++          ...baseDef,
++          id: resultId,
++          name: `${baseDef.name} (${bonusLabel})`,
++          effect: {
++            ...baseDef.effect,
++            ...Object.fromEntries(sorted.map((m) => [m, (baseDef.effect[m] ?? 0) + (recipe.modValue ?? 0)])),
++          },
++        };
++      }
++    }
++
+     state.gold -= recipe.goldCost;
+     state.stats.goldSpent += recipe.goldCost;
+     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
+       state.materials[materialId] -= amount;
+     }
+-    InventoryManager.add(state, recipe.resultConsumableId, 1);
++    InventoryManager.add(state, resultId, 1);
+     return null;
+   },
+ 
+diff --git a/src/game/managers/InventoryManager.ts b/src/game/managers/InventoryManager.ts
+index 05cca79..925cd7c 100644
+--- a/src/game/managers/InventoryManager.ts
++++ b/src/game/managers/InventoryManager.ts
+@@ -2,6 +2,20 @@ import { CONSUMABLE_BY_ID, CONSUMABLES } from '../data/items';
+ import { ConsumableDef, GameState, Hero, Modifiers } from '../types';
+ 
+ export const InventoryManager = {
++  /**
++   * The one place a consumable defId actually gets resolved to its def --
++   * checks `state.customConsumables` (crafted variants with a chosen mod
++   * bonus baked in, see CraftingManager) before falling back to the
++   * static, hand-authored `CONSUMABLE_BY_ID`. Every other function below
++   * goes through this rather than reading `CONSUMABLE_BY_ID` directly, so
++   * a crafted variant behaves identically to a shop-bought consumable
++   * everywhere it might show up -- equipped, used standalone, or applied
++   * to a quest.
++   */
++  resolveDef(state: GameState, defId: string): ConsumableDef | undefined {
++    return state.customConsumables[defId] ?? CONSUMABLE_BY_ID[defId];
++  },
++
+   count(state: GameState, defId: string): number {
+     return state.inventory[defId] ?? 0;
+   },
+@@ -29,15 +43,19 @@ export const InventoryManager = {
+     return null;
+   },
+ 
++  /** Everything with stock > 0 -- both the static shop catalogue and any
++   *  crafted custom variants, since the latter only ever exist in
++   *  `state.inventory` via crafting, never the static `CONSUMABLES` list. */
+   owned(state: GameState): { def: ConsumableDef; count: number }[] {
+-    return CONSUMABLES
++    const all: ConsumableDef[] = [...CONSUMABLES, ...Object.values(state.customConsumables)];
++    return all
+       .map((def) => ({ def, count: state.inventory[def.id] ?? 0 }))
+       .filter((entry) => entry.count > 0);
+   },
+ 
+   /** Uses a bandage-style item outside of questing. */
+   useOnHero(state: GameState, hero: Hero, defId: string): string | null {
+-    const def = CONSUMABLE_BY_ID[defId];
++    const def = InventoryManager.resolveDef(state, defId);
+     if (!def) return 'Unknown item.';
+     if (!def.effect.healInjury) return 'Apply that one when sending a hero out.';
+     if (hero.injuries.length === 0) return `${hero.name} is not injured.`;
+@@ -47,23 +65,31 @@ export const InventoryManager = {
+   },
+ 
+   /** Aggregates the quest-time effects of a chosen consumable loadout. */
+-  loadoutEffects(defIds: string[]): {
++  loadoutEffects(state: GameState, defIds: string[]): {
+     mods: Partial<Modifiers>;
+     preventInjury: boolean;
+     guaranteedGoodEvent: boolean;
+   } {
+     let success = 0;
+     let gold = 0;
++    let xp = 0;
++    let loot = 0;
++    let injuryResist = 0;
++    let speed = 0;
+     let preventInjury = false;
+     let guaranteedGoodEvent = false;
+     for (const id of defIds) {
+-      const def = CONSUMABLE_BY_ID[id];
++      const def = InventoryManager.resolveDef(state, id);
+       if (!def) continue;
+       success += def.effect.success ?? 0;
+       gold += def.effect.gold ?? 0;
++      xp += def.effect.xp ?? 0;
++      loot += def.effect.loot ?? 0;
++      injuryResist += def.effect.injuryResist ?? 0;
++      speed += def.effect.speed ?? 0;
+       preventInjury ||= !!def.effect.preventInjury;
+       guaranteedGoodEvent ||= !!def.effect.guaranteedGoodEvent;
+     }
+-    return { mods: { success, gold }, preventInjury, guaranteedGoodEvent };
++    return { mods: { success, gold, xp, loot, injuryResist, speed }, preventInjury, guaranteedGoodEvent };
+   },
+ };
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 67581fd..ecaa4c3 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -231,7 +231,7 @@ export const QuestManager = {
+    * raise the hero's *actual* mods above this now-tier-accurate floor.
+    */
+   previewSuccess(state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number): number {
+-    const loadout = InventoryManager.loadoutEffects(consumables);
++    const loadout = InventoryManager.loadoutEffects(state, consumables);
+     const classDef = HERO_CLASSES[hero.heroClass];
+     // Every chain stage now carries its own authored tag (see
+     // ChainStageDef.tag / chainOffer) rather than the old hardcoded
+@@ -268,7 +268,7 @@ export const QuestManager = {
+       }
+     }
+ 
+-    const loadout = InventoryManager.loadoutEffects(consumables);
++    const loadout = InventoryManager.loadoutEffects(state, consumables);
+     const classDef = HERO_CLASSES[hero.heroClass];
+     const preferred = classDef.preferred.includes(offer.tag) ? classDef.preferredBonus : 0;
+     const mods = sumMods(
+@@ -469,7 +469,7 @@ export const QuestManager = {
+   previewLoot(
+     state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number,
+   ): { name: string; rarity: Rarity; chance: number }[] {
+-    const loadout = InventoryManager.loadoutEffects(consumables);
++    const loadout = InventoryManager.loadoutEffects(state, consumables);
+     const mods = sumMods(HeroManager.heroMods(hero, now), ModifierManager.global(state), loadout.mods);
+     const lootChance = DIFFICULTIES[offer.difficulty].lootChance + mods.loot;
+     // Mirrors resolve()'s own two-stage math exactly -- see the comment
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index ca3bf9a..19ff070 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -66,6 +66,7 @@ export function createInitialState(now = Date.now()): GameState {
+     heroSlots: 1,
+     roster: ['adventurer'],
+     inventory: { healing_potion: 1 },
++    customConsumables: {},
+     stash: [],
+     questBoard: [],
+     boardRefreshedAt: 0,
+@@ -339,6 +340,11 @@ const MIGRATIONS: Record<number, Migration> = {
+       tradeRouteUnlocked: (save.tradeRouteUnlocked as boolean | undefined) ?? false,
+     };
+   },
++  21: (save) => ({
++    ...save,
++    version: 22,
++    customConsumables: (save.customConsumables as Record<string, unknown> | undefined) ?? {},
++  }),
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 7017823..9e70258 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 21;
++export const SAVE_VERSION = 22;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -73,6 +73,20 @@ export interface ConsumableDef {
+   effect: {
+     success?: number;
+     gold?: number;
++    /** xp/loot/injuryResist/speed are only ever populated on a
++     *  custom-crafted variant (see CraftingManager's consumable path) --
++     *  every hand-authored consumable in consumables.json sticks to
++     *  success/gold/preventInjury/guaranteedGoodEvent/healInjury. Same
++     *  units as Modifiers: xp/gold are % multipliers, loot/injuryResist
++     *  are flat percentage points, speed is a % duration reduction. */
++    xp?: number;
++    loot?: number;
++    injuryResist?: number;
++    speed?: number;
++    /** Unused by any current recipe -- included only so the full
++     *  `keyof Modifiers` range types cleanly against this object
++     *  (CraftingManager.craftConsumable indexes it generically). */
++    durability?: number;
+     preventInjury?: boolean;
+     guaranteedGoodEvent?: boolean;
+     healInjury?: boolean;
+@@ -597,6 +611,19 @@ export interface GameState {
+   roster: HeroClass[];
+ 
+   inventory: Record<string, number>;
++  /**
++   * Runtime-registered consumable variants produced by crafting with a
++   * chosen mod bonus (see CraftingManager's consumable path) -- e.g.
++   * "Trail Rations, but with +10% injury resist baked in" isn't one of
++   * the hand-authored entries in consumables.json, so it's registered
++   * here instead, keyed by a stable id derived from the base consumable
++   * + the exact mod combo chosen (so re-crafting the same combo stacks
++   * onto the same entry rather than spawning duplicates). Checked before
++   * CONSUMABLE_BY_ID everywhere a consumable might be resolved by id --
++   * see InventoryManager.resolveDef, the one place that lookup actually
++   * happens.
++   */
++  customConsumables: Record<string, ConsumableDef>;
+   stash: EquipmentItem[];
+ 
+   questBoard: QuestOffer[];
+diff --git a/src/ui/CraftingStation.tsx b/src/ui/CraftingStation.tsx
+index 8096812..4fdcc7d 100644
+--- a/src/ui/CraftingStation.tsx
++++ b/src/ui/CraftingStation.tsx
+@@ -159,11 +159,14 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+   const [targetUid, setTargetUid] = useState('');
+   const [chosenStats, setChosenStats] = useState<(keyof Stats)[]>([]);
+   // consumable -- which of the recipe's required materials have been
+-  // clicked-through/confirmed. Every current recipe has exactly one valid
+-  // material per slot, so this is a "reveal, then confirm" tap rather than
+-  // a real choice yet -- built to already support a recipe with real
+-  // alternatives later without another UI pass.
++  // clicked-through/confirmed (one combined slot covering all of them,
++  // however many there are -- see materialsSlot below), plus an optional
++  // chosen bonus, same modOptions/modsToPick/modValue fields gear recipes
++  // already use, toggled the same multi-select way the enchant stat slot
++  // is (a list, not fixed gear-style slots -- modsToPick is realistically
++  // 0 or 1 for a consumable, not gear's fixed 2).
+   const [confirmedMaterials, setConfirmedMaterials] = useState<Set<MaterialId>>(new Set());
++  const [chosenConsumableMods, setChosenConsumableMods] = useState<(keyof Modifiers)[]>([]);
+ 
+   const [openSlot, setOpenSlot] = useState<'top' | 'bottomLeft' | 'bottomRight' | null>(null);
+ 
+@@ -173,6 +176,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+     setModSlot1(null);
+     setChosenStats([]);
+     setConfirmedMaterials(new Set());
++    setChosenConsumableMods([]);
+   }
+ 
+   function reset() {
+@@ -182,6 +186,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+     setTargetUid('');
+     setChosenStats([]);
+     setConfirmedMaterials(new Set());
++    setChosenConsumableMods([]);
+   }
+ 
+   const afford = recipe ? CraftingManager.affordability(state, recipe) : null;
+@@ -194,13 +199,13 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+   const canCraft = !!recipe && !!afford?.ok
+     && (category !== 'gear' || chosenMods.length === modsToPick)
+     && (category !== 'enchant' || (chosenStats.length === statsToPick && targetUid !== ''))
+-    && (category !== 'consumable' || materialIds.every((id) => confirmedMaterials.has(id)));
++    && (category !== 'consumable' || (materialIds.every((id) => confirmedMaterials.has(id)) && chosenConsumableMods.length === modsToPick));
+ 
+   function handleCraft() {
+     if (!recipe) return;
+     if (category === 'gear') engine.craftGear(recipe.id, chosenMods);
+     else if (category === 'enchant') engine.enchantItem(recipe.id, targetUid, chosenStats);
+-    else engine.craftConsumable(recipe.id);
++    else engine.craftConsumable(recipe.id, chosenConsumableMods);
+     reset();
+   }
+ 
+@@ -274,25 +279,45 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+     </span>
+   );
+ 
+-  /* ------------------------- consumable material slots -------------------- */
+-  function materialSlot(index: 0 | 1) {
+-    const id = materialIds[index];
+-    if (!id) return null;
++  /* ------------------------- consumable: materials slot (combined) -------- */
++  const materialsOptions: PickerOption[] = materialIds.map((id) => {
+     const material = MATERIAL_BY_ID[id];
+     const need = recipe?.materialCost[id] ?? 0;
+     const have = state.materials[id] ?? 0;
+-    const confirmed = confirmedMaterials.has(id);
+     return {
+-      id, material, need, have, confirmed,
+-      options: [{
+-        key: id,
+-        label: `${material.name} x${need}`,
+-        sublabel: have >= need ? `Have ${have}` : `Need ${need}, have ${have}`,
+-        disabled: have < need,
+-      }],
++      key: id,
++      label: `${material.name} x${need}`,
++      sublabel: have >= need ? `Have ${have}` : `Need ${need}, have ${have}`,
++      disabled: have < need,
+     };
++  });
++  const allMaterialsConfirmed = materialIds.length > 0 && materialIds.every((id) => confirmedMaterials.has(id));
++  const materialsFilled = allMaterialsConfirmed
++    ? <span className="craft-slot-label">{materialIds.map((id) => MATERIAL_BY_ID[id].glyph).join(' ')}</span>
++    : null;
++
++  /* ------------------------- consumable: bonus slot ------------------------ */
++  const consumableModOptions: PickerOption[] = (recipe?.modOptions ?? []).map((m) => ({
++    key: m,
++    label: `+${recipe?.modValue ?? 0}% ${MOD_LABEL[m]}`,
++    disabled: !chosenConsumableMods.includes(m) && chosenConsumableMods.length >= modsToPick,
++  }));
++
++  function toggleConsumableMod(key: string) {
++    const mod = key as keyof Modifiers;
++    setChosenConsumableMods((prev) => {
++      if (prev.includes(mod)) return prev.filter((m) => m !== mod);
++      if (prev.length >= modsToPick) return prev;
++      return [...prev, mod];
++    });
+   }
+ 
++  const consumableModFilled = chosenConsumableMods.length === 0 ? null : (
++    <span className="craft-slot-label">
++      {chosenConsumableMods.map((m) => `+${recipe?.modValue}% ${MOD_LABEL[m]}`).join(', ')}
++    </span>
++  );
++
+   const scene = (
+     <div className="craft-scene" style={{ backgroundImage: `url(${STATION_BG[category]})` }}>
+       <SlotBox
+@@ -341,22 +366,22 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+ 
+       {category === 'consumable' && (
+         <>
+-          {[0, 1].map((i) => {
+-            const slot = materialSlot(i as 0 | 1);
+-            if (!slot) return null;
+-            return (
+-              <SlotBox
+-                key={slot.id}
+-                rect={i === 0 ? rects.bottomLeft : rects.bottomRight}
+-                filled={slot.confirmed
+-                  ? <span className="craft-slot-label">{slot.material.glyph} {slot.material.name}</span>
+-                  : null}
+-                disabled={!recipe}
+-                label={`Select ${slot.material.name}`}
+-                onOpen={() => setOpenSlot(i === 0 ? 'bottomLeft' : 'bottomRight')}
+-              />
+-            );
+-          })}
++          <SlotBox
++            rect={rects.bottomLeft}
++            filled={materialsFilled}
++            disabled={!recipe}
++            label="Confirm materials"
++            onOpen={() => setOpenSlot('bottomLeft')}
++          />
++          {modsToPick > 0 && (
++            <SlotBox
++              rect={rects.bottomRight}
++              filled={consumableModFilled}
++              disabled={!recipe}
++              label="Choose a bonus"
++              onOpen={() => setOpenSlot('bottomRight')}
++            />
++          )}
+         </>
+       )}
+     </div>
+@@ -427,19 +452,26 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+         />
+       )}
+ 
+-      {(openSlot === 'bottomLeft' || openSlot === 'bottomRight') && category === 'consumable' && (() => {
+-        const index = openSlot === 'bottomLeft' ? 0 : 1;
+-        const slot = materialSlot(index);
+-        if (!slot) return null;
+-        return (
+-          <PickerModal
+-            title={`Select ${slot.material.name}`}
+-            options={slot.options}
+-            onPick={(key) => setConfirmedMaterials((prev) => new Set(prev).add(key as MaterialId))}
+-            onClose={() => setOpenSlot(null)}
+-          />
+-        );
+-      })()}
++      {openSlot === 'bottomLeft' && category === 'consumable' && (
++        <PickerModal
++          title="Confirm materials"
++          options={materialsOptions}
++          onPick={(key) => setConfirmedMaterials((prev) => new Set(prev).add(key as MaterialId))}
++          onClose={() => setOpenSlot(null)}
++          closeOnPick={materialIds.length <= 1}
++          selectedKeys={[...confirmedMaterials]}
++        />
++      )}
++      {openSlot === 'bottomRight' && category === 'consumable' && (
++        <PickerModal
++          title={`Choose a bonus (${chosenConsumableMods.length}/${modsToPick})`}
++          options={consumableModOptions}
++          onPick={toggleConsumableMod}
++          onClose={() => setOpenSlot(null)}
++          closeOnPick={modsToPick <= 1}
++          selectedKeys={chosenConsumableMods}
++        />
++      )}
+     </div>
+   );
+ }
+diff --git a/src/ui/EnhanceStation.tsx b/src/ui/EnhanceStation.tsx
+index e00ebcb..819cf01 100644
+--- a/src/ui/EnhanceStation.tsx
++++ b/src/ui/EnhanceStation.tsx
+@@ -1,6 +1,6 @@
+ import { useState } from 'react';
+ import { useEngine } from './useEngine';
+-import { EquipmentManager } from '../game/managers/EquipmentManager';
++import { EquipmentManager, MAX_PLUS } from '../game/managers/EquipmentManager';
+ import { formatGold } from '../game/util';
+ import { ItemIcon } from './icons';
+ import { PickerModal, SlotBox } from './CraftingStation';
+@@ -16,14 +16,22 @@ import type { PickerOption, Rect } from './CraftingStation';
+ const SLOT_RECT: Rect = { left: 40.9, top: 37.0, width: 18.7, height: 23.1 };
+ 
+ /**
+- * Durability repair, moved here from a per-item button buried in each
+- * equipped item's expanded card on the Inventory tab -- now a dedicated
+- * click-select-confirm station on the Blacksmith's own page, matching
+- * Crafting's visual pattern with commissioned art (a single slot here,
+- * since there's only one real choice: which item). Still calls the exact
+- * same `engine.repair` the old per-item button did -- this only moves
+- * *where* that action lives, not what it does. The Inventory tab's
+- * top-level "Repair everything" bulk button is unrelated and untouched.
++ * The "Refine" (+N) mechanic, moved here from a per-item button buried in
++ * each equipped item's expanded card on the Inventory tab -- now a
++ * dedicated click-select-confirm station on the Blacksmith's own page,
++ * matching Crafting's visual pattern with commissioned art (a single slot
++ * here, since there's only one real choice: which item).
++ *
++ * Correction from an earlier pass: this was originally wired to plain
++ * durability *repair* (`engine.repair`, restoring current durability back
++ * up to whatever the existing cap already was), based on a literal read
++ * of "enhance its durability." What was actually meant was the item's
++ * `plus` upgrade -- `EquipmentManager.upgrade`/`engine.upgradeItem` --
++ * which *raises* the durability cap itself (`maxDurability` scales with
++ * `item.plus`) and tops the item off to that new, higher cap as part of
++ * the same action. Plain repair (restore to whatever the cap already is,
++ * no cap increase) stays as a quick action back on the Inventory tab
++ * instead -- it was never the button being asked to move.
+  */
+ export function EnhanceStation({ onClose }: { onClose: () => void }) {
+   const engine = useEngine();
+@@ -36,20 +44,23 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
+   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
+   const item = found?.item;
+   const def = item ? EquipmentManager.def(item) : undefined;
+-  const cost = item ? EquipmentManager.repairCost(item, workshop) : 0;
++  const cost = item ? EquipmentManager.upgradeCost(item, workshop) : 0;
+   const maxDurability = item ? EquipmentManager.maxDurability(item) : 0;
+-  const needsRepair = cost > 0;
++  const maxed = item ? item.plus >= MAX_PLUS : false;
++  // Same formula EquipmentManager.maxDurability itself uses, evaluated one
++  // plus level ahead -- just for the "here's what you'd get" preview line.
++  const nextMaxDurability = def ? Math.floor(def.maxDurability * (1 + ((item?.plus ?? 0) + 1) * 0.1)) : 0;
+ 
+   const options: PickerOption[] = EquipmentManager.allItems(state)
+     .map(({ item: i, heroId }): PickerOption | null => {
+       const d = EquipmentManager.def(i);
+       if (!d) return null;
+       const owner = heroId ? state.heroes.find((h) => h.id === heroId)?.name ?? 'Stash' : 'Stash';
+-      const full = i.durability >= EquipmentManager.maxDurability(i);
++      const atMax = i.plus >= MAX_PLUS;
+       return {
+         key: i.uid,
+-        label: d.name,
+-        sublabel: `${owner} -- ${full ? 'full durability' : `${i.durability}/${EquipmentManager.maxDurability(i)} durability`}`,
++        label: `${d.name}${i.plus > 0 ? ` +${i.plus}` : ''}`,
++        sublabel: `${owner} -- ${atMax ? 'max refinement' : `+${i.plus}/${MAX_PLUS}`}`,
+         icon: <ItemIcon slot={d.slot} icon={d.icon} size={64} />,
+       };
+     })
+@@ -57,7 +68,7 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
+ 
+   function handleEnhance() {
+     if (!item) return;
+-    engine.repair(item.uid);
++    engine.upgradeItem(item.uid);
+   }
+ 
+   return (
+@@ -80,13 +91,15 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
+         {item && def ? (
+           <p className="tiny muted" style={{ margin: '8px 0' }}>
+             {def.name}{item.plus > 0 ? ` +${item.plus}` : ''} &mdash;{' '}
+-            {needsRepair ? `${item.durability}/${maxDurability} durability, ${formatGold(cost)} to fully restore` : 'already at full durability'}
++            {maxed
++              ? 'already at maximum refinement'
++              : `+${item.plus} \u2192 +${item.plus + 1} (durability cap ${maxDurability} \u2192 ${nextMaxDurability}), ${formatGold(cost)}`}
+           </p>
+         ) : (
+-          <p className="tiny muted" style={{ margin: '8px 0' }}>Choose an item to see its condition.</p>
++          <p className="tiny muted" style={{ margin: '8px 0' }}>Choose an item to see its refinement level.</p>
+         )}
+ 
+-        <button className="btn-purple" disabled={!item || !needsRepair} onClick={handleEnhance}>
++        <button className="btn-purple" disabled={!item || maxed || state.gold < cost} onClick={handleEnhance}>
+           Enhance
+         </button>
+       </div>
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index e2fee55..a2081ab 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -2,10 +2,9 @@ import { useState } from 'react';
+ import { useEngine } from '../useEngine';
+ import { useSettings } from '../useSettings';
+ import { GameEngine } from '../../game/engine';
+-import { EquipmentManager, MAX_PLUS } from '../../game/managers/EquipmentManager';
++import { EquipmentManager } from '../../game/managers/EquipmentManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { EQUIPMENT_BY_ID, ITEM_SETS } from '../../game/data/equipment';
+-import { CONSUMABLE_BY_ID } from '../../game/data/items';
+ import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { describeMods, describeStats, formatGold, RARITY_COLOR } from '../../game/util';
+@@ -91,7 +90,7 @@ function ConsumableSlotCard({
+   available: { def: ConsumableDef; count: number }[]; engine: GameEngine;
+ }) {
+   const [picking, setPicking] = useState(false);
+-  const def = equippedDefId ? CONSUMABLE_BY_ID[equippedDefId] : undefined;
++  const def = equippedDefId ? InventoryManager.resolveDef(engine.state, equippedDefId) : undefined;
+ 
+   if (def) {
+     return (
+@@ -165,9 +164,11 @@ function ConsumableSlotCard({
+ 
+ /** A single worn-gear slot. Collapsed shows just the icon, name, and rarity
+  *  pill; clicking expands to the full mod breakdown, durability, and the
+- *  refine/remove actions -- same collapse-by-default pattern used on
+- *  the Quest Board and Lore tab. Durability repair itself now lives on the
+- *  Blacksmith's own Enhance station rather than a button here. */
++ *  repair/remove actions -- same collapse-by-default pattern used on
++ *  the Quest Board and Lore tab. "Refine" (the +N upgrade, which also
++ *  raises the durability cap) now lives on the Blacksmith's own Enhance
++ *  station instead of a button here -- plain repair (restore to whatever
++ *  the cap already is, no cap increase) stays here as a quick action. */
+ function SlotCard({
+   slot, item, workshop, hero, engine,
+ }: { slot: EquipSlot; item: EquipmentItem | undefined; workshop: number; hero: Hero; engine: GameEngine }) {
+@@ -213,10 +214,10 @@ function SlotCard({
+           <div className="row wrap" style={{ marginTop: 6 }}>
+             <button
+               style={{ minHeight: 24, padding: '3px 6px' }}
+-              onClick={() => engine.upgradeItem(item.uid)}
+-              disabled={item.plus >= MAX_PLUS}
++              onClick={() => engine.repair(item.uid)}
++              disabled={EquipmentManager.repairCost(item, workshop) === 0}
+             >
+-              Refine {formatGold(EquipmentManager.upgradeCost(item, workshop))}
++              Repair {formatGold(EquipmentManager.repairCost(item, workshop))}
+             </button>
+             <button
+               style={{ minHeight: 24, padding: '3px 6px' }}
+diff --git a/src/ui/panels/QuestPanel.tsx b/src/ui/panels/QuestPanel.tsx
+index 8f5ada8..13301e6 100644
+--- a/src/ui/panels/QuestPanel.tsx
++++ b/src/ui/panels/QuestPanel.tsx
+@@ -3,7 +3,7 @@ import { useEngine, useNow } from '../useEngine';
+ import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import { DIFFICULTIES, DIFFICULTY_ORDER } from '../../game/data/quests';
+-import { CONSUMABLE_BY_ID } from '../../game/data/items';
++import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { QuestOffer, Hero } from '../../game/types';
+ import { formatDuration, formatGold } from '../../game/util';
+ import { RarityPill } from '../RarityPill';
+@@ -325,7 +325,7 @@ export function QuestPanel() {
+                   <span>Success <b>{Math.round(quest.finalSuccess)}%</b></span>
+                   <span>Reward <b className="gold-text">{formatGold(quest.offer.rewardGold * quest.goldMultiplier)}</b></span>
+                   {quest.consumables.length > 0 && (
+-                    <span>Used {quest.consumables.map((c) => CONSUMABLE_BY_ID[c]?.name).join(', ')}</span>
++                    <span>Used {quest.consumables.map((c) => InventoryManager.resolveDef(state, c)?.name).join(', ')}</span>
+                   )}
+                 </div>
+                 <div className="bar"><span style={{ width: `${progress}%` }} /></div>

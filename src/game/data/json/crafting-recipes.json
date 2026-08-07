@@ -76,7 +76,7 @@
     "modOptions": [
       "injuryResist"
     ],
-    "modsToPick": 0,
+    "modsToPick": 1,
     "modValue": 10,
     "resultConsumableId": "strength_potion",
     "statsToPick": 0,

@@ -3,7 +3,7 @@ import { useEngine, useNow } from '../useEngine';
 import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { DIFFICULTIES, DIFFICULTY_ORDER } from '../../game/data/quests';
-import { CONSUMABLE_BY_ID } from '../../game/data/items';
+import { InventoryManager } from '../../game/managers/InventoryManager';
 import { QuestOffer, Hero } from '../../game/types';
 import { formatDuration, formatGold } from '../../game/util';
 import { RarityPill } from '../RarityPill';
@@ -325,7 +325,7 @@ export function QuestPanel() {
                   <span>Success <b>{Math.round(quest.finalSuccess)}%</b></span>
                   <span>Reward <b className="gold-text">{formatGold(quest.offer.rewardGold * quest.goldMultiplier)}</b></span>
                   {quest.consumables.length > 0 && (
-                    <span>Used {quest.consumables.map((c) => CONSUMABLE_BY_ID[c]?.name).join(', ')}</span>
+                    <span>Used {quest.consumables.map((c) => InventoryManager.resolveDef(state, c)?.name).join(', ')}</span>
                   )}
                 </div>
                 <div className="bar"><span style={{ width: `${progress}%` }} /></div>

@@ -844,42 +844,52 @@ either quality or actually finishing what's here.
 `npx tsc --noEmit` and `vite build` both pass clean across the whole
 batch.
 
-### Durability repair moved to the Blacksmith's own Enhance station -- complete
-Per direct request: the per-item "Repair" button used to live buried in
-each equipped item's expanded card on the Inventory tab. Removed from
-there and rebuilt as a dedicated station on the Blacksmith's own Vendors
-page, next to Crafting -- same single-click-select-confirm shape as
+### "Enhance" station moved to the Blacksmith -- complete (corrected)
+Per direct request: a per-item button used to live buried in each
+equipped item's expanded card on the Inventory tab. Removed from there
+and rebuilt as a dedicated station on the Blacksmith's own Vendors page,
+next to Crafting -- same single-click-select-confirm shape as
 Crafting/Enchanting, with commissioned art (`public/lore/crafting/
 enhance.jpg`, converted from the supplied JPG). New `src/ui/
 EnhanceStation.tsx`: one slot (this scene only has one painted frame,
 unlike Crafting/Enchanting's three) -- click it, pick any item (stash or
 equipped, across every hero, same `EquipmentManager.allItems` lookup
-Enchant's own item picker already uses), see its current durability and
-repair cost, confirm. Still calls the exact same `engine.repair()` the
-old button did -- only *where* the action lives changed, not what it
-does. `PickerModal`/`SlotBox`/`Rect` exported from `CraftingStation.tsx`
-so this didn't need to duplicate that popup code.
+Enchant's own item picker already uses), confirm. `PickerModal`/
+`SlotBox`/`Rect` exported from `CraftingStation.tsx` so this didn't need
+to duplicate that popup code.
 
-Left alone, deliberately: the separate "Refine" (+N power upgrade)
-button and the Inventory tab's own top-level "Repair everything" bulk
-action are unrelated mechanics that weren't part of what was asked to
-move.
+**Correction, same conversation:** the first pass wired this to plain
+durability *repair* (`engine.repair` -- restores current durability back
+up to whatever the cap already was, no cap change), based on a literal
+reading of "enhance its durability." What was actually meant was the
+existing **"Refine" (+N)** mechanic (`EquipmentManager.upgrade`/
+`engine.upgradeItem`), which *raises the durability cap itself*
+(`maxDurability` scales with `item.plus`) and tops the item off to that
+new, higher cap as part of the same action -- matching "enhance
+[increases] durability limits" exactly once it was spelled out. Swapped
+the station over to call `upgradeItem` instead, gated on `item.plus <
+MAX_PLUS` rather than repair cost, with a preview line showing the
+plus level and durability-cap change (e.g. "+0 -> +1 (durability cap 40
+-> 44)"). Plain repair moved *back* to the Inventory tab's per-item card
+-- it was never the button being asked to move, and un-removing it was
+the other half of this correction.
 
-**Craft/Enchant/Enhance buttons are now purple**, per direct request --
-new `.btn-purple` class built on `--violet` (the game's one existing
-purple accent, already defined per-theme including High Contrast, rather
-than introducing a new one-off color). Applied to both the vendor-page
+**Craft/Enchant/Enhance buttons are still purple**, per direct request --
+`.btn-purple` class built on `--violet` (the game's one existing purple
+accent, already defined per-theme including High Contrast, rather than
+introducing a new one-off color). Applied to both the vendor-page
 trigger buttons (Crafting, Enhance) and the submit buttons inside each
-overlay, so "this is a crafting-family action" reads as one consistent
-visual language rather than blending into every other brass
-`btn-primary` on the page.
+overlay, unaffected by the repair/refine correction above.
 
-Verified at runtime: a damaged test item is found via the same lookup
-the UI relies on, and `engine.repair()` correctly restores it to full
-durability. The single slot's position was hand-measured against the
-actual supplied image and confirmed by drawing the rect back onto the
-source art, same process used for the other three crafting scenes.
-`npx tsc --noEmit` and `vite build` both pass clean.
+Verified at runtime, both before and after the correction: a damaged
+test item is found via the same lookup the UI relies on; after the
+correction, calling the station's action on a fresh item confirmed
+`plus` increases by exactly 1, the durability *cap* itself genuinely
+increases (not just current durability), and the item tops off to that
+new, higher cap. The single slot's position was hand-measured against
+the actual supplied image and confirmed by drawing the rect back onto
+the source art, same process used for the other three crafting scenes.
+`npx tsc --noEmit` and `vite build` both pass clean throughout.
 
 ### Harvest icon randomization -- logic prepped, waiting on real art
 The player described a specific icon-pool naming convention (Ore1-3,
@@ -924,6 +934,75 @@ is empty (git doesn't track empty directories; it'll appear once real
 files land there). Drop the actual art in at that path, matching the
 filenames listed above, and it'll pick up automatically with no further
 code changes.
+
+### Consumables can now carry crafted stat/mod bonuses -- complete
+Per direct request: extend consumable crafting to support the same
+"pick a bonus" flow gear crafting already has. This was flagged as a
+genuine architecture decision in an earlier pass rather than a quick UI
+add-on, and it was -- consumables were tracked as flat counts against a
+*static* registry (`CONSUMABLE_BY_ID`, built once from consumables.json),
+unlike equipment, which has individual instanced items that can each
+carry their own `customMods`. A crafted consumable with a chosen bonus
+needed to behave like a genuinely different item from the plain version
+-- stacking separately, carrying its own name and effect -- without
+becoming a whole new per-unit-instance system the way equipment is.
+
+**The approach:** a *runtime-registered variant*, not a per-unit
+instance. `GameState.customConsumables: Record<string, ConsumableDef>`
+(new, `SAVE_VERSION` 21->22 with a migration) holds crafted variants,
+keyed by a stable id derived from the base consumable + the exact mod
+combo chosen (`baseId::sortedMods`) -- so re-crafting the same combo
+stacks onto the same registered entry instead of spawning a duplicate
+every time, and `state.inventory` keeps working exactly as before (a
+flat count keyed by id, the variant's id is just a longer string than
+usual). `InventoryManager.resolveDef(state, id)` is the one place a
+consumable id actually gets resolved -- checks `customConsumables`
+before falling back to the static table -- and every function that used
+to read `CONSUMABLE_BY_ID` directly now goes through it instead:
+`owned()` (so a crafted variant actually shows up in the equip picker,
+not just accumulates silently in `state.inventory`), `useOnHero()`,
+`loadoutEffects()` (now aggregates the *full* modifier set --
+xp/loot/injuryResist/speed, not just success/gold like before -- since
+`ConsumableDef.effect` gained those fields too, matching `Modifiers`
+completely except deliberately excluding `speed` as a valid recipe
+option: `QuestManager.previewDuration` doesn't consult the consumable
+loadout at all, a pre-existing gap this patch didn't introduce, so a
+"speed" bonus would silently do nothing until that's separately wired
+up), plus the two UI spots that display a consumable by id
+(`EquipmentPanel`'s equipped-slot card, `QuestPanel`'s "Used X" line on
+a quest's log entry).
+
+**`CraftingStation.tsx`'s consumable flow redesigned** to fit an extra
+choice into the same three-slot scene: the old two-boxes-one-per-
+material layout became a single combined "confirm all materials" slot
+(materials picked up priority in the two boxes before; this scales to
+any number of materials instead of being hardcoded to at most two), and
+the second box now shows a "bonus" picker -- but only when the selected
+recipe actually has `modsToPick > 0`, staying hidden entirely for a
+recipe with none (Trail Rations, Herbal Tonic are completely unaffected,
+still exactly as simple as before). The bonus picker reuses the same
+multi-select popup pattern the Enchant stat picker already established
+(stays open across multiple picks when more than one is allowed, closes
+immediately for the common single-pick case).
+
+**Found and fixed real dormant scaffolding while implementing this:**
+`craft_trail_meal` ("Meal On The Go") already had `modOptions:
+["injuryResist"]` and a `modValue` sitting in crafting-recipes.json, but
+`modsToPick` was `0` -- meaning the mod choice was defined but could
+never actually be picked, silently inert. Set to `1`; this is now the
+first real, working example of a mod-bearing consumable recipe.
+
+Verified with two separate runtime scripts, not just typechecked: (1) a
+plain craft with no mods behaves identically to before (adds straight to
+the base stack, registers nothing); (2) crafting with a chosen mod
+registers a distinct variant with the correct name and effect value,
+crafting the *same* combo again stacks onto that same entry rather than
+duplicating, `owned()` surfaces it with the right count, and
+`loadoutEffects()` resolves its bonus correctly; (3) a full craft ->
+equip -> send-on-quest -> resolve cycle confirms the crafted bonus
+actually lands on the quest's own locked-in `injuryResist` value, not
+just in isolated unit checks. `npx tsc --noEmit` and `vite build` both
+pass clean.
 
 ### Cleanup items
 - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid
@@ -1116,14 +1195,9 @@ Route) living in one administrative spot rather than scattered across
 the tab.
 
 ### Bigger, still-undecided
-- **Queued from the same conversation as the UX/economy batch above,
-  deliberately not attempted yet -- each is real design/content work in
-  its own right:**
-  - **Consumable stats/mods.** Extend consumables to carry player-chosen
-    stat/mod bonuses the way craftable gear's `customMods` already does,
-    rather than being fixed, static items. Needs a schema decision first
-    (stored per-stack, or does equipping "lock in" a roll like gear
-    crafting does?) before any code.
+- **Queued from the same conversation as the UX/economy batch above:**
+  - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
+    crafted stat/mod bonuses" above for the full writeup.
   - **Equipment pool expansion.** Currently thin -- confirmed only one
     real leather-tier item (a cap) exists. Ask is a full set each for
     leather/steel/thief across every slot, a brand new `cloak` slot type
