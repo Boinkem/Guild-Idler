@@ -12,6 +12,35 @@ export const PrestigeManager = {
     return hero.level >= PRESTIGE_MIN_LEVEL && hero.status !== 'questing';
   },
 
+  canEarlyRetire(hero: Hero): boolean {
+    return hero.status !== 'questing';
+  },
+
+  /**
+   * Frees up a hero slot immediately, at any level, with no reward at all
+   * -- no renown, no ascension, no prestige streak credit. A normal Retire
+   * (below) requires level 30, which is the right gate for the *reward*
+   * (renown scales off level and quest count, so an under-levelled retire
+   * genuinely isn't worth much yet) but was also, incidentally, the only
+   * way to ever get a hero slot back at all. That's a real trap: recruit
+   * the wrong class, or just decide you don't want that slot filled right
+   * now, and there was no way out of it short of levelling that specific
+   * hero all the way to 30 first. Early Retirement exists purely to
+   * un-stick that -- deliberately worse than waiting for a real Retire
+   * (nothing gained), but always available. Unlike Retire, which replaces
+   * the hero in place (same slot, same id, reset to level 1), this
+   * removes them from the roster outright, actually shrinking
+   * `state.heroes` so the freed slot can be spent on a different recruit.
+   */
+  earlyRetire(state: GameState, hero: Hero): { error: string } | null {
+    if (hero.status === 'questing') return { error: `${hero.name} is out on a quest.` };
+    for (const item of Object.values(hero.equipment)) {
+      if (item) state.stash.push(item);
+    }
+    state.heroes = state.heroes.filter((h) => h.id !== hero.id);
+    return null;
+  },
+
   /** Base renown, before any streak bonus. Shown as the "guaranteed" part of the preview. */
   renownPreview(hero: Hero): number {
     return renownForRetirement(hero.level, hero.questsCompleted);

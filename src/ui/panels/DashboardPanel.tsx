@@ -8,7 +8,7 @@ import { guildPowerLevel, levelTierColor, levelTierName } from '../../game/power
 import { currentGuildRank, nextGuildRank } from '../../game/data/guildRank';
 import { formatGold, formatNumber } from '../../game/util';
 
-function Ring({
+export function Ring({
   progress, color, size, children, title,
 }: {
   progress: number; color: string; size: number; children: ReactNode; title?: string;

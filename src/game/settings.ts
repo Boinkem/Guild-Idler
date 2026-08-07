@@ -97,7 +97,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fontScale: 1.35,
   spriteScale: 1,
   density: 'compact',
-  theme: 'candlelit',
+  theme: 'high_contrast',
   styleId: 'adventure',
   fontId: 'readable',
   companionBackdrop: 'off',
@@ -273,7 +273,7 @@ export const SettingsStore = {
    */
   apply(settings: Settings): void {
     const root = document.documentElement;
-    const theme = THEME_BY_ID[settings.theme] ?? THEME_BY_ID.candlelit;
+    const theme = THEME_BY_ID[settings.theme] ?? THEME_BY_ID.high_contrast;
     for (const [key, value] of Object.entries(theme.vars)) {
       root.style.setProperty(key, value);
     }

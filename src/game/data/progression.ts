@@ -404,7 +404,14 @@ export const RECRUIT_COST: Record<HeroClass, number> = {
   // old prices, almost entirely due to compounding Tavern + recruit costs.
   // Everything from Gladiator up is untouched; the early on-ramp specifically
   // was the problem, not the overall curve.
-  adventurer: 0, knight: 150,
+  // Adventurer priced at 150g (was 0) -- a free recruit sounds generous but
+  // was a real trap: normal retirement requires level 30, so a player who
+  // filled a slot with a free Adventurer had no way to ever get that slot
+  // back except levelling that specific hero all the way up, even if they
+  // immediately regretted the pick. Early Retirement (see PrestigeManager)
+  // is the actual fix for the trap -- this price just stops "free" from
+  // reading as "no real cost to filling a slot" in the first place.
+  adventurer: 150, knight: 150,
   dwarf: 500, gladiator: 1500,
   samurai: 5000, witch: 6500,
   lizardman: 16000, pyromancer: 20000, wizard: 32000,

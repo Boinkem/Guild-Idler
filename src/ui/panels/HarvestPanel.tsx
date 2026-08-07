@@ -10,6 +10,7 @@ import {
 import { HarvestManager } from '../../game/managers/HarvestManager';
 import { MaterialId } from '../../game/types';
 import { formatGold, formatMaterial } from '../../game/util';
+import { Ring } from './DashboardPanel';
 import { MaxFlash, useMaxFlash } from '../maxFlash';
 
 type SubTab = 'warehouse' | 'fields';
@@ -237,7 +238,17 @@ function WarehouseTab() {
   return (
     <>
       <div className="card" style={{ marginBottom: 12 }}>
-        <div className="card-title">Warehouse</div>
+        <div className="spread">
+          <div className="card-title">Warehouse</div>
+          <Ring
+            progress={state.heroes.length > 0 ? HarvestManager.idleHeroCount(state) / state.heroes.length : 0}
+            color="var(--brass)"
+            size={40}
+            title={`${HarvestManager.idleHeroCount(state)} idle hero${HarvestManager.idleHeroCount(state) === 1 ? '' : 'es'} feeding every node's spawn timer right now`}
+          >
+            <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>{HarvestManager.idleHeroCount(state)}</span>
+          </Ring>
+        </div>
         <p className="card-flavour">
           One shared storage cap, applied to every material. {WAREHOUSE_UPGRADE.capacityPerLevel} more per level.
         </p>

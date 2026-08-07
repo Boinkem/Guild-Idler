@@ -1128,6 +1128,20 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  /**
+   * Early Retirement -- see PrestigeManager.earlyRetire's own comment for
+   * why this exists. No renown, no ascension, no streak; just frees the
+   * slot immediately regardless of level.
+   */
+  earlyRetire(heroId: string) {
+    const hero = this.hero(heroId);
+    if (!hero) return;
+    const outcome = PrestigeManager.earlyRetire(this.state, hero);
+    if (outcome && 'error' in outcome) return this.say(outcome.error);
+    this.say(`${hero.name} leaves the guild. The slot is free.`);
+    void this.saveNow();
+  }
+
   allocateStat(heroId: string, stat: keyof Hero['stats']) {
     const hero = this.hero(heroId);
     if (!hero || hero.statPoints <= 0) return;

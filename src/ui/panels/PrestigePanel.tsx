@@ -32,7 +32,8 @@ export function PrestigePanel() {
       <h2>Prestige</h2>
       <p className="subtitle">
         Retire a hero at level {PRESTIGE_MIN_LEVEL} or above. They hand in their level, XP, and gear;
-        the guild keeps everything else, and gains Heroic Renown.
+        the guild keeps everything else, and gains Heroic Renown. Not there yet? Early Retirement frees
+        the slot immediately instead, with no renown or bonus attached.
       </p>
 
       <div className="card">
@@ -88,20 +89,38 @@ export function PrestigePanel() {
                 {preview.bonusPct > 0 && <span> (base {PrestigeManager.renownPreview(hero)} + streak {preview.bonusPct}%)</span>}
               </div>
             </div>
-            <button
-              className="btn-primary"
-              disabled={!eligible}
-              onClick={() => {
-                if (!settings.confirmRetire
-                  || confirm(`Retire ${hero.name}? They return to level 1 and the guild gains ${formatNumber(preview.total)} renown.`)) {
-                  setJustRetired({ heroId: hero.id, amount: preview.total, key: Date.now() });
-                  window.setTimeout(() => setJustRetired(null), 2200);
-                  engine.retire(hero.id);
-                }
-              }}
-            >
-              {eligible ? 'Retire' : `Needs level ${PRESTIGE_MIN_LEVEL}`}
-            </button>
+            <div className="row" style={{ gap: 6 }}>
+              <button
+                className="btn-primary"
+                disabled={!eligible}
+                onClick={() => {
+                  if (!settings.confirmRetire
+                    || confirm(`Retire ${hero.name}? They return to level 1 and the guild gains ${formatNumber(preview.total)} renown.`)) {
+                    setJustRetired({ heroId: hero.id, amount: preview.total, key: Date.now() });
+                    window.setTimeout(() => setJustRetired(null), 2200);
+                    engine.retire(hero.id);
+                  }
+                }}
+              >
+                {eligible ? 'Retire' : `Needs level ${PRESTIGE_MIN_LEVEL}`}
+              </button>
+              {/* Only offered before a hero actually qualifies for a real
+                  Retire -- once eligible, early retirement is strictly
+                  worse (same freed slot, nothing gained), so there's
+                  nothing left for this to usefully offer. */}
+              {!eligible && PrestigeManager.canEarlyRetire(hero) && (
+                <button
+                  className="btn-ghost"
+                  onClick={() => {
+                    if (confirm(`Early-retire ${hero.name}? No renown, no bonus -- this just frees the slot right now instead of waiting for level ${PRESTIGE_MIN_LEVEL}.`)) {
+                      engine.earlyRetire(hero.id);
+                    }
+                  }}
+                >
+                  Early Retire
+                </button>
+              )}
+            </div>
           </div>
         );
       })}

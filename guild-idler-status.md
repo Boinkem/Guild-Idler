@@ -758,6 +758,92 @@ collect-burst "+0.5 Ore" particle text.
 
 `npx tsc --noEmit` and `vite build` both pass clean.
 
+### UX/economy batch -- complete
+A round of smaller, independent fixes and additions, grouped into one
+patch since none needed its own dedicated pass. Three larger asks from
+the same conversation -- consumable stats/mods, a full equipment-set
+expansion (leather/steel/thief + a new cloak slot + per-raid sets), and
+generalizing Harvest's fish node into a broader food category -- were
+deliberately **not** attempted here and are queued as their own
+follow-ups instead; each is real content/schema design work in its own
+right; rushing them into the same patch as everything below risked
+either quality or actually finishing what's here.
+
+- **High Contrast is now the default theme** for any brand-new install
+  (`DEFAULT_SETTINGS.theme`, plus the corrupt-settings fallback in
+  `SettingsStore.apply`). Existing players' own saved theme choice is
+  untouched either way -- this only affects what a save with no settings
+  yet resolves to.
+- **Quest/lore/hero card hover fixed.** The existing `.card:has
+  (.hero-card-summary:hover)` rule only matched while the cursor was
+  inside that exact nested title row -- `:has()`'s argument doesn't
+  benefit from the normal ancestor-hover bubbling the way a plain
+  `.card:hover` would, so hovering anywhere else on the same visual card
+  (stats, description, buttons) did nothing. Fixed by moving `:hover`
+  onto the card itself and using `:has()` only to scope *which* cards
+  get the treatment (`.card:has(.hero-card-summary):hover`) -- same
+  intent, now hovering anywhere on the card highlights it.
+- **Empty consumable slot no longer looks inert.** It was using the exact
+  same `.item-card.empty` styling as a genuinely non-clickable empty gear
+  slot (`cursor: default`, no hover feedback at all), despite actually
+  being a real click target (opens the equip picker). Added a
+  `clickable` modifier class, used only by the consumable slot, that
+  layers real hover/cursor affordance back on top of the shared "empty"
+  visual treatment.
+- **Idle-hero-count ring added to the Warehouse tab** -- reused
+  `DashboardPanel`'s existing `Ring` component (now exported) rather than
+  building a second circular-progress implementation. Fill fraction is
+  idle heroes / total roster size, with the raw count shown inside and
+  as the hover title; existing "N idle heroes feeding every node" text
+  elsewhere in Harvest is unchanged, this is a second, glanceable
+  presentation of the same number, not a replacement.
+- **Onboarding tour's step descriptions were stale.** `harvest` had *no*
+  entry at all -- the tour would spotlight that tab with a blank
+  description, since Harvest didn't exist yet when this map was last
+  written. `shop` was a leftover from before the Vendors restructure (the
+  real tab id has been `vendors` since patch 0118) and `upgrades` no
+  longer matches any tab at all (fully absorbed into Guild Hall / each
+  vendor's own page, same restructure). Added the missing `harvest`
+  entry, renamed `shop`->`vendors` with an updated description, dropped
+  the dead `upgrades` entry, and refreshed `guild`'s description to
+  mention it now also covers the general upgrades that used to live on
+  their own tab. The tour's *step list itself* (`ALL_TABS` in
+  `MenuWindow.tsx`) was already generated dynamically from the live tab
+  set, so it was never actually out of sync on steps/order -- only the
+  hardcoded description lookup table had drifted.
+- **Adventurer recruit cost 0g -> 150g, plus a new Early Retirement
+  option.** A free recruit sounds generous but was a real trap: normal
+  Retire requires level 30, so filling a slot with a free Adventurer left
+  no way to ever get that slot back except levelling that specific hero
+  all the way up, even on immediate regret. `PrestigeManager.earlyRetire`
+  (new) removes a hero from the roster outright at *any* level, for *no*
+  reward at all -- no renown, no ascension, no streak credit, deliberately
+  worse than a real Retire, existing purely to un-stick the trap. Unlike
+  Retire (which resets the hero in place, same slot/id), this actually
+  shrinks `state.heroes`, freeing the slot for a different recruit.
+  `PrestigePanel` shows an "Early Retire" button next to the normal one,
+  but only while a hero hasn't yet qualified for the real thing (once
+  eligible, early retirement is strictly worse, so there's nothing left
+  for it to usefully offer). Verified at runtime: a level-5 hero can
+  early-retire and is removed from the roster with renown unchanged, a
+  questing hero is refused, and equipped gear still returns to the
+  stash either way.
+- **`stat-conversion-table.md`** (new, repo root, alongside the other
+  project docs) -- answers "how much does +1 Strength actually turn
+  into?" directly from the live formulas in `HeroManager.statMods`/
+  `personalLootBonus`, not estimated. Every stat curve in this game is
+  sqrt- or power-based (diminishing returns), so there's no single fixed
+  ratio -- the table gives the real marginal value of the *next* point at
+  a spread of benchmark levels (5 through 200) instead. Also documents
+  which modifiers are additive percentage-points (Success/Gold%/XP%/
+  Speed%/InjuryResist) versus Luck's Loot% specifically, which is a
+  separate *multiplicative* stage and isn't directly comparable to the
+  others at face value -- worth a careful read before using the raw
+  numbers for balance decisions.
+
+`npx tsc --noEmit` and `vite build` both pass clean across the whole
+batch.
+
 ### Cleanup items
 - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid
   encounter with loot now has all three difficulty tiers.
@@ -949,6 +1035,38 @@ Route) living in one administrative spot rather than scattered across
 the tab.
 
 ### Bigger, still-undecided
+- **Queued from the same conversation as the UX/economy batch above,
+  deliberately not attempted yet -- each is real design/content work in
+  its own right:**
+  - **Consumable stats/mods.** Extend consumables to carry player-chosen
+    stat/mod bonuses the way craftable gear's `customMods` already does,
+    rather than being fixed, static items. Needs a schema decision first
+    (stored per-stack, or does equipping "lock in" a roll like gear
+    crafting does?) before any code.
+  - **Equipment pool expansion.** Currently thin -- confirmed only one
+    real leather-tier item (a cap) exists. Ask is a full set each for
+    leather/steel/thief across every slot, a brand new `cloak` slot type
+    filling every existing set too, and a dedicated themed set per raid
+    (5 raids). This is the biggest of the three by far -- a new slot type
+    alone touches `EquipSlot` in types.ts, the DevTool's schema (see the
+    "shield slot missing" bug this exact codebase already hit once, same
+    risk class), every set-bonus table, and icon assignment for
+    potentially 30+ new items before any stats are even chosen.
+  - **Harvest fish -> food generalization.** Broaden the Fish Weir node
+    (and its recipes) to cover berries/red meat/etc, not just fish
+    specifically. Connects to the icon-randomization ask below (Food is
+    one of the four planned icon categories) -- the player has icons
+    coming for this but hadn't uploaded them as of this patch, so this
+    is logic-and-naming prep at most until they land, not a full
+    implementation.
+- **Harvest icon randomization**, prepped but not wired to real files
+  yet -- the player described a specific naming convention (Wood1-3,
+  Food1-4, Ore1-3, Herb1-2, a few icons per harvest category) for
+  replacing the current text-glyph placeholders with real art, picked
+  randomly per spawn. Worth scaffolding the selection logic (a
+  `Record<MaterialId, string[]>` icon-pool lookup, random pick at spawn
+  time same as the loot table pattern) as soon as the files themselves
+  are available -- no point guessing at exact filenames before that.
 - ~~First-five-minutes onboarding beat~~ -- done. A scripted, one-time tour
   on a genuinely fresh save: a spotlight box over each real nav tab in
   turn (dimming everything else via one oversized box-shadow, no separate

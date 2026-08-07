@@ -145,7 +145,7 @@ function ConsumableSlotCard({
   }
 
   return (
-    <div className="item-card empty">
+    <div className="item-card empty clickable">
       <div
         className="item-card-summary"
         onClick={() => setPicking(true)}
