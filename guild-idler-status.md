@@ -1648,6 +1648,30 @@ from the spec pass).
   (`.pet-companion-button`, replacing the old plain `.pet-companion` div
   -- positioning and the bob animation both moved onto the button since
   it's now the actual click target) rather than inert art.
+- **Companion pet was too small and floating in the wrong spot -- fixed,
+  verified against an actual rendered mockup rather than hand-computed
+  CSS.** Reported directly: sitting off to the side at the old 40px size
+  read as a stray icon, not a companion. Two changes: size roughly
+  doubled (40px -> 90px, `IdleView.tsx`), and positioning switched from
+  `bottom`-anchoring (relative to the WHOLE `.idle-stage`, which also
+  contains the gold/level plate and status text below the hero+shadow --
+  this was the actual bug, not just a bad offset: a `bottom` value tuned
+  to sit near the hero's feet instead anchored near the bottom of all
+  that extra content) to `top`-anchoring, using `.hero-carousel`'s own
+  fixed `margin-top: 26px` plus the hero's fixed 120px base height as
+  reliable constants. Landed on `top: 56px; left: calc(50% - 30px)`
+  (z-index bumped 1 -> 2, so the pet draws in front of the hero, on
+  purpose) -- confirmed by rendering an actual standalone mockup of the
+  real `.idle-stage` markup and CSS with Playwright/headless Chromium
+  (a placeholder hero silhouette in place of the real gitignored art,
+  the real `ember_kit` sprite for the pet) and reading back precise
+  bounding-box coordinates rather than eyeballing a screenshot: the pet's
+  bottom-left corner lands exactly on the hero's bottom-left corner at
+  the default `spriteScale`. Any visual offset beyond that exact corner
+  match is the fox art's own internal frame padding, not a CSS error.
+  Like the original fixed offset this replaced, this is tuned for a
+  typical hero width, not the exact width of every class -- hero sprite
+  width isn't available to pure CSS the way its height is.
 - **Art -- five assets done, egg sprite sheet still blocked.** Ember Kit
   (fox), Rooftail (red panda), Ashwing (crow), and Hatchery Hound (Saint
   Bernard) all have real animated sprites, recoloured across all 5 rarity

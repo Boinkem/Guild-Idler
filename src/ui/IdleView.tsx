@@ -268,7 +268,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
               rarity={equippedPet.rarity}
               animation={petAnimation}
               flip={facingReturn}
-              height={Math.round(40 * settings.spriteScale)}
+              height={Math.round(90 * settings.spriteScale)}
               title={equippedPet.name}
               fallback={<span style={{ fontSize: '1.4rem' }}>{petDef.glyph}</span>}
             />

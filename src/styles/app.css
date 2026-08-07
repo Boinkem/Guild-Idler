@@ -415,11 +415,16 @@ button:focus-visible, [tabindex]:focus-visible {
      loop the whole time, so it doesn't read as frozen. Positioning and the
      bob animation both live on the button now (not the PetSprite div
      nested inside it) since the click target needs the same placement the
-     sprite used to have on its own before it became clickable. */
+     sprite used to have on its own before it became clickable.
+     Bottom-left of the hero, overlapping onto it rather than beside it --
+     confirmed against an actual rendered mockup (not just reasoned through
+     in CSS) that this reads as the pet standing in the foreground at the
+     hero's feet, not floating off to one side. Higher z-index than
+     .knight-button on purpose, for the same "foreground" reason. */
   position: absolute;
-  bottom: 22px;
-  left: calc(50% + 34px);
-  z-index: 1;
+  top: 56px;
+  left: calc(50% - 30px);
+  z-index: 2;
   background: none;
   border: none;
   box-shadow: none;
