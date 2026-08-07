@@ -419,7 +419,8 @@ export const QuestManager = {
     // hero earned it. See PetManager for why this lives here rather than
     // inside HeroManager.grantXp itself (that function only ever sees one
     // hero, not the full GameState an egg/pet needs).
-    const hatched = PetManager.addHatchXp(state, xp, resolvedAt);
+    const newlyReadyEggs = PetManager.addHatchXp(state, xp);
+    if (newlyReadyEggs.length > 0) state.pendingHatchReadyNotice = true;
     PetManager.grantEquippedXp(state, xp);
 
     const storage = ModifierManager.goldStorage(state);
@@ -511,7 +512,6 @@ export const QuestManager = {
       brokenItems: broken,
       levelsGained,
       chainAdvanced,
-      hatchedPets: hatched.map((p) => ({ name: p.name, defId: p.defId })),
       eggDropped,
     };
     state.log.unshift(result);

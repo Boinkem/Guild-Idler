@@ -1685,6 +1685,14 @@ button.harvest-item:hover {
 }
 .egg-empty-nest:hover { opacity: 1; background: color-mix(in srgb, var(--panel) 94%, transparent); }
 
+/* A ready-to-hatch egg card -- a soft glow rather than a loud animation,
+   enough to catch the eye scanning the Nests grid without fighting with
+   the "Ready to Hatch!" text itself for attention. */
+.egg-ready {
+  border-color: var(--moss);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--moss) 40%, transparent);
+}
+
 /*
  * The Hatchery tab's own banner scene -- same aspect-ratio-locked,
  * full-width, no-crop treatment `.harvest-scene` already established (see

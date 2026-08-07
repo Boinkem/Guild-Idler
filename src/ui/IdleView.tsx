@@ -194,6 +194,11 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
       : `Raid ended: ${raidResult.raidName} (${raidResult.encountersCleared}/${raidResult.totalEncounters}) →`
     : null;
 
+  // Same treatment again -- HatchReadyModal only renders full detail once
+  // the menu is open, and an egg finishing incubation is just as likely to
+  // land mid-quest while the companion window is the only thing showing.
+  const hatchReadyBanner = engine.state.pendingHatchReadyNotice ? 'An egg is ready to hatch! →' : null;
+
   return (
     <div className={`idle-root ${locked ? '' : 'unlocked'}`}>
       <div className="idle-stage">
@@ -275,6 +280,9 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
         )}
         {raidBanner && (
           <button className="idle-away-banner idle-chain-banner" onClick={onOpenMenu}>{raidBanner}</button>
+        )}
+        {hatchReadyBanner && (
+          <button className="idle-away-banner idle-chain-banner" onClick={onOpenMenu}>{hatchReadyBanner}</button>
         )}
 
         <div className="idle-actions">

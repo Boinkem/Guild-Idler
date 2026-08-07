@@ -49,26 +49,51 @@ export const PetManager = {
   /**
    * Adds hero-XP progress to every currently-incubating egg at once
    * (account-wide, not tied to a specific hero -- see the open question
-   * recorded in guild-idler-status.md) and hatches any that cross their
-   * threshold. Called from QuestManager.resolve right alongside
-   * HeroManager.grantXp, so hatching keeps pace with ordinary play with no
-   * separate tick needed. Returns the pets that hatched this call, if any,
-   * so the caller can toast/celebrate.
+   * recorded in guild-idler-status.md). Called from QuestManager.resolve
+   * right alongside HeroManager.grantXp, so hatch progress keeps pace with
+   * ordinary play with no separate tick needed.
+   *
+   * Deliberately does NOT hatch anything itself -- an egg crossing its
+   * threshold just becomes eligible (see isReady below) and stays
+   * incubating, showing "Ready to Hatch!" on its Nest card until the
+   * player opens it themselves via hatchReadyEgg. Returns eggs that
+   * crossed the threshold on THIS call specifically (not every already-
+   * ready egg), so the caller can raise pendingHatchReadyNotice exactly
+   * once per egg rather than every subsequent quest while it sits waiting.
    */
-  addHatchXp(state: GameState, xp: number, now = Date.now()): Pet[] {
+  addHatchXp(state: GameState, xp: number): EggInstance[] {
     if (xp <= 0 || state.incubatingEggs.length === 0) return [];
-    const hatched: Pet[] = [];
-    const stillIncubating: EggInstance[] = [];
+    const newlyReady: EggInstance[] = [];
     for (const egg of state.incubatingEggs) {
+      const wasReady = PetManager.isReady(egg);
       egg.hatchXp += xp;
-      if (egg.hatchXp >= hatchXpThreshold(egg.rarity)) {
-        hatched.push(PetManager.hatch(state, egg, now));
-      } else {
-        stillIncubating.push(egg);
-      }
+      if (!wasReady && PetManager.isReady(egg)) newlyReady.push(egg);
     }
-    state.incubatingEggs = stillIncubating;
-    return hatched;
+    return newlyReady;
+  },
+
+  /** Whether an egg has earned enough hatchXp to be opened -- pure and
+   *  cheap, safe to call from render (see EggCard's "Ready to Hatch!"
+   *  label) rather than needing a stored flag kept in sync. */
+  isReady(egg: EggInstance): boolean {
+    return egg.hatchXp >= hatchXpThreshold(egg.rarity);
+  },
+
+  /**
+   * The actual hatch, explicitly triggered by the player opening a ready
+   * egg (see HatcheryPanel's EggCard) rather than happening automatically
+   * the instant hatchXp crosses the threshold -- the "Ready to Hatch!" ->
+   * click -> reveal beat is the point, not a technicality. Returns null
+   * (no state change) if the egg doesn't exist or isn't actually ready
+   * yet -- defensive against a stale UI click racing a state change, not
+   * expected to trigger in normal play since the button that calls this
+   * is itself gated on isReady.
+   */
+  hatchReadyEgg(state: GameState, eggUid: string, now = Date.now()): Pet | null {
+    const egg = state.incubatingEggs.find((e) => e.uid === eggUid);
+    if (!egg || !PetManager.isReady(egg)) return null;
+    state.incubatingEggs = state.incubatingEggs.filter((e) => e.uid !== eggUid);
+    return PetManager.hatch(state, egg, now);
   },
 
   /** Rolls a species and a bonus, and adds the resulting Pet to state.pets. */

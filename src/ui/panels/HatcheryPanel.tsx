@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { PetManager } from '../../game/managers/PetManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
@@ -21,6 +21,15 @@ export function HatcheryPanel() {
   const engine = useEngine();
   const state = engine.state;
   const [subTab, setSubTab] = useState<SubTab>('home');
+
+  // Consumes a pending sub-tab request (see HatchRevealModal's "Go to
+  // Pets") the same "read once, on mount or on a fresh request" way
+  // MenuWindow already consumes engine.requestedTab -- this is the
+  // one-level-deeper version for a panel's own internal tab state.
+  useEffect(() => {
+    const requested = engine.consumeRequestedHatcherySubTab();
+    if (requested) setSubTab(requested);
+  }, [engine, engine.requestedHatcherySubTab]);
 
   return (
     <>
@@ -74,7 +83,7 @@ function NestsTab() {
 
       <div className="grid two">
         {nestSlots.map((egg, i) => (egg
-          ? <EggCard key={egg.uid} egg={egg} onUnequip={() => engine.unequipEgg(egg.uid)} />
+          ? <EggCard key={egg.uid} egg={egg} onUnequip={() => engine.unequipEgg(egg.uid)} onHatch={() => engine.hatchEgg(egg.uid)} />
           : <EmptyNestCard key={`empty-${i}`} onClick={() => setPickerOpen(true)} />
         ))}
       </div>
@@ -93,11 +102,19 @@ function EmptyNestCard({ onClick }: { onClick: () => void }) {
   );
 }
 
-function EggCard({ egg, onUnequip }: { egg: EggInstance; onUnequip: () => void }) {
+function EggCard({ egg, onUnequip, onHatch }: { egg: EggInstance; onUnequip: () => void; onHatch: () => void }) {
   const threshold = hatchXpThreshold(egg.rarity);
   const pct = Math.min(100, (egg.hatchXp / threshold) * 100);
+  const ready = PetManager.isReady(egg);
+
   return (
-    <div className="card" style={{ marginBottom: 0 }}>
+    <div
+      className={`card ${ready ? 'egg-ready' : ''}`}
+      style={{ marginBottom: 0, cursor: ready ? 'pointer' : undefined }}
+      onClick={ready ? onHatch : undefined}
+      role={ready ? 'button' : undefined}
+      tabIndex={ready ? 0 : undefined}
+    >
       <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
         <EggIcon rarity={egg.rarity} size={40} />
         <div style={{ flex: 1 }}>
@@ -106,16 +123,28 @@ function EggCard({ egg, onUnequip }: { egg: EggInstance; onUnequip: () => void }
             <RarityPill rarity={egg.rarity} />
           </div>
           <p className="card-flavour">
-            {egg.dedicatedPetId ? 'A special clutch -- this one has already decided what it will become.' : 'Hatching into something from the general pool.'}
+            {ready
+              ? 'It stopped growing a while ago -- click to see what it became.'
+              : egg.dedicatedPetId
+                ? 'A special clutch -- this one has already decided what it will become.'
+                : 'Hatching into something from the general pool.'}
           </p>
         </div>
       </div>
-      <div className="harvest-stock-bar" style={{ margin: '8px 0 4px' }}>
-        <span style={{ width: `${pct}%` }} />
-      </div>
+      {ready ? (
+        <p className="good" style={{ margin: '8px 0 4px', fontWeight: 600 }}>Ready to Hatch!</p>
+      ) : (
+        <div className="harvest-stock-bar" style={{ margin: '8px 0 4px' }}>
+          <span style={{ width: `${pct}%` }} />
+        </div>
+      )}
       <div className="spread">
         <span className="tiny muted">{formatMaterial(egg.hatchXp)}/{formatMaterial(threshold)} xp</span>
-        <button className="btn-ghost" style={{ minHeight: 22, fontSize: '0.6875rem' }} onClick={onUnequip}>
+        <button
+          className="btn-ghost"
+          style={{ minHeight: 22, fontSize: '0.6875rem' }}
+          onClick={(e) => { e.stopPropagation(); onUnequip(); }}
+        >
           Unequip
         </button>
       </div>

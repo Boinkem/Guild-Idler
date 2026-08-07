@@ -130,15 +130,20 @@ one of a limited number of Nest slots to start incubating toward a
 rarity-based hatch-xp threshold (fed by hero xp earned anywhere in the
 guild) -- Nests are genuine equip slots, the same relationship the
 equipment stash has to a hero's worn gear, not an auto-start-on-grant
-system anymore. Hatching rolls a random pet with its own bonus type/
-magnitude. Equipped pets (1 base slot, more via the new Companion Bond
-upgrade) feed their bonus into the account-wide modifier pool, gain their
-own xp which grows that bonus over time, and now render live beside the
-hero on the desktop companion; happiness decays lazily and can be restored
-by feeding raw materials or a new craftable Pet Treat. Three real animated
-species (fox/red panda/crow) ship with art across all 5 rarity recolors;
-egg art is still glyph-only, blocked on sourcing the actual transparent
-spritesheet. See its own section below for the full writeup.
+system anymore. Reaching the threshold makes an egg eligible, not hatched
+-- it sits marked "Ready to Hatch!" until the player clicks it, at which
+point a reveal modal shows the actual pet, with its own separate
+persisted prompt nudging the player toward the Hatchery the moment
+anything first becomes ready (see the full writeup below for why this
+changed from the original auto-hatch behaviour). Equipped pets (1 base
+slot, more via the new Companion Bond upgrade) feed their bonus into the
+account-wide modifier pool, gain their own xp which grows that bonus over
+time, and now render live beside the hero on the desktop companion;
+happiness decays lazily and can be restored by feeding raw materials or a
+new craftable Pet Treat. Three real animated species (fox/red panda/crow)
+ship with art across all 5 rarity recolors; egg art is still glyph-only,
+blocked on sourcing the actual transparent spritesheet. See its own
+section below for the full writeup.
 
 **World lore** — `world-lore-pantheon.md` is the source of truth for
 gods/pantheon rules. Starved gods can lash out from the starving itself
@@ -1535,9 +1540,10 @@ from the spec pass).
     which eggs aren't part of) -- plain text-list editing, same as `loot`
     itself before that picker existed. This is the actual "assign eggs as
     loot, like gear" devtool support the original spec asked for.
-  - `QuestResult.eggDropped`/`RaidResult.eggsFound` (both optional, same
-    not-migrated reasoning as `hatchedPets`) surface the drop for a toast,
-    mirroring the hatch celebration already in `engine.ts`.
+  - `QuestResult.eggDropped`/`RaidResult.eggsFound` (both optional, not
+    backfilled by migration -- old log entries predate them, every read
+    already treats a missing value as "nothing found") surface an ordinary
+    drop for a toast in `engine.ts`.
 - **Egg selection UI -- built, using the new modal background art.**
   `EggSelectModal.tsx` reuses `CraftingStation.tsx`'s `SlotBox`/
   `PickerModal`/`Rect` machinery directly rather than duplicating it --
@@ -1555,6 +1561,50 @@ from the spec pass).
   the one egg actually mid-hatch should ever animate, not every egg
   sitting in storage. Reads `public/pets/egg/<rarity>/icon.png`, same
   glyph-fallback convention as everywhere else -- no real icon art yet.
+- **Hatching is now explicit and player-triggered, not automatic.**
+  Caught almost immediately after the egg-drop-wiring patch landed:
+  hatching used to happen the instant an egg's `hatchXp` crossed its
+  threshold, inside the same call that adds xp -- so a busy player would
+  see an egg vanish from its Nest straight into the Pets tab with nothing
+  more than an easy-to-miss toast, no real moment to it. Reworked:
+  - `PetManager.addHatchXp` no longer calls `hatch()` at all. Crossing the
+    threshold just makes an egg eligible (`PetManager.isReady`, a pure
+    `hatchXp >= hatchXpThreshold(rarity)` check, nothing stored) -- it
+    stays in its Nest, incubating in place, until the player opens it.
+  - A ready `EggCard` swaps its progress bar for bold green "Ready to
+    Hatch!" text and a soft moss glow, and becomes clickable. Clicking
+    calls new `engine.hatchEgg`, which does the actual hatch
+    (`PetManager.hatchReadyEgg` -- rolls species/bonus, creates the `Pet`,
+    removes the egg) and stores the result in a new transient
+    `engine.lastHatchedPet` (same read-then-cleared shape as
+    `lastResult`/`lastRaidResult`).
+  - New `HatchRevealModal.tsx` reads `lastHatchedPet` directly (renders
+    nothing if null, same convention `QuestResultModal` uses for
+    `lastResult`) -- "It Hatched! / The egg hatched into 'xx'" with the
+    pet's live `PetSprite`, Close, and a "Go to Pets" button. That button
+    needed a genuine sub-tab deep link, not just "open the Hatchery tab" --
+    new `engine.requestHatcherySubTab`/`consumeRequestedHatcherySubTab`,
+    one level deeper than the existing `requestTab` (which only knows
+    about MenuWindow's top-level tabs, not a panel's own internal
+    `useState`). Hatchery-specific for now rather than a generic
+    sub-tab system, until a second panel actually needs one.
+  - The "you have something to check on" half is its own new
+    `state.pendingHatchReadyNotice` flag, set the moment any egg *first*
+    crosses its threshold (`QuestManager.resolve`, alongside the
+    `addHatchXp` call) -- persisted, not transient, so it survives a
+    reload unacknowledged. Surfaced via new `HatchReadyModal.tsx`
+    ("An Egg is Ready! ... Go to Hatchery") using the exact same
+    active-gated-modal-plus-idle-banner treatment
+    `ChainCompleteModal`/`RaidResultModal` already established, since a
+    quest resolving mid-away just as easily lands while the player's
+    looking at the idle companion as the full menu. Deliberately doesn't
+    say which egg or how many -- the Nests tab marks each ready card on
+    its own once they actually get there.
+  - `QuestResult.hatchedPets` and its toast are gone entirely (removed,
+    not deprecated) -- nothing hatches automatically anymore, so a field
+    describing what "just hatched" during a quest resolution stopped
+    describing anything real.
+  - `SAVE_VERSION` bumped 24 -> 25 for `pendingHatchReadyNotice`.
 - ~~Companion sprite on the desktop window~~ -- done. `IdleView` renders
   the first equipped pet beside the hero via the same `PetSprite`
   component the Hatchery uses, requesting the generic `idle`/`movement`

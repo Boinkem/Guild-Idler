@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 24;
+export const SAVE_VERSION = 25;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -310,17 +310,10 @@ export interface QuestResult {
   brokenItems: string[];
   levelsGained: number;
   chainAdvanced?: { chainId: string; stage: number; totalStages: number; completed: boolean };
-  /** Eggs that finished incubating and hatched as a direct result of this
-   *  quest's xp reward -- see PetManager.addHatchXp, called alongside
-   *  HeroManager.grantXp in QuestManager.resolve. Optional (not backfilled
-   *  by migration) since old QuestResult entries already sitting in
-   *  state.log predate this field entirely -- treat a missing value as
-   *  "nothing hatched," same as every UI read of it already does. */
-  hatchedPets?: { name: string; defId: string }[];
   /** An ordinary egg drop rolled this quest, if any -- independent of
-   *  hatchedPets above (a freshly-dropped egg goes to storage, unequipped,
+   *  hatchXp progress (a freshly-dropped egg goes to storage, unequipped,
    *  not straight into a nest -- see PetManager.grantEgg). Same
-   *  optional/not-migrated reasoning as hatchedPets. */
+   *  optional/not-migrated reasoning as other result-log additions. */
   eggDropped?: { rarity: Rarity };
 }
 
@@ -785,6 +778,18 @@ export interface GameState {
    */
   eggStorage: EggInstance[];
   pets: Pet[];
+  /**
+   * True the moment ANY incubating egg first crosses its hatchXpThreshold,
+   * cleared by dismissHatchReadyNotice. Deliberately NOT the trigger for
+   * the actual hatch -- an egg reaching threshold just becomes eligible
+   * (see PetManager.isReady); the player still has to open it themselves
+   * from the Nests tab to see what it became. This flag exists purely to
+   * get their attention, the same "persisted until acknowledged" shape as
+   * pendingChainDiscovery/pendingHatcherySpotlight, not a queue of which
+   * eggs specifically -- the Nests tab itself marks each ready card
+   * individually once they get there.
+   */
+  pendingHatchReadyNotice: boolean;
   /** Which owned pets currently accompany the guild -- feeds ModifierManager's
    *  global mods and is the only thing that gains a pet post-hatch xp (see
    *  PetManager). Capped at ModifierManager.petSlots(state), same

@@ -1,4 +1,4 @@
-import { ActiveQuest, GameState, Hero, HeroClass, MaterialId, Modifiers, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Stats } from './types';
+import { ActiveQuest, GameState, Hero, HeroClass, MaterialId, Modifiers, Pet, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Stats } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -55,6 +55,16 @@ export class GameEngine {
   offlineReport: OfflineReport | null = null;
   lastResult: QuestResult | null = null;
   lastRaidResult: RaidResult | null = null;
+  /**
+   * Set by hatchEgg, cleared by dismissHatchedPet -- same transient
+   * (unsaved), read-then-cleared shape as lastResult/lastRaidResult. Feeds
+   * HatchRevealModal, the "the egg hatched into 'xx'" card shown the
+   * moment a player opens a ready egg from the Nests tab. Genuinely
+   * transient rather than persisted: if the app closes before it's
+   * dismissed, there's nothing to restore -- the pet itself is already
+   * safely in state.pets either way, this is only the one-shot reveal.
+   */
+  lastHatchedPet: Pet | null = null;
   /**
    * Queued rather than a single overwritable value -- simultaneous events
    * (a quest finishing right as it unlocks something) now show one after
@@ -390,13 +400,12 @@ export class GameEngine {
       } else if (result.loot.some((l) => l.rarity === 'legendary')) playSound('legendary_drop');
       else if (result.levelsGained > 0) playSound('level_up');
       else playSound(result.success ? 'quest_success' : 'quest_fail');
-      // Independent of the sound-priority chain above -- a hatch can land
-      // on the same resolution as a level-up or even a chain completion,
-      // and deserves its own toast either way rather than being silently
-      // swallowed by whichever cue won.
-      for (const pet of result.hatchedPets ?? []) {
-        this.say(`An egg hatched! Say hello to ${pet.name}.`, 'hatchery');
-      }
+      // The "egg is ready" moment now gets its own dedicated prompt
+      // (HatchReadyModal, plus an idle-view banner) rather than a toast --
+      // set directly on state.pendingHatchReadyNotice inside
+      // QuestManager.resolve, nothing to do here. A toast was too easy to
+      // miss for something the player has to act on (open the Hatchery,
+      // click the ready egg) rather than just read.
       if (result.eggDropped) {
         this.say(`Found a ${result.eggDropped.rarity} egg! Equip it in the Hatchery to start it incubating.`, 'hatchery');
       }
@@ -745,6 +754,26 @@ export class GameEngine {
     return id;
   }
 
+  /**
+   * Same "transient, consume-once" shape as requestedTab/consumeRequestedTab
+   * just above, one level deeper -- requestTab only knows about MenuWindow's
+   * own top-level tabs, not a panel's internal sub-tab state (HatcheryPanel
+   * manages 'home'/'pets' itself via useState). Only Hatchery needs this
+   * today (HatchRevealModal's "Go to Pets"); kept specific rather than a
+   * generic sub-tab system until a second panel actually needs one.
+   */
+  requestedHatcherySubTab: 'home' | 'pets' | null = null;
+  requestHatcherySubTab(subTab: 'home' | 'pets') {
+    this.requestedTab = 'hatchery';
+    this.requestedHatcherySubTab = subTab;
+    this.notify();
+  }
+  consumeRequestedHatcherySubTab(): 'home' | 'pets' | null {
+    const sub = this.requestedHatcherySubTab;
+    this.requestedHatcherySubTab = null;
+    return sub;
+  }
+
   /** What the corner sprite should be doing right now. */
   get companionStatus(): 'idle' | 'questing' | 'injured' | 'ready' {
     const heroes = this.state.heroes;
@@ -1086,6 +1115,33 @@ export class GameEngine {
   dismissHatcherySpotlight() {
     this.state.pendingHatcherySpotlight = false;
     void this.saveNow();
+  }
+
+  /** Dismisses the "an egg is ready" prompt -- see
+   *  GameState.pendingHatchReadyNotice's own doc comment for why this
+   *  doesn't track which egg specifically. */
+  dismissHatchReadyNotice() {
+    this.state.pendingHatchReadyNotice = false;
+    void this.saveNow();
+  }
+
+  /** The actual hatch, explicit and player-triggered -- see
+   *  PetManager.hatchReadyEgg. Stores the result in lastHatchedPet for
+   *  HatchRevealModal rather than returning it directly, same "mutate
+   *  state, UI reads a transient field" shape every other action here
+   *  uses (see lastResult/lastRaidResult). */
+  hatchEgg(eggUid: string) {
+    const pet = PetManager.hatchReadyEgg(this.state, eggUid, Date.now());
+    if (!pet) return this.say('That egg is not ready to hatch yet.');
+    this.lastHatchedPet = pet;
+    playSound('legendary_drop');
+    this.notify();
+    void this.saveNow();
+  }
+
+  dismissHatchedPet() {
+    this.lastHatchedPet = null;
+    this.notify();
   }
 
   equipEgg(eggUid: string) {

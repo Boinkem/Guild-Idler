@@ -118,6 +118,7 @@ export function createInitialState(now = Date.now()): GameState {
     eggStorage: [],
     pets: [],
     equippedPetIds: [],
+    pendingHatchReadyNotice: false,
   };
 }
 
@@ -368,6 +369,16 @@ const MIGRATIONS: Record<number, Migration> = {
     // where it is (incubatingEggs is untouched here), it just now also has
     // an empty storage pool alongside it rather than nothing.
     eggStorage: (save.eggStorage as unknown[] | undefined) ?? [],
+  }),
+  24: (save) => ({
+    ...save,
+    version: 25,
+    // Hatching also stopped being automatic this patch -- any egg already
+    // sitting past its threshold on an existing save (there's no way to
+    // tell from old data alone) will just show "Ready to Hatch!" the next
+    // time its Nest card renders, computed fresh from isReady() rather
+    // than a stored flag. This only backfills the notice flag itself.
+    pendingHatchReadyNotice: (save.pendingHatchReadyNotice as boolean | undefined) ?? false,
   }),
 };
 

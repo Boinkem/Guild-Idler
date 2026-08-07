@@ -8,6 +8,8 @@ import { OfflineReportModal } from './ui/OfflineReportModal';
 import { QuestResultModal } from './ui/QuestResultModal';
 import { ChainCompleteModal } from './ui/ChainCompleteModal';
 import { RaidResultModal } from './ui/RaidResultModal';
+import { HatchReadyModal } from './ui/HatchReadyModal';
+import { HatchRevealModal } from './ui/HatchRevealModal';
 import { AchievementPopup } from './ui/AchievementPopup';
 import { Toast } from './ui/Toast';
 
@@ -92,6 +94,14 @@ export function App() {
           <QuestResultModal onViewLore={() => changeMode('menu')} />
           <ChainCompleteModal active={mode === 'menu'} onViewLore={() => changeMode('menu')} />
           <RaidResultModal active={mode === 'menu'} onViewLore={() => changeMode('menu')} />
+          <HatchReadyModal active={mode === 'menu'} onView={() => changeMode('menu')} />
+          {/* Not active-gated like the others above -- HatchRevealModal can
+              only ever be triggered by a click already happening inside the
+              Hatchery panel, which means the menu is already open. No idle-
+              view path to guard against, unlike an egg becoming ready
+              (which can happen mid-quest while the companion window is all
+              that's showing). */}
+          <HatchRevealModal />
         </>
       )}
       <Toast />
