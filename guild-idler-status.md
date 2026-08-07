@@ -1506,13 +1506,31 @@ from the spec pass).
   equipment loot does. Needs a loot-table-shaped field (mirroring
   `RaidEncounterDef.loot`'s "defId@chance" convention, likely
   "rarity@chance" or a dedicated pet-loot list) plus a devtool picker --
-  scoped but not started.
-- **Companion sprite on the desktop window.** Equipped-pet data model is
-  ready; the actual render hook into the idle companion / hero-sprite
-  views isn't built yet.
-- **Art.** No real pet or Hatchery-background art exists yet -- every pet
-  renders as its glyph, `hatchery-bg.jpg` renders nothing. Same "safe to
-  ship before art lands" convention as every other asset in this game.
+  scoped but not started. Blocked separately on the actual egg spritesheet
+  too -- see Art below.
+- ~~Companion sprite on the desktop window~~ -- done. `IdleView` renders
+  the first equipped pet beside the hero via the same `PetSprite`
+  component the Hatchery uses, requesting the generic `idle`/`movement`
+  verbs (now resolved symmetrically regardless of species vocabulary --
+  see `PetSprite.tsx`'s `resolveAnimation`) plus a brief `damage` flash on
+  a failed quest return, mirroring the existing floating-reward-text
+  tracking pattern. Deliberately does NOT track the hero's own
+  depart/arrive translateX keyframes -- the pet stays in place through a
+  departure rather than walking off-screen in sync, a scope cut rather
+  than an oversight, still animating its own loop the whole time so it
+  doesn't read as frozen.
+- **Art -- three species done, egg sheet still blocked.** Ember Kit (fox),
+  Rooftail (red panda), and Ashwing (crow) all have real animated sprites
+  now, recoloured across all 5 rarity tiers via a new
+  `tools/import_pets.py` (same lightness-preserving HLS palette-swap
+  technique `tools/recolor.py` already established for heroes, applied
+  per-`Rarity` instead of per-skin). `hatchery-bg.jpg` still renders
+  nothing. The egg sheet is still blocked -- two uploads so far have both
+  turned out to be the asset pack's promo/preview composite (opaque flat
+  background baked in, no real alpha channel), not the actual
+  redistributable spritesheet.png. Needs the real transparent file before
+  any of the incubating-egg/hatch-card visuals in the original spec can
+  be built.
 - Bonus roll ranges, hatch-xp thresholds, and feed gains are first-pass
   numbers, not a balance pass -- same "content is a cache, gameplay data
   confirms the intent" spirit as every other system's initial numbers.

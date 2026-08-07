@@ -407,6 +407,20 @@ button:focus-visible, [tabindex]:focus-visible {
   filter: blur(1px);
 }
 
+.pet-companion {
+  /* Sits beside the hero rather than tracking the depart/arrive translateX
+     keyframes -- it stays put through a departure/return rather than
+     walking off-screen in sync, a deliberate scope cut rather than an
+     oversight (see IdleView.tsx). Still animates its own idle/movement
+     loop the whole time, so it doesn't read as frozen. */
+  position: absolute;
+  bottom: 22px;
+  left: calc(50% + 34px);
+  z-index: 1;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.4));
+  animation: bob calc(2.4s / max(var(--anim-speed, 1), 0.001)) steps(2, end) infinite;
+}
+
 .idle-plate {
   margin-top: 8px;
   display: flex;

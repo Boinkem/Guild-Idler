@@ -3,6 +3,8 @@ import { useEngine, useNow } from './useEngine';
 import { useSettings } from './useSettings';
 import { PixelSprite, QUEST_MARK } from './sprites/PixelSprite';
 import { HeroAnimation, HeroSprite } from './sprites/HeroSprite';
+import { PetSprite } from './sprites/PetSprite';
+import { PET_BY_ID } from '../game/data/pets';
 import { formatDuration, formatGold } from '../game/util';
 
 type Anim = 'idle' | 'walking' | 'departing' | 'returning';
@@ -102,6 +104,37 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
 
   const questsReady = engine.state.questBoard.length;
   const injured = hero.injuries.length > 0;
+
+  // The desktop companion shows at most one pet -- the first equipped slot
+  // -- trailing beside the hero rather than a full party lineup, which
+  // would crowd a window this small fast. Its animation deliberately
+  // mirrors the hero's own coarse state (idle vs moving) rather than
+  // tracking the hero's fuller attack-flash detail, since most equipped
+  // species (red panda, crow) don't have anything analogous to attack
+  // frames anyway.
+  const equippedPet = engine.state.pets.find((p) => p.uid === engine.state.equippedPetIds[0]);
+  const petDef = equippedPet ? PET_BY_ID[equippedPet.defId] : null;
+
+  // "Desktop when back from failed quest -- damage" (fox-specific request,
+  // but harmless to request generically -- PetSprite.resolveAnimation just
+  // falls back to idle for species without a damage animation of their
+  // own). Same lastResult-watching shape as the floatingText effect above,
+  // its own ref since both effects independently react to the same value.
+  const lastPetResultId = useRef<string | null>(null);
+  const [petFlashDamage, setPetFlashDamage] = useState(false);
+  useEffect(() => {
+    const result = engine.lastResult;
+    if (!result || result.questId === lastPetResultId.current) return undefined;
+    lastPetResultId.current = result.questId;
+    if (result.success) return undefined;
+    setPetFlashDamage(true);
+    const id = window.setTimeout(() => setPetFlashDamage(false), 1400);
+    return () => window.clearTimeout(id);
+  }, [engine.lastResult]);
+
+  const petAnimation = petFlashDamage
+    ? 'damage'
+    : anim === 'idle' ? 'idle' : 'movement';
 
   const spriteAnimation: HeroAnimation =
     flashAttack && (anim === 'walking')
@@ -214,6 +247,18 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
           )}
         </div>
         <div className="knight-shadow" />
+
+        {equippedPet && petDef && (
+          <PetSprite
+            species={petDef.spriteFolder}
+            rarity={equippedPet.rarity}
+            animation={petAnimation}
+            flip={facingReturn}
+            height={Math.round(40 * settings.spriteScale)}
+            title={equippedPet.name}
+            className="pet-companion"
+          />
+        )}
 
         <div className="idle-plate">
           <span className="gold">◆ {formatGold(engine.state.gold)}</span>

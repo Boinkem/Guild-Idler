@@ -58,12 +58,19 @@ function useManifest(): Manifest | null {
 
 /** Falls back to whichever animation the species actually has, same
  *  "nearest available" resolution HeroSprite already does for classes with
- *  a smaller animation set than the samurai's full ten. */
+ *  a smaller animation set than the samurai's full ten. Kept symmetric on
+ *  purpose -- callers like the desktop companion want to request generic
+ *  verbs ('idle'/'movement') without caring whether the equipped pet is a
+ *  fox or a crow with its own vocabulary. */
 function resolveAnimation(char: SpeciesManifest, requested: PetAnimation): PetAnimation {
   if (char.animations[requested]) return requested;
   if ((requested === 'sitting' || requested === 'laying') && char.animations.sleep) return 'sleep';
+  if (requested === 'sleep' && char.animations.laying) return 'laying';
+  if (requested === 'sleep' && char.animations.sitting) return 'sitting';
   if (requested === 'perched' && char.animations.idle) return 'idle';
+  if (requested === 'idle' && char.animations.perched) return 'perched';
   if (requested === 'walking' && char.animations.movement) return 'movement';
+  if (requested === 'movement' && char.animations.walking) return 'walking';
   if (requested === 'flying' && char.animations.movement) return 'movement';
   if (requested === 'eating' && char.animations.catch) return 'catch';
   return char.animations.idle ? 'idle' : (Object.keys(char.animations)[0] as PetAnimation);
