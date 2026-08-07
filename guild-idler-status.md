@@ -220,26 +220,16 @@ raid fight).
   the old schema. Added both fields as `boolean` type (already fully
   supported end to end, just never wired to this schema) -- fixed and
   now editable via a checkbox, not just fixed silently.
-- **Every CSS animation in the game plays instantly, no visible motion at
-  all -- root cause still unknown.** First noticed via Harvest's
-  fall-in/collect-particle effects (patches 0112/0113 chased two real but
-  ultimately unrelated leads there: a hardcoded duration not respecting
-  `--anim-speed`, and an off-screen animation start -- both legitimate
-  fixes, neither was the actual cause). Confirmed NOT specific to Harvest:
-  the pre-existing quest-completion gold/XP particle burst
-  (`QuestResultModal`, `collect-fly`) does the exact same thing --
-  appears/vanishes instantly instead of flying and fading. Confirmed NOT
-  the in-game Settings > Reduce Motion toggle (checked, it's off) and the
-  player doesn't believe a Windows power-saving mode is active. Since
-  every animation-duration in the app funnels through one global
-  mechanism (`@media (prefers-reduced-motion: reduce)` and/or
-  `:root[data-motion='off']`, both forcing `animation-duration: 0.001ms
-  !important` in `app.css`), whatever's triggering this is almost
-  certainly one of those two matching when it shouldn't -- worth checking
-  Windows' Ease of Access > Visual effects > "Show animations" setting
-  specifically (a different toggle from power mode), and/or actually
-  inspecting the live DOM's `:root` for `data-motion`/computed
-  `prefers-reduced-motion` state via DevTools next time this comes up.
+- ~~Every CSS animation in the game plays instantly, no visible motion at
+  all -- root cause still unknown.~~ -- resolved, see "Harvest fall
+  animation, background dimming, spawn/yield retune" below for the full
+  writeup. Root cause: an unconditional `@media
+  (prefers-reduced-motion: reduce)` rule in `app.css` forced
+  `animation-duration: 0.001ms !important` on every element whenever the
+  *OS* reported that preference, regardless of what the in-game Settings
+  > Animation Speed / Reduce Motion controls showed -- exactly matching
+  "checked, it's off" while still silently winning. Confirmed as the
+  same root cause behind this report and the newer Harvest-specific one.
 - ~~A toast notification sometimes never goes away~~ -- resolved (patch
   0116). Real React bug, not a UI/CSS issue: `Toast.tsx`'s auto-dismiss
   effect was keyed on `[message, engine]` -- message text. Two toasts in
@@ -696,6 +686,77 @@ via a minimal standalone render, and the timing fix was verified by
 direct comparison of the two duration formulas rather than by eye;
 worth a real in-app look to confirm both land the way they're intended
 to before calling this fully closed.
+
+### Harvest: real root cause found, background dimmed, spawn/yield retuned -- complete
+Follow-up report: falling items still weren't visibly falling even with
+the previous patch's timing fix in place, and "settings are all default,
+animations turned on" -- ruling out both bugs fixed in that patch (which
+only mattered at a non-default Animation Speed). That detail was the
+actual clue: something was overriding the animation *independent of*
+what Settings showed.
+
+**Found it.** `app.css` had an unconditional
+`@media (prefers-reduced-motion: reduce) { *, *::before, *::after {
+animation-duration: 0.001ms !important; ... } }` rule -- reacting to the
+*operating system's* accessibility preference, completely separate from
+the in-game Settings > Animation Speed / Reduce Motion controls. On any
+system where the OS reports that preference (a genuinely common default
+on some platforms, not always chosen with this specific game's cosmetic
+animations in mind), every animation in the app -- Harvest's fall,
+the quest-completion particle burst, all of it -- collapsed to
+0.001ms regardless of what the in-game toggle showed, with no way to
+turn it back on from inside the game. This lines up exactly with the
+long-standing "animations play instantly, root cause unknown" entry in
+Known Bugs above (now resolved, cross-referencing here) -- "checked, the
+in-game toggle is off" was true and irrelevant, since the OS-level media
+query was winning regardless.
+
+**Fix:** removed the blanket media query. `:root[data-motion='off']`
+(driven entirely by the in-game setting via `SettingsStore.apply`) is
+now the only place motion gets suppressed. The OS preference isn't
+ignored, though -- a new `prefersReducedMotionByDefault()` in
+`settings.ts` seeds `reduceMotion` from `window.matchMedia` *once*, only
+for a brand-new save with no stored settings yet, so a new player on a
+reduced-motion system still gets sensible accessibility defaults; from
+that point on the in-game control is the single source of truth and can
+actually be changed. Verified the settings-load logic directly (fresh
+load with OS preference true -> `reduceMotion: true`; fresh load with it
+false -> `reduceMotion: false`), since there's no browser here to check
+the media query itself against.
+
+**Background dimmed**, per direct request -- the Fields scene's
+background art now renders on its own `.harvest-scene-bg` layer at
+`opacity: 0.7` instead of directly on the same element the interactive
+items are drawn on, so dimming the art doesn't dim the falling items or
+their glow along with it (same "fade via a separate layer" approach
+`MenuWindow.tsx`'s guild-hall background already uses, just a lighter
+touch -- 0.7 rather than 0.35 -- since this art is the actual content
+being interacted with, not a decorative backdrop sitting behind opaque
+cards). Player's mentioned they'll likely swap this background for
+something simpler later; the dimming layer works with whatever image
+ends up there.
+
+**Spawn rate doubled, yield per catch halved**, per direct request:
+`harvest.baseSpawnIntervalMs` 90s->45s, `harvest.minSpawnIntervalMs`
+20s->10s, `harvest.baseYieldPerCatch` 1->0.5 (`default`/`min` updated to
+match in `tuning.json`, so a DevTool "reset to default" lands on the new
+baseline, not the old one). Twice the clicks, half the yield each --
+per-hour totals land close to where they were, the loop just asks for
+more engagement rather than being a straight buff or nerf. Tool
+upgrades' own `yieldBonusPerLevel` deliberately left untouched, so
+invested tool levels now matter *more* relative to the smaller base than
+they used to.
+
+Yield can now be genuinely fractional (0.5 per catch at the base tier).
+Verified this accumulates exactly rather than losing anything to
+rounding -- two 0.5 catches sum to precisely 1 in `state.materials`, not
+0 or 1 from a naive floor. Only the *display* rounds, via a new
+`formatMaterial()` in `util.ts` (whole numbers show as-is, anything
+fractional shows one decimal), used everywhere a material count renders
+-- the Fields stock line, the Warehouse stock rows, and the
+collect-burst "+0.5 Ore" particle text.
+
+`npx tsc --noEmit` and `vite build` both pass clean.
 
 ### Cleanup items
 - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid

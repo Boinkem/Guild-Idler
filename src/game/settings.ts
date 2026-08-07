@@ -209,11 +209,42 @@ const MIGRATIONS: Record<number, Migration> = {
   // 1 -> 2 would go here when the shape next changes.
 };
 
+/**
+ * Reads the OS/browser's `prefers-reduced-motion` accessibility preference,
+ * used only to pick a sensible *default* for a brand-new save's
+ * `reduceMotion` setting -- never checked again after that. This used to
+ * also be enforced directly and unconditionally in CSS
+ * (`@media (prefers-reduced-motion: reduce) { *, *::before, *::after {
+ * animation-duration: 0.001ms !important; ... } }`), which was a real bug,
+ * not a redundant safety net: that rule applied regardless of what the
+ * in-game Animation Speed / Reduce Motion controls were set to, so a player
+ * on a system reporting this preference (a genuinely common default on
+ * some platforms, and not always chosen for a reason that has anything to
+ * do with wanting *this* game's cosmetic animations suppressed) would see
+ * every animation in the app -- Harvest's fall-in, the quest-completion
+ * particle burst, all of it -- collapse to near-zero duration no matter
+ * what Settings actually showed, with no way to turn it back on from
+ * inside the game. That's likely the real explanation for the
+ * long-standing "animations play instantly, root cause unknown" issue.
+ * Respecting the OS preference as the *starting point* for a new player,
+ * while leaving the in-game setting as the one actual source of truth from
+ * then on (see `apply` below, which is now the only place motion gets
+ * turned off), keeps the accessibility intent without permanently
+ * overriding an explicit in-game choice to turn animations back on.
+ */
+function prefersReducedMotionByDefault(): boolean {
+  try {
+    return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  } catch {
+    return false;
+  }
+}
+
 export const SettingsStore = {
   load(): Settings {
     try {
       const raw = window.localStorage.getItem(KEY);
-      if (!raw) return { ...DEFAULT_SETTINGS };
+      if (!raw) return { ...DEFAULT_SETTINGS, reduceMotion: prefersReducedMotionByDefault() };
       let parsed = JSON.parse(raw) as Record<string, unknown>;
       let version = typeof parsed.version === 'number' ? parsed.version : 1;
       while (version < SETTINGS_VERSION && MIGRATIONS[version]) {
@@ -223,7 +254,7 @@ export const SettingsStore = {
       // Merge over defaults so a missing key never yields undefined.
       return { ...DEFAULT_SETTINGS, ...(parsed as Partial<Settings>), version: SETTINGS_VERSION };
     } catch {
-      return { ...DEFAULT_SETTINGS };
+      return { ...DEFAULT_SETTINGS, reduceMotion: prefersReducedMotionByDefault() };
     }
   },
 

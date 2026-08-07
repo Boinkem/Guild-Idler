@@ -859,14 +859,19 @@ button:focus-visible, [tabindex]:focus-visible {
   font-size: 0.6875rem;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-  }
-}
-
+/*
+ * There used to be an unconditional `@media (prefers-reduced-motion:
+ * reduce) { *, *::before, *::after { animation-duration: 0.001ms
+ * !important; ... } }` rule here. Removed -- it applied regardless of
+ * what Settings > Animation Speed / Reduce Motion actually showed, which
+ * meant a player on a system reporting that OS-level preference had every
+ * animation in the app collapse to instant with no way to turn it back on
+ * in-game. `:root[data-motion='off']` below is now the only place motion
+ * gets suppressed, driven entirely by the in-game setting -- see
+ * `prefersReducedMotionByDefault` in settings.ts for how the OS
+ * preference still gets respected, just as a one-time default for a new
+ * save rather than a permanent override.
+ */
 :root[data-motion='off'] *,
 :root[data-motion='off'] *::before,
 :root[data-motion='off'] *::after {
@@ -1463,10 +1468,25 @@ input[type='range'] {
   border-radius: 6px;
   border: 1px solid var(--edge);
   background-color: var(--night);
-  background-size: 100% 100%;
-  background-position: center;
   overflow: hidden;
   margin-bottom: 12px;
+}
+/*
+ * The background art on its own layer, dimmed independently of the
+ * interactive items drawn on top -- was the image directly on
+ * `.harvest-scene` itself, which meant dimming it would have dimmed the
+ * falling items and their glow right along with it. Same "fade via a
+ * separate layer, not the image's own opacity" approach the guild-hall
+ * background already uses in MenuWindow.tsx, just a lighter touch here
+ * (0.7, not 0.35) since this art is the actual content being interacted
+ * with, not a decorative backdrop sitting behind opaque cards.
+ */
+.harvest-scene-bg {
+  position: absolute;
+  inset: 0;
+  background-size: 100% 100%;
+  background-position: center;
+  opacity: 0.7;
 }
 .harvest-scene-empty {
   position: absolute;

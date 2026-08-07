@@ -57,6 +57,17 @@ export function formatGold(value: number): string {
   return formatNumber(value);
 }
 
+/**
+ * Material stock display -- whole numbers show as-is, but
+ * `harvest.baseYieldPerCatch` can be fractional (0.5 per catch as of the
+ * spawn-rate/yield retune), so raw totals can genuinely land on a half-unit.
+ * Rounds only for display; the underlying `state.materials` value stays
+ * exact so two half-catches still add up to a whole unit with nothing lost.
+ */
+export function formatMaterial(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 export function formatDuration(ms: number): string {
   if (ms <= 0) return 'ready';
   const totalSeconds = Math.ceil(ms / 1000);

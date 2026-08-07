@@ -337,19 +337,19 @@
     "id": "harvest.baseSpawnIntervalMs",
     "label": "Harvest: base spawn interval (ms)",
     "category": "harvest",
-    "value": 90000,
-    "default": 90000,
+    "value": 45000,
+    "default": 45000,
     "min": 5000,
-    "description": "Time between spawns at a node with zero idle heroes and no tool upgrade. 90000 = 90s."
+    "description": "Time between spawns at a node with zero idle heroes and no tool upgrade. 45000 = 45s. Halved from the original 90s alongside baseYieldPerCatch being halved -- spawn twice as often, worth half as much each, more clicks for a similar per-hour total rather than a straight buff or nerf."
   },
   {
     "id": "harvest.minSpawnIntervalMs",
     "label": "Harvest: minimum spawn interval (ms)",
     "category": "harvest",
-    "value": 20000,
-    "default": 20000,
+    "value": 10000,
+    "default": 10000,
     "min": 2000,
-    "description": "Soft floor -- idle-hero count and tool level can shrink the interval, but never past this, so a node never spawns faster than one item every 20s regardless of roster size."
+    "description": "Soft floor -- idle-hero count and tool level can shrink the interval, but never past this, so a node never spawns faster than one item every 10s regardless of roster size. Halved from 20s alongside baseSpawnIntervalMs, same reasoning."
   },
   {
     "id": "harvest.spawnReductionPerIdleHeroMs",
@@ -393,10 +393,10 @@
     "id": "harvest.baseYieldPerCatch",
     "label": "Harvest: base yield per catch",
     "category": "harvest",
-    "value": 1,
-    "default": 1,
-    "min": 1,
-    "description": "Flat, predictable material gained per normal catch before any tool-upgrade bonus. 1:1 to start, scaled later purely by upgrades, not by RNG."
+    "value": 0.5,
+    "default": 0.5,
+    "min": 0.5,
+    "description": "Flat, predictable material gained per normal catch before any tool-upgrade bonus. Halved from the original 1:1 alongside baseSpawnIntervalMs/minSpawnIntervalMs being halved -- twice as many catches for half the yield each, so per-hour totals land close to where they were, but the loop asks for closer to double the clicks. Can be fractional (materials accumulate exactly, only display formatting rounds); scaled later purely by upgrades, not by RNG."
   },
   {
     "id": "harvest.sellPricePerUnit",

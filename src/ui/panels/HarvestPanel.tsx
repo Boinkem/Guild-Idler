@@ -9,7 +9,7 @@ import {
 } from '../../game/data/harvestUpgrades';
 import { HarvestManager } from '../../game/managers/HarvestManager';
 import { MaterialId } from '../../game/types';
-import { formatGold } from '../../game/util';
+import { formatGold, formatMaterial } from '../../game/util';
 import { MaxFlash, useMaxFlash } from '../maxFlash';
 
 type SubTab = 'warehouse' | 'fields';
@@ -91,11 +91,12 @@ function FieldsTab() {
       <div className="row wrap" style={{ gap: 12, marginBottom: 8 }}>
         {MATERIALS.map((m) => (
           <span key={m.id} className="tiny muted">
-            {m.name}: {state.materials[m.id]}/{HarvestManager.capacity(state)}
+            {m.name}: {formatMaterial(state.materials[m.id])}/{HarvestManager.capacity(state)}
           </span>
         ))}
       </div>
-      <div className="harvest-scene" style={{ backgroundImage: 'url(./lore/harvest/fields.jpg)' }}>
+      <div className="harvest-scene">
+        <div className="harvest-scene-bg" aria-hidden="true" style={{ backgroundImage: 'url(./lore/harvest/fields.jpg)' }} />
         {NODE_ORDER.map((nodeId) => <NodeLane key={nodeId} nodeId={nodeId} />)}
       </div>
     </>
@@ -182,7 +183,7 @@ function NodeLane({ nodeId }: { nodeId: MaterialId }) {
             className="collect-particle material"
             style={{ '--dx': `${BURST_PARTICLES[0].dx}px`, '--dy': `${BURST_PARTICLES[0].dy}px`, '--rot': `${BURST_PARTICLES[0].rot}deg` } as CSSProperties}
           >
-            +{burst.gained} {material.name}{burst.bonus ? ' bonus!' : ''}
+            +{formatMaterial(burst.gained)} {material.name}{burst.bonus ? ' bonus!' : ''}
           </span>
           {BURST_PARTICLES.slice(1).map((p, i) => (
             <span
@@ -247,7 +248,7 @@ function WarehouseTab() {
               <span style={{ width: `${Math.min(100, (state.materials[m.id] / cap) * 100)}%` }} />
             </div>
             <span className="tiny muted" style={{ width: 60, textAlign: 'right' }}>
-              {state.materials[m.id]}/{cap}
+              {formatMaterial(state.materials[m.id])}/{cap}
             </span>
           </div>
         ))}
