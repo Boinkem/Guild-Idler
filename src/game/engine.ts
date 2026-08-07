@@ -208,26 +208,72 @@ export class GameEngine {
   }
 
   /**
-   * Called right after a quest resolves for a hero with an active Auto-Chain
-   * streak. Either starts the next quest and extends the streak, or ends it
-   * (cap reached, upgrade somehow no longer active, or nothing eligible on
-   * the board) and resets the hero's counters. Shared by live tick() and
-   * offline catch-up — offline continuation works the same way, just without
-   * the toast/sound treatment live play gets, and using generateBoard's own
-   * time-seeded determinism to reproduce what the board would have shown at
-   * that historical moment rather than needing a separate simulation.
+   * Called right after a quest resolves for a hero who might auto-continue
+   * into another one. Two independent mechanisms live here, checked in
+   * order:
+   *
+   * 1. **Chain-stepping** (`hero.autoAdvanceChainId`) -- set by startQuest
+   *    when a chain offer was sent via "Chain Quest Steps" rather than
+   *    "Send on Quest". Auto-continues *that specific chain's* remaining
+   *    stages, independent of whether the Auto-Chain upgrade is owned.
+   * 2. **Auto-Chain bounty streak** (`hero.autoChainTarget`) -- the
+   *    existing upgrade-gated repeat mechanic. Deliberately still never
+   *    picks up chain offers itself (see pickBestQuest) -- it's a fallback
+   *    for ordinary board contracts, not a second way to advance a story.
+   *
+   * A finished chain (every stage done) hands off to #2 to spend whatever
+   * streak budget is left, so "auto-queue a chain" reads as: run the whole
+   * chain, then keep going on ordinary contracts. A *failed* stage, in
+   * either mechanism, stops everything outright instead of continuing --
+   * the as-far-as-you-can-go rule: one failure ends the run and returns the
+   * hero to idle for the player to decide what's next, rather than quietly
+   * grinding through more attempts (or more contracts) on its own.
+   *
+   * Shared by live tick() and offline catch-up — offline continuation works
+   * the same way, just without the toast/sound treatment live play gets.
    */
-  private tryContinueAutoChain(hero: Hero, now: number): { continued: boolean; completedCount: number; target: number } | null {
+  private tryContinueAutoChain(
+    hero: Hero, now: number, prevSuccess: boolean,
+  ): { continued: boolean; completedCount: number; target: number; via: 'chain' | 'streak'; stoppedByFailure?: boolean } | null {
+    if (hero.autoAdvanceChainId) {
+      const chainId = hero.autoAdvanceChainId;
+      if (!prevSuccess) {
+        // As far as you can go: a failed stage stops the chain right here,
+        // and takes the ordinary bounty streak down with it too, so the
+        // hero doesn't quietly wander back into contracts right after a
+        // chain stage went wrong -- the player should notice and decide.
+        hero.autoAdvanceChainId = null;
+        hero.autoChainTarget = null;
+        hero.autoChainCount = 0;
+        return { continued: false, completedCount: 0, target: 0, via: 'chain', stoppedByFailure: true };
+      }
+      const chain = CHAIN_BY_ID[chainId];
+      const active = this.state.activeChains.find((c) => c.chainId === chainId);
+      if (chain && active && active.stage < chain.stages.length) {
+        const rng = createRng(uid('autoAdvanceChain'));
+        const offer = QuestManager.chainOffer(chain, active.stage, rng);
+        const { error } = QuestManager.start(this.state, hero, offer, [], now);
+        if (!error) {
+          return { continued: true, completedCount: active.stage + 1, target: chain.stages.length, via: 'chain' };
+        }
+      }
+      // Chain complete (or nothing left to advance) -- fall through to the
+      // ordinary Auto-Chain bounty streak below, if one is still active,
+      // to spend whatever budget remains.
+      hero.autoAdvanceChainId = null;
+    }
+
     if (hero.autoChainTarget === null) return null;
     const target = hero.autoChainTarget;
 
-    const giveUp = (): { continued: boolean; completedCount: number; target: number } => {
+    const giveUp = (stoppedByFailure = false): { continued: boolean; completedCount: number; target: number; via: 'streak'; stoppedByFailure?: boolean } => {
       const completedCount = hero.autoChainCount;
       hero.autoChainTarget = null;
       hero.autoChainCount = 0;
-      return { continued: false, completedCount, target };
+      return { continued: false, completedCount, target, via: 'streak', stoppedByFailure };
     };
 
+    if (!prevSuccess) return giveUp(true);
     if (hero.autoChainCount >= target) return giveUp();
     const level = this.state.upgrades['auto_chain'] ?? 0;
     if (level <= 0) return giveUp();
@@ -240,7 +286,7 @@ export class GameEngine {
     if (error) return giveUp();
 
     hero.autoChainCount += 1;
-    return { continued: true, completedCount: hero.autoChainCount, target };
+    return { continued: true, completedCount: hero.autoChainCount, target, via: 'streak' };
   }
 
   clearToast() {
@@ -348,11 +394,16 @@ export class GameEngine {
 
       const chainHero = this.state.heroes.find((h) => h.id === quest.heroId);
       if (chainHero) {
-        const chainResult = this.tryContinueAutoChain(chainHero, now);
+        const chainResult = this.tryContinueAutoChain(chainHero, now, result.success);
         if (chainResult) {
           if (chainResult.continued) {
             playSound('depart');
-            this.say(`${chainHero.name} keeps going — ${chainResult.completedCount}/${chainResult.target} in this streak.`);
+            const label = chainResult.via === 'chain' ? 'chain step' : 'streak';
+            this.say(`${chainHero.name} keeps going — ${chainResult.completedCount}/${chainResult.target} in this ${label}.`);
+          } else if (chainResult.stoppedByFailure) {
+            playSound('quest_fail');
+            const note = chainResult.via === 'chain' ? 'a failed stage' : 'a failed quest';
+            this.say(`${chainHero.name}'s run stops after ${note} and waits for new orders.`);
           } else {
             playSound('chain_complete');
             const n = chainResult.completedCount;
@@ -447,7 +498,7 @@ export class GameEngine {
       }
 
       const hero = this.state.heroes.find((h) => h.id === quest.heroId);
-      if (hero) this.tryContinueAutoChain(hero, quest.endsAt);
+      if (hero) this.tryContinueAutoChain(hero, quest.endsAt, result.success);
     }
     for (const hero of this.state.heroes) HeroManager.pruneInjuries(hero, now);
 
@@ -695,14 +746,21 @@ export class GameEngine {
   /* -------------------------------- actions ---------------------------- */
 
   /**
-   * The third parameter is accepted but ignored -- kept only so the
-   * existing call site (QuestPanel, which currently passes []) doesn't need
-   * a second edit just for this. Consumables now come from the hero's own
-   * equipped slots (see equipConsumable/unequipConsumable below) instead of
-   * a loadout picked at send time, matching how equipped gear already
-   * works: what's slotted is what gets used, no separate per-send choice.
+   * The third parameter is accepted but ignored -- kept only so existing
+   * call sites that still pass [] don't need a second edit just for this.
+   * Consumables now come from the hero's own equipped slots (see
+   * equipConsumable/unequipConsumable below) instead of a loadout picked at
+   * send time, matching how equipped gear already works: what's slotted is
+   * what gets used, no separate per-send choice.
+   *
+   * `chainSteps` is the "Chain Quest Steps" option on a chain offer's send
+   * picker (QuestPanel), as opposed to plain "Send on Quest" -- only
+   * meaningful when `offer.chain` is set, ignored otherwise. It sets
+   * `autoAdvanceChainId` so tryContinueAutoChain auto-continues this exact
+   * chain's remaining stages once this stage resolves, independent of
+   * whatever the Auto-Chain (bounty streak) upgrade is doing.
    */
-  startQuest(heroId: string, offer: QuestOffer, _consumables?: string[]) {
+  startQuest(heroId: string, offer: QuestOffer, _consumables?: string[], chainSteps = false) {
     const hero = this.hero(heroId);
     if (!hero) return;
     const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], Date.now());
@@ -721,9 +779,39 @@ export class GameEngine {
       hero.autoChainTarget = null;
       hero.autoChainCount = 0;
     }
+    // Same "manual send always resets prior streak state" reasoning applies
+    // here -- any hero being sent by hand either opts into chain-stepping
+    // right now (via the offer just picked) or isn't chain-stepping at all,
+    // regardless of what they were doing before.
+    hero.autoAdvanceChainId = (chainSteps && offer.chain) ? offer.chain.chainId : null;
 
     playSound('depart');
     this.say(`${hero.name} sets out: ${offer.name}`);
+    void this.saveNow();
+  }
+
+  /**
+   * Cancels a hero's active quest early and brings them straight home --
+   * no reward, no failure penalty, just a clean cut. Also stops any
+   * Auto-Chain streak or chain-stepping the hero had queued up, since
+   * pulling a hero back mid-run is a deliberate "stop everything, let me
+   * decide" action -- it shouldn't quietly resume a streak or a chain the
+   * moment they're home. Confirmed with the player before this is ever
+   * called (see QuestPanel's Recall button).
+   */
+  recallHero(heroId: string) {
+    const hero = this.hero(heroId);
+    if (!hero) return;
+    const quest = this.activeQuestFor(heroId);
+    if (!quest) return;
+    this.state.activeQuests = this.state.activeQuests.filter((q) => q.id !== quest.id);
+    hero.status = 'idle';
+    hero.activeQuestId = null;
+    hero.autoChainTarget = null;
+    hero.autoChainCount = 0;
+    hero.autoAdvanceChainId = null;
+    playSound('depart');
+    this.say(`${hero.name} is recalled and heads back to the guild.`);
     void this.saveNow();
   }
 

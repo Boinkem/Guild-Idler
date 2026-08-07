@@ -12,7 +12,11 @@ stale sections here are worse than no section at all.
 
 **Core loop** — quest board (30-min refresh windows, tier eligibility by
 level), offline catch-up, Auto-Chain streaks, burst quests (capped live
-against the best-unlocked tier rather than a flat taper).
+against the best-unlocked tier rather than a flat taper). Auto-Chain now
+stops itself the moment any quest fails ("as far as you can go") instead
+of grinding on toward its target count regardless of outcome, and story
+chains have their own independent auto-continue -- see "Auto-queue / chain
+stepping rework" below.
 
 **Heroes** — recruiting, leveling, stat allocation, injuries, skins,
 ascension/prestige, retirement with streak bonus.
@@ -279,6 +283,74 @@ loadout picked at send time. One follow-up worth a look next time
 `HeroManager.ts` is in hand: `create()` should explicitly initialize
 `equippedConsumables: []` on new heroes for cleanliness -- not required
 (the field is optional and read defensively everywhere), just tidier.
+
+### Auto-queue / chain-stepping rework -- complete
+Started from a real complaint: sending a hero on a story chain's first
+stage with Auto-Chain active only ever ran that one stage, then fell back
+to ordinary board contracts -- because `pickBestQuest` (Auto-Chain's own
+quest picker) has always deliberately excluded chain offers, on purpose,
+so idle heroes don't independently pile into the same chain. That
+exclusion stays -- "auto-queue bounties never includes quest chains" is
+still correct -- but chain progression itself needed its own, separate
+auto-continue rather than accidentally inheriting the bounty picker's
+exclusion.
+
+- **`Hero.autoAdvanceChainId`** (new, optional field, same
+  defensive-optional convention as `equippedConsumables` -- no save
+  migration needed). Set by `startQuest`'s new `chainSteps` param when a
+  chain offer is sent via the quest board's new **Chain Quest Steps**
+  button (as opposed to **Send on Quest**, which now only shows as a
+  distinct choice when the chain has stages left to run after this one).
+  `tryContinueAutoChain` checks this first, independent of whether the
+  Auto-Chain upgrade is even owned: on a successful stage it starts the
+  next one directly; once the chain's last stage completes, it clears the
+  flag and falls through to the ordinary Auto-Chain bounty streak (if the
+  hero has one active) to spend whatever budget is left -- "run the whole
+  chain, then keep going on contracts," matching the fix as scoped.
+- **Stop-on-failure ("as far as you can go")**, applied to *both*
+  mechanisms, not just chain-stepping. Previously Auto-Chain kept sending
+  a hero at its rolled target count regardless of whether each quest
+  succeeded or failed -- a failed stage or contract no longer continues
+  either kind of run; it clears the streak/chain state and returns the
+  hero to idle for a new manual order instead of grinding on.
+- **Recall** -- `GameEngine.recallHero`, a new button on each "On the
+  road" card in the Quest tab. Cancels the active quest outright (no
+  reward, no failure penalty) and also clears any queued Auto-Chain
+  streak or chain-stepping the hero had going, since pulling a hero back
+  mid-run is a deliberate "stop everything" action. Confirmed first --
+  `confirm('Cancel the current quest and bring the hero home?')`, same
+  inline-`confirm()` convention `StatsPanel`'s hard-reset button already
+  uses.
+- Verified at runtime (not just typechecked): a script drove a real
+  `GameEngine` through a full chain via chainSteps end to end (confirms
+  it lands in `completedChains` and correctly falls back to an ordinary
+  contract afterward), a failed chain stage (confirms both the chain flag
+  and the bounty streak clear with no fallback quest started), a failed
+  ordinary streak (confirms it also stops rather than continuing to
+  target), and a Recall (confirms the quest is cancelled and all
+  streak/chain state clears). `npx tsc --noEmit` and `vite build` both
+  pass clean.
+
+**Open discussion, not yet acted on this patch:** the report that started
+this conversation also flagged a related pacing problem worth its own
+pass before changing the underlying logic further -- a brand-new recruit
+can inherit a quest board that's scaled to the guild's *best* hero
+(`reqLevel <= topLevel + 2`), so a fresh level-1 hire can be the only idle
+hero standing next to a board with nothing but Hard/Epic offers on it,
+especially a few in-game days into a save. The stop-on-failure fix above
+should blunt the worst symptom described (a new hire grinding failure
+after failure unattended), but it doesn't address the root cause: nothing
+currently stops a *manual* send, Quick-assign, or a fresh Auto-Chain
+streak from putting a low-level recruit on a quest they're heavily
+favoured to fail in the first place, just because it's the only offer
+left once better-equipped heroes have claimed the easier ones. Needs its
+own scoping pass -- options range from a per-hero suitability filter on
+Quick-assign/Auto-Chain's own picker, to a low-level-hero-specific slice
+of the board (mirroring the existing solo-player guaranteed-Easy-offer
+rule in `generateBoard`), to just surfacing the risk more clearly in the
+UI and leaving the choice to the player. Deliberately not folded into
+this patch since it changes board/assignment logic rather than the
+auto-continue logic this one was scoped around.
 
 ### Cleanup items
 - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid

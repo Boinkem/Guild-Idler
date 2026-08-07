@@ -41,7 +41,7 @@ interface QuestCardProps {
   onToggleExpanded: (offerId: string) => void;
   onStartAssigning: (offerId: string, heroId: string) => void;
   onCancelAssigning: () => void;
-  onSend: (offer: Offer, heroId: string) => void;
+  onSend: (offer: Offer, heroId: string, chainSteps?: boolean) => void;
 }
 
 /** Shared card body for both Discovered Quests and Available Contracts --
@@ -151,13 +151,34 @@ function QuestCard({
             );
           })}
           <button className="btn-ghost" onClick={onCancelAssigning}>Cancel</button>
-          <button
-            className="btn-primary"
-            disabled={!pickedHero}
-            onClick={() => pickedHero && onSend(offer, pickedHero.id)}
-          >
-            {pickedHero ? `Send ${pickedHero.name}` : 'Pick a hero'}
-          </button>
+          {offer.chain && offer.chain.stage + 1 < offer.chain.totalStages ? (
+            <>
+              <button
+                className="btn-ghost"
+                disabled={!pickedHero}
+                title="Send this stage only -- return to the board afterward"
+                onClick={() => pickedHero && onSend(offer, pickedHero.id, false)}
+              >
+                Send on Quest
+              </button>
+              <button
+                className="btn-primary"
+                disabled={!pickedHero}
+                title="Automatically continue this hero through the rest of the chain"
+                onClick={() => pickedHero && onSend(offer, pickedHero.id, true)}
+              >
+                Chain Quest Steps
+              </button>
+            </>
+          ) : (
+            <button
+              className="btn-primary"
+              disabled={!pickedHero}
+              onClick={() => pickedHero && onSend(offer, pickedHero.id)}
+            >
+              {pickedHero ? `Send ${pickedHero.name}` : 'Pick a hero'}
+            </button>
+          )}
         </div>
       ) : (
         <div className="row end" style={{ marginTop: 4, gap: 8 }}>
@@ -240,9 +261,18 @@ export function QuestPanel() {
   // Inventory rework). Quests now always send with an empty loadout; once
   // that rework lands, startQuest will read from the hero's own equipped
   // slots instead of needing anything passed in here at all.
-  const send = (offer: Offer, targetHeroId: string) => {
-    engine.startQuest(targetHeroId, offer, []);
+  const send = (offer: Offer, targetHeroId: string, chainSteps = false) => {
+    engine.startQuest(targetHeroId, offer, [], chainSteps);
     setAssigning(null);
+  };
+
+  // Confirmed before cancelling anything -- pulling a hero back mid-quest
+  // forfeits whatever that quest would have paid out, and (per
+  // recallHero) also drops any Auto-Chain streak or chain-stepping they
+  // had queued up, so this isn't something to trigger by an accidental
+  // click.
+  const recall = (heroId: string) => {
+    if (confirm('Cancel the current quest and bring the hero home?')) engine.recallHero(heroId);
   };
 
   // Same eligibility rule QuestCard's own "Requires level X" check uses --
@@ -299,6 +329,15 @@ export function QuestPanel() {
                   )}
                 </div>
                 <div className="bar"><span style={{ width: `${progress}%` }} /></div>
+                <div className="row end" style={{ marginTop: 6 }}>
+                  <button
+                    className="btn-ghost"
+                    style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+                    onClick={() => recall(quest.heroId)}
+                  >
+                    Recall
+                  </button>
+                </div>
               </div>
             );
           })}

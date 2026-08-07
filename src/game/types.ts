@@ -217,6 +217,19 @@ export interface Hero {
    * backfills it to [] for anything already saved.
    */
   equippedConsumables?: string[];
+  /**
+   * Set when this hero was sent via the "Chain Quest Steps" option on a
+   * story-chain offer -- the chainId being auto-advanced. Independent of
+   * autoChainTarget/autoChainCount (the ordinary Auto-Chain bounty streak):
+   * this hero auto-continues *this specific chain's* remaining stages,
+   * regardless of whether the Auto-Chain upgrade is even owned. Cleared the
+   * moment the chain finishes (every stage done) or a stage fails -- a
+   * failure always stops the chain right there ("as far as you can go"),
+   * it never silently retries. Optional/undefined for any hero not
+   * currently chain-stepping, same defensive-optional convention as
+   * equippedConsumables above -- no migration needed for existing saves.
+   */
+  autoAdvanceChainId?: string | null;
 }
 
 /* ----------------------------- quests ----------------------------- */

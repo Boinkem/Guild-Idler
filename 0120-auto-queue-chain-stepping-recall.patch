@@ -1,0 +1,407 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index fc2358a..4786dcf 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -12,7 +12,11 @@ stale sections here are worse than no section at all.
+ 
+ **Core loop** — quest board (30-min refresh windows, tier eligibility by
+ level), offline catch-up, Auto-Chain streaks, burst quests (capped live
+-against the best-unlocked tier rather than a flat taper).
++against the best-unlocked tier rather than a flat taper). Auto-Chain now
++stops itself the moment any quest fails ("as far as you can go") instead
++of grinding on toward its target count regardless of outcome, and story
++chains have their own independent auto-continue -- see "Auto-queue / chain
++stepping rework" below.
+ 
+ **Heroes** — recruiting, leveling, stat allocation, injuries, skins,
+ ascension/prestige, retirement with streak bonus.
+@@ -280,6 +284,74 @@ loadout picked at send time. One follow-up worth a look next time
+ `equippedConsumables: []` on new heroes for cleanliness -- not required
+ (the field is optional and read defensively everywhere), just tidier.
+ 
++### Auto-queue / chain-stepping rework -- complete
++Started from a real complaint: sending a hero on a story chain's first
++stage with Auto-Chain active only ever ran that one stage, then fell back
++to ordinary board contracts -- because `pickBestQuest` (Auto-Chain's own
++quest picker) has always deliberately excluded chain offers, on purpose,
++so idle heroes don't independently pile into the same chain. That
++exclusion stays -- "auto-queue bounties never includes quest chains" is
++still correct -- but chain progression itself needed its own, separate
++auto-continue rather than accidentally inheriting the bounty picker's
++exclusion.
++
++- **`Hero.autoAdvanceChainId`** (new, optional field, same
++  defensive-optional convention as `equippedConsumables` -- no save
++  migration needed). Set by `startQuest`'s new `chainSteps` param when a
++  chain offer is sent via the quest board's new **Chain Quest Steps**
++  button (as opposed to **Send on Quest**, which now only shows as a
++  distinct choice when the chain has stages left to run after this one).
++  `tryContinueAutoChain` checks this first, independent of whether the
++  Auto-Chain upgrade is even owned: on a successful stage it starts the
++  next one directly; once the chain's last stage completes, it clears the
++  flag and falls through to the ordinary Auto-Chain bounty streak (if the
++  hero has one active) to spend whatever budget is left -- "run the whole
++  chain, then keep going on contracts," matching the fix as scoped.
++- **Stop-on-failure ("as far as you can go")**, applied to *both*
++  mechanisms, not just chain-stepping. Previously Auto-Chain kept sending
++  a hero at its rolled target count regardless of whether each quest
++  succeeded or failed -- a failed stage or contract no longer continues
++  either kind of run; it clears the streak/chain state and returns the
++  hero to idle for a new manual order instead of grinding on.
++- **Recall** -- `GameEngine.recallHero`, a new button on each "On the
++  road" card in the Quest tab. Cancels the active quest outright (no
++  reward, no failure penalty) and also clears any queued Auto-Chain
++  streak or chain-stepping the hero had going, since pulling a hero back
++  mid-run is a deliberate "stop everything" action. Confirmed first --
++  `confirm('Cancel the current quest and bring the hero home?')`, same
++  inline-`confirm()` convention `StatsPanel`'s hard-reset button already
++  uses.
++- Verified at runtime (not just typechecked): a script drove a real
++  `GameEngine` through a full chain via chainSteps end to end (confirms
++  it lands in `completedChains` and correctly falls back to an ordinary
++  contract afterward), a failed chain stage (confirms both the chain flag
++  and the bounty streak clear with no fallback quest started), a failed
++  ordinary streak (confirms it also stops rather than continuing to
++  target), and a Recall (confirms the quest is cancelled and all
++  streak/chain state clears). `npx tsc --noEmit` and `vite build` both
++  pass clean.
++
++**Open discussion, not yet acted on this patch:** the report that started
++this conversation also flagged a related pacing problem worth its own
++pass before changing the underlying logic further -- a brand-new recruit
++can inherit a quest board that's scaled to the guild's *best* hero
++(`reqLevel <= topLevel + 2`), so a fresh level-1 hire can be the only idle
++hero standing next to a board with nothing but Hard/Epic offers on it,
++especially a few in-game days into a save. The stop-on-failure fix above
++should blunt the worst symptom described (a new hire grinding failure
++after failure unattended), but it doesn't address the root cause: nothing
++currently stops a *manual* send, Quick-assign, or a fresh Auto-Chain
++streak from putting a low-level recruit on a quest they're heavily
++favoured to fail in the first place, just because it's the only offer
++left once better-equipped heroes have claimed the easier ones. Needs its
++own scoping pass -- options range from a per-hero suitability filter on
++Quick-assign/Auto-Chain's own picker, to a low-level-hero-specific slice
++of the board (mirroring the existing solo-player guaranteed-Easy-offer
++rule in `generateBoard`), to just surfacing the risk more clearly in the
++UI and leaving the choice to the player. Deliberately not folded into
++this patch since it changes board/assignment logic rather than the
++auto-continue logic this one was scoped around.
++
+ ### Cleanup items
+ - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid
+   encounter with loot now has all three difficulty tiers.
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 7dcb744..f40d7e9 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -208,26 +208,72 @@ export class GameEngine {
+   }
+ 
+   /**
+-   * Called right after a quest resolves for a hero with an active Auto-Chain
+-   * streak. Either starts the next quest and extends the streak, or ends it
+-   * (cap reached, upgrade somehow no longer active, or nothing eligible on
+-   * the board) and resets the hero's counters. Shared by live tick() and
+-   * offline catch-up — offline continuation works the same way, just without
+-   * the toast/sound treatment live play gets, and using generateBoard's own
+-   * time-seeded determinism to reproduce what the board would have shown at
+-   * that historical moment rather than needing a separate simulation.
++   * Called right after a quest resolves for a hero who might auto-continue
++   * into another one. Two independent mechanisms live here, checked in
++   * order:
++   *
++   * 1. **Chain-stepping** (`hero.autoAdvanceChainId`) -- set by startQuest
++   *    when a chain offer was sent via "Chain Quest Steps" rather than
++   *    "Send on Quest". Auto-continues *that specific chain's* remaining
++   *    stages, independent of whether the Auto-Chain upgrade is owned.
++   * 2. **Auto-Chain bounty streak** (`hero.autoChainTarget`) -- the
++   *    existing upgrade-gated repeat mechanic. Deliberately still never
++   *    picks up chain offers itself (see pickBestQuest) -- it's a fallback
++   *    for ordinary board contracts, not a second way to advance a story.
++   *
++   * A finished chain (every stage done) hands off to #2 to spend whatever
++   * streak budget is left, so "auto-queue a chain" reads as: run the whole
++   * chain, then keep going on ordinary contracts. A *failed* stage, in
++   * either mechanism, stops everything outright instead of continuing --
++   * the as-far-as-you-can-go rule: one failure ends the run and returns the
++   * hero to idle for the player to decide what's next, rather than quietly
++   * grinding through more attempts (or more contracts) on its own.
++   *
++   * Shared by live tick() and offline catch-up — offline continuation works
++   * the same way, just without the toast/sound treatment live play gets.
+    */
+-  private tryContinueAutoChain(hero: Hero, now: number): { continued: boolean; completedCount: number; target: number } | null {
++  private tryContinueAutoChain(
++    hero: Hero, now: number, prevSuccess: boolean,
++  ): { continued: boolean; completedCount: number; target: number; via: 'chain' | 'streak'; stoppedByFailure?: boolean } | null {
++    if (hero.autoAdvanceChainId) {
++      const chainId = hero.autoAdvanceChainId;
++      if (!prevSuccess) {
++        // As far as you can go: a failed stage stops the chain right here,
++        // and takes the ordinary bounty streak down with it too, so the
++        // hero doesn't quietly wander back into contracts right after a
++        // chain stage went wrong -- the player should notice and decide.
++        hero.autoAdvanceChainId = null;
++        hero.autoChainTarget = null;
++        hero.autoChainCount = 0;
++        return { continued: false, completedCount: 0, target: 0, via: 'chain', stoppedByFailure: true };
++      }
++      const chain = CHAIN_BY_ID[chainId];
++      const active = this.state.activeChains.find((c) => c.chainId === chainId);
++      if (chain && active && active.stage < chain.stages.length) {
++        const rng = createRng(uid('autoAdvanceChain'));
++        const offer = QuestManager.chainOffer(chain, active.stage, rng);
++        const { error } = QuestManager.start(this.state, hero, offer, [], now);
++        if (!error) {
++          return { continued: true, completedCount: active.stage + 1, target: chain.stages.length, via: 'chain' };
++        }
++      }
++      // Chain complete (or nothing left to advance) -- fall through to the
++      // ordinary Auto-Chain bounty streak below, if one is still active,
++      // to spend whatever budget remains.
++      hero.autoAdvanceChainId = null;
++    }
++
+     if (hero.autoChainTarget === null) return null;
+     const target = hero.autoChainTarget;
+ 
+-    const giveUp = (): { continued: boolean; completedCount: number; target: number } => {
++    const giveUp = (stoppedByFailure = false): { continued: boolean; completedCount: number; target: number; via: 'streak'; stoppedByFailure?: boolean } => {
+       const completedCount = hero.autoChainCount;
+       hero.autoChainTarget = null;
+       hero.autoChainCount = 0;
+-      return { continued: false, completedCount, target };
++      return { continued: false, completedCount, target, via: 'streak', stoppedByFailure };
+     };
+ 
++    if (!prevSuccess) return giveUp(true);
+     if (hero.autoChainCount >= target) return giveUp();
+     const level = this.state.upgrades['auto_chain'] ?? 0;
+     if (level <= 0) return giveUp();
+@@ -240,7 +286,7 @@ export class GameEngine {
+     if (error) return giveUp();
+ 
+     hero.autoChainCount += 1;
+-    return { continued: true, completedCount: hero.autoChainCount, target };
++    return { continued: true, completedCount: hero.autoChainCount, target, via: 'streak' };
+   }
+ 
+   clearToast() {
+@@ -348,11 +394,16 @@ export class GameEngine {
+ 
+       const chainHero = this.state.heroes.find((h) => h.id === quest.heroId);
+       if (chainHero) {
+-        const chainResult = this.tryContinueAutoChain(chainHero, now);
++        const chainResult = this.tryContinueAutoChain(chainHero, now, result.success);
+         if (chainResult) {
+           if (chainResult.continued) {
+             playSound('depart');
+-            this.say(`${chainHero.name} keeps going — ${chainResult.completedCount}/${chainResult.target} in this streak.`);
++            const label = chainResult.via === 'chain' ? 'chain step' : 'streak';
++            this.say(`${chainHero.name} keeps going — ${chainResult.completedCount}/${chainResult.target} in this ${label}.`);
++          } else if (chainResult.stoppedByFailure) {
++            playSound('quest_fail');
++            const note = chainResult.via === 'chain' ? 'a failed stage' : 'a failed quest';
++            this.say(`${chainHero.name}'s run stops after ${note} and waits for new orders.`);
+           } else {
+             playSound('chain_complete');
+             const n = chainResult.completedCount;
+@@ -447,7 +498,7 @@ export class GameEngine {
+       }
+ 
+       const hero = this.state.heroes.find((h) => h.id === quest.heroId);
+-      if (hero) this.tryContinueAutoChain(hero, quest.endsAt);
++      if (hero) this.tryContinueAutoChain(hero, quest.endsAt, result.success);
+     }
+     for (const hero of this.state.heroes) HeroManager.pruneInjuries(hero, now);
+ 
+@@ -695,14 +746,21 @@ export class GameEngine {
+   /* -------------------------------- actions ---------------------------- */
+ 
+   /**
+-   * The third parameter is accepted but ignored -- kept only so the
+-   * existing call site (QuestPanel, which currently passes []) doesn't need
+-   * a second edit just for this. Consumables now come from the hero's own
+-   * equipped slots (see equipConsumable/unequipConsumable below) instead of
+-   * a loadout picked at send time, matching how equipped gear already
+-   * works: what's slotted is what gets used, no separate per-send choice.
++   * The third parameter is accepted but ignored -- kept only so existing
++   * call sites that still pass [] don't need a second edit just for this.
++   * Consumables now come from the hero's own equipped slots (see
++   * equipConsumable/unequipConsumable below) instead of a loadout picked at
++   * send time, matching how equipped gear already works: what's slotted is
++   * what gets used, no separate per-send choice.
++   *
++   * `chainSteps` is the "Chain Quest Steps" option on a chain offer's send
++   * picker (QuestPanel), as opposed to plain "Send on Quest" -- only
++   * meaningful when `offer.chain` is set, ignored otherwise. It sets
++   * `autoAdvanceChainId` so tryContinueAutoChain auto-continues this exact
++   * chain's remaining stages once this stage resolves, independent of
++   * whatever the Auto-Chain (bounty streak) upgrade is doing.
+    */
+-  startQuest(heroId: string, offer: QuestOffer, _consumables?: string[]) {
++  startQuest(heroId: string, offer: QuestOffer, _consumables?: string[], chainSteps = false) {
+     const hero = this.hero(heroId);
+     if (!hero) return;
+     const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], Date.now());
+@@ -721,12 +779,42 @@ export class GameEngine {
+       hero.autoChainTarget = null;
+       hero.autoChainCount = 0;
+     }
++    // Same "manual send always resets prior streak state" reasoning applies
++    // here -- any hero being sent by hand either opts into chain-stepping
++    // right now (via the offer just picked) or isn't chain-stepping at all,
++    // regardless of what they were doing before.
++    hero.autoAdvanceChainId = (chainSteps && offer.chain) ? offer.chain.chainId : null;
+ 
+     playSound('depart');
+     this.say(`${hero.name} sets out: ${offer.name}`);
+     void this.saveNow();
+   }
+ 
++  /**
++   * Cancels a hero's active quest early and brings them straight home --
++   * no reward, no failure penalty, just a clean cut. Also stops any
++   * Auto-Chain streak or chain-stepping the hero had queued up, since
++   * pulling a hero back mid-run is a deliberate "stop everything, let me
++   * decide" action -- it shouldn't quietly resume a streak or a chain the
++   * moment they're home. Confirmed with the player before this is ever
++   * called (see QuestPanel's Recall button).
++   */
++  recallHero(heroId: string) {
++    const hero = this.hero(heroId);
++    if (!hero) return;
++    const quest = this.activeQuestFor(heroId);
++    if (!quest) return;
++    this.state.activeQuests = this.state.activeQuests.filter((q) => q.id !== quest.id);
++    hero.status = 'idle';
++    hero.activeQuestId = null;
++    hero.autoChainTarget = null;
++    hero.autoChainCount = 0;
++    hero.autoAdvanceChainId = null;
++    playSound('depart');
++    this.say(`${hero.name} is recalled and heads back to the guild.`);
++    void this.saveNow();
++  }
++
+   /** Adds a consumable to a hero's equipped slots -- persists until removed
+    *  or consumed by a quest, capped at ModifierManager.consumableSlots. Does
+    *  not touch state.inventory; that deduction still happens at quest-start
+diff --git a/src/game/types.ts b/src/game/types.ts
+index b3fbd72..7017823 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -217,6 +217,19 @@ export interface Hero {
+    * backfills it to [] for anything already saved.
+    */
+   equippedConsumables?: string[];
++  /**
++   * Set when this hero was sent via the "Chain Quest Steps" option on a
++   * story-chain offer -- the chainId being auto-advanced. Independent of
++   * autoChainTarget/autoChainCount (the ordinary Auto-Chain bounty streak):
++   * this hero auto-continues *this specific chain's* remaining stages,
++   * regardless of whether the Auto-Chain upgrade is even owned. Cleared the
++   * moment the chain finishes (every stage done) or a stage fails -- a
++   * failure always stops the chain right there ("as far as you can go"),
++   * it never silently retries. Optional/undefined for any hero not
++   * currently chain-stepping, same defensive-optional convention as
++   * equippedConsumables above -- no migration needed for existing saves.
++   */
++  autoAdvanceChainId?: string | null;
+ }
+ 
+ /* ----------------------------- quests ----------------------------- */
+diff --git a/src/ui/panels/QuestPanel.tsx b/src/ui/panels/QuestPanel.tsx
+index 0a64dfd..8f5ada8 100644
+--- a/src/ui/panels/QuestPanel.tsx
++++ b/src/ui/panels/QuestPanel.tsx
+@@ -41,7 +41,7 @@ interface QuestCardProps {
+   onToggleExpanded: (offerId: string) => void;
+   onStartAssigning: (offerId: string, heroId: string) => void;
+   onCancelAssigning: () => void;
+-  onSend: (offer: Offer, heroId: string) => void;
++  onSend: (offer: Offer, heroId: string, chainSteps?: boolean) => void;
+ }
+ 
+ /** Shared card body for both Discovered Quests and Available Contracts --
+@@ -151,13 +151,34 @@ function QuestCard({
+             );
+           })}
+           <button className="btn-ghost" onClick={onCancelAssigning}>Cancel</button>
+-          <button
+-            className="btn-primary"
+-            disabled={!pickedHero}
+-            onClick={() => pickedHero && onSend(offer, pickedHero.id)}
+-          >
+-            {pickedHero ? `Send ${pickedHero.name}` : 'Pick a hero'}
+-          </button>
++          {offer.chain && offer.chain.stage + 1 < offer.chain.totalStages ? (
++            <>
++              <button
++                className="btn-ghost"
++                disabled={!pickedHero}
++                title="Send this stage only -- return to the board afterward"
++                onClick={() => pickedHero && onSend(offer, pickedHero.id, false)}
++              >
++                Send on Quest
++              </button>
++              <button
++                className="btn-primary"
++                disabled={!pickedHero}
++                title="Automatically continue this hero through the rest of the chain"
++                onClick={() => pickedHero && onSend(offer, pickedHero.id, true)}
++              >
++                Chain Quest Steps
++              </button>
++            </>
++          ) : (
++            <button
++              className="btn-primary"
++              disabled={!pickedHero}
++              onClick={() => pickedHero && onSend(offer, pickedHero.id)}
++            >
++              {pickedHero ? `Send ${pickedHero.name}` : 'Pick a hero'}
++            </button>
++          )}
+         </div>
+       ) : (
+         <div className="row end" style={{ marginTop: 4, gap: 8 }}>
+@@ -240,11 +261,20 @@ export function QuestPanel() {
+   // Inventory rework). Quests now always send with an empty loadout; once
+   // that rework lands, startQuest will read from the hero's own equipped
+   // slots instead of needing anything passed in here at all.
+-  const send = (offer: Offer, targetHeroId: string) => {
+-    engine.startQuest(targetHeroId, offer, []);
++  const send = (offer: Offer, targetHeroId: string, chainSteps = false) => {
++    engine.startQuest(targetHeroId, offer, [], chainSteps);
+     setAssigning(null);
+   };
+ 
++  // Confirmed before cancelling anything -- pulling a hero back mid-quest
++  // forfeits whatever that quest would have paid out, and (per
++  // recallHero) also drops any Auto-Chain streak or chain-stepping they
++  // had queued up, so this isn't something to trigger by an accidental
++  // click.
++  const recall = (heroId: string) => {
++    if (confirm('Cancel the current quest and bring the hero home?')) engine.recallHero(heroId);
++  };
++
+   // Same eligibility rule QuestCard's own "Requires level X" check uses --
+   // first contract some idle hero actually qualifies for, first hero who
+   // qualifies for it. A quick top-up action, not an optimal assignment.
+@@ -299,6 +329,15 @@ export function QuestPanel() {
+                   )}
+                 </div>
+                 <div className="bar"><span style={{ width: `${progress}%` }} /></div>
++                <div className="row end" style={{ marginTop: 6 }}>
++                  <button
++                    className="btn-ghost"
++                    style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
++                    onClick={() => recall(quest.heroId)}
++                  >
++                    Recall
++                  </button>
++                </div>
+               </div>
+             );
+           })}
