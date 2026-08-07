@@ -1672,6 +1672,39 @@ from the spec pass).
   Like the original fixed offset this replaced, this is tuned for a
   typical hero width, not the exact width of every class -- hero sprite
   width isn't available to pure CSS the way its height is.
+- **Follow-up: the "internal frame padding" caveat above turned out to be
+  real and fixable, not just a caveat.** Reported directly: the hound
+  specifically still read as hovering above the floor even with the
+  corner-accurate positioning above. Measured it rather than guessing
+  again -- every single frame of every one of the hound's three
+  animations carried exactly 35px of fully-transparent empty canvas below
+  the dog, out of a 100px frame (zero variance across all 25 frames
+  checked). Fox and Red Panda already sit at 0px padding natively
+  (already correct); the Crow varies 9-17px frame-to-frame since a bird's
+  legs genuinely move during a wing-flap, which is real motion, not
+  padding to remove.
+  `tools/import_pets.py` now auto-grounds every species: for each one, it
+  measures the bottom padding on every frame of every animation and crops
+  the MINIMUM shared amount off the bottom of every frame uniformly
+  (`ground_trim_for`) -- using the minimum rather than a per-animation or
+  per-frame value on purpose, so a pose that's genuinely higher up
+  mid-motion (a pounce, a wingbeat) keeps that travel intact; only the
+  padding empty in literally every frame gets removed. Confirmed safe
+  against all four current species before shipping: Fox/Red Panda trim to
+  0 (no-op, pixel-identical output), Crow trims 9px (48px -> 39px frame
+  height, verified visually afterward that no part of the bird itself got
+  clipped), Hound trims the full 35px (100px -> 65px). `extra_*` sprites
+  (the Crow's crumbs/fish icons) are deliberately excluded from this --
+  they're separate small objects, not the creature's own body, and
+  measuring their padding against the creature's frames would be
+  meaningless. One real side effect worth knowing: since the trim is
+  vertical-only, a species that gets trimmed now renders WIDER relative
+  to its height than before at the same `height` prop (frameW is
+  unchanged, frameH shrank) -- confirmed this doesn't break the
+  `left`-edge-anchored positioning above, since anchoring the left edge
+  (not centering) means the extra width just extends further right, over
+  the hero, which was already the accepted "being over the hero is fine"
+  behaviour.
 - **Art -- five assets done, egg sprite sheet still blocked.** Ember Kit
   (fox), Rooftail (red panda), Ashwing (crow), and Hatchery Hound (Saint
   Bernard) all have real animated sprites, recoloured across all 5 rarity

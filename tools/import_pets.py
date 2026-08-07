@@ -221,6 +221,57 @@ def slice_strip(img: Image.Image, spec: PetSpec, row: int, start_col: int, count
     return out
 
 
+def frame_bottom_padding(frame: Image.Image) -> int | None:
+    """Rows of fully-transparent padding below the lowest opaque pixel in
+    this one frame, or None if the frame has no opaque pixels at all.
+    Pure PIL (no numpy) -- frame sizes here are small (<=100x100), so a
+    plain per-row scan is fast enough and keeps Pillow the tool's only
+    dependency."""
+    w, h = frame.size
+    px = frame.load()
+    last_opaque_row = -1
+    for y in range(h):
+        for x in range(w):
+            if px[x, y][3] > 0:
+                last_opaque_row = y
+                break
+    return None if last_opaque_row < 0 else h - 1 - last_opaque_row
+
+
+def ground_trim_for(strips: Dict[str, Image.Image], frame_w: int) -> int:
+    """
+    How many empty rows to crop off the BOTTOM of every frame so the
+    lowest point any animation actually reaches becomes the frame's own
+    floor -- the fix for a species whose source pack baked in a lot of
+    empty canvas below the character (confirmed directly: the Hatchery
+    Hound's pack had a uniform 35px of nothing under every single frame
+    of every animation, at a 100px frame height, which read as visibly
+    floating once displayed grounded the way fox/red panda already sit
+    natively at zero padding).
+
+    Takes the MINIMUM padding across every frame of every animation, not
+    a fixed guess -- a flying bird's legs tuck up mid-flap, a pouncing fox
+    dips lower than its idle stance, and both of those are real motion,
+    not padding to trim away. Using the single lowest point any frame
+    reaches as the species' own "floor" crops out only the part that's
+    empty in literally every frame, so animation with genuine vertical
+    travel keeps that travel intact -- confirmed against the actual
+    measured per-frame values (fox: 0 across every animation, already
+    correct, so this is a no-op; crow: 11-17px depending on the frame,
+    real wing motion; hound: exactly 35px on every single frame with zero
+    variance, the one actually-uniform case).
+    """
+    paddings: List[int] = []
+    for strip in strips.values():
+        count = strip.width // frame_w
+        for i in range(count):
+            frame = strip.crop((i * frame_w, 0, (i + 1) * frame_w, strip.height))
+            pad = frame_bottom_padding(frame)
+            if pad is not None:
+                paddings.append(pad)
+    return min(paddings) if paddings else 0
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument('--src', required=True, help='folder holding the raw uploaded sheets')
@@ -233,6 +284,7 @@ def main() -> None:
 
     for spec in targets:
         counts: Dict[str, int] = {}
+        raw_strips: Dict[str, Image.Image] = {}
 
         if spec.sheet_file:
             src_path = os.path.join(args.src, spec.sheet_file)
@@ -244,14 +296,22 @@ def main() -> None:
 
             for anim, (row, start_col, count) in spec.rows.items():
                 counts[anim] = count
-                strip = slice_strip(sheet, spec, row, start_col, count)
+                raw_strips[anim] = slice_strip(sheet, spec, row, start_col, count)
+
+            trim = ground_trim_for(raw_strips, spec.frame_w)
+            frame_h = spec.frame_h - trim
+            if trim > 0:
+                print(f'    grounding: trimming {trim}px of empty canvas off every frame\'s bottom ({spec.frame_h} -> {frame_h}px)')
+
+            for anim, strip in raw_strips.items():
+                cropped = strip.crop((0, 0, strip.width, frame_h)) if trim > 0 else strip
                 for tier in RARITY_LIVERY:
                     mapping = build_map(spec, tier)
-                    recoloured = recolor_image(strip, mapping)
+                    recoloured = recolor_image(cropped, mapping)
                     dest_dir = os.path.join(args.out, spec.species_id, tier)
                     os.makedirs(dest_dir, exist_ok=True)
                     recoloured.save(os.path.join(dest_dir, f'{anim}.png'), optimize=True)
-                print(f'    {anim}: row {row}, {count} frames -> all 5 rarity tiers')
+                print(f'    {anim}: row {spec.rows[anim][0]}, {counts[anim]} frames -> all 5 rarity tiers')
 
             for name, (row, col) in spec.extras.items():
                 box = (col * spec.frame_w, row * spec.frame_h, (col + 1) * spec.frame_w, (row + 1) * spec.frame_h)
@@ -274,19 +334,27 @@ def main() -> None:
                     missing = True
                     break
                 strip = Image.open(src_path)
-                count = strip.width // spec.frame_w
-                counts[anim] = count
-                for tier in RARITY_LIVERY:
-                    mapping = build_map(spec, tier)
-                    recoloured = recolor_image(strip, mapping)
-                    dest_dir = os.path.join(args.out, spec.species_id, tier)
-                    os.makedirs(dest_dir, exist_ok=True)
-                    recoloured.save(os.path.join(dest_dir, f'{anim}.png'), optimize=True)
-                print(f'    {anim}: {filename}, {count} frames -> all 5 rarity tiers')
+                counts[anim] = strip.width // spec.frame_w
+                raw_strips[anim] = strip
             if missing:
                 continue
 
-        manifest[spec.species_id] = {'frameW': spec.frame_w, 'frameH': spec.frame_h, 'animations': counts}
+            trim = ground_trim_for(raw_strips, spec.frame_w)
+            frame_h = spec.frame_h - trim
+            if trim > 0:
+                print(f'    grounding: trimming {trim}px of empty canvas off every frame\'s bottom ({spec.frame_h} -> {frame_h}px)')
+
+            for anim, strip in raw_strips.items():
+                cropped = strip.crop((0, 0, strip.width, frame_h)) if trim > 0 else strip
+                for tier in RARITY_LIVERY:
+                    mapping = build_map(spec, tier)
+                    recoloured = recolor_image(cropped, mapping)
+                    dest_dir = os.path.join(args.out, spec.species_id, tier)
+                    os.makedirs(dest_dir, exist_ok=True)
+                    recoloured.save(os.path.join(dest_dir, f'{anim}.png'), optimize=True)
+                print(f'    {anim}: {spec.anim_files[anim]}, {counts[anim]} frames -> all 5 rarity tiers')
+
+        manifest[spec.species_id] = {'frameW': spec.frame_w, 'frameH': frame_h, 'animations': counts}
 
     os.makedirs(args.out, exist_ok=True)
     manifest_path = os.path.join(args.out, 'manifest.json')
