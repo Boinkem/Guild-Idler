@@ -200,11 +200,47 @@ export const QuestManager = {
     return scored.sort((a, b) => b.p - a.p)[0].o;
   },
 
-  /** Success chance preview, used by the UI and locked in at departure. */
+  /**
+   * Success chance preview, used by the UI and locked in at departure.
+   *
+   * The level/stat-derived portion of `heroMods` (the flat `level * 0.4`
+   * term, plus the str/end curve inside statMods) both scale off the
+   * hero's *raw* level -- which used to mean a hero standing exactly at a
+   * quest's own reqLevel, with zero gear or spent stat points, was still
+   * carrying the full "free" bonus of every level it took to get there.
+   * reqLevel ended up barely gating anything: a fresh level-6 hero on a
+   * level-6, Normal-tier (75% baseSuccess) chain stage was landing in the
+   * 80s-90s, not near 75%, and a fresh recruit is only *further* behind
+   * that curve on the earliest few levels, where the same mechanism now
+   * helps rather than hurts (see the recruit-difficulty note in
+   * guild-idler-status.md).
+   *
+   * `baselineOffset` below is exactly what a bare, zero-investment hero of
+   * this class would carry in these two terms if it were standing right at
+   * offer.reqLevel -- HeroManager.heroMods/statMods themselves are left
+   * untouched (they're also used for the Heroes panel's raw stat display
+   * and for raids, neither of which has this same "gated by reqLevel"
+   * framing), and only this preview subtracts it. Net effect: a hero
+   * exactly at reqLevel with nothing invested lands close to the tier's
+   * own baseSuccess (a small gap remains from the difficulty-tier penalty
+   * below, and from any class-identity success mod like Samurai's or
+   * Lizardman's, both intentional). Out-leveling the requirement, or
+   * investing in stats/gear/upgrades, is what should move the needle from
+   * there -- and still does, since both raise the hero's *actual* mods
+   * above this now-nonzero floor.
+   */
   previewSuccess(state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number): number {
     const loadout = InventoryManager.loadoutEffects(consumables);
     const classDef = HERO_CLASSES[hero.heroClass];
-    const preferred = classDef.preferred.includes(offer.tag) ? classDef.preferredBonus : 0;
+    // Chain stages are hardcoded to tag: 'explore' regardless of what the
+    // chain is actually about (see chainOffer above) -- so an explore-
+    // preferring class (Gladiator, Lizardman, Wizard) would otherwise get
+    // its full preferred-quest bonus on literally every story chain in the
+    // game, unconditionally. That's an artifact of the tag, not a real
+    // "this hero is suited to this story" signal, so chain offers never
+    // get a preferred bonus at all -- ordinary board contracts, whose tags
+    // do reflect their actual template, are unaffected.
+    const preferred = (!offer.chain && classDef.preferred.includes(offer.tag)) ? classDef.preferredBonus : 0;
     const mods = sumMods(
       HeroManager.heroMods(hero, now),
       ModifierManager.global(state),
@@ -212,7 +248,9 @@ export const QuestManager = {
       { success: preferred },
       { success: -(DIFFICULTY_ORDER.indexOf(offer.difficulty) * 2) },
     );
-    return clamp(offer.baseSuccess + mods.success, MIN_SUCCESS, MAX_SUCCESS);
+    const baselineStats = HeroManager.baselineStats(hero.heroClass, offer.reqLevel);
+    const baselineOffset = (HeroManager.statMods(baselineStats).success ?? 0) + offer.reqLevel * 0.4;
+    return clamp(offer.baseSuccess + mods.success - baselineOffset, MIN_SUCCESS, MAX_SUCCESS);
   },
 
   previewDuration(state: GameState, hero: Hero, offer: QuestOffer, now: number): number {

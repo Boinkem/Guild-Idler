@@ -42,6 +42,26 @@ export const HeroManager = {
     };
   },
 
+  /**
+   * The stats a hero of this class would have at a given level with zero
+   * investment -- no equipment, no bonusStats, no spent stat points. Same
+   * automatic per-level growth math create()/grantXp already apply, just
+   * evaluated directly for an arbitrary level instead of by simulating
+   * every level-up in sequence. Used to anchor success chance to a quest's
+   * own reqLevel rather than the hero's raw level -- see
+   * QuestManager.previewSuccess's comment for why.
+   */
+  baselineStats(heroClass: HeroClass, level: number): Stats {
+    const def = HERO_CLASSES[heroClass];
+    const levels = Math.max(0, level - 1);
+    return {
+      strength: def.baseStats.strength + def.growth.strength * levels,
+      endurance: def.baseStats.endurance + def.growth.endurance * levels,
+      luck: def.baseStats.luck + def.growth.luck * levels,
+      wisdom: def.baseStats.wisdom + def.growth.wisdom * levels,
+    };
+  },
+
   xpToNext(hero: Hero): number {
     return xpForLevel(hero.level);
   },

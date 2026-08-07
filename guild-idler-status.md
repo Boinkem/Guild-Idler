@@ -352,6 +352,62 @@ UI and leaving the choice to the player. Deliberately not folded into
 this patch since it changes board/assignment logic rather than the
 auto-continue logic this one was scoped around.
 
+### Quest success anchored to reqLevel, not raw hero level -- complete
+Started from a real report: a fresh level 6 hero, zero gear/consumables/
+spent stat points, had a ~91-93% success chance on `goblin_warband`'s
+first (Normal, baseSuccess 75%) stage -- reqLevel was barely functioning
+as a real gate. Root cause was two things stacking, both in
+`QuestManager.previewSuccess`:
+
+- The flat `hero.level * 0.4` term and the str/end stat curve inside
+  `statMods` both scale off the hero's *raw* level, which keeps growing
+  automatically via `HeroManager.grantXp`'s per-level class growth --
+  independent of any actually-spent stat point. A hero standing exactly
+  at a quest's reqLevel had therefore already banked the full "free"
+  value of every level it took to get there, and the tier's own
+  baseSuccess never accounted for that.
+- Every chain stage is hardcoded to `tag: 'explore'`
+  (`QuestManager.chainOffer`), regardless of what the chain is actually
+  about -- so Gladiator/Lizardman/Wizard (all `preferred: [...,
+  'explore']`) got their full preferred-quest bonus on literally every
+  story chain in the game, unconditionally. Confirmed as part of the
+  original 93% figure.
+
+**Fix:** `previewSuccess` now subtracts a `baselineOffset` -- exactly what
+a bare, zero-investment hero of the same class would carry in those two
+level-derived terms if it stood right at `offer.reqLevel` (new
+`HeroManager.baselineStats(heroClass, level)`, same automatic-growth math
+`create()`/`grantXp` already apply, evaluated directly for an arbitrary
+level). `HeroManager.heroMods`/`statMods` themselves are untouched --
+they're also read by the Heroes panel's raw stat display and by
+`RaidManager`, neither of which has this same "gated by reqLevel" framing
+-- so gold/xp/speed/injuryResist and raid math are unaffected; only this
+one preview (and `QuestManager.start`, which calls it to lock in
+`finalSuccess`) changed. Chain offers also no longer get a preferred-tag
+bonus at all, since their tag isn't a real reflection of the story --
+ordinary board contracts, whose tags come from their actual template,
+are unaffected.
+
+Verified at runtime across every recruitable class: a hero standing
+exactly at a quest's reqLevel with nothing invested now lands close to
+that stage's own baseSuccess (Normal ~73%, Hard ~56% -- the few-point gap
+below the raw number is the existing, unchanged difficulty-tier penalty,
+plus any class-identity success mod like Samurai's or Lizardman's, both
+intentional and left alone). Out-leveling the requirement still
+meaningfully raises success (73% -> 76% -> 80% -> 86% at level 6/10/16/25
+on the same stage) -- the fix re-anchors the floor, it doesn't flatten
+the curve. Applies to ordinary board contracts too, not just chains,
+since both read from the same `offer.reqLevel`. `npx tsc --noEmit` and
+`vite build` both pass clean.
+
+**Not touched, flagged for later:** the same "mods scale off raw level,
+not the challenge's own level" architecture likely applies to
+`RaidManager`'s success math too (`heroMods` feeds it directly, same as
+before) -- raids weren't part of this report and have their own
+level/difficulty gating shape, so left alone rather than assumed fixed
+by the same change. Worth its own look if a similar complaint comes in
+about raids.
+
 ### Cleanup items
 - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid
   encounter with loot now has all three difficulty tiers.
