@@ -140,10 +140,10 @@ slot, more via the new Companion Bond upgrade) feed their bonus into the
 account-wide modifier pool, gain their own xp which grows that bonus over
 time, and now render live beside the hero on the desktop companion;
 happiness decays lazily and can be restored by feeding raw materials or a
-new craftable Pet Treat. Three real animated species (fox/red panda/crow)
-ship with art across all 5 rarity recolors; egg art is still glyph-only,
-blocked on sourcing the actual transparent spritesheet. See its own
-section below for the full writeup.
+new craftable Pet Treat. Four real animated species (fox/red panda/crow/
+hatchery hound) ship with art across all 5 rarity recolors; egg art is
+still glyph-only, blocked on sourcing the actual transparent spritesheet.
+See its own section below for the full writeup.
 
 **World lore** — `world-lore-pantheon.md` is the source of truth for
 gods/pantheon rules. Starved gods can lash out from the starving itself
@@ -1616,23 +1616,42 @@ from the spec pass).
   departure rather than walking off-screen in sync, a scope cut rather
   than an oversight, still animating its own loop the whole time so it
   doesn't read as frozen.
-- **Art -- four assets done, egg sprite sheet still blocked.** Ember Kit
-  (fox), Rooftail (red panda), and Ashwing (crow) all have real animated
-  sprites, recoloured across all 5 rarity tiers via a new `tools/
-  import_pets.py` (same lightness-preserving HLS palette-swap technique
-  `tools/recolor.py` already established for heroes, applied per-`Rarity`
-  instead of per-skin). `public/lore/hatchery-select-bg.jpg` (the egg-
-  equip modal's background) is real now too, hand-measured for its one
-  content-window slot rect -- see EggSelectModal above. `hatchery-bg.jpg`
-  (the Hatchery tab's own background, separate from the select-modal one)
-  still renders nothing. The egg SPRITE sheet is still blocked -- two
-  uploads so far have both turned out to be the asset pack's promo/preview
-  composite (opaque flat background baked in, no real alpha channel), not
-  the actual redistributable spritesheet.png. Needs the real transparent
-  file before the animated hatch-card moment from the original spec can be
-  built; the static per-rarity `EggIcon` (storage/selection display) is
-  unaffected by this and just needs `public/pets/egg/<rarity>/icon.png`
-  whenever that's sourced separately.
+- **Art -- five assets done, egg sprite sheet still blocked.** Ember Kit
+  (fox), Rooftail (red panda), Ashwing (crow), and Hatchery Hound (Saint
+  Bernard) all have real animated sprites, recoloured across all 5 rarity
+  tiers via `tools/import_pets.py` (same lightness-preserving HLS
+  palette-swap technique `tools/recolor.py` already established for
+  heroes, applied per-`Rarity` instead of per-skin). The Hound's pack
+  shipped as three already-cut per-animation strip files rather than one
+  row-grid sheet -- `PetSpec` now takes either shape (`sheet_file`+`rows`
+  to slice, or `anim_files` for pre-cut strips just needing a recolour
+  pass), only `idle`/`movement`/`sleep` for this one (no `idle2`/`catch`/
+  `damage` -- fine, `PetSprite.resolveAnimation` already falls back to
+  idle for anything a species doesn't have). Found and fixed a real bug
+  while adding it: `--only <species>` was writing a wholly fresh
+  `manifest.json` instead of merging, so regenerating just the Hound
+  silently wiped the other three species' entries -- confirmed by
+  actually triggering it, not just reasoned through; fixed by loading and
+  merging onto whatever's already on disk. `public/lore/
+  hatchery-select-bg.jpg` (the egg-equip modal's background) and
+  `hatchery-bg.jpg` (the Hatchery tab's own, see the background-placement
+  note below) are both real now too. The egg SPRITE sheet is still
+  blocked -- two uploads so far have both turned out to be the asset
+  pack's promo/preview composite (opaque flat background baked in, no
+  real alpha channel), not the actual redistributable spritesheet.png.
+  Needs the real transparent file before the animated hatch-card moment
+  from the original spec can be built; the static per-rarity `EggIcon`
+  (storage/selection display) is unaffected by this and just needs
+  `public/pets/egg/<rarity>/icon.png` whenever that's sourced separately.
+- **Hatchery background moved to the tab-level treatment, not an in-panel
+  banner.** Was using the same aspect-ratio-locked banner-strip approach
+  Harvest's Fields scene uses, sitting inside the panel content -- moved
+  instead to the same mechanism the Raids tab already uses to override
+  MenuWindow's default `guild-hall-bg.jpg`: one shared full-`menu-root`
+  backdrop layer, chosen per-tab, faded to the same 0.35 opacity every
+  other tab's backdrop uses. `HatcheryPanel.tsx`'s own `.hatchery-scene`
+  div and its CSS rule are both removed -- `hatchery-bg.jpg` itself is
+  unchanged, just displayed differently now.
 - Bonus roll ranges, hatch-xp thresholds, and feed gains are first-pass
   numbers, not a balance pass -- same "content is a cache, gameplay data
   confirms the intent" spirit as every other system's initial numbers.

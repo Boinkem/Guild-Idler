@@ -69,21 +69,31 @@ def apply_livery(rgb: RGB, livery: Livery) -> RGB:
 
 class PetSpec:
     def __init__(
-        self, species_id: str, sheet_file: str, frame_w: int, frame_h: int,
-        rows: Dict[str, Tuple[int, int, int]],
+        self, species_id: str, frame_w: int, frame_h: int,
         recolor: List[str], keep: List[str],
+        sheet_file: str | None = None,
+        rows: Dict[str, Tuple[int, int, int]] | None = None,
         extras: Dict[str, Tuple[int, int]] | None = None,
+        anim_files: Dict[str, str] | None = None,
     ):
         self.species_id = species_id
-        self.sheet_file = sheet_file
         self.frame_w = frame_w
         self.frame_h = frame_h
-        # animation -> (row, startCol, frameCount)
-        self.rows = rows
+        # Two mutually-exclusive source shapes, exactly one set per spec:
+        #  - sheet_file + rows: one row-grid sheet, sliced by this script
+        #    (every species so far except the Hound).
+        #  - anim_files: the pack already ships one pre-cut horizontal strip
+        #    file per animation (just frame_w-wide cells, one row) --
+        #    nothing to slice, only recolour. The Hound's Saint Bernard
+        #    pack came this way.
+        self.sheet_file = sheet_file
+        self.rows = rows or {}
+        self.anim_files = anim_files or {}
         self.recolor = [hex_to_rgb(c) for c in recolor]
         self.keep = [hex_to_rgb(c) for c in keep]
         # single-frame standalone sprites (e.g. crow's crumbs/fish), not
-        # animations -- (row, col) into the same grid.
+        # animations -- (row, col) into the sheet_file grid. Not supported
+        # for the anim_files shape (no species has needed it there yet).
         self.extras = extras or {}
 
 
@@ -152,7 +162,24 @@ CROW = PetSpec(
     keep=['#000000', '#696a6a'],
 )
 
-PETS: List[PetSpec] = [FOX, RED_PANDA, CROW]
+HOUND = PetSpec(
+    species_id='hatchery_hound',
+    frame_w=100, frame_h=100,
+    # Already three separate pre-cut strip files, not a row-grid --
+    # frame count comes from each file's own width / frame_w, not a hand
+    # counted row. Only 3 of the usual 6 canonical animations (no idle2/
+    # catch/damage) -- fine, PetSprite.resolveAnimation already falls back
+    # to idle for anything a species doesn't have.
+    anim_files={
+        'idle': 'Saint-Bernard-Idle.png',
+        'movement': 'Saint-Bernard-run.png',
+        'sleep': 'Saint-Bernard-lying-down.png',
+    },
+    recolor=['#9f5434', '#7a3e25', '#906028', '#cd6a41', '#b6603c'],  # fur tones
+    keep=['#cbc4c1', '#b9afab', '#9d9592', '#100804'],  # white/grey body + outline
+)
+
+PETS: List[PetSpec] = [FOX, RED_PANDA, CROW, HOUND]
 
 
 # -------------------------------------------------------------- recolour ---
@@ -205,42 +232,78 @@ def main() -> None:
     manifest: Dict[str, dict] = {}
 
     for spec in targets:
-        src_path = os.path.join(args.src, spec.sheet_file)
-        if not os.path.exists(src_path):
-            print(f'  skip {spec.species_id}: {spec.sheet_file} not found in {args.src}')
-            continue
-        sheet = Image.open(src_path)
-        print(f'{spec.species_id} ({spec.sheet_file}):')
-
         counts: Dict[str, int] = {}
-        for anim, (row, start_col, count) in spec.rows.items():
-            counts[anim] = count
-            strip = slice_strip(sheet, spec, row, start_col, count)
-            for tier in RARITY_LIVERY:
-                mapping = build_map(spec, tier)
-                recoloured = recolor_image(strip, mapping)
-                dest_dir = os.path.join(args.out, spec.species_id, tier)
-                os.makedirs(dest_dir, exist_ok=True)
-                recoloured.save(os.path.join(dest_dir, f'{anim}.png'), optimize=True)
-            print(f'    {anim}: row {row}, {count} frames -> all 5 rarity tiers')
 
-        for name, (row, col) in spec.extras.items():
-            box = (col * spec.frame_w, row * spec.frame_h, (col + 1) * spec.frame_w, (row + 1) * spec.frame_h)
-            frame = sheet.crop(box)
-            for tier in RARITY_LIVERY:
-                mapping = build_map(spec, tier)
-                recoloured = recolor_image(frame, mapping)
-                dest_dir = os.path.join(args.out, spec.species_id, tier)
-                os.makedirs(dest_dir, exist_ok=True)
-                recoloured.save(os.path.join(dest_dir, f'extra_{name}.png'), optimize=True)
-            print(f'    extra "{name}": row {row} col {col} -> all 5 rarity tiers')
+        if spec.sheet_file:
+            src_path = os.path.join(args.src, spec.sheet_file)
+            if not os.path.exists(src_path):
+                print(f'  skip {spec.species_id}: {spec.sheet_file} not found in {args.src}')
+                continue
+            sheet = Image.open(src_path)
+            print(f'{spec.species_id} ({spec.sheet_file}):')
+
+            for anim, (row, start_col, count) in spec.rows.items():
+                counts[anim] = count
+                strip = slice_strip(sheet, spec, row, start_col, count)
+                for tier in RARITY_LIVERY:
+                    mapping = build_map(spec, tier)
+                    recoloured = recolor_image(strip, mapping)
+                    dest_dir = os.path.join(args.out, spec.species_id, tier)
+                    os.makedirs(dest_dir, exist_ok=True)
+                    recoloured.save(os.path.join(dest_dir, f'{anim}.png'), optimize=True)
+                print(f'    {anim}: row {row}, {count} frames -> all 5 rarity tiers')
+
+            for name, (row, col) in spec.extras.items():
+                box = (col * spec.frame_w, row * spec.frame_h, (col + 1) * spec.frame_w, (row + 1) * spec.frame_h)
+                frame = sheet.crop(box)
+                for tier in RARITY_LIVERY:
+                    mapping = build_map(spec, tier)
+                    recoloured = recolor_image(frame, mapping)
+                    dest_dir = os.path.join(args.out, spec.species_id, tier)
+                    os.makedirs(dest_dir, exist_ok=True)
+                    recoloured.save(os.path.join(dest_dir, f'extra_{name}.png'), optimize=True)
+                print(f'    extra "{name}": row {row} col {col} -> all 5 rarity tiers')
+
+        else:
+            print(f'{spec.species_id} (pre-cut strips):')
+            missing = False
+            for anim, filename in spec.anim_files.items():
+                src_path = os.path.join(args.src, filename)
+                if not os.path.exists(src_path):
+                    print(f'  skip {spec.species_id}: {filename} not found in {args.src}')
+                    missing = True
+                    break
+                strip = Image.open(src_path)
+                count = strip.width // spec.frame_w
+                counts[anim] = count
+                for tier in RARITY_LIVERY:
+                    mapping = build_map(spec, tier)
+                    recoloured = recolor_image(strip, mapping)
+                    dest_dir = os.path.join(args.out, spec.species_id, tier)
+                    os.makedirs(dest_dir, exist_ok=True)
+                    recoloured.save(os.path.join(dest_dir, f'{anim}.png'), optimize=True)
+                print(f'    {anim}: {filename}, {count} frames -> all 5 rarity tiers')
+            if missing:
+                continue
 
         manifest[spec.species_id] = {'frameW': spec.frame_w, 'frameH': spec.frame_h, 'animations': counts}
 
     os.makedirs(args.out, exist_ok=True)
-    with open(os.path.join(args.out, 'manifest.json'), 'w') as f:
-        json.dump(manifest, f, indent=2)
-    print(f'\nwrote {os.path.join(args.out, "manifest.json")}')
+    manifest_path = os.path.join(args.out, 'manifest.json')
+    # Merge onto whatever's already there rather than overwriting wholesale
+    # -- --only lets a single species be regenerated (e.g. after getting
+    # its art on a different day, in a different --src folder than the
+    # others) without wiping every other species' entry in the process.
+    # Confirmed necessary the hard way: an early --only run without this
+    # clobbered three already-built species down to just the one just run.
+    existing: Dict[str, dict] = {}
+    if os.path.exists(manifest_path):
+        with open(manifest_path) as f:
+            existing = json.load(f)
+    existing.update(manifest)
+    with open(manifest_path, 'w') as f:
+        json.dump(existing, f, indent=2)
+    print(f'\nwrote {manifest_path}')
     print('done')
 
 

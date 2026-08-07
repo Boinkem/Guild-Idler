@@ -152,7 +152,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         aria-hidden="true"
         style={{
           position: 'absolute', inset: 0,
-          backgroundImage: `url(${tab === 'raids' ? './lore/raids-bg.jpg' : './lore/guild-hall-bg.jpg'})`,
+          backgroundImage: `url(${tab === 'raids' ? './lore/raids-bg.jpg' : tab === 'hatchery' ? './lore/hatchery-bg.jpg' : './lore/guild-hall-bg.jpg'})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           opacity: 0.35,

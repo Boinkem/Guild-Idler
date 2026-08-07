@@ -1,0 +1,318 @@
+diff --git final_a/guild-idler-status.md final_b/guild-idler-status.md
+index f70cc21..e138b91 100644
+--- final_a/guild-idler-status.md
++++ final_b/guild-idler-status.md
+@@ -140,10 +140,10 @@ slot, more via the new Companion Bond upgrade) feed their bonus into the
+ account-wide modifier pool, gain their own xp which grows that bonus over
+ time, and now render live beside the hero on the desktop companion;
+ happiness decays lazily and can be restored by feeding raw materials or a
+-new craftable Pet Treat. Three real animated species (fox/red panda/crow)
+-ship with art across all 5 rarity recolors; egg art is still glyph-only,
+-blocked on sourcing the actual transparent spritesheet. See its own
+-section below for the full writeup.
++new craftable Pet Treat. Four real animated species (fox/red panda/crow/
++hatchery hound) ship with art across all 5 rarity recolors; egg art is
++still glyph-only, blocked on sourcing the actual transparent spritesheet.
++See its own section below for the full writeup.
+ 
+ **World lore** — `world-lore-pantheon.md` is the source of truth for
+ gods/pantheon rules. Starved gods can lash out from the starving itself
+@@ -1616,23 +1616,42 @@ from the spec pass).
+   departure rather than walking off-screen in sync, a scope cut rather
+   than an oversight, still animating its own loop the whole time so it
+   doesn't read as frozen.
+-- **Art -- four assets done, egg sprite sheet still blocked.** Ember Kit
+-  (fox), Rooftail (red panda), and Ashwing (crow) all have real animated
+-  sprites, recoloured across all 5 rarity tiers via a new `tools/
+-  import_pets.py` (same lightness-preserving HLS palette-swap technique
+-  `tools/recolor.py` already established for heroes, applied per-`Rarity`
+-  instead of per-skin). `public/lore/hatchery-select-bg.jpg` (the egg-
+-  equip modal's background) is real now too, hand-measured for its one
+-  content-window slot rect -- see EggSelectModal above. `hatchery-bg.jpg`
+-  (the Hatchery tab's own background, separate from the select-modal one)
+-  still renders nothing. The egg SPRITE sheet is still blocked -- two
+-  uploads so far have both turned out to be the asset pack's promo/preview
+-  composite (opaque flat background baked in, no real alpha channel), not
+-  the actual redistributable spritesheet.png. Needs the real transparent
+-  file before the animated hatch-card moment from the original spec can be
+-  built; the static per-rarity `EggIcon` (storage/selection display) is
+-  unaffected by this and just needs `public/pets/egg/<rarity>/icon.png`
+-  whenever that's sourced separately.
++- **Art -- five assets done, egg sprite sheet still blocked.** Ember Kit
++  (fox), Rooftail (red panda), Ashwing (crow), and Hatchery Hound (Saint
++  Bernard) all have real animated sprites, recoloured across all 5 rarity
++  tiers via `tools/import_pets.py` (same lightness-preserving HLS
++  palette-swap technique `tools/recolor.py` already established for
++  heroes, applied per-`Rarity` instead of per-skin). The Hound's pack
++  shipped as three already-cut per-animation strip files rather than one
++  row-grid sheet -- `PetSpec` now takes either shape (`sheet_file`+`rows`
++  to slice, or `anim_files` for pre-cut strips just needing a recolour
++  pass), only `idle`/`movement`/`sleep` for this one (no `idle2`/`catch`/
++  `damage` -- fine, `PetSprite.resolveAnimation` already falls back to
++  idle for anything a species doesn't have). Found and fixed a real bug
++  while adding it: `--only <species>` was writing a wholly fresh
++  `manifest.json` instead of merging, so regenerating just the Hound
++  silently wiped the other three species' entries -- confirmed by
++  actually triggering it, not just reasoned through; fixed by loading and
++  merging onto whatever's already on disk. `public/lore/
++  hatchery-select-bg.jpg` (the egg-equip modal's background) and
++  `hatchery-bg.jpg` (the Hatchery tab's own, see the background-placement
++  note below) are both real now too. The egg SPRITE sheet is still
++  blocked -- two uploads so far have both turned out to be the asset
++  pack's promo/preview composite (opaque flat background baked in, no
++  real alpha channel), not the actual redistributable spritesheet.png.
++  Needs the real transparent file before the animated hatch-card moment
++  from the original spec can be built; the static per-rarity `EggIcon`
++  (storage/selection display) is unaffected by this and just needs
++  `public/pets/egg/<rarity>/icon.png` whenever that's sourced separately.
++- **Hatchery background moved to the tab-level treatment, not an in-panel
++  banner.** Was using the same aspect-ratio-locked banner-strip approach
++  Harvest's Fields scene uses, sitting inside the panel content -- moved
++  instead to the same mechanism the Raids tab already uses to override
++  MenuWindow's default `guild-hall-bg.jpg`: one shared full-`menu-root`
++  backdrop layer, chosen per-tab, faded to the same 0.35 opacity every
++  other tab's backdrop uses. `HatcheryPanel.tsx`'s own `.hatchery-scene`
++  div and its CSS rule are both removed -- `hatchery-bg.jpg` itself is
++  unchanged, just displayed differently now.
+ - Bonus roll ranges, hatch-xp thresholds, and feed gains are first-pass
+   numbers, not a balance pass -- same "content is a cache, gameplay data
+   confirms the intent" spirit as every other system's initial numbers.
+diff --git final_a/src/styles/app.css final_b/src/styles/app.css
+index 5002eb5..0f4a01e 100644
+--- final_a/src/styles/app.css
++++ final_b/src/styles/app.css
+@@ -1693,30 +1693,6 @@ button.harvest-item:hover {
+   box-shadow: 0 0 0 1px color-mix(in srgb, var(--moss) 40%, transparent);
+ }
+ 
+-/*
+- * The Hatchery tab's own banner scene -- same aspect-ratio-locked,
+- * full-width, no-crop treatment `.harvest-scene` already established (see
+- * that rule's own comment for why a fixed height + `cover` was the wrong
+- * call: it crops a detailed scene down to a thin sliver the moment the
+- * panel is wider than the art's own ratio). Matches
+- * hatchery-bg.jpg's real 1448x1086 canvas. Purely decorative (no
+- * SlotBox-style interactive hit-targets sitting on top of this one, unlike
+- * Harvest's falling materials or the Crafting scenes), so no dimming
+- * layer needed -- the image is shown at full strength, nothing has to
+- * stay legible on top of it.
+- */
+-.hatchery-scene {
+-  width: 100%;
+-  aspect-ratio: 1448 / 1086;
+-  background-size: 100% 100%;
+-  background-position: center;
+-  border-radius: 6px;
+-  border: 1px solid var(--edge);
+-  background-color: var(--night);
+-  overflow: hidden;
+-  margin-bottom: 12px;
+-}
+-
+ /* The small picker popped open by clicking a slot -- same overlay/modal
+    shell as everywhere else in the game, just narrower and listing rows
+    instead of one item's own detail (see PickerModal in CraftingStation.tsx). */
+diff --git final_a/src/ui/MenuWindow.tsx final_b/src/ui/MenuWindow.tsx
+index 440525e..9ff22dd 100644
+--- final_a/src/ui/MenuWindow.tsx
++++ final_b/src/ui/MenuWindow.tsx
+@@ -152,7 +152,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+         aria-hidden="true"
+         style={{
+           position: 'absolute', inset: 0,
+-          backgroundImage: `url(${tab === 'raids' ? './lore/raids-bg.jpg' : './lore/guild-hall-bg.jpg'})`,
++          backgroundImage: `url(${tab === 'raids' ? './lore/raids-bg.jpg' : tab === 'hatchery' ? './lore/hatchery-bg.jpg' : './lore/guild-hall-bg.jpg'})`,
+           backgroundSize: 'cover',
+           backgroundPosition: 'center',
+           opacity: 0.35,
+diff --git final_a/src/ui/panels/HatcheryPanel.tsx final_b/src/ui/panels/HatcheryPanel.tsx
+index 6be15f1..b0b566a 100644
+--- final_a/src/ui/panels/HatcheryPanel.tsx
++++ final_b/src/ui/panels/HatcheryPanel.tsx
+@@ -48,8 +48,6 @@ export function HatcheryPanel() {
+         </button>
+       </div>
+ 
+-      <div className="hatchery-scene" aria-hidden="true" style={{ backgroundImage: 'url(./lore/hatchery-bg.jpg)' }} />
+-
+       {subTab === 'home' ? <NestsTab /> : <PetsTab />}
+     </>
+   );
+diff --git final_a/tools/import_pets.py final_b/tools/import_pets.py
+index 1487368..83e77f0 100644
+--- final_a/tools/import_pets.py
++++ final_b/tools/import_pets.py
+@@ -69,21 +69,31 @@ def apply_livery(rgb: RGB, livery: Livery) -> RGB:
+ 
+ class PetSpec:
+     def __init__(
+-        self, species_id: str, sheet_file: str, frame_w: int, frame_h: int,
+-        rows: Dict[str, Tuple[int, int, int]],
++        self, species_id: str, frame_w: int, frame_h: int,
+         recolor: List[str], keep: List[str],
++        sheet_file: str | None = None,
++        rows: Dict[str, Tuple[int, int, int]] | None = None,
+         extras: Dict[str, Tuple[int, int]] | None = None,
++        anim_files: Dict[str, str] | None = None,
+     ):
+         self.species_id = species_id
+-        self.sheet_file = sheet_file
+         self.frame_w = frame_w
+         self.frame_h = frame_h
+-        # animation -> (row, startCol, frameCount)
+-        self.rows = rows
++        # Two mutually-exclusive source shapes, exactly one set per spec:
++        #  - sheet_file + rows: one row-grid sheet, sliced by this script
++        #    (every species so far except the Hound).
++        #  - anim_files: the pack already ships one pre-cut horizontal strip
++        #    file per animation (just frame_w-wide cells, one row) --
++        #    nothing to slice, only recolour. The Hound's Saint Bernard
++        #    pack came this way.
++        self.sheet_file = sheet_file
++        self.rows = rows or {}
++        self.anim_files = anim_files or {}
+         self.recolor = [hex_to_rgb(c) for c in recolor]
+         self.keep = [hex_to_rgb(c) for c in keep]
+         # single-frame standalone sprites (e.g. crow's crumbs/fish), not
+-        # animations -- (row, col) into the same grid.
++        # animations -- (row, col) into the sheet_file grid. Not supported
++        # for the anim_files shape (no species has needed it there yet).
+         self.extras = extras or {}
+ 
+ 
+@@ -152,7 +162,24 @@ CROW = PetSpec(
+     keep=['#000000', '#696a6a'],
+ )
+ 
+-PETS: List[PetSpec] = [FOX, RED_PANDA, CROW]
++HOUND = PetSpec(
++    species_id='hatchery_hound',
++    frame_w=100, frame_h=100,
++    # Already three separate pre-cut strip files, not a row-grid --
++    # frame count comes from each file's own width / frame_w, not a hand
++    # counted row. Only 3 of the usual 6 canonical animations (no idle2/
++    # catch/damage) -- fine, PetSprite.resolveAnimation already falls back
++    # to idle for anything a species doesn't have.
++    anim_files={
++        'idle': 'Saint-Bernard-Idle.png',
++        'movement': 'Saint-Bernard-run.png',
++        'sleep': 'Saint-Bernard-lying-down.png',
++    },
++    recolor=['#9f5434', '#7a3e25', '#906028', '#cd6a41', '#b6603c'],  # fur tones
++    keep=['#cbc4c1', '#b9afab', '#9d9592', '#100804'],  # white/grey body + outline
++)
++
++PETS: List[PetSpec] = [FOX, RED_PANDA, CROW, HOUND]
+ 
+ 
+ # -------------------------------------------------------------- recolour ---
+@@ -205,42 +232,78 @@ def main() -> None:
+     manifest: Dict[str, dict] = {}
+ 
+     for spec in targets:
+-        src_path = os.path.join(args.src, spec.sheet_file)
+-        if not os.path.exists(src_path):
+-            print(f'  skip {spec.species_id}: {spec.sheet_file} not found in {args.src}')
+-            continue
+-        sheet = Image.open(src_path)
+-        print(f'{spec.species_id} ({spec.sheet_file}):')
+-
+         counts: Dict[str, int] = {}
+-        for anim, (row, start_col, count) in spec.rows.items():
+-            counts[anim] = count
+-            strip = slice_strip(sheet, spec, row, start_col, count)
+-            for tier in RARITY_LIVERY:
+-                mapping = build_map(spec, tier)
+-                recoloured = recolor_image(strip, mapping)
+-                dest_dir = os.path.join(args.out, spec.species_id, tier)
+-                os.makedirs(dest_dir, exist_ok=True)
+-                recoloured.save(os.path.join(dest_dir, f'{anim}.png'), optimize=True)
+-            print(f'    {anim}: row {row}, {count} frames -> all 5 rarity tiers')
+-
+-        for name, (row, col) in spec.extras.items():
+-            box = (col * spec.frame_w, row * spec.frame_h, (col + 1) * spec.frame_w, (row + 1) * spec.frame_h)
+-            frame = sheet.crop(box)
+-            for tier in RARITY_LIVERY:
+-                mapping = build_map(spec, tier)
+-                recoloured = recolor_image(frame, mapping)
+-                dest_dir = os.path.join(args.out, spec.species_id, tier)
+-                os.makedirs(dest_dir, exist_ok=True)
+-                recoloured.save(os.path.join(dest_dir, f'extra_{name}.png'), optimize=True)
+-            print(f'    extra "{name}": row {row} col {col} -> all 5 rarity tiers')
++
++        if spec.sheet_file:
++            src_path = os.path.join(args.src, spec.sheet_file)
++            if not os.path.exists(src_path):
++                print(f'  skip {spec.species_id}: {spec.sheet_file} not found in {args.src}')
++                continue
++            sheet = Image.open(src_path)
++            print(f'{spec.species_id} ({spec.sheet_file}):')
++
++            for anim, (row, start_col, count) in spec.rows.items():
++                counts[anim] = count
++                strip = slice_strip(sheet, spec, row, start_col, count)
++                for tier in RARITY_LIVERY:
++                    mapping = build_map(spec, tier)
++                    recoloured = recolor_image(strip, mapping)
++                    dest_dir = os.path.join(args.out, spec.species_id, tier)
++                    os.makedirs(dest_dir, exist_ok=True)
++                    recoloured.save(os.path.join(dest_dir, f'{anim}.png'), optimize=True)
++                print(f'    {anim}: row {row}, {count} frames -> all 5 rarity tiers')
++
++            for name, (row, col) in spec.extras.items():
++                box = (col * spec.frame_w, row * spec.frame_h, (col + 1) * spec.frame_w, (row + 1) * spec.frame_h)
++                frame = sheet.crop(box)
++                for tier in RARITY_LIVERY:
++                    mapping = build_map(spec, tier)
++                    recoloured = recolor_image(frame, mapping)
++                    dest_dir = os.path.join(args.out, spec.species_id, tier)
++                    os.makedirs(dest_dir, exist_ok=True)
++                    recoloured.save(os.path.join(dest_dir, f'extra_{name}.png'), optimize=True)
++                print(f'    extra "{name}": row {row} col {col} -> all 5 rarity tiers')
++
++        else:
++            print(f'{spec.species_id} (pre-cut strips):')
++            missing = False
++            for anim, filename in spec.anim_files.items():
++                src_path = os.path.join(args.src, filename)
++                if not os.path.exists(src_path):
++                    print(f'  skip {spec.species_id}: {filename} not found in {args.src}')
++                    missing = True
++                    break
++                strip = Image.open(src_path)
++                count = strip.width // spec.frame_w
++                counts[anim] = count
++                for tier in RARITY_LIVERY:
++                    mapping = build_map(spec, tier)
++                    recoloured = recolor_image(strip, mapping)
++                    dest_dir = os.path.join(args.out, spec.species_id, tier)
++                    os.makedirs(dest_dir, exist_ok=True)
++                    recoloured.save(os.path.join(dest_dir, f'{anim}.png'), optimize=True)
++                print(f'    {anim}: {filename}, {count} frames -> all 5 rarity tiers')
++            if missing:
++                continue
+ 
+         manifest[spec.species_id] = {'frameW': spec.frame_w, 'frameH': spec.frame_h, 'animations': counts}
+ 
+     os.makedirs(args.out, exist_ok=True)
+-    with open(os.path.join(args.out, 'manifest.json'), 'w') as f:
+-        json.dump(manifest, f, indent=2)
+-    print(f'\nwrote {os.path.join(args.out, "manifest.json")}')
++    manifest_path = os.path.join(args.out, 'manifest.json')
++    # Merge onto whatever's already there rather than overwriting wholesale
++    # -- --only lets a single species be regenerated (e.g. after getting
++    # its art on a different day, in a different --src folder than the
++    # others) without wiping every other species' entry in the process.
++    # Confirmed necessary the hard way: an early --only run without this
++    # clobbered three already-built species down to just the one just run.
++    existing: Dict[str, dict] = {}
++    if os.path.exists(manifest_path):
++        with open(manifest_path) as f:
++            existing = json.load(f)
++    existing.update(manifest)
++    with open(manifest_path, 'w') as f:
++        json.dump(existing, f, indent=2)
++    print(f'\nwrote {manifest_path}')
+     print('done')
+ 
+ 
