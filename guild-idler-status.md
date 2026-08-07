@@ -1004,6 +1004,44 @@ actually lands on the quest's own locked-in `injuryResist` value, not
 just in isolated unit checks. `npx tsc --noEmit` and `vite build` both
 pass clean.
 
+### Quests above a hero's own level are now attemptable, at a cost -- complete
+Player-reported: running out of same-level quests between board refreshes
+(especially likely right after a couple of short burst quests clear)
+left a hero simply idle with nothing to send. Rather than only re-tuning
+board supply/refresh timing, the fix landed on was to let a hero attempt
+a quest *above* their own level instead of being hard-blocked from it --
+"you get an offer, it might be a bad idea, but it's your call."
+
+`QuestManager.start` no longer returns an error for
+`hero.level < offer.reqLevel` -- that hard gate is gone. Instead,
+`previewSuccess` now applies a per-level penalty when a hero is under a
+quest's reqLevel: `quest.overLevelPenaltyPercent` (new tuning entry,
+default 10) success points per level of gap, stacked on top of
+everything else, still passing through the existing MIN_SUCCESS/
+MAX_SUCCESS (5-95) clamp -- so reaching three levels above your station
+costs roughly 30 points, but it's never literally 0% or refused outright.
+`QuestPanel`'s hero picker reflects this directly: an under-level hero's
+chip is no longer disabled, just flagged (a red "risky" chip style, plus
+a tooltip stating the exact level gap and that success will be reduced)
+-- previously-blocking "Requires level X" copy replaced with an accurate
+"reduced success" framing throughout.
+
+**Deliberately not touched:** both `pickBestQuest` (the Auto-Chain bounty
+streak's own picker) and `QuestPanel`'s Quick-assign button still only
+ever pick a quest a hero already qualifies for outright. Reaching above
+your level is meant to be an explicit, opt-in trade a player makes on
+purpose -- automation gambling with a hero's odds without being asked
+would be a real regression, not a feature, so neither of those picks up
+over-level offers on its own.
+
+Verified at runtime: a hero well under a Hard-tier quest's reqLevel can
+now actually be sent (previously a hard error); `previewSuccess`'s drop
+between an at-level and a 3-levels-under attempt on the same offer lines
+up with the tuned penalty; the result still respects the 5% floor rather
+than going negative or unsendable; and `pickBestQuest` continues to
+ignore over-level offers entirely even when they're the only thing on
+the board. `npx tsc --noEmit` and `vite build` both pass clean.
+
 ### Cleanup items
 - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid
   encounter with loot now has all three difficulty tiers.

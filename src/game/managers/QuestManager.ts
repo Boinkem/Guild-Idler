@@ -12,6 +12,7 @@ import { clamp, HOUR, MINUTE, sumMods } from '../util';
 import { HeroManager } from './HeroManager';
 import { EventManager } from './EventManager';
 import { InventoryManager } from './InventoryManager';
+import { Tuning } from '../data/tuning';
 import { EquipmentManager } from './EquipmentManager';
 import { ModifierManager } from './ModifierManager';
 
@@ -229,6 +230,15 @@ export const QuestManager = {
    * requirement, or investing in stats/gear/upgrades/consumables, is what
    * should move the needle from there -- and does, since all of those
    * raise the hero's *actual* mods above this now-tier-accurate floor.
+   *
+   * Going the other way -- attempting a quest *above* the hero's own
+   * level -- is a deliberate, opt-in trade now rather than blocked
+   * outright (see `start`'s own comment for why). `overLevelPenalty`
+   * below is the cost of that trade: `quest.overLevelPenaltyPercent`
+   * (tunable, default 10) success points per level of gap between the
+   * hero and offer.reqLevel, on top of everything else. A hero already
+   * at or above reqLevel pays nothing extra here -- this only ever
+   * subtracts, never adds.
    */
   previewSuccess(state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number): number {
     const loadout = InventoryManager.loadoutEffects(state, consumables);
@@ -248,7 +258,9 @@ export const QuestManager = {
     );
     const baselineStats = HeroManager.baselineStats(hero.heroClass, offer.reqLevel);
     const baselineOffset = (HeroManager.statMods(baselineStats).success ?? 0) + offer.reqLevel * 0.4;
-    return clamp(offer.baseSuccess + mods.success - baselineOffset, MIN_SUCCESS, MAX_SUCCESS);
+    const levelGap = Math.max(0, offer.reqLevel - hero.level);
+    const overLevelPenalty = levelGap * Tuning.get('quest.overLevelPenaltyPercent');
+    return clamp(offer.baseSuccess + mods.success - baselineOffset - overLevelPenalty, MIN_SUCCESS, MAX_SUCCESS);
   },
 
   previewDuration(state: GameState, hero: Hero, offer: QuestOffer, now: number): number {
@@ -257,11 +269,26 @@ export const QuestManager = {
     return Math.max(MINUTE, Math.floor(offer.duration * factor));
   },
 
+  /**
+   * Direct player feedback: running out of same-level quests between board
+   * refreshes (especially likely right after a couple of short burst
+   * quests clear) left a hero simply idle with nothing to do. Rather than
+   * only tuning board supply/refresh timing, a hero can now be sent on a
+   * quest *above* their own level -- previously a hard block here
+   * (`hero.level < offer.reqLevel` used to return an error outright) --
+   * at reduced odds instead of being blocked outright. See
+   * previewSuccess's own comment for exactly how that penalty is
+   * computed; MIN_SUCCESS (5) still applies, so it's always technically
+   * attemptable, never a free pass or a true dead end. Auto-Chain
+   * (`pickBestQuest`) deliberately still only picks quests a hero already
+   * qualifies for -- reaching above your level is an explicit, opt-in
+   * trade a player makes on purpose, not something automation should do
+   * on its own.
+   */
   start(
     state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number,
   ): { quest?: ActiveQuest; error?: string } {
     if (hero.status === 'questing') return { error: `${hero.name} is already out.` };
-    if (hero.level < offer.reqLevel) return { error: `Requires level ${offer.reqLevel}.` };
     for (const id of consumables) {
       if (InventoryManager.count(state, id) < consumables.filter((c) => c === id).length) {
         return { error: 'Not enough consumables for that loadout.' };

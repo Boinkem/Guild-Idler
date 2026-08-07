@@ -59,7 +59,7 @@ function QuestCard({
   const chance = QuestManager.previewSuccess(state, statHero, offer, [], now);
   const duration = QuestManager.previewDuration(state, statHero, offer, now);
   const chain = offer.chain ? CHAIN_BY_ID[offer.chain.chainId] : undefined;
-  const anyEligible = idleHeroes.some((h) => h.level >= offer.reqLevel);
+  const noHeroMeetsLevel = idleHeroes.length > 0 && !idleHeroes.some((h) => h.level >= offer.reqLevel);
 
   return (
     <div className={`card quest-card ${offer.difficulty} ${offer.chain ? 'chain' : ''}`}>
@@ -136,17 +136,16 @@ function QuestCard({
       {isAssigning ? (
         <div className="row wrap end" style={{ marginTop: 8, gap: 6 }} onClick={(e) => e.stopPropagation()}>
           {idleHeroes.map((h) => {
-            const eligible = h.level >= offer.reqLevel;
+            const gap = Math.max(0, offer.reqLevel - h.level);
             const selected = pickedHeroId === h.id;
             return (
               <button
                 key={h.id}
-                className={`chip ${selected ? 'on' : ''}`}
-                disabled={!eligible}
-                title={eligible ? undefined : `Requires level ${offer.reqLevel}`}
+                className={`chip ${selected ? 'on' : ''} ${gap > 0 ? 'risky' : ''}`}
+                title={gap > 0 ? `${gap} level${gap === 1 ? '' : 's'} under -- reduced success chance` : undefined}
                 onClick={() => onStartAssigning(offer.id, h.id)}
               >
-                {h.name} · Lv {h.level}{h.injuries.length > 0 ? ' ⚑' : ''}
+                {h.name} · Lv {h.level}{gap > 0 ? ' ⚠' : ''}{h.injuries.length > 0 ? ' ⚑' : ''}
               </button>
             );
           })}
@@ -190,7 +189,7 @@ function QuestCard({
           </button>
           {idleHeroes.length > 0 && (
             <>
-              {!anyEligible && <span className="tiny muted">Requires level {offer.reqLevel}</span>}
+              {noHeroMeetsLevel && <span className="tiny muted">No hero meets level {offer.reqLevel} -- reduced success</span>}
               <button
                 className="btn-primary"
                 onClick={(e) => {

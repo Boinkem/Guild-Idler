@@ -645,5 +645,15 @@
     "default": 5000,
     "min": 0,
     "description": "Additional spawn-interval reduction per tool level, on top of the idle-hero reduction."
+  },
+  {
+    "id": "quest.overLevelPenaltyPercent",
+    "label": "Quests: over-level attempt penalty (% per level)",
+    "category": "quests",
+    "value": 10,
+    "default": 10,
+    "min": 0,
+    "max": 50,
+    "description": "Success-chance penalty applied per level a hero is BELOW a quest's own reqLevel, when they attempt it anyway. Sending on a quest above your level is allowed (only auto-queue/pickBestQuest still restricts itself to quests a hero already qualifies for) -- this is what makes doing so a real trade rather than a free pass. 10 means a hero 3 levels under a quest's reqLevel loses 30 percentage points of success attempting it, on top of everything else. Existing MIN_SUCCESS/MAX_SUCCESS clamps (5-95) still apply, so it's always technically attemptable, never literally impossible or free."
   }
 ]
