@@ -163,5 +163,24 @@
     ],
     "statsToPick": 2,
     "statValue": 6
+  },
+  {
+    "id": "craft_foragers_bundle",
+    "name": "Forager's Bundle",
+    "description": "Wild berries and whatever else looked worth picking along the treeline -- more luck than skill in the gathering.",
+    "category": "consumable",
+    "icon": "food/Food_01.png",
+    "materialCost": {
+      "fish": 10
+    },
+    "goldCost": 15,
+    "modOptions": [
+      "gold"
+    ],
+    "modsToPick": 1,
+    "modValue": 8,
+    "resultConsumableId": "minor_lucky_potion",
+    "statsToPick": 0,
+    "statValue": 0
   }
 ]

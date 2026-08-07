@@ -13,6 +13,11 @@ export interface HarvestToolDef {
   spawnBonusMsPerLevel: number;
 }
 
+// "Net" stays as the fish/food node's tool name even after the material's
+// display identity broadened to a general "Food" theme -- the dock scene
+// in fields.jpg (shared background art, not something this patch can
+// redraw) still visually shows fishing nets specifically, so the tool
+// name still matches what's actually on screen.
 const TOOL_NAME: Record<MaterialId, string> = {
   ore: 'Pickaxe', timber: 'Woodaxe', herbs: 'Sickle', fish: 'Net',
 };

@@ -1119,6 +1119,48 @@ equipment pool before any of this started (e.g. `voidforged_crown` and
 `requiem_crown` sharing the same icon file) -- confirmed none involve
 anything touched here, flagged as a real but separate cleanup item.
 
+### Fish Weir generalized to a broader Food/Provisions theme -- complete
+Per direct request: "fish" as the harvest node's identity was too narrow
+to build recipe variety around -- a berry-foraging or red-meat-themed
+recipe shouldn't have to pretend it's made of fish just because that's
+the only food-type material in the game.
+
+**The underlying `MaterialId` value stays `'fish'`, deliberately.**
+Renaming it would mean migrating every existing save's `materials.fish`,
+`harvestNodes.fish`, and `harvestTools.fish` keys for a change that's
+purely cosmetic -- not worth the risk for something the display layer
+can handle on its own. Everything that actually changed lives in the
+*display* fields: `name` "Fish" -> "Food", `nodeName` "Fish Weir" ->
+"Provisions Dock", `description` broadened from "the day's catch...
+salted for the road" to cover the catch, salted meat, and foraged
+berries alike, and the glyph fallback changed from a fishing pole to a
+basket. The harvest tool's own name stays "Net" on purpose -- the dock
+scene in the shared `fields.jpg` background still visually shows fishing
+nets specifically (redrawing that art wasn't in scope here), so the tool
+name still matches what's actually on screen even though the material
+it produces is framed more broadly now. DevTool-facing tuning labels
+("Net (Fish Weir): ...") updated to match the new node name for
+consistency in that UI.
+
+**New recipe, `craft_foragers_bundle`** ("Forager's Bundle") -- a
+genuinely non-fish demonstration that the generalization is real and
+usable, not just a documentation change: berries-themed flavor text,
+crafts into Minor Lucky Potion with a chosen gold bonus (reusing the
+consumable custom-mod system from the previous patch), while still
+drawing from the same underlying `fish` material key under the hood.
+`craft_trail_meal` ("Meal On The Go") already had non-fish flavor text
+("Hearty, Meat n Veg stew") despite consuming the same material -- that
+was a good sign this generalization was overdue, not a loose end to
+clean up.
+
+Verified at runtime: the material id is confirmed unchanged (so an
+existing save's `materials.fish` value keeps working exactly as
+before); the new recipe's flavor text contains no mention of fish at
+all while still correctly consuming and deducting from the same
+underlying material pool; crafting it with a chosen mod produces a
+correctly-named, correctly-stacked variant via the existing custom-mod
+crafting pipeline. `npx tsc --noEmit` and `vite build` both pass clean.
+
 ### Cleanup items
 - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid
   encounter with loot now has all three difficulty tiers.
@@ -1323,13 +1365,9 @@ the tab.
     piece into each would mean inventing new lore-specific items for
     chains that already shipped, a separate ask from what was scoped
     here.
-  - **Harvest fish -> food generalization.** Broaden the Fish Weir node
-    (and its recipes) to cover berries/red meat/etc, not just fish
-    specifically. Connects to the icon-randomization ask below (Food is
-    one of the four planned icon categories) -- the player has icons
-    coming for this but hadn't uploaded them as of this patch, so this
-    is logic-and-naming prep at most until they land, not a full
-    implementation.
+  - ~~Harvest fish -> food generalization~~ -- done, see "Fish Weir
+    generalized to a broader Food/Provisions theme" above for the full
+    writeup.
 - ~~Harvest icon randomization, prepped but not wired to real files
   yet~~ -- selection logic done, see "Harvest icon randomization" above
   for the full writeup. Still waiting on the actual art files in

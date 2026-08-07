@@ -602,7 +602,7 @@
   },
   {
     "id": "harvest_tool.fish.baseCost",
-    "label": "Net (Fish Weir): base cost",
+    "label": "Net (Provisions Dock): base cost",
     "category": "harvest_tools",
     "value": 200,
     "default": 200,
@@ -611,7 +611,7 @@
   },
   {
     "id": "harvest_tool.fish.costGrowth",
-    "label": "Net (Fish Weir): cost growth",
+    "label": "Net (Provisions Dock): cost growth",
     "category": "harvest_tools",
     "value": 1.7,
     "default": 1.7,
@@ -621,7 +621,7 @@
   },
   {
     "id": "harvest_tool.fish.maxLevel",
-    "label": "Net (Fish Weir): max level",
+    "label": "Net (Provisions Dock): max level",
     "category": "harvest_tools",
     "value": 8,
     "default": 8,
@@ -630,16 +630,16 @@
   },
   {
     "id": "harvest_tool.fish.yieldBonusPerLevel",
-    "label": "Net (Fish Weir): yield bonus per level",
+    "label": "Net (Provisions Dock): yield bonus per level",
     "category": "harvest_tools",
     "value": 1,
     "default": 1,
     "min": 0,
-    "description": "Added to the Fish Weir's yield-per-catch per tool level."
+    "description": "Added to the Provisions Dock's yield-per-catch per tool level."
   },
   {
     "id": "harvest_tool.fish.spawnBonusMsPerLevel",
-    "label": "Net (Fish Weir): spawn speedup per level (ms)",
+    "label": "Net (Provisions Dock): spawn speedup per level (ms)",
     "category": "harvest_tools",
     "value": 5000,
     "default": 5000,

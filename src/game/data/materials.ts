@@ -49,13 +49,24 @@ export const MATERIALS: MaterialDef[] = [
     icons: ['herb1.png', 'herb2.png'],
   },
   {
-    id: 'fish', name: 'Fish', nodeName: 'Fish Weir',
-    description: 'The day\u2019s catch from the guild\u2019s fish weir, salted for the road.',
-    glyph: '\ud83c\udfa3',
-    // Named "Food" rather than "Fish" -- prepped ahead of the planned Fish
-    // Weir -> broader food-node generalization (berries, red meat, etc,
-    // still queued as its own pass, see guild-idler-status.md), so the
-    // icon pool doesn't need renaming again once that lands.
+    id: 'fish', name: 'Food', nodeName: 'Provisions Dock',
+    // Broadened from a fish-only theme, per direct request -- "fish" as a
+    // material was too narrow to build varied recipe flavor around (a
+    // hunter's ration or a forager's bundle shouldn't have to pretend
+    // they're made of fish just because that's the only food material
+    // that exists). The underlying id stays 'fish' on purpose -- renaming
+    // it would mean migrating every existing save's `materials.fish`,
+    // `harvestNodes.fish`, and `harvestTools.fish` keys for a change
+    // that's purely cosmetic, not worth the risk. The dock itself (and
+    // its shared spot in fields.jpg) still visually reads as a fishing
+    // wharf -- read as "where the guild's whole food supply comes
+    // through," not just the catch itself, fish included but not
+    // exclusive.
+    description: 'Whatever the day\u2019s supply run brings in -- the catch off the dock, salted meat, foraged berries. Anything that keeps a hero fed on the road.',
+    glyph: '\ud83e\udffa',
+    // Named "Food" rather than "Fish" from the start of this icon prep --
+    // see the comment above, this was scaffolded ahead of the
+    // generalization landing, not after.
     icons: ['Food1.png', 'Food2.png', 'Food3.png', 'Food4.png'],
   },
 ];
