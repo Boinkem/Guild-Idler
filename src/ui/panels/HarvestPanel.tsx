@@ -87,15 +87,15 @@ function FieldsTab() {
   const state = useEngine().state;
   return (
     <>
-      <div className="harvest-scene" style={{ backgroundImage: 'url(./lore/harvest/fields.jpg)' }}>
-        {NODE_ORDER.map((nodeId) => <NodeLane key={nodeId} nodeId={nodeId} />)}
-      </div>
-      <div className="row wrap" style={{ gap: 12 }}>
+      <div className="row wrap" style={{ gap: 12, marginBottom: 8 }}>
         {MATERIALS.map((m) => (
           <span key={m.id} className="tiny muted">
             {m.name}: {state.materials[m.id]}/{HarvestManager.capacity(state)}
           </span>
         ))}
+      </div>
+      <div className="harvest-scene" style={{ backgroundImage: 'url(./lore/harvest/fields.jpg)' }}>
+        {NODE_ORDER.map((nodeId) => <NodeLane key={nodeId} nodeId={nodeId} />)}
       </div>
     </>
   );

@@ -1452,11 +1452,18 @@ input[type='range'] {
  */
 .harvest-scene {
   position: relative;
-  height: 280px;
+  width: 100%;
+  /* Matches public/lore/harvest/fields.jpg's own 1672x941 canvas exactly --
+     was a fixed 280px height with `cover`, which crops hard the moment the
+     panel is wider than ~500px (280 * 1672/941), leaving only a thin
+     horizontal sliver of a much taller scene visible. Locking the aspect
+     ratio and stretching to fill it (same fix CraftingStation's own scene
+     uses) shows the whole image at any panel width, full height, no crop. */
+  aspect-ratio: 1672 / 941;
   border-radius: 6px;
   border: 1px solid var(--edge);
   background-color: var(--night);
-  background-size: cover;
+  background-size: 100% 100%;
   background-position: center;
   overflow: hidden;
   margin-bottom: 12px;
@@ -1551,7 +1558,7 @@ input[type='range'] {
   justify-content: center;
   background: transparent;
   border: none;
-  padding: 4%;
+  padding: 2%;
   cursor: pointer;
   color: var(--parchment);
   transition: background 120ms ease;
@@ -1597,3 +1604,5 @@ input[type='range'] {
 }
 .craft-picker-row:hover:not(:disabled) { border-color: var(--brass-dim); }
 .craft-picker-row:disabled { opacity: 0.4; cursor: default; }
+.craft-picker-row.selected { border-color: var(--brass); background: var(--panel-3); }
+.craft-picker-check { color: var(--brass); font-weight: 700; }

@@ -92,36 +92,49 @@ function SlotBox({
 /** Small nested picker -- reuses the same overlay/modal shell every other
  *  click-to-open-detail surface in this game already uses (see
  *  EquipmentShopCard), just narrower and listing options instead of one
- *  item's own detail. */
+ *  item's own detail. `closeOnPick` defaults to true (pick one, done) --
+ *  set false for a picker where more than one row can be selected in the
+ *  same visit (e.g. a sigil that grants more than one stat), so picking
+ *  one doesn't force reopening the popup to pick the next. `selectedKeys`
+ *  drives the checked/highlighted look either way, but only matters
+ *  visually once closeOnPick is false -- a single-pick popup closes
+ *  before the person would ever see it. */
 function PickerModal({
-  title, options, onPick, onClose,
+  title, options, onPick, onClose, closeOnPick = true, selectedKeys,
 }: {
   title: string; options: PickerOption[]; onPick: (key: string) => void; onClose: () => void;
+  closeOnPick?: boolean; selectedKeys?: string[];
 }) {
   return (
     <div className="overlay" style={{ zIndex: 60 }} onClick={onClose}>
       <div className="modal" style={{ maxWidth: 360 }} onClick={(e) => e.stopPropagation()}>
         <div className="spread" style={{ marginBottom: 8 }}>
           <span className="card-title">{title}</span>
-          <button onClick={onClose}>Close</button>
+          <button className={closeOnPick ? '' : 'btn-primary'} onClick={onClose}>
+            {closeOnPick ? 'Close' : 'Done'}
+          </button>
         </div>
         {options.length === 0 && <p className="small muted">Nothing available yet.</p>}
         <div className="craft-picker-list">
-          {options.map((opt) => (
-            <button
-              key={opt.key}
-              type="button"
-              className="craft-picker-row"
-              disabled={opt.disabled}
-              onClick={() => { if (!opt.disabled) { onPick(opt.key); onClose(); } }}
-            >
-              {opt.icon}
-              <span style={{ flex: 1, textAlign: 'left' }}>
-                <div>{opt.label}</div>
-                {opt.sublabel && <div className="tiny muted">{opt.sublabel}</div>}
-              </span>
-            </button>
-          ))}
+          {options.map((opt) => {
+            const selected = selectedKeys?.includes(opt.key) ?? false;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                className={`craft-picker-row ${selected ? 'selected' : ''}`}
+                disabled={opt.disabled}
+                onClick={() => { if (!opt.disabled) { onPick(opt.key); if (closeOnPick) onClose(); } }}
+              >
+                {opt.icon}
+                <span style={{ flex: 1, textAlign: 'left' }}>
+                  <div>{opt.label}</div>
+                  {opt.sublabel && <div className="tiny muted">{opt.sublabel}</div>}
+                </span>
+                {selected && <span aria-hidden="true" className="craft-picker-check">✓</span>}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -197,9 +210,9 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
       if (!targetUid) return null;
       const found = EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid);
       const def = found && EquipmentManager.def(found.item);
-      return def ? <ItemIcon slot={def.slot} icon={def.icon} size={44} /> : null;
+      return def ? <ItemIcon slot={def.slot} icon={def.icon} size={88} /> : null;
     })()
-    : (recipe ? <RecipeIcon icon={recipe.icon} category={category} size={44} /> : null);
+    : (recipe ? <RecipeIcon icon={recipe.icon} category={category} size={88} /> : null);
 
   const topOptions: PickerOption[] = category === 'enchant'
     ? EquipmentManager.allItems(state).map(({ item, heroId }): PickerOption | null => {
@@ -208,12 +221,12 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
       const owner = heroId ? state.heroes.find((h) => h.id === heroId)?.name : 'Stash';
       return {
         key: item.uid, label: def.name, sublabel: owner ?? 'Stash',
-        icon: <ItemIcon slot={def.slot} icon={def.icon} size={32} />,
+        icon: <ItemIcon slot={def.slot} icon={def.icon} size={64} />,
       };
     }).filter((o): o is PickerOption => o !== null)
     : recipes.map((r) => ({
       key: r.id, label: r.name, sublabel: r.description,
-      icon: <RecipeIcon icon={r.icon} category={category} size={32} />,
+      icon: <RecipeIcon icon={r.icon} category={category} size={64} />,
     }));
 
   function handleTopPick(key: string) {
@@ -312,7 +325,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
         <>
           <SlotBox
             rect={rects.bottomLeft}
-            filled={recipe ? <RecipeIcon icon={recipe.icon} category={category} size={40} /> : null}
+            filled={recipe ? <RecipeIcon icon={recipe.icon} category={category} size={80} /> : null}
             label="Choose what to apply"
             onOpen={() => setOpenSlot('bottomLeft')}
           />
@@ -398,7 +411,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
       {openSlot === 'bottomLeft' && category === 'enchant' && (
         <PickerModal
           title="Choose what to apply"
-          options={recipes.map((r) => ({ key: r.id, label: r.name, sublabel: r.description, icon: <RecipeIcon icon={r.icon} category={category} size={32} /> }))}
+          options={recipes.map((r) => ({ key: r.id, label: r.name, sublabel: r.description, icon: <RecipeIcon icon={r.icon} category={category} size={64} /> }))}
           onPick={pickRecipe}
           onClose={() => setOpenSlot(null)}
         />
@@ -409,6 +422,8 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
           options={statOptions}
           onPick={toggleStat}
           onClose={() => setOpenSlot(null)}
+          closeOnPick={statsToPick <= 1}
+          selectedKeys={chosenStats}
         />
       )}
 

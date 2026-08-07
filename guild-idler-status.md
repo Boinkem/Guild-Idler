@@ -590,6 +590,55 @@ image and inspecting the result directly, not just computed and trusted
 entirely rather than left as dead code, since `VendorsPanel.tsx` was its
 only caller. `npx tsc --noEmit` and `vite build` both pass clean.
 
+### Crafting station polish + Harvest scene sizing -- complete
+Follow-up pass, two unrelated fixes landed together since both touched
+adjacent code:
+
+- **Slot/picker icons doubled.** Every `ItemIcon`/`RecipeIcon` size in
+  `CraftingStation.tsx` doubled (top-slot filled icon 44->88, picker-row
+  icons 32->64, the enchant sigil slot 40->80). `.craft-slot`'s own
+  padding trimmed 4%->2% to give the bigger icons room inside the same
+  painted frames rather than crowding them -- `.item-icon img`'s existing
+  `width/height: 70%` scales off its container automatically, so this
+  was a sizing-only change, no new icon-rendering path needed.
+- **Enchant's stat picker now supports real multi-select.** Previously
+  every picker (including this one) closed itself immediately after any
+  pick -- fine for a single choice, but a sigil with `statsToPick > 1`
+  meant picking the first stat closed the popup, forcing a full reopen
+  to pick the second. `PickerModal` gained `closeOnPick` (default true,
+  unchanged behavior everywhere else) and `selectedKeys` (drives a
+  checkmark + highlighted row). The stat picker is the one caller that
+  passes `closeOnPick={statsToPick <= 1}` -- stays open across multiple
+  picks exactly when a sigil actually offers more than one, closes
+  immediately (old behavior, untouched) for today's single-stat Minor
+  Sigil. Already-picked rows stay clickable to toggle back off, same
+  logic `toggleStat` always had, just now visible while the popup is
+  still open instead of only inferable from the slot afterward.
+
+**Harvest's Fields scene was cropping hard on anything wider than a
+fairly narrow window** -- `.harvest-scene` was a fixed 280px height with
+`background-size: cover` against `public/lore/harvest/fields.jpg`'s own
+1672x941 (i.e. much wider-than-280px-tall) canvas. `cover` has to scale
+the image up to fill the panel's full width, and past roughly 500px wide
+that scaled height exceeds 280px, so cover silently crops the excess off
+the top and bottom -- and the wider the panel gets, the worse the crop,
+which is exactly the "too wide and thin" complaint (confirmed against
+the actual currently-used background art, not a guess -- the player
+supplied it directly and it matched the repo's own file byte-for-byte).
+Same fix already used for `CraftingStation`'s scenes: `aspect-ratio: 1672
+/ 941` on the container plus `background-size: 100% 100%` instead of
+`cover`, so the full image always shows, fully proportioned, at any
+panel width -- no crop, ever, and it gets taller (not just wider) as the
+window does, which is the "more vertical space" the report asked for.
+The per-node falling-item positioning (`top: 62%` etc.) is already
+percentage-based, so it needed no changes to keep lining up.
+
+The material stock line (`Ore: X/Y`, etc.) moved from below the scene to
+above it, per direct request -- purely a JSX reorder in `FieldsTab`, no
+logic change.
+
+`npx tsc --noEmit` and `vite build` both pass clean.
+
 ### Cleanup items
 - ~~Heroic/Mythic tiered loot for the Last God raid~~ -- done. Every raid
   encounter with loot now has all three difficulty tiers.
