@@ -1213,24 +1213,8 @@ crafting pipeline. `npx tsc --noEmit` and `vite build` both pass clean.
 ### Deferred systems (queued before the polish/narrative detour started)
 - ~~Pets~~ -- built. See "Pets / Hatchery -- built" below for the full writeup.
 - Freeze slot for the quest board (never got a firm yes/no).
-- **Quest chains in the DevTool, editable like raids are.** Bigger than
-  it sounds -- raids.json/raid-encounters.json are already small, flat,
-  JSON-driven data the DevTool edits directly, but `QUEST_CHAINS` in
-  `quests.ts` is still ~420 lines of literal TS objects, 19 chains, each
-  with an embedded `stages` array of nested objects (name/flavour/
-  difficulty/duration/goldMultiplier per stage) -- not a separate
-  reusable pool the way raid encounters are, and not something the
-  DevTool's current field types (`string[]`, `mods`, `stats`, `effect`,
-  `eventEffects`) already know how to render. Needs: (1) migrating
-  `QUEST_CHAINS` out to `quest-chains.json` (mechanical, scriptable --
-  should convert losslessly, not be hand-retyped, given how much prose
-  is riding on it), with `quests.ts` importing and re-typing it the same
-  way `raids.ts` already does for its own JSON; (2) a new `chainStages`
-  field type in the DevTool (both `server.mjs` validation and an
-  `app.js` repeatable sub-form, add/remove rows) -- structurally its own
-  small feature, not a tweak to an existing one. Worth doing, but sizable
-  enough to want its own dedicated pass rather than folding into
-  whatever else is in flight.
+- ~~Quest chains in the DevTool, editable like raids are.~~ -- done. See
+  "Quest chains in the DevTool -- built" below for the full writeup.
 - ~~Shop -> Vendors restructure~~ -- done (patch 0118). Shop renamed to
   Vendors; its three sections split one per vendor (Blacksmith sells
   armour, Alchemist sells supplies, Enchanter sells black market); the
@@ -1720,18 +1704,11 @@ from the spec pass).
     needing anything hatchery-unlock-specific. Also surfaced in the
     Quest tab's existing "Guaranteed on completion" preview
     (`chainCompletionPreview`), alongside gold/renown/items.
-  - **DevTool reality check, stated plainly rather than glossed over:**
-    `rewardEgg` lives on `ChainDef`, and quest chains still aren't
-    DevTool-editable at all yet (`QUEST_CHAINS` is still ~450 lines of
-    literal TS -- see the long-standing "Quest chains in the DevTool"
-    backlog item). This is a pre-existing limitation this patch doesn't
-    change, not a regression -- `rewardItems` (gear) has never been
-    DevTool-editable either, for the same reason. What IS fully DevTool-
-    editable today is the raid-encounter side: `RaidEncounterDef.eggLoot`
-    (built in an earlier pass), the same reused string-list
-    `"rarity[:dedicatedPetId]@chance"` convention `loot` already uses. If
-    full chain-reward editing is wanted, that needs the bigger chains-
-    migration project, not a quick addition here.
+  - **DevTool note (now resolved by a later pass the same session):**
+    at the time this landed, `rewardEgg` lived on `ChainDef` and quest
+    chains weren't DevTool-editable at all yet. That's since been fixed
+    -- see "Quest chains in the DevTool -- built" below, which covers
+    `rewardEgg` along with everything else on a chain.
 - **A batch of real reported issues + the egg art, all fixed/landed
   together.**
   - **Egg icons -- the actual blocker is resolved.** The uploaded
@@ -1907,6 +1884,59 @@ from the spec pass).
 - The parked "rare pet variants with their own bonus, plus a universal
   refine/upgrade path" idea from the spec pass is still just an idea --
   untouched by this build.
+
+### Quest chains in the DevTool -- built
+Closed out the long-standing backlog item, done in the two pieces its own
+description called for.
+
+**Migration.** `QUEST_CHAINS` (20 chains, ~450 lines of literal TS) moved
+to `src/game/data/json/quest-chains.json`; `quests.ts` imports and
+re-types it, same pattern `raids.ts` already established for its own
+JSON (`durationMinutes` on disk, converted to `duration` ms on load --
+same human-friendly-unit convention `raid-encounters.json`'s
+`durationHours` uses). The JSON itself was generated programmatically --
+a one-off `tsx` script dumped the live `QUEST_CHAINS` export straight out
+of the running module, rather than hand-transcribing 20 chains' worth of
+prose -- and the result was deep-equality-verified byte-for-byte
+identical to the original array before anything was deleted, not just
+typechecked (`tsc` alone doesn't catch a dropped field on a JSON import,
+confirmed by deliberately introducing one during development: a leftover
+`durationMinutes` key that should have been consumed and dropped instead
+sat alongside the new `duration` field until the equality check caught
+it).
+
+**The new field type.** `stages` is the reason this was ever "bigger than
+it sounds": every other DevTool content type is a flat array of entries,
+this is the first one where a single entry contains its own repeatable
+sub-list. New `chainStages` field type, both halves:
+- `server.mjs`: validates every stage's `name`/`flavour`/`tag`/
+  `difficulty`/`durationMinutes`/`goldMultiplier`, rejects unknown keys,
+  requires at least one stage. Unit-tested directly (extracted the
+  validation logic into a standalone script rather than relying on live
+  HTTP requests, which this sandbox's network policy turned out to block
+  even for localhost) against all 20 real migrated chains (zero errors)
+  plus deliberately-broken cases (missing field, bad enum value, empty
+  stage list) -- all caught correctly.
+- `app.js`: a real repeatable sub-form. Each stage renders as its own
+  bordered mini-form (name/flavour/tag/difficulty/duration/gold, plus a
+  remove button); "+ add stage" inserts a fresh blank row using the same
+  template; `wireStagesInput` mirrors `wireListInput`'s exact add/remove
+  wiring shape, just for a 6-field row instead of a single text input.
+  Removing a stage is blocked once only one remains (`chainStages` is
+  required and non-empty), rather than letting the save fail later with a
+  less obvious error.
+
+**`rewardEgg` got the same treatment**, as its own new `eggReward` field
+type: a checkbox ("grants an egg reward") that shows/hides a rarity
+dropdown + optional dedicated-pet-id text field together, rather than a
+rarity picker that's always present with no way to represent "no reward
+at all." Fields stay in the DOM when hidden (not removed), so toggling
+off and back on doesn't lose whatever was already typed.
+
+Both new field types share the same styling conventions as the rest of
+the editor (`style.css`'s existing `--panel2`/`--panel3`/`--text`
+variables -- the DevTool's own separate stylesheet, unrelated to the
+game's own `app.css` typo fixed elsewhere this session).
 
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**

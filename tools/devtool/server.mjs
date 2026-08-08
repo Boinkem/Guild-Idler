@@ -59,6 +59,47 @@ const SCHEMAS = {
       },
     },
   },
+  'quest-chains': {
+    file: 'quest-chains.json',
+    label: 'Quest Chains',
+    idField: 'id',
+    // The big one -- migrated from ~450 lines of literal TS specifically
+    // so this could exist (see quests.ts's own comment on the migration).
+    // `stages` is the reason this needed a genuinely new field type
+    // (`chainStages`) rather than reusing an existing one: every other
+    // content type here is a flat array of entries, this is the first
+    // one where a SINGLE entry itself contains its own repeatable
+    // sub-list. See the 'chainStages' case in validateEntry below, and
+    // app.js's matching add/remove-row UI.
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      name: { type: 'string', required: true },
+      description: { type: 'string', required: true },
+      reqLevel: { type: 'number', required: true },
+      rewardGold: { type: 'number', required: true },
+      rewardItems: { type: 'string[]', required: false, picker: 'lootTable' },
+      rewardRenown: { type: 'number', required: true },
+      title: { type: 'string', required: false },
+      epilogue: { type: 'string', required: false },
+      // Gates this chain from ever being offered until the referenced
+      // chain id appears in a player's completedChains -- free-text
+      // rather than a dropdown of known chain ids, since this schema has
+      // no cross-entry lookup mechanism (same trade-off dedicatedPetId
+      // below accepts).
+      requiresChainId: { type: 'string', required: false },
+      // True for exactly one chain (the Hatchery's own intro) today, but
+      // not restricted to that here -- see ChainDef.grantsHatchery's own
+      // comment for why this is deliberately decoupled from rewardEgg.
+      grantsHatchery: { type: 'boolean', required: false },
+      // The egg equivalent of rewardItems above -- always granted on
+      // completion, not a chance roll. New 'eggReward' field type (see
+      // validateEntry below): an object with a required rarity and an
+      // optional dedicatedPetId (free-text pet id, same no-cross-entry-
+      // lookup trade-off as requiresChainId).
+      rewardEgg: { type: 'eggReward', required: false },
+      stages: { type: 'chainStages', required: true },
+    },
+  },
   'equipment': {
     file: 'equipment.json',
     label: 'Equipment',
@@ -299,6 +340,13 @@ const STAT_KEYS = ['strength', 'endurance', 'luck', 'wisdom'];
 const EFFECT_KEYS = ['success', 'gold', 'preventInjury', 'guaranteedGoodEvent', 'healInjury'];
 const EVENT_EFFECT_KEYS = ['success', 'goldPct', 'flatGold', 'xpPct', 'loot', 'durability', 'delay', 'injury', 'guaranteedLoot'];
 const MATERIAL_KEYS = ['ore', 'timber', 'herbs', 'fish'];
+const RARITY_KEYS = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+const CHAIN_STAGE_TAGS = ['combat', 'escort', 'explore', 'arcane', 'stealth', 'defense'];
+const CHAIN_STAGE_DIFFICULTIES = ['easy', 'normal', 'hard', 'epic', 'legendary'];
+// Every field a single stage row needs -- durationMinutes, not duration,
+// same human-friendly-unit convention raid-encounters.json's durationHours
+// already established (quests.ts converts back to ms on load).
+const CHAIN_STAGE_FIELDS = ['name', 'flavour', 'tag', 'difficulty', 'durationMinutes', 'goldMultiplier'];
 
 function validateEntry(schema, entry, index) {
   const errors = [];
@@ -357,6 +405,51 @@ function validateEntry(schema, entry, index) {
         break;
       case 'boolean':
         if (typeof value !== 'boolean') errors.push(`entry ${index}: "${key}" must be true or false`);
+        break;
+      case 'eggReward':
+        if (typeof value !== 'object' || Array.isArray(value)) {
+          errors.push(`entry ${index}: "${key}" must be an object`);
+        } else {
+          if (!RARITY_KEYS.includes(value.rarity)) errors.push(`entry ${index}: "${key}.rarity" must be one of ${RARITY_KEYS.join(', ')}`);
+          if (value.dedicatedPetId !== undefined && typeof value.dedicatedPetId !== 'string') {
+            errors.push(`entry ${index}: "${key}.dedicatedPetId" must be text`);
+          }
+          for (const k of Object.keys(value)) {
+            if (k !== 'rarity' && k !== 'dedicatedPetId') errors.push(`entry ${index}: unknown key "${k}" in "${key}"`);
+          }
+        }
+        break;
+      case 'chainStages':
+        if (!Array.isArray(value) || value.length === 0) {
+          errors.push(`entry ${index}: "${key}" must be a non-empty list of stages`);
+          break;
+        }
+        value.forEach((stage, si) => {
+          if (typeof stage !== 'object' || Array.isArray(stage) || stage === null) {
+            errors.push(`entry ${index}, stage ${si}: must be an object`);
+            return;
+          }
+          for (const f of CHAIN_STAGE_FIELDS) {
+            if (stage[f] === undefined || stage[f] === null || stage[f] === '') {
+              errors.push(`entry ${index}, stage ${si}: "${f}" is required`);
+            }
+          }
+          if (stage.tag !== undefined && !CHAIN_STAGE_TAGS.includes(stage.tag)) {
+            errors.push(`entry ${index}, stage ${si}: "tag" must be one of ${CHAIN_STAGE_TAGS.join(', ')}`);
+          }
+          if (stage.difficulty !== undefined && !CHAIN_STAGE_DIFFICULTIES.includes(stage.difficulty)) {
+            errors.push(`entry ${index}, stage ${si}: "difficulty" must be one of ${CHAIN_STAGE_DIFFICULTIES.join(', ')}`);
+          }
+          if (stage.durationMinutes !== undefined && (typeof stage.durationMinutes !== 'number' || stage.durationMinutes <= 0)) {
+            errors.push(`entry ${index}, stage ${si}: "durationMinutes" must be a positive number`);
+          }
+          if (stage.goldMultiplier !== undefined && typeof stage.goldMultiplier !== 'number') {
+            errors.push(`entry ${index}, stage ${si}: "goldMultiplier" must be a number`);
+          }
+          for (const k of Object.keys(stage)) {
+            if (!CHAIN_STAGE_FIELDS.includes(k)) errors.push(`entry ${index}, stage ${si}: unknown key "${k}"`);
+          }
+        });
         break;
     }
     if (spec.slug && typeof value === 'string' && !/^[a-z][a-z0-9_]*$/.test(value)) {

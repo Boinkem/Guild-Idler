@@ -77,6 +77,31 @@ td.actions button { padding: 4px 8px; font-size: 11px; margin-right: 4px; }
 .kv-grid { display: grid; grid-template-columns: 1fr 90px; gap: 6px 8px; align-items: center; }
 .kv-grid label { font-size: 11px; color: var(--muted); }
 
+/* ----------------------------- chain stages -------------------------------- */
+/* Each stage is its own bordered mini-form, not just another list-input row --
+   6 fields per stage (name/flavour/tag/difficulty/duration/gold), too much for
+   a single-line row. */
+.stages-input { display: flex; flex-direction: column; gap: 12px; }
+.stage-row { background: var(--panel2); border: 1px solid var(--panel3); padding: 10px 12px; }
+.stage-row-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.stage-row-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.stage-row label { display: block; font-size: 11px; color: var(--muted); margin: 6px 0 4px; }
+.stage-row input[type=text], .stage-row textarea, .stage-row select, .stage-row input[type=number] {
+  width: 100%; background: var(--panel); border: 1px solid var(--panel3); color: var(--text);
+  padding: 6px 7px; font: inherit;
+}
+.stage-row textarea { min-height: 44px; resize: vertical; }
+.stage-row-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-top: 4px; }
+.stages-input > [data-add-stage] { align-self: flex-start; }
+
+/* ------------------------------ egg reward --------------------------------- */
+.egg-reward-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.egg-reward-fields label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.egg-reward-fields select, .egg-reward-fields input {
+  width: 100%; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text);
+  padding: 6px 7px; font: inherit;
+}
+
 .errors { background: rgba(163, 58, 58, 0.15); border: 1px solid var(--bad); padding: 10px 12px; margin-bottom: 14px; font-size: 12px; }
 .errors ul { margin: 6px 0 0; padding-left: 18px; }
 

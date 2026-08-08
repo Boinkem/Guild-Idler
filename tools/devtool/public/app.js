@@ -195,7 +195,84 @@ function fieldControl(spec, key, value) {
   if (spec.type === 'materials') return kvGrid(id, MATERIAL_KEYS, value ?? {}, 'number');
   if (spec.type === 'effect') return kvGrid(id, EFFECT_KEYS, value ?? {}, 'mixed');
   if (spec.type === 'eventEffects') return kvGrid(id, EVENT_EFFECT_KEYS, value ?? {}, 'mixed');
+  if (spec.type === 'eggReward') return eggRewardInput(id, value);
+  if (spec.type === 'chainStages') return stagesInput(id, value ?? []);
   return `<input type="text" id="${id}" value="${escapeHtml(JSON.stringify(value))}" />`;
+}
+
+const RARITY_KEYS = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+const CHAIN_STAGE_TAGS = ['combat', 'escort', 'explore', 'arcane', 'stealth', 'defense'];
+const CHAIN_STAGE_DIFFICULTIES = ['easy', 'normal', 'hard', 'epic', 'legendary'];
+
+/**
+ * A toggle (has this chain got a guaranteed egg reward at all?) plus two
+ * sub-fields, shown/hidden together -- rewardEgg is optional on ChainDef,
+ * so "no toggle checked" has to be a real, distinct state from "rarity
+ * defaults to common," not just a rarity picker that's always present.
+ */
+function eggRewardInput(id, value) {
+  const has = !!value;
+  return `
+    <div class="egg-reward" id="${id}">
+      <label><input type="checkbox" data-egg-enabled ${has ? 'checked' : ''} /> Grants an egg reward</label>
+      <div class="egg-reward-fields" ${has ? '' : 'style="display:none"'}>
+        <label>Rarity</label>
+        <select data-egg-rarity>
+          ${RARITY_KEYS.map((r) => `<option value="${r}" ${value?.rarity === r ? 'selected' : ''}>${r}</option>`).join('')}
+        </select>
+        <label>Dedicated pet id (optional)</label>
+        <input type="text" data-egg-pet value="${escapeHtml(value?.dedicatedPetId ?? '')}" placeholder="leave blank for the general random pool" />
+      </div>
+    </div>`;
+}
+
+/**
+ * The repeatable stage sub-form -- the actual reason chainStages needed to
+ * be a genuinely new field type rather than reusing listInput (a flat list
+ * of single text values), since each row here is itself a 6-field
+ * mini-form (name/flavour/tag/difficulty/durationMinutes/goldMultiplier),
+ * not one string. Built synchronously (unlike the icon/loot pickers)
+ * since tag/difficulty options are static, no server round-trip needed.
+ */
+function stagesInput(id, stages) {
+  const rows = (stages.length ? stages : [{}]).map((s) => stageRowHtml(s)).join('');
+  return `<div class="stages-input" id="${id}">${rows}<button type="button" data-add-stage>+ add stage</button></div>`;
+}
+
+function stageRowHtml(s) {
+  return `
+    <div class="stage-row">
+      <div class="stage-row-header">
+        <span class="stage-row-title">Stage</span>
+        <button type="button" class="remove" data-remove-stage>&minus; remove stage</button>
+      </div>
+      <label>Name</label>
+      <input type="text" data-stage-name value="${escapeHtml(s.name ?? '')}" />
+      <label>Flavour</label>
+      <textarea data-stage-flavour>${escapeHtml(s.flavour ?? '')}</textarea>
+      <div class="stage-row-grid">
+        <div>
+          <label>Tag</label>
+          <select data-stage-tag>
+            ${CHAIN_STAGE_TAGS.map((t) => `<option value="${t}" ${s.tag === t ? 'selected' : ''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label>Difficulty</label>
+          <select data-stage-difficulty>
+            ${CHAIN_STAGE_DIFFICULTIES.map((d) => `<option value="${d}" ${s.difficulty === d ? 'selected' : ''}>${d}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label>Duration (minutes)</label>
+          <input type="number" data-stage-duration value="${s.durationMinutes ?? ''}" step="any" />
+        </div>
+        <div>
+          <label>Gold multiplier</label>
+          <input type="number" data-stage-gold value="${s.goldMultiplier ?? ''}" step="any" />
+        </div>
+      </div>
+    </div>`;
 }
 
 const MOD_KEYS = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability'];
@@ -451,6 +528,44 @@ function wireListInput(container) {
   });
 }
 
+/** Add/remove-row wiring for the chainStages repeatable sub-form -- same
+ *  "insert a fresh row before the add button, wire its own remove button
+ *  inline" shape as wireListInput above, just a bigger row template. */
+function wireStagesInput(container) {
+  container.querySelectorAll('.stages-input').forEach((stagesEl) => {
+    const addBtn = stagesEl.querySelector('[data-add-stage]');
+    const wireRemove = (row) => {
+      row.querySelector('[data-remove-stage]').onclick = () => {
+        // Always leave at least one row -- chainStages is required and
+        // non-empty (see server.mjs's validateEntry), so an empty stage
+        // list would just fail to save with a confusing error instead of
+        // being prevented here where the reason is obvious.
+        if (stagesEl.querySelectorAll('.stage-row').length > 1) row.remove();
+      };
+    };
+    addBtn.onclick = () => {
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = stageRowHtml({});
+      const row = wrapper.firstElementChild;
+      wireRemove(row);
+      stagesEl.insertBefore(row, addBtn);
+    };
+    stagesEl.querySelectorAll('.stage-row').forEach(wireRemove);
+  });
+}
+
+/** Shows/hides the rarity+petId sub-fields as the "grants an egg reward"
+ *  checkbox toggles -- the fields stay in the DOM either way (readField's
+ *  eggReward case only reads them when the checkbox is checked), so
+ *  toggling off and back on doesn't lose whatever was already typed. */
+function wireEggRewardInput(container) {
+  container.querySelectorAll('.egg-reward').forEach((el) => {
+    const checkbox = el.querySelector('[data-egg-enabled]');
+    const fields = el.querySelector('.egg-reward-fields');
+    checkbox.onchange = () => { fields.style.display = checkbox.checked ? '' : 'none'; };
+  });
+}
+
 function readField(spec, key) {
   const el = document.getElementById(`f_${key}`);
   if (spec.picker === 'icon') return el.dataset.value || '';
@@ -472,6 +587,25 @@ function readField(spec, key) {
       }
     });
     return out;
+  }
+  if (spec.type === 'eggReward') {
+    const enabled = el.querySelector('[data-egg-enabled]').checked;
+    if (!enabled) return undefined;
+    const dedicatedPetId = el.querySelector('[data-egg-pet]').value.trim();
+    return {
+      rarity: el.querySelector('[data-egg-rarity]').value,
+      ...(dedicatedPetId ? { dedicatedPetId } : {}),
+    };
+  }
+  if (spec.type === 'chainStages') {
+    return [...el.querySelectorAll('.stage-row')].map((row) => ({
+      name: row.querySelector('[data-stage-name]').value,
+      flavour: row.querySelector('[data-stage-flavour]').value,
+      tag: row.querySelector('[data-stage-tag]').value,
+      difficulty: row.querySelector('[data-stage-difficulty]').value,
+      durationMinutes: parseFloat(row.querySelector('[data-stage-duration]').value) || 0,
+      goldMultiplier: parseFloat(row.querySelector('[data-stage-gold]').value) || 0,
+    }));
   }
   return el.value;
 }
@@ -510,6 +644,8 @@ function openEditor(index) {
   wireListInput(editor);
   wireIconFields(editor);
   wireLootFields(editor);
+  wireStagesInput(editor);
+  wireEggRewardInput(editor);
 
   editor.querySelector('#cancelBtn').onclick = () => overlay.remove();
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
@@ -518,7 +654,7 @@ function openEditor(index) {
     const entry = {};
     for (const [key, spec] of Object.entries(schema.fields)) {
       const value = readField(spec, key);
-      const isEmpty = value === '' || value === null || (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0) || (Array.isArray(value) && value.length === 0);
+      const isEmpty = value === '' || value === null || value === undefined || (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0) || (Array.isArray(value) && value.length === 0);
       if (!spec.required && isEmpty) continue;
       entry[key] = value;
     }
