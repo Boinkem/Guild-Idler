@@ -3,11 +3,19 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 27;
+export const SAVE_VERSION = 28;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+
+/**
+ * A weapon's infused damage type, or an enemy's own vulnerability/attack
+ * type. Deliberately a flat, small set rather than tied to any existing
+ * taxonomy (Rarity, Difficulty) -- an element is a property of a weapon,
+ * a piece of armor, or a quest/raid encounter, not of a hero or a class.
+ */
+export type ElementType = 'fire' | 'frost' | 'lightning' | 'poison';
 
 export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'shield' | 'gloves' | 'boots' | 'ring' | 'amulet' | 'cloak';
 
@@ -161,6 +169,28 @@ export interface EquipmentItem {
    * HeroManager.equipmentStats for where this actually gets applied.
    */
   enchantStats?: Partial<Stats>;
+  /**
+   * Set by the Blacksmith's Infuse station, weapon slot only -- the
+   * element this weapon deals. A single value, not a set: infusing again
+   * with a different element replaces it (this is meant to read as
+   * "changing what the weapon is infused with," not stacking multiple
+   * damage types onto one blade). See QuestManager.previewSuccess and
+   * RaidManager.elementalBonus for where this actually matters -- it
+   * matches against a quest/encounter's own `vulnerableTo` list for a
+   * success bonus, nullified if the encounter also lists that element
+   * under `immuneTo`.
+   */
+  elementalDamage?: ElementType;
+  /**
+   * Set by the Blacksmith's Infuse station, non-weapon slots -- how much
+   * this piece resists each element, additive per element if infused
+   * again (same "stacks with itself" shape EquipmentItem.enchantStats
+   * already established, unlike elementalDamage above which replaces).
+   * Matches against a quest/encounter's own `dealsElement` list -- framed
+   * to the player as extra effective endurance against that element's
+   * attacks, mechanically just another additive success contribution.
+   */
+  elementalResist?: Partial<Record<ElementType, number>>;
 }
 
 export interface ItemSet {
@@ -268,6 +298,17 @@ export interface QuestOffer {
   reqLevel: number;
   /** Set when this offer is one stage of a chain. */
   chain?: { chainId: string; stage: number; totalStages: number };
+  /**
+   * Rolled at generation time (see QuestManager.rollElementTags) -- what
+   * this quest's opposition is weak to (a matching weapon's
+   * elementalDamage adds a success bonus) and what it attacks with (a
+   * matching piece of armor's elementalResist adds a bonus in turn).
+   * Independent lists, can overlap, either or both can be empty --
+   * harder difficulty tiers roll a higher ceiling on how many of each a
+   * single offer can carry, not a guarantee of any.
+   */
+  vulnerableTo?: ElementType[];
+  dealsElement?: ElementType[];
 }
 
 export interface ActiveQuest {
@@ -378,6 +419,25 @@ export interface RaidEncounterDef {
    * economy.loot/diffCfg.lootBonus scaling either way.
    */
   eggLoot?: string[];
+  /**
+   * Authored, not rolled -- raid encounters are a small curated list
+   * (unlike quest offers, which are procedurally generated per board),
+   * so these are hand-set per encounter via the devtool the same way
+   * `loot` already is, defaulting to none. Same meaning as QuestOffer's
+   * own vulnerableTo/dealsElement -- see RaidManager.elementalBonus.
+   */
+  vulnerableTo?: ElementType[];
+  dealsElement?: ElementType[];
+  /**
+   * Raid-only -- an element this specific encounter is immune to,
+   * nullifying the weapon-matching half of elementalBonus for any hero
+   * whose weapon is infused with a listed element (armor's
+   * elementalResist side is unaffected; immunity describes the
+   * encounter's own resilience, not its attack). "A fire dragon, immune
+   * to fire damage" was the motivating example -- no equivalent concept
+   * exists for ordinary quest offers.
+   */
+  immuneTo?: ElementType[];
 }
 
 export interface RaidDef {
@@ -787,6 +847,23 @@ export interface GameState {
   /** True once the Trade Route upgrade is bought -- gates selling materials for gold. */
   tradeRouteUnlocked: boolean;
 
+  /* --------------------------- Elemental infusion --------------------------- */
+  /**
+   * A standalone currency, deliberately not folded into `materials`
+   * (Record<MaterialId, ...>) -- scrap comes from breaking down owned
+   * equipment (EquipmentManager.scrapValue, see engine.scrapItem), not
+   * from a Harvest node, so it doesn't belong in that system's per-node
+   * state (harvestNodes/harvestTools) the way ore/timber/herbs/food do.
+   */
+  scrap: number;
+  /** Elemental Gems, one counter per element -- crafted at the Enchanter,
+   *  spent at the Blacksmith's Infuse station on a weapon's
+   *  elementalDamage. See CraftingManager.craftGem/engine.infuseItem. */
+  gems: Partial<Record<ElementType, number>>;
+  /** Resistance Gems, same shape again, spent on a non-weapon item's
+   *  elementalResist instead. */
+  resistGems: Partial<Record<ElementType, number>>;
+
   /* ---------------------------- Pets / Hatchery ---------------------------- */
   /** True once the intro chain that grants the Hatchery has been completed
    *  -- gates the Hatchery tab's visibility entirely (see MenuWindow). */
@@ -945,7 +1022,7 @@ export interface CraftingRecipeDef {
   id: string;
   name: string;
   description: string;
-  category: 'gear' | 'consumable' | 'enchant';
+  category: 'gear' | 'consumable' | 'enchant' | 'gem';
   /** Relative path under the item-icons folder, same convention as
    *  EquipmentDef.icon/ConsumableDef.icon. No glyph fallback here since
    *  a recipe isn't itself an item -- falls all the way back to a plain
@@ -953,6 +1030,13 @@ export interface CraftingRecipeDef {
   icon?: string;
   materialCost: Partial<Record<MaterialId, number>>;
   goldCost: number;
+  /** `gem` recipes only, in addition to materialCost/goldCost -- Scrap is
+   *  its own standalone currency (see GameState.scrap), not a MaterialId,
+   *  so it needs its own cost field rather than fitting into
+   *  materialCost. Every gem recipe is expected to set this; 0/undefined
+   *  would mean a gem that costs no scrap at all, which defeats the
+   *  point of the scrapping loop. */
+  scrapCost?: number;
   /** `gear` recipes only -- the craftable EquipmentDef this recipe produces. */
   resultDefId?: string;
   /** `gear` recipes only -- the eligible mod pool the player picks from. */
@@ -969,4 +1053,10 @@ export interface CraftingRecipeDef {
   statsToPick?: number;
   /** `enchant` recipes only -- fixed strength applied to each picked stat, additive with anything already enchanted. */
   statValue?: number;
+  /** `gem` recipes only -- which counter this recipe adds +1 to on craft
+   *  (GameState.gems or resistGems, for the given element). No player
+   *  choice involved at craft time, unlike gear/enchant -- a gem recipe
+   *  is authored per element, same way Trail Rations vs Herbal Tonic are
+   *  two separate consumable recipes rather than one with a picker. */
+  resultGem?: { kind: 'elemental' | 'resist'; element: ElementType };
 }

@@ -1,5 +1,5 @@
 import {
-  ActiveRaid, GameState, Hero, Modifiers, RaidDifficulty, RaidLootDrop, RaidResult,
+  ActiveRaid, GameState, Hero, Modifiers, RaidDifficulty, RaidEncounterDef, RaidLootDrop, RaidResult,
 } from '../types';
 import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty } from '../data/raids';
 import { EQUIPMENT_BY_ID } from '../data/equipment';
@@ -8,10 +8,27 @@ import { HeroManager } from './HeroManager';
 import { EquipmentManager } from './EquipmentManager';
 import { ModifierManager } from './ModifierManager';
 import { PetManager } from './PetManager';
+import { elementalBonusForHero } from '../data/elements';
 import { createRng } from '../rng';
 import { clamp, sumMods, MINUTE } from '../util';
 
 export const RaidManager = {
+  /**
+   * Average elemental contribution across the party for one specific
+   * encounter -- recomputed fresh per encounter (unlike partySuccessBonus,
+   * which is locked in once at raid start), since different encounters in
+   * the same raid can carry entirely different tags. Averaged rather than
+   * weakest-link like partySuccessBonus: this is a small bonus on top, not
+   * the core pass/fail gate, matching how partyEconomyMods (gold/xp/loot/
+   * speed) already treats "a shared payout, not something to punish a
+   * lagging hero for" -- see that function's own comment.
+   */
+  elementalBonus(heroes: Hero[], encounter: RaidEncounterDef): number {
+    if (heroes.length === 0) return 0;
+    const total = heroes.reduce((sum, h) => sum + elementalBonusForHero(h, encounter), 0);
+    return total / heroes.length;
+  },
+
   /**
    * Weakest-link success contribution: the party's worst hero sets the
    * floor, with a smaller (0.2x) averaged contribution from the rest of the
@@ -101,7 +118,8 @@ export const RaidManager = {
     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)).filter((h): h is Hero => !!h);
     const bonus = RaidManager.partySuccessBonus(state, heroes, now, raid.reqLevel);
     const penalty = RAID_DIFFICULTIES[difficulty].successPenalty;
-    return clamp(encounter.baseSuccess - penalty + bonus, MIN_SUCCESS, MAX_SUCCESS);
+    const elemental = RaidManager.elementalBonus(heroes, encounter);
+    return clamp(encounter.baseSuccess - penalty + bonus + elemental, MIN_SUCCESS, MAX_SUCCESS);
   },
 
   /**
@@ -193,7 +211,8 @@ export const RaidManager = {
     for (const encounterId of encounterIds) {
       const encounter = RAID_ENCOUNTER_BY_ID[encounterId];
       if (!encounter) continue; // devtool data drift safety -- an unknown id is skipped, not a crash
-      const chance = clamp(encounter.baseSuccess - diffCfg.successPenalty + active.partySuccessBonus, MIN_SUCCESS, MAX_SUCCESS);
+      const elemental = RaidManager.elementalBonus(heroes, encounter);
+      const chance = clamp(encounter.baseSuccess - diffCfg.successPenalty + active.partySuccessBonus + elemental, MIN_SUCCESS, MAX_SUCCESS);
       if (!rng.chance(chance)) break;
 
       encountersCleared += 1;

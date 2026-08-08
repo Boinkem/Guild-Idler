@@ -1,4 +1,4 @@
-import { ActiveQuest, GameState, Hero, HeroClass, MaterialId, Modifiers, Pet, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Stats } from './types';
+import { ActiveQuest, ElementType, GameState, Hero, HeroClass, MaterialId, Modifiers, Pet, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Stats } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -1310,6 +1310,34 @@ export class GameEngine {
     if (error) return this.say(error);
     playSound('purchase');
     this.say('The Enchanter\u2019s work takes -- the piece carries it now.');
+    void this.saveNow();
+  }
+
+  craftGem(recipeId: string) {
+    const error = CraftingManager.craftGem(this.state, recipeId);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.say('A new gem, ready for the Blacksmith\u2019s Infuse station.');
+    void this.saveNow();
+  }
+
+  /** Breaks a stash item down into Scrap instead of selling it for gold --
+   *  see EquipmentManager.scrapValue/ShopManager.scrapItem. */
+  scrapItem(itemUid: string) {
+    const error = ShopManager.scrapItem(this.state, itemUid);
+    if (error) return this.say(error);
+    this.say('Broken down into scrap.');
+    void this.saveNow();
+  }
+
+  /** Blacksmith's Infuse action -- spends a gem (which pool depends on the
+   *  item's own slot, weapon vs everything else, see
+   *  EquipmentManager.infuse) on an owned item. */
+  infuseItem(itemUid: string, element: ElementType) {
+    const error = EquipmentManager.infuse(this.state, itemUid, element);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.say('The infusion takes.');
     void this.saveNow();
   }
 

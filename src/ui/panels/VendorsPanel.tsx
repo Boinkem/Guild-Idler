@@ -15,6 +15,7 @@ import { VendorSprite } from '../sprites/VendorSprite';
 import { MaxFlash, useMaxFlash } from '../maxFlash';
 import { CraftingStation } from '../CraftingStation';
 import { EnhanceStation } from '../EnhanceStation';
+import { InfuseStation } from '../InfuseStation';
 
 /** Confirmed pairing, not a guess -- Blacksmith sells armour, Alchemist sells
  *  supplies, Enchanter sells the black market. Same mapping decides which
@@ -51,6 +52,8 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
   const { settings } = useSettings();
   const [showCrafting, setShowCrafting] = useState(false);
   const [showEnhance, setShowEnhance] = useState(false);
+  const [showInfuse, setShowInfuse] = useState(false);
+  const [showGems, setShowGems] = useState(false);
 
   const vendorDef = VENDORS.find((v) => v.id === vendorId)!;
   const level = GuildManager.vendorLevel(state, vendorId);
@@ -130,6 +133,17 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
               {vendorId === 'blacksmith' && (
                 <button className="btn-purple" onClick={() => setShowEnhance(true)}>Enhance</button>
               )}
+              {/* Elemental infusion (weapon damage + armor resist) --
+                  Blacksmith applies gems the Enchanter crafts, per the
+                  "both at the Blacksmith, Enchanter crafts the gems"
+                  confirmed split. See guild-idler-status.md's Elemental
+                  infusion section. */}
+              {vendorId === 'blacksmith' && (
+                <button className="btn-purple" onClick={() => setShowInfuse(true)}>Infuse</button>
+              )}
+              {vendorId === 'enchanter' && (
+                <button className="btn-purple" onClick={() => setShowGems(true)}>Gems</button>
+              )}
             </div>
           </div>
         </div>
@@ -150,6 +164,8 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
         <CraftingStation category={VENDOR_CRAFT_CATEGORY[vendorId]} onClose={() => setShowCrafting(false)} />
       )}
       {showEnhance && <EnhanceStation onClose={() => setShowEnhance(false)} />}
+      {showInfuse && <InfuseStation onClose={() => setShowInfuse(false)} />}
+      {showGems && <CraftingStation category="gem" onClose={() => setShowGems(false)} />}
     </>
   );
 }
@@ -201,7 +217,10 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
         ))}
       </div>
 
-      <div className="section-heading">Sell from the stash</div>
+      <div className="spread" style={{ alignItems: 'center' }}>
+        <div className="section-heading" style={{ marginBottom: 0 }}>Sell from the stash</div>
+        <span className="tiny muted">Scrap: {state.scrap}</span>
+      </div>
       {state.stash.length === 0 && <p className="small muted">Nothing spare to sell.</p>}
       <div className="grid two">
         {state.stash.map((item) => {
@@ -215,9 +234,14 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
                   {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
                 </span>
               </div>
-              <button onClick={() => { if (!settings.confirmSell || confirm('Sell this item?')) engine.sellItem(item.uid); }}>
-                Sell · {formatGold(EquipmentManager.sellValue(item))}
-              </button>
+              <div className="row" style={{ gap: 6 }}>
+                <button onClick={() => { if (!settings.confirmSell || confirm('Scrap this item? This cannot be undone.')) engine.scrapItem(item.uid); }}>
+                  Scrap · {EquipmentManager.scrapValue(item)}
+                </button>
+                <button onClick={() => { if (!settings.confirmSell || confirm('Sell this item?')) engine.sellItem(item.uid); }}>
+                  Sell · {formatGold(EquipmentManager.sellValue(item))}
+                </button>
+              </div>
             </div>
           );
         })}

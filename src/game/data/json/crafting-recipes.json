@@ -2,7 +2,7 @@
   {
     "id": "craft_guildmade_blade",
     "name": "Guildmade Blade",
-    "description": "A weapon built to the wielder’s own spec, not whatever the smith happened to have on the rack.",
+    "description": "A weapon built to the wielder\u2019s own spec, not whatever the smith happened to have on the rack.",
     "category": "gear",
     "icon": "weapons/Weapon_06.png",
     "materialCost": {
@@ -25,7 +25,7 @@
   {
     "id": "craft_guildmade_band",
     "name": "Guildmade Band",
-    "description": "A ring cast and set by the guild’s own hand -- exactly the bonuses asked for, nothing left to chance.",
+    "description": "A ring cast and set by the guild\u2019s own hand -- exactly the bonuses asked for, nothing left to chance.",
     "category": "gear",
     "icon": "accessories/Accessory_07.png",
     "materialCost": {
@@ -48,7 +48,7 @@
   {
     "id": "craft_trail_rations",
     "name": "Trail Rations",
-    "description": "Smoked fish and dried herbs, packed for a hero who won’t be home for dinner.",
+    "description": "Smoked fish and dried herbs, packed for a hero who won\u2019t be home for dinner.",
     "category": "consumable",
     "icon": "food/Food_36.png",
     "materialCost": {
@@ -85,7 +85,7 @@
   {
     "id": "craft_herbal_tonic",
     "name": "Herbal Tonic",
-    "description": "The Herb Garden’s own cure-all, brewed in-house rather than bought off a vendor’s shelf.",
+    "description": "The Herb Garden\u2019s own cure-all, brewed in-house rather than bought off a vendor\u2019s shelf.",
     "category": "consumable",
     "icon": "potions/Potion_10.png",
     "materialCost": {
@@ -199,5 +199,109 @@
     "modValue": 0,
     "statsToPick": 0,
     "statValue": 0
+  },
+  {
+    "id": "craft_elemental_gem_fire",
+    "name": "Fire Gem",
+    "description": "A shard of raw fire bound into something a blacksmith can work into a blade. Spent at the Infuse station.",
+    "category": "gem",
+    "materialCost": {},
+    "goldCost": 150,
+    "scrapCost": 6,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "fire"
+    }
+  },
+  {
+    "id": "craft_elemental_gem_frost",
+    "name": "Frost Gem",
+    "description": "A shard of raw frost bound into something a blacksmith can work into a blade. Spent at the Infuse station.",
+    "category": "gem",
+    "materialCost": {},
+    "goldCost": 150,
+    "scrapCost": 6,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "frost"
+    }
+  },
+  {
+    "id": "craft_elemental_gem_lightning",
+    "name": "Lightning Gem",
+    "description": "A shard of raw lightning bound into something a blacksmith can work into a blade. Spent at the Infuse station.",
+    "category": "gem",
+    "materialCost": {},
+    "goldCost": 150,
+    "scrapCost": 6,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "lightning"
+    }
+  },
+  {
+    "id": "craft_elemental_gem_poison",
+    "name": "Poison Gem",
+    "description": "A shard of raw poison bound into something a blacksmith can work into a blade. Spent at the Infuse station.",
+    "category": "gem",
+    "materialCost": {},
+    "goldCost": 150,
+    "scrapCost": 6,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "poison"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_fire",
+    "name": "Fire Resistance Gem",
+    "description": "Tempered to turn aside fire rather than channel it -- worked into armor instead of a blade.",
+    "category": "gem",
+    "materialCost": {},
+    "goldCost": 150,
+    "scrapCost": 6,
+    "resultGem": {
+      "kind": "resist",
+      "element": "fire"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_frost",
+    "name": "Frost Resistance Gem",
+    "description": "Tempered to turn aside frost rather than channel it -- worked into armor instead of a blade.",
+    "category": "gem",
+    "materialCost": {},
+    "goldCost": 150,
+    "scrapCost": 6,
+    "resultGem": {
+      "kind": "resist",
+      "element": "frost"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_lightning",
+    "name": "Lightning Resistance Gem",
+    "description": "Tempered to turn aside lightning rather than channel it -- worked into armor instead of a blade.",
+    "category": "gem",
+    "materialCost": {},
+    "goldCost": 150,
+    "scrapCost": 6,
+    "resultGem": {
+      "kind": "resist",
+      "element": "lightning"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_poison",
+    "name": "Poison Resistance Gem",
+    "description": "Tempered to turn aside poison rather than channel it -- worked into armor instead of a blade.",
+    "category": "gem",
+    "materialCost": {},
+    "goldCost": 150,
+    "scrapCost": 6,
+    "resultGem": {
+      "kind": "resist",
+      "element": "poison"
+    }
   }
 ]

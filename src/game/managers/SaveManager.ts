@@ -117,6 +117,9 @@ export function createInitialState(now = Date.now()): GameState {
     harvestTools: emptyMaterials(),
     warehouseLevel: 0,
     tradeRouteUnlocked: false,
+    scrap: 0,
+    gems: {},
+    resistGems: {},
     hatcheryUnlocked: false,
     pendingHatcherySpotlight: false,
     incubatingEggs: [],
@@ -414,6 +417,17 @@ const MIGRATIONS: Record<number, Migration> = {
     questRerollsUsedToday: (save.questRerollsUsedToday as number | undefined) ?? 0,
     vendorRerollDay: (save.vendorRerollDay as number | undefined) ?? 0,
     vendorRerollsUsedToday: (save.vendorRerollsUsedToday as number | undefined) ?? 0,
+  }),
+  27: (save) => ({
+    ...save,
+    version: 28,
+    // Elemental infusion system -- 0/empty is exactly correct for a save
+    // that predates this, not a placeholder needing correction. Existing
+    // equipment items simply have no elementalDamage/elementalResist yet
+    // (both optional fields, no migration needed on the items themselves).
+    scrap: (save.scrap as number | undefined) ?? 0,
+    gems: (save.gems as GameState['gems'] | undefined) ?? {},
+    resistGems: (save.resistGems as GameState['resistGems'] | undefined) ?? {},
   }),
 };
 

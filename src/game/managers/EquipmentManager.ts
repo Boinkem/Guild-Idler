@@ -1,7 +1,8 @@
 import { EQUIPMENT_BY_ID, RARITY_PRICE_MULT } from '../data/equipment';
-import { EquipmentDef, EquipmentItem, GameState, Hero } from '../types';
+import { EquipmentDef, EquipmentItem, ElementType, GameState, Hero } from '../types';
 import { uid } from '../rng';
 import { clamp } from '../util';
+import { Tuning } from '../data/tuning';
 
 export const MAX_PLUS = 10;
 
@@ -62,6 +63,21 @@ export const EquipmentManager = {
     if (!def) return 0;
     const condition = 0.4 + 0.6 * (item.durability / EquipmentManager.maxDurability(item));
     return Math.max(1, Math.floor(def.value * 0.35 * condition * (1 + item.plus * 0.25)));
+  },
+
+  /**
+   * Scrap gained from breaking an item down instead of selling it for
+   * gold -- a straight rarity lookup (elemental.scrapValue.<rarity> in the
+   * tuning registry), deliberately NOT scaled by condition/plus the way
+   * sellValue is. Scrapping is meant to be the "I don't want this item but
+   * it's still worth its rarity in raw material" option, not a second
+   * gold-adjacent economy to min-max around -- the rarer the item, the
+   * more scrap, full stop.
+   */
+  scrapValue(item: EquipmentItem): number {
+    const def = EQUIPMENT_BY_ID[item.defId];
+    if (!def) return 0;
+    return Tuning.get(`elemental.scrapValue.${def.rarity}`);
   },
 
   shopPrice(def: EquipmentDef): number {
@@ -144,5 +160,38 @@ export const EquipmentManager = {
       }
     }
     return out;
+  },
+
+  /**
+   * Blacksmith's Infuse action -- consumes 1 gem, sets/adds the item's own
+   * elemental field. Which gem pool and which field depends entirely on
+   * the item's own slot (weapon vs everything else), not a separate
+   * player choice -- a weapon can only take elemental damage, everything
+   * else can only take resist, so there's nothing to pick beyond item +
+   * element. Weapon side REPLACES (matches EquipmentItem.elementalDamage's
+   * own "changing what it's infused with" framing); armor side ADDS
+   * (matches elementalResist's own "stacks with itself" framing, same
+   * shape CraftingManager.enchantItem already uses for enchantStats).
+   * Same stash-or-equipped search scope as repair()/enchantItem().
+   */
+  infuse(state: GameState, itemUid: string, element: ElementType): string | null {
+    const found = EquipmentManager.allItems(state).find((e) => e.item.uid === itemUid);
+    if (!found) return 'That item can\u2019t be found.';
+    const { item } = found;
+    const def = EquipmentManager.def(item);
+    if (!def) return 'That item no longer exists.';
+
+    if (def.slot === 'weapon') {
+      if ((state.gems[element] ?? 0) < 1) return 'Not enough Elemental Gems.';
+      state.gems[element] = (state.gems[element] ?? 0) - 1;
+      item.elementalDamage = element;
+    } else {
+      if ((state.resistGems[element] ?? 0) < 1) return 'Not enough Resistance Gems.';
+      state.resistGems[element] = (state.resistGems[element] ?? 0) - 1;
+      const updated = { ...item.elementalResist };
+      updated[element] = (updated[element] ?? 0) + Tuning.get('elemental.bonusPerMatchPercent');
+      item.elementalResist = updated;
+    }
+    return null;
   },
 };

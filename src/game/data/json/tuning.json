@@ -889,5 +889,70 @@
     "default": 1.6,
     "min": 1,
     "description": "Same shape as reroll.questCostGrowth, for the Vendors shop restock reroll."
+  },
+  {
+    "id": "elemental.tagRollChancePercent",
+    "label": "Elemental: per-element tag roll chance (%)",
+    "category": "elemental",
+    "value": 22,
+    "default": 22,
+    "min": 0,
+    "max": 100,
+    "description": "Independent chance for each candidate element to actually appear on a quest offer, checked once per element up to that tier's own ceiling (see rollElementTags in elements.ts). At 22%, Easy/Normal (max 1 tag) land ~37% zero tags / 63% one; Hard/Epic/Legendary (max 2-3) land ~37% zero / 41% one / 21% two-or-more -- verified at runtime across 2000 samples per tier."
+  },
+  {
+    "id": "elemental.bonusPerMatchPercent",
+    "label": "Elemental: success bonus per matching tag (%)",
+    "category": "elemental",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "max": 20,
+    "description": "Flat success-chance points added per matching element -- a weapon's elementalDamage matching one of the offer's vulnerableTo entries, or a piece of armor's elementalResist matching a dealsElement entry. Deliberately modest (a nice-to-have, not a build-around), and stacks per matching tag if an offer carries more than one."
+  },
+  {
+    "id": "elemental.scrapValue.common",
+    "label": "Scrap yield: Common item",
+    "category": "elemental",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "description": "Scrap gained from breaking down a Common-rarity item at the Blacksmith. See EquipmentManager.scrapValue -- doubles per rarity tier."
+  },
+  {
+    "id": "elemental.scrapValue.uncommon",
+    "label": "Scrap yield: Uncommon item",
+    "category": "elemental",
+    "value": 4,
+    "default": 4,
+    "min": 0,
+    "description": "Same shape as elemental.scrapValue.common, one tier up."
+  },
+  {
+    "id": "elemental.scrapValue.rare",
+    "label": "Scrap yield: Rare item",
+    "category": "elemental",
+    "value": 8,
+    "default": 8,
+    "min": 0,
+    "description": "Same shape as elemental.scrapValue.common, two tiers up."
+  },
+  {
+    "id": "elemental.scrapValue.epic",
+    "label": "Scrap yield: Epic item",
+    "category": "elemental",
+    "value": 16,
+    "default": 16,
+    "min": 0,
+    "description": "Same shape as elemental.scrapValue.common, three tiers up."
+  },
+  {
+    "id": "elemental.scrapValue.legendary",
+    "label": "Scrap yield: Legendary item",
+    "category": "elemental",
+    "value": 32,
+    "default": 32,
+    "min": 0,
+    "description": "Same shape as elemental.scrapValue.common, four tiers up -- the rarer the item, the more scrap, per the original ask."
   }
 ]

@@ -186,4 +186,16 @@ export const ShopManager = {
     state.stats.goldEarned += value;
     return null;
   },
+
+  /** Same shape as sell() -- stash-only, same "equipped or missing" error
+   *  -- but converts the item to Scrap instead of gold. See
+   *  EquipmentManager.scrapValue for the rarity-based payout. */
+  scrapItem(state: GameState, itemUid: string): string | null {
+    const item = state.stash.find((i) => i.uid === itemUid);
+    if (!item) return 'That item is equipped or missing.';
+    const value = EquipmentManager.scrapValue(item);
+    state.stash = state.stash.filter((i) => i.uid !== itemUid);
+    state.scrap += value;
+    return null;
+  },
 };

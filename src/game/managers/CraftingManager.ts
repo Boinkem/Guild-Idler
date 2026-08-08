@@ -10,12 +10,38 @@ export const CraftingManager = {
   /** What's still missing to afford a recipe, if anything -- used to grey out the Craft button. */
   affordability(state: GameState, recipe: CraftingRecipeDef): { ok: boolean; reason?: string } {
     if (state.gold < recipe.goldCost) return { ok: false, reason: 'Not enough gold.' };
+    if ((recipe.scrapCost ?? 0) > state.scrap) return { ok: false, reason: 'Not enough scrap.' };
     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
       if (state.materials[materialId] < amount) {
         return { ok: false, reason: `Not enough ${MATERIAL_BY_ID[materialId].name.toLowerCase()}.` };
       }
     }
     return { ok: true };
+  },
+
+  /**
+   * Crafts a `gem` recipe -- no player choice at craft time (unlike gear/
+   * enchant), a gem recipe is authored per element/kind already (see
+   * CraftingRecipeDef.resultGem), so this just checks affordability and
+   * adds +1 to the right counter (GameState.gems or resistGems).
+   */
+  craftGem(state: GameState, recipeId: string): string | null {
+    const recipe = CRAFTING_RECIPE_BY_ID[recipeId];
+    if (!recipe || recipe.category !== 'gem' || !recipe.resultGem) return 'Unknown recipe.';
+    const afford = CraftingManager.affordability(state, recipe);
+    if (!afford.ok) return afford.reason ?? 'Cannot afford this.';
+
+    const { kind, element } = recipe.resultGem;
+    const pool = kind === 'elemental' ? state.gems : state.resistGems;
+    pool[element] = (pool[element] ?? 0) + 1;
+
+    state.gold -= recipe.goldCost;
+    state.stats.goldSpent += recipe.goldCost;
+    state.scrap -= recipe.scrapCost ?? 0;
+    for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
+      state.materials[materialId] -= amount;
+    }
+    return null;
   },
 
   /**

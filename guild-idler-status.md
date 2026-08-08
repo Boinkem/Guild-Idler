@@ -456,6 +456,138 @@ upgrades' per-level bonuses directly rather than just their cost curve.
 
 `npx tsc --noEmit` and `vite build` both pass clean.
 
+### Elemental infusion (weapons, armor, quests, raids) -- complete
+A weapon can now be infused with an element (fire/frost/lightning/poison);
+armor can be infused with resistance to one. Confirmed split: both
+infusions happen at the **Blacksmith** (new Infuse button, next to
+Enhance); the **Enchanter** crafts the gems that get spent there (new
+Gems button). Quests and raid encounters both carry elemental tags now,
+scaled by difficulty per the original ask ("the harder the quest... the
+more resist modifiers... depending on how many elements").
+
+**Data model.** New `ElementType` (fire/frost/lightning/poison).
+`EquipmentItem.elementalDamage` (weapon, single value -- infusing again
+*replaces* it, meant to read as changing what the weapon carries, not
+stacking multiple damage types onto one blade) and `elementalResist`
+(everything else, a value per element that *adds* on repeat infusion,
+same "stacks with itself" shape `enchantStats` already established).
+`QuestOffer` and `RaidEncounterDef` both gained `vulnerableTo` (weak to --
+matches a weapon) and `dealsElement` (attacks with -- matches armor
+resist); `RaidEncounterDef` additionally gets `immuneTo` (raid-only,
+nullifies the weapon-matching bonus specifically, not armor resist -- "a
+fire dragon, immune to fire damage" was the motivating example, and there
+is no ordinary-quest equivalent). Quest tags are rolled procedurally at
+generation time; raid encounter tags are authored by hand (raid encounters
+are a small curated list, not procedurally generated the way board
+offers are) -- three encounters tagged as a working example:
+`wyrmkeep_frozen_wyrm` (deals frost, immune to frost, vulnerable to fire
+-- the actual "immune to its own element" example), `wyrmkeep_hatchling_
+brood` (deals frost, vulnerable to fire, no immunity -- the trash-tier
+version of the same boss's theme), and `blackford_uncrowned` (deals
+poison, vulnerable to lightning, for variety across raids). The other 12
+encounters are untagged on purpose -- a full content pass wasn't in scope
+for landing the mechanic itself, same "content is a cache, gameplay data
+confirms the intent" spirit as every other system's first-pass numbers.
+
+**Tag density**, `elemental.tagRollChancePercent` in the tuning registry:
+each candidate element gets an independent chance to appear, checked up
+to that tier's own ceiling (Easy/Normal: max 1; Hard/Epic: max 2;
+Legendary: max 3). Tuned to 22% after an initial pass at 45% turned out
+far denser than intended -- at 45%, Easy/Normal landed a tag on ~91% of
+offers (checking up to 4 candidates against a 1-tag cap makes "at least
+one hit" likely even at a modest per-candidate rate); verified directly
+at 2000 samples per tier rather than assumed from the formula, both before
+and after the fix. At the corrected 22%, Easy/Normal land ~37% zero tags
+/ 63% one; Hard/Epic/Legendary land ~37% zero / 41% one / 21%
+two-or-more.
+
+**Success-chance integration** (`elemental.bonusPerMatchPercent`, 3% by
+default): a matching weapon element adds a flat bonus; matching armor
+resist adds whatever's actually accumulated on that piece (so a
+twice-infused item contributes double) -- both live in a new shared
+`elementalBonusForHero` (`data/elements.ts`), used by
+`QuestManager.previewSuccess` and by both of `RaidManager`'s success-calc
+paths (`previewEncounterSuccess` for the UI preview, and the live
+per-encounter `resolve()` loop -- recomputed fresh per encounter, unlike
+the party's ordinary `partySuccessBonus`, which is locked in once at raid
+start, since different encounters in the same raid can carry entirely
+different tags).
+
+**Scrap** -- a new standalone currency (`GameState.scrap`), deliberately
+NOT folded into the existing `MaterialId`/Harvest system despite the
+"materials" framing, since scrap comes from breaking down owned equipment
+(new Scrap button next to Sell, Blacksmith's stash list) rather than a
+Harvest node -- adding it to `MaterialId` would have meant awkward
+exceptions everywhere that type is used for per-node Harvest state
+(`harvestNodes`/`harvestTools`), which scrap has no relationship to.
+Yield scales with rarity via 5 new tuning entries (`elemental.scrapValue.
+<rarity>`, 2/4/8/16/32 -- doubling per tier, matching "the rarer the item,
+the more materials" directly), deliberately NOT scaled by condition/plus
+the way `sellValue` is -- scrapping is the "I don't want this but it's
+still worth its rarity" option, not a second gold-adjacent economy to
+min-max.
+
+**Gems** -- 8 new Enchanter recipes (`craft_elemental_gem_<element>` /
+`craft_resistance_gem_<element>`, one pair per element), a new `'gem'`
+`CraftingRecipeDef` category with no player choice at craft time (unlike
+gear/enchant) since each recipe is already authored for a specific
+element/kind via the new `resultGem` field -- `CraftingManager.craftGem`
+just checks affordability and adds +1 to the right counter
+(`GameState.gems` or `resistGems`). `CraftingRecipeDef` also gained a
+`scrapCost` field, since Scrap is its own currency rather than a
+`MaterialId` and so can't fit into the existing `materialCost` map.
+`CraftingStation.tsx` picked up `'gem'` as a fourth category -- the
+simplest of the four, a single top slot (choose a recipe) with no bottom
+slots at all, since there's nothing else to pick.
+
+**Infuse station** (`InfuseStation.tsx`, new file) -- mirrors
+`EnhanceStation.tsx`'s single-station click-select-confirm pattern, two
+slots (item, then gem) instead of one. Which gem pool an item draws from
+(`gems` vs `resistGems`) is decided entirely by the item's own slot
+(weapon vs everything else) -- no separate "kind" choice for the player
+to make, since a weapon can only ever take elemental damage and
+everything else can only ever take resist.
+
+**Known gaps, deliberately not blocking this patch:**
+- **Art.** No commissioned background exists yet for the Infuse station
+  or the Gems crafting scene (`./lore/crafting/infuse.jpg` /
+  `.../gem.jpg`) -- same "missing file just fails to paint" convention as
+  every other banner in this game, and `InfuseStation`'s own two slot
+  rects are hand-guessed placeholders (mirrored off `EnhanceStation`'s
+  single slot) pending real art to calibrate against, unlike every other
+  station's slots, which were hand-measured against a real image.
+- **Icons.** New gem recipes ship with no `icon` field set (falls back to
+  a plain 💎 glyph via `CATEGORY_FALLBACK['gem']`) -- deliberately, rather
+  than guessing at specific `crafting/Crafting_NN.png` filenames. Already
+  confirmed the right assets exist in the icon library; assign them via
+  the DevTool's Icon Library the same gradual way every other item's icon
+  gets filled in.
+- **12 of 15 raid encounters carry no elemental tags at all** -- see the
+  content-pass note above.
+- **Chain-stage offers don't roll elemental tags** -- chain stages are
+  hand-authored content (specific named bosses), not procedural filler
+  like board contracts, so they were left out of the roll rather than
+  retrofitted; nothing stops a future chain from hand-authoring
+  `vulnerableTo`/`dealsElement` directly on a stage the same way raid
+  encounters do, if a specific stage calls for it.
+- **DevTool schema** doesn't yet expose `elementalDamage`/
+  `elementalResist` on equipment, `vulnerableTo`/`dealsElement`/
+  `immuneTo` on raid encounters, or the new `'gem'`/`scrapCost`/
+  `resultGem` fields on crafting recipes -- same "noted, not fixed"
+  situation as Board Runner/Trade Favor's fields last patch; the 3
+  hand-tagged raid encounters and 8 gem recipes above were edited
+  directly in the JSON, not through the DevTool.
+
+Verified at runtime throughout, not just typechecked: tag-roll
+distribution at 2000 samples per tier (both before and after the density
+fix), the full craft-gem -> infuse-weapon -> matching-success-bonus
+pipeline end to end, armor resist correctly stacking across two
+infusions (2x the per-infusion bonus, confirmed exactly), immunity
+correctly zeroing the weapon-side bonus while leaving armor resist
+untouched, raid encounter tags loading as authored, and a pre-28 save
+migrating to the correct 0/empty defaults for scrap/gems/resistGems.
+`npx tsc --noEmit` and `vite build` both pass clean.
+
 ### Consumables & equip-slot rework -- complete
 Inventory's consumables are now clickable, same detail-expand treatment
 the stash already has. New per-hero consumable-equip slots live in the

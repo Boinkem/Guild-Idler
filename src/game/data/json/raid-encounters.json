@@ -129,6 +129,12 @@
       "chainmail_mythic@6",
       "ranger_boots_mythic@6",
       "tollkeepers_signet_mythic@4"
+    ],
+    "dealsElement": [
+      "poison"
+    ],
+    "vulnerableTo": [
+      "lightning"
     ]
   },
   {
@@ -213,6 +219,12 @@
     ],
     "lootMythic": [
       "frostfang_claw_mythic@10"
+    ],
+    "dealsElement": [
+      "frost"
+    ],
+    "vulnerableTo": [
+      "fire"
     ]
   },
   {
@@ -255,6 +267,15 @@
     "lootMythic": [
       "dragon_helm_mythic@8",
       "frozen_maw_shield_mythic@5"
+    ],
+    "dealsElement": [
+      "frost"
+    ],
+    "immuneTo": [
+      "frost"
+    ],
+    "vulnerableTo": [
+      "fire"
     ]
   },
   {

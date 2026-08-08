@@ -1,0 +1,1319 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 9a76f5f..9d652f9 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -456,6 +456,138 @@ upgrades' per-level bonuses directly rather than just their cost curve.
+ 
+ `npx tsc --noEmit` and `vite build` both pass clean.
+ 
++### Elemental infusion (weapons, armor, quests, raids) -- complete
++A weapon can now be infused with an element (fire/frost/lightning/poison);
++armor can be infused with resistance to one. Confirmed split: both
++infusions happen at the **Blacksmith** (new Infuse button, next to
++Enhance); the **Enchanter** crafts the gems that get spent there (new
++Gems button). Quests and raid encounters both carry elemental tags now,
++scaled by difficulty per the original ask ("the harder the quest... the
++more resist modifiers... depending on how many elements").
++
++**Data model.** New `ElementType` (fire/frost/lightning/poison).
++`EquipmentItem.elementalDamage` (weapon, single value -- infusing again
++*replaces* it, meant to read as changing what the weapon carries, not
++stacking multiple damage types onto one blade) and `elementalResist`
++(everything else, a value per element that *adds* on repeat infusion,
++same "stacks with itself" shape `enchantStats` already established).
++`QuestOffer` and `RaidEncounterDef` both gained `vulnerableTo` (weak to --
++matches a weapon) and `dealsElement` (attacks with -- matches armor
++resist); `RaidEncounterDef` additionally gets `immuneTo` (raid-only,
++nullifies the weapon-matching bonus specifically, not armor resist -- "a
++fire dragon, immune to fire damage" was the motivating example, and there
++is no ordinary-quest equivalent). Quest tags are rolled procedurally at
++generation time; raid encounter tags are authored by hand (raid encounters
++are a small curated list, not procedurally generated the way board
++offers are) -- three encounters tagged as a working example:
++`wyrmkeep_frozen_wyrm` (deals frost, immune to frost, vulnerable to fire
++-- the actual "immune to its own element" example), `wyrmkeep_hatchling_
++brood` (deals frost, vulnerable to fire, no immunity -- the trash-tier
++version of the same boss's theme), and `blackford_uncrowned` (deals
++poison, vulnerable to lightning, for variety across raids). The other 12
++encounters are untagged on purpose -- a full content pass wasn't in scope
++for landing the mechanic itself, same "content is a cache, gameplay data
++confirms the intent" spirit as every other system's first-pass numbers.
++
++**Tag density**, `elemental.tagRollChancePercent` in the tuning registry:
++each candidate element gets an independent chance to appear, checked up
++to that tier's own ceiling (Easy/Normal: max 1; Hard/Epic: max 2;
++Legendary: max 3). Tuned to 22% after an initial pass at 45% turned out
++far denser than intended -- at 45%, Easy/Normal landed a tag on ~91% of
++offers (checking up to 4 candidates against a 1-tag cap makes "at least
++one hit" likely even at a modest per-candidate rate); verified directly
++at 2000 samples per tier rather than assumed from the formula, both before
++and after the fix. At the corrected 22%, Easy/Normal land ~37% zero tags
++/ 63% one; Hard/Epic/Legendary land ~37% zero / 41% one / 21%
++two-or-more.
++
++**Success-chance integration** (`elemental.bonusPerMatchPercent`, 3% by
++default): a matching weapon element adds a flat bonus; matching armor
++resist adds whatever's actually accumulated on that piece (so a
++twice-infused item contributes double) -- both live in a new shared
++`elementalBonusForHero` (`data/elements.ts`), used by
++`QuestManager.previewSuccess` and by both of `RaidManager`'s success-calc
++paths (`previewEncounterSuccess` for the UI preview, and the live
++per-encounter `resolve()` loop -- recomputed fresh per encounter, unlike
++the party's ordinary `partySuccessBonus`, which is locked in once at raid
++start, since different encounters in the same raid can carry entirely
++different tags).
++
++**Scrap** -- a new standalone currency (`GameState.scrap`), deliberately
++NOT folded into the existing `MaterialId`/Harvest system despite the
++"materials" framing, since scrap comes from breaking down owned equipment
++(new Scrap button next to Sell, Blacksmith's stash list) rather than a
++Harvest node -- adding it to `MaterialId` would have meant awkward
++exceptions everywhere that type is used for per-node Harvest state
++(`harvestNodes`/`harvestTools`), which scrap has no relationship to.
++Yield scales with rarity via 5 new tuning entries (`elemental.scrapValue.
++<rarity>`, 2/4/8/16/32 -- doubling per tier, matching "the rarer the item,
++the more materials" directly), deliberately NOT scaled by condition/plus
++the way `sellValue` is -- scrapping is the "I don't want this but it's
++still worth its rarity" option, not a second gold-adjacent economy to
++min-max.
++
++**Gems** -- 8 new Enchanter recipes (`craft_elemental_gem_<element>` /
++`craft_resistance_gem_<element>`, one pair per element), a new `'gem'`
++`CraftingRecipeDef` category with no player choice at craft time (unlike
++gear/enchant) since each recipe is already authored for a specific
++element/kind via the new `resultGem` field -- `CraftingManager.craftGem`
++just checks affordability and adds +1 to the right counter
++(`GameState.gems` or `resistGems`). `CraftingRecipeDef` also gained a
++`scrapCost` field, since Scrap is its own currency rather than a
++`MaterialId` and so can't fit into the existing `materialCost` map.
++`CraftingStation.tsx` picked up `'gem'` as a fourth category -- the
++simplest of the four, a single top slot (choose a recipe) with no bottom
++slots at all, since there's nothing else to pick.
++
++**Infuse station** (`InfuseStation.tsx`, new file) -- mirrors
++`EnhanceStation.tsx`'s single-station click-select-confirm pattern, two
++slots (item, then gem) instead of one. Which gem pool an item draws from
++(`gems` vs `resistGems`) is decided entirely by the item's own slot
++(weapon vs everything else) -- no separate "kind" choice for the player
++to make, since a weapon can only ever take elemental damage and
++everything else can only ever take resist.
++
++**Known gaps, deliberately not blocking this patch:**
++- **Art.** No commissioned background exists yet for the Infuse station
++  or the Gems crafting scene (`./lore/crafting/infuse.jpg` /
++  `.../gem.jpg`) -- same "missing file just fails to paint" convention as
++  every other banner in this game, and `InfuseStation`'s own two slot
++  rects are hand-guessed placeholders (mirrored off `EnhanceStation`'s
++  single slot) pending real art to calibrate against, unlike every other
++  station's slots, which were hand-measured against a real image.
++- **Icons.** New gem recipes ship with no `icon` field set (falls back to
++  a plain 💎 glyph via `CATEGORY_FALLBACK['gem']`) -- deliberately, rather
++  than guessing at specific `crafting/Crafting_NN.png` filenames. Already
++  confirmed the right assets exist in the icon library; assign them via
++  the DevTool's Icon Library the same gradual way every other item's icon
++  gets filled in.
++- **12 of 15 raid encounters carry no elemental tags at all** -- see the
++  content-pass note above.
++- **Chain-stage offers don't roll elemental tags** -- chain stages are
++  hand-authored content (specific named bosses), not procedural filler
++  like board contracts, so they were left out of the roll rather than
++  retrofitted; nothing stops a future chain from hand-authoring
++  `vulnerableTo`/`dealsElement` directly on a stage the same way raid
++  encounters do, if a specific stage calls for it.
++- **DevTool schema** doesn't yet expose `elementalDamage`/
++  `elementalResist` on equipment, `vulnerableTo`/`dealsElement`/
++  `immuneTo` on raid encounters, or the new `'gem'`/`scrapCost`/
++  `resultGem` fields on crafting recipes -- same "noted, not fixed"
++  situation as Board Runner/Trade Favor's fields last patch; the 3
++  hand-tagged raid encounters and 8 gem recipes above were edited
++  directly in the JSON, not through the DevTool.
++
++Verified at runtime throughout, not just typechecked: tag-roll
++distribution at 2000 samples per tier (both before and after the density
++fix), the full craft-gem -> infuse-weapon -> matching-success-bonus
++pipeline end to end, armor resist correctly stacking across two
++infusions (2x the per-infusion bonus, confirmed exactly), immunity
++correctly zeroing the weapon-side bonus while leaving armor resist
++untouched, raid encounter tags loading as authored, and a pre-28 save
++migrating to the correct 0/empty defaults for scrap/gems/resistGems.
++`npx tsc --noEmit` and `vite build` both pass clean.
++
+ ### Consumables & equip-slot rework -- complete
+ Inventory's consumables are now clickable, same detail-expand treatment
+ the stash already has. New per-hero consumable-equip slots live in the
+diff --git a/src/game/data/elements.ts b/src/game/data/elements.ts
+new file mode 100644
+index 0000000..16e25b7
+--- /dev/null
++++ b/src/game/data/elements.ts
+@@ -0,0 +1,89 @@
++import { Difficulty, ElementType, Hero } from '../types';
++import { DIFFICULTY_ORDER } from './quests';
++import { Rng } from '../rng';
++import { Tuning } from './tuning';
++
++export const ELEMENT_TYPES: ElementType[] = ['fire', 'frost', 'lightning', 'poison'];
++
++export const ELEMENT_LABEL: Record<ElementType, string> = {
++  fire: 'Fire', frost: 'Frost', lightning: 'Lightning', poison: 'Poison',
++};
++
++export const ELEMENT_GLYPH: Record<ElementType, string> = {
++  fire: '\u{1f525}', frost: '\u{2744}\u{fe0f}', lightning: '\u{26a1}', poison: '\u{2620}\u{fe0f}',
++};
++
++/**
++ * How many elemental tags a quest at a given difficulty tier CAN carry --
++ * a ceiling, not a guarantee. Each element under that ceiling still rolls
++ * independently (elemental.tagRollChancePercent, see below), so most
++ * quests land well under their tier's own max, including zero. Harder
++ * tiers get a higher ceiling on purpose, per the original ask ("the
++ * harder the quest... the more resist modifiers... depending on how many
++ * elements") -- Easy/Normal cap at 1, Hard/Epic at 2, Legendary at 3.
++ */
++function maxTagsForTier(difficulty: Difficulty): number {
++  const tierIndex = DIFFICULTY_ORDER.indexOf(difficulty);
++  return Math.min(ELEMENT_TYPES.length, 1 + Math.floor(tierIndex / 2));
++}
++
++/**
++ * Rolls an independent set of elements (no repeats) for one tag list --
++ * called twice per offer/encounter, once for vulnerableTo and once for
++ * dealsElement, so the two lists are never forced to match or overlap.
++ * At the tuned 22% per-candidate chance, a max-1 tier (Easy/Normal) lands
++ * roughly 37% zero tags / 63% one tag; a max-2/3 tier (Hard/Epic/
++ * Legendary) checks more candidates against that same per-candidate
++ * chance, landing roughly 37% zero / 41% one / 21% two-or-more --
++ * verified at runtime across 2000 samples per tier, not just estimated
++ * from the math.
++ * Shared by QuestManager.generateOffer (quests) and content authors
++ * populating RaidEncounterDef by hand (raids don't roll this live, but
++ * this same function is available if a future pass wants to
++ * procedurally seed new encounters instead of hand-authoring them).
++ */
++export function rollElementTags(rng: Rng, difficulty: Difficulty): ElementType[] {
++  const maxTags = maxTagsForTier(difficulty);
++  const tags: ElementType[] = [];
++  for (const el of rng.shuffle(ELEMENT_TYPES)) {
++    if (tags.length >= maxTags) break;
++    if (rng.chance(Tuning.get('elemental.tagRollChancePercent'))) tags.push(el);
++  }
++  return tags;
++}
++
++/**
++ * Shared by QuestManager.previewSuccess and RaidManager.elementalBonus --
++ * a quest offer and a raid encounter carry the same shape of tags, so one
++ * function covers both. Two independent contributions:
++ *
++ * - Weapon side: the hero's equipped weapon's own elementalDamage
++ *   (single value, not a magnitude -- see EquipmentItem's own comment on
++ *   why infusing replaces rather than stacks) matching one of `tags.
++ *   vulnerableTo` adds a flat elemental.bonusPerMatchPercent, UNLESS that
++ *   same element is also listed under `tags.immuneTo` (raid-only) --
++ *   immunity describes the encounter's own resilience, so a matching
++ *   weapon does nothing special here rather than backfiring.
++ * - Armor side: every equipped item's own elementalResist (a numeric
++ *   value per element, additive across repeated infusions -- see
++ *   EquipmentItem's own comment on why this one DOES stack) is summed
++ *   for each element listed in `tags.dealsElement`. Not gated by
++ *   `immuneTo` -- immunity is about the encounter's own weakness being
++ *   nullified, not its attack type.
++ */
++export function elementalBonusForHero(
++  hero: Hero,
++  tags: { vulnerableTo?: ElementType[]; dealsElement?: ElementType[]; immuneTo?: ElementType[] },
++): number {
++  let bonus = 0;
++  const weaponElement = hero.equipment.weapon?.elementalDamage;
++  if (weaponElement && tags.vulnerableTo?.includes(weaponElement) && !(tags.immuneTo?.includes(weaponElement))) {
++    bonus += Tuning.get('elemental.bonusPerMatchPercent');
++  }
++  for (const el of tags.dealsElement ?? []) {
++    for (const item of Object.values(hero.equipment)) {
++      bonus += item?.elementalResist?.[el] ?? 0;
++    }
++  }
++  return bonus;
++}
+diff --git a/src/game/data/json/crafting-recipes.json b/src/game/data/json/crafting-recipes.json
+index 7fe2022..429bd2d 100644
+--- a/src/game/data/json/crafting-recipes.json
++++ b/src/game/data/json/crafting-recipes.json
+@@ -2,7 +2,7 @@
+   {
+     "id": "craft_guildmade_blade",
+     "name": "Guildmade Blade",
+-    "description": "A weapon built to the wielder’s own spec, not whatever the smith happened to have on the rack.",
++    "description": "A weapon built to the wielder\u2019s own spec, not whatever the smith happened to have on the rack.",
+     "category": "gear",
+     "icon": "weapons/Weapon_06.png",
+     "materialCost": {
+@@ -25,7 +25,7 @@
+   {
+     "id": "craft_guildmade_band",
+     "name": "Guildmade Band",
+-    "description": "A ring cast and set by the guild’s own hand -- exactly the bonuses asked for, nothing left to chance.",
++    "description": "A ring cast and set by the guild\u2019s own hand -- exactly the bonuses asked for, nothing left to chance.",
+     "category": "gear",
+     "icon": "accessories/Accessory_07.png",
+     "materialCost": {
+@@ -48,7 +48,7 @@
+   {
+     "id": "craft_trail_rations",
+     "name": "Trail Rations",
+-    "description": "Smoked fish and dried herbs, packed for a hero who won’t be home for dinner.",
++    "description": "Smoked fish and dried herbs, packed for a hero who won\u2019t be home for dinner.",
+     "category": "consumable",
+     "icon": "food/Food_36.png",
+     "materialCost": {
+@@ -85,7 +85,7 @@
+   {
+     "id": "craft_herbal_tonic",
+     "name": "Herbal Tonic",
+-    "description": "The Herb Garden’s own cure-all, brewed in-house rather than bought off a vendor’s shelf.",
++    "description": "The Herb Garden\u2019s own cure-all, brewed in-house rather than bought off a vendor\u2019s shelf.",
+     "category": "consumable",
+     "icon": "potions/Potion_10.png",
+     "materialCost": {
+@@ -199,5 +199,109 @@
+     "modValue": 0,
+     "statsToPick": 0,
+     "statValue": 0
++  },
++  {
++    "id": "craft_elemental_gem_fire",
++    "name": "Fire Gem",
++    "description": "A shard of raw fire bound into something a blacksmith can work into a blade. Spent at the Infuse station.",
++    "category": "gem",
++    "materialCost": {},
++    "goldCost": 150,
++    "scrapCost": 6,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "fire"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_frost",
++    "name": "Frost Gem",
++    "description": "A shard of raw frost bound into something a blacksmith can work into a blade. Spent at the Infuse station.",
++    "category": "gem",
++    "materialCost": {},
++    "goldCost": 150,
++    "scrapCost": 6,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "frost"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_lightning",
++    "name": "Lightning Gem",
++    "description": "A shard of raw lightning bound into something a blacksmith can work into a blade. Spent at the Infuse station.",
++    "category": "gem",
++    "materialCost": {},
++    "goldCost": 150,
++    "scrapCost": 6,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "lightning"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_poison",
++    "name": "Poison Gem",
++    "description": "A shard of raw poison bound into something a blacksmith can work into a blade. Spent at the Infuse station.",
++    "category": "gem",
++    "materialCost": {},
++    "goldCost": 150,
++    "scrapCost": 6,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "poison"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_fire",
++    "name": "Fire Resistance Gem",
++    "description": "Tempered to turn aside fire rather than channel it -- worked into armor instead of a blade.",
++    "category": "gem",
++    "materialCost": {},
++    "goldCost": 150,
++    "scrapCost": 6,
++    "resultGem": {
++      "kind": "resist",
++      "element": "fire"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_frost",
++    "name": "Frost Resistance Gem",
++    "description": "Tempered to turn aside frost rather than channel it -- worked into armor instead of a blade.",
++    "category": "gem",
++    "materialCost": {},
++    "goldCost": 150,
++    "scrapCost": 6,
++    "resultGem": {
++      "kind": "resist",
++      "element": "frost"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_lightning",
++    "name": "Lightning Resistance Gem",
++    "description": "Tempered to turn aside lightning rather than channel it -- worked into armor instead of a blade.",
++    "category": "gem",
++    "materialCost": {},
++    "goldCost": 150,
++    "scrapCost": 6,
++    "resultGem": {
++      "kind": "resist",
++      "element": "lightning"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_poison",
++    "name": "Poison Resistance Gem",
++    "description": "Tempered to turn aside poison rather than channel it -- worked into armor instead of a blade.",
++    "category": "gem",
++    "materialCost": {},
++    "goldCost": 150,
++    "scrapCost": 6,
++    "resultGem": {
++      "kind": "resist",
++      "element": "poison"
++    }
+   }
+ ]
+diff --git a/src/game/data/json/raid-encounters.json b/src/game/data/json/raid-encounters.json
+index 84573e4..1462248 100644
+--- a/src/game/data/json/raid-encounters.json
++++ b/src/game/data/json/raid-encounters.json
+@@ -129,6 +129,12 @@
+       "chainmail_mythic@6",
+       "ranger_boots_mythic@6",
+       "tollkeepers_signet_mythic@4"
++    ],
++    "dealsElement": [
++      "poison"
++    ],
++    "vulnerableTo": [
++      "lightning"
+     ]
+   },
+   {
+@@ -213,6 +219,12 @@
+     ],
+     "lootMythic": [
+       "frostfang_claw_mythic@10"
++    ],
++    "dealsElement": [
++      "frost"
++    ],
++    "vulnerableTo": [
++      "fire"
+     ]
+   },
+   {
+@@ -255,6 +267,15 @@
+     "lootMythic": [
+       "dragon_helm_mythic@8",
+       "frozen_maw_shield_mythic@5"
++    ],
++    "dealsElement": [
++      "frost"
++    ],
++    "immuneTo": [
++      "frost"
++    ],
++    "vulnerableTo": [
++      "fire"
+     ]
+   },
+   {
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 7d161e8..aa50654 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -889,5 +889,70 @@
+     "default": 1.6,
+     "min": 1,
+     "description": "Same shape as reroll.questCostGrowth, for the Vendors shop restock reroll."
++  },
++  {
++    "id": "elemental.tagRollChancePercent",
++    "label": "Elemental: per-element tag roll chance (%)",
++    "category": "elemental",
++    "value": 22,
++    "default": 22,
++    "min": 0,
++    "max": 100,
++    "description": "Independent chance for each candidate element to actually appear on a quest offer, checked once per element up to that tier's own ceiling (see rollElementTags in elements.ts). At 22%, Easy/Normal (max 1 tag) land ~37% zero tags / 63% one; Hard/Epic/Legendary (max 2-3) land ~37% zero / 41% one / 21% two-or-more -- verified at runtime across 2000 samples per tier."
++  },
++  {
++    "id": "elemental.bonusPerMatchPercent",
++    "label": "Elemental: success bonus per matching tag (%)",
++    "category": "elemental",
++    "value": 3,
++    "default": 3,
++    "min": 0,
++    "max": 20,
++    "description": "Flat success-chance points added per matching element -- a weapon's elementalDamage matching one of the offer's vulnerableTo entries, or a piece of armor's elementalResist matching a dealsElement entry. Deliberately modest (a nice-to-have, not a build-around), and stacks per matching tag if an offer carries more than one."
++  },
++  {
++    "id": "elemental.scrapValue.common",
++    "label": "Scrap yield: Common item",
++    "category": "elemental",
++    "value": 2,
++    "default": 2,
++    "min": 0,
++    "description": "Scrap gained from breaking down a Common-rarity item at the Blacksmith. See EquipmentManager.scrapValue -- doubles per rarity tier."
++  },
++  {
++    "id": "elemental.scrapValue.uncommon",
++    "label": "Scrap yield: Uncommon item",
++    "category": "elemental",
++    "value": 4,
++    "default": 4,
++    "min": 0,
++    "description": "Same shape as elemental.scrapValue.common, one tier up."
++  },
++  {
++    "id": "elemental.scrapValue.rare",
++    "label": "Scrap yield: Rare item",
++    "category": "elemental",
++    "value": 8,
++    "default": 8,
++    "min": 0,
++    "description": "Same shape as elemental.scrapValue.common, two tiers up."
++  },
++  {
++    "id": "elemental.scrapValue.epic",
++    "label": "Scrap yield: Epic item",
++    "category": "elemental",
++    "value": 16,
++    "default": 16,
++    "min": 0,
++    "description": "Same shape as elemental.scrapValue.common, three tiers up."
++  },
++  {
++    "id": "elemental.scrapValue.legendary",
++    "label": "Scrap yield: Legendary item",
++    "category": "elemental",
++    "value": 32,
++    "default": 32,
++    "min": 0,
++    "description": "Same shape as elemental.scrapValue.common, four tiers up -- the rarer the item, the more scrap, per the original ask."
+   }
+ ]
+diff --git a/src/game/data/reroll.ts b/src/game/data/reroll.ts
+new file mode 100644
+index 0000000..5990f84
+--- /dev/null
++++ b/src/game/data/reroll.ts
+@@ -0,0 +1,43 @@
++import { DAY } from '../util';
++import { Tuning } from './tuning';
++
++/**
++ * Shared math for the two independent reroll systems (quest board, Vendors
++ * restock) -- same shape both times: a small number of free rerolls per
++ * calendar day (base 1, more via that system's own guild upgrade), then an
++ * escalating gold cost per additional reroll, all resetting together at the
++ * next day boundary. Kept as plain functions rather than a stateful manager
++ * since neither system owns any state of its own beyond the two counters
++ * already living on GameState (dayField/usedField), the same way burst's
++ * cap math in balance.ts is plain functions rather than a manager.
++ *
++ * Day boundaries are plain UTC-epoch-day division (`Math.floor(now / DAY)`),
++ * matching every other window-bucketed system in this game (the quest
++ * board's own 30-min windows, shop's 4h window, etc.) rather than the
++ * player's local midnight -- simplest, and consistent with how every other
++ * "resets on a timer" system here already works.
++ */
++export function rerollDay(now: number): number {
++  return Math.floor(now / DAY);
++}
++
++/** How many of today's rerolls have actually been used, given the day the
++ *  stored counter was last touched -- 0 if that day has since rolled over,
++ *  since the counter itself is only reset lazily, on next use, not ticked. */
++export function rerollsUsedToday(usedCount: number, storedDay: number, now: number): number {
++  return storedDay === rerollDay(now) ? usedCount : 0;
++}
++
++/**
++ * Gold cost of the *next* reroll, given how many have already been used
++ * today and how many of today's are free. 0 while still within the free
++ * allowance; otherwise baseCost * growth^(paid rerolls so far), rounded
++ * down to a whole gold amount.
++ */
++export function nextRerollCost(
++  usedToday: number, freeCount: number, baseCostTuningId: string, growthTuningId: string,
++): number {
++  if (usedToday < freeCount) return 0;
++  const paidSoFar = usedToday - freeCount;
++  return Math.floor(Tuning.get(baseCostTuningId) * Tuning.get(growthTuningId) ** paidSoFar);
++}
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 8d1f4ed..3d7951a 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -1,4 +1,4 @@
+-import { ActiveQuest, GameState, Hero, HeroClass, MaterialId, Modifiers, Pet, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Stats } from './types';
++import { ActiveQuest, ElementType, GameState, Hero, HeroClass, MaterialId, Modifiers, Pet, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Stats } from './types';
+ import { createRng, uid } from './rng';
+ import { HeroManager } from './managers/HeroManager';
+ import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
+@@ -1313,6 +1313,34 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  craftGem(recipeId: string) {
++    const error = CraftingManager.craftGem(this.state, recipeId);
++    if (error) return this.say(error);
++    playSound('purchase');
++    this.say('A new gem, ready for the Blacksmith\u2019s Infuse station.');
++    void this.saveNow();
++  }
++
++  /** Breaks a stash item down into Scrap instead of selling it for gold --
++   *  see EquipmentManager.scrapValue/ShopManager.scrapItem. */
++  scrapItem(itemUid: string) {
++    const error = ShopManager.scrapItem(this.state, itemUid);
++    if (error) return this.say(error);
++    this.say('Broken down into scrap.');
++    void this.saveNow();
++  }
++
++  /** Blacksmith's Infuse action -- spends a gem (which pool depends on the
++   *  item's own slot, weapon vs everything else, see
++   *  EquipmentManager.infuse) on an owned item. */
++  infuseItem(itemUid: string, element: ElementType) {
++    const error = EquipmentManager.infuse(this.state, itemUid, element);
++    if (error) return this.say(error);
++    playSound('purchase');
++    this.say('The infusion takes.');
++    void this.saveNow();
++  }
++
+   recruit(heroClass: HeroClass) {
+     // Checked here rather than relying on GuildManager's own error, so the
+     // message can point at the actual fix (upgrades or a Renown perk)
+diff --git a/src/game/managers/CraftingManager.ts b/src/game/managers/CraftingManager.ts
+index 616590d..30e67e6 100644
+--- a/src/game/managers/CraftingManager.ts
++++ b/src/game/managers/CraftingManager.ts
+@@ -10,6 +10,7 @@ export const CraftingManager = {
+   /** What's still missing to afford a recipe, if anything -- used to grey out the Craft button. */
+   affordability(state: GameState, recipe: CraftingRecipeDef): { ok: boolean; reason?: string } {
+     if (state.gold < recipe.goldCost) return { ok: false, reason: 'Not enough gold.' };
++    if ((recipe.scrapCost ?? 0) > state.scrap) return { ok: false, reason: 'Not enough scrap.' };
+     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
+       if (state.materials[materialId] < amount) {
+         return { ok: false, reason: `Not enough ${MATERIAL_BY_ID[materialId].name.toLowerCase()}.` };
+@@ -18,6 +19,31 @@ export const CraftingManager = {
+     return { ok: true };
+   },
+ 
++  /**
++   * Crafts a `gem` recipe -- no player choice at craft time (unlike gear/
++   * enchant), a gem recipe is authored per element/kind already (see
++   * CraftingRecipeDef.resultGem), so this just checks affordability and
++   * adds +1 to the right counter (GameState.gems or resistGems).
++   */
++  craftGem(state: GameState, recipeId: string): string | null {
++    const recipe = CRAFTING_RECIPE_BY_ID[recipeId];
++    if (!recipe || recipe.category !== 'gem' || !recipe.resultGem) return 'Unknown recipe.';
++    const afford = CraftingManager.affordability(state, recipe);
++    if (!afford.ok) return afford.reason ?? 'Cannot afford this.';
++
++    const { kind, element } = recipe.resultGem;
++    const pool = kind === 'elemental' ? state.gems : state.resistGems;
++    pool[element] = (pool[element] ?? 0) + 1;
++
++    state.gold -= recipe.goldCost;
++    state.stats.goldSpent += recipe.goldCost;
++    state.scrap -= recipe.scrapCost ?? 0;
++    for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
++      state.materials[materialId] -= amount;
++    }
++    return null;
++  },
++
+   /**
+    * Crafts a `gear` recipe, applying `chosenMods` (must be exactly
+    * recipe.modsToPick entries, each one of recipe.modOptions) as the
+diff --git a/src/game/managers/EquipmentManager.ts b/src/game/managers/EquipmentManager.ts
+index fd695e5..cab6889 100644
+--- a/src/game/managers/EquipmentManager.ts
++++ b/src/game/managers/EquipmentManager.ts
+@@ -1,7 +1,8 @@
+ import { EQUIPMENT_BY_ID, RARITY_PRICE_MULT } from '../data/equipment';
+-import { EquipmentDef, EquipmentItem, GameState, Hero } from '../types';
++import { EquipmentDef, EquipmentItem, ElementType, GameState, Hero } from '../types';
+ import { uid } from '../rng';
+ import { clamp } from '../util';
++import { Tuning } from '../data/tuning';
+ 
+ export const MAX_PLUS = 10;
+ 
+@@ -64,6 +65,21 @@ export const EquipmentManager = {
+     return Math.max(1, Math.floor(def.value * 0.35 * condition * (1 + item.plus * 0.25)));
+   },
+ 
++  /**
++   * Scrap gained from breaking an item down instead of selling it for
++   * gold -- a straight rarity lookup (elemental.scrapValue.<rarity> in the
++   * tuning registry), deliberately NOT scaled by condition/plus the way
++   * sellValue is. Scrapping is meant to be the "I don't want this item but
++   * it's still worth its rarity in raw material" option, not a second
++   * gold-adjacent economy to min-max around -- the rarer the item, the
++   * more scrap, full stop.
++   */
++  scrapValue(item: EquipmentItem): number {
++    const def = EQUIPMENT_BY_ID[item.defId];
++    if (!def) return 0;
++    return Tuning.get(`elemental.scrapValue.${def.rarity}`);
++  },
++
+   shopPrice(def: EquipmentDef): number {
+     return Math.ceil(def.value * 1.15);
+   },
+@@ -145,4 +161,37 @@ export const EquipmentManager = {
+     }
+     return out;
+   },
++
++  /**
++   * Blacksmith's Infuse action -- consumes 1 gem, sets/adds the item's own
++   * elemental field. Which gem pool and which field depends entirely on
++   * the item's own slot (weapon vs everything else), not a separate
++   * player choice -- a weapon can only take elemental damage, everything
++   * else can only take resist, so there's nothing to pick beyond item +
++   * element. Weapon side REPLACES (matches EquipmentItem.elementalDamage's
++   * own "changing what it's infused with" framing); armor side ADDS
++   * (matches elementalResist's own "stacks with itself" framing, same
++   * shape CraftingManager.enchantItem already uses for enchantStats).
++   * Same stash-or-equipped search scope as repair()/enchantItem().
++   */
++  infuse(state: GameState, itemUid: string, element: ElementType): string | null {
++    const found = EquipmentManager.allItems(state).find((e) => e.item.uid === itemUid);
++    if (!found) return 'That item can\u2019t be found.';
++    const { item } = found;
++    const def = EquipmentManager.def(item);
++    if (!def) return 'That item no longer exists.';
++
++    if (def.slot === 'weapon') {
++      if ((state.gems[element] ?? 0) < 1) return 'Not enough Elemental Gems.';
++      state.gems[element] = (state.gems[element] ?? 0) - 1;
++      item.elementalDamage = element;
++    } else {
++      if ((state.resistGems[element] ?? 0) < 1) return 'Not enough Resistance Gems.';
++      state.resistGems[element] = (state.resistGems[element] ?? 0) - 1;
++      const updated = { ...item.elementalResist };
++      updated[element] = (updated[element] ?? 0) + Tuning.get('elemental.bonusPerMatchPercent');
++      item.elementalResist = updated;
++    }
++    return null;
++  },
+ };
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 509c0d6..0bc84b5 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -18,6 +18,7 @@ import { EquipmentManager } from './EquipmentManager';
+ import { ModifierManager } from './ModifierManager';
+ import { PetManager } from './PetManager';
+ import { rerollDay, rerollsUsedToday, nextRerollCost } from '../data/reroll';
++import { rollElementTags, elementalBonusForHero } from '../data/elements';
+ 
+ export const BOARD_SIZE = 6;
+ export const BOARD_REFRESH_MS = 30 * MINUTE;
+@@ -223,6 +224,8 @@ export const QuestManager = {
+       rewardXp,
+       loot: lootTableFor(difficulty, rng),
+       reqLevel: cfg.reqLevel,
++      vulnerableTo: rollElementTags(rng, difficulty),
++      dealsElement: rollElementTags(rng, difficulty),
+     };
+   },
+ 
+@@ -331,7 +334,8 @@ export const QuestManager = {
+     const baselineOffset = (HeroManager.statMods(baselineStats).success ?? 0) + offer.reqLevel * 0.4;
+     const levelGap = Math.max(0, offer.reqLevel - hero.level);
+     const overLevelPenalty = levelGap * Tuning.get('quest.overLevelPenaltyPercent');
+-    return clamp(offer.baseSuccess + mods.success - baselineOffset - overLevelPenalty, MIN_SUCCESS, MAX_SUCCESS);
++    const elemental = elementalBonusForHero(hero, offer);
++    return clamp(offer.baseSuccess + mods.success + elemental - baselineOffset - overLevelPenalty, MIN_SUCCESS, MAX_SUCCESS);
+   },
+ 
+   previewDuration(state: GameState, hero: Hero, offer: QuestOffer, now: number): number {
+diff --git a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
+index ae64911..fdafd48 100644
+--- a/src/game/managers/RaidManager.ts
++++ b/src/game/managers/RaidManager.ts
+@@ -1,5 +1,5 @@
+ import {
+-  ActiveRaid, GameState, Hero, Modifiers, RaidDifficulty, RaidLootDrop, RaidResult,
++  ActiveRaid, GameState, Hero, Modifiers, RaidDifficulty, RaidEncounterDef, RaidLootDrop, RaidResult,
+ } from '../types';
+ import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty } from '../data/raids';
+ import { EQUIPMENT_BY_ID } from '../data/equipment';
+@@ -8,10 +8,27 @@ import { HeroManager } from './HeroManager';
+ import { EquipmentManager } from './EquipmentManager';
+ import { ModifierManager } from './ModifierManager';
+ import { PetManager } from './PetManager';
++import { elementalBonusForHero } from '../data/elements';
+ import { createRng } from '../rng';
+ import { clamp, sumMods, MINUTE } from '../util';
+ 
+ export const RaidManager = {
++  /**
++   * Average elemental contribution across the party for one specific
++   * encounter -- recomputed fresh per encounter (unlike partySuccessBonus,
++   * which is locked in once at raid start), since different encounters in
++   * the same raid can carry entirely different tags. Averaged rather than
++   * weakest-link like partySuccessBonus: this is a small bonus on top, not
++   * the core pass/fail gate, matching how partyEconomyMods (gold/xp/loot/
++   * speed) already treats "a shared payout, not something to punish a
++   * lagging hero for" -- see that function's own comment.
++   */
++  elementalBonus(heroes: Hero[], encounter: RaidEncounterDef): number {
++    if (heroes.length === 0) return 0;
++    const total = heroes.reduce((sum, h) => sum + elementalBonusForHero(h, encounter), 0);
++    return total / heroes.length;
++  },
++
+   /**
+    * Weakest-link success contribution: the party's worst hero sets the
+    * floor, with a smaller (0.2x) averaged contribution from the rest of the
+@@ -101,7 +118,8 @@ export const RaidManager = {
+     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)).filter((h): h is Hero => !!h);
+     const bonus = RaidManager.partySuccessBonus(state, heroes, now, raid.reqLevel);
+     const penalty = RAID_DIFFICULTIES[difficulty].successPenalty;
+-    return clamp(encounter.baseSuccess - penalty + bonus, MIN_SUCCESS, MAX_SUCCESS);
++    const elemental = RaidManager.elementalBonus(heroes, encounter);
++    return clamp(encounter.baseSuccess - penalty + bonus + elemental, MIN_SUCCESS, MAX_SUCCESS);
+   },
+ 
+   /**
+@@ -193,7 +211,8 @@ export const RaidManager = {
+     for (const encounterId of encounterIds) {
+       const encounter = RAID_ENCOUNTER_BY_ID[encounterId];
+       if (!encounter) continue; // devtool data drift safety -- an unknown id is skipped, not a crash
+-      const chance = clamp(encounter.baseSuccess - diffCfg.successPenalty + active.partySuccessBonus, MIN_SUCCESS, MAX_SUCCESS);
++      const elemental = RaidManager.elementalBonus(heroes, encounter);
++      const chance = clamp(encounter.baseSuccess - diffCfg.successPenalty + active.partySuccessBonus + elemental, MIN_SUCCESS, MAX_SUCCESS);
+       if (!rng.chance(chance)) break;
+ 
+       encountersCleared += 1;
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 16f7aee..4852c0d 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -117,6 +117,9 @@ export function createInitialState(now = Date.now()): GameState {
+     harvestTools: emptyMaterials(),
+     warehouseLevel: 0,
+     tradeRouteUnlocked: false,
++    scrap: 0,
++    gems: {},
++    resistGems: {},
+     hatcheryUnlocked: false,
+     pendingHatcherySpotlight: false,
+     incubatingEggs: [],
+@@ -415,6 +418,17 @@ const MIGRATIONS: Record<number, Migration> = {
+     vendorRerollDay: (save.vendorRerollDay as number | undefined) ?? 0,
+     vendorRerollsUsedToday: (save.vendorRerollsUsedToday as number | undefined) ?? 0,
+   }),
++  27: (save) => ({
++    ...save,
++    version: 28,
++    // Elemental infusion system -- 0/empty is exactly correct for a save
++    // that predates this, not a placeholder needing correction. Existing
++    // equipment items simply have no elementalDamage/elementalResist yet
++    // (both optional fields, no migration needed on the items themselves).
++    scrap: (save.scrap as number | undefined) ?? 0,
++    gems: (save.gems as GameState['gems'] | undefined) ?? {},
++    resistGems: (save.resistGems as GameState['resistGems'] | undefined) ?? {},
++  }),
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/managers/ShopManager.ts b/src/game/managers/ShopManager.ts
+index 166e7e3..d5fe5dc 100644
+--- a/src/game/managers/ShopManager.ts
++++ b/src/game/managers/ShopManager.ts
+@@ -186,4 +186,16 @@ export const ShopManager = {
+     state.stats.goldEarned += value;
+     return null;
+   },
++
++  /** Same shape as sell() -- stash-only, same "equipped or missing" error
++   *  -- but converts the item to Scrap instead of gold. See
++   *  EquipmentManager.scrapValue for the rarity-based payout. */
++  scrapItem(state: GameState, itemUid: string): string | null {
++    const item = state.stash.find((i) => i.uid === itemUid);
++    if (!item) return 'That item is equipped or missing.';
++    const value = EquipmentManager.scrapValue(item);
++    state.stash = state.stash.filter((i) => i.uid !== itemUid);
++    state.scrap += value;
++    return null;
++  },
+ };
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 1ca9d10..82da667 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,12 +3,20 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 27;
++export const SAVE_VERSION = 28;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+ export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+ 
++/**
++ * A weapon's infused damage type, or an enemy's own vulnerability/attack
++ * type. Deliberately a flat, small set rather than tied to any existing
++ * taxonomy (Rarity, Difficulty) -- an element is a property of a weapon,
++ * a piece of armor, or a quest/raid encounter, not of a hero or a class.
++ */
++export type ElementType = 'fire' | 'frost' | 'lightning' | 'poison';
++
+ export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'shield' | 'gloves' | 'boots' | 'ring' | 'amulet' | 'cloak';
+ 
+ /**
+@@ -161,6 +169,28 @@ export interface EquipmentItem {
+    * HeroManager.equipmentStats for where this actually gets applied.
+    */
+   enchantStats?: Partial<Stats>;
++  /**
++   * Set by the Blacksmith's Infuse station, weapon slot only -- the
++   * element this weapon deals. A single value, not a set: infusing again
++   * with a different element replaces it (this is meant to read as
++   * "changing what the weapon is infused with," not stacking multiple
++   * damage types onto one blade). See QuestManager.previewSuccess and
++   * RaidManager.elementalBonus for where this actually matters -- it
++   * matches against a quest/encounter's own `vulnerableTo` list for a
++   * success bonus, nullified if the encounter also lists that element
++   * under `immuneTo`.
++   */
++  elementalDamage?: ElementType;
++  /**
++   * Set by the Blacksmith's Infuse station, non-weapon slots -- how much
++   * this piece resists each element, additive per element if infused
++   * again (same "stacks with itself" shape EquipmentItem.enchantStats
++   * already established, unlike elementalDamage above which replaces).
++   * Matches against a quest/encounter's own `dealsElement` list -- framed
++   * to the player as extra effective endurance against that element's
++   * attacks, mechanically just another additive success contribution.
++   */
++  elementalResist?: Partial<Record<ElementType, number>>;
+ }
+ 
+ export interface ItemSet {
+@@ -268,6 +298,17 @@ export interface QuestOffer {
+   reqLevel: number;
+   /** Set when this offer is one stage of a chain. */
+   chain?: { chainId: string; stage: number; totalStages: number };
++  /**
++   * Rolled at generation time (see QuestManager.rollElementTags) -- what
++   * this quest's opposition is weak to (a matching weapon's
++   * elementalDamage adds a success bonus) and what it attacks with (a
++   * matching piece of armor's elementalResist adds a bonus in turn).
++   * Independent lists, can overlap, either or both can be empty --
++   * harder difficulty tiers roll a higher ceiling on how many of each a
++   * single offer can carry, not a guarantee of any.
++   */
++  vulnerableTo?: ElementType[];
++  dealsElement?: ElementType[];
+ }
+ 
+ export interface ActiveQuest {
+@@ -378,6 +419,25 @@ export interface RaidEncounterDef {
+    * economy.loot/diffCfg.lootBonus scaling either way.
+    */
+   eggLoot?: string[];
++  /**
++   * Authored, not rolled -- raid encounters are a small curated list
++   * (unlike quest offers, which are procedurally generated per board),
++   * so these are hand-set per encounter via the devtool the same way
++   * `loot` already is, defaulting to none. Same meaning as QuestOffer's
++   * own vulnerableTo/dealsElement -- see RaidManager.elementalBonus.
++   */
++  vulnerableTo?: ElementType[];
++  dealsElement?: ElementType[];
++  /**
++   * Raid-only -- an element this specific encounter is immune to,
++   * nullifying the weapon-matching half of elementalBonus for any hero
++   * whose weapon is infused with a listed element (armor's
++   * elementalResist side is unaffected; immunity describes the
++   * encounter's own resilience, not its attack). "A fire dragon, immune
++   * to fire damage" was the motivating example -- no equivalent concept
++   * exists for ordinary quest offers.
++   */
++  immuneTo?: ElementType[];
+ }
+ 
+ export interface RaidDef {
+@@ -787,6 +847,23 @@ export interface GameState {
+   /** True once the Trade Route upgrade is bought -- gates selling materials for gold. */
+   tradeRouteUnlocked: boolean;
+ 
++  /* --------------------------- Elemental infusion --------------------------- */
++  /**
++   * A standalone currency, deliberately not folded into `materials`
++   * (Record<MaterialId, ...>) -- scrap comes from breaking down owned
++   * equipment (EquipmentManager.scrapValue, see engine.scrapItem), not
++   * from a Harvest node, so it doesn't belong in that system's per-node
++   * state (harvestNodes/harvestTools) the way ore/timber/herbs/food do.
++   */
++  scrap: number;
++  /** Elemental Gems, one counter per element -- crafted at the Enchanter,
++   *  spent at the Blacksmith's Infuse station on a weapon's
++   *  elementalDamage. See CraftingManager.craftGem/engine.infuseItem. */
++  gems: Partial<Record<ElementType, number>>;
++  /** Resistance Gems, same shape again, spent on a non-weapon item's
++   *  elementalResist instead. */
++  resistGems: Partial<Record<ElementType, number>>;
++
+   /* ---------------------------- Pets / Hatchery ---------------------------- */
+   /** True once the intro chain that grants the Hatchery has been completed
+    *  -- gates the Hatchery tab's visibility entirely (see MenuWindow). */
+@@ -945,7 +1022,7 @@ export interface CraftingRecipeDef {
+   id: string;
+   name: string;
+   description: string;
+-  category: 'gear' | 'consumable' | 'enchant';
++  category: 'gear' | 'consumable' | 'enchant' | 'gem';
+   /** Relative path under the item-icons folder, same convention as
+    *  EquipmentDef.icon/ConsumableDef.icon. No glyph fallback here since
+    *  a recipe isn't itself an item -- falls all the way back to a plain
+@@ -953,6 +1030,13 @@ export interface CraftingRecipeDef {
+   icon?: string;
+   materialCost: Partial<Record<MaterialId, number>>;
+   goldCost: number;
++  /** `gem` recipes only, in addition to materialCost/goldCost -- Scrap is
++   *  its own standalone currency (see GameState.scrap), not a MaterialId,
++   *  so it needs its own cost field rather than fitting into
++   *  materialCost. Every gem recipe is expected to set this; 0/undefined
++   *  would mean a gem that costs no scrap at all, which defeats the
++   *  point of the scrapping loop. */
++  scrapCost?: number;
+   /** `gear` recipes only -- the craftable EquipmentDef this recipe produces. */
+   resultDefId?: string;
+   /** `gear` recipes only -- the eligible mod pool the player picks from. */
+@@ -969,4 +1053,10 @@ export interface CraftingRecipeDef {
+   statsToPick?: number;
+   /** `enchant` recipes only -- fixed strength applied to each picked stat, additive with anything already enchanted. */
+   statValue?: number;
++  /** `gem` recipes only -- which counter this recipe adds +1 to on craft
++   *  (GameState.gems or resistGems, for the given element). No player
++   *  choice involved at craft time, unlike gear/enchant -- a gem recipe
++   *  is authored per element, same way Trail Rations vs Herbal Tonic are
++   *  two separate consumable recipes rather than one with a picker. */
++  resultGem?: { kind: 'elemental' | 'resist'; element: ElementType };
+ }
+diff --git a/src/ui/CraftingStation.tsx b/src/ui/CraftingStation.tsx
+index eeb71a8..bf93e3d 100644
+--- a/src/ui/CraftingStation.tsx
++++ b/src/ui/CraftingStation.tsx
+@@ -21,10 +21,13 @@ const STATION_BG: Record<Category, string> = {
+   gear: './lore/crafting/gear.jpg',
+   consumable: './lore/crafting/consumable.jpg',
+   enchant: './lore/crafting/enchant.jpg',
++  // No commissioned art yet -- same "missing file just fails to paint"
++  // convention every other banner/background in this game already uses.
++  gem: './lore/crafting/gem.jpg',
+ };
+ 
+ const STATION_TITLE: Record<Category, string> = {
+-  gear: 'Crafting', consumable: 'Supplies', enchant: 'Enchanting',
++  gear: 'Crafting', consumable: 'Supplies', enchant: 'Enchanting', gem: 'Gems',
+ };
+ 
+ export interface Rect { left: number; top: number; width: number; height: number; }
+@@ -54,6 +57,17 @@ const SLOT_RECTS: Record<Category, { top: Rect; bottomLeft: Rect; bottomRight: R
+     bottomLeft: { left: 31.8, top: 52.0, width: 16.4, height: 21.8 },
+     bottomRight: { left: 51.2, top: 52.0, width: 16.8, height: 21.8 },
+   },
++  // Only the top slot is ever rendered for `gem` (see the scene JSX below
++  // -- there's no category==='gem' block adding bottom slots, a recipe is
++  // the only choice this category needs), so bottomLeft/bottomRight here
++  // are never actually shown; kept centered as a harmless placeholder
++  // rather than omitted, since the Record type requires all three either
++  // way. Reuses consumable's top rect pending real commissioned art.
++  gem: {
++    top: { left: 41.4, top: 18.5, width: 16.5, height: 21.0 },
++    bottomLeft: { left: 26.5, top: 52.0, width: 16.0, height: 20.3 },
++    bottomRight: { left: 57.1, top: 52.0, width: 16.0, height: 20.3 },
++  },
+ };
+ 
+ /** A single option row inside a slot's picker popup. */
+@@ -205,6 +219,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+     if (!recipe) return;
+     if (category === 'gear') engine.craftGear(recipe.id, chosenMods);
+     else if (category === 'enchant') engine.enchantItem(recipe.id, targetUid, chosenStats);
++    else if (category === 'gem') engine.craftGem(recipe.id);
+     else engine.craftConsumable(recipe.id, chosenConsumableMods);
+     reset();
+   }
+@@ -388,7 +403,11 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+   );
+ 
+   const materialCostLine = recipe
+-    ? `${Object.entries(recipe.materialCost).map(([id, amt]) => `${amt} ${MATERIAL_BY_ID[id as MaterialId].name}`).join(' + ')} + ${formatGold(recipe.goldCost)} gold`
++    ? [
++      ...Object.entries(recipe.materialCost).map(([id, amt]) => `${amt} ${MATERIAL_BY_ID[id as MaterialId].name}`),
++      ...(recipe.scrapCost ? [`${recipe.scrapCost} Scrap`] : []),
++      `${formatGold(recipe.goldCost)} gold`,
++    ].join(' + ')
+     : null;
+ 
+   return (
+diff --git a/src/ui/InfuseStation.tsx b/src/ui/InfuseStation.tsx
+new file mode 100644
+index 0000000..61e577a
+--- /dev/null
++++ b/src/ui/InfuseStation.tsx
+@@ -0,0 +1,131 @@
++import { useState } from 'react';
++import { useEngine } from './useEngine';
++import { EquipmentManager } from '../game/managers/EquipmentManager';
++import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH } from '../game/data/elements';
++import { ElementType } from '../game/types';
++import { ItemIcon } from './icons';
++import { PickerModal, SlotBox } from './CraftingStation';
++import type { PickerOption, Rect } from './CraftingStation';
++
++/**
++ * Two side-by-side slots (item, then gem) on the same "commissioned art +
++ * click-select-confirm" pattern EnhanceStation established -- no real art
++ * for this one yet either, so these are placeholder rects (same
++ * proportions as EnhanceStation's own single slot, just mirrored left and
++ * right of center) pending an actual infuse.jpg. Recalibrate both once
++ * real art exists, the same note EnhanceStation's own SLOT_RECT carries.
++ */
++const ITEM_SLOT: Rect = { left: 22.0, top: 37.0, width: 18.7, height: 23.1 };
++const GEM_SLOT: Rect = { left: 59.5, top: 37.0, width: 18.7, height: 23.1 };
++
++export function InfuseStation({ onClose }: { onClose: () => void }) {
++  const engine = useEngine();
++  const state = engine.state;
++
++  const [targetUid, setTargetUid] = useState('');
++  const [element, setElement] = useState<ElementType | null>(null);
++  const [openItemPicker, setOpenItemPicker] = useState(false);
++  const [openGemPicker, setOpenGemPicker] = useState(false);
++
++  const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
++  const item = found?.item;
++  const def = item ? EquipmentManager.def(item) : undefined;
++  // Which gem pool this item actually draws from is decided entirely by
++  // its own slot (weapon vs everything else) -- see
++  // EquipmentManager.infuse's own comment for why there's no separate
++  // "kind" choice for the player to make.
++  const isWeapon = def?.slot === 'weapon';
++  const gemPool = isWeapon ? state.gems : state.resistGems;
++
++  const itemOptions: PickerOption[] = EquipmentManager.allItems(state)
++    .map(({ item: i, heroId }): PickerOption | null => {
++      const d = EquipmentManager.def(i);
++      if (!d) return null;
++      const owner = heroId ? state.heroes.find((h) => h.id === heroId)?.name ?? 'Stash' : 'Stash';
++      const current = d.slot === 'weapon'
++        ? (i.elementalDamage ? ELEMENT_LABEL[i.elementalDamage] : 'Uninfused')
++        : (Object.keys(i.elementalResist ?? {}).length > 0
++          ? Object.entries(i.elementalResist ?? {}).map(([el, v]) => `${ELEMENT_LABEL[el as ElementType]} +${v}%`).join(', ')
++          : 'No resist yet');
++      return {
++        key: i.uid,
++        label: d.name,
++        sublabel: `${owner} -- ${current}`,
++        icon: <ItemIcon slot={d.slot} icon={d.icon} size={40} />,
++      };
++    })
++    .filter((o): o is PickerOption => o !== null);
++
++  const gemOptions: PickerOption[] = ELEMENT_TYPES.map((el) => ({
++    key: el,
++    label: `${ELEMENT_GLYPH[el]} ${ELEMENT_LABEL[el]} ${isWeapon ? 'Gem' : 'Resistance Gem'}`,
++    sublabel: `Have ${gemPool[el] ?? 0}`,
++    disabled: (gemPool[el] ?? 0) < 1,
++  }));
++
++  function handleInfuse() {
++    if (!item || !element) return;
++    engine.infuseItem(item.uid, element);
++    setElement(null);
++  }
++
++  const canInfuse = !!item && !!element && (gemPool[element] ?? 0) >= 1;
++
++  return (
++    <div className="overlay" onClick={onClose}>
++      <div className="modal craft-station-modal" onClick={(e) => e.stopPropagation()}>
++        <div className="spread" style={{ marginBottom: 8 }}>
++          <span className="card-title">Infuse</span>
++          <button onClick={onClose}>Close</button>
++        </div>
++
++        <div className="craft-scene" style={{ backgroundImage: 'url(./lore/crafting/infuse.jpg)' }}>
++          <SlotBox
++            rect={ITEM_SLOT}
++            filled={def && item ? <ItemIcon slot={def.slot} icon={def.icon} size={88} /> : null}
++            label="Choose an item to infuse"
++            onOpen={() => setOpenItemPicker(true)}
++          />
++          <SlotBox
++            rect={GEM_SLOT}
++            filled={element ? <span className="craft-slot-label" style={{ fontSize: '1.6rem' }}>{ELEMENT_GLYPH[element]}</span> : null}
++            disabled={!item}
++            label="Choose a gem"
++            onOpen={() => setOpenGemPicker(true)}
++          />
++        </div>
++
++        {item && def ? (
++          <p className="tiny muted" style={{ margin: '8px 0' }}>
++            {def.name} -- {isWeapon
++              ? `weapon: infusing replaces whatever element it currently carries${item.elementalDamage ? ` (currently ${ELEMENT_LABEL[item.elementalDamage]})` : ''}.`
++              : 'armor: infusing adds to (stacks with) any resist it already carries.'}
++          </p>
++        ) : (
++          <p className="tiny muted" style={{ margin: '8px 0' }}>Choose an item to see what it can carry.</p>
++        )}
++
++        <button className="btn-purple" disabled={!canInfuse} onClick={handleInfuse}>
++          Infuse
++        </button>
++      </div>
++
++      {openItemPicker && (
++        <PickerModal
++          title="Choose an item"
++          options={itemOptions}
++          onPick={(key) => { setTargetUid(key); setElement(null); }}
++          onClose={() => setOpenItemPicker(false)}
++        />
++      )}
++      {openGemPicker && (
++        <PickerModal
++          title="Choose a gem"
++          options={gemOptions}
++          onPick={(key) => setElement(key as ElementType)}
++          onClose={() => setOpenGemPicker(false)}
++        />
++      )}
++    </div>
++  );
++}
+diff --git a/src/ui/icons.tsx b/src/ui/icons.tsx
+index 0f6ea51..7b21341 100644
+--- a/src/ui/icons.tsx
++++ b/src/ui/icons.tsx
+@@ -11,8 +11,8 @@ const SLOT_FALLBACK: Record<EquipSlot, string> = {
+   gloves: '🧤', boots: '👢', ring: '💍', amulet: '📿', cloak: '🧣',
+ };
+ 
+-const CATEGORY_FALLBACK: Record<'gear' | 'consumable' | 'enchant', string> = {
+-  gear: '⚔️', consumable: '🧪', enchant: '✨',
++const CATEGORY_FALLBACK: Record<'gear' | 'consumable' | 'enchant' | 'gem', string> = {
++  gear: '⚔️', consumable: '🧪', enchant: '✨', gem: '💎',
+ };
+ 
+ function IconBox({ icon, size, fallback }: { icon?: string; size: number; fallback: string }) {
+@@ -34,7 +34,7 @@ export function ConsumableIcon({ icon, glyph, size = 40 }: { icon?: string; glyp
+   return <IconBox icon={icon} size={size} fallback={glyph} />;
+ }
+ 
+-/** Falls back to a per-category glyph (gear/consumable/enchant) when a recipe has no icon assigned. */
+-export function RecipeIcon({ icon, category, size = 40 }: { icon?: string; category: 'gear' | 'consumable' | 'enchant'; size?: number }) {
++/** Falls back to a per-category glyph (gear/consumable/enchant/gem) when a recipe has no icon assigned. */
++export function RecipeIcon({ icon, category, size = 40 }: { icon?: string; category: 'gear' | 'consumable' | 'enchant' | 'gem'; size?: number }) {
+   return <IconBox icon={icon} size={size} fallback={CATEGORY_FALLBACK[category]} />;
+ }
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index d363198..27729fb 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -15,6 +15,7 @@ import { VendorSprite } from '../sprites/VendorSprite';
+ import { MaxFlash, useMaxFlash } from '../maxFlash';
+ import { CraftingStation } from '../CraftingStation';
+ import { EnhanceStation } from '../EnhanceStation';
++import { InfuseStation } from '../InfuseStation';
+ 
+ /** Confirmed pairing, not a guess -- Blacksmith sells armour, Alchemist sells
+  *  supplies, Enchanter sells the black market. Same mapping decides which
+@@ -51,6 +52,8 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+   const { settings } = useSettings();
+   const [showCrafting, setShowCrafting] = useState(false);
+   const [showEnhance, setShowEnhance] = useState(false);
++  const [showInfuse, setShowInfuse] = useState(false);
++  const [showGems, setShowGems] = useState(false);
+ 
+   const vendorDef = VENDORS.find((v) => v.id === vendorId)!;
+   const level = GuildManager.vendorLevel(state, vendorId);
+@@ -130,6 +133,17 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+               {vendorId === 'blacksmith' && (
+                 <button className="btn-purple" onClick={() => setShowEnhance(true)}>Enhance</button>
+               )}
++              {/* Elemental infusion (weapon damage + armor resist) --
++                  Blacksmith applies gems the Enchanter crafts, per the
++                  "both at the Blacksmith, Enchanter crafts the gems"
++                  confirmed split. See guild-idler-status.md's Elemental
++                  infusion section. */}
++              {vendorId === 'blacksmith' && (
++                <button className="btn-purple" onClick={() => setShowInfuse(true)}>Infuse</button>
++              )}
++              {vendorId === 'enchanter' && (
++                <button className="btn-purple" onClick={() => setShowGems(true)}>Gems</button>
++              )}
+             </div>
+           </div>
+         </div>
+@@ -150,6 +164,8 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+         <CraftingStation category={VENDOR_CRAFT_CATEGORY[vendorId]} onClose={() => setShowCrafting(false)} />
+       )}
+       {showEnhance && <EnhanceStation onClose={() => setShowEnhance(false)} />}
++      {showInfuse && <InfuseStation onClose={() => setShowInfuse(false)} />}
++      {showGems && <CraftingStation category="gem" onClose={() => setShowGems(false)} />}
+     </>
+   );
+ }
+@@ -201,7 +217,10 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell:
+         ))}
+       </div>
+ 
+-      <div className="section-heading">Sell from the stash</div>
++      <div className="spread" style={{ alignItems: 'center' }}>
++        <div className="section-heading" style={{ marginBottom: 0 }}>Sell from the stash</div>
++        <span className="tiny muted">Scrap: {state.scrap}</span>
++      </div>
+       {state.stash.length === 0 && <p className="small muted">Nothing spare to sell.</p>}
+       <div className="grid two">
+         {state.stash.map((item) => {
+@@ -215,9 +234,14 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell:
+                   {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
+                 </span>
+               </div>
+-              <button onClick={() => { if (!settings.confirmSell || confirm('Sell this item?')) engine.sellItem(item.uid); }}>
+-                Sell · {formatGold(EquipmentManager.sellValue(item))}
+-              </button>
++              <div className="row" style={{ gap: 6 }}>
++                <button onClick={() => { if (!settings.confirmSell || confirm('Scrap this item? This cannot be undone.')) engine.scrapItem(item.uid); }}>
++                  Scrap · {EquipmentManager.scrapValue(item)}
++                </button>
++                <button onClick={() => { if (!settings.confirmSell || confirm('Sell this item?')) engine.sellItem(item.uid); }}>
++                  Sell · {formatGold(EquipmentManager.sellValue(item))}
++                </button>
++              </div>
+             </div>
+           );
+         })}

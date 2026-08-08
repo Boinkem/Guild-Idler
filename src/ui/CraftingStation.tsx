@@ -21,10 +21,13 @@ const STATION_BG: Record<Category, string> = {
   gear: './lore/crafting/gear.jpg',
   consumable: './lore/crafting/consumable.jpg',
   enchant: './lore/crafting/enchant.jpg',
+  // No commissioned art yet -- same "missing file just fails to paint"
+  // convention every other banner/background in this game already uses.
+  gem: './lore/crafting/gem.jpg',
 };
 
 const STATION_TITLE: Record<Category, string> = {
-  gear: 'Crafting', consumable: 'Supplies', enchant: 'Enchanting',
+  gear: 'Crafting', consumable: 'Supplies', enchant: 'Enchanting', gem: 'Gems',
 };
 
 export interface Rect { left: number; top: number; width: number; height: number; }
@@ -53,6 +56,17 @@ const SLOT_RECTS: Record<Category, { top: Rect; bottomLeft: Rect; bottomRight: R
     top: { left: 42.3, top: 24.5, width: 16.8, height: 21.8 },
     bottomLeft: { left: 31.8, top: 52.0, width: 16.4, height: 21.8 },
     bottomRight: { left: 51.2, top: 52.0, width: 16.8, height: 21.8 },
+  },
+  // Only the top slot is ever rendered for `gem` (see the scene JSX below
+  // -- there's no category==='gem' block adding bottom slots, a recipe is
+  // the only choice this category needs), so bottomLeft/bottomRight here
+  // are never actually shown; kept centered as a harmless placeholder
+  // rather than omitted, since the Record type requires all three either
+  // way. Reuses consumable's top rect pending real commissioned art.
+  gem: {
+    top: { left: 41.4, top: 18.5, width: 16.5, height: 21.0 },
+    bottomLeft: { left: 26.5, top: 52.0, width: 16.0, height: 20.3 },
+    bottomRight: { left: 57.1, top: 52.0, width: 16.0, height: 20.3 },
   },
 };
 
@@ -205,6 +219,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
     if (!recipe) return;
     if (category === 'gear') engine.craftGear(recipe.id, chosenMods);
     else if (category === 'enchant') engine.enchantItem(recipe.id, targetUid, chosenStats);
+    else if (category === 'gem') engine.craftGem(recipe.id);
     else engine.craftConsumable(recipe.id, chosenConsumableMods);
     reset();
   }
@@ -388,7 +403,11 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
   );
 
   const materialCostLine = recipe
-    ? `${Object.entries(recipe.materialCost).map(([id, amt]) => `${amt} ${MATERIAL_BY_ID[id as MaterialId].name}`).join(' + ')} + ${formatGold(recipe.goldCost)} gold`
+    ? [
+      ...Object.entries(recipe.materialCost).map(([id, amt]) => `${amt} ${MATERIAL_BY_ID[id as MaterialId].name}`),
+      ...(recipe.scrapCost ? [`${recipe.scrapCost} Scrap`] : []),
+      `${formatGold(recipe.goldCost)} gold`,
+    ].join(' + ')
     : null;
 
   return (

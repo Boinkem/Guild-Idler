@@ -11,8 +11,8 @@ const SLOT_FALLBACK: Record<EquipSlot, string> = {
   gloves: '🧤', boots: '👢', ring: '💍', amulet: '📿', cloak: '🧣',
 };
 
-const CATEGORY_FALLBACK: Record<'gear' | 'consumable' | 'enchant', string> = {
-  gear: '⚔️', consumable: '🧪', enchant: '✨',
+const CATEGORY_FALLBACK: Record<'gear' | 'consumable' | 'enchant' | 'gem', string> = {
+  gear: '⚔️', consumable: '🧪', enchant: '✨', gem: '💎',
 };
 
 function IconBox({ icon, size, fallback }: { icon?: string; size: number; fallback: string }) {
@@ -34,7 +34,7 @@ export function ConsumableIcon({ icon, glyph, size = 40 }: { icon?: string; glyp
   return <IconBox icon={icon} size={size} fallback={glyph} />;
 }
 
-/** Falls back to a per-category glyph (gear/consumable/enchant) when a recipe has no icon assigned. */
-export function RecipeIcon({ icon, category, size = 40 }: { icon?: string; category: 'gear' | 'consumable' | 'enchant'; size?: number }) {
+/** Falls back to a per-category glyph (gear/consumable/enchant/gem) when a recipe has no icon assigned. */
+export function RecipeIcon({ icon, category, size = 40 }: { icon?: string; category: 'gear' | 'consumable' | 'enchant' | 'gem'; size?: number }) {
   return <IconBox icon={icon} size={size} fallback={CATEGORY_FALLBACK[category]} />;
 }

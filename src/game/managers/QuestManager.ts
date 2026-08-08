@@ -18,6 +18,7 @@ import { EquipmentManager } from './EquipmentManager';
 import { ModifierManager } from './ModifierManager';
 import { PetManager } from './PetManager';
 import { rerollDay, rerollsUsedToday, nextRerollCost } from '../data/reroll';
+import { rollElementTags, elementalBonusForHero } from '../data/elements';
 
 export const BOARD_SIZE = 6;
 export const BOARD_REFRESH_MS = 30 * MINUTE;
@@ -223,6 +224,8 @@ export const QuestManager = {
       rewardXp,
       loot: lootTableFor(difficulty, rng),
       reqLevel: cfg.reqLevel,
+      vulnerableTo: rollElementTags(rng, difficulty),
+      dealsElement: rollElementTags(rng, difficulty),
     };
   },
 
@@ -331,7 +334,8 @@ export const QuestManager = {
     const baselineOffset = (HeroManager.statMods(baselineStats).success ?? 0) + offer.reqLevel * 0.4;
     const levelGap = Math.max(0, offer.reqLevel - hero.level);
     const overLevelPenalty = levelGap * Tuning.get('quest.overLevelPenaltyPercent');
-    return clamp(offer.baseSuccess + mods.success - baselineOffset - overLevelPenalty, MIN_SUCCESS, MAX_SUCCESS);
+    const elemental = elementalBonusForHero(hero, offer);
+    return clamp(offer.baseSuccess + mods.success + elemental - baselineOffset - overLevelPenalty, MIN_SUCCESS, MAX_SUCCESS);
   },
 
   previewDuration(state: GameState, hero: Hero, offer: QuestOffer, now: number): number {
