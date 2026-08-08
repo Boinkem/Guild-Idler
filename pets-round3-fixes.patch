@@ -1,0 +1,428 @@
+diff --git round3_a/guild-idler-status.md round3_b/guild-idler-status.md
+index a78a7ad..f0c3899 100644
+--- round3_a/guild-idler-status.md
++++ round3_b/guild-idler-status.md
+@@ -1684,6 +1684,54 @@ from the spec pass).
+   doesn't conflict with anything: the Hatchery's own Pets tab, where each
+   `PetCard`'s sprite is now the clickable target (previously inert)
+   instead of the desktop companion.
++- **Second batch: layout bugs, a real pre-existing CSS variable typo, egg
++  drops tuned down, and a guaranteed egg-reward mechanism for chains.**
++  - **Pet cards were overflowing their own borders.** Header restructured
++    -- the rarity pill moved off the crowded name+Rename row and down to
++    pair with the species/level line instead, where there's more room; the
++    name itself now truncates with an ellipsis rather than forcing width;
++    `min-width: 0` added throughout (the classic missing piece that lets
++    a flex/grid child actually shrink instead of overflowing). New
++    `.pet-grid` (260px min column) scoped to just the Pets tab rather than
++    widening the shared `.grid.two` class, which 11 other panels also use.
++  - **The feed dropdown was white-on-white -- root cause was a real,
++    pre-existing bug, not new.** `var(--panel2)`/`var(--panel3)`/
++    `var(--text)` don't exist as CSS variables (the real names are
++    `--panel-2`/`--panel-3`/`--parchment`) -- silently falling back to
++    nothing, which happened to leave the closed dropdown box readable by
++    accident while the open `<option>` list rendered with the browser's
++    native (white) popup styling. Found the same exact typo already
++    sitting in `DashboardPanel.tsx` and `GuildNamingModal.tsx` too, not
++    just the Hatchery -- fixed all three. Also added a global `select`/
++    `select option` CSS rule as a safety net so the same typo can't
++    silently reintroduce this for a future dropdown.
++  - **Ordinary quest egg-drop chances lowered.** Was 1-3% flat per
++    difficulty tier; now 0.15-0.5% -- a genuine rare find, not a routine
++    drop, per how this was actually asked for ("very very low").
++  - **New: a guaranteed egg reward for quest chains, the actual egg
++    equivalent of `rewardItems`.** New `ChainDef.rewardEgg?: { rarity,
++    dedicatedPetId? }`, granted in `QuestManager`'s chain-completion block
++    exactly alongside the existing `rewardItems` loop -- same "always
++    granted on completion, not a chance roll" contract. `the_last_clutch`
++    refactored to use this generic field instead of a chain-specific
++    hardcoded grant call it used to have inline -- `grantsHatchery` is now
++    ONLY about the tab's own unlock+spotlight, decoupled from the egg
++    grant itself, so a future chain can carry its own `rewardEgg` without
++    needing anything hatchery-unlock-specific. Also surfaced in the
++    Quest tab's existing "Guaranteed on completion" preview
++    (`chainCompletionPreview`), alongside gold/renown/items.
++  - **DevTool reality check, stated plainly rather than glossed over:**
++    `rewardEgg` lives on `ChainDef`, and quest chains still aren't
++    DevTool-editable at all yet (`QUEST_CHAINS` is still ~450 lines of
++    literal TS -- see the long-standing "Quest chains in the DevTool"
++    backlog item). This is a pre-existing limitation this patch doesn't
++    change, not a regression -- `rewardItems` (gear) has never been
++    DevTool-editable either, for the same reason. What IS fully DevTool-
++    editable today is the raid-encounter side: `RaidEncounterDef.eggLoot`
++    (built in an earlier pass), the same reused string-list
++    `"rarity[:dedicatedPetId]@chance"` convention `loot` already uses. If
++    full chain-reward editing is wanted, that needs the bigger chains-
++    migration project, not a quick addition here.
+ - **A batch of real reported issues + the egg art, all fixed/landed
+   together.**
+   - **Egg icons -- the actual blocker is resolved.** The uploaded
+diff --git round3_a/src/game/data/json/tuning.json round3_b/src/game/data/json/tuning.json
+index 941981b..3690bee 100644
+--- round3_a/src/game/data/json/tuning.json
++++ round3_b/src/game/data/json/tuning.json
+@@ -808,50 +808,50 @@
+     "id": "pets.questEggDropChance.easy",
+     "label": "Pets: egg drop chance, Easy quests (%)",
+     "category": "pets",
+-    "value": 1,
+-    "default": 1,
++    "value": 0.15,
++    "default": 0.15,
+     "min": 0,
+     "max": 100,
+-    "description": "Flat % chance a successful Easy-tier quest drops an ordinary egg into storage. Rarity granted is the highest rarity that tier's own equipment loot table allows (see LOOT_RARITY_BY_DIFFICULTY) -- Easy grants Uncommon eggs specifically, not Common, since the low drop chance is already the real difficulty lever."
++    "description": "Flat % chance a successful Easy-tier quest drops an ordinary egg into storage (Uncommon rarity). Deliberately very low -- a genuine rare find, not a routine drop."
+   },
+   {
+     "id": "pets.questEggDropChance.normal",
+     "label": "Pets: egg drop chance, Normal quests (%)",
+     "category": "pets",
+-    "value": 1.5,
+-    "default": 1.5,
++    "value": 0.2,
++    "default": 0.2,
+     "min": 0,
+     "max": 100,
+-    "description": "Flat % chance a successful Normal-tier quest drops an ordinary egg (Rare rarity)."
++    "description": "Flat % chance a successful Normal-tier quest drops an ordinary egg (Rare rarity). Deliberately very low."
+   },
+   {
+     "id": "pets.questEggDropChance.hard",
+     "label": "Pets: egg drop chance, Hard quests (%)",
+     "category": "pets",
+-    "value": 2,
+-    "default": 2,
++    "value": 0.3,
++    "default": 0.3,
+     "min": 0,
+     "max": 100,
+-    "description": "Flat % chance a successful Hard-tier quest drops an ordinary egg (Epic rarity)."
++    "description": "Flat % chance a successful Hard-tier quest drops an ordinary egg (Epic rarity). Deliberately very low."
+   },
+   {
+     "id": "pets.questEggDropChance.epic",
+     "label": "Pets: egg drop chance, Epic quests (%)",
+     "category": "pets",
+-    "value": 2.5,
+-    "default": 2.5,
++    "value": 0.4,
++    "default": 0.4,
+     "min": 0,
+     "max": 100,
+-    "description": "Flat % chance a successful Epic-tier quest drops an ordinary egg (Legendary rarity)."
++    "description": "Flat % chance a successful Epic-tier quest drops an ordinary egg (Legendary rarity). Deliberately very low."
+   },
+   {
+     "id": "pets.questEggDropChance.legendary",
+     "label": "Pets: egg drop chance, Legendary quests (%)",
+     "category": "pets",
+-    "value": 3,
+-    "default": 3,
++    "value": 0.5,
++    "default": 0.5,
+     "min": 0,
+     "max": 100,
+-    "description": "Flat % chance a successful Legendary-tier quest drops an ordinary egg (Legendary rarity)."
++    "description": "Flat % chance a successful Legendary-tier quest drops an ordinary egg (Legendary rarity). Deliberately very low."
+   }
+-]
++]
+\ No newline at end of file
+diff --git round3_a/src/game/data/quests.ts round3_b/src/game/data/quests.ts
+index 305c6e1..ad2888a 100644
+--- round3_a/src/game/data/quests.ts
++++ round3_b/src/game/data/quests.ts
+@@ -1,4 +1,4 @@
+-import { Difficulty, QuestTag } from '../types';
++import { Difficulty, QuestTag, Rarity } from '../types';
+ import { HOUR, MINUTE } from '../util';
+ 
+ export interface DifficultyConfig {
+@@ -169,13 +169,25 @@ export interface ChainDef {
+   requiresChainId?: string;
+   /**
+    * True for exactly one chain -- the Hatchery's own intro. Completing it
+-   * flips state.hatcheryUnlocked, grants one starter egg (via a
+-   * dedicated-pool pet, see PET_BY_ID['hatchery_hound']), and triggers the
+-   * one-time spotlight prompt on the new tab. Handled in
+-   * QuestManager.resolve's chain-completion block, right alongside the
+-   * ordinary rewardGold/rewardItems grant.
++   * flips state.hatcheryUnlocked and triggers the one-time spotlight
++   * prompt on the new tab. Handled in QuestManager.resolve's chain-
++   * completion block, right alongside the ordinary rewardGold/rewardItems
++   * grant. Deliberately just the unlock+spotlight now, not the egg grant
++   * itself -- see rewardEgg below, which the_last_clutch also uses, same
++   * as any future chain that wants to guarantee one.
+    */
+   grantsHatchery?: boolean;
++  /**
++   * A guaranteed egg on completion -- the egg equivalent of rewardItems
++   * above, same "always granted, not a chance roll" contract. Optional
++   * dedicatedPetId locks in a specific species from the dedicated pool
++   * (see EggInstance.dedicatedPetId) rather than the general random one,
++   * the same way `the_last_clutch` guarantees hatchery_hound specifically
++   * rather than leaving it to chance. Independent of grantsHatchery --
++   * that flag is only ever about the Hatchery's own unlock, any chain can
++   * carry a rewardEgg once the Hatchery already exists.
++   */
++  rewardEgg?: { rarity: Rarity; dedicatedPetId?: string };
+ }
+ 
+ export const QUEST_CHAINS: ChainDef[] = [
+@@ -208,6 +220,7 @@ export const QUEST_CHAINS: ChainDef[] = [
+     rewardRenown: 1,
+     title: 'Keeper of the Clutch',
+     grantsHatchery: true,
++    rewardEgg: { rarity: 'common', dedicatedPetId: 'hatchery_hound' },
+     epilogue: "The hatchery stands again, propped up with new timber where the old beams had given out. The keeper still comes by most mornings, mostly to make sure nobody's doing it wrong -- and so far, nobody has. Whatever hatches from here on is the guild's own to raise.",
+     stages: [
+       { name: 'The Failing Coop', flavour: "Half the roof's already down, and the keeper won't leave the one nest she still trusts, not even to eat. She doesn't want gold. She wants someone strong enough to carry water and lumber faster than the weather can undo it.", tag: 'escort', difficulty: 'easy', duration: 60 * MINUTE, goldMultiplier: 1.2 },
+diff --git round3_a/src/game/managers/QuestManager.ts round3_b/src/game/managers/QuestManager.ts
+index 4bdbd8e..fb8ca8b 100644
+--- round3_a/src/game/managers/QuestManager.ts
++++ round3_b/src/game/managers/QuestManager.ts
+@@ -456,22 +456,25 @@ export const QuestManager = {
+             if (item) state.stash.push(item);
+             if (!state.discoveredItems.includes(defId)) state.discoveredItems.push(defId);
+           }
++          // Guaranteed egg reward -- the egg equivalent of rewardItems
++          // just above, same "always granted" contract. Independent of
++          // grantsHatchery below (that flag is only ever about the tab's
++          // own unlock+spotlight); any chain can carry a rewardEgg once
++          // the Hatchery exists.
++          if (chain.rewardEgg) {
++            PetManager.grantEgg(state, chain.rewardEgg.rarity, chain.rewardEgg.dedicatedPetId, resolvedAt);
++          }
+           state.completedChains.push(chainId);
+           state.activeChains = state.activeChains.filter((c) => c.chainId !== chainId);
+           state.stats.chainsCompleted += 1;
+           if (chain.title && hero) hero.title = chain.title;
+-          // The Hatchery's own intro -- see ChainDef.grantsHatchery. The
+-          // starter egg is a dedicated-pool egg (always hatches into
+-          // hatchery_hound, not a random species) since it's meant to read
+-          // as a specific reward for saving THIS hatchery, not a generic
+-          // loot roll. grantEgg can still fail if incubation is somehow
+-          // already full (it never should be, on a first unlock, but the
+-          // check costs nothing) -- either way hatcheryUnlocked and the
+-          // spotlight flag still fire, so the tab always appears.
++          // The Hatchery's own intro -- see ChainDef.grantsHatchery. Just
++          // the unlock+spotlight now; the_last_clutch's actual egg grant
++          // goes through the generic rewardEgg path above like any other
++          // chain's would.
+           if (chain.grantsHatchery) {
+             state.hatcheryUnlocked = true;
+             state.pendingHatcherySpotlight = true;
+-            PetManager.grantEgg(state, 'common', 'hatchery_hound', resolvedAt);
+           }
+         }
+       } else {
+@@ -557,7 +560,7 @@ export const QuestManager = {
+    * anywhere before; used on a chain's final-stage board card to show what's
+    * actually guaranteed, separate from that stage's own chance-based loot.
+    */
+-  chainCompletionPreview(chain: ChainDef): { rewardGold: number; rewardRenown: number; items: { name: string; rarity: Rarity }[] } {
++  chainCompletionPreview(chain: ChainDef): { rewardGold: number; rewardRenown: number; items: { name: string; rarity: Rarity }[]; egg?: { rarity: Rarity } } {
+     return {
+       rewardGold: chain.rewardGold,
+       rewardRenown: chain.rewardRenown,
+@@ -565,6 +568,7 @@ export const QuestManager = {
+         .map((defId) => EQUIPMENT_BY_ID[defId])
+         .filter((def): def is NonNullable<typeof def> => !!def)
+         .map((def) => ({ name: def.name, rarity: def.rarity })),
++      egg: chain.rewardEgg ? { rarity: chain.rewardEgg.rarity } : undefined,
+     };
+   },
+ };
+diff --git round3_a/src/styles/app.css round3_b/src/styles/app.css
+index 745d55e..424b09b 100644
+--- round3_a/src/styles/app.css
++++ round3_b/src/styles/app.css
+@@ -689,6 +689,13 @@ button:focus-visible, [tabindex]:focus-visible {
+ 
+ .grid { display: grid; gap: calc(8px * var(--density-scale)); }
+ .grid.two { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
++/* Pet cards specifically need a bit more room than the general 230px
++   minimum -- a name + Rename button + rarity pill genuinely doesn't fit
++   at 230px for a longer pet name (see the header restructuring in
++   HatcheryPanel.tsx's PetCard, which also moved the pill down a row to
++   help). Scoped to this one grid rather than widening `.grid.two`
++   globally, since that class is shared by 11 other panels. */
++.pet-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+ .grid.three { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+ 
+ .row { display: flex; gap: calc(8px * var(--density-scale)); align-items: center; }
+@@ -966,6 +973,30 @@ button:focus-visible, [tabindex]:focus-visible {
+ .setting-label { font-size: 0.75rem; }
+ .setting-control { flex: none; }
+ 
++/*
++ * No prior global <select> styling existed at all -- every dropdown was
++ * inline-styled per component, and at least 3 of them (Hatchery's feed
++ * picker, Dashboard, GuildNamingModal) had typo'd CSS variable names
++ * (--panel2/--panel3/--text instead of the real --panel-2/--panel-3/
++ * --parchment) that silently fell back to nothing, leaving the closed box
++ * readable by accident but the dropdown's own <option> list rendering
++ * with the browser's native white popup styling -- unreadable white-on-
++ * white. Fixed at both levels: the inline typos themselves, and this
++ * global rule as a safety net so the same mistake can't reintroduce the
++ * bug for a future dropdown. <option> needs its own explicit rule, not
++ * just inheritance from `select` -- most browsers render the open
++ * dropdown's option list outside the normal styling cascade.
++ */
++select {
++  background: var(--panel-2);
++  border: 1px solid var(--panel-3);
++  color: var(--parchment);
++}
++select option {
++  background: var(--panel-2);
++  color: var(--parchment);
++}
++
+ input[type='range'] {
+   width: 180px;
+   accent-color: var(--brass);
+diff --git round3_a/src/ui/GuildNamingModal.tsx round3_b/src/ui/GuildNamingModal.tsx
+index b15c91d..9f9c117 100644
+--- round3_a/src/ui/GuildNamingModal.tsx
++++ round3_b/src/ui/GuildNamingModal.tsx
+@@ -71,7 +71,7 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => void })
+           style={{
+             width: 96, height: 96, margin: '0 auto 12px',
+             display: 'flex', alignItems: 'center', justifyContent: 'center',
+-            border: '1px dashed var(--panel3)', borderRadius: 4, fontSize: 40,
++            border: '1px dashed var(--panel-3)', borderRadius: 4, fontSize: 40,
+           }}
+           aria-hidden="true"
+         >
+@@ -94,8 +94,8 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => void })
+             onChange={(e) => setDraft(e.target.value)}
+             onKeyDown={(e) => { if (e.key === 'Enter') confirm(); }}
+             style={{
+-              flex: 1, background: 'var(--panel2)', border: '1px solid var(--panel3)',
+-              color: 'var(--text)', padding: '7px 8px',
++              flex: 1, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
++              color: 'var(--parchment)', padding: '7px 8px',
+             }}
+           />
+         </div>
+diff --git round3_a/src/ui/panels/DashboardPanel.tsx round3_b/src/ui/panels/DashboardPanel.tsx
+index 3a178e2..9eb6a78 100644
+--- round3_a/src/ui/panels/DashboardPanel.tsx
++++ round3_b/src/ui/panels/DashboardPanel.tsx
+@@ -63,8 +63,8 @@ export function DashboardPanel() {
+               onChange={(e) => setNameDraft(e.target.value)}
+               onKeyDown={(e) => { if (e.key === 'Enter') saveName(); }}
+               style={{
+-                flex: 1, background: 'var(--panel2)', border: '1px solid var(--panel3)',
+-                color: 'var(--text)', padding: '7px 8px',
++                flex: 1, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
++                color: 'var(--parchment)', padding: '7px 8px',
+               }}
+             />
+             <button onClick={saveName}>Save</button>
+diff --git round3_a/src/ui/panels/HatcheryPanel.tsx round3_b/src/ui/panels/HatcheryPanel.tsx
+index 554fc56..a4a337f 100644
+--- round3_a/src/ui/panels/HatcheryPanel.tsx
++++ round3_b/src/ui/panels/HatcheryPanel.tsx
+@@ -166,7 +166,7 @@ function PetsTab() {
+       {state.pets.length === 0 && (
+         <div className="card"><p className="card-flavour">No pets hatched yet -- check the Nests tab.</p></div>
+       )}
+-      <div className="grid two">
++      <div className="grid two pet-grid">
+         {state.pets.map((pet) => <PetCard key={pet.uid} pet={pet} />)}
+       </div>
+     </>
+@@ -216,7 +216,7 @@ function PetCard({ pet }: { pet: Pet }) {
+             fallback={<span style={{ fontSize: '1.6rem' }}>{def?.glyph ?? '\u2753'}</span>}
+           />
+         </button>
+-        <div style={{ flex: 1 }}>
++        <div style={{ flex: 1, minWidth: 0 }}>
+           {editing ? (
+             <div className="row" style={{ gap: 6 }}>
+               <input
+@@ -226,27 +226,31 @@ function PetCard({ pet }: { pet: Pet }) {
+                 autoFocus
+                 onChange={(e) => setDraft(e.target.value)}
+                 onKeyDown={(e) => { if (e.key === 'Enter') saveName(); }}
+-                style={{ flex: 1, background: 'var(--panel2)', border: '1px solid var(--panel3)', color: 'var(--text)', padding: '4px 6px' }}
++                style={{ flex: 1, minWidth: 0, background: 'var(--panel-2)', border: '1px solid var(--panel-3)', color: 'var(--parchment)', padding: '4px 6px' }}
+               />
+               <button onClick={saveName}>Save</button>
+             </div>
+           ) : (
+-            <div className="spread">
+-              <span className="row" style={{ gap: 6, alignItems: 'center' }}>
+-                <span className="card-title">{pet.name}</span>
+-                <button
+-                  type="button"
+-                  className="btn-ghost"
+-                  style={{ minHeight: 0, padding: '1px 6px', fontSize: '0.6875rem', color: '#5b8fd6', borderColor: '#5b8fd6' }}
+-                  onClick={() => { setDraft(pet.name); setEditing(true); }}
+-                >
+-                  Rename
+-                </button>
++            <span className="row" style={{ gap: 6, alignItems: 'center', minWidth: 0 }}>
++              <span className="card-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
++                {pet.name}
+               </span>
+-              <RarityPill rarity={pet.rarity} />
+-            </div>
++              <button
++                type="button"
++                className="btn-ghost"
++                style={{ minHeight: 0, padding: '1px 6px', fontSize: '0.6875rem', color: '#5b8fd6', borderColor: '#5b8fd6', flexShrink: 0 }}
++                onClick={() => { setDraft(pet.name); setEditing(true); }}
++              >
++                Rename
++              </button>
++            </span>
+           )}
+-          <p className="tiny muted" style={{ margin: '2px 0' }}>{def?.name ?? 'Unknown species'} -- Level {level}</p>
++          <div className="spread" style={{ marginTop: 2, gap: 6 }}>
++            <p className="tiny muted" style={{ margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
++              {def?.name ?? 'Unknown species'} -- Level {level}
++            </p>
++            <RarityPill rarity={pet.rarity} />
++          </div>
+         </div>
+       </div>
+ 
+@@ -267,7 +271,7 @@ function PetCard({ pet }: { pet: Pet }) {
+         <select
+           value={feedMaterial}
+           onChange={(e) => setFeedMaterial(e.target.value as MaterialId)}
+-          style={{ background: 'var(--panel2)', border: '1px solid var(--panel3)', color: 'var(--text)', padding: '4px 6px' }}
++          style={{ background: 'var(--panel-2)', border: '1px solid var(--panel-3)', color: 'var(--parchment)', padding: '4px 6px' }}
+         >
+           {FEEDABLE_MATERIALS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+         </select>
+diff --git round3_a/src/ui/panels/QuestPanel.tsx round3_b/src/ui/panels/QuestPanel.tsx
+index 7b9bd33..37340f2 100644
+--- round3_a/src/ui/panels/QuestPanel.tsx
++++ round3_b/src/ui/panels/QuestPanel.tsx
+@@ -7,6 +7,7 @@ import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { QuestOffer, Hero } from '../../game/types';
+ import { formatDuration, formatGold } from '../../game/util';
+ import { RarityPill } from '../RarityPill';
++import { EggIcon } from '../EggIcon';
+ 
+ type Offer = QuestOffer;
+ 
+@@ -126,6 +127,13 @@ function QuestCard({
+                       <RarityPill rarity={item.rarity} />
+                     </span>
+                   ))}
++                  {completion.egg && (
++                    <span className="row" style={{ gap: 4, alignItems: 'center' }}>
++                      <EggIcon rarity={completion.egg.rarity} size={16} />
++                      <span className="tiny">Egg</span>
++                      <RarityPill rarity={completion.egg.rarity} />
++                    </span>
++                  )}
+                 </div>
+               </>
+             );

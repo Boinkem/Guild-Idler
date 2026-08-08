@@ -689,6 +689,13 @@ button:focus-visible, [tabindex]:focus-visible {
 
 .grid { display: grid; gap: calc(8px * var(--density-scale)); }
 .grid.two { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+/* Pet cards specifically need a bit more room than the general 230px
+   minimum -- a name + Rename button + rarity pill genuinely doesn't fit
+   at 230px for a longer pet name (see the header restructuring in
+   HatcheryPanel.tsx's PetCard, which also moved the pill down a row to
+   help). Scoped to this one grid rather than widening `.grid.two`
+   globally, since that class is shared by 11 other panels. */
+.pet-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .grid.three { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 
 .row { display: flex; gap: calc(8px * var(--density-scale)); align-items: center; }
@@ -965,6 +972,30 @@ button:focus-visible, [tabindex]:focus-visible {
 }
 .setting-label { font-size: 0.75rem; }
 .setting-control { flex: none; }
+
+/*
+ * No prior global <select> styling existed at all -- every dropdown was
+ * inline-styled per component, and at least 3 of them (Hatchery's feed
+ * picker, Dashboard, GuildNamingModal) had typo'd CSS variable names
+ * (--panel2/--panel3/--text instead of the real --panel-2/--panel-3/
+ * --parchment) that silently fell back to nothing, leaving the closed box
+ * readable by accident but the dropdown's own <option> list rendering
+ * with the browser's native white popup styling -- unreadable white-on-
+ * white. Fixed at both levels: the inline typos themselves, and this
+ * global rule as a safety net so the same mistake can't reintroduce the
+ * bug for a future dropdown. <option> needs its own explicit rule, not
+ * just inheritance from `select` -- most browsers render the open
+ * dropdown's option list outside the normal styling cascade.
+ */
+select {
+  background: var(--panel-2);
+  border: 1px solid var(--panel-3);
+  color: var(--parchment);
+}
+select option {
+  background: var(--panel-2);
+  color: var(--parchment);
+}
 
 input[type='range'] {
   width: 180px;

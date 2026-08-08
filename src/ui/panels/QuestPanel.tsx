@@ -7,6 +7,7 @@ import { InventoryManager } from '../../game/managers/InventoryManager';
 import { QuestOffer, Hero } from '../../game/types';
 import { formatDuration, formatGold } from '../../game/util';
 import { RarityPill } from '../RarityPill';
+import { EggIcon } from '../EggIcon';
 
 type Offer = QuestOffer;
 
@@ -126,6 +127,13 @@ function QuestCard({
                       <RarityPill rarity={item.rarity} />
                     </span>
                   ))}
+                  {completion.egg && (
+                    <span className="row" style={{ gap: 4, alignItems: 'center' }}>
+                      <EggIcon rarity={completion.egg.rarity} size={16} />
+                      <span className="tiny">Egg</span>
+                      <RarityPill rarity={completion.egg.rarity} />
+                    </span>
+                  )}
                 </div>
               </>
             );

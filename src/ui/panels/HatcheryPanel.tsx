@@ -166,7 +166,7 @@ function PetsTab() {
       {state.pets.length === 0 && (
         <div className="card"><p className="card-flavour">No pets hatched yet -- check the Nests tab.</p></div>
       )}
-      <div className="grid two">
+      <div className="grid two pet-grid">
         {state.pets.map((pet) => <PetCard key={pet.uid} pet={pet} />)}
       </div>
     </>
@@ -216,7 +216,7 @@ function PetCard({ pet }: { pet: Pet }) {
             fallback={<span style={{ fontSize: '1.6rem' }}>{def?.glyph ?? '\u2753'}</span>}
           />
         </button>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           {editing ? (
             <div className="row" style={{ gap: 6 }}>
               <input
@@ -226,27 +226,31 @@ function PetCard({ pet }: { pet: Pet }) {
                 autoFocus
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') saveName(); }}
-                style={{ flex: 1, background: 'var(--panel2)', border: '1px solid var(--panel3)', color: 'var(--text)', padding: '4px 6px' }}
+                style={{ flex: 1, minWidth: 0, background: 'var(--panel-2)', border: '1px solid var(--panel-3)', color: 'var(--parchment)', padding: '4px 6px' }}
               />
               <button onClick={saveName}>Save</button>
             </div>
           ) : (
-            <div className="spread">
-              <span className="row" style={{ gap: 6, alignItems: 'center' }}>
-                <span className="card-title">{pet.name}</span>
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  style={{ minHeight: 0, padding: '1px 6px', fontSize: '0.6875rem', color: '#5b8fd6', borderColor: '#5b8fd6' }}
-                  onClick={() => { setDraft(pet.name); setEditing(true); }}
-                >
-                  Rename
-                </button>
+            <span className="row" style={{ gap: 6, alignItems: 'center', minWidth: 0 }}>
+              <span className="card-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                {pet.name}
               </span>
-              <RarityPill rarity={pet.rarity} />
-            </div>
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ minHeight: 0, padding: '1px 6px', fontSize: '0.6875rem', color: '#5b8fd6', borderColor: '#5b8fd6', flexShrink: 0 }}
+                onClick={() => { setDraft(pet.name); setEditing(true); }}
+              >
+                Rename
+              </button>
+            </span>
           )}
-          <p className="tiny muted" style={{ margin: '2px 0' }}>{def?.name ?? 'Unknown species'} -- Level {level}</p>
+          <div className="spread" style={{ marginTop: 2, gap: 6 }}>
+            <p className="tiny muted" style={{ margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+              {def?.name ?? 'Unknown species'} -- Level {level}
+            </p>
+            <RarityPill rarity={pet.rarity} />
+          </div>
         </div>
       </div>
 
@@ -267,7 +271,7 @@ function PetCard({ pet }: { pet: Pet }) {
         <select
           value={feedMaterial}
           onChange={(e) => setFeedMaterial(e.target.value as MaterialId)}
-          style={{ background: 'var(--panel2)', border: '1px solid var(--panel3)', color: 'var(--text)', padding: '4px 6px' }}
+          style={{ background: 'var(--panel-2)', border: '1px solid var(--panel-3)', color: 'var(--parchment)', padding: '4px 6px' }}
         >
           {FEEDABLE_MATERIALS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
         </select>

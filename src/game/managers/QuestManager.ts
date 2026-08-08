@@ -456,22 +456,25 @@ export const QuestManager = {
             if (item) state.stash.push(item);
             if (!state.discoveredItems.includes(defId)) state.discoveredItems.push(defId);
           }
+          // Guaranteed egg reward -- the egg equivalent of rewardItems
+          // just above, same "always granted" contract. Independent of
+          // grantsHatchery below (that flag is only ever about the tab's
+          // own unlock+spotlight); any chain can carry a rewardEgg once
+          // the Hatchery exists.
+          if (chain.rewardEgg) {
+            PetManager.grantEgg(state, chain.rewardEgg.rarity, chain.rewardEgg.dedicatedPetId, resolvedAt);
+          }
           state.completedChains.push(chainId);
           state.activeChains = state.activeChains.filter((c) => c.chainId !== chainId);
           state.stats.chainsCompleted += 1;
           if (chain.title && hero) hero.title = chain.title;
-          // The Hatchery's own intro -- see ChainDef.grantsHatchery. The
-          // starter egg is a dedicated-pool egg (always hatches into
-          // hatchery_hound, not a random species) since it's meant to read
-          // as a specific reward for saving THIS hatchery, not a generic
-          // loot roll. grantEgg can still fail if incubation is somehow
-          // already full (it never should be, on a first unlock, but the
-          // check costs nothing) -- either way hatcheryUnlocked and the
-          // spotlight flag still fire, so the tab always appears.
+          // The Hatchery's own intro -- see ChainDef.grantsHatchery. Just
+          // the unlock+spotlight now; the_last_clutch's actual egg grant
+          // goes through the generic rewardEgg path above like any other
+          // chain's would.
           if (chain.grantsHatchery) {
             state.hatcheryUnlocked = true;
             state.pendingHatcherySpotlight = true;
-            PetManager.grantEgg(state, 'common', 'hatchery_hound', resolvedAt);
           }
         }
       } else {
@@ -557,7 +560,7 @@ export const QuestManager = {
    * anywhere before; used on a chain's final-stage board card to show what's
    * actually guaranteed, separate from that stage's own chance-based loot.
    */
-  chainCompletionPreview(chain: ChainDef): { rewardGold: number; rewardRenown: number; items: { name: string; rarity: Rarity }[] } {
+  chainCompletionPreview(chain: ChainDef): { rewardGold: number; rewardRenown: number; items: { name: string; rarity: Rarity }[]; egg?: { rarity: Rarity } } {
     return {
       rewardGold: chain.rewardGold,
       rewardRenown: chain.rewardRenown,
@@ -565,6 +568,7 @@ export const QuestManager = {
         .map((defId) => EQUIPMENT_BY_ID[defId])
         .filter((def): def is NonNullable<typeof def> => !!def)
         .map((def) => ({ name: def.name, rarity: def.rarity })),
+      egg: chain.rewardEgg ? { rarity: chain.rewardEgg.rarity } : undefined,
     };
   },
 };

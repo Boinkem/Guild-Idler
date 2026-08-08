@@ -1684,6 +1684,54 @@ from the spec pass).
   doesn't conflict with anything: the Hatchery's own Pets tab, where each
   `PetCard`'s sprite is now the clickable target (previously inert)
   instead of the desktop companion.
+- **Second batch: layout bugs, a real pre-existing CSS variable typo, egg
+  drops tuned down, and a guaranteed egg-reward mechanism for chains.**
+  - **Pet cards were overflowing their own borders.** Header restructured
+    -- the rarity pill moved off the crowded name+Rename row and down to
+    pair with the species/level line instead, where there's more room; the
+    name itself now truncates with an ellipsis rather than forcing width;
+    `min-width: 0` added throughout (the classic missing piece that lets
+    a flex/grid child actually shrink instead of overflowing). New
+    `.pet-grid` (260px min column) scoped to just the Pets tab rather than
+    widening the shared `.grid.two` class, which 11 other panels also use.
+  - **The feed dropdown was white-on-white -- root cause was a real,
+    pre-existing bug, not new.** `var(--panel2)`/`var(--panel3)`/
+    `var(--text)` don't exist as CSS variables (the real names are
+    `--panel-2`/`--panel-3`/`--parchment`) -- silently falling back to
+    nothing, which happened to leave the closed dropdown box readable by
+    accident while the open `<option>` list rendered with the browser's
+    native (white) popup styling. Found the same exact typo already
+    sitting in `DashboardPanel.tsx` and `GuildNamingModal.tsx` too, not
+    just the Hatchery -- fixed all three. Also added a global `select`/
+    `select option` CSS rule as a safety net so the same typo can't
+    silently reintroduce this for a future dropdown.
+  - **Ordinary quest egg-drop chances lowered.** Was 1-3% flat per
+    difficulty tier; now 0.15-0.5% -- a genuine rare find, not a routine
+    drop, per how this was actually asked for ("very very low").
+  - **New: a guaranteed egg reward for quest chains, the actual egg
+    equivalent of `rewardItems`.** New `ChainDef.rewardEgg?: { rarity,
+    dedicatedPetId? }`, granted in `QuestManager`'s chain-completion block
+    exactly alongside the existing `rewardItems` loop -- same "always
+    granted on completion, not a chance roll" contract. `the_last_clutch`
+    refactored to use this generic field instead of a chain-specific
+    hardcoded grant call it used to have inline -- `grantsHatchery` is now
+    ONLY about the tab's own unlock+spotlight, decoupled from the egg
+    grant itself, so a future chain can carry its own `rewardEgg` without
+    needing anything hatchery-unlock-specific. Also surfaced in the
+    Quest tab's existing "Guaranteed on completion" preview
+    (`chainCompletionPreview`), alongside gold/renown/items.
+  - **DevTool reality check, stated plainly rather than glossed over:**
+    `rewardEgg` lives on `ChainDef`, and quest chains still aren't
+    DevTool-editable at all yet (`QUEST_CHAINS` is still ~450 lines of
+    literal TS -- see the long-standing "Quest chains in the DevTool"
+    backlog item). This is a pre-existing limitation this patch doesn't
+    change, not a regression -- `rewardItems` (gear) has never been
+    DevTool-editable either, for the same reason. What IS fully DevTool-
+    editable today is the raid-encounter side: `RaidEncounterDef.eggLoot`
+    (built in an earlier pass), the same reused string-list
+    `"rarity[:dedicatedPetId]@chance"` convention `loot` already uses. If
+    full chain-reward editing is wanted, that needs the bigger chains-
+    migration project, not a quick addition here.
 - **A batch of real reported issues + the egg art, all fixed/landed
   together.**
   - **Egg icons -- the actual blocker is resolved.** The uploaded

@@ -808,50 +808,50 @@
     "id": "pets.questEggDropChance.easy",
     "label": "Pets: egg drop chance, Easy quests (%)",
     "category": "pets",
-    "value": 1,
-    "default": 1,
+    "value": 0.15,
+    "default": 0.15,
     "min": 0,
     "max": 100,
-    "description": "Flat % chance a successful Easy-tier quest drops an ordinary egg into storage. Rarity granted is the highest rarity that tier's own equipment loot table allows (see LOOT_RARITY_BY_DIFFICULTY) -- Easy grants Uncommon eggs specifically, not Common, since the low drop chance is already the real difficulty lever."
+    "description": "Flat % chance a successful Easy-tier quest drops an ordinary egg into storage (Uncommon rarity). Deliberately very low -- a genuine rare find, not a routine drop."
   },
   {
     "id": "pets.questEggDropChance.normal",
     "label": "Pets: egg drop chance, Normal quests (%)",
     "category": "pets",
-    "value": 1.5,
-    "default": 1.5,
+    "value": 0.2,
+    "default": 0.2,
     "min": 0,
     "max": 100,
-    "description": "Flat % chance a successful Normal-tier quest drops an ordinary egg (Rare rarity)."
+    "description": "Flat % chance a successful Normal-tier quest drops an ordinary egg (Rare rarity). Deliberately very low."
   },
   {
     "id": "pets.questEggDropChance.hard",
     "label": "Pets: egg drop chance, Hard quests (%)",
     "category": "pets",
-    "value": 2,
-    "default": 2,
+    "value": 0.3,
+    "default": 0.3,
     "min": 0,
     "max": 100,
-    "description": "Flat % chance a successful Hard-tier quest drops an ordinary egg (Epic rarity)."
+    "description": "Flat % chance a successful Hard-tier quest drops an ordinary egg (Epic rarity). Deliberately very low."
   },
   {
     "id": "pets.questEggDropChance.epic",
     "label": "Pets: egg drop chance, Epic quests (%)",
     "category": "pets",
-    "value": 2.5,
-    "default": 2.5,
+    "value": 0.4,
+    "default": 0.4,
     "min": 0,
     "max": 100,
-    "description": "Flat % chance a successful Epic-tier quest drops an ordinary egg (Legendary rarity)."
+    "description": "Flat % chance a successful Epic-tier quest drops an ordinary egg (Legendary rarity). Deliberately very low."
   },
   {
     "id": "pets.questEggDropChance.legendary",
     "label": "Pets: egg drop chance, Legendary quests (%)",
     "category": "pets",
-    "value": 3,
-    "default": 3,
+    "value": 0.5,
+    "default": 0.5,
     "min": 0,
     "max": 100,
-    "description": "Flat % chance a successful Legendary-tier quest drops an ordinary egg (Legendary rarity)."
+    "description": "Flat % chance a successful Legendary-tier quest drops an ordinary egg (Legendary rarity). Deliberately very low."
   }
 ]

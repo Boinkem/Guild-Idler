@@ -63,8 +63,8 @@ export function DashboardPanel() {
               onChange={(e) => setNameDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') saveName(); }}
               style={{
-                flex: 1, background: 'var(--panel2)', border: '1px solid var(--panel3)',
-                color: 'var(--text)', padding: '7px 8px',
+                flex: 1, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+                color: 'var(--parchment)', padding: '7px 8px',
               }}
             />
             <button onClick={saveName}>Save</button>

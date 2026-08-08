@@ -1,4 +1,4 @@
-import { Difficulty, QuestTag } from '../types';
+import { Difficulty, QuestTag, Rarity } from '../types';
 import { HOUR, MINUTE } from '../util';
 
 export interface DifficultyConfig {
@@ -169,13 +169,25 @@ export interface ChainDef {
   requiresChainId?: string;
   /**
    * True for exactly one chain -- the Hatchery's own intro. Completing it
-   * flips state.hatcheryUnlocked, grants one starter egg (via a
-   * dedicated-pool pet, see PET_BY_ID['hatchery_hound']), and triggers the
-   * one-time spotlight prompt on the new tab. Handled in
-   * QuestManager.resolve's chain-completion block, right alongside the
-   * ordinary rewardGold/rewardItems grant.
+   * flips state.hatcheryUnlocked and triggers the one-time spotlight
+   * prompt on the new tab. Handled in QuestManager.resolve's chain-
+   * completion block, right alongside the ordinary rewardGold/rewardItems
+   * grant. Deliberately just the unlock+spotlight now, not the egg grant
+   * itself -- see rewardEgg below, which the_last_clutch also uses, same
+   * as any future chain that wants to guarantee one.
    */
   grantsHatchery?: boolean;
+  /**
+   * A guaranteed egg on completion -- the egg equivalent of rewardItems
+   * above, same "always granted, not a chance roll" contract. Optional
+   * dedicatedPetId locks in a specific species from the dedicated pool
+   * (see EggInstance.dedicatedPetId) rather than the general random one,
+   * the same way `the_last_clutch` guarantees hatchery_hound specifically
+   * rather than leaving it to chance. Independent of grantsHatchery --
+   * that flag is only ever about the Hatchery's own unlock, any chain can
+   * carry a rewardEgg once the Hatchery already exists.
+   */
+  rewardEgg?: { rarity: Rarity; dedicatedPetId?: string };
 }
 
 export const QUEST_CHAINS: ChainDef[] = [
@@ -208,6 +220,7 @@ export const QUEST_CHAINS: ChainDef[] = [
     rewardRenown: 1,
     title: 'Keeper of the Clutch',
     grantsHatchery: true,
+    rewardEgg: { rarity: 'common', dedicatedPetId: 'hatchery_hound' },
     epilogue: "The hatchery stands again, propped up with new timber where the old beams had given out. The keeper still comes by most mornings, mostly to make sure nobody's doing it wrong -- and so far, nobody has. Whatever hatches from here on is the guild's own to raise.",
     stages: [
       { name: 'The Failing Coop', flavour: "Half the roof's already down, and the keeper won't leave the one nest she still trusts, not even to eat. She doesn't want gold. She wants someone strong enough to carry water and lumber faster than the weather can undo it.", tag: 'escort', difficulty: 'easy', duration: 60 * MINUTE, goldMultiplier: 1.2 },
