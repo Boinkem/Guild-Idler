@@ -1640,6 +1640,36 @@ from the spec pass).
      caller does, a pet with no art yet (or hitting bug #1 above) rendered
      as a literal empty box, not even an emoji. Fixed by passing the same
      `PetDef.glyph` fallback every other caller already uses.
+- **New: pet can be dragged to a custom spot, scaled independently of the
+  hero, both persisted.** Same lock/unlock state the companion window
+  already uses to become draggable at all -- not a separate toggle, per
+  how this was actually asked for. Reusing that state meant the pet
+  needed its OWN drag handling rather than opting into the window's
+  existing OS-level `-webkit-app-region: drag`, which would otherwise
+  move the whole companion instead of just the pet: real mousedown/
+  mousemove/mouseup tracking on `.pet-companion-button`
+  (`handlePetMouseDown` etc., `IdleView.tsx`), with a 3px-of-movement
+  threshold before it counts as a drag rather than a click, and a
+  `petJustDraggedRef` flag consumed in the click handler so a completed
+  drag doesn't also fire "open guild" the moment the mouse releases (the
+  same click-vs-drag problem `.knight-button`'s own comment already
+  documents solving for the window-level case, solved the same way here
+  since this needed its own answer). The offset itself
+  (`settings.petOffsetX/Y`, persisted like every other display setting,
+  not game state) is applied via CSS custom properties
+  (`--pet-drag-x/-y`) added on top of the existing default-position
+  `calc()` rather than a `transform`, since the `bob` keyframe animation
+  already animates `transform` and a second source fighting it every
+  frame would have caused visible jitter -- confirmed via the same
+  rendered-mockup approach as the positioning fixes above, simulating a
+  dragged offset and checking it composes correctly with the grounded
+  default position, not just reasoned through. New "Reset pet position"
+  button in Settings for undoing a bad drag. Also added a dedicated "Pet
+  size" slider (`settings.petSpriteScale`), independent of the hero's own
+  `spriteScale` -- a pet and hero don't need to grow together, and
+  neither `Settings` field needed a version bump to add since the
+  existing load path already spreads new fields over `DEFAULT_SETTINGS`
+  automatically.
 - **Click the desktop companion pet to view it enlarged -- moved after a
   real conflict was reported.** `PetEnlargedModal.tsx` (a big 160px
   `PetSprite` with Idle/Movement/Sleep buttons, falling back the same way

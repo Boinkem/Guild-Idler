@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useSettings } from '../useSettings';
 import { HeroSprite } from '../sprites/HeroSprite';
+import { PetSprite } from '../sprites/PetSprite';
 import { Settings, THEMES } from '../../game/settings';
 import { previewSound } from '../../game/sound';
 
@@ -142,6 +143,25 @@ export function SettingsPanel() {
             <HeroSprite heroClass="adventurer" animation="idle" height={Math.round(80 * settings.spriteScale)} />
           </div>
         </div>
+      </Row>
+
+      <Row label="Pet size" hint={`${Math.round(settings.petSpriteScale * 100)}% -- affects the companion pet only, not the hero above`}>
+        <div className="row" style={{ gap: 16, alignItems: 'center' }}>
+          <input
+            type="range" min={0.5} max={2} step={0.05}
+            value={settings.petSpriteScale}
+            onChange={(e) => update('petSpriteScale', Number(e.target.value))}
+          />
+          <div className="sprite-preview">
+            <PetSprite species="ember_kit" animation="idle" height={Math.round(48 * settings.petSpriteScale)} fallback={<span>🦊</span>} />
+          </div>
+        </div>
+      </Row>
+
+      <Row label="Pet position" hint="Unlock the companion and drag the pet to move it. Resets it to the default spot beside the hero.">
+        <button onClick={() => { update('petOffsetX', 0); update('petOffsetY', 0); }}>
+          Reset pet position
+        </button>
       </Row>
 
       <Row label="Animation speed" hint="Applies to the corner companion.">

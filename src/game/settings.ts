@@ -61,6 +61,17 @@ export interface Settings {
   fontScale: number;          // 0.85 – 1.5, 1.35 = default (the old 1 read small on a desktop)
   /** Multiplier on the corner companion and menu hero sprites. */
   spriteScale: number;        // 0.75 – 1.75
+  /** Multiplier on the equipped pet's companion sprite -- independent of
+   *  spriteScale, since a pet and a hero don't need to grow together. */
+  petSpriteScale: number;     // 0.5 – 2
+  /** Companion pet's dragged position offset from its default spot, in px
+   *  relative to the default anchor -- set by dragging the pet while the
+   *  companion is unlocked (see IdleView.tsx), (0,0) is the default
+   *  position. Persisted here rather than game state since, like every
+   *  other display setting, it's a per-device preference, not guild
+   *  progress. */
+  petOffsetX: number;
+  petOffsetY: number;
   /** Menu density: tightens or loosens padding across cards and panels. */
   density: 'compact' | 'cozy' | 'comfortable';
 
@@ -96,6 +107,9 @@ export const DEFAULT_SETTINGS: Settings = {
   version: SETTINGS_VERSION,
   fontScale: 1.35,
   spriteScale: 1,
+  petSpriteScale: 1,
+  petOffsetX: 0,
+  petOffsetY: 0,
   density: 'compact',
   theme: 'high_contrast',
   styleId: 'adventure',

@@ -17,7 +17,7 @@ const ATTACK_VARIANTS: HeroAnimation[] = ['attack_1', 'attack_2', 'attack_3'];
 export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
   const engine = useEngine();
   const now = useNow();
-  const { settings } = useSettings();
+  const { settings, update: updateSettings } = useSettings();
   const hero = engine.displayedHero;
   const quest = engine.activeQuestFor(hero.id);
   const [anim, setAnim] = useState<Anim>(quest ? 'walking' : 'idle');
@@ -114,6 +114,62 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
   // frames anyway.
   const equippedPet = engine.state.pets.find((p) => p.uid === engine.state.equippedPetIds[0]);
   const petDef = equippedPet ? PET_BY_ID[equippedPet.defId] : null;
+
+  /**
+   * Free-drag the pet to a custom spot, reusing the SAME lock/unlock state
+   * the whole companion window already uses -- deliberately not its own
+   * separate toggle, per how this was actually asked for. Real click-vs-
+   * drag disambiguation is needed here (unlike the window's own OS-level
+   * drag, which Chromium already handles for free): a plain click still
+   * has to open the guild, exactly like the hero, and only an actual
+   * mouse-move during the hold should count as a drag. window-level
+   * mousemove/mouseup listeners (not onMouseMove on the button itself) so
+   * dragging keeps tracking even if the cursor slips off the small sprite
+   * mid-drag.
+   */
+  const petDragRef = useRef<{ startX: number; startY: number; origX: number; origY: number; moved: boolean } | null>(null);
+  const petJustDraggedRef = useRef(false);
+
+  const handlePetMouseDown = (e: React.MouseEvent) => {
+    if (locked) return; // locked: plain click only, same as the hero
+    e.preventDefault();
+    petDragRef.current = {
+      startX: e.clientX, startY: e.clientY,
+      origX: settings.petOffsetX, origY: settings.petOffsetY,
+      moved: false,
+    };
+    window.addEventListener('mousemove', handlePetMouseMove);
+    window.addEventListener('mouseup', handlePetMouseUp);
+  };
+  const handlePetMouseMove = (e: MouseEvent) => {
+    const drag = petDragRef.current;
+    if (!drag) return;
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
+    // A few px of slop before it counts as a real drag -- otherwise every
+    // ordinary click (which always jitters the mouse a pixel or two) would
+    // register as a drag and silently eat the click-to-open-guild behaviour.
+    if (!drag.moved && Math.hypot(dx, dy) < 3) return;
+    drag.moved = true;
+    petJustDraggedRef.current = true;
+    updateSettings('petOffsetX', drag.origX + dx);
+    updateSettings('petOffsetY', drag.origY + dy);
+  };
+  const handlePetMouseUp = () => {
+    window.removeEventListener('mousemove', handlePetMouseMove);
+    window.removeEventListener('mouseup', handlePetMouseUp);
+    petDragRef.current = null;
+  };
+  const handlePetClick = () => {
+    // Consume the flag rather than checking drag.moved directly -- mouseup
+    // (which clears petDragRef) always fires before click in standard DOM
+    // event order, so by the time this runs petDragRef is already null.
+    if (petJustDraggedRef.current) {
+      petJustDraggedRef.current = false;
+      return;
+    }
+    onOpenMenu();
+  };
 
   // "Desktop when back from failed quest -- damage" (fox-specific request,
   // but harmless to request generically -- PetSprite.resolveAnimation just
@@ -257,16 +313,18 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
           <button
             type="button"
             className="pet-companion-button"
-            onClick={onOpenMenu}
+            onMouseDown={handlePetMouseDown}
+            onClick={handlePetClick}
+            style={{ '--pet-drag-x': `${settings.petOffsetX}px`, '--pet-drag-y': `${settings.petOffsetY}px` } as React.CSSProperties}
             title={equippedPet.name}
-            aria-label={`${equippedPet.name} — open guild`}
+            aria-label={`${equippedPet.name} — open guild, or drag to reposition while unlocked`}
           >
             <PetSprite
               species={petDef.spriteFolder}
               rarity={equippedPet.rarity}
               animation={petAnimation}
               flip={facingReturn}
-              height={Math.round(90 * settings.spriteScale)}
+              height={Math.round(90 * settings.petSpriteScale)}
               title={equippedPet.name}
               fallback={<span style={{ fontSize: '1.4rem' }}>{petDef.glyph}</span>}
             />

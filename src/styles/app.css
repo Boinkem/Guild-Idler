@@ -293,6 +293,21 @@ button:focus-visible, [tabindex]:focus-visible {
 .idle-root.unlocked .carousel-arrow {
   -webkit-app-region: no-drag;
 }
+/*
+ * The pet needs its OWN drag handling (see IdleView.tsx's
+ * handlePetMouseDown) rather than the OS-level window-drag every other
+ * unlocked element opts into above -- dragging the pet is meant to
+ * reposition just the pet, not move the whole companion window. Chromium
+ * would otherwise treat any mouse-move starting on the pet as a window
+ * drag before React's own listeners get a chance, the same way it does
+ * for .knight-button, since .pet-companion-button also sits inside
+ * .idle-stage's blanket drag region above.
+ */
+.idle-root.unlocked .pet-companion-button {
+  -webkit-app-region: no-drag;
+  cursor: grab;
+}
+.idle-root.unlocked .pet-companion-button:active { cursor: grabbing; }
 
 /*
  * -webkit-app-region: drag above has zero visual effect on its own -- a
@@ -420,10 +435,15 @@ button:focus-visible, [tabindex]:focus-visible {
      confirmed against an actual rendered mockup (not just reasoned through
      in CSS) that this reads as the pet standing in the foreground at the
      hero's feet, not floating off to one side. Higher z-index than
-     .knight-button on purpose, for the same "foreground" reason. */
+     .knight-button on purpose, for the same "foreground" reason.
+     --pet-drag-x/--pet-drag-y are set inline by IdleView.tsx from
+     settings.petOffsetX/Y (persisted, dragged by the player while
+     unlocked) -- added on top of the default anchor via calc() rather
+     than a separate transform, since bob's own keyframes already animate
+     transform and a second transform source would fight it every frame. */
   position: absolute;
-  top: 56px;
-  left: calc(50% - 30px);
+  top: calc(56px + var(--pet-drag-y, 0px));
+  left: calc(50% - 30px + var(--pet-drag-x, 0px));
   z-index: 2;
   background: none;
   border: none;
