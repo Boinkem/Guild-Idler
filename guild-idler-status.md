@@ -1640,14 +1640,20 @@ from the spec pass).
      caller does, a pet with no art yet (or hitting bug #1 above) rendered
      as a literal empty box, not even an emoji. Fixed by passing the same
      `PetDef.glyph` fallback every other caller already uses.
-- **New: click the desktop companion pet to view it enlarged.** New
-  `PetEnlargedModal.tsx` -- a big (160px) `PetSprite` with Idle/Movement/
-  Sleep buttons to preview whichever animations the species actually has
-  (an unsupported request just falls back the same way `PetSprite` always
-  does). The companion pet is now a real `<button>`
-  (`.pet-companion-button`, replacing the old plain `.pet-companion` div
-  -- positioning and the bob animation both moved onto the button since
-  it's now the actual click target) rather than inert art.
+- **Click the desktop companion pet to view it enlarged -- moved after a
+  real conflict was reported.** `PetEnlargedModal.tsx` (a big 160px
+  `PetSprite` with Idle/Movement/Sleep buttons, falling back the same way
+  `PetSprite` always does for a species missing one of those) originally
+  opened from clicking the companion pet itself. Reported directly: since
+  the pet sits deliberately overlapping the hero (see the positioning
+  writeup below), that made the hero underneath hard to click at all --
+  the pet's button, on top, ate the click every time. Companion pet click
+  now does exactly what the hero's own click already does (`onOpenMenu`,
+  same handler, same behaviour) instead of opening the enlarge modal.
+  The modal itself wasn't deleted, just re-homed to a click target that
+  doesn't conflict with anything: the Hatchery's own Pets tab, where each
+  `PetCard`'s sprite is now the clickable target (previously inert)
+  instead of the desktop companion.
 - **Companion pet was too small and floating in the wrong spot -- fixed,
   verified against an actual rendered mockup rather than hand-computed
   CSS.** Reported directly: sitting off to the side at the old 40px size

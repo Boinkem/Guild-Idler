@@ -1,0 +1,254 @@
+diff --git drag_a/guild-idler-status.md drag_b/guild-idler-status.md
+index fadc2a3..32f19fc 100644
+--- drag_a/guild-idler-status.md
++++ drag_b/guild-idler-status.md
+@@ -1640,6 +1640,36 @@ from the spec pass).
+      caller does, a pet with no art yet (or hitting bug #1 above) rendered
+      as a literal empty box, not even an emoji. Fixed by passing the same
+      `PetDef.glyph` fallback every other caller already uses.
++- **New: pet can be dragged to a custom spot, scaled independently of the
++  hero, both persisted.** Same lock/unlock state the companion window
++  already uses to become draggable at all -- not a separate toggle, per
++  how this was actually asked for. Reusing that state meant the pet
++  needed its OWN drag handling rather than opting into the window's
++  existing OS-level `-webkit-app-region: drag`, which would otherwise
++  move the whole companion instead of just the pet: real mousedown/
++  mousemove/mouseup tracking on `.pet-companion-button`
++  (`handlePetMouseDown` etc., `IdleView.tsx`), with a 3px-of-movement
++  threshold before it counts as a drag rather than a click, and a
++  `petJustDraggedRef` flag consumed in the click handler so a completed
++  drag doesn't also fire "open guild" the moment the mouse releases (the
++  same click-vs-drag problem `.knight-button`'s own comment already
++  documents solving for the window-level case, solved the same way here
++  since this needed its own answer). The offset itself
++  (`settings.petOffsetX/Y`, persisted like every other display setting,
++  not game state) is applied via CSS custom properties
++  (`--pet-drag-x/-y`) added on top of the existing default-position
++  `calc()` rather than a `transform`, since the `bob` keyframe animation
++  already animates `transform` and a second source fighting it every
++  frame would have caused visible jitter -- confirmed via the same
++  rendered-mockup approach as the positioning fixes above, simulating a
++  dragged offset and checking it composes correctly with the grounded
++  default position, not just reasoned through. New "Reset pet position"
++  button in Settings for undoing a bad drag. Also added a dedicated "Pet
++  size" slider (`settings.petSpriteScale`), independent of the hero's own
++  `spriteScale` -- a pet and hero don't need to grow together, and
++  neither `Settings` field needed a version bump to add since the
++  existing load path already spreads new fields over `DEFAULT_SETTINGS`
++  automatically.
+ - **Click the desktop companion pet to view it enlarged -- moved after a
+   real conflict was reported.** `PetEnlargedModal.tsx` (a big 160px
+   `PetSprite` with Idle/Movement/Sleep buttons, falling back the same way
+diff --git drag_a/src/game/settings.ts drag_b/src/game/settings.ts
+index a9c2e14..8e23893 100644
+--- drag_a/src/game/settings.ts
++++ drag_b/src/game/settings.ts
+@@ -61,6 +61,17 @@ export interface Settings {
+   fontScale: number;          // 0.85 – 1.5, 1.35 = default (the old 1 read small on a desktop)
+   /** Multiplier on the corner companion and menu hero sprites. */
+   spriteScale: number;        // 0.75 – 1.75
++  /** Multiplier on the equipped pet's companion sprite -- independent of
++   *  spriteScale, since a pet and a hero don't need to grow together. */
++  petSpriteScale: number;     // 0.5 – 2
++  /** Companion pet's dragged position offset from its default spot, in px
++   *  relative to the default anchor -- set by dragging the pet while the
++   *  companion is unlocked (see IdleView.tsx), (0,0) is the default
++   *  position. Persisted here rather than game state since, like every
++   *  other display setting, it's a per-device preference, not guild
++   *  progress. */
++  petOffsetX: number;
++  petOffsetY: number;
+   /** Menu density: tightens or loosens padding across cards and panels. */
+   density: 'compact' | 'cozy' | 'comfortable';
+ 
+@@ -96,6 +107,9 @@ export const DEFAULT_SETTINGS: Settings = {
+   version: SETTINGS_VERSION,
+   fontScale: 1.35,
+   spriteScale: 1,
++  petSpriteScale: 1,
++  petOffsetX: 0,
++  petOffsetY: 0,
+   density: 'compact',
+   theme: 'high_contrast',
+   styleId: 'adventure',
+diff --git drag_a/src/styles/app.css drag_b/src/styles/app.css
+index 54f3c9e..7e34ab7 100644
+--- drag_a/src/styles/app.css
++++ drag_b/src/styles/app.css
+@@ -293,6 +293,21 @@ button:focus-visible, [tabindex]:focus-visible {
+ .idle-root.unlocked .carousel-arrow {
+   -webkit-app-region: no-drag;
+ }
++/*
++ * The pet needs its OWN drag handling (see IdleView.tsx's
++ * handlePetMouseDown) rather than the OS-level window-drag every other
++ * unlocked element opts into above -- dragging the pet is meant to
++ * reposition just the pet, not move the whole companion window. Chromium
++ * would otherwise treat any mouse-move starting on the pet as a window
++ * drag before React's own listeners get a chance, the same way it does
++ * for .knight-button, since .pet-companion-button also sits inside
++ * .idle-stage's blanket drag region above.
++ */
++.idle-root.unlocked .pet-companion-button {
++  -webkit-app-region: no-drag;
++  cursor: grab;
++}
++.idle-root.unlocked .pet-companion-button:active { cursor: grabbing; }
+ 
+ /*
+  * -webkit-app-region: drag above has zero visual effect on its own -- a
+@@ -420,10 +435,15 @@ button:focus-visible, [tabindex]:focus-visible {
+      confirmed against an actual rendered mockup (not just reasoned through
+      in CSS) that this reads as the pet standing in the foreground at the
+      hero's feet, not floating off to one side. Higher z-index than
+-     .knight-button on purpose, for the same "foreground" reason. */
++     .knight-button on purpose, for the same "foreground" reason.
++     --pet-drag-x/--pet-drag-y are set inline by IdleView.tsx from
++     settings.petOffsetX/Y (persisted, dragged by the player while
++     unlocked) -- added on top of the default anchor via calc() rather
++     than a separate transform, since bob's own keyframes already animate
++     transform and a second transform source would fight it every frame. */
+   position: absolute;
+-  top: 56px;
+-  left: calc(50% - 30px);
++  top: calc(56px + var(--pet-drag-y, 0px));
++  left: calc(50% - 30px + var(--pet-drag-x, 0px));
+   z-index: 2;
+   background: none;
+   border: none;
+diff --git drag_a/src/ui/IdleView.tsx drag_b/src/ui/IdleView.tsx
+index 538186b..5402dea 100644
+--- drag_a/src/ui/IdleView.tsx
++++ drag_b/src/ui/IdleView.tsx
+@@ -17,7 +17,7 @@ const ATTACK_VARIANTS: HeroAnimation[] = ['attack_1', 'attack_2', 'attack_3'];
+ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+   const engine = useEngine();
+   const now = useNow();
+-  const { settings } = useSettings();
++  const { settings, update: updateSettings } = useSettings();
+   const hero = engine.displayedHero;
+   const quest = engine.activeQuestFor(hero.id);
+   const [anim, setAnim] = useState<Anim>(quest ? 'walking' : 'idle');
+@@ -115,6 +115,62 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+   const equippedPet = engine.state.pets.find((p) => p.uid === engine.state.equippedPetIds[0]);
+   const petDef = equippedPet ? PET_BY_ID[equippedPet.defId] : null;
+ 
++  /**
++   * Free-drag the pet to a custom spot, reusing the SAME lock/unlock state
++   * the whole companion window already uses -- deliberately not its own
++   * separate toggle, per how this was actually asked for. Real click-vs-
++   * drag disambiguation is needed here (unlike the window's own OS-level
++   * drag, which Chromium already handles for free): a plain click still
++   * has to open the guild, exactly like the hero, and only an actual
++   * mouse-move during the hold should count as a drag. window-level
++   * mousemove/mouseup listeners (not onMouseMove on the button itself) so
++   * dragging keeps tracking even if the cursor slips off the small sprite
++   * mid-drag.
++   */
++  const petDragRef = useRef<{ startX: number; startY: number; origX: number; origY: number; moved: boolean } | null>(null);
++  const petJustDraggedRef = useRef(false);
++
++  const handlePetMouseDown = (e: React.MouseEvent) => {
++    if (locked) return; // locked: plain click only, same as the hero
++    e.preventDefault();
++    petDragRef.current = {
++      startX: e.clientX, startY: e.clientY,
++      origX: settings.petOffsetX, origY: settings.petOffsetY,
++      moved: false,
++    };
++    window.addEventListener('mousemove', handlePetMouseMove);
++    window.addEventListener('mouseup', handlePetMouseUp);
++  };
++  const handlePetMouseMove = (e: MouseEvent) => {
++    const drag = petDragRef.current;
++    if (!drag) return;
++    const dx = e.clientX - drag.startX;
++    const dy = e.clientY - drag.startY;
++    // A few px of slop before it counts as a real drag -- otherwise every
++    // ordinary click (which always jitters the mouse a pixel or two) would
++    // register as a drag and silently eat the click-to-open-guild behaviour.
++    if (!drag.moved && Math.hypot(dx, dy) < 3) return;
++    drag.moved = true;
++    petJustDraggedRef.current = true;
++    updateSettings('petOffsetX', drag.origX + dx);
++    updateSettings('petOffsetY', drag.origY + dy);
++  };
++  const handlePetMouseUp = () => {
++    window.removeEventListener('mousemove', handlePetMouseMove);
++    window.removeEventListener('mouseup', handlePetMouseUp);
++    petDragRef.current = null;
++  };
++  const handlePetClick = () => {
++    // Consume the flag rather than checking drag.moved directly -- mouseup
++    // (which clears petDragRef) always fires before click in standard DOM
++    // event order, so by the time this runs petDragRef is already null.
++    if (petJustDraggedRef.current) {
++      petJustDraggedRef.current = false;
++      return;
++    }
++    onOpenMenu();
++  };
++
+   // "Desktop when back from failed quest -- damage" (fox-specific request,
+   // but harmless to request generically -- PetSprite.resolveAnimation just
+   // falls back to idle for species without a damage animation of their
+@@ -257,16 +313,18 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+           <button
+             type="button"
+             className="pet-companion-button"
+-            onClick={onOpenMenu}
++            onMouseDown={handlePetMouseDown}
++            onClick={handlePetClick}
++            style={{ '--pet-drag-x': `${settings.petOffsetX}px`, '--pet-drag-y': `${settings.petOffsetY}px` } as React.CSSProperties}
+             title={equippedPet.name}
+-            aria-label={`${equippedPet.name} — open guild`}
++            aria-label={`${equippedPet.name} — open guild, or drag to reposition while unlocked`}
+           >
+             <PetSprite
+               species={petDef.spriteFolder}
+               rarity={equippedPet.rarity}
+               animation={petAnimation}
+               flip={facingReturn}
+-              height={Math.round(90 * settings.spriteScale)}
++              height={Math.round(90 * settings.petSpriteScale)}
+               title={equippedPet.name}
+               fallback={<span style={{ fontSize: '1.4rem' }}>{petDef.glyph}</span>}
+             />
+diff --git drag_a/src/ui/panels/SettingsPanel.tsx drag_b/src/ui/panels/SettingsPanel.tsx
+index 084641f..1b6a52e 100644
+--- drag_a/src/ui/panels/SettingsPanel.tsx
++++ drag_b/src/ui/panels/SettingsPanel.tsx
+@@ -1,6 +1,7 @@
+ import type { ReactNode } from 'react';
+ import { useSettings } from '../useSettings';
+ import { HeroSprite } from '../sprites/HeroSprite';
++import { PetSprite } from '../sprites/PetSprite';
+ import { Settings, THEMES } from '../../game/settings';
+ import { previewSound } from '../../game/sound';
+ 
+@@ -144,6 +145,25 @@ export function SettingsPanel() {
+         </div>
+       </Row>
+ 
++      <Row label="Pet size" hint={`${Math.round(settings.petSpriteScale * 100)}% -- affects the companion pet only, not the hero above`}>
++        <div className="row" style={{ gap: 16, alignItems: 'center' }}>
++          <input
++            type="range" min={0.5} max={2} step={0.05}
++            value={settings.petSpriteScale}
++            onChange={(e) => update('petSpriteScale', Number(e.target.value))}
++          />
++          <div className="sprite-preview">
++            <PetSprite species="ember_kit" animation="idle" height={Math.round(48 * settings.petSpriteScale)} fallback={<span>🦊</span>} />
++          </div>
++        </div>
++      </Row>
++
++      <Row label="Pet position" hint="Unlock the companion and drag the pet to move it. Resets it to the default spot beside the hero.">
++        <button onClick={() => { update('petOffsetX', 0); update('petOffsetY', 0); }}>
++          Reset pet position
++        </button>
++      </Row>
++
+       <Row label="Animation speed" hint="Applies to the corner companion.">
+         <Segmented
+           value={settings.reduceMotion ? 0 : settings.animationSpeed}

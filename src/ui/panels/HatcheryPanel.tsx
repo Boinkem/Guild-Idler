@@ -8,6 +8,7 @@ import { EggInstance, MaterialId, Pet } from '../../game/types';
 import { RarityPill } from '../RarityPill';
 import { formatMaterial } from '../../game/util';
 import { PetSprite } from '../sprites/PetSprite';
+import { PetEnlargedModal } from '../PetEnlargedModal';
 import { EggIcon } from '../EggIcon';
 import { EggSelectModal } from '../EggSelectModal';
 
@@ -179,6 +180,7 @@ function PetCard({ pet }: { pet: Pet }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(pet.name);
   const [feedMaterial, setFeedMaterial] = useState<MaterialId>('ore');
+  const [enlarged, setEnlarged] = useState(false);
 
   const happiness = PetManager.currentHappiness(pet, now);
   const bonus = PetManager.effectiveBonus(pet, now);
@@ -194,14 +196,22 @@ function PetCard({ pet }: { pet: Pet }) {
   return (
     <div className="card" style={{ marginBottom: 0 }}>
       <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
-        <PetSprite
-          species={def?.spriteFolder ?? pet.defId}
-          rarity={pet.rarity}
-          animation="idle"
-          height={48}
-          title={pet.name}
-          fallback={<span style={{ fontSize: '1.6rem' }}>{def?.glyph ?? '\u2753'}</span>}
-        />
+        <button
+          type="button"
+          className="btn-ghost"
+          style={{ padding: 0, border: 'none', background: 'none', minHeight: 0 }}
+          onClick={() => setEnlarged(true)}
+          title={`${pet.name} — view enlarged`}
+        >
+          <PetSprite
+            species={def?.spriteFolder ?? pet.defId}
+            rarity={pet.rarity}
+            animation="idle"
+            height={48}
+            title={pet.name}
+            fallback={<span style={{ fontSize: '1.6rem' }}>{def?.glyph ?? '\u2753'}</span>}
+          />
+        </button>
         <div style={{ flex: 1 }}>
           {editing ? (
             <div className="row" style={{ gap: 6 }}>
@@ -268,6 +278,8 @@ function PetCard({ pet }: { pet: Pet }) {
       >
         {equipped ? 'Equipped -- unequip' : 'Equip'}
       </button>
+
+      {enlarged && <PetEnlargedModal pet={pet} onClose={() => setEnlarged(false)} />}
     </div>
   );
 }

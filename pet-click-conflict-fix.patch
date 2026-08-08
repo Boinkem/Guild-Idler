@@ -1,0 +1,136 @@
+diff --git click_a/guild-idler-status.md click_b/guild-idler-status.md
+index 2ac266b..fadc2a3 100644
+--- click_a/guild-idler-status.md
++++ click_b/guild-idler-status.md
+@@ -1640,14 +1640,20 @@ from the spec pass).
+      caller does, a pet with no art yet (or hitting bug #1 above) rendered
+      as a literal empty box, not even an emoji. Fixed by passing the same
+      `PetDef.glyph` fallback every other caller already uses.
+-- **New: click the desktop companion pet to view it enlarged.** New
+-  `PetEnlargedModal.tsx` -- a big (160px) `PetSprite` with Idle/Movement/
+-  Sleep buttons to preview whichever animations the species actually has
+-  (an unsupported request just falls back the same way `PetSprite` always
+-  does). The companion pet is now a real `<button>`
+-  (`.pet-companion-button`, replacing the old plain `.pet-companion` div
+-  -- positioning and the bob animation both moved onto the button since
+-  it's now the actual click target) rather than inert art.
++- **Click the desktop companion pet to view it enlarged -- moved after a
++  real conflict was reported.** `PetEnlargedModal.tsx` (a big 160px
++  `PetSprite` with Idle/Movement/Sleep buttons, falling back the same way
++  `PetSprite` always does for a species missing one of those) originally
++  opened from clicking the companion pet itself. Reported directly: since
++  the pet sits deliberately overlapping the hero (see the positioning
++  writeup below), that made the hero underneath hard to click at all --
++  the pet's button, on top, ate the click every time. Companion pet click
++  now does exactly what the hero's own click already does (`onOpenMenu`,
++  same handler, same behaviour) instead of opening the enlarge modal.
++  The modal itself wasn't deleted, just re-homed to a click target that
++  doesn't conflict with anything: the Hatchery's own Pets tab, where each
++  `PetCard`'s sprite is now the clickable target (previously inert)
++  instead of the desktop companion.
+ - **Companion pet was too small and floating in the wrong spot -- fixed,
+   verified against an actual rendered mockup rather than hand-computed
+   CSS.** Reported directly: sitting off to the side at the old 40px size
+diff --git click_a/src/ui/IdleView.tsx click_b/src/ui/IdleView.tsx
+index 65d7867..538186b 100644
+--- click_a/src/ui/IdleView.tsx
++++ click_b/src/ui/IdleView.tsx
+@@ -4,7 +4,6 @@ import { useSettings } from './useSettings';
+ import { PixelSprite, QUEST_MARK } from './sprites/PixelSprite';
+ import { HeroAnimation, HeroSprite } from './sprites/HeroSprite';
+ import { PetSprite } from './sprites/PetSprite';
+-import { PetEnlargedModal } from './PetEnlargedModal';
+ import { PET_BY_ID } from '../game/data/pets';
+ import { formatDuration, formatGold } from '../game/util';
+ 
+@@ -115,7 +114,6 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+   // frames anyway.
+   const equippedPet = engine.state.pets.find((p) => p.uid === engine.state.equippedPetIds[0]);
+   const petDef = equippedPet ? PET_BY_ID[equippedPet.defId] : null;
+-  const [showPetModal, setShowPetModal] = useState(false);
+ 
+   // "Desktop when back from failed quest -- damage" (fox-specific request,
+   // but harmless to request generically -- PetSprite.resolveAnimation just
+@@ -259,9 +257,9 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+           <button
+             type="button"
+             className="pet-companion-button"
+-            onClick={() => setShowPetModal(true)}
+-            title={`${equippedPet.name} — click to view`}
+-            aria-label={`${equippedPet.name} — click to view enlarged`}
++            onClick={onOpenMenu}
++            title={equippedPet.name}
++            aria-label={`${equippedPet.name} — open guild`}
+           >
+             <PetSprite
+               species={petDef.spriteFolder}
+@@ -274,9 +272,6 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+             />
+           </button>
+         )}
+-        {showPetModal && equippedPet && (
+-          <PetEnlargedModal pet={equippedPet} onClose={() => setShowPetModal(false)} />
+-        )}
+ 
+         <div className="idle-plate">
+           <span className="gold">◆ {formatGold(engine.state.gold)}</span>
+diff --git click_a/src/ui/panels/HatcheryPanel.tsx click_b/src/ui/panels/HatcheryPanel.tsx
+index b0b566a..502402b 100644
+--- click_a/src/ui/panels/HatcheryPanel.tsx
++++ click_b/src/ui/panels/HatcheryPanel.tsx
+@@ -8,6 +8,7 @@ import { EggInstance, MaterialId, Pet } from '../../game/types';
+ import { RarityPill } from '../RarityPill';
+ import { formatMaterial } from '../../game/util';
+ import { PetSprite } from '../sprites/PetSprite';
++import { PetEnlargedModal } from '../PetEnlargedModal';
+ import { EggIcon } from '../EggIcon';
+ import { EggSelectModal } from '../EggSelectModal';
+ 
+@@ -179,6 +180,7 @@ function PetCard({ pet }: { pet: Pet }) {
+   const [editing, setEditing] = useState(false);
+   const [draft, setDraft] = useState(pet.name);
+   const [feedMaterial, setFeedMaterial] = useState<MaterialId>('ore');
++  const [enlarged, setEnlarged] = useState(false);
+ 
+   const happiness = PetManager.currentHappiness(pet, now);
+   const bonus = PetManager.effectiveBonus(pet, now);
+@@ -194,14 +196,22 @@ function PetCard({ pet }: { pet: Pet }) {
+   return (
+     <div className="card" style={{ marginBottom: 0 }}>
+       <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
+-        <PetSprite
+-          species={def?.spriteFolder ?? pet.defId}
+-          rarity={pet.rarity}
+-          animation="idle"
+-          height={48}
+-          title={pet.name}
+-          fallback={<span style={{ fontSize: '1.6rem' }}>{def?.glyph ?? '\u2753'}</span>}
+-        />
++        <button
++          type="button"
++          className="btn-ghost"
++          style={{ padding: 0, border: 'none', background: 'none', minHeight: 0 }}
++          onClick={() => setEnlarged(true)}
++          title={`${pet.name} — view enlarged`}
++        >
++          <PetSprite
++            species={def?.spriteFolder ?? pet.defId}
++            rarity={pet.rarity}
++            animation="idle"
++            height={48}
++            title={pet.name}
++            fallback={<span style={{ fontSize: '1.6rem' }}>{def?.glyph ?? '\u2753'}</span>}
++          />
++        </button>
+         <div style={{ flex: 1 }}>
+           {editing ? (
+             <div className="row" style={{ gap: 6 }}>
+@@ -268,6 +278,8 @@ function PetCard({ pet }: { pet: Pet }) {
+       >
+         {equipped ? 'Equipped -- unequip' : 'Equip'}
+       </button>
++
++      {enlarged && <PetEnlargedModal pet={pet} onClose={() => setEnlarged(false)} />}
+     </div>
+   );
+ }
