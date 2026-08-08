@@ -1,0 +1,470 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 6cddde2..562d1a9 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -1288,6 +1288,46 @@ files land there). Drop the actual art in at that path, matching the
+ filenames listed above, and it'll pick up automatically with no further
+ code changes.
+ 
++**Update -- real art landed.** `public/harvest-icons/` now has real
++16x16 pixel art for all 12 pool entries across the 4 materials. Two
++filename lists needed correcting to match what was actually delivered,
++rather than the placeholder names this section was scaffolded with
++before any art existed: Herbs went from a 2-icon `['herb1.png',
++'herb2.png']` placeholder to the real 3-icon `['Herb1.png', 'Herb2.png',
++'Herb3.png']` (note the case change too -- lowercase was a guess, the
++real files are capitalized); Food's placeholder `['Food1.png', ...,
++'Food4.png']` (4 entries, guessed ahead of the fish->food generalization
++landing) is replaced by the real `['Fish1.png', 'Fish2.png',
++'fish3.png']` (3 entries -- the icon filenames were never required to
++match the material's display name, same as ore/timber/herbs' own icons
++only coincidentally spell out their material). `fish3.png`'s lowercase
++`f` is kept exactly as delivered rather than normalized to match its two
++siblings -- the array entry has to match the real filename on disk
++byte-for-byte on a case-sensitive deploy target, even though a typical
++Windows dev machine won't notice a mismatch locally. Ore and Timber's
++filenames already matched what was scaffolded, no changes needed there.
++
++Also doubled the falling icons' on-screen size per direct request, which
++surfaced a real layout gap while doing it: `.harvest-item` never had an
++explicit `width`/`height` at all -- `HarvestGlyph`'s `<img>` sizes itself
++to 100%/100% of its parent, which only ever "worked" because no icon had
++ever actually loaded before now (the folder didn't exist, so every spawn
++was showing its glyph fallback, sized purely by `font-size`, never the
++image path). Added an explicit `72px` box (doubled from the glyph's own
++implicit ~36px footprint) so the real `<img>` has something concrete to
++fill. That same change also exposed a second pre-existing quirk: `left:
++X%` (from `spawnPositionPercent`) was always the button's *left edge*,
++not its center -- a small, easy-to-miss offset at the old shrink-to-fit
++size, much more noticeable at 72px. Fixed alongside the sizing change
++with `transform: translateX(-50%)`, which also had to be folded into
++every step of both `harvest-fall` and `harvest-pulse`'s keyframes (a
++running CSS animation's `transform` *replaces* the element's base
++transform rather than composing with it, so leaving the base transform
++on its own would only have centered the icon for the instant before
++either animation class attaches).
++
++`npx tsc --noEmit` and `vite build` both pass clean.
++
+ ### Consumables can now carry crafted stat/mod bonuses -- complete
+ Per direct request: extend consumable crafting to support the same
+ "pick a bonus" flow gear crafting already has. This was flagged as a
+diff --git a/public/harvest-icons/Fish1.png b/public/harvest-icons/Fish1.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..68e4bf8d29a2c06d2171561a0b4bee678151833a
+GIT binary patch
+literal 1103
+zcmaJ=TWHfz7|yJhAsbF8^9qIxVS;T=(sf<q>gbx*6_;7N>gI#EEIDn%mYkTJt=;g!
+zd1J%klgN<0C|=M9-<*g8FE~(Ss6*7Lp!lMo=z|X;it}Wy(+6wd<Xrf^@BjY){AVQ5
+zwykpc+T|2QRmNMyB$=z6QNEP?H+-3u$+QMXJ8?To<D6_kDy*VzNXK<K1Cvlz2ln5G
+zjTGggwNxkWlv)J^>0a5vc=NhR*c8>+ls9Fi2V%M#W;7$je7<p$p*1zcboeD8nGu-P
+zS_UoHKG>F0278pC$~0}I8}kAY&>@!TyxwcrLO#UI=?Y}+9J35P2f;ld=C`R%DM3e&
+z1!=z*coa|%=z7k}`RW3Jz-F2U9AE*@a=eEN2tHl_fS&&t63tT6LQ;&)$0EBBlf~E+
+zST>i-d2>E5vN9|e3<ezyp7#)h#~v`Soc9=ZO;JIFwqj`}){sFvigGvV!y$$^{hfkt
+zF31}8e3?kW*t~4AoEJDL6@ilUf2gi6plzIlfBgPa*iH?YkWE4x^;rtJxO9yZ$`m3N
+zlrgeW2=x}Ln8+fG>?|_rNV}iz&<qvj>^Za~330>5vZ27Z7-9(Dt7)nbiHRT_=9@u7
+z9pJdAKUg32NB#9a&;a<bFA^wnMWpoU(7;8m`iC1S$#oh*H%Vj>T3SC;V;0isxr7C+
+zw3lE>y?L%$+Do`3mnCLc=UV@|=He0Q9cQ`Fv}Ci;_Rt``Zjq*bdA_ciJc!A-7*6G1
+zbpM#0ZE|fqc+@>vC=_bP%RCvC*<Di}`1YP3`-BwgF}Nib(xVqn?%A?t{PW(niB(;v
+zA7omOm7lwQ_>$||>#F{;R^PqYvRx}d?CJ0`N}U4KbcIiSJ@xJlb@#)f(e#dYE$*q+
+zr_Nk-^^VtkUpLb~wzT2W_Os8+r;n`vT9F+oYrPE~^(PJ-t{6H#^yJN*LPDzj8Cy|1
+zv9t2(l8UZP1-C0P=6ZW)?8L*Fd!r*m%?JI}!<OKt7O$p0?wfpdc}w$Y=ZVLoZQ_;Y
+Hu0y{7_seSk
+
+literal 0
+HcmV?d00001
+
+diff --git a/public/harvest-icons/Fish2.png b/public/harvest-icons/Fish2.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..4a530cad56e81ede4ee58e11382f4c50aad584c0
+GIT binary patch
+literal 1162
+zcmaJ>O=#Oz99QPzgy6J2q$J(e^`Q{hMl3zqu^o$ejw?BdA<B&7wK<eBS$auCqK`-~
+zm6DEOT2?yn=*D0qrQ2ZS&_WpuMptNAJxbOL`av?-p_lg3_RvBP2|J81?<tMb9p(w7
+z_rdS?`+xn=r}@#Lw$|5MDT->#4T}Y`?)Tr8Ao(8NsL5nGh_mB(%$&fkY$Gb8nk58s
+zx;%*rNLJ@(e?$Eg6#!as9FI#QykhE%>|+>Dw+Ne}`qQ2zE7J&r5}MSE6#e4*O&Vxw
+ziar*TpkxVXN*i9V(b&RhQCXN)k}92k5A=IH5zrBqfv3+H4)3MtZC#%1{cDy6+YmgR
+zqF*L8F6Dt>+6crL7*=2$f;h);(cVNN(E}oogDi}&TqMjT_-KTO5bQiOiDs)4d_f%C
+ziA7E+dJ1EUXIa;E88^z9_9V+ClSyAA5(yJT*qJx5?1c@dtF9m-N3k^vYo-BwMY&|o
+z;S^0WeOZET?aCU?PMb)>SWmWCj)8tjb)Y2uKUCLu(GD)4SNZ;@uv4735L-ZwIcF<m
+za1&jAD2o?tBxBPqn&wQsi}@)No6eMJ0bwi#j%kK!y3RIQlK7nAVA)VmPE65+&uE&;
+z3xk<N_DD7f`+6bAWn;;BHkOUWqp%M~GEpH>=ZdB>ry~Q`x#}x!rXklif^Lz>BC@rU
+zNFB6I9c&lOYmIYBG}PPSs*Q8$Ysh6uGORz=e~r0*MZDv0cTGzUyS7IL@w!b+{f(Yu
+zD5{CdiJ7AJptM!1r32mNPuf>1mCD;!o5GVSeYC43ed^DO{Kv|^(ENt`%j3m!YoYZ$
+z>pk7wE04PV`pjd?z3y8d-^u^<xK%jx`M$`q^7O#j56&;Pyg~iGwRvyuEPUtO;@Z|J
+zD}I8lUTj+r1=ioaFmU%__3F(_Zc{Tj(Q!QKwvIgOT;gujHV@8p4sV=)Hk1zw?>DcG
+z4h7-e!$*6o`faT|AO?hs*ALwK?(5st5|CDB@0Y*othR>&dW~IM*rT=_4=o2ff=j`@
+z@LKxYS#ImvjpkdIy)W$xKU0f=AD1@ol%K!3zvBu1=-%M3Bcb-!uKX}ic_>q$N`0|<
+Wf4S%HGkg8NLoPciet+b{)BgZL>4hKw
+
+literal 0
+HcmV?d00001
+
+diff --git a/public/harvest-icons/Herb1.png b/public/harvest-icons/Herb1.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..fb52f967db00151ec95539ad7177454b51d4f2d2
+GIT binary patch
+literal 1137
+zcmah}TWAzl7#>ZljWHz!MT|mECSZMVXU@#*B|GdIcP`uAk_~aQ;66y)*_o4MNM_DB
+zbCTVJf@1qpDeV?oYN0KC?Zr~t7qLjA6tuJy6(7{Lfzl=|Eo~8LK@rz8aW_g49hf=i
+z{Cwa4fB)soD<i|tcW>z3z%WdAKBpDw+7rG{t)t&(Z!`_MY$bY`jN)-pGknBkEL=q(
+z?-&!Phzx7);5R76Fde`yl}WiUB%9dbj1a@s9gngZCN)_1408$*P(>5An`Zy{@+%hD
+zR+`-xE5L%MqDeb9@1xQA;gUH&WhO0la5qTRW$M5|!~k_?+70A-nqBcL(|u^>S+D{j
+zQ)%{|sB&QhsMtp!#=(dQ;}FCJPLQIBL}C{Zp#XU(@`4x<60#)95Q5gj(rCUlE*G_I
+zD;7Pa*-1h?ndfV@8dsAz>`(AQGMNm0h+>2yBEg(XjC#Zk`r95f6qvs45gWT8^k`J^
+z3`w(8>Ae&juTWTZ>;|nu(US3X!{Y@G@{SYcwSo>v5#5*ZP;^k5^AKM|0iN+q+K=)6
+zHksD$(SbrBRU>QIoN<s#@>-gu7S6IQ8LCl9)1?78AnAgj$CPX=o{1~!fSycb#Z0`-
+z&AS0HTobjq_I+;Rkz85zkwLIu!g#vfy^%>wa4?BIppM4CKHIf$EeH$S(usU~7Fk&z
+zJ7A?Uvi-m4q4KDn6;(yiBn1xWF+ostMN`zM7)z@0gc8lLEw1&DtRKtesTe+N>jQ0W
+zo9OI>+ts0^ht;u1E}eCs4)qJOy=&=(_${wxO7&~i+s)=+$3`fMXOnvlX4kPy*Qvv`
+z6VLq!s~Zh%cFj=#ca7txf7rXfBk245%+SlzC;z*&?UQG&RyHyIn#-G;ZwMpT4}GxQ
+z{PXqP!p)wg=GKOAwCnKEGx2KI+kcBYPEIwJjy2Tuh2<yJ#ao9w)m_~EEu1*rSC(?y
+zzdi?__$d$i8ebUSufNDish`JQn(O>{OQrJ1W_8n@_h0?Xi=Tf>J9p&NM?z{xW$|oo
+z+wWrw%iYJeeD)#gd-Lf%!{e1JuSxbV|E}HnYv*#;i(?B*)9-e69vJF*?;Q{I?q|RP
+Wquse3o5?ys_!G$M!`i1x<;Y$9?|i=i
+
+literal 0
+HcmV?d00001
+
+diff --git a/public/harvest-icons/Herb2.png b/public/harvest-icons/Herb2.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..9976ee1c4f3128bde14bcd45a36d642d29db828a
+GIT binary patch
+literal 1130
+zcmah|TWAzl7#=U(8rMi(`Vc92I;&8KyK~v>PG*`l*|}`9up5@mg8N{jvoj~jG?_W$
+z%!xZmeTcO!t+X_S-a=IZiuR!h`Xu_`Zs?0p+ovM2E!fgn=tC`tw1wjKOx%s7h#i<Y
+z7ryWNzyC7tlty3f-o9%)MN!@P5w%R#p77lkA>ZBiTRK^Ku~x-nXad)D4^mkZ)gZ{*
+z`Xnqv-JCme0}fKu7GPDXxLPbo2C@@+h)D#tOV|`OI25?LF%2=O!AZ->(D$xgr-5Z=
+z=mV)DTXYpTWsS^xaBP0GV$4q)qDc?!2ZMn`1Z;?P5ZE)0F9jKTT~{Le@S35)Is{K=
+z=trii#S&1E2SF;q#tk;jf;5-llKp}p>;pW@u?)*I93STdDalJL3)&A&qIu?oR918C
+zSmczUr!aOUhN;)<iFz`Dyh(-=MKRRi`8Ywu{W%BgLEQ0U9R(HohG)6hLJkNO^%|PR
+z8JakKl!EORiyOj@-!2p>858I(!zEb8w!^&E(LOH2$2Ojb_A7HPWXjM-vz|fvF%j#K
+zN$s8<C<GEWl8TI38#*|zW@vJgFfCJJ6;03vlq@@t)HqH{$+=WIo0gRUO%!r`Hr?Uo
+z9UtqC0XtmlF;{#lS5iEvW8_s3n(1_}G=(tor;rPju@pF9IVP(6VPV@op=TY1X3j%4
+zSg(v^{U>_pykE=liY%*1nH|tl94BkCDl7ebN>tK<+@Gb}T=NN8|1XyzW|*+8|7vsR
+zip);9-56SO*cf~0kXiT0P%qhUOp+hsPF~Gcg4?yfTdkojJ6N7y5r>cDA~Y4fI=p<9
+z{+_Mv(AA@x3bC&i9|-r(UWwe5%@a%8R)7EF7+;NDZoWwUy!rFKhcRRMr`GVz7W$TN
+z{?)VA>RsecMi)*t)3xX)slHQpE;fJN{Ar&wc&?E?F|&1br{6X5{Fl#O`rwt7h2Qop
+z?kT+RZp3<PuKVuZFUA*+&tBMD`t!M$&NNqFz1e#E{b$ye)u7N=iNx&X*EW4793F3+
+z|M<<4M2Snsf9(DG+<Uj8KYa9E*Dujy<BheMQ(aw$3O%QnT)68X1sYWKO7z2P)Hh+S
+NR9+iZFUp5s{|5$ddY}LR
+
+literal 0
+HcmV?d00001
+
+diff --git a/public/harvest-icons/Herb3.png b/public/harvest-icons/Herb3.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..01558a97463531b8a495a86fd3fd229668f2d209
+GIT binary patch
+literal 1148
+zcmah}ZD<o`96z;<Z>?0jSzR4{ywI(nxwkY)b2g^AT%v)bmNZ~Kjb84awnx2tu6IvO
+z+Km~F3NjEss4$o^wl8Coq8o@PB5q^8VE17T#WCg_Lm2xYSSJkXvgc}2MMMwop6B`V
+z`~CmF|I2fS2Ku)(uXt+(MN!SE?Q)i^E$+L_L%toeRfR0;aUzcg(J(G5Hl$)2DnO7j
+zlo6PPiZ(fZ4fayh5}@buIG;(2Dl!<w#V{qqB5aE4jg~A$9fKGY;D~NU=m!@r(LmQC
+z^v*zr%UE$Zs&AjN;oww%PMsQ4!x|mk3VKT-abQ5KfReGxbi`7Gp7$$~y=!J^Fb~0F
+z5&Eg9d}aW|kqtqB;e09=<Uo*Tcz<^&6xs{~j^|iTV0ppEheW?1avZ2VG>K+w!(vuW
+z)?$%UgdWA%5?QubEHXtugX|HO4~N694?*w|gwL5Yu~PDxj<@bXhK_3M7S@poT#rft
+zP2dPkls-+turiqi$EH&&6e$^7QY@BdIMy)Syynpk&cbIhUW#^dlNMyN&_NTnO8PPE
+zt&>UZULD8<5;dZX)CmKcI3-7DVqr906FE5`NwK8B_4pG!p9o0FKrj}R;ysCQC@I8(
+zb#BUZuwtsP&eflB`B!qqxD6GI>>NV7>fIX{MHo4w$O7@f0NAOU8Y((&VQV^}t?!0f
+z(nbcDuZ*a_5ZzVYok$9CNs|2%*OLhFyp)h+Dc&sv!tr28>W<MhuJ)3wU(02Q7}jm;
+zb8W7h$n3b=g`p*fg|UYwnRS~C^~DcbFOv)LFeS%wrC$nj)oOG}6DJ7YhWo~o9-3Nt
+zzC7Lse&q^HioAPK+I!>3H|@7RKj*nGX_b$c-TD2Ay)^Ir`f?Zb=i)Cm{pVFb{iE79
+zQ|&yQF3)bfUiAa@jW+7dit+tgW{v;mz3JF-Ra*5=Td=Vy+7>Oh+m9bNd;U6E8JYp(
+zEgj#r;CJ`#@B8s!xI@11=tlYd=KGze-YYLU(Ym2)F4DQ)3SK=XU)gu&OHc1RL%&Ho
+z+SB>Mfz_J#>ZQ{b_3xgq&Mm$5^EIjK?eZsci+B9=!{3cZW*TN2r#6Et4QKaPLL2XW
+jwEQ!F>vX!Zl4@8-sUP0GTe-dEsQW)iCHm!QX=va72K{^I
+
+literal 0
+HcmV?d00001
+
+diff --git a/public/harvest-icons/Ore1.png b/public/harvest-icons/Ore1.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..6ee6fe007fb8bbb89a31d005efb4e72551165806
+GIT binary patch
+literal 1168
+zcmeAS@N?(olHy`uVBq!ia0vp^0wB!61|;P_|4#%`k|nMYCBgY=CFO}lsSJ)O`AMk?
+zp1FzXsX?iUDV2pMQ*9U+m=!WZB1$5BeXNr6bM+EIYV;~{3xK*A7;Nk-3KEmEQ%e+*
+zQqwc@Y?a>c-mj#PnPRIHZt82`Ti~3Uk?B!Ylp0*+7m{3+ootz+WN)WnQ(*-(AUCxn
+zQK2F?C$HG5!d3}vt`(3C64qBz04piUwpD^SD#ABF!8yMuRl!uxKsVXI%s|1+P|wiV
+z#N6CmN5ROz&_Lh7NZ-&%*U;R`*vQJjKmiJrfVLH-q*(>IxIyg#@@$ndN=gc>^!3Zj
+z%k|2Q_413-^$jg8EkR}&8R-I5=oVMzl_XZ^<`pZ$OmImpPA<wUD9OyvQvjKmn3P{y
+zVygsnDZ~r81-`y;gY$}^0R;>){ffi_eM3D1{oGuTzrd=COM+4n&cLd=IHa;5RX-@T
+zIKQ+g85kdF$}r8qu)}W=NFmTQRxbI;rManjC7v#}N<b04l*|+>14{!(M*|~c0}EqU
+zLqk_nCpS|wM>8j93s*~XHzP+gm|oAk;*!L?<W!j6OoUz|yn3yii&7Iy@{2<9^K)Ra
+z7m$%(l3$#WU!dR|Y^o5RnU|7ZUJMFYs5?`OGRsm^+=}vZ6~G~5m5F9M$mJ%kZbr^d
+zPA<ky1{SWShK5eAPA*Q)CPt=~&SvILCXPx_y(w6HO;E2s&@uX;Xhn)<m=G}SfSB+^
+z3*^9)eQF*strr0k_3ZSECJYRWY@RNTAr-fh{`~)M&#c<OI$uRuS-I<_!)b|&R}CIs
+z-eVjz`Qg={nmh`(ykfZyJIrA_U?M#&wfU#Qu6rHws}+4(OoW+yc9_h6KZ{G;JuR8n
+zC8y5$I!9Tci}W(?gl&hIPSyS_-QYGuyzJgjzGcb6RUfJu#R3#Al)ts^daK}U_y5Py
+zf;Z2Mdm31zFI2o!Ue(ske_&R^w)sC;F7gyTZ4(V$(dH2RsD6P$2jeF`iNi-G9Bs^G
+z>Ph^RuvdZUra+0S0nemnNv1`KY{n0{D<=eRJb8Fe+az&^mohTSH90&y8C?lQy&i0h
+zhgek3HO-53;PS7T<P_MV(>`yb#KzS08BRGn`DGbcBp9+b9WSgoz1|U2MtHjVxvX<a
+GXaWGg*@t8R
+
+literal 0
+HcmV?d00001
+
+diff --git a/public/harvest-icons/Ore2.png b/public/harvest-icons/Ore2.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..b127a42e6e44398b61b5d78a85432ab175d57724
+GIT binary patch
+literal 1169
+zcmah}YiJZ#7@cU`M3dAMMPs1mGTT5Y*_}JHuk1A2WL~RVvLS31Tqr_jXYMA`%{-i$
+zbT^@3wJ{J&OaAnS&?goNf~g37&<cr4A&XEDX>0q-`fN*~0b9WuOz*_qC`IhR%zbdq
+z`Of!XW(EiLv}|eLLJ&ktYOk2VYpeG*`tY~o&Z>-;U9OaKhs=Uol5IqAs+mV1rOP8I
+zgJgB$Kn3*>#73ZHb8ar(&nl)Kls!zatXr5(5IwzROIC`=1$i{0842>wZx%?PsR?pl
+zBn{J+fJU{wlQtTf9LOq@MJ2A1y)T2FGK&Rt<jSC|j~NbIPLON5EZ%$96baTKZZSbV
+zG?hya0>QKqhy-Ckfl&yebdU~(W3gBlU?2@C$WSyBpkr)^VIc(7hs4orwZLY?WHlB(
+zCCE|NwOEQOl}f=<C}`Rv6djMpJq?BlU_`)~FkHDDFdTnPK}3#XYnH2-2JjT+ygBYB
+zNbK}s3c8g}uL~PawNSWZR9UttItVFU_wrgpJ8lL&vhhT;lbx^-l|ha<ZY#JS1%Hi<
+zYxnd(9uT`>MN=8qk>RGq1c`5gs;06q4ml1oG1wiFXj+Q!$w-uo@<O*1k0lu{TH~e+
+z$CV8Q)wtRtZuF^KR<M!mns(MS$7<ah95r3j88s~+3`M{`%}~vf;}y2*6WQA9NKM+N
+z4%RBeYX6DuIS)%oM&Nld#KUeWLesp&i@XqKB5@%a<HH<T<*HA}`hU3;HbZ%BeXPy3
+zD?B^ic715^VSVh8foI*uLk*W_<_My$AtiFz^3VB|)z#jOoo{aX=y|{2fAqJ$i*1*_
+zhre9@<Jf!OS}XsI`&v)Uojf9gft`!tA8+0|d=GrRIrYp>o&8hcZ5#T(3dhnPHt*b1
+zQ2yQ!UHGI}zpMT8`^1Sl_$qhRH+b%@cDeO|uYGyt_x-+<j;3E&7+$&5*fe+l%g+wA
+zyvAqhnW?%L8{Tfo^_^K9Oa4G)mZ;9A+Xvsc+t%f4>X<EFo$edDcJSj0@GZSG+`LWL
+z(QsljoUXj}*O|pk+mbkYXZHBk9lMw2rz#iDo}Z#_a7Ry9E}XCLY?bGUd(Z8Ew*TF_
+z!25mIx_&*j>C@%wp}=<OO7o$aQ2yd~@W>UrgC!av@!*3mb{Ae*eaHJrq@)3Ho*zE^
+EFYUI7a{vGU
+
+literal 0
+HcmV?d00001
+
+diff --git a/public/harvest-icons/Ore3.png b/public/harvest-icons/Ore3.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..cfc8dcefe163b9fc0bad4676658c66dd3bc3094f
+GIT binary patch
+literal 1162
+zcmeAS@N?(olHy`uVBq!ia0vp^0wB!61|;P_|4#%`k|nMYCBgY=CFO}lsSJ)O`AMk?
+zp1FzXsX?iUDV2pMQ*9U+m=!WZB1$5BeXNr6bM+EIYV;~{3xK*A7;Nk-3KEmEQ%e+*
+zQqwc@Y?a>c-mj#PnPRIHZt82`Ti~3Uk?B!Ylp0*+7m{3+ootz+WN)WnQ(*-(AUCxn
+zQK2F?C$HG5!d3}vt`(3C64qBz04piUwpD^SD#ABF!8yMuRl!uxKsVXI%s|1+P|wiV
+z#N6CmN5ROz&_Lh7NZ-&%*U;R`*vQJjKmiJrfVLH-q*(>IxIyg#@@$ndN=gc>^!3Zj
+z%k|2Q_413-^$jg8EkR}&8R-I5=oVMzl_XZ^<`pZ$OmImpPA<wUD9OyvQvjKmn3P{y
+zVygsnDZ~r81-`y;gY$}^0R;>){ffi_eM3D1{oGuTzrd=COM+4n&cLd=IHa;5RX-@T
+zIKQ+g85kdF$}r8qu)}W=NFmTQRxbI;rManjC7v#}N<b04l*|+>150yb0|PU20}EqU
+zLqk_nCpS|wM>8j93s*~XHzP+gm|oAk;*!L?<W!j6OoU!Dyn3yii&7Iy@{2<9^K)Ra
+z7m$%(l3$#WU!dR|Y^o5RnU|7ZUJMFYs5?`OGRsm^+=}vZ6~G~5m5F9M$mJ%kZbr^d
+zPA<ky1{SWShK5eAPA*Q)CPt=~&SvILCXPx_y(w6HO;E2s&@uX;Xhn)<m=G}SfSB+^
+z3*^9)eQF*strr0k^_MOBQ49=>44y8IAr-fh{`~)M&#c<OI-NyXS@}-N0@WTBNrp>*
+zs(O`Xybb;=dggd0#|iEe5-KcL{`|kZxHf?&X?AwU-*%0^{R`)HPLRKO_L)&m=EF1w
+zsisG|5($T%l}uPRfBB??Nd{8l2~C+t(yTV6#jHzcy2*7&fpwAM_k&W7>lhkEcgG8q
+zF>Z=aRP4{OJ|QsS#!2b*8+I|toLX>!Em1(eMSXekAwwOpgpJKI+8<Uphp`xQsI;w<
+z6x*u7rXbz4j-xGcor}M;&krZLC-FI-PB5Nsnsd*wadVQnx-$#2kDz|n9Dm+34sity
+zO-C;lD|;xONt>ZmBiSPuUDl>~WIA^ugTeuZPto75xTQIAgGvWaS3j3^P6<r_DsF<(
+
+literal 0
+HcmV?d00001
+
+diff --git a/public/harvest-icons/Wood1.png b/public/harvest-icons/Wood1.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..cc6cb383990e0f3fb585f6e1ca6f899e225ceb97
+GIT binary patch
+literal 1163
+zcmeAS@N?(olHy`uVBq!ia0vp^0wB!61|;P_|4#%`k|nMYCBgY=CFO}lsSJ)O`AMk?
+zp1FzXsX?iUDV2pMQ*9U+m=!WZB1$5BeXNr6bM+EIYV;~{3xK*A7;Nk-3KEmEQ%e+*
+zQqwc@Y?a>c-mj#PnPRIHZt82`Ti~3Uk?B!Ylp0*+7m{3+ootz+WN)WnQ(*-(AUCxn
+zQK2F?C$HG5!d3}vt`(3C64qBz04piUwpD^SD#ABF!8yMuRl!uxKsVXI%s|1+P|wiV
+z#N6CmN5ROz&_Lh7NZ-&%*U;R`*vQJjKmiJrfVLH-q*(>IxIyg#@@$ndN=gc>^!3Zj
+z%k|2Q_413-^$jg8EkR}&8R-I5=oVMzl_XZ^<`pZ$OmImpPA<wUD9OyvQvjKmn3P{y
+zVygsnDZ~r81-`y;gY$}^0R;>){ffi_eM3D1{oGuTzrd=COM+4n&cLd=IHa;5RX-@T
+zIKQ+g85kdF$}r8qu)}W=NFmTQRxbI;rManjC7v#}N<b04l*|+>11AeJb5|Ev0}EqU
+zLqk_nCpS|wM>8j93s*~XHzP+gm|oAk;*!L?<W!j6OoUz+yn3yii&7Iy@{2<9^K)Ra
+z7m$%(l3$#WU!dR|Y^o5RnU|7ZUJMFYs5?`OGRsm^+=}vZ6~G~5m5F9M$mJ%kZbr^d
+zPA<ky1{SWShK5eAPA*Q)CPt=~&SvILCXPx_y(w6HO;E2s&@uX;Xhn)<m=G}SfSB+^
+z3*^9)eQF*strr0k^(wy|91IMMjGiuzAr-flOfp>8=qS>f{x9RJ{=7-1D_Wuw8ND_#
+zS#RK3xSe@vhN+fppzWgT();4i&8YvQuUt6U^VylX#>MCMUblLF#(d&Zy@+ht*ZXT!
+zUGJ@3R=56hd)Dk4hbK9e=RWSRHMm=K_4yZ%Z=99;Zq9zVBw1>|{Y$AMPY%DFH2L70
+zrEb%5Zm{xs3M~#ZR$udfot$@X(chzAmO7+Ns(7lD@@-Bd=M{%(bIrLECne~=+#YvU
+zCjIuI$c5a$Jng-W82Mg5ni|}EVRy$Tx#XYfD;W2dyfVD>B{@>Cbtm`C$P=gbOuMRd
+ztWK!%>CMa2S>w$4Lm%cFUQ_vH*^zGB%I*3`?Hv;jgMjP4?E>Mg>Y(Dm)78&qol`;+
+E0Kc7-+W-In
+
+literal 0
+HcmV?d00001
+
+diff --git a/public/harvest-icons/Wood2.png b/public/harvest-icons/Wood2.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..c198e43a298c4292eb58b2c70f035987cf16fb56
+GIT binary patch
+literal 1155
+zcmah}TWB0r7@j6gS`ri6P^i5~Pbc0A*`3Q~Z$q|mXJ^K4?Jmn^CHqjYvoj~jn4LM(
+znUn4$h^{Sa0)cKpG>G`7#XdwWqSZcBTT-Zq2*F-eYKfsw^+7>{Vmy=Xrlpj2VCJ0j
+z^L_vS{g*RSx$JWtZCl$Yit0%3k@95S;J@oz$#=&e%PLv6V7Z6~&=9Vu4y2MgDnXDo
+z)nS;2sy=@30_>xxW?&SGxR}`|XvhqzJ|^gyHepj#U%zLo+9<@J1cwbPLH~aG3=IrD
+zK@WyAY{pK(5o6DU0|zFu1#Mzfi|cg%ZqVlm#DNL13OuuHxq_FVSNsZO@0%GKtU&N+
+zg1#-Pn8|?@av%r?*?`7ISP<cYT&Oo1jrIVZ<yeO08IBKdQ6a<&EDP!nO`<vakdT*@
+zdMt8E&?6Yz0>e})m0%?lM9wh7#p7|`2hRrxBH)f&SoH#y+uiUWL05AO8ym<1zDKo$
+z#&CirN^hrN+L_F%W6P}<ij<7;RGZ;~EMuB}UMpx9=iwb0_eHyfaT_vu=%O)4BmEfa
+zZjeds9vsLA5;cN^v@sJ}I4vb;VhQSoF0f)O5|w41jfG^6lf$ACjwB;uDkjIH3ZINL
+zxM|D9s-?jO*SN#w9>^6^4pcF63J8@O-OG(2jNB1qgVaD63>ub>Dz0DHx=!dAhoG)F
+z$OJ2u5sZ7H`^tM|g-?m16cX8(9OgJt79}y&%ZKBsNL1`i(sizWpR6CsWr!HYZ|hxc
+zZkWjI_}kT?C5P3qhZdQ2hYU6TCA^tjh^4fYEO=K-|1K~0H$PdOsx>Lf`DHNu{QIxh
+z76+fc`fGV6_QQ|UYdfmOe_t-`o_Wz&{O0<JZ`<BEvgNEay=a`?!EMT(9L~K^dt!U*
+z&3941*Lm@g8%HjKoW8B)udZ&Vr@A(oZF#L{F#gFKKY#J+xh3|}*9-5xZ7GjY^V72%
+z7f@|p-Kx$uO<nl>`?G&G?dxiNwmdU`>^HUa%%{}JHTwLmYe%o|?7VSq|KalbpRNH0
+z{PXyS8?Llp{u@x8&AG3tbKG|ypK988e%(hcM(YPHPl>P0&AoYCs_m-9WN(cwOg`G)
+rUVgc_SDI25KFdxX?V5axs#49=uI*=zUwLUM?f(|ia#orZ4;=m<q_u@t
+
+literal 0
+HcmV?d00001
+
+diff --git a/public/harvest-icons/Wood3.png b/public/harvest-icons/Wood3.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..657286f763dcb492368c330fca54e5363a17e678
+GIT binary patch
+literal 1198
+zcmah}ZD`zN9M7!V>e$!~71!$YS?c_tcbAuY>!rOO$tAa5*DK|EuJ=J*)8x4}-14#{
+z^>Wop)wNh!*a?F{J7k{(rxg7nN|D)4N~d+`+7CJu2adXmu<0f^HmOg#yG~@xK=Qos
+z`~CjE{|g!G?AX6!Tm3c+!*--v`3zb;?pwPBeV@9%CZeUz7IJo%p0|sl2{BgIdm%`v
+zVjs*vQ7#=h2b(dh1}NE_olCbflCJti7vpzS1F<ozIqn#uRDd?<g?)+^!>`Vq!GR*j
+z@a|BWOdAQ<ue1)Duxqd*D-9N;sEo&3K(oUj0TtRJaMZ(^#W*p1U6(<7_nN@LI>au-
+z@H?h*=}wT)O$b7M(kGE&5`-x~6$nNm5ig)giX=#yplBZzVFENmlA!Y7D4HqfnGBz-
+z#6qVS-f!CmLlDJc(O(Ssb+eD4qS2_ULDN2j@L46z79F2vHB=RNXi27G*ov+JS5fTM
+z2kaP*oZd-6HPYz~Va=)(3YCm-M1!FGB%!KqUh8Pf&cM4i?uoXtB?A%}Xz2r{g!++h
+zsFG3b?jOhnA~y`LO9Lv@>=Ylv(T!hLWQOD#!x2FUlZ^p^qJ$8a429V+muM8CktEHA
+ztK5`k*`g-FDp$G74c(W^BupsUx|!AW!`1F}_UpE8_3H*mbcH~-qRD#EatmAW2~Fi?
+zC?`!_1?!bzl>bC`od<;^o!~e=z>$qYh@v=w<GDnT4n-5;2p44W3Rk{I*8j^TkQu^l
+z>%ZDuy+X6&Za0P&9X7@uYG~F?G}J$()Nu^k^mK}6v(Cld+iPp_ntj7#<p+|<`86<c
+z;GL23%5%5!bKjFkPQ73EP(8ME`{rLmWc;hysoA#YYyDdTN5^)5JzhMNUpReT>O5GU
+z&yGL&)|JVtEzXxc9;IgG&F_G5<J&`{t4$|f|7`B)blv4;B|UX%^4O2BZT;o!3)gP^
+z{_yC&_de?R(|cu7dU0U3o;|;1Q~3;A&%RoIV&QYLQ2IpNEn*iYe(Ux;zG8cvKYk75
+zJ{Vf1mPzc>OHN_)5BW0ZDewAuWadG+$@|Q~Jwpp0u3p^R8k{@1^TNdRuKD=r<+d_=
+z&Bm5ojp32a?F}b)E^ntFk(=7Qr*1tO^L}&Fcx<?x?RXcQ_+s&;?Q-et-xG`bKi<>e
+kd3%Z3+j9PR>$6xbiM^6tJT`MKIOYC9QbGqm&Go$T5C7YrlK=n!
+
+literal 0
+HcmV?d00001
+
+diff --git a/public/harvest-icons/fish3.png b/public/harvest-icons/fish3.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..8f7c75fd385a0021adc6d9b7b2e06dac3e771d23
+GIT binary patch
+literal 1308
+zcmeAS@N?(olHy`uVBq!ia0vp^0wB!61|;P_|4#%`jKx9jP7LeL$-D$|SkfJR9T^xl
+z_H+M9WCij$3p^r=85sBugD~Uq{1qucLCF%=h?3y^w370~qErUQl>DSr1<%~X^wgl#
+z#FWaylc_cg49v?iLn2Bde0{8v^K<nQL2C3WatnaE85nHrD+&^mvr|hHl2X$%^K6yg
+z@7}MZkeOnu6mIHk;9KCFnvv;IRg@ZB<rk7%m7Q#vqGWH!%Vkqx1vDWywIorYA~z?m
+z*s8)-32d+xkPQ;nS5g2gDap1~g19QeH$cHTzbI9~RL?*+*}%*|!OT$4(AdP>++0V&
+z$iUD*-@r)U&`8(N+{)O<%D_MY3Y37>aoQB6q*(>IxIt|L@@$ndN=gc>^!3Zj%k|2Q
+z_413-^$jg8EkULj8R-I5=oVMzl_XZ^<`pZ0&43u<l3JWxlvz-cnV+WsGBhzMzqG_w
+z3FusiKXMD;Cg&AH0}B{z`W1-<`i6Q2Ab-IW`ugHmnwtw(U0f2Bif}SkgNs8d3sUui
+zQj7CTi;{uSm!=G|s=&&*C^fMpzbGU>KL-|+0U7xv`NbLe1q#l=rV8Pic`5nj#bDLG
+zzE+-j#U+V($*G<$wn{+#dYPFiR?coN29AzKP6iex28M>Nrj}-|rmm)D#s(G!MvlhL
+z<}kf3`N^fZsd*(Zy(tL2&N%gg;)j#d251-1c9+zm%(B!Jx1#)91+b^BGI6`d5~rC^
+zy(zfe<A_tQKG;Dv`k>fFifxD}njkbXOES}N#12RX67P04Ahwl%Q6?~e5<%(5&d^35
+zLk!bihzKz80$pIE56?It9z64<=B3!Gm#f>`-I}hl8JI0^dAc};SoklUXwTPVAabmJ
+zhoNy|N}^g}(gU6%o^byMZ#eJ7*f2Aj8x$rOJ!Dg}Ff_Jf&%7M=&$T}IcijHE``Hiu
+zZMGXUTU6&i6*(s0@JMNSj?yEg>%FSt9YS|6akpn>n?84&u&MJ#yg9=UPX>qZ?R)yl
+zpMgXyLZbhu9Pnq_wX5`ekJ^PK*YNGXgr1(eBCYY!vNj@V`a+iYcV9RePT!4^@TfSY
+zb3AT|#HE^lJIkl<IH78jy6c&o*~gHSo}G8wXC<+2h_=7Ec7EP_^)oNJCH@|(k9foP
+Zfh{LC?%$-ncT_;7kEg4j%Q~loCIE-0vReQE
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/game/data/materials.ts b/src/game/data/materials.ts
+index f02ac42..1f5cda0 100644
+--- a/src/game/data/materials.ts
++++ b/src/game/data/materials.ts
+@@ -46,7 +46,7 @@ export const MATERIALS: MaterialDef[] = [
+     id: 'herbs', name: 'Herbs', nodeName: 'Herb Garden',
+     description: 'Cuttings and roots from the herb garden -- the backbone of every potion.',
+     glyph: '\ud83c\udf3f',
+-    icons: ['herb1.png', 'herb2.png'],
++    icons: ['Herb1.png', 'Herb2.png', 'Herb3.png'],
+   },
+   {
+     id: 'fish', name: 'Food', nodeName: 'Provisions Dock',
+@@ -64,10 +64,17 @@ export const MATERIALS: MaterialDef[] = [
+     // exclusive.
+     description: 'Whatever the day\u2019s supply run brings in -- the catch off the dock, salted meat, foraged berries. Anything that keeps a hero fed on the road.',
+     glyph: '\ud83e\udffa',
+-    // Named "Food" rather than "Fish" from the start of this icon prep --
+-    // see the comment above, this was scaffolded ahead of the
+-    // generalization landing, not after.
+-    icons: ['Food1.png', 'Food2.png', 'Food3.png', 'Food4.png'],
++    // Real art landed as Fish1/Fish2/fish3.png (note the inconsistent
++    // case on the third file -- kept exactly as delivered rather than
++    // renamed, since the filename here has to match the actual file on
++    // disk byte-for-byte on a case-sensitive deploy target even though a
++    // typical Windows dev machine won't notice the mismatch locally).
++    // Only 3 icons, not the original 4-icon "Food1-4.png" placeholder
++    // name list this was scaffolded with before any real art existed --
++    // the icon filenames don't need to match the material's display name
++    // ("Food"), same as ore/timber/herbs' own icon files don't spell out
++    // "Ore"/"Timber"/"Herb" as a requirement, just a coincidence they do.
++    icons: ['Fish1.png', 'Fish2.png', 'fish3.png'],
+   },
+ ];
+ 
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 78986d8..e44d2f4 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -1609,12 +1609,38 @@ input[type='range'] {
+ .harvest-item {
+   position: absolute;
+   top: 62%;
+-  font-size: 2rem;
++  /*
++   * No real art existed at all until now (public/harvest-icons/ didn't
++   * exist -- every spawn was showing its glyph fallback, e.g. a plain 🪵
++   * emoji, never a loaded <img>). HarvestGlyph's <img> sizes itself to
++   * 100%/100% of this element, which needs an explicit box for that to
++   * mean anything -- previously "worked" only because the glyph text
++   * itself established the button's shrink-to-fit size, with no image
++   * ever actually loading to expose the gap. Doubled per direct request
++   * (was implicitly ~36px from a 2rem glyph's own rendered footprint) now
++   * that real icons need a real box to fill.
++   */
++  width: 72px;
++  height: 72px;
++  font-size: 3rem;
+   line-height: 1;
+   cursor: pointer;
+   user-select: none;
+   border-radius: 50%;
+   filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
++  /*
++   * `left: X%` from spawnPositionPercent was always the button's LEFT
++   * EDGE, not its center -- a small, easy-to-miss offset at the old
++   * shrink-to-fit glyph size, much more noticeable now that the box is
++   * an explicit 72px. Centers on its spawn point instead. Both
++   * `harvest-fall`/`harvest-pulse` keyframes below now carry this same
++   * translateX alongside their own scale() at every step -- a CSS
++   * animation's transform REPLACES the base transform while running, it
++   * doesn't compose with it, so leaving it off the keyframes would have
++   * meant centered only for the split second before either animation
++   * class attaches.
++   */
++  transform: translateX(-50%);
+   /*
+    * Persistent "this is clickable" glow -- previously the only visual cue
+    * at all was the generic `button:hover` rule (a plain panel-color
+@@ -1649,17 +1675,17 @@ button.harvest-item:hover {
+   box-shadow: 0 0 22px 9px color-mix(in srgb, var(--brass) 85%, transparent);
+ }
+ @keyframes harvest-fall {
+-  0% { top: 4%; opacity: 0; transform: scale(0.7); }
++  0% { top: 4%; opacity: 0; transform: translateX(-50%) scale(0.7); }
+   15% { opacity: 1; }
+-  55% { top: 62%; transform: scale(1); }
++  55% { top: 62%; transform: translateX(-50%) scale(1); }
+   70% { top: 52%; }
+-  85% { top: 62%; transform: scale(1); }
++  85% { top: 62%; transform: translateX(-50%) scale(1); }
+   93% { top: 57%; }
+-  100% { top: 62%; transform: scale(1); }
++  100% { top: 62%; transform: translateX(-50%) scale(1); }
+ }
+ @keyframes harvest-pulse {
+-  0%, 100% { transform: scale(1); }
+-  50% { transform: scale(1.12); }
++  0%, 100% { transform: translateX(-50%) scale(1); }
++  50% { transform: translateX(-50%) scale(1.12); }
+ }
+ .harvest-stock-row { display: flex; align-items: center; gap: 6px; }
+ .harvest-stock-bar {

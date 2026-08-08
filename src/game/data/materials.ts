@@ -46,7 +46,7 @@ export const MATERIALS: MaterialDef[] = [
     id: 'herbs', name: 'Herbs', nodeName: 'Herb Garden',
     description: 'Cuttings and roots from the herb garden -- the backbone of every potion.',
     glyph: '\ud83c\udf3f',
-    icons: ['herb1.png', 'herb2.png'],
+    icons: ['Herb1.png', 'Herb2.png', 'Herb3.png'],
   },
   {
     id: 'fish', name: 'Food', nodeName: 'Provisions Dock',
@@ -64,10 +64,17 @@ export const MATERIALS: MaterialDef[] = [
     // exclusive.
     description: 'Whatever the day\u2019s supply run brings in -- the catch off the dock, salted meat, foraged berries. Anything that keeps a hero fed on the road.',
     glyph: '\ud83e\udffa',
-    // Named "Food" rather than "Fish" from the start of this icon prep --
-    // see the comment above, this was scaffolded ahead of the
-    // generalization landing, not after.
-    icons: ['Food1.png', 'Food2.png', 'Food3.png', 'Food4.png'],
+    // Real art landed as Fish1/Fish2/fish3.png (note the inconsistent
+    // case on the third file -- kept exactly as delivered rather than
+    // renamed, since the filename here has to match the actual file on
+    // disk byte-for-byte on a case-sensitive deploy target even though a
+    // typical Windows dev machine won't notice the mismatch locally).
+    // Only 3 icons, not the original 4-icon "Food1-4.png" placeholder
+    // name list this was scaffolded with before any real art existed --
+    // the icon filenames don't need to match the material's display name
+    // ("Food"), same as ore/timber/herbs' own icon files don't spell out
+    // "Ore"/"Timber"/"Herb" as a requirement, just a coincidence they do.
+    icons: ['Fish1.png', 'Fish2.png', 'fish3.png'],
   },
 ];
 

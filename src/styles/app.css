@@ -1609,12 +1609,38 @@ input[type='range'] {
 .harvest-item {
   position: absolute;
   top: 62%;
-  font-size: 2rem;
+  /*
+   * No real art existed at all until now (public/harvest-icons/ didn't
+   * exist -- every spawn was showing its glyph fallback, e.g. a plain 🪵
+   * emoji, never a loaded <img>). HarvestGlyph's <img> sizes itself to
+   * 100%/100% of this element, which needs an explicit box for that to
+   * mean anything -- previously "worked" only because the glyph text
+   * itself established the button's shrink-to-fit size, with no image
+   * ever actually loading to expose the gap. Doubled per direct request
+   * (was implicitly ~36px from a 2rem glyph's own rendered footprint) now
+   * that real icons need a real box to fill.
+   */
+  width: 72px;
+  height: 72px;
+  font-size: 3rem;
   line-height: 1;
   cursor: pointer;
   user-select: none;
   border-radius: 50%;
   filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
+  /*
+   * `left: X%` from spawnPositionPercent was always the button's LEFT
+   * EDGE, not its center -- a small, easy-to-miss offset at the old
+   * shrink-to-fit glyph size, much more noticeable now that the box is
+   * an explicit 72px. Centers on its spawn point instead. Both
+   * `harvest-fall`/`harvest-pulse` keyframes below now carry this same
+   * translateX alongside their own scale() at every step -- a CSS
+   * animation's transform REPLACES the base transform while running, it
+   * doesn't compose with it, so leaving it off the keyframes would have
+   * meant centered only for the split second before either animation
+   * class attaches.
+   */
+  transform: translateX(-50%);
   /*
    * Persistent "this is clickable" glow -- previously the only visual cue
    * at all was the generic `button:hover` rule (a plain panel-color
@@ -1649,17 +1675,17 @@ button.harvest-item:hover {
   box-shadow: 0 0 22px 9px color-mix(in srgb, var(--brass) 85%, transparent);
 }
 @keyframes harvest-fall {
-  0% { top: 4%; opacity: 0; transform: scale(0.7); }
+  0% { top: 4%; opacity: 0; transform: translateX(-50%) scale(0.7); }
   15% { opacity: 1; }
-  55% { top: 62%; transform: scale(1); }
+  55% { top: 62%; transform: translateX(-50%) scale(1); }
   70% { top: 52%; }
-  85% { top: 62%; transform: scale(1); }
+  85% { top: 62%; transform: translateX(-50%) scale(1); }
   93% { top: 57%; }
-  100% { top: 62%; transform: scale(1); }
+  100% { top: 62%; transform: translateX(-50%) scale(1); }
 }
 @keyframes harvest-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.12); }
+  0%, 100% { transform: translateX(-50%) scale(1); }
+  50% { transform: translateX(-50%) scale(1.12); }
 }
 .harvest-stock-row { display: flex; align-items: center; gap: 6px; }
 .harvest-stock-bar {

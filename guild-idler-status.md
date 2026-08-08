@@ -1288,6 +1288,46 @@ files land there). Drop the actual art in at that path, matching the
 filenames listed above, and it'll pick up automatically with no further
 code changes.
 
+**Update -- real art landed.** `public/harvest-icons/` now has real
+16x16 pixel art for all 12 pool entries across the 4 materials. Two
+filename lists needed correcting to match what was actually delivered,
+rather than the placeholder names this section was scaffolded with
+before any art existed: Herbs went from a 2-icon `['herb1.png',
+'herb2.png']` placeholder to the real 3-icon `['Herb1.png', 'Herb2.png',
+'Herb3.png']` (note the case change too -- lowercase was a guess, the
+real files are capitalized); Food's placeholder `['Food1.png', ...,
+'Food4.png']` (4 entries, guessed ahead of the fish->food generalization
+landing) is replaced by the real `['Fish1.png', 'Fish2.png',
+'fish3.png']` (3 entries -- the icon filenames were never required to
+match the material's display name, same as ore/timber/herbs' own icons
+only coincidentally spell out their material). `fish3.png`'s lowercase
+`f` is kept exactly as delivered rather than normalized to match its two
+siblings -- the array entry has to match the real filename on disk
+byte-for-byte on a case-sensitive deploy target, even though a typical
+Windows dev machine won't notice a mismatch locally. Ore and Timber's
+filenames already matched what was scaffolded, no changes needed there.
+
+Also doubled the falling icons' on-screen size per direct request, which
+surfaced a real layout gap while doing it: `.harvest-item` never had an
+explicit `width`/`height` at all -- `HarvestGlyph`'s `<img>` sizes itself
+to 100%/100% of its parent, which only ever "worked" because no icon had
+ever actually loaded before now (the folder didn't exist, so every spawn
+was showing its glyph fallback, sized purely by `font-size`, never the
+image path). Added an explicit `72px` box (doubled from the glyph's own
+implicit ~36px footprint) so the real `<img>` has something concrete to
+fill. That same change also exposed a second pre-existing quirk: `left:
+X%` (from `spawnPositionPercent`) was always the button's *left edge*,
+not its center -- a small, easy-to-miss offset at the old shrink-to-fit
+size, much more noticeable at 72px. Fixed alongside the sizing change
+with `transform: translateX(-50%)`, which also had to be folded into
+every step of both `harvest-fall` and `harvest-pulse`'s keyframes (a
+running CSS animation's `transform` *replaces* the element's base
+transform rather than composing with it, so leaving the base transform
+on its own would only have centered the icon for the instant before
+either animation class attaches).
+
+`npx tsc --noEmit` and `vite build` both pass clean.
+
 ### Consumables can now carry crafted stat/mod bonuses -- complete
 Per direct request: extend consumable crafting to support the same
 "pick a bonus" flow gear crafting already has. This was flagged as a
