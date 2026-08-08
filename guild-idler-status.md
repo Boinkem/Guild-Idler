@@ -540,22 +540,48 @@ just checks affordability and adds +1 to the right counter
 simplest of the four, a single top slot (choose a recipe) with no bottom
 slots at all, since there's nothing else to pick.
 
-**Infuse station** (`InfuseStation.tsx`, new file) -- mirrors
-`EnhanceStation.tsx`'s single-station click-select-confirm pattern, two
-slots (item, then gem) instead of one. Which gem pool an item draws from
-(`gems` vs `resistGems`) is decided entirely by the item's own slot
-(weapon vs everything else) -- no separate "kind" choice for the player
-to make, since a weapon can only ever take elemental damage and
-everything else can only ever take resist.
+**Infuse station** (`InfuseStation.tsx`) -- mirrors `EnhanceStation.tsx`'s
+click-select-confirm pattern, but only one slot on the frame (item), not
+two -- the commissioned art (`infuse.jpg`) only painted one cutout, unlike
+gear/consumable/enchant's three-slot scenes, so gem choice is a row of
+labelled chip buttons below the frame instead of a second floating slot.
+Which gem pool an item draws from (`gems` vs `resistGems`) is still
+decided entirely by the item's own slot (weapon vs everything else) -- no
+separate "kind" choice for the player to make.
+
+**Scrap** also became its own dedicated station (`ScrapStation.tsx`,
+new file) rather than staying as a per-item button in the Vendors stash
+list -- moved for the same reason Enhance moved off the Inventory tab
+before it, and because real background art (`scrap.png`) arrived for it
+specifically. Confirms with a "+N Scrap" collect-burst on the item's own
+slot -- reuses the exact `collect-burst`/`collect-particle` convention
+Harvest catches and quest/raid reward bursts already established, with a
+new `.collect-particle.scrap` colour variant and a 5-icon pool
+(`SCRAP_ICONS` in `data/elements.ts`, reusing existing
+`crafting/Crafting_74-78.png` icons rather than needing new art) picked
+per-event the same deterministic-sine-seed way `harvestIconFor` already
+picks a Harvest icon. One real bug caught before it shipped: the burst
+was originally nested inside `.craft-scene`, which has `overflow: hidden`
+to keep the background art cleanly cropped -- that would have clipped
+the particles' upward flight. Fixed by making the burst a sibling of
+`.craft-scene` instead of a child, both wrapped in a shared
+`position: relative` container.
+
+Both stations' slot rects were hand-measured programmatically (largest
+contiguous dark region near the image's center, via a Python connected-
+components pass against each PNG/JPEG) rather than eyeballed, then
+cross-checked against `EnhanceStation`'s own already-correct rect for
+sanity -- both new measurements landed close to it, as expected since all
+of these scenes share the same underlying 1402x1122 template.
 
 **Known gaps, deliberately not blocking this patch:**
-- **Art.** No commissioned background exists yet for the Infuse station
-  or the Gems crafting scene (`./lore/crafting/infuse.jpg` /
-  `.../gem.jpg`) -- same "missing file just fails to paint" convention as
-  every other banner in this game, and `InfuseStation`'s own two slot
-  rects are hand-guessed placeholders (mirrored off `EnhanceStation`'s
-  single slot) pending real art to calibrate against, unlike every other
-  station's slots, which were hand-measured against a real image.
+- **Gem crafting scene** (Enchanter's `'gem'` CraftingStation category)
+  still has no commissioned background (`./lore/crafting/gem.jpg`) --
+  same "missing file just fails to paint" convention as everywhere else,
+  and its single top-slot rect is still a placeholder (reused from the
+  `consumable` category's own rect) pending real art to measure against,
+  unlike Infuse/Scrap above, which now both have real art and real
+  measured rects.
 - **Icons.** New gem recipes ship with no `icon` field set (falls back to
   a plain 💎 glyph via `CATEGORY_FALLBACK['gem']`) -- deliberately, rather
   than guessing at specific `crafting/Crafting_NN.png` filenames. Already
@@ -584,8 +610,10 @@ fix), the full craft-gem -> infuse-weapon -> matching-success-bonus
 pipeline end to end, armor resist correctly stacking across two
 infusions (2x the per-infusion bonus, confirmed exactly), immunity
 correctly zeroing the weapon-side bonus while leaving armor resist
-untouched, raid encounter tags loading as authored, and a pre-28 save
-migrating to the correct 0/empty defaults for scrap/gems/resistGems.
+untouched, raid encounter tags loading as authored, a pre-28 save
+migrating to the correct 0/empty defaults for scrap/gems/resistGems, and
+(this pass) the scrap icon pool resolving deterministically per event
+while still covering all 5 icons across repeated calls.
 `npx tsc --noEmit` and `vite build` both pass clean.
 
 ### Consumables & equip-slot rework -- complete

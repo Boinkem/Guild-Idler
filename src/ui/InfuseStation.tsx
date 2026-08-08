@@ -7,16 +7,11 @@ import { ItemIcon } from './icons';
 import { PickerModal, SlotBox } from './CraftingStation';
 import type { PickerOption, Rect } from './CraftingStation';
 
-/**
- * Two side-by-side slots (item, then gem) on the same "commissioned art +
- * click-select-confirm" pattern EnhanceStation established -- no real art
- * for this one yet either, so these are placeholder rects (same
- * proportions as EnhanceStation's own single slot, just mirrored left and
- * right of center) pending an actual infuse.jpg. Recalibrate both once
- * real art exists, the same note EnhanceStation's own SLOT_RECT carries.
- */
-const ITEM_SLOT: Rect = { left: 22.0, top: 37.0, width: 18.7, height: 23.1 };
-const GEM_SLOT: Rect = { left: 59.5, top: 37.0, width: 18.7, height: 23.1 };
+/** Hand-measured against infuse.jpg's own 1402x1122 canvas -- only one
+ *  slot cutout painted into this art (unlike gear/consumable/enchant's
+ *  three-slot scenes), so gem choice is a row of buttons below the frame
+ *  instead of a second SlotBox on the image. */
+const ITEM_SLOT: Rect = { left: 42.4, top: 38.7, width: 15.1, height: 19.6 };
 
 export function InfuseStation({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
@@ -25,7 +20,6 @@ export function InfuseStation({ onClose }: { onClose: () => void }) {
   const [targetUid, setTargetUid] = useState('');
   const [element, setElement] = useState<ElementType | null>(null);
   const [openItemPicker, setOpenItemPicker] = useState(false);
-  const [openGemPicker, setOpenGemPicker] = useState(false);
 
   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
   const item = found?.item;
@@ -56,13 +50,6 @@ export function InfuseStation({ onClose }: { onClose: () => void }) {
     })
     .filter((o): o is PickerOption => o !== null);
 
-  const gemOptions: PickerOption[] = ELEMENT_TYPES.map((el) => ({
-    key: el,
-    label: `${ELEMENT_GLYPH[el]} ${ELEMENT_LABEL[el]} ${isWeapon ? 'Gem' : 'Resistance Gem'}`,
-    sublabel: `Have ${gemPool[el] ?? 0}`,
-    disabled: (gemPool[el] ?? 0) < 1,
-  }));
-
   function handleInfuse() {
     if (!item || !element) return;
     engine.infuseItem(item.uid, element);
@@ -86,13 +73,6 @@ export function InfuseStation({ onClose }: { onClose: () => void }) {
             label="Choose an item to infuse"
             onOpen={() => setOpenItemPicker(true)}
           />
-          <SlotBox
-            rect={GEM_SLOT}
-            filled={element ? <span className="craft-slot-label" style={{ fontSize: '1.6rem' }}>{ELEMENT_GLYPH[element]}</span> : null}
-            disabled={!item}
-            label="Choose a gem"
-            onOpen={() => setOpenGemPicker(true)}
-          />
         </div>
 
         {item && def ? (
@@ -102,8 +82,29 @@ export function InfuseStation({ onClose }: { onClose: () => void }) {
               : 'armor: infusing adds to (stacks with) any resist it already carries.'}
           </p>
         ) : (
-          <p className="tiny muted" style={{ margin: '8px 0' }}>Choose an item to see what it can carry.</p>
+          <p className="tiny muted" style={{ margin: '8px 0' }}>Choose an item, then a gem, below.</p>
         )}
+
+        {/* Gem row -- only meaningful once an item is chosen (it decides
+            which pool/label set applies), so it's disabled rather than
+            hidden beforehand to keep the layout stable. */}
+        <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
+          {ELEMENT_TYPES.map((el) => {
+            const have = gemPool[el] ?? 0;
+            const selected = element === el;
+            return (
+              <button
+                key={el}
+                className={`chip ${selected ? 'on' : ''}`}
+                disabled={!item || have < 1}
+                onClick={() => setElement(el)}
+                title={`${ELEMENT_LABEL[el]} ${isWeapon ? 'Gem' : 'Resistance Gem'} -- have ${have}`}
+              >
+                {ELEMENT_GLYPH[el]} {ELEMENT_LABEL[el]} ({have})
+              </button>
+            );
+          })}
+        </div>
 
         <button className="btn-purple" disabled={!canInfuse} onClick={handleInfuse}>
           Infuse
@@ -116,14 +117,6 @@ export function InfuseStation({ onClose }: { onClose: () => void }) {
           options={itemOptions}
           onPick={(key) => { setTargetUid(key); setElement(null); }}
           onClose={() => setOpenItemPicker(false)}
-        />
-      )}
-      {openGemPicker && (
-        <PickerModal
-          title="Choose a gem"
-          options={gemOptions}
-          onPick={(key) => setElement(key as ElementType)}
-          onClose={() => setOpenGemPicker(false)}
         />
       )}
     </div>

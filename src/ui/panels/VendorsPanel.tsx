@@ -16,6 +16,7 @@ import { MaxFlash, useMaxFlash } from '../maxFlash';
 import { CraftingStation } from '../CraftingStation';
 import { EnhanceStation } from '../EnhanceStation';
 import { InfuseStation } from '../InfuseStation';
+import { ScrapStation } from '../ScrapStation';
 
 /** Confirmed pairing, not a guess -- Blacksmith sells armour, Alchemist sells
  *  supplies, Enchanter sells the black market. Same mapping decides which
@@ -54,6 +55,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
   const [showEnhance, setShowEnhance] = useState(false);
   const [showInfuse, setShowInfuse] = useState(false);
   const [showGems, setShowGems] = useState(false);
+  const [showScrap, setShowScrap] = useState(false);
 
   const vendorDef = VENDORS.find((v) => v.id === vendorId)!;
   const level = GuildManager.vendorLevel(state, vendorId);
@@ -141,6 +143,13 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
               {vendorId === 'blacksmith' && (
                 <button className="btn-purple" onClick={() => setShowInfuse(true)}>Infuse</button>
               )}
+              {/* Breaks an owned item down into Scrap instead of gold --
+                  its own dedicated station now (own background art),
+                  moved off the stash list the same way Enhance moved off
+                  the Inventory tab before it. */}
+              {vendorId === 'blacksmith' && (
+                <button className="btn-purple" onClick={() => setShowScrap(true)}>Scrap</button>
+              )}
               {vendorId === 'enchanter' && (
                 <button className="btn-purple" onClick={() => setShowGems(true)}>Gems</button>
               )}
@@ -165,6 +174,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
       )}
       {showEnhance && <EnhanceStation onClose={() => setShowEnhance(false)} />}
       {showInfuse && <InfuseStation onClose={() => setShowInfuse(false)} />}
+      {showScrap && <ScrapStation onClose={() => setShowScrap(false)} />}
       {showGems && <CraftingStation category="gem" onClose={() => setShowGems(false)} />}
     </>
   );
@@ -234,14 +244,9 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
                   {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
                 </span>
               </div>
-              <div className="row" style={{ gap: 6 }}>
-                <button onClick={() => { if (!settings.confirmSell || confirm('Scrap this item? This cannot be undone.')) engine.scrapItem(item.uid); }}>
-                  Scrap · {EquipmentManager.scrapValue(item)}
-                </button>
-                <button onClick={() => { if (!settings.confirmSell || confirm('Sell this item?')) engine.sellItem(item.uid); }}>
-                  Sell · {formatGold(EquipmentManager.sellValue(item))}
-                </button>
-              </div>
+              <button onClick={() => { if (!settings.confirmSell || confirm('Sell this item?')) engine.sellItem(item.uid); }}>
+                Sell · {formatGold(EquipmentManager.sellValue(item))}
+              </button>
             </div>
           );
         })}

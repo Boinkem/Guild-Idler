@@ -14,6 +14,31 @@ export const ELEMENT_GLYPH: Record<ElementType, string> = {
 };
 
 /**
+ * Icon pool for the Scrap "+N Scrap" collect-burst (see ScrapStation.tsx)
+ * -- reuses 5 existing crafting icons rather than needing new art, same
+ * "one is picked at random per event" idea as harvestIconFor
+ * (data/materials.ts), just simpler: Scrap isn't a Harvest node, so there's
+ * no per-material lookup, just one flat pool. Paths are relative to
+ * public/item-icons/, matching ItemIcon's own convention.
+ */
+export const SCRAP_ICONS = [
+  'crafting/Crafting_74.png',
+  'crafting/Crafting_75.png',
+  'crafting/Crafting_76.png',
+  'crafting/Crafting_77.png',
+  'crafting/Crafting_78.png',
+];
+
+/** Deterministic per-event pick from SCRAP_ICONS, so the same scrap action
+ *  shows the same icon across a re-render but still varies action to
+ *  action -- same sine-seed trick harvestIconFor already uses. */
+export function scrapIconFor(seed: number): string {
+  const x = Math.sin(seed) * 10000;
+  const frac = x - Math.floor(x);
+  return SCRAP_ICONS[Math.floor(frac * SCRAP_ICONS.length)];
+}
+
+/**
  * How many elemental tags a quest at a given difficulty tier CAN carry --
  * a ceiling, not a guarantee. Each element under that ceiling still rolls
  * independently (elemental.tagRollChancePercent, see below), so most

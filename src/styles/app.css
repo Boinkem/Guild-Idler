@@ -812,6 +812,10 @@ button:focus-visible, [tabindex]:focus-visible {
   color: var(--moss);
   text-shadow: 0 0 8px color-mix(in srgb, var(--moss) 70%, transparent);
 }
+.collect-particle.scrap {
+  color: var(--brass-dim);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--brass-dim) 70%, transparent);
+}
 @keyframes collect-fly {
   0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
   15% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
