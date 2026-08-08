@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 26;
+export const SAVE_VERSION = 27;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -543,6 +543,13 @@ export interface UpgradeDef {
   /** Grants this many extra equipped-pet slots per level -- same shape
    *  again. Only Companion Bond uses this. */
   petSlotsPerLevel?: number;
+  /** Grants this many extra free quest-board rerolls per day, per level --
+   *  same special-purpose-field shape as the slot-count fields above. Only
+   *  Board Runner uses this. */
+  questFreeRerollsPerLevel?: number;
+  /** Same shape again, for free Vendors-shop restock rerolls per day. Only
+   *  Trade Favor uses this. */
+  vendorFreeRerollsPerLevel?: number;
 }
 
 export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern';
@@ -671,6 +678,20 @@ export interface GameState {
    * stage rather than each getting their own copy.
    */
   chainBoard: QuestOffer[];
+  /**
+   * Daily reroll tracking for the quest board's Reroll button -- see
+   * QuestManager.questRerollCost/rerollContractsForHero and
+   * data/reroll.ts's shared day/cost math. `questRerollDay` is the day
+   * window (see reroll.ts's `rerollDay`) `questRerollsUsedToday` was last
+   * touched for; a stale day is treated as 0 used rather than reset
+   * proactively, the same lazy-reset shape burst/shop windows already use.
+   */
+  questRerollDay: number;
+  questRerollsUsedToday: number;
+  /** Same shape again, independent counter, for the Vendors shop restock
+   *  reroll -- see ShopManager.vendorRerollCost/rerollShop. */
+  vendorRerollDay: number;
+  vendorRerollsUsedToday: number;
   boardRefreshedAt: number;
   activeQuests: ActiveQuest[];
   activeChains: ActiveChain[];

@@ -2,6 +2,7 @@ import { Modifiers, Rarity, Stats, ZERO_MODS } from './types';
 
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;
+export const DAY = 24 * HOUR;
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));

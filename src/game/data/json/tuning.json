@@ -853,5 +853,41 @@
     "min": 0,
     "max": 100,
     "description": "Flat % chance a successful Legendary-tier quest drops an ordinary egg (Legendary rarity). Deliberately very low."
+  },
+  {
+    "id": "reroll.questBaseCost",
+    "label": "Quest reroll: base gold cost",
+    "category": "reroll",
+    "value": 40,
+    "default": 40,
+    "min": 0,
+    "description": "Gold cost of the first PAID quest-board reroll on a given day (i.e. the reroll right after the free allowance runs out). Each reroll after that multiplies by reroll.questCostGrowth. Resets to this base cost every day along with the free-reroll count."
+  },
+  {
+    "id": "reroll.questCostGrowth",
+    "label": "Quest reroll: cost growth per paid reroll",
+    "category": "reroll",
+    "value": 1.6,
+    "default": 1.6,
+    "min": 1,
+    "description": "Multiplier applied to the quest-board reroll cost for each additional paid reroll within the same day -- e.g. at 1.6x and a 40g base, the 2nd paid reroll costs 64g, the 3rd 102g, and so on. Resets alongside the daily free-reroll count."
+  },
+  {
+    "id": "reroll.vendorBaseCost",
+    "label": "Vendor reroll: base gold cost",
+    "category": "reroll",
+    "value": 60,
+    "default": 60,
+    "min": 0,
+    "description": "Same shape as reroll.questBaseCost, for the Vendors shop restock reroll instead of the quest board. Priced a little higher than the quest reroll since a shop restock touches both equipment and consumable stock at once."
+  },
+  {
+    "id": "reroll.vendorCostGrowth",
+    "label": "Vendor reroll: cost growth per paid reroll",
+    "category": "reroll",
+    "value": 1.6,
+    "default": 1.6,
+    "min": 1,
+    "description": "Same shape as reroll.questCostGrowth, for the Vendors shop restock reroll."
   }
 ]

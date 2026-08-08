@@ -154,15 +154,40 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
   );
 }
 
+/** Shared between ArmourStock and SuppliesStock -- both draw from the same
+ *  underlying state.shop, so one reroll restocks both at once, and the
+ *  button is shown identically on either vendor's page rather than
+ *  duplicated logic per page. */
+function ShopRerollButton() {
+  const engine = useEngine();
+  const state = engine.state;
+  const now = useNow();
+  const cost = ShopManager.vendorRerollCost(state, now);
+  return (
+    <button
+      className="btn-ghost"
+      style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+      onClick={() => engine.rerollShop()}
+      disabled={cost > state.gold}
+      title={cost > 0 ? `Restock early for ${cost} gold` : 'Restock early -- free today'}
+    >
+      {cost > 0 ? `Reroll stock · ${formatGold(cost)}` : 'Reroll stock · Free'}
+    </button>
+  );
+}
+
 function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: boolean } }) {
   const engine = useEngine();
   const state = engine.state;
 
   return (
     <>
-      <p className="tiny muted" style={{ marginBottom: 8 }}>
-        Stock rotates in {formatDuration(ShopManager.timeUntilRefresh(state, now))}. The armourer buys as well as sells.
-      </p>
+      <div className="spread" style={{ alignItems: 'center', marginBottom: 8 }}>
+        <p className="tiny muted" style={{ margin: 0 }}>
+          Stock rotates in {formatDuration(ShopManager.timeUntilRefresh(state, now))}. The armourer buys as well as sells.
+        </p>
+        <ShopRerollButton />
+      </div>
       {state.shop.equipment.length === 0 && <p className="small muted">Sold out. Come back after the next delivery.</p>}
       <div className="grid two">
         {state.shop.equipment.map((entry) => (
@@ -206,16 +231,21 @@ function SuppliesStock() {
   const state = engine.state;
 
   return (
-    <div className="grid three">
-      {state.shop.consumables.map((entry) => (
-        <ConsumableShopCard
-          key={entry.defId}
-          def={CONSUMABLE_BY_ID[entry.defId]}
-          canAfford={state.gold >= (CONSUMABLE_BY_ID[entry.defId]?.cost ?? Infinity)}
-          onBuy={() => engine.buyConsumable(entry.defId)}
-        />
-      ))}
-    </div>
+    <>
+      <div className="row end" style={{ marginBottom: 8 }}>
+        <ShopRerollButton />
+      </div>
+      <div className="grid three">
+        {state.shop.consumables.map((entry) => (
+          <ConsumableShopCard
+            key={entry.defId}
+            def={CONSUMABLE_BY_ID[entry.defId]}
+            canAfford={state.gold >= (CONSUMABLE_BY_ID[entry.defId]?.cost ?? Infinity)}
+            onBuy={() => engine.buyConsumable(entry.defId)}
+          />
+        ))}
+      </div>
+    </>
   );
 }
 

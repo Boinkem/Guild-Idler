@@ -120,6 +120,22 @@ export const UPGRADES: UpgradeDef[] = [
     baseCost: 2200, costGrowth: 2.3, maxLevel: 2,
     modsPerLevel: {}, petSlotsPerLevel: 1,
   },
+  {
+    id: 'board_runner', name: 'Board Runner',
+    description: "A retained courier who'll fetch a fresh set of contracts on request -- extra free quest-board rerolls per day before the price starts climbing.",
+    // Base (1 free/day) lives in ModifierManager.questFreeRerolls as the
+    // floor. 3 levels take it to 4 total, matching the "up to 4" spec.
+    baseCost: 900, costGrowth: 2.0, maxLevel: 3,
+    modsPerLevel: {}, questFreeRerollsPerLevel: 1,
+  },
+  {
+    id: 'trade_favor', name: 'Trade Favor',
+    description: 'A standing favor with every stall in the market -- extra free restocks per day before you start paying the vendors to hurry.',
+    // Same shape as Board Runner, independent counter -- see
+    // ModifierManager.vendorFreeRerolls.
+    baseCost: 900, costGrowth: 2.0, maxLevel: 3,
+    modsPerLevel: {}, vendorFreeRerollsPerLevel: 1,
+  },
 ];
 
 /**

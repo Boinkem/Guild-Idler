@@ -59,7 +59,16 @@ const MIN_LEVEL_FOR_CAP = 5;
  *  quick top-up, never the rational default strategy over the board. */
 const BURST_CAP_FRACTION = 0.825;
 
-export function burstCapsPerHour(topLevel: number, legendaryUnlocked: boolean): { gold: number; xp: number } {
+/**
+ * Shared by both fast-completion modes (burst AND medium -- see
+ * DifficultyConfig's own comment on mediumChance for why medium needs the
+ * same guardrail burst already has). Kept as one function/one cap fraction
+ * rather than two separate curves: both modes exist for the same reason
+ * (an explicit, generous-feeling reward range reads better than a
+ * proportional slice of the full range), so both need the same protection
+ * against becoming the dominant strategy once out-leveled.
+ */
+export function fastQuestCapsPerHour(topLevel: number, legendaryUnlocked: boolean): { gold: number; xp: number } {
   if (topLevel < MIN_LEVEL_FOR_CAP) return { gold: Infinity, xp: Infinity };
   const tier = DIFFICULTIES[bestUnlockedTier(topLevel, legendaryUnlocked)];
   return {

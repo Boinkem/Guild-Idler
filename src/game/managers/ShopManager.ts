@@ -4,6 +4,8 @@ import { EquipmentItem, GameState, ShopStock } from '../types';
 import { createRng, uid } from '../rng';
 import { HOUR } from '../util';
 import { EquipmentManager } from './EquipmentManager';
+import { ModifierManager } from './ModifierManager';
+import { rerollDay, rerollsUsedToday, nextRerollCost } from '../data/reroll';
 
 export const SHOP_REFRESH_MS = 4 * HOUR;
 const SHOP_EQUIPMENT_SLOTS = 5;
@@ -20,12 +22,16 @@ export const ShopManager = {
     return now - state.shop.refreshedAt >= SHOP_REFRESH_MS;
   },
 
-  /** Stock is seeded per refresh window so it is stable across restarts. */
-  refresh(state: GameState, now: number, force = false): ShopStock {
+  /** Stock is seeded per refresh window so it is stable across restarts.
+   *  `salt` defaults to 0 (fully deterministic per window, for reload
+   *  stability); the Vendors reroll button passes the exact reroll moment
+   *  instead, so a manual reroll produces genuinely new stock rather than
+   *  reproducing the same window-seeded result. */
+  refresh(state: GameState, now: number, force = false, salt: number | string = 0): ShopStock {
     if (!force && !ShopManager.needsRefresh(state, now)) return state.shop;
     const window = Math.floor(now / SHOP_REFRESH_MS);
     const topLevel = Math.max(1, ...state.heroes.map((h) => h.level));
-    const rng = createRng(`shop:${window}:${state.createdAt}`);
+    const rng = createRng(`shop:${window}:${state.createdAt}:${salt}`);
 
     // raidExclusive items (Heroic/Mythic tiered raid loot variants) never
     // belong in a purchasable pool -- see the comment on EquipmentDef itself
@@ -55,6 +61,45 @@ export const ShopManager = {
 
   timeUntilRefresh(state: GameState, now: number): number {
     return Math.max(0, state.shop.refreshedAt + SHOP_REFRESH_MS - now);
+  },
+
+  /**
+   * Gold cost of the *next* Vendors restock reroll -- 0 while still within
+   * today's free allowance (see ModifierManager.vendorFreeRerolls),
+   * climbing per additional paid reroll after that. Same shape as
+   * QuestManager.questRerollCost, entirely independent counter/upgrade.
+   */
+  vendorRerollCost(state: GameState, now: number): number {
+    const used = rerollsUsedToday(state.vendorRerollsUsedToday, state.vendorRerollDay, now);
+    const free = ModifierManager.vendorFreeRerolls(state);
+    return nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
+  },
+
+  /**
+   * Restocks the Vendors shop (equipment AND consumables -- refresh()
+   * already regenerates both together) early, spending today's next
+   * reroll. Doesn't touch the black market -- that has its own, much
+   * longer natural refresh window, deliberately scarce rather than
+   * something to reroll on demand. `state.shop.refreshedAt` stays pinned
+   * to the current window's own boundary (refresh() sets it from `window`,
+   * not `now`), so a reroll doesn't push back the next scheduled natural
+   * restock either.
+   */
+  rerollShop(state: GameState, now: number): string | null {
+    const day = rerollDay(now);
+    if (state.vendorRerollDay !== day) {
+      state.vendorRerollDay = day;
+      state.vendorRerollsUsedToday = 0;
+    }
+    const cost = ShopManager.vendorRerollCost(state, now);
+    if (cost > 0) {
+      if (state.gold < cost) return `Not enough gold to reroll (needs ${cost}).`;
+      state.gold -= cost;
+      state.stats.goldSpent += cost;
+    }
+    state.vendorRerollsUsedToday += 1;
+    ShopManager.refresh(state, now, true, now);
+    return null;
   },
 
   /* ------------------------------ black market ----------------------------- */

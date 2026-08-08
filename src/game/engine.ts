@@ -925,6 +925,19 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  /** Replaces this hero's own quest-board contracts with a fresh set --
+   *  free once a day (more via Board Runner), gold cost climbing after
+   *  that. See QuestManager.rerollContractsForHero for the cost/state math. */
+  rerollQuestBoard(heroId: string) {
+    const hero = this.hero(heroId);
+    if (!hero) return;
+    const error = QuestManager.rerollContractsForHero(this.state, hero, Date.now());
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.say(`${hero.name}'s contracts refreshed.`);
+    void this.saveNow();
+  }
+
   /** Adds a consumable to a hero's equipped slots -- persists until removed
    *  or consumed by a quest, capped at ModifierManager.consumableSlots. Does
    *  not touch state.inventory; that deduction still happens at quest-start
@@ -1067,6 +1080,17 @@ export class GameEngine {
     if (error) return this.say(error);
     playSound('purchase');
     this.say('Added to the stash.');
+    void this.saveNow();
+  }
+
+  /** Restocks the Vendors shop (equipment + consumables) early -- free
+   *  once a day (more via Trade Favor), gold cost climbing after that.
+   *  Doesn't touch the black market. See ShopManager.rerollShop. */
+  rerollShop() {
+    const error = ShopManager.rerollShop(this.state, Date.now());
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.say('The vendors restock early.');
     void this.saveNow();
   }
 

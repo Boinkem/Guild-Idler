@@ -70,6 +70,10 @@ export function createInitialState(now = Date.now()): GameState {
     stash: [],
     questBoards: {},
     chainBoard: [],
+    questRerollDay: 0,
+    questRerollsUsedToday: 0,
+    vendorRerollDay: 0,
+    vendorRerollsUsedToday: 0,
     boardRefreshedAt: 0,
     activeQuests: [],
     activeChains: [],
@@ -400,6 +404,17 @@ const MIGRATIONS: Record<number, Migration> = {
       chainBoard: [],
     };
   },
+  26: (save) => ({
+    ...save,
+    version: 27,
+    // Reroll counters -- 0/0 is exactly "no rerolls used yet today", the
+    // correct starting state for a save that predates this system, not a
+    // placeholder that needs correcting on first use.
+    questRerollDay: (save.questRerollDay as number | undefined) ?? 0,
+    questRerollsUsedToday: (save.questRerollsUsedToday as number | undefined) ?? 0,
+    vendorRerollDay: (save.vendorRerollDay as number | undefined) ?? 0,
+    vendorRerollsUsedToday: (save.vendorRerollsUsedToday as number | undefined) ?? 0,
+  }),
 };
 
 export const SaveManager = {

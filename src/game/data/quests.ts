@@ -39,6 +39,27 @@ export interface DifficultyConfig {
   burstMaxGold?: number;
   burstMinXp?: number;
   burstMaxXp?: number;
+  /**
+   * A third duration mode, same shape as burst (own chance, own duration
+   * range, own reward range) but landing in the gap burst and the normal
+   * range left open -- burst tops out at 8 minutes, and the normal range
+   * starts at a full hour, so there was nowhere for a genuinely "half an
+   * hour, check back on your break" contract to live. Rolled independently
+   * of burst (burst is checked first; medium only gets a chance if burst
+   * didn't hit), so the two never compete for the same slot on a given
+   * offer. Subject to the same live per-hour cap burst gets (see
+   * balance.ts's fastQuestCapsPerHour) for the same reason: an explicit
+   * reward range read as more satisfying than a proportional slice of the
+   * full range when burst was first added, but that same generosity needs
+   * the same guardrail against becoming the dominant strategy.
+   */
+  mediumChance?: number;
+  mediumMinDuration?: number;
+  mediumMaxDuration?: number;
+  mediumMinGold?: number;
+  mediumMaxGold?: number;
+  mediumMinXp?: number;
+  mediumMaxXp?: number;
 }
 
 export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
@@ -55,12 +76,25 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
     // values on their own (10/20 xp, 8/16 gold), which measured out to
     // roughly 10-15x the normal per-hour rate for a hero at reqLevel 1.
     burstMinGold: 6, burstMaxGold: 12, burstMinXp: 8, burstMaxXp: 14,
+    // Medium: rolled only when burst didn't hit (45% burst, then 35% of the
+    // remainder -- ~19% of all Easy offers land medium, ~36% land full-length).
+    // 20-40min, priced above burst's raw numbers since it's a much longer
+    // commitment, but still well under the full 1-2h range's totals -- the
+    // live per-hour cap (see generateOffer) is what actually keeps this
+    // honest, these are just the pre-cap starting numbers.
+    mediumChance: 35, mediumMinDuration: 20 * MINUTE, mediumMaxDuration: 40 * MINUTE,
+    mediumMinGold: 14, mediumMaxGold: 30, mediumMinXp: 14, mediumMaxXp: 22,
     minGold: 8, maxGold: 25, xpMultiplier: 1, lootChance: 12,
     reqLevel: 1, weight: 30, color: '#79a86b',
   },
   normal: {
     id: 'normal', label: 'Normal', baseSuccess: 60,
     minDuration: 2 * HOUR, maxDuration: 4 * HOUR,
+    // Rarer than Easy's medium roll (25% vs 35%) -- Normal is already the
+    // step up from "quick check-in" territory, so full-length offers should
+    // still dominate its board more than Easy's.
+    mediumChance: 25, mediumMinDuration: 20 * MINUTE, mediumMaxDuration: 40 * MINUTE,
+    mediumMinGold: 20, mediumMaxGold: 45, mediumMinXp: 20, mediumMaxXp: 32,
     minGold: 25, maxGold: 60, xpMultiplier: 2.4, lootChance: 20,
     reqLevel: 3, weight: 28, color: '#5b8fd6',
   },

@@ -3,7 +3,7 @@ import {
   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES,
 } from '../data/quests';
 import { HERO_CLASSES } from '../data/progression';
-import { burstCapsPerHour } from '../data/balance';
+import { fastQuestCapsPerHour } from '../data/balance';
 import { questEggDropChance } from '../data/pets';
 import {
   ActiveQuest, Difficulty, GameState, Hero, QuestOffer, QuestResult, Rarity,
@@ -17,6 +17,7 @@ import { Tuning } from '../data/tuning';
 import { EquipmentManager } from './EquipmentManager';
 import { ModifierManager } from './ModifierManager';
 import { PetManager } from './PetManager';
+import { rerollDay, rerollsUsedToday, nextRerollCost } from '../data/reroll';
 
 export const BOARD_SIZE = 6;
 export const BOARD_REFRESH_MS = 30 * MINUTE;
@@ -55,9 +56,9 @@ export const QuestManager = {
    * (window, hero id), so it survives reloads the same way the old shared
    * board did.
    */
-  generateContractsForHero(state: GameState, hero: Hero, now: number): QuestOffer[] {
+  generateContractsForHero(state: GameState, hero: Hero, now: number, salt: number | string = 0): QuestOffer[] {
     const window = Math.floor(now / BOARD_REFRESH_MS);
-    const rng = createRng(`board:${window}:${hero.id}:${state.createdAt}`);
+    const rng = createRng(`board:${window}:${hero.id}:${state.createdAt}:${salt}`);
     const legendaryUnlocked = ModifierManager.hasUnlock(state, 'legendaryQuests');
 
     const available = DIFFICULTY_ORDER.filter((d) => {
@@ -69,7 +70,7 @@ export const QuestManager = {
     const offers: QuestOffer[] = [];
     for (let i = 0; i < BOARD_SIZE; i++) {
       const difficulty = rng.weighted(available.map((d) => ({ item: d, weight: DIFFICULTIES[d].weight })));
-      offers.push(QuestManager.generateOffer(difficulty, rng, `q:${window}:${hero.id}:${i}`, hero.level, false, legendaryUnlocked));
+      offers.push(QuestManager.generateOffer(difficulty, rng, `q:${window}:${hero.id}:${salt}:${i}`, hero.level, false, legendaryUnlocked));
     }
 
     // Every hero's board is their own now, so "no second pair of hands to
@@ -78,9 +79,52 @@ export const QuestManager = {
     // (this used to be gated on state.heroes.length <= 1, back when a
     // second hero could just pull from the same shared pool instead).
     if (!offers.some((o) => o.difficulty === 'easy' && o.duration <= 5 * MINUTE)) {
-      offers[offers.length - 1] = QuestManager.generateOffer('easy', rng, `q:${window}:${hero.id}:guaranteed`, hero.level, true, legendaryUnlocked);
+      offers[offers.length - 1] = QuestManager.generateOffer('easy', rng, `q:${window}:${hero.id}:${salt}:guaranteed`, hero.level, true, legendaryUnlocked);
     }
     return offers;
+  },
+
+  /**
+   * Gold cost of this hero's *next* quest-board reroll -- 0 while still
+   * within today's free allowance (see ModifierManager.questFreeRerolls),
+   * climbing per additional paid reroll after that. The free/paid count is
+   * account-wide, not per hero -- rerolling three different heroes' boards
+   * in one day spends from the same daily allowance as rerolling one
+   * hero's board three times.
+   */
+  questRerollCost(state: GameState, now: number): number {
+    const used = rerollsUsedToday(state.questRerollsUsedToday, state.questRerollDay, now);
+    const free = ModifierManager.questFreeRerolls(state);
+    return nextRerollCost(used, free, 'reroll.questBaseCost', 'reroll.questCostGrowth');
+  },
+
+  /**
+   * Replaces this one hero's own contract board with a freshly-rolled set,
+   * spending today's next reroll (free or paid, per questRerollCost above).
+   * Only touches `questBoards[hero.id]` -- the chain board and every other
+   * hero's own contracts are untouched, and `boardRefreshedAt` (the natural
+   * 30-min window clock) isn't reset either, so this doesn't push back the
+   * next scheduled refresh for anyone.
+   */
+  rerollContractsForHero(state: GameState, hero: Hero, now: number): string | null {
+    const day = rerollDay(now);
+    if (state.questRerollDay !== day) {
+      state.questRerollDay = day;
+      state.questRerollsUsedToday = 0;
+    }
+    const cost = QuestManager.questRerollCost(state, now);
+    if (cost > 0) {
+      if (state.gold < cost) return `Not enough gold to reroll (needs ${cost}).`;
+      state.gold -= cost;
+      state.stats.goldSpent += cost;
+    }
+    state.questRerollsUsedToday += 1;
+    // Salted with the exact reroll moment so this produces genuinely new
+    // offers rather than reproducing the same window-seeded board --
+    // generateContractsForHero's default (unsalted) seed is otherwise fully
+    // deterministic per (window, hero), on purpose, for reload stability.
+    state.questBoards[hero.id] = QuestManager.generateContractsForHero(state, hero, now, now);
+    return null;
   },
 
   /**
@@ -131,34 +175,38 @@ export const QuestManager = {
     // Duration and reward used to be rolled independently, which meant a
     // quest at the short end of a tier's range paid exactly as well as one at
     // the long end. Reward now interpolates across whichever range was
-    // actually rolled. Burst quests use their own explicit reward range
-    // (deliberately generous — see the comment on burstMinGold) rather than
-    // a proportional slice of the full range, which measured out to 1-2 XP
-    // per burst quest — mathematically fair, but reads as insulting rather
-    // than the "numbers going up" feeling this is supposed to deliver.
+    // actually rolled. Burst and medium quests each use their own explicit
+    // reward range (deliberately generous — see the comment on
+    // burstMinGold) rather than a proportional slice of the full range,
+    // which measured out to 1-2 XP per burst quest — mathematically fair,
+    // but reads as insulting rather than the "numbers going up" feeling
+    // this is supposed to deliver. Burst is checked first, medium only gets
+    // a chance if burst didn't hit, so an offer is never both at once.
     const useBurst = forceBurst || (cfg.burstChance !== undefined && rng.chance(cfg.burstChance));
-    const durMin = useBurst ? cfg.burstMinDuration! : cfg.minDuration;
-    const durMax = useBurst ? cfg.burstMaxDuration! : cfg.maxDuration;
+    const useMedium = !useBurst && cfg.mediumChance !== undefined && rng.chance(cfg.mediumChance);
+    const durMin = useBurst ? cfg.burstMinDuration! : useMedium ? cfg.mediumMinDuration! : cfg.minDuration;
+    const durMax = useBurst ? cfg.burstMaxDuration! : useMedium ? cfg.mediumMaxDuration! : cfg.maxDuration;
     const duration = rng.int(durMin, durMax);
     const span = durMax - durMin;
     const t = span > 0 ? (duration - durMin) / span : 1;
-    const goldMin = useBurst ? cfg.burstMinGold! : cfg.minGold;
-    const goldMax = useBurst ? cfg.burstMaxGold! : cfg.maxGold;
-    const xpMin = useBurst ? cfg.burstMinXp! : 18;
-    const xpMax = useBurst ? cfg.burstMaxXp! : 30;
+    const goldMin = useBurst ? cfg.burstMinGold! : useMedium ? cfg.mediumMinGold! : cfg.minGold;
+    const goldMax = useBurst ? cfg.burstMaxGold! : useMedium ? cfg.mediumMaxGold! : cfg.maxGold;
+    const xpMin = useBurst ? cfg.burstMinXp! : useMedium ? cfg.mediumMinXp! : 18;
+    const xpMax = useBurst ? cfg.burstMaxXp! : useMedium ? cfg.mediumMaxXp! : 30;
     let rewardGold = Math.max(1, Math.round(goldMin + t * (goldMax - goldMin)));
     let rewardXp = Math.floor((xpMin + t * (xpMax - xpMin)) * cfg.xpMultiplier);
 
-    // Burst reward is capped at ~80-85% of whatever the best currently-
-    // unlocked tier pays per hour -- live, computed from DIFFICULTIES
-    // itself rather than a flat decay curve, so it can never silently
-    // become the mathematically dominant strategy the way the old flat
-    // taper did (confirmed directly: its 0.2 floor never actually dropped
-    // burst below the best unlocked tier until very late). Untouched below
-    // level 5 -- the deliberate onboarding hook, confirmed not the problem.
-    if (useBurst) {
+    // Both fast-completion modes are capped at ~80-85% of whatever the best
+    // currently-unlocked tier pays per hour -- live, computed from
+    // DIFFICULTIES itself rather than a flat decay curve, so neither can
+    // silently become the mathematically dominant strategy the way the old
+    // flat burst taper did (confirmed directly: its 0.2 floor never
+    // actually dropped burst below the best unlocked tier until very
+    // late). Untouched below level 5 -- the deliberate onboarding hook,
+    // confirmed not the problem.
+    if (useBurst || useMedium) {
       const durationHours = duration / HOUR;
-      const caps = burstCapsPerHour(topLevel, legendaryUnlocked);
+      const caps = fastQuestCapsPerHour(topLevel, legendaryUnlocked);
       rewardGold = Math.min(rewardGold, Math.max(1, Math.round(caps.gold * durationHours)));
       rewardXp = Math.min(rewardXp, Math.floor(caps.xp * durationHours));
     }

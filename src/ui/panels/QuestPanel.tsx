@@ -271,6 +271,13 @@ export function QuestPanel() {
     if (offer) send(offer);
   };
 
+  // Free once a day (more via the Board Runner guild upgrade), then an
+  // escalating gold cost -- see QuestManager.questRerollCost. The
+  // free/paid count is account-wide, shared across every hero's board, not
+  // reset per hero.
+  const rerollCost = QuestManager.questRerollCost(state, now);
+  const reroll = () => engine.rerollQuestBoard(selectedHero.id);
+
   return (
     <>
       <h2>Quest Board</h2>
@@ -332,16 +339,29 @@ export function QuestPanel() {
           {/* ------------------------------- contracts ------------------------------- */}
           <div className="spread" style={{ alignItems: 'center' }}>
             <div className="section-heading" style={{ marginBottom: 0 }}>{selectedHero.name}'s Contracts</div>
-            {autoChainOwned && contractOffers.length > 0 && (
+            <div className="row" style={{ gap: 6 }}>
               <button
                 className="btn-ghost"
                 style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
-                onClick={quickAssign}
-                title="Send this hero on the best contract from their own board"
+                onClick={reroll}
+                disabled={rerollCost > state.gold}
+                title={rerollCost > 0
+                  ? `Reroll this hero's contracts for ${rerollCost} gold`
+                  : "Reroll this hero's contracts -- free today"}
               >
-                Quick-assign
+                {rerollCost > 0 ? `Reroll · ${formatGold(rerollCost)}` : 'Reroll · Free'}
               </button>
-            )}
+              {autoChainOwned && contractOffers.length > 0 && (
+                <button
+                  className="btn-ghost"
+                  style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+                  onClick={quickAssign}
+                  title="Send this hero on the best contract from their own board"
+                >
+                  Quick-assign
+                </button>
+              )}
+            </div>
           </div>
           {contractOffers.length === 0 && <p className="small muted">Nothing open right now. New contracts arrive within the half hour.</p>}
           {contractOffers.map((offer) => (

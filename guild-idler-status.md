@@ -366,6 +366,96 @@ current window either way).
 
 `npx tsc --noEmit` and `vite build` both pass clean.
 
+### Medium-length quests + board/vendor reroll -- complete
+Two independent asks landed together since both touched the quest-offer
+generation path.
+
+**Medium quests.** There was a real gap in the duration spread: burst tops
+out at 8 minutes, and the normal range starts at a full hour, so there was
+nowhere for a genuine "half an hour, check back on your break" contract to
+live. `DifficultyConfig` gained a third duration mode -- `mediumChance`/
+`mediumMin·MaxDuration`/`mediumMin·MaxGold`/`mediumMin·MaxXp` -- same shape
+as burst's existing fields, rolled independently (burst is checked first;
+medium only gets a chance if burst didn't hit, so an offer is never both).
+Wired onto Easy (35% chance conditional on not-burst, ~19% of all Easy
+offers) and Normal (25% conditional, rarer on purpose -- Normal should
+still skew toward full-length more than Easy does) tiers, both spanning
+20-40 minutes. Hard/Epic/Legendary deliberately left alone -- those are
+meant to read as genuine hours-long expeditions, not something with a
+quick-turnaround option.
+
+Medium shares burst's existing live per-hour cap rather than getting its
+own separate guardrail -- `balance.ts`'s `burstCapsPerHour` renamed to
+`fastQuestCapsPerHour` and now applied to both modes, since both exist for
+the same reason (an explicit, generous-feeling reward range beats a
+proportional slice of the full range, which measured out to 1-2 XP per
+offer when burst was first tuned) and so both need the same protection
+against becoming the dominant strategy once out-leveled.
+
+Verified at runtime, not just typechecked: 5000 sampled Easy-tier offers
+landed ~44.6% burst / ~20% medium / ~35.4% normal (target was 45/19.25/
+35.75) with every medium sample's duration falling inside the intended
+20-40 minute window, zero outliers.
+
+**Quest board + Vendors reroll.** A new Reroll button on each hero's own
+Contracts section (Quest tab) and on the Vendors shop's Stock section --
+1 free reroll per day each, independently tracked, then an escalating
+gold cost per additional reroll that day (40g base for quests / 60g for
+Vendors, both ×1.6 per additional paid reroll -- new `reroll.*` Tuning
+entries, 4 total). Two new guild upgrades, **Board Runner** and **Trade
+Favor** (3 levels each, +1 free reroll/day/level -- 1 base + 3 = 4 total,
+matching the "up to 4" spec), same `UpgradeDef` special-purpose-field
+shape `consumableSlotsPerLevel`/`petSlotsPerLevel` already established.
+The free/paid count for each system is account-wide, not per-hero --
+rerolling three different heroes' boards in one day spends from the same
+daily quest-reroll allowance as rerolling one hero's board three times.
+
+Shared day-window and cost-curve math lives in new `data/reroll.ts`
+(plain functions, not a manager -- neither system owns state beyond the
+two counter fields already on GameState, the same shape burst's own cap
+math in `balance.ts` already uses). Day boundaries are plain UTC-epoch-day
+division (`Math.floor(now / DAY)`, new `DAY` constant in `util.ts`),
+matching every other window-bucketed system in this game (the quest
+board's 30-min windows, shop's 4h window) rather than the player's local
+midnight.
+
+A reroll needed to actually produce different offers, not just repeat the
+same window-seeded board -- `generateContractsForHero` and
+`ShopManager.refresh` both gained an optional `salt` parameter (default 0,
+fully deterministic per window for reload stability; a reroll passes the
+exact reroll moment instead) folded into their RNG seed and offer ids.
+Neither reroll touches its system's natural refresh clock
+(`boardRefreshedAt` / `state.shop.refreshedAt`) -- confirmed directly, a
+reroll doesn't push back the next scheduled automatic refresh for anyone.
+Vendors reroll restocks both equipment and consumables at once (`refresh()`
+already regenerates both together) but deliberately doesn't touch the
+black market, which keeps its own much longer natural window as an
+intentionally scarcer system. `SAVE_VERSION` bumped 26 -> 27; migration
+backfills all four new counter fields to 0/0 for any existing save, which
+is exactly "no rerolls used yet today," not a placeholder needing
+correction.
+
+Verified at runtime: the cost curve matches the tuned formula exactly
+(0, 40, 64, 102, 163 gold for 5 quest rerolls at the default 40g/1.6x with
+no upgrade); a day rollover correctly resets the next reroll to free;
+Board Runner at max level correctly grants 4 free rerolls before any cost
+appears; the Vendors curve mirrors the same shape independently (0, 60,
+96 at its own 60g/1.6x); a reroll's resulting board/shop stock genuinely
+differs from what was there before; and a migrated pre-27 save lands on
+the correct 0/0 defaults for all four counters.
+
+**Noted, not fixed:** the DevTool's upgrade schema doesn't yet expose any
+of the existing special-purpose per-level fields (`consumableSlotsPerLevel`,
+`incubationSlotsPerLevel`, `petSlotsPerLevel`) for editing, and Board
+Runner/Trade Favor's new `questFreeRerollsPerLevel`/
+`vendorFreeRerollsPerLevel` are in the same boat -- a pre-existing gap this
+patch didn't introduce (none of Potion Belt/Nest Expansion/Companion Bond
+got DevTool support for their own special field either), not something
+newly broken. Worth a look if the DevTool ever needs to edit these
+upgrades' per-level bonuses directly rather than just their cost curve.
+
+`npx tsc --noEmit` and `vite build` both pass clean.
+
 ### Consumables & equip-slot rework -- complete
 Inventory's consumables are now clickable, same detail-expand treatment
 the stash already has. New per-hero consumable-equip slots live in the
@@ -2072,13 +2162,41 @@ game's own `app.css` typo fixed elsewhere this session).
 
 ## Brainstorming / not yet committed
 
-- **Class/role based heroes** -- giving hero classes actual mechanical
-  roles (tank/support/dps-style differentiation, or similar) rather than
-  today's flat stat-and-preferred-quest-type distinction. No concrete
-  design yet -- needs its own scoping conversation before anything else
-  (what "role" actually means mechanically here, whether it affects
-  quests/raids/both, whether existing classes get reworked or new ones
-  get added).
+- **Melee/Ranged/Caster hero roles** -- scoping discussion started, no
+  code yet. Concrete shape proposed so far: a role (Melee/Ranged/Caster)
+  sits alongside a hero's existing class, with quest offers carrying a
+  role-affinity modifier the same general shape the existing preferred-tag
+  bonus already uses (match the offer's role for a bonus, mismatch for a
+  penalty); raids would additionally be able to require a specific role
+  mix in the party (e.g. "at least one of each"). Each class's actual role
+  is meant to be fixed (a Knight is always Melee, a Wizard always Caster)
+  but a hero should be able to retrain into their class's role via some
+  mechanism (framed as "training") -- open question whether a class only
+  ever has one valid role or can offer a choice between two. Naming is
+  meant to be flavoured per class+role pairing rather than a flat
+  "Melee/Ranged/Caster" label everywhere (a melee Wizard reading as
+  "Arcane Warrior," a caster Knight as "Rune Knight," etc.), which means a
+  full naming pass across every existing class before this could ship, not
+  just the mechanical wiring. Needs its own dedicated scoping pass before
+  any implementation starts -- open questions include: does every class
+  get exactly one native role or a short list of valid retrains; is
+  training a gold cost, a quest chain, a vendor unlock, or something else;
+  does the role mechanic apply to ordinary board contracts too or only
+  chain/raid content; and how "mismatch" penalties interact with the
+  existing preferred-tag bonus so the two don't double-count or fight each
+  other.
+- **Hero talent trees** -- explicitly parked for a later discussion,
+  raised alongside the roles scoping above but deliberately not folded
+  into it. Concept: a talent point every 5-10 levels, spent into a small,
+  flavoured tree scoped to the hero's selected role (so the tree itself
+  would need the roles system above to exist first) -- individual talents
+  are simple (e.g. "+1% Endurance," "+1% Strength") but reworded per class
+  the same way role names would be ("Gritted Teeth" for a Melee Knight,
+  etc.). Proposed gating: either a strict prerequisite chain (need talent
+  N to unlock talent N+1) or a "up to 2 points in one talent before being
+  allowed to move to the next" alternative -- not decided which. Blocked
+  on the roles system landing first, since talents are described as being
+  scoped per-role.
 - **The Rememberer** -- a future Minor-domain god concept (memory/being
   forgotten, fades because written record-keeping replaced an oral
   practice). Parked in favor of reworking the Last God instead.
