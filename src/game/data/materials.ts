@@ -95,3 +95,12 @@ export function harvestIconFor(materialId: MaterialId, spawnedAt: number): strin
   const frac = x - Math.floor(x);
   return pool[Math.floor(frac * pool.length)];
 }
+
+/**
+ * Materials a pet can be fed -- deliberately a subset of MATERIALS, not
+ * all four. Ore and Timber are construction/crafting resources with no
+ * natural "a pet would eat this" reading; Herbs and Food (fish) are the
+ * two that do, and are the only two the Hatchery's feed dropdown offers.
+ */
+export const FEEDABLE_MATERIALS: MaterialDef[] = MATERIALS.filter((m) => m.id === 'herbs' || m.id === 'fish');
+

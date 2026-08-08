@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useEngine } from '../useEngine';
-import { formatGold, formatDuration } from '../../game/util';
+import { formatGold, formatDuration, RARITY_ORDER } from '../../game/util';
+import { PETS } from '../../game/data/pets';
 
 const HOUR = 3600000;
 
@@ -103,6 +104,23 @@ export function TestingPanel() {
           </div>
         );
       })}
+
+      <div className="section-heading">Hatchery</div>
+      <p className="small muted" style={{ marginBottom: 8 }}>
+        {state.hatcheryUnlocked ? 'Hatchery already unlocked.' : 'Hatchery is locked -- any button below unlocks it automatically.'}
+      </p>
+      <p className="tiny muted" style={{ marginBottom: 4 }}>Add an egg to storage:</p>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+        {RARITY_ORDER.map((rarity) => (
+          <button key={rarity} onClick={() => engine.testAddEgg(rarity)}>+ {rarity} egg</button>
+        ))}
+      </div>
+      <p className="tiny muted" style={{ marginBottom: 4 }}>Hatch a specific species directly (skips the egg entirely):</p>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        {PETS.map((def) => (
+          <button key={def.id} onClick={() => engine.testAddPet(def.id)}>+ {def.name}</button>
+        ))}
+      </div>
 
       <div className="section-heading">Current state</div>
       <p className="small muted">

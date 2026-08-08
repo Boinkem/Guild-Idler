@@ -705,10 +705,10 @@
     "id": "pets.baseIncubationSlots",
     "label": "Pets: base incubation slots",
     "category": "pets",
-    "value": 2,
-    "default": 2,
+    "value": 1,
+    "default": 1,
     "min": 1,
-    "description": "How many eggs can incubate at once before any Nest Expansion levels. A dropped egg beyond capacity is simply not granted -- see PetManager.grantEgg."
+    "description": "How many eggs can incubate at once before any Nest Expansion levels. Starts at 1 on purpose -- the 2nd nest is meant to be an early Nest Expansion purchase, not free. A dropped egg beyond capacity goes to storage unequipped rather than being lost -- see PetManager.grantEgg."
   },
   {
     "id": "pets.baseBonusValueMin",

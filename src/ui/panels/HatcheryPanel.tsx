@@ -1,12 +1,13 @@
+import type { CSSProperties } from 'react';
 import { useEffect, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { PetManager } from '../../game/managers/PetManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { PET_BY_ID, hatchXpThreshold } from '../../game/data/pets';
-import { MATERIALS } from '../../game/data/materials';
+import { FEEDABLE_MATERIALS } from '../../game/data/materials';
 import { EggInstance, MaterialId, Pet } from '../../game/types';
 import { RarityPill } from '../RarityPill';
-import { formatMaterial } from '../../game/util';
+import { formatMaterial, RARITY_COLOR } from '../../game/util';
 import { PetSprite } from '../sprites/PetSprite';
 import { PetEnlargedModal } from '../PetEnlargedModal';
 import { EggIcon } from '../EggIcon';
@@ -179,7 +180,7 @@ function PetCard({ pet }: { pet: Pet }) {
   const def = PET_BY_ID[pet.defId];
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(pet.name);
-  const [feedMaterial, setFeedMaterial] = useState<MaterialId>('ore');
+  const [feedMaterial, setFeedMaterial] = useState<MaterialId>('herbs');
   const [enlarged, setEnlarged] = useState(false);
 
   const happiness = PetManager.currentHappiness(pet, now);
@@ -194,7 +195,10 @@ function PetCard({ pet }: { pet: Pet }) {
   };
 
   return (
-    <div className="card" style={{ marginBottom: 0 }}>
+    <div
+      className="card pet-card-hover"
+      style={{ marginBottom: 0, '--rarity-color': RARITY_COLOR[pet.rarity] } as CSSProperties}
+    >
       <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
         <button
           type="button"
@@ -228,8 +232,16 @@ function PetCard({ pet }: { pet: Pet }) {
             </div>
           ) : (
             <div className="spread">
-              <span className="card-title" onClick={() => { setDraft(pet.name); setEditing(true); }} style={{ cursor: 'pointer' }}>
-                {pet.name}
+              <span className="row" style={{ gap: 6, alignItems: 'center' }}>
+                <span className="card-title">{pet.name}</span>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  style={{ minHeight: 0, padding: '1px 6px', fontSize: '0.6875rem', color: '#5b8fd6', borderColor: '#5b8fd6' }}
+                  onClick={() => { setDraft(pet.name); setEditing(true); }}
+                >
+                  Rename
+                </button>
               </span>
               <RarityPill rarity={pet.rarity} />
             </div>
@@ -257,7 +269,7 @@ function PetCard({ pet }: { pet: Pet }) {
           onChange={(e) => setFeedMaterial(e.target.value as MaterialId)}
           style={{ background: 'var(--panel2)', border: '1px solid var(--panel3)', color: 'var(--text)', padding: '4px 6px' }}
         >
-          {MATERIALS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          {FEEDABLE_MATERIALS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
         </select>
         <button className="btn-ghost" style={{ minHeight: 26 }} onClick={() => engine.feedPetMaterial(pet.uid, feedMaterial)}>
           Feed (5)

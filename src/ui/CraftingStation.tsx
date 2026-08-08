@@ -127,9 +127,9 @@ export function PickerModal({
                 onClick={() => { if (!opt.disabled) { onPick(opt.key); if (closeOnPick) onClose(); } }}
               >
                 {opt.icon}
-                <span style={{ flex: 1, textAlign: 'left' }}>
-                  <div>{opt.label}</div>
-                  {opt.sublabel && <div className="tiny muted">{opt.sublabel}</div>}
+                <span style={{ textAlign: 'left', minWidth: 0 }}>
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{opt.label}</div>
+                  {opt.sublabel && <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{opt.sublabel}</div>}
                 </span>
                 {selected && <span aria-hidden="true" className="craft-picker-check">✓</span>}
               </button>
@@ -226,12 +226,12 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
       const owner = heroId ? state.heroes.find((h) => h.id === heroId)?.name : 'Stash';
       return {
         key: item.uid, label: def.name, sublabel: owner ?? 'Stash',
-        icon: <ItemIcon slot={def.slot} icon={def.icon} size={64} />,
+        icon: <ItemIcon slot={def.slot} icon={def.icon} size={40} />,
       };
     }).filter((o): o is PickerOption => o !== null)
     : recipes.map((r) => ({
       key: r.id, label: r.name, sublabel: r.description,
-      icon: <RecipeIcon icon={r.icon} category={category} size={64} />,
+      icon: <RecipeIcon icon={r.icon} category={category} size={40} />,
     }));
 
   function handleTopPick(key: string) {
@@ -436,7 +436,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
       {openSlot === 'bottomLeft' && category === 'enchant' && (
         <PickerModal
           title="Choose what to apply"
-          options={recipes.map((r) => ({ key: r.id, label: r.name, sublabel: r.description, icon: <RecipeIcon icon={r.icon} category={category} size={64} /> }))}
+          options={recipes.map((r) => ({ key: r.id, label: r.name, sublabel: r.description, icon: <RecipeIcon icon={r.icon} category={category} size={40} /> }))}
           onPick={pickRecipe}
           onClose={() => setOpenSlot(null)}
         />

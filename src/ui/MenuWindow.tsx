@@ -42,41 +42,41 @@ import { TESTING_TOOLS_ENABLED } from '../game/testingTools';
 const DASHBOARD_GROUP = {
   label: null,
   tabs: [
-    { id: 'dashboard', label: 'The Guild', Panel: DashboardPanel },
+    { id: 'dashboard', label: 'The Guild', Panel: DashboardPanel, tooltip: 'Overview of your guild, active heroes, and what needs attention.' },
   ],
 } as const;
 const GUILD_GROUP = {
   label: 'Guild',
   tabs: [
-    { id: 'heroes', label: 'Heroes', Panel: HeroesPanel },
-    { id: 'equipment', label: 'Inventory', Panel: EquipmentPanel },
-    { id: 'vendors', label: 'Vendors', Panel: VendorsPanel },
-    { id: 'guild', label: 'Guild Hall', Panel: GuildPanel },
-    { id: 'harvest', label: 'Harvest', Panel: HarvestPanel },
-    { id: 'hatchery', label: 'Hatchery', Panel: HatcheryPanel },
+    { id: 'heroes', label: 'Heroes', Panel: HeroesPanel, tooltip: 'Recruit, level, and manage your roster of heroes.' },
+    { id: 'equipment', label: 'Inventory', Panel: EquipmentPanel, tooltip: 'Gear and consumables in your stash, and what each hero has equipped.' },
+    { id: 'vendors', label: 'Vendors', Panel: VendorsPanel, tooltip: 'Buy from the Blacksmith, Alchemist, and Enchanter, or craft your own gear.' },
+    { id: 'guild', label: 'Guild Hall', Panel: GuildPanel, tooltip: 'Facility and permanent upgrades that boost the whole guild.' },
+    { id: 'harvest', label: 'Harvest', Panel: HarvestPanel, tooltip: 'Idle heroes gather materials here -- spend the stock crafting or sell it.' },
+    { id: 'hatchery', label: 'Hatchery', Panel: HatcheryPanel, tooltip: 'Incubate eggs into pets, then equip one to accompany the guild.' },
   ],
 } as const;
 const ADVENTURE_GROUP = {
   label: 'Adventure',
   tabs: [
-    { id: 'quests', label: 'Quests', Panel: QuestPanel },
-    { id: 'raids', label: 'Raids', Panel: RaidsPanel },
-    { id: 'lore', label: 'Lore', Panel: LorePanel },
-    { id: 'guide', label: 'Guide', Panel: GuidePanel },
+    { id: 'quests', label: 'Quests', Panel: QuestPanel, tooltip: 'The quest board and any quest chains your heroes have discovered.' },
+    { id: 'raids', label: 'Raids', Panel: RaidsPanel, tooltip: 'Multi-encounter raids for a full party, with their own difficulty tiers.' },
+    { id: 'lore', label: 'Lore', Panel: LorePanel, tooltip: 'The story so far -- every quest chain you\u2019ve uncovered.' },
+    { id: 'guide', label: 'Guide', Panel: GuidePanel, tooltip: 'Notification log and how-to reference for the guild\u2019s systems.' },
   ],
 } as const;
 const PROGRESSION_GROUP = {
   label: 'Progression',
   tabs: [
-    { id: 'prestige', label: 'Prestige', Panel: PrestigePanel },
+    { id: 'prestige', label: 'Prestige', Panel: PrestigePanel, tooltip: 'Retire your guild for renown and permanent perks, and start again.' },
   ],
 } as const;
 const META_GROUP = {
   label: 'Meta',
   tabs: [
-    { id: 'stats', label: 'Statistics', Panel: StatsPanel },
-    { id: 'settings', label: 'Settings', Panel: SettingsPanel },
-    ...(TESTING_TOOLS_ENABLED ? [{ id: 'testing', label: 'Testing', Panel: TestingPanel }] as const : []),
+    { id: 'stats', label: 'Statistics', Panel: StatsPanel, tooltip: 'Lifetime stats and achievements for this guild.' },
+    { id: 'settings', label: 'Settings', Panel: SettingsPanel, tooltip: 'Display, sound, and gameplay preferences.' },
+    ...(TESTING_TOOLS_ENABLED ? [{ id: 'testing', label: 'Testing', Panel: TestingPanel, tooltip: 'Developer-only tools for skipping ahead and spawning test content.' }] as const : []),
   ],
 } as const;
 
@@ -95,7 +95,7 @@ type TabId =
 
 interface TabGroup {
   label: string | null;
-  tabs: readonly { id: TabId; label: string; Panel: () => JSX.Element }[];
+  tabs: readonly { id: TabId; label: string; Panel: () => JSX.Element; tooltip: string }[];
 }
 
 // Explicit TabGroup[] annotation here, rather than letting TS infer the
@@ -196,6 +196,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
                     data-tab-id={t.id}
                     aria-current={t.id === tab}
                     onClick={() => setTab(t.id)}
+                    title={t.tooltip}
                   >
                     {t.label}
                     {t.id === 'quests' && idleHeroes > 0 ? <span className="tab-badge">{idleHeroes}</span> : null}

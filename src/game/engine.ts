@@ -654,6 +654,41 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  /** Unlocks the Hatchery directly, bypassing the intro chain -- testing
+   *  eggs/pets otherwise means actually playing `the_last_clutch` first
+   *  every single time. */
+  testUnlockHatchery() {
+    if (!TESTING_TOOLS_ENABLED) return;
+    this.state.hatcheryUnlocked = true;
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Drops an egg straight into storage, same as a real quest/raid roll --
+   *  see PetManager.grantEgg. Also force-unlocks the Hatchery if it isn't
+   *  already, since an egg with nowhere to be equipped isn't much of a
+   *  test. */
+  testAddEgg(rarity: Rarity, dedicatedPetId?: string) {
+    if (!TESTING_TOOLS_ENABLED) return;
+    this.state.hatcheryUnlocked = true;
+    PetManager.grantEgg(this.state, rarity, dedicatedPetId, Date.now());
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Hatches a specific species directly, skipping the egg/incubation
+   *  step entirely -- for testing a pet's bonus/happiness/feeding/sprite
+   *  without needing to grind out a real hatch first. Reuses
+   *  PetManager.hatch with a throwaway EggInstance rather than duplicating
+   *  its bonus-roll logic. */
+  testAddPet(defId: string, rarity: Rarity = 'common') {
+    if (!TESTING_TOOLS_ENABLED) return;
+    this.state.hatcheryUnlocked = true;
+    PetManager.hatch(this.state, { uid: uid('egg'), rarity, dedicatedPetId: defId, hatchXp: 0, startedAt: Date.now() }, Date.now());
+    this.notify();
+    void this.saveNow();
+  }
+
   /** Resolves a hero's active quest immediately, using its own already-locked-in odds — not a guaranteed win, just not waiting for the clock. */
   testCompleteActiveQuest(heroId: string) {
     if (!TESTING_TOOLS_ENABLED) return;

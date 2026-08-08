@@ -1684,6 +1684,82 @@ from the spec pass).
   doesn't conflict with anything: the Hatchery's own Pets tab, where each
   `PetCard`'s sprite is now the clickable target (previously inert)
   instead of the desktop companion.
+- **A batch of real reported issues + the egg art, all fixed/landed
+  together.**
+  - **Egg icons -- the actual blocker is resolved.** The uploaded
+    `Eggs_32x32.png`/`.aseprite` turned out to be the real thing this
+    time: genuine alpha transparency, not another promo composite. On
+    inspection it's a 10-column x 16-row grid of egg DESIGNS x COLOURS
+    (each row one solid colour in 10 surface-pattern variants, plus a
+    "shell cracked open" pose in the last column), not an animation strip
+    -- confirmed before writing any import logic, not assumed. New
+    `tools/import_eggs.py` crops exactly 5 static icons (one column,
+    reused across 5 rows) straight to `public/pets/egg/<rarity>/icon.png`
+    -- no recolouring needed, unlike the pet species tool, since this
+    sheet already ships each rarity as a genuinely different colour.
+    Row-per-rarity and the one column used were both picked by matching,
+    not eyeballed: row colours were averaged and compared against the
+    game's actual `RARITY_COLOR` hex values (`src/game/util.ts`) for the
+    closest fit per tier, and column 7 (a smooth single-tone gradient,
+    no speckle/spot/stripe) was picked as the one design that stays
+    readable at small icon sizes across every row -- column 9 (the
+    cracked-open pose) was deliberately excluded, these depict a whole
+    unhatched egg sitting in storage. `EggIcon.tsx` already pointed at
+    this exact path convention from when it was first built, so no code
+    change was needed there at all -- only the art was missing. The
+    animated hatch-card moment from the original spec is still separate,
+    unbuilt work; this covers exactly what was asked for, the static
+    storage/inventory views.
+  - **"Choose an item" picker was visibly overlapping -- root cause
+    found, not just patched around.** Every picker list (Enhance's item
+    picker, Crafting's recipe pickers) was reusing the same 64px icon
+    size built for the big slot display in the main crafting scene --
+    correct there, way too large for a compact list row. Confirmed via
+    `grep` that none of the 4 call sites feeding a `PickerModal` also fed
+    a `SlotBox` (those use their own, separate 88px), so this was safe to
+    shrink in isolation: all 4 dropped to 40px, `ItemIcon`'s own already-
+    established default. `.craft-picker-row` also switched from flex to
+    CSS grid (`40px 1fr auto` -- icon, text, checkmark) for genuinely
+    consistent table-like column alignment down the list, plus text
+    truncation on long names/sublabels that could previously push the
+    checkmark column around. Verified via a rendered mockup, not just
+    reasoned through -- clean, no overlap, columns line up.
+  - **Testing panel: add eggs/pets directly.** New `engine.testAddEgg`/
+    `testAddPet`/`testUnlockHatchery`, all auto-unlocking the Hatchery so
+    testing pets doesn't mean playing through `the_last_clutch` first
+    every single time. `testAddPet` reuses `PetManager.hatch` with a
+    throwaway `EggInstance` rather than duplicating its bonus-roll logic.
+    Buttons for all 5 rarities and every current species in
+    `TestingPanel.tsx`.
+  - **Feed dropdown offered Ore and Timber -- removed.** New
+    `FEEDABLE_MATERIALS` in `materials.ts` (Herbs + Food/fish only --
+    Ore/Timber are construction resources with no "a pet would eat this"
+    reading), plus the dropdown's own default state fixed from `'ore'` to
+    `'herbs'` (nothing had actually caught that the default itself was
+    one of the two being removed).
+  - **Rename was a genuinely hidden interaction -- now a visible
+    button.** Clicking the pet's own name to rename it had no affordance
+    at all pointing at that being possible. Added an explicit blue
+    "Rename" button next to the name; the click-to-edit behaviour on the
+    name itself stays as a bonus shortcut, not the only way in anymore.
+  - **No hover feedback anywhere on pet cards -- added, using each pet's
+    own rarity colour.** New `.pet-card-hover` (border + glow on
+    `:hover`, reading `--rarity-color` set inline per-card straight from
+    `RARITY_COLOR` -- the exact same hex every `RarityPill` already uses,
+    so a card's hover state always matches its own pill with zero drift
+    between the two).
+  - **Nests now start at 1, not 2.** `pets.baseIncubationSlots` tuning
+    default changed 2 -> 1 -- the 2nd nest is meant to be Nest
+    Expansion's own first purchase, not something every player starts
+    with for free. Nest Expansion's own definition (3 levels,
+    `incubationSlotsPerLevel: 1`) is unchanged, so the effective range is
+    now 1-4 nests instead of 2-5.
+  - **Guild menu tab tooltips.** Every tab across all 5 groups
+    (Dashboard/Guild/Adventure/Progression/Meta, 15 tabs including the
+    testing-only one) now has a one-line `title` attribute -- a plain
+    native browser tooltip, not a custom component, added directly to
+    each tab's own definition object rather than a separate lookup table
+    that could drift out of sync with the tab list.
 - **Companion pet was too small and floating in the wrong spot -- fixed,
   verified against an actual rendered mockup rather than hand-computed
   CSS.** Reported directly: sitting off to the side at the old 40px size

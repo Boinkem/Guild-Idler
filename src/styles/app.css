@@ -1728,6 +1728,17 @@ button.harvest-item:hover {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--moss) 40%, transparent);
 }
 
+/* Rarity-colored glow on hover -- --rarity-color is set inline per-card
+   from RARITY_COLOR (util.ts), the same hex set every RarityPill already
+   uses, so a card's hover state always matches its own pill exactly. */
+.pet-card-hover {
+  transition: box-shadow 150ms ease, border-color 150ms ease;
+}
+.pet-card-hover:hover {
+  border-color: var(--rarity-color, var(--edge));
+  box-shadow: 0 0 12px 1px color-mix(in srgb, var(--rarity-color, transparent) 45%, transparent);
+}
+
 /* The small picker popped open by clicking a slot -- same overlay/modal
    shell as everywhere else in the game, just narrower and listing rows
    instead of one item's own detail (see PickerModal in CraftingStation.tsx). */
@@ -1739,7 +1750,8 @@ button.harvest-item:hover {
   overflow-y: auto;
 }
 .craft-picker-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
   align-items: center;
   gap: 10px;
   width: 100%;

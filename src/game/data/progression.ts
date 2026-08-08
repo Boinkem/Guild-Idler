@@ -105,8 +105,10 @@ export const UPGRADES: UpgradeDef[] = [
   {
     id: 'nest_expansion', name: 'Nest Expansion',
     description: "More room in the Hatchery for eggs to incubate at once -- doesn't speed up any single one, just lets more happen in parallel.",
-    // Base (2) lives in pets.baseIncubationSlots via ModifierManager.incubationSlots;
-    // 3 levels take it to a max of 5.
+    // Base (1, pets.baseIncubationSlots via ModifierManager.incubationSlots)
+    // starts deliberately low -- the 2nd nest is meant to be this upgrade's
+    // own first purchase, not something every player already has. 3 levels
+    // take it to a max of 4.
     baseCost: 1500, costGrowth: 2.0, maxLevel: 3,
     modsPerLevel: {}, incubationSlotsPerLevel: 1,
   },

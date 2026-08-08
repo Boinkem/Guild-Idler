@@ -61,7 +61,7 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
         key: i.uid,
         label: `${d.name}${i.plus > 0 ? ` +${i.plus}` : ''}`,
         sublabel: `${owner} -- ${atMax ? 'max refinement' : `+${i.plus}/${MAX_PLUS}`}`,
-        icon: <ItemIcon slot={d.slot} icon={d.icon} size={64} />,
+        icon: <ItemIcon slot={d.slot} icon={d.icon} size={40} />,
       };
     })
     .filter((o): o is PickerOption => o !== null);
