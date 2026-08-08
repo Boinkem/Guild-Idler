@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
 import { GuildManager } from '../../game/managers/GuildManager';
@@ -34,33 +34,28 @@ function ChainQuestBanner({ chainId }: { chainId: string }) {
 interface QuestCardProps {
   offer: Offer;
   isOpen: boolean;
-  isAssigning: boolean;
-  pickedHeroId: string | null;
-  previewHero: Hero;
-  idleHeroes: Hero[];
+  hero: Hero;
   now: number;
   onToggleExpanded: (offerId: string) => void;
-  onStartAssigning: (offerId: string, heroId: string) => void;
-  onCancelAssigning: () => void;
-  onSend: (offer: Offer, heroId: string, chainSteps?: boolean) => void;
+  onSend: (offer: Offer, chainSteps?: boolean) => void;
 }
 
-/** Shared card body for both Discovered Quests and Available Contracts --
- *  identical behaviour either way, the only difference is the banner art
- *  shown for a chain entry specifically. */
+/** Shared card body for both a hero's own Contracts and their Discovered
+ *  Quests -- identical behaviour either way, the only difference is the
+ *  banner art shown for a chain entry specifically. Always renders against
+ *  whichever hero's tab is currently open (see QuestPanel) -- there's no
+ *  separate hero picker inside the card anymore, since picking the hero is
+ *  now the very first thing the player does on this tab. */
 function QuestCard({
-  offer, isOpen, isAssigning, pickedHeroId, previewHero, idleHeroes, now,
-  onToggleExpanded, onStartAssigning, onCancelAssigning, onSend,
+  offer, isOpen, hero, now, onToggleExpanded, onSend,
 }: QuestCardProps) {
   const engine = useEngine();
   const state = engine.state;
   const cfg = DIFFICULTIES[offer.difficulty];
-  const pickedHero = pickedHeroId ? state.heroes.find((h) => h.id === pickedHeroId) : undefined;
-  const statHero = pickedHero ?? previewHero;
-  const chance = QuestManager.previewSuccess(state, statHero, offer, [], now);
-  const duration = QuestManager.previewDuration(state, statHero, offer, now);
+  const chance = QuestManager.previewSuccess(state, hero, offer, [], now);
+  const duration = QuestManager.previewDuration(state, hero, offer, now);
   const chain = offer.chain ? CHAIN_BY_ID[offer.chain.chainId] : undefined;
-  const noHeroMeetsLevel = idleHeroes.length > 0 && !idleHeroes.some((h) => h.level >= offer.reqLevel);
+  const levelGap = Math.max(0, offer.reqLevel - hero.level);
 
   return (
     <div className={`card quest-card ${offer.difficulty} ${offer.chain ? 'chain' : ''}`}>
@@ -83,8 +78,10 @@ function QuestCard({
       </div>
 
       <div className="stat-row" style={{ margin: '6px 0' }}>
-        {isAssigning && (
-          <span className="muted">{pickedHero ? pickedHero.name : 'Pick a hero'}</span>
+        {levelGap > 0 && (
+          <span className="tiny" style={{ color: 'var(--blood)' }}>
+            {levelGap} level{levelGap === 1 ? '' : 's'} under -- reduced success chance
+          </span>
         )}
         <span>Success <b className={chance >= 60 ? 'good' : chance >= 35 ? '' : 'bad'}>{Math.round(chance)}%</b></span>
         <span>Time <b>{formatDuration(duration)}</b></span>
@@ -95,11 +92,11 @@ function QuestCard({
       {isOpen && (
         <>
           <p className="card-flavour">{chain ? `${chain.description} — ${offer.flavour}` : offer.flavour}</p>
-          {QuestManager.previewLoot(state, statHero, offer, [], now).length > 0 && (
+          {QuestManager.previewLoot(state, hero, offer, [], now).length > 0 && (
             <>
               <div className="tiny muted" style={{ marginBottom: 2 }}>Chance to find</div>
               <div className="row wrap quest-popout-loot" style={{ gap: 6, alignItems: 'center' }}>
-                {QuestManager.previewLoot(state, statHero, offer, [], now).map((entry) => (
+                {QuestManager.previewLoot(state, hero, offer, [], now).map((entry) => (
                   <span key={entry.name} className="row" style={{ gap: 4, alignItems: 'center' }}>
                     <span className="tiny">{entry.name}</span>
                     <span className="tiny muted">{Math.round(entry.chance)}%</span>
@@ -141,77 +138,55 @@ function QuestCard({
         </>
       )}
 
-      {isAssigning ? (
-        <div className="row wrap end" style={{ marginTop: 8, gap: 6 }} onClick={(e) => e.stopPropagation()}>
-          {idleHeroes.map((h) => {
-            const gap = Math.max(0, offer.reqLevel - h.level);
-            const selected = pickedHeroId === h.id;
-            return (
-              <button
-                key={h.id}
-                className={`chip ${selected ? 'on' : ''} ${gap > 0 ? 'risky' : ''}`}
-                title={gap > 0 ? `${gap} level${gap === 1 ? '' : 's'} under -- reduced success chance` : undefined}
-                onClick={() => onStartAssigning(offer.id, h.id)}
-              >
-                {h.name} · Lv {h.level}{gap > 0 ? ' ⚠' : ''}{h.injuries.length > 0 ? ' ⚑' : ''}
-              </button>
-            );
-          })}
-          <button className="btn-ghost" onClick={onCancelAssigning}>Cancel</button>
-          {offer.chain && offer.chain.stage + 1 < offer.chain.totalStages ? (
-            <>
-              <button
-                className="btn-ghost"
-                disabled={!pickedHero}
-                title="Send this stage only -- return to the board afterward"
-                onClick={() => pickedHero && onSend(offer, pickedHero.id, false)}
-              >
-                Send on Quest
-              </button>
-              <button
-                className="btn-primary"
-                disabled={!pickedHero}
-                title="Automatically continue this hero through the rest of the chain"
-                onClick={() => pickedHero && onSend(offer, pickedHero.id, true)}
-              >
-                Chain Quest Steps
-              </button>
-            </>
-          ) : (
+      <div className="row end" style={{ marginTop: 8, gap: 6 }} onClick={(e) => e.stopPropagation()}>
+        <button
+          className="btn-ghost hero-card-expand"
+          onClick={() => onToggleExpanded(offer.id)}
+        >
+          {isOpen ? 'Less ▲' : 'More ▼'}
+        </button>
+        {offer.chain && offer.chain.stage + 1 < offer.chain.totalStages ? (
+          <>
+            <button
+              className="btn-ghost"
+              title="Send this stage only -- return to the board afterward"
+              onClick={() => onSend(offer, false)}
+            >
+              Send on Quest
+            </button>
             <button
               className="btn-primary"
-              disabled={!pickedHero}
-              onClick={() => pickedHero && onSend(offer, pickedHero.id)}
+              title="Automatically continue this hero through the rest of the chain"
+              onClick={() => onSend(offer, true)}
             >
-              {pickedHero ? `Send ${pickedHero.name}` : 'Pick a hero'}
+              Chain Quest Steps
             </button>
-          )}
-        </div>
-      ) : (
-        <div className="row end" style={{ marginTop: 4, gap: 8 }}>
-          <button
-            className="btn-ghost hero-card-expand"
-            onClick={(e) => { e.stopPropagation(); onToggleExpanded(offer.id); }}
-          >
-            {isOpen ? 'Less ▲' : 'More ▼'}
+          </>
+        ) : (
+          <button className="btn-primary" onClick={() => onSend(offer)}>
+            Send {hero.name}
           </button>
-          {idleHeroes.length > 0 && (
-            <>
-              {noHeroMeetsLevel && <span className="tiny muted">No hero meets level {offer.reqLevel} -- reduced success</span>}
-              <button
-                className="btn-primary"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onStartAssigning(offer.id, previewHero.id);
-                }}
-              >
-                Assign hero
-              </button>
-            </>
-          )}
-        </div>
-      )}
+        )}
+      </div>
     </div>
+  );
+}
+
+/** One hero's tab -- name, level, and at-a-glance status. Selected state
+ *  reuses the same chip/on treatment the old hero-assign picker already
+ *  used inside a card; injury/questing status reuse the same glyphs too,
+ *  so switching to a hero-first flow doesn't also invent a new visual
+ *  language for something players already recognise. */
+function HeroTab({ hero, selected, onSelect }: { hero: Hero; selected: boolean; onSelect: () => void }) {
+  return (
+    <button
+      className={`chip ${selected ? 'on' : ''} ${hero.injuries.length > 0 ? 'risky' : ''}`}
+      onClick={onSelect}
+    >
+      {hero.name} · Lv {hero.level}
+      {hero.status === 'questing' ? ' ⏳' : ''}
+      {hero.injuries.length > 0 ? ' ⚑' : ''}
+    </button>
   );
 }
 
@@ -219,8 +194,6 @@ export function QuestPanel() {
   const engine = useEngine();
   const now = useNow();
   const state = engine.state;
-
-  const idleHeroes = state.heroes.filter((h) => h.status !== 'questing');
 
   // Condensed by default, same pattern as the Heroes tab -- a full board of
   // contracts used to run the panel very long. Flavour text and the full
@@ -234,43 +207,48 @@ export function QuestPanel() {
     });
   };
 
-  // Which quest card currently has its hero picker open, and which hero is
-  // currently selected within it (not yet sent). Only one card's picker at
-  // a time -- opening a new one closes whichever was already open.
-  const [assigning, setAssigning] = useState<{ offerId: string; heroId: string } | null>(null);
+  // Which hero's own log is currently open. A large, level-varied roster
+  // used to share one 6-slot board -- messy, since the board's difficulty
+  // mix was scaled around whichever hero happened to be the guild's top
+  // level, and everyone competed for the same handful of slots. Each hero
+  // now generates and keeps their own pool (see
+  // QuestManager.generateContractsForHero), so picking a hero here picks
+  // whose pool you're looking at, not who to send on a shared offer.
+  const [selectedHeroId, setSelectedHeroId] = useState<string | null>(state.heroes[0]?.id ?? null);
+  useEffect(() => {
+    // Falls back to the first hero if the previously-selected one no longer
+    // exists. Only Early Retirement actually removes a hero from the
+    // roster outright (an ordinary Retire reuses the same id, reset to
+    // level 1) -- but a fresh save or an imported one could also just not
+    // contain whatever id was last selected.
+    if (!state.heroes.some((h) => h.id === selectedHeroId)) {
+      setSelectedHeroId(state.heroes[0]?.id ?? null);
+    }
+  }, [state.heroes, selectedHeroId]);
+  const selectedHero = state.heroes.find((h) => h.id === selectedHeroId) ?? state.heroes[0];
 
-  // Preview stats need *some* hero to preview against before a card's
-  // picker is even opened. Once a picker is open, the stats below switch to
-  // whichever hero is actually selected in it -- success/duration are hero-
-  // stat-dependent, so showing one hero's odds while a different hero is
-  // selected would be actively misleading, not just imprecise.
-  const previewHero = idleHeroes[0] ?? state.heroes[0];
-
-  // Split into two genuinely different things that used to share one list
-  // and one label: chain-stage offers (a continuing story, discovered once
-  // and then followed) versus ordinary board contracts (rotate every 30
-  // minutes, no narrative continuity). Contracts sort by difficulty tier
-  // ascending now rather than duration -- the closest board-offer analogue
-  // to "rarity", since a plain quest offer has no rarity field of its own.
-  const chainOffers = useMemo(
-    () => state.questBoard.filter((o) => o.chain !== undefined).sort((a, b) => a.duration - b.duration),
-    [state.questBoard],
-  );
+  // This hero's own contract pool, sorted by difficulty tier ascending --
+  // the closest board-offer analogue to "rarity", since a plain quest
+  // offer has no rarity field of its own.
   const contractOffers = useMemo(
-    () => [...state.questBoard]
-      .filter((o) => o.chain === undefined)
+    () => [...(state.questBoards[selectedHero.id] ?? [])]
       .sort((a, b) => DIFFICULTY_ORDER.indexOf(a.difficulty) - DIFFICULTY_ORDER.indexOf(b.difficulty)),
-    [state.questBoard],
+    [state.questBoards, selectedHero.id],
   );
 
-  // Consumables no longer live on this tab -- picking a loadout at send
-  // time is being replaced by per-hero equipped consumable slots (see the
-  // Inventory rework). Quests now always send with an empty loadout; once
-  // that rework lands, startQuest will read from the hero's own equipped
-  // slots instead of needing anything passed in here at all.
-  const send = (offer: Offer, targetHeroId: string, chainSteps = false) => {
-    engine.startQuest(targetHeroId, offer, [], chainSteps);
-    setAssigning(null);
+  // Chain-stage offers are still guild-wide -- a chain's progress is
+  // tracked once, not per hero, so every hero's tab shows the same current
+  // stage rather than each getting their own copy of the story.
+  const chainOffers = useMemo(
+    () => [...state.chainBoard].sort((a, b) => a.duration - b.duration),
+    [state.chainBoard],
+  );
+
+  // Consumables no longer live on this tab -- quests automatically use
+  // whatever's equipped on the sent hero's own consumable slots instead of
+  // a loadout picked at send time.
+  const send = (offer: Offer, chainSteps = false) => {
+    engine.startQuest(selectedHero.id, offer, [], chainSteps);
   };
 
   // Confirmed before cancelling anything -- pulling a hero back mid-quest
@@ -282,36 +260,24 @@ export function QuestPanel() {
     if (confirm('Cancel the current quest and bring the hero home?')) engine.recallHero(heroId);
   };
 
-  // Same eligibility rule QuestCard's own "Requires level X" check uses --
-  // first contract some idle hero actually qualifies for, first hero who
-  // qualifies for it. A quick top-up action, not an optimal assignment.
+  // Quick-assign now acts on whichever hero's tab is open, sending them on
+  // the best contract from their own board -- the per-hero equivalent of
+  // the old board-wide "first idle hero, first contract they qualify for"
+  // shortcut.
   const autoChainDef = GuildManager.upgrades().find((u) => u.unlocks === 'autoChain');
   const autoChainOwned = !!autoChainDef && GuildManager.upgradeLevel(state, autoChainDef.id) > 0;
-  const autoAssign = () => {
-    for (const offer of contractOffers) {
-      const hero = idleHeroes.find((h) => h.level >= offer.reqLevel);
-      if (hero) { send(offer, hero.id); return; }
-    }
+  const quickAssign = () => {
+    const offer = QuestManager.pickBestQuest(state, selectedHero, now);
+    if (offer) send(offer);
   };
-
-  const cardProps = (offer: Offer) => ({
-    offer,
-    isOpen: expanded.has(offer.id),
-    isAssigning: assigning?.offerId === offer.id,
-    pickedHeroId: assigning?.offerId === offer.id ? assigning.heroId : null,
-    previewHero,
-    idleHeroes,
-    now,
-    onToggleExpanded: toggleExpanded,
-    onStartAssigning: (offerId: string, heroId: string) => setAssigning({ offerId, heroId }),
-    onCancelAssigning: () => setAssigning(null),
-    onSend: send,
-  });
 
   return (
     <>
       <h2>Quest Board</h2>
-      <p className="subtitle">Contracts rotate every half hour. Send someone before they expire.</p>
+      <p className="subtitle">
+        Each hero keeps their own contracts, scaled to their own level. Pick a hero below to see
+        what's open to them.
+      </p>
 
       {/* --------------------------- active quests --------------------------- */}
       {state.activeQuests.length > 0 && (
@@ -351,32 +317,62 @@ export function QuestPanel() {
         </>
       )}
 
-      {idleHeroes.length === 0 && (
-        <p className="small muted">Everyone is out. Wait for a return, or recruit another hero in the Guild Hall.</p>
-      )}
-
-      {/* ------------------------------- contracts ------------------------------- */}
-      <div className="spread" style={{ alignItems: 'center' }}>
-        <div className="section-heading" style={{ marginBottom: 0 }}>Available Contracts</div>
-        {autoChainOwned && idleHeroes.length > 0 && contractOffers.length > 0 && (
-          <button
-            className="btn-ghost"
-            style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
-            onClick={autoAssign}
-            title="Send the first idle hero on the first contract they qualify for"
-          >
-            Quick-assign
-          </button>
-        )}
+      {/* ------------------------------- hero tabs ------------------------------- */}
+      <div className="section-heading">Heroes</div>
+      <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
+        {state.heroes.map((h) => (
+          <HeroTab key={h.id} hero={h} selected={h.id === selectedHero.id} onSelect={() => setSelectedHeroId(h.id)} />
+        ))}
       </div>
-      {contractOffers.length === 0 && <p className="small muted">The board is empty. New contracts arrive shortly.</p>}
-      {contractOffers.map((offer) => <QuestCard key={offer.id} {...cardProps(offer)} />)}
 
-      {/* --------------------------- discovered quests --------------------------- */}
-      {chainOffers.length > 0 && (
+      {selectedHero.status === 'questing' ? (
+        <p className="small muted">{selectedHero.name} is already out -- see "On the road" above.</p>
+      ) : (
         <>
-          <div className="section-heading">Discovered Quests</div>
-          {chainOffers.map((offer) => <QuestCard key={offer.id} {...cardProps(offer)} />)}
+          {/* ------------------------------- contracts ------------------------------- */}
+          <div className="spread" style={{ alignItems: 'center' }}>
+            <div className="section-heading" style={{ marginBottom: 0 }}>{selectedHero.name}'s Contracts</div>
+            {autoChainOwned && contractOffers.length > 0 && (
+              <button
+                className="btn-ghost"
+                style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+                onClick={quickAssign}
+                title="Send this hero on the best contract from their own board"
+              >
+                Quick-assign
+              </button>
+            )}
+          </div>
+          {contractOffers.length === 0 && <p className="small muted">Nothing open right now. New contracts arrive within the half hour.</p>}
+          {contractOffers.map((offer) => (
+            <QuestCard
+              key={offer.id}
+              offer={offer}
+              isOpen={expanded.has(offer.id)}
+              hero={selectedHero}
+              now={now}
+              onToggleExpanded={toggleExpanded}
+              onSend={send}
+            />
+          ))}
+
+          {/* --------------------------- discovered quests --------------------------- */}
+          {chainOffers.length > 0 && (
+            <>
+              <div className="section-heading">Discovered Quests</div>
+              {chainOffers.map((offer) => (
+                <QuestCard
+                  key={offer.id}
+                  offer={offer}
+                  isOpen={expanded.has(offer.id)}
+                  hero={selectedHero}
+                  now={now}
+                  onToggleExpanded={toggleExpanded}
+                  onSend={send}
+                />
+              ))}
+            </>
+          )}
         </>
       )}
     </>

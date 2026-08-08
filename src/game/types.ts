@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 25;
+export const SAVE_VERSION = 26;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -654,7 +654,23 @@ export interface GameState {
   customConsumables: Record<string, ConsumableDef>;
   stash: EquipmentItem[];
 
-  questBoard: QuestOffer[];
+  /**
+   * Contract offers, one pool per hero (keyed by hero id) -- each hero
+   * generates and keeps their own set rather than the whole roster
+   * competing over one shared board. Eligibility and burst caps scale off
+   * that specific hero's own level (see QuestManager.generateContractsForHero),
+   * not the guild's top hero, so a low-level recruit sees contracts sized
+   * for them instead of leftovers from a high-level main. See the Quest
+   * Tab hero-log rework.
+   */
+  questBoards: Record<string, QuestOffer[]>;
+  /**
+   * Chain-stage offers, still a single shared list -- a chain's progress
+   * (ActiveChain.stage) is tracked once per chainId, not owned by a
+   * specific hero, so every idle hero who qualifies sees the same current
+   * stage rather than each getting their own copy.
+   */
+  chainBoard: QuestOffer[];
   boardRefreshedAt: number;
   activeQuests: ActiveQuest[];
   activeChains: ActiveChain[];

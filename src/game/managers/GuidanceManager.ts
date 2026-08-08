@@ -58,7 +58,7 @@ type Check = (state: GameState) => boolean;
 const CHECKS: Record<string, Check> = {
   first_level_up: (state) => state.heroes.some((h) => h.level >= 2),
   first_equipment_found: (state) => state.discoveredItems.length >= 1,
-  first_chain_seen: (state) => state.questBoard.some((o) => o.chain !== undefined),
+  first_chain_seen: (state) => state.chainBoard.length > 0,
   hero_slots_full: (state) => state.heroes.length >= ModifierManager.heroSlots(state),
   raids_unlocked: (state) => ModifierManager.hasUnlock(state, 'raids'),
 };

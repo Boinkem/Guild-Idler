@@ -68,7 +68,8 @@ export function createInitialState(now = Date.now()): GameState {
     inventory: { healing_potion: 1 },
     customConsumables: {},
     stash: [],
-    questBoard: [],
+    questBoards: {},
+    chainBoard: [],
     boardRefreshedAt: 0,
     activeQuests: [],
     activeChains: [],
@@ -380,6 +381,25 @@ const MIGRATIONS: Record<number, Migration> = {
     // than a stored flag. This only backfills the notice flag itself.
     pendingHatchReadyNotice: (save.pendingHatchReadyNotice as boolean | undefined) ?? false,
   }),
+  25: (save) => {
+    // Quest Tab hero-log rework: the one shared 6-slot questBoard is
+    // replaced by a per-hero questBoards map (contract offers, scaled to
+    // each hero's own level) plus a separate guild-wide chainBoard
+    // (story-chain stage offers, unchanged -- a chain's progress was
+    // never owned by a specific hero). The old shared board can't be
+    // salvaged into the new per-hero shape -- its offers were never
+    // scoped to any one hero -- so it's simply dropped; refreshWorld
+    // regenerates every hero's own board and the chain board from
+    // scratch on the very next tick, the same "missing data just
+    // regenerates" contract every board refresh already relies on.
+    const { questBoard: _oldBoard, ...rest } = save;
+    return {
+      ...rest,
+      version: 26,
+      questBoards: {},
+      chainBoard: [],
+    };
+  },
 };
 
 export const SaveManager = {

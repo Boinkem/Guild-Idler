@@ -10,13 +10,15 @@ stale sections here are worse than no section at all.
 
 ## Systems in place
 
-**Core loop** — quest board (30-min refresh windows, tier eligibility by
-level), offline catch-up, Auto-Chain streaks, burst quests (capped live
-against the best-unlocked tier rather than a flat taper). Auto-Chain now
-stops itself the moment any quest fails ("as far as you can go") instead
-of grinding on toward its target count regardless of outcome, and story
-chains have their own independent auto-continue -- see "Auto-queue / chain
-stepping rework" below.
+**Core loop** — quest board (30-min refresh windows), offline catch-up,
+Auto-Chain streaks, burst quests (capped live against the best-unlocked
+tier rather than a flat taper). Auto-Chain now stops itself the moment
+any quest fails ("as far as you can go") instead of grinding on toward
+its target count regardless of outcome, and story chains have their own
+independent auto-continue -- see "Auto-queue / chain stepping rework"
+below. Each hero now generates and keeps their own contract pool, scaled
+to their own level rather than the guild's top hero -- see "Quest Tab
+hero-log rework" below.
 
 **Heroes** — recruiting, leveling, stat allocation, injuries, skins,
 ascension/prestige, retirement with streak bonus.
@@ -287,6 +289,82 @@ tier ascending, with a Quick-assign button gated on owning Auto-Chain) and
 "Discovered Quests" (chain-stage offers, with banner art support) --
 contracts intentionally shown first. Consumables removed from this tab
 entirely, folded into the rework below instead.
+
+**Superseded by "Quest Tab hero-log rework" below** -- the single shared
+6-slot board this section describes is gone; every hero now generates and
+keeps their own contract pool instead. Left in place as a record of the
+original shape rather than rewritten in place.
+
+### Quest Tab hero-log rework -- complete
+Started from a real scaling complaint: the whole roster shared one 6-slot
+contract board, sized around whichever hero happened to be the guild's
+current top level (`reqLevel <= topLevel + 2`) -- a large, level-varied
+roster meant everyone competed for the same handful of slots, and a
+fresh recruit could easily find nothing on the board they actually
+qualified for if the window's RNG leaned toward harder tiers. Considered
+a smaller UI-only fix first (keep the shared pool, just reorganize the
+*view* per hero) but that would have left the actual scaling problem
+untouched -- contention gets worse with more heroes, not better -- so
+went with the structural version instead.
+
+**Every hero now generates and keeps their own contract pool.** The Quest
+tab opens with a row of hero tabs (name, level, questing/injury glyphs);
+selecting one shows that hero's own contracts and lets you send them
+directly -- no more click-a-quest-then-pick-a-hero flow, since the hero
+is chosen first now. `QuestManager.generateBoard` (one shared board) is
+replaced by two functions:
+
+- **`generateContractsForHero(state, hero, now)`** -- eligibility and
+  burst-reward caps now scale off that specific hero's own level
+  (`hero.level + 2 >= reqLevel`), not the guild's top hero. Deterministic
+  per `(window, hero.id)`, same reload-survives-refresh guarantee the old
+  shared board had. The "guarantee one short Easy offer so a solo player
+  always has *something* to send" rule (previously gated on
+  `state.heroes.length <= 1`, back when a second hero could just pull
+  from the same shared pool) now applies unconditionally to every hero's
+  own board, since "no second pair of hands to fall back on" is true of
+  each hero individually under this model.
+- **`generateChainBoard(state, now)`** -- unchanged in spirit, still one
+  shared list. A chain's progress (`ActiveChain.stage`) is tracked once
+  per `chainId`, not owned by any specific hero, so every idle hero who
+  qualifies still sees the same current stage on their own tab, exactly
+  as before.
+
+`GameState.questBoard` (one array) is replaced by `questBoards` (a
+`Record<heroId, QuestOffer[]>`) plus a separate `chainBoard`.
+`refreshWorld` regenerates every hero's own board on each 30-minute
+window rollover, and also fills in a board immediately for any hero who
+doesn't have one yet (a brand-new recruit, or a hero reset by Retire --
+same id, back to level 1) rather than waiting out the rest of the current
+window; boards for heroes removed via Early Retirement are pruned rather
+than left orphaned in the save. `SAVE_VERSION` bumped 25 -> 26; the old
+shared board can't be salvaged into the new per-hero shape (its offers
+were never scoped to one hero), so the migration just drops it and lets
+the very next tick regenerate everything fresh, the same "missing data
+just regenerates" contract every board refresh already relies on.
+
+Quick-assign now sends whichever hero's tab is open on the best contract
+from *their own* board, rather than the first idle hero on the board's
+first qualifying contract. The Auto-Chain bounty streak's continuation
+call (`tryContinueAutoChain`) used to regenerate the *entire* shared
+board just to guarantee a next contract for one streaking hero -- which,
+under the old model, could incidentally resurrect offers other heroes
+were relying on. It now regenerates only that hero's own board, same
+guarantee, correctly scoped.
+
+**A bug caught and fixed during this same pass, before it shipped:**
+the first version of `refreshWorld`'s chain-board refresh used
+`chainBoard.length === 0` as a "needs regenerating" signal, mirroring the
+per-hero board's own fallback -- but an empty chain board is a
+legitimate steady state (nothing currently unlocked, or every available
+chain completed), not a sign it was never generated. Left as written,
+that condition would have re-triggered every single tick once no chains
+were available, forcing a save on every tick. Fixed to key off the
+window rollover alone (which also correctly covers first-load and
+post-migration, since `boardRefreshedAt` starts far behind the real
+current window either way).
+
+`npx tsc --noEmit` and `vite build` both pass clean.
 
 ### Consumables & equip-slot rework -- complete
 Inventory's consumables are now clickable, same detail-expand treatment

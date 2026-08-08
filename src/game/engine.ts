@@ -289,7 +289,11 @@ export class GameEngine {
     const level = this.state.upgrades['auto_chain'] ?? 0;
     if (level <= 0) return giveUp();
 
-    this.state.questBoard = QuestManager.generateBoard(this.state, now);
+    // Regenerated fresh (not just filled-in-if-empty) so a streaking hero
+    // always has a next contract to grab, same guarantee the old shared
+    // board gave this call -- but scoped to this hero's own pool only now,
+    // so it can no longer refill offers other heroes were relying on.
+    this.state.questBoards[hero.id] = QuestManager.generateContractsForHero(this.state, hero, now);
     const offer = QuestManager.pickBestQuest(this.state, hero, now);
     if (!offer) return giveUp();
 
@@ -454,14 +458,43 @@ export class GameEngine {
     if (changed) void SaveManager.save(this.adapter, this.state);
   }
 
-  /** Regenerates the quest board and shop when their windows roll over. */
+  /** Regenerates the quest boards and shop when their windows roll over. */
   private refreshWorld(now: number): boolean {
     let changed = false;
     const window = Math.floor(now / BOARD_REFRESH_MS);
-    if (this.state.boardRefreshedAt !== window || this.state.questBoard.length === 0) {
-      this.state.boardRefreshedAt = window;
-      const active = new Set(this.state.activeQuests.map((q) => q.offer.id));
-      this.state.questBoard = QuestManager.generateBoard(this.state, now).filter((o) => !active.has(o.id));
+    const windowRolledOver = this.state.boardRefreshedAt !== window;
+    if (windowRolledOver) this.state.boardRefreshedAt = window;
+
+    const active = new Set(this.state.activeQuests.map((q) => q.offer.id));
+    // Each hero's own board regenerates on the same window rollover as
+    // before, but also whenever that specific hero has no board yet --
+    // covers a brand-new recruit, a hero reset by Retire (same id, back to
+    // level 1), and a save migrated from before this rework, none of which
+    // should have to wait out the rest of the current window for a board.
+    for (const hero of this.state.heroes) {
+      const existing = this.state.questBoards[hero.id];
+      if (windowRolledOver || !existing || existing.length === 0) {
+        this.state.questBoards[hero.id] = QuestManager.generateContractsForHero(this.state, hero, now)
+          .filter((o) => !active.has(o.id));
+        changed = true;
+      }
+    }
+    // Early Retirement actually removes a hero from the roster (unlike a
+    // normal Retire, which reuses the same id) -- drop their now-orphaned
+    // board rather than letting it sit in the save forever.
+    for (const heroId of Object.keys(this.state.questBoards)) {
+      if (!this.state.heroes.some((h) => h.id === heroId)) {
+        delete this.state.questBoards[heroId];
+        changed = true;
+      }
+    }
+    // Unlike a per-hero board, an empty chainBoard is a legitimate steady
+    // state (nothing currently unlocked, or everything completed) rather
+    // than a sign it was never generated -- so only the window rollover
+    // (which also covers a fresh save/migration, since boardRefreshedAt
+    // starts far behind the real current window) should trigger this.
+    if (windowRolledOver) {
+      this.state.chainBoard = QuestManager.generateChainBoard(this.state, now).filter((o) => !active.has(o.id));
       changed = true;
     }
     if (ShopManager.needsRefresh(this.state, now) || this.state.shop.equipment.length === 0) {
@@ -814,7 +847,9 @@ export class GameEngine {
     const heroes = this.state.heroes;
     if (heroes.some((h) => h.status === 'questing')) return 'questing';
     if (heroes.some((h) => h.injuries.length > 0)) return 'injured';
-    if (this.state.questBoard.length > 0) return 'ready';
+    const anyReady = this.state.chainBoard.length > 0
+      || heroes.some((h) => (this.state.questBoards[h.id]?.length ?? 0) > 0);
+    if (anyReady) return 'ready';
     return 'idle';
   }
 

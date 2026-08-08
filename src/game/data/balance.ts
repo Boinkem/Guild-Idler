@@ -39,9 +39,10 @@ function expectedRatePerHour(cfg: DifficultyConfig, kind: 'gold' | 'xp'): number
   return expectedReward / avgDurationHours;
 }
 
-/** Highest difficulty tier currently available to a hero at topLevel --
- *  same eligibility rule QuestManager.generateBoard already uses
- *  (topLevel + 2 >= reqLevel, legendary additionally gated by its unlock). */
+/** Highest difficulty tier currently available at a given level -- same
+ *  eligibility rule QuestManager.generateContractsForHero already uses
+ *  (level + 2 >= reqLevel, legendary additionally gated by its unlock).
+ *  Called with a specific hero's own level, not the guild's top hero. */
 export function bestUnlockedTier(topLevel: number, legendaryUnlocked: boolean): Difficulty {
   let best: Difficulty = 'easy';
   for (const id of DIFFICULTY_ORDER) {

@@ -43,37 +43,58 @@ function lootTableFor(difficulty: Difficulty, rng: Rng): { defId: string; chance
 }
 
 export const QuestManager = {
-  /** The board is regenerated from a stable seed so it survives reloads. */
-  generateBoard(state: GameState, now: number): QuestOffer[] {
-    const topLevel = Math.max(1, ...state.heroes.map((h) => h.level));
+  /**
+   * One hero's own contract pool -- each hero generates and keeps their
+   * own board now (see the Quest Tab hero-log rework), rather than a
+   * single shared 6-slot board the whole roster used to compete over.
+   * Eligibility and burst caps scale off *this hero's* level, not the
+   * guild's top hero, so a fresh recruit sees Easy/Normal contracts sized
+   * for them instead of leftovers from a high-level main -- and, since
+   * every hero has their own untouched pool, a large roster no longer
+   * drains a shared board other heroes were relying on. Deterministic per
+   * (window, hero id), so it survives reloads the same way the old shared
+   * board did.
+   */
+  generateContractsForHero(state: GameState, hero: Hero, now: number): QuestOffer[] {
     const window = Math.floor(now / BOARD_REFRESH_MS);
-    const rng = createRng(`board:${window}:${topLevel}:${state.createdAt}`);
+    const rng = createRng(`board:${window}:${hero.id}:${state.createdAt}`);
     const legendaryUnlocked = ModifierManager.hasUnlock(state, 'legendaryQuests');
 
     const available = DIFFICULTY_ORDER.filter((d) => {
       const cfg = DIFFICULTIES[d];
       if (d === 'legendary' && !legendaryUnlocked) return false;
-      return topLevel + 2 >= cfg.reqLevel;
+      return hero.level + 2 >= cfg.reqLevel;
     });
 
     const offers: QuestOffer[] = [];
     for (let i = 0; i < BOARD_SIZE; i++) {
       const difficulty = rng.weighted(available.map((d) => ({ item: d, weight: DIFFICULTIES[d].weight })));
-      offers.push(QuestManager.generateOffer(difficulty, rng, `q:${window}:${i}`, topLevel, false, legendaryUnlocked));
+      offers.push(QuestManager.generateOffer(difficulty, rng, `q:${window}:${hero.id}:${i}`, hero.level, false, legendaryUnlocked));
     }
 
-    // With only one hero, there's no second pair of hands to fall back on
-    // while waiting out a long quest -- and the burst roll (see
-    // generateOffer) is random, so a genuinely unlucky board could hand a
-    // solo player nothing under a couple of hours until the next refresh.
-    // Force one guaranteed short Easy offer onto the board in that case,
-    // replacing the last slot rather than adding a 7th, so a fresh guild
-    // always has *something* to send within a few minutes.
-    if (state.heroes.length <= 1 && !offers.some((o) => o.difficulty === 'easy' && o.duration <= 5 * MINUTE)) {
-      offers[offers.length - 1] = QuestManager.generateOffer('easy', rng, `q:${window}:guaranteed`, topLevel, true, legendaryUnlocked);
+    // Every hero's board is their own now, so "no second pair of hands to
+    // fall back on while waiting out a long quest" is true of every hero
+    // individually, not just a one-hero guild -- guaranteed unconditionally
+    // (this used to be gated on state.heroes.length <= 1, back when a
+    // second hero could just pull from the same shared pool instead).
+    if (!offers.some((o) => o.difficulty === 'easy' && o.duration <= 5 * MINUTE)) {
+      offers[offers.length - 1] = QuestManager.generateOffer('easy', rng, `q:${window}:${hero.id}:guaranteed`, hero.level, true, legendaryUnlocked);
     }
+    return offers;
+  },
 
-    // Chain stages are appended when a chain is running or available.
+  /**
+   * Story-chain stage offers -- still one shared list, not per-hero.
+   * ActiveChain tracks a chain's stage once per chainId (not owned by any
+   * one hero), so every idle hero who qualifies sees the same current
+   * stage on their own tab, exactly as any idle hero could pick up any
+   * chain offer on the old shared board.
+   */
+  generateChainBoard(state: GameState, now: number): QuestOffer[] {
+    const topLevel = Math.max(1, ...state.heroes.map((h) => h.level));
+    const window = Math.floor(now / BOARD_REFRESH_MS);
+    const rng = createRng(`chains:${window}:${state.createdAt}`);
+    const offers: QuestOffer[] = [];
     if (ModifierManager.hasUnlock(state, 'chains')) {
       for (const chain of QUEST_CHAINS) {
         if (state.completedChains.includes(chain.id)) continue;
@@ -195,7 +216,7 @@ export const QuestManager = {
    * player noticing.
    */
   pickBestQuest(state: GameState, hero: Hero, now: number): QuestOffer | null {
-    const eligible = state.questBoard.filter((o) => hero.level >= o.reqLevel && !o.chain);
+    const eligible = (state.questBoards[hero.id] ?? []).filter((o) => hero.level >= o.reqLevel && !o.chain);
     if (eligible.length === 0) return null;
     const scored = eligible.map((o) => ({ o, p: QuestManager.previewSuccess(state, hero, o, [], now) }));
     const viable = scored.filter((e) => e.p >= 50).sort((a, b) => b.o.rewardGold - a.o.rewardGold);
@@ -326,7 +347,15 @@ export const QuestManager = {
     hero.status = 'questing';
     hero.activeQuestId = quest.id;
     state.activeQuests.push(quest);
-    state.questBoard = state.questBoard.filter((o) => o.id !== offer.id);
+    // Chain stages come off the shared chainBoard; ordinary contracts come
+    // off specifically the sending hero's own board -- a contract offer
+    // only ever exists in that one hero's pool to begin with.
+    if (offer.chain) {
+      state.chainBoard = state.chainBoard.filter((o) => o.id !== offer.id);
+    } else {
+      const board = state.questBoards[hero.id];
+      if (board) state.questBoards[hero.id] = board.filter((o) => o.id !== offer.id);
+    }
     return { quest };
   },
 
