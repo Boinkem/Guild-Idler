@@ -961,8 +961,9 @@ export class GameEngine {
     void this.saveNow();
   }
 
-  /** Clears whichever contract is frozen for this hero, if any -- same
-   *  daily allowance as freezing. See QuestManager.unfreezeOffer. */
+  /** Clears whichever contract is frozen for this hero, if any -- always
+   *  free, never gated by the daily freeze allowance. See
+   *  QuestManager.unfreezeOffer. */
   unfreezeQuestOffer(heroId: string) {
     const hero = this.hero(heroId);
     if (!hero) return;

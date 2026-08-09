@@ -138,13 +138,15 @@ export const UPGRADES: UpgradeDef[] = [
   },
   {
     id: 'board_warden', name: 'Board Warden',
-    description: "A standing order to hold one contract back from the board's own churn -- freeze it in place through the next refresh, reroll, or restock. Each level buys an extra change of mind per day.",
-    // Base (1 freeze/unfreeze change per day) lives in
-    // ModifierManager.freezeChangesPerDay as the floor. 2 levels take it to
-    // 3 total, matching the "up to 3 times" spec. Freezing itself never
-    // costs gold -- only the daily number of times the frozen contract can
-    // be changed is gated, same "free action, limited frequency" shape as
-    // the reroll systems' free-tier count.
+    description: "A standing order to hold one contract back from the board's own churn -- freeze it in place through the next refresh, reroll, or restock. Each level buys an extra freeze per day; letting a contract go is always free.",
+    // Base (1 freeze per day) lives in ModifierManager.freezeChangesPerDay
+    // as the floor. 2 levels take it to 3 total, matching the "up to 3
+    // times" spec. Freezing itself never costs gold -- only the daily
+    // number of times a *new* contract can be frozen is gated, same "free
+    // action, limited frequency" shape as the reroll systems' free-tier
+    // count. Unfreezing is deliberately NOT gated by this at all -- see
+    // QuestManager.unfreezeOffer -- so running out of freezes for the day
+    // can never trap a player holding one they no longer want.
     baseCost: 1200, costGrowth: 2.1, maxLevel: 2,
     modsPerLevel: {}, freezeChangesPerLevel: 1,
   },

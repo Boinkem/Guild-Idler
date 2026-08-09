@@ -2542,14 +2542,33 @@ game's own `app.css` typo fixed elsewhere this session).
 
 ### Quest board freeze slot -- built
 Resolves the long-standing "never got a firm yes/no" backlog item. Scope
-locked in: one freezable contract per hero (not account-wide), free to
-freeze/unfreeze, gated on a shared daily allowance rather than a gold
-cost -- base 1 change/day, up to 3/day via a new guild upgrade. Freezing
-protects the contract from all three ways a hero's board gets fully
-regenerated (the natural 30-min window refresh, a paid/free reroll, and
-an Auto-Chain restock), not just the passive refresh -- the stronger of
-the two options considered, on the read that a freeze which still loses
-to a manual reroll wouldn't be worth the UI real estate.
+locked in: one freezable contract per hero (not account-wide), gated on
+a shared daily allowance rather than a gold cost -- base 1 freeze/day, up
+to 3/day via a new guild upgrade. Freezing protects the contract from all
+three ways a hero's board gets fully regenerated (the natural 30-min
+window refresh, a paid/free reroll, and an Auto-Chain restock), not just
+the passive refresh -- the stronger of the two options considered, on the
+read that a freeze which still loses to a manual reroll wouldn't be worth
+the UI real estate.
+
+**Follow-up correction (same day):** the daily allowance originally gated
+*both* freezing and unfreezing off the same counter, which meant using
+your one daily change to freeze something left you unable to unfreeze it
+again until the next day -- a real "stuck" state, not the intent.
+Unfreezing is now always free and never spends from the allowance at all
+(`QuestManager.unfreezeOffer` no longer checks or touches
+`freezeChangesUsedToday`); only freezing a *new* contract is gated. This
+means freeze -> unfreeze -> freeze-something-else is no longer possible
+to chain infinitely in a day (re-freezing still needs an available
+charge each time), but a player can never end the day stuck holding a
+frozen contract they don't want. Board Warden's description and every
+related doc comment (`types.ts`, `ModifierManager.ts`, `progression.ts`,
+`engine.ts`) updated to match. UI: the freeze-charge indicator next to
+Reroll now reads "X freeze(s) left today" and renders in `--sky` (the
+theme's existing blue accent) instead of muted grey, so it's easy to spot
+before committing a charge; the "❄ Frozen" tag on a card uses the same
+color instead of a non-existent `--frost` variable that happened to work
+only because of its fallback value.
 
 **What's live:**
 - `QuestOffer` objects are frozen by value, not by id -- a hero's board
@@ -2575,24 +2594,54 @@ to a manual reroll wouldn't be worth the UI real estate.
   not vendor-specific): base cost 1200g, 2 levels, `freezeChangesPerLevel:
   1` -- same `modsPerLevel`-adjacent special-purpose-field shape as Board
   Runner's `questFreeRerollsPerLevel`. `ModifierManager.freezeChangesPerDay`
-  reads it the same way `questFreeRerolls` reads Board Runner.
+  reads it the same way `questFreeRerolls` reads Board Runner. Only gates
+  freezing, per the correction above.
 - UI: a Freeze/Unfreeze button on each of a hero's own contract cards in
   `QuestPanel.tsx` (chain-stage offers don't get one -- those are
   guild-wide, not owned by any one hero, so "freeze" isn't meaningful for
-  them), a "❄ Frozen" tag on the card itself when active, and a "changes
-  left today" indicator next to the existing Reroll button.
+  them), a "❄ Frozen" tag on the card itself when active (in `--sky`), and
+  a blue "X freezes left today" indicator next to the existing Reroll
+  button. The Unfreeze button is never disabled by the daily allowance.
 - `SAVE_VERSION` bumped 28 -> 29; migration fills in an empty
   `frozenQuestOffers` map and 0/0 day-counters for any save from before
   this existed -- verified against a constructed pre-migration save
   object at runtime, not just written and assumed correct.
 
 **Verified at runtime** (not just typechecked): freezing consumes the
-daily allowance and a second change is correctly blocked at the base 1/day
-cap; Board Warden at level 2 raises the allowance to 3/day and the extra
-changes are usable; a frozen offer survives a window-rollover
-regeneration and a paid reroll with board size unchanged; sending the
-hero on the frozen offer clears it without spending a change; the
-allowance resets on the next day boundary; and a save missing the new
+daily allowance and a second freeze is correctly blocked at the base 1/day
+cap; unfreezing succeeds and spends nothing even at 0 freezes remaining;
+Board Warden at level 2 raises the freeze allowance to 3/day; a frozen
+offer survives a window-rollover regeneration and a paid reroll with
+board size unchanged; sending the hero on the frozen offer clears it
+without spending a change; and a save missing the new fields migrates to
+sensible defaults.
+
+### Quest board reroll not visibly refreshing -- fixed
+Reported alongside the freeze-slot work: the Reroll button correctly
+spent gold and correctly regenerated the hero's board in `state`, but the
+board shown on screen didn't change. Root cause was a stale
+`useMemo` dependency in `QuestPanel.tsx`'s `contractOffers`, not anything
+in `QuestManager`/`engine.ts` -- the engine always reassigns
+`state.questBoards[hero.id]` to a brand-new array on every regeneration
+(reroll, window refresh, Auto-Chain restock), but it does that by
+mutating the existing `state.questBoards` Record in place, never
+replacing the Record itself. `contractOffers`'s `useMemo` depended on
+`state.questBoards` (the outer Record) rather than
+`state.questBoards[selectedHero.id]` (the actual array that changes), so
+React's reference-equality check on that dependency never saw a change
+and kept returning the stale cached board, even though `engine.notify()`
+was correctly forcing a re-render every time. Fixed by depending on the
+hero-specific array itself. Verified at runtime (not just reasoned
+through): confirmed the outer Record's reference is unchanged across a
+reroll while the hero-specific array reference does change, which is
+exactly what the fixed dependency now tracks. Worth keeping in mind for
+any future panel code touching `state` directly -- this codebase's
+engine mutates nested state in place rather than replacing objects
+wholesale, so a `useMemo`/`useEffect` dependency needs to name the
+specific nested value that actually gets reassigned, not a parent
+container whose own reference never changes.
+
+
 fields migrates to sensible defaults. `npx tsc --noEmit` and a full
 `vite build` both pass clean.
 

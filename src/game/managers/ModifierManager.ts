@@ -142,8 +142,10 @@ export const ModifierManager = {
     return 1 + bonus;
   },
 
-  /** 1 free freeze/unfreeze change per day base, +1 per Board Warden level
-   *  (max 2 levels -> 3 total, matching the backlog's "up to 3 times" spec). */
+  /** 1 free freeze change per day base, +1 per Board Warden level (max 2
+   *  levels -> 3 total, matching the backlog's "up to 3 times" spec). Only
+   *  gates freezing a new contract -- unfreezing never spends from this,
+   *  see QuestManager.unfreezeOffer. */
   freezeChangesPerDay(state: GameState): number {
     const bonus = Object.entries(state.upgrades).reduce((sum, [id, level]) => {
       const def = UPGRADE_BY_ID[id];

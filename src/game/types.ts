@@ -632,9 +632,11 @@ export interface UpgradeDef {
   /** Same shape again, for free Vendors-shop restock rerolls per day. Only
    *  Trade Favor uses this. */
   vendorFreeRerollsPerLevel?: number;
-  /** Grants this many extra quest-board freeze/unfreeze changes per day,
-   *  per level -- same special-purpose-field shape as questFreeRerollsPerLevel
-   *  above, independent counter. Only Board Warden uses this. */
+  /** Grants this many extra quest-board freeze changes per day, per level
+   *  -- same special-purpose-field shape as questFreeRerollsPerLevel above,
+   *  independent counter. Only gates freezing a new contract; unfreezing
+   *  is always free (see QuestManager.unfreezeOffer). Only Board Warden
+   *  uses this. */
   freezeChangesPerLevel?: number;
 }
 
@@ -791,9 +793,11 @@ export interface GameState {
    */
   frozenQuestOffers: Record<string, QuestOffer>;
   /**
-   * Daily allowance tracking for freezing/unfreezing a contract -- same
-   * lazy day-reset shape as questRerollDay/vendorRerollDay above. Base
-   * 1/day, more via the Board Warden guild upgrade (see
+   * Daily allowance tracking for freezing a contract -- unfreezing is
+   * always free and never spends from this (see QuestManager.unfreezeOffer),
+   * so running out never traps a player with an unwanted frozen contract.
+   * Same lazy day-reset shape as questRerollDay/vendorRerollDay above.
+   * Base 1/day, more via the Board Warden guild upgrade (see
    * ModifierManager.freezeChangesPerDay).
    */
   freezeChangeDay: number;

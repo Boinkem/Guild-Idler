@@ -151,11 +151,13 @@ export const QuestManager = {
   },
 
   /**
-   * How many freeze/unfreeze changes `hero`'s guild still has today, given
-   * Board Warden's level (see ModifierManager.freezeChangesPerDay). Same
-   * lazy day-reset shape as the reroll systems -- the stored day/count only
-   * resets on next use, not proactively. Account-wide, not per hero, same
-   * as the reroll allowances.
+   * How many freeze changes `hero`'s guild still has today, given Board
+   * Warden's level (see ModifierManager.freezeChangesPerDay). Unfreezing
+   * doesn't spend from this allowance at all (see unfreezeOffer below) --
+   * this only gates freezing a new contract. Same lazy day-reset shape as
+   * the reroll systems -- the stored day/count only resets on next use,
+   * not proactively. Account-wide, not per hero, same as the reroll
+   * allowances.
    */
   freezeChangesRemaining(state: GameState, now: number): number {
     const used = rerollsUsedToday(state.freezeChangesUsedToday, state.freezeChangeDay, now);
@@ -170,7 +172,10 @@ export const QuestManager = {
    * hero, rather than requiring an explicit unfreeze first. Spends one of
    * today's freeze changes (see freezeChangesRemaining); returns an error
    * string if none remain, or null on success, same shape as every other
-   * gated action in this file.
+   * gated action in this file. Unfreezing is deliberately NOT gated the
+   * same way -- see unfreezeOffer -- so running out of freeze changes for
+   * the day can never trap a player with a contract they no longer want
+   * frozen.
    */
   freezeOffer(state: GameState, hero: Hero, offerId: string, now: number): string | null {
     const day = rerollDay(now);
@@ -189,22 +194,15 @@ export const QuestManager = {
   },
 
   /**
-   * Clears whichever contract is frozen for `hero`, if any -- spends one of
-   * today's freeze changes, the same allowance unfreezing shares with
-   * freezing (see freezeOffer). A no-op (no allowance spent) if nothing is
-   * currently frozen for this hero.
+   * Clears whichever contract is frozen for `hero`, if any -- always free
+   * and always available, regardless of today's freeze-change allowance.
+   * Only freezing spends from that allowance (see freezeOffer); unfreezing
+   * never does, on purpose -- a player who's used up today's freeze
+   * changes should never be stuck holding a frozen contract they don't
+   * want anymore. A no-op if nothing is currently frozen for this hero.
    */
   unfreezeOffer(state: GameState, hero: Hero, now: number): string | null {
-    if (!state.frozenQuestOffers[hero.id]) return null;
-    const day = rerollDay(now);
-    if (state.freezeChangeDay !== day) {
-      state.freezeChangeDay = day;
-      state.freezeChangesUsedToday = 0;
-    }
-    if (QuestManager.freezeChangesRemaining(state, now) <= 0) {
-      return 'No freeze changes left today.';
-    }
-    state.freezeChangesUsedToday += 1;
+    void now; // kept for signature symmetry with freezeOffer / future use
     delete state.frozenQuestOffers[hero.id];
     return null;
   },

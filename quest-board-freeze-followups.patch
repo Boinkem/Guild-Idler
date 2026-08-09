@@ -1,0 +1,374 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 7088a9c..afcf7e8 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -2542,14 +2542,33 @@ game's own `app.css` typo fixed elsewhere this session).
+ 
+ ### Quest board freeze slot -- built
+ Resolves the long-standing "never got a firm yes/no" backlog item. Scope
+-locked in: one freezable contract per hero (not account-wide), free to
+-freeze/unfreeze, gated on a shared daily allowance rather than a gold
+-cost -- base 1 change/day, up to 3/day via a new guild upgrade. Freezing
+-protects the contract from all three ways a hero's board gets fully
+-regenerated (the natural 30-min window refresh, a paid/free reroll, and
+-an Auto-Chain restock), not just the passive refresh -- the stronger of
+-the two options considered, on the read that a freeze which still loses
+-to a manual reroll wouldn't be worth the UI real estate.
++locked in: one freezable contract per hero (not account-wide), gated on
++a shared daily allowance rather than a gold cost -- base 1 freeze/day, up
++to 3/day via a new guild upgrade. Freezing protects the contract from all
++three ways a hero's board gets fully regenerated (the natural 30-min
++window refresh, a paid/free reroll, and an Auto-Chain restock), not just
++the passive refresh -- the stronger of the two options considered, on the
++read that a freeze which still loses to a manual reroll wouldn't be worth
++the UI real estate.
++
++**Follow-up correction (same day):** the daily allowance originally gated
++*both* freezing and unfreezing off the same counter, which meant using
++your one daily change to freeze something left you unable to unfreeze it
++again until the next day -- a real "stuck" state, not the intent.
++Unfreezing is now always free and never spends from the allowance at all
++(`QuestManager.unfreezeOffer` no longer checks or touches
++`freezeChangesUsedToday`); only freezing a *new* contract is gated. This
++means freeze -> unfreeze -> freeze-something-else is no longer possible
++to chain infinitely in a day (re-freezing still needs an available
++charge each time), but a player can never end the day stuck holding a
++frozen contract they don't want. Board Warden's description and every
++related doc comment (`types.ts`, `ModifierManager.ts`, `progression.ts`,
++`engine.ts`) updated to match. UI: the freeze-charge indicator next to
++Reroll now reads "X freeze(s) left today" and renders in `--sky` (the
++theme's existing blue accent) instead of muted grey, so it's easy to spot
++before committing a charge; the "❄ Frozen" tag on a card uses the same
++color instead of a non-existent `--frost` variable that happened to work
++only because of its fallback value.
+ 
+ **What's live:**
+ - `QuestOffer` objects are frozen by value, not by id -- a hero's board
+@@ -2575,24 +2594,54 @@ to a manual reroll wouldn't be worth the UI real estate.
+   not vendor-specific): base cost 1200g, 2 levels, `freezeChangesPerLevel:
+   1` -- same `modsPerLevel`-adjacent special-purpose-field shape as Board
+   Runner's `questFreeRerollsPerLevel`. `ModifierManager.freezeChangesPerDay`
+-  reads it the same way `questFreeRerolls` reads Board Runner.
++  reads it the same way `questFreeRerolls` reads Board Runner. Only gates
++  freezing, per the correction above.
+ - UI: a Freeze/Unfreeze button on each of a hero's own contract cards in
+   `QuestPanel.tsx` (chain-stage offers don't get one -- those are
+   guild-wide, not owned by any one hero, so "freeze" isn't meaningful for
+-  them), a "❄ Frozen" tag on the card itself when active, and a "changes
+-  left today" indicator next to the existing Reroll button.
++  them), a "❄ Frozen" tag on the card itself when active (in `--sky`), and
++  a blue "X freezes left today" indicator next to the existing Reroll
++  button. The Unfreeze button is never disabled by the daily allowance.
+ - `SAVE_VERSION` bumped 28 -> 29; migration fills in an empty
+   `frozenQuestOffers` map and 0/0 day-counters for any save from before
+   this existed -- verified against a constructed pre-migration save
+   object at runtime, not just written and assumed correct.
+ 
+ **Verified at runtime** (not just typechecked): freezing consumes the
+-daily allowance and a second change is correctly blocked at the base 1/day
+-cap; Board Warden at level 2 raises the allowance to 3/day and the extra
+-changes are usable; a frozen offer survives a window-rollover
+-regeneration and a paid reroll with board size unchanged; sending the
+-hero on the frozen offer clears it without spending a change; the
+-allowance resets on the next day boundary; and a save missing the new
++daily allowance and a second freeze is correctly blocked at the base 1/day
++cap; unfreezing succeeds and spends nothing even at 0 freezes remaining;
++Board Warden at level 2 raises the freeze allowance to 3/day; a frozen
++offer survives a window-rollover regeneration and a paid reroll with
++board size unchanged; sending the hero on the frozen offer clears it
++without spending a change; and a save missing the new fields migrates to
++sensible defaults.
++
++### Quest board reroll not visibly refreshing -- fixed
++Reported alongside the freeze-slot work: the Reroll button correctly
++spent gold and correctly regenerated the hero's board in `state`, but the
++board shown on screen didn't change. Root cause was a stale
++`useMemo` dependency in `QuestPanel.tsx`'s `contractOffers`, not anything
++in `QuestManager`/`engine.ts` -- the engine always reassigns
++`state.questBoards[hero.id]` to a brand-new array on every regeneration
++(reroll, window refresh, Auto-Chain restock), but it does that by
++mutating the existing `state.questBoards` Record in place, never
++replacing the Record itself. `contractOffers`'s `useMemo` depended on
++`state.questBoards` (the outer Record) rather than
++`state.questBoards[selectedHero.id]` (the actual array that changes), so
++React's reference-equality check on that dependency never saw a change
++and kept returning the stale cached board, even though `engine.notify()`
++was correctly forcing a re-render every time. Fixed by depending on the
++hero-specific array itself. Verified at runtime (not just reasoned
++through): confirmed the outer Record's reference is unchanged across a
++reroll while the hero-specific array reference does change, which is
++exactly what the fixed dependency now tracks. Worth keeping in mind for
++any future panel code touching `state` directly -- this codebase's
++engine mutates nested state in place rather than replacing objects
++wholesale, so a `useMemo`/`useEffect` dependency needs to name the
++specific nested value that actually gets reassigned, not a parent
++container whose own reference never changes.
++
++
+ fields migrates to sensible defaults. `npx tsc --noEmit` and a full
+ `vite build` both pass clean.
+ 
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 25a089c..678fcce 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -138,13 +138,15 @@ export const UPGRADES: UpgradeDef[] = [
+   },
+   {
+     id: 'board_warden', name: 'Board Warden',
+-    description: "A standing order to hold one contract back from the board's own churn -- freeze it in place through the next refresh, reroll, or restock. Each level buys an extra change of mind per day.",
+-    // Base (1 freeze/unfreeze change per day) lives in
+-    // ModifierManager.freezeChangesPerDay as the floor. 2 levels take it to
+-    // 3 total, matching the "up to 3 times" spec. Freezing itself never
+-    // costs gold -- only the daily number of times the frozen contract can
+-    // be changed is gated, same "free action, limited frequency" shape as
+-    // the reroll systems' free-tier count.
++    description: "A standing order to hold one contract back from the board's own churn -- freeze it in place through the next refresh, reroll, or restock. Each level buys an extra freeze per day; letting a contract go is always free.",
++    // Base (1 freeze per day) lives in ModifierManager.freezeChangesPerDay
++    // as the floor. 2 levels take it to 3 total, matching the "up to 3
++    // times" spec. Freezing itself never costs gold -- only the daily
++    // number of times a *new* contract can be frozen is gated, same "free
++    // action, limited frequency" shape as the reroll systems' free-tier
++    // count. Unfreezing is deliberately NOT gated by this at all -- see
++    // QuestManager.unfreezeOffer -- so running out of freezes for the day
++    // can never trap a player holding one they no longer want.
+     baseCost: 1200, costGrowth: 2.1, maxLevel: 2,
+     modsPerLevel: {}, freezeChangesPerLevel: 1,
+   },
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 1c84c35..7e60a09 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -961,8 +961,9 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
+-  /** Clears whichever contract is frozen for this hero, if any -- same
+-   *  daily allowance as freezing. See QuestManager.unfreezeOffer. */
++  /** Clears whichever contract is frozen for this hero, if any -- always
++   *  free, never gated by the daily freeze allowance. See
++   *  QuestManager.unfreezeOffer. */
+   unfreezeQuestOffer(heroId: string) {
+     const hero = this.hero(heroId);
+     if (!hero) return;
+diff --git a/src/game/managers/ModifierManager.ts b/src/game/managers/ModifierManager.ts
+index 5a95d61..3f00552 100644
+--- a/src/game/managers/ModifierManager.ts
++++ b/src/game/managers/ModifierManager.ts
+@@ -142,8 +142,10 @@ export const ModifierManager = {
+     return 1 + bonus;
+   },
+ 
+-  /** 1 free freeze/unfreeze change per day base, +1 per Board Warden level
+-   *  (max 2 levels -> 3 total, matching the backlog's "up to 3 times" spec). */
++  /** 1 free freeze change per day base, +1 per Board Warden level (max 2
++   *  levels -> 3 total, matching the backlog's "up to 3 times" spec). Only
++   *  gates freezing a new contract -- unfreezing never spends from this,
++   *  see QuestManager.unfreezeOffer. */
+   freezeChangesPerDay(state: GameState): number {
+     const bonus = Object.entries(state.upgrades).reduce((sum, [id, level]) => {
+       const def = UPGRADE_BY_ID[id];
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index aff8142..0f974ea 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -151,11 +151,13 @@ export const QuestManager = {
+   },
+ 
+   /**
+-   * How many freeze/unfreeze changes `hero`'s guild still has today, given
+-   * Board Warden's level (see ModifierManager.freezeChangesPerDay). Same
+-   * lazy day-reset shape as the reroll systems -- the stored day/count only
+-   * resets on next use, not proactively. Account-wide, not per hero, same
+-   * as the reroll allowances.
++   * How many freeze changes `hero`'s guild still has today, given Board
++   * Warden's level (see ModifierManager.freezeChangesPerDay). Unfreezing
++   * doesn't spend from this allowance at all (see unfreezeOffer below) --
++   * this only gates freezing a new contract. Same lazy day-reset shape as
++   * the reroll systems -- the stored day/count only resets on next use,
++   * not proactively. Account-wide, not per hero, same as the reroll
++   * allowances.
+    */
+   freezeChangesRemaining(state: GameState, now: number): number {
+     const used = rerollsUsedToday(state.freezeChangesUsedToday, state.freezeChangeDay, now);
+@@ -170,7 +172,10 @@ export const QuestManager = {
+    * hero, rather than requiring an explicit unfreeze first. Spends one of
+    * today's freeze changes (see freezeChangesRemaining); returns an error
+    * string if none remain, or null on success, same shape as every other
+-   * gated action in this file.
++   * gated action in this file. Unfreezing is deliberately NOT gated the
++   * same way -- see unfreezeOffer -- so running out of freeze changes for
++   * the day can never trap a player with a contract they no longer want
++   * frozen.
+    */
+   freezeOffer(state: GameState, hero: Hero, offerId: string, now: number): string | null {
+     const day = rerollDay(now);
+@@ -189,22 +194,15 @@ export const QuestManager = {
+   },
+ 
+   /**
+-   * Clears whichever contract is frozen for `hero`, if any -- spends one of
+-   * today's freeze changes, the same allowance unfreezing shares with
+-   * freezing (see freezeOffer). A no-op (no allowance spent) if nothing is
+-   * currently frozen for this hero.
++   * Clears whichever contract is frozen for `hero`, if any -- always free
++   * and always available, regardless of today's freeze-change allowance.
++   * Only freezing spends from that allowance (see freezeOffer); unfreezing
++   * never does, on purpose -- a player who's used up today's freeze
++   * changes should never be stuck holding a frozen contract they don't
++   * want anymore. A no-op if nothing is currently frozen for this hero.
+    */
+   unfreezeOffer(state: GameState, hero: Hero, now: number): string | null {
+-    if (!state.frozenQuestOffers[hero.id]) return null;
+-    const day = rerollDay(now);
+-    if (state.freezeChangeDay !== day) {
+-      state.freezeChangeDay = day;
+-      state.freezeChangesUsedToday = 0;
+-    }
+-    if (QuestManager.freezeChangesRemaining(state, now) <= 0) {
+-      return 'No freeze changes left today.';
+-    }
+-    state.freezeChangesUsedToday += 1;
++    void now; // kept for signature symmetry with freezeOffer / future use
+     delete state.frozenQuestOffers[hero.id];
+     return null;
+   },
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 6b7bb01..a1f4ca6 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -632,9 +632,11 @@ export interface UpgradeDef {
+   /** Same shape again, for free Vendors-shop restock rerolls per day. Only
+    *  Trade Favor uses this. */
+   vendorFreeRerollsPerLevel?: number;
+-  /** Grants this many extra quest-board freeze/unfreeze changes per day,
+-   *  per level -- same special-purpose-field shape as questFreeRerollsPerLevel
+-   *  above, independent counter. Only Board Warden uses this. */
++  /** Grants this many extra quest-board freeze changes per day, per level
++   *  -- same special-purpose-field shape as questFreeRerollsPerLevel above,
++   *  independent counter. Only gates freezing a new contract; unfreezing
++   *  is always free (see QuestManager.unfreezeOffer). Only Board Warden
++   *  uses this. */
+   freezeChangesPerLevel?: number;
+ }
+ 
+@@ -791,9 +793,11 @@ export interface GameState {
+    */
+   frozenQuestOffers: Record<string, QuestOffer>;
+   /**
+-   * Daily allowance tracking for freezing/unfreezing a contract -- same
+-   * lazy day-reset shape as questRerollDay/vendorRerollDay above. Base
+-   * 1/day, more via the Board Warden guild upgrade (see
++   * Daily allowance tracking for freezing a contract -- unfreezing is
++   * always free and never spends from this (see QuestManager.unfreezeOffer),
++   * so running out never traps a player with an unwanted frozen contract.
++   * Same lazy day-reset shape as questRerollDay/vendorRerollDay above.
++   * Base 1/day, more via the Board Warden guild upgrade (see
+    * ModifierManager.freezeChangesPerDay).
+    */
+   freezeChangeDay: number;
+diff --git a/src/ui/panels/QuestPanel.tsx b/src/ui/panels/QuestPanel.tsx
+index ad486c0..765b6f0 100644
+--- a/src/ui/panels/QuestPanel.tsx
++++ b/src/ui/panels/QuestPanel.tsx
+@@ -41,7 +41,7 @@ interface QuestCardProps {
+   /** Freeze is only meaningful for a hero's own board contracts -- chain
+    *  stages are guild-wide and always omit these. */
+   isFrozen?: boolean;
+-  canToggleFreeze?: boolean;
++  canFreeze?: boolean;
+   onToggleFreeze?: (offer: Offer) => void;
+ }
+ 
+@@ -53,7 +53,7 @@ interface QuestCardProps {
+  *  now the very first thing the player does on this tab. */
+ function QuestCard({
+   offer, isOpen, hero, now, onToggleExpanded, onSend,
+-  isFrozen, canToggleFreeze, onToggleFreeze,
++  isFrozen, canFreeze, onToggleFreeze,
+ }: QuestCardProps) {
+   const engine = useEngine();
+   const state = engine.state;
+@@ -77,7 +77,7 @@ function QuestCard({
+         <span className="card-title quest-title hero-card-name">{offer.name}</span>
+         <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
+         {isFrozen && (
+-          <span className="tag" style={{ color: 'var(--frost, #7ec8e3)' }} title="This contract is frozen -- it won't be replaced by a board refresh, reroll, or restock">
++          <span className="tag" style={{ color: 'var(--sky)' }} title="This contract is frozen -- it won't be replaced by a board refresh, reroll, or restock">
+             ❄ Frozen
+           </span>
+         )}
+@@ -160,12 +160,12 @@ function QuestCard({
+           <button
+             className="btn-ghost"
+             onClick={() => onToggleFreeze(offer)}
+-            disabled={!isFrozen && !canToggleFreeze}
++            disabled={!isFrozen && !canFreeze}
+             title={isFrozen
+-              ? 'Unfreeze -- this contract will refresh normally again'
+-              : canToggleFreeze
++              ? 'Unfreeze -- always free, this contract will refresh normally again'
++              : canFreeze
+                 ? "Freeze -- keep this contract on the board through the next refresh, reroll, or restock"
+-                : 'No freeze changes left today'}
++                : 'No freezes left today'}
+           >
+             {isFrozen ? '❄ Unfreeze' : '❄ Freeze'}
+           </button>
+@@ -255,10 +255,22 @@ export function QuestPanel() {
+   // This hero's own contract pool, sorted by difficulty tier ascending --
+   // the closest board-offer analogue to "rarity", since a plain quest
+   // offer has no rarity field of its own.
++  //
++  // Deliberately depends on the hero's own board array (state.questBoards
++  // [selectedHero.id]), not the outer state.questBoards Record itself.
++  // The engine always reassigns that inner array on every regeneration
++  // (see QuestManager.rerollContractsForHero, engine.refreshWorld, and the
++  // Auto-Chain restock) but mutates it INTO the same outer Record object
++  // rather than ever replacing the Record -- so the Record's own reference
++  // never changes, and a dependency on it alone would never trigger a
++  // recompute. This was the actual cause of "Reroll spends gold but the
++  // board doesn't visibly change": the board really did rotate in state,
++  // this memo just kept returning its stale cached value against an
++  // unchanged Record reference.
+   const contractOffers = useMemo(
+     () => [...(state.questBoards[selectedHero.id] ?? [])]
+       .sort((a, b) => DIFFICULTY_ORDER.indexOf(a.difficulty) - DIFFICULTY_ORDER.indexOf(b.difficulty)),
+-    [state.questBoards, selectedHero.id],
++    [state.questBoards[selectedHero.id], selectedHero.id],
+   );
+ 
+   // Chain-stage offers are still guild-wide -- a chain's progress is
+@@ -303,8 +315,10 @@ export function QuestPanel() {
+   const rerollCost = QuestManager.questRerollCost(state, now);
+   const reroll = () => engine.rerollQuestBoard(selectedHero.id);
+ 
+-  // Freeze/unfreeze -- one slot per hero, gated on a shared daily allowance
+-  // (more via Board Warden). See QuestManager.freezeChangesRemaining.
++  // Freeze/unfreeze -- one slot per hero. Freezing is gated on a shared
++  // daily allowance (more via Board Warden); unfreezing is always free and
++  // never blocked by it, so running out of freezes can't trap a player
++  // holding one they no longer want. See QuestManager.freezeChangesRemaining.
+   const frozenOfferId = state.frozenQuestOffers[selectedHero.id]?.id;
+   const freezeChangesLeft = QuestManager.freezeChangesRemaining(state, now);
+   const toggleFreeze = (offer: Offer) => {
+@@ -385,8 +399,8 @@ export function QuestPanel() {
+               >
+                 {rerollCost > 0 ? `Reroll · ${formatGold(rerollCost)}` : 'Reroll · Free'}
+               </button>
+-              <span className="tiny muted" title="Freeze/unfreeze changes left today">
+-                ❄ {freezeChangesLeft} left today
++              <span className="tiny" style={{ color: 'var(--sky)' }} title="Freezes left today -- unfreezing is always free">
++                ❄ {freezeChangesLeft} freeze{freezeChangesLeft === 1 ? '' : 's'} left today
+               </span>
+               {autoChainOwned && contractOffers.length > 0 && (
+                 <button
+@@ -411,7 +425,7 @@ export function QuestPanel() {
+               onToggleExpanded={toggleExpanded}
+               onSend={send}
+               isFrozen={frozenOfferId === offer.id}
+-              canToggleFreeze={freezeChangesLeft > 0}
++              canFreeze={freezeChangesLeft > 0}
+               onToggleFreeze={toggleFreeze}
+             />
+           ))}
