@@ -384,7 +384,7 @@ export function QuestPanel() {
         <div className="section-heading" style={{ marginBottom: 0 }}>Heroes</div>
         {idleCount > 0 && (
           <button
-            className="btn-ghost"
+            className="btn-green"
             style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
             onClick={() => engine.sendAllIdle()}
             title="Send every idle hero on their own best contract"

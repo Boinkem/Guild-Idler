@@ -238,9 +238,8 @@ button:focus-visible, [tabindex]:focus-visible {
 
 /* Crafting/Enchanting/Enhance are deliberately styled apart from every
    other action button in the game -- --violet is already the game's one
-   consistent purple accent (Renown uses it too), defined per-theme
-   including High Contrast, so this stays legible and on-brand everywhere
-   rather than introducing a new one-off color. */
+   consistent purple accent (Renown uses it too), so this stays legible
+   and on-brand rather than introducing a new one-off color. */
 .btn-purple {
   background: color-mix(in srgb, var(--violet) 55%, var(--panel-2));
   border-color: var(--violet);
@@ -249,6 +248,23 @@ button:focus-visible, [tabindex]:focus-visible {
 }
 .btn-purple:hover:not(:disabled) { background: var(--violet); color: var(--ink); }
 .btn-purple:disabled { opacity: 0.5; }
+
+/* Bulk-convenience actions (Send All Idle, Equip Best from Stash, Sell
+   Junk) -- deliberately their own accent so they stand out from the
+   ordinary .btn-ghost row they sit in, same "own color, own meaning"
+   shape as .btn-purple above, but --moss (green) rather than --violet so
+   the two don't read as the same category of action. Green reads as
+   "does something good for you in bulk" across all three despite them
+   touching three different systems (quests, equipment, stash) -- the
+   color is tied to "bulk convenience", not to any one panel. */
+.btn-green {
+  background: color-mix(in srgb, var(--moss) 55%, var(--panel-2));
+  border-color: var(--moss);
+  color: #fff8e6;
+  font-weight: 700;
+}
+.btn-green:hover:not(:disabled) { background: var(--moss); color: var(--ink); }
+.btn-green:disabled { opacity: 0.5; }
 
 /* ------------------------------ idle companion ------------------------------ */
 

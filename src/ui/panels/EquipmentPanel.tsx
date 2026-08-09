@@ -343,6 +343,7 @@ export function EquipmentPanel() {
         <div style={{ flex: 1 }} />
         <GearScoreBadge score={HeroManager.gearScore(hero)} showProgress />
         <button
+          className="btn-green"
           onClick={() => engine.equipBestGear(hero.id)}
           style={{ marginLeft: 10 }}
           title="Equip the highest Gear Score item in the stash for each slot, wherever it beats what's already worn"
@@ -408,7 +409,7 @@ export function EquipmentPanel() {
               ))}
             </select>
             <button
-              className="btn-ghost"
+              className="btn-green"
               style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
               onClick={sellJunk}
               disabled={junkPreview.length === 0}
