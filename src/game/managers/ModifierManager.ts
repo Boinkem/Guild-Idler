@@ -142,6 +142,16 @@ export const ModifierManager = {
     return 1 + bonus;
   },
 
+  /** 1 free freeze/unfreeze change per day base, +1 per Board Warden level
+   *  (max 2 levels -> 3 total, matching the backlog's "up to 3 times" spec). */
+  freezeChangesPerDay(state: GameState): number {
+    const bonus = Object.entries(state.upgrades).reduce((sum, [id, level]) => {
+      const def = UPGRADE_BY_ID[id];
+      return sum + (def?.freezeChangesPerLevel ?? 0) * level;
+    }, 0);
+    return 1 + bonus;
+  },
+
   hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic'): boolean {
     return Object.entries(state.upgrades).some(([id, level]) => {
       const def = UPGRADE_BY_ID[id];

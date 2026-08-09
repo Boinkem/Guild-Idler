@@ -74,6 +74,9 @@ export function createInitialState(now = Date.now()): GameState {
     questRerollsUsedToday: 0,
     vendorRerollDay: 0,
     vendorRerollsUsedToday: 0,
+    frozenQuestOffers: {},
+    freezeChangeDay: 0,
+    freezeChangesUsedToday: 0,
     boardRefreshedAt: 0,
     activeQuests: [],
     activeChains: [],
@@ -428,6 +431,16 @@ const MIGRATIONS: Record<number, Migration> = {
     scrap: (save.scrap as number | undefined) ?? 0,
     gems: (save.gems as GameState['gems'] | undefined) ?? {},
     resistGems: (save.resistGems as GameState['resistGems'] | undefined) ?? {},
+  }),
+  28: (save) => ({
+    ...save,
+    version: 29,
+    // Quest-board freeze slot -- empty/0 is exactly "nothing frozen yet,
+    // no changes used today", the correct starting state for a save that
+    // predates this system, not a placeholder needing correction.
+    frozenQuestOffers: (save.frozenQuestOffers as GameState['frozenQuestOffers'] | undefined) ?? {},
+    freezeChangeDay: (save.freezeChangeDay as number | undefined) ?? 0,
+    freezeChangesUsedToday: (save.freezeChangesUsedToday as number | undefined) ?? 0,
   }),
 };
 

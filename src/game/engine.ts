@@ -293,7 +293,11 @@ export class GameEngine {
     // always has a next contract to grab, same guarantee the old shared
     // board gave this call -- but scoped to this hero's own pool only now,
     // so it can no longer refill offers other heroes were relying on.
-    this.state.questBoards[hero.id] = QuestManager.generateContractsForHero(this.state, hero, now);
+    // Frozen offer (if any) survives this restock too -- see
+    // QuestManager.applyFrozenOffer.
+    this.state.questBoards[hero.id] = QuestManager.applyFrozenOffer(
+      this.state, hero, QuestManager.generateContractsForHero(this.state, hero, now),
+    );
     const offer = QuestManager.pickBestQuest(this.state, hero, now);
     if (!offer) return giveUp();
 
@@ -474,8 +478,13 @@ export class GameEngine {
     for (const hero of this.state.heroes) {
       const existing = this.state.questBoards[hero.id];
       if (windowRolledOver || !existing || existing.length === 0) {
-        this.state.questBoards[hero.id] = QuestManager.generateContractsForHero(this.state, hero, now)
-          .filter((o) => !active.has(o.id));
+        // Frozen offer (if any) survives this regeneration too -- see
+        // QuestManager.applyFrozenOffer, the same splice used by a paid
+        // reroll and an Auto-Chain restock.
+        this.state.questBoards[hero.id] = QuestManager.applyFrozenOffer(
+          this.state, hero,
+          QuestManager.generateContractsForHero(this.state, hero, now).filter((o) => !active.has(o.id)),
+        );
         changed = true;
       }
     }
@@ -935,6 +944,30 @@ export class GameEngine {
     if (error) return this.say(error);
     playSound('purchase');
     this.say(`${hero.name}'s contracts refreshed.`);
+    void this.saveNow();
+  }
+
+  /** Freezes one of this hero's own board contracts so it survives the
+   *  board's next refresh, reroll, or Auto-Chain restock -- one frozen
+   *  slot per hero, spends today's freeze-change allowance (more via Board
+   *  Warden). See QuestManager.freezeOffer. */
+  freezeQuestOffer(heroId: string, offerId: string) {
+    const hero = this.hero(heroId);
+    if (!hero) return;
+    const error = QuestManager.freezeOffer(this.state, hero, offerId, Date.now());
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.say(`${hero.name}'s contract frozen -- it'll stay on the board.`);
+    void this.saveNow();
+  }
+
+  /** Clears whichever contract is frozen for this hero, if any -- same
+   *  daily allowance as freezing. See QuestManager.unfreezeOffer. */
+  unfreezeQuestOffer(heroId: string) {
+    const hero = this.hero(heroId);
+    if (!hero) return;
+    const error = QuestManager.unfreezeOffer(this.state, hero, Date.now());
+    if (error) return this.say(error);
     void this.saveNow();
   }
 

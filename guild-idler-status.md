@@ -12,7 +12,9 @@ stale sections here are worse than no section at all.
 
 **Core loop** — quest board (30-min refresh windows), offline catch-up,
 Auto-Chain streaks, burst quests (capped live against the best-unlocked
-tier rather than a flat taper). Auto-Chain now stops itself the moment
+tier rather than a flat taper), one freezable contract per hero (survives
+a refresh, reroll, or Auto-Chain restock -- see "Quest board freeze slot
+-- built" below). Auto-Chain now stops itself the moment
 any quest fails ("as far as you can go") instead of grinding on toward
 its target count regardless of outcome, and story chains have their own
 independent auto-continue -- see "Auto-queue / chain stepping rework"
@@ -1811,7 +1813,8 @@ crafting pipeline. `npx tsc --noEmit` and `vite build` both pass clean.
 
 ### Deferred systems (queued before the polish/narrative detour started)
 - ~~Pets~~ -- built. See "Pets / Hatchery -- built" below for the full writeup.
-- Freeze slot for the quest board (never got a firm yes/no).
+- ~~Freeze slot for the quest board (never got a firm yes/no).~~ -- done.
+  See "Quest board freeze slot -- built" below for the full writeup.
 - ~~Quest chains in the DevTool, editable like raids are.~~ -- done. See
   "Quest chains in the DevTool -- built" below for the full writeup.
 - ~~Shop -> Vendors restructure~~ -- done (patch 0118). Shop renamed to
@@ -2536,6 +2539,62 @@ Both new field types share the same styling conventions as the rest of
 the editor (`style.css`'s existing `--panel2`/`--panel3`/`--text`
 variables -- the DevTool's own separate stylesheet, unrelated to the
 game's own `app.css` typo fixed elsewhere this session).
+
+### Quest board freeze slot -- built
+Resolves the long-standing "never got a firm yes/no" backlog item. Scope
+locked in: one freezable contract per hero (not account-wide), free to
+freeze/unfreeze, gated on a shared daily allowance rather than a gold
+cost -- base 1 change/day, up to 3/day via a new guild upgrade. Freezing
+protects the contract from all three ways a hero's board gets fully
+regenerated (the natural 30-min window refresh, a paid/free reroll, and
+an Auto-Chain restock), not just the passive refresh -- the stronger of
+the two options considered, on the read that a freeze which still loses
+to a manual reroll wouldn't be worth the UI real estate.
+
+**What's live:**
+- `QuestOffer` objects are frozen by value, not by id -- a hero's board
+  gets a brand-new set of ids every window regardless
+  (`QuestManager.generateOffer`'s seedTag includes the window), so storing
+  just an id would have gone stale the moment the window rolled over.
+  `state.frozenQuestOffers[heroId]` holds the actual offer.
+- `QuestManager.applyFrozenOffer` is the single splice point all three
+  regeneration paths (`engine.refreshWorld`'s window-rollover loop,
+  `QuestManager.rerollContractsForHero`, and the Auto-Chain mid-streak
+  restock in `engine.ts`) now call through, so there's one place this
+  logic lives rather than three copies drifting apart. Board size stays
+  exactly `BOARD_SIZE` either way -- the frozen offer takes one slot,
+  generation fills the rest.
+- A frozen offer already mid-quest (hero was sent on it, then the board
+  regenerated before it resolved) is skipped rather than shown twice --
+  it reappears on the next regeneration if the freeze is still set once
+  the quest resolves.
+- Sending the hero on their own frozen contract clears the freeze
+  automatically (`QuestManager.start`) without spending a daily change --
+  that's the freeze being *used*, not changed.
+- New guild upgrade **Board Warden** (`progression.ts`, general upgrade,
+  not vendor-specific): base cost 1200g, 2 levels, `freezeChangesPerLevel:
+  1` -- same `modsPerLevel`-adjacent special-purpose-field shape as Board
+  Runner's `questFreeRerollsPerLevel`. `ModifierManager.freezeChangesPerDay`
+  reads it the same way `questFreeRerolls` reads Board Runner.
+- UI: a Freeze/Unfreeze button on each of a hero's own contract cards in
+  `QuestPanel.tsx` (chain-stage offers don't get one -- those are
+  guild-wide, not owned by any one hero, so "freeze" isn't meaningful for
+  them), a "❄ Frozen" tag on the card itself when active, and a "changes
+  left today" indicator next to the existing Reroll button.
+- `SAVE_VERSION` bumped 28 -> 29; migration fills in an empty
+  `frozenQuestOffers` map and 0/0 day-counters for any save from before
+  this existed -- verified against a constructed pre-migration save
+  object at runtime, not just written and assumed correct.
+
+**Verified at runtime** (not just typechecked): freezing consumes the
+daily allowance and a second change is correctly blocked at the base 1/day
+cap; Board Warden at level 2 raises the allowance to 3/day and the extra
+changes are usable; a frozen offer survives a window-rollover
+regeneration and a paid reroll with board size unchanged; sending the
+hero on the frozen offer clears it without spending a change; the
+allowance resets on the next day boundary; and a save missing the new
+fields migrates to sensible defaults. `npx tsc --noEmit` and a full
+`vite build` both pass clean.
 
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**

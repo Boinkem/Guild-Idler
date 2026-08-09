@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 28;
+export const SAVE_VERSION = 29;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -632,6 +632,10 @@ export interface UpgradeDef {
   /** Same shape again, for free Vendors-shop restock rerolls per day. Only
    *  Trade Favor uses this. */
   vendorFreeRerollsPerLevel?: number;
+  /** Grants this many extra quest-board freeze/unfreeze changes per day,
+   *  per level -- same special-purpose-field shape as questFreeRerollsPerLevel
+   *  above, independent counter. Only Board Warden uses this. */
+  freezeChangesPerLevel?: number;
 }
 
 export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern';
@@ -774,6 +778,26 @@ export interface GameState {
    *  reroll -- see ShopManager.vendorRerollCost/rerollShop. */
   vendorRerollDay: number;
   vendorRerollsUsedToday: number;
+  /**
+   * At most one frozen contract per hero, keyed by hero id -- kept as the
+   * actual offer object rather than just an id, since a regenerated board
+   * assigns every offer a brand-new id on each window anyway (see
+   * QuestManager.generateOffer's seedTag). A frozen offer is spliced back
+   * into that hero's board in place of one freshly-generated slot on every
+   * full regeneration (window refresh, paid reroll, or an Auto-Chain
+   * restock) -- see QuestManager.applyFrozenOffer, the one place all three
+   * of those paths converge. Cleared automatically once the hero is
+   * actually sent on it (QuestManager.start), not just left to go stale.
+   */
+  frozenQuestOffers: Record<string, QuestOffer>;
+  /**
+   * Daily allowance tracking for freezing/unfreezing a contract -- same
+   * lazy day-reset shape as questRerollDay/vendorRerollDay above. Base
+   * 1/day, more via the Board Warden guild upgrade (see
+   * ModifierManager.freezeChangesPerDay).
+   */
+  freezeChangeDay: number;
+  freezeChangesUsedToday: number;
   boardRefreshedAt: number;
   activeQuests: ActiveQuest[];
   activeChains: ActiveChain[];

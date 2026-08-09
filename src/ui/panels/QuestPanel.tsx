@@ -38,6 +38,11 @@ interface QuestCardProps {
   now: number;
   onToggleExpanded: (offerId: string) => void;
   onSend: (offer: Offer, chainSteps?: boolean) => void;
+  /** Freeze is only meaningful for a hero's own board contracts -- chain
+   *  stages are guild-wide and always omit these. */
+  isFrozen?: boolean;
+  canToggleFreeze?: boolean;
+  onToggleFreeze?: (offer: Offer) => void;
 }
 
 /** Shared card body for both a hero's own Contracts and their Discovered
@@ -48,6 +53,7 @@ interface QuestCardProps {
  *  now the very first thing the player does on this tab. */
 function QuestCard({
   offer, isOpen, hero, now, onToggleExpanded, onSend,
+  isFrozen, canToggleFreeze, onToggleFreeze,
 }: QuestCardProps) {
   const engine = useEngine();
   const state = engine.state;
@@ -70,6 +76,11 @@ function QuestCard({
       >
         <span className="card-title quest-title hero-card-name">{offer.name}</span>
         <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
+        {isFrozen && (
+          <span className="tag" style={{ color: 'var(--frost, #7ec8e3)' }} title="This contract is frozen -- it won't be replaced by a board refresh, reroll, or restock">
+            ❄ Frozen
+          </span>
+        )}
         {offer.chain && (
           <span className="tag" style={{ color: 'var(--blood)' }}>
             Chain {offer.chain.stage + 1}/{offer.chain.totalStages}
@@ -145,6 +156,20 @@ function QuestCard({
         >
           {isOpen ? 'Less ▲' : 'More ▼'}
         </button>
+        {!offer.chain && onToggleFreeze && (
+          <button
+            className="btn-ghost"
+            onClick={() => onToggleFreeze(offer)}
+            disabled={!isFrozen && !canToggleFreeze}
+            title={isFrozen
+              ? 'Unfreeze -- this contract will refresh normally again'
+              : canToggleFreeze
+                ? "Freeze -- keep this contract on the board through the next refresh, reroll, or restock"
+                : 'No freeze changes left today'}
+          >
+            {isFrozen ? '❄ Unfreeze' : '❄ Freeze'}
+          </button>
+        )}
         {offer.chain && offer.chain.stage + 1 < offer.chain.totalStages ? (
           <>
             <button
@@ -278,6 +303,15 @@ export function QuestPanel() {
   const rerollCost = QuestManager.questRerollCost(state, now);
   const reroll = () => engine.rerollQuestBoard(selectedHero.id);
 
+  // Freeze/unfreeze -- one slot per hero, gated on a shared daily allowance
+  // (more via Board Warden). See QuestManager.freezeChangesRemaining.
+  const frozenOfferId = state.frozenQuestOffers[selectedHero.id]?.id;
+  const freezeChangesLeft = QuestManager.freezeChangesRemaining(state, now);
+  const toggleFreeze = (offer: Offer) => {
+    if (frozenOfferId === offer.id) engine.unfreezeQuestOffer(selectedHero.id);
+    else engine.freezeQuestOffer(selectedHero.id, offer.id);
+  };
+
   return (
     <>
       <h2>Quest Board</h2>
@@ -351,6 +385,9 @@ export function QuestPanel() {
               >
                 {rerollCost > 0 ? `Reroll · ${formatGold(rerollCost)}` : 'Reroll · Free'}
               </button>
+              <span className="tiny muted" title="Freeze/unfreeze changes left today">
+                ❄ {freezeChangesLeft} left today
+              </span>
               {autoChainOwned && contractOffers.length > 0 && (
                 <button
                   className="btn-ghost"
@@ -373,6 +410,9 @@ export function QuestPanel() {
               now={now}
               onToggleExpanded={toggleExpanded}
               onSend={send}
+              isFrozen={frozenOfferId === offer.id}
+              canToggleFreeze={freezeChangesLeft > 0}
+              onToggleFreeze={toggleFreeze}
             />
           ))}
 

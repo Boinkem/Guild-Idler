@@ -124,7 +124,88 @@ export const QuestManager = {
     // offers rather than reproducing the same window-seeded board --
     // generateContractsForHero's default (unsalted) seed is otherwise fully
     // deterministic per (window, hero), on purpose, for reload stability.
-    state.questBoards[hero.id] = QuestManager.generateContractsForHero(state, hero, now, now);
+    // Frozen offer (if any) survives a reroll same as it survives the
+    // natural window refresh -- see applyFrozenOffer.
+    state.questBoards[hero.id] = QuestManager.applyFrozenOffer(
+      state, hero, QuestManager.generateContractsForHero(state, hero, now, now),
+    );
+    return null;
+  },
+
+  /**
+   * Splices `hero`'s currently-frozen contract (if any) into a freshly
+   * generated board in place of one generated slot, so board size stays
+   * exactly BOARD_SIZE either way. This is the one place all three "fully
+   * regenerate this hero's board" paths converge (window refresh, a paid
+   * reroll, and an Auto-Chain restock) -- call it right after generating a
+   * fresh board rather than duplicating the splice logic at each call site.
+   * A frozen offer currently being quested on (hero already sent on it) is
+   * skipped -- it'll reappear once that quest resolves and the freeze is
+   * still set, rather than showing twice.
+   */
+  applyFrozenOffer(state: GameState, hero: Hero, fresh: QuestOffer[]): QuestOffer[] {
+    const frozen = state.frozenQuestOffers[hero.id];
+    if (!frozen) return fresh;
+    if (state.activeQuests.some((q) => q.offer.id === frozen.id)) return fresh;
+    return [frozen, ...fresh.slice(0, Math.max(0, fresh.length - 1))];
+  },
+
+  /**
+   * How many freeze/unfreeze changes `hero`'s guild still has today, given
+   * Board Warden's level (see ModifierManager.freezeChangesPerDay). Same
+   * lazy day-reset shape as the reroll systems -- the stored day/count only
+   * resets on next use, not proactively. Account-wide, not per hero, same
+   * as the reroll allowances.
+   */
+  freezeChangesRemaining(state: GameState, now: number): number {
+    const used = rerollsUsedToday(state.freezeChangesUsedToday, state.freezeChangeDay, now);
+    return Math.max(0, ModifierManager.freezeChangesPerDay(state) - used);
+  },
+
+  /**
+   * Freezes one of `hero`'s own board contracts so it survives the next
+   * window refresh, reroll, or Auto-Chain restock instead of being
+   * replaced -- exactly one frozen slot per hero at a time. Freezing a new
+   * offer silently replaces whichever one was already frozen for this
+   * hero, rather than requiring an explicit unfreeze first. Spends one of
+   * today's freeze changes (see freezeChangesRemaining); returns an error
+   * string if none remain, or null on success, same shape as every other
+   * gated action in this file.
+   */
+  freezeOffer(state: GameState, hero: Hero, offerId: string, now: number): string | null {
+    const day = rerollDay(now);
+    if (state.freezeChangeDay !== day) {
+      state.freezeChangeDay = day;
+      state.freezeChangesUsedToday = 0;
+    }
+    if (QuestManager.freezeChangesRemaining(state, now) <= 0) {
+      return 'No freeze changes left today.';
+    }
+    const offer = (state.questBoards[hero.id] ?? []).find((o) => o.id === offerId && !o.chain);
+    if (!offer) return 'That contract is no longer on the board.';
+    state.freezeChangesUsedToday += 1;
+    state.frozenQuestOffers[hero.id] = offer;
+    return null;
+  },
+
+  /**
+   * Clears whichever contract is frozen for `hero`, if any -- spends one of
+   * today's freeze changes, the same allowance unfreezing shares with
+   * freezing (see freezeOffer). A no-op (no allowance spent) if nothing is
+   * currently frozen for this hero.
+   */
+  unfreezeOffer(state: GameState, hero: Hero, now: number): string | null {
+    if (!state.frozenQuestOffers[hero.id]) return null;
+    const day = rerollDay(now);
+    if (state.freezeChangeDay !== day) {
+      state.freezeChangeDay = day;
+      state.freezeChangesUsedToday = 0;
+    }
+    if (QuestManager.freezeChangesRemaining(state, now) <= 0) {
+      return 'No freeze changes left today.';
+    }
+    state.freezeChangesUsedToday += 1;
+    delete state.frozenQuestOffers[hero.id];
     return null;
   },
 
@@ -426,6 +507,12 @@ export const QuestManager = {
     } else {
       const board = state.questBoards[hero.id];
       if (board) state.questBoards[hero.id] = board.filter((o) => o.id !== offer.id);
+    }
+    // Sending a hero on their own frozen contract clears the freeze --
+    // it's been used, not "changed", so this doesn't touch today's freeze
+    // allowance the way an explicit unfreeze does.
+    if (state.frozenQuestOffers[hero.id]?.id === offer.id) {
+      delete state.frozenQuestOffers[hero.id];
     }
     return { quest };
   },
