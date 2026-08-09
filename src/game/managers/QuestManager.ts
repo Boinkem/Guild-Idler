@@ -3,7 +3,7 @@ import {
   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES,
 } from '../data/quests';
 import { HERO_CLASSES } from '../data/progression';
-import { fastQuestCapsPerHour } from '../data/balance';
+import { fastQuestCapsPerHour, fastQuestFloorPerHour } from '../data/balance';
 import { questEggDropChance } from '../data/pets';
 import {
   ActiveQuest, Difficulty, GameState, Hero, QuestOffer, QuestResult, Rarity,
@@ -206,10 +206,29 @@ export const QuestManager = {
     // late). Untouched below level 5 -- the deliberate onboarding hook,
     // confirmed not the problem.
     if (useBurst || useMedium) {
+      const rawGold = rewardGold;
+      const rawXp = rewardXp;
       const durationHours = duration / HOUR;
       const caps = fastQuestCapsPerHour(topLevel, legendaryUnlocked);
-      rewardGold = Math.min(rewardGold, Math.max(1, Math.round(caps.gold * durationHours)));
-      rewardXp = Math.min(rewardXp, Math.floor(caps.xp * durationHours));
+      rewardGold = Math.min(rawGold, Math.max(1, Math.round(caps.gold * durationHours)));
+      rewardXp = Math.min(rawXp, Math.floor(caps.xp * durationHours));
+
+      // The cap above can legitimately crush a very short duration down to
+      // the bare "1" minimum -- mathematically necessary for the cap to
+      // mean anything, but reads as insulting rather than "a smaller but
+      // real reward" (this was the actual player-reported complaint that
+      // led here). Floors it back up to at least what the offer's OWN
+      // tier would pay for this same duration at its own uncapped rate --
+      // see fastQuestFloorPerHour's own comment for why this specific
+      // anchor can never let a fast-mode offer out-earn the player's real
+      // best-unlocked tier, even though it visibly improves the worst
+      // case. Clamped to never exceed the raw pre-cap roll -- a floor,
+      // not a second, looser cap.
+      const floor = fastQuestFloorPerHour(cfg);
+      const floorGold = Math.max(1, Math.round(floor.gold * durationHours));
+      const floorXp = Math.max(1, Math.round(floor.xp * durationHours));
+      rewardGold = Math.max(rewardGold, Math.min(rawGold, floorGold));
+      rewardXp = Math.max(rewardXp, Math.min(rawXp, floorXp));
     }
 
     return {
@@ -468,6 +487,35 @@ export const QuestManager = {
     }
     gold = Math.max(0, gold);
 
+    // Daily first-burst bonus -- see Hero.lastBurstBonusDay's own comment
+    // for why a once-per-day event can safely be generous where every
+    // other lever in the burst formula has to stay conservative. Applied
+    // after success/failure is already resolved, as a GUARANTEED MINIMUM
+    // (Math.max), not a multiplier -- a multiplier was tried first and
+    // caught by direct testing before it shipped: it multiplies whatever
+    // the roll already produced, so a failed first burst (which can
+    // legitimately pay 0 gold after the 15% failure-payout reduction)
+    // stayed at exactly 0 regardless of the multiplier, defeating the
+    // entire point of guaranteeing a meaningful first experience. A flat
+    // floor sidesteps that -- it doesn't matter what the underlying roll
+    // or outcome was, the first burst of the day always pays out at
+    // least this much. Regardless of duration within the burst range --
+    // simplest possible rule: first burst-mode quest this hero finishes
+    // each day, full stop. Burst-mode is identified the same way
+    // generateOffer's own useBurst check would have (duration within the
+    // tier's own burst range), rather than adding a field to QuestOffer
+    // just to remember which mode generated it.
+    let dailyBurstBonus = false;
+    if (hero && cfg.burstMaxDuration !== undefined && quest.offer.duration <= cfg.burstMaxDuration) {
+      const today = rerollDay(resolvedAt);
+      if (hero.lastBurstBonusDay !== today) {
+        hero.lastBurstBonusDay = today;
+        dailyBurstBonus = true;
+        gold = Math.max(gold, Tuning.get('quest.dailyBurstBonusGold'));
+        xp = Math.max(xp, Tuning.get('quest.dailyBurstBonusXp'));
+      }
+    }
+
     /* ------------------------------- injury ------------------------------- */
     let injury: QuestResult['injury'];
     const injuryRisk = success
@@ -597,6 +645,7 @@ export const QuestManager = {
       levelsGained,
       chainAdvanced,
       eggDropped,
+      dailyBurstBonus: dailyBurstBonus || undefined,
     };
     state.log.unshift(result);
     if (state.log.length > 60) state.log.length = 60;

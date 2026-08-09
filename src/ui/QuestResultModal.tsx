@@ -94,6 +94,11 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; 
           {result.gold > 0 && <span className="burst-gold">+{formatGold(result.gold)} gold</span>}
         </div>
         {result.levelsGained > 0 && <p className="good burst-levelup">Level up ×{result.levelsGained}!</p>}
+        {result.dailyBurstBonus && (
+          <p className="good" style={{ fontSize: '0.75rem' }}>
+            ✨ First burst of the day -- reward boosted!
+          </p>
+        )}
 
         {result.loot.length > 0 && (
           <>

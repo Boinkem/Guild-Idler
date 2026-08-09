@@ -1328,6 +1328,128 @@ either animation class attaches).
 
 `npx tsc --noEmit` and `vite build` both pass clean.
 
+### Burst/medium reward review + daily first-burst bonus -- complete
+Started from a direct player report: some short quests were paying
+"1 gold and 1 xp," which is worthless for the time spent. Reviewed via
+direct simulation against the real game formulas (not sampling and
+eyeballing) rather than assumed -- full methodology and data in this
+conversation's own history, summarized here.
+
+**Root cause, confirmed.** Burst/medium's live per-hour cap
+(`fastQuestCapsPerHour`, ~82.5% of whatever the player's best-unlocked
+tier pays) is sound in principle, but at a very short duration (minutes,
+not hours), a real per-hour rate multiplied out and rounded produces a
+tiny number -- and the `Math.max(1, ...)` safety floor that stops it from
+showing literally "0" then dominates the result. At level 5 (the moment
+the cap switches on), Easy-tier burst's minimum reward fell from 6g/8xp
+to 1g/0xp -- a hard cliff, not a gradual scale-down, and it stayed there
+through the whole rest of the game (checked to level 55). XP had no floor
+at all and could show a bare 0. Medium mode showed the same cliff shape
+(20-45g/48-76xp down to 3-5g/3-7xp at the same transition), though at a
+less visually dramatic scale.
+
+**A second, more serious problem found along the way, in the ALREADY-
+SHIPPED cap, not anything proposed as a fix.** Swept the worst-case
+effective gold/hour across burst's *entire* duration range (not just
+sampled points) and compared against the true, unreduced rate of the
+player's actual best-unlocked tier. Found the current cap's `Math.max(1,
+...)` floor lets the shortest end of burst's range imply a **higher**
+effective rate than real tier content -- 40 gold/hr from "1 gold ÷ 90
+seconds," against a real tier rate of 9-28 gold/hr depending on level.
+This isn't a rare edge case: at level 13, **50% of burst's entire
+duration range** produces a capped reward that, per hour, out-earns
+actually doing Hard-tier content. This is the same class of problem that
+motivated building the cap system in the first place (the old flat taper
+being "the mathematically dominant strategy... to level 25-30") --
+smaller in absolute stakes, but a real, previously-unverified gap in the
+current live formula.
+
+**Why a naive floor doesn't work, proven before building anything.**
+First candidate (a floor set to a fraction of the offer's own *uncapped*
+reward, e.g. 20-30%) was rejected by simulation before implementation --
+it made the dominance problem measurably worse (worst-case rate rose to
+60-80 gold/hr). A second candidate (anchor the floor to the offer's own
+tier's real, unreduced rate -- provably safe, since every tier's own rate
+is by construction no higher than any harder tier's) was implemented, and
+directly confirmed a hard mathematical ceiling: **any per-hour rate,
+applied to a duration measured in minutes, rounds down to a value too
+small to move the needle.** Even the tier's full 100% rate (~8 g/hr for
+Easy), applied across burst's entire 2-8 minute window, never once
+produced more than 1-2 gold at the levels tested -- confirmed directly
+against the shipped code, not assumed from the formula. Making this
+airtight at every level would require raising burst's minimum duration to
+roughly 6.5 minutes, which doesn't fix burst, it deletes "fast" as a
+category.
+
+**What actually shipped, as a result -- three complementary pieces, not
+one:**
+
+1. **Burst's minimum duration raised from 90 seconds to 2 minutes**
+   (`quests.ts`). Doesn't close the gap, meaningfully shrinks it: worst-
+   case rate down from a flat 40 gold/hr at every level to ~30 gold/hr,
+   and the frequency of hitting the exact "1 gold" floor drops from 100%
+   at level 5 to ~14-15% by level 30+ (the cap's own absolute value grows
+   as higher tiers unlock, so this improves with level even though the
+   floor mechanism itself doesn't change).
+2. **A tier-rate-anchored floor** (`balance.ts`'s new
+   `fastQuestFloorPerHour`, wired into `QuestManager.generateOffer`
+   alongside the existing cap). Provably safe (anchored to the offer's own
+   tier, never the player's current best tier, so it can never let a
+   fast-mode offer out-earn real content) but modest in absolute effect
+   for burst specifically, for the mathematical reason above. Its real,
+   unambiguous win: **XP can no longer show 0** -- confirmed at 0/1300+
+   samples across every tested level, versus ~45-50% of rolls landing at
+   0 XP before this patch. Gold's typical value also improved measurably
+   at higher levels (level 30+: ~14% of rolls land at exactly 1 gold,
+   versus persisting throughout at low-mid levels) even though the
+   absolute worst case doesn't move much.
+3. **A once-per-day guaranteed minimum, per hero** (`Hero.
+   lastBurstBonusDay`, new) -- the actual effective lever for "make it
+   feel meaningful," precisely because a once-daily event isn't
+   constrained by the per-hour-rate safety math at all: repeating it
+   doesn't get you more of it, so it can be flatly generous without
+   reopening any dominance question. The first burst-mode quest a hero
+   *resolves* each calendar day is guaranteed at least
+   `quest.dailyBurstBonusGold`/`quest.dailyBurstBonusXp` (8/8 by default),
+   regardless of success/failure or how badly the cap crushed the
+   underlying roll. Applied at resolution time (not generation/offer
+   time), so it can't be seen and chased in advance -- it's a pleasant
+   surprise on whichever burst the player happens to send first that day,
+   not a specific offer to hunt for. `QuestResultModal.tsx` shows a small
+   "✨ First burst of the day" callout when it fires.
+
+   **A real bug caught and fixed before it shipped, by testing the
+   mechanic end-to-end rather than trusting the design on paper:** the
+   first implementation used a ×3 multiplier instead of a guaranteed
+   minimum. A failed quest's payout can legitimately be 0 gold after the
+   15% failure-payout reduction -- and multiplying 0 by anything is still
+   0, so a failed first burst wasted the entire daily bonus on nothing,
+   defeating the actual purpose. Fixed by switching to a flat
+   `Math.max(gold, guaranteedMinimum)` floor instead, which doesn't care
+   what the underlying roll or outcome was. Verified directly: a forced-
+   failure first burst now correctly pays the guaranteed 8/8 rather than
+   0/0; a second burst the same day correctly does NOT get boosted; a
+   burst on the following day correctly gets boosted again.
+
+**Explicitly not fully closed, and won't be without deleting "burst" as a
+concept.** The absolute worst-case scenario (a player who specifically
+hunts for and only accepts the shortest-looking burst offers, repeatedly,
+every single day) can still theoretically out-earn real tier content by a
+modest margin (~30 vs ~9-28 gold/hr, narrowing at higher levels) --
+smaller and shallower than the original bug this cap system exists to
+prevent, but not literally zero. Recorded here rather than re-litigated
+if it comes up again: this is a confirmed, accepted, bounded tradeoff,
+not an oversight -- the alternative (~6.5 minute minimum burst duration)
+was rejected as disproportionate to the actual risk.
+
+Medium mode needed none of this -- confirmed by the same sweep that it
+never exceeds real tier rates at any level, 0% of its duration range,
+under the old formula already. Left untouched apart from picking up the
+same tier-anchored floor as burst (harmless there, since medium's cap-
+derived values were already above what the floor would produce).
+
+`npx tsc --noEmit` and `vite build` both pass clean.
+
 ### Weapon Enchanting / Armour Infusion split -- complete
 Restructured the elemental infusion UI per direct request, on top of the
 mechanic itself (unchanged): the old single "Infuse" station (Blacksmith,

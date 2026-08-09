@@ -954,5 +954,23 @@
     "default": 32,
     "min": 0,
     "description": "Same shape as elemental.scrapValue.common, four tiers up -- the rarer the item, the more scrap, per the original ask."
+  },
+  {
+    "id": "quest.dailyBurstBonusGold",
+    "label": "Quests: daily first-burst guaranteed gold",
+    "category": "quests",
+    "value": 8,
+    "default": 8,
+    "min": 0,
+    "description": "Guaranteed MINIMUM gold on the first burst-mode quest each hero resolves per calendar day (tracked via Hero.lastBurstBonusDay) -- a floor (Math.max), not a multiplier. A multiplier was tried first and rejected: it multiplies whatever the roll already produced, so a FAILED first burst (which can legitimately pay 0 after the failure-payout reduction) stayed at 0 no matter the multiplier, defeating the entire point. A flat guaranteed minimum instead means the first burst of the day always pays out something solid regardless of success/failure or how badly the cap/floor crushed the underlying roll. Safe to be generous (this is a fairly solid number for a 2-8 minute task) because it cannot be farmed -- it fires at most once per hero per day regardless of roster size or how many quests get sent."
+  },
+  {
+    "id": "quest.dailyBurstBonusXp",
+    "label": "Quests: daily first-burst guaranteed xp",
+    "category": "quests",
+    "value": 8,
+    "default": 8,
+    "min": 0,
+    "description": "Same shape as quest.dailyBurstBonusGold, for XP."
   }
 ]

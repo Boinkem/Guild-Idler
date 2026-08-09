@@ -76,3 +76,30 @@ export function fastQuestCapsPerHour(topLevel: number, legendaryUnlocked: boolea
     xp: BURST_CAP_FRACTION * expectedRatePerHour(tier, 'xp'),
   };
 }
+
+/**
+ * A floor, not a ceiling -- the counterpart to fastQuestCapsPerHour above,
+ * closing the "worthless reward" complaint that motivated adding this at
+ * all. Anchored to the offer's OWN tier's rate (not the player's current
+ * best-unlocked tier the way the cap is) -- a deliberately safe choice:
+ * every tier's own rate is, by construction, no higher than any harder
+ * tier's rate (DIFFICULTIES only gets more generous per hour going up),
+ * so flooring an Easy offer at Easy's own rate can never let it out-earn
+ * whatever the player's actual best-unlocked tier currently pays. This
+ * was checked by direct simulation, not assumed: at every tested level
+ * and every tested duration, `tierOwnRate(easy) <= expectedRatePerHour of
+ * the real best-unlocked tier`, with equality only when Easy IS the best
+ * tier (i.e. before level 5, when the cap doesn't even apply yet).
+ *
+ * This does NOT fully close the residual overshoot at the very shortest
+ * durations (see QuestManager.generateOffer's own comment on why a
+ * positive-integer floor divided by an arbitrarily short duration can
+ * never be made airtight) -- it meaningfully shrinks it. That's a
+ * confirmed, accepted tradeoff, not an oversight.
+ */
+export function fastQuestFloorPerHour(cfg: DifficultyConfig): { gold: number; xp: number } {
+  return {
+    gold: expectedRatePerHour(cfg, 'gold'),
+    xp: expectedRatePerHour(cfg, 'xp'),
+  };
+}

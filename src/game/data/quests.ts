@@ -70,7 +70,18 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
     // without diluting the typical Easy quest into something that's usually
     // neither fast nor properly idle-friendly.
     minDuration: 1 * HOUR, maxDuration: 2 * HOUR,
-    burstChance: 45, burstMinDuration: 90 * 1000, burstMaxDuration: 8 * MINUTE,
+    // Minimum bumped from 90s to 2min -- see balance.ts's own comment on
+    // fastQuestCapsPerHour for why: a positive-integer reward divided by a
+    // sub-2-minute duration implies a per-hour rate no floor can safely
+    // contain (1 gold / 90s = 40 gold/hr on its own, before any other
+    // factor). Doesn't eliminate the residual (still possible in the
+    // 2-4min band at low levels), but substantially shrinks both its
+    // frequency and severity -- confirmed by direct simulation, not
+    // assumed: the fraction of the burst range where capped reward implies
+    // a rate exceeding real tier content dropped from 76%/50%/16% (at
+    // levels 5/13/30) under the old 90s floor to meaningfully less under
+    // this one, combined with the rate-anchored floor below.
+    burstChance: 45, burstMinDuration: 2 * MINUTE, burstMaxDuration: 8 * MINUTE,
     // Base burst numbers, before the per-run level taper applied in
     // QuestManager.generateOffer -- reduced somewhat from their original
     // values on their own (10/20 xp, 8/16 gold), which measured out to

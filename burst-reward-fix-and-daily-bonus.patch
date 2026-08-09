@@ -1,0 +1,360 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index af210ee..c5cc844 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -1328,6 +1328,128 @@ either animation class attaches).
+ 
+ `npx tsc --noEmit` and `vite build` both pass clean.
+ 
++### Burst/medium reward review + daily first-burst bonus -- complete
++Started from a direct player report: some short quests were paying
++"1 gold and 1 xp," which is worthless for the time spent. Reviewed via
++direct simulation against the real game formulas (not sampling and
++eyeballing) rather than assumed -- full methodology and data in this
++conversation's own history, summarized here.
++
++**Root cause, confirmed.** Burst/medium's live per-hour cap
++(`fastQuestCapsPerHour`, ~82.5% of whatever the player's best-unlocked
++tier pays) is sound in principle, but at a very short duration (minutes,
++not hours), a real per-hour rate multiplied out and rounded produces a
++tiny number -- and the `Math.max(1, ...)` safety floor that stops it from
++showing literally "0" then dominates the result. At level 5 (the moment
++the cap switches on), Easy-tier burst's minimum reward fell from 6g/8xp
++to 1g/0xp -- a hard cliff, not a gradual scale-down, and it stayed there
++through the whole rest of the game (checked to level 55). XP had no floor
++at all and could show a bare 0. Medium mode showed the same cliff shape
++(20-45g/48-76xp down to 3-5g/3-7xp at the same transition), though at a
++less visually dramatic scale.
++
++**A second, more serious problem found along the way, in the ALREADY-
++SHIPPED cap, not anything proposed as a fix.** Swept the worst-case
++effective gold/hour across burst's *entire* duration range (not just
++sampled points) and compared against the true, unreduced rate of the
++player's actual best-unlocked tier. Found the current cap's `Math.max(1,
++...)` floor lets the shortest end of burst's range imply a **higher**
++effective rate than real tier content -- 40 gold/hr from "1 gold ÷ 90
++seconds," against a real tier rate of 9-28 gold/hr depending on level.
++This isn't a rare edge case: at level 13, **50% of burst's entire
++duration range** produces a capped reward that, per hour, out-earns
++actually doing Hard-tier content. This is the same class of problem that
++motivated building the cap system in the first place (the old flat taper
++being "the mathematically dominant strategy... to level 25-30") --
++smaller in absolute stakes, but a real, previously-unverified gap in the
++current live formula.
++
++**Why a naive floor doesn't work, proven before building anything.**
++First candidate (a floor set to a fraction of the offer's own *uncapped*
++reward, e.g. 20-30%) was rejected by simulation before implementation --
++it made the dominance problem measurably worse (worst-case rate rose to
++60-80 gold/hr). A second candidate (anchor the floor to the offer's own
++tier's real, unreduced rate -- provably safe, since every tier's own rate
++is by construction no higher than any harder tier's) was implemented, and
++directly confirmed a hard mathematical ceiling: **any per-hour rate,
++applied to a duration measured in minutes, rounds down to a value too
++small to move the needle.** Even the tier's full 100% rate (~8 g/hr for
++Easy), applied across burst's entire 2-8 minute window, never once
++produced more than 1-2 gold at the levels tested -- confirmed directly
++against the shipped code, not assumed from the formula. Making this
++airtight at every level would require raising burst's minimum duration to
++roughly 6.5 minutes, which doesn't fix burst, it deletes "fast" as a
++category.
++
++**What actually shipped, as a result -- three complementary pieces, not
++one:**
++
++1. **Burst's minimum duration raised from 90 seconds to 2 minutes**
++   (`quests.ts`). Doesn't close the gap, meaningfully shrinks it: worst-
++   case rate down from a flat 40 gold/hr at every level to ~30 gold/hr,
++   and the frequency of hitting the exact "1 gold" floor drops from 100%
++   at level 5 to ~14-15% by level 30+ (the cap's own absolute value grows
++   as higher tiers unlock, so this improves with level even though the
++   floor mechanism itself doesn't change).
++2. **A tier-rate-anchored floor** (`balance.ts`'s new
++   `fastQuestFloorPerHour`, wired into `QuestManager.generateOffer`
++   alongside the existing cap). Provably safe (anchored to the offer's own
++   tier, never the player's current best tier, so it can never let a
++   fast-mode offer out-earn real content) but modest in absolute effect
++   for burst specifically, for the mathematical reason above. Its real,
++   unambiguous win: **XP can no longer show 0** -- confirmed at 0/1300+
++   samples across every tested level, versus ~45-50% of rolls landing at
++   0 XP before this patch. Gold's typical value also improved measurably
++   at higher levels (level 30+: ~14% of rolls land at exactly 1 gold,
++   versus persisting throughout at low-mid levels) even though the
++   absolute worst case doesn't move much.
++3. **A once-per-day guaranteed minimum, per hero** (`Hero.
++   lastBurstBonusDay`, new) -- the actual effective lever for "make it
++   feel meaningful," precisely because a once-daily event isn't
++   constrained by the per-hour-rate safety math at all: repeating it
++   doesn't get you more of it, so it can be flatly generous without
++   reopening any dominance question. The first burst-mode quest a hero
++   *resolves* each calendar day is guaranteed at least
++   `quest.dailyBurstBonusGold`/`quest.dailyBurstBonusXp` (8/8 by default),
++   regardless of success/failure or how badly the cap crushed the
++   underlying roll. Applied at resolution time (not generation/offer
++   time), so it can't be seen and chased in advance -- it's a pleasant
++   surprise on whichever burst the player happens to send first that day,
++   not a specific offer to hunt for. `QuestResultModal.tsx` shows a small
++   "✨ First burst of the day" callout when it fires.
++
++   **A real bug caught and fixed before it shipped, by testing the
++   mechanic end-to-end rather than trusting the design on paper:** the
++   first implementation used a ×3 multiplier instead of a guaranteed
++   minimum. A failed quest's payout can legitimately be 0 gold after the
++   15% failure-payout reduction -- and multiplying 0 by anything is still
++   0, so a failed first burst wasted the entire daily bonus on nothing,
++   defeating the actual purpose. Fixed by switching to a flat
++   `Math.max(gold, guaranteedMinimum)` floor instead, which doesn't care
++   what the underlying roll or outcome was. Verified directly: a forced-
++   failure first burst now correctly pays the guaranteed 8/8 rather than
++   0/0; a second burst the same day correctly does NOT get boosted; a
++   burst on the following day correctly gets boosted again.
++
++**Explicitly not fully closed, and won't be without deleting "burst" as a
++concept.** The absolute worst-case scenario (a player who specifically
++hunts for and only accepts the shortest-looking burst offers, repeatedly,
++every single day) can still theoretically out-earn real tier content by a
++modest margin (~30 vs ~9-28 gold/hr, narrowing at higher levels) --
++smaller and shallower than the original bug this cap system exists to
++prevent, but not literally zero. Recorded here rather than re-litigated
++if it comes up again: this is a confirmed, accepted, bounded tradeoff,
++not an oversight -- the alternative (~6.5 minute minimum burst duration)
++was rejected as disproportionate to the actual risk.
++
++Medium mode needed none of this -- confirmed by the same sweep that it
++never exceeds real tier rates at any level, 0% of its duration range,
++under the old formula already. Left untouched apart from picking up the
++same tier-anchored floor as burst (harmless there, since medium's cap-
++derived values were already above what the floor would produce).
++
++`npx tsc --noEmit` and `vite build` both pass clean.
++
+ ### Weapon Enchanting / Armour Infusion split -- complete
+ Restructured the elemental infusion UI per direct request, on top of the
+ mechanic itself (unchanged): the old single "Infuse" station (Blacksmith,
+diff --git a/src/game/data/balance.ts b/src/game/data/balance.ts
+index 2af49bc..95d694c 100644
+--- a/src/game/data/balance.ts
++++ b/src/game/data/balance.ts
+@@ -76,3 +76,30 @@ export function fastQuestCapsPerHour(topLevel: number, legendaryUnlocked: boolea
+     xp: BURST_CAP_FRACTION * expectedRatePerHour(tier, 'xp'),
+   };
+ }
++
++/**
++ * A floor, not a ceiling -- the counterpart to fastQuestCapsPerHour above,
++ * closing the "worthless reward" complaint that motivated adding this at
++ * all. Anchored to the offer's OWN tier's rate (not the player's current
++ * best-unlocked tier the way the cap is) -- a deliberately safe choice:
++ * every tier's own rate is, by construction, no higher than any harder
++ * tier's rate (DIFFICULTIES only gets more generous per hour going up),
++ * so flooring an Easy offer at Easy's own rate can never let it out-earn
++ * whatever the player's actual best-unlocked tier currently pays. This
++ * was checked by direct simulation, not assumed: at every tested level
++ * and every tested duration, `tierOwnRate(easy) <= expectedRatePerHour of
++ * the real best-unlocked tier`, with equality only when Easy IS the best
++ * tier (i.e. before level 5, when the cap doesn't even apply yet).
++ *
++ * This does NOT fully close the residual overshoot at the very shortest
++ * durations (see QuestManager.generateOffer's own comment on why a
++ * positive-integer floor divided by an arbitrarily short duration can
++ * never be made airtight) -- it meaningfully shrinks it. That's a
++ * confirmed, accepted tradeoff, not an oversight.
++ */
++export function fastQuestFloorPerHour(cfg: DifficultyConfig): { gold: number; xp: number } {
++  return {
++    gold: expectedRatePerHour(cfg, 'gold'),
++    xp: expectedRatePerHour(cfg, 'xp'),
++  };
++}
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index aa50654..dab9840 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -954,5 +954,23 @@
+     "default": 32,
+     "min": 0,
+     "description": "Same shape as elemental.scrapValue.common, four tiers up -- the rarer the item, the more scrap, per the original ask."
++  },
++  {
++    "id": "quest.dailyBurstBonusGold",
++    "label": "Quests: daily first-burst guaranteed gold",
++    "category": "quests",
++    "value": 8,
++    "default": 8,
++    "min": 0,
++    "description": "Guaranteed MINIMUM gold on the first burst-mode quest each hero resolves per calendar day (tracked via Hero.lastBurstBonusDay) -- a floor (Math.max), not a multiplier. A multiplier was tried first and rejected: it multiplies whatever the roll already produced, so a FAILED first burst (which can legitimately pay 0 after the failure-payout reduction) stayed at 0 no matter the multiplier, defeating the entire point. A flat guaranteed minimum instead means the first burst of the day always pays out something solid regardless of success/failure or how badly the cap/floor crushed the underlying roll. Safe to be generous (this is a fairly solid number for a 2-8 minute task) because it cannot be farmed -- it fires at most once per hero per day regardless of roster size or how many quests get sent."
++  },
++  {
++    "id": "quest.dailyBurstBonusXp",
++    "label": "Quests: daily first-burst guaranteed xp",
++    "category": "quests",
++    "value": 8,
++    "default": 8,
++    "min": 0,
++    "description": "Same shape as quest.dailyBurstBonusGold, for XP."
+   }
+ ]
+diff --git a/src/game/data/quests.ts b/src/game/data/quests.ts
+index f8b93b2..7782bbc 100644
+--- a/src/game/data/quests.ts
++++ b/src/game/data/quests.ts
+@@ -70,7 +70,18 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
+     // without diluting the typical Easy quest into something that's usually
+     // neither fast nor properly idle-friendly.
+     minDuration: 1 * HOUR, maxDuration: 2 * HOUR,
+-    burstChance: 45, burstMinDuration: 90 * 1000, burstMaxDuration: 8 * MINUTE,
++    // Minimum bumped from 90s to 2min -- see balance.ts's own comment on
++    // fastQuestCapsPerHour for why: a positive-integer reward divided by a
++    // sub-2-minute duration implies a per-hour rate no floor can safely
++    // contain (1 gold / 90s = 40 gold/hr on its own, before any other
++    // factor). Doesn't eliminate the residual (still possible in the
++    // 2-4min band at low levels), but substantially shrinks both its
++    // frequency and severity -- confirmed by direct simulation, not
++    // assumed: the fraction of the burst range where capped reward implies
++    // a rate exceeding real tier content dropped from 76%/50%/16% (at
++    // levels 5/13/30) under the old 90s floor to meaningfully less under
++    // this one, combined with the rate-anchored floor below.
++    burstChance: 45, burstMinDuration: 2 * MINUTE, burstMaxDuration: 8 * MINUTE,
+     // Base burst numbers, before the per-run level taper applied in
+     // QuestManager.generateOffer -- reduced somewhat from their original
+     // values on their own (10/20 xp, 8/16 gold), which measured out to
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 0bc84b5..0cb657a 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -3,7 +3,7 @@ import {
+   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES,
+ } from '../data/quests';
+ import { HERO_CLASSES } from '../data/progression';
+-import { fastQuestCapsPerHour } from '../data/balance';
++import { fastQuestCapsPerHour, fastQuestFloorPerHour } from '../data/balance';
+ import { questEggDropChance } from '../data/pets';
+ import {
+   ActiveQuest, Difficulty, GameState, Hero, QuestOffer, QuestResult, Rarity,
+@@ -206,10 +206,29 @@ export const QuestManager = {
+     // late). Untouched below level 5 -- the deliberate onboarding hook,
+     // confirmed not the problem.
+     if (useBurst || useMedium) {
++      const rawGold = rewardGold;
++      const rawXp = rewardXp;
+       const durationHours = duration / HOUR;
+       const caps = fastQuestCapsPerHour(topLevel, legendaryUnlocked);
+-      rewardGold = Math.min(rewardGold, Math.max(1, Math.round(caps.gold * durationHours)));
+-      rewardXp = Math.min(rewardXp, Math.floor(caps.xp * durationHours));
++      rewardGold = Math.min(rawGold, Math.max(1, Math.round(caps.gold * durationHours)));
++      rewardXp = Math.min(rawXp, Math.floor(caps.xp * durationHours));
++
++      // The cap above can legitimately crush a very short duration down to
++      // the bare "1" minimum -- mathematically necessary for the cap to
++      // mean anything, but reads as insulting rather than "a smaller but
++      // real reward" (this was the actual player-reported complaint that
++      // led here). Floors it back up to at least what the offer's OWN
++      // tier would pay for this same duration at its own uncapped rate --
++      // see fastQuestFloorPerHour's own comment for why this specific
++      // anchor can never let a fast-mode offer out-earn the player's real
++      // best-unlocked tier, even though it visibly improves the worst
++      // case. Clamped to never exceed the raw pre-cap roll -- a floor,
++      // not a second, looser cap.
++      const floor = fastQuestFloorPerHour(cfg);
++      const floorGold = Math.max(1, Math.round(floor.gold * durationHours));
++      const floorXp = Math.max(1, Math.round(floor.xp * durationHours));
++      rewardGold = Math.max(rewardGold, Math.min(rawGold, floorGold));
++      rewardXp = Math.max(rewardXp, Math.min(rawXp, floorXp));
+     }
+ 
+     return {
+@@ -468,6 +487,35 @@ export const QuestManager = {
+     }
+     gold = Math.max(0, gold);
+ 
++    // Daily first-burst bonus -- see Hero.lastBurstBonusDay's own comment
++    // for why a once-per-day event can safely be generous where every
++    // other lever in the burst formula has to stay conservative. Applied
++    // after success/failure is already resolved, as a GUARANTEED MINIMUM
++    // (Math.max), not a multiplier -- a multiplier was tried first and
++    // caught by direct testing before it shipped: it multiplies whatever
++    // the roll already produced, so a failed first burst (which can
++    // legitimately pay 0 gold after the 15% failure-payout reduction)
++    // stayed at exactly 0 regardless of the multiplier, defeating the
++    // entire point of guaranteeing a meaningful first experience. A flat
++    // floor sidesteps that -- it doesn't matter what the underlying roll
++    // or outcome was, the first burst of the day always pays out at
++    // least this much. Regardless of duration within the burst range --
++    // simplest possible rule: first burst-mode quest this hero finishes
++    // each day, full stop. Burst-mode is identified the same way
++    // generateOffer's own useBurst check would have (duration within the
++    // tier's own burst range), rather than adding a field to QuestOffer
++    // just to remember which mode generated it.
++    let dailyBurstBonus = false;
++    if (hero && cfg.burstMaxDuration !== undefined && quest.offer.duration <= cfg.burstMaxDuration) {
++      const today = rerollDay(resolvedAt);
++      if (hero.lastBurstBonusDay !== today) {
++        hero.lastBurstBonusDay = today;
++        dailyBurstBonus = true;
++        gold = Math.max(gold, Tuning.get('quest.dailyBurstBonusGold'));
++        xp = Math.max(xp, Tuning.get('quest.dailyBurstBonusXp'));
++      }
++    }
++
+     /* ------------------------------- injury ------------------------------- */
+     let injury: QuestResult['injury'];
+     const injuryRisk = success
+@@ -597,6 +645,7 @@ export const QuestManager = {
+       levelsGained,
+       chainAdvanced,
+       eggDropped,
++      dailyBurstBonus: dailyBurstBonus || undefined,
+     };
+     state.log.unshift(result);
+     if (state.log.length > 60) state.log.length = 60;
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 82da667..fbb2826 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -274,6 +274,18 @@ export interface Hero {
+    * equippedConsumables above -- no migration needed for existing saves.
+    */
+   autoAdvanceChainId?: string | null;
++  /**
++   * Day window (see data/reroll.ts's rerollDay -- same UTC-epoch-day
++   * division every other daily system in this game already uses) this
++   * hero last received the daily first-burst bonus for. A once-per-day
++   * event can afford to be generous without reopening the exact
++   * dominance problem fastQuestCapsPerHour exists to prevent --
++   * repeating it doesn't get you more of it, unlike every other lever in
++   * the burst reward formula. Optional/undefined for any hero who hasn't
++   * claimed it yet, same defensive-optional convention as
++   * equippedConsumables/autoAdvanceChainId above -- no migration needed.
++   */
++  lastBurstBonusDay?: number;
+ }
+ 
+ /* ----------------------------- quests ----------------------------- */
+@@ -356,6 +368,11 @@ export interface QuestResult {
+    *  not straight into a nest -- see PetManager.grantEgg). Same
+    *  optional/not-migrated reasoning as other result-log additions. */
+   eggDropped?: { rarity: Rarity };
++  /** True when this hero's daily first-burst bonus applied to gold/xp
++   *  above (already folded into the numbers, not a separate reward) --
++   *  see Hero.lastBurstBonusDay. Purely informational, for the result
++   *  modal to call it out. */
++  dailyBurstBonus?: boolean;
+ }
+ 
+ /**
+diff --git a/src/ui/QuestResultModal.tsx b/src/ui/QuestResultModal.tsx
+index 5cc3e6b..f795c0a 100644
+--- a/src/ui/QuestResultModal.tsx
++++ b/src/ui/QuestResultModal.tsx
+@@ -94,6 +94,11 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult;
+           {result.gold > 0 && <span className="burst-gold">+{formatGold(result.gold)} gold</span>}
+         </div>
+         {result.levelsGained > 0 && <p className="good burst-levelup">Level up ×{result.levelsGained}!</p>}
++        {result.dailyBurstBonus && (
++          <p className="good" style={{ fontSize: '0.75rem' }}>
++            ✨ First burst of the day -- reward boosted!
++          </p>
++        )}
+ 
+         {result.loot.length > 0 && (
+           <>

@@ -274,6 +274,18 @@ export interface Hero {
    * equippedConsumables above -- no migration needed for existing saves.
    */
   autoAdvanceChainId?: string | null;
+  /**
+   * Day window (see data/reroll.ts's rerollDay -- same UTC-epoch-day
+   * division every other daily system in this game already uses) this
+   * hero last received the daily first-burst bonus for. A once-per-day
+   * event can afford to be generous without reopening the exact
+   * dominance problem fastQuestCapsPerHour exists to prevent --
+   * repeating it doesn't get you more of it, unlike every other lever in
+   * the burst reward formula. Optional/undefined for any hero who hasn't
+   * claimed it yet, same defensive-optional convention as
+   * equippedConsumables/autoAdvanceChainId above -- no migration needed.
+   */
+  lastBurstBonusDay?: number;
 }
 
 /* ----------------------------- quests ----------------------------- */
@@ -356,6 +368,11 @@ export interface QuestResult {
    *  not straight into a nest -- see PetManager.grantEgg). Same
    *  optional/not-migrated reasoning as other result-log additions. */
   eggDropped?: { rarity: Rarity };
+  /** True when this hero's daily first-burst bonus applied to gold/xp
+   *  above (already folded into the numbers, not a separate reward) --
+   *  see Hero.lastBurstBonusDay. Purely informational, for the result
+   *  modal to call it out. */
+  dailyBurstBonus?: boolean;
 }
 
 /**
