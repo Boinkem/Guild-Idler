@@ -373,6 +373,11 @@ export interface QuestResult {
    *  see Hero.lastBurstBonusDay. Purely informational, for the result
    *  modal to call it out. */
   dailyBurstBonus?: boolean;
+  /** True when a Critical Burst (see quest.critChance in tuning.json)
+   *  multiplied gold/xp above -- already folded into the numbers, purely
+   *  informational for the result modal's celebration. Independent of,
+   *  and can stack with, dailyBurstBonus on the same quest. */
+  critBonus?: boolean;
 }
 
 /**

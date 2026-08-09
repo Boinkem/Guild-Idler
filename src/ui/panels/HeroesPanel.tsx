@@ -9,6 +9,7 @@ import { HERO_CLASSES, RECRUIT_COST, SKINS } from '../../game/data/progression';
 import { HeroClass, Stats } from '../../game/types';
 import { describeMods, formatDuration, formatGold } from '../../game/util';
 import { HeroSprite } from '../sprites/HeroSprite';
+import { GearScoreBadge } from '../GearScoreBadge';
 
 const STAT_KEYS: (keyof Stats)[] = ['strength', 'endurance', 'luck', 'wisdom'];
 
@@ -75,6 +76,7 @@ export function HeroesPanel() {
                     {hero.ascension > 0 && (
                       <> · {PrestigeManager.rankFor(hero) ?? `ascended ×${hero.ascension}`}</>
                     )}
+                    {' · '}<GearScoreBadge score={HeroManager.gearScore(hero)} size="small" />
                   </span>
                 </div>
                 <div className="bar xp" style={{ marginTop: 6 }}><span style={{ width: `${(hero.xp / toNext) * 100}%` }} /></div>

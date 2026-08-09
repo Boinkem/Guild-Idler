@@ -972,5 +972,24 @@
     "default": 8,
     "min": 0,
     "description": "Same shape as quest.dailyBurstBonusGold, for XP."
+  },
+  {
+    "id": "quest.critChance",
+    "label": "Quests: critical burst chance (%)",
+    "category": "quests",
+    "value": 8,
+    "default": 8,
+    "min": 0,
+    "max": 100,
+    "description": "Chance, per successful quest, of a Critical Burst -- gold and xp both multiplied by quest.critMultiplier, with its own distinct celebration in the result modal. Independent of (and can stack with) the daily first-burst floor above; deliberately not scaled by any stat so it stays a purely random spike rather than another thing to optimize."
+  },
+  {
+    "id": "quest.critMultiplier",
+    "label": "Quests: critical burst multiplier",
+    "category": "quests",
+    "value": 2.5,
+    "default": 2.5,
+    "min": 1,
+    "description": "Gold/xp multiplier applied on a Critical Burst (see quest.critChance). Applied to the already-resolved reward roll, so it scales with everything else that already fed into it (quest tier, equipment bonuses, events)."
   }
 ]

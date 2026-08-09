@@ -487,6 +487,23 @@ export const QuestManager = {
     }
     gold = Math.max(0, gold);
 
+    // Critical Burst -- a rare, purely random spike on top of the normal
+    // reward roll, independent of the daily first-burst floor below (both
+    // can fire on the same quest, on a very good day -- that's intended,
+    // not a bug to dedupe). Scoped to gold/xp only, not loot chance, which
+    // already has its own personalLoot stage -- keeping crit to raw
+    // currency keeps it legible as "this run just paid extra" rather than
+    // becoming a second loot system layered on the first. Only rolls on
+    // success; a failed quest already pays a reduced consolation and
+    // doesn't need an additional random axis.
+    let critBonus = false;
+    if (success && rng.chance(Tuning.get('quest.critChance'))) {
+      critBonus = true;
+      const mult = Tuning.get('quest.critMultiplier');
+      gold = Math.floor(gold * mult);
+      xp = Math.floor(xp * mult);
+    }
+
     // Daily first-burst bonus -- see Hero.lastBurstBonusDay's own comment
     // for why a once-per-day event can safely be generous where every
     // other lever in the burst formula has to stay conservative. Applied
@@ -646,6 +663,7 @@ export const QuestManager = {
       chainAdvanced,
       eggDropped,
       dailyBurstBonus: dailyBurstBonus || undefined,
+      critBonus: critBonus || undefined,
     };
     state.log.unshift(result);
     if (state.log.length > 60) state.log.length = 60;

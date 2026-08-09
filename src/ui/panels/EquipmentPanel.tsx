@@ -3,12 +3,14 @@ import { useEngine } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { GameEngine } from '../../game/engine';
 import { EquipmentManager } from '../../game/managers/EquipmentManager';
+import { HeroManager } from '../../game/managers/HeroManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { EQUIPMENT_BY_ID, ITEM_SETS } from '../../game/data/equipment';
 import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { describeMods, describeStats, formatGold, RARITY_COLOR } from '../../game/util';
 import { ItemIcon, ConsumableIcon } from '../icons';
+import { GearScoreBadge } from '../GearScoreBadge';
 
 const SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet', 'cloak'];
 
@@ -307,14 +309,15 @@ export function EquipmentPanel() {
         Buying and selling both happen in the Shop — this is just what you have.
       </p>
 
-      <div className="row wrap" style={{ marginBottom: 10 }}>
+      <div className="row wrap" style={{ marginBottom: 10, alignItems: 'center' }}>
         {state.heroes.map((h) => (
           <button key={h.id} className={h.id === hero.id ? 'btn-primary' : ''} onClick={() => setHeroId(h.id)}>
             {h.name}
           </button>
         ))}
         <div style={{ flex: 1 }} />
-        <button onClick={() => engine.repairAll()} disabled={repairBill === 0}>
+        <GearScoreBadge score={HeroManager.gearScore(hero)} showProgress />
+        <button onClick={() => engine.repairAll()} disabled={repairBill === 0} style={{ marginLeft: 10 }}>
           Repair everything · {formatGold(repairBill)}
         </button>
       </div>

@@ -1337,6 +1337,41 @@ input[type='range'] {
 }
 .burst-xp { color: var(--moss); text-shadow: 0 0 14px rgba(121, 168, 107, 0.5); }
 .burst-gold { color: var(--brass); text-shadow: 0 0 14px rgba(217, 164, 65, 0.5); animation-delay: 80ms; }
+
+/* ------------------------------ critical burst ------------------------------ */
+/* A rare reward-roll spike (see quest.critChance in tuning.json) gets its
+   own, bigger celebration layered on the normal reward-burst: the numbers
+   scale up and glow gold regardless of whether they're XP or gold, a
+   "Critical Burst!" label pops in above, and a few extra coin particles
+   join the usual collect-fly burst on dismiss. */
+.burst-xp.crit, .burst-gold.crit {
+  color: var(--brass);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--brass) 90%, transparent),
+    0 0 22px color-mix(in srgb, var(--brass) 55%, transparent);
+  animation: burst-pop-crit 480ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+.burst-gold.crit { animation-delay: 80ms; }
+@keyframes burst-pop-crit {
+  0% { transform: scale(0.4); opacity: 0; }
+  55% { transform: scale(1.4); opacity: 1; }
+  100% { transform: scale(1.15); opacity: 1; }
+}
+.crit-burst-label {
+  text-align: center;
+  margin: 2px 0 0;
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  color: var(--brass);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--brass) 80%, transparent);
+  animation: burst-pop 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  animation-delay: 120ms;
+}
+.collect-particle.coin.crit {
+  font-size: 1.125rem;
+  color: var(--brass);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--brass) 90%, transparent);
+}
 .burst-levelup {
   text-align: center;
   font-size: 0.875rem;
@@ -1844,3 +1879,47 @@ button.harvest-item:hover {
 .craft-picker-row:disabled { opacity: 0.4; cursor: default; }
 .craft-picker-row.selected { border-color: var(--brass); background: var(--panel-3); }
 .craft-picker-check { color: var(--brass); font-weight: 700; }
+
+/* ------------------------------ gear score badge ---------------------------- */
+/* Colour-banded like RarityPill (see gearScoreTier in data/equipment.ts),
+   with a brief glow pulse the instant the score crosses into a new tier --
+   GearScoreBadge.tsx sets --gear-score-color inline and toggles the
+   .gear-score-tierup class for the duration of the pulse. */
+
+.gear-score-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  color: var(--gear-score-color, var(--parchment));
+  text-shadow: 0 0 6px color-mix(in srgb, var(--gear-score-color, transparent) 55%, transparent);
+  transition: color 200ms ease, text-shadow 200ms ease;
+}
+.gear-score-badge-small {
+  font-size: 0.6875rem;
+}
+.gear-score-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+.gear-score-bar {
+  width: 100px;
+}
+.gear-score-bar > span {
+  transition: width 300ms ease, background 300ms ease;
+}
+.gear-score-tierup {
+  animation: gear-score-tierup-pulse 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+@keyframes gear-score-tierup-pulse {
+  0% { transform: scale(1); text-shadow: 0 0 6px color-mix(in srgb, var(--gear-score-color, transparent) 55%, transparent); }
+  35% {
+    transform: scale(1.35);
+    text-shadow: 0 0 18px color-mix(in srgb, var(--gear-score-color, transparent) 95%, transparent),
+      0 0 30px color-mix(in srgb, var(--gear-score-color, transparent) 60%, transparent);
+  }
+  100% { transform: scale(1); text-shadow: 0 0 6px color-mix(in srgb, var(--gear-score-color, transparent) 55%, transparent); }
+}

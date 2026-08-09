@@ -1,4 +1,4 @@
-import { EQUIPMENT_BY_ID, SET_BY_ID } from '../data/equipment';
+import { EQUIPMENT_BY_ID, GEAR_SCORE_BY_RARITY, SET_BY_ID } from '../data/equipment';
 import { INJURIES } from '../data/items';
 import { HERO_CLASSES, RECRUIT_START_LEVEL, xpForLevel } from '../data/progression';
 import { DIFFICULTY_ORDER } from '../data/quests';
@@ -101,6 +101,25 @@ export const HeroManager = {
       total.endurance += ((base?.endurance ?? 0) + (enchant?.endurance ?? 0)) * scale;
       total.luck += ((base?.luck ?? 0) + (enchant?.luck ?? 0)) * scale;
       total.wisdom += ((base?.wisdom ?? 0) + (enchant?.wisdom ?? 0)) * scale;
+    }
+    return total;
+  },
+
+  /**
+   * Sum of GEAR_SCORE_BY_RARITY across every equipped item. Deliberately
+   * flat per tier (see GEAR_SCORE_BY_RARITY) rather than reading the item's
+   * rolled stats -- this is a badge of "how well is this hero geared",
+   * separate from and in addition to the combat-stat bonus gear already
+   * grants via equipmentStats(). Broken/zero-durability items still count:
+   * the badge represents what's equipped, not what's currently usable.
+   */
+  gearScore(hero: Hero): number {
+    let total = 0;
+    for (const item of Object.values(hero.equipment)) {
+      if (!item) continue;
+      const def = EQUIPMENT_BY_ID[item.defId];
+      if (!def) continue;
+      total += GEAR_SCORE_BY_RARITY[def.rarity] ?? 0;
     }
     return total;
   },

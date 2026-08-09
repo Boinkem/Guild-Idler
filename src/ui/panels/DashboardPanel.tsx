@@ -4,8 +4,8 @@ import { useEngine } from '../useEngine';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { VENDORS, vendorUpgrades, xpForLevel } from '../../game/data/progression';
 import { AchievementManager } from '../../game/managers/AchievementManager';
-import { guildPowerLevel, levelTierColor, levelTierName } from '../../game/power';
-import { currentGuildRank, nextGuildRank } from '../../game/data/guildRank';
+import { guildPowerBreakdown, levelTierColor, levelTierName } from '../../game/power';
+import { currentGuildRank, nextGuildRank, powerToNextRank } from '../../game/data/guildRank';
 import { formatGold, formatNumber } from '../../game/util';
 
 export function Ring({
@@ -32,9 +32,12 @@ export function Ring({
 export function DashboardPanel() {
   const engine = useEngine();
   const state = engine.state;
-  const power = guildPowerLevel(state);
+  const breakdown = guildPowerBreakdown(state);
+  const power = breakdown.total;
   const rank = currentGuildRank(state);
   const next = nextGuildRank(state);
+  const powerNeeded = powerToNextRank(state);
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const achProgress = AchievementManager.progress(state);
   const guildAgeDays = Math.max(0, Math.floor((Date.now() - state.createdAt) / (24 * 3600000)));
 
@@ -85,16 +88,18 @@ export function DashboardPanel() {
           <b className="gold-text">{rank.name}</b>
         </div>
         <p className="tiny muted" style={{ margin: '2px 0 0' }}>{rank.blurb}</p>
-        {next && (
+        {next && powerNeeded !== null && (
           <p className="tiny muted" style={{ margin: '4px 0 0' }}>
-            Next: {next.name} — reach level {next.minLevel} or complete a chain at that level.
+            Next: {next.name} — {formatNumber(powerNeeded)} more Guild Power.
           </p>
         )}
       </div>
 
       <div
         className="card power-card"
-        title="Combines hero stats, ascension, Renown, vendor relationships, guild upgrades, and completed story chains into one number."
+        style={{ cursor: 'pointer' }}
+        onClick={() => setShowBreakdown((v) => !v)}
+        title="Tap to see what makes up this number. Combines hero stats, gear score, ascension, guild upgrades, renown perks, raid upgrades, and completed story chains."
       >
         <div className="tiny muted" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>Guild Power</div>
         <div className="power-number">{power.toLocaleString()}</div>
@@ -103,6 +108,18 @@ export function DashboardPanel() {
           <span style={{ color: 'var(--violet)' }}>✦ {formatNumber(state.renown)} renown</span>
           <span className="muted">Day {guildAgeDays}</span>
         </div>
+        {showBreakdown && (
+          <div className="tiny muted" style={{ marginTop: 8, borderTop: '1px solid var(--panel-3)', paddingTop: 6 }}>
+            <div className="spread"><span>Hero Levels &amp; Stats</span><span>{breakdown.heroStats.toLocaleString()}</span></div>
+            <div className="spread"><span>Gear Score</span><span>{breakdown.gearScore.toLocaleString()}</span></div>
+            <div className="spread"><span>Guild Facilities</span><span>{breakdown.facilities.toLocaleString()}</span></div>
+            <div className="spread"><span>Vendor Upgrades</span><span>{breakdown.vendorUpgrades.toLocaleString()}</span></div>
+            <div className="spread"><span>Raid Upgrades</span><span>{breakdown.raidUpgrades.toLocaleString()}</span></div>
+            <div className="spread"><span>Renown Perks</span><span>{breakdown.renownPerks.toLocaleString()}</span></div>
+            <div className="spread"><span>Completed Chains</span><span>{breakdown.completedChains.toLocaleString()}</span></div>
+            <div className="spread"><span>Ascension</span><span>{breakdown.ascension.toLocaleString()}</span></div>
+          </div>
+        )}
       </div>
 
       <div className="section-heading">Heroes</div>

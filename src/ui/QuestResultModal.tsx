@@ -26,6 +26,14 @@ const XP_PARTICLES = [
   { dx: 24, dy: -100, rot: 12, delay: 70 },
   { dx: 2, dy: -118, rot: 2, delay: 130 },
 ];
+/** Extra particles layered on top of COIN_PARTICLES/XP_PARTICLES for a
+ * Critical Burst -- same fly-and-fade language, just a fuller burst so a
+ * crit visibly reads as "more" rather than only the text turning gold. */
+const CRIT_EXTRA_COIN_PARTICLES = [
+  { dx: -80, dy: -30, rot: -30, delay: 60 },
+  { dx: 80, dy: -30, rot: 30, delay: 100 },
+  { dx: 0, dy: -50, rot: 0, delay: 20 },
+];
 
 /**
  * Shown when a quest resolves while the player is watching. Split into an
@@ -69,7 +77,7 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; 
   const handleDismiss = () => {
     if (dismissing) return;
     setDismissing(true);
-    playSound('collect');
+    playSound(result.critBonus ? 'legendary_drop' : 'collect');
     timeoutRef.current = window.setTimeout(() => engine.dismissResult(), DISMISS_DELAY_MS);
   };
 
@@ -89,10 +97,11 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; 
           {result.success ? 'The contract is fulfilled.' : 'The contract failed.'}
         </p>
 
-        <div className="reward-burst">
-          {result.xp > 0 && <span className="burst-xp">+{result.xp} XP</span>}
-          {result.gold > 0 && <span className="burst-gold">+{formatGold(result.gold)} gold</span>}
+        <div className={`reward-burst ${result.critBonus ? 'crit' : ''}`}>
+          {result.xp > 0 && <span className={`burst-xp ${result.critBonus ? 'crit' : ''}`}>+{result.xp} XP</span>}
+          {result.gold > 0 && <span className={`burst-gold ${result.critBonus ? 'crit' : ''}`}>+{formatGold(result.gold)} gold</span>}
         </div>
+        {result.critBonus && <p className="crit-burst-label">⚡ Critical Burst!</p>}
         {result.levelsGained > 0 && <p className="good burst-levelup">Level up ×{result.levelsGained}!</p>}
         {result.dailyBurstBonus && (
           <p className="good" style={{ fontSize: '0.75rem' }}>
@@ -169,6 +178,15 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; 
               <span
                 key={`coin-${i}`}
                 className="collect-particle coin"
+                style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, animationDelay: `${p.delay}ms` } as CSSProperties}
+              >
+                ◆
+              </span>
+            ))}
+            {result.gold > 0 && result.critBonus && CRIT_EXTRA_COIN_PARTICLES.map((p, i) => (
+              <span
+                key={`crit-coin-${i}`}
+                className="collect-particle coin crit"
                 style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, animationDelay: `${p.delay}ms` } as CSSProperties}
               >
                 ◆

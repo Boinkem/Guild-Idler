@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { MouseEvent, CSSProperties } from 'react';
 import { QUEST_CHAINS, ChainDef } from '../../game/data/quests';
-import { GUILD_RANK_TIERS, currentGuildRank, nextGuildRank, rankTierForLevel } from '../../game/data/guildRank';
+import { GUILD_RANK_TIERS, currentGuildRank, nextGuildRank, powerToNextRank, rankTierForLevel } from '../../game/data/guildRank';
 import { outgoingConnections, incomingConnections } from '../../game/data/chainConnections';
 import { RAIDS, RAID_ENCOUNTER_BY_ID, isRaidUnlocked } from '../../game/data/raids';
 import { useEngine } from '../useEngine';
@@ -334,6 +334,7 @@ export function LorePanel() {
 
   const rank = currentGuildRank(state);
   const next = nextGuildRank(state);
+  const powerNeeded = powerToNextRank(state);
 
   return (
     <>
@@ -350,9 +351,9 @@ export function LorePanel() {
           </span>
         </div>
         <p className="tiny muted" style={{ margin: '4px 0 0' }}>{rank.blurb}</p>
-        {next && (
+        {next && powerNeeded !== null && (
           <p className="tiny muted" style={{ margin: '4px 0 0' }}>
-            Next: {next.name} — reach level {next.minLevel} or complete a chain at that level.
+            Next: {next.name} — {powerNeeded.toLocaleString()} more Guild Power.
           </p>
         )}
       </div>

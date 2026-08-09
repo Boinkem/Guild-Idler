@@ -1,0 +1,842 @@
+diff --git a/src/game/data/equipment.ts b/src/game/data/equipment.ts
+index f4b9bd9..8ced440 100644
+--- a/src/game/data/equipment.ts
++++ b/src/game/data/equipment.ts
+@@ -23,6 +23,49 @@ export const RARITY_PRICE_MULT: Record<Rarity, number> = {
+   common: 1, uncommon: 2.2, rare: 5, epic: 12, legendary: 32,
+ };
+ 
++/**
++ * Flat "Gear Score" awarded per equipped item, purely by rarity tier --
++ * deliberately NOT derived from the item's actual rolled stats/mods (those
++ * already feed hero power separately via equipmentStats). This is a clean,
++ * predictable prestige number, the equivalent of an "item level" badge: a
++ * legendary always contributes 30 regardless of which legendary it is or
++ * how it rolled, so it reads consistently everywhere it's shown (hero
++ * card, Guild Power breakdown, tier-colour breakpoints).
++ */
++export const GEAR_SCORE_BY_RARITY: Record<Rarity, number> = {
++  common: 1, uncommon: 3, rare: 7, epic: 15, legendary: 30,
++};
++
++/** Max possible Gear Score for one hero: 9 equipment slots, all legendary. */
++export const GEAR_SCORE_MAX = 9 * GEAR_SCORE_BY_RARITY.legendary;
++
++/**
++ * Gear Score tiers, evenly spaced across GEAR_SCORE_MAX and reusing the
++ * same rarity palette as everything else (RARITY_COLOR in util.ts) -- a
++ * hero's Gear Score badge glows the same amber as a legendary item, same
++ * "one colour language" reasoning as levelTierColor in power.ts. Distinct
++ * from item rarity itself: this bands the *sum* across all equipped gear,
++ * not any single item.
++ */
++export const GEAR_SCORE_TIERS: { name: string; min: number; color: string }[] = [
++  { name: 'Common', min: 0, color: '#b9ad93' },
++  { name: 'Uncommon', min: Math.round(GEAR_SCORE_MAX * 0.2), color: '#79a86b' },
++  { name: 'Rare', min: Math.round(GEAR_SCORE_MAX * 0.4), color: '#5b8fd6' },
++  { name: 'Epic', min: Math.round(GEAR_SCORE_MAX * 0.6), color: '#a874d6' },
++  { name: 'Legendary', min: Math.round(GEAR_SCORE_MAX * 0.8), color: '#d9a441' },
++];
++
++/** The Gear Score tier (name + colour + min threshold) a given score falls
++ * into, plus its index -- the index is what callers use to detect a
++ * breakpoint crossing. */
++export function gearScoreTier(score: number): { name: string; color: string; min: number; index: number } {
++  let index = 0;
++  for (let i = 0; i < GEAR_SCORE_TIERS.length; i++) {
++    if (score >= GEAR_SCORE_TIERS[i].min) index = i;
++  }
++  return { ...GEAR_SCORE_TIERS[index], index };
++}
++
+ /**
+  * Equipment lives in json/equipment.json so it can be edited via
+  * tools/devtool without touching TypeScript.
+diff --git a/src/game/data/guildRank.ts b/src/game/data/guildRank.ts
+index b3dc2d7..ab36e80 100644
+--- a/src/game/data/guildRank.ts
++++ b/src/game/data/guildRank.ts
+@@ -1,11 +1,10 @@
+ import { GameState } from '../types';
+ import { QUEST_CHAINS } from './quests';
++import { guildPowerLevel, GUILD_POWER_CEILING } from '../power';
+ 
+ export interface GuildRankTier {
+   id: string;
+   name: string;
+-  /** Minimum effective level (see effectiveGuildLevel) needed to reach this tier. */
+-  minLevel: number;
+   blurb: string;
+   /**
+    * Reuses the same rarity palette as power.ts's per-hero level tiers, so a
+@@ -18,58 +17,96 @@ export interface GuildRankTier {
+ }
+ 
+ /**
+- * Guild-wide rank, distinct from a hero's individual `ascension` count or the
+- * per-hero level-color tiers in power.ts. Thresholds are mapped onto the
+- * existing QUEST_CHAINS reqLevel curve: "Actors of Greater Calls" lands on
+- * proving_the_bastion (reqLevel 16), the chain where the guild stops being
+- * purely freelance; "Ascended" triggers at reqLevel 34, matching the first
+- * capstone chain (world_ender).
++ * Guild-wide rank names/blurbs/colours, shared by two different threshold
++ * scales below: individual quest chains are tiered by their own reqLevel
++ * (0-34, see rankTierForLevel), while the guild's own rank is tiered by
++ * total Guild Power (0-GUILD_POWER_CEILING, see currentGuildRank). Same six
++ * labels either way -- only the number being measured differs.
+  */
+ export const GUILD_RANK_TIERS: GuildRankTier[] = [
+   {
+-    id: 'freelance_operators', name: 'Freelance Operators', minLevel: 0,
++    id: 'freelance_operators', name: 'Freelance Operators',
+     blurb: 'Whatever is on the board, whoever is free to take it.',
+     color: '#b9ad93',
+   },
+   {
+-    id: 'professional_contractors', name: 'Professional Contractors', minLevel: 8,
++    id: 'professional_contractors', name: 'Professional Contractors',
+     blurb: 'Reputable enough that the work keeps finding the guild first.',
+     color: '#79a86b',
+   },
+   {
+-    id: 'actors_of_greater_calls', name: 'Actors of Greater Calls', minLevel: 15,
++    id: 'actors_of_greater_calls', name: 'Actors of Greater Calls',
+     blurb: 'Asked directly, now, rather than posted to a board.',
+     color: '#5b8fd6',
+   },
+   {
+-    id: 'realms_influence', name: "A Realm's Influence", minLevel: 18,
++    id: 'realms_influence', name: "A Realm's Influence",
+     blurb: 'Territory held, not just visited.',
+     color: '#a874d6',
+   },
+   {
+-    id: 'realms_protector', name: "A Realm's Protector", minLevel: 32,
++    id: 'realms_protector', name: "A Realm's Protector",
+     blurb: 'The thing standing between the Reach and what comes for it.',
+     color: '#d9a441',
+   },
+   {
+-    id: 'ascended', name: 'Ascended', minLevel: 34,
++    id: 'ascended', name: 'Ascended',
+     blurb: 'Known throughout, for reasons nobody has to explain twice.',
+     color: '#d64f4f',
+   },
+ ];
+ 
+-/** The rank tier a given level falls into. Shared by currentGuildRank (the
+- * guild's own level) and the Lore tab (an individual chain's reqLevel). */
++/**
++ * Thresholds for CHAIN reqLevel tiering (a single chain's own difficulty,
++ * 0-34), unrelated to guild rank. "Actors of Greater Calls" lands on
++ * proving_the_bastion (reqLevel 16); "Ascended" triggers at reqLevel 34,
++ * matching the first capstone chain (world_ender). Index-aligned with
++ * GUILD_RANK_TIERS.
++ */
++const CHAIN_LEVEL_THRESHOLDS = [0, 8, 15, 18, 32, 34];
++
++/** The rank tier a given chain reqLevel falls into. Used by the Lore tab
++ * to colour individual chains -- NOT the guild's own rank, see below. */
+ export function rankTierForLevel(level: number): GuildRankTier {
+-  let rank = GUILD_RANK_TIERS[0];
+-  for (const tier of GUILD_RANK_TIERS) {
+-    if (level >= tier.minLevel) rank = tier;
++  let index = 0;
++  for (let i = 0; i < CHAIN_LEVEL_THRESHOLDS.length; i++) {
++    if (level >= CHAIN_LEVEL_THRESHOLDS[i]) index = i;
++  }
++  return GUILD_RANK_TIERS[index];
++}
++
++/**
++ * Thresholds for GUILD rank tiering, evenly spaced across
++ * GUILD_POWER_CEILING (see power.ts for how that ceiling is derived).
++ * A brand-new guild sits at 0/9,900 -> Freelance Operators. A single
++ * level-55 hero with nothing else invested sits at roughly 550/9,900 --
++ * still comfortably Freelance Operators, not Ascended, which is the bug
++ * this replaces (guild rank used to be driven off a single hero's level
++ * alone). "Ascended" is reserved for actually reaching the ceiling --
++ * from there, further ascension stacks (uncapped, see power.ts) are the
++ * only thing left to grow.
++ */
++const GUILD_RANK_POWER_THRESHOLDS = [0, 0.2, 0.4, 0.6, 0.8, 1.0].map(
++  (fraction) => Math.round(fraction * GUILD_POWER_CEILING),
++);
++
++/** The rank tier a given Guild Power total falls into. */
++export function guildRankTierForPower(power: number): GuildRankTier {
++  let index = 0;
++  for (let i = 0; i < GUILD_RANK_POWER_THRESHOLDS.length; i++) {
++    if (power >= GUILD_RANK_POWER_THRESHOLDS[i]) index = i;
+   }
+-  return rank;
++  return GUILD_RANK_TIERS[index];
+ }
+ 
+-/** Highest chain reqLevel among all completed chains, or 0 if none completed yet. */
+-function highestCompletedReqLevel(state: GameState): number {
++/** Guild Power required to reach a given rank tier index, or null if out of range. */
++function powerThresholdForIndex(index: number): number | null {
++  return GUILD_RANK_POWER_THRESHOLDS[index] ?? null;
++}
++
++/** Highest chain reqLevel among all completed chains, or 0 if none completed yet.
++ *  Kept only as a display aid (e.g. lore progress), not part of guild rank anymore. */
++export function highestCompletedReqLevel(state: GameState): number {
+   let highest = 0;
+   for (const id of state.completedChains) {
+     const chain = QUEST_CHAINS.find((c) => c.id === id);
+@@ -78,23 +115,9 @@ function highestCompletedReqLevel(state: GameState): number {
+   return highest;
+ }
+ 
+-/**
+- * The level used to place the guild in a rank tier. Combines two signals so
+- * "Ascended" can trigger the moment a hero reaches capstone level (matching
+- * "starts doing capstone quests", not "finishes one") while never regressing
+- * once a chain has actually been completed at that tier: completedChains
+- * only ever grows, so it acts as a floor even if the hero who reached that
+- * level later retires and resets.
+- */
+-export function effectiveGuildLevel(state: GameState): number {
+-  const chainLevel = highestCompletedReqLevel(state);
+-  const heroLevel = state.heroes.reduce((max, h) => Math.max(max, h.level), 0);
+-  return Math.max(chainLevel, heroLevel);
+-}
+-
+-/** The guild's current rank tier. */
++/** The guild's current rank tier, driven by total Guild Power. */
+ export function currentGuildRank(state: GameState): GuildRankTier {
+-  return rankTierForLevel(effectiveGuildLevel(state));
++  return guildRankTierForPower(guildPowerLevel(state));
+ }
+ 
+ /** The next tier up, or null if already at the highest (Ascended). */
+@@ -103,3 +126,12 @@ export function nextGuildRank(state: GameState): GuildRankTier | null {
+   const index = GUILD_RANK_TIERS.findIndex((t) => t.id === current.id);
+   return GUILD_RANK_TIERS[index + 1] ?? null;
+ }
++
++/** Guild Power still needed to reach the next rank, or null if already at the highest. */
++export function powerToNextRank(state: GameState): number | null {
++  const current = currentGuildRank(state);
++  const index = GUILD_RANK_TIERS.findIndex((t) => t.id === current.id);
++  const nextThreshold = powerThresholdForIndex(index + 1);
++  if (nextThreshold === null) return null;
++  return Math.max(0, nextThreshold - guildPowerLevel(state));
++}
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index dab9840..e2b7b4f 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -972,5 +972,24 @@
+     "default": 8,
+     "min": 0,
+     "description": "Same shape as quest.dailyBurstBonusGold, for XP."
++  },
++  {
++    "id": "quest.critChance",
++    "label": "Quests: critical burst chance (%)",
++    "category": "quests",
++    "value": 8,
++    "default": 8,
++    "min": 0,
++    "max": 100,
++    "description": "Chance, per successful quest, of a Critical Burst -- gold and xp both multiplied by quest.critMultiplier, with its own distinct celebration in the result modal. Independent of (and can stack with) the daily first-burst floor above; deliberately not scaled by any stat so it stays a purely random spike rather than another thing to optimize."
++  },
++  {
++    "id": "quest.critMultiplier",
++    "label": "Quests: critical burst multiplier",
++    "category": "quests",
++    "value": 2.5,
++    "default": 2.5,
++    "min": 1,
++    "description": "Gold/xp multiplier applied on a Critical Burst (see quest.critChance). Applied to the already-resolved reward roll, so it scales with everything else that already fed into it (quest tier, equipment bonuses, events)."
+   }
+ ]
+diff --git a/src/game/managers/HeroManager.ts b/src/game/managers/HeroManager.ts
+index 382d13d..a97c4b2 100644
+--- a/src/game/managers/HeroManager.ts
++++ b/src/game/managers/HeroManager.ts
+@@ -1,4 +1,4 @@
+-import { EQUIPMENT_BY_ID, SET_BY_ID } from '../data/equipment';
++import { EQUIPMENT_BY_ID, GEAR_SCORE_BY_RARITY, SET_BY_ID } from '../data/equipment';
+ import { INJURIES } from '../data/items';
+ import { HERO_CLASSES, RECRUIT_START_LEVEL, xpForLevel } from '../data/progression';
+ import { DIFFICULTY_ORDER } from '../data/quests';
+@@ -105,6 +105,25 @@ export const HeroManager = {
+     return total;
+   },
+ 
++  /**
++   * Sum of GEAR_SCORE_BY_RARITY across every equipped item. Deliberately
++   * flat per tier (see GEAR_SCORE_BY_RARITY) rather than reading the item's
++   * rolled stats -- this is a badge of "how well is this hero geared",
++   * separate from and in addition to the combat-stat bonus gear already
++   * grants via equipmentStats(). Broken/zero-durability items still count:
++   * the badge represents what's equipped, not what's currently usable.
++   */
++  gearScore(hero: Hero): number {
++    let total = 0;
++    for (const item of Object.values(hero.equipment)) {
++      if (!item) continue;
++      const def = EQUIPMENT_BY_ID[item.defId];
++      if (!def) continue;
++      total += GEAR_SCORE_BY_RARITY[def.rarity] ?? 0;
++    }
++    return total;
++  },
++
+   totalStats(hero: Hero): Stats {
+     const gear = HeroManager.equipmentStats(hero);
+     const bonus = hero.bonusStats ?? { strength: 0, endurance: 0, luck: 0, wisdom: 0 };
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 0cb657a..e4d0493 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -487,6 +487,23 @@ export const QuestManager = {
+     }
+     gold = Math.max(0, gold);
+ 
++    // Critical Burst -- a rare, purely random spike on top of the normal
++    // reward roll, independent of the daily first-burst floor below (both
++    // can fire on the same quest, on a very good day -- that's intended,
++    // not a bug to dedupe). Scoped to gold/xp only, not loot chance, which
++    // already has its own personalLoot stage -- keeping crit to raw
++    // currency keeps it legible as "this run just paid extra" rather than
++    // becoming a second loot system layered on the first. Only rolls on
++    // success; a failed quest already pays a reduced consolation and
++    // doesn't need an additional random axis.
++    let critBonus = false;
++    if (success && rng.chance(Tuning.get('quest.critChance'))) {
++      critBonus = true;
++      const mult = Tuning.get('quest.critMultiplier');
++      gold = Math.floor(gold * mult);
++      xp = Math.floor(xp * mult);
++    }
++
+     // Daily first-burst bonus -- see Hero.lastBurstBonusDay's own comment
+     // for why a once-per-day event can safely be generous where every
+     // other lever in the burst formula has to stay conservative. Applied
+@@ -646,6 +663,7 @@ export const QuestManager = {
+       chainAdvanced,
+       eggDropped,
+       dailyBurstBonus: dailyBurstBonus || undefined,
++      critBonus: critBonus || undefined,
+     };
+     state.log.unshift(result);
+     if (state.log.length > 60) state.log.length = 60;
+diff --git a/src/game/power.ts b/src/game/power.ts
+index f044e4c..b9dd210 100644
+--- a/src/game/power.ts
++++ b/src/game/power.ts
+@@ -2,32 +2,101 @@ import { GameState } from './types';
+ import { HeroManager } from './managers/HeroManager';
+ 
+ /**
+- * A single aggregated "how far has this guild come" number, combining every
+- * progress system rather than just one dimension — hero power, renown
+- * invested, vendor relationships built, guild upgrades bought, chains
+- * completed, and accumulated ascension. Purely derived from existing state;
+- * nothing new to save.
++ * Every source contributes at this same "1 level/perk = 20 points" rate --
++ * vendor upgrades, guild facilities, renown perks, and raid upgrades are
++ * all conceptually the same thing (spend a resource, permanently improve
++ * the guild), so they're weighted identically rather than each needing
++ * its own tuned number.
+  */
+-export function guildPowerLevel(state: GameState): number {
+-  let total = 0;
++const UPGRADE_LEVEL_WEIGHT = 20;
++const CHAIN_WEIGHT = 100;
++/** Gear Score feeds Guild Power 1:1 with raw hero stat points -- see power.ts docs. */
++const GEAR_SCORE_WEIGHT = 1;
++const ASCENSION_WEIGHT = 30;
++
++export interface GuildPowerBreakdown {
++  /** Sum of every hero's strength+endurance+luck+wisdom (base + gear + bonus stats). */
++  heroStats: number;
++  /** Sum of every hero's flat, rarity-tier Gear Score (see GEAR_SCORE_BY_RARITY). */
++  gearScore: number;
++  /** Ascension stacks from retired heroes. Deliberately uncapped -- see guildPowerCeiling(). */
++  ascension: number;
++  facilities: number;
++  vendorUpgrades: number;
++  raidUpgrades: number;
++  renownPerks: number;
++  completedChains: number;
++  total: number;
++}
++
++/**
++ * A single aggregated "how far has this guild come" number, combining
++ * every progress system rather than just one dimension. Purely derived
++ * from existing state; nothing new to save.
++ *
++ * IMPORTANT: renown perks are counted by LEVELS OWNED (state.renownPerks),
++ * never by the spendable state.renown currency balance. Renown is earned
++ * by retiring and spent buying perks -- if we counted the balance, buying
++ * a perk would make Guild Power go DOWN, which is exactly backwards.
++ */
++export function guildPowerBreakdown(state: GameState): GuildPowerBreakdown {
++  let heroStats = 0;
++  let gearScore = 0;
++  let ascension = 0;
+ 
+   for (const hero of state.heroes) {
+     const stats = HeroManager.totalStats(hero);
+-    total += stats.strength + stats.endurance + stats.luck + stats.wisdom;
+-    total += hero.ascension * 30;
++    heroStats += stats.strength + stats.endurance + stats.luck + stats.wisdom;
++    gearScore += HeroManager.gearScore(hero) * GEAR_SCORE_WEIGHT;
++    ascension += hero.ascension * ASCENSION_WEIGHT;
+   }
+ 
+-  total += state.renown * 2;
+-  total += Object.values(state.vendorLevels).reduce((sum, lvl) => sum + lvl, 0) * 50;
+-  total += Object.values(state.upgrades).reduce((sum, lvl) => sum + lvl, 0) * 20;
+-  total += state.completedChains.length * 100;
++  const facilities = Object.values(state.guild).reduce((sum, lvl) => sum + lvl, 0) * UPGRADE_LEVEL_WEIGHT;
++  const vendorUpgrades = Object.values(state.upgrades).reduce((sum, lvl) => sum + lvl, 0) * UPGRADE_LEVEL_WEIGHT;
++  const raidUpgrades = Object.values(state.raidUpgrades).reduce((sum, lvl) => sum + lvl, 0) * UPGRADE_LEVEL_WEIGHT;
++  const renownPerks = Object.values(state.renownPerks).reduce((sum, lvl) => sum + lvl, 0) * UPGRADE_LEVEL_WEIGHT;
++  const completedChains = state.completedChains.length * CHAIN_WEIGHT;
++
++  const total = heroStats + gearScore + ascension + facilities + vendorUpgrades + raidUpgrades + renownPerks + completedChains;
+ 
+-  return Math.floor(total);
++  return {
++    heroStats, gearScore, ascension, facilities, vendorUpgrades, raidUpgrades, renownPerks, completedChains,
++    total: Math.floor(total),
++  };
+ }
+ 
++export function guildPowerLevel(state: GameState): number {
++  return guildPowerBreakdown(state).total;
++}
++
++/**
++ * The finite ceiling of Guild Power at "everything unlocked, every hero
++ * slot filled with a level-55 hero in full legendary gear, every upgrade
++ * tree maxed, every chain complete" -- used only to size the rank bands
++ * in guildRank.ts. Deliberately EXCLUDES ascension: retirement stacks are
++ * uncapped by design (that's the point -- see PrestigeManager.retire), so
++ * counting them here would make the ceiling a moving target. Ascension is
++ * instead what carries a guild from "max rank" into the "Ascended" band.
++ *
++ * Hand-verified against current content rather than computed live from
++ * every data file, since several of those numbers (average stat growth
++ * across hero classes, effective renown-perk caps including tier2) don't
++ * reduce to a single clean formula. Re-derive this if hero slots, gear
++ * slots, upgrade trees, or chain count change meaningfully:
++ *
++ *   heroes:       10 slots x ~212 avg stat total at level 55         = 2,120
++ *   gear score:   10 slots x 9 gear slots x 30 (legendary)           = 2,700
++ *   upgrades:     254 total levels (79 vendor + 47 facilities
++ *                 + 114 renown incl. tier2 + 14 raid) x 20           = 5,080
++ *   chains:       20 chains x 100                                   = 2,000
++ *   ------------------------------------------------------------------------
++ *   ceiling                                                         = 9,900
++ */
++export const GUILD_POWER_CEILING = 9_900;
++
+ /**
+  * Level tiers echo the same colour language as equipment rarity (see
+- * RARITY_COLOR in util.ts) — a level-50 hero's ring glows the same amber as
++ * RARITY_COLOR in util.ts) -- a level-50 hero's ring glows the same amber as
+  * a legendary weapon, reinforcing "you've become that" rather than
+  * introducing a second, unrelated colour system to learn.
+  */
+diff --git a/src/game/types.ts b/src/game/types.ts
+index fbb2826..8183454 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -373,6 +373,11 @@ export interface QuestResult {
+    *  see Hero.lastBurstBonusDay. Purely informational, for the result
+    *  modal to call it out. */
+   dailyBurstBonus?: boolean;
++  /** True when a Critical Burst (see quest.critChance in tuning.json)
++   *  multiplied gold/xp above -- already folded into the numbers, purely
++   *  informational for the result modal's celebration. Independent of,
++   *  and can stack with, dailyBurstBonus on the same quest. */
++  critBonus?: boolean;
+ }
+ 
+ /**
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 0a37978..f096366 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -1337,6 +1337,41 @@ input[type='range'] {
+ }
+ .burst-xp { color: var(--moss); text-shadow: 0 0 14px rgba(121, 168, 107, 0.5); }
+ .burst-gold { color: var(--brass); text-shadow: 0 0 14px rgba(217, 164, 65, 0.5); animation-delay: 80ms; }
++
++/* ------------------------------ critical burst ------------------------------ */
++/* A rare reward-roll spike (see quest.critChance in tuning.json) gets its
++   own, bigger celebration layered on the normal reward-burst: the numbers
++   scale up and glow gold regardless of whether they're XP or gold, a
++   "Critical Burst!" label pops in above, and a few extra coin particles
++   join the usual collect-fly burst on dismiss. */
++.burst-xp.crit, .burst-gold.crit {
++  color: var(--brass);
++  text-shadow: 0 0 10px color-mix(in srgb, var(--brass) 90%, transparent),
++    0 0 22px color-mix(in srgb, var(--brass) 55%, transparent);
++  animation: burst-pop-crit 480ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
++}
++.burst-gold.crit { animation-delay: 80ms; }
++@keyframes burst-pop-crit {
++  0% { transform: scale(0.4); opacity: 0; }
++  55% { transform: scale(1.4); opacity: 1; }
++  100% { transform: scale(1.15); opacity: 1; }
++}
++.crit-burst-label {
++  text-align: center;
++  margin: 2px 0 0;
++  font-family: var(--font-display);
++  font-size: 0.8125rem;
++  letter-spacing: 0.04em;
++  color: var(--brass);
++  text-shadow: 0 0 10px color-mix(in srgb, var(--brass) 80%, transparent);
++  animation: burst-pop 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
++  animation-delay: 120ms;
++}
++.collect-particle.coin.crit {
++  font-size: 1.125rem;
++  color: var(--brass);
++  text-shadow: 0 0 12px color-mix(in srgb, var(--brass) 90%, transparent);
++}
+ .burst-levelup {
+   text-align: center;
+   font-size: 0.875rem;
+@@ -1844,3 +1879,47 @@ button.harvest-item:hover {
+ .craft-picker-row:disabled { opacity: 0.4; cursor: default; }
+ .craft-picker-row.selected { border-color: var(--brass); background: var(--panel-3); }
+ .craft-picker-check { color: var(--brass); font-weight: 700; }
++
++/* ------------------------------ gear score badge ---------------------------- */
++/* Colour-banded like RarityPill (see gearScoreTier in data/equipment.ts),
++   with a brief glow pulse the instant the score crosses into a new tier --
++   GearScoreBadge.tsx sets --gear-score-color inline and toggles the
++   .gear-score-tierup class for the duration of the pulse. */
++
++.gear-score-badge {
++  display: inline-flex;
++  align-items: center;
++  gap: 3px;
++  font-weight: 700;
++  font-size: 0.8125rem;
++  color: var(--gear-score-color, var(--parchment));
++  text-shadow: 0 0 6px color-mix(in srgb, var(--gear-score-color, transparent) 55%, transparent);
++  transition: color 200ms ease, text-shadow 200ms ease;
++}
++.gear-score-badge-small {
++  font-size: 0.6875rem;
++}
++.gear-score-wrap {
++  display: inline-flex;
++  flex-direction: column;
++  align-items: flex-start;
++  gap: 3px;
++}
++.gear-score-bar {
++  width: 100px;
++}
++.gear-score-bar > span {
++  transition: width 300ms ease, background 300ms ease;
++}
++.gear-score-tierup {
++  animation: gear-score-tierup-pulse 900ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
++}
++@keyframes gear-score-tierup-pulse {
++  0% { transform: scale(1); text-shadow: 0 0 6px color-mix(in srgb, var(--gear-score-color, transparent) 55%, transparent); }
++  35% {
++    transform: scale(1.35);
++    text-shadow: 0 0 18px color-mix(in srgb, var(--gear-score-color, transparent) 95%, transparent),
++      0 0 30px color-mix(in srgb, var(--gear-score-color, transparent) 60%, transparent);
++  }
++  100% { transform: scale(1); text-shadow: 0 0 6px color-mix(in srgb, var(--gear-score-color, transparent) 55%, transparent); }
++}
+diff --git a/src/ui/GearScoreBadge.tsx b/src/ui/GearScoreBadge.tsx
+new file mode 100644
+index 0000000..5f62c16
+--- /dev/null
++++ b/src/ui/GearScoreBadge.tsx
+@@ -0,0 +1,58 @@
++import { useEffect, useRef, useState } from 'react';
++import { GEAR_SCORE_TIERS, gearScoreTier } from '../game/data/equipment';
++
++/**
++ * A hero's Gear Score, colour-banded the same way RarityPill colours an
++ * item -- see gearScoreTier in data/equipment.ts. Fires a brief glow pulse
++ * the moment the score crosses into a new tier (e.g. Rare -> Epic), same
++ * "flash once on the actual moment of crossing" precedent as useMaxFlash
++ * in maxFlash.tsx, just a colour pulse instead of a star burst since this
++ * can happen repeatedly over a playthrough rather than once per item.
++ *
++ * Tracks its own previous tier via a ref rather than a shared hook --
++ * each badge instance is scoped to one hero, so there's nothing to
++ * coordinate across panels.
++ */
++export function GearScoreBadge({
++  score, size = 'normal', showProgress = false,
++}: {
++  score: number; size?: 'small' | 'normal'; showProgress?: boolean;
++}) {
++  const tier = gearScoreTier(score);
++  const nextTier = GEAR_SCORE_TIERS[tier.index + 1];
++  const prevIndexRef = useRef<number | null>(null);
++  const [flashing, setFlashing] = useState(false);
++
++  useEffect(() => {
++    const prev = prevIndexRef.current;
++    if (prev !== null && tier.index > prev) {
++      setFlashing(true);
++      const id = window.setTimeout(() => setFlashing(false), 900);
++      prevIndexRef.current = tier.index;
++      return () => window.clearTimeout(id);
++    }
++    prevIndexRef.current = tier.index;
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [tier.index]);
++
++  // Progress within the current tier band toward the next one -- omitted
++  // entirely at Legendary (nothing further to progress toward).
++  const progress = nextTier ? Math.min(1, (score - tier.min) / (nextTier.min - tier.min)) : 1;
++
++  return (
++    <span className="gear-score-wrap">
++      <span
++        className={`gear-score-badge ${size === 'small' ? 'gear-score-badge-small' : ''} ${flashing ? 'gear-score-tierup' : ''}`}
++        style={{ '--gear-score-color': tier.color } as React.CSSProperties}
++        title={`Gear Score ${score} — ${tier.name}${nextTier ? ` (${nextTier.min - score} to ${nextTier.name})` : ' (max tier)'}`}
++      >
++        ⛨ {score}
++      </span>
++      {showProgress && (
++        <div className="bar gear-score-bar" title={nextTier ? `${nextTier.min - score} more to ${nextTier.name}` : 'Max tier reached'}>
++          <span style={{ width: `${progress * 100}%`, background: tier.color }} />
++        </div>
++      )}
++    </span>
++  );
++}
+diff --git a/src/ui/QuestResultModal.tsx b/src/ui/QuestResultModal.tsx
+index f795c0a..15d4407 100644
+--- a/src/ui/QuestResultModal.tsx
++++ b/src/ui/QuestResultModal.tsx
+@@ -26,6 +26,14 @@ const XP_PARTICLES = [
+   { dx: 24, dy: -100, rot: 12, delay: 70 },
+   { dx: 2, dy: -118, rot: 2, delay: 130 },
+ ];
++/** Extra particles layered on top of COIN_PARTICLES/XP_PARTICLES for a
++ * Critical Burst -- same fly-and-fade language, just a fuller burst so a
++ * crit visibly reads as "more" rather than only the text turning gold. */
++const CRIT_EXTRA_COIN_PARTICLES = [
++  { dx: -80, dy: -30, rot: -30, delay: 60 },
++  { dx: 80, dy: -30, rot: 30, delay: 100 },
++  { dx: 0, dy: -50, rot: 0, delay: 20 },
++];
+ 
+ /**
+  * Shown when a quest resolves while the player is watching. Split into an
+@@ -69,7 +77,7 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult;
+   const handleDismiss = () => {
+     if (dismissing) return;
+     setDismissing(true);
+-    playSound('collect');
++    playSound(result.critBonus ? 'legendary_drop' : 'collect');
+     timeoutRef.current = window.setTimeout(() => engine.dismissResult(), DISMISS_DELAY_MS);
+   };
+ 
+@@ -89,10 +97,11 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult;
+           {result.success ? 'The contract is fulfilled.' : 'The contract failed.'}
+         </p>
+ 
+-        <div className="reward-burst">
+-          {result.xp > 0 && <span className="burst-xp">+{result.xp} XP</span>}
+-          {result.gold > 0 && <span className="burst-gold">+{formatGold(result.gold)} gold</span>}
++        <div className={`reward-burst ${result.critBonus ? 'crit' : ''}`}>
++          {result.xp > 0 && <span className={`burst-xp ${result.critBonus ? 'crit' : ''}`}>+{result.xp} XP</span>}
++          {result.gold > 0 && <span className={`burst-gold ${result.critBonus ? 'crit' : ''}`}>+{formatGold(result.gold)} gold</span>}
+         </div>
++        {result.critBonus && <p className="crit-burst-label">⚡ Critical Burst!</p>}
+         {result.levelsGained > 0 && <p className="good burst-levelup">Level up ×{result.levelsGained}!</p>}
+         {result.dailyBurstBonus && (
+           <p className="good" style={{ fontSize: '0.75rem' }}>
+@@ -174,6 +183,15 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult;
+                 ◆
+               </span>
+             ))}
++            {result.gold > 0 && result.critBonus && CRIT_EXTRA_COIN_PARTICLES.map((p, i) => (
++              <span
++                key={`crit-coin-${i}`}
++                className="collect-particle coin crit"
++                style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, animationDelay: `${p.delay}ms` } as CSSProperties}
++              >
++                ◆
++              </span>
++            ))}
+             {result.xp > 0 && XP_PARTICLES.map((p, i) => (
+               <span
+                 key={`xp-${i}`}
+diff --git a/src/ui/panels/DashboardPanel.tsx b/src/ui/panels/DashboardPanel.tsx
+index 9eb6a78..e4d862e 100644
+--- a/src/ui/panels/DashboardPanel.tsx
++++ b/src/ui/panels/DashboardPanel.tsx
+@@ -4,8 +4,8 @@ import { useEngine } from '../useEngine';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import { VENDORS, vendorUpgrades, xpForLevel } from '../../game/data/progression';
+ import { AchievementManager } from '../../game/managers/AchievementManager';
+-import { guildPowerLevel, levelTierColor, levelTierName } from '../../game/power';
+-import { currentGuildRank, nextGuildRank } from '../../game/data/guildRank';
++import { guildPowerBreakdown, levelTierColor, levelTierName } from '../../game/power';
++import { currentGuildRank, nextGuildRank, powerToNextRank } from '../../game/data/guildRank';
+ import { formatGold, formatNumber } from '../../game/util';
+ 
+ export function Ring({
+@@ -32,9 +32,12 @@ export function Ring({
+ export function DashboardPanel() {
+   const engine = useEngine();
+   const state = engine.state;
+-  const power = guildPowerLevel(state);
++  const breakdown = guildPowerBreakdown(state);
++  const power = breakdown.total;
+   const rank = currentGuildRank(state);
+   const next = nextGuildRank(state);
++  const powerNeeded = powerToNextRank(state);
++  const [showBreakdown, setShowBreakdown] = useState(false);
+   const achProgress = AchievementManager.progress(state);
+   const guildAgeDays = Math.max(0, Math.floor((Date.now() - state.createdAt) / (24 * 3600000)));
+ 
+@@ -85,16 +88,18 @@ export function DashboardPanel() {
+           <b className="gold-text">{rank.name}</b>
+         </div>
+         <p className="tiny muted" style={{ margin: '2px 0 0' }}>{rank.blurb}</p>
+-        {next && (
++        {next && powerNeeded !== null && (
+           <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+-            Next: {next.name} — reach level {next.minLevel} or complete a chain at that level.
++            Next: {next.name} — {formatNumber(powerNeeded)} more Guild Power.
+           </p>
+         )}
+       </div>
+ 
+       <div
+         className="card power-card"
+-        title="Combines hero stats, ascension, Renown, vendor relationships, guild upgrades, and completed story chains into one number."
++        style={{ cursor: 'pointer' }}
++        onClick={() => setShowBreakdown((v) => !v)}
++        title="Tap to see what makes up this number. Combines hero stats, gear score, ascension, guild upgrades, renown perks, raid upgrades, and completed story chains."
+       >
+         <div className="tiny muted" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>Guild Power</div>
+         <div className="power-number">{power.toLocaleString()}</div>
+@@ -103,6 +108,18 @@ export function DashboardPanel() {
+           <span style={{ color: 'var(--violet)' }}>✦ {formatNumber(state.renown)} renown</span>
+           <span className="muted">Day {guildAgeDays}</span>
+         </div>
++        {showBreakdown && (
++          <div className="tiny muted" style={{ marginTop: 8, borderTop: '1px solid var(--panel-3)', paddingTop: 6 }}>
++            <div className="spread"><span>Hero Levels &amp; Stats</span><span>{breakdown.heroStats.toLocaleString()}</span></div>
++            <div className="spread"><span>Gear Score</span><span>{breakdown.gearScore.toLocaleString()}</span></div>
++            <div className="spread"><span>Guild Facilities</span><span>{breakdown.facilities.toLocaleString()}</span></div>
++            <div className="spread"><span>Vendor Upgrades</span><span>{breakdown.vendorUpgrades.toLocaleString()}</span></div>
++            <div className="spread"><span>Raid Upgrades</span><span>{breakdown.raidUpgrades.toLocaleString()}</span></div>
++            <div className="spread"><span>Renown Perks</span><span>{breakdown.renownPerks.toLocaleString()}</span></div>
++            <div className="spread"><span>Completed Chains</span><span>{breakdown.completedChains.toLocaleString()}</span></div>
++            <div className="spread"><span>Ascension</span><span>{breakdown.ascension.toLocaleString()}</span></div>
++          </div>
++        )}
+       </div>
+ 
+       <div className="section-heading">Heroes</div>
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 1458a7b..f79b79c 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -3,12 +3,14 @@ import { useEngine } from '../useEngine';
+ import { useSettings } from '../useSettings';
+ import { GameEngine } from '../../game/engine';
+ import { EquipmentManager } from '../../game/managers/EquipmentManager';
++import { HeroManager } from '../../game/managers/HeroManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { EQUIPMENT_BY_ID, ITEM_SETS } from '../../game/data/equipment';
+ import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { describeMods, describeStats, formatGold, RARITY_COLOR } from '../../game/util';
+ import { ItemIcon, ConsumableIcon } from '../icons';
++import { GearScoreBadge } from '../GearScoreBadge';
+ 
+ const SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet', 'cloak'];
+ 
+@@ -307,14 +309,15 @@ export function EquipmentPanel() {
+         Buying and selling both happen in the Shop — this is just what you have.
+       </p>
+ 
+-      <div className="row wrap" style={{ marginBottom: 10 }}>
++      <div className="row wrap" style={{ marginBottom: 10, alignItems: 'center' }}>
+         {state.heroes.map((h) => (
+           <button key={h.id} className={h.id === hero.id ? 'btn-primary' : ''} onClick={() => setHeroId(h.id)}>
+             {h.name}
+           </button>
+         ))}
+         <div style={{ flex: 1 }} />
+-        <button onClick={() => engine.repairAll()} disabled={repairBill === 0}>
++        <GearScoreBadge score={HeroManager.gearScore(hero)} showProgress />
++        <button onClick={() => engine.repairAll()} disabled={repairBill === 0} style={{ marginLeft: 10 }}>
+           Repair everything · {formatGold(repairBill)}
+         </button>
+       </div>
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index 288a8ee..33000de 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -9,6 +9,7 @@ import { HERO_CLASSES, RECRUIT_COST, SKINS } from '../../game/data/progression';
+ import { HeroClass, Stats } from '../../game/types';
+ import { describeMods, formatDuration, formatGold } from '../../game/util';
+ import { HeroSprite } from '../sprites/HeroSprite';
++import { GearScoreBadge } from '../GearScoreBadge';
+ 
+ const STAT_KEYS: (keyof Stats)[] = ['strength', 'endurance', 'luck', 'wisdom'];
+ 
+@@ -75,6 +76,7 @@ export function HeroesPanel() {
+                     {hero.ascension > 0 && (
+                       <> · {PrestigeManager.rankFor(hero) ?? `ascended ×${hero.ascension}`}</>
+                     )}
++                    {' · '}<GearScoreBadge score={HeroManager.gearScore(hero)} size="small" />
+                   </span>
+                 </div>
+                 <div className="bar xp" style={{ marginTop: 6 }}><span style={{ width: `${(hero.xp / toNext) * 100}%` }} /></div>
+diff --git a/src/ui/panels/LorePanel.tsx b/src/ui/panels/LorePanel.tsx
+index 4964d04..814e222 100644
+--- a/src/ui/panels/LorePanel.tsx
++++ b/src/ui/panels/LorePanel.tsx
+@@ -1,7 +1,7 @@
+ import { useState } from 'react';
+ import type { MouseEvent, CSSProperties } from 'react';
+ import { QUEST_CHAINS, ChainDef } from '../../game/data/quests';
+-import { GUILD_RANK_TIERS, currentGuildRank, nextGuildRank, rankTierForLevel } from '../../game/data/guildRank';
++import { GUILD_RANK_TIERS, currentGuildRank, nextGuildRank, powerToNextRank, rankTierForLevel } from '../../game/data/guildRank';
+ import { outgoingConnections, incomingConnections } from '../../game/data/chainConnections';
+ import { RAIDS, RAID_ENCOUNTER_BY_ID, isRaidUnlocked } from '../../game/data/raids';
+ import { useEngine } from '../useEngine';
+@@ -334,6 +334,7 @@ export function LorePanel() {
+ 
+   const rank = currentGuildRank(state);
+   const next = nextGuildRank(state);
++  const powerNeeded = powerToNextRank(state);
+ 
+   return (
+     <>
+@@ -350,9 +351,9 @@ export function LorePanel() {
+           </span>
+         </div>
+         <p className="tiny muted" style={{ margin: '4px 0 0' }}>{rank.blurb}</p>
+-        {next && (
++        {next && powerNeeded !== null && (
+           <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+-            Next: {next.name} — reach level {next.minLevel} or complete a chain at that level.
++            Next: {next.name} — {powerNeeded.toLocaleString()} more Guild Power.
+           </p>
+         )}
+       </div>

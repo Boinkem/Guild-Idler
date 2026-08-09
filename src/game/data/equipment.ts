@@ -24,6 +24,49 @@ export const RARITY_PRICE_MULT: Record<Rarity, number> = {
 };
 
 /**
+ * Flat "Gear Score" awarded per equipped item, purely by rarity tier --
+ * deliberately NOT derived from the item's actual rolled stats/mods (those
+ * already feed hero power separately via equipmentStats). This is a clean,
+ * predictable prestige number, the equivalent of an "item level" badge: a
+ * legendary always contributes 30 regardless of which legendary it is or
+ * how it rolled, so it reads consistently everywhere it's shown (hero
+ * card, Guild Power breakdown, tier-colour breakpoints).
+ */
+export const GEAR_SCORE_BY_RARITY: Record<Rarity, number> = {
+  common: 1, uncommon: 3, rare: 7, epic: 15, legendary: 30,
+};
+
+/** Max possible Gear Score for one hero: 9 equipment slots, all legendary. */
+export const GEAR_SCORE_MAX = 9 * GEAR_SCORE_BY_RARITY.legendary;
+
+/**
+ * Gear Score tiers, evenly spaced across GEAR_SCORE_MAX and reusing the
+ * same rarity palette as everything else (RARITY_COLOR in util.ts) -- a
+ * hero's Gear Score badge glows the same amber as a legendary item, same
+ * "one colour language" reasoning as levelTierColor in power.ts. Distinct
+ * from item rarity itself: this bands the *sum* across all equipped gear,
+ * not any single item.
+ */
+export const GEAR_SCORE_TIERS: { name: string; min: number; color: string }[] = [
+  { name: 'Common', min: 0, color: '#b9ad93' },
+  { name: 'Uncommon', min: Math.round(GEAR_SCORE_MAX * 0.2), color: '#79a86b' },
+  { name: 'Rare', min: Math.round(GEAR_SCORE_MAX * 0.4), color: '#5b8fd6' },
+  { name: 'Epic', min: Math.round(GEAR_SCORE_MAX * 0.6), color: '#a874d6' },
+  { name: 'Legendary', min: Math.round(GEAR_SCORE_MAX * 0.8), color: '#d9a441' },
+];
+
+/** The Gear Score tier (name + colour + min threshold) a given score falls
+ * into, plus its index -- the index is what callers use to detect a
+ * breakpoint crossing. */
+export function gearScoreTier(score: number): { name: string; color: string; min: number; index: number } {
+  let index = 0;
+  for (let i = 0; i < GEAR_SCORE_TIERS.length; i++) {
+    if (score >= GEAR_SCORE_TIERS[i].min) index = i;
+  }
+  return { ...GEAR_SCORE_TIERS[index], index };
+}
+
+/**
  * Equipment lives in json/equipment.json so it can be edited via
  * tools/devtool without touching TypeScript.
  */
