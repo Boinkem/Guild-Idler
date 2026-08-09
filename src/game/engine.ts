@@ -16,7 +16,7 @@ import { HarvestManager } from './managers/HarvestManager';
 import { PetManager } from './managers/PetManager';
 import { CraftingManager } from './managers/CraftingManager';
 import { SKIN_BY_ID, SKIN_PRICE, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
-import { EQUIPMENT_BY_ID, SET_BY_ID } from './data/equipment';
+import { EQUIPMENT_BY_ID, SET_BY_ID, GEAR_SCORE_BY_RARITY, EQUIP_SLOTS } from './data/equipment';
 import { RAID_BY_ID } from './data/raids';
 import { playSound } from './sound';
 import { TESTING_TOOLS_ENABLED } from './testingTools';
@@ -910,6 +910,52 @@ export class GameEngine {
   }
 
   /**
+   * Sends every idle hero (not currently questing) on their own best
+   * contract, via the same QuestManager.pickBestQuest scoring Quick-assign
+   * already uses on the currently-open hero -- this is the roster-wide
+   * version of that button. Skips any hero with nothing eligible on their
+   * own board rather than failing the whole batch over one hero with an
+   * empty pool. Gives each sent hero the same Auto-Chain streak setup a
+   * manual single send would (see startQuest above), but deliberately
+   * never opts a hero into chain-stepping -- a bulk "send everyone"
+   * action picking a specific chain stage to auto-advance on a player's
+   * behalf would be a much bigger decision than this button should make
+   * silently. One summary toast and one save at the end, not one per hero
+   * -- same "don't spam the toast queue for a bulk action" shape as
+   * repairAll(). Returns how many heroes were actually sent.
+   */
+  sendAllIdle(): number {
+    const now = Date.now();
+    const level = this.state.upgrades['auto_chain'] ?? 0;
+    let sent = 0;
+    for (const hero of this.state.heroes) {
+      if (hero.status === 'questing') continue;
+      const offer = QuestManager.pickBestQuest(this.state, hero, now);
+      if (!offer) continue;
+      const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], now);
+      if (error) continue;
+      if (level > 0) {
+        const range = AUTO_CHAIN_RANGES[level];
+        hero.autoChainTarget = range.min + Math.floor(Math.random() * (range.max - range.min + 1));
+        hero.autoChainCount = 1;
+      } else {
+        hero.autoChainTarget = null;
+        hero.autoChainCount = 0;
+      }
+      hero.autoAdvanceChainId = null;
+      sent++;
+    }
+    if (sent > 0) {
+      playSound('depart');
+      this.say(sent === 1 ? '1 hero sent out on a contract.' : `${sent} heroes sent out on contracts.`);
+      void this.saveNow();
+    } else {
+      this.say('No idle heroes have an open contract right now.');
+    }
+    return sent;
+  }
+
+  /**
    * Cancels a hero's active quest early and brings them straight home --
    * no reward, no failure penalty, just a clean cut. Also stops any
    * Auto-Chain streak or chain-stepping the hero had queued up, since
@@ -1099,6 +1145,71 @@ export class GameEngine {
     if (error) return this.say(error);
     this.say('Sold.');
     void this.saveNow();
+  }
+
+  /** Bulk-sells every stash item at or below `maxRarity` in one action --
+   *  the "clear out the junk" counterpart to selling one item at a time.
+   *  Crafted and enchanted items are skipped regardless of rarity (see
+   *  ShopManager.sellBelowRarity's own comment). One summary toast, not
+   *  one per item sold. */
+  sellJunk(maxRarity: Rarity) {
+    const { count, gold } = ShopManager.sellBelowRarity(this.state, maxRarity);
+    if (count === 0) return this.say('Nothing in the stash qualifies.');
+    playSound('purchase');
+    this.say(`Sold ${count} item${count === 1 ? '' : 's'} for ${gold} gold.`);
+    void this.saveNow();
+  }
+
+  /**
+   * For each of a hero's 9 equipment slots, equips the highest-Gear-Score
+   * eligible item currently sitting in the stash if it beats what's
+   * already equipped there -- the bulk counterpart to picking through the
+   * Stash one item at a time. Gear Score is the same flat, rarity-tier
+   * value HeroManager.gearScore already sums (see GEAR_SCORE_BY_RARITY);
+   * ties are left alone rather than swapped for swapping's sake. Skips
+   * anything the hero can't wear yet (reqLevel), same as a manual equip
+   * would refuse. Loops slot-by-slot via EquipmentManager.equip itself so
+   * a displaced item lands back in the stash exactly the way a manual
+   * equip already handles it, and a later slot can immediately see an
+   * item the earlier slot's displacement just freed up. Returns how many
+   * slots actually changed. */
+  equipBestGear(heroId: string): number {
+    const hero = this.hero(heroId);
+    if (!hero) return 0;
+    if (hero.status === 'questing') {
+      this.say(`${hero.name} is away on a quest.`);
+      return 0;
+    }
+    let changed = 0;
+    for (const slot of EQUIP_SLOTS) {
+      const currentItem = hero.equipment[slot];
+      const currentDef = currentItem ? EQUIPMENT_BY_ID[currentItem.defId] : undefined;
+      const currentScore = currentDef ? GEAR_SCORE_BY_RARITY[currentDef.rarity] ?? 0 : -1;
+      let best: typeof currentItem = undefined;
+      let bestScore = currentScore;
+      for (const item of this.state.stash) {
+        const def = EQUIPMENT_BY_ID[item.defId];
+        if (!def || def.slot !== slot) continue;
+        if (hero.level < def.reqLevel) continue;
+        const score = GEAR_SCORE_BY_RARITY[def.rarity] ?? 0;
+        if (score > bestScore) {
+          bestScore = score;
+          best = item;
+        }
+      }
+      if (best) {
+        const error = EquipmentManager.equip(this.state, hero, best);
+        if (!error) changed++;
+      }
+    }
+    if (changed > 0) {
+      this.checkSetBonusMilestones(hero);
+      this.say(`Equipped ${changed} better item${changed === 1 ? '' : 's'} on ${hero.name}.`);
+      void this.saveNow();
+    } else {
+      this.say(`Nothing in the stash outranks what ${hero.name} already has equipped.`);
+    }
+    return changed;
   }
 
   buyConsumable(defId: string, amount = 1) {

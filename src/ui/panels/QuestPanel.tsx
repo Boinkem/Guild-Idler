@@ -297,6 +297,13 @@ export function QuestPanel() {
     if (confirm('Cancel the current quest and bring the hero home?')) engine.recallHero(heroId);
   };
 
+  // Roster-wide count of heroes not currently questing -- drives the "Send
+  // All Idle" button (see engine.sendAllIdle). Doesn't check whether each
+  // idle hero actually has an eligible contract; sendAllIdle itself skips
+  // anyone with nothing open rather than the button needing to know that
+  // in advance.
+  const idleCount = state.heroes.filter((h) => h.status !== 'questing').length;
+
   // Quick-assign now acts on whichever hero's tab is open, sending them on
   // the best contract from their own board -- the per-hero equivalent of
   // the old board-wide "first idle hero, first contract they qualify for"
@@ -373,7 +380,19 @@ export function QuestPanel() {
       )}
 
       {/* ------------------------------- hero tabs ------------------------------- */}
-      <div className="section-heading">Heroes</div>
+      <div className="spread" style={{ alignItems: 'center' }}>
+        <div className="section-heading" style={{ marginBottom: 0 }}>Heroes</div>
+        {idleCount > 0 && (
+          <button
+            className="btn-ghost"
+            style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+            onClick={() => engine.sendAllIdle()}
+            title="Send every idle hero on their own best contract"
+          >
+            Send All Idle ({idleCount})
+          </button>
+        )}
+      </div>
       <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
         {state.heroes.map((h) => (
           <HeroTab key={h.id} hero={h} selected={h.id === selectedHero.id} onSelect={() => setSelectedHeroId(h.id)} />

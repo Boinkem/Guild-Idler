@@ -1,4 +1,4 @@
-import { EquipmentDef, ItemSet, Rarity } from '../types';
+import { EquipSlot, EquipmentDef, ItemSet, Rarity } from '../types';
 
 /** Loot weight and shop pricing scale off rarity. */
 export const RARITY_WEIGHT: Record<Rarity, number> = {
@@ -38,6 +38,14 @@ export const GEAR_SCORE_BY_RARITY: Record<Rarity, number> = {
 
 /** Max possible Gear Score for one hero: 9 equipment slots, all legendary. */
 export const GEAR_SCORE_MAX = 9 * GEAR_SCORE_BY_RARITY.legendary;
+
+/**
+ * Every equipment slot a hero has, in the fixed display order
+ * EquipmentPanel already used locally -- pulled out here so
+ * engine.equipBestGear can iterate the same set without either duplicating
+ * the list or importing a UI file into game logic.
+ */
+export const EQUIP_SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet', 'cloak'];
 
 /**
  * Gear Score tiers, evenly spaced across GEAR_SCORE_MAX and reusing the

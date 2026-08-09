@@ -1,8 +1,8 @@
 import { EQUIPMENT, EQUIPMENT_BY_ID, RARITY_WEIGHT } from '../data/equipment';
 import { CONSUMABLES } from '../data/items';
-import { EquipmentItem, GameState, ShopStock } from '../types';
+import { EquipmentItem, GameState, Rarity, ShopStock } from '../types';
 import { createRng, uid } from '../rng';
-import { HOUR } from '../util';
+import { HOUR, RARITY_ORDER } from '../util';
 import { EquipmentManager } from './EquipmentManager';
 import { ModifierManager } from './ModifierManager';
 import { rerollDay, rerollsUsedToday, nextRerollCost } from '../data/reroll';
@@ -185,6 +185,36 @@ export const ShopManager = {
     state.gold += value;
     state.stats.goldEarned += value;
     return null;
+  },
+
+  /**
+   * Bulk-sells every stash item at or below `maxRarity` -- the "clear out
+   * the junk" counterpart to selling one item at a time. Stash-only, same
+   * as sell() -- equipped gear is never touched, so nothing a hero is
+   * currently wearing can be swept up by accident regardless of its
+   * rarity. Crafted items (`customMods` set) and enchanted items
+   * (`enchantStats` set) are skipped even if their base rarity qualifies
+   * -- both represent player effort/materials spent beyond what the
+   * rarity alone reflects, so a blanket rarity sweep shouldn't be the
+   * thing that sells one off by surprise. Returns how many items sold and
+   * the total gold earned, so the caller can report a single summary
+   * rather than one toast per item.
+   */
+  sellBelowRarity(state: GameState, maxRarity: Rarity): { count: number; gold: number } {
+    const maxIndex = RARITY_ORDER.indexOf(maxRarity);
+    const toSell = state.stash.filter((item) => {
+      if (item.customMods || (item.enchantStats && Object.keys(item.enchantStats).length > 0)) return false;
+      const def = EQUIPMENT_BY_ID[item.defId];
+      if (!def) return false;
+      return RARITY_ORDER.indexOf(def.rarity) <= maxIndex;
+    });
+    if (toSell.length === 0) return { count: 0, gold: 0 };
+    const sellUids = new Set(toSell.map((i) => i.uid));
+    const gold = toSell.reduce((sum, item) => sum + EquipmentManager.sellValue(item), 0);
+    state.stash = state.stash.filter((i) => !sellUids.has(i.uid));
+    state.gold += gold;
+    state.stats.goldEarned += gold;
+    return { count: toSell.length, gold };
   },
 
   /** Same shape as sell() -- stash-only, same "equipped or missing" error

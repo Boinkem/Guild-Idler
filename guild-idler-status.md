@@ -2641,9 +2641,123 @@ wholesale, so a `useMemo`/`useEffect` dependency needs to name the
 specific nested value that actually gets reassigned, not a parent
 container whose own reference never changes.
 
+### QOL backlog
+A menu of quality-of-life ideas surveyed across the systems already in
+place, not tied to any one bug report. Four built this round (see
+writeups below); the rest are recorded here for later, not committed to
+any particular order.
 
-fields migrates to sensible defaults. `npx tsc --noEmit` and a full
-`vite build` both pass clean.
+- ~~**Send All Idle** (quest board) -- one click sends every idle hero on
+  their own best contract.~~ -- done, see "Send All Idle -- built" below.
+- ~~**Bulk-sell junk** (equipment) -- sell every stash item at or below a
+  chosen rarity in one action.~~ -- done, see "Bulk-sell junk -- built"
+  below.
+- ~~**Equip best gear** (one-click) -- equip the highest Gear Score item
+  in the stash for each of a hero's slots.~~ -- done, see "Equip Best
+  Gear -- built" below.
+- ~~**Ready-to-collect digest** (Dashboard) -- a glanceable "needs
+  attention" card instead of hunting across tabs.~~ -- done, see
+  "Attention digest -- built" below.
+- **Sort/filter contracts by success chance or reward** -- the quest
+  board only sorts by difficulty tier ascending today; once a hero's
+  board gets crowded (freeze slot + reroll in play) a value-based sort
+  would help more.
+- **Equip best consumable** -- same one-click idea as Equip Best Gear,
+  for a hero's consumable slots instead of gear slots.
+- **"Materials needed" indicator** on the Crafting overlay -- show what's
+  missing (and how much) for a recipe the player can't afford yet,
+  instead of just disabling the button with no explanation.
+- **A "ready to collect" badge on the Harvest tab itself** -- distinct
+  from the Dashboard digest above; the fall/click mechanic is easy to
+  miss from another tab. Not attempted this round: Harvest's spawn state
+  looked like client-side animation state rather than something tracked
+  in persisted `GameState`, so this would need its own investigation
+  before it's clear how cheap or expensive it'd be to surface a count.
+
+### Send All Idle -- built
+The roster-wide version of the existing per-hero Quick-assign button.
+`engine.sendAllIdle()` loops every hero not currently questing, sends
+each on their own best contract via the same `QuestManager.pickBestQuest`
+scoring Quick-assign already uses, and skips any hero with nothing
+eligible on their own board rather than failing the whole batch over one
+hero with an empty pool. Gives every sent hero the same Auto-Chain streak
+setup a manual single send would (see `startQuest`), but deliberately
+never opts a hero into chain-stepping -- a bulk action silently picking a
+specific chain stage to auto-advance on the player's behalf would be a
+much bigger decision than one button should make without being asked.
+One summary toast and one save at the end, not one per hero, same
+"don't spam the toast queue for a bulk action" shape `repairAll()`
+already established. UI: a "Send All Idle (N)" button next to the Heroes
+section heading in `QuestPanel.tsx`, only rendered when N > 0. Verified
+at runtime: sending a 3-hero idle roster sends all 3 and correctly
+reports 0 on a second call once everyone's already out.
+
+### Bulk-sell junk -- built
+`ShopManager.sellBelowRarity(state, maxRarity)` sells every stash item at
+or below a chosen rarity in one action -- the bulk counterpart to
+`ShopManager.sell`'s one-item-at-a-time path, same stash-only scope
+(equipped gear is never touched, so nothing a hero is wearing can be
+swept up regardless of its rarity). Crafted items (`customMods` set) and
+enchanted items (`enchantStats` set) are always skipped, even if their
+base rarity qualifies -- both represent player effort/materials spent
+beyond what the rarity alone reflects, so a blanket rarity sweep
+shouldn't be the thing that sells one off by surprise. `engine.sellJunk()`
+wraps it with a single summary toast. UI lives in `EquipmentPanel.tsx`'s
+Stash section header: a rarity dropdown (defaults to Common, the safest
+threshold, rather than remembering the last choice or defaulting
+broader) plus a "Sell Junk (N) · Gold" button whose preview count/value
+mirrors the manager's own filter exactly, gated behind the existing
+confirm-sell setting the same way a single sell already is. Verified at
+runtime: a stash of 2 plain commons + 1 rare + 1 crafted common correctly
+sells only the 2 plain commons, leaves the rare and the crafted common
+untouched, and credits exactly the reported gold total.
+
+### Equip Best Gear -- built
+`engine.equipBestGear(heroId)` walks all 9 of a hero's equipment slots
+and equips the highest-Gear-Score eligible stash item wherever it beats
+what's already worn there, reusing `EquipmentManager.equip`'s existing
+displacement-to-stash handling so a bumped item lands back in the stash
+exactly the way a manual equip already does -- and a later slot can
+immediately see an item an earlier slot's own displacement just freed up.
+Gear Score here is the same flat, rarity-tier value
+`HeroManager.gearScore` already sums per hero (`GEAR_SCORE_BY_RARITY`);
+ties are left alone rather than swapped for swapping's sake, and
+anything above the hero's level is skipped, same as a manual equip
+would refuse. The hardcoded slot list that used to live only inside
+`EquipmentPanel.tsx` is now a shared `EQUIP_SLOTS` constant in
+`equipment.ts` so the panel and the engine method read from one place
+instead of two lists that could drift. UI: an "Equip best from stash"
+button next to Repair Everything in `EquipmentPanel.tsx`'s hero-picker
+row. Verified at runtime: a hero wielding a common weapon with a
+legendary weapon sitting in the stash correctly swaps to the legendary,
+the displaced common lands back in the stash, and running it again with
+nothing better in the stash changes 0 slots.
+
+### Attention digest -- built
+A new "Needs attention" card at the top of the Dashboard (`DashboardPanel
+.tsx`), built from three signals that are genuinely persisted and ongoing
+rather than a transient toast or a one-time Guidance nudge: idle heroes
+with nothing sent out (pairs naturally with Send All Idle above), eggs
+that have crossed their hatch threshold and are ready to collect
+(`PetManager.isReady` over `state.incubatingEggs`, gated on
+`state.hatcheryUnlocked`), and equipped gear sitting at 0 durability.
+Each line gets its own "Go to [tab]" button via the existing
+`engine.requestTab` primitive (the same navigation the Guide's
+notification "Go to" buttons already use) rather than inventing a new
+navigation mechanism. Renders nothing at all when every signal is empty,
+rather than an "all clear" card taking up space on every single visit.
+Deliberately scoped to signals cheap to compute from existing state with
+no new persisted fields or migration needed -- a fourth candidate signal
+(materials waiting to be collected on the Harvest tab) was considered
+and left for the QOL backlog above instead, since Harvest's spawn state
+didn't look like it lived in persisted `GameState` and would need its
+own investigation first.
+
+All four verified together: `npx tsc --noEmit` and a full `vite build`
+both pass clean, plus 15 runtime checks covering Send All Idle's bulk
+send/skip behavior, Sell Junk's crafted/enchanted exclusion and exact
+gold accounting, Equip Best Gear's slot-by-slot swap and displacement,
+and the digest's underlying idle/broken-gear signal counts.
 
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**

@@ -5,14 +5,14 @@ import { GameEngine } from '../../game/engine';
 import { EquipmentManager } from '../../game/managers/EquipmentManager';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
-import { EQUIPMENT_BY_ID, ITEM_SETS } from '../../game/data/equipment';
+import { EQUIPMENT_BY_ID, ITEM_SETS, EQUIP_SLOTS } from '../../game/data/equipment';
 import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
-import { describeMods, describeStats, formatGold, RARITY_COLOR } from '../../game/util';
+import { describeMods, describeStats, formatGold, RARITY_COLOR, RARITY_ORDER } from '../../game/util';
 import { ItemIcon, ConsumableIcon } from '../icons';
 import { GearScoreBadge } from '../GearScoreBadge';
 
-const SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet', 'cloak'];
+const SLOTS = EQUIP_SLOTS;
 
 function RarityPill({ rarity }: { rarity: Rarity }) {
   return (
@@ -301,6 +301,31 @@ export function EquipmentPanel() {
   const repairBill = EquipmentManager.allItems(state)
     .reduce((sum, e) => sum + EquipmentManager.repairCost(e.item, workshop), 0);
 
+  // Sell Junk -- bulk-sells everything in the stash at or below a chosen
+  // rarity (see ShopManager.sellBelowRarity). Defaults to Common, the
+  // safest threshold, rather than defaulting to whatever was last picked
+  // or something broader -- a bulk sell is higher-stakes than selling one
+  // item at a time, so the default shouldn't be able to surprise anyone.
+  // The preview below mirrors sellBelowRarity's own filter exactly
+  // (skip crafted/enchanted items regardless of rarity) so the count and
+  // gold shown on the button are exactly what pressing it will do, not an
+  // approximation.
+  const [junkRarity, setJunkRarity] = useState<Rarity>('common');
+  const junkMaxIndex = RARITY_ORDER.indexOf(junkRarity);
+  const junkPreview = state.stash.filter((item) => {
+    if (item.customMods || (item.enchantStats && Object.keys(item.enchantStats).length > 0)) return false;
+    const def = EQUIPMENT_BY_ID[item.defId];
+    if (!def) return false;
+    return RARITY_ORDER.indexOf(def.rarity) <= junkMaxIndex;
+  });
+  const junkGold = junkPreview.reduce((sum, item) => sum + EquipmentManager.sellValue(item), 0);
+  const sellJunk = () => {
+    if (junkPreview.length === 0) return;
+    if (!settings.confirmSell || confirm(`Sell ${junkPreview.length} item${junkPreview.length === 1 ? '' : 's'} (${junkRarity} and below) for ${junkGold} gold?`)) {
+      engine.sellJunk(junkRarity);
+    }
+  };
+
   return (
     <>
       <h2>Inventory</h2>
@@ -317,6 +342,13 @@ export function EquipmentPanel() {
         ))}
         <div style={{ flex: 1 }} />
         <GearScoreBadge score={HeroManager.gearScore(hero)} showProgress />
+        <button
+          onClick={() => engine.equipBestGear(hero.id)}
+          style={{ marginLeft: 10 }}
+          title="Equip the highest Gear Score item in the stash for each slot, wherever it beats what's already worn"
+        >
+          Equip best from stash
+        </button>
         <button onClick={() => engine.repairAll()} disabled={repairBill === 0} style={{ marginLeft: 10 }}>
           Repair everything · {formatGold(repairBill)}
         </button>
@@ -359,7 +391,34 @@ export function EquipmentPanel() {
         </div>
       )}
 
-      <div className="section-heading">Stash ({state.stash.length})</div>
+      <div className="spread" style={{ alignItems: 'center' }}>
+        <div className="section-heading" style={{ marginBottom: 0 }}>Stash ({state.stash.length})</div>
+        {state.stash.length > 0 && (
+          <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+            <select
+              value={junkRarity}
+              onChange={(e) => setJunkRarity(e.target.value as Rarity)}
+              style={{
+                background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+                color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.625rem',
+              }}
+            >
+              {RARITY_ORDER.map((r) => (
+                <option key={r} value={r}>{r} and below</option>
+              ))}
+            </select>
+            <button
+              className="btn-ghost"
+              style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+              onClick={sellJunk}
+              disabled={junkPreview.length === 0}
+              title="Crafted and enchanted items are never swept up by this, regardless of rarity"
+            >
+              Sell Junk ({junkPreview.length}) · {formatGold(junkGold)}
+            </button>
+          </div>
+        )}
+      </div>
       {state.stash.length === 0 && <p className="small muted">Nothing spare. Loot drops from successful quests.</p>}
       <div className="item-card-grid">
         {state.stash.map((item) => (

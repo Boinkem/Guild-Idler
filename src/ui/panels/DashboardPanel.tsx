@@ -4,9 +4,76 @@ import { useEngine } from '../useEngine';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { VENDORS, vendorUpgrades, xpForLevel } from '../../game/data/progression';
 import { AchievementManager } from '../../game/managers/AchievementManager';
+import { PetManager } from '../../game/managers/PetManager';
 import { guildPowerBreakdown, levelTierColor, levelTierName } from '../../game/power';
 import { currentGuildRank, nextGuildRank, powerToNextRank } from '../../game/data/guildRank';
 import { formatGold, formatNumber } from '../../game/util';
+
+/**
+ * "Needs attention" digest -- one glanceable card for state that's sitting
+ * around waiting on the player, instead of hunting across tabs for it.
+ * Deliberately built only from persisted GameState signals that are real
+ * and ongoing (idle heroes, ready-to-hatch eggs, broken equipped gear),
+ * not anything transient like a toast or a one-time Guidance nudge -- this
+ * is meant to still be accurate the next time the player opens the app,
+ * not just right after the triggering event. Renders nothing at all when
+ * every signal is empty, rather than an empty "all clear" card taking up
+ * space on every single visit.
+ */
+function AttentionDigest() {
+  const engine = useEngine();
+  const state = engine.state;
+
+  const idleCount = state.heroes.filter((h) => h.status !== 'questing').length;
+  const eggsReady = state.incubatingEggs.filter((e) => PetManager.isReady(e)).length;
+  const brokenGear = state.heroes.reduce(
+    (sum, h) => sum + Object.values(h.equipment).filter((item) => item && item.durability <= 0).length,
+    0,
+  );
+
+  const items: { key: string; label: string; tab: string }[] = [];
+  if (idleCount > 0) {
+    items.push({
+      key: 'idle',
+      label: `${idleCount} hero${idleCount === 1 ? '' : 's'} idle with nothing sent out`,
+      tab: 'quests',
+    });
+  }
+  if (state.hatcheryUnlocked && eggsReady > 0) {
+    items.push({
+      key: 'eggs',
+      label: `${eggsReady} egg${eggsReady === 1 ? '' : 's'} ready to hatch`,
+      tab: 'hatchery',
+    });
+  }
+  if (brokenGear > 0) {
+    items.push({
+      key: 'broken',
+      label: `${brokenGear} piece${brokenGear === 1 ? '' : 's'} of equipped gear broken`,
+      tab: 'equipment',
+    });
+  }
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="card">
+      <div className="card-title" style={{ marginBottom: 4 }}>Needs attention</div>
+      {items.map((item) => (
+        <div key={item.key} className="spread" style={{ alignItems: 'center', marginTop: 4 }}>
+          <span className="small">{item.label}</span>
+          <button
+            className="btn-ghost"
+            style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+            onClick={() => engine.requestTab(item.tab)}
+          >
+            Go to {item.tab === 'quests' ? 'Quests' : item.tab === 'hatchery' ? 'Hatchery' : 'Inventory'}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function Ring({
   progress, color, size, children, title,
@@ -53,6 +120,8 @@ export function DashboardPanel() {
     <>
       <h2>The Guild</h2>
       <p className="subtitle">Everything the guild has built, at a glance.</p>
+
+      <AttentionDigest />
 
       <div className="card">
         {editingName || !state.guildName ? (

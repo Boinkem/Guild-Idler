@@ -1,0 +1,580 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index afcf7e8..3b404c8 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -2641,9 +2641,123 @@ wholesale, so a `useMemo`/`useEffect` dependency needs to name the
+ specific nested value that actually gets reassigned, not a parent
+ container whose own reference never changes.
+ 
+-
+-fields migrates to sensible defaults. `npx tsc --noEmit` and a full
+-`vite build` both pass clean.
++### QOL backlog
++A menu of quality-of-life ideas surveyed across the systems already in
++place, not tied to any one bug report. Four built this round (see
++writeups below); the rest are recorded here for later, not committed to
++any particular order.
++
++- ~~**Send All Idle** (quest board) -- one click sends every idle hero on
++  their own best contract.~~ -- done, see "Send All Idle -- built" below.
++- ~~**Bulk-sell junk** (equipment) -- sell every stash item at or below a
++  chosen rarity in one action.~~ -- done, see "Bulk-sell junk -- built"
++  below.
++- ~~**Equip best gear** (one-click) -- equip the highest Gear Score item
++  in the stash for each of a hero's slots.~~ -- done, see "Equip Best
++  Gear -- built" below.
++- ~~**Ready-to-collect digest** (Dashboard) -- a glanceable "needs
++  attention" card instead of hunting across tabs.~~ -- done, see
++  "Attention digest -- built" below.
++- **Sort/filter contracts by success chance or reward** -- the quest
++  board only sorts by difficulty tier ascending today; once a hero's
++  board gets crowded (freeze slot + reroll in play) a value-based sort
++  would help more.
++- **Equip best consumable** -- same one-click idea as Equip Best Gear,
++  for a hero's consumable slots instead of gear slots.
++- **"Materials needed" indicator** on the Crafting overlay -- show what's
++  missing (and how much) for a recipe the player can't afford yet,
++  instead of just disabling the button with no explanation.
++- **A "ready to collect" badge on the Harvest tab itself** -- distinct
++  from the Dashboard digest above; the fall/click mechanic is easy to
++  miss from another tab. Not attempted this round: Harvest's spawn state
++  looked like client-side animation state rather than something tracked
++  in persisted `GameState`, so this would need its own investigation
++  before it's clear how cheap or expensive it'd be to surface a count.
++
++### Send All Idle -- built
++The roster-wide version of the existing per-hero Quick-assign button.
++`engine.sendAllIdle()` loops every hero not currently questing, sends
++each on their own best contract via the same `QuestManager.pickBestQuest`
++scoring Quick-assign already uses, and skips any hero with nothing
++eligible on their own board rather than failing the whole batch over one
++hero with an empty pool. Gives every sent hero the same Auto-Chain streak
++setup a manual single send would (see `startQuest`), but deliberately
++never opts a hero into chain-stepping -- a bulk action silently picking a
++specific chain stage to auto-advance on the player's behalf would be a
++much bigger decision than one button should make without being asked.
++One summary toast and one save at the end, not one per hero, same
++"don't spam the toast queue for a bulk action" shape `repairAll()`
++already established. UI: a "Send All Idle (N)" button next to the Heroes
++section heading in `QuestPanel.tsx`, only rendered when N > 0. Verified
++at runtime: sending a 3-hero idle roster sends all 3 and correctly
++reports 0 on a second call once everyone's already out.
++
++### Bulk-sell junk -- built
++`ShopManager.sellBelowRarity(state, maxRarity)` sells every stash item at
++or below a chosen rarity in one action -- the bulk counterpart to
++`ShopManager.sell`'s one-item-at-a-time path, same stash-only scope
++(equipped gear is never touched, so nothing a hero is wearing can be
++swept up regardless of its rarity). Crafted items (`customMods` set) and
++enchanted items (`enchantStats` set) are always skipped, even if their
++base rarity qualifies -- both represent player effort/materials spent
++beyond what the rarity alone reflects, so a blanket rarity sweep
++shouldn't be the thing that sells one off by surprise. `engine.sellJunk()`
++wraps it with a single summary toast. UI lives in `EquipmentPanel.tsx`'s
++Stash section header: a rarity dropdown (defaults to Common, the safest
++threshold, rather than remembering the last choice or defaulting
++broader) plus a "Sell Junk (N) · Gold" button whose preview count/value
++mirrors the manager's own filter exactly, gated behind the existing
++confirm-sell setting the same way a single sell already is. Verified at
++runtime: a stash of 2 plain commons + 1 rare + 1 crafted common correctly
++sells only the 2 plain commons, leaves the rare and the crafted common
++untouched, and credits exactly the reported gold total.
++
++### Equip Best Gear -- built
++`engine.equipBestGear(heroId)` walks all 9 of a hero's equipment slots
++and equips the highest-Gear-Score eligible stash item wherever it beats
++what's already worn there, reusing `EquipmentManager.equip`'s existing
++displacement-to-stash handling so a bumped item lands back in the stash
++exactly the way a manual equip already does -- and a later slot can
++immediately see an item an earlier slot's own displacement just freed up.
++Gear Score here is the same flat, rarity-tier value
++`HeroManager.gearScore` already sums per hero (`GEAR_SCORE_BY_RARITY`);
++ties are left alone rather than swapped for swapping's sake, and
++anything above the hero's level is skipped, same as a manual equip
++would refuse. The hardcoded slot list that used to live only inside
++`EquipmentPanel.tsx` is now a shared `EQUIP_SLOTS` constant in
++`equipment.ts` so the panel and the engine method read from one place
++instead of two lists that could drift. UI: an "Equip best from stash"
++button next to Repair Everything in `EquipmentPanel.tsx`'s hero-picker
++row. Verified at runtime: a hero wielding a common weapon with a
++legendary weapon sitting in the stash correctly swaps to the legendary,
++the displaced common lands back in the stash, and running it again with
++nothing better in the stash changes 0 slots.
++
++### Attention digest -- built
++A new "Needs attention" card at the top of the Dashboard (`DashboardPanel
++.tsx`), built from three signals that are genuinely persisted and ongoing
++rather than a transient toast or a one-time Guidance nudge: idle heroes
++with nothing sent out (pairs naturally with Send All Idle above), eggs
++that have crossed their hatch threshold and are ready to collect
++(`PetManager.isReady` over `state.incubatingEggs`, gated on
++`state.hatcheryUnlocked`), and equipped gear sitting at 0 durability.
++Each line gets its own "Go to [tab]" button via the existing
++`engine.requestTab` primitive (the same navigation the Guide's
++notification "Go to" buttons already use) rather than inventing a new
++navigation mechanism. Renders nothing at all when every signal is empty,
++rather than an "all clear" card taking up space on every single visit.
++Deliberately scoped to signals cheap to compute from existing state with
++no new persisted fields or migration needed -- a fourth candidate signal
++(materials waiting to be collected on the Harvest tab) was considered
++and left for the QOL backlog above instead, since Harvest's spawn state
++didn't look like it lived in persisted `GameState` and would need its
++own investigation first.
++
++All four verified together: `npx tsc --noEmit` and a full `vite build`
++both pass clean, plus 15 runtime checks covering Send All Idle's bulk
++send/skip behavior, Sell Junk's crafted/enchanted exclusion and exact
++gold accounting, Equip Best Gear's slot-by-slot swap and displacement,
++and the digest's underlying idle/broken-gear signal counts.
+ 
+ ### Bigger, still-undecided
+ - **Queued from the same conversation as the UX/economy batch above:**
+diff --git a/src/game/data/equipment.ts b/src/game/data/equipment.ts
+index 8ced440..d8d56c9 100644
+--- a/src/game/data/equipment.ts
++++ b/src/game/data/equipment.ts
+@@ -1,4 +1,4 @@
+-import { EquipmentDef, ItemSet, Rarity } from '../types';
++import { EquipSlot, EquipmentDef, ItemSet, Rarity } from '../types';
+ 
+ /** Loot weight and shop pricing scale off rarity. */
+ export const RARITY_WEIGHT: Record<Rarity, number> = {
+@@ -39,6 +39,14 @@ export const GEAR_SCORE_BY_RARITY: Record<Rarity, number> = {
+ /** Max possible Gear Score for one hero: 9 equipment slots, all legendary. */
+ export const GEAR_SCORE_MAX = 9 * GEAR_SCORE_BY_RARITY.legendary;
+ 
++/**
++ * Every equipment slot a hero has, in the fixed display order
++ * EquipmentPanel already used locally -- pulled out here so
++ * engine.equipBestGear can iterate the same set without either duplicating
++ * the list or importing a UI file into game logic.
++ */
++export const EQUIP_SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet', 'cloak'];
++
+ /**
+  * Gear Score tiers, evenly spaced across GEAR_SCORE_MAX and reusing the
+  * same rarity palette as everything else (RARITY_COLOR in util.ts) -- a
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 7e60a09..fb7f96d 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -16,7 +16,7 @@ import { HarvestManager } from './managers/HarvestManager';
+ import { PetManager } from './managers/PetManager';
+ import { CraftingManager } from './managers/CraftingManager';
+ import { SKIN_BY_ID, SKIN_PRICE, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
+-import { EQUIPMENT_BY_ID, SET_BY_ID } from './data/equipment';
++import { EQUIPMENT_BY_ID, SET_BY_ID, GEAR_SCORE_BY_RARITY, EQUIP_SLOTS } from './data/equipment';
+ import { RAID_BY_ID } from './data/raids';
+ import { playSound } from './sound';
+ import { TESTING_TOOLS_ENABLED } from './testingTools';
+@@ -909,6 +909,52 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /**
++   * Sends every idle hero (not currently questing) on their own best
++   * contract, via the same QuestManager.pickBestQuest scoring Quick-assign
++   * already uses on the currently-open hero -- this is the roster-wide
++   * version of that button. Skips any hero with nothing eligible on their
++   * own board rather than failing the whole batch over one hero with an
++   * empty pool. Gives each sent hero the same Auto-Chain streak setup a
++   * manual single send would (see startQuest above), but deliberately
++   * never opts a hero into chain-stepping -- a bulk "send everyone"
++   * action picking a specific chain stage to auto-advance on a player's
++   * behalf would be a much bigger decision than this button should make
++   * silently. One summary toast and one save at the end, not one per hero
++   * -- same "don't spam the toast queue for a bulk action" shape as
++   * repairAll(). Returns how many heroes were actually sent.
++   */
++  sendAllIdle(): number {
++    const now = Date.now();
++    const level = this.state.upgrades['auto_chain'] ?? 0;
++    let sent = 0;
++    for (const hero of this.state.heroes) {
++      if (hero.status === 'questing') continue;
++      const offer = QuestManager.pickBestQuest(this.state, hero, now);
++      if (!offer) continue;
++      const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], now);
++      if (error) continue;
++      if (level > 0) {
++        const range = AUTO_CHAIN_RANGES[level];
++        hero.autoChainTarget = range.min + Math.floor(Math.random() * (range.max - range.min + 1));
++        hero.autoChainCount = 1;
++      } else {
++        hero.autoChainTarget = null;
++        hero.autoChainCount = 0;
++      }
++      hero.autoAdvanceChainId = null;
++      sent++;
++    }
++    if (sent > 0) {
++      playSound('depart');
++      this.say(sent === 1 ? '1 hero sent out on a contract.' : `${sent} heroes sent out on contracts.`);
++      void this.saveNow();
++    } else {
++      this.say('No idle heroes have an open contract right now.');
++    }
++    return sent;
++  }
++
+   /**
+    * Cancels a hero's active quest early and brings them straight home --
+    * no reward, no failure penalty, just a clean cut. Also stops any
+@@ -1101,6 +1147,71 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /** Bulk-sells every stash item at or below `maxRarity` in one action --
++   *  the "clear out the junk" counterpart to selling one item at a time.
++   *  Crafted and enchanted items are skipped regardless of rarity (see
++   *  ShopManager.sellBelowRarity's own comment). One summary toast, not
++   *  one per item sold. */
++  sellJunk(maxRarity: Rarity) {
++    const { count, gold } = ShopManager.sellBelowRarity(this.state, maxRarity);
++    if (count === 0) return this.say('Nothing in the stash qualifies.');
++    playSound('purchase');
++    this.say(`Sold ${count} item${count === 1 ? '' : 's'} for ${gold} gold.`);
++    void this.saveNow();
++  }
++
++  /**
++   * For each of a hero's 9 equipment slots, equips the highest-Gear-Score
++   * eligible item currently sitting in the stash if it beats what's
++   * already equipped there -- the bulk counterpart to picking through the
++   * Stash one item at a time. Gear Score is the same flat, rarity-tier
++   * value HeroManager.gearScore already sums (see GEAR_SCORE_BY_RARITY);
++   * ties are left alone rather than swapped for swapping's sake. Skips
++   * anything the hero can't wear yet (reqLevel), same as a manual equip
++   * would refuse. Loops slot-by-slot via EquipmentManager.equip itself so
++   * a displaced item lands back in the stash exactly the way a manual
++   * equip already handles it, and a later slot can immediately see an
++   * item the earlier slot's displacement just freed up. Returns how many
++   * slots actually changed. */
++  equipBestGear(heroId: string): number {
++    const hero = this.hero(heroId);
++    if (!hero) return 0;
++    if (hero.status === 'questing') {
++      this.say(`${hero.name} is away on a quest.`);
++      return 0;
++    }
++    let changed = 0;
++    for (const slot of EQUIP_SLOTS) {
++      const currentItem = hero.equipment[slot];
++      const currentDef = currentItem ? EQUIPMENT_BY_ID[currentItem.defId] : undefined;
++      const currentScore = currentDef ? GEAR_SCORE_BY_RARITY[currentDef.rarity] ?? 0 : -1;
++      let best: typeof currentItem = undefined;
++      let bestScore = currentScore;
++      for (const item of this.state.stash) {
++        const def = EQUIPMENT_BY_ID[item.defId];
++        if (!def || def.slot !== slot) continue;
++        if (hero.level < def.reqLevel) continue;
++        const score = GEAR_SCORE_BY_RARITY[def.rarity] ?? 0;
++        if (score > bestScore) {
++          bestScore = score;
++          best = item;
++        }
++      }
++      if (best) {
++        const error = EquipmentManager.equip(this.state, hero, best);
++        if (!error) changed++;
++      }
++    }
++    if (changed > 0) {
++      this.checkSetBonusMilestones(hero);
++      this.say(`Equipped ${changed} better item${changed === 1 ? '' : 's'} on ${hero.name}.`);
++      void this.saveNow();
++    } else {
++      this.say(`Nothing in the stash outranks what ${hero.name} already has equipped.`);
++    }
++    return changed;
++  }
++
+   buyConsumable(defId: string, amount = 1) {
+     const error = InventoryManager.buy(this.state, defId, amount);
+     if (error) return this.say(error);
+diff --git a/src/game/managers/ShopManager.ts b/src/game/managers/ShopManager.ts
+index d5fe5dc..d39372f 100644
+--- a/src/game/managers/ShopManager.ts
++++ b/src/game/managers/ShopManager.ts
+@@ -1,8 +1,8 @@
+ import { EQUIPMENT, EQUIPMENT_BY_ID, RARITY_WEIGHT } from '../data/equipment';
+ import { CONSUMABLES } from '../data/items';
+-import { EquipmentItem, GameState, ShopStock } from '../types';
++import { EquipmentItem, GameState, Rarity, ShopStock } from '../types';
+ import { createRng, uid } from '../rng';
+-import { HOUR } from '../util';
++import { HOUR, RARITY_ORDER } from '../util';
+ import { EquipmentManager } from './EquipmentManager';
+ import { ModifierManager } from './ModifierManager';
+ import { rerollDay, rerollsUsedToday, nextRerollCost } from '../data/reroll';
+@@ -187,6 +187,36 @@ export const ShopManager = {
+     return null;
+   },
+ 
++  /**
++   * Bulk-sells every stash item at or below `maxRarity` -- the "clear out
++   * the junk" counterpart to selling one item at a time. Stash-only, same
++   * as sell() -- equipped gear is never touched, so nothing a hero is
++   * currently wearing can be swept up by accident regardless of its
++   * rarity. Crafted items (`customMods` set) and enchanted items
++   * (`enchantStats` set) are skipped even if their base rarity qualifies
++   * -- both represent player effort/materials spent beyond what the
++   * rarity alone reflects, so a blanket rarity sweep shouldn't be the
++   * thing that sells one off by surprise. Returns how many items sold and
++   * the total gold earned, so the caller can report a single summary
++   * rather than one toast per item.
++   */
++  sellBelowRarity(state: GameState, maxRarity: Rarity): { count: number; gold: number } {
++    const maxIndex = RARITY_ORDER.indexOf(maxRarity);
++    const toSell = state.stash.filter((item) => {
++      if (item.customMods || (item.enchantStats && Object.keys(item.enchantStats).length > 0)) return false;
++      const def = EQUIPMENT_BY_ID[item.defId];
++      if (!def) return false;
++      return RARITY_ORDER.indexOf(def.rarity) <= maxIndex;
++    });
++    if (toSell.length === 0) return { count: 0, gold: 0 };
++    const sellUids = new Set(toSell.map((i) => i.uid));
++    const gold = toSell.reduce((sum, item) => sum + EquipmentManager.sellValue(item), 0);
++    state.stash = state.stash.filter((i) => !sellUids.has(i.uid));
++    state.gold += gold;
++    state.stats.goldEarned += gold;
++    return { count: toSell.length, gold };
++  },
++
+   /** Same shape as sell() -- stash-only, same "equipped or missing" error
+    *  -- but converts the item to Scrap instead of gold. See
+    *  EquipmentManager.scrapValue for the rarity-based payout. */
+diff --git a/src/ui/panels/DashboardPanel.tsx b/src/ui/panels/DashboardPanel.tsx
+index e4d862e..6338e74 100644
+--- a/src/ui/panels/DashboardPanel.tsx
++++ b/src/ui/panels/DashboardPanel.tsx
+@@ -4,10 +4,77 @@ import { useEngine } from '../useEngine';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import { VENDORS, vendorUpgrades, xpForLevel } from '../../game/data/progression';
+ import { AchievementManager } from '../../game/managers/AchievementManager';
++import { PetManager } from '../../game/managers/PetManager';
+ import { guildPowerBreakdown, levelTierColor, levelTierName } from '../../game/power';
+ import { currentGuildRank, nextGuildRank, powerToNextRank } from '../../game/data/guildRank';
+ import { formatGold, formatNumber } from '../../game/util';
+ 
++/**
++ * "Needs attention" digest -- one glanceable card for state that's sitting
++ * around waiting on the player, instead of hunting across tabs for it.
++ * Deliberately built only from persisted GameState signals that are real
++ * and ongoing (idle heroes, ready-to-hatch eggs, broken equipped gear),
++ * not anything transient like a toast or a one-time Guidance nudge -- this
++ * is meant to still be accurate the next time the player opens the app,
++ * not just right after the triggering event. Renders nothing at all when
++ * every signal is empty, rather than an empty "all clear" card taking up
++ * space on every single visit.
++ */
++function AttentionDigest() {
++  const engine = useEngine();
++  const state = engine.state;
++
++  const idleCount = state.heroes.filter((h) => h.status !== 'questing').length;
++  const eggsReady = state.incubatingEggs.filter((e) => PetManager.isReady(e)).length;
++  const brokenGear = state.heroes.reduce(
++    (sum, h) => sum + Object.values(h.equipment).filter((item) => item && item.durability <= 0).length,
++    0,
++  );
++
++  const items: { key: string; label: string; tab: string }[] = [];
++  if (idleCount > 0) {
++    items.push({
++      key: 'idle',
++      label: `${idleCount} hero${idleCount === 1 ? '' : 's'} idle with nothing sent out`,
++      tab: 'quests',
++    });
++  }
++  if (state.hatcheryUnlocked && eggsReady > 0) {
++    items.push({
++      key: 'eggs',
++      label: `${eggsReady} egg${eggsReady === 1 ? '' : 's'} ready to hatch`,
++      tab: 'hatchery',
++    });
++  }
++  if (brokenGear > 0) {
++    items.push({
++      key: 'broken',
++      label: `${brokenGear} piece${brokenGear === 1 ? '' : 's'} of equipped gear broken`,
++      tab: 'equipment',
++    });
++  }
++
++  if (items.length === 0) return null;
++
++  return (
++    <div className="card">
++      <div className="card-title" style={{ marginBottom: 4 }}>Needs attention</div>
++      {items.map((item) => (
++        <div key={item.key} className="spread" style={{ alignItems: 'center', marginTop: 4 }}>
++          <span className="small">{item.label}</span>
++          <button
++            className="btn-ghost"
++            style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
++            onClick={() => engine.requestTab(item.tab)}
++          >
++            Go to {item.tab === 'quests' ? 'Quests' : item.tab === 'hatchery' ? 'Hatchery' : 'Inventory'}
++          </button>
++        </div>
++      ))}
++    </div>
++  );
++}
++
+ export function Ring({
+   progress, color, size, children, title,
+ }: {
+@@ -54,6 +121,8 @@ export function DashboardPanel() {
+       <h2>The Guild</h2>
+       <p className="subtitle">Everything the guild has built, at a glance.</p>
+ 
++      <AttentionDigest />
++
+       <div className="card">
+         {editingName || !state.guildName ? (
+           <div className="row" style={{ gap: 8 }}>
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index f79b79c..5ee4553 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -5,14 +5,14 @@ import { GameEngine } from '../../game/engine';
+ import { EquipmentManager } from '../../game/managers/EquipmentManager';
+ import { HeroManager } from '../../game/managers/HeroManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+-import { EQUIPMENT_BY_ID, ITEM_SETS } from '../../game/data/equipment';
++import { EQUIPMENT_BY_ID, ITEM_SETS, EQUIP_SLOTS } from '../../game/data/equipment';
+ import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+-import { describeMods, describeStats, formatGold, RARITY_COLOR } from '../../game/util';
++import { describeMods, describeStats, formatGold, RARITY_COLOR, RARITY_ORDER } from '../../game/util';
+ import { ItemIcon, ConsumableIcon } from '../icons';
+ import { GearScoreBadge } from '../GearScoreBadge';
+ 
+-const SLOTS: EquipSlot[] = ['weapon', 'helmet', 'chest', 'shield', 'gloves', 'boots', 'ring', 'amulet', 'cloak'];
++const SLOTS = EQUIP_SLOTS;
+ 
+ function RarityPill({ rarity }: { rarity: Rarity }) {
+   return (
+@@ -301,6 +301,31 @@ export function EquipmentPanel() {
+   const repairBill = EquipmentManager.allItems(state)
+     .reduce((sum, e) => sum + EquipmentManager.repairCost(e.item, workshop), 0);
+ 
++  // Sell Junk -- bulk-sells everything in the stash at or below a chosen
++  // rarity (see ShopManager.sellBelowRarity). Defaults to Common, the
++  // safest threshold, rather than defaulting to whatever was last picked
++  // or something broader -- a bulk sell is higher-stakes than selling one
++  // item at a time, so the default shouldn't be able to surprise anyone.
++  // The preview below mirrors sellBelowRarity's own filter exactly
++  // (skip crafted/enchanted items regardless of rarity) so the count and
++  // gold shown on the button are exactly what pressing it will do, not an
++  // approximation.
++  const [junkRarity, setJunkRarity] = useState<Rarity>('common');
++  const junkMaxIndex = RARITY_ORDER.indexOf(junkRarity);
++  const junkPreview = state.stash.filter((item) => {
++    if (item.customMods || (item.enchantStats && Object.keys(item.enchantStats).length > 0)) return false;
++    const def = EQUIPMENT_BY_ID[item.defId];
++    if (!def) return false;
++    return RARITY_ORDER.indexOf(def.rarity) <= junkMaxIndex;
++  });
++  const junkGold = junkPreview.reduce((sum, item) => sum + EquipmentManager.sellValue(item), 0);
++  const sellJunk = () => {
++    if (junkPreview.length === 0) return;
++    if (!settings.confirmSell || confirm(`Sell ${junkPreview.length} item${junkPreview.length === 1 ? '' : 's'} (${junkRarity} and below) for ${junkGold} gold?`)) {
++      engine.sellJunk(junkRarity);
++    }
++  };
++
+   return (
+     <>
+       <h2>Inventory</h2>
+@@ -317,6 +342,13 @@ export function EquipmentPanel() {
+         ))}
+         <div style={{ flex: 1 }} />
+         <GearScoreBadge score={HeroManager.gearScore(hero)} showProgress />
++        <button
++          onClick={() => engine.equipBestGear(hero.id)}
++          style={{ marginLeft: 10 }}
++          title="Equip the highest Gear Score item in the stash for each slot, wherever it beats what's already worn"
++        >
++          Equip best from stash
++        </button>
+         <button onClick={() => engine.repairAll()} disabled={repairBill === 0} style={{ marginLeft: 10 }}>
+           Repair everything · {formatGold(repairBill)}
+         </button>
+@@ -359,7 +391,34 @@ export function EquipmentPanel() {
+         </div>
+       )}
+ 
+-      <div className="section-heading">Stash ({state.stash.length})</div>
++      <div className="spread" style={{ alignItems: 'center' }}>
++        <div className="section-heading" style={{ marginBottom: 0 }}>Stash ({state.stash.length})</div>
++        {state.stash.length > 0 && (
++          <div className="row" style={{ gap: 6, alignItems: 'center' }}>
++            <select
++              value={junkRarity}
++              onChange={(e) => setJunkRarity(e.target.value as Rarity)}
++              style={{
++                background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
++                color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.625rem',
++              }}
++            >
++              {RARITY_ORDER.map((r) => (
++                <option key={r} value={r}>{r} and below</option>
++              ))}
++            </select>
++            <button
++              className="btn-ghost"
++              style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
++              onClick={sellJunk}
++              disabled={junkPreview.length === 0}
++              title="Crafted and enchanted items are never swept up by this, regardless of rarity"
++            >
++              Sell Junk ({junkPreview.length}) · {formatGold(junkGold)}
++            </button>
++          </div>
++        )}
++      </div>
+       {state.stash.length === 0 && <p className="small muted">Nothing spare. Loot drops from successful quests.</p>}
+       <div className="item-card-grid">
+         {state.stash.map((item) => (
+diff --git a/src/ui/panels/QuestPanel.tsx b/src/ui/panels/QuestPanel.tsx
+index 765b6f0..94ca0f3 100644
+--- a/src/ui/panels/QuestPanel.tsx
++++ b/src/ui/panels/QuestPanel.tsx
+@@ -297,6 +297,13 @@ export function QuestPanel() {
+     if (confirm('Cancel the current quest and bring the hero home?')) engine.recallHero(heroId);
+   };
+ 
++  // Roster-wide count of heroes not currently questing -- drives the "Send
++  // All Idle" button (see engine.sendAllIdle). Doesn't check whether each
++  // idle hero actually has an eligible contract; sendAllIdle itself skips
++  // anyone with nothing open rather than the button needing to know that
++  // in advance.
++  const idleCount = state.heroes.filter((h) => h.status !== 'questing').length;
++
+   // Quick-assign now acts on whichever hero's tab is open, sending them on
+   // the best contract from their own board -- the per-hero equivalent of
+   // the old board-wide "first idle hero, first contract they qualify for"
+@@ -373,7 +380,19 @@ export function QuestPanel() {
+       )}
+ 
+       {/* ------------------------------- hero tabs ------------------------------- */}
+-      <div className="section-heading">Heroes</div>
++      <div className="spread" style={{ alignItems: 'center' }}>
++        <div className="section-heading" style={{ marginBottom: 0 }}>Heroes</div>
++        {idleCount > 0 && (
++          <button
++            className="btn-ghost"
++            style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
++            onClick={() => engine.sendAllIdle()}
++            title="Send every idle hero on their own best contract"
++          >
++            Send All Idle ({idleCount})
++          </button>
++        )}
++      </div>
+       <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
+         {state.heroes.map((h) => (
+           <HeroTab key={h.id} hero={h} selected={h.id === selectedHero.id} onSelect={() => setSelectedHeroId(h.id)} />
