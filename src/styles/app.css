@@ -1767,6 +1767,21 @@ button.harvest-item:hover {
   overflow: hidden;
 }
 
+/* Same shape again -- armorinfusion.jpg's own canvas is also 1448x1086,
+   not the 1402x1122 the original three crafting scenes (gear/consumable/
+   enchant) use. Two real slot cutouts this time (gear top, gem bottom),
+   unlike Weapon Enchanting's single-slot infuse.jpg. */
+.armor-infusion-scene {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1448 / 1086;
+  background-size: 100% 100%;
+  background-position: center;
+  background-color: var(--night);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
 /* An empty Nest slot -- same .card base as a filled one, but a real
    <button> (click anywhere to open EggSelectModal) with a dashed edge and
    dimmer text so it reads as "nothing here yet" rather than content. */

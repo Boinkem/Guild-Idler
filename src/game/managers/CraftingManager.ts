@@ -1,4 +1,4 @@
-import { CraftingRecipeDef, GameState, MaterialId, Modifiers, Stats } from '../types';
+import { CraftingRecipeDef, ElementType, GameState, MaterialId, Modifiers, Stats } from '../types';
 import { CRAFTING_RECIPE_BY_ID } from '../data/craftingRecipes';
 import { CONSUMABLE_BY_ID } from '../data/items';
 import { EquipmentManager } from './EquipmentManager';
@@ -42,6 +42,49 @@ export const CraftingManager = {
       state.materials[materialId] -= amount;
     }
     return null;
+  },
+
+  /**
+   * What it costs to infuse a given item with a given element -- 0/0 and
+   * `ready: true` if a matching gem is already sitting in inventory from
+   * an earlier craft (state.gems/resistGems, whichever the item's own
+   * slot points at), otherwise the underlying gem recipe's own
+   * scrapCost/goldCost, since craftAndInfuse below will need to craft one
+   * fresh before it can apply it. Used by both Weapon Enchanting and
+   * Armour Infusion to label each element option ("Ready" vs a cost).
+   */
+  gemCost(state: GameState, isWeapon: boolean, element: ElementType): { ready: boolean; scrapCost: number; goldCost: number } {
+    const pool = isWeapon ? state.gems : state.resistGems;
+    if ((pool[element] ?? 0) >= 1) return { ready: true, scrapCost: 0, goldCost: 0 };
+    const recipeId = isWeapon ? `craft_elemental_gem_${element}` : `craft_resistance_gem_${element}`;
+    const recipe = CRAFTING_RECIPE_BY_ID[recipeId];
+    return { ready: false, scrapCost: recipe?.scrapCost ?? 0, goldCost: recipe?.goldCost ?? 0 };
+  },
+
+  /**
+   * Weapon Enchanting and Armour Infusion both collapsed from a two-step
+   * "craft a gem, then separately spend it" flow into this single action
+   * -- select gear, select an element, Infuse, done. Uses an already-
+   * owned gem if one exists (state.gems/resistGems, per the item's own
+   * slot -- see EquipmentManager.infuse's own comment for why there's no
+   * separate "kind" choice), otherwise crafts one fresh via the
+   * underlying recipe first. Which pool/recipe applies is decided
+   * entirely by the item's own slot (weapon vs everything else), same as
+   * before.
+   */
+  craftAndInfuse(state: GameState, itemUid: string, element: ElementType): string | null {
+    const found = EquipmentManager.allItems(state).find((e) => e.item.uid === itemUid);
+    if (!found) return 'That item can\u2019t be found.';
+    const def = EquipmentManager.def(found.item);
+    if (!def) return 'That item no longer exists.';
+    const isWeapon = def.slot === 'weapon';
+    const pool = isWeapon ? state.gems : state.resistGems;
+    if ((pool[element] ?? 0) < 1) {
+      const recipeId = isWeapon ? `craft_elemental_gem_${element}` : `craft_resistance_gem_${element}`;
+      const craftErr = CraftingManager.craftGem(state, recipeId);
+      if (craftErr) return craftErr;
+    }
+    return EquipmentManager.infuse(state, itemUid, element);
   },
 
   /**

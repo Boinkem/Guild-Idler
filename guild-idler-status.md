@@ -1328,6 +1328,76 @@ either animation class attaches).
 
 `npx tsc --noEmit` and `vite build` both pass clean.
 
+### Weapon Enchanting / Armour Infusion split -- complete
+Restructured the elemental infusion UI per direct request, on top of the
+mechanic itself (unchanged): the old single "Infuse" station (Blacksmith,
+handled both weapons and armor) is gone, split into two, both now living
+at the **Enchanter**:
+
+- **Weapon Enchanting** (`WeaponEnchantStation.tsx`, replaces
+  `InfuseStation.tsx`) -- weapons only. Same single-slot `infuse.jpg`
+  layout as before, item picker now filtered to the weapon slot.
+- **Armour Infusion** (`ArmourInfusionStation.tsx`, new file) -- armor
+  only, replaces what used to be a plain "Gems" recipe-crafting screen
+  with no item selection at all. Real two-slot art this time
+  (`armor-infusion.jpg`, gear top / gem bottom) -- both slot rects
+  hand-measured the same programmatic way as every other station's real
+  art (largest dark region near each cutout, cross-checked visually
+  before use).
+
+**The bigger change is underneath, not just the relabeling.** Both
+stations used to require a separate trip to a "Gems" crafting screen
+first (craft a gem, spend scrap+gold, then separately visit Infuse to
+apply it) -- collapsed into one action per the "function like crafting"
+request: pick gear, pick an element, Infuse. `CraftingManager.
+craftAndInfuse` (new) uses an already-owned gem if one exists in
+inventory (`state.gems`/`resistGems`, whichever pool the item's own slot
+points at), otherwise crafts one fresh via the same underlying recipe
+first, then applies it -- both in the same click, same atomic state
+update. `CraftingManager.gemCost` (new) previews this per element so
+each option in the UI reads "Ready" (already own one, free) or the live
+scrap+gold cost (will craft fresh). The standalone "Gems" crafting screen
+is gone from the UI entirely -- `CraftingStation.tsx`'s `'gem'` category
+code path still exists underneath (used internally by `craftGem`/
+`craftAndInfuse`) but nothing renders `<CraftingStation category="gem">`
+as a standalone screen anymore; left in place rather than ripped out
+since it's harmless dead UI code, not a functional risk.
+
+Verified at runtime: fresh-craft path charges the correct scrap+gold and
+fully consumes the crafted gem (0 leftover); re-infusing a weapon with a
+different element correctly replaces rather than stacks; a pre-owned gem
+is correctly detected and used for free (0 gold/scrap spent); armor
+resist correctly stacks across two infusions of the same element (exact
+2x); and an insufficient-funds attempt is correctly blocked with the
+right error.
+
+**DevTool: the icon-picker request needed no new code.** `picker: 'icon'`
+already works generically for any schema field, and `crafting-recipes`
+already had it on `icon` -- it just couldn't reach `gem`-category
+recipes because the category enum didn't include `'gem'` at all (added
+now, alongside `scrapCost` and a new `resultGem` field type covering
+which counter a gem recipe adds to and which element). A real bug caught
+and fixed before it shipped: `resultGem`'s first pass had no way to read
+as "not set" (a `<select>` always has *some* value, unlike a blank text
+input) -- since every schema field renders and gets collected on save
+regardless of the entry's own category, saving any ordinary gear/
+consumable/enchant recipe would have silently attached a stray
+`resultGem: {kind:'elemental', element:'fire'}` default to it. Fixed
+with the same enabled-checkbox toggle `eggReward` (chain rewards) already
+established for exactly this problem, defaulting unchecked/omitted for
+anything that didn't already have a value. Verified directly against the
+running DevTool server (not just read through): the schema endpoint
+reflects all three additions, an existing gem recipe's `resultGem`
+round-trips correctly through the data endpoint, a valid new gem recipe
+saves successfully, and an invalid element value is correctly rejected
+with a clear per-field error message -- test data cleaned up afterward,
+not left in the real content file.
+
+`npx tsc --noEmit` and `vite build` both pass clean; DevTool JS/CSS
+verified via `node --check` (syntax) and live requests against the
+running server (behavior), since there's no compiler for that side to
+catch mistakes automatically.
+
 ### Consumables can now carry crafted stat/mod bonuses -- complete
 Per direct request: extend consumable crafting to support the same
 "pick a bonus" flow gear crafting already has. This was flagged as a

@@ -275,10 +275,13 @@ const SCHEMAS = {
       id: { type: 'string', required: true, slug: true },
       name: { type: 'string', required: true },
       description: { type: 'string', required: true },
-      category: { type: 'enum', required: true, options: ['gear', 'consumable', 'enchant'] },
+      category: { type: 'enum', required: true, options: ['gear', 'consumable', 'enchant', 'gem'] },
       icon: { type: 'string', required: false, picker: 'icon' },
       materialCost: { type: 'materials', required: true },
       goldCost: { type: 'number', required: true },
+      // gem only -- Scrap is its own standalone currency (GameState.scrap),
+      // not a MaterialId, so it can't fit into materialCost above.
+      scrapCost: { type: 'number', required: false },
       // gear only -- an equipment id, ideally one with craftable: true set
       // on it (see the Equipment tab), so it doesn't also turn up in the
       // shop/black market/loot rolls with none of the mods a real craft
@@ -293,6 +296,12 @@ const SCHEMAS = {
       statOptions: { type: 'statKeyList', required: false },
       statsToPick: { type: 'number', required: false },
       statValue: { type: 'number', required: false },
+      // gem only -- which counter this recipe adds +1 to on craft
+      // (GameState.gems or resistGems, for the given element). No
+      // "toggle" the way rewardEgg needs (a gem recipe always needs one),
+      // so this is always shown for a gem-category entry rather than
+      // conditionally revealed.
+      resultGem: { type: 'resultGem', required: false },
     },
   },
   'tuning': {
@@ -336,6 +345,9 @@ const SCHEMAS = {
 };
 
 const MOD_KEYS = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability'];
+// Same 4 elements as ElementType in types.ts -- used by the 'resultGem'
+// field type below (Weapon Enchanting / Armour Infusion gem recipes).
+const ELEMENT_KEYS = ['fire', 'frost', 'lightning', 'poison'];
 const STAT_KEYS = ['strength', 'endurance', 'luck', 'wisdom'];
 const EFFECT_KEYS = ['success', 'gold', 'preventInjury', 'guaranteedGoodEvent', 'healInjury'];
 const EVENT_EFFECT_KEYS = ['success', 'goldPct', 'flatGold', 'xpPct', 'loot', 'durability', 'delay', 'injury', 'guaranteedLoot'];
@@ -416,6 +428,27 @@ function validateEntry(schema, entry, index) {
           }
           for (const k of Object.keys(value)) {
             if (k !== 'rarity' && k !== 'dedicatedPetId') errors.push(`entry ${index}: unknown key "${k}" in "${key}"`);
+          }
+        }
+        break;
+      case 'resultGem':
+        // Only meaningful (and only required) on a `gem`-category recipe --
+        // an entry of any other category just leaves this undefined, same
+        // "not every field applies to every category" trust level this
+        // schema already extends everywhere else (see this schema's own
+        // top comment).
+        if (value === undefined) break;
+        if (typeof value !== 'object' || Array.isArray(value) || value === null) {
+          errors.push(`entry ${index}: "${key}" must be an object`);
+        } else {
+          if (!['elemental', 'resist'].includes(value.kind)) {
+            errors.push(`entry ${index}: "${key}.kind" must be "elemental" or "resist"`);
+          }
+          if (!ELEMENT_KEYS.includes(value.element)) {
+            errors.push(`entry ${index}: "${key}.element" must be one of ${ELEMENT_KEYS.join(', ')}`);
+          }
+          for (const k of Object.keys(value)) {
+            if (k !== 'kind' && k !== 'element') errors.push(`entry ${index}: unknown key "${k}" in "${key}"`);
           }
         }
         break;

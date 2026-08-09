@@ -15,7 +15,8 @@ import { VendorSprite } from '../sprites/VendorSprite';
 import { MaxFlash, useMaxFlash } from '../maxFlash';
 import { CraftingStation } from '../CraftingStation';
 import { EnhanceStation } from '../EnhanceStation';
-import { InfuseStation } from '../InfuseStation';
+import { WeaponEnchantStation } from '../WeaponEnchantStation';
+import { ArmourInfusionStation } from '../ArmourInfusionStation';
 import { ScrapStation } from '../ScrapStation';
 
 /** Confirmed pairing, not a guess -- Blacksmith sells armour, Alchemist sells
@@ -53,9 +54,9 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
   const { settings } = useSettings();
   const [showCrafting, setShowCrafting] = useState(false);
   const [showEnhance, setShowEnhance] = useState(false);
-  const [showInfuse, setShowInfuse] = useState(false);
-  const [showGems, setShowGems] = useState(false);
   const [showScrap, setShowScrap] = useState(false);
+  const [showWeaponEnchant, setShowWeaponEnchant] = useState(false);
+  const [showArmourInfusion, setShowArmourInfusion] = useState(false);
 
   const vendorDef = VENDORS.find((v) => v.id === vendorId)!;
   const level = GuildManager.vendorLevel(state, vendorId);
@@ -135,14 +136,6 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
               {vendorId === 'blacksmith' && (
                 <button className="btn-purple" onClick={() => setShowEnhance(true)}>Enhance</button>
               )}
-              {/* Elemental infusion (weapon damage + armor resist) --
-                  Blacksmith applies gems the Enchanter crafts, per the
-                  "both at the Blacksmith, Enchanter crafts the gems"
-                  confirmed split. See guild-idler-status.md's Elemental
-                  infusion section. */}
-              {vendorId === 'blacksmith' && (
-                <button className="btn-purple" onClick={() => setShowInfuse(true)}>Infuse</button>
-              )}
               {/* Breaks an owned item down into Scrap instead of gold --
                   its own dedicated station now (own background art),
                   moved off the stash list the same way Enhance moved off
@@ -150,8 +143,18 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
               {vendorId === 'blacksmith' && (
                 <button className="btn-purple" onClick={() => setShowScrap(true)}>Scrap</button>
               )}
+              {/* Elemental infusion moved here entirely, split in two --
+                  Weapon Enchanting (weapons only) and Armour Infusion
+                  (everything else), both now living at the Enchanter
+                  rather than split across Blacksmith (apply) and
+                  Enchanter (craft the gem first, separately). Each is a
+                  single collapsed craft-then-apply action now -- see
+                  CraftingManager.craftAndInfuse. */}
               {vendorId === 'enchanter' && (
-                <button className="btn-purple" onClick={() => setShowGems(true)}>Gems</button>
+                <button className="btn-purple" onClick={() => setShowWeaponEnchant(true)}>Weapon Enchanting</button>
+              )}
+              {vendorId === 'enchanter' && (
+                <button className="btn-purple" onClick={() => setShowArmourInfusion(true)}>Armour Infusion</button>
               )}
             </div>
           </div>
@@ -173,9 +176,9 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
         <CraftingStation category={VENDOR_CRAFT_CATEGORY[vendorId]} onClose={() => setShowCrafting(false)} />
       )}
       {showEnhance && <EnhanceStation onClose={() => setShowEnhance(false)} />}
-      {showInfuse && <InfuseStation onClose={() => setShowInfuse(false)} />}
       {showScrap && <ScrapStation onClose={() => setShowScrap(false)} />}
-      {showGems && <CraftingStation category="gem" onClose={() => setShowGems(false)} />}
+      {showWeaponEnchant && <WeaponEnchantStation onClose={() => setShowWeaponEnchant(false)} />}
+      {showArmourInfusion && <ArmourInfusionStation onClose={() => setShowArmourInfusion(false)} />}
     </>
   );
 }

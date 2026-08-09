@@ -196,11 +196,14 @@ function fieldControl(spec, key, value) {
   if (spec.type === 'effect') return kvGrid(id, EFFECT_KEYS, value ?? {}, 'mixed');
   if (spec.type === 'eventEffects') return kvGrid(id, EVENT_EFFECT_KEYS, value ?? {}, 'mixed');
   if (spec.type === 'eggReward') return eggRewardInput(id, value);
+  if (spec.type === 'resultGem') return resultGemInput(id, value);
   if (spec.type === 'chainStages') return stagesInput(id, value ?? []);
   return `<input type="text" id="${id}" value="${escapeHtml(JSON.stringify(value))}" />`;
 }
 
 const RARITY_KEYS = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+// Same 4 elements as ElementType in types.ts -- used by resultGemInput below.
+const ELEMENT_KEYS = ['fire', 'frost', 'lightning', 'poison'];
 const CHAIN_STAGE_TAGS = ['combat', 'escort', 'explore', 'arcane', 'stealth', 'defense'];
 const CHAIN_STAGE_DIFFICULTIES = ['easy', 'normal', 'hard', 'epic', 'legendary'];
 
@@ -222,6 +225,39 @@ function eggRewardInput(id, value) {
         </select>
         <label>Dedicated pet id (optional)</label>
         <input type="text" data-egg-pet value="${escapeHtml(value?.dedicatedPetId ?? '')}" placeholder="leave blank for the general random pool" />
+      </div>
+    </div>`;
+}
+
+/**
+ * `resultGem`'s two sub-fields -- which counter a `gem`-category recipe
+ * adds to (GameState.gems for a weapon-enchant gem, resistGems for an
+ * armor-infusion one) and which of the 4 elements. Needs the same
+ * enabled-toggle eggRewardInput above uses, for the same reason: every
+ * field in this schema renders for every recipe regardless of category
+ * (there's no category-conditional visibility in this editor), and a
+ * <select> can't naturally read as "empty" the way a blank text input
+ * can -- without an explicit toggle, saving any gear/consumable/enchant
+ * recipe would silently attach a `resultGem: {kind:'elemental',
+ * element:'fire'}` default to it, the exact class of bug already flagged
+ * elsewhere in this schema (see raidExclusive/craftable's own comment).
+ * Defaults unchecked for anything that didn't already have a value.
+ */
+function resultGemInput(id, value) {
+  const has = !!value;
+  return `
+    <div class="result-gem" id="${id}">
+      <label><input type="checkbox" data-gem-enabled ${has ? 'checked' : ''} /> Produces a gem (gem-category recipes only)</label>
+      <div class="result-gem-fields" ${has ? '' : 'style="display:none"'}>
+        <label>Kind</label>
+        <select data-gem-kind>
+          <option value="elemental" ${value?.kind === 'elemental' ? 'selected' : ''}>Elemental (Weapon Enchanting)</option>
+          <option value="resist" ${value?.kind === 'resist' ? 'selected' : ''}>Resistance (Armour Infusion)</option>
+        </select>
+        <label>Element</label>
+        <select data-gem-element>
+          ${ELEMENT_KEYS.map((el) => `<option value="${el}" ${value?.element === el ? 'selected' : ''}>${el}</option>`).join('')}
+        </select>
       </div>
     </div>`;
 }
@@ -566,6 +602,14 @@ function wireEggRewardInput(container) {
   });
 }
 
+function wireResultGemInput(container) {
+  container.querySelectorAll('.result-gem').forEach((el) => {
+    const checkbox = el.querySelector('[data-gem-enabled]');
+    const fields = el.querySelector('.result-gem-fields');
+    checkbox.onchange = () => { fields.style.display = checkbox.checked ? '' : 'none'; };
+  });
+}
+
 function readField(spec, key) {
   const el = document.getElementById(`f_${key}`);
   if (spec.picker === 'icon') return el.dataset.value || '';
@@ -595,6 +639,14 @@ function readField(spec, key) {
     return {
       rarity: el.querySelector('[data-egg-rarity]').value,
       ...(dedicatedPetId ? { dedicatedPetId } : {}),
+    };
+  }
+  if (spec.type === 'resultGem') {
+    const enabled = el.querySelector('[data-gem-enabled]').checked;
+    if (!enabled) return undefined;
+    return {
+      kind: el.querySelector('[data-gem-kind]').value,
+      element: el.querySelector('[data-gem-element]').value,
     };
   }
   if (spec.type === 'chainStages') {
@@ -646,6 +698,7 @@ function openEditor(index) {
   wireLootFields(editor);
   wireStagesInput(editor);
   wireEggRewardInput(editor);
+  wireResultGemInput(editor);
 
   editor.querySelector('#cancelBtn').onclick = () => overlay.remove();
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };

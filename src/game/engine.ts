@@ -1333,8 +1333,12 @@ export class GameEngine {
   /** Blacksmith's Infuse action -- spends a gem (which pool depends on the
    *  item's own slot, weapon vs everything else, see
    *  EquipmentManager.infuse) on an owned item. */
+  /** Weapon Enchanting (weapons) and Armour Infusion (everything else) --
+   *  see CraftingManager.craftAndInfuse for the combined craft-then-apply
+   *  flow, which uses an already-owned gem if one exists or crafts one
+   *  fresh otherwise. */
   infuseItem(itemUid: string, element: ElementType) {
-    const error = EquipmentManager.infuse(this.state, itemUid, element);
+    const error = CraftingManager.craftAndInfuse(this.state, itemUid, element);
     if (error) return this.say(error);
     playSound('purchase');
     this.say('The infusion takes.');
