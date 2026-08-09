@@ -1,0 +1,437 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 3b404c8..24d8400 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -2673,6 +2673,24 @@ any particular order.
+   looked like client-side animation state rather than something tracked
+   in persisted `GameState`, so this would need its own investigation
+   before it's clear how cheap or expensive it'd be to surface a count.
++- ~~**Extend nav tab badges** (Hatchery + Equipment) -- the idle-heroes
++  badge already existed on Quests; extend the same pattern to eggs ready
++  and broken gear.~~ -- done, see "Attention nav badges -- built" below.
++- ~~**Legendary-drop flourish** -- a legendary quest reward only got a
++  sound cue before this; give it a visual moment to match.~~ -- done, see
++  "Legendary-drop flourish -- built" below.
++- ~~**Guild Hall affordable-upgrade highlight** -- glow/highlight any
++  facility or permanent upgrade the player can currently afford but
++  hasn't bought.~~ -- done, see "Guild Hall affordable highlight --
++  built" below.
++- **Auto-repair threshold** -- opt-in setting to auto-repair gear once
++  durability drops below a chosen %, instead of a manual Repair
++  Everything trip. Considered this round, not built -- deferred in favor
++  of the three visual items above.
++- **Auto-equip on loot** -- opt-in setting so quest loot that beats
++  what's equipped auto-equips instead of sitting in the stash until Equip
++  Best is run manually. Same "considered, deferred" status as auto-repair
++  above.
+ 
+ ### Send All Idle -- built
+ The roster-wide version of the existing per-hero Quick-assign button.
+@@ -2759,6 +2777,79 @@ send/skip behavior, Sell Junk's crafted/enchanted exclusion and exact
+ gold accounting, Equip Best Gear's slot-by-slot swap and displacement,
+ and the digest's underlying idle/broken-gear signal counts.
+ 
++### Bulk-action button color -- done
++Send All Idle, Equip Best from Stash, and Sell Junk all rendered as plain
++`.btn-ghost` buttons -- easy to miss sitting next to ordinary actions.
++Gave them a shared `.btn-green` class (new, `app.css`) using `--moss`,
++same accent-button pattern `.btn-purple` already established for
++Crafting/Enchanting/Enhance, deliberately a different color so the two
++don't read as the same category of action -- green reads as "does
++something good for you in bulk" across all three despite them touching
++three different systems (quests, equipment, stash); the color is tied to
++"bulk convenience," not to any one panel.
++
++### Attention nav badges -- built
++The Quests nav tab already had a small numeric badge for idle heroes
++(`.tab-badge` in `app.css`, wired in `MenuWindow.tsx`) before this round.
++Extended the same pattern to Hatchery (eggs ready to hatch) and Equipment
++(broken equipped gear), rather than only the Dashboard digest card
++knowing about those two signals. Pulled the actual counting logic for
++all three signals (idle heroes, eggs ready, broken gear) out into a new
++shared `attentionCounts()` (`src/game/attention.ts`), and refactored both
++`DashboardPanel`'s digest card and `MenuWindow`'s nav badges to read from
++it -- previously the digest computed these three inline, and duplicating
++that same logic a second time for the nav badges would have meant two
++copies that could quietly drift apart from each other later. Broken gear
++gets its own `--blood` red badge variant (`.tab-badge.broken`) rather
++than the same green as idle-heroes/eggs-ready -- a problem needing
++attention reads differently from an opportunity waiting to be taken, and
++`--blood` is the same red the durability bar already turns once it's
++critically low, so the color language stays consistent with what's
++already on-screen elsewhere.
++
++### Legendary-drop flourish -- built
++A legendary quest reward previously only got a sound cue
++(`playSound('legendary_drop')`, gated on `result.critBonus` specifically,
++not on the loot's own rarity) -- the Loot list itself just showed the
++item's name in its rarity color plus a `RarityPill`, identical treatment
++to a common drop. Now, in `QuestResultModal.tsx`: the dismiss sound
++correctly fires on `result.critBonus || hasLegendary` rather than crit
++alone, so a legendary drop gets its audio cue even on an unremarkable,
++non-crit roll; a "★ Legendary find!" label pops in the same way the
++existing "⚡ Critical Burst!" label does (own class, `.legendary-drop-
++label`, since a crit and a legendary drop are unrelated events that can
++both fire on the same result); the specific legendary item's name in the
++Loot list gets a finite 2-pulse gold shimmer (`.legendary-loot-name` /
++`@keyframes legendary-shimmer`, ~2.4s total, not a looping glow that
++would still be animating if the player leaves the card open); and a
++5-star particle burst (`LEGENDARY_PARTICLES`, `.collect-particle
++.legendary`) fires once on dismiss alongside the existing coin/XP
++particles -- bigger and slower than the ordinary particles so it reads
++as a bigger moment, capped at one full burst per result regardless of
++how many legendary items actually dropped, since stacking a full burst
++per item would read as chaotic rather than special.
++
++### Guild Hall affordable highlight -- built
++Facility and permanent-upgrade cards in `GuildPanel.tsx` only signaled
++affordability through the Buy/Build button's own disabled state --
++easy to miss which of several cards in the two-column grid are actually
++purchasable right now without checking gold against each price
++individually. Both card loops now compute `affordable` (next cost is
++covered by current gold, and the upgrade isn't already maxed) and add a
++`.card.affordable` class when true -- `--moss` border-left plus a subtle
++inset glow, layered on top of the same border-left-color convention the
++difficulty-tier quest cards (`.card.easy`, `.card.normal`, etc.) already
++use, rather than inventing a new visual language for "you can afford
++this." Scoped to Guild Hall only, per what was asked -- Vendors' own
++upgrade cards weren't touched this round.
++
++All three verified together: `npx tsc --noEmit` and a full `vite build`
++both pass clean, plus 12 runtime checks covering `attentionCounts()`'s
++idle/eggs-ready/broken-gear signals (including the hatchery-locked gate
++on eggs ready), the affordable-upgrade cost comparison at the exact
++boundary (one gold short, exact cost, gold to spare), and legendary-loot
++detection in a result's loot list.
++
+ ### Bigger, still-undecided
+ - **Queued from the same conversation as the UX/economy batch above:**
+   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
+diff --git a/src/game/attention.ts b/src/game/attention.ts
+new file mode 100644
+index 0000000..478641b
+--- /dev/null
++++ b/src/game/attention.ts
+@@ -0,0 +1,36 @@
++import { GameState } from './types';
++import { PetManager } from './managers/PetManager';
++
++/**
++ * The same three "needs attention" signals surfaced in two places: the
++ * Dashboard's digest card (DashboardPanel's AttentionDigest) and the small
++ * numeric badges on the Hatchery/Equipment/Quests nav tabs themselves
++ * (MenuWindow). Pulled out here so both read from one place rather than
++ * two copies of the same three counts drifting apart over time.
++ *
++ * Deliberately only signals that are real, persisted, and ongoing --
++ * nothing transient like a toast or a one-time Guidance nudge -- so both
++ * consumers stay accurate the next time the player opens the app, not
++ * just right after whatever triggered them.
++ */
++export interface AttentionCounts {
++  /** Heroes not currently questing -- pairs with Send All Idle. */
++  idleHeroes: number;
++  /** Eggs that have crossed their hatch threshold and are ready to collect. */
++  eggsReady: number;
++  /** Equipped gear (any hero, any slot) sitting at 0 durability. */
++  brokenGear: number;
++}
++
++export function attentionCounts(state: GameState): AttentionCounts {
++  return {
++    idleHeroes: state.heroes.filter((h) => h.status !== 'questing').length,
++    eggsReady: state.hatcheryUnlocked
++      ? state.incubatingEggs.filter((e) => PetManager.isReady(e)).length
++      : 0,
++    brokenGear: state.heroes.reduce(
++      (sum, h) => sum + Object.values(h.equipment).filter((item) => item && item.durability <= 0).length,
++      0,
++    ),
++  };
++}
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 8a727d1..6afbac0 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -610,6 +610,11 @@ button:focus-visible, [tabindex]:focus-visible {
+   color: var(--moss);
+   font-size: 0.625rem;
+ }
++/* Broken gear is a problem, not an opportunity like idle heroes or a
++   ready-to-hatch egg -- same --blood red the durability bar already uses
++   once it drops critically low (see .bar.dura.low), so the color
++   language stays consistent with what's already on-screen elsewhere. */
++.tabs .tab-badge.broken { color: var(--blood); }
+ 
+ .panel {
+   flex: 1;
+@@ -676,6 +681,17 @@ button:focus-visible, [tabindex]:focus-visible {
+ .card.epic { border-left-color: var(--violet); }
+ .card.legendary { border-left-color: var(--brass); }
+ .card.chain { border-left-color: var(--blood); }
++/* Guild Hall facility/upgrade cards the player can afford right now but
++   hasn't bought yet -- same border-left-color convention as the
++   difficulty-tier cards just above, --moss for the same "opportunity"
++   reason the bulk-action buttons and idle/eggs-ready nav badges use it.
++   A brighter glow on top of the color change (not just a plain color
++   swap) since this card sits in a two-column grid rather than a stacked
++   list, where a border-color-only change is easy to miss at a glance. */
++.card.affordable {
++  border-left-color: var(--moss);
++  box-shadow: 0 0 0 1px color-mix(in srgb, var(--moss) 30%, transparent) inset;
++}
+ 
+ .card-head { display: flex; align-items: baseline; gap: 8px; }
+ /* The click target stays just the clickable header row inside
+@@ -832,6 +848,18 @@ button:focus-visible, [tabindex]:focus-visible {
+   color: var(--brass-dim);
+   text-shadow: 0 0 8px color-mix(in srgb, var(--brass-dim) 70%, transparent);
+ }
++/* Legendary loot's own star burst -- same fly-and-fade shape as every
++   other collect-particle, but bigger and with a stronger glow so it
++   visibly outranks an ordinary coin/XP particle rather than just being
++   another one in the same size. Uses --brass, the same gold RARITY_COLOR
++   already assigns to legendary items, so the color language stays tied
++   to what the player already associates with that rarity. */
++.collect-particle.legendary {
++  font-size: 1.25rem;
++  color: var(--brass);
++  text-shadow: 0 0 10px color-mix(in srgb, var(--brass) 85%, transparent),
++    0 0 22px color-mix(in srgb, var(--brass) 50%, transparent);
++}
+ @keyframes collect-fly {
+   0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+   15% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+@@ -1383,6 +1411,35 @@ input[type='range'] {
+   animation: burst-pop 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+   animation-delay: 120ms;
+ }
++/* Same pop-in shape as .crit-burst-label -- a legendary drop and a crit
++   roll are unrelated events (see hasLegendary in QuestResultModal) and
++   can both fire on the same result, so this is deliberately its own rule
++   rather than reusing the crit label's class, even though the visual
++   language is intentionally the same family. */
++.legendary-drop-label {
++  text-align: center;
++  margin: 2px 0 0;
++  font-family: var(--font-display);
++  font-size: 0.8125rem;
++  letter-spacing: 0.04em;
++  color: var(--brass);
++  text-shadow: 0 0 10px color-mix(in srgb, var(--brass) 80%, transparent);
++  animation: burst-pop 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
++  animation-delay: 160ms;
++}
++/* A few slow shimmer pulses on the legendary item's own name in the Loot
++   list, so the specific line that earned the fuss is easy to spot even
++   after the burst above has already faded -- finite (3 pulses, ~2.4s
++   total), not a looping glow that would still be running if the player
++   leaves the result card open and comes back to it later. */
++.legendary-loot-name {
++  display: inline-block;
++  animation: legendary-shimmer 800ms ease-in-out 2;
++}
++@keyframes legendary-shimmer {
++  0%, 100% { text-shadow: 0 0 4px color-mix(in srgb, var(--brass) 40%, transparent); }
++  50% { text-shadow: 0 0 12px color-mix(in srgb, var(--brass) 90%, transparent), 0 0 22px color-mix(in srgb, var(--brass) 50%, transparent); }
++}
+ .collect-particle.coin.crit {
+   font-size: 1.125rem;
+   color: var(--brass);
+diff --git a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+index 4a438b9..9f7a717 100644
+--- a/src/ui/MenuWindow.tsx
++++ b/src/ui/MenuWindow.tsx
+@@ -3,6 +3,7 @@ import { useEngine } from './useEngine';
+ import { OnboardingTour } from './OnboardingTour';
+ import { ChainDiscoveryModal } from './ChainDiscoveryModal';
+ import { formatGold, formatNumber } from '../game/util';
++import { attentionCounts } from '../game/attention';
+ import { QuestPanel } from './panels/QuestPanel';
+ import { HeroesPanel } from './panels/HeroesPanel';
+ import { EquipmentPanel } from './panels/EquipmentPanel';
+@@ -137,7 +138,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+   }, [engine, engine.requestedTab]);
+ 
+   const Panel = ALL_TABS.find((t) => t.id === tab)!.Panel;
+-  const idleHeroes = engine.state.heroes.filter((h) => h.status !== 'questing').length;
++  const { idleHeroes, eggsReady, brokenGear } = attentionCounts(engine.state);
+ 
+   return (
+     <div className="menu-root" style={{ position: 'relative' }}>
+@@ -200,6 +201,8 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+                   >
+                     {t.label}
+                     {t.id === 'quests' && idleHeroes > 0 ? <span className="tab-badge">{idleHeroes}</span> : null}
++                    {t.id === 'hatchery' && eggsReady > 0 ? <span className="tab-badge">{eggsReady}</span> : null}
++                    {t.id === 'equipment' && brokenGear > 0 ? <span className="tab-badge broken">{brokenGear}</span> : null}
+                   </button>
+                 ))}
+             </div>
+diff --git a/src/ui/QuestResultModal.tsx b/src/ui/QuestResultModal.tsx
+index 15d4407..aa9f0ad 100644
+--- a/src/ui/QuestResultModal.tsx
++++ b/src/ui/QuestResultModal.tsx
+@@ -34,6 +34,18 @@ const CRIT_EXTRA_COIN_PARTICLES = [
+   { dx: 80, dy: -30, rot: 30, delay: 100 },
+   { dx: 0, dy: -50, rot: 0, delay: 20 },
+ ];
++/** A legendary item dropping gets its own star burst, same fly-and-fade
++ * shape as the coin/XP particles but wider and slower (bigger moment,
++ * bigger spread) -- fires once per result regardless of how many
++ * legendary items actually dropped, since stacking multiple full bursts
++ * would read as chaotic rather than special. */
++const LEGENDARY_PARTICLES = [
++  { dx: -70, dy: -100, rot: -20, delay: 0 },
++  { dx: -30, dy: -130, rot: -8, delay: 60 },
++  { dx: 10, dy: -140, rot: 4, delay: 20 },
++  { dx: 50, dy: -125, rot: 14, delay: 100 },
++  { dx: 85, dy: -85, rot: 26, delay: 40 },
++];
+ 
+ /**
+  * Shown when a quest resolves while the player is watching. Split into an
+@@ -69,6 +81,7 @@ export function QuestResultModal({ onViewLore }: { onViewLore?: () => void }) {
+ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; engine: GameEngine; onViewLore?: () => void }) {
+   const [dismissing, setDismissing] = useState(false);
+   const timeoutRef = useRef<number | null>(null);
++  const hasLegendary = result.loot.some((item) => item.rarity === 'legendary');
+ 
+   useEffect(() => () => {
+     if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
+@@ -77,7 +90,7 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult;
+   const handleDismiss = () => {
+     if (dismissing) return;
+     setDismissing(true);
+-    playSound(result.critBonus ? 'legendary_drop' : 'collect');
++    playSound(result.critBonus || hasLegendary ? 'legendary_drop' : 'collect');
+     timeoutRef.current = window.setTimeout(() => engine.dismissResult(), DISMISS_DELAY_MS);
+   };
+ 
+@@ -102,6 +115,7 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult;
+           {result.gold > 0 && <span className={`burst-gold ${result.critBonus ? 'crit' : ''}`}>+{formatGold(result.gold)} gold</span>}
+         </div>
+         {result.critBonus && <p className="crit-burst-label">⚡ Critical Burst!</p>}
++        {hasLegendary && <p className="legendary-drop-label">★ Legendary find!</p>}
+         {result.levelsGained > 0 && <p className="good burst-levelup">Level up ×{result.levelsGained}!</p>}
+         {result.dailyBurstBonus && (
+           <p className="good" style={{ fontSize: '0.75rem' }}>
+@@ -114,7 +128,12 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult;
+             <div className="section-heading">Loot</div>
+             {result.loot.map((item) => (
+               <div key={item.defId} className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 2 }}>
+-                <span style={{ fontSize: 11, color: RARITY_COLOR[item.rarity] }}>{item.name}</span>
++                <span
++                  className={item.rarity === 'legendary' ? 'legendary-loot-name' : undefined}
++                  style={{ fontSize: 11, color: RARITY_COLOR[item.rarity] }}
++                >
++                  {item.name}
++                </span>
+                 <RarityPill rarity={item.rarity} />
+               </div>
+             ))}
+@@ -201,6 +220,15 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult;
+                 ✦
+               </span>
+             ))}
++            {hasLegendary && LEGENDARY_PARTICLES.map((p, i) => (
++              <span
++                key={`legendary-${i}`}
++                className="collect-particle legendary"
++                style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, animationDelay: `${p.delay}ms` } as CSSProperties}
++              >
++                ★
++              </span>
++            ))}
+           </div>
+         )}
+       </div>
+diff --git a/src/ui/panels/DashboardPanel.tsx b/src/ui/panels/DashboardPanel.tsx
+index 6338e74..14cdda9 100644
+--- a/src/ui/panels/DashboardPanel.tsx
++++ b/src/ui/panels/DashboardPanel.tsx
+@@ -4,7 +4,7 @@ import { useEngine } from '../useEngine';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import { VENDORS, vendorUpgrades, xpForLevel } from '../../game/data/progression';
+ import { AchievementManager } from '../../game/managers/AchievementManager';
+-import { PetManager } from '../../game/managers/PetManager';
++import { attentionCounts } from '../../game/attention';
+ import { guildPowerBreakdown, levelTierColor, levelTierName } from '../../game/power';
+ import { currentGuildRank, nextGuildRank, powerToNextRank } from '../../game/data/guildRank';
+ import { formatGold, formatNumber } from '../../game/util';
+@@ -12,34 +12,27 @@ import { formatGold, formatNumber } from '../../game/util';
+ /**
+  * "Needs attention" digest -- one glanceable card for state that's sitting
+  * around waiting on the player, instead of hunting across tabs for it.
+- * Deliberately built only from persisted GameState signals that are real
+- * and ongoing (idle heroes, ready-to-hatch eggs, broken equipped gear),
+- * not anything transient like a toast or a one-time Guidance nudge -- this
+- * is meant to still be accurate the next time the player opens the app,
+- * not just right after the triggering event. Renders nothing at all when
+- * every signal is empty, rather than an empty "all clear" card taking up
+- * space on every single visit.
++ * Reads attentionCounts() (game/attention.ts) -- the same three signals
++ * that also drive the small numeric badges on the Hatchery/Equipment nav
++ * tabs themselves (see MenuWindow), so this card and those badges can
++ * never say two different things. Renders nothing at all when every
++ * signal is empty, rather than an empty "all clear" card taking up space
++ * on every single visit.
+  */
+ function AttentionDigest() {
+   const engine = useEngine();
+   const state = engine.state;
+-
+-  const idleCount = state.heroes.filter((h) => h.status !== 'questing').length;
+-  const eggsReady = state.incubatingEggs.filter((e) => PetManager.isReady(e)).length;
+-  const brokenGear = state.heroes.reduce(
+-    (sum, h) => sum + Object.values(h.equipment).filter((item) => item && item.durability <= 0).length,
+-    0,
+-  );
++  const { idleHeroes, eggsReady, brokenGear } = attentionCounts(state);
+ 
+   const items: { key: string; label: string; tab: string }[] = [];
+-  if (idleCount > 0) {
++  if (idleHeroes > 0) {
+     items.push({
+       key: 'idle',
+-      label: `${idleCount} hero${idleCount === 1 ? '' : 's'} idle with nothing sent out`,
++      label: `${idleHeroes} hero${idleHeroes === 1 ? '' : 's'} idle with nothing sent out`,
+       tab: 'quests',
+     });
+   }
+-  if (state.hatcheryUnlocked && eggsReady > 0) {
++  if (eggsReady > 0) {
+     items.push({
+       key: 'eggs',
+       label: `${eggsReady} egg${eggsReady === 1 ? '' : 's'} ready to hatch`,
+diff --git a/src/ui/panels/GuildPanel.tsx b/src/ui/panels/GuildPanel.tsx
+index facc98b..bf1cb60 100644
+--- a/src/ui/panels/GuildPanel.tsx
++++ b/src/ui/panels/GuildPanel.tsx
+@@ -38,9 +38,13 @@ export function GuildPanel() {
+     const level = GuildManager.upgradeLevel(state, def.id);
+     const cost = GuildManager.nextUpgradeCost(state, def.id);
+     const maxed = cost === null && level >= def.maxLevel;
++    // Highlighted the moment it's actually buyable, not just "cheaper than
++    // the most expensive thing in the tab" -- affordable means the exact
++    // next-purchase cost is covered by current gold right now.
++    const affordable = !maxed && cost !== null && state.gold >= cost;
+     const flash = flashes[def.id];
+     return (
+-      <div key={def.id} className="card" style={{ marginBottom: 0 }}>
++      <div key={def.id} className={`card ${affordable ? 'affordable' : ''}`} style={{ marginBottom: 0 }}>
+         <div className="spread">
+           <span className="card-title">{def.name}</span>
+           <span key={level} className="small muted purchase-pulse">{level}/{def.maxLevel}</span>
+@@ -83,9 +87,10 @@ export function GuildPanel() {
+           const level = GuildManager.facilityLevel(state, def.id);
+           const cost = GuildManager.nextCost(state, def.id);
+           const maxed = cost === null;
++          const affordable = !maxed && state.gold >= cost;
+           const flash = flashes[def.id];
+           return (
+-            <div key={def.id} className="card" style={{ marginBottom: 0 }}>
++            <div key={def.id} className={`card ${affordable ? 'affordable' : ''}`} style={{ marginBottom: 0 }}>
+               <div className="spread">
+                 <span className="card-title">{def.name}</span>
+                 <span key={level} className="small muted purchase-pulse">Level {level}/{def.maxLevel}</span>

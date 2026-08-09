@@ -4,7 +4,7 @@ import { useEngine } from '../useEngine';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { VENDORS, vendorUpgrades, xpForLevel } from '../../game/data/progression';
 import { AchievementManager } from '../../game/managers/AchievementManager';
-import { PetManager } from '../../game/managers/PetManager';
+import { attentionCounts } from '../../game/attention';
 import { guildPowerBreakdown, levelTierColor, levelTierName } from '../../game/power';
 import { currentGuildRank, nextGuildRank, powerToNextRank } from '../../game/data/guildRank';
 import { formatGold, formatNumber } from '../../game/util';
@@ -12,34 +12,27 @@ import { formatGold, formatNumber } from '../../game/util';
 /**
  * "Needs attention" digest -- one glanceable card for state that's sitting
  * around waiting on the player, instead of hunting across tabs for it.
- * Deliberately built only from persisted GameState signals that are real
- * and ongoing (idle heroes, ready-to-hatch eggs, broken equipped gear),
- * not anything transient like a toast or a one-time Guidance nudge -- this
- * is meant to still be accurate the next time the player opens the app,
- * not just right after the triggering event. Renders nothing at all when
- * every signal is empty, rather than an empty "all clear" card taking up
- * space on every single visit.
+ * Reads attentionCounts() (game/attention.ts) -- the same three signals
+ * that also drive the small numeric badges on the Hatchery/Equipment nav
+ * tabs themselves (see MenuWindow), so this card and those badges can
+ * never say two different things. Renders nothing at all when every
+ * signal is empty, rather than an empty "all clear" card taking up space
+ * on every single visit.
  */
 function AttentionDigest() {
   const engine = useEngine();
   const state = engine.state;
-
-  const idleCount = state.heroes.filter((h) => h.status !== 'questing').length;
-  const eggsReady = state.incubatingEggs.filter((e) => PetManager.isReady(e)).length;
-  const brokenGear = state.heroes.reduce(
-    (sum, h) => sum + Object.values(h.equipment).filter((item) => item && item.durability <= 0).length,
-    0,
-  );
+  const { idleHeroes, eggsReady, brokenGear } = attentionCounts(state);
 
   const items: { key: string; label: string; tab: string }[] = [];
-  if (idleCount > 0) {
+  if (idleHeroes > 0) {
     items.push({
       key: 'idle',
-      label: `${idleCount} hero${idleCount === 1 ? '' : 's'} idle with nothing sent out`,
+      label: `${idleHeroes} hero${idleHeroes === 1 ? '' : 's'} idle with nothing sent out`,
       tab: 'quests',
     });
   }
-  if (state.hatcheryUnlocked && eggsReady > 0) {
+  if (eggsReady > 0) {
     items.push({
       key: 'eggs',
       label: `${eggsReady} egg${eggsReady === 1 ? '' : 's'} ready to hatch`,

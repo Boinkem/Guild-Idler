@@ -34,6 +34,18 @@ const CRIT_EXTRA_COIN_PARTICLES = [
   { dx: 80, dy: -30, rot: 30, delay: 100 },
   { dx: 0, dy: -50, rot: 0, delay: 20 },
 ];
+/** A legendary item dropping gets its own star burst, same fly-and-fade
+ * shape as the coin/XP particles but wider and slower (bigger moment,
+ * bigger spread) -- fires once per result regardless of how many
+ * legendary items actually dropped, since stacking multiple full bursts
+ * would read as chaotic rather than special. */
+const LEGENDARY_PARTICLES = [
+  { dx: -70, dy: -100, rot: -20, delay: 0 },
+  { dx: -30, dy: -130, rot: -8, delay: 60 },
+  { dx: 10, dy: -140, rot: 4, delay: 20 },
+  { dx: 50, dy: -125, rot: 14, delay: 100 },
+  { dx: 85, dy: -85, rot: 26, delay: 40 },
+];
 
 /**
  * Shown when a quest resolves while the player is watching. Split into an
@@ -69,6 +81,7 @@ export function QuestResultModal({ onViewLore }: { onViewLore?: () => void }) {
 function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; engine: GameEngine; onViewLore?: () => void }) {
   const [dismissing, setDismissing] = useState(false);
   const timeoutRef = useRef<number | null>(null);
+  const hasLegendary = result.loot.some((item) => item.rarity === 'legendary');
 
   useEffect(() => () => {
     if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
@@ -77,7 +90,7 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; 
   const handleDismiss = () => {
     if (dismissing) return;
     setDismissing(true);
-    playSound(result.critBonus ? 'legendary_drop' : 'collect');
+    playSound(result.critBonus || hasLegendary ? 'legendary_drop' : 'collect');
     timeoutRef.current = window.setTimeout(() => engine.dismissResult(), DISMISS_DELAY_MS);
   };
 
@@ -102,6 +115,7 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; 
           {result.gold > 0 && <span className={`burst-gold ${result.critBonus ? 'crit' : ''}`}>+{formatGold(result.gold)} gold</span>}
         </div>
         {result.critBonus && <p className="crit-burst-label">⚡ Critical Burst!</p>}
+        {hasLegendary && <p className="legendary-drop-label">★ Legendary find!</p>}
         {result.levelsGained > 0 && <p className="good burst-levelup">Level up ×{result.levelsGained}!</p>}
         {result.dailyBurstBonus && (
           <p className="good" style={{ fontSize: '0.75rem' }}>
@@ -114,7 +128,12 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; 
             <div className="section-heading">Loot</div>
             {result.loot.map((item) => (
               <div key={item.defId} className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 2 }}>
-                <span style={{ fontSize: 11, color: RARITY_COLOR[item.rarity] }}>{item.name}</span>
+                <span
+                  className={item.rarity === 'legendary' ? 'legendary-loot-name' : undefined}
+                  style={{ fontSize: 11, color: RARITY_COLOR[item.rarity] }}
+                >
+                  {item.name}
+                </span>
                 <RarityPill rarity={item.rarity} />
               </div>
             ))}
@@ -199,6 +218,15 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; 
                 style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, animationDelay: `${p.delay}ms` } as CSSProperties}
               >
                 ✦
+              </span>
+            ))}
+            {hasLegendary && LEGENDARY_PARTICLES.map((p, i) => (
+              <span
+                key={`legendary-${i}`}
+                className="collect-particle legendary"
+                style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, animationDelay: `${p.delay}ms` } as CSSProperties}
+              >
+                ★
               </span>
             ))}
           </div>

@@ -38,9 +38,13 @@ export function GuildPanel() {
     const level = GuildManager.upgradeLevel(state, def.id);
     const cost = GuildManager.nextUpgradeCost(state, def.id);
     const maxed = cost === null && level >= def.maxLevel;
+    // Highlighted the moment it's actually buyable, not just "cheaper than
+    // the most expensive thing in the tab" -- affordable means the exact
+    // next-purchase cost is covered by current gold right now.
+    const affordable = !maxed && cost !== null && state.gold >= cost;
     const flash = flashes[def.id];
     return (
-      <div key={def.id} className="card" style={{ marginBottom: 0 }}>
+      <div key={def.id} className={`card ${affordable ? 'affordable' : ''}`} style={{ marginBottom: 0 }}>
         <div className="spread">
           <span className="card-title">{def.name}</span>
           <span key={level} className="small muted purchase-pulse">{level}/{def.maxLevel}</span>
@@ -83,9 +87,10 @@ export function GuildPanel() {
           const level = GuildManager.facilityLevel(state, def.id);
           const cost = GuildManager.nextCost(state, def.id);
           const maxed = cost === null;
+          const affordable = !maxed && state.gold >= cost;
           const flash = flashes[def.id];
           return (
-            <div key={def.id} className="card" style={{ marginBottom: 0 }}>
+            <div key={def.id} className={`card ${affordable ? 'affordable' : ''}`} style={{ marginBottom: 0 }}>
               <div className="spread">
                 <span className="card-title">{def.name}</span>
                 <span key={level} className="small muted purchase-pulse">Level {level}/{def.maxLevel}</span>

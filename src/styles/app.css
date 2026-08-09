@@ -610,6 +610,11 @@ button:focus-visible, [tabindex]:focus-visible {
   color: var(--moss);
   font-size: 0.625rem;
 }
+/* Broken gear is a problem, not an opportunity like idle heroes or a
+   ready-to-hatch egg -- same --blood red the durability bar already uses
+   once it drops critically low (see .bar.dura.low), so the color
+   language stays consistent with what's already on-screen elsewhere. */
+.tabs .tab-badge.broken { color: var(--blood); }
 
 .panel {
   flex: 1;
@@ -676,6 +681,17 @@ button:focus-visible, [tabindex]:focus-visible {
 .card.epic { border-left-color: var(--violet); }
 .card.legendary { border-left-color: var(--brass); }
 .card.chain { border-left-color: var(--blood); }
+/* Guild Hall facility/upgrade cards the player can afford right now but
+   hasn't bought yet -- same border-left-color convention as the
+   difficulty-tier cards just above, --moss for the same "opportunity"
+   reason the bulk-action buttons and idle/eggs-ready nav badges use it.
+   A brighter glow on top of the color change (not just a plain color
+   swap) since this card sits in a two-column grid rather than a stacked
+   list, where a border-color-only change is easy to miss at a glance. */
+.card.affordable {
+  border-left-color: var(--moss);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--moss) 30%, transparent) inset;
+}
 
 .card-head { display: flex; align-items: baseline; gap: 8px; }
 /* The click target stays just the clickable header row inside
@@ -831,6 +847,18 @@ button:focus-visible, [tabindex]:focus-visible {
 .collect-particle.scrap {
   color: var(--brass-dim);
   text-shadow: 0 0 8px color-mix(in srgb, var(--brass-dim) 70%, transparent);
+}
+/* Legendary loot's own star burst -- same fly-and-fade shape as every
+   other collect-particle, but bigger and with a stronger glow so it
+   visibly outranks an ordinary coin/XP particle rather than just being
+   another one in the same size. Uses --brass, the same gold RARITY_COLOR
+   already assigns to legendary items, so the color language stays tied
+   to what the player already associates with that rarity. */
+.collect-particle.legendary {
+  font-size: 1.25rem;
+  color: var(--brass);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--brass) 85%, transparent),
+    0 0 22px color-mix(in srgb, var(--brass) 50%, transparent);
 }
 @keyframes collect-fly {
   0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
@@ -1382,6 +1410,35 @@ input[type='range'] {
   text-shadow: 0 0 10px color-mix(in srgb, var(--brass) 80%, transparent);
   animation: burst-pop 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
   animation-delay: 120ms;
+}
+/* Same pop-in shape as .crit-burst-label -- a legendary drop and a crit
+   roll are unrelated events (see hasLegendary in QuestResultModal) and
+   can both fire on the same result, so this is deliberately its own rule
+   rather than reusing the crit label's class, even though the visual
+   language is intentionally the same family. */
+.legendary-drop-label {
+  text-align: center;
+  margin: 2px 0 0;
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  color: var(--brass);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--brass) 80%, transparent);
+  animation: burst-pop 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  animation-delay: 160ms;
+}
+/* A few slow shimmer pulses on the legendary item's own name in the Loot
+   list, so the specific line that earned the fuss is easy to spot even
+   after the burst above has already faded -- finite (3 pulses, ~2.4s
+   total), not a looping glow that would still be running if the player
+   leaves the result card open and comes back to it later. */
+.legendary-loot-name {
+  display: inline-block;
+  animation: legendary-shimmer 800ms ease-in-out 2;
+}
+@keyframes legendary-shimmer {
+  0%, 100% { text-shadow: 0 0 4px color-mix(in srgb, var(--brass) 40%, transparent); }
+  50% { text-shadow: 0 0 12px color-mix(in srgb, var(--brass) 90%, transparent), 0 0 22px color-mix(in srgb, var(--brass) 50%, transparent); }
 }
 .collect-particle.coin.crit {
   font-size: 1.125rem;

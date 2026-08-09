@@ -2673,6 +2673,24 @@ any particular order.
   looked like client-side animation state rather than something tracked
   in persisted `GameState`, so this would need its own investigation
   before it's clear how cheap or expensive it'd be to surface a count.
+- ~~**Extend nav tab badges** (Hatchery + Equipment) -- the idle-heroes
+  badge already existed on Quests; extend the same pattern to eggs ready
+  and broken gear.~~ -- done, see "Attention nav badges -- built" below.
+- ~~**Legendary-drop flourish** -- a legendary quest reward only got a
+  sound cue before this; give it a visual moment to match.~~ -- done, see
+  "Legendary-drop flourish -- built" below.
+- ~~**Guild Hall affordable-upgrade highlight** -- glow/highlight any
+  facility or permanent upgrade the player can currently afford but
+  hasn't bought.~~ -- done, see "Guild Hall affordable highlight --
+  built" below.
+- **Auto-repair threshold** -- opt-in setting to auto-repair gear once
+  durability drops below a chosen %, instead of a manual Repair
+  Everything trip. Considered this round, not built -- deferred in favor
+  of the three visual items above.
+- **Auto-equip on loot** -- opt-in setting so quest loot that beats
+  what's equipped auto-equips instead of sitting in the stash until Equip
+  Best is run manually. Same "considered, deferred" status as auto-repair
+  above.
 
 ### Send All Idle -- built
 The roster-wide version of the existing per-hero Quick-assign button.
@@ -2758,6 +2776,79 @@ both pass clean, plus 15 runtime checks covering Send All Idle's bulk
 send/skip behavior, Sell Junk's crafted/enchanted exclusion and exact
 gold accounting, Equip Best Gear's slot-by-slot swap and displacement,
 and the digest's underlying idle/broken-gear signal counts.
+
+### Bulk-action button color -- done
+Send All Idle, Equip Best from Stash, and Sell Junk all rendered as plain
+`.btn-ghost` buttons -- easy to miss sitting next to ordinary actions.
+Gave them a shared `.btn-green` class (new, `app.css`) using `--moss`,
+same accent-button pattern `.btn-purple` already established for
+Crafting/Enchanting/Enhance, deliberately a different color so the two
+don't read as the same category of action -- green reads as "does
+something good for you in bulk" across all three despite them touching
+three different systems (quests, equipment, stash); the color is tied to
+"bulk convenience," not to any one panel.
+
+### Attention nav badges -- built
+The Quests nav tab already had a small numeric badge for idle heroes
+(`.tab-badge` in `app.css`, wired in `MenuWindow.tsx`) before this round.
+Extended the same pattern to Hatchery (eggs ready to hatch) and Equipment
+(broken equipped gear), rather than only the Dashboard digest card
+knowing about those two signals. Pulled the actual counting logic for
+all three signals (idle heroes, eggs ready, broken gear) out into a new
+shared `attentionCounts()` (`src/game/attention.ts`), and refactored both
+`DashboardPanel`'s digest card and `MenuWindow`'s nav badges to read from
+it -- previously the digest computed these three inline, and duplicating
+that same logic a second time for the nav badges would have meant two
+copies that could quietly drift apart from each other later. Broken gear
+gets its own `--blood` red badge variant (`.tab-badge.broken`) rather
+than the same green as idle-heroes/eggs-ready -- a problem needing
+attention reads differently from an opportunity waiting to be taken, and
+`--blood` is the same red the durability bar already turns once it's
+critically low, so the color language stays consistent with what's
+already on-screen elsewhere.
+
+### Legendary-drop flourish -- built
+A legendary quest reward previously only got a sound cue
+(`playSound('legendary_drop')`, gated on `result.critBonus` specifically,
+not on the loot's own rarity) -- the Loot list itself just showed the
+item's name in its rarity color plus a `RarityPill`, identical treatment
+to a common drop. Now, in `QuestResultModal.tsx`: the dismiss sound
+correctly fires on `result.critBonus || hasLegendary` rather than crit
+alone, so a legendary drop gets its audio cue even on an unremarkable,
+non-crit roll; a "★ Legendary find!" label pops in the same way the
+existing "⚡ Critical Burst!" label does (own class, `.legendary-drop-
+label`, since a crit and a legendary drop are unrelated events that can
+both fire on the same result); the specific legendary item's name in the
+Loot list gets a finite 2-pulse gold shimmer (`.legendary-loot-name` /
+`@keyframes legendary-shimmer`, ~2.4s total, not a looping glow that
+would still be animating if the player leaves the card open); and a
+5-star particle burst (`LEGENDARY_PARTICLES`, `.collect-particle
+.legendary`) fires once on dismiss alongside the existing coin/XP
+particles -- bigger and slower than the ordinary particles so it reads
+as a bigger moment, capped at one full burst per result regardless of
+how many legendary items actually dropped, since stacking a full burst
+per item would read as chaotic rather than special.
+
+### Guild Hall affordable highlight -- built
+Facility and permanent-upgrade cards in `GuildPanel.tsx` only signaled
+affordability through the Buy/Build button's own disabled state --
+easy to miss which of several cards in the two-column grid are actually
+purchasable right now without checking gold against each price
+individually. Both card loops now compute `affordable` (next cost is
+covered by current gold, and the upgrade isn't already maxed) and add a
+`.card.affordable` class when true -- `--moss` border-left plus a subtle
+inset glow, layered on top of the same border-left-color convention the
+difficulty-tier quest cards (`.card.easy`, `.card.normal`, etc.) already
+use, rather than inventing a new visual language for "you can afford
+this." Scoped to Guild Hall only, per what was asked -- Vendors' own
+upgrade cards weren't touched this round.
+
+All three verified together: `npx tsc --noEmit` and a full `vite build`
+both pass clean, plus 12 runtime checks covering `attentionCounts()`'s
+idle/eggs-ready/broken-gear signals (including the hatchery-locked gate
+on eggs ready), the affordable-upgrade cost comparison at the exact
+boundary (one gold short, exact cost, gold to spare), and legendary-loot
+detection in a result's loot list.
 
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**

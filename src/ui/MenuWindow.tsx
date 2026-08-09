@@ -3,6 +3,7 @@ import { useEngine } from './useEngine';
 import { OnboardingTour } from './OnboardingTour';
 import { ChainDiscoveryModal } from './ChainDiscoveryModal';
 import { formatGold, formatNumber } from '../game/util';
+import { attentionCounts } from '../game/attention';
 import { QuestPanel } from './panels/QuestPanel';
 import { HeroesPanel } from './panels/HeroesPanel';
 import { EquipmentPanel } from './panels/EquipmentPanel';
@@ -137,7 +138,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   }, [engine, engine.requestedTab]);
 
   const Panel = ALL_TABS.find((t) => t.id === tab)!.Panel;
-  const idleHeroes = engine.state.heroes.filter((h) => h.status !== 'questing').length;
+  const { idleHeroes, eggsReady, brokenGear } = attentionCounts(engine.state);
 
   return (
     <div className="menu-root" style={{ position: 'relative' }}>
@@ -200,6 +201,8 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
                   >
                     {t.label}
                     {t.id === 'quests' && idleHeroes > 0 ? <span className="tab-badge">{idleHeroes}</span> : null}
+                    {t.id === 'hatchery' && eggsReady > 0 ? <span className="tab-badge">{eggsReady}</span> : null}
+                    {t.id === 'equipment' && brokenGear > 0 ? <span className="tab-badge broken">{brokenGear}</span> : null}
                   </button>
                 ))}
             </div>
