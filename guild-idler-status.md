@@ -1398,6 +1398,45 @@ verified via `node --check` (syntax) and live requests against the
 running server (behavior), since there's no compiler for that side to
 catch mistakes automatically.
 
+**Follow-up bugfix, same patch series: `PickerModal` truncation.**
+Reported directly from screenshots -- Armour Infusion's "Choose a
+resistance gem" list showed each option collapsed to almost nothing
+("Fire" as "F…", "Lightning" as "L…"), while every other picker on the
+same screen (including Armour Infusion's own "Choose armor" list, right
+next to it) rendered fine. Root cause: `.craft-picker-row` is a 3-column
+CSS grid (`40px 1fr auto` -- icon / text / checkmark). `PickerOption.icon`
+is optional, and when a caller omits it, React renders nothing at all for
+that slot -- no placeholder, no empty node. CSS Grid then auto-places the
+remaining children starting from column 1, shoving the text span into the
+40px icon column instead of the intended 1fr text column. The gem picker
+was the only caller that omitted an icon (it had embedded the element
+glyph directly in the label string instead, e.g. `"🔥 Fire Resistance
+Gem"`), which is exactly why it alone showed the bug.
+
+Fixed in two parts: `PickerModal` (`CraftingStation.tsx`) now always
+renders a stable placeholder in the icon slot (`opt.icon ?? <span
+aria-hidden="true" />`) so the grid can never collapse regardless of what
+a future caller passes, and the gem picker's options were also cleaned up
+to use a real `icon` field (the element glyph, properly sized) instead of
+embedding it in the label text. Every other existing `PickerModal` caller
+was checked and already supplies a real icon (`EggSelectModal`,
+`EnhanceStation`, `ScrapStation`, `WeaponEnchantStation`'s own item
+picker) -- this was specifically an Armour Infusion gem-picker gap, not a
+systemic one, though the `PickerModal` fix itself protects every current
+and future caller regardless.
+
+Verified visually, not just reasoned through: built a minimal HTML repro
+of the exact CSS rules and rendered it with the actual Chromium binary
+available in this environment (the same engine Electron ships) -- the
+"before" version reproduced the reported bug almost exactly
+(`"🔥 Fi…"`/`"⚡ Li…"`, matching the real screenshots' `"F…"`/`"L…"`
+pattern), and the "after" version confirmed both the placeholder fix and
+the real-icon cleanup render correctly. (A first attempt at this repro
+used `wkhtmltoimage`, which is available in this environment but uses an
+old WebKitGTK engine with unreliable CSS Grid support -- it failed to
+reproduce the bug at all, which would have been a false negative if
+trusted; re-ran with real Chrome instead once that mismatch was caught.)
+
 ### Consumables can now carry crafted stat/mod bonuses -- complete
 Per direct request: extend consumable crafting to support the same
 "pick a bonus" flow gear crafting already has. This was flagged as a

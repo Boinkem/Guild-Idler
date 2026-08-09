@@ -140,7 +140,23 @@ export function PickerModal({
                 disabled={opt.disabled}
                 onClick={() => { if (!opt.disabled) { onPick(opt.key); if (closeOnPick) onClose(); } }}
               >
-                {opt.icon}
+                {/*
+                 * .craft-picker-row is a 3-column CSS grid (40px icon /
+                 * 1fr text / auto checkmark) -- when opt.icon is omitted,
+                 * React renders nothing at all for that slot, so CSS
+                 * Grid auto-places the remaining children starting from
+                 * column 1, shoving the text span into the 40px icon
+                 * column instead of the 1fr text column. The result was
+                 * severe truncation on any picker whose options don't
+                 * carry an icon (confirmed directly: Armour Infusion's
+                 * gem picker, which only had glyphs embedded in the
+                 * label string, showed "Fire" as "F…" and "Lightning"
+                 * as "L…", while every icon-bearing picker on the same
+                 * screen rendered fine). A stable empty placeholder here
+                 * keeps exactly 3 grid children at all times regardless
+                 * of what an individual caller passes.
+                 */}
+                {opt.icon ?? <span aria-hidden="true" />}
                 <span style={{ textAlign: 'left', minWidth: 0 }}>
                   <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{opt.label}</div>
                   {opt.sublabel && <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{opt.sublabel}</div>}

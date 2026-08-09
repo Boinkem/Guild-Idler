@@ -60,8 +60,12 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
     const affordable = elCost.ready || (state.gold >= elCost.goldCost && state.scrap >= elCost.scrapCost);
     return {
       key: el,
-      label: `${ELEMENT_GLYPH[el]} ${ELEMENT_LABEL[el]} Resistance Gem`,
+      label: `${ELEMENT_LABEL[el]} Resistance Gem`,
       sublabel: elCost.ready ? 'Ready' : `${elCost.scrapCost} Scrap + ${formatGold(elCost.goldCost)}`,
+      // A real icon slot now, not text embedded in the label -- see
+      // PickerModal's own comment on why an option without one used to
+      // truncate its whole label to almost nothing.
+      icon: <span style={{ fontSize: '1.4rem' }}>{ELEMENT_GLYPH[el]}</span>,
       disabled: !affordable,
     };
   });
