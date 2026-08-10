@@ -31,7 +31,15 @@ export type HeroClass = 'adventurer' | 'knight' | 'gladiator' | 'samurai' | 'wit
 
 /** Cosmetic recolour skins, applied per hero. */
 
-export type HeroSkin = 'original' | 'necrotic' | 'holy' | 'infernal' | 'frost';
+/**
+ * Any skin id from SKINS (progression.ts), plain string rather than a
+ * closed union -- a new skin (including a future DLC one, see
+ * SkinDef.requiresDlc) only ever needs a new data entry, never a code
+ * change to this type. The 5 base skins ('original'/'necrotic'/'holy'/
+ * 'infernal'/'frost') aren't enumerated here anymore; SKIN_BY_ID is the
+ * actual source of truth for what's valid.
+ */
+export type HeroSkin = string;
 
 export type HeroStatus = 'idle' | 'questing' | 'resting';
 
@@ -1036,6 +1044,13 @@ export interface PetDef {
   /** True if this pet can only hatch from a dedicated-reward egg (see
    *  EggInstance.dedicatedPetId) -- never rolled by the general pool. */
   dedicatedOnly?: boolean;
+  /** Unset for every base-game species (rolls normally, or is
+   *  dedicatedOnly as above). Set to a DLC pack id for a species that
+   *  only exists once that pack is owned -- same shape and same
+   *  DlcManager.owns gate as SkinDef.requiresDlc. A dedicatedOnly DLC
+   *  pet (a pack's own signature species, granted by its own reward
+   *  chain/egg) is a valid combination -- the two flags are independent. */
+  requiresDlc?: string;
 }
 
 /**

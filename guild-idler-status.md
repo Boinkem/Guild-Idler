@@ -3303,6 +3303,88 @@ server's own syntax check all pass clean, plus runtime checks confirming
 `QUEST_PREFIXES` and `GUILD_RANK_TIERS` resolve to byte-identical content
 after their JSON migration.
 
+### DLC groundwork -- built
+Discussed how Steam DLC actually works mechanically (a separate App ID
+per pack, Steam's own depot delivery placing new files into the existing
+install folder once owned, `BIsDlcInstalled` as the runtime ownership
+check) and mapped that onto this codebase specifically, ahead of any
+concrete pack being scoped -- so a future pack can be *added* rather than
+requiring the base game's own systems to be reworked first.
+
+**The core distinction worth remembering:** a code patch (the `.patch`
+files this whole conversation has been shipping) is a text diff against
+existing files -- order-dependent, breaks if an earlier one hasn't
+landed, because it's editing lines that might not be there yet. Steam
+DLC is nothing like that. It's Steam copying brand-new files into the
+game's existing install folder once a player owns that pack's own App
+ID -- nothing about the base game's own files gets rewritten, and an
+unowned pack simply never has its files show up at all, the same way an
+uninstalled expansion for any other game doesn't touch the base install.
+For that to work, the base game has to already know *where* to look for
+a pack's files without knowing what's in them yet -- that's the actual
+gap that needed closing before any real pack could exist.
+
+**What shipped, none of it changing today's actual game behavior:**
+
+- **`HeroSkin` loosened from a closed 5-value union to a plain string.**
+  It was `'original' | 'necrotic' | 'holy' | 'infernal' | 'frost'` --
+  adding any new skin, DLC or otherwise, meant editing that type in code
+  every time. `SKIN_BY_ID` was already the real source of truth for
+  what's valid; the type just hadn't caught up. Confirmed safe: nothing
+  in the codebase does an exhaustive switch over the old union, and
+  `engine.setHeroSkin` already took a plain string.
+- **`SkinDef`/`PetDef` both gained an optional `requiresDlc?: string`.**
+  Unset (every entry today) means base-game content, exactly as now.
+  Set to a pack id means that entry only actually exists once that pack
+  is owned -- pets already worked this way structurally (`PetDef.id` was
+  already a plain string pulled from JSON, no code change needed to add
+  a species), skins didn't.
+- **New `DlcManager` (`src/game/managers/DlcManager.ts`).** A short,
+  hand-maintained `KNOWN_DLC_PACKS: string[]` (empty today -- no DLC
+  exists yet) is the list of pack ids the base game checks for at
+  startup. Growing that list by one entry is an ordinary base-game
+  update whenever a real pack ships -- not something individual players
+  can get "out of order" the way chained patches can, since it's the
+  same list shipped to everyone regardless of what they own. For each
+  known id, `loadInstalledPacks()` tries `fetch('./dlc/<packId>/pack
+  .json')` -- same fetch-with-graceful-fallback idiom the hero/pet
+  sprite manifests already use (`cache: 'no-store'`, catch-and-treat-as-
+  absent). Owning the pack means Steam already placed that file (and
+  whatever art it references) before the game ever launched, so the
+  fetch succeeds; not owning it means the path simply doesn't exist,
+  the fetch 404s, and it's treated exactly like every other "art not
+  installed yet" case already handled throughout this game. `owns
+  (dlcId)`, `allSkins()`, `allPets()`, and `installedPackIds()` round
+  out the public surface -- a found pack's skins/pets get stamped with
+  its own pack id and merged onto the base `SKINS`/`PETS` lists.
+- **Wired into `GameEngine.boot()`**, fire-and-forget (not awaited --
+  checking for DLC shouldn't hold up the game's own startup, and today
+  it resolves instantly since `KNOWN_DLC_PACKS` is empty).
+
+**Deliberately NOT done, because there's nothing to gate yet:** no live
+UI reads from `DlcManager.allSkins()`/`allPets()` -- every skin picker
+and pet roster still reads straight from `SKINS`/`PETS`, unchanged. No
+"locked, owned via DLC" treatment exists anywhere. No Steamworks SDK
+integration exists at all yet (achievements are still a local stub) --
+`DlcManager.owns()` today is gated purely by file presence, which is
+sufficient for cosmetic content's actual stakes; a real ownership call
+can slot in later without restructuring anything here, whenever cloud
+saves/achievements bring the real SDK in anyway. Noted directly in
+`DlcManager`'s own doc comment: once a real pack exists, whichever UI
+calls `allSkins()`/`allPets()` needs to actually re-render once
+`loadInstalledPacks()` resolves (a `useEffect` + local state, or hooking
+into the engine's existing `notify()` pub/sub) rather than assuming a
+synchronous read during initial render already reflects ownership --
+not built now since there's no consumer to build it against yet.
+
+Verified: `npx tsc --noEmit` and a full `vite build` both pass clean,
+plus 12 runtime checks covering `owns()`'s undefined/unowned/base cases,
+`allSkins()`/`allPets()` correctly equaling the base lists with zero
+packs installed, the pack-stamping and merge logic (a simulated pack's
+entries correctly tagged with its own id and appended without dropping
+any base entry), and a type-level confirmation that `HeroSkin` now
+accepts an arbitrary string.
+
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**
   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
@@ -3420,4 +3502,6 @@ after their JSON migration.
   what happens next." No concrete DLC pack has been scoped yet (which
   skins, which pets, bundling/pricing per pack) -- revisit once the base
   game is actually on Steam and it's clear what the roster of cosmetics
-  worth packaging even looks like.
+  worth packaging even looks like. The technical groundwork for this is
+  now built, ahead of any actual pack -- see "DLC groundwork -- built"
+  in the main patch log above.

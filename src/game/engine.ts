@@ -7,6 +7,7 @@ import { ShopManager } from './managers/ShopManager';
 import { SaveManager, SaveAdapter, defaultAdapter, createInitialState } from './managers/SaveManager';
 import { EquipmentManager } from './managers/EquipmentManager';
 import { InventoryManager } from './managers/InventoryManager';
+import { DlcManager } from './managers/DlcManager';
 import { GuildManager } from './managers/GuildManager';
 import { PrestigeManager } from './managers/PrestigeManager';
 import { ModifierManager } from './managers/ModifierManager';
@@ -135,6 +136,13 @@ export class GameEngine {
     if (!isNew) engine.catchUpOffline();
     engine.refreshWorld(Date.now());
     engine.start();
+    // Fire-and-forget, not awaited -- checking for owned DLC packs
+    // shouldn't hold up the game's own startup, and today KNOWN_DLC_PACKS
+    // is empty anyway (this resolves instantly with nothing found). Not
+    // wired into any live UI yet; see DlcManager's own doc comment for
+    // what a future consumer (a skin picker, a pet roster) needs to do to
+    // pick up a pack that finishes loading after that UI's first render.
+    void DlcManager.loadInstalledPacks();
     return engine;
   }
 

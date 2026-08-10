@@ -584,10 +584,24 @@ export interface SkinDef {
   id: string;
   name: string;
   description: string;
-  /** Flat gold price; every skin costs the same regardless of class. */
+  /** Flat gold price; every skin costs the same regardless of class.
+   *  Meaningless for a DLC skin (see requiresDlc below) -- Steam
+   *  ownership gates those, not gold, so `cost` on a DLC entry is
+   *  cosmetic-only text ("free once you own the pack") rather than
+   *  something ShopManager ever actually charges. */
   cost: number;
   /** Small swatch colours for the shop UI. */
   swatch: [string, string];
+  /**
+   * Unset for every base-game skin (gold-purchasable, always available).
+   * Set to a DLC pack id for a skin that only exists once that pack is
+   * owned -- see DlcManager.owns. A skin entry with this set can still
+   * ship in the base game's own SKINS array (so the shop/picker UI knows
+   * it exists and can show it as locked), but its actual sprite files
+   * only arrive on disk once Steam installs the owned DLC depot; nothing
+   * about this field alone makes content appear or disappear.
+   */
+  requiresDlc?: string;
 }
 
 export const SKIN_PRICE = 3500;
