@@ -170,12 +170,6 @@
 /* Raid Result modal, full-clear treatment -- a raid worth committing hours
    to deserves a slightly bigger visual moment when it actually pays off. */
 .modal.raid-full-clear { border-color: var(--brass); border-width: 2px; }
-/* Quest Result modal, chain-completion treatment -- same shape as
-   raid-full-clear above, --violet instead of --brass to match the idle
-   companion's own .idle-chain-banner treatment for chain-related UI
-   elsewhere, since finishing a multi-stage story chain is arguably the
-   single biggest narrative moment this modal can show. */
-.modal.chain-complete { border-color: var(--violet); border-width: 2px; }
 
 /* Loot entries in a raid encounter's preview -- plain button reset so they
    read the same as the old static text, but are actually clickable now:
@@ -747,7 +741,21 @@ button:focus-visible, [tabindex]:focus-visible {
   border: 1px solid #000;
   overflow: hidden;
 }
-.bar > span { display: block; height: 100%; background: var(--moss); }
+/* Every progress bar in the game (XP, durability, harvest, anything else
+   built on .bar) previously snapped straight to its new width on every
+   re-render -- no transition at all, so an XP gain or a durability hit
+   just teleported rather than visibly climbing/dropping. One shared rule
+   here fixes every consumer at once rather than needing a per-panel fix.
+   ease-out (fast start, gentle settle) reads as "arriving" rather than
+   "sliding," which suits a gain landing better than a linear tween would.
+   This is a plain CSS transition (transition-duration), not a @keyframes
+   animation (animation-duration) -- a different property from the one
+   implicated in the separate, still-unresolved "every animation plays
+   instantly" bug elsewhere in the backlog, so this isn't expected to be
+   affected by whatever's causing that. Still correctly respects the
+   deliberate :root[data-motion='off'] override below, which zeroes out
+   transition-duration too, on purpose, for accessibility. */
+.bar > span { display: block; height: 100%; background: var(--moss); transition: width 500ms ease-out; }
 .bar.xp > span { background: var(--sky); }
 .bar.dura > span { background: var(--brass); }
 .bar.dura.low > span { background: var(--blood); }
@@ -949,11 +957,24 @@ button:focus-visible, [tabindex]:focus-visible {
   z-index: 51;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
 }
+.achievement-popup-glyph-wrap { position: relative; display: inline-block; flex: none; }
 .achievement-popup-glyph {
   font-size: 1.5rem;
   color: var(--brass);
   line-height: 1;
   flex: none;
+}
+/* Small star burst around the glyph, same star-poof keyframe as maxFlash/
+   levelFlash's own bursts, scaled down for this popup's compact size. */
+.achievement-popup-star {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  font-size: 0.625rem;
+  color: var(--brass);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--brass) 80%, transparent);
+  opacity: 0;
+  animation: star-poof 1000ms ease-out forwards;
 }
 .achievement-popup-body { min-width: 0; }
 .achievement-popup-kicker {
@@ -1452,11 +1473,14 @@ input[type='range'] {
   display: inline-block;
   animation: legendary-shimmer 800ms ease-in-out 2;
 }
-/* Expedition-complete banner -- deliberately bigger than crit/legendary's
-   own pop-in labels (this replaces what used to be a single plain line of
-   colored text), since finishing a multi-stage story chain is the biggest
-   single moment either result modal can show. --violet, matching
-   .modal.chain-complete's own border and .collect-particle.chain. */
+/* Expedition-complete banner, in ChainCompleteModal -- deliberately bigger
+   than crit/legendary's own pop-in labels, since finishing a multi-stage
+   story chain is the biggest single moment either result modal can show.
+   Base color is --violet (this game's general "story/chain" accent) but
+   ChainCompleteModal overrides both color and text-shadow inline to the
+   chain's own rank tier color when one resolves, matching that modal's
+   border and .collect-particle.chain particles -- this rule is just the
+   shape (size, animation, layout) and the fallback color. */
 .chain-complete-label {
   text-align: center;
   margin: 4px 0 0;
@@ -1578,6 +1602,44 @@ input[type='range'] {
   0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(0deg); }
   18% { opacity: 1; }
   100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.05) rotate(var(--rot)); }
+}
+
+/* Hero level-up flash on a Heroes-tab card -- same layered shape as
+   .max-flash-* just above (background wash + centered text + star burst,
+   reusing the same star-poof keyframe), --sky instead of --brass so a
+   level-up reads as its own kind of moment rather than "maxed out". See
+   levelFlash.tsx's useLevelUpFlash/LevelUpFlash. */
+.level-flash-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none;
+  z-index: 3;
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--sky) 35%, transparent), transparent 70%);
+  animation: max-flash-bg 1400ms ease-out forwards;
+}
+.level-flash-text {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  padding: 0 10px;
+  color: var(--sky);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--sky) 80%, transparent), 0 2px 3px rgba(0, 0, 0, 0.8);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  animation: max-flash-text 1400ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+.level-flash-star {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  font-size: 0.875rem;
+  color: var(--sky);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--sky) 80%, transparent);
+  opacity: 0;
+  animation: star-poof 1300ms ease-out forwards;
 }
 
 /* --------------------------------- toast ------------------------------------ */

@@ -10,6 +10,7 @@ import { HeroClass, Stats } from '../../game/types';
 import { describeMods, formatDuration, formatGold } from '../../game/util';
 import { HeroSprite } from '../sprites/HeroSprite';
 import { GearScoreBadge } from '../GearScoreBadge';
+import { useLevelUpFlash, LevelUpFlash } from '../levelFlash';
 
 const STAT_KEYS: (keyof Stats)[] = ['strength', 'endurance', 'luck', 'wisdom'];
 
@@ -34,6 +35,10 @@ export function HeroesPanel() {
     });
   };
 
+  const { flashes: levelFlashes, dismiss: dismissLevelFlash } = useLevelUpFlash(
+    state.heroes.map((h) => ({ id: h.id, level: h.level })),
+  );
+
   return (
     <>
       <h2>Heroes</h2>
@@ -50,6 +55,13 @@ export function HeroesPanel() {
 
         return (
           <div key={hero.id} className="card">
+            {levelFlashes[hero.id] && (
+              <LevelUpFlash
+                key={levelFlashes[hero.id].key}
+                levels={levelFlashes[hero.id].levels}
+                onDone={() => dismissLevelFlash(hero.id)}
+              />
+            )}
             <div
               className="row hero-card-summary"
               style={{ alignItems: 'center', gap: 12 }}

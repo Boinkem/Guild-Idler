@@ -2944,6 +2944,111 @@ reproduction (a level-3 hero seeing strictly fewer offers than the raw
 board once any discovered chain exceeds their level) and the
 hasLegendary/chainComplete flourish-trigger logic for both modals.
 
+### Engagement / positive-feedback-loop review -- built
+A full systems review requested directly: look across every panel for a
+visual shortfall in the "number go up" / gain-feedback department, then
+build the highest-value fixes found. Six built, one correction to
+something landed in the round right before this one:
+
+**Correction: reverted the redundant chain-completion flourish added to
+`QuestResultModal`.** That addition (previous round) duplicated a
+celebration that already existed: `ChainCompleteModal.tsx` is a
+dedicated, richer "Story Chain Complete" overlay (tier-colored border,
+title earned, gold + renown, item rewards) that fires from the exact same
+event (`result.chainAdvanced?.completed` / `engine.completedChainCelebration`,
+both set in the same `engine.ts` code block) and is mounted alongside
+`QuestResultModal` in `App.tsx` -- so the two would have shown back to
+back for one completion, competing rather than complementing. Reverted
+`QuestResultModal` back to its original plain-text chain-progress line,
+and moved the actual flourish investment to where it belonged in the
+first place -- see below.
+
+**1. Animated progress bars (global CSS fix).** Every `.bar` in the game
+(XP, durability, harvest, anything else built on the shared class)
+previously snapped straight to a new width with no transition at all --
+one line (`transition: width 500ms ease-out` on `.bar > span`) fixes
+every consumer at once. Deliberately a plain CSS `transition`
+(`transition-duration`), not a `@keyframes animation`
+(`animation-duration`) -- a different property from the one implicated in
+the separate, still-unresolved "every animation plays instantly" bug
+elsewhere in Known Bugs, so this isn't expected to be affected by
+whatever's causing that; still correctly respects the deliberate
+`:root[data-motion='off']` override, which zeroes out
+`transition-duration` too, on purpose, for accessibility.
+
+**2. `ChainCompleteModal` particle burst.** The single biggest narrative
+moment in the game had zero particle effects -- just a static bordered
+card. Now gets a 6-star burst (`CHAIN_COMPLETE_PARTICLES`) and a bigger
+"🏆 Expedition Complete!" label, both dynamically colored to the chain's
+own rank tier (`rankTierForLevel`, same source the border already used)
+via inline style rather than a fixed color -- falls back to `--violet`
+when a tier can't be resolved. Fires on arrival (mount), not on dismiss --
+unlike the result modals' own bursts, this one has no exit animation
+worth timing against, and the celebration should be the first thing seen
+rather than something revealed only after closing the card.
+
+**3. Offline report overhaul.** The classic idle-game "welcome back"
+moment was the flattest-reading screen in the game: a static stat-row of
+plain numbers, loot listed with no rarity coloring at all, no mention of
+levels gained, and -- found while investigating, not reported first --
+raid results resolved offline were completely absent from the breakdown
+even though `report.goldGained`/`xpGained` already correctly folded their
+contribution into the totals (`engine.ts`), so the totals were right but
+the per-item list silently hid where roughly half the number could have
+come from. Fixed: loot in both quest and (newly added) raid result cards
+is now rarity-colored with the same legendary shimmer treatment used
+elsewhere, a "+N levels" line appears when any levels were gained while
+away, a full raid-results section mirrors the quest cards (difficulty
+color from the same palette `RaidsPanel` already established for
+Normal/Heroic/Mythic), and a particle burst (coin/xp/legendary, same
+components as the result modals) fires on open.
+
+**4. Hero level-up flourish.** Previously only a plain pop-in text line
+inside `QuestResultModal`, nothing on the Heroes tab itself. New
+`levelFlash.tsx` (`useLevelUpFlash`/`LevelUpFlash`) mirrors
+`maxFlash.tsx`'s existing "detect a crossing, fire a one-off flash" shape
+and reuses its exported `STAR_BURST` particle layout, but for a level
+increase rather than a max-level crossing -- `--sky` (the same blue the
+XP bar already uses) instead of `--brass`, so a level-up doesn't visually
+read as "maxed out". Wired into `HeroesPanel.tsx`'s hero cards. Only
+fires for a level-up that happens while the tab is open and being
+watched, same "only fires for what you're watching" scope the engine's
+own immediate sound cues already use -- levels gained while away are
+already covered by the Offline Report's new summary line above, not
+duplicated here.
+
+**5. Numeric count-up on gold/XP.** No number in the entire game animated
+toward its new value -- everything just snapped to the final figure
+instantly. New reusable `useCountUp` hook (`useCountUp.ts`), two call
+shapes: a live-tracking mode (nav gold/renown in `MenuWindow.tsx` --
+continues smoothly from wherever the display currently sits if another
+change lands mid-tween, rather than restarting, so a burst of quick small
+gains reads as one continuously climbing number; no animation on first
+mount so the nav bar doesn't count up from 0 on every app launch) and a
+one-shot `{ from: 0 }` mode for a result already known at mount (the
+reward-burst numbers in `QuestResultModal`/`RaidResultModal`, and the
+totals in the offline report). Same ease-out curve as the `.bar`
+transition above, for a consistent feel between the two techniques.
+
+**6. Achievement popup particle burst.** Had a nice pop-in glow already
+but nothing further -- inconsistent with legendary/chain moments of
+similar rarity/weight. Added a small 5-star burst anchored specifically
+on the popup's own glyph icon (`achievement-popup-glyph-wrap`, its own
+positioning context) rather than the whole card, scaled down to match
+this popup's compact fixed-corner size rather than reusing one of the
+wider result-modal bursts.
+
+All six (plus the revert) verified together: `npx tsc --noEmit` and a
+full `vite build` both pass clean, plus 14 runtime checks covering the
+level-up-flash detection rule (fires on a real crossing, never on first
+render regardless of starting level, correct delta on a multi-level
+jump, only the hero that actually changed gets flagged), the count-up
+easing math (exact boundaries at t=0/t=duration, no overshoot past
+duration, ease-out reaching more than the linear-implied distance by the
+time midpoint, and a decreasing target working the same as an
+increasing one), the offline report's cross-source legendary detection
+(quest-only vs. raid-only), and its levelsGained summation.
+
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**
   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry

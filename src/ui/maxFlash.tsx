@@ -7,7 +7,7 @@ import type { CSSProperties } from 'react';
  * Guild Hall facilities. Extracted here rather than duplicated per panel.
  */
 
-const STAR_BURST: { dx: number; dy: number; rot: number }[] = [
+export const STAR_BURST: { dx: number; dy: number; rot: number }[] = [
   { dx: 0, dy: -36, rot: -12 },
   { dx: 27, dy: -24, rot: 16 },
   { dx: 36, dy: 3, rot: -20 },

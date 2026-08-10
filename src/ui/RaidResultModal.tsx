@@ -6,6 +6,7 @@ import { useEngine } from './useEngine';
 import { playSound } from '../game/sound';
 import { RarityPill } from './RarityPill';
 import { formatGold, RARITY_COLOR } from '../game/util';
+import { useCountUp } from './useCountUp';
 
 /** Same dismiss timing as QuestResultModal, for the same reason -- gives the
  *  longest particle time to finish fading rather than getting cut off. */
@@ -64,6 +65,12 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
   const [dismissing, setDismissing] = useState(false);
   const timeoutRef = useRef<number | null>(null);
   const hasLegendary = result.loot.some((item) => item.rarity === 'legendary');
+  // Same one-shot 0 -> final-value count-up as QuestResultModal's own,
+  // for the same reason -- a raid's payoff deserves at least the same
+  // treatment an ordinary quest's does, arguably more given the time
+  // investment.
+  const displayGold = useCountUp(result.gold, { from: 0, durationMs: 700 });
+  const displayXp = useCountUp(result.xp, { from: 0, durationMs: 700 });
 
   useEffect(() => () => {
     if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
@@ -98,8 +105,8 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
         </p>
 
         <div className="reward-burst">
-          {result.xp > 0 && <span className="burst-xp">+{result.xp} XP</span>}
-          {result.gold > 0 && <span className="burst-gold">+{formatGold(result.gold)} gold</span>}
+          {result.xp > 0 && <span className="burst-xp">+{displayXp} XP</span>}
+          {result.gold > 0 && <span className="burst-gold">+{formatGold(displayGold)} gold</span>}
         </div>
         {hasLegendary && <p className="legendary-drop-label">★ Legendary find!</p>}
 

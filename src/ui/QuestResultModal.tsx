@@ -7,6 +7,7 @@ import { useSettings } from './useSettings';
 import { playSound } from '../game/sound';
 import { formatGold, RARITY_COLOR } from '../game/util';
 import { RarityPill } from './RarityPill';
+import { useCountUp } from './useCountUp';
 
 /** How long the pop-out + coin/XP burst plays before the modal actually
  * unmounts. Matches the CSS: modal-pop-out is 320ms, collect-fly is 750ms
@@ -46,21 +47,6 @@ const LEGENDARY_PARTICLES = [
   { dx: 50, dy: -125, rot: 14, delay: 100 },
   { dx: 85, dy: -85, rot: 26, delay: 40 },
 ];
-/** Legendary loot dropping and a chain finishing are unrelated events that
- * can both fire on the same result, so this is its own particle set
- * rather than reusing LEGENDARY_PARTICLES -- a wider, fuller spread than
- * even the legendary burst, since finishing a multi-stage story chain is
- * the single biggest moment this modal can show. Violet, matching the
- * idle companion's own .idle-chain-banner treatment for chain-related UI
- * elsewhere, rather than reusing legendary's gold. */
-const CHAIN_COMPLETE_PARTICLES = [
-  { dx: -95, dy: -70, rot: -24, delay: 0 },
-  { dx: -60, dy: -120, rot: -12, delay: 50 },
-  { dx: -20, dy: -145, rot: -4, delay: 90 },
-  { dx: 20, dy: -145, rot: 4, delay: 30 },
-  { dx: 60, dy: -120, rot: 12, delay: 110 },
-  { dx: 95, dy: -70, rot: 24, delay: 70 },
-];
 
 /**
  * Shown when a quest resolves while the player is watching. Split into an
@@ -97,7 +83,13 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; 
   const [dismissing, setDismissing] = useState(false);
   const timeoutRef = useRef<number | null>(null);
   const hasLegendary = result.loot.some((item) => item.rarity === 'legendary');
-  const chainComplete = result.chainAdvanced?.completed ?? false;
+  // One-shot count-up from 0 -- this card mounts once per result with the
+  // final reward already known, so it should count up to it on arrival
+  // rather than appearing pre-finished. Slightly longer than the default
+  // duration so it doesn't finish before the card's own pop-in animation
+  // does.
+  const displayGold = useCountUp(result.gold, { from: 0, durationMs: 700 });
+  const displayXp = useCountUp(result.xp, { from: 0, durationMs: 700 });
 
   useEffect(() => () => {
     if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
@@ -118,7 +110,7 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; 
 
   return (
     <div className="overlay" onClick={handleDismiss}>
-      <div className={`modal ${chainComplete ? 'chain-complete' : ''} ${dismissing ? 'dismissing' : ''}`} onClick={(e) => e.stopPropagation()}>
+      <div className={`modal ${dismissing ? 'dismissing' : ''}`} onClick={(e) => e.stopPropagation()}>
         <h3>{result.heroName} is back</h3>
         <p className="small muted" style={{ marginTop: 0 }}>{result.questName}</p>
 
@@ -127,8 +119,8 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; 
         </p>
 
         <div className={`reward-burst ${result.critBonus ? 'crit' : ''}`}>
-          {result.xp > 0 && <span className={`burst-xp ${result.critBonus ? 'crit' : ''}`}>+{result.xp} XP</span>}
-          {result.gold > 0 && <span className={`burst-gold ${result.critBonus ? 'crit' : ''}`}>+{formatGold(result.gold)} gold</span>}
+          {result.xp > 0 && <span className={`burst-xp ${result.critBonus ? 'crit' : ''}`}>+{displayXp} XP</span>}
+          {result.gold > 0 && <span className={`burst-gold ${result.critBonus ? 'crit' : ''}`}>+{formatGold(displayGold)} gold</span>}
         </div>
         {result.critBonus && <p className="crit-burst-label">⚡ Critical Burst!</p>}
         {hasLegendary && <p className="legendary-drop-label">★ Legendary find!</p>}
@@ -182,11 +174,10 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; 
           </>
         )}
 
-        {chainComplete && <p className="chain-complete-label">🏆 Expedition Complete!</p>}
         {result.chainAdvanced && (
           <p className="small" style={{ color: 'var(--brass)' }}>
             {result.chainAdvanced.completed
-              ? 'Rewards delivered to the guild.'
+              ? 'The expedition is complete. Rewards delivered to the guild.'
               : `Expedition progress: stage ${result.chainAdvanced.stage + 1} of ${result.chainAdvanced.totalStages}.`}
           </p>
         )}
@@ -244,15 +235,6 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; 
                 style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, animationDelay: `${p.delay}ms` } as CSSProperties}
               >
                 ★
-              </span>
-            ))}
-            {chainComplete && CHAIN_COMPLETE_PARTICLES.map((p, i) => (
-              <span
-                key={`chain-${i}`}
-                className="collect-particle chain"
-                style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, animationDelay: `${p.delay}ms` } as CSSProperties}
-              >
-                ✦
               </span>
             ))}
           </div>

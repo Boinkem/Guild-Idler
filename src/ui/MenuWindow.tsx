@@ -4,6 +4,7 @@ import { OnboardingTour } from './OnboardingTour';
 import { ChainDiscoveryModal } from './ChainDiscoveryModal';
 import { formatGold, formatNumber } from '../game/util';
 import { attentionCounts } from '../game/attention';
+import { useCountUp } from './useCountUp';
 import { QuestPanel } from './panels/QuestPanel';
 import { HeroesPanel } from './panels/HeroesPanel';
 import { EquipmentPanel } from './panels/EquipmentPanel';
@@ -139,6 +140,12 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
 
   const Panel = ALL_TABS.find((t) => t.id === tab)!.Panel;
   const { idleHeroes, eggsReady, brokenGear } = attentionCounts(engine.state);
+  // Nav gold/renown count up to a new value rather than snapping -- the
+  // numeric equivalent of the .bar fill transition. No animation on first
+  // mount/app launch (see useCountUp's own doc comment); only on values
+  // that change after that.
+  const displayGold = useCountUp(engine.state.gold);
+  const displayRenown = useCountUp(engine.state.renown);
 
   return (
     <div className="menu-root" style={{ position: 'relative' }}>
@@ -163,8 +170,8 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
       <header className="titlebar" style={{ position: 'relative' }}>
         <h1>{engine.state.guildName || 'Guild Idler'}</h1>
         <div className="resources">
-          <span className="gold">◆ {formatGold(engine.state.gold)} / {formatGold(engine.goldStorage)}</span>
-          <span className="renown">✦ {formatNumber(engine.state.renown)} renown</span>
+          <span className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
+          <span className="renown">✦ {formatNumber(displayRenown)} renown</span>
         </div>
         <div className="spacer" />
         <button
