@@ -27,7 +27,16 @@ export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'shield' | 'gloves' | 'b
  */
 export type MaterialId = 'ore' | 'timber' | 'herbs' | 'fish';
 
-export type HeroClass = 'adventurer' | 'knight' | 'gladiator' | 'samurai' | 'witch' | 'pyromancer' | 'lizardman' | 'wizard' | 'dwarf';
+/**
+ * Plain string rather than a closed union, same reasoning as HeroSkin --
+ * a new hero class (including a future DLC one, see HeroClassDef.
+ * requiresDlc) only ever needs a new data entry plus new sprite art, not
+ * a code change to this type. Confirmed safe to widen: nothing in the
+ * codebase switches or compares on a literal class id, every consumer
+ * already goes through a HERO_CLASSES/RECRUIT_COST lookup (or, since
+ * this round, DlcManager.heroClassDef/recruitCost for a DLC-aware one).
+ */
+export type HeroClass = string;
 
 /** Cosmetic recolour skins, applied per hero. */
 

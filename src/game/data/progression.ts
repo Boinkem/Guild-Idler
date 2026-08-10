@@ -472,6 +472,17 @@ export interface HeroClassDef {
   /** Baseline power tier 0-3; higher hires start stronger to justify the cost. */
   tier: number;
   names: string[];
+  /**
+   * Unset for every base-game class (recruitable at HERO_CLASSES/
+   * RECRUIT_COST's own values, exactly as today). Set to a DLC pack id
+   * for a class that only exists once that pack is owned -- same shape
+   * as SkinDef.requiresDlc/PetDef.requiresDlc. A DLC class's own recruit
+   * cost lives in that pack's own manifest (DlcPackManifest.recruitCosts)
+   * rather than the base RECRUIT_COST record, since RECRUIT_COST stays a
+   * closed lookup for the 9 base classes only -- see DlcManager.
+   * recruitCost for the merged, DLC-aware version.
+   */
+  requiresDlc?: string;
 }
 
 export const HERO_CLASSES: Record<HeroClass, HeroClassDef> = {

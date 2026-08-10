@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { HeroClass, HeroSkin } from '../../game/types';
+import { DlcManager } from '../../game/managers/DlcManager';
 
 /**
  * Renders the character sprite packs. Each character has its own frame size and
@@ -10,6 +11,17 @@ import { HeroClass, HeroSkin } from '../../game/types';
  *
  * Generate the art with:
  *   python3 tools/import_characters.py --src <packs> --knight-src <knight> --out public/heroes
+ *
+ * A DLC pack can add its own hero classes the same way it adds skins/pets
+ * (see DlcManager) -- its own `heroes-manifest.json`, same shape as the
+ * base game's, discovered at `./dlc/<packId>/heroes-manifest.json` once
+ * that pack is installed. Its sprite files live under
+ * `./dlc/<packId>/heroes/<class>/<skin>/<anim>.png` -- a separate folder
+ * per pack rather than merged into `./heroes/`, so two different DLC
+ * packs (or a pack and the base game) can never collide on a shared
+ * path. `CharManifest.basePath` below records which root a given class's
+ * frames actually live under; unset means the base game's own
+ * `./heroes/`, exactly as before this existed.
  */
 
 export type HeroAnimation =
@@ -21,6 +33,12 @@ interface CharManifest {
   frameH: number;
   animations: Partial<Record<HeroAnimation, number>>;
   attacks: HeroAnimation[];
+  /** Root folder this class's sprite files live under -- './heroes' (the
+   *  base game's own art) when unset, or './dlc/<packId>/heroes' for a
+   *  class a DLC pack added. Stamped automatically when a pack's own
+   *  manifest is merged in (see loadManifest below); never present in
+   *  the base game's own manifest.json on disk. */
+  basePath?: string;
 }
 
 type Manifest = Partial<Record<HeroClass, CharManifest>>;
@@ -89,13 +107,40 @@ const HERO_REVERSED_FACING: Partial<Record<HeroClass, true>> = {
 let manifestCache: Manifest | null = null;
 let manifestPromise: Promise<Manifest> | null = null;
 
+/**
+ * Loads the base game's own manifest, then checks every known DLC pack
+ * (see DlcManager.knownPackIds) for its own `heroes-manifest.json` in
+ * parallel -- packs the player doesn't own simply won't have that file,
+ * so `fetchPackAsset` resolves to null for them and they contribute
+ * nothing, same as today. Any class a pack DOES provide gets its
+ * `basePath` stamped to that pack's own art folder before merging, so
+ * later frame-URL construction knows to look under
+ * `./dlc/<packId>/heroes/...` instead of the base game's `./heroes/`.
+ * A DLC class with the same id as a base class (shouldn't happen, but
+ * not enforced anywhere yet) would lose to the base entry here --
+ * merged with the DLC packs spread first, base game's own manifest
+ * spread last and therefore taking priority, on the principle that a
+ * pack should never be able to silently override base-game art.
+ */
 function loadManifest(): Promise<Manifest> {
   if (manifestCache) return Promise.resolve(manifestCache);
   if (!manifestPromise) {
-    manifestPromise = fetch('./heroes/manifest.json')
-      .then((r) => (r.ok ? r.json() : {}))
-      .then((m: Manifest) => { manifestCache = m; return m; })
-      .catch(() => { manifestCache = {}; return {}; });
+    manifestPromise = Promise.all([
+      fetch('./heroes/manifest.json').then((r) => (r.ok ? r.json() as Promise<Manifest> : {})).catch(() => ({})),
+      ...DlcManager.knownPackIds().map((packId) => DlcManager.fetchPackAsset<Manifest>(packId, 'heroes-manifest.json')
+        .then((packManifest) => {
+          if (!packManifest) return {};
+          const stamped: Manifest = {};
+          for (const [classId, char] of Object.entries(packManifest)) {
+            if (char) stamped[classId] = { ...char, basePath: `./dlc/${packId}/heroes` };
+          }
+          return stamped;
+        })),
+    ]).then(([base, ...packs]) => {
+      const merged: Manifest = Object.assign({}, ...packs, base);
+      manifestCache = merged;
+      return merged;
+    }).catch(() => { manifestCache = {}; return {}; });
   }
   return manifestPromise;
 }
@@ -194,7 +239,7 @@ export function HeroSprite({
   }
 
   const scale = (height / char.frameH) * (HERO_DISPLAY_SCALE[heroClass] ?? 1);
-  const url = `./heroes/${heroClass}/${skin}/${resolved}.png`;
+  const url = `${char.basePath ?? './heroes'}/${heroClass}/${skin}/${resolved}.png`;
   const offset = resolved === 'idle' ? HERO_DISPLAY_OFFSET[heroClass] : undefined;
   // XOR, not OR/AND -- a reversed-facing class should flip exactly when a
   // normal class WOULDN'T, and vice versa, not simply flip more often.

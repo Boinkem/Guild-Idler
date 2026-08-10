@@ -3385,6 +3385,92 @@ entries correctly tagged with its own id and appended without dropping
 any base entry), and a type-level confirmation that `HeroSkin` now
 accepts an arbitrary string.
 
+### DLC groundwork, hero classes -- built
+Follow-up the same day: confirmed `HeroClass` was the same kind of
+closed union `HeroSkin` had been (`'adventurer' | 'knight' | ... |
+'dwarf'`, 9 fixed values) -- adding a new hero class, DLC or otherwise,
+meant a code change every time, same problem the skin type had, and the
+one the direct question ("I have other hero sprites to add later") was
+actually about.
+
+**Widened `HeroClass` to a plain string, same as `HeroSkin`.** Confirmed
+safe first: nothing in the codebase switches or compares on a literal
+class id, every consumer already goes through a `HERO_CLASSES`/
+`RECRUIT_COST` lookup. Two of those lookups (`HERO_CLASSES`,
+`RECRUIT_COST` itself) are non-partial Records that assume every key is
+present -- fine for the 9 base classes' own object literals (widening a
+union to `string` doesn't require a `Record<string, X>` literal to be
+exhaustive, unlike a closed union), but a literal `HERO_CLASSES[dlcId]`
+lookup would still be typed as "always returns a value" even for an id
+that isn't actually in there. Rather than relying on that, added
+DLC-aware lookups instead (below) for any code that might see a class
+id beyond the base 9.
+
+**`HeroClassDef` gained `requiresDlc?: string`**, same contract as
+`SkinDef`/`PetDef`'s own field.
+
+**`DlcManager` extended:**
+- `DlcPackManifest.heroClasses?`/`recruitCosts?` -- a pack's own added
+  classes and their recruit costs, same "stamped with the pack's id at
+  merge time" shape skins/pets already have.
+- `allHeroClasses()` -- base `HERO_CLASSES` plus any installed pack's.
+- `heroClassDef(id)`/`recruitCost(id)` -- safe single-lookup helpers
+  that check the base record first, then fall through to installed
+  packs, returning `undefined` rather than silently lying about a class
+  that doesn't exist anywhere.
+- New `fetchPackAsset<T>(packId, relativePath)` -- a generic version of
+  the same fetch-with-graceful-fallback idiom `loadInstalledPacks`
+  already used for `pack.json` itself, so other asset kinds (sprite
+  manifests, anything added later) don't need to duplicate that
+  fetch/try-catch. Checks `owns(packId)` first, so it can never return
+  content for a pack that isn't actually installed even if something
+  else on disk happened to answer the request.
+- New `knownPackIds()` -- read-only view of `KNOWN_DLC_PACKS`, for
+  anything that needs to enumerate packs to probe rather than check
+  ownership of one specific id (HeroSprite.tsx, below, is the first
+  consumer).
+
+**`HeroSprite.tsx`'s manifest loading actually extended, not just
+scaffolded.** This is the concrete "will my new sprites work later"
+answer: `loadManifest()` now fetches the base game's own
+`./heroes/manifest.json` AND, in parallel, checks every known DLC pack
+for its own `./dlc/<packId>/heroes-manifest.json` via the new
+`fetchPackAsset`. A pack's classes get their `basePath` stamped to
+`./dlc/<packId>/heroes` before merging in -- a new `CharManifest.
+basePath` field records which root a class's frames live under, unset
+(so it falls back to the base game's own `./heroes/`) for every base
+class exactly as before. The actual sprite frame URL now reads
+`${char.basePath ?? './heroes'}/${heroClass}/${skin}/${resolved}.png`
+instead of always assuming `./heroes/`. Merge order deliberately puts
+the base game's own manifest last (highest priority) so a DLC pack can
+never silently override base-game art even if a class id collision ever
+happened. Confirmed base-class URLs are byte-identical to before this
+change (`./heroes/dwarf/original/idle.png`), and a simulated DLC class
+correctly resolves to its own isolated folder
+(`./dlc/test_hero_pack/heroes/test_ranger/original/idle.png`).
+
+**What this means in practice, once a real hero-class pack exists:**
+drop the pack's sprite files under `public/dlc/<packId>/heroes/<class>/
+<skin>/...` and a `heroes-manifest.json` describing them (same shape
+`tools/import_characters.py` already produces for the base game), plus
+a `pack.json` with the class's `HeroClassDef` and recruit cost, add the
+pack id to `KNOWN_DLC_PACKS` once, and the sprite system already knows
+how to find and render it -- no further `HeroSprite.tsx` changes needed.
+Recruiting/roster UI still isn't wired to `DlcManager.allHeroClasses()`
+yet (same "no consumer to build against yet" deferral the skin/pet
+pickers already have) -- that's the remaining step once a real class
+exists to recruit.
+
+Verified: `npx tsc --noEmit` and a full `vite build` both pass clean,
+plus 12 runtime checks covering `allHeroClasses()`/`heroClassDef`/
+`recruitCost` all correctly matching base-game values with zero packs
+installed and correctly returning `undefined` for an unknown class,
+`fetchPackAsset` returning null for an unowned pack, the hero-class
+stamping/merge logic, and a type-level confirmation that `HeroClass`
+now accepts an arbitrary string -- plus a direct check that base-class
+sprite URLs are unchanged byte-for-byte and a DLC class resolves to its
+own separate folder.
+
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**
   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry

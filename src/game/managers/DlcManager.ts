@@ -1,4 +1,4 @@
-import { SkinDef, SKINS } from '../data/progression';
+import { SkinDef, SKINS, HeroClassDef, HERO_CLASSES, RECRUIT_COST } from '../data/progression';
 import { PetDef } from '../types';
 import { PETS } from '../data/pets';
 
@@ -42,11 +42,16 @@ import { PETS } from '../data/pets';
  * icon, a hero class with no manifest entry): quietly absent, no error,
  * no broken state.
  *
- * Nothing in this file is wired into the live UI yet -- SKINS/PETS still
- * drive every skin picker and pet roster exactly as they did before this
- * existed. This is the tested mechanism sitting ready; once a real DLC
- * pack exists, call sites switch from `SKINS`/`PETS` to
- * `DlcManager.allSkins()`/`allPets()` to actually include it.
+ * Nothing in this file is wired into the live UI yet -- SKINS/PETS/
+ * HERO_CLASSES still drive every skin picker, pet roster, and recruit
+ * screen exactly as they did before this existed. This is the tested
+ * mechanism sitting ready; once a real DLC pack exists, call sites switch
+ * from `SKINS`/`PETS`/`HERO_CLASSES` to `DlcManager.allSkins()`/
+ * `allPets()`/`allHeroClasses()` (or the single-lookup `heroClassDef`/
+ * `recruitCost`) to actually include it. A brand-new hero class's sprite
+ * art is discovered the same file-presence way -- see HeroSprite.tsx's
+ * own `loadManifest`, which already checks every known pack for its own
+ * `heroes-manifest.json` today, live, not just scaffolded.
  */
 
 /**
@@ -67,6 +72,18 @@ export interface DlcPackManifest {
    *  own pack.json doesn't need to repeat its own id on every entry. */
   skins?: Omit<SkinDef, 'requiresDlc'>[];
   pets?: Omit<PetDef, 'requiresDlc'>[];
+  /** New hero classes this pack adds -- their actual sprite art is
+   *  discovered separately (see fetchPackHeroManifest below), this is
+   *  just the gameplay-facing definition (stats, growth, preferred tags,
+   *  etc.), same split HERO_CLASSES already keeps between "what the
+   *  class is" and "what it looks like." */
+  heroClasses?: Omit<HeroClassDef, 'requiresDlc'>[];
+  /** Recruit cost for each class id this pack adds -- kept separate from
+   *  the class definitions above (and from the base game's own
+   *  RECRUIT_COST) rather than folded into HeroClassDef, matching how
+   *  RECRUIT_COST is already its own record alongside HERO_CLASSES for
+   *  the base 9 classes. */
+  recruitCosts?: Record<string, number>;
 }
 
 let installedPacks: Record<string, DlcPackManifest> = {};
@@ -137,6 +154,73 @@ export const DlcManager = {
       (pack) => (pack.pets ?? []).map((p) => ({ ...p, requiresDlc: pack.id })),
     );
     return [...PETS, ...extra];
+  },
+
+  /** Base hero classes plus whatever any currently-owned DLC pack adds. */
+  allHeroClasses(): HeroClassDef[] {
+    const extra = Object.values(installedPacks).flatMap(
+      (pack) => (pack.heroClasses ?? []).map((c) => ({ ...c, requiresDlc: pack.id })),
+    );
+    return [...Object.values(HERO_CLASSES), ...extra];
+  },
+
+  /** DLC-aware single-class lookup -- checks the base HERO_CLASSES record
+   *  first (the common case, and the only case today), then falls
+   *  through to any installed pack's own classes. Returns undefined for
+   *  a class id that isn't in either -- same "might not exist" contract
+   *  a plain HERO_CLASSES[x] lookup doesn't currently carry (that record
+   *  is typed as always returning a value, which was true when HeroClass
+   *  was a closed union but no longer is now that a DLC class id can
+   *  reach this same code path). Existing call sites that only ever deal
+   *  with base classes are unaffected; anything that might see a DLC
+   *  class id should use this instead of indexing HERO_CLASSES directly. */
+  heroClassDef(classId: string): HeroClassDef | undefined {
+    if (classId in HERO_CLASSES) return HERO_CLASSES[classId];
+    for (const pack of Object.values(installedPacks)) {
+      const found = pack.heroClasses?.find((c) => c.id === classId);
+      if (found) return { ...found, requiresDlc: pack.id };
+    }
+    return undefined;
+  },
+
+  /** DLC-aware recruit cost lookup, same fallback shape as heroClassDef. */
+  recruitCost(classId: string): number | undefined {
+    if (classId in RECRUIT_COST) return RECRUIT_COST[classId];
+    for (const pack of Object.values(installedPacks)) {
+      if (pack.recruitCosts && classId in pack.recruitCosts) return pack.recruitCosts[classId];
+    }
+    return undefined;
+  },
+
+  /**
+   * Generic fetch for any other JSON file living inside an installed
+   * pack's own folder -- e.g. a hero sprite manifest at
+   * `./dlc/<packId>/heroes-manifest.json`, mirroring the shape
+   * `./heroes/manifest.json` already has for the base 9 classes. Kept
+   * generic (not hardcoded to one asset kind) so pet sprites or anything
+   * else added later can reuse the same discovery logic rather than
+   * duplicating the fetch/try-catch idiom per asset type. Returns null
+   * for any pack that isn't actually installed (checked via `owns`
+   * first) or whose file simply isn't present -- same graceful-absence
+   * contract as fetchPack itself.
+   */
+  async fetchPackAsset<T>(packId: string, relativePath: string): Promise<T | null> {
+    if (!DlcManager.owns(packId)) return null;
+    try {
+      const res = await fetch(`./dlc/${packId}/${relativePath}`, { cache: 'no-store' });
+      if (!res.ok) return null;
+      return await res.json() as T;
+    } catch {
+      return null;
+    }
+  },
+
+  /** Every pack id the base game currently knows to check for, whether or
+   *  not the player owns it -- for anything (like HeroSprite.tsx's own
+   *  manifest loading) that needs to enumerate packs to probe rather than
+   *  just check ownership of one specific id. */
+  knownPackIds(): string[] {
+    return [...KNOWN_DLC_PACKS];
   },
 
   /** Which packs were actually found this session -- for a Settings/About
