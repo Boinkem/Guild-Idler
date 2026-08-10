@@ -59,6 +59,22 @@ const SCHEMAS = {
       },
     },
   },
+  'quest-prefixes': {
+    file: 'quest-prefixes.json',
+    label: 'Quest Prefixes',
+    idField: 'id',
+    // Small flavor list (5 entries) prepended to a quest name at a small
+    // random chance -- was a plain JSON array of strings until this schema
+    // was added, which the generic id-keyed editor every other content
+    // type here uses can't represent directly. Converted to {id, text}
+    // objects (quests.ts maps back to a plain string[] at import time) so
+    // it fits the same shape as everything else, rather than inventing a
+    // one-off "raw string array" field type for a single 5-entry list.
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      text: { type: 'string', required: true },
+    },
+  },
   'quest-chains': {
     file: 'quest-chains.json',
     label: 'Quest Chains',
@@ -176,6 +192,23 @@ const SCHEMAS = {
       // yet) -- same trade-off requiresChainId/dedicatedPetId elsewhere
       // already accept.
       icons: { type: 'string[]', required: false },
+    },
+  },
+  'guild-rank-tiers': {
+    file: 'guild-rank-tiers.json',
+    label: 'Guild Rank Tiers',
+    idField: 'id',
+    // 6 fixed tiers, shared by two different threshold scales (a single
+    // chain's own reqLevel, and the guild's total Guild Power -- see
+    // guildRank.ts's own comment). Editing name/blurb/color here changes
+    // both scales at once, since both just index into this same array;
+    // there's no separate "chain tier" vs. "guild tier" content, only a
+    // different number being measured against the same six labels.
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      name: { type: 'string', required: true },
+      blurb: { type: 'string', required: true },
+      color: { type: 'string', required: true },
     },
   },
   'pets': {

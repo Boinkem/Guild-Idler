@@ -1,7 +1,7 @@
 [
-  "Urgent:",
-  "Contract:",
-  "Bounty:",
-  "Request:",
-  "Sealed Orders:"
+  { "id": "urgent", "text": "Urgent:" },
+  { "id": "contract", "text": "Contract:" },
+  { "id": "bounty", "text": "Bounty:" },
+  { "id": "request", "text": "Request:" },
+  { "id": "sealed_orders", "text": "Sealed Orders:" }
 ]

@@ -1,0 +1,2446 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 1ed7eaf..aebe2b0 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -2687,14 +2687,14 @@ any particular order.
+   facility or permanent upgrade the player can currently afford but
+   hasn't bought.~~ -- done, see "Guild Hall affordable highlight --
+   built" below.
+-- **Auto-repair threshold** -- opt-in setting to auto-repair gear once
++- ~~**Auto-repair threshold** -- opt-in setting to auto-repair gear once
+   durability drops below a chosen %, instead of a manual Repair
+-  Everything trip. Considered twice now (this round and the visual-QOL
+-  round before it), not built either time -- still deferred.
+-- **Auto-equip on loot** -- opt-in setting so quest loot that beats
++  Everything trip.~~ -- done, see "Auto-repair + auto-equip -- built"
++  below.
++- ~~**Auto-equip on loot** -- opt-in setting so quest loot that beats
+   what's equipped auto-equips instead of sitting in the stash until Equip
+-  Best is run manually. Same "considered twice, deferred both times"
+-  status as auto-repair above.
++  Best is run manually.~~ -- done, see "Auto-repair + auto-equip --
++  built" below.
+ - ~~**Extend legendary-drop flourish to Raid results**~~ -- done, see
+   "Raid + chain-completion flourish -- built" below.
+ - ~~**Chain-completion flourish** -- finishing a multi-stage story chain
+@@ -3162,6 +3162,147 @@ Equip Best Consumables picking the highest-cost item first and never
+ over-equipping beyond what's owned, and `harvestReady` counting correctly
+ across 0/1/2/3 simultaneously-pending nodes.
+ 
++### Auto-repair + auto-equip -- built
++The last two open QOL backlog items, both opt-in automation preferences:
++
++**Auto-repair.** New `GameState.autoRepairEnabled`/`autoRepairThresholdPercent`
++(1-99, default 50, clamped on write). Ticks in `GameEngine.refreshWorld`
++alongside Harvest's own spawn timer -- repairs any equipped-or-stashed
++item (same `EquipmentManager.allItems(state)` scope the manual "Repair
++Everything" button already uses) once its durability ratio drops to or
++below the threshold, never spending past what the guild can currently
++afford (same affordability gate `repairAll()` already has), one item at
++a time so partial gold still gets partial repairs done rather than an
++all-or-nothing batch. Self-limiting by construction: a repaired item is
++back at full durability, so it stops qualifying for the threshold check
++on the very next tick.
++
++**Auto-equip on loot.** New `GameState.autoEquipOnLoot`. Wired directly
++into `QuestManager.resolve`'s loot loop -- a drop that beats what the
++*hero who actually earned it* is currently wearing (same
++`GEAR_SCORE_BY_RARITY` comparison `engine.equipBestGear` already uses
++for its own manual bulk-equip) equips immediately via
++`EquipmentManager.equip` instead of landing in the stash; the displaced
++item goes to the stash automatically, the same way a manual equip
++already handles it. Deliberately scoped to only the earning hero, never
++the whole roster -- a stash drop had no "which hero" context before this,
++and inventing one ("whoever it helps most") would be a much bigger,
++more surprising behavior change than "the hero who found it gets first
++look at it."
++
++**Where the toggles live.** Both in `EquipmentPanel.tsx`, next to the
++manual actions they automate -- deliberately NOT in the Settings panel,
++whose own subtitle promises "Everything here is per-device... it never
++touches your guild's progress." These two genuinely do (they spend gold
++and touch gear), so they belong with the save, not local device
++cosmetics. Exported `SettingsPanel.tsx`'s existing `Row`/`Toggle`
++components for reuse rather than duplicating them. `SAVE_VERSION` bumped
++29 -> 30; migration defaults both to off for existing saves, so a save
++that predates this never suddenly starts spending gold or swapping gear
++on its own the moment it loads.
++
++Verified: `npx tsc --noEmit` and a full `vite build` both pass clean,
++plus 13 runtime checks covering auto-repair firing only below threshold
++and only when affordable (including a zero-gold guild being correctly
++left untouched), threshold clamping to 1-99, and the auto-equip gear-
++score comparison plus the full `EquipmentManager.equip` displacement
++path landing the old item back in the stash.
++
++### Tuning registry expansion, round 2 -- built
++Everything flagged as deferred from the first tuning-registry batch
++(guild facilities, patch 0107) migrated in one pass, plus three more
++gaps found along the way that weren't on the original list:
++
++- **`UPGRADES`** (all 20 vendor upgrades in `progression.ts`) --
++  `baseCost`/`costGrowth`/`maxLevel` plus every per-level bonus value
++  (`successPerLevel`, `goldPerLevel`, `consumableSlotsPerLevel`, etc.),
++  category `vendor_upgrades`, 74 entries.
++- **`RENOWN_PERKS`** (all 7 perks) -- `cost`/`costGrowth`/`maxLevel`,
++  each perk's `modsPerLevel` value, and the 6 perks with a tier2 curve
++  (`tier2.maxLevel`/`startCost`/`costGrowth`), category `renown_perks`,
++  46 entries. `extra_banner` (no tier2, a `heroSlotsPerLevel` field
++  instead of a mod) handled as its own special case, same as the
++  original array already treated it.
++- **`raid_loot`/`raid_recovery`** in `raidUpgrades.ts` -- the two
++  upgrades explicitly left hardcoded when `raid_speed` was migrated
++  originally, "a small, low-risk follow-up" per that comment. 15 entries,
++  same shape `raid_speed` already established.
++- **Found during the same pass, not on the original list:**
++  `AUTO_CHAIN_RANGES` (8 entries, the min/max streak length rolled at
++  each of Auto-Chain's 4 upgrade levels), the vendor level-up cost curve
++  (`VENDOR_LEVEL_BASE_COST`/`GROWTH`, 2 entries), and
++  `EARLY_TIER_DISCOUNT` (4 entries) -- the fraction of full price a
++  guild's first few purchases of *anything* leveled cost, arguably the
++  single biggest lever in this whole batch since it's applied to every
++  leveled cost formula in the game (upgrades, facilities, renown perks,
++  vendor levels), not just one system.
++
++`storagePerLevel`/`heroSlotsPerLevel` deliberately still stay hardcoded
++(structural, not a balance knob), same reasoning the first batch already
++established for those two fields.
++
++149 new tuning entries total, generated via a small Python script that
++read the original literals directly rather than being hand-typed --
++specifically to avoid transcription errors at this volume, the same
++concern that made the original UPGRADES/RENOWN_PERKS migration feel
++risky enough to defer in the first place. Every resolved value verified
++byte-identical to the original hardcoded literals before landing, via
++dedicated runtime checks comparing each field of every migrated entry
++(`UPGRADES`, `RENOWN_PERKS` including tier2 curves, `RAID_UPGRADES`,
++`AUTO_CHAIN_RANGES`, and `earlyTierDiscount()`/`vendorLevelCost()`'s
++resolved output) against the pre-migration values -- same bar the first
++batch set. `npx tsc --noEmit` and a full `vite build` both pass clean.
++
++### DevTool coverage review -- built
++A full audit of `src/game/data/` against the DevTool's `SCHEMAS`
++(`tools/devtool/server.mjs`), specifically looking for anything easily
++customizable that still required hunting down and hand-editing a
++TypeScript file instead of using the DevTool's existing UI. Confirmed
++equipment, consumables, injuries, pets, events, achievements, crafting
++recipes, materials, harvest tools, raid difficulties, and reroll costs
++were all already properly wired (either JSON+schema, or reading from the
++tuning registry). Found and fixed two real gaps, plus one correction:
++
++- **`quest-prefixes.json` had no DevTool schema at all.** The file
++  existed and was already being read by `quests.ts`, but there was no
++  `SCHEMAS` entry for it -- editing it meant hand-editing JSON directly,
++  with none of the DevTool's validation or UI. Its previous shape (a
++  plain array of 5 strings) also didn't fit the generic id-keyed editor
++  every other content type here uses, so it was converted to `{id,
++  text}` objects (`quests.ts` maps back to a plain `string[]` at import
++  time) and a new `quest-prefixes` schema added.
++- **`GUILD_RANK_TIERS`** (the 6 rank names/blurbs/colors shared by both
++  a single chain's own reqLevel tiering and the guild's total Guild
++  Power tiering -- see `guildRank.ts`'s own comment) was a hardcoded TS
++  array. Migrated to `json/guild-rank-tiers.json` + a new
++  `guild-rank-tiers` schema, same import-and-retype pattern
++  equipment/pets already use.
++- **Correction, not a new fix:** the new `guild-rank-tiers` schema
++  originally included a `picker: 'color'` hint on the `color` field,
++  which isn't an actual supported picker in the DevTool frontend --
++  checked `app.js` directly and confirmed only `'icon'` and `'lootTable'`
++  are real picker types; anything else silently falls through to a plain
++  text input regardless. Removed the misleading hint; the field still
++  works fine as a plain string (paste a hex value), just without
++  implying a color-swatch UI that doesn't exist.
++
++**Found but deliberately not migrated this round:** the `DIFFICULTIES`
++table in `quests.ts` (easy/normal/hard/epic/legendary, roughly 100
++tunable values across base success, duration ranges, and the burst/
++medium sub-configs each tier carries) is the single largest remaining
++gap -- fully hardcoded, zero DevTool/Tuning access, with dense balance
++rationale documented across many of its own comments. Scoped at roughly
++the same size as this round's entire UPGRADES+RENOWN_PERKS+raid_loot/
++recovery migration on its own. Deliberately left for its own dedicated
++pass rather than rushed into an already-large session, same "needs its
++own scoping" treatment the quest-chains DevTool migration got before it
++was actually done properly.
++
++Verified: `npx tsc --noEmit`, a full `vite build`, and the DevTool
++server's own syntax check all pass clean, plus runtime checks confirming
++`QUEST_PREFIXES` and `GUILD_RANK_TIERS` resolve to byte-identical content
++after their JSON migration.
++
+ ### Bigger, still-undecided
+ - **Queued from the same conversation as the UX/economy batch above:**
+   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
+@@ -3193,19 +3334,27 @@ across 0/1/2/3 simultaneously-pending nodes.
+   since a chain's actual discovery timing depends on board RNG, not a
+   fixed step count. Existing saves are migrated straight past it --
+   never retrofitted onto anyone already playing.
+-- ~~Tuning registry expansion beyond raid coefficients~~ -- first batch
+-  done (patch 0107): all 5 guild facilities' `baseCost`/`costGrowth`/
+-  `maxLevel` and their single `modsPerLevel` effect strength now read
+-  from the registry (`guild_facility.<id>.*`, category `guild_facilities`,
+-  20 new entries) instead of being literals in `progression.ts` -- same
+-  mechanical pattern `raid_speed` already established in
+-  `raidUpgrades.ts`. `storagePerLevel`/`heroSlotsPerLevel` deliberately
+-  stay hardcoded (structural, not a balance knob). Verified the resolved
+-  values are byte-identical to the old literals before this landed.
+-  Not yet migrated, if there's appetite for another batch: `UPGRADES`
+-  (vendor upgrades) and `RENOWN_PERKS` in the same file, and
+-  `raid_loot`/`raid_recovery` in `raidUpgrades.ts` (already flagged
+-  there as deferred, same shape as `raid_speed`).
++- ~~Tuning registry expansion beyond raid coefficients~~ -- done, in two
++  batches. First (patch 0107): all 5 guild facilities' `baseCost`/
++  `costGrowth`/`maxLevel` and their single `modsPerLevel` effect strength
++  (`guild_facility.<id>.*`, category `guild_facilities`, 20 entries).
++  Second (this round): everything flagged as deferred from the first --
++  `UPGRADES` (all 20 vendor upgrades, category `vendor_upgrades`, 74
++  entries), `RENOWN_PERKS` (all 7 perks including their tier2 curves,
++  category `renown_perks`, 46 entries), and `raid_loot`/`raid_recovery`
++  in `raidUpgrades.ts` (15 entries) -- plus three more found during the
++  same pass that weren't on the original deferred list:
++  `AUTO_CHAIN_RANGES`, the vendor level-up cost curve, and
++  `EARLY_TIER_DISCOUNT` (the global early-purchase discount applied to
++  every leveled cost formula in the game -- arguably the single biggest
++  lever in this batch). `storagePerLevel`/`heroSlotsPerLevel` still
++  deliberately stay hardcoded (structural, not a balance knob), same
++  reasoning as the first batch. 149 new tuning entries total this round,
++  generated via a script reading the original literals rather than
++  hand-typed, specifically to avoid transcription errors across that
++  volume -- every resolved value verified byte-identical to the original
++  hardcoded literals before landing via dedicated runtime checks, same
++  bar the first batch set.
+ 
+ ### Platform / distribution
+ - **Steam Cloud saves** -- no code work needed yet. Saves already live at
+diff --git a/src/game/data/guildRank.ts b/src/game/data/guildRank.ts
+index ab36e80..c3d9f4d 100644
+--- a/src/game/data/guildRank.ts
++++ b/src/game/data/guildRank.ts
+@@ -22,39 +22,13 @@ export interface GuildRankTier {
+  * (0-34, see rankTierForLevel), while the guild's own rank is tiered by
+  * total Guild Power (0-GUILD_POWER_CEILING, see currentGuildRank). Same six
+  * labels either way -- only the number being measured differs.
++ *
++ * Lives in json/guild-rank-tiers.json rather than a literal array here --
++ * editable via tools/devtool without touching TypeScript, same pattern
++ * equipment/pets/consumables already use.
+  */
+-export const GUILD_RANK_TIERS: GuildRankTier[] = [
+-  {
+-    id: 'freelance_operators', name: 'Freelance Operators',
+-    blurb: 'Whatever is on the board, whoever is free to take it.',
+-    color: '#b9ad93',
+-  },
+-  {
+-    id: 'professional_contractors', name: 'Professional Contractors',
+-    blurb: 'Reputable enough that the work keeps finding the guild first.',
+-    color: '#79a86b',
+-  },
+-  {
+-    id: 'actors_of_greater_calls', name: 'Actors of Greater Calls',
+-    blurb: 'Asked directly, now, rather than posted to a board.',
+-    color: '#5b8fd6',
+-  },
+-  {
+-    id: 'realms_influence', name: "A Realm's Influence",
+-    blurb: 'Territory held, not just visited.',
+-    color: '#a874d6',
+-  },
+-  {
+-    id: 'realms_protector', name: "A Realm's Protector",
+-    blurb: 'The thing standing between the Reach and what comes for it.',
+-    color: '#d9a441',
+-  },
+-  {
+-    id: 'ascended', name: 'Ascended',
+-    blurb: 'Known throughout, for reasons nobody has to explain twice.',
+-    color: '#d64f4f',
+-  },
+-];
++import guildRankTiersJson from './json/guild-rank-tiers.json';
++export const GUILD_RANK_TIERS: GuildRankTier[] = guildRankTiersJson as GuildRankTier[];
+ 
+ /**
+  * Thresholds for CHAIN reqLevel tiering (a single chain's own difficulty,
+diff --git a/src/game/data/json/guild-rank-tiers.json b/src/game/data/json/guild-rank-tiers.json
+new file mode 100644
+index 0000000..9d66932
+--- /dev/null
++++ b/src/game/data/json/guild-rank-tiers.json
+@@ -0,0 +1,38 @@
++[
++  {
++    "id": "freelance_operators",
++    "name": "Freelance Operators",
++    "blurb": "Whatever is on the board, whoever is free to take it.",
++    "color": "#b9ad93"
++  },
++  {
++    "id": "professional_contractors",
++    "name": "Professional Contractors",
++    "blurb": "Reputable enough that the work keeps finding the guild first.",
++    "color": "#79a86b"
++  },
++  {
++    "id": "actors_of_greater_calls",
++    "name": "Actors of Greater Calls",
++    "blurb": "Asked directly, now, rather than posted to a board.",
++    "color": "#5b8fd6"
++  },
++  {
++    "id": "realms_influence",
++    "name": "A Realm's Influence",
++    "blurb": "Territory held, not just visited.",
++    "color": "#a874d6"
++  },
++  {
++    "id": "realms_protector",
++    "name": "A Realm's Protector",
++    "blurb": "The thing standing between the Reach and what comes for it.",
++    "color": "#d9a441"
++  },
++  {
++    "id": "ascended",
++    "name": "Ascended",
++    "blurb": "Known throughout, for reasons nobody has to explain twice.",
++    "color": "#d64f4f"
++  }
++]
+diff --git a/src/game/data/json/quest-prefixes.json b/src/game/data/json/quest-prefixes.json
+index 1d91fc1..644bb9c 100644
+--- a/src/game/data/json/quest-prefixes.json
++++ b/src/game/data/json/quest-prefixes.json
+@@ -1,7 +1,7 @@
+ [
+-  "Urgent:",
+-  "Contract:",
+-  "Bounty:",
+-  "Request:",
+-  "Sealed Orders:"
+-]
+\ No newline at end of file
++  { "id": "urgent", "text": "Urgent:" },
++  { "id": "contract", "text": "Contract:" },
++  { "id": "bounty", "text": "Bounty:" },
++  { "id": "request", "text": "Request:" },
++  { "id": "sealed_orders", "text": "Sealed Orders:" }
++]
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index e2b7b4f..f678e07 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -991,5 +991,1346 @@
+     "default": 2.5,
+     "min": 1,
+     "description": "Gold/xp multiplier applied on a Critical Burst (see quest.critChance). Applied to the already-resolved reward roll, so it scales with everything else that already fed into it (quest tier, equipment bonuses, events)."
++  },
++  {
++    "id": "raid_loot.lootPerLevel",
++    "label": "Raid Loot: loot bonus per level",
++    "category": "raid_upgrades",
++    "value": 10,
++    "default": 10,
++    "description": "Loot-chance bonus (percentage points) granted per Raid Loot upgrade level.",
++    "min": 0
++  },
++  {
++    "id": "raid_loot.goldPerLevel",
++    "label": "Raid Loot: gold bonus per level",
++    "category": "raid_upgrades",
++    "value": 12,
++    "default": 12,
++    "description": "Gold bonus (percentage points) granted per Raid Loot upgrade level.",
++    "min": 0
++  },
++  {
++    "id": "raid_loot.goldBaseCost",
++    "label": "Raid Loot: gold-tier base cost",
++    "category": "raid_upgrades",
++    "value": 6000,
++    "default": 6000,
++    "description": "Gold cost of Raid Loot's first purchasable level.",
++    "min": 0
++  },
++  {
++    "id": "raid_loot.goldCostGrowth",
++    "label": "Raid Loot: gold-tier cost growth",
++    "category": "raid_upgrades",
++    "value": 2.0,
++    "default": 2.0,
++    "description": "Multiplier applied per level while Raid Loot is still in its gold-cost tier.",
++    "min": 1
++  },
++  {
++    "id": "raid_loot.goldTierMaxLevel",
++    "label": "Raid Loot: levels priced in gold",
++    "category": "raid_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "How many of Raid Loot's levels are bought with gold before it switches to Renown.",
++    "min": 0
++  },
++  {
++    "id": "raid_loot.renownBaseCost",
++    "label": "Raid Loot: renown-tier base cost",
++    "category": "raid_upgrades",
++    "value": 12,
++    "default": 12,
++    "description": "Renown cost of Raid Loot's first Renown-priced level.",
++    "min": 0
++  },
++  {
++    "id": "raid_loot.renownCostGrowth",
++    "label": "Raid Loot: renown-tier cost growth",
++    "category": "raid_upgrades",
++    "value": 1.5,
++    "default": 1.5,
++    "description": "Multiplier applied per level while Raid Loot is in its Renown-cost tier.",
++    "min": 1
++  },
++  {
++    "id": "raid_loot.maxLevel",
++    "label": "Raid Loot: max level",
++    "category": "raid_upgrades",
++    "value": 2,
++    "default": 2,
++    "description": "Level cap for Raid Loot.",
++    "min": 0
++  },
++  {
++    "id": "raid_recovery.injuryResistPerLevel",
++    "label": "Raid Recovery: injury resist per level",
++    "category": "raid_upgrades",
++    "value": 18,
++    "default": 18,
++    "description": "Injury-resist bonus (percentage points) granted per Raid Recovery upgrade level.",
++    "min": 0
++  },
++  {
++    "id": "raid_recovery.goldBaseCost",
++    "label": "Raid Recovery: gold-tier base cost",
++    "category": "raid_upgrades",
++    "value": 5500,
++    "default": 5500,
++    "description": "Gold cost of Raid Recovery's first purchasable level.",
++    "min": 0
++  },
++  {
++    "id": "raid_recovery.goldCostGrowth",
++    "label": "Raid Recovery: gold-tier cost growth",
++    "category": "raid_upgrades",
++    "value": 2.0,
++    "default": 2.0,
++    "description": "Multiplier applied per level while Raid Recovery is still in its gold-cost tier.",
++    "min": 1
++  },
++  {
++    "id": "raid_recovery.goldTierMaxLevel",
++    "label": "Raid Recovery: levels priced in gold",
++    "category": "raid_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "How many of Raid Recovery's levels are bought with gold before it switches to Renown.",
++    "min": 0
++  },
++  {
++    "id": "raid_recovery.renownBaseCost",
++    "label": "Raid Recovery: renown-tier base cost",
++    "category": "raid_upgrades",
++    "value": 11,
++    "default": 11,
++    "description": "Renown cost of Raid Recovery's first Renown-priced level.",
++    "min": 0
++  },
++  {
++    "id": "raid_recovery.renownCostGrowth",
++    "label": "Raid Recovery: renown-tier cost growth",
++    "category": "raid_upgrades",
++    "value": 1.5,
++    "default": 1.5,
++    "description": "Multiplier applied per level while Raid Recovery is in its Renown-cost tier.",
++    "min": 1
++  },
++  {
++    "id": "raid_recovery.maxLevel",
++    "label": "Raid Recovery: max level",
++    "category": "raid_upgrades",
++    "value": 2,
++    "default": 2,
++    "description": "Level cap for Raid Recovery.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.renowned_skill.cost",
++    "label": "Renowned Skill: base cost",
++    "category": "renown_perks",
++    "value": 1,
++    "default": 1,
++    "description": "Renown cost of Renowned Skill's first level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.renowned_skill.costGrowth",
++    "label": "Renowned Skill: cost growth",
++    "category": "renown_perks",
++    "value": 1.6,
++    "default": 1.6,
++    "description": "Multiplier applied per level to Renowned Skill's cost.",
++    "min": 1
++  },
++  {
++    "id": "renown_perk.renowned_skill.maxLevel",
++    "label": "Renowned Skill: tier-1 max level",
++    "category": "renown_perks",
++    "value": 20,
++    "default": 20,
++    "description": "Level cap for Renowned Skill before its tier-2 curve takes over.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.renowned_skill.successPerLevel",
++    "label": "Renowned Skill: success per level",
++    "category": "renown_perks",
++    "value": 3,
++    "default": 3,
++    "description": "success bonus granted per Renowned Skill level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.renowned_skill.tier2MaxLevel",
++    "label": "Renowned Skill: tier-2 max level",
++    "category": "renown_perks",
++    "value": 25,
++    "default": 25,
++    "description": "Level cap for Renowned Skill once its tier-2 curve begins.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.renowned_skill.tier2StartCost",
++    "label": "Renowned Skill: tier-2 start cost",
++    "category": "renown_perks",
++    "value": 9822,
++    "default": 9822,
++    "description": "Renown cost of Renowned Skill's first tier-2 level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.renowned_skill.tier2CostGrowth",
++    "label": "Renowned Skill: tier-2 cost growth",
++    "category": "renown_perks",
++    "value": 1.12,
++    "default": 1.12,
++    "description": "Multiplier applied per level within Renowned Skill's tier-2 curve.",
++    "min": 1
++  },
++  {
++    "id": "renown_perk.legacy_of_wealth.cost",
++    "label": "Legacy of Wealth: base cost",
++    "category": "renown_perks",
++    "value": 1,
++    "default": 1,
++    "description": "Renown cost of Legacy of Wealth's first level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.legacy_of_wealth.costGrowth",
++    "label": "Legacy of Wealth: cost growth",
++    "category": "renown_perks",
++    "value": 1.6,
++    "default": 1.6,
++    "description": "Multiplier applied per level to Legacy of Wealth's cost.",
++    "min": 1
++  },
++  {
++    "id": "renown_perk.legacy_of_wealth.maxLevel",
++    "label": "Legacy of Wealth: tier-1 max level",
++    "category": "renown_perks",
++    "value": 20,
++    "default": 20,
++    "description": "Level cap for Legacy of Wealth before its tier-2 curve takes over.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.legacy_of_wealth.goldPerLevel",
++    "label": "Legacy of Wealth: gold per level",
++    "category": "renown_perks",
++    "value": 15,
++    "default": 15,
++    "description": "gold bonus granted per Legacy of Wealth level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.legacy_of_wealth.tier2MaxLevel",
++    "label": "Legacy of Wealth: tier-2 max level",
++    "category": "renown_perks",
++    "value": 25,
++    "default": 25,
++    "description": "Level cap for Legacy of Wealth once its tier-2 curve begins.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.legacy_of_wealth.tier2StartCost",
++    "label": "Legacy of Wealth: tier-2 start cost",
++    "category": "renown_perks",
++    "value": 9822,
++    "default": 9822,
++    "description": "Renown cost of Legacy of Wealth's first tier-2 level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.legacy_of_wealth.tier2CostGrowth",
++    "label": "Legacy of Wealth: tier-2 cost growth",
++    "category": "renown_perks",
++    "value": 1.12,
++    "default": 1.12,
++    "description": "Multiplier applied per level within Legacy of Wealth's tier-2 curve.",
++    "min": 1
++  },
++  {
++    "id": "renown_perk.swift_legend.cost",
++    "label": "Swift Legend: base cost",
++    "category": "renown_perks",
++    "value": 2,
++    "default": 2,
++    "description": "Renown cost of Swift Legend's first level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.swift_legend.costGrowth",
++    "label": "Swift Legend: cost growth",
++    "category": "renown_perks",
++    "value": 1.7,
++    "default": 1.7,
++    "description": "Multiplier applied per level to Swift Legend's cost.",
++    "min": 1
++  },
++  {
++    "id": "renown_perk.swift_legend.maxLevel",
++    "label": "Swift Legend: tier-1 max level",
++    "category": "renown_perks",
++    "value": 10,
++    "default": 10,
++    "description": "Level cap for Swift Legend before its tier-2 curve takes over.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.swift_legend.speedPerLevel",
++    "label": "Swift Legend: speed per level",
++    "category": "renown_perks",
++    "value": 5,
++    "default": 5,
++    "description": "speed bonus granted per Swift Legend level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.swift_legend.tier2MaxLevel",
++    "label": "Swift Legend: tier-2 max level",
++    "category": "renown_perks",
++    "value": 13,
++    "default": 13,
++    "description": "Level cap for Swift Legend once its tier-2 curve begins.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.swift_legend.tier2StartCost",
++    "label": "Swift Legend: tier-2 start cost",
++    "category": "renown_perks",
++    "value": 309,
++    "default": 309,
++    "description": "Renown cost of Swift Legend's first tier-2 level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.swift_legend.tier2CostGrowth",
++    "label": "Swift Legend: tier-2 cost growth",
++    "category": "renown_perks",
++    "value": 1.12,
++    "default": 1.12,
++    "description": "Multiplier applied per level within Swift Legend's tier-2 curve.",
++    "min": 1
++  },
++  {
++    "id": "renown_perk.collectors_eye.cost",
++    "label": "Collector's Eye: base cost",
++    "category": "renown_perks",
++    "value": 2,
++    "default": 2,
++    "description": "Renown cost of Collector's Eye's first level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.collectors_eye.costGrowth",
++    "label": "Collector's Eye: cost growth",
++    "category": "renown_perks",
++    "value": 1.7,
++    "default": 1.7,
++    "description": "Multiplier applied per level to Collector's Eye's cost.",
++    "min": 1
++  },
++  {
++    "id": "renown_perk.collectors_eye.maxLevel",
++    "label": "Collector's Eye: tier-1 max level",
++    "category": "renown_perks",
++    "value": 12,
++    "default": 12,
++    "description": "Level cap for Collector's Eye before its tier-2 curve takes over.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.collectors_eye.lootPerLevel",
++    "label": "Collector's Eye: loot per level",
++    "category": "renown_perks",
++    "value": 4,
++    "default": 4,
++    "description": "loot bonus granted per Collector's Eye level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.collectors_eye.tier2MaxLevel",
++    "label": "Collector's Eye: tier-2 max level",
++    "category": "renown_perks",
++    "value": 15,
++    "default": 15,
++    "description": "Level cap for Collector's Eye once its tier-2 curve begins.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.collectors_eye.tier2StartCost",
++    "label": "Collector's Eye: tier-2 start cost",
++    "category": "renown_perks",
++    "value": 891,
++    "default": 891,
++    "description": "Renown cost of Collector's Eye's first tier-2 level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.collectors_eye.tier2CostGrowth",
++    "label": "Collector's Eye: tier-2 cost growth",
++    "category": "renown_perks",
++    "value": 1.12,
++    "default": 1.12,
++    "description": "Multiplier applied per level within Collector's Eye's tier-2 curve.",
++    "min": 1
++  },
++  {
++    "id": "renown_perk.enduring_legend.cost",
++    "label": "Enduring Legend: base cost",
++    "category": "renown_perks",
++    "value": 2,
++    "default": 2,
++    "description": "Renown cost of Enduring Legend's first level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.enduring_legend.costGrowth",
++    "label": "Enduring Legend: cost growth",
++    "category": "renown_perks",
++    "value": 1.65,
++    "default": 1.65,
++    "description": "Multiplier applied per level to Enduring Legend's cost.",
++    "min": 1
++  },
++  {
++    "id": "renown_perk.enduring_legend.maxLevel",
++    "label": "Enduring Legend: tier-1 max level",
++    "category": "renown_perks",
++    "value": 10,
++    "default": 10,
++    "description": "Level cap for Enduring Legend before its tier-2 curve takes over.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.enduring_legend.injuryResistPerLevel",
++    "label": "Enduring Legend: injuryResist per level",
++    "category": "renown_perks",
++    "value": 10,
++    "default": 10,
++    "description": "injuryResist bonus granted per Enduring Legend level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.enduring_legend.tier2MaxLevel",
++    "label": "Enduring Legend: tier-2 max level",
++    "category": "renown_perks",
++    "value": 13,
++    "default": 13,
++    "description": "Level cap for Enduring Legend once its tier-2 curve begins.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.enduring_legend.tier2StartCost",
++    "label": "Enduring Legend: tier-2 start cost",
++    "category": "renown_perks",
++    "value": 236,
++    "default": 236,
++    "description": "Renown cost of Enduring Legend's first tier-2 level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.enduring_legend.tier2CostGrowth",
++    "label": "Enduring Legend: tier-2 cost growth",
++    "category": "renown_perks",
++    "value": 1.12,
++    "default": 1.12,
++    "description": "Multiplier applied per level within Enduring Legend's tier-2 curve.",
++    "min": 1
++  },
++  {
++    "id": "renown_perk.scholars_legacy.cost",
++    "label": "Scholar's Legacy: base cost",
++    "category": "renown_perks",
++    "value": 1,
++    "default": 1,
++    "description": "Renown cost of Scholar's Legacy's first level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.scholars_legacy.costGrowth",
++    "label": "Scholar's Legacy: cost growth",
++    "category": "renown_perks",
++    "value": 1.6,
++    "default": 1.6,
++    "description": "Multiplier applied per level to Scholar's Legacy's cost.",
++    "min": 1
++  },
++  {
++    "id": "renown_perk.scholars_legacy.maxLevel",
++    "label": "Scholar's Legacy: tier-1 max level",
++    "category": "renown_perks",
++    "value": 15,
++    "default": 15,
++    "description": "Level cap for Scholar's Legacy before its tier-2 curve takes over.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.scholars_legacy.xpPerLevel",
++    "label": "Scholar's Legacy: xp per level",
++    "category": "renown_perks",
++    "value": 20,
++    "default": 20,
++    "description": "xp bonus granted per Scholar's Legacy level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.scholars_legacy.tier2MaxLevel",
++    "label": "Scholar's Legacy: tier-2 max level",
++    "category": "renown_perks",
++    "value": 19,
++    "default": 19,
++    "description": "Level cap for Scholar's Legacy once its tier-2 curve begins.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.scholars_legacy.tier2StartCost",
++    "label": "Scholar's Legacy: tier-2 start cost",
++    "category": "renown_perks",
++    "value": 936,
++    "default": 936,
++    "description": "Renown cost of Scholar's Legacy's first tier-2 level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.scholars_legacy.tier2CostGrowth",
++    "label": "Scholar's Legacy: tier-2 cost growth",
++    "category": "renown_perks",
++    "value": 1.12,
++    "default": 1.12,
++    "description": "Multiplier applied per level within Scholar's Legacy's tier-2 curve.",
++    "min": 1
++  },
++  {
++    "id": "renown_perk.extra_banner.cost",
++    "label": "Extra Banner: base cost",
++    "category": "renown_perks",
++    "value": 5,
++    "default": 5,
++    "description": "Renown cost of Extra Banner's first level.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.extra_banner.costGrowth",
++    "label": "Extra Banner: cost growth",
++    "category": "renown_perks",
++    "value": 2.2,
++    "default": 2.2,
++    "description": "Multiplier applied per level to Extra Banner's cost.",
++    "min": 1
++  },
++  {
++    "id": "renown_perk.extra_banner.maxLevel",
++    "label": "Extra Banner: max level",
++    "category": "renown_perks",
++    "value": 4,
++    "default": 4,
++    "description": "Level cap for Extra Banner -- deliberately no tier-2, hero slots stay a small fixed number.",
++    "min": 0
++  },
++  {
++    "id": "renown_perk.extra_banner.heroSlotsPerLevel",
++    "label": "Extra Banner: hero slots per level",
++    "category": "renown_perks",
++    "value": 1,
++    "default": 1,
++    "description": "Extra hero roster slots granted per Extra Banner level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.weapons_training.baseCost",
++    "label": "Better Weapons Training: base cost",
++    "category": "vendor_upgrades",
++    "value": 200,
++    "default": 200,
++    "description": "Gold cost of Better Weapons Training's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.weapons_training.costGrowth",
++    "label": "Better Weapons Training: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1.75,
++    "default": 1.75,
++    "description": "Multiplier applied per level to Better Weapons Training's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.weapons_training.maxLevel",
++    "label": "Better Weapons Training: max level",
++    "category": "vendor_upgrades",
++    "value": 10,
++    "default": 10,
++    "description": "Level cap for Better Weapons Training.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.weapons_training.successPerLevel",
++    "label": "Better Weapons Training: success bonus per level",
++    "category": "vendor_upgrades",
++    "value": 5,
++    "default": 5,
++    "description": "Better Weapons Training's success bonus per level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.efficient_adventuring.baseCost",
++    "label": "Efficient Adventuring: base cost",
++    "category": "vendor_upgrades",
++    "value": 250,
++    "default": 250,
++    "description": "Gold cost of Efficient Adventuring's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.efficient_adventuring.costGrowth",
++    "label": "Efficient Adventuring: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1.8,
++    "default": 1.8,
++    "description": "Multiplier applied per level to Efficient Adventuring's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.efficient_adventuring.maxLevel",
++    "label": "Efficient Adventuring: max level",
++    "category": "vendor_upgrades",
++    "value": 10,
++    "default": 10,
++    "description": "Level cap for Efficient Adventuring.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.efficient_adventuring.goldPerLevel",
++    "label": "Efficient Adventuring: gold bonus per level",
++    "category": "vendor_upgrades",
++    "value": 10,
++    "default": 10,
++    "description": "Efficient Adventuring's gold bonus per level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.veteran_explorer.baseCost",
++    "label": "Alchemical Assay: base cost",
++    "category": "vendor_upgrades",
++    "value": 400,
++    "default": 400,
++    "description": "Gold cost of Alchemical Assay's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.veteran_explorer.costGrowth",
++    "label": "Alchemical Assay: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1.9,
++    "default": 1.9,
++    "description": "Multiplier applied per level to Alchemical Assay's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.veteran_explorer.maxLevel",
++    "label": "Alchemical Assay: max level",
++    "category": "vendor_upgrades",
++    "value": 8,
++    "default": 8,
++    "description": "Level cap for Alchemical Assay.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.veteran_explorer.lootPerLevel",
++    "label": "Alchemical Assay: loot bonus per level",
++    "category": "vendor_upgrades",
++    "value": 5,
++    "default": 5,
++    "description": "Alchemical Assay's loot bonus per level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.mounted_travel.baseCost",
++    "label": "Mounted Travel: base cost",
++    "category": "vendor_upgrades",
++    "value": 600,
++    "default": 600,
++    "description": "Gold cost of Mounted Travel's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.mounted_travel.costGrowth",
++    "label": "Mounted Travel: cost growth",
++    "category": "vendor_upgrades",
++    "value": 2.0,
++    "default": 2.0,
++    "description": "Multiplier applied per level to Mounted Travel's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.mounted_travel.maxLevel",
++    "label": "Mounted Travel: max level",
++    "category": "vendor_upgrades",
++    "value": 6,
++    "default": 6,
++    "description": "Level cap for Mounted Travel.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.mounted_travel.speedPerLevel",
++    "label": "Mounted Travel: speed bonus per level",
++    "category": "vendor_upgrades",
++    "value": 10,
++    "default": 10,
++    "description": "Mounted Travel's speed bonus per level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.field_medicine.baseCost",
++    "label": "Restorative Tinctures: base cost",
++    "category": "vendor_upgrades",
++    "value": 350,
++    "default": 350,
++    "description": "Gold cost of Restorative Tinctures's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.field_medicine.costGrowth",
++    "label": "Restorative Tinctures: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1.85,
++    "default": 1.85,
++    "description": "Multiplier applied per level to Restorative Tinctures's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.field_medicine.maxLevel",
++    "label": "Restorative Tinctures: max level",
++    "category": "vendor_upgrades",
++    "value": 8,
++    "default": 8,
++    "description": "Level cap for Restorative Tinctures.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.field_medicine.injuryResistPerLevel",
++    "label": "Restorative Tinctures: injury-resist bonus per level",
++    "category": "vendor_upgrades",
++    "value": 8,
++    "default": 8,
++    "description": "Restorative Tinctures's injury-resist bonus per level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.armourers_contract.baseCost",
++    "label": "Armourer's Contract: base cost",
++    "category": "vendor_upgrades",
++    "value": 500,
++    "default": 500,
++    "description": "Gold cost of Armourer's Contract's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.armourers_contract.costGrowth",
++    "label": "Armourer's Contract: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1.9,
++    "default": 1.9,
++    "description": "Multiplier applied per level to Armourer's Contract's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.armourers_contract.maxLevel",
++    "label": "Armourer's Contract: max level",
++    "category": "vendor_upgrades",
++    "value": 6,
++    "default": 6,
++    "description": "Level cap for Armourer's Contract.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.armourers_contract.durabilityPerLevel",
++    "label": "Armourer's Contract: durability bonus per level",
++    "category": "vendor_upgrades",
++    "value": 10,
++    "default": 10,
++    "description": "Armourer's Contract's durability bonus per level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.war_stories.baseCost",
++    "label": "Runic Insight: base cost",
++    "category": "vendor_upgrades",
++    "value": 450,
++    "default": 450,
++    "description": "Gold cost of Runic Insight's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.war_stories.costGrowth",
++    "label": "Runic Insight: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1.85,
++    "default": 1.85,
++    "description": "Multiplier applied per level to Runic Insight's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.war_stories.maxLevel",
++    "label": "Runic Insight: max level",
++    "category": "vendor_upgrades",
++    "value": 8,
++    "default": 8,
++    "description": "Level cap for Runic Insight.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.war_stories.xpPerLevel",
++    "label": "Runic Insight: xp bonus per level",
++    "category": "vendor_upgrades",
++    "value": 15,
++    "default": 15,
++    "description": "Runic Insight's xp bonus per level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.master_adventurer.baseCost",
++    "label": "Enchanted Seal: base cost",
++    "category": "vendor_upgrades",
++    "value": 5000,
++    "default": 5000,
++    "description": "Gold cost of Enchanted Seal's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.master_adventurer.costGrowth",
++    "label": "Enchanted Seal: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Multiplier applied per level to Enchanted Seal's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.master_adventurer.maxLevel",
++    "label": "Enchanted Seal: max level",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Level cap for Enchanted Seal.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.master_adventurer.successPerLevel",
++    "label": "Enchanted Seal: success bonus per level",
++    "category": "vendor_upgrades",
++    "value": 3,
++    "default": 3,
++    "description": "Enchanted Seal's success bonus per level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.guild_charter.baseCost",
++    "label": "Guild Charter: base cost",
++    "category": "vendor_upgrades",
++    "value": 3000,
++    "default": 3000,
++    "description": "Gold cost of Guild Charter's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.guild_charter.costGrowth",
++    "label": "Guild Charter: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Multiplier applied per level to Guild Charter's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.guild_charter.maxLevel",
++    "label": "Guild Charter: max level",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Level cap for Guild Charter.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.black_market_contact.baseCost",
++    "label": "Black Market Contact: base cost",
++    "category": "vendor_upgrades",
++    "value": 9000,
++    "default": 9000,
++    "description": "Gold cost of Black Market Contact's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.black_market_contact.costGrowth",
++    "label": "Black Market Contact: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Multiplier applied per level to Black Market Contact's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.black_market_contact.maxLevel",
++    "label": "Black Market Contact: max level",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Level cap for Black Market Contact.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.auto_chain.baseCost",
++    "label": "Auto-Chain: base cost",
++    "category": "vendor_upgrades",
++    "value": 3500,
++    "default": 3500,
++    "description": "Gold cost of Auto-Chain's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.auto_chain.costGrowth",
++    "label": "Auto-Chain: cost growth",
++    "category": "vendor_upgrades",
++    "value": 2.3,
++    "default": 2.3,
++    "description": "Multiplier applied per level to Auto-Chain's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.auto_chain.maxLevel",
++    "label": "Auto-Chain: max level",
++    "category": "vendor_upgrades",
++    "value": 4,
++    "default": 4,
++    "description": "Level cap for Auto-Chain.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.raid_charter.baseCost",
++    "label": "Raid Charter: base cost",
++    "category": "vendor_upgrades",
++    "value": 2500,
++    "default": 2500,
++    "description": "Gold cost of Raid Charter's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.raid_charter.costGrowth",
++    "label": "Raid Charter: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Multiplier applied per level to Raid Charter's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.raid_charter.maxLevel",
++    "label": "Raid Charter: max level",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Level cap for Raid Charter.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.raid_heroic_clearance.baseCost",
++    "label": "Heroic Clearance: base cost",
++    "category": "vendor_upgrades",
++    "value": 20000,
++    "default": 20000,
++    "description": "Gold cost of Heroic Clearance's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.raid_heroic_clearance.costGrowth",
++    "label": "Heroic Clearance: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Multiplier applied per level to Heroic Clearance's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.raid_heroic_clearance.maxLevel",
++    "label": "Heroic Clearance: max level",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Level cap for Heroic Clearance.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.raid_mythic_clearance.baseCost",
++    "label": "Mythic Clearance: base cost",
++    "category": "vendor_upgrades",
++    "value": 60000,
++    "default": 60000,
++    "description": "Gold cost of Mythic Clearance's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.raid_mythic_clearance.costGrowth",
++    "label": "Mythic Clearance: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Multiplier applied per level to Mythic Clearance's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.raid_mythic_clearance.maxLevel",
++    "label": "Mythic Clearance: max level",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Level cap for Mythic Clearance.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.potion_belt.baseCost",
++    "label": "Potion Belt: base cost",
++    "category": "vendor_upgrades",
++    "value": 1800,
++    "default": 1800,
++    "description": "Gold cost of Potion Belt's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.potion_belt.costGrowth",
++    "label": "Potion Belt: cost growth",
++    "category": "vendor_upgrades",
++    "value": 2.2,
++    "default": 2.2,
++    "description": "Multiplier applied per level to Potion Belt's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.potion_belt.maxLevel",
++    "label": "Potion Belt: max level",
++    "category": "vendor_upgrades",
++    "value": 2,
++    "default": 2,
++    "description": "Level cap for Potion Belt.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.potion_belt.consumableSlotsPerLevel",
++    "label": "Potion Belt: consumable slots granted per level",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Potion Belt's consumable slots granted per level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.nest_expansion.baseCost",
++    "label": "Nest Expansion: base cost",
++    "category": "vendor_upgrades",
++    "value": 1500,
++    "default": 1500,
++    "description": "Gold cost of Nest Expansion's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.nest_expansion.costGrowth",
++    "label": "Nest Expansion: cost growth",
++    "category": "vendor_upgrades",
++    "value": 2.0,
++    "default": 2.0,
++    "description": "Multiplier applied per level to Nest Expansion's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.nest_expansion.maxLevel",
++    "label": "Nest Expansion: max level",
++    "category": "vendor_upgrades",
++    "value": 3,
++    "default": 3,
++    "description": "Level cap for Nest Expansion.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.nest_expansion.incubationSlotsPerLevel",
++    "label": "Nest Expansion: incubation slots granted per level",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Nest Expansion's incubation slots granted per level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.companion_bond.baseCost",
++    "label": "Companion Bond: base cost",
++    "category": "vendor_upgrades",
++    "value": 2200,
++    "default": 2200,
++    "description": "Gold cost of Companion Bond's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.companion_bond.costGrowth",
++    "label": "Companion Bond: cost growth",
++    "category": "vendor_upgrades",
++    "value": 2.3,
++    "default": 2.3,
++    "description": "Multiplier applied per level to Companion Bond's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.companion_bond.maxLevel",
++    "label": "Companion Bond: max level",
++    "category": "vendor_upgrades",
++    "value": 2,
++    "default": 2,
++    "description": "Level cap for Companion Bond.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.companion_bond.petSlotsPerLevel",
++    "label": "Companion Bond: pet slots granted per level",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Companion Bond's pet slots granted per level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.board_runner.baseCost",
++    "label": "Board Runner: base cost",
++    "category": "vendor_upgrades",
++    "value": 900,
++    "default": 900,
++    "description": "Gold cost of Board Runner's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.board_runner.costGrowth",
++    "label": "Board Runner: cost growth",
++    "category": "vendor_upgrades",
++    "value": 2.0,
++    "default": 2.0,
++    "description": "Multiplier applied per level to Board Runner's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.board_runner.maxLevel",
++    "label": "Board Runner: max level",
++    "category": "vendor_upgrades",
++    "value": 3,
++    "default": 3,
++    "description": "Level cap for Board Runner.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.board_runner.questFreeRerollsPerLevel",
++    "label": "Board Runner: free quest-board rerolls per day granted per level",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Board Runner's free quest-board rerolls per day granted per level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.trade_favor.baseCost",
++    "label": "Trade Favor: base cost",
++    "category": "vendor_upgrades",
++    "value": 900,
++    "default": 900,
++    "description": "Gold cost of Trade Favor's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.trade_favor.costGrowth",
++    "label": "Trade Favor: cost growth",
++    "category": "vendor_upgrades",
++    "value": 2.0,
++    "default": 2.0,
++    "description": "Multiplier applied per level to Trade Favor's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.trade_favor.maxLevel",
++    "label": "Trade Favor: max level",
++    "category": "vendor_upgrades",
++    "value": 3,
++    "default": 3,
++    "description": "Level cap for Trade Favor.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.trade_favor.vendorFreeRerollsPerLevel",
++    "label": "Trade Favor: free vendor restocks per day granted per level",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Trade Favor's free vendor restocks per day granted per level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.board_warden.baseCost",
++    "label": "Board Warden: base cost",
++    "category": "vendor_upgrades",
++    "value": 1200,
++    "default": 1200,
++    "description": "Gold cost of Board Warden's first level.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.board_warden.costGrowth",
++    "label": "Board Warden: cost growth",
++    "category": "vendor_upgrades",
++    "value": 2.1,
++    "default": 2.1,
++    "description": "Multiplier applied per level to Board Warden's cost.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.board_warden.maxLevel",
++    "label": "Board Warden: max level",
++    "category": "vendor_upgrades",
++    "value": 2,
++    "default": 2,
++    "description": "Level cap for Board Warden.",
++    "min": 0
++  },
++  {
++    "id": "upgrade.board_warden.freezeChangesPerLevel",
++    "label": "Board Warden: extra quest-board freezes per day granted per level",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Board Warden's extra quest-board freezes per day granted per level.",
++    "min": 0
++  },
++  {
++    "id": "auto_chain_range.1.min",
++    "label": "Auto-Chain lvl1: min streak",
++    "category": "progression",
++    "value": 2,
++    "default": 2,
++    "description": "Minimum quest-count streak length rolled at Auto-Chain upgrade level 1.",
++    "min": 1
++  },
++  {
++    "id": "auto_chain_range.1.max",
++    "label": "Auto-Chain lvl1: max streak",
++    "category": "progression",
++    "value": 3,
++    "default": 3,
++    "description": "Maximum quest-count streak length rolled at Auto-Chain upgrade level 1.",
++    "min": 1
++  },
++  {
++    "id": "auto_chain_range.2.min",
++    "label": "Auto-Chain lvl2: min streak",
++    "category": "progression",
++    "value": 3,
++    "default": 3,
++    "description": "Minimum quest-count streak length rolled at Auto-Chain upgrade level 2.",
++    "min": 1
++  },
++  {
++    "id": "auto_chain_range.2.max",
++    "label": "Auto-Chain lvl2: max streak",
++    "category": "progression",
++    "value": 5,
++    "default": 5,
++    "description": "Maximum quest-count streak length rolled at Auto-Chain upgrade level 2.",
++    "min": 1
++  },
++  {
++    "id": "auto_chain_range.3.min",
++    "label": "Auto-Chain lvl3: min streak",
++    "category": "progression",
++    "value": 6,
++    "default": 6,
++    "description": "Minimum quest-count streak length rolled at Auto-Chain upgrade level 3.",
++    "min": 1
++  },
++  {
++    "id": "auto_chain_range.3.max",
++    "label": "Auto-Chain lvl3: max streak",
++    "category": "progression",
++    "value": 8,
++    "default": 8,
++    "description": "Maximum quest-count streak length rolled at Auto-Chain upgrade level 3.",
++    "min": 1
++  },
++  {
++    "id": "auto_chain_range.4.min",
++    "label": "Auto-Chain lvl4: min streak",
++    "category": "progression",
++    "value": 10,
++    "default": 10,
++    "description": "Minimum quest-count streak length rolled at Auto-Chain upgrade level 4.",
++    "min": 1
++  },
++  {
++    "id": "auto_chain_range.4.max",
++    "label": "Auto-Chain lvl4: max streak",
++    "category": "progression",
++    "value": 10,
++    "default": 10,
++    "description": "Maximum quest-count streak length rolled at Auto-Chain upgrade level 4.",
++    "min": 1
++  },
++  {
++    "id": "vendor_level.baseCost",
++    "label": "Vendor level: base cost",
++    "category": "progression",
++    "value": 800,
++    "default": 800,
++    "description": "Gold cost of a vendor's first level.",
++    "min": 0
++  },
++  {
++    "id": "vendor_level.costGrowth",
++    "label": "Vendor level: cost growth",
++    "category": "progression",
++    "value": 2.1,
++    "default": 2.1,
++    "description": "Multiplier applied per level to a vendor's level-up cost.",
++    "min": 1
++  },
++  {
++    "id": "early_tier_discount.level0",
++    "label": "Early-tier discount: level 0",
++    "category": "progression",
++    "value": 0.15,
++    "default": 0.15,
++    "description": "Fraction of full price a guild's very first purchase of anything costs (applies to every leveled cost formula in the game).",
++    "min": 0
++  },
++  {
++    "id": "early_tier_discount.level1",
++    "label": "Early-tier discount: level 1",
++    "category": "progression",
++    "value": 0.35,
++    "default": 0.35,
++    "description": "Fraction of full price the second purchase of a given leveled item costs.",
++    "min": 0
++  },
++  {
++    "id": "early_tier_discount.level2",
++    "label": "Early-tier discount: level 2",
++    "category": "progression",
++    "value": 0.6,
++    "default": 0.6,
++    "description": "Fraction of full price the third purchase of a given leveled item costs.",
++    "min": 0
++  },
++  {
++    "id": "early_tier_discount.level3",
++    "label": "Early-tier discount: level 3",
++    "category": "progression",
++    "value": 0.85,
++    "default": 0.85,
++    "description": "Fraction of full price the fourth purchase of a given leveled item costs. Level 4+ is always full price (1.0), not itself a tuning entry.",
++    "min": 0
+   }
+ ]
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 678fcce..2d96692 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -4,70 +4,96 @@ import { Tuning } from './tuning';
+ /* --------------------------- permanent upgrades --------------------------- */
+ 
+ export const UPGRADES: UpgradeDef[] = [
++  // Every baseCost/costGrowth/maxLevel and per-level bonus value below
++  // reads from the tuning registry (tuning.json, category
++  // 'vendor_upgrades') rather than being a literal -- editable live via
++  // the devtool's Tuning tab without touching this file. See tuning.ts.
+   {
+     id: 'weapons_training', name: 'Better Weapons Training',
+     description: 'Drill the fundamentals until they are boring.',
+-    baseCost: 200, costGrowth: 1.75, maxLevel: 10,
+-    modsPerLevel: { success: 5 }, vendor: 'blacksmith',
++    baseCost: Tuning.get('upgrade.weapons_training.baseCost'),
++    costGrowth: Tuning.get('upgrade.weapons_training.costGrowth'),
++    maxLevel: Tuning.get('upgrade.weapons_training.maxLevel'),
++    modsPerLevel: { success: Tuning.get('upgrade.weapons_training.successPerLevel') }, vendor: 'blacksmith',
+   },
+   {
+     id: 'efficient_adventuring', name: 'Efficient Adventuring',
+     description: 'Negotiate the contract before drawing the sword.',
+-    baseCost: 250, costGrowth: 1.8, maxLevel: 10,
+-    modsPerLevel: { gold: 10 },
++    baseCost: Tuning.get('upgrade.efficient_adventuring.baseCost'),
++    costGrowth: Tuning.get('upgrade.efficient_adventuring.costGrowth'),
++    maxLevel: Tuning.get('upgrade.efficient_adventuring.maxLevel'),
++    modsPerLevel: { gold: Tuning.get('upgrade.efficient_adventuring.goldPerLevel') },
+   },
+   {
+     id: 'veteran_explorer', name: 'Alchemical Assay',
+     description: 'Acid, flame, and a practiced eye separate true ore from slag before the cart even leaves the ruin.',
+-    baseCost: 400, costGrowth: 1.9, maxLevel: 8,
+-    modsPerLevel: { loot: 5 }, vendor: 'alchemist',
++    baseCost: Tuning.get('upgrade.veteran_explorer.baseCost'),
++    costGrowth: Tuning.get('upgrade.veteran_explorer.costGrowth'),
++    maxLevel: Tuning.get('upgrade.veteran_explorer.maxLevel'),
++    modsPerLevel: { loot: Tuning.get('upgrade.veteran_explorer.lootPerLevel') }, vendor: 'alchemist',
+   },
+   {
+     id: 'mounted_travel', name: 'Mounted Travel',
+     description: 'A good horse shortens every road.',
+-    baseCost: 600, costGrowth: 2.0, maxLevel: 6,
+-    modsPerLevel: { speed: 10 }, vendor: 'blacksmith',
++    baseCost: Tuning.get('upgrade.mounted_travel.baseCost'),
++    costGrowth: Tuning.get('upgrade.mounted_travel.costGrowth'),
++    maxLevel: Tuning.get('upgrade.mounted_travel.maxLevel'),
++    modsPerLevel: { speed: Tuning.get('upgrade.mounted_travel.speedPerLevel') }, vendor: 'blacksmith',
+   },
+   {
+     id: 'field_medicine', name: 'Restorative Tinctures',
+     description: 'Bitter draughts, brewed to knit flesh faster than they have any business doing.',
+-    baseCost: 350, costGrowth: 1.85, maxLevel: 8,
+-    modsPerLevel: { injuryResist: 8 }, vendor: 'alchemist',
++    baseCost: Tuning.get('upgrade.field_medicine.baseCost'),
++    costGrowth: Tuning.get('upgrade.field_medicine.costGrowth'),
++    maxLevel: Tuning.get('upgrade.field_medicine.maxLevel'),
++    modsPerLevel: { injuryResist: Tuning.get('upgrade.field_medicine.injuryResistPerLevel') }, vendor: 'alchemist',
+   },
+   {
+     id: 'armourers_contract', name: "Armourer's Contract",
+     description: 'Standing repairs mean gear lasts noticeably longer.',
+-    baseCost: 500, costGrowth: 1.9, maxLevel: 6,
+-    modsPerLevel: { durability: 10 }, vendor: 'blacksmith',
++    baseCost: Tuning.get('upgrade.armourers_contract.baseCost'),
++    costGrowth: Tuning.get('upgrade.armourers_contract.costGrowth'),
++    maxLevel: Tuning.get('upgrade.armourers_contract.maxLevel'),
++    modsPerLevel: { durability: Tuning.get('upgrade.armourers_contract.durabilityPerLevel') }, vendor: 'blacksmith',
+   },
+   {
+     id: 'war_stories', name: 'Runic Insight',
+     description: 'Wards etched into a hero\'s gear murmur half-remembered lessons back to whoever carries them.',
+-    baseCost: 450, costGrowth: 1.85, maxLevel: 8,
+-    modsPerLevel: { xp: 15 }, vendor: 'enchanter',
++    baseCost: Tuning.get('upgrade.war_stories.baseCost'),
++    costGrowth: Tuning.get('upgrade.war_stories.costGrowth'),
++    maxLevel: Tuning.get('upgrade.war_stories.maxLevel'),
++    modsPerLevel: { xp: Tuning.get('upgrade.war_stories.xpPerLevel') }, vendor: 'enchanter',
+   },
+   {
+     id: 'master_adventurer', name: 'Enchanted Seal',
+     description: 'A ward pressed into the guild charter unlocks Legendary contracts on the quest board -- and lends every hero its quiet protection.',
+-    baseCost: 5000, costGrowth: 1, maxLevel: 1,
+-    modsPerLevel: { success: 3 }, unlocks: 'legendaryQuests', vendor: 'enchanter',
++    baseCost: Tuning.get('upgrade.master_adventurer.baseCost'),
++    costGrowth: Tuning.get('upgrade.master_adventurer.costGrowth'),
++    maxLevel: Tuning.get('upgrade.master_adventurer.maxLevel'),
++    modsPerLevel: { success: Tuning.get('upgrade.master_adventurer.successPerLevel') }, unlocks: 'legendaryQuests', vendor: 'enchanter',
+   },
+   {
+     id: 'guild_charter', name: 'Guild Charter',
+     description: 'Unlocks multi-day quest chains.',
+-    baseCost: 3000, costGrowth: 1, maxLevel: 1,
++    baseCost: Tuning.get('upgrade.guild_charter.baseCost'),
++    costGrowth: Tuning.get('upgrade.guild_charter.costGrowth'),
++    maxLevel: Tuning.get('upgrade.guild_charter.maxLevel'),
+     modsPerLevel: {}, unlocks: 'chains',
+   },
+   {
+     id: 'black_market_contact', name: 'Black Market Contact',
+     description: "Someone who knows someone. Unlocks a second, pricier stock rotation biased toward rare and legendary gear — often stock the regular armourer would never touch.",
+-    baseCost: 9000, costGrowth: 1, maxLevel: 1,
++    baseCost: Tuning.get('upgrade.black_market_contact.baseCost'),
++    costGrowth: Tuning.get('upgrade.black_market_contact.costGrowth'),
++    maxLevel: Tuning.get('upgrade.black_market_contact.maxLevel'),
+     modsPerLevel: {}, unlocks: 'blackMarket',
+   },
+   {
+     id: 'auto_chain', name: 'Auto-Chain',
+     description: 'A hero keeps taking the next contract on their own instead of waiting for orders — for a while. Each level lets the streak run longer before it needs a fresh send.',
+-    baseCost: 3500, costGrowth: 2.3, maxLevel: 4,
++    baseCost: Tuning.get('upgrade.auto_chain.baseCost'),
++    costGrowth: Tuning.get('upgrade.auto_chain.costGrowth'),
++    maxLevel: Tuning.get('upgrade.auto_chain.maxLevel'),
+     modsPerLevel: {}, unlocks: 'autoChain',
+   },
+   {
+@@ -78,19 +104,25 @@ export const UPGRADES: UpgradeDef[] = [
+     // (reqLevel 8). Difficulty is now the real gate, via the two upgrades
+     // below, rather than the base Charter price doing double duty as both
+     // "can the guild raid at all" and "can it raid at the hardest tiers."
+-    baseCost: 2500, costGrowth: 1, maxLevel: 1,
++    baseCost: Tuning.get('upgrade.raid_charter.baseCost'),
++    costGrowth: Tuning.get('upgrade.raid_charter.costGrowth'),
++    maxLevel: Tuning.get('upgrade.raid_charter.maxLevel'),
+     modsPerLevel: {}, unlocks: 'raids',
+   },
+   {
+     id: 'raid_heroic_clearance', name: 'Heroic Clearance',
+     description: 'Formal sign-off to run raids at Heroic difficulty -- harsher odds, longer expeditions, and loot worth the extra risk.',
+-    baseCost: 20000, costGrowth: 1, maxLevel: 1,
++    baseCost: Tuning.get('upgrade.raid_heroic_clearance.baseCost'),
++    costGrowth: Tuning.get('upgrade.raid_heroic_clearance.costGrowth'),
++    maxLevel: Tuning.get('upgrade.raid_heroic_clearance.maxLevel'),
+     modsPerLevel: {}, unlocks: 'raidsHeroic',
+   },
+   {
+     id: 'raid_mythic_clearance', name: 'Mythic Clearance',
+     description: "The guild's word that it can handle Mythic difficulty -- the hardest raiding gets, and the only tier where the very best loot actually drops.",
+-    baseCost: 60000, costGrowth: 1, maxLevel: 1,
++    baseCost: Tuning.get('upgrade.raid_mythic_clearance.baseCost'),
++    costGrowth: Tuning.get('upgrade.raid_mythic_clearance.costGrowth'),
++    maxLevel: Tuning.get('upgrade.raid_mythic_clearance.maxLevel'),
+     modsPerLevel: {}, unlocks: 'raidsMythic',
+   },
+   {
+@@ -99,8 +131,10 @@ export const UPGRADES: UpgradeDef[] = [
+     // Base slot count (1) lives in ModifierManager.consumableSlots as the
+     // floor; this upgrade's 2 levels take it to a max of 3, matching the
+     // backlog's "1 base, up to 3 via upgrade" spec exactly.
+-    baseCost: 1800, costGrowth: 2.2, maxLevel: 2,
+-    modsPerLevel: {}, consumableSlotsPerLevel: 1,
++    baseCost: Tuning.get('upgrade.potion_belt.baseCost'),
++    costGrowth: Tuning.get('upgrade.potion_belt.costGrowth'),
++    maxLevel: Tuning.get('upgrade.potion_belt.maxLevel'),
++    modsPerLevel: {}, consumableSlotsPerLevel: Tuning.get('upgrade.potion_belt.consumableSlotsPerLevel'),
+   },
+   {
+     id: 'nest_expansion', name: 'Nest Expansion',
+@@ -109,32 +143,40 @@ export const UPGRADES: UpgradeDef[] = [
+     // starts deliberately low -- the 2nd nest is meant to be this upgrade's
+     // own first purchase, not something every player already has. 3 levels
+     // take it to a max of 4.
+-    baseCost: 1500, costGrowth: 2.0, maxLevel: 3,
+-    modsPerLevel: {}, incubationSlotsPerLevel: 1,
++    baseCost: Tuning.get('upgrade.nest_expansion.baseCost'),
++    costGrowth: Tuning.get('upgrade.nest_expansion.costGrowth'),
++    maxLevel: Tuning.get('upgrade.nest_expansion.maxLevel'),
++    modsPerLevel: {}, incubationSlotsPerLevel: Tuning.get('upgrade.nest_expansion.incubationSlotsPerLevel'),
+   },
+   {
+     id: 'companion_bond', name: 'Companion Bond',
+     description: 'A second (then third) pet can accompany the guild at once, each contributing its own bonus.',
+     // Same "1 base, more via upgrade" shape as Potion Belt -- base slot (1)
+     // lives in ModifierManager.petSlots as the floor.
+-    baseCost: 2200, costGrowth: 2.3, maxLevel: 2,
+-    modsPerLevel: {}, petSlotsPerLevel: 1,
++    baseCost: Tuning.get('upgrade.companion_bond.baseCost'),
++    costGrowth: Tuning.get('upgrade.companion_bond.costGrowth'),
++    maxLevel: Tuning.get('upgrade.companion_bond.maxLevel'),
++    modsPerLevel: {}, petSlotsPerLevel: Tuning.get('upgrade.companion_bond.petSlotsPerLevel'),
+   },
+   {
+     id: 'board_runner', name: 'Board Runner',
+     description: "A retained courier who'll fetch a fresh set of contracts on request -- extra free quest-board rerolls per day before the price starts climbing.",
+     // Base (1 free/day) lives in ModifierManager.questFreeRerolls as the
+     // floor. 3 levels take it to 4 total, matching the "up to 4" spec.
+-    baseCost: 900, costGrowth: 2.0, maxLevel: 3,
+-    modsPerLevel: {}, questFreeRerollsPerLevel: 1,
++    baseCost: Tuning.get('upgrade.board_runner.baseCost'),
++    costGrowth: Tuning.get('upgrade.board_runner.costGrowth'),
++    maxLevel: Tuning.get('upgrade.board_runner.maxLevel'),
++    modsPerLevel: {}, questFreeRerollsPerLevel: Tuning.get('upgrade.board_runner.questFreeRerollsPerLevel'),
+   },
+   {
+     id: 'trade_favor', name: 'Trade Favor',
+     description: 'A standing favor with every stall in the market -- extra free restocks per day before you start paying the vendors to hurry.',
+     // Same shape as Board Runner, independent counter -- see
+     // ModifierManager.vendorFreeRerolls.
+-    baseCost: 900, costGrowth: 2.0, maxLevel: 3,
+-    modsPerLevel: {}, vendorFreeRerollsPerLevel: 1,
++    baseCost: Tuning.get('upgrade.trade_favor.baseCost'),
++    costGrowth: Tuning.get('upgrade.trade_favor.costGrowth'),
++    maxLevel: Tuning.get('upgrade.trade_favor.maxLevel'),
++    modsPerLevel: {}, vendorFreeRerollsPerLevel: Tuning.get('upgrade.trade_favor.vendorFreeRerollsPerLevel'),
+   },
+   {
+     id: 'board_warden', name: 'Board Warden',
+@@ -147,8 +189,10 @@ export const UPGRADES: UpgradeDef[] = [
+     // count. Unfreezing is deliberately NOT gated by this at all -- see
+     // QuestManager.unfreezeOffer -- so running out of freezes for the day
+     // can never trap a player holding one they no longer want.
+-    baseCost: 1200, costGrowth: 2.1, maxLevel: 2,
+-    modsPerLevel: {}, freezeChangesPerLevel: 1,
++    baseCost: Tuning.get('upgrade.board_warden.baseCost'),
++    costGrowth: Tuning.get('upgrade.board_warden.costGrowth'),
++    maxLevel: Tuning.get('upgrade.board_warden.maxLevel'),
++    modsPerLevel: {}, freezeChangesPerLevel: Tuning.get('upgrade.board_warden.freezeChangesPerLevel'),
+   },
+ ];
+ 
+@@ -159,10 +203,10 @@ export const UPGRADES: UpgradeDef[] = [
+  * unpredictable rather than a metronomic "always exactly 3."
+  */
+ export const AUTO_CHAIN_RANGES: Record<number, { min: number; max: number }> = {
+-  1: { min: 2, max: 3 },
+-  2: { min: 3, max: 5 },
+-  3: { min: 6, max: 8 },
+-  4: { min: 10, max: 10 },
++  1: { min: Tuning.get('auto_chain_range.1.min'), max: Tuning.get('auto_chain_range.1.max') },
++  2: { min: Tuning.get('auto_chain_range.2.min'), max: Tuning.get('auto_chain_range.2.max') },
++  3: { min: Tuning.get('auto_chain_range.3.min'), max: Tuning.get('auto_chain_range.3.max') },
++  4: { min: Tuning.get('auto_chain_range.4.min'), max: Tuning.get('auto_chain_range.4.max') },
+ };
+ 
+ /* --------------------------------- vendors --------------------------------- */
+@@ -179,8 +223,8 @@ export const VENDORS: VendorDef[] = [
+   { id: 'enchanter', name: 'The Enchanter', blurb: 'Old books, older favours, and a taste for the theatrical.' },
+ ];
+ 
+-const VENDOR_LEVEL_BASE_COST = 800;
+-const VENDOR_LEVEL_COST_GROWTH = 2.1;
++const VENDOR_LEVEL_BASE_COST = Tuning.get('vendor_level.baseCost');
++const VENDOR_LEVEL_COST_GROWTH = Tuning.get('vendor_level.costGrowth');
+ 
+ /** Every upgrade a given vendor offers, in the fixed order they unlock at vendor levels 1, 2, 3... */
+ export function vendorUpgrades(vendorId: VendorId): UpgradeDef[] {
+@@ -197,7 +241,12 @@ export function vendorUpgrades(vendorId: VendorId): UpgradeDef[] {
+  * "worth" farming relative to another -- it just makes the early game less
+  * of a wall before any of that economy gets to matter.
+  */
+-const EARLY_TIER_DISCOUNT = [0.15, 0.35, 0.6, 0.85]; // level 4+ = 1.0, full price
++const EARLY_TIER_DISCOUNT = [
++  Tuning.get('early_tier_discount.level0'),
++  Tuning.get('early_tier_discount.level1'),
++  Tuning.get('early_tier_discount.level2'),
++  Tuning.get('early_tier_discount.level3'),
++]; // level 4+ = 1.0, full price
+ 
+ export function earlyTierDiscount(level: number): number {
+   return level < EARLY_TIER_DISCOUNT.length ? EARLY_TIER_DISCOUNT[level] : 1;
+@@ -295,45 +344,99 @@ export const RENOWN_PERKS: RenownPerkDef[] = [
+   {
+     id: 'renowned_skill', name: 'Renowned Skill',
+     description: 'Every retired knight leaves behind hard-won technique.',
+-    cost: 1, costGrowth: 1.6, maxLevel: 20, modsPerLevel: { success: 3 },
+-    tier2: { maxLevel: 25, startCost: 9822, costGrowth: 1.12, unlockFlavour: 'The old masters take on students of their own.' },
++    // Every numeric field here reads from the tuning registry
++    // (tuning.json) rather than being a literal -- editable live via the
++    // devtool's Tuning tab without touching this file. See tuning.ts.
++    cost: Tuning.get('renown_perk.renowned_skill.cost'),
++    costGrowth: Tuning.get('renown_perk.renowned_skill.costGrowth'),
++    maxLevel: Tuning.get('renown_perk.renowned_skill.maxLevel'),
++    modsPerLevel: { success: Tuning.get('renown_perk.renowned_skill.successPerLevel') },
++    tier2: {
++      maxLevel: Tuning.get('renown_perk.renowned_skill.tier2MaxLevel'),
++      startCost: Tuning.get('renown_perk.renowned_skill.tier2StartCost'),
++      costGrowth: Tuning.get('renown_perk.renowned_skill.tier2CostGrowth'),
++      unlockFlavour: 'The old masters take on students of their own.',
++    },
+   },
+   {
+     id: 'legacy_of_wealth', name: 'Legacy of Wealth',
+     description: 'The guild coffers remember better days.',
+-    cost: 1, costGrowth: 1.6, maxLevel: 20, modsPerLevel: { gold: 15 },
+-    tier2: { maxLevel: 25, startCost: 9822, costGrowth: 1.12, unlockFlavour: 'Word of the guild reaches courts that used to ignore it.' },
++    cost: Tuning.get('renown_perk.legacy_of_wealth.cost'),
++    costGrowth: Tuning.get('renown_perk.legacy_of_wealth.costGrowth'),
++    maxLevel: Tuning.get('renown_perk.legacy_of_wealth.maxLevel'),
++    modsPerLevel: { gold: Tuning.get('renown_perk.legacy_of_wealth.goldPerLevel') },
++    tier2: {
++      maxLevel: Tuning.get('renown_perk.legacy_of_wealth.tier2MaxLevel'),
++      startCost: Tuning.get('renown_perk.legacy_of_wealth.tier2StartCost'),
++      costGrowth: Tuning.get('renown_perk.legacy_of_wealth.tier2CostGrowth'),
++      unlockFlavour: 'Word of the guild reaches courts that used to ignore it.',
++    },
+   },
+   {
+     id: 'swift_legend', name: 'Swift Legend',
+     description: 'Reputation opens gates that used to take days.',
+-    cost: 2, costGrowth: 1.7, maxLevel: 10, modsPerLevel: { speed: 5 },
+-    tier2: { maxLevel: 13, startCost: 309, costGrowth: 1.12, unlockFlavour: 'Roads that were never built start showing up on the map.' },
++    cost: Tuning.get('renown_perk.swift_legend.cost'),
++    costGrowth: Tuning.get('renown_perk.swift_legend.costGrowth'),
++    maxLevel: Tuning.get('renown_perk.swift_legend.maxLevel'),
++    modsPerLevel: { speed: Tuning.get('renown_perk.swift_legend.speedPerLevel') },
++    tier2: {
++      maxLevel: Tuning.get('renown_perk.swift_legend.tier2MaxLevel'),
++      startCost: Tuning.get('renown_perk.swift_legend.tier2StartCost'),
++      costGrowth: Tuning.get('renown_perk.swift_legend.tier2CostGrowth'),
++      unlockFlavour: 'Roads that were never built start showing up on the map.',
++    },
+   },
+   {
+     id: 'collectors_eye', name: "Collector's Eye",
+     description: 'You know exactly what is worth carrying home.',
+-    cost: 2, costGrowth: 1.7, maxLevel: 12, modsPerLevel: { loot: 4 },
+-    tier2: { maxLevel: 15, startCost: 891, costGrowth: 1.12, unlockFlavour: 'Things that should stay buried start feeling curious about you too.' },
++    cost: Tuning.get('renown_perk.collectors_eye.cost'),
++    costGrowth: Tuning.get('renown_perk.collectors_eye.costGrowth'),
++    maxLevel: Tuning.get('renown_perk.collectors_eye.maxLevel'),
++    modsPerLevel: { loot: Tuning.get('renown_perk.collectors_eye.lootPerLevel') },
++    tier2: {
++      maxLevel: Tuning.get('renown_perk.collectors_eye.tier2MaxLevel'),
++      startCost: Tuning.get('renown_perk.collectors_eye.tier2StartCost'),
++      costGrowth: Tuning.get('renown_perk.collectors_eye.tier2CostGrowth'),
++      unlockFlavour: 'Things that should stay buried start feeling curious about you too.',
++    },
+   },
+   {
+     id: 'enduring_legend', name: 'Enduring Legend',
+     description: 'Heroes trained on your legend get hurt far less.',
+-    cost: 2, costGrowth: 1.65, maxLevel: 10, modsPerLevel: { injuryResist: 10 },
+-    tier2: { maxLevel: 13, startCost: 236, costGrowth: 1.12, unlockFlavour: 'New recruits flinch less on their first day than veterans used to on their hundredth.' },
++    cost: Tuning.get('renown_perk.enduring_legend.cost'),
++    costGrowth: Tuning.get('renown_perk.enduring_legend.costGrowth'),
++    maxLevel: Tuning.get('renown_perk.enduring_legend.maxLevel'),
++    modsPerLevel: { injuryResist: Tuning.get('renown_perk.enduring_legend.injuryResistPerLevel') },
++    tier2: {
++      maxLevel: Tuning.get('renown_perk.enduring_legend.tier2MaxLevel'),
++      startCost: Tuning.get('renown_perk.enduring_legend.tier2StartCost'),
++      costGrowth: Tuning.get('renown_perk.enduring_legend.tier2CostGrowth'),
++      unlockFlavour: 'New recruits flinch less on their first day than veterans used to on their hundredth.',
++    },
+   },
+   {
+     id: 'extra_banner', name: 'Extra Banner',
+     description: 'A permanent additional hero slot.',
+-    cost: 5, costGrowth: 2.2, maxLevel: 4, modsPerLevel: {}, heroSlotsPerLevel: 1,
++    cost: Tuning.get('renown_perk.extra_banner.cost'),
++    costGrowth: Tuning.get('renown_perk.extra_banner.costGrowth'),
++    maxLevel: Tuning.get('renown_perk.extra_banner.maxLevel'),
++    modsPerLevel: {}, heroSlotsPerLevel: Tuning.get('renown_perk.extra_banner.heroSlotsPerLevel'),
+     // Deliberately no tier2: hero slots stay a small, fixed number rather
+     // than scaling indefinitely — the roster is meant to stay a roster.
+   },
+   {
+     id: 'scholars_legacy', name: "Scholar's Legacy",
+     description: 'New heroes learn from every campaign that came before.',
+-    cost: 1, costGrowth: 1.6, maxLevel: 15, modsPerLevel: { xp: 20 },
+-    tier2: { maxLevel: 19, startCost: 936, costGrowth: 1.12, unlockFlavour: 'The guild library runs out of shelf space again.' },
++    cost: Tuning.get('renown_perk.scholars_legacy.cost'),
++    costGrowth: Tuning.get('renown_perk.scholars_legacy.costGrowth'),
++    maxLevel: Tuning.get('renown_perk.scholars_legacy.maxLevel'),
++    modsPerLevel: { xp: Tuning.get('renown_perk.scholars_legacy.xpPerLevel') },
++    tier2: {
++      maxLevel: Tuning.get('renown_perk.scholars_legacy.tier2MaxLevel'),
++      startCost: Tuning.get('renown_perk.scholars_legacy.tier2StartCost'),
++      costGrowth: Tuning.get('renown_perk.scholars_legacy.tier2CostGrowth'),
++      unlockFlavour: 'The guild library runs out of shelf space again.',
++    },
+   },
+ ];
+ 
+diff --git a/src/game/data/quests.ts b/src/game/data/quests.ts
+index 7782bbc..e344520 100644
+--- a/src/game/data/quests.ts
++++ b/src/game/data/quests.ts
+@@ -161,8 +161,12 @@ interface Template {
+ import questTemplatesJson from './json/quest-templates.json';
+ export const QUEST_TEMPLATES: Template[] = questTemplatesJson as Template[];
+ 
++// Was a plain array of strings; now {id, text} objects so it fits the
++// DevTool's generic id-keyed editor shape (every other content type there
++// is an array of objects, not raw scalars) -- editable via the new
++// 'quest-prefixes' devtool tab without touching TypeScript.
+ import questPrefixesJson from './json/quest-prefixes.json';
+-export const QUEST_PREFIXES: string[] = questPrefixesJson as string[];
++export const QUEST_PREFIXES: string[] = (questPrefixesJson as { id: string; text: string }[]).map((p) => p.text);
+ 
+ /* --------------------------- multi-day chains --------------------------- */
+ 
+diff --git a/src/game/data/raidUpgrades.ts b/src/game/data/raidUpgrades.ts
+index 33a3383..e3e919f 100644
+--- a/src/game/data/raidUpgrades.ts
++++ b/src/game/data/raidUpgrades.ts
+@@ -32,10 +32,10 @@ export const RAID_UPGRADES: RaidUpgradeDef[] = [
+     maxLevel: Tuning.get('raid_speed.maxLevel'),
+   },
+   /**
+-   * These two are NOT yet wired into the tuning registry -- hardcoded here
+-   * deliberately rather than guessing at tuning.json's structure without
+-   * having that file in hand. Moving them onto Tuning.get() calls later is
+-   * a small, low-risk follow-up, same mechanical shape as raid_speed above.
++   * Both now read from the tuning registry the same way raid_speed above
++   * does -- the earlier comment here (kept below for context) predates
++   * actually having tuning.json in hand; migrating them was exactly the
++   * small, low-risk follow-up it anticipated.
+    *
+    * Both are built with exactly 3 levels (0-2) on purpose, to match the
+    * 3-image sprite progression in the Raid Quartermaster's Den 1:1 with no
+@@ -47,25 +47,25 @@ export const RAID_UPGRADES: RaidUpgradeDef[] = [
+     id: 'raid_loot',
+     name: 'Raid Loot',
+     description: 'Better odds and richer hauls from every raid encounter -- the difference between an empty vault and one worth the trip.',
+-    modsPerLevel: { loot: 10, gold: 12 },
+-    goldBaseCost: 6000,
+-    goldCostGrowth: 2.0,
+-    goldTierMaxLevel: 1,
+-    renownBaseCost: 12,
+-    renownCostGrowth: 1.5,
+-    maxLevel: 2,
++    modsPerLevel: { loot: Tuning.get('raid_loot.lootPerLevel'), gold: Tuning.get('raid_loot.goldPerLevel') },
++    goldBaseCost: Tuning.get('raid_loot.goldBaseCost'),
++    goldCostGrowth: Tuning.get('raid_loot.goldCostGrowth'),
++    goldTierMaxLevel: Tuning.get('raid_loot.goldTierMaxLevel'),
++    renownBaseCost: Tuning.get('raid_loot.renownBaseCost'),
++    renownCostGrowth: Tuning.get('raid_loot.renownCostGrowth'),
++    maxLevel: Tuning.get('raid_loot.maxLevel'),
+   },
+   {
+     id: 'raid_recovery',
+     name: 'Raid Recovery',
+     description: 'Better field triage and hardier gear -- heroes come back from raids in noticeably better shape.',
+-    modsPerLevel: { injuryResist: 18 },
+-    goldBaseCost: 5500,
+-    goldCostGrowth: 2.0,
+-    goldTierMaxLevel: 1,
+-    renownBaseCost: 11,
+-    renownCostGrowth: 1.5,
+-    maxLevel: 2,
++    modsPerLevel: { injuryResist: Tuning.get('raid_recovery.injuryResistPerLevel') },
++    goldBaseCost: Tuning.get('raid_recovery.goldBaseCost'),
++    goldCostGrowth: Tuning.get('raid_recovery.goldCostGrowth'),
++    goldTierMaxLevel: Tuning.get('raid_recovery.goldTierMaxLevel'),
++    renownBaseCost: Tuning.get('raid_recovery.renownBaseCost'),
++    renownCostGrowth: Tuning.get('raid_recovery.renownCostGrowth'),
++    maxLevel: Tuning.get('raid_recovery.maxLevel'),
+   },
+ ];
+ 
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 90da77d..fdfef89 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -516,6 +516,33 @@ export class GameEngine {
+       changed = true;
+     }
+     if (HarvestManager.ensureSpawns(this.state, now)) changed = true;
++    // Auto-repair -- opt-in (GameState.autoRepairEnabled), ticks every
++    // refreshWorld call the same way Harvest's spawn timer does. Uses the
++    // exact same EquipmentManager.allItems(state) scope repairAll() uses
++    // for its manual "Repair Everything" button (equipped AND stashed,
++    // not equipped-only), since this is meant to automate that same
++    // action, not a narrower one. Self-limiting by nature: repairing an
++    // item restores it to full durability, so it stops qualifying for the
++    // threshold check on the very next tick -- this never spends gold
++    // repeatedly on the same item once it's already been repaired. Never
++    // spends past what the guild can currently afford, same affordability
++    // gate repairAll() already has, one item at a time rather than an
++    // all-or-nothing batch (so a guild that can afford 2 of 5 needed
++    // repairs this tick still gets those 2 done now, the rest as gold
++    // allows on a later tick).
++    if (this.state.autoRepairEnabled) {
++      const workshop = this.state.guild.workshop ?? 0;
++      const threshold = this.state.autoRepairThresholdPercent / 100;
++      for (const { item } of EquipmentManager.allItems(this.state)) {
++        const max = EquipmentManager.maxDurability(item);
++        if (max <= 0 || item.durability / max > threshold) continue;
++        const cost = EquipmentManager.repairCost(item, workshop);
++        if (cost > 0 && this.state.gold >= cost) {
++          EquipmentManager.repair(this.state, item, workshop);
++          changed = true;
++        }
++      }
++    }
+     return changed;
+   }
+ 
+@@ -1175,6 +1202,23 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /** Turns auto-repair on/off, and optionally updates its threshold in the
++   *  same call (the toggle row in EquipmentPanel does both from one
++   *  control). Threshold clamped to 1-99 -- see GameState.
++   *  autoRepairThresholdPercent's own comment for why 0/100 are excluded. */
++  setAutoRepair(enabled: boolean, thresholdPercent?: number) {
++    this.state.autoRepairEnabled = enabled;
++    if (thresholdPercent !== undefined) {
++      this.state.autoRepairThresholdPercent = Math.max(1, Math.min(99, Math.round(thresholdPercent)));
++    }
++    void this.saveNow();
++  }
++
++  setAutoEquipOnLoot(enabled: boolean) {
++    this.state.autoEquipOnLoot = enabled;
++    void this.saveNow();
++  }
++
+   upgradeItem(itemUid: string) {
+     const found = EquipmentManager.allItems(this.state).find((e) => e.item.uid === itemUid);
+     if (!found) return;
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 0f974ea..7b94596 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -1,4 +1,4 @@
+-import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE } from '../data/equipment';
++import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE, GEAR_SCORE_BY_RARITY } from '../data/equipment';
+ import {
+   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES,
+ } from '../data/quests';
+@@ -659,7 +659,29 @@ export const QuestManager = {
+ 
+     for (const drop of loot) {
+       const item = EquipmentManager.instantiate(drop.defId);
+-      if (item) state.stash.push(item);
++      if (item) {
++        // Auto-equip on loot -- opt-in (GameState.autoEquipOnLoot), only
++        // for the hero who actually earned the drop, same GEAR_SCORE_BY_
++        // RARITY comparison engine.equipBestGear already uses for its own
++        // manual bulk-equip, so "beats what's worn" means the same thing
++        // in both places. EquipmentManager.equip handles the displaced
++        // item landing back in the stash itself -- no separate push
++        // needed on that path. Falls through to the ordinary stash push
++        // when the setting is off, hero is missing (shouldn't happen but
++        // guarded same as the durability block above), or the drop simply
++        // isn't an upgrade.
++        const def = EQUIPMENT_BY_ID[item.defId];
++        const currentItem = def && hero ? hero.equipment[def.slot] : undefined;
++        const currentDef = currentItem ? EQUIPMENT_BY_ID[currentItem.defId] : undefined;
++        const currentScore = currentDef ? GEAR_SCORE_BY_RARITY[currentDef.rarity] ?? 0 : -1;
++        const newScore = def ? GEAR_SCORE_BY_RARITY[def.rarity] ?? 0 : -1;
++        const isUpgrade = !!def && !!hero && newScore > currentScore && hero.level >= def.reqLevel;
++        if (state.autoEquipOnLoot && isUpgrade && hero) {
++          EquipmentManager.equip(state, hero, item);
++        } else {
++          state.stash.push(item);
++        }
++      }
+       if (!state.discoveredItems.includes(drop.defId)) state.discoveredItems.push(drop.defId);
+       state.stats.itemsFound += 1;
+       if (drop.rarity === 'legendary') state.stats.legendaryItemsFound += 1;
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 101502b..ea1e3f8 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -129,6 +129,9 @@ export function createInitialState(now = Date.now()): GameState {
+     eggStorage: [],
+     pets: [],
+     equippedPetIds: [],
++    autoRepairEnabled: false,
++    autoRepairThresholdPercent: 50,
++    autoEquipOnLoot: false,
+     pendingHatchReadyNotice: false,
+   };
+ }
+@@ -442,6 +445,16 @@ const MIGRATIONS: Record<number, Migration> = {
+     freezeChangeDay: (save.freezeChangeDay as number | undefined) ?? 0,
+     freezeChangesUsedToday: (save.freezeChangesUsedToday as number | undefined) ?? 0,
+   }),
++  29: (save) => ({
++    ...save,
++    version: 30,
++    // Both auto-repair/auto-equip default to off -- opt-in automation, a
++    // save that predates this should never suddenly start spending gold
++    // or swapping gear on its own the moment it loads.
++    autoRepairEnabled: (save.autoRepairEnabled as boolean | undefined) ?? false,
++    autoRepairThresholdPercent: (save.autoRepairThresholdPercent as number | undefined) ?? 50,
++    autoEquipOnLoot: (save.autoEquipOnLoot as boolean | undefined) ?? false,
++  }),
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index a1f4ca6..6277c74 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 29;
++export const SAVE_VERSION = 30;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -959,6 +959,35 @@ export interface GameState {
+    *  PetManager). Capped at ModifierManager.petSlots(state), same
+    *  "array, not a fixed-size struct" shape as Hero.equippedConsumables. */
+   equippedPetIds: string[];
++
++  /* ------------------------- automation preferences -------------------------
++     Both opt-in, both off by default. Live in GameState (not Settings) on
++     purpose -- these spend the guild's own gold and touch its own gear,
++     which makes them guild-progress preferences that belong with the save
++     and should follow it through Steam Cloud, not local device cosmetics
++     the way Settings' theme/font/density are documented to be. */
++  /** When true, GameEngine.refreshWorld auto-repairs any equipped item that
++   *  drops at or below autoRepairThresholdPercent of its own max durability,
++   *  spending gold the same way a manual Repair Everything trip would --
++   *  never repairs past what the guild can currently afford, same
++   *  affordability gate repairAll() already uses. */
++  autoRepairEnabled: boolean;
++  /** 1-99. Repair triggers once current/max durability, as a percentage,
++   *  drops to or below this. Deliberately not 0 or 100 -- 0 would mean
++   *  "wait until fully broken" (defeats the point of *auto*-repair) and
++   *  100 would repair on every single point of wear, spending gold
++   *  constantly for no real benefit. */
++  autoRepairThresholdPercent: number;
++  /** When true, QuestManager.resolve auto-equips a loot drop straight onto
++   *  the hero who earned it if it beats what they're already wearing in
++   *  that slot (same GEAR_SCORE_BY_RARITY comparison engine.equipBestGear
++   *  already uses for its own manual bulk-equip) instead of the drop
++   *  always landing in the stash. Only ever checked against the earning
++   *  hero, never the whole roster -- a stash drop had no "which hero"
++   *  context before this, and inventing one (e.g. "whoever it helps most")
++   *  would be a much bigger, more surprising behavior change than "the
++   *  hero who found it gets first look at it." */
++  autoEquipOnLoot: boolean;
+ }
+ 
+ /**
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 784ba80..5aab0af 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -11,6 +11,7 @@ import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { describeMods, describeStats, formatGold, RARITY_COLOR, RARITY_ORDER } from '../../game/util';
+ import { ItemIcon, ConsumableIcon } from '../icons';
+ import { GearScoreBadge } from '../GearScoreBadge';
++import { Row, Toggle } from './SettingsPanel';
+ 
+ const SLOTS = EQUIP_SLOTS;
+ 
+@@ -334,6 +335,45 @@ export function EquipmentPanel() {
+         Buying and selling both happen in the Shop — this is just what you have.
+       </p>
+ 
++      {/* Guild-wide automation preferences -- live in GameState, not
++          Settings, since both spend gold/touch gear and therefore follow
++          the save (and eventually Steam Cloud) rather than being a local
++          device cosmetic. Placed here, next to the manual actions they
++          automate (Repair Everything below, Equip Best from Stash on
++          each hero's own gear grid), rather than in the Settings panel,
++          whose own subtitle promises it "never touches your guild's
++          progress" -- these two genuinely do. */}
++      <div className="card" style={{ marginBottom: 10 }}>
++        <Row
++          label="Auto-repair"
++          hint={`Automatically repair gear once it drops to ${state.autoRepairThresholdPercent}% durability or below, whenever the guild can afford it.`}
++        >
++          <Toggle
++            value={state.autoRepairEnabled}
++            onChange={(v) => engine.setAutoRepair(v)}
++          />
++        </Row>
++        {state.autoRepairEnabled && (
++          <Row label="Repair threshold" hint="Lower means gear wears further before it's automatically fixed.">
++            <input
++              type="range"
++              min={1}
++              max={99}
++              value={state.autoRepairThresholdPercent}
++              onChange={(e) => engine.setAutoRepair(true, Number(e.target.value))}
++              style={{ width: 120 }}
++            />
++            <span className="tiny muted" style={{ marginLeft: 8 }}>{state.autoRepairThresholdPercent}%</span>
++          </Row>
++        )}
++        <Row
++          label="Auto-equip loot"
++          hint="A quest reward that beats what the hero who found it is already wearing equips immediately, instead of sitting in the stash."
++        >
++          <Toggle value={state.autoEquipOnLoot} onChange={(v) => engine.setAutoEquipOnLoot(v)} />
++        </Row>
++      </div>
++
+       <div className="row wrap" style={{ marginBottom: 10, alignItems: 'center' }}>
+         {state.heroes.map((h) => (
+           <button key={h.id} className={h.id === hero.id ? 'btn-primary' : ''} onClick={() => setHeroId(h.id)}>
+diff --git a/src/ui/panels/SettingsPanel.tsx b/src/ui/panels/SettingsPanel.tsx
+index 1b6a52e..9e450b0 100644
+--- a/src/ui/panels/SettingsPanel.tsx
++++ b/src/ui/panels/SettingsPanel.tsx
+@@ -7,7 +7,7 @@ import { previewSound } from '../../game/sound';
+ 
+ /* ------------------------------ small controls ---------------------------- */
+ 
+-function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
++export function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+   return (
+     <div className="setting-row">
+       <div className="setting-label">
+@@ -41,7 +41,7 @@ function Segmented<T extends string | number>({
+   );
+ }
+ 
+-function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
++export function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+   return (
+     <button
+       className={`toggle ${value ? 'on' : ''}`}
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index ec2f3e9..41d82e5 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -59,6 +59,22 @@ const SCHEMAS = {
+       },
+     },
+   },
++  'quest-prefixes': {
++    file: 'quest-prefixes.json',
++    label: 'Quest Prefixes',
++    idField: 'id',
++    // Small flavor list (5 entries) prepended to a quest name at a small
++    // random chance -- was a plain JSON array of strings until this schema
++    // was added, which the generic id-keyed editor every other content
++    // type here uses can't represent directly. Converted to {id, text}
++    // objects (quests.ts maps back to a plain string[] at import time) so
++    // it fits the same shape as everything else, rather than inventing a
++    // one-off "raw string array" field type for a single 5-entry list.
++    fields: {
++      id: { type: 'string', required: true, slug: true },
++      text: { type: 'string', required: true },
++    },
++  },
+   'quest-chains': {
+     file: 'quest-chains.json',
+     label: 'Quest Chains',
+@@ -178,6 +194,23 @@ const SCHEMAS = {
+       icons: { type: 'string[]', required: false },
+     },
+   },
++  'guild-rank-tiers': {
++    file: 'guild-rank-tiers.json',
++    label: 'Guild Rank Tiers',
++    idField: 'id',
++    // 6 fixed tiers, shared by two different threshold scales (a single
++    // chain's own reqLevel, and the guild's total Guild Power -- see
++    // guildRank.ts's own comment). Editing name/blurb/color here changes
++    // both scales at once, since both just index into this same array;
++    // there's no separate "chain tier" vs. "guild tier" content, only a
++    // different number being measured against the same six labels.
++    fields: {
++      id: { type: 'string', required: true, slug: true },
++      name: { type: 'string', required: true },
++      blurb: { type: 'string', required: true },
++      color: { type: 'string', required: true },
++    },
++  },
+   'pets': {
+     file: 'pets.json',
+     label: 'Pets',

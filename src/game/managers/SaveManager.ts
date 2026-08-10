@@ -129,6 +129,9 @@ export function createInitialState(now = Date.now()): GameState {
     eggStorage: [],
     pets: [],
     equippedPetIds: [],
+    autoRepairEnabled: false,
+    autoRepairThresholdPercent: 50,
+    autoEquipOnLoot: false,
     pendingHatchReadyNotice: false,
   };
 }
@@ -441,6 +444,16 @@ const MIGRATIONS: Record<number, Migration> = {
     frozenQuestOffers: (save.frozenQuestOffers as GameState['frozenQuestOffers'] | undefined) ?? {},
     freezeChangeDay: (save.freezeChangeDay as number | undefined) ?? 0,
     freezeChangesUsedToday: (save.freezeChangesUsedToday as number | undefined) ?? 0,
+  }),
+  29: (save) => ({
+    ...save,
+    version: 30,
+    // Both auto-repair/auto-equip default to off -- opt-in automation, a
+    // save that predates this should never suddenly start spending gold
+    // or swapping gear on its own the moment it loads.
+    autoRepairEnabled: (save.autoRepairEnabled as boolean | undefined) ?? false,
+    autoRepairThresholdPercent: (save.autoRepairThresholdPercent as number | undefined) ?? 50,
+    autoEquipOnLoot: (save.autoEquipOnLoot as boolean | undefined) ?? false,
   }),
 };
 

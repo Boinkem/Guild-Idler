@@ -516,6 +516,33 @@ export class GameEngine {
       changed = true;
     }
     if (HarvestManager.ensureSpawns(this.state, now)) changed = true;
+    // Auto-repair -- opt-in (GameState.autoRepairEnabled), ticks every
+    // refreshWorld call the same way Harvest's spawn timer does. Uses the
+    // exact same EquipmentManager.allItems(state) scope repairAll() uses
+    // for its manual "Repair Everything" button (equipped AND stashed,
+    // not equipped-only), since this is meant to automate that same
+    // action, not a narrower one. Self-limiting by nature: repairing an
+    // item restores it to full durability, so it stops qualifying for the
+    // threshold check on the very next tick -- this never spends gold
+    // repeatedly on the same item once it's already been repaired. Never
+    // spends past what the guild can currently afford, same affordability
+    // gate repairAll() already has, one item at a time rather than an
+    // all-or-nothing batch (so a guild that can afford 2 of 5 needed
+    // repairs this tick still gets those 2 done now, the rest as gold
+    // allows on a later tick).
+    if (this.state.autoRepairEnabled) {
+      const workshop = this.state.guild.workshop ?? 0;
+      const threshold = this.state.autoRepairThresholdPercent / 100;
+      for (const { item } of EquipmentManager.allItems(this.state)) {
+        const max = EquipmentManager.maxDurability(item);
+        if (max <= 0 || item.durability / max > threshold) continue;
+        const cost = EquipmentManager.repairCost(item, workshop);
+        if (cost > 0 && this.state.gold >= cost) {
+          EquipmentManager.repair(this.state, item, workshop);
+          changed = true;
+        }
+      }
+    }
     return changed;
   }
 
@@ -1172,6 +1199,23 @@ export class GameEngine {
       }
     }
     this.say(spent > 0 ? `Repaired everything for ${spent} gold.` : 'Nothing needed repairing.');
+    void this.saveNow();
+  }
+
+  /** Turns auto-repair on/off, and optionally updates its threshold in the
+   *  same call (the toggle row in EquipmentPanel does both from one
+   *  control). Threshold clamped to 1-99 -- see GameState.
+   *  autoRepairThresholdPercent's own comment for why 0/100 are excluded. */
+  setAutoRepair(enabled: boolean, thresholdPercent?: number) {
+    this.state.autoRepairEnabled = enabled;
+    if (thresholdPercent !== undefined) {
+      this.state.autoRepairThresholdPercent = Math.max(1, Math.min(99, Math.round(thresholdPercent)));
+    }
+    void this.saveNow();
+  }
+
+  setAutoEquipOnLoot(enabled: boolean) {
+    this.state.autoEquipOnLoot = enabled;
     void this.saveNow();
   }
 

@@ -11,6 +11,7 @@ import { InventoryManager } from '../../game/managers/InventoryManager';
 import { describeMods, describeStats, formatGold, RARITY_COLOR, RARITY_ORDER } from '../../game/util';
 import { ItemIcon, ConsumableIcon } from '../icons';
 import { GearScoreBadge } from '../GearScoreBadge';
+import { Row, Toggle } from './SettingsPanel';
 
 const SLOTS = EQUIP_SLOTS;
 
@@ -333,6 +334,45 @@ export function EquipmentPanel() {
         Everything the guild owns: worn gear, the shared stash, and consumables on hand.
         Buying and selling both happen in the Shop — this is just what you have.
       </p>
+
+      {/* Guild-wide automation preferences -- live in GameState, not
+          Settings, since both spend gold/touch gear and therefore follow
+          the save (and eventually Steam Cloud) rather than being a local
+          device cosmetic. Placed here, next to the manual actions they
+          automate (Repair Everything below, Equip Best from Stash on
+          each hero's own gear grid), rather than in the Settings panel,
+          whose own subtitle promises it "never touches your guild's
+          progress" -- these two genuinely do. */}
+      <div className="card" style={{ marginBottom: 10 }}>
+        <Row
+          label="Auto-repair"
+          hint={`Automatically repair gear once it drops to ${state.autoRepairThresholdPercent}% durability or below, whenever the guild can afford it.`}
+        >
+          <Toggle
+            value={state.autoRepairEnabled}
+            onChange={(v) => engine.setAutoRepair(v)}
+          />
+        </Row>
+        {state.autoRepairEnabled && (
+          <Row label="Repair threshold" hint="Lower means gear wears further before it's automatically fixed.">
+            <input
+              type="range"
+              min={1}
+              max={99}
+              value={state.autoRepairThresholdPercent}
+              onChange={(e) => engine.setAutoRepair(true, Number(e.target.value))}
+              style={{ width: 120 }}
+            />
+            <span className="tiny muted" style={{ marginLeft: 8 }}>{state.autoRepairThresholdPercent}%</span>
+          </Row>
+        )}
+        <Row
+          label="Auto-equip loot"
+          hint="A quest reward that beats what the hero who found it is already wearing equips immediately, instead of sitting in the stash."
+        >
+          <Toggle value={state.autoEquipOnLoot} onChange={(v) => engine.setAutoEquipOnLoot(v)} />
+        </Row>
+      </div>
 
       <div className="row wrap" style={{ marginBottom: 10, alignItems: 'center' }}>
         {state.heroes.map((h) => (

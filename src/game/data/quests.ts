@@ -161,8 +161,12 @@ interface Template {
 import questTemplatesJson from './json/quest-templates.json';
 export const QUEST_TEMPLATES: Template[] = questTemplatesJson as Template[];
 
+// Was a plain array of strings; now {id, text} objects so it fits the
+// DevTool's generic id-keyed editor shape (every other content type there
+// is an array of objects, not raw scalars) -- editable via the new
+// 'quest-prefixes' devtool tab without touching TypeScript.
 import questPrefixesJson from './json/quest-prefixes.json';
-export const QUEST_PREFIXES: string[] = questPrefixesJson as string[];
+export const QUEST_PREFIXES: string[] = (questPrefixesJson as { id: string; text: string }[]).map((p) => p.text);
 
 /* --------------------------- multi-day chains --------------------------- */
 

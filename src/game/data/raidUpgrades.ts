@@ -32,10 +32,10 @@ export const RAID_UPGRADES: RaidUpgradeDef[] = [
     maxLevel: Tuning.get('raid_speed.maxLevel'),
   },
   /**
-   * These two are NOT yet wired into the tuning registry -- hardcoded here
-   * deliberately rather than guessing at tuning.json's structure without
-   * having that file in hand. Moving them onto Tuning.get() calls later is
-   * a small, low-risk follow-up, same mechanical shape as raid_speed above.
+   * Both now read from the tuning registry the same way raid_speed above
+   * does -- the earlier comment here (kept below for context) predates
+   * actually having tuning.json in hand; migrating them was exactly the
+   * small, low-risk follow-up it anticipated.
    *
    * Both are built with exactly 3 levels (0-2) on purpose, to match the
    * 3-image sprite progression in the Raid Quartermaster's Den 1:1 with no
@@ -47,25 +47,25 @@ export const RAID_UPGRADES: RaidUpgradeDef[] = [
     id: 'raid_loot',
     name: 'Raid Loot',
     description: 'Better odds and richer hauls from every raid encounter -- the difference between an empty vault and one worth the trip.',
-    modsPerLevel: { loot: 10, gold: 12 },
-    goldBaseCost: 6000,
-    goldCostGrowth: 2.0,
-    goldTierMaxLevel: 1,
-    renownBaseCost: 12,
-    renownCostGrowth: 1.5,
-    maxLevel: 2,
+    modsPerLevel: { loot: Tuning.get('raid_loot.lootPerLevel'), gold: Tuning.get('raid_loot.goldPerLevel') },
+    goldBaseCost: Tuning.get('raid_loot.goldBaseCost'),
+    goldCostGrowth: Tuning.get('raid_loot.goldCostGrowth'),
+    goldTierMaxLevel: Tuning.get('raid_loot.goldTierMaxLevel'),
+    renownBaseCost: Tuning.get('raid_loot.renownBaseCost'),
+    renownCostGrowth: Tuning.get('raid_loot.renownCostGrowth'),
+    maxLevel: Tuning.get('raid_loot.maxLevel'),
   },
   {
     id: 'raid_recovery',
     name: 'Raid Recovery',
     description: 'Better field triage and hardier gear -- heroes come back from raids in noticeably better shape.',
-    modsPerLevel: { injuryResist: 18 },
-    goldBaseCost: 5500,
-    goldCostGrowth: 2.0,
-    goldTierMaxLevel: 1,
-    renownBaseCost: 11,
-    renownCostGrowth: 1.5,
-    maxLevel: 2,
+    modsPerLevel: { injuryResist: Tuning.get('raid_recovery.injuryResistPerLevel') },
+    goldBaseCost: Tuning.get('raid_recovery.goldBaseCost'),
+    goldCostGrowth: Tuning.get('raid_recovery.goldCostGrowth'),
+    goldTierMaxLevel: Tuning.get('raid_recovery.goldTierMaxLevel'),
+    renownBaseCost: Tuning.get('raid_recovery.renownBaseCost'),
+    renownCostGrowth: Tuning.get('raid_recovery.renownCostGrowth'),
+    maxLevel: Tuning.get('raid_recovery.maxLevel'),
   },
 ];
 

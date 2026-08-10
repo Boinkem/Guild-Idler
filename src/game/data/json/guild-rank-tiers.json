@@ -1,0 +1,38 @@
+[
+  {
+    "id": "freelance_operators",
+    "name": "Freelance Operators",
+    "blurb": "Whatever is on the board, whoever is free to take it.",
+    "color": "#b9ad93"
+  },
+  {
+    "id": "professional_contractors",
+    "name": "Professional Contractors",
+    "blurb": "Reputable enough that the work keeps finding the guild first.",
+    "color": "#79a86b"
+  },
+  {
+    "id": "actors_of_greater_calls",
+    "name": "Actors of Greater Calls",
+    "blurb": "Asked directly, now, rather than posted to a board.",
+    "color": "#5b8fd6"
+  },
+  {
+    "id": "realms_influence",
+    "name": "A Realm's Influence",
+    "blurb": "Territory held, not just visited.",
+    "color": "#a874d6"
+  },
+  {
+    "id": "realms_protector",
+    "name": "A Realm's Protector",
+    "blurb": "The thing standing between the Reach and what comes for it.",
+    "color": "#d9a441"
+  },
+  {
+    "id": "ascended",
+    "name": "Ascended",
+    "blurb": "Known throughout, for reasons nobody has to explain twice.",
+    "color": "#d64f4f"
+  }
+]

@@ -1,4 +1,4 @@
-import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE } from '../data/equipment';
+import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE, GEAR_SCORE_BY_RARITY } from '../data/equipment';
 import {
   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES,
 } from '../data/quests';
@@ -659,7 +659,29 @@ export const QuestManager = {
 
     for (const drop of loot) {
       const item = EquipmentManager.instantiate(drop.defId);
-      if (item) state.stash.push(item);
+      if (item) {
+        // Auto-equip on loot -- opt-in (GameState.autoEquipOnLoot), only
+        // for the hero who actually earned the drop, same GEAR_SCORE_BY_
+        // RARITY comparison engine.equipBestGear already uses for its own
+        // manual bulk-equip, so "beats what's worn" means the same thing
+        // in both places. EquipmentManager.equip handles the displaced
+        // item landing back in the stash itself -- no separate push
+        // needed on that path. Falls through to the ordinary stash push
+        // when the setting is off, hero is missing (shouldn't happen but
+        // guarded same as the durability block above), or the drop simply
+        // isn't an upgrade.
+        const def = EQUIPMENT_BY_ID[item.defId];
+        const currentItem = def && hero ? hero.equipment[def.slot] : undefined;
+        const currentDef = currentItem ? EQUIPMENT_BY_ID[currentItem.defId] : undefined;
+        const currentScore = currentDef ? GEAR_SCORE_BY_RARITY[currentDef.rarity] ?? 0 : -1;
+        const newScore = def ? GEAR_SCORE_BY_RARITY[def.rarity] ?? 0 : -1;
+        const isUpgrade = !!def && !!hero && newScore > currentScore && hero.level >= def.reqLevel;
+        if (state.autoEquipOnLoot && isUpgrade && hero) {
+          EquipmentManager.equip(state, hero, item);
+        } else {
+          state.stash.push(item);
+        }
+      }
       if (!state.discoveredItems.includes(drop.defId)) state.discoveredItems.push(drop.defId);
       state.stats.itemsFound += 1;
       if (drop.rarity === 'legendary') state.stats.legendaryItemsFound += 1;

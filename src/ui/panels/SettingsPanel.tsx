@@ -7,7 +7,7 @@ import { previewSound } from '../../game/sound';
 
 /* ------------------------------ small controls ---------------------------- */
 
-function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+export function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <div className="setting-row">
       <div className="setting-label">
@@ -41,7 +41,7 @@ function Segmented<T extends string | number>({
   );
 }
 
-function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+export function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
       className={`toggle ${value ? 'on' : ''}`}

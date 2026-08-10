@@ -2687,14 +2687,14 @@ any particular order.
   facility or permanent upgrade the player can currently afford but
   hasn't bought.~~ -- done, see "Guild Hall affordable highlight --
   built" below.
-- **Auto-repair threshold** -- opt-in setting to auto-repair gear once
+- ~~**Auto-repair threshold** -- opt-in setting to auto-repair gear once
   durability drops below a chosen %, instead of a manual Repair
-  Everything trip. Considered twice now (this round and the visual-QOL
-  round before it), not built either time -- still deferred.
-- **Auto-equip on loot** -- opt-in setting so quest loot that beats
+  Everything trip.~~ -- done, see "Auto-repair + auto-equip -- built"
+  below.
+- ~~**Auto-equip on loot** -- opt-in setting so quest loot that beats
   what's equipped auto-equips instead of sitting in the stash until Equip
-  Best is run manually. Same "considered twice, deferred both times"
-  status as auto-repair above.
+  Best is run manually.~~ -- done, see "Auto-repair + auto-equip --
+  built" below.
 - ~~**Extend legendary-drop flourish to Raid results**~~ -- done, see
   "Raid + chain-completion flourish -- built" below.
 - ~~**Chain-completion flourish** -- finishing a multi-stage story chain
@@ -3162,6 +3162,147 @@ Equip Best Consumables picking the highest-cost item first and never
 over-equipping beyond what's owned, and `harvestReady` counting correctly
 across 0/1/2/3 simultaneously-pending nodes.
 
+### Auto-repair + auto-equip -- built
+The last two open QOL backlog items, both opt-in automation preferences:
+
+**Auto-repair.** New `GameState.autoRepairEnabled`/`autoRepairThresholdPercent`
+(1-99, default 50, clamped on write). Ticks in `GameEngine.refreshWorld`
+alongside Harvest's own spawn timer -- repairs any equipped-or-stashed
+item (same `EquipmentManager.allItems(state)` scope the manual "Repair
+Everything" button already uses) once its durability ratio drops to or
+below the threshold, never spending past what the guild can currently
+afford (same affordability gate `repairAll()` already has), one item at
+a time so partial gold still gets partial repairs done rather than an
+all-or-nothing batch. Self-limiting by construction: a repaired item is
+back at full durability, so it stops qualifying for the threshold check
+on the very next tick.
+
+**Auto-equip on loot.** New `GameState.autoEquipOnLoot`. Wired directly
+into `QuestManager.resolve`'s loot loop -- a drop that beats what the
+*hero who actually earned it* is currently wearing (same
+`GEAR_SCORE_BY_RARITY` comparison `engine.equipBestGear` already uses
+for its own manual bulk-equip) equips immediately via
+`EquipmentManager.equip` instead of landing in the stash; the displaced
+item goes to the stash automatically, the same way a manual equip
+already handles it. Deliberately scoped to only the earning hero, never
+the whole roster -- a stash drop had no "which hero" context before this,
+and inventing one ("whoever it helps most") would be a much bigger,
+more surprising behavior change than "the hero who found it gets first
+look at it."
+
+**Where the toggles live.** Both in `EquipmentPanel.tsx`, next to the
+manual actions they automate -- deliberately NOT in the Settings panel,
+whose own subtitle promises "Everything here is per-device... it never
+touches your guild's progress." These two genuinely do (they spend gold
+and touch gear), so they belong with the save, not local device
+cosmetics. Exported `SettingsPanel.tsx`'s existing `Row`/`Toggle`
+components for reuse rather than duplicating them. `SAVE_VERSION` bumped
+29 -> 30; migration defaults both to off for existing saves, so a save
+that predates this never suddenly starts spending gold or swapping gear
+on its own the moment it loads.
+
+Verified: `npx tsc --noEmit` and a full `vite build` both pass clean,
+plus 13 runtime checks covering auto-repair firing only below threshold
+and only when affordable (including a zero-gold guild being correctly
+left untouched), threshold clamping to 1-99, and the auto-equip gear-
+score comparison plus the full `EquipmentManager.equip` displacement
+path landing the old item back in the stash.
+
+### Tuning registry expansion, round 2 -- built
+Everything flagged as deferred from the first tuning-registry batch
+(guild facilities, patch 0107) migrated in one pass, plus three more
+gaps found along the way that weren't on the original list:
+
+- **`UPGRADES`** (all 20 vendor upgrades in `progression.ts`) --
+  `baseCost`/`costGrowth`/`maxLevel` plus every per-level bonus value
+  (`successPerLevel`, `goldPerLevel`, `consumableSlotsPerLevel`, etc.),
+  category `vendor_upgrades`, 74 entries.
+- **`RENOWN_PERKS`** (all 7 perks) -- `cost`/`costGrowth`/`maxLevel`,
+  each perk's `modsPerLevel` value, and the 6 perks with a tier2 curve
+  (`tier2.maxLevel`/`startCost`/`costGrowth`), category `renown_perks`,
+  46 entries. `extra_banner` (no tier2, a `heroSlotsPerLevel` field
+  instead of a mod) handled as its own special case, same as the
+  original array already treated it.
+- **`raid_loot`/`raid_recovery`** in `raidUpgrades.ts` -- the two
+  upgrades explicitly left hardcoded when `raid_speed` was migrated
+  originally, "a small, low-risk follow-up" per that comment. 15 entries,
+  same shape `raid_speed` already established.
+- **Found during the same pass, not on the original list:**
+  `AUTO_CHAIN_RANGES` (8 entries, the min/max streak length rolled at
+  each of Auto-Chain's 4 upgrade levels), the vendor level-up cost curve
+  (`VENDOR_LEVEL_BASE_COST`/`GROWTH`, 2 entries), and
+  `EARLY_TIER_DISCOUNT` (4 entries) -- the fraction of full price a
+  guild's first few purchases of *anything* leveled cost, arguably the
+  single biggest lever in this whole batch since it's applied to every
+  leveled cost formula in the game (upgrades, facilities, renown perks,
+  vendor levels), not just one system.
+
+`storagePerLevel`/`heroSlotsPerLevel` deliberately still stay hardcoded
+(structural, not a balance knob), same reasoning the first batch already
+established for those two fields.
+
+149 new tuning entries total, generated via a small Python script that
+read the original literals directly rather than being hand-typed --
+specifically to avoid transcription errors at this volume, the same
+concern that made the original UPGRADES/RENOWN_PERKS migration feel
+risky enough to defer in the first place. Every resolved value verified
+byte-identical to the original hardcoded literals before landing, via
+dedicated runtime checks comparing each field of every migrated entry
+(`UPGRADES`, `RENOWN_PERKS` including tier2 curves, `RAID_UPGRADES`,
+`AUTO_CHAIN_RANGES`, and `earlyTierDiscount()`/`vendorLevelCost()`'s
+resolved output) against the pre-migration values -- same bar the first
+batch set. `npx tsc --noEmit` and a full `vite build` both pass clean.
+
+### DevTool coverage review -- built
+A full audit of `src/game/data/` against the DevTool's `SCHEMAS`
+(`tools/devtool/server.mjs`), specifically looking for anything easily
+customizable that still required hunting down and hand-editing a
+TypeScript file instead of using the DevTool's existing UI. Confirmed
+equipment, consumables, injuries, pets, events, achievements, crafting
+recipes, materials, harvest tools, raid difficulties, and reroll costs
+were all already properly wired (either JSON+schema, or reading from the
+tuning registry). Found and fixed two real gaps, plus one correction:
+
+- **`quest-prefixes.json` had no DevTool schema at all.** The file
+  existed and was already being read by `quests.ts`, but there was no
+  `SCHEMAS` entry for it -- editing it meant hand-editing JSON directly,
+  with none of the DevTool's validation or UI. Its previous shape (a
+  plain array of 5 strings) also didn't fit the generic id-keyed editor
+  every other content type here uses, so it was converted to `{id,
+  text}` objects (`quests.ts` maps back to a plain `string[]` at import
+  time) and a new `quest-prefixes` schema added.
+- **`GUILD_RANK_TIERS`** (the 6 rank names/blurbs/colors shared by both
+  a single chain's own reqLevel tiering and the guild's total Guild
+  Power tiering -- see `guildRank.ts`'s own comment) was a hardcoded TS
+  array. Migrated to `json/guild-rank-tiers.json` + a new
+  `guild-rank-tiers` schema, same import-and-retype pattern
+  equipment/pets already use.
+- **Correction, not a new fix:** the new `guild-rank-tiers` schema
+  originally included a `picker: 'color'` hint on the `color` field,
+  which isn't an actual supported picker in the DevTool frontend --
+  checked `app.js` directly and confirmed only `'icon'` and `'lootTable'`
+  are real picker types; anything else silently falls through to a plain
+  text input regardless. Removed the misleading hint; the field still
+  works fine as a plain string (paste a hex value), just without
+  implying a color-swatch UI that doesn't exist.
+
+**Found but deliberately not migrated this round:** the `DIFFICULTIES`
+table in `quests.ts` (easy/normal/hard/epic/legendary, roughly 100
+tunable values across base success, duration ranges, and the burst/
+medium sub-configs each tier carries) is the single largest remaining
+gap -- fully hardcoded, zero DevTool/Tuning access, with dense balance
+rationale documented across many of its own comments. Scoped at roughly
+the same size as this round's entire UPGRADES+RENOWN_PERKS+raid_loot/
+recovery migration on its own. Deliberately left for its own dedicated
+pass rather than rushed into an already-large session, same "needs its
+own scoping" treatment the quest-chains DevTool migration got before it
+was actually done properly.
+
+Verified: `npx tsc --noEmit`, a full `vite build`, and the DevTool
+server's own syntax check all pass clean, plus runtime checks confirming
+`QUEST_PREFIXES` and `GUILD_RANK_TIERS` resolve to byte-identical content
+after their JSON migration.
+
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**
   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
@@ -3193,19 +3334,27 @@ across 0/1/2/3 simultaneously-pending nodes.
   since a chain's actual discovery timing depends on board RNG, not a
   fixed step count. Existing saves are migrated straight past it --
   never retrofitted onto anyone already playing.
-- ~~Tuning registry expansion beyond raid coefficients~~ -- first batch
-  done (patch 0107): all 5 guild facilities' `baseCost`/`costGrowth`/
-  `maxLevel` and their single `modsPerLevel` effect strength now read
-  from the registry (`guild_facility.<id>.*`, category `guild_facilities`,
-  20 new entries) instead of being literals in `progression.ts` -- same
-  mechanical pattern `raid_speed` already established in
-  `raidUpgrades.ts`. `storagePerLevel`/`heroSlotsPerLevel` deliberately
-  stay hardcoded (structural, not a balance knob). Verified the resolved
-  values are byte-identical to the old literals before this landed.
-  Not yet migrated, if there's appetite for another batch: `UPGRADES`
-  (vendor upgrades) and `RENOWN_PERKS` in the same file, and
-  `raid_loot`/`raid_recovery` in `raidUpgrades.ts` (already flagged
-  there as deferred, same shape as `raid_speed`).
+- ~~Tuning registry expansion beyond raid coefficients~~ -- done, in two
+  batches. First (patch 0107): all 5 guild facilities' `baseCost`/
+  `costGrowth`/`maxLevel` and their single `modsPerLevel` effect strength
+  (`guild_facility.<id>.*`, category `guild_facilities`, 20 entries).
+  Second (this round): everything flagged as deferred from the first --
+  `UPGRADES` (all 20 vendor upgrades, category `vendor_upgrades`, 74
+  entries), `RENOWN_PERKS` (all 7 perks including their tier2 curves,
+  category `renown_perks`, 46 entries), and `raid_loot`/`raid_recovery`
+  in `raidUpgrades.ts` (15 entries) -- plus three more found during the
+  same pass that weren't on the original deferred list:
+  `AUTO_CHAIN_RANGES`, the vendor level-up cost curve, and
+  `EARLY_TIER_DISCOUNT` (the global early-purchase discount applied to
+  every leveled cost formula in the game -- arguably the single biggest
+  lever in this batch). `storagePerLevel`/`heroSlotsPerLevel` still
+  deliberately stay hardcoded (structural, not a balance knob), same
+  reasoning as the first batch. 149 new tuning entries total this round,
+  generated via a script reading the original literals rather than
+  hand-typed, specifically to avoid transcription errors across that
+  volume -- every resolved value verified byte-identical to the original
+  hardcoded literals before landing via dedicated runtime checks, same
+  bar the first batch set.
 
 ### Platform / distribution
 - **Steam Cloud saves** -- no code work needed yet. Saves already live at

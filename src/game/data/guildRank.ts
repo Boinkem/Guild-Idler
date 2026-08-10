@@ -22,39 +22,13 @@ export interface GuildRankTier {
  * (0-34, see rankTierForLevel), while the guild's own rank is tiered by
  * total Guild Power (0-GUILD_POWER_CEILING, see currentGuildRank). Same six
  * labels either way -- only the number being measured differs.
+ *
+ * Lives in json/guild-rank-tiers.json rather than a literal array here --
+ * editable via tools/devtool without touching TypeScript, same pattern
+ * equipment/pets/consumables already use.
  */
-export const GUILD_RANK_TIERS: GuildRankTier[] = [
-  {
-    id: 'freelance_operators', name: 'Freelance Operators',
-    blurb: 'Whatever is on the board, whoever is free to take it.',
-    color: '#b9ad93',
-  },
-  {
-    id: 'professional_contractors', name: 'Professional Contractors',
-    blurb: 'Reputable enough that the work keeps finding the guild first.',
-    color: '#79a86b',
-  },
-  {
-    id: 'actors_of_greater_calls', name: 'Actors of Greater Calls',
-    blurb: 'Asked directly, now, rather than posted to a board.',
-    color: '#5b8fd6',
-  },
-  {
-    id: 'realms_influence', name: "A Realm's Influence",
-    blurb: 'Territory held, not just visited.',
-    color: '#a874d6',
-  },
-  {
-    id: 'realms_protector', name: "A Realm's Protector",
-    blurb: 'The thing standing between the Reach and what comes for it.',
-    color: '#d9a441',
-  },
-  {
-    id: 'ascended', name: 'Ascended',
-    blurb: 'Known throughout, for reasons nobody has to explain twice.',
-    color: '#d64f4f',
-  },
-];
+import guildRankTiersJson from './json/guild-rank-tiers.json';
+export const GUILD_RANK_TIERS: GuildRankTier[] = guildRankTiersJson as GuildRankTier[];
 
 /**
  * Thresholds for CHAIN reqLevel tiering (a single chain's own difficulty,

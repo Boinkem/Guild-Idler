@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 29;
+export const SAVE_VERSION = 30;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -959,6 +959,35 @@ export interface GameState {
    *  PetManager). Capped at ModifierManager.petSlots(state), same
    *  "array, not a fixed-size struct" shape as Hero.equippedConsumables. */
   equippedPetIds: string[];
+
+  /* ------------------------- automation preferences -------------------------
+     Both opt-in, both off by default. Live in GameState (not Settings) on
+     purpose -- these spend the guild's own gold and touch its own gear,
+     which makes them guild-progress preferences that belong with the save
+     and should follow it through Steam Cloud, not local device cosmetics
+     the way Settings' theme/font/density are documented to be. */
+  /** When true, GameEngine.refreshWorld auto-repairs any equipped item that
+   *  drops at or below autoRepairThresholdPercent of its own max durability,
+   *  spending gold the same way a manual Repair Everything trip would --
+   *  never repairs past what the guild can currently afford, same
+   *  affordability gate repairAll() already uses. */
+  autoRepairEnabled: boolean;
+  /** 1-99. Repair triggers once current/max durability, as a percentage,
+   *  drops to or below this. Deliberately not 0 or 100 -- 0 would mean
+   *  "wait until fully broken" (defeats the point of *auto*-repair) and
+   *  100 would repair on every single point of wear, spending gold
+   *  constantly for no real benefit. */
+  autoRepairThresholdPercent: number;
+  /** When true, QuestManager.resolve auto-equips a loot drop straight onto
+   *  the hero who earned it if it beats what they're already wearing in
+   *  that slot (same GEAR_SCORE_BY_RARITY comparison engine.equipBestGear
+   *  already uses for its own manual bulk-equip) instead of the drop
+   *  always landing in the stash. Only ever checked against the earning
+   *  hero, never the whole roster -- a stash drop had no "which hero"
+   *  context before this, and inventing one (e.g. "whoever it helps most")
+   *  would be a much bigger, more surprising behavior change than "the
+   *  hero who found it gets first look at it." */
+  autoEquipOnLoot: boolean;
 }
 
 /**

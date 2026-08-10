@@ -4,70 +4,96 @@ import { Tuning } from './tuning';
 /* --------------------------- permanent upgrades --------------------------- */
 
 export const UPGRADES: UpgradeDef[] = [
+  // Every baseCost/costGrowth/maxLevel and per-level bonus value below
+  // reads from the tuning registry (tuning.json, category
+  // 'vendor_upgrades') rather than being a literal -- editable live via
+  // the devtool's Tuning tab without touching this file. See tuning.ts.
   {
     id: 'weapons_training', name: 'Better Weapons Training',
     description: 'Drill the fundamentals until they are boring.',
-    baseCost: 200, costGrowth: 1.75, maxLevel: 10,
-    modsPerLevel: { success: 5 }, vendor: 'blacksmith',
+    baseCost: Tuning.get('upgrade.weapons_training.baseCost'),
+    costGrowth: Tuning.get('upgrade.weapons_training.costGrowth'),
+    maxLevel: Tuning.get('upgrade.weapons_training.maxLevel'),
+    modsPerLevel: { success: Tuning.get('upgrade.weapons_training.successPerLevel') }, vendor: 'blacksmith',
   },
   {
     id: 'efficient_adventuring', name: 'Efficient Adventuring',
     description: 'Negotiate the contract before drawing the sword.',
-    baseCost: 250, costGrowth: 1.8, maxLevel: 10,
-    modsPerLevel: { gold: 10 },
+    baseCost: Tuning.get('upgrade.efficient_adventuring.baseCost'),
+    costGrowth: Tuning.get('upgrade.efficient_adventuring.costGrowth'),
+    maxLevel: Tuning.get('upgrade.efficient_adventuring.maxLevel'),
+    modsPerLevel: { gold: Tuning.get('upgrade.efficient_adventuring.goldPerLevel') },
   },
   {
     id: 'veteran_explorer', name: 'Alchemical Assay',
     description: 'Acid, flame, and a practiced eye separate true ore from slag before the cart even leaves the ruin.',
-    baseCost: 400, costGrowth: 1.9, maxLevel: 8,
-    modsPerLevel: { loot: 5 }, vendor: 'alchemist',
+    baseCost: Tuning.get('upgrade.veteran_explorer.baseCost'),
+    costGrowth: Tuning.get('upgrade.veteran_explorer.costGrowth'),
+    maxLevel: Tuning.get('upgrade.veteran_explorer.maxLevel'),
+    modsPerLevel: { loot: Tuning.get('upgrade.veteran_explorer.lootPerLevel') }, vendor: 'alchemist',
   },
   {
     id: 'mounted_travel', name: 'Mounted Travel',
     description: 'A good horse shortens every road.',
-    baseCost: 600, costGrowth: 2.0, maxLevel: 6,
-    modsPerLevel: { speed: 10 }, vendor: 'blacksmith',
+    baseCost: Tuning.get('upgrade.mounted_travel.baseCost'),
+    costGrowth: Tuning.get('upgrade.mounted_travel.costGrowth'),
+    maxLevel: Tuning.get('upgrade.mounted_travel.maxLevel'),
+    modsPerLevel: { speed: Tuning.get('upgrade.mounted_travel.speedPerLevel') }, vendor: 'blacksmith',
   },
   {
     id: 'field_medicine', name: 'Restorative Tinctures',
     description: 'Bitter draughts, brewed to knit flesh faster than they have any business doing.',
-    baseCost: 350, costGrowth: 1.85, maxLevel: 8,
-    modsPerLevel: { injuryResist: 8 }, vendor: 'alchemist',
+    baseCost: Tuning.get('upgrade.field_medicine.baseCost'),
+    costGrowth: Tuning.get('upgrade.field_medicine.costGrowth'),
+    maxLevel: Tuning.get('upgrade.field_medicine.maxLevel'),
+    modsPerLevel: { injuryResist: Tuning.get('upgrade.field_medicine.injuryResistPerLevel') }, vendor: 'alchemist',
   },
   {
     id: 'armourers_contract', name: "Armourer's Contract",
     description: 'Standing repairs mean gear lasts noticeably longer.',
-    baseCost: 500, costGrowth: 1.9, maxLevel: 6,
-    modsPerLevel: { durability: 10 }, vendor: 'blacksmith',
+    baseCost: Tuning.get('upgrade.armourers_contract.baseCost'),
+    costGrowth: Tuning.get('upgrade.armourers_contract.costGrowth'),
+    maxLevel: Tuning.get('upgrade.armourers_contract.maxLevel'),
+    modsPerLevel: { durability: Tuning.get('upgrade.armourers_contract.durabilityPerLevel') }, vendor: 'blacksmith',
   },
   {
     id: 'war_stories', name: 'Runic Insight',
     description: 'Wards etched into a hero\'s gear murmur half-remembered lessons back to whoever carries them.',
-    baseCost: 450, costGrowth: 1.85, maxLevel: 8,
-    modsPerLevel: { xp: 15 }, vendor: 'enchanter',
+    baseCost: Tuning.get('upgrade.war_stories.baseCost'),
+    costGrowth: Tuning.get('upgrade.war_stories.costGrowth'),
+    maxLevel: Tuning.get('upgrade.war_stories.maxLevel'),
+    modsPerLevel: { xp: Tuning.get('upgrade.war_stories.xpPerLevel') }, vendor: 'enchanter',
   },
   {
     id: 'master_adventurer', name: 'Enchanted Seal',
     description: 'A ward pressed into the guild charter unlocks Legendary contracts on the quest board -- and lends every hero its quiet protection.',
-    baseCost: 5000, costGrowth: 1, maxLevel: 1,
-    modsPerLevel: { success: 3 }, unlocks: 'legendaryQuests', vendor: 'enchanter',
+    baseCost: Tuning.get('upgrade.master_adventurer.baseCost'),
+    costGrowth: Tuning.get('upgrade.master_adventurer.costGrowth'),
+    maxLevel: Tuning.get('upgrade.master_adventurer.maxLevel'),
+    modsPerLevel: { success: Tuning.get('upgrade.master_adventurer.successPerLevel') }, unlocks: 'legendaryQuests', vendor: 'enchanter',
   },
   {
     id: 'guild_charter', name: 'Guild Charter',
     description: 'Unlocks multi-day quest chains.',
-    baseCost: 3000, costGrowth: 1, maxLevel: 1,
+    baseCost: Tuning.get('upgrade.guild_charter.baseCost'),
+    costGrowth: Tuning.get('upgrade.guild_charter.costGrowth'),
+    maxLevel: Tuning.get('upgrade.guild_charter.maxLevel'),
     modsPerLevel: {}, unlocks: 'chains',
   },
   {
     id: 'black_market_contact', name: 'Black Market Contact',
     description: "Someone who knows someone. Unlocks a second, pricier stock rotation biased toward rare and legendary gear — often stock the regular armourer would never touch.",
-    baseCost: 9000, costGrowth: 1, maxLevel: 1,
+    baseCost: Tuning.get('upgrade.black_market_contact.baseCost'),
+    costGrowth: Tuning.get('upgrade.black_market_contact.costGrowth'),
+    maxLevel: Tuning.get('upgrade.black_market_contact.maxLevel'),
     modsPerLevel: {}, unlocks: 'blackMarket',
   },
   {
     id: 'auto_chain', name: 'Auto-Chain',
     description: 'A hero keeps taking the next contract on their own instead of waiting for orders — for a while. Each level lets the streak run longer before it needs a fresh send.',
-    baseCost: 3500, costGrowth: 2.3, maxLevel: 4,
+    baseCost: Tuning.get('upgrade.auto_chain.baseCost'),
+    costGrowth: Tuning.get('upgrade.auto_chain.costGrowth'),
+    maxLevel: Tuning.get('upgrade.auto_chain.maxLevel'),
     modsPerLevel: {}, unlocks: 'autoChain',
   },
   {
@@ -78,19 +104,25 @@ export const UPGRADES: UpgradeDef[] = [
     // (reqLevel 8). Difficulty is now the real gate, via the two upgrades
     // below, rather than the base Charter price doing double duty as both
     // "can the guild raid at all" and "can it raid at the hardest tiers."
-    baseCost: 2500, costGrowth: 1, maxLevel: 1,
+    baseCost: Tuning.get('upgrade.raid_charter.baseCost'),
+    costGrowth: Tuning.get('upgrade.raid_charter.costGrowth'),
+    maxLevel: Tuning.get('upgrade.raid_charter.maxLevel'),
     modsPerLevel: {}, unlocks: 'raids',
   },
   {
     id: 'raid_heroic_clearance', name: 'Heroic Clearance',
     description: 'Formal sign-off to run raids at Heroic difficulty -- harsher odds, longer expeditions, and loot worth the extra risk.',
-    baseCost: 20000, costGrowth: 1, maxLevel: 1,
+    baseCost: Tuning.get('upgrade.raid_heroic_clearance.baseCost'),
+    costGrowth: Tuning.get('upgrade.raid_heroic_clearance.costGrowth'),
+    maxLevel: Tuning.get('upgrade.raid_heroic_clearance.maxLevel'),
     modsPerLevel: {}, unlocks: 'raidsHeroic',
   },
   {
     id: 'raid_mythic_clearance', name: 'Mythic Clearance',
     description: "The guild's word that it can handle Mythic difficulty -- the hardest raiding gets, and the only tier where the very best loot actually drops.",
-    baseCost: 60000, costGrowth: 1, maxLevel: 1,
+    baseCost: Tuning.get('upgrade.raid_mythic_clearance.baseCost'),
+    costGrowth: Tuning.get('upgrade.raid_mythic_clearance.costGrowth'),
+    maxLevel: Tuning.get('upgrade.raid_mythic_clearance.maxLevel'),
     modsPerLevel: {}, unlocks: 'raidsMythic',
   },
   {
@@ -99,8 +131,10 @@ export const UPGRADES: UpgradeDef[] = [
     // Base slot count (1) lives in ModifierManager.consumableSlots as the
     // floor; this upgrade's 2 levels take it to a max of 3, matching the
     // backlog's "1 base, up to 3 via upgrade" spec exactly.
-    baseCost: 1800, costGrowth: 2.2, maxLevel: 2,
-    modsPerLevel: {}, consumableSlotsPerLevel: 1,
+    baseCost: Tuning.get('upgrade.potion_belt.baseCost'),
+    costGrowth: Tuning.get('upgrade.potion_belt.costGrowth'),
+    maxLevel: Tuning.get('upgrade.potion_belt.maxLevel'),
+    modsPerLevel: {}, consumableSlotsPerLevel: Tuning.get('upgrade.potion_belt.consumableSlotsPerLevel'),
   },
   {
     id: 'nest_expansion', name: 'Nest Expansion',
@@ -109,32 +143,40 @@ export const UPGRADES: UpgradeDef[] = [
     // starts deliberately low -- the 2nd nest is meant to be this upgrade's
     // own first purchase, not something every player already has. 3 levels
     // take it to a max of 4.
-    baseCost: 1500, costGrowth: 2.0, maxLevel: 3,
-    modsPerLevel: {}, incubationSlotsPerLevel: 1,
+    baseCost: Tuning.get('upgrade.nest_expansion.baseCost'),
+    costGrowth: Tuning.get('upgrade.nest_expansion.costGrowth'),
+    maxLevel: Tuning.get('upgrade.nest_expansion.maxLevel'),
+    modsPerLevel: {}, incubationSlotsPerLevel: Tuning.get('upgrade.nest_expansion.incubationSlotsPerLevel'),
   },
   {
     id: 'companion_bond', name: 'Companion Bond',
     description: 'A second (then third) pet can accompany the guild at once, each contributing its own bonus.',
     // Same "1 base, more via upgrade" shape as Potion Belt -- base slot (1)
     // lives in ModifierManager.petSlots as the floor.
-    baseCost: 2200, costGrowth: 2.3, maxLevel: 2,
-    modsPerLevel: {}, petSlotsPerLevel: 1,
+    baseCost: Tuning.get('upgrade.companion_bond.baseCost'),
+    costGrowth: Tuning.get('upgrade.companion_bond.costGrowth'),
+    maxLevel: Tuning.get('upgrade.companion_bond.maxLevel'),
+    modsPerLevel: {}, petSlotsPerLevel: Tuning.get('upgrade.companion_bond.petSlotsPerLevel'),
   },
   {
     id: 'board_runner', name: 'Board Runner',
     description: "A retained courier who'll fetch a fresh set of contracts on request -- extra free quest-board rerolls per day before the price starts climbing.",
     // Base (1 free/day) lives in ModifierManager.questFreeRerolls as the
     // floor. 3 levels take it to 4 total, matching the "up to 4" spec.
-    baseCost: 900, costGrowth: 2.0, maxLevel: 3,
-    modsPerLevel: {}, questFreeRerollsPerLevel: 1,
+    baseCost: Tuning.get('upgrade.board_runner.baseCost'),
+    costGrowth: Tuning.get('upgrade.board_runner.costGrowth'),
+    maxLevel: Tuning.get('upgrade.board_runner.maxLevel'),
+    modsPerLevel: {}, questFreeRerollsPerLevel: Tuning.get('upgrade.board_runner.questFreeRerollsPerLevel'),
   },
   {
     id: 'trade_favor', name: 'Trade Favor',
     description: 'A standing favor with every stall in the market -- extra free restocks per day before you start paying the vendors to hurry.',
     // Same shape as Board Runner, independent counter -- see
     // ModifierManager.vendorFreeRerolls.
-    baseCost: 900, costGrowth: 2.0, maxLevel: 3,
-    modsPerLevel: {}, vendorFreeRerollsPerLevel: 1,
+    baseCost: Tuning.get('upgrade.trade_favor.baseCost'),
+    costGrowth: Tuning.get('upgrade.trade_favor.costGrowth'),
+    maxLevel: Tuning.get('upgrade.trade_favor.maxLevel'),
+    modsPerLevel: {}, vendorFreeRerollsPerLevel: Tuning.get('upgrade.trade_favor.vendorFreeRerollsPerLevel'),
   },
   {
     id: 'board_warden', name: 'Board Warden',
@@ -147,8 +189,10 @@ export const UPGRADES: UpgradeDef[] = [
     // count. Unfreezing is deliberately NOT gated by this at all -- see
     // QuestManager.unfreezeOffer -- so running out of freezes for the day
     // can never trap a player holding one they no longer want.
-    baseCost: 1200, costGrowth: 2.1, maxLevel: 2,
-    modsPerLevel: {}, freezeChangesPerLevel: 1,
+    baseCost: Tuning.get('upgrade.board_warden.baseCost'),
+    costGrowth: Tuning.get('upgrade.board_warden.costGrowth'),
+    maxLevel: Tuning.get('upgrade.board_warden.maxLevel'),
+    modsPerLevel: {}, freezeChangesPerLevel: Tuning.get('upgrade.board_warden.freezeChangesPerLevel'),
   },
 ];
 
@@ -159,10 +203,10 @@ export const UPGRADES: UpgradeDef[] = [
  * unpredictable rather than a metronomic "always exactly 3."
  */
 export const AUTO_CHAIN_RANGES: Record<number, { min: number; max: number }> = {
-  1: { min: 2, max: 3 },
-  2: { min: 3, max: 5 },
-  3: { min: 6, max: 8 },
-  4: { min: 10, max: 10 },
+  1: { min: Tuning.get('auto_chain_range.1.min'), max: Tuning.get('auto_chain_range.1.max') },
+  2: { min: Tuning.get('auto_chain_range.2.min'), max: Tuning.get('auto_chain_range.2.max') },
+  3: { min: Tuning.get('auto_chain_range.3.min'), max: Tuning.get('auto_chain_range.3.max') },
+  4: { min: Tuning.get('auto_chain_range.4.min'), max: Tuning.get('auto_chain_range.4.max') },
 };
 
 /* --------------------------------- vendors --------------------------------- */
@@ -179,8 +223,8 @@ export const VENDORS: VendorDef[] = [
   { id: 'enchanter', name: 'The Enchanter', blurb: 'Old books, older favours, and a taste for the theatrical.' },
 ];
 
-const VENDOR_LEVEL_BASE_COST = 800;
-const VENDOR_LEVEL_COST_GROWTH = 2.1;
+const VENDOR_LEVEL_BASE_COST = Tuning.get('vendor_level.baseCost');
+const VENDOR_LEVEL_COST_GROWTH = Tuning.get('vendor_level.costGrowth');
 
 /** Every upgrade a given vendor offers, in the fixed order they unlock at vendor levels 1, 2, 3... */
 export function vendorUpgrades(vendorId: VendorId): UpgradeDef[] {
@@ -197,7 +241,12 @@ export function vendorUpgrades(vendorId: VendorId): UpgradeDef[] {
  * "worth" farming relative to another -- it just makes the early game less
  * of a wall before any of that economy gets to matter.
  */
-const EARLY_TIER_DISCOUNT = [0.15, 0.35, 0.6, 0.85]; // level 4+ = 1.0, full price
+const EARLY_TIER_DISCOUNT = [
+  Tuning.get('early_tier_discount.level0'),
+  Tuning.get('early_tier_discount.level1'),
+  Tuning.get('early_tier_discount.level2'),
+  Tuning.get('early_tier_discount.level3'),
+]; // level 4+ = 1.0, full price
 
 export function earlyTierDiscount(level: number): number {
   return level < EARLY_TIER_DISCOUNT.length ? EARLY_TIER_DISCOUNT[level] : 1;
@@ -295,45 +344,99 @@ export const RENOWN_PERKS: RenownPerkDef[] = [
   {
     id: 'renowned_skill', name: 'Renowned Skill',
     description: 'Every retired knight leaves behind hard-won technique.',
-    cost: 1, costGrowth: 1.6, maxLevel: 20, modsPerLevel: { success: 3 },
-    tier2: { maxLevel: 25, startCost: 9822, costGrowth: 1.12, unlockFlavour: 'The old masters take on students of their own.' },
+    // Every numeric field here reads from the tuning registry
+    // (tuning.json) rather than being a literal -- editable live via the
+    // devtool's Tuning tab without touching this file. See tuning.ts.
+    cost: Tuning.get('renown_perk.renowned_skill.cost'),
+    costGrowth: Tuning.get('renown_perk.renowned_skill.costGrowth'),
+    maxLevel: Tuning.get('renown_perk.renowned_skill.maxLevel'),
+    modsPerLevel: { success: Tuning.get('renown_perk.renowned_skill.successPerLevel') },
+    tier2: {
+      maxLevel: Tuning.get('renown_perk.renowned_skill.tier2MaxLevel'),
+      startCost: Tuning.get('renown_perk.renowned_skill.tier2StartCost'),
+      costGrowth: Tuning.get('renown_perk.renowned_skill.tier2CostGrowth'),
+      unlockFlavour: 'The old masters take on students of their own.',
+    },
   },
   {
     id: 'legacy_of_wealth', name: 'Legacy of Wealth',
     description: 'The guild coffers remember better days.',
-    cost: 1, costGrowth: 1.6, maxLevel: 20, modsPerLevel: { gold: 15 },
-    tier2: { maxLevel: 25, startCost: 9822, costGrowth: 1.12, unlockFlavour: 'Word of the guild reaches courts that used to ignore it.' },
+    cost: Tuning.get('renown_perk.legacy_of_wealth.cost'),
+    costGrowth: Tuning.get('renown_perk.legacy_of_wealth.costGrowth'),
+    maxLevel: Tuning.get('renown_perk.legacy_of_wealth.maxLevel'),
+    modsPerLevel: { gold: Tuning.get('renown_perk.legacy_of_wealth.goldPerLevel') },
+    tier2: {
+      maxLevel: Tuning.get('renown_perk.legacy_of_wealth.tier2MaxLevel'),
+      startCost: Tuning.get('renown_perk.legacy_of_wealth.tier2StartCost'),
+      costGrowth: Tuning.get('renown_perk.legacy_of_wealth.tier2CostGrowth'),
+      unlockFlavour: 'Word of the guild reaches courts that used to ignore it.',
+    },
   },
   {
     id: 'swift_legend', name: 'Swift Legend',
     description: 'Reputation opens gates that used to take days.',
-    cost: 2, costGrowth: 1.7, maxLevel: 10, modsPerLevel: { speed: 5 },
-    tier2: { maxLevel: 13, startCost: 309, costGrowth: 1.12, unlockFlavour: 'Roads that were never built start showing up on the map.' },
+    cost: Tuning.get('renown_perk.swift_legend.cost'),
+    costGrowth: Tuning.get('renown_perk.swift_legend.costGrowth'),
+    maxLevel: Tuning.get('renown_perk.swift_legend.maxLevel'),
+    modsPerLevel: { speed: Tuning.get('renown_perk.swift_legend.speedPerLevel') },
+    tier2: {
+      maxLevel: Tuning.get('renown_perk.swift_legend.tier2MaxLevel'),
+      startCost: Tuning.get('renown_perk.swift_legend.tier2StartCost'),
+      costGrowth: Tuning.get('renown_perk.swift_legend.tier2CostGrowth'),
+      unlockFlavour: 'Roads that were never built start showing up on the map.',
+    },
   },
   {
     id: 'collectors_eye', name: "Collector's Eye",
     description: 'You know exactly what is worth carrying home.',
-    cost: 2, costGrowth: 1.7, maxLevel: 12, modsPerLevel: { loot: 4 },
-    tier2: { maxLevel: 15, startCost: 891, costGrowth: 1.12, unlockFlavour: 'Things that should stay buried start feeling curious about you too.' },
+    cost: Tuning.get('renown_perk.collectors_eye.cost'),
+    costGrowth: Tuning.get('renown_perk.collectors_eye.costGrowth'),
+    maxLevel: Tuning.get('renown_perk.collectors_eye.maxLevel'),
+    modsPerLevel: { loot: Tuning.get('renown_perk.collectors_eye.lootPerLevel') },
+    tier2: {
+      maxLevel: Tuning.get('renown_perk.collectors_eye.tier2MaxLevel'),
+      startCost: Tuning.get('renown_perk.collectors_eye.tier2StartCost'),
+      costGrowth: Tuning.get('renown_perk.collectors_eye.tier2CostGrowth'),
+      unlockFlavour: 'Things that should stay buried start feeling curious about you too.',
+    },
   },
   {
     id: 'enduring_legend', name: 'Enduring Legend',
     description: 'Heroes trained on your legend get hurt far less.',
-    cost: 2, costGrowth: 1.65, maxLevel: 10, modsPerLevel: { injuryResist: 10 },
-    tier2: { maxLevel: 13, startCost: 236, costGrowth: 1.12, unlockFlavour: 'New recruits flinch less on their first day than veterans used to on their hundredth.' },
+    cost: Tuning.get('renown_perk.enduring_legend.cost'),
+    costGrowth: Tuning.get('renown_perk.enduring_legend.costGrowth'),
+    maxLevel: Tuning.get('renown_perk.enduring_legend.maxLevel'),
+    modsPerLevel: { injuryResist: Tuning.get('renown_perk.enduring_legend.injuryResistPerLevel') },
+    tier2: {
+      maxLevel: Tuning.get('renown_perk.enduring_legend.tier2MaxLevel'),
+      startCost: Tuning.get('renown_perk.enduring_legend.tier2StartCost'),
+      costGrowth: Tuning.get('renown_perk.enduring_legend.tier2CostGrowth'),
+      unlockFlavour: 'New recruits flinch less on their first day than veterans used to on their hundredth.',
+    },
   },
   {
     id: 'extra_banner', name: 'Extra Banner',
     description: 'A permanent additional hero slot.',
-    cost: 5, costGrowth: 2.2, maxLevel: 4, modsPerLevel: {}, heroSlotsPerLevel: 1,
+    cost: Tuning.get('renown_perk.extra_banner.cost'),
+    costGrowth: Tuning.get('renown_perk.extra_banner.costGrowth'),
+    maxLevel: Tuning.get('renown_perk.extra_banner.maxLevel'),
+    modsPerLevel: {}, heroSlotsPerLevel: Tuning.get('renown_perk.extra_banner.heroSlotsPerLevel'),
     // Deliberately no tier2: hero slots stay a small, fixed number rather
     // than scaling indefinitely — the roster is meant to stay a roster.
   },
   {
     id: 'scholars_legacy', name: "Scholar's Legacy",
     description: 'New heroes learn from every campaign that came before.',
-    cost: 1, costGrowth: 1.6, maxLevel: 15, modsPerLevel: { xp: 20 },
-    tier2: { maxLevel: 19, startCost: 936, costGrowth: 1.12, unlockFlavour: 'The guild library runs out of shelf space again.' },
+    cost: Tuning.get('renown_perk.scholars_legacy.cost'),
+    costGrowth: Tuning.get('renown_perk.scholars_legacy.costGrowth'),
+    maxLevel: Tuning.get('renown_perk.scholars_legacy.maxLevel'),
+    modsPerLevel: { xp: Tuning.get('renown_perk.scholars_legacy.xpPerLevel') },
+    tier2: {
+      maxLevel: Tuning.get('renown_perk.scholars_legacy.tier2MaxLevel'),
+      startCost: Tuning.get('renown_perk.scholars_legacy.tier2StartCost'),
+      costGrowth: Tuning.get('renown_perk.scholars_legacy.tier2CostGrowth'),
+      unlockFlavour: 'The guild library runs out of shelf space again.',
+    },
   },
 ];
 
