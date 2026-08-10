@@ -1455,13 +1455,15 @@
     "maxDurability": 247,
     "value": 8320,
     "mods": {
-      "injuryResist": 26,
-      "success": 10
+      "success": 10,
+      "injuryResist": 26
     },
     "stats": {
       "endurance": 12
     },
-    "raidExclusive": true
+    "icon": "armor/Armor_40.png",
+    "raidExclusive": true,
+    "craftable": false
   },
   {
     "id": "dragon_helm_mythic",
@@ -1472,73 +1474,79 @@
     "maxDurability": 321,
     "value": 10816,
     "mods": {
-      "injuryResist": 34,
-      "success": 14
+      "success": 14,
+      "injuryResist": 34
     },
     "stats": {
       "endurance": 15
     },
-    "raidExclusive": true
+    "icon": "armor/Armor_40.png",
+    "raidExclusive": true,
+    "craftable": false
   },
   {
     "id": "copper_band_heroic",
     "name": "Copper Band (Heroic)",
     "slot": "ring",
-    "rarity": "common",
+    "rarity": "epic",
     "reqLevel": 1,
     "maxDurability": 78,
     "value": 39,
     "mods": {
       "loot": 1
     },
-    "raidExclusive": true
+    "raidExclusive": true,
+    "craftable": false
   },
   {
     "id": "copper_band_mythic",
     "name": "Copper Band (Mythic)",
     "slot": "ring",
-    "rarity": "common",
+    "rarity": "epic",
     "reqLevel": 1,
     "maxDurability": 101,
     "value": 51,
     "mods": {
       "loot": 2
     },
-    "raidExclusive": true
-  },
-  {
-    "id": "work_gloves_heroic",
-    "name": "Work Gloves (Heroic)",
-    "slot": "gloves",
-    "rarity": "common",
-    "reqLevel": 1,
-    "maxDurability": 39,
-    "value": 26,
-    "mods": {
-      "gold": 4
-    },
     "raidExclusive": true,
-    "setId": "blackford"
+    "craftable": false
   },
   {
     "id": "work_gloves_mythic",
     "name": "Work Gloves (Mythic)",
     "slot": "gloves",
-    "rarity": "common",
+    "rarity": "epic",
     "reqLevel": 1,
     "maxDurability": 51,
     "value": 34,
     "mods": {
       "gold": 5
     },
+    "setId": "blackford",
     "raidExclusive": true,
-    "setId": "blackford"
+    "craftable": false
+  },
+  {
+    "id": "work_gloves_heroic",
+    "name": "Work Gloves (Heroic)",
+    "slot": "gloves",
+    "rarity": "epic",
+    "reqLevel": 1,
+    "maxDurability": 31,
+    "value": 34,
+    "mods": {
+      "gold": 3
+    },
+    "setId": "blackford",
+    "raidExclusive": true,
+    "craftable": false
   },
   {
     "id": "knights_blade_heroic",
     "name": "Knight's Blade (Heroic)",
     "slot": "weapon",
-    "rarity": "uncommon",
+    "rarity": "epic",
     "reqLevel": 5,
     "maxDurability": 91,
     "value": 208,
@@ -1549,8 +1557,10 @@
     "stats": {
       "strength": 4
     },
+    "setId": "blackford",
+    "icon": "weapons/Weapon_03.png",
     "raidExclusive": true,
-    "setId": "blackford"
+    "craftable": false
   },
   {
     "id": "knights_blade_mythic",
@@ -1567,8 +1577,10 @@
     "stats": {
       "strength": 5
     },
+    "setId": "blackford",
+    "icon": "weapons/Weapon_03.png",
     "raidExclusive": true,
-    "setId": "blackford"
+    "craftable": false
   },
   {
     "id": "iron_helm_heroic",
@@ -1579,50 +1591,56 @@
     "maxDurability": 78,
     "value": 182,
     "mods": {
-      "injuryResist": 9,
-      "success": 3
+      "success": 3,
+      "injuryResist": 9
     },
     "stats": {
       "endurance": 3
     },
+    "setId": "blackford",
+    "icon": "armor/Armor_31.png",
     "raidExclusive": true,
-    "setId": "blackford"
+    "craftable": false
   },
   {
     "id": "iron_helm_mythic",
     "name": "Iron Helm (Mythic)",
     "slot": "helmet",
-    "rarity": "uncommon",
+    "rarity": "epic",
     "reqLevel": 4,
     "maxDurability": 101,
     "value": 237,
     "mods": {
-      "injuryResist": 12,
-      "success": 3
+      "success": 3,
+      "injuryResist": 12
     },
     "stats": {
       "endurance": 3
     },
+    "setId": "blackford",
+    "icon": "armor/Armor_38.png",
     "raidExclusive": true,
-    "setId": "blackford"
+    "craftable": false
   },
   {
     "id": "chainmail_heroic",
     "name": "Chainmail Hauberk (Heroic)",
     "slot": "chest",
-    "rarity": "uncommon",
+    "rarity": "epic",
     "reqLevel": 6,
     "maxDurability": 98,
     "value": 273,
     "mods": {
-      "injuryResist": 12,
-      "success": 4
+      "success": 4,
+      "injuryResist": 12
     },
     "stats": {
       "endurance": 4
     },
+    "setId": "blackford",
+    "icon": "armor/Armor_03.png",
     "raidExclusive": true,
-    "setId": "blackford"
+    "craftable": false
   },
   {
     "id": "chainmail_mythic",
