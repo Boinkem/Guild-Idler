@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
@@ -12,6 +12,7 @@ import { MaterialId } from '../../game/types';
 import { formatGold, formatMaterial } from '../../game/util';
 import { Ring } from './DashboardPanel';
 import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
+import { useFlyTargetRef, measureFlyOffset } from '../flyTarget';
 
 type SubTab = 'warehouse' | 'fields';
 
@@ -106,26 +107,100 @@ export function HarvestPanel() {
  * just positioned within that node's own 25%-wide slice instead of the
  * full width a dedicated per-node scene used to have.
  */
+/** How long a caught material's icon takes to fly from the node lane to
+ *  the Fields tab's own material counter above -- also when that
+ *  counter's own arrival flash fires. Longer than Scrap's own 650ms
+ *  (bigger, more satisfying moment per direct request; Harvest catches
+ *  happen far more often than a Scrap action, but the flourish is
+ *  cheap/ambient enough that a longer one here doesn't get tiring the
+ *  way a longer one on every single quest result might). */
+const HARVEST_FLY_MS = 900;
+const HARVEST_FLASH_MS = 700;
+
 function FieldsTab() {
   const state = useEngine().state;
+  const cap = HarvestManager.capacity(state);
+  const [flashing, setFlashing] = useState<Partial<Record<MaterialId, boolean>>>({});
+  const flashTimeouts = useRef<Partial<Record<MaterialId, number>>>({});
+
+  const triggerFlash = (materialId: MaterialId) => {
+    setFlashing((cur) => ({ ...cur, [materialId]: true }));
+    const existing = flashTimeouts.current[materialId];
+    if (existing !== undefined) window.clearTimeout(existing);
+    flashTimeouts.current[materialId] = window.setTimeout(() => {
+      setFlashing((cur) => ({ ...cur, [materialId]: false }));
+    }, HARVEST_FLASH_MS);
+  };
+
+  useEffect(() => () => {
+    for (const id of Object.values(flashTimeouts.current)) if (id !== undefined) window.clearTimeout(id);
+  }, []);
+
   return (
     <>
       <div className="row wrap" style={{ gap: 12, marginBottom: 8 }}>
         {MATERIALS.map((m) => (
-          <span key={m.id} className="tiny muted">
-            {m.name}: {formatMaterial(state.materials[m.id])}/{HarvestManager.capacity(state)}
-          </span>
+          <MaterialCounter key={m.id} materialId={m.id} amount={state.materials[m.id]} cap={cap} flashing={!!flashing[m.id]} />
         ))}
       </div>
+      <SpawnTimerBar />
       <div className="harvest-scene">
         <div className="harvest-scene-bg" aria-hidden="true" style={{ backgroundImage: 'url(./lore/harvest/fields.jpg)' }} />
-        {NODE_ORDER.map((nodeId) => <NodeLane key={nodeId} nodeId={nodeId} />)}
+        {NODE_ORDER.map((nodeId) => <NodeLane key={nodeId} nodeId={nodeId} onCatch={triggerFlash} />)}
       </div>
     </>
   );
 }
 
-function NodeLane({ nodeId }: { nodeId: MaterialId }) {
+/**
+ * Countdown to the next synchronized spawn wave (see GameState.
+ * harvestNextSpawnAt's own doc comment) -- a plain, drains-to-empty
+ * `.bar`, same convention every other progress bar in the game already
+ * uses (and, since the animated-width fix earlier this project, animates
+ * smoothly rather than snapping). Ticks once a second -- fine-grained
+ * enough for a bar the player is just glancing at, not worth a faster
+ * tick that would only matter for something like the falling-item
+ * fade-out, which already has its own 400ms tick where it's actually
+ * needed.
+ */
+function SpawnTimerBar() {
+  const state = useEngine().state;
+  const now = useNow(1000);
+  const total = HarvestManager.globalSpawnIntervalMs(state);
+  const remaining = Math.max(0, state.harvestNextSpawnAt - now);
+  const ratio = total > 0 ? Math.min(1, remaining / total) : 0;
+  return (
+    <div className="row" style={{ gap: 8, alignItems: 'center', marginBottom: 10 }}>
+      <span className="tiny muted" style={{ flex: 'none' }}>Next spawn</span>
+      <div className="bar" style={{ flex: 1 }} title={`${Math.ceil(remaining / 1000)}s until the next wave`}>
+        <span style={{ width: `${ratio * 100}%` }} />
+      </div>
+      <span className="tiny muted" style={{ flex: 'none', width: 28, textAlign: 'right' }}>
+        {Math.ceil(remaining / 1000)}s
+      </span>
+    </div>
+  );
+}
+
+/** The Fields tab's own always-visible material counter -- doubles as the
+ *  fly target every node lane's catch flight aims at (see NodeLane's own
+ *  `onCatch`), registered under `material:<id>` the same way
+ *  ScrapStation's counter registered `scrap`/MenuWindow's registers
+ *  `gold`. Deliberately the Fields tab's own summary row, not the
+ *  Warehouse tab's stock rows -- those live on a different sub-tab that
+ *  isn't mounted at the same time a catch actually happens, so they'd
+ *  never be a valid fly target in the first place. */
+function MaterialCounter({ materialId, amount, cap, flashing }: { materialId: MaterialId; amount: number; cap: number; flashing: boolean }) {
+  const ref = useFlyTargetRef<HTMLSpanElement>(`material:${materialId}`);
+  const material = MATERIAL_BY_ID[materialId];
+  return (
+    <span ref={ref} className={`tiny muted counter-flash-target ${flashing ? 'flash' : ''}`}>
+      {material.name}: {formatMaterial(amount)}/{cap}
+    </span>
+  );
+}
+
+function NodeLane({ nodeId, onCatch }: { nodeId: MaterialId; onCatch: (materialId: MaterialId) => void }) {
   const engine = useEngine();
   const state = engine.state;
   // 400ms tick -- fast enough that the fade-out near despawn reads as
@@ -133,6 +208,7 @@ function NodeLane({ nodeId }: { nodeId: MaterialId }) {
   // low-stakes.
   const now = useNow(400);
   const [burst, setBurst] = useState<{ key: number; left: number; gained: number; bonus: boolean; icon: string | null } | null>(null);
+  const [flight, setFlight] = useState<{ key: number; dx: number; dy: number; left: number; icon: string | null } | null>(null);
   const { settings } = useSettings();
 
   const material = MATERIAL_BY_ID[nodeId];
@@ -146,13 +222,14 @@ function NodeLane({ nodeId }: { nodeId: MaterialId }) {
    *
    * 1. That 1200ms was hardcoded, but the CSS animation it's gating
    *    (`.harvest-item.fresh`'s `harvest-fall`) scales with
-   *    `--anim-speed` (`calc(900ms / max(var(--anim-speed, 1), 0.001))`).
-   *    At the default 1x speed that's 900ms, comfortably inside 1200ms --
-   *    but at Settings > Animation speed "Slow" (0.5x) the real CSS
-   *    duration stretches to 1800ms, so the class flipped from `fresh`
-   *    to `settled` (and the fall animation got yanked mid-flight, right
-   *    as it was easing into its landing bounce) 600ms before the fall
-   *    was actually done playing.
+   *    `--anim-speed` (`calc(2000ms / max(var(--anim-speed, 1), 0.001))`,
+   *    slowed from an original 900ms per direct request -- the fall
+   *    reads noticeably more of a gentle drift now, not a quick drop).
+   *    At the default 1x speed that's 2000ms; at Settings > Animation
+   *    speed "Slow" (0.5x) the real CSS duration stretches to 4000ms, so
+   *    a fixed hardcoded gate would cut the fall off (and the fall
+   *    animation got yanked mid-flight, right as it was easing into its
+   *    landing bounce) well before it was actually done playing.
    * 2. On the very first render where a fresh `pending` appears, the
    *    effect hasn't run yet, so `isFresh` started out `false` for one
    *    frame -- the item's first paint used the *settled* (already-at-
@@ -166,7 +243,7 @@ function NodeLane({ nodeId }: { nodeId: MaterialId }) {
    * catch up to.
    */
   const animSpeed = settings.reduceMotion ? 0 : settings.animationSpeed;
-  const fallDurationMs = 900 / Math.max(animSpeed, 0.001);
+  const fallDurationMs = 2000 / Math.max(animSpeed, 0.001);
   const isFresh = pending ? (now - pending.spawnedAt) < fallDurationMs + 300 : false;
 
   const msLeft = pending ? pending.expiresAt - now : 0;
@@ -174,10 +251,16 @@ function NodeLane({ nodeId }: { nodeId: MaterialId }) {
   const leftPercent = pending ? spawnPositionPercent(pending.spawnedAt, nodeId) : 0;
   const icon = pending ? harvestIconFor(nodeId, pending.spawnedAt) : null;
 
-  function handleClick() {
+  function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
     const result = engine.catchMaterial(nodeId);
     if (result.gained > 0) {
-      setBurst({ key: Date.now(), left: leftPercent, gained: result.gained, bonus: result.bonus, icon });
+      const key = Date.now();
+      setBurst({ key, left: leftPercent, gained: result.gained, bonus: result.bonus, icon });
+      const offset = measureFlyOffset(e.currentTarget, `material:${nodeId}`);
+      if (offset) {
+        setFlight({ key, ...offset, left: leftPercent, icon });
+        window.setTimeout(() => onCatch(nodeId), HARVEST_FLY_MS);
+      }
     }
   }
 
@@ -203,7 +286,7 @@ function NodeLane({ nodeId }: { nodeId: MaterialId }) {
           key={burst.key}
         >
           <span
-            className="collect-particle material"
+            className="collect-particle material harvest-catch"
             style={{ '--dx': `${BURST_PARTICLES[0].dx}px`, '--dy': `${BURST_PARTICLES[0].dy}px`, '--rot': `${BURST_PARTICLES[0].rot}deg` } as CSSProperties}
           >
             +{formatMaterial(burst.gained)} {material.name}{burst.bonus ? ' bonus!' : ''}
@@ -218,6 +301,31 @@ function NodeLane({ nodeId }: { nodeId: MaterialId }) {
             </span>
           ))}
         </div>
+      )}
+
+      {/* The actual "flies up to the counter" particle -- separate from
+          the local burst above, which stays as in-place flavor at the
+          spawn's own position. This one travels the real measured
+          distance to the Fields tab's own material counter (see
+          MaterialCounter/measureFlyOffset), landing exactly on it
+          regardless of where in the lane the catch happened. Positioned
+          at the spawn's own last on-screen spot (same left% the item
+          itself was showing at), not the scene's origin, since that's
+          where the actual catch visually happened. */}
+      {flight && (
+        <span
+          key={flight.key}
+          className="fly-particle"
+          aria-hidden="true"
+          style={{
+            left: `${flight.left}%`, top: '62%',
+            '--fly-dx': `${flight.dx}px`, '--fly-dy': `${flight.dy}px`,
+            animationDuration: `${HARVEST_FLY_MS}ms`,
+            position: 'absolute', fontSize: '1.25rem',
+          } as CSSProperties}
+        >
+          <HarvestGlyph icon={flight.icon} glyph={material.glyph} />
+        </span>
       )}
     </>
   );

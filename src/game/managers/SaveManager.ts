@@ -116,8 +116,9 @@ export function createInitialState(now = Date.now()): GameState {
     pendingChainDiscovery: false,
     materials: emptyMaterials(),
     harvestNodes: Object.fromEntries(
-      NODE_ORDER.map((id) => [id, { nextSpawnAt: now + Tuning.get('harvest.baseSpawnIntervalMs'), pending: null }]),
+      NODE_ORDER.map((id) => [id, { pending: null }]),
     ) as GameState['harvestNodes'],
+    harvestNextSpawnAt: now + Tuning.get('harvest.baseSpawnIntervalMs'),
     harvestTools: emptyMaterials(),
     warehouseLevel: 0,
     tradeRouteUnlocked: false,
@@ -469,6 +470,29 @@ const MIGRATIONS: Record<number, Migration> = {
     // update count toward it, which is what "unread" should mean here.
     notificationsSeenId: (save.notifications as { id: string }[] | undefined)?.[0]?.id ?? null,
   }),
+  31: (save) => {
+    const oldNodes = (save.harvestNodes as Record<string, { nextSpawnAt?: number; pending: unknown }> | undefined) ?? {};
+    // Old per-node nextSpawnAt values get dropped (that field no longer
+    // exists on HarvestNodeState) rather than migrated forward -- picking
+    // any one of the 4 old values to seed the new shared timer would be
+    // arbitrary anyway, so this just starts the first synchronized wave
+    // one full base interval from whenever the save loads, the same
+    // "fresh cycle starting now" shape a genuinely new save already gets
+    // in createInitialState. Each node's own `pending` (whatever's
+    // already sitting there, if anything) carries over untouched -- a
+    // player mid-catch when this update lands doesn't lose an item
+    // they can already see on screen.
+    const harvestNodes: Record<string, { pending: unknown }> = {};
+    for (const [id, node] of Object.entries(oldNodes)) {
+      harvestNodes[id] = { pending: node.pending };
+    }
+    return {
+      ...save,
+      version: 32,
+      harvestNodes,
+      harvestNextSpawnAt: Date.now() + Tuning.get('harvest.baseSpawnIntervalMs'),
+    };
+  },
 };
 
 export const SaveManager = {

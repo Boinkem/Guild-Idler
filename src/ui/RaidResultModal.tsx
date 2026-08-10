@@ -7,6 +7,7 @@ import { playSound } from '../game/sound';
 import { RarityPill } from './RarityPill';
 import { formatGold, RARITY_COLOR } from '../game/util';
 import { useCountUp } from './useCountUp';
+import { measureFlyOffset } from './flyTarget';
 
 /** Same dismiss timing as QuestResultModal, for the same reason -- gives the
  *  longest particle time to finish fading rather than getting cut off. */
@@ -63,6 +64,8 @@ export function RaidResultModal({ active, onViewLore }: { active: boolean; onVie
 
 function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; engine: GameEngine; onViewLore: () => void }) {
   const [dismissing, setDismissing] = useState(false);
+  const rewardBurstRef = useRef<HTMLDivElement>(null);
+  const [goldFlight, setGoldFlight] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
   const timeoutRef = useRef<number | null>(null);
   const hasLegendary = result.loot.some((item) => item.rarity === 'legendary');
   // Same one-shot 0 -> final-value count-up as QuestResultModal's own,
@@ -80,6 +83,15 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
     if (dismissing) return;
     setDismissing(true);
     playSound(hasLegendary ? 'legendary_drop' : 'collect');
+    // Gold-only (no XP flight, unlike QuestResultModal's own version) --
+    // a raid's reward XP goes to the whole party (result.heroIds), not
+    // one specific hero, so there's no single obvious XP bar to aim at
+    // the way a solo quest result has.
+    if (rewardBurstRef.current && result.gold > 0) {
+      const originRect = rewardBurstRef.current.getBoundingClientRect();
+      const offset = measureFlyOffset(rewardBurstRef.current, 'gold');
+      if (offset) setGoldFlight({ x: originRect.left + originRect.width / 2, y: originRect.top, ...offset });
+    }
     timeoutRef.current = window.setTimeout(() => engine.dismissRaidResult(), DISMISS_DELAY_MS);
   };
 
@@ -104,7 +116,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
               : 'The party was turned back at the first encounter.'}
         </p>
 
-        <div className="reward-burst">
+        <div ref={rewardBurstRef} className="reward-burst">
           {result.xp > 0 && <span className="burst-xp">+{displayXp} XP</span>}
           {result.gold > 0 && <span className="burst-gold">+{formatGold(displayGold)} gold</span>}
         </div>
@@ -175,6 +187,25 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
               </span>
             ))}
           </div>
+        )}
+
+        {/* Flies to the header's gold display, the real measured
+            distance -- same mechanism QuestResultModal's own gold flight
+            uses, see that component for the fuller explanation. Silently
+            renders nothing if the header wasn't mounted to measure
+            against (idle mode has no header). */}
+        {dismissing && goldFlight && (
+          <span
+            className="fly-particle"
+            aria-hidden="true"
+            style={{
+              position: 'fixed', left: goldFlight.x, top: goldFlight.y,
+              '--fly-dx': `${goldFlight.dx}px`, '--fly-dy': `${goldFlight.dy}px`,
+              animationDuration: `${DISMISS_DELAY_MS}ms`, fontSize: '1.1rem', color: 'var(--brass)',
+            } as CSSProperties}
+          >
+            ◆
+          </span>
         )}
       </div>
     </div>

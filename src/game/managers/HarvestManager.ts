@@ -11,14 +11,27 @@ export const HarvestManager = {
     return state.heroes.filter((h) => h.status !== 'questing').length;
   },
 
-  /** Time until this node's next spawn, given the current idle-hero count and tool level. */
-  spawnIntervalMs(state: GameState, nodeId: MaterialId): number {
+  /**
+   * Time until the NEXT synchronized spawn wave (all 4 nodes at once) --
+   * replaces what used to be a per-node spawnIntervalMs. Idle-hero-count
+   * still speeds this up the same way it always has; tool level's own
+   * bonus is now the BEST of the 4 nodes' own levels rather than each
+   * node's individual one, since there's only one shared timer left to
+   * apply a bonus to -- upgrading any single tool still speeds up the
+   * whole wave, it just no longer matters WHICH one you upgraded for
+   * timing purposes (yield-per-catch is still fully per-node/per-tool,
+   * unaffected by this).
+   */
+  globalSpawnIntervalMs(state: GameState): number {
     const base = Tuning.get('harvest.baseSpawnIntervalMs');
     const min = Tuning.get('harvest.minSpawnIntervalMs');
     const perHero = Tuning.get('harvest.spawnReductionPerIdleHeroMs');
-    const tool = HARVEST_TOOL_BY_NODE[nodeId];
-    const toolLevel = state.harvestTools[nodeId] ?? 0;
-    const reduction = HarvestManager.idleHeroCount(state) * perHero + toolLevel * tool.spawnBonusMsPerLevel;
+    const bestToolBonus = Math.max(0, ...NODE_ORDER.map((nodeId) => {
+      const tool = HARVEST_TOOL_BY_NODE[nodeId];
+      const level = state.harvestTools[nodeId] ?? 0;
+      return level * tool.spawnBonusMsPerLevel;
+    }));
+    const reduction = HarvestManager.idleHeroCount(state) * perHero + bestToolBonus;
     return Math.max(min, base - reduction);
   },
 
@@ -27,12 +40,22 @@ export const HarvestManager = {
   },
 
   /**
-   * Advances every node's spawn/despawn state to `now`. Called from
-   * GameEngine.refreshWorld the same way the quest board and shop
-   * rotations already are -- a node keeps spawning (and expiring) items
-   * even while its own tab isn't the one open, same "the world doesn't
-   * pause just because you're not looking at it" principle as everything
-   * else that ticks.
+   * Advances the shared spawn wave and every node's own despawn to `now`.
+   * Called from GameEngine.refreshWorld the same way the quest board and
+   * shop rotations already are -- the fields keep spawning (and expiring)
+   * even while the Harvest tab isn't the one open, same "the world
+   * doesn't pause just because you're not looking at it" principle as
+   * everything else that ticks.
+   *
+   * Two independent things happen here, on purpose: an individual node's
+   * pending item still despawns on its own schedule (no penalty, it just
+   * disappears) if it sits uncaught past its own expiresAt, but nothing
+   * about that reschedules that one node's own next spawn anymore --
+   * only the shared `harvestNextSpawnAt` firing does that, for every node
+   * at once. A node whose item is still sitting there uncaught when the
+   * next wave fires gets overwritten with a fresh one rather than
+   * skipped -- see GameState.harvestNextSpawnAt's own doc comment for
+   * why that's the intended behavior, not a bug.
    */
   ensureSpawns(state: GameState, now: number): boolean {
     let changed = false;
@@ -40,18 +63,20 @@ export const HarvestManager = {
       const node = state.harvestNodes[nodeId];
       if (node.pending && now >= node.pending.expiresAt) {
         node.pending = null;
-        node.nextSpawnAt = now + HarvestManager.spawnIntervalMs(state, nodeId);
         changed = true;
       }
-      if (!node.pending && now >= node.nextSpawnAt) {
-        const bonusChance = Tuning.get('harvest.bonusChancePercent') / 100;
-        node.pending = {
+    }
+    if (now >= state.harvestNextSpawnAt) {
+      const bonusChance = Tuning.get('harvest.bonusChancePercent') / 100;
+      for (const nodeId of NODE_ORDER) {
+        state.harvestNodes[nodeId].pending = {
           spawnedAt: now,
           expiresAt: now + Tuning.get('harvest.despawnWindowMs'),
           bonus: Math.random() < bonusChance,
         };
-        changed = true;
       }
+      state.harvestNextSpawnAt = now + HarvestManager.globalSpawnIntervalMs(state);
+      changed = true;
     }
     return changed;
   },
@@ -60,7 +85,9 @@ export const HarvestManager = {
    * Catches whatever's currently pending at a node, if anything. Returns
    * the amount gained (0 if there was nothing to catch, already expired,
    * or the warehouse is already full), and whether it was a bonus glint,
-   * for the UI's collect-particle feedback.
+   * for the UI's collect-particle feedback. No longer reschedules this
+   * node's own next spawn -- that's the shared wave timer's job now, not
+   * something an individual catch influences.
    */
   catch(state: GameState, nodeId: MaterialId, now: number): { gained: number; bonus: boolean } {
     const node = state.harvestNodes[nodeId];
@@ -74,7 +101,6 @@ export const HarvestManager = {
     const gained = Math.max(0, Math.min(raw, cap - state.materials[nodeId]));
     state.materials[nodeId] += gained;
     node.pending = null;
-    node.nextSpawnAt = now + HarvestManager.spawnIntervalMs(state, nodeId);
     return { gained, bonus };
   },
 

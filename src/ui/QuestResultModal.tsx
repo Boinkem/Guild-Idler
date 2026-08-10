@@ -8,6 +8,7 @@ import { playSound } from '../game/sound';
 import { formatGold, RARITY_COLOR } from '../game/util';
 import { RarityPill } from './RarityPill';
 import { useCountUp } from './useCountUp';
+import { measureFlyOffset } from './flyTarget';
 
 /** How long the pop-out + coin/XP burst plays before the modal actually
  * unmounts. Matches the CSS: modal-pop-out is 320ms, collect-fly is 750ms
@@ -84,6 +85,9 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
 }) {
   const [dismissing, setDismissing] = useState(false);
   const timeoutRef = useRef<number | null>(null);
+  const rewardBurstRef = useRef<HTMLDivElement>(null);
+  const [goldFlight, setGoldFlight] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
+  const [xpFlight, setXpFlight] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
   const hasLegendary = result.loot.some((item) => item.rarity === 'legendary');
   // One-shot count-up from 0 -- this card mounts once per result with the
   // final reward already known, so it should count up to it on arrival
@@ -121,6 +125,25 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
     if (dismissing) return;
     setDismissing(true);
     playSound(result.critBonus || hasLegendary ? 'legendary_drop' : 'collect');
+    // Measured right here, at the same moment the ordinary local coin/XP
+    // burst below starts -- same "measure at the action that triggers the
+    // burst" timing ScrapStation's own fly-to-counter already established.
+    // Both gracefully resolve to null (no flight rendered) if their target
+    // isn't currently mounted -- the header's gold display only exists in
+    // full menu mode, and a hero's own XP bar only exists while the Heroes
+    // tab happens to be open, neither of which this modal can assume.
+    if (rewardBurstRef.current) {
+      const originRect = rewardBurstRef.current.getBoundingClientRect();
+      const origin = { x: originRect.left + originRect.width / 2, y: originRect.top };
+      if (result.gold > 0) {
+        const offset = measureFlyOffset(rewardBurstRef.current, 'gold');
+        if (offset) setGoldFlight({ ...origin, ...offset });
+      }
+      if (result.xp > 0) {
+        const offset = measureFlyOffset(rewardBurstRef.current, `heroXp:${result.heroId}`);
+        if (offset) setXpFlight({ ...origin, ...offset });
+      }
+    }
     timeoutRef.current = window.setTimeout(() => engine.dismissResult(), DISMISS_DELAY_MS);
   };
 
@@ -140,7 +163,7 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
           {result.success ? 'The contract is fulfilled.' : 'The contract failed.'}
         </p>
 
-        <div className={`reward-burst ${result.critBonus ? 'crit' : ''}`}>
+        <div ref={rewardBurstRef} className={`reward-burst ${result.critBonus ? 'crit' : ''}`}>
           {result.xp > 0 && <span className={`burst-xp ${result.critBonus ? 'crit' : ''}`}>+{displayXp} XP</span>}
           {result.gold > 0 && <span className={`burst-gold ${result.critBonus ? 'crit' : ''}`}>+{formatGold(displayGold)} gold</span>}
         </div>
@@ -260,6 +283,46 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
               </span>
             ))}
           </div>
+        )}
+
+        {/* The actual "flies to where it belongs" particles -- separate
+            from the local coin/XP burst above, which stays as in-place
+            flavor at the reward-burst's own position. These travel the
+            real measured distance (see handleDismiss) to the header's
+            gold display and this hero's own XP bar, landing exactly on
+            them and triggering their own arrival flash -- same mechanism
+            ScrapStation's original fly-to-counter established, generalized
+            via flyTarget.ts so it works across completely different,
+            not-simultaneously-mounted panels. Silently render nothing if
+            their target wasn't mounted to measure against (idle mode has
+            no header; the Heroes tab might not be open) -- the local
+            burst and the count-up on whatever numbers ARE visible already
+            cover the reward being clearly communicated either way. */}
+        {dismissing && goldFlight && (
+          <span
+            className="fly-particle"
+            aria-hidden="true"
+            style={{
+              position: 'fixed', left: goldFlight.x, top: goldFlight.y,
+              '--fly-dx': `${goldFlight.dx}px`, '--fly-dy': `${goldFlight.dy}px`,
+              animationDuration: `${DISMISS_DELAY_MS}ms`, fontSize: '1.1rem', color: 'var(--brass)',
+            } as CSSProperties}
+          >
+            ◆
+          </span>
+        )}
+        {dismissing && xpFlight && (
+          <span
+            className="fly-particle"
+            aria-hidden="true"
+            style={{
+              position: 'fixed', left: xpFlight.x, top: xpFlight.y,
+              '--fly-dx': `${xpFlight.dx}px`, '--fly-dy': `${xpFlight.dy}px`,
+              animationDuration: `${DISMISS_DELAY_MS}ms`, fontSize: '1.1rem', color: 'var(--sky)',
+            } as CSSProperties}
+          >
+            ✦
+          </span>
         )}
       </div>
     </div>

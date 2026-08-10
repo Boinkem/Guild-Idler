@@ -110,7 +110,7 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
       <div className="modal craft-station-modal" onClick={(e) => e.stopPropagation()}>
         <div className="spread" style={{ marginBottom: 8 }}>
           <span className="card-title">Scrap</span>
-          <span ref={counterRef} className={`tiny scrap-counter ${counterFlash ? 'flash' : ''}`}>
+          <span ref={counterRef} className={`tiny counter-flash-target ${counterFlash ? 'flash' : ''}`}>
             ⚙ {displayScrap}
           </span>
           <button onClick={onClose}>Close</button>
@@ -189,7 +189,7 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
           {flight && (
             <span
               key={flight.key}
-              className="scrap-fly-to-counter"
+              className="fly-particle"
               aria-hidden="true"
               style={{
                 left: `${SLOT_RECT.left + SLOT_RECT.width / 2}%`,

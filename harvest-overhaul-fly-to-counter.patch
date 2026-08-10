@@ -1,0 +1,1114 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 433a5e7..1f016e7 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -3694,6 +3694,117 @@ now grows to fit the card, instead of the card needing to shrink or
+ scroll to fit the window. `npx tsc --noEmit` and a full `vite build` both
+ pass clean.
+ 
++### Harvest overhaul + universal fly-to-counter -- built
++A large batch: two quick fixes, a Harvest mechanics change, and a shared
++piece of infrastructure (`flyTarget.ts`) that generalizes Scrap's own
++fly-to-counter flourish so it works everywhere the same idea was asked
++for, even across panels that aren't simultaneously mounted.
++
++**Quick fixes:**
++- **Notification banner gated to menu mode only.** Was mounted
++  unconditionally; now only shows once the full menu is open, matching
++  every other "needs a destination to navigate to" modal. Notifications
++  that arrive while idle still archive and count toward the header badge
++  exactly the same -- this only gates the transient pop-in.
++- **Wizard facing the wrong way -- fixed.** Same `HERO_REVERSED_FACING`
++  mechanism the Dwarf fix already established (`HeroSprite.tsx`) -- his
++  source pack was authored facing the opposite default direction from
++  every other class, same as the Dwarf's was.
++- **Harvest icons halved** (72px -> 36px, was doubled from an original
++  ~36px in an earlier pass) -- read as too large once real art was
++  actually in place. Glow/shadow radii scaled down proportionally to
++  match rather than left oversized against the smaller icon.
++
++**New shared infrastructure: `src/ui/flyTarget.ts`.** Scrap's own
++fly-to-counter (built earlier) worked because the item slot and the
++Scrap counter were both inside the same modal at the same time --
++several new requests (a Harvest catch flying to the Fields tab's own
++counter while spawning happens there; quest reward gold flying to the
++header; XP flying to a specific hero's own bar) don't have that luxury,
++since origin and destination can be on completely different, not-
++simultaneously-mounted panels. New shared registry: `registerFlyTarget`/
++`useFlyTargetRef` let any component register "here's where things should
++fly to" under a string key; `measureFlyOffset` gives any origin element
++the real live `getBoundingClientRect()`-measured distance to a
++registered target, or `null` if that target isn't currently mounted
++(every consumer treats that as "skip this flight," never an error).
++Generalized the existing Scrap-specific CSS classes into reusable ones
++(`.scrap-fly-to-counter` -> `.fly-particle`, `.scrap-counter` ->
++`.counter-flash-target`) and updated `ScrapStation.tsx` to the renamed
++classes, confirmed with a fresh `vite build` that nothing broke there.
++
++**Harvest spawn synchronization.** Per direct request ("materials all
++spawn at the same time, not at random intervals"): replaced 4
++independent per-node `nextSpawnAt` timers with one shared `GameState.
++harvestNextSpawnAt`. All 4 materials now spawn together as a single
++wave. This meant a real design decision about what tool upgrades mean
++once there's only one shared timer -- resolved by having the wave's own
++speed read the BEST of the 4 nodes' own tool-driven spawn bonuses
++(upgrading any single tool still speeds up the whole wave), while yield-
++per-catch stays fully per-node/per-tool, completely unaffected. A node
++whose previous wave's item is still sitting there uncaught when the next
++wave fires gets overwritten with a fresh one rather than skipped -- the
++wave is the moment that matters, not any one node's own catch-up state,
++same "miss it, no penalty, it's just gone" spirit the despawn timer
++already had. `SAVE_VERSION` bumped 31 -> 32; migration preserves
++whatever's already `pending` on each node (a player mid-catch when this
++lands doesn't lose an item they can already see) and starts the first
++synchronized wave one base interval out. New `SpawnTimerBar` (Fields
++tab) shows a plain countdown to the next wave, same `.bar` convention
++(and the animated-width fix) every other progress bar in the game
++already uses.
++
++**Harvest catch flash.** Bigger (new `.collect-particle.harvest-catch`
++modifier, 1.25rem vs the shared default 0.9375rem) and longer (1200ms vs
++750ms) per direct request, plus a genuine flight to the Fields tab's own
++material counter (not the separate Warehouse tab's stock rows, which
++aren't mounted at the same time a catch happens) using the new
++`flyTarget` system -- the counter flashes gold on arrival, timed to the
++flight's own duration.
++
++**Harvest falling animation.** Slowed from 900ms to 2000ms (a little
++over half the original speed, per direct request) -- the JS-side
++`fallDurationMs` constant in `HarvestPanel.tsx` updated to match exactly,
++since an existing comment there already explained why that value has to
++mirror the CSS duration formula precisely (a mismatch was a real
++previously-fixed bug in this same animation). Added left/right horizontal
++wobble to the `harvest-fall` keyframe, layered on top of the existing
++vertical fall + landing bounce rather than replacing it -- starts
++slightly left, wobbles right as it falls, settles with a little residual
++sway during the bounce.
++
++**Gold/XP fly-to-counter for quest and raid rewards.** The header's gold
++display (`MenuWindow.tsx`) and each hero's own XP bar (`HeroesPanel.tsx`,
++the collapsed-summary one, always visible) are now registered fly
++targets. `QuestResultModal` measures both flights the moment the card is
++dismissed (same "measure at the action that triggers the burst" timing
++Scrap's own flight already used), flying gold to the header and XP to
++the specific hero who earned it -- both silently skip if their target
++isn't currently mounted (idle mode has no header; the Heroes tab might
++not be open), so the existing local burst and count-up already cover the
++reward regardless. `RaidResultModal` gets the same gold flight; XP is
++deliberately NOT flown for raids -- a raid's XP goes to the whole party
++(`result.heroIds`), not one specific hero, so there's no single obvious
++bar to aim at the way a solo quest result has.
++
++Hit a real Rules-of-Hooks constraint building the hero-XP-bar
++registration: `HeroesPanel.tsx` renders each hero's card via a plain
++`.map()` callback, not a real per-item component, so `useFlyTargetRef`
++(a hook) couldn't be called there -- same constraint `usePulsesOnChange`
++already had to be designed around earlier. Fixed by calling
++`registerFlyTarget` (a plain function) directly from a callback ref
++instead of going through the hook at all for that one call site.
++
++Verified: `npx tsc --noEmit` and a full `vite build` both pass clean,
++plus 17 runtime checks -- 11 for the synchronized spawn wave (all 4
++nodes spawning at the exact same timestamp, catching one node not
++rescheduling the shared timer, an uncaught node correctly getting
++overwritten rather than skipped on the next wave, idle-hero-count and
++best-of-4-tools both correctly speeding up the shared interval) and 6
++for the `flyTarget` registry itself (unregistered-target safety, correct
++center/offset math against a fake measured element, and the
++unregister-on-unmount contract).
++
+ ### Bigger, still-undecided
+ - **Queued from the same conversation as the UX/economy batch above:**
+   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
+@@ -3843,14 +3954,18 @@ pass clean.
+   now built, ahead of any actual pack -- see "DLC groundwork -- built"
+   in the main patch log above.
+ - **Adventurer's idle animation has a weapon-out frame mixed into it** --
+-  reported directly, not yet fixed: the base Adventurer class's idle
+-  loop includes at least one frame with the weapon drawn, when idle
+-  should read as idle only (no weapon out) the same way every other
+-  class's idle animation already does. Waiting on the actual sprite
+-  sheet files to be sent over before touching this -- recorded here so
+-  it isn't lost in the meantime. Likely fix shape once the files are in
+-  hand: either the source sheet's idle row needs trimming at import time
+-  (`tools/import_characters.py`), or the frame count/range for
+-  Adventurer's `idle` animation needs adjusting in the generated
+-  `public/heroes/manifest.json` if the weapon-out frame is only a subset
+-  of an otherwise-correct row.
++  reported directly, still not fixed, but now reviewed. 6 reference
++  frames were sent over (adventurer-idle-00 through 03, plus a -2-01/
++  -2-02 pair), each 50x37px, all confirmed on review to show a calm,
++  weapon-sheathed idle pose with no flourish -- a good, correct reference
++  set. Not yet actually usable to fix this, though: they're loose
++  individual frame files, not the single horizontal sprite-strip format
++  `tools/import_characters.py` / the generated `public/heroes/
++  manifest.json` actually expect (one wide PNG per animation, frame
++  count times frameW across, same convention every other class's idle
++  strip already uses) -- and binary art can't travel through a code
++  patch regardless of format, so this needs the actual strip file placed
++  locally and the import script re-run, not something fixable from here
++  directly. Next step whenever that's ready: either compile these 6 (or
++  however many the real idle loop uses) into one strip and drop it in,
++  or send the strip directly for review.
+diff --git a/src/App.tsx b/src/App.tsx
+index b5eac92..d386237 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -106,7 +106,17 @@ export function App() {
+         </>
+       )}
+       <Toast />
+-      <NotificationBanner />
++      {/* Menu-only -- the notification banner is meant to be a prominent,
++          clickable "go check this out" moment, which only makes sense
++          once the full menu (with somewhere for it to actually navigate
++          to) is open. The tiny idle companion window already has its own
++          compact quest-result banner for the one thing worth surfacing
++          there; a second, unrelated banner system popping up over that
++          small window would be genuinely noisy, not helpful. Notifications
++          that arrive while idle still archive into the log and count
++          toward the header badge/unread count exactly the same -- this
++          only gates the transient pop-in banner itself. */}
++      {mode === 'menu' && <NotificationBanner />}
+       <AchievementPopup />
+     </EngineContext.Provider>
+   );
+diff --git a/src/game/managers/HarvestManager.ts b/src/game/managers/HarvestManager.ts
+index 800a781..96e8090 100644
+--- a/src/game/managers/HarvestManager.ts
++++ b/src/game/managers/HarvestManager.ts
+@@ -11,14 +11,27 @@ export const HarvestManager = {
+     return state.heroes.filter((h) => h.status !== 'questing').length;
+   },
+ 
+-  /** Time until this node's next spawn, given the current idle-hero count and tool level. */
+-  spawnIntervalMs(state: GameState, nodeId: MaterialId): number {
++  /**
++   * Time until the NEXT synchronized spawn wave (all 4 nodes at once) --
++   * replaces what used to be a per-node spawnIntervalMs. Idle-hero-count
++   * still speeds this up the same way it always has; tool level's own
++   * bonus is now the BEST of the 4 nodes' own levels rather than each
++   * node's individual one, since there's only one shared timer left to
++   * apply a bonus to -- upgrading any single tool still speeds up the
++   * whole wave, it just no longer matters WHICH one you upgraded for
++   * timing purposes (yield-per-catch is still fully per-node/per-tool,
++   * unaffected by this).
++   */
++  globalSpawnIntervalMs(state: GameState): number {
+     const base = Tuning.get('harvest.baseSpawnIntervalMs');
+     const min = Tuning.get('harvest.minSpawnIntervalMs');
+     const perHero = Tuning.get('harvest.spawnReductionPerIdleHeroMs');
+-    const tool = HARVEST_TOOL_BY_NODE[nodeId];
+-    const toolLevel = state.harvestTools[nodeId] ?? 0;
+-    const reduction = HarvestManager.idleHeroCount(state) * perHero + toolLevel * tool.spawnBonusMsPerLevel;
++    const bestToolBonus = Math.max(0, ...NODE_ORDER.map((nodeId) => {
++      const tool = HARVEST_TOOL_BY_NODE[nodeId];
++      const level = state.harvestTools[nodeId] ?? 0;
++      return level * tool.spawnBonusMsPerLevel;
++    }));
++    const reduction = HarvestManager.idleHeroCount(state) * perHero + bestToolBonus;
+     return Math.max(min, base - reduction);
+   },
+ 
+@@ -27,12 +40,22 @@ export const HarvestManager = {
+   },
+ 
+   /**
+-   * Advances every node's spawn/despawn state to `now`. Called from
+-   * GameEngine.refreshWorld the same way the quest board and shop
+-   * rotations already are -- a node keeps spawning (and expiring) items
+-   * even while its own tab isn't the one open, same "the world doesn't
+-   * pause just because you're not looking at it" principle as everything
+-   * else that ticks.
++   * Advances the shared spawn wave and every node's own despawn to `now`.
++   * Called from GameEngine.refreshWorld the same way the quest board and
++   * shop rotations already are -- the fields keep spawning (and expiring)
++   * even while the Harvest tab isn't the one open, same "the world
++   * doesn't pause just because you're not looking at it" principle as
++   * everything else that ticks.
++   *
++   * Two independent things happen here, on purpose: an individual node's
++   * pending item still despawns on its own schedule (no penalty, it just
++   * disappears) if it sits uncaught past its own expiresAt, but nothing
++   * about that reschedules that one node's own next spawn anymore --
++   * only the shared `harvestNextSpawnAt` firing does that, for every node
++   * at once. A node whose item is still sitting there uncaught when the
++   * next wave fires gets overwritten with a fresh one rather than
++   * skipped -- see GameState.harvestNextSpawnAt's own doc comment for
++   * why that's the intended behavior, not a bug.
+    */
+   ensureSpawns(state: GameState, now: number): boolean {
+     let changed = false;
+@@ -40,18 +63,20 @@ export const HarvestManager = {
+       const node = state.harvestNodes[nodeId];
+       if (node.pending && now >= node.pending.expiresAt) {
+         node.pending = null;
+-        node.nextSpawnAt = now + HarvestManager.spawnIntervalMs(state, nodeId);
+         changed = true;
+       }
+-      if (!node.pending && now >= node.nextSpawnAt) {
+-        const bonusChance = Tuning.get('harvest.bonusChancePercent') / 100;
+-        node.pending = {
++    }
++    if (now >= state.harvestNextSpawnAt) {
++      const bonusChance = Tuning.get('harvest.bonusChancePercent') / 100;
++      for (const nodeId of NODE_ORDER) {
++        state.harvestNodes[nodeId].pending = {
+           spawnedAt: now,
+           expiresAt: now + Tuning.get('harvest.despawnWindowMs'),
+           bonus: Math.random() < bonusChance,
+         };
+-        changed = true;
+       }
++      state.harvestNextSpawnAt = now + HarvestManager.globalSpawnIntervalMs(state);
++      changed = true;
+     }
+     return changed;
+   },
+@@ -60,7 +85,9 @@ export const HarvestManager = {
+    * Catches whatever's currently pending at a node, if anything. Returns
+    * the amount gained (0 if there was nothing to catch, already expired,
+    * or the warehouse is already full), and whether it was a bonus glint,
+-   * for the UI's collect-particle feedback.
++   * for the UI's collect-particle feedback. No longer reschedules this
++   * node's own next spawn -- that's the shared wave timer's job now, not
++   * something an individual catch influences.
+    */
+   catch(state: GameState, nodeId: MaterialId, now: number): { gained: number; bonus: boolean } {
+     const node = state.harvestNodes[nodeId];
+@@ -74,7 +101,6 @@ export const HarvestManager = {
+     const gained = Math.max(0, Math.min(raw, cap - state.materials[nodeId]));
+     state.materials[nodeId] += gained;
+     node.pending = null;
+-    node.nextSpawnAt = now + HarvestManager.spawnIntervalMs(state, nodeId);
+     return { gained, bonus };
+   },
+ 
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 5e348b7..39a13b6 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -116,8 +116,9 @@ export function createInitialState(now = Date.now()): GameState {
+     pendingChainDiscovery: false,
+     materials: emptyMaterials(),
+     harvestNodes: Object.fromEntries(
+-      NODE_ORDER.map((id) => [id, { nextSpawnAt: now + Tuning.get('harvest.baseSpawnIntervalMs'), pending: null }]),
++      NODE_ORDER.map((id) => [id, { pending: null }]),
+     ) as GameState['harvestNodes'],
++    harvestNextSpawnAt: now + Tuning.get('harvest.baseSpawnIntervalMs'),
+     harvestTools: emptyMaterials(),
+     warehouseLevel: 0,
+     tradeRouteUnlocked: false,
+@@ -469,6 +470,29 @@ const MIGRATIONS: Record<number, Migration> = {
+     // update count toward it, which is what "unread" should mean here.
+     notificationsSeenId: (save.notifications as { id: string }[] | undefined)?.[0]?.id ?? null,
+   }),
++  31: (save) => {
++    const oldNodes = (save.harvestNodes as Record<string, { nextSpawnAt?: number; pending: unknown }> | undefined) ?? {};
++    // Old per-node nextSpawnAt values get dropped (that field no longer
++    // exists on HarvestNodeState) rather than migrated forward -- picking
++    // any one of the 4 old values to seed the new shared timer would be
++    // arbitrary anyway, so this just starts the first synchronized wave
++    // one full base interval from whenever the save loads, the same
++    // "fresh cycle starting now" shape a genuinely new save already gets
++    // in createInitialState. Each node's own `pending` (whatever's
++    // already sitting there, if anything) carries over untouched -- a
++    // player mid-catch when this update lands doesn't lose an item
++    // they can already see on screen.
++    const harvestNodes: Record<string, { pending: unknown }> = {};
++    for (const [id, node] of Object.entries(oldNodes)) {
++      harvestNodes[id] = { pending: node.pending };
++    }
++    return {
++      ...save,
++      version: 32,
++      harvestNodes,
++      harvestNextSpawnAt: Date.now() + Tuning.get('harvest.baseSpawnIntervalMs'),
++    };
++  },
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 6cea632..b534176 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 31;
++export const SAVE_VERSION = 32;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -936,6 +936,30 @@ export interface GameState {
+   materials: Record<MaterialId, number>;
+   /** Per-node spawn/pending-item state -- see HarvestManager. */
+   harvestNodes: Record<MaterialId, HarvestNodeState>;
++  /**
++   * One shared timestamp for all 4 nodes, replacing what used to be an
++   * independent `nextSpawnAt` per node -- per direct request, the 4
++   * materials are meant to spawn together as one synchronized wave
++   * ("harvest o'clock"), not drift in and out of sync with each other on
++   * their own random-feeling schedules. When this fires (see
++   * HarvestManager.ensureSpawns), every node gets a fresh pending item at
++   * once, each still independently rolling its own bonus-glint chance --
++   * only the TIMING is shared, not the outcome. A node whose previous
++   * wave's item is still sitting there uncaught when the next wave fires
++   * gets overwritten with a fresh one rather than skipped, the same "miss
++   * it and it's just gone, no penalty" spirit the old despawn-without-
++   * penalty behavior already had -- the wave is the moment that matters,
++   * not any one node's own catch-up state.
++   *
++   * The interval itself still speeds up with idle hero count, the same
++   * factor it always has -- but tool level's own spawn-speed bonus
++   * (HarvestToolDef.spawnBonusMsPerLevel) is now read as the BEST of the
++   * 4 nodes' own tool levels, not each node's individual one, since a
++   * per-node bonus is meaningless once there's only one shared timer to
++   * apply it to. Upgrading any single tool still speeds up the whole
++   * wave for everyone -- see HarvestManager.globalSpawnIntervalMs.
++   */
++  harvestNextSpawnAt: number;
+   /** Levels bought in the per-node tool upgrade line (Pickaxe/Woodaxe/Sickle/Net). */
+   harvestTools: Record<MaterialId, number>;
+   /** Levels bought in the Warehouse capacity upgrade -- same storagePerLevel shape as Treasury. */
+@@ -1044,8 +1068,12 @@ export interface GameState {
+  * already are, so a node keeps spawning (and expiring) items even while its
+  * own tab isn't the one open.
+  */
++/** Per-node state is now just "what's currently sitting here, if
++ *  anything" -- spawn timing itself moved to a single shared
++ *  GameState.harvestNextSpawnAt (see HarvestManager.ensureSpawns' own
++ *  comment for why), so an individual node no longer tracks its own
++ *  next-spawn time. */
+ export interface HarvestNodeState {
+-  nextSpawnAt: number;
+   pending: { spawnedAt: number; expiresAt: number; bonus: boolean } | null;
+ }
+ 
+diff --git a/src/styles/app.css b/src/styles/app.css
+index dbdcae9..9d46cb9 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -969,26 +969,37 @@ button:focus-visible, [tabindex]:focus-visible {
+   color: var(--moss);
+   text-shadow: 0 0 8px color-mix(in srgb, var(--moss) 70%, transparent);
+ }
++/* Harvest's own catch flash -- bigger and slower than the shared default
++   (.collect-particle's own 0.9375rem/750ms), per direct request. Layered
++   on top of .collect-particle.material rather than replacing it, so it
++   keeps that class's own color/glow and just overrides size+duration. */
++.collect-particle.harvest-catch {
++  font-size: 1.25rem;
++  animation-duration: 1200ms;
++}
+ .collect-particle.scrap {
+   color: var(--brass-dim);
+   text-shadow: 0 0 8px color-mix(in srgb, var(--brass-dim) 70%, transparent);
+ }
+-/* The single particle that actually travels to the corner Scrap counter
+-   (ScrapStation.tsx) -- deliberately its own class, not .collect-particle,
+-   since it needs a real measured travel distance (--fly-dx/--fly-dy, set
+-   inline from a live getBoundingClientRect diff) rather than a small fixed
+-   local pop. Positioned absolutely at the item slot's own center (left/top
+-   set inline to match SLOT_RECT) and animates outward from there. */
+-.scrap-fly-to-counter {
++/* The single particle that actually travels to a registered counter/bar
++   target (see flyTarget.ts) -- originally built just for ScrapStation.tsx,
++   generalized here since Harvest catches and quest reward gold/XP now use
++   the exact same mechanism. Deliberately its own class, not
++   .collect-particle, since it needs a real measured travel distance
++   (--fly-dx/--fly-dy, set inline from measureFlyOffset's live
++   getBoundingClientRect diff) rather than a small fixed local pop.
++   Positioned absolutely at the origin's own center (left/top set inline
++   per call site) and animates outward from there. */
++.fly-particle {
+   position: absolute;
+   transform: translate(-50%, -50%);
+   pointer-events: none;
+   z-index: 7;
+-  animation-name: scrap-fly;
++  animation-name: fly-particle;
+   animation-timing-function: cubic-bezier(0.3, 0, 0.7, 1);
+   animation-fill-mode: forwards;
+ }
+-@keyframes scrap-fly {
++@keyframes fly-particle {
+   0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+   75% { opacity: 1; }
+   100% {
+@@ -996,15 +1007,17 @@ button:focus-visible, [tabindex]:focus-visible {
+     transform: translate(calc(-50% + var(--fly-dx)), calc(-50% + var(--fly-dy))) scale(0.35);
+   }
+ }
+-/* The corner counter itself (ScrapStation.tsx header) -- pulses gold the
+-   moment the flight particle above actually lands (see FLY_MS-timed
+-   useEffect in ScrapStation.tsx), so the flash reads as "arrived" rather
+-   than firing on an unrelated timer. The number inside climbs via
+-   useCountUp independently -- this class only handles the color/scale
+-   pulse around it. */
+-.scrap-counter { display: inline-block; }
+-.scrap-counter.flash { animation: scrap-counter-flash 550ms ease-out; }
+-@keyframes scrap-counter-flash {
++/* The counter/bar a fly-particle above lands on -- pulses gold the moment
++   the flight actually arrives (timed in JS to the flight's own duration),
++   so the flash reads as "arrived" rather than firing on an unrelated
++   timer. Whatever number/bar is inside climbs via useCountUp or the
++   .bar width transition independently -- this class only handles the
++   color/scale pulse around it. Originally ScrapStation-specific
++   (.scrap-counter), generalized for the same reason as .fly-particle
++   above. */
++.counter-flash-target { display: inline-block; }
++.counter-flash-target.flash { animation: counter-flash-pulse 550ms ease-out; }
++@keyframes counter-flash-pulse {
+   0% { color: inherit; text-shadow: none; transform: scale(1); }
+   30% {
+     color: var(--brass);
+@@ -2046,10 +2059,15 @@ input[type='range'] {
+    * ever actually loading to expose the gap. Doubled per direct request
+    * (was implicitly ~36px from a 2rem glyph's own rendered footprint) now
+    * that real icons need a real box to fill.
++   *
++   * Halved again per a later, separate direct request -- 72px read as too
++   * large once real art was actually in place and visible against the
++   * rest of the scene. Lands close to (not exactly) the original
++   * pre-doubling size, not a full revert.
+    */
+-  width: 72px;
+-  height: 72px;
+-  font-size: 3rem;
++  width: 36px;
++  height: 36px;
++  font-size: 1.5rem;
+   line-height: 1;
+   cursor: pointer;
+   user-select: none;
+@@ -2076,7 +2094,7 @@ input[type='range'] {
+    * the eye to in the first place). Golden and always on, so a spawn
+    * reads as interactive the moment it appears.
+    */
+-  box-shadow: 0 0 16px 6px color-mix(in srgb, var(--brass) 55%, transparent);
++  box-shadow: 0 0 8px 3px color-mix(in srgb, var(--brass) 55%, transparent);
+   transition: opacity 400ms linear, box-shadow 150ms ease;
+   background: none;
+   border: none;
+@@ -2088,26 +2106,27 @@ input[type='range'] {
+    out-specify that rule, a plain `.harvest-item:hover` alone would lose. */
+ button.harvest-item:hover {
+   background: none;
+-  box-shadow: 0 0 22px 9px color-mix(in srgb, var(--brass) 75%, transparent);
++  box-shadow: 0 0 11px 4px color-mix(in srgb, var(--brass) 75%, transparent);
+ }
+ .harvest-item.fresh {
+-  animation: harvest-fall calc(900ms / max(var(--anim-speed, 1), 0.001)) cubic-bezier(0.3, 0, 0.6, 1) both;
++  animation: harvest-fall calc(2000ms / max(var(--anim-speed, 1), 0.001)) cubic-bezier(0.3, 0, 0.6, 1) both;
+ }
+ .harvest-item.settled {
+   animation: harvest-pulse calc(1.6s / max(var(--anim-speed, 1), 0.001)) ease-in-out infinite;
+ }
+ .harvest-item.bonus {
+-  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--brass) 80%, transparent))
+-    drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
+-  box-shadow: 0 0 22px 9px color-mix(in srgb, var(--brass) 85%, transparent);
++  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--brass) 80%, transparent))
++    drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
++  box-shadow: 0 0 11px 4px color-mix(in srgb, var(--brass) 85%, transparent);
+ }
+ @keyframes harvest-fall {
+-  0% { top: 4%; opacity: 0; transform: translateX(-50%) scale(0.7); }
++  0% { top: 4%; opacity: 0; transform: translateX(calc(-50% - 10px)) scale(0.7); }
+   15% { opacity: 1; }
+-  55% { top: 62%; transform: translateX(-50%) scale(1); }
+-  70% { top: 52%; }
+-  85% { top: 62%; transform: translateX(-50%) scale(1); }
+-  93% { top: 57%; }
++  30% { transform: translateX(calc(-50% + 8px)) scale(0.8); }
++  55% { top: 62%; transform: translateX(calc(-50% - 6px)) scale(1); }
++  70% { top: 52%; transform: translateX(calc(-50% + 4px)) scale(1); }
++  85% { top: 62%; transform: translateX(calc(-50% - 3px)) scale(1); }
++  93% { top: 57%; transform: translateX(-50%) scale(1); }
+   100% { top: 62%; transform: translateX(-50%) scale(1); }
+ }
+ @keyframes harvest-pulse {
+diff --git a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+index ed44da0..6c893f4 100644
+--- a/src/ui/MenuWindow.tsx
++++ b/src/ui/MenuWindow.tsx
+@@ -5,6 +5,7 @@ import { ChainDiscoveryModal } from './ChainDiscoveryModal';
+ import { formatGold, formatNumber } from '../game/util';
+ import { attentionCounts } from '../game/attention';
+ import { useCountUp } from './useCountUp';
++import { useFlyTargetRef } from './flyTarget';
+ import { QuestPanel } from './panels/QuestPanel';
+ import { HeroesPanel } from './panels/HeroesPanel';
+ import { EquipmentPanel } from './panels/EquipmentPanel';
+@@ -145,6 +146,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+   // mount/app launch (see useCountUp's own doc comment); only on values
+   // that change after that.
+   const displayGold = useCountUp(engine.state.gold);
++  const goldRef = useFlyTargetRef<HTMLSpanElement>('gold');
+   const displayRenown = useCountUp(engine.state.renown);
+   const unreadCount = engine.unreadNotificationCount;
+ 
+@@ -171,7 +173,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+       <header className="titlebar" style={{ position: 'relative' }}>
+         <h1>{engine.state.guildName || 'Guild Idler'}</h1>
+         <div className="resources">
+-          <span className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
++          <span ref={goldRef} className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
+           <span className="renown">✦ {formatNumber(displayRenown)} renown</span>
+           <button
+             className="header-notif-icon"
+diff --git a/src/ui/QuestResultModal.tsx b/src/ui/QuestResultModal.tsx
+index 8dd822b..3402a06 100644
+--- a/src/ui/QuestResultModal.tsx
++++ b/src/ui/QuestResultModal.tsx
+@@ -8,6 +8,7 @@ import { playSound } from '../game/sound';
+ import { formatGold, RARITY_COLOR } from '../game/util';
+ import { RarityPill } from './RarityPill';
+ import { useCountUp } from './useCountUp';
++import { measureFlyOffset } from './flyTarget';
+ 
+ /** How long the pop-out + coin/XP burst plays before the modal actually
+  * unmounts. Matches the CSS: modal-pop-out is 320ms, collect-fly is 750ms
+@@ -84,6 +85,9 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
+ }) {
+   const [dismissing, setDismissing] = useState(false);
+   const timeoutRef = useRef<number | null>(null);
++  const rewardBurstRef = useRef<HTMLDivElement>(null);
++  const [goldFlight, setGoldFlight] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
++  const [xpFlight, setXpFlight] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
+   const hasLegendary = result.loot.some((item) => item.rarity === 'legendary');
+   // One-shot count-up from 0 -- this card mounts once per result with the
+   // final reward already known, so it should count up to it on arrival
+@@ -121,6 +125,25 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
+     if (dismissing) return;
+     setDismissing(true);
+     playSound(result.critBonus || hasLegendary ? 'legendary_drop' : 'collect');
++    // Measured right here, at the same moment the ordinary local coin/XP
++    // burst below starts -- same "measure at the action that triggers the
++    // burst" timing ScrapStation's own fly-to-counter already established.
++    // Both gracefully resolve to null (no flight rendered) if their target
++    // isn't currently mounted -- the header's gold display only exists in
++    // full menu mode, and a hero's own XP bar only exists while the Heroes
++    // tab happens to be open, neither of which this modal can assume.
++    if (rewardBurstRef.current) {
++      const originRect = rewardBurstRef.current.getBoundingClientRect();
++      const origin = { x: originRect.left + originRect.width / 2, y: originRect.top };
++      if (result.gold > 0) {
++        const offset = measureFlyOffset(rewardBurstRef.current, 'gold');
++        if (offset) setGoldFlight({ ...origin, ...offset });
++      }
++      if (result.xp > 0) {
++        const offset = measureFlyOffset(rewardBurstRef.current, `heroXp:${result.heroId}`);
++        if (offset) setXpFlight({ ...origin, ...offset });
++      }
++    }
+     timeoutRef.current = window.setTimeout(() => engine.dismissResult(), DISMISS_DELAY_MS);
+   };
+ 
+@@ -140,7 +163,7 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
+           {result.success ? 'The contract is fulfilled.' : 'The contract failed.'}
+         </p>
+ 
+-        <div className={`reward-burst ${result.critBonus ? 'crit' : ''}`}>
++        <div ref={rewardBurstRef} className={`reward-burst ${result.critBonus ? 'crit' : ''}`}>
+           {result.xp > 0 && <span className={`burst-xp ${result.critBonus ? 'crit' : ''}`}>+{displayXp} XP</span>}
+           {result.gold > 0 && <span className={`burst-gold ${result.critBonus ? 'crit' : ''}`}>+{formatGold(displayGold)} gold</span>}
+         </div>
+@@ -261,6 +284,46 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
+             ))}
+           </div>
+         )}
++
++        {/* The actual "flies to where it belongs" particles -- separate
++            from the local coin/XP burst above, which stays as in-place
++            flavor at the reward-burst's own position. These travel the
++            real measured distance (see handleDismiss) to the header's
++            gold display and this hero's own XP bar, landing exactly on
++            them and triggering their own arrival flash -- same mechanism
++            ScrapStation's original fly-to-counter established, generalized
++            via flyTarget.ts so it works across completely different,
++            not-simultaneously-mounted panels. Silently render nothing if
++            their target wasn't mounted to measure against (idle mode has
++            no header; the Heroes tab might not be open) -- the local
++            burst and the count-up on whatever numbers ARE visible already
++            cover the reward being clearly communicated either way. */}
++        {dismissing && goldFlight && (
++          <span
++            className="fly-particle"
++            aria-hidden="true"
++            style={{
++              position: 'fixed', left: goldFlight.x, top: goldFlight.y,
++              '--fly-dx': `${goldFlight.dx}px`, '--fly-dy': `${goldFlight.dy}px`,
++              animationDuration: `${DISMISS_DELAY_MS}ms`, fontSize: '1.1rem', color: 'var(--brass)',
++            } as CSSProperties}
++          >
++            ◆
++          </span>
++        )}
++        {dismissing && xpFlight && (
++          <span
++            className="fly-particle"
++            aria-hidden="true"
++            style={{
++              position: 'fixed', left: xpFlight.x, top: xpFlight.y,
++              '--fly-dx': `${xpFlight.dx}px`, '--fly-dy': `${xpFlight.dy}px`,
++              animationDuration: `${DISMISS_DELAY_MS}ms`, fontSize: '1.1rem', color: 'var(--sky)',
++            } as CSSProperties}
++          >
++            ✦
++          </span>
++        )}
+       </div>
+     </div>
+   );
+diff --git a/src/ui/RaidResultModal.tsx b/src/ui/RaidResultModal.tsx
+index c145334..8603f31 100644
+--- a/src/ui/RaidResultModal.tsx
++++ b/src/ui/RaidResultModal.tsx
+@@ -7,6 +7,7 @@ import { playSound } from '../game/sound';
+ import { RarityPill } from './RarityPill';
+ import { formatGold, RARITY_COLOR } from '../game/util';
+ import { useCountUp } from './useCountUp';
++import { measureFlyOffset } from './flyTarget';
+ 
+ /** Same dismiss timing as QuestResultModal, for the same reason -- gives the
+  *  longest particle time to finish fading rather than getting cut off. */
+@@ -63,6 +64,8 @@ export function RaidResultModal({ active, onViewLore }: { active: boolean; onVie
+ 
+ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; engine: GameEngine; onViewLore: () => void }) {
+   const [dismissing, setDismissing] = useState(false);
++  const rewardBurstRef = useRef<HTMLDivElement>(null);
++  const [goldFlight, setGoldFlight] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
+   const timeoutRef = useRef<number | null>(null);
+   const hasLegendary = result.loot.some((item) => item.rarity === 'legendary');
+   // Same one-shot 0 -> final-value count-up as QuestResultModal's own,
+@@ -80,6 +83,15 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
+     if (dismissing) return;
+     setDismissing(true);
+     playSound(hasLegendary ? 'legendary_drop' : 'collect');
++    // Gold-only (no XP flight, unlike QuestResultModal's own version) --
++    // a raid's reward XP goes to the whole party (result.heroIds), not
++    // one specific hero, so there's no single obvious XP bar to aim at
++    // the way a solo quest result has.
++    if (rewardBurstRef.current && result.gold > 0) {
++      const originRect = rewardBurstRef.current.getBoundingClientRect();
++      const offset = measureFlyOffset(rewardBurstRef.current, 'gold');
++      if (offset) setGoldFlight({ x: originRect.left + originRect.width / 2, y: originRect.top, ...offset });
++    }
+     timeoutRef.current = window.setTimeout(() => engine.dismissRaidResult(), DISMISS_DELAY_MS);
+   };
+ 
+@@ -104,7 +116,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
+               : 'The party was turned back at the first encounter.'}
+         </p>
+ 
+-        <div className="reward-burst">
++        <div ref={rewardBurstRef} className="reward-burst">
+           {result.xp > 0 && <span className="burst-xp">+{displayXp} XP</span>}
+           {result.gold > 0 && <span className="burst-gold">+{formatGold(displayGold)} gold</span>}
+         </div>
+@@ -176,6 +188,25 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
+             ))}
+           </div>
+         )}
++
++        {/* Flies to the header's gold display, the real measured
++            distance -- same mechanism QuestResultModal's own gold flight
++            uses, see that component for the fuller explanation. Silently
++            renders nothing if the header wasn't mounted to measure
++            against (idle mode has no header). */}
++        {dismissing && goldFlight && (
++          <span
++            className="fly-particle"
++            aria-hidden="true"
++            style={{
++              position: 'fixed', left: goldFlight.x, top: goldFlight.y,
++              '--fly-dx': `${goldFlight.dx}px`, '--fly-dy': `${goldFlight.dy}px`,
++              animationDuration: `${DISMISS_DELAY_MS}ms`, fontSize: '1.1rem', color: 'var(--brass)',
++            } as CSSProperties}
++          >
++            ◆
++          </span>
++        )}
+       </div>
+     </div>
+   );
+diff --git a/src/ui/ScrapStation.tsx b/src/ui/ScrapStation.tsx
+index f079f58..3ce424a 100644
+--- a/src/ui/ScrapStation.tsx
++++ b/src/ui/ScrapStation.tsx
+@@ -110,7 +110,7 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
+       <div className="modal craft-station-modal" onClick={(e) => e.stopPropagation()}>
+         <div className="spread" style={{ marginBottom: 8 }}>
+           <span className="card-title">Scrap</span>
+-          <span ref={counterRef} className={`tiny scrap-counter ${counterFlash ? 'flash' : ''}`}>
++          <span ref={counterRef} className={`tiny counter-flash-target ${counterFlash ? 'flash' : ''}`}>
+             ⚙ {displayScrap}
+           </span>
+           <button onClick={onClose}>Close</button>
+@@ -189,7 +189,7 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
+           {flight && (
+             <span
+               key={flight.key}
+-              className="scrap-fly-to-counter"
++              className="fly-particle"
+               aria-hidden="true"
+               style={{
+                 left: `${SLOT_RECT.left + SLOT_RECT.width / 2}%`,
+diff --git a/src/ui/flyTarget.ts b/src/ui/flyTarget.ts
+new file mode 100644
+index 0000000..ada498b
+--- /dev/null
++++ b/src/ui/flyTarget.ts
+@@ -0,0 +1,66 @@
++import { useEffect, useRef } from 'react';
++import type { RefObject } from 'react';
++
++/**
++ * A shared registry of DOM elements that a flying particle (see
++ * ScrapStation.tsx's original fly-to-counter, and now HarvestPanel.tsx's
++ * catch flash / QuestResultModal.tsx's gold+XP flights) can measure and
++ * fly toward, even when the origin and the destination live in different,
++ * not-simultaneously-mounted components -- Scrap's own flight worked
++ * without this because the item slot and the Scrap counter were both
++ * inside the same modal at the same time; a quest reward flying toward
++ * the header's gold display, or a Harvest catch flying toward the
++ * Warehouse tab's stock counter while the Fields tab is what's actually
++ * showing, don't have that luxury.
++ *
++ * A target that isn't currently mounted (e.g. the Heroes tab isn't open,
++ * so no hero XP bar is registered) simply isn't in the registry --
++ * every consumer treats "not found" as "skip this particular flight,"
++ * never as an error. The local burst/count-up still happens regardless;
++ * this registry only ever gates the extra long-distance flourish on top.
++ */
++const targets: Record<string, HTMLElement | null> = {};
++
++export function registerFlyTarget(key: string, el: HTMLElement | null) {
++  targets[key] = el;
++}
++
++/** The target's current on-screen center, or null if nothing with this
++ *  key is currently mounted/registered. */
++export function getFlyTargetCenter(key: string): { x: number; y: number } | null {
++  const el = targets[key];
++  if (!el) return null;
++  const rect = el.getBoundingClientRect();
++  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
++}
++
++/**
++ * The real on-screen distance (in px) from `originEl`'s own center to the
++ * registered target's center -- same live-measurement approach
++ * ScrapStation.tsx's original fly-to-counter used (a fixed dx/dy only
++ * works when the layout distance is actually fixed, which it isn't once
++ * origin and target can be in different, independently-sized panels).
++ * Returns null if the target isn't currently registered, so callers can
++ * skip the long-distance flight gracefully rather than flying toward
++ * nothing.
++ */
++export function measureFlyOffset(originEl: HTMLElement, targetKey: string): { dx: number; dy: number } | null {
++  const target = getFlyTargetCenter(targetKey);
++  if (!target) return null;
++  const originRect = originEl.getBoundingClientRect();
++  const originCenter = { x: originRect.left + originRect.width / 2, y: originRect.top + originRect.height / 2 };
++  return { dx: target.x - originCenter.x, dy: target.y - originCenter.y };
++}
++
++/** Registers `key` as pointing at this ref's element for as long as the
++ *  calling component stays mounted -- unregisters (sets back to null,
++ *  never deletes the key) on unmount, so a stale rect from a torn-down
++ *  component can never be measured against by mistake. */
++export function useFlyTargetRef<T extends HTMLElement>(key: string): RefObject<T> {
++  const ref = useRef<T>(null);
++  useEffect(() => {
++    registerFlyTarget(key, ref.current);
++    return () => registerFlyTarget(key, null);
++  });
++  return ref;
++}
+diff --git a/src/ui/panels/HarvestPanel.tsx b/src/ui/panels/HarvestPanel.tsx
+index 0e4a71c..ec7282b 100644
+--- a/src/ui/panels/HarvestPanel.tsx
++++ b/src/ui/panels/HarvestPanel.tsx
+@@ -1,4 +1,4 @@
+-import { useState } from 'react';
++import { useEffect, useRef, useState } from 'react';
+ import type { CSSProperties } from 'react';
+ import { useEngine, useNow } from '../useEngine';
+ import { useSettings } from '../useSettings';
+@@ -12,6 +12,7 @@ import { MaterialId } from '../../game/types';
+ import { formatGold, formatMaterial } from '../../game/util';
+ import { Ring } from './DashboardPanel';
+ import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
++import { useFlyTargetRef, measureFlyOffset } from '../flyTarget';
+ 
+ type SubTab = 'warehouse' | 'fields';
+ 
+@@ -106,26 +107,100 @@ export function HarvestPanel() {
+  * just positioned within that node's own 25%-wide slice instead of the
+  * full width a dedicated per-node scene used to have.
+  */
++/** How long a caught material's icon takes to fly from the node lane to
++ *  the Fields tab's own material counter above -- also when that
++ *  counter's own arrival flash fires. Longer than Scrap's own 650ms
++ *  (bigger, more satisfying moment per direct request; Harvest catches
++ *  happen far more often than a Scrap action, but the flourish is
++ *  cheap/ambient enough that a longer one here doesn't get tiring the
++ *  way a longer one on every single quest result might). */
++const HARVEST_FLY_MS = 900;
++const HARVEST_FLASH_MS = 700;
++
+ function FieldsTab() {
+   const state = useEngine().state;
++  const cap = HarvestManager.capacity(state);
++  const [flashing, setFlashing] = useState<Partial<Record<MaterialId, boolean>>>({});
++  const flashTimeouts = useRef<Partial<Record<MaterialId, number>>>({});
++
++  const triggerFlash = (materialId: MaterialId) => {
++    setFlashing((cur) => ({ ...cur, [materialId]: true }));
++    const existing = flashTimeouts.current[materialId];
++    if (existing !== undefined) window.clearTimeout(existing);
++    flashTimeouts.current[materialId] = window.setTimeout(() => {
++      setFlashing((cur) => ({ ...cur, [materialId]: false }));
++    }, HARVEST_FLASH_MS);
++  };
++
++  useEffect(() => () => {
++    for (const id of Object.values(flashTimeouts.current)) if (id !== undefined) window.clearTimeout(id);
++  }, []);
++
+   return (
+     <>
+       <div className="row wrap" style={{ gap: 12, marginBottom: 8 }}>
+         {MATERIALS.map((m) => (
+-          <span key={m.id} className="tiny muted">
+-            {m.name}: {formatMaterial(state.materials[m.id])}/{HarvestManager.capacity(state)}
+-          </span>
++          <MaterialCounter key={m.id} materialId={m.id} amount={state.materials[m.id]} cap={cap} flashing={!!flashing[m.id]} />
+         ))}
+       </div>
++      <SpawnTimerBar />
+       <div className="harvest-scene">
+         <div className="harvest-scene-bg" aria-hidden="true" style={{ backgroundImage: 'url(./lore/harvest/fields.jpg)' }} />
+-        {NODE_ORDER.map((nodeId) => <NodeLane key={nodeId} nodeId={nodeId} />)}
++        {NODE_ORDER.map((nodeId) => <NodeLane key={nodeId} nodeId={nodeId} onCatch={triggerFlash} />)}
+       </div>
+     </>
+   );
+ }
+ 
+-function NodeLane({ nodeId }: { nodeId: MaterialId }) {
++/**
++ * Countdown to the next synchronized spawn wave (see GameState.
++ * harvestNextSpawnAt's own doc comment) -- a plain, drains-to-empty
++ * `.bar`, same convention every other progress bar in the game already
++ * uses (and, since the animated-width fix earlier this project, animates
++ * smoothly rather than snapping). Ticks once a second -- fine-grained
++ * enough for a bar the player is just glancing at, not worth a faster
++ * tick that would only matter for something like the falling-item
++ * fade-out, which already has its own 400ms tick where it's actually
++ * needed.
++ */
++function SpawnTimerBar() {
++  const state = useEngine().state;
++  const now = useNow(1000);
++  const total = HarvestManager.globalSpawnIntervalMs(state);
++  const remaining = Math.max(0, state.harvestNextSpawnAt - now);
++  const ratio = total > 0 ? Math.min(1, remaining / total) : 0;
++  return (
++    <div className="row" style={{ gap: 8, alignItems: 'center', marginBottom: 10 }}>
++      <span className="tiny muted" style={{ flex: 'none' }}>Next spawn</span>
++      <div className="bar" style={{ flex: 1 }} title={`${Math.ceil(remaining / 1000)}s until the next wave`}>
++        <span style={{ width: `${ratio * 100}%` }} />
++      </div>
++      <span className="tiny muted" style={{ flex: 'none', width: 28, textAlign: 'right' }}>
++        {Math.ceil(remaining / 1000)}s
++      </span>
++    </div>
++  );
++}
++
++/** The Fields tab's own always-visible material counter -- doubles as the
++ *  fly target every node lane's catch flight aims at (see NodeLane's own
++ *  `onCatch`), registered under `material:<id>` the same way
++ *  ScrapStation's counter registered `scrap`/MenuWindow's registers
++ *  `gold`. Deliberately the Fields tab's own summary row, not the
++ *  Warehouse tab's stock rows -- those live on a different sub-tab that
++ *  isn't mounted at the same time a catch actually happens, so they'd
++ *  never be a valid fly target in the first place. */
++function MaterialCounter({ materialId, amount, cap, flashing }: { materialId: MaterialId; amount: number; cap: number; flashing: boolean }) {
++  const ref = useFlyTargetRef<HTMLSpanElement>(`material:${materialId}`);
++  const material = MATERIAL_BY_ID[materialId];
++  return (
++    <span ref={ref} className={`tiny muted counter-flash-target ${flashing ? 'flash' : ''}`}>
++      {material.name}: {formatMaterial(amount)}/{cap}
++    </span>
++  );
++}
++
++function NodeLane({ nodeId, onCatch }: { nodeId: MaterialId; onCatch: (materialId: MaterialId) => void }) {
+   const engine = useEngine();
+   const state = engine.state;
+   // 400ms tick -- fast enough that the fade-out near despawn reads as
+@@ -133,6 +208,7 @@ function NodeLane({ nodeId }: { nodeId: MaterialId }) {
+   // low-stakes.
+   const now = useNow(400);
+   const [burst, setBurst] = useState<{ key: number; left: number; gained: number; bonus: boolean; icon: string | null } | null>(null);
++  const [flight, setFlight] = useState<{ key: number; dx: number; dy: number; left: number; icon: string | null } | null>(null);
+   const { settings } = useSettings();
+ 
+   const material = MATERIAL_BY_ID[nodeId];
+@@ -146,13 +222,14 @@ function NodeLane({ nodeId }: { nodeId: MaterialId }) {
+    *
+    * 1. That 1200ms was hardcoded, but the CSS animation it's gating
+    *    (`.harvest-item.fresh`'s `harvest-fall`) scales with
+-   *    `--anim-speed` (`calc(900ms / max(var(--anim-speed, 1), 0.001))`).
+-   *    At the default 1x speed that's 900ms, comfortably inside 1200ms --
+-   *    but at Settings > Animation speed "Slow" (0.5x) the real CSS
+-   *    duration stretches to 1800ms, so the class flipped from `fresh`
+-   *    to `settled` (and the fall animation got yanked mid-flight, right
+-   *    as it was easing into its landing bounce) 600ms before the fall
+-   *    was actually done playing.
++   *    `--anim-speed` (`calc(2000ms / max(var(--anim-speed, 1), 0.001))`,
++   *    slowed from an original 900ms per direct request -- the fall
++   *    reads noticeably more of a gentle drift now, not a quick drop).
++   *    At the default 1x speed that's 2000ms; at Settings > Animation
++   *    speed "Slow" (0.5x) the real CSS duration stretches to 4000ms, so
++   *    a fixed hardcoded gate would cut the fall off (and the fall
++   *    animation got yanked mid-flight, right as it was easing into its
++   *    landing bounce) well before it was actually done playing.
+    * 2. On the very first render where a fresh `pending` appears, the
+    *    effect hasn't run yet, so `isFresh` started out `false` for one
+    *    frame -- the item's first paint used the *settled* (already-at-
+@@ -166,7 +243,7 @@ function NodeLane({ nodeId }: { nodeId: MaterialId }) {
+    * catch up to.
+    */
+   const animSpeed = settings.reduceMotion ? 0 : settings.animationSpeed;
+-  const fallDurationMs = 900 / Math.max(animSpeed, 0.001);
++  const fallDurationMs = 2000 / Math.max(animSpeed, 0.001);
+   const isFresh = pending ? (now - pending.spawnedAt) < fallDurationMs + 300 : false;
+ 
+   const msLeft = pending ? pending.expiresAt - now : 0;
+@@ -174,10 +251,16 @@ function NodeLane({ nodeId }: { nodeId: MaterialId }) {
+   const leftPercent = pending ? spawnPositionPercent(pending.spawnedAt, nodeId) : 0;
+   const icon = pending ? harvestIconFor(nodeId, pending.spawnedAt) : null;
+ 
+-  function handleClick() {
++  function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
+     const result = engine.catchMaterial(nodeId);
+     if (result.gained > 0) {
+-      setBurst({ key: Date.now(), left: leftPercent, gained: result.gained, bonus: result.bonus, icon });
++      const key = Date.now();
++      setBurst({ key, left: leftPercent, gained: result.gained, bonus: result.bonus, icon });
++      const offset = measureFlyOffset(e.currentTarget, `material:${nodeId}`);
++      if (offset) {
++        setFlight({ key, ...offset, left: leftPercent, icon });
++        window.setTimeout(() => onCatch(nodeId), HARVEST_FLY_MS);
++      }
+     }
+   }
+ 
+@@ -203,7 +286,7 @@ function NodeLane({ nodeId }: { nodeId: MaterialId }) {
+           key={burst.key}
+         >
+           <span
+-            className="collect-particle material"
++            className="collect-particle material harvest-catch"
+             style={{ '--dx': `${BURST_PARTICLES[0].dx}px`, '--dy': `${BURST_PARTICLES[0].dy}px`, '--rot': `${BURST_PARTICLES[0].rot}deg` } as CSSProperties}
+           >
+             +{formatMaterial(burst.gained)} {material.name}{burst.bonus ? ' bonus!' : ''}
+@@ -219,6 +302,31 @@ function NodeLane({ nodeId }: { nodeId: MaterialId }) {
+           ))}
+         </div>
+       )}
++
++      {/* The actual "flies up to the counter" particle -- separate from
++          the local burst above, which stays as in-place flavor at the
++          spawn's own position. This one travels the real measured
++          distance to the Fields tab's own material counter (see
++          MaterialCounter/measureFlyOffset), landing exactly on it
++          regardless of where in the lane the catch happened. Positioned
++          at the spawn's own last on-screen spot (same left% the item
++          itself was showing at), not the scene's origin, since that's
++          where the actual catch visually happened. */}
++      {flight && (
++        <span
++          key={flight.key}
++          className="fly-particle"
++          aria-hidden="true"
++          style={{
++            left: `${flight.left}%`, top: '62%',
++            '--fly-dx': `${flight.dx}px`, '--fly-dy': `${flight.dy}px`,
++            animationDuration: `${HARVEST_FLY_MS}ms`,
++            position: 'absolute', fontSize: '1.25rem',
++          } as CSSProperties}
++        >
++          <HarvestGlyph icon={flight.icon} glyph={material.glyph} />
++        </span>
++      )}
+     </>
+   );
+ }
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index 1f6f8d1..083e1f3 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -11,6 +11,7 @@ import { describeMods, formatDuration, formatGold } from '../../game/util';
+ import { HeroSprite } from '../sprites/HeroSprite';
+ import { GearScoreBadge } from '../GearScoreBadge';
+ import { useLevelUpFlash, LevelUpFlash } from '../levelFlash';
++import { registerFlyTarget } from '../flyTarget';
+ 
+ const STAT_KEYS: (keyof Stats)[] = ['strength', 'endurance', 'luck', 'wisdom'];
+ 
+@@ -91,7 +92,13 @@ export function HeroesPanel() {
+                     {' · '}<GearScoreBadge score={HeroManager.gearScore(hero)} size="small" />
+                   </span>
+                 </div>
+-                <div className="bar xp" style={{ marginTop: 6 }}><span style={{ width: `${(hero.xp / toNext) * 100}%` }} /></div>
++                <div
++                  ref={(el) => registerFlyTarget(`heroXp:${hero.id}`, el)}
++                  className="bar xp"
++                  style={{ marginTop: 6 }}
++                >
++                  <span style={{ width: `${(hero.xp / toNext) * 100}%` }} />
++                </div>
+                 {!isOpen && (
+                   <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+                     {hero.status === 'questing' ? 'away on a quest' : 'at the guild'}
+diff --git a/src/ui/sprites/HeroSprite.tsx b/src/ui/sprites/HeroSprite.tsx
+index 4b504fe..d15edd8 100644
+--- a/src/ui/sprites/HeroSprite.tsx
++++ b/src/ui/sprites/HeroSprite.tsx
+@@ -91,17 +91,19 @@ const HERO_DISPLAY_OFFSET: Partial<Record<HeroClass, { x: number; y: number }>>
+  * its own source sheet -- unflipped plays facing away (departing/walking
+  * out), flipped plays facing the viewer (returning home), matching
+  * whichever way the equipped pet's own run animation faces beside it. The
+- * Dwarf's source pack was authored facing the opposite default direction
+- * from every other class, so applying the same flip logic left the Dwarf
+- * facing backward relative to both the other classes and the pet running
+- * next to him. Rather than push this per-class quirk onto every caller of
+- * `flip` (IdleView.tsx and anywhere else that ever renders a HeroSprite),
+- * it's inverted once here, internally, the same "corrected in one place"
+- * shape HERO_DISPLAY_SCALE/HERO_DISPLAY_OFFSET above already use for their
+- * own per-class art quirks.
++ * Dwarf's source pack (and, per the same report, the Wizard's) was
++ * authored facing the opposite default direction from every other class,
++ * so applying the same flip logic left them facing backward relative to
++ * both the other classes and the pet running next to them. Rather than
++ * push this per-class quirk onto every caller of `flip` (IdleView.tsx and
++ * anywhere else that ever renders a HeroSprite), it's inverted once here,
++ * internally, the same "corrected in one place" shape
++ * HERO_DISPLAY_SCALE/HERO_DISPLAY_OFFSET above already use for their own
++ * per-class art quirks.
+  */
+ const HERO_REVERSED_FACING: Partial<Record<HeroClass, true>> = {
+   dwarf: true,
++  wizard: true,
+ };
+ 
+ let manifestCache: Manifest | null = null;

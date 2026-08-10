@@ -11,6 +11,7 @@ import { describeMods, formatDuration, formatGold } from '../../game/util';
 import { HeroSprite } from '../sprites/HeroSprite';
 import { GearScoreBadge } from '../GearScoreBadge';
 import { useLevelUpFlash, LevelUpFlash } from '../levelFlash';
+import { registerFlyTarget } from '../flyTarget';
 
 const STAT_KEYS: (keyof Stats)[] = ['strength', 'endurance', 'luck', 'wisdom'];
 
@@ -91,7 +92,13 @@ export function HeroesPanel() {
                     {' · '}<GearScoreBadge score={HeroManager.gearScore(hero)} size="small" />
                   </span>
                 </div>
-                <div className="bar xp" style={{ marginTop: 6 }}><span style={{ width: `${(hero.xp / toNext) * 100}%` }} /></div>
+                <div
+                  ref={(el) => registerFlyTarget(`heroXp:${hero.id}`, el)}
+                  className="bar xp"
+                  style={{ marginTop: 6 }}
+                >
+                  <span style={{ width: `${(hero.xp / toNext) * 100}%` }} />
+                </div>
                 {!isOpen && (
                   <p className="tiny muted" style={{ margin: '4px 0 0' }}>
                     {hero.status === 'questing' ? 'away on a quest' : 'at the guild'}

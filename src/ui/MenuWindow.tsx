@@ -5,6 +5,7 @@ import { ChainDiscoveryModal } from './ChainDiscoveryModal';
 import { formatGold, formatNumber } from '../game/util';
 import { attentionCounts } from '../game/attention';
 import { useCountUp } from './useCountUp';
+import { useFlyTargetRef } from './flyTarget';
 import { QuestPanel } from './panels/QuestPanel';
 import { HeroesPanel } from './panels/HeroesPanel';
 import { EquipmentPanel } from './panels/EquipmentPanel';
@@ -145,6 +146,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   // mount/app launch (see useCountUp's own doc comment); only on values
   // that change after that.
   const displayGold = useCountUp(engine.state.gold);
+  const goldRef = useFlyTargetRef<HTMLSpanElement>('gold');
   const displayRenown = useCountUp(engine.state.renown);
   const unreadCount = engine.unreadNotificationCount;
 
@@ -171,7 +173,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
       <header className="titlebar" style={{ position: 'relative' }}>
         <h1>{engine.state.guildName || 'Guild Idler'}</h1>
         <div className="resources">
-          <span className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
+          <span ref={goldRef} className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
           <span className="renown">✦ {formatNumber(displayRenown)} renown</span>
           <button
             className="header-notif-icon"

@@ -106,7 +106,17 @@ export function App() {
         </>
       )}
       <Toast />
-      <NotificationBanner />
+      {/* Menu-only -- the notification banner is meant to be a prominent,
+          clickable "go check this out" moment, which only makes sense
+          once the full menu (with somewhere for it to actually navigate
+          to) is open. The tiny idle companion window already has its own
+          compact quest-result banner for the one thing worth surfacing
+          there; a second, unrelated banner system popping up over that
+          small window would be genuinely noisy, not helpful. Notifications
+          that arrive while idle still archive into the log and count
+          toward the header badge/unread count exactly the same -- this
+          only gates the transient pop-in banner itself. */}
+      {mode === 'menu' && <NotificationBanner />}
       <AchievementPopup />
     </EngineContext.Provider>
   );

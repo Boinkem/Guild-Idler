@@ -969,26 +969,37 @@ button:focus-visible, [tabindex]:focus-visible {
   color: var(--moss);
   text-shadow: 0 0 8px color-mix(in srgb, var(--moss) 70%, transparent);
 }
+/* Harvest's own catch flash -- bigger and slower than the shared default
+   (.collect-particle's own 0.9375rem/750ms), per direct request. Layered
+   on top of .collect-particle.material rather than replacing it, so it
+   keeps that class's own color/glow and just overrides size+duration. */
+.collect-particle.harvest-catch {
+  font-size: 1.25rem;
+  animation-duration: 1200ms;
+}
 .collect-particle.scrap {
   color: var(--brass-dim);
   text-shadow: 0 0 8px color-mix(in srgb, var(--brass-dim) 70%, transparent);
 }
-/* The single particle that actually travels to the corner Scrap counter
-   (ScrapStation.tsx) -- deliberately its own class, not .collect-particle,
-   since it needs a real measured travel distance (--fly-dx/--fly-dy, set
-   inline from a live getBoundingClientRect diff) rather than a small fixed
-   local pop. Positioned absolutely at the item slot's own center (left/top
-   set inline to match SLOT_RECT) and animates outward from there. */
-.scrap-fly-to-counter {
+/* The single particle that actually travels to a registered counter/bar
+   target (see flyTarget.ts) -- originally built just for ScrapStation.tsx,
+   generalized here since Harvest catches and quest reward gold/XP now use
+   the exact same mechanism. Deliberately its own class, not
+   .collect-particle, since it needs a real measured travel distance
+   (--fly-dx/--fly-dy, set inline from measureFlyOffset's live
+   getBoundingClientRect diff) rather than a small fixed local pop.
+   Positioned absolutely at the origin's own center (left/top set inline
+   per call site) and animates outward from there. */
+.fly-particle {
   position: absolute;
   transform: translate(-50%, -50%);
   pointer-events: none;
   z-index: 7;
-  animation-name: scrap-fly;
+  animation-name: fly-particle;
   animation-timing-function: cubic-bezier(0.3, 0, 0.7, 1);
   animation-fill-mode: forwards;
 }
-@keyframes scrap-fly {
+@keyframes fly-particle {
   0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   75% { opacity: 1; }
   100% {
@@ -996,15 +1007,17 @@ button:focus-visible, [tabindex]:focus-visible {
     transform: translate(calc(-50% + var(--fly-dx)), calc(-50% + var(--fly-dy))) scale(0.35);
   }
 }
-/* The corner counter itself (ScrapStation.tsx header) -- pulses gold the
-   moment the flight particle above actually lands (see FLY_MS-timed
-   useEffect in ScrapStation.tsx), so the flash reads as "arrived" rather
-   than firing on an unrelated timer. The number inside climbs via
-   useCountUp independently -- this class only handles the color/scale
-   pulse around it. */
-.scrap-counter { display: inline-block; }
-.scrap-counter.flash { animation: scrap-counter-flash 550ms ease-out; }
-@keyframes scrap-counter-flash {
+/* The counter/bar a fly-particle above lands on -- pulses gold the moment
+   the flight actually arrives (timed in JS to the flight's own duration),
+   so the flash reads as "arrived" rather than firing on an unrelated
+   timer. Whatever number/bar is inside climbs via useCountUp or the
+   .bar width transition independently -- this class only handles the
+   color/scale pulse around it. Originally ScrapStation-specific
+   (.scrap-counter), generalized for the same reason as .fly-particle
+   above. */
+.counter-flash-target { display: inline-block; }
+.counter-flash-target.flash { animation: counter-flash-pulse 550ms ease-out; }
+@keyframes counter-flash-pulse {
   0% { color: inherit; text-shadow: none; transform: scale(1); }
   30% {
     color: var(--brass);
@@ -2046,10 +2059,15 @@ input[type='range'] {
    * ever actually loading to expose the gap. Doubled per direct request
    * (was implicitly ~36px from a 2rem glyph's own rendered footprint) now
    * that real icons need a real box to fill.
+   *
+   * Halved again per a later, separate direct request -- 72px read as too
+   * large once real art was actually in place and visible against the
+   * rest of the scene. Lands close to (not exactly) the original
+   * pre-doubling size, not a full revert.
    */
-  width: 72px;
-  height: 72px;
-  font-size: 3rem;
+  width: 36px;
+  height: 36px;
+  font-size: 1.5rem;
   line-height: 1;
   cursor: pointer;
   user-select: none;
@@ -2076,7 +2094,7 @@ input[type='range'] {
    * the eye to in the first place). Golden and always on, so a spawn
    * reads as interactive the moment it appears.
    */
-  box-shadow: 0 0 16px 6px color-mix(in srgb, var(--brass) 55%, transparent);
+  box-shadow: 0 0 8px 3px color-mix(in srgb, var(--brass) 55%, transparent);
   transition: opacity 400ms linear, box-shadow 150ms ease;
   background: none;
   border: none;
@@ -2088,26 +2106,27 @@ input[type='range'] {
    out-specify that rule, a plain `.harvest-item:hover` alone would lose. */
 button.harvest-item:hover {
   background: none;
-  box-shadow: 0 0 22px 9px color-mix(in srgb, var(--brass) 75%, transparent);
+  box-shadow: 0 0 11px 4px color-mix(in srgb, var(--brass) 75%, transparent);
 }
 .harvest-item.fresh {
-  animation: harvest-fall calc(900ms / max(var(--anim-speed, 1), 0.001)) cubic-bezier(0.3, 0, 0.6, 1) both;
+  animation: harvest-fall calc(2000ms / max(var(--anim-speed, 1), 0.001)) cubic-bezier(0.3, 0, 0.6, 1) both;
 }
 .harvest-item.settled {
   animation: harvest-pulse calc(1.6s / max(var(--anim-speed, 1), 0.001)) ease-in-out infinite;
 }
 .harvest-item.bonus {
-  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--brass) 80%, transparent))
-    drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
-  box-shadow: 0 0 22px 9px color-mix(in srgb, var(--brass) 85%, transparent);
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--brass) 80%, transparent))
+    drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+  box-shadow: 0 0 11px 4px color-mix(in srgb, var(--brass) 85%, transparent);
 }
 @keyframes harvest-fall {
-  0% { top: 4%; opacity: 0; transform: translateX(-50%) scale(0.7); }
+  0% { top: 4%; opacity: 0; transform: translateX(calc(-50% - 10px)) scale(0.7); }
   15% { opacity: 1; }
-  55% { top: 62%; transform: translateX(-50%) scale(1); }
-  70% { top: 52%; }
-  85% { top: 62%; transform: translateX(-50%) scale(1); }
-  93% { top: 57%; }
+  30% { transform: translateX(calc(-50% + 8px)) scale(0.8); }
+  55% { top: 62%; transform: translateX(calc(-50% - 6px)) scale(1); }
+  70% { top: 52%; transform: translateX(calc(-50% + 4px)) scale(1); }
+  85% { top: 62%; transform: translateX(calc(-50% - 3px)) scale(1); }
+  93% { top: 57%; transform: translateX(-50%) scale(1); }
   100% { top: 62%; transform: translateX(-50%) scale(1); }
 }
 @keyframes harvest-pulse {

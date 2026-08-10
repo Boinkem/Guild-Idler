@@ -3694,6 +3694,117 @@ now grows to fit the card, instead of the card needing to shrink or
 scroll to fit the window. `npx tsc --noEmit` and a full `vite build` both
 pass clean.
 
+### Harvest overhaul + universal fly-to-counter -- built
+A large batch: two quick fixes, a Harvest mechanics change, and a shared
+piece of infrastructure (`flyTarget.ts`) that generalizes Scrap's own
+fly-to-counter flourish so it works everywhere the same idea was asked
+for, even across panels that aren't simultaneously mounted.
+
+**Quick fixes:**
+- **Notification banner gated to menu mode only.** Was mounted
+  unconditionally; now only shows once the full menu is open, matching
+  every other "needs a destination to navigate to" modal. Notifications
+  that arrive while idle still archive and count toward the header badge
+  exactly the same -- this only gates the transient pop-in.
+- **Wizard facing the wrong way -- fixed.** Same `HERO_REVERSED_FACING`
+  mechanism the Dwarf fix already established (`HeroSprite.tsx`) -- his
+  source pack was authored facing the opposite default direction from
+  every other class, same as the Dwarf's was.
+- **Harvest icons halved** (72px -> 36px, was doubled from an original
+  ~36px in an earlier pass) -- read as too large once real art was
+  actually in place. Glow/shadow radii scaled down proportionally to
+  match rather than left oversized against the smaller icon.
+
+**New shared infrastructure: `src/ui/flyTarget.ts`.** Scrap's own
+fly-to-counter (built earlier) worked because the item slot and the
+Scrap counter were both inside the same modal at the same time --
+several new requests (a Harvest catch flying to the Fields tab's own
+counter while spawning happens there; quest reward gold flying to the
+header; XP flying to a specific hero's own bar) don't have that luxury,
+since origin and destination can be on completely different, not-
+simultaneously-mounted panels. New shared registry: `registerFlyTarget`/
+`useFlyTargetRef` let any component register "here's where things should
+fly to" under a string key; `measureFlyOffset` gives any origin element
+the real live `getBoundingClientRect()`-measured distance to a
+registered target, or `null` if that target isn't currently mounted
+(every consumer treats that as "skip this flight," never an error).
+Generalized the existing Scrap-specific CSS classes into reusable ones
+(`.scrap-fly-to-counter` -> `.fly-particle`, `.scrap-counter` ->
+`.counter-flash-target`) and updated `ScrapStation.tsx` to the renamed
+classes, confirmed with a fresh `vite build` that nothing broke there.
+
+**Harvest spawn synchronization.** Per direct request ("materials all
+spawn at the same time, not at random intervals"): replaced 4
+independent per-node `nextSpawnAt` timers with one shared `GameState.
+harvestNextSpawnAt`. All 4 materials now spawn together as a single
+wave. This meant a real design decision about what tool upgrades mean
+once there's only one shared timer -- resolved by having the wave's own
+speed read the BEST of the 4 nodes' own tool-driven spawn bonuses
+(upgrading any single tool still speeds up the whole wave), while yield-
+per-catch stays fully per-node/per-tool, completely unaffected. A node
+whose previous wave's item is still sitting there uncaught when the next
+wave fires gets overwritten with a fresh one rather than skipped -- the
+wave is the moment that matters, not any one node's own catch-up state,
+same "miss it, no penalty, it's just gone" spirit the despawn timer
+already had. `SAVE_VERSION` bumped 31 -> 32; migration preserves
+whatever's already `pending` on each node (a player mid-catch when this
+lands doesn't lose an item they can already see) and starts the first
+synchronized wave one base interval out. New `SpawnTimerBar` (Fields
+tab) shows a plain countdown to the next wave, same `.bar` convention
+(and the animated-width fix) every other progress bar in the game
+already uses.
+
+**Harvest catch flash.** Bigger (new `.collect-particle.harvest-catch`
+modifier, 1.25rem vs the shared default 0.9375rem) and longer (1200ms vs
+750ms) per direct request, plus a genuine flight to the Fields tab's own
+material counter (not the separate Warehouse tab's stock rows, which
+aren't mounted at the same time a catch happens) using the new
+`flyTarget` system -- the counter flashes gold on arrival, timed to the
+flight's own duration.
+
+**Harvest falling animation.** Slowed from 900ms to 2000ms (a little
+over half the original speed, per direct request) -- the JS-side
+`fallDurationMs` constant in `HarvestPanel.tsx` updated to match exactly,
+since an existing comment there already explained why that value has to
+mirror the CSS duration formula precisely (a mismatch was a real
+previously-fixed bug in this same animation). Added left/right horizontal
+wobble to the `harvest-fall` keyframe, layered on top of the existing
+vertical fall + landing bounce rather than replacing it -- starts
+slightly left, wobbles right as it falls, settles with a little residual
+sway during the bounce.
+
+**Gold/XP fly-to-counter for quest and raid rewards.** The header's gold
+display (`MenuWindow.tsx`) and each hero's own XP bar (`HeroesPanel.tsx`,
+the collapsed-summary one, always visible) are now registered fly
+targets. `QuestResultModal` measures both flights the moment the card is
+dismissed (same "measure at the action that triggers the burst" timing
+Scrap's own flight already used), flying gold to the header and XP to
+the specific hero who earned it -- both silently skip if their target
+isn't currently mounted (idle mode has no header; the Heroes tab might
+not be open), so the existing local burst and count-up already cover the
+reward regardless. `RaidResultModal` gets the same gold flight; XP is
+deliberately NOT flown for raids -- a raid's XP goes to the whole party
+(`result.heroIds`), not one specific hero, so there's no single obvious
+bar to aim at the way a solo quest result has.
+
+Hit a real Rules-of-Hooks constraint building the hero-XP-bar
+registration: `HeroesPanel.tsx` renders each hero's card via a plain
+`.map()` callback, not a real per-item component, so `useFlyTargetRef`
+(a hook) couldn't be called there -- same constraint `usePulsesOnChange`
+already had to be designed around earlier. Fixed by calling
+`registerFlyTarget` (a plain function) directly from a callback ref
+instead of going through the hook at all for that one call site.
+
+Verified: `npx tsc --noEmit` and a full `vite build` both pass clean,
+plus 17 runtime checks -- 11 for the synchronized spawn wave (all 4
+nodes spawning at the exact same timestamp, catching one node not
+rescheduling the shared timer, an uncaught node correctly getting
+overwritten rather than skipped on the next wave, idle-hero-count and
+best-of-4-tools both correctly speeding up the shared interval) and 6
+for the `flyTarget` registry itself (unregistered-target safety, correct
+center/offset math against a fake measured element, and the
+unregister-on-unmount contract).
+
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**
   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
@@ -3843,14 +3954,18 @@ pass clean.
   now built, ahead of any actual pack -- see "DLC groundwork -- built"
   in the main patch log above.
 - **Adventurer's idle animation has a weapon-out frame mixed into it** --
-  reported directly, not yet fixed: the base Adventurer class's idle
-  loop includes at least one frame with the weapon drawn, when idle
-  should read as idle only (no weapon out) the same way every other
-  class's idle animation already does. Waiting on the actual sprite
-  sheet files to be sent over before touching this -- recorded here so
-  it isn't lost in the meantime. Likely fix shape once the files are in
-  hand: either the source sheet's idle row needs trimming at import time
-  (`tools/import_characters.py`), or the frame count/range for
-  Adventurer's `idle` animation needs adjusting in the generated
-  `public/heroes/manifest.json` if the weapon-out frame is only a subset
-  of an otherwise-correct row.
+  reported directly, still not fixed, but now reviewed. 6 reference
+  frames were sent over (adventurer-idle-00 through 03, plus a -2-01/
+  -2-02 pair), each 50x37px, all confirmed on review to show a calm,
+  weapon-sheathed idle pose with no flourish -- a good, correct reference
+  set. Not yet actually usable to fix this, though: they're loose
+  individual frame files, not the single horizontal sprite-strip format
+  `tools/import_characters.py` / the generated `public/heroes/
+  manifest.json` actually expect (one wide PNG per animation, frame
+  count times frameW across, same convention every other class's idle
+  strip already uses) -- and binary art can't travel through a code
+  patch regardless of format, so this needs the actual strip file placed
+  locally and the import script re-run, not something fixable from here
+  directly. Next step whenever that's ready: either compile these 6 (or
+  however many the real idle loop uses) into one strip and drop it in,
+  or send the strip directly for review.
