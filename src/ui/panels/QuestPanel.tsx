@@ -274,11 +274,26 @@ export function QuestPanel() {
   );
 
   // Chain-stage offers are still guild-wide -- a chain's progress is
-  // tracked once, not per hero, so every hero's tab shows the same current
-  // stage rather than each getting their own copy of the story.
+  // tracked once, not per hero, so every hero who's eligible for it sees
+  // the same current stage rather than each getting their own copy of the
+  // story. "Guild-wide" only covers *discovery* though (generateChainBoard
+  // gates that on the guild's single highest-level hero, per the story
+  // being a guild-level milestone) -- it was never meant to mean "every
+  // hero's own board shows every discovered chain regardless of whether
+  // that specific hero could ever take it." Before this filter, a fresh
+  // level 3 recruit's Discovered Quests list showed the exact same chain
+  // offers as the guild's level 30 hero, including stages dozens of
+  // levels above anything the level 3 hero could act on. Filtered here to
+  // match Available Contracts' own per-hero scoping (which never showed
+  // this problem, since generateContractsForHero already builds each
+  // hero's contract pool from their own level) -- a hero who outlevels a
+  // chain later just sees it appear on their own tab once they cross its
+  // reqLevel, the same as any other hero already can.
   const chainOffers = useMemo(
-    () => [...state.chainBoard].sort((a, b) => a.duration - b.duration),
-    [state.chainBoard],
+    () => [...state.chainBoard]
+      .filter((offer) => selectedHero.level >= offer.reqLevel)
+      .sort((a, b) => a.duration - b.duration),
+    [state.chainBoard, selectedHero.level],
   );
 
   // Consumables no longer live on this tab -- quests automatically use

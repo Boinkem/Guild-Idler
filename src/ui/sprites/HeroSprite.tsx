@@ -68,6 +68,24 @@ const HERO_DISPLAY_OFFSET: Partial<Record<HeroClass, { x: number; y: number }>> 
   samurai: { x: 16, y: 13 },
 };
 
+/**
+ * Every class's `flip` prop assumes the same default facing direction in
+ * its own source sheet -- unflipped plays facing away (departing/walking
+ * out), flipped plays facing the viewer (returning home), matching
+ * whichever way the equipped pet's own run animation faces beside it. The
+ * Dwarf's source pack was authored facing the opposite default direction
+ * from every other class, so applying the same flip logic left the Dwarf
+ * facing backward relative to both the other classes and the pet running
+ * next to him. Rather than push this per-class quirk onto every caller of
+ * `flip` (IdleView.tsx and anywhere else that ever renders a HeroSprite),
+ * it's inverted once here, internally, the same "corrected in one place"
+ * shape HERO_DISPLAY_SCALE/HERO_DISPLAY_OFFSET above already use for their
+ * own per-class art quirks.
+ */
+const HERO_REVERSED_FACING: Partial<Record<HeroClass, true>> = {
+  dwarf: true,
+};
+
 let manifestCache: Manifest | null = null;
 let manifestPromise: Promise<Manifest> | null = null;
 
@@ -178,9 +196,12 @@ export function HeroSprite({
   const scale = (height / char.frameH) * (HERO_DISPLAY_SCALE[heroClass] ?? 1);
   const url = `./heroes/${heroClass}/${skin}/${resolved}.png`;
   const offset = resolved === 'idle' ? HERO_DISPLAY_OFFSET[heroClass] : undefined;
+  // XOR, not OR/AND -- a reversed-facing class should flip exactly when a
+  // normal class WOULDN'T, and vice versa, not simply flip more often.
+  const effectiveFlip = HERO_REVERSED_FACING[heroClass] ? !flip : flip;
   const transforms: string[] = [];
-  if (flip) transforms.push('scaleX(-1)');
-  if (offset) transforms.push(`translate(${flip ? -offset.x : offset.x}%, ${offset.y}%)`);
+  if (effectiveFlip) transforms.push('scaleX(-1)');
+  if (offset) transforms.push(`translate(${effectiveFlip ? -offset.x : offset.x}%, ${offset.y}%)`);
   const style: CSSProperties = {
     width: char.frameW * scale,
     height: char.frameH * scale,

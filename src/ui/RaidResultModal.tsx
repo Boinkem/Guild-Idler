@@ -23,6 +23,17 @@ const XP_PARTICLES = [
   { dx: 24, dy: -100, rot: 12, delay: 70 },
   { dx: 2, dy: -118, rot: 2, delay: 130 },
 ];
+/** Same legendary star burst as QuestResultModal -- raids are the single
+ *  biggest time commitment in the game, so a legendary drop here deserves
+ *  at least the same celebration an ordinary quest's legendary drop
+ *  already gets, not less. */
+const LEGENDARY_PARTICLES = [
+  { dx: -70, dy: -100, rot: -20, delay: 0 },
+  { dx: -30, dy: -130, rot: -8, delay: 60 },
+  { dx: 10, dy: -140, rot: 4, delay: 20 },
+  { dx: 50, dy: -125, rot: 14, delay: 100 },
+  { dx: 85, dy: -85, rot: 26, delay: 40 },
+];
 
 /**
  * Shown when a raid resolves. Always mounted regardless of view mode, only
@@ -52,6 +63,7 @@ export function RaidResultModal({ active, onViewLore }: { active: boolean; onVie
 function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; engine: GameEngine; onViewLore: () => void }) {
   const [dismissing, setDismissing] = useState(false);
   const timeoutRef = useRef<number | null>(null);
+  const hasLegendary = result.loot.some((item) => item.rarity === 'legendary');
 
   useEffect(() => () => {
     if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
@@ -60,7 +72,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
   const handleDismiss = () => {
     if (dismissing) return;
     setDismissing(true);
-    playSound('collect');
+    playSound(hasLegendary ? 'legendary_drop' : 'collect');
     timeoutRef.current = window.setTimeout(() => engine.dismissRaidResult(), DISMISS_DELAY_MS);
   };
 
@@ -89,6 +101,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
           {result.xp > 0 && <span className="burst-xp">+{result.xp} XP</span>}
           {result.gold > 0 && <span className="burst-gold">+{formatGold(result.gold)} gold</span>}
         </div>
+        {hasLegendary && <p className="legendary-drop-label">★ Legendary find!</p>}
 
         {result.loot.length > 0 && (
           <>
@@ -96,7 +109,12 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
             <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
               {result.loot.map((item, i) => (
                 <span key={`${item.defId}-${i}`} className="row" style={{ gap: 4, alignItems: 'center' }}>
-                  <span className="tiny" style={{ color: RARITY_COLOR[item.rarity] }}>{item.name}</span>
+                  <span
+                    className={`tiny ${item.rarity === 'legendary' ? 'legendary-loot-name' : ''}`}
+                    style={{ color: RARITY_COLOR[item.rarity] }}
+                  >
+                    {item.name}
+                  </span>
                   <RarityPill rarity={item.rarity} />
                 </span>
               ))}
@@ -138,6 +156,15 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
                 style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, animationDelay: `${p.delay}ms` } as CSSProperties}
               >
                 ✦
+              </span>
+            ))}
+            {hasLegendary && LEGENDARY_PARTICLES.map((p, i) => (
+              <span
+                key={`legendary-${i}`}
+                className="collect-particle legendary"
+                style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, animationDelay: `${p.delay}ms` } as CSSProperties}
+              >
+                ★
               </span>
             ))}
           </div>

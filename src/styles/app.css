@@ -170,6 +170,12 @@
 /* Raid Result modal, full-clear treatment -- a raid worth committing hours
    to deserves a slightly bigger visual moment when it actually pays off. */
 .modal.raid-full-clear { border-color: var(--brass); border-width: 2px; }
+/* Quest Result modal, chain-completion treatment -- same shape as
+   raid-full-clear above, --violet instead of --brass to match the idle
+   companion's own .idle-chain-banner treatment for chain-related UI
+   elsewhere, since finishing a multi-stage story chain is arguably the
+   single biggest narrative moment this modal can show. */
+.modal.chain-complete { border-color: var(--violet); border-width: 2px; }
 
 /* Loot entries in a raid encounter's preview -- plain button reset so they
    read the same as the old static text, but are actually clickable now:
@@ -860,6 +866,16 @@ button:focus-visible, [tabindex]:focus-visible {
   text-shadow: 0 0 10px color-mix(in srgb, var(--brass) 85%, transparent),
     0 0 22px color-mix(in srgb, var(--brass) 50%, transparent);
 }
+/* Chain-completion star burst -- same bigger-than-ordinary shape as
+   .collect-particle.legendary just above, --violet instead of --brass so
+   the two big moments (a legendary drop, a finished story chain) read as
+   visually distinct from each other when either fires. */
+.collect-particle.chain {
+  font-size: 1.25rem;
+  color: var(--violet);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--violet) 85%, transparent),
+    0 0 22px color-mix(in srgb, var(--violet) 50%, transparent);
+}
 @keyframes collect-fly {
   0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
   15% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
@@ -1435,6 +1451,22 @@ input[type='range'] {
 .legendary-loot-name {
   display: inline-block;
   animation: legendary-shimmer 800ms ease-in-out 2;
+}
+/* Expedition-complete banner -- deliberately bigger than crit/legendary's
+   own pop-in labels (this replaces what used to be a single plain line of
+   colored text), since finishing a multi-stage story chain is the biggest
+   single moment either result modal can show. --violet, matching
+   .modal.chain-complete's own border and .collect-particle.chain. */
+.chain-complete-label {
+  text-align: center;
+  margin: 4px 0 0;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  color: var(--violet);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--violet) 85%, transparent),
+    0 0 24px color-mix(in srgb, var(--violet) 45%, transparent);
+  animation: burst-pop-crit 520ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
 }
 @keyframes legendary-shimmer {
   0%, 100% { text-shadow: 0 0 4px color-mix(in srgb, var(--brass) 40%, transparent); }

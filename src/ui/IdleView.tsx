@@ -103,10 +103,16 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
   }, [engine.lastResult]);
 
   // This hero's own contracts, plus whatever's currently on the shared
-  // chain board -- the companion sprite stands in for one hero at a time,
-  // so "ready" should mean ready for *them*, not the whole roster pooled
-  // together the way it did before the Quest Tab hero-log rework.
-  const questsReady = (engine.state.questBoards[hero.id]?.length ?? 0) + engine.state.chainBoard.length;
+  // chain board that THIS hero is actually high-level enough to take --
+  // the companion sprite stands in for one hero at a time, so "ready"
+  // should mean ready for *them*, not the whole roster pooled together
+  // the way it did before the Quest Tab hero-log rework. Chain discovery
+  // itself stays guild-wide (generateChainBoard gates that on the guild's
+  // single highest-level hero), but a chain being *discovered* doesn't
+  // mean every hero can act on it -- same reqLevel filter QuestPanel's own
+  // chainOffers now applies, so this badge and that list always agree.
+  const questsReady = (engine.state.questBoards[hero.id]?.length ?? 0)
+    + engine.state.chainBoard.filter((o) => hero.level >= o.reqLevel).length;
   const injured = hero.injuries.length > 0;
 
   // The desktop companion shows at most one pet -- the first equipped slot

@@ -1,0 +1,432 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 24d8400..e1a289b 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -2685,12 +2685,17 @@ any particular order.
+   built" below.
+ - **Auto-repair threshold** -- opt-in setting to auto-repair gear once
+   durability drops below a chosen %, instead of a manual Repair
+-  Everything trip. Considered this round, not built -- deferred in favor
+-  of the three visual items above.
++  Everything trip. Considered twice now (this round and the visual-QOL
++  round before it), not built either time -- still deferred.
+ - **Auto-equip on loot** -- opt-in setting so quest loot that beats
+   what's equipped auto-equips instead of sitting in the stash until Equip
+-  Best is run manually. Same "considered, deferred" status as auto-repair
+-  above.
++  Best is run manually. Same "considered twice, deferred both times"
++  status as auto-repair above.
++- ~~**Extend legendary-drop flourish to Raid results**~~ -- done, see
++  "Raid + chain-completion flourish -- built" below.
++- ~~**Chain-completion flourish** -- finishing a multi-stage story chain
++  got nothing but a single line of colored text before this.~~ -- done,
++  see "Raid + chain-completion flourish -- built" below.
+ 
+ ### Send All Idle -- built
+ The roster-wide version of the existing per-hero Quick-assign button.
+@@ -2850,6 +2855,95 @@ on eggs ready), the affordable-upgrade cost comparison at the exact
+ boundary (one gold short, exact cost, gold to spare), and legendary-loot
+ detection in a result's loot list.
+ 
++### Chain offers ignoring the viewing hero's own level -- fixed
++Reported directly: a level 3 hero's Discovered Quests list showed the
++exact same chain stage offers as the guild's much-higher-level heroes,
++including stages dozens of levels above anything a level 3 hero could
++act on. Root cause: chain *discovery* (`QuestManager.generateChainBoard`)
++has always correctly gated on the guild's single highest-level hero --
++that part is intentional, a story chain becoming available is a
++guild-level milestone, not a per-hero one. But `state.chainBoard` itself
++is guild-wide and shared, and neither `QuestPanel.tsx`'s `chainOffers`
++nor `IdleView.tsx`'s `questsReady` badge count ever filtered that shared
++list down to what the *specific hero being viewed* could actually take --
++unlike Available Contracts, which was always correctly scoped per-hero
++from the start (`generateContractsForHero` builds each hero's own pool
++from their own level), so this asymmetry was invisible until the
++Discovered Quests / per-hero-log split made the two sit side by side.
++Both now filter `state.chainBoard` down to `offer.reqLevel <=
++[the specific hero's own level]` before rendering/counting -- a hero who
++later outlevels a chain just sees it appear on their own tab the moment
++they cross its reqLevel, same as any other hero already could. Verified
++at runtime: a two-hero guild (level 3 and level 30) correctly shows the
++level-3 hero strictly fewer chain offers than the raw discovered board
++whenever any discovered chain requires more than level 3.
++
++### Backlog notes: fox pet run animation, Dwarf facing direction
++Two visual reports investigated this round, one fixed in code and one
++diagnosed as an asset-pipeline gap rather than a code bug:
++- **Dwarf facing the wrong direction relative to running pets -- fixed.**
++  Every class shares one `flip` boolean in `HeroSprite.tsx`, applied
++  uniformly on the assumption every class's source sheet was authored
++  facing the same default direction. The Dwarf's pack was authored facing
++  the opposite default direction from every other class, so the shared
++  flip logic left the Dwarf facing backward relative to both the other
++  classes and whatever pet is running beside him. Fixed with a new
++  `HERO_REVERSED_FACING` per-class quirks map (same convention
++  `HERO_DISPLAY_SCALE`/`HERO_DISPLAY_OFFSET` already established just
++  above it for their own per-class art quirks) that XORs into the
++  effective flip internally -- callers like `IdleView.tsx` don't need to
++  know this per-class exception exists at all.
++- **Fox not visibly running when a quest starts -- diagnosed, not a code
++  fix.** `tools/import_pets.py`'s `FOX` spec already defines a 14-frame
++  `movement` row (`rows={'movement': (1, 0, 14), ...}`), and
++  `PetSprite.tsx`'s `resolveAnimation` returns a species' own animation
++  immediately if the manifest has it -- so if the fox genuinely doesn't
++  run, the most likely explanation is that the locally-generated
++  `public/pets/manifest.json` (gitignored, not in the repo) predates that
++  `movement` row being added to the import script, and just needs
++  `tools/import_pets.py` re-run against the source sheets. Not something
++  a code patch can fix blind without the actual generated manifest to
++  inspect -- flagged here rather than guessed at.
++
++### Raid + chain-completion flourish -- built
++Two extensions of the legendary-drop flourish from the visual-QOL round
++before this one, both aimed at moments that had noticeably less payoff
++feedback than they deserved:
++- **Raid results.** `RaidResultModal.tsx` had the exact same coin/XP
++  particle system `QuestResultModal.tsx` did before that round, but never
++  got the legendary treatment extended to it -- raids are the single
++  biggest time commitment in the game, so a legendary raid drop deserved
++  at least the same celebration an ordinary quest's legendary drop
++  already got, not less. Same treatment ported over: the dismiss sound
++  now correctly fires `legendary_drop` on legendary loot (previously
++  always just `collect`), a "★ Legendary find!" label pops in, the
++  specific legendary item's name gets the same finite gold shimmer, and
++  the same star particle burst fires on dismiss.
++- **Chain completion.** Finishing a multi-stage story chain -- arguably
++  the single biggest narrative moment either result modal can show --
++  previously got nothing but one plain line of brass-colored text
++  ("The expedition is complete..."). Now gets its own treatment,
++  deliberately bigger than legendary's own labels since this outranks it:
++  a `.modal.chain-complete` violet border (same `border-color` + doubled
++  `border-width` convention `.modal.raid-full-clear` already established
++  for raids), a large "🏆 Expedition Complete!" banner that pops in bigger
++  than the crit/legendary labels, and its own wider 6-star violet particle
++  burst (`CHAIN_COMPLETE_PARTICLES`, `.collect-particle.chain`) -- violet
++  throughout rather than reusing legendary's gold, matching the idle
++  companion's own `.idle-chain-banner` treatment for chain-related UI
++  elsewhere, and keeping the two big moments visually distinct from each
++  other when both happen to fire on the same result. The immediate
++  `chain_complete` sound cue already existed and fires the moment the
++  chain resolves (`engine.ts`) -- this pass only touched the result
++  card's own visual treatment, not the audio, which was already correct.
++
++All three (chain-eligibility fix, Dwarf facing, raid/chain flourish)
++verified together: `npx tsc --noEmit` and a full `vite build` both pass
++clean, plus runtime checks covering the chain-level filter's exact bug
++reproduction (a level-3 hero seeing strictly fewer offers than the raw
++board once any discovered chain exceeds their level) and the
++hasLegendary/chainComplete flourish-trigger logic for both modals.
++
+ ### Bigger, still-undecided
+ - **Queued from the same conversation as the UX/economy batch above:**
+   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 6afbac0..2e2e930 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -170,6 +170,12 @@
+ /* Raid Result modal, full-clear treatment -- a raid worth committing hours
+    to deserves a slightly bigger visual moment when it actually pays off. */
+ .modal.raid-full-clear { border-color: var(--brass); border-width: 2px; }
++/* Quest Result modal, chain-completion treatment -- same shape as
++   raid-full-clear above, --violet instead of --brass to match the idle
++   companion's own .idle-chain-banner treatment for chain-related UI
++   elsewhere, since finishing a multi-stage story chain is arguably the
++   single biggest narrative moment this modal can show. */
++.modal.chain-complete { border-color: var(--violet); border-width: 2px; }
+ 
+ /* Loot entries in a raid encounter's preview -- plain button reset so they
+    read the same as the old static text, but are actually clickable now:
+@@ -860,6 +866,16 @@ button:focus-visible, [tabindex]:focus-visible {
+   text-shadow: 0 0 10px color-mix(in srgb, var(--brass) 85%, transparent),
+     0 0 22px color-mix(in srgb, var(--brass) 50%, transparent);
+ }
++/* Chain-completion star burst -- same bigger-than-ordinary shape as
++   .collect-particle.legendary just above, --violet instead of --brass so
++   the two big moments (a legendary drop, a finished story chain) read as
++   visually distinct from each other when either fires. */
++.collect-particle.chain {
++  font-size: 1.25rem;
++  color: var(--violet);
++  text-shadow: 0 0 10px color-mix(in srgb, var(--violet) 85%, transparent),
++    0 0 22px color-mix(in srgb, var(--violet) 50%, transparent);
++}
+ @keyframes collect-fly {
+   0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+   15% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+@@ -1436,6 +1452,22 @@ input[type='range'] {
+   display: inline-block;
+   animation: legendary-shimmer 800ms ease-in-out 2;
+ }
++/* Expedition-complete banner -- deliberately bigger than crit/legendary's
++   own pop-in labels (this replaces what used to be a single plain line of
++   colored text), since finishing a multi-stage story chain is the biggest
++   single moment either result modal can show. --violet, matching
++   .modal.chain-complete's own border and .collect-particle.chain. */
++.chain-complete-label {
++  text-align: center;
++  margin: 4px 0 0;
++  font-family: var(--font-display);
++  font-size: 1rem;
++  letter-spacing: 0.04em;
++  color: var(--violet);
++  text-shadow: 0 0 12px color-mix(in srgb, var(--violet) 85%, transparent),
++    0 0 24px color-mix(in srgb, var(--violet) 45%, transparent);
++  animation: burst-pop-crit 520ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
++}
+ @keyframes legendary-shimmer {
+   0%, 100% { text-shadow: 0 0 4px color-mix(in srgb, var(--brass) 40%, transparent); }
+   50% { text-shadow: 0 0 12px color-mix(in srgb, var(--brass) 90%, transparent), 0 0 22px color-mix(in srgb, var(--brass) 50%, transparent); }
+diff --git a/src/ui/IdleView.tsx b/src/ui/IdleView.tsx
+index 12e8be9..fcd454f 100644
+--- a/src/ui/IdleView.tsx
++++ b/src/ui/IdleView.tsx
+@@ -103,10 +103,16 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+   }, [engine.lastResult]);
+ 
+   // This hero's own contracts, plus whatever's currently on the shared
+-  // chain board -- the companion sprite stands in for one hero at a time,
+-  // so "ready" should mean ready for *them*, not the whole roster pooled
+-  // together the way it did before the Quest Tab hero-log rework.
+-  const questsReady = (engine.state.questBoards[hero.id]?.length ?? 0) + engine.state.chainBoard.length;
++  // chain board that THIS hero is actually high-level enough to take --
++  // the companion sprite stands in for one hero at a time, so "ready"
++  // should mean ready for *them*, not the whole roster pooled together
++  // the way it did before the Quest Tab hero-log rework. Chain discovery
++  // itself stays guild-wide (generateChainBoard gates that on the guild's
++  // single highest-level hero), but a chain being *discovered* doesn't
++  // mean every hero can act on it -- same reqLevel filter QuestPanel's own
++  // chainOffers now applies, so this badge and that list always agree.
++  const questsReady = (engine.state.questBoards[hero.id]?.length ?? 0)
++    + engine.state.chainBoard.filter((o) => hero.level >= o.reqLevel).length;
+   const injured = hero.injuries.length > 0;
+ 
+   // The desktop companion shows at most one pet -- the first equipped slot
+diff --git a/src/ui/QuestResultModal.tsx b/src/ui/QuestResultModal.tsx
+index aa9f0ad..6af1cf9 100644
+--- a/src/ui/QuestResultModal.tsx
++++ b/src/ui/QuestResultModal.tsx
+@@ -46,6 +46,21 @@ const LEGENDARY_PARTICLES = [
+   { dx: 50, dy: -125, rot: 14, delay: 100 },
+   { dx: 85, dy: -85, rot: 26, delay: 40 },
+ ];
++/** Legendary loot dropping and a chain finishing are unrelated events that
++ * can both fire on the same result, so this is its own particle set
++ * rather than reusing LEGENDARY_PARTICLES -- a wider, fuller spread than
++ * even the legendary burst, since finishing a multi-stage story chain is
++ * the single biggest moment this modal can show. Violet, matching the
++ * idle companion's own .idle-chain-banner treatment for chain-related UI
++ * elsewhere, rather than reusing legendary's gold. */
++const CHAIN_COMPLETE_PARTICLES = [
++  { dx: -95, dy: -70, rot: -24, delay: 0 },
++  { dx: -60, dy: -120, rot: -12, delay: 50 },
++  { dx: -20, dy: -145, rot: -4, delay: 90 },
++  { dx: 20, dy: -145, rot: 4, delay: 30 },
++  { dx: 60, dy: -120, rot: 12, delay: 110 },
++  { dx: 95, dy: -70, rot: 24, delay: 70 },
++];
+ 
+ /**
+  * Shown when a quest resolves while the player is watching. Split into an
+@@ -82,6 +97,7 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult;
+   const [dismissing, setDismissing] = useState(false);
+   const timeoutRef = useRef<number | null>(null);
+   const hasLegendary = result.loot.some((item) => item.rarity === 'legendary');
++  const chainComplete = result.chainAdvanced?.completed ?? false;
+ 
+   useEffect(() => () => {
+     if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
+@@ -102,7 +118,7 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult;
+ 
+   return (
+     <div className="overlay" onClick={handleDismiss}>
+-      <div className={`modal ${dismissing ? 'dismissing' : ''}`} onClick={(e) => e.stopPropagation()}>
++      <div className={`modal ${chainComplete ? 'chain-complete' : ''} ${dismissing ? 'dismissing' : ''}`} onClick={(e) => e.stopPropagation()}>
+         <h3>{result.heroName} is back</h3>
+         <p className="small muted" style={{ marginTop: 0 }}>{result.questName}</p>
+ 
+@@ -166,10 +182,11 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult;
+           </>
+         )}
+ 
++        {chainComplete && <p className="chain-complete-label">🏆 Expedition Complete!</p>}
+         {result.chainAdvanced && (
+           <p className="small" style={{ color: 'var(--brass)' }}>
+             {result.chainAdvanced.completed
+-              ? 'The expedition is complete. Rewards delivered to the guild.'
++              ? 'Rewards delivered to the guild.'
+               : `Expedition progress: stage ${result.chainAdvanced.stage + 1} of ${result.chainAdvanced.totalStages}.`}
+           </p>
+         )}
+@@ -229,6 +246,15 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult;
+                 ★
+               </span>
+             ))}
++            {chainComplete && CHAIN_COMPLETE_PARTICLES.map((p, i) => (
++              <span
++                key={`chain-${i}`}
++                className="collect-particle chain"
++                style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, animationDelay: `${p.delay}ms` } as CSSProperties}
++              >
++                ✦
++              </span>
++            ))}
+           </div>
+         )}
+       </div>
+diff --git a/src/ui/RaidResultModal.tsx b/src/ui/RaidResultModal.tsx
+index 1d781f0..bbad313 100644
+--- a/src/ui/RaidResultModal.tsx
++++ b/src/ui/RaidResultModal.tsx
+@@ -23,6 +23,17 @@ const XP_PARTICLES = [
+   { dx: 24, dy: -100, rot: 12, delay: 70 },
+   { dx: 2, dy: -118, rot: 2, delay: 130 },
+ ];
++/** Same legendary star burst as QuestResultModal -- raids are the single
++ *  biggest time commitment in the game, so a legendary drop here deserves
++ *  at least the same celebration an ordinary quest's legendary drop
++ *  already gets, not less. */
++const LEGENDARY_PARTICLES = [
++  { dx: -70, dy: -100, rot: -20, delay: 0 },
++  { dx: -30, dy: -130, rot: -8, delay: 60 },
++  { dx: 10, dy: -140, rot: 4, delay: 20 },
++  { dx: 50, dy: -125, rot: 14, delay: 100 },
++  { dx: 85, dy: -85, rot: 26, delay: 40 },
++];
+ 
+ /**
+  * Shown when a raid resolves. Always mounted regardless of view mode, only
+@@ -52,6 +63,7 @@ export function RaidResultModal({ active, onViewLore }: { active: boolean; onVie
+ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; engine: GameEngine; onViewLore: () => void }) {
+   const [dismissing, setDismissing] = useState(false);
+   const timeoutRef = useRef<number | null>(null);
++  const hasLegendary = result.loot.some((item) => item.rarity === 'legendary');
+ 
+   useEffect(() => () => {
+     if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
+@@ -60,7 +72,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
+   const handleDismiss = () => {
+     if (dismissing) return;
+     setDismissing(true);
+-    playSound('collect');
++    playSound(hasLegendary ? 'legendary_drop' : 'collect');
+     timeoutRef.current = window.setTimeout(() => engine.dismissRaidResult(), DISMISS_DELAY_MS);
+   };
+ 
+@@ -89,6 +101,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
+           {result.xp > 0 && <span className="burst-xp">+{result.xp} XP</span>}
+           {result.gold > 0 && <span className="burst-gold">+{formatGold(result.gold)} gold</span>}
+         </div>
++        {hasLegendary && <p className="legendary-drop-label">★ Legendary find!</p>}
+ 
+         {result.loot.length > 0 && (
+           <>
+@@ -96,7 +109,12 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
+             <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
+               {result.loot.map((item, i) => (
+                 <span key={`${item.defId}-${i}`} className="row" style={{ gap: 4, alignItems: 'center' }}>
+-                  <span className="tiny" style={{ color: RARITY_COLOR[item.rarity] }}>{item.name}</span>
++                  <span
++                    className={`tiny ${item.rarity === 'legendary' ? 'legendary-loot-name' : ''}`}
++                    style={{ color: RARITY_COLOR[item.rarity] }}
++                  >
++                    {item.name}
++                  </span>
+                   <RarityPill rarity={item.rarity} />
+                 </span>
+               ))}
+@@ -140,6 +158,15 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
+                 ✦
+               </span>
+             ))}
++            {hasLegendary && LEGENDARY_PARTICLES.map((p, i) => (
++              <span
++                key={`legendary-${i}`}
++                className="collect-particle legendary"
++                style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, animationDelay: `${p.delay}ms` } as CSSProperties}
++              >
++                ★
++              </span>
++            ))}
+           </div>
+         )}
+       </div>
+diff --git a/src/ui/panels/QuestPanel.tsx b/src/ui/panels/QuestPanel.tsx
+index 201e812..012fb37 100644
+--- a/src/ui/panels/QuestPanel.tsx
++++ b/src/ui/panels/QuestPanel.tsx
+@@ -274,11 +274,26 @@ export function QuestPanel() {
+   );
+ 
+   // Chain-stage offers are still guild-wide -- a chain's progress is
+-  // tracked once, not per hero, so every hero's tab shows the same current
+-  // stage rather than each getting their own copy of the story.
++  // tracked once, not per hero, so every hero who's eligible for it sees
++  // the same current stage rather than each getting their own copy of the
++  // story. "Guild-wide" only covers *discovery* though (generateChainBoard
++  // gates that on the guild's single highest-level hero, per the story
++  // being a guild-level milestone) -- it was never meant to mean "every
++  // hero's own board shows every discovered chain regardless of whether
++  // that specific hero could ever take it." Before this filter, a fresh
++  // level 3 recruit's Discovered Quests list showed the exact same chain
++  // offers as the guild's level 30 hero, including stages dozens of
++  // levels above anything the level 3 hero could act on. Filtered here to
++  // match Available Contracts' own per-hero scoping (which never showed
++  // this problem, since generateContractsForHero already builds each
++  // hero's contract pool from their own level) -- a hero who outlevels a
++  // chain later just sees it appear on their own tab once they cross its
++  // reqLevel, the same as any other hero already can.
+   const chainOffers = useMemo(
+-    () => [...state.chainBoard].sort((a, b) => a.duration - b.duration),
+-    [state.chainBoard],
++    () => [...state.chainBoard]
++      .filter((offer) => selectedHero.level >= offer.reqLevel)
++      .sort((a, b) => a.duration - b.duration),
++    [state.chainBoard, selectedHero.level],
+   );
+ 
+   // Consumables no longer live on this tab -- quests automatically use
+diff --git a/src/ui/sprites/HeroSprite.tsx b/src/ui/sprites/HeroSprite.tsx
+index 50abd86..b41000d 100644
+--- a/src/ui/sprites/HeroSprite.tsx
++++ b/src/ui/sprites/HeroSprite.tsx
+@@ -68,6 +68,24 @@ const HERO_DISPLAY_OFFSET: Partial<Record<HeroClass, { x: number; y: number }>>
+   samurai: { x: 16, y: 13 },
+ };
+ 
++/**
++ * Every class's `flip` prop assumes the same default facing direction in
++ * its own source sheet -- unflipped plays facing away (departing/walking
++ * out), flipped plays facing the viewer (returning home), matching
++ * whichever way the equipped pet's own run animation faces beside it. The
++ * Dwarf's source pack was authored facing the opposite default direction
++ * from every other class, so applying the same flip logic left the Dwarf
++ * facing backward relative to both the other classes and the pet running
++ * next to him. Rather than push this per-class quirk onto every caller of
++ * `flip` (IdleView.tsx and anywhere else that ever renders a HeroSprite),
++ * it's inverted once here, internally, the same "corrected in one place"
++ * shape HERO_DISPLAY_SCALE/HERO_DISPLAY_OFFSET above already use for their
++ * own per-class art quirks.
++ */
++const HERO_REVERSED_FACING: Partial<Record<HeroClass, true>> = {
++  dwarf: true,
++};
++
+ let manifestCache: Manifest | null = null;
+ let manifestPromise: Promise<Manifest> | null = null;
+ 
+@@ -178,9 +196,12 @@ export function HeroSprite({
+   const scale = (height / char.frameH) * (HERO_DISPLAY_SCALE[heroClass] ?? 1);
+   const url = `./heroes/${heroClass}/${skin}/${resolved}.png`;
+   const offset = resolved === 'idle' ? HERO_DISPLAY_OFFSET[heroClass] : undefined;
++  // XOR, not OR/AND -- a reversed-facing class should flip exactly when a
++  // normal class WOULDN'T, and vice versa, not simply flip more often.
++  const effectiveFlip = HERO_REVERSED_FACING[heroClass] ? !flip : flip;
+   const transforms: string[] = [];
+-  if (flip) transforms.push('scaleX(-1)');
+-  if (offset) transforms.push(`translate(${flip ? -offset.x : offset.x}%, ${offset.y}%)`);
++  if (effectiveFlip) transforms.push('scaleX(-1)');
++  if (offset) transforms.push(`translate(${effectiveFlip ? -offset.x : offset.x}%, ${offset.y}%)`);
+   const style: CSSProperties = {
+     width: char.frameW * scale,
+     height: char.frameH * scale,

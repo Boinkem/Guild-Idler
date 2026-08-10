@@ -2685,12 +2685,17 @@ any particular order.
   built" below.
 - **Auto-repair threshold** -- opt-in setting to auto-repair gear once
   durability drops below a chosen %, instead of a manual Repair
-  Everything trip. Considered this round, not built -- deferred in favor
-  of the three visual items above.
+  Everything trip. Considered twice now (this round and the visual-QOL
+  round before it), not built either time -- still deferred.
 - **Auto-equip on loot** -- opt-in setting so quest loot that beats
   what's equipped auto-equips instead of sitting in the stash until Equip
-  Best is run manually. Same "considered, deferred" status as auto-repair
-  above.
+  Best is run manually. Same "considered twice, deferred both times"
+  status as auto-repair above.
+- ~~**Extend legendary-drop flourish to Raid results**~~ -- done, see
+  "Raid + chain-completion flourish -- built" below.
+- ~~**Chain-completion flourish** -- finishing a multi-stage story chain
+  got nothing but a single line of colored text before this.~~ -- done,
+  see "Raid + chain-completion flourish -- built" below.
 
 ### Send All Idle -- built
 The roster-wide version of the existing per-hero Quick-assign button.
@@ -2849,6 +2854,95 @@ idle/eggs-ready/broken-gear signals (including the hatchery-locked gate
 on eggs ready), the affordable-upgrade cost comparison at the exact
 boundary (one gold short, exact cost, gold to spare), and legendary-loot
 detection in a result's loot list.
+
+### Chain offers ignoring the viewing hero's own level -- fixed
+Reported directly: a level 3 hero's Discovered Quests list showed the
+exact same chain stage offers as the guild's much-higher-level heroes,
+including stages dozens of levels above anything a level 3 hero could
+act on. Root cause: chain *discovery* (`QuestManager.generateChainBoard`)
+has always correctly gated on the guild's single highest-level hero --
+that part is intentional, a story chain becoming available is a
+guild-level milestone, not a per-hero one. But `state.chainBoard` itself
+is guild-wide and shared, and neither `QuestPanel.tsx`'s `chainOffers`
+nor `IdleView.tsx`'s `questsReady` badge count ever filtered that shared
+list down to what the *specific hero being viewed* could actually take --
+unlike Available Contracts, which was always correctly scoped per-hero
+from the start (`generateContractsForHero` builds each hero's own pool
+from their own level), so this asymmetry was invisible until the
+Discovered Quests / per-hero-log split made the two sit side by side.
+Both now filter `state.chainBoard` down to `offer.reqLevel <=
+[the specific hero's own level]` before rendering/counting -- a hero who
+later outlevels a chain just sees it appear on their own tab the moment
+they cross its reqLevel, same as any other hero already could. Verified
+at runtime: a two-hero guild (level 3 and level 30) correctly shows the
+level-3 hero strictly fewer chain offers than the raw discovered board
+whenever any discovered chain requires more than level 3.
+
+### Backlog notes: fox pet run animation, Dwarf facing direction
+Two visual reports investigated this round, one fixed in code and one
+diagnosed as an asset-pipeline gap rather than a code bug:
+- **Dwarf facing the wrong direction relative to running pets -- fixed.**
+  Every class shares one `flip` boolean in `HeroSprite.tsx`, applied
+  uniformly on the assumption every class's source sheet was authored
+  facing the same default direction. The Dwarf's pack was authored facing
+  the opposite default direction from every other class, so the shared
+  flip logic left the Dwarf facing backward relative to both the other
+  classes and whatever pet is running beside him. Fixed with a new
+  `HERO_REVERSED_FACING` per-class quirks map (same convention
+  `HERO_DISPLAY_SCALE`/`HERO_DISPLAY_OFFSET` already established just
+  above it for their own per-class art quirks) that XORs into the
+  effective flip internally -- callers like `IdleView.tsx` don't need to
+  know this per-class exception exists at all.
+- **Fox not visibly running when a quest starts -- diagnosed, not a code
+  fix.** `tools/import_pets.py`'s `FOX` spec already defines a 14-frame
+  `movement` row (`rows={'movement': (1, 0, 14), ...}`), and
+  `PetSprite.tsx`'s `resolveAnimation` returns a species' own animation
+  immediately if the manifest has it -- so if the fox genuinely doesn't
+  run, the most likely explanation is that the locally-generated
+  `public/pets/manifest.json` (gitignored, not in the repo) predates that
+  `movement` row being added to the import script, and just needs
+  `tools/import_pets.py` re-run against the source sheets. Not something
+  a code patch can fix blind without the actual generated manifest to
+  inspect -- flagged here rather than guessed at.
+
+### Raid + chain-completion flourish -- built
+Two extensions of the legendary-drop flourish from the visual-QOL round
+before this one, both aimed at moments that had noticeably less payoff
+feedback than they deserved:
+- **Raid results.** `RaidResultModal.tsx` had the exact same coin/XP
+  particle system `QuestResultModal.tsx` did before that round, but never
+  got the legendary treatment extended to it -- raids are the single
+  biggest time commitment in the game, so a legendary raid drop deserved
+  at least the same celebration an ordinary quest's legendary drop
+  already got, not less. Same treatment ported over: the dismiss sound
+  now correctly fires `legendary_drop` on legendary loot (previously
+  always just `collect`), a "★ Legendary find!" label pops in, the
+  specific legendary item's name gets the same finite gold shimmer, and
+  the same star particle burst fires on dismiss.
+- **Chain completion.** Finishing a multi-stage story chain -- arguably
+  the single biggest narrative moment either result modal can show --
+  previously got nothing but one plain line of brass-colored text
+  ("The expedition is complete..."). Now gets its own treatment,
+  deliberately bigger than legendary's own labels since this outranks it:
+  a `.modal.chain-complete` violet border (same `border-color` + doubled
+  `border-width` convention `.modal.raid-full-clear` already established
+  for raids), a large "🏆 Expedition Complete!" banner that pops in bigger
+  than the crit/legendary labels, and its own wider 6-star violet particle
+  burst (`CHAIN_COMPLETE_PARTICLES`, `.collect-particle.chain`) -- violet
+  throughout rather than reusing legendary's gold, matching the idle
+  companion's own `.idle-chain-banner` treatment for chain-related UI
+  elsewhere, and keeping the two big moments visually distinct from each
+  other when both happen to fire on the same result. The immediate
+  `chain_complete` sound cue already existed and fires the moment the
+  chain resolves (`engine.ts`) -- this pass only touched the result
+  card's own visual treatment, not the audio, which was already correct.
+
+All three (chain-eligibility fix, Dwarf facing, raid/chain flourish)
+verified together: `npx tsc --noEmit` and a full `vite build` both pass
+clean, plus runtime checks covering the chain-level filter's exact bug
+reproduction (a level-3 hero seeing strictly fewer offers than the raw
+board once any discovered chain exceeds their level) and the
+hasLegendary/chainComplete flourish-trigger logic for both modals.
 
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**
