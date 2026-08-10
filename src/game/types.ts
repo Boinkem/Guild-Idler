@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 32;
+export const SAVE_VERSION = 33;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -934,32 +934,14 @@ export interface GameState {
   /* ------------------------- Harvest/Gathering ------------------------- */
   /** Current stock of each material, capped by warehouseCapacity(). */
   materials: Record<MaterialId, number>;
-  /** Per-node spawn/pending-item state -- see HarvestManager. */
+  /** Per-node spawn/pending-item state, including each node's own
+   *  independent `nextSpawnAt` -- see HarvestManager. Was briefly one
+   *  shared GameState-level timestamp for all 4 nodes ("harvest o'clock"),
+   *  reverted after direct follow-up feedback (confirmed with a
+   *  screenshot: synchronized catches meant every node's own burst text
+   *  landed at once and visually overlapped into an unreadable pile) --
+   *  see HarvestManager.spawnIntervalMs's own comment for the full story. */
   harvestNodes: Record<MaterialId, HarvestNodeState>;
-  /**
-   * One shared timestamp for all 4 nodes, replacing what used to be an
-   * independent `nextSpawnAt` per node -- per direct request, the 4
-   * materials are meant to spawn together as one synchronized wave
-   * ("harvest o'clock"), not drift in and out of sync with each other on
-   * their own random-feeling schedules. When this fires (see
-   * HarvestManager.ensureSpawns), every node gets a fresh pending item at
-   * once, each still independently rolling its own bonus-glint chance --
-   * only the TIMING is shared, not the outcome. A node whose previous
-   * wave's item is still sitting there uncaught when the next wave fires
-   * gets overwritten with a fresh one rather than skipped, the same "miss
-   * it and it's just gone, no penalty" spirit the old despawn-without-
-   * penalty behavior already had -- the wave is the moment that matters,
-   * not any one node's own catch-up state.
-   *
-   * The interval itself still speeds up with idle hero count, the same
-   * factor it always has -- but tool level's own spawn-speed bonus
-   * (HarvestToolDef.spawnBonusMsPerLevel) is now read as the BEST of the
-   * 4 nodes' own tool levels, not each node's individual one, since a
-   * per-node bonus is meaningless once there's only one shared timer to
-   * apply it to. Upgrading any single tool still speeds up the whole
-   * wave for everyone -- see HarvestManager.globalSpawnIntervalMs.
-   */
-  harvestNextSpawnAt: number;
   /** Levels bought in the per-node tool upgrade line (Pickaxe/Woodaxe/Sickle/Net). */
   harvestTools: Record<MaterialId, number>;
   /** Levels bought in the Warehouse capacity upgrade -- same storagePerLevel shape as Treasury. */
@@ -1063,17 +1045,19 @@ export interface GameState {
 /**
  * One node's live gathering state. `pending` is the falling/settled item
  * currently on screen in that node's own tab, if any -- null means nothing
- * has spawned yet since the last catch or despawn. Ticked forward in
- * GameEngine.refreshWorld the same way the quest board and shop rotations
- * already are, so a node keeps spawning (and expiring) items even while its
- * own tab isn't the one open.
+ * has spawned yet since the last catch or despawn. `nextSpawnAt` is this
+ * node's own independent next-spawn time -- briefly moved to a single
+ * shared GameState-level timer (all 4 nodes spawning together as one
+ * synchronized wave) and reverted back after direct follow-up feedback,
+ * confirmed with a screenshot: synchronized catches meant every node's own
+ * burst text landed at the same moment and visually overlapped into an
+ * unreadable pile. See HarvestManager.spawnIntervalMs's own comment for
+ * the fuller story. Ticked forward in GameEngine.refreshWorld the same way
+ * the quest board and shop rotations already are, so a node keeps spawning
+ * (and expiring) items even while its own tab isn't the one open.
  */
-/** Per-node state is now just "what's currently sitting here, if
- *  anything" -- spawn timing itself moved to a single shared
- *  GameState.harvestNextSpawnAt (see HarvestManager.ensureSpawns' own
- *  comment for why), so an individual node no longer tracks its own
- *  next-spawn time. */
 export interface HarvestNodeState {
+  nextSpawnAt: number;
   pending: { spawnedAt: number; expiresAt: number; bonus: boolean } | null;
 }
 

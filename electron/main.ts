@@ -193,6 +193,49 @@ async function createWindow() {
     menuSize = { width, height };
     await writeSettings({ menuWidth: width, menuHeight: height });
   });
+
+  /**
+   * Blocks the window from actually closing until the renderer confirms
+   * its own save has finished writing to disk. Previously nothing did
+   * this at all -- the renderer's own `beforeunload`/`visibilitychange`
+   * handlers (App.tsx) fired a save, but fire-and-forget, with nothing on
+   * the main-process side ever waiting for it. `save:write`'s own handler
+   * is a genuine multi-step async sequence (write a temp file, back up the
+   * old save, rename the temp file into place) -- real disk I/O that
+   * takes real time, and Electron gives a closing window/quitting app no
+   * guarantee that time exists. Closing (or quitting from the tray) soon
+   * after something saveworthy happened -- a quest resolving, a
+   * notification archiving -- could let the process terminate mid-write,
+   * silently discarding it. The NEXT launch would then load a save from
+   * before that event, and normal catch-up/refresh logic would naturally
+   * reprocess whatever was still "due" by wall-clock time -- reported
+   * directly as a quest-result popup and its matching notification both
+   * reappearing on every restart, which is exactly what a lost save
+   * right before close would produce.
+   *
+   * `allowClose` lets the SECOND close attempt (this handler calling
+   * `win.close()` again once the flush confirms) actually proceed instead
+   * of looping forever. A 2-second timeout is a safety net, not the
+   * expected path -- if the renderer is unresponsive for any reason, the
+   * window still closes rather than trapping the user in an unclosable
+   * app.
+   */
+  let allowClose = false;
+  win.on('close', (event) => {
+    if (allowClose) return;
+    event.preventDefault();
+    const finish = () => {
+      if (allowClose) return;
+      allowClose = true;
+      win?.close();
+    };
+    const timeout = setTimeout(finish, 2000);
+    ipcMain.once('save:flush-complete', () => {
+      clearTimeout(timeout);
+      finish();
+    });
+    win?.webContents.send('save:flush-request');
+  });
 }
 
 function createTray() {

@@ -241,9 +241,14 @@
     "name": "Lightning Gem",
     "description": "A shard of raw lightning bound into something a blacksmith can work into a blade. Spent at the Infuse station.",
     "category": "gem",
+    "icon": "crafting/Crafting_21.png",
     "materialCost": {},
     "goldCost": 150,
     "scrapCost": 6,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
     "resultGem": {
       "kind": "elemental",
       "element": "lightning"
@@ -254,9 +259,14 @@
     "name": "Poison Gem",
     "description": "A shard of raw poison bound into something a blacksmith can work into a blade. Spent at the Infuse station.",
     "category": "gem",
+    "icon": "crafting/Crafting_35.png",
     "materialCost": {},
     "goldCost": 150,
     "scrapCost": 6,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
     "resultGem": {
       "kind": "elemental",
       "element": "poison"
@@ -267,9 +277,14 @@
     "name": "Fire Resistance Gem",
     "description": "Tempered to turn aside fire rather than channel it -- worked into armor instead of a blade.",
     "category": "gem",
+    "icon": "crafting/Crafting_23.png",
     "materialCost": {},
     "goldCost": 150,
     "scrapCost": 6,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
     "resultGem": {
       "kind": "resist",
       "element": "fire"
@@ -280,9 +295,14 @@
     "name": "Frost Resistance Gem",
     "description": "Tempered to turn aside frost rather than channel it -- worked into armor instead of a blade.",
     "category": "gem",
+    "icon": "crafting/Crafting_09.png",
     "materialCost": {},
     "goldCost": 150,
     "scrapCost": 6,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
     "resultGem": {
       "kind": "resist",
       "element": "frost"
@@ -293,9 +313,14 @@
     "name": "Lightning Resistance Gem",
     "description": "Tempered to turn aside lightning rather than channel it -- worked into armor instead of a blade.",
     "category": "gem",
+    "icon": "crafting/Crafting_16.png",
     "materialCost": {},
     "goldCost": 150,
     "scrapCost": 6,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
     "resultGem": {
       "kind": "resist",
       "element": "lightning"
@@ -306,9 +331,14 @@
     "name": "Poison Resistance Gem",
     "description": "Tempered to turn aside poison rather than channel it -- worked into armor instead of a blade.",
     "category": "gem",
+    "icon": "crafting/Crafting_30.png",
     "materialCost": {},
     "goldCost": 150,
     "scrapCost": 6,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
     "resultGem": {
       "kind": "resist",
       "element": "poison"

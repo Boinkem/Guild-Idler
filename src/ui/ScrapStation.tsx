@@ -95,6 +95,21 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
     setTargetUid('');
   }
 
+  // Neither `burst` nor `flight` was ever reset back to null after its own
+  // animation finished -- confirmed as a real, pre-existing bug (not
+  // unique to Harvest's own copy of this pattern, which inherited it from
+  // here): the CSS animation correctly finishes and holds at opacity 0
+  // via `forwards`, but nothing ever cleared the state, so the element
+  // just stayed mounted (invisible, but present) indefinitely instead of
+  // actually being removed. Fixed the same way HarvestPanel.tsx's own
+  // catch flash now is: an explicit timeout, matched to each animation's
+  // own duration, clears it back to null once it's actually done.
+  useEffect(() => {
+    if (!burst) return undefined;
+    const id = window.setTimeout(() => setBurst(null), 750);
+    return () => window.clearTimeout(id);
+  }, [burst]);
+
   // Flashes the counter once the flight particle actually lands, timed to
   // FLY_MS rather than firing immediately -- so the flash reads as "it
   // arrived" rather than going off before the icon visibly gets there.
@@ -102,7 +117,8 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
     if (!flight) return undefined;
     const arrive = window.setTimeout(() => setCounterFlash(true), FLY_MS);
     const clear = window.setTimeout(() => setCounterFlash(false), FLY_MS + FLASH_MS);
-    return () => { window.clearTimeout(arrive); window.clearTimeout(clear); };
+    const clearFlight = window.setTimeout(() => setFlight(null), FLY_MS);
+    return () => { window.clearTimeout(arrive); window.clearTimeout(clear); window.clearTimeout(clearFlight); };
   }, [flight]);
 
   return (

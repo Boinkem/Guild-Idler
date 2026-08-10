@@ -3805,6 +3805,125 @@ for the `flyTarget` registry itself (unregistered-target safety, correct
 center/offset math against a fake measured element, and the
 unregister-on-unmount contract).
 
+### Harvest spawn sync reverted + burst/flight cleanup + save-on-close race -- built
+Follow-up after the previous Harvest overhaul landed and got tested live.
+Two of the four items below (the spawn-sync revert and the burst/flight
+fix) were already present in the repo by the time this round started --
+documented here since they hadn't been written up yet, alongside two new
+pieces of work from this round.
+
+**Harvest spawn synchronization reverted.** The single shared
+`GameState.harvestNextSpawnAt` wave (previous round) looked bad in
+practice, confirmed with a screenshot: every node's own burst text
+landed at the same moment and visually overlapped into an unreadable
+pile, and catching one node while the other 3 were still pulsing (all
+spawned in lockstep) read as noisy rather than satisfying. Reverted back
+to independent per-node `nextSpawnAt` -- `SAVE_VERSION` 32 -> 33, with a
+clean migration that undoes the previous one (rather than trying to
+reconstruct 4 meaningful per-node values from the one shared timestamp,
+each node just gets a fresh one-interval-out start, same "fresh cycle
+starting now" shape a genuinely new save already gets). `SpawnTimerBar`
+adapted to show the soonest of any node's own next spawn, with an
+"everything's already out there waiting" state for when every node
+already has something pending and there's no meaningful countdown to
+show. Left three stacked, contradictory comment blocks behind on
+`HarvestNodeState` from the sync-then-revert sequence -- cleaned up into
+one accurate one while in the area.
+
+**Harvest burst/flight text "pinging."** Root cause: neither `burst` nor
+`flight` state in `NodeLane` was ever reset back to `null` after its own
+animation finished -- both used a `key`-based remount so a NEW catch
+correctly replayed the animation, but the OLD, already-finished element
+(CSS `forwards`-held at opacity 0) just stayed mounted indefinitely,
+since nothing ever cleared the state. Traced back far enough to find
+where the pattern actually originated: `ScrapStation.tsx`'s own
+fly-to-counter (the original template both Harvest's catch flash and
+the quest/raid gold flights below were modeled on) had the identical gap
+-- `burst` was never cleared at all, and `flight` had a counter-flash
+timeout but nothing that cleared `flight` itself. Fixed in both places
+with explicit timeouts matched to each animation's own duration (750ms
+for Scrap's own burst; 1200ms for Harvest's catch text and
+`HARVEST_FLY_MS` for its flight particle) -- cleared on unmount too, so
+navigating away mid-animation can't fire a state update on an unmounted
+component.
+
+**Reviewed all other fly-in effects, per direct request, for the same
+class of bug.** `QuestResultModal`/`RaidResultModal`'s own gold/XP
+flight state (`goldFlight`/`xpFlight`) is never explicitly cleared
+either, but confirmed this is NOT the same bug: both modals fully
+unmount their card component the moment `dismissResult()`/
+`dismissRaidResult()` fires (`if (!result) return null`), which destroys
+all of that component's local state (including the flight state)
+outright -- there's no persistent parent component for stale state to
+linger in the way `NodeLane`/`ScrapStation` (which never unmount, just
+re-render indefinitely) had. No further fixes needed on this front.
+
+**Save could be lost right before the app closes -- fixed, and likely
+the actual cause of "the last notification always comes back after
+restarting."** Traced through every candidate that could explain a
+notification-like thing reappearing on every launch (`lastResult`
+confirmed transient and correctly cleared on dismiss; `catchUpOffline`
+confirmed to never touch `lastResult` at all; `HatchReadyModal`'s own
+dismiss confirmed to persist correctly) before finding the real,
+systemic gap: nothing on the main-process side ever waited for a save to
+actually finish writing before letting the window close or the app quit.
+`save:write`'s own handler is a genuine multi-step async sequence (write
+a temp file, back up the old save, rename the temp file into place) --
+real disk I/O, and Electron gives a closing window no guarantee that
+time exists. The renderer's own `beforeunload`/`visibilitychange`
+handlers fired a save, but fire-and-forget, with nothing blocking the
+actual close on it. Closing (or quitting from the tray -- `window:quit`
+calls `app.quit()`, which funnels through the same window `close` event)
+soon after something saveworthy happened -- a quest resolving and
+archiving its own notification, for instance -- could let the process
+terminate mid-write, silently discarding it. The next launch would then
+load a save from before that event, and ordinary catch-up/refresh logic
+would naturally reprocess whatever was still "due" by wall-clock time --
+which reads exactly like the same quest result and its matching
+notification both reappearing, on both surfaces reported (the idle-
+companion popup and the menu's own banner), since both are downstream of
+the exact same lost write.
+
+Fixed with a new main-to-renderer request/response pair: `main.ts`'s
+window now has a real `close` handler that prevents the first close
+attempt, sends a `save:flush-request` to the renderer, and waits (with a
+2-second timeout safety net, so an unresponsive renderer can never trap
+the window open indefinitely) for a `save:flush-complete` signal before
+actually allowing the window to close. `preload.ts` gained
+`onRequestFlushSave`, the renderer-side half -- `App.tsx` wires this to
+`engine.saveNow()`, only once `engine` actually exists (nothing to lose
+before that). This is a systemic fix, not a notification-specific patch
+-- it protects every save-worthy action equally, which is the more
+complete answer to "it should probably have some memory to it" than
+special-casing any one notification type would have been.
+
+Verified: `npx tsc --noEmit` and a full `vite build` both pass clean
+(including `electron/main.ts`/`preload.ts`'s own new code, covered by
+the same single project-wide tsconfig), plus 6 runtime checks exercising
+the close-flow's control logic in isolation (a real Electron process
+can't run in this environment, so the `allowClose`/timeout/one-shot-
+listener shape was verified with plain EventEmitters standing in for
+`ipcMain`) -- confirmed exactly one real close happens per attempt, the
+timeout correctly gets cancelled once the real completion signal
+arrives, an unresponsive renderer still lets the window close via the
+safety net, and a late completion signal arriving after the timeout
+already fired doesn't trigger a second close.
+
+**Complementary fix, same root complaint, different angle:**
+`IdleView.tsx`'s own compact "away" summary banners (shown over the
+desktop companion sprite -- the quest/chain/raid/hatch-ready one-liners
+players can click straight into the menu from) now call
+`engine.markNotificationsSeen()` alongside their existing navigation.
+Offline catch-up can legitimately archive its own entries (guidance
+topics resolved while away) into the notification log -- without this,
+opening the menu right after reading one of these compact summaries
+could immediately trigger the header's own `NotificationBanner` for
+something covering the exact same offline stretch, reading as "the same
+notification coming back" even though it's technically a different (if
+closely related) log entry. Acknowledging here gives these summaries the
+"memory" they were missing -- once the headline's been seen, the detail-
+level log entry underneath it doesn't also demand separate attention.
+
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**
   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry

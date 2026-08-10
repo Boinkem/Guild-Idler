@@ -153,26 +153,43 @@ function FieldsTab() {
 }
 
 /**
- * Countdown to the next synchronized spawn wave (see GameState.
- * harvestNextSpawnAt's own doc comment) -- a plain, drains-to-empty
- * `.bar`, same convention every other progress bar in the game already
- * uses (and, since the animated-width fix earlier this project, animates
- * smoothly rather than snapping). Ticks once a second -- fine-grained
- * enough for a bar the player is just glancing at, not worth a faster
- * tick that would only matter for something like the falling-item
- * fade-out, which already has its own 400ms tick where it's actually
- * needed.
+ * Countdown to the SOONEST upcoming spawn across all 4 nodes -- reworked
+ * from a single shared wave countdown back to this after spawning itself
+ * reverted to independent per-node timing (see HarvestManager.
+ * spawnIntervalMs's own comment). There's no longer one shared "next
+ * spawn" moment to point at, so this shows whichever node is closest,
+ * recomputed fresh each tick since a different node can become the
+ * soonest one from moment to moment (a catch resets that node's own
+ * timer, which can leapfrog past whichever node was previously
+ * soonest). A node that already has something pending doesn't count
+ * toward this at all -- "next spawn" means the next NEW item appearing,
+ * not one already sitting there waiting to be caught.
  */
 function SpawnTimerBar() {
   const state = useEngine().state;
   const now = useNow(1000);
-  const total = HarvestManager.globalSpawnIntervalMs(state);
-  const remaining = Math.max(0, state.harvestNextSpawnAt - now);
+  const waitingNodes = NODE_ORDER.filter((id) => !state.harvestNodes[id].pending);
+  if (waitingNodes.length === 0) {
+    // Every node already has something pending -- there's no "next spawn"
+    // to count down to right now, so the bar would be meaningless. Shown
+    // as a quiet "all set" state instead of a confusing frozen/empty bar.
+    return (
+      <div className="row" style={{ gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <span className="tiny muted">Everything's out there waiting to be caught.</span>
+      </div>
+    );
+  }
+  const soonest = waitingNodes.reduce((earliest, id) => {
+    const at = state.harvestNodes[id].nextSpawnAt;
+    return at < state.harvestNodes[earliest].nextSpawnAt ? id : earliest;
+  }, waitingNodes[0]);
+  const total = HarvestManager.spawnIntervalMs(state, soonest);
+  const remaining = Math.max(0, state.harvestNodes[soonest].nextSpawnAt - now);
   const ratio = total > 0 ? Math.min(1, remaining / total) : 0;
   return (
     <div className="row" style={{ gap: 8, alignItems: 'center', marginBottom: 10 }}>
       <span className="tiny muted" style={{ flex: 'none' }}>Next spawn</span>
-      <div className="bar" style={{ flex: 1 }} title={`${Math.ceil(remaining / 1000)}s until the next wave`}>
+      <div className="bar" style={{ flex: 1 }} title={`${Math.ceil(remaining / 1000)}s until the next spawn`}>
         <span style={{ width: `${ratio * 100}%` }} />
       </div>
       <span className="tiny muted" style={{ flex: 'none', width: 28, textAlign: 'right' }}>
@@ -209,6 +226,26 @@ function NodeLane({ nodeId, onCatch }: { nodeId: MaterialId; onCatch: (materialI
   const now = useNow(400);
   const [burst, setBurst] = useState<{ key: number; left: number; gained: number; bonus: boolean; icon: string | null } | null>(null);
   const [flight, setFlight] = useState<{ key: number; dx: number; dy: number; left: number; icon: string | null } | null>(null);
+  const burstTimeoutRef = useRef<number | null>(null);
+  const flightTimeoutRef = useRef<number | null>(null);
+
+  // Neither `burst` nor `flight` was ever reset back to null after its own
+  // animation finished -- both used a `key`-based remount so a NEW catch
+  // correctly replayed the animation, but the OLD (already-finished, CSS
+  // `forwards`-held-at-opacity-0) element just stayed mounted forever
+  // rather than actually being cleared, since nothing ever set the state
+  // back to null. Confirmed as the actual cause of reported "the text
+  // continues to ping until a new node spawns" -- not literally a replay
+  // loop, but stale burst/flight state accumulating indefinitely, which
+  // this fixes the same way ScrapStation's own burst/flight state already
+  // does: an explicit timeout, matched to each animation's own duration,
+  // clears it back to null once it's actually done. Cleared on unmount
+  // too, so navigating away mid-animation can't fire a state update on an
+  // unmounted component.
+  useEffect(() => () => {
+    if (burstTimeoutRef.current !== null) window.clearTimeout(burstTimeoutRef.current);
+    if (flightTimeoutRef.current !== null) window.clearTimeout(flightTimeoutRef.current);
+  }, []);
   const { settings } = useSettings();
 
   const material = MATERIAL_BY_ID[nodeId];
@@ -256,10 +293,24 @@ function NodeLane({ nodeId, onCatch }: { nodeId: MaterialId; onCatch: (materialI
     if (result.gained > 0) {
       const key = Date.now();
       setBurst({ key, left: leftPercent, gained: result.gained, bonus: result.bonus, icon });
+      if (burstTimeoutRef.current !== null) window.clearTimeout(burstTimeoutRef.current);
+      // 1200ms matches .collect-particle.harvest-catch's own animation-
+      // duration exactly -- same "the JS clear has to mirror the CSS
+      // timing" requirement the falling-animation fix elsewhere in this
+      // file already established, for the same reason: clearing early
+      // would cut the animation off mid-flight, and clearing late just
+      // leaves a finished (invisible) element sitting around doing
+      // nothing, which is the exact bug this whole change fixes.
+      burstTimeoutRef.current = window.setTimeout(() => setBurst(null), 1200);
+
       const offset = measureFlyOffset(e.currentTarget, `material:${nodeId}`);
       if (offset) {
         setFlight({ key, ...offset, left: leftPercent, icon });
-        window.setTimeout(() => onCatch(nodeId), HARVEST_FLY_MS);
+        if (flightTimeoutRef.current !== null) window.clearTimeout(flightTimeoutRef.current);
+        flightTimeoutRef.current = window.setTimeout(() => {
+          setFlight(null);
+          onCatch(nodeId);
+        }, HARVEST_FLY_MS);
       }
     }
   }

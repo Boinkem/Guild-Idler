@@ -29,6 +29,9 @@ declare global {
       /** Main-to-renderer only -- the tray's "Show Guild Hall" item. See
        *  preload.ts's own comment on this same method for the full reasoning. */
       onOpenGuildHall(callback: () => void): () => void;
+      /** Main-to-renderer only -- main is about to close/quit and needs a
+       *  final save flushed first. See preload.ts's own comment for why. */
+      onRequestFlushSave(callback: () => void | Promise<void>): () => void;
     };
   }
 }
@@ -116,9 +119,8 @@ export function createInitialState(now = Date.now()): GameState {
     pendingChainDiscovery: false,
     materials: emptyMaterials(),
     harvestNodes: Object.fromEntries(
-      NODE_ORDER.map((id) => [id, { pending: null }]),
+      NODE_ORDER.map((id) => [id, { nextSpawnAt: now + Tuning.get('harvest.baseSpawnIntervalMs'), pending: null }]),
     ) as GameState['harvestNodes'],
-    harvestNextSpawnAt: now + Tuning.get('harvest.baseSpawnIntervalMs'),
     harvestTools: emptyMaterials(),
     warehouseLevel: 0,
     tradeRouteUnlocked: false,
@@ -491,6 +493,30 @@ const MIGRATIONS: Record<number, Migration> = {
       version: 32,
       harvestNodes,
       harvestNextSpawnAt: Date.now() + Tuning.get('harvest.baseSpawnIntervalMs'),
+    };
+  },
+  32: (save) => {
+    // Reverting the 31->32 migration above -- synchronized spawning
+    // looked bad in practice (overlapping burst text across nodes,
+    // confirmed with a screenshot) and was rolled back after direct
+    // follow-up feedback. Each node gets its own independent
+    // `nextSpawnAt` again; picking a fresh one-interval-out start (same
+    // "fresh cycle starting now" shape a genuinely new save gets) rather
+    // than trying to reconstruct 4 different values from the single
+    // shared timestamp this save currently has, which wouldn't mean
+    // anything meaningful per-node anyway. `pending` (whatever's already
+    // sitting there, if anything) carries over untouched either way.
+    const oldNodes = (save.harvestNodes as Record<string, { pending: unknown }> | undefined) ?? {};
+    const harvestNodes: Record<string, { nextSpawnAt: number; pending: unknown }> = {};
+    for (const [id, node] of Object.entries(oldNodes)) {
+      harvestNodes[id] = { nextSpawnAt: Date.now() + Tuning.get('harvest.baseSpawnIntervalMs'), pending: node.pending };
+    }
+    const rest = { ...save } as Record<string, unknown>;
+    delete rest.harvestNextSpawnAt;
+    return {
+      ...rest,
+      version: 33,
+      harvestNodes,
     };
   },
 };

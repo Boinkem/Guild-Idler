@@ -1386,8 +1386,10 @@
     "stats": {
       "wisdom": 12
     },
+    "setId": "bonewrought",
+    "icon": "armor/Armor_127.png",
     "raidExclusive": true,
-    "setId": "bonewrought"
+    "craftable": false
   },
   {
     "id": "choir_mask_mythic",
@@ -1405,8 +1407,10 @@
     "stats": {
       "wisdom": 15
     },
+    "setId": "bonewrought",
+    "icon": "armor/Armor_127.png",
     "raidExclusive": true,
-    "setId": "bonewrought"
+    "craftable": false
   },
   {
     "id": "silenced_bell_heroic",
@@ -1421,11 +1425,13 @@
       "gold": 26
     },
     "stats": {
-      "wisdom": 8,
-      "luck": 6
+      "luck": 6,
+      "wisdom": 8
     },
+    "setId": "bonewrought",
+    "icon": "misc/Misc_25.png",
     "raidExclusive": true,
-    "setId": "bonewrought"
+    "craftable": false
   },
   {
     "id": "silenced_bell_mythic",
@@ -1440,11 +1446,13 @@
       "gold": 34
     },
     "stats": {
-      "wisdom": 10,
-      "luck": 8
+      "luck": 8,
+      "wisdom": 10
     },
+    "setId": "bonewrought",
+    "icon": "misc/Misc_25.png",
     "raidExclusive": true,
-    "setId": "bonewrought"
+    "craftable": false
   },
   {
     "id": "dragon_helm_heroic",
@@ -1495,6 +1503,7 @@
     "mods": {
       "loot": 1
     },
+    "icon": "accessories/Accessory_06.png",
     "raidExclusive": true,
     "craftable": false
   },
@@ -1509,6 +1518,7 @@
     "mods": {
       "loot": 2
     },
+    "icon": "accessories/Accessory_06.png",
     "raidExclusive": true,
     "craftable": false
   },
@@ -1651,14 +1661,16 @@
     "maxDurability": 127,
     "value": 355,
     "mods": {
-      "injuryResist": 15,
-      "success": 5
+      "success": 5,
+      "injuryResist": 15
     },
     "stats": {
       "endurance": 5
     },
+    "setId": "blackford",
+    "icon": "armor/Armor_03.png",
     "raidExclusive": true,
-    "setId": "blackford"
+    "craftable": false
   },
   {
     "id": "ranger_boots_heroic",
@@ -2644,7 +2656,9 @@
       "endurance": 3
     },
     "setId": "steel",
-    "icon": "armor/Armor_11.png"
+    "icon": "armor/Armor_10.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "steel_kite_shield",
@@ -2661,7 +2675,9 @@
       "endurance": 2
     },
     "setId": "steel",
-    "icon": "shields/Shield_02.png"
+    "icon": "shields/Shield_21.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "steel_greaves",
@@ -2678,7 +2694,9 @@
       "endurance": 2
     },
     "setId": "steel",
-    "icon": "armor/Armor_12.png"
+    "icon": "armor/Armor_45.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "steel_band",
@@ -2693,7 +2711,9 @@
       "gold": 4
     },
     "setId": "steel",
-    "icon": "accessories/Accessory_16.png"
+    "icon": "accessories/Accessory_02.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "steel_locket",
@@ -2725,7 +2745,9 @@
       "speed": 3
     },
     "setId": "steel",
-    "icon": "armor/Armor_100.png"
+    "icon": "armor/Armor_134.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "cutpurse_stiletto",
@@ -2762,7 +2784,9 @@
       "luck": 3
     },
     "setId": "thief",
-    "icon": "armor/Armor_101.png"
+    "icon": "armor/Armor_26.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "cutpurse_leathers",
@@ -2781,7 +2805,9 @@
       "luck": 2
     },
     "setId": "thief",
-    "icon": "armor/Armor_102.png"
+    "icon": "armor/Armor_68.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "cutpurse_buckler",
@@ -2813,11 +2839,13 @@
       "speed": 13
     },
     "stats": {
-      "luck": 2,
-      "endurance": 2
+      "endurance": 2,
+      "luck": 2
     },
     "setId": "thief",
-    "icon": "armor/Armor_103.png"
+    "icon": "armor/Armor_54.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "cutpurse_signet",
@@ -2835,7 +2863,9 @@
       "luck": 5
     },
     "setId": "thief",
-    "icon": "accessories/Accessory_19.png"
+    "icon": "accessories/Accessory_01.png",
+    "raidExclusive": false,
+    "craftable": false
   },
   {
     "id": "cutpurse_locket",
@@ -2872,6 +2902,8 @@
       "luck": 4
     },
     "setId": "thief",
-    "icon": "armor/Armor_104.png"
+    "icon": "armor/Armor_134.png",
+    "raidExclusive": false,
+    "craftable": false
   }
 ]

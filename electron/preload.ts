@@ -29,6 +29,28 @@ const api = {
     ipcRenderer.on('open-guild-hall', listener);
     return () => ipcRenderer.removeListener('open-guild-hall', listener);
   },
+  /**
+   * The other main-to-renderer direction: main is about to actually close
+   * the window (or quit the app) and needs the renderer's own in-memory
+   * state flushed to disk first -- see main.ts's own `close` handler for
+   * why this exists (a real, previously-unguarded race where the process
+   * could terminate mid-write, silently losing whatever happened in the
+   * last few seconds before close). `callback` should call the engine's
+   * own saveNow() and await it; this always signals completion back to
+   * main afterward (even if the callback throws), since main is blocking
+   * the actual close on that signal and must never wait forever.
+   */
+  onRequestFlushSave: (callback: () => void | Promise<void>): (() => void) => {
+    const listener = async () => {
+      try {
+        await callback();
+      } finally {
+        ipcRenderer.send('save:flush-complete');
+      }
+    };
+    ipcRenderer.on('save:flush-request', listener);
+    return () => ipcRenderer.removeListener('save:flush-request', listener);
+  },
 };
 
 contextBridge.exposeInMainWorld('littleKnight', api);

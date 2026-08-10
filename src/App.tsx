@@ -64,6 +64,17 @@ export function App() {
   // already happening in the renderer.
   useEffect(() => window.littleKnight?.onOpenGuildHall(() => changeMode('menu')), [changeMode]);
 
+  // Answers main's "about to close, flush your save" request -- see
+  // preload.ts/main.ts for why this exists (a real race where the process
+  // could previously terminate mid-write). Only registered once `engine`
+  // exists, since there's nothing to save before that; a close attempt
+  // during the brief loading window before boot finishes has nothing
+  // in-memory yet that could be lost anyway.
+  useEffect(() => {
+    if (!engine) return undefined;
+    return window.littleKnight?.onRequestFlushSave(() => engine.saveNow());
+  }, [engine]);
+
   if (!engine) return <div className="loading">Waking the knight…</div>;
 
   return (
