@@ -462,11 +462,31 @@ export const QuestManager = {
     state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number,
   ): { quest?: ActiveQuest; error?: string } {
     if (hero.status === 'questing') return { error: `${hero.name} is already out.` };
-    for (const id of consumables) {
-      if (InventoryManager.count(state, id) < consumables.filter((c) => c === id).length) {
-        return { error: 'Not enough consumables for that loadout.' };
+
+    // A hero's equipped consumable slots can end up pointing at an item the
+    // guild no longer actually has -- the previous version of this hard-
+    // failed the whole send with "Not enough consumables for that loadout"
+    // whenever that happened, which is exactly what a slot still assigned
+    // to an item consumed on a PRIOR send does (equipping never touches
+    // state.inventory; the deduction below is what actually spends the
+    // item, and nothing ever cleared the slot afterward). That turned "used
+    // your last potion last time" into "this hero can never be sent again
+    // until you notice and manually unequip," and made sendAllIdle silently
+    // skip every affected hero, reporting "no idle heroes have an open
+    // contract" even though they plainly did. Fixed by reconciling instead
+    // of failing: drop whatever's no longer actually in stock and proceed
+    // with whatever legitimately still is, keeping the hero's own equipped
+    // slots in sync so the next send doesn't hit the same wall.
+    const remaining: Record<string, number> = {};
+    consumables = consumables.filter((id) => {
+      remaining[id] = remaining[id] ?? InventoryManager.count(state, id);
+      if (remaining[id] > 0) {
+        remaining[id] -= 1;
+        return true;
       }
-    }
+      return false;
+    });
+    if (hero.equippedConsumables) hero.equippedConsumables = [...consumables];
 
     const loadout = InventoryManager.loadoutEffects(state, consumables);
     const classDef = HERO_CLASSES[hero.heroClass];

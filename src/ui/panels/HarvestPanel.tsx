@@ -35,10 +35,18 @@ function spawnPositionPercent(spawnedAt: number, nodeId: MaterialId): number {
   return laneStart + padding + frac * (laneWidth - padding * 2);
 }
 
+// Five little "+ Ore!" pings per catch, purely a visual flourish -- none of
+// them carry the actual gained amount anymore (see the burst render below
+// for why: showing a fraction of the real total on every single one of
+// several particles read as if that fraction had been gained several times
+// over, when only one lot was ever actually caught). The real number lives
+// solely in the counter above, via useCountUpDisplay.
 const BURST_PARTICLES = [
-  { dx: -18, dy: -70, rot: -12, delay: 0 },
-  { dx: 10, dy: -84, rot: 10, delay: 40 },
-  { dx: 32, dy: -58, rot: 18, delay: 90 },
+  { dx: -24, dy: -66, rot: -14, delay: 0 },
+  { dx: -8, dy: -86, rot: -4, delay: 60 },
+  { dx: 10, dy: -92, rot: 8, delay: 120 },
+  { dx: 26, dy: -78, rot: 16, delay: 180 },
+  { dx: 34, dy: -54, rot: 22, delay: 240 },
 ];
 
 /**
@@ -199,6 +207,42 @@ function SpawnTimerBar() {
   );
 }
 
+/**
+ * Animates a displayed number toward `value` over a short tween instead of
+ * jumping straight to it -- direct feedback that the counter's own text
+ * used to update in one instant, silent jump the moment a catch landed,
+ * which read as disconnected from the catch-burst's own multi-particle
+ * flourish playing out in the lane at the same time (the burst looked like
+ * several small catches, but the counter visibly moved only once, with no
+ * per-particle correspondence). Restarts from whatever's currently
+ * displayed if `value` changes again mid-tween, so a rapid run of catches
+ * keeps chasing the latest total smoothly rather than queuing up separate
+ * animations.
+ */
+function useCountUpDisplay(value: number, durationMs = 550): number {
+  const [display, setDisplay] = useState(value);
+  const frameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (value === display) return undefined;
+    const from = display;
+    const delta = value - from;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / durationMs);
+      setDisplay(from + delta * t);
+      if (t < 1) frameRef.current = requestAnimationFrame(tick);
+    };
+    frameRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, durationMs]);
+
+  return display;
+}
+
 /** The Fields tab's own always-visible material counter -- doubles as the
  *  fly target every node lane's catch flight aims at (see NodeLane's own
  *  `onCatch`), registered under `material:<id>` the same way
@@ -210,9 +254,10 @@ function SpawnTimerBar() {
 function MaterialCounter({ materialId, amount, cap, flashing }: { materialId: MaterialId; amount: number; cap: number; flashing: boolean }) {
   const ref = useFlyTargetRef<HTMLSpanElement>(`material:${materialId}`);
   const material = MATERIAL_BY_ID[materialId];
+  const displayAmount = useCountUpDisplay(amount);
   return (
     <span ref={ref} className={`tiny muted counter-flash-target ${flashing ? 'flash' : ''}`}>
-      {material.name}: {formatMaterial(amount)}/{cap}
+      {material.name}: {formatMaterial(displayAmount)}/{cap}
     </span>
   );
 }
@@ -336,19 +381,18 @@ function NodeLane({ nodeId, onCatch }: { nodeId: MaterialId; onCatch: (materialI
           style={{ left: `${burst.left}%`, bottom: 'auto', top: '62%' }}
           key={burst.key}
         >
-          <span
-            className="collect-particle material harvest-catch"
-            style={{ '--dx': `${BURST_PARTICLES[0].dx}px`, '--dy': `${BURST_PARTICLES[0].dy}px`, '--rot': `${BURST_PARTICLES[0].rot}deg` } as CSSProperties}
-          >
-            +{formatMaterial(burst.gained)} {material.name}{burst.bonus ? ' bonus!' : ''}
-          </span>
-          {BURST_PARTICLES.slice(1).map((p, i) => (
+          {/* Every particle reads the same plain "+ Ore!"/"+ Bonus Ore!" --
+              no amount on any of them. The real gained total shows once,
+              counting up on the always-visible MaterialCounter above,
+              instead of a fraction of it being repeated on each of several
+              particles and reading like it was gained that many times. */}
+          {BURST_PARTICLES.map((p, i) => (
             <span
               key={i}
-              className="collect-particle material"
+              className="collect-particle material harvest-catch"
               style={{ '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--rot': `${p.rot}deg`, animationDelay: `${p.delay}ms` } as CSSProperties}
             >
-              <HarvestGlyph icon={burst.icon} glyph={material.glyph} />
+              + {burst.bonus ? 'Bonus ' : ''}{material.name}!
             </span>
           ))}
         </div>

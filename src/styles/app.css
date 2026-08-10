@@ -1134,6 +1134,9 @@ button:focus-visible, [tabindex]:focus-visible {
   bottom: 0;
   height: 3px;
   background: var(--edge);
+  /* Purely decorative -- must never sit in front of the close button's own
+     click target, even for the 3px sliver it visually overlaps. */
+  pointer-events: none;
 }
 .notification-banner-bar > span {
   display: block;

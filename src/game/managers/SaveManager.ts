@@ -136,6 +136,7 @@ export function createInitialState(now = Date.now()): GameState {
     autoRepairEnabled: false,
     autoRepairThresholdPercent: 50,
     autoEquipOnLoot: false,
+    autoEquipConsumablesOnSend: false,
     pendingHatchReadyNotice: false,
   };
 }

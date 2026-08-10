@@ -1040,6 +1040,14 @@ export interface GameState {
    *  would be a much bigger, more surprising behavior change than "the
    *  hero who found it gets first look at it." */
   autoEquipOnLoot: boolean;
+  /** When true, GameEngine.startQuest/sendAllIdle silently fill each sent
+   *  hero's EMPTY consumable slots (never swapping out something already
+   *  slotted) via the same highest-cost-first logic the manual "Equip
+   *  Best" button already uses, right before departure -- so a hero whose
+   *  last potion got used up on a previous send doesn't sit there
+   *  under-equipped until the player notices and revisits the Equipment
+   *  tab by hand. */
+  autoEquipConsumablesOnSend: boolean;
 }
 
 /**

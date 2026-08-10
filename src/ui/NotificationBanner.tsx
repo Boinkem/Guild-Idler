@@ -58,9 +58,20 @@ export function NotificationBanner() {
 
   if (!shown) return null;
 
+  // The dismiss itself (hiding the banner) is local UI state and must
+  // always succeed the instant the button's clicked -- previously it ran
+  // AFTER engine.markNotificationsSeen(), so any error thrown by that call
+  // (a malformed notification entry, a save failure, anything) aborted
+  // before setShown(null) ever ran, and the close button appeared to do
+  // nothing at all. Reordered so the banner always closes first, with the
+  // acknowledge side-effect now wrapped so it can never block that again.
   const acknowledge = () => {
-    engine.markNotificationsSeen();
     setShown(null);
+    try {
+      engine.markNotificationsSeen();
+    } catch (err) {
+      console.error('Failed to mark notifications as seen:', err);
+    }
   };
 
   const handleClick = () => {
@@ -70,13 +81,20 @@ export function NotificationBanner() {
 
   return (
     <div key={shown.id} className="notification-banner" role="status">
-      <button className="notification-banner-body" onClick={handleClick}>
+      <button type="button" className="notification-banner-body" onClick={handleClick}>
         <span className="notification-banner-message">{shown.message}</span>
         {shown.targetTab && (
           <span className="tiny notification-banner-goto">Go to {TAB_LABELS[shown.targetTab] ?? shown.targetTab} →</span>
         )}
       </button>
-      <button className="notification-banner-close" onClick={acknowledge} aria-label="Dismiss">×</button>
+      <button
+        type="button"
+        className="notification-banner-close"
+        onClick={(e) => { e.stopPropagation(); acknowledge(); }}
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
       <div className="notification-banner-bar" aria-hidden="true"><span /></div>
     </div>
   );

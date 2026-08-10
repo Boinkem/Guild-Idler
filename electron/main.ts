@@ -16,6 +16,27 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  */
 app.setName('little-knight');
 
+/**
+ * Taskbar/window icon, and the source Tray falls back to once real art
+ * exists. Windows wants an .ico; this .png path is what actually gets read
+ * at runtime for the taskbar/window icon on Windows and Linux (macOS's
+ * Dock icon instead comes from the app bundle itself, via build.mac.icon
+ * in package.json -- see the icon note there). electron-builder separately
+ * reads build.win.icon/build.mac.icon/build.linux.icon at PACKAGE time for
+ * the installed app's own icon, so both this runtime path and those
+ * package.json paths need the real files dropped in, not just one of them.
+ * `nativeImage.createFromPath` on a missing file returns an empty (not
+ * null/throwing) image, so `loadAppIcon()` safely resolves to `undefined`
+ * until `build/icon.png` actually exists -- Electron's own default icon
+ * keeps showing in the meantime, exactly like today, rather than every
+ * window suddenly going blank the moment this lands.
+ */
+const APP_ICON_PATH = path.join(__dirname, '..', 'build', 'icon.png');
+function loadAppIcon() {
+  const img = nativeImage.createFromPath(APP_ICON_PATH);
+  return img.isEmpty() ? undefined : img;
+}
+
 /** Window sizes. The idle companion is tiny; the menu needs room. */
 const IDLE_SIZE = { width: 260, height: 300 };
 const MENU_SIZE = { width: 900, height: 620 };
@@ -119,6 +140,7 @@ async function createWindow() {
   win = new BrowserWindow({
     ...IDLE_SIZE,
     ...idleBounds,
+    icon: loadAppIcon(),
     frame: false,
     transparent: true,
     resizable: false,
@@ -239,8 +261,9 @@ async function createWindow() {
 }
 
 function createTray() {
-  // A 16x16 transparent icon keeps the tray entry working without shipping binaries.
-  tray = new Tray(nativeImage.createEmpty());
+  // Falls back to a 16x16 transparent icon so the tray entry still works
+  // before build/icon.png exists -- see loadAppIcon's own comment above.
+  tray = new Tray(loadAppIcon() ?? nativeImage.createEmpty());
   const menu = Menu.buildFromTemplate([
     {
       label: 'Always on top',

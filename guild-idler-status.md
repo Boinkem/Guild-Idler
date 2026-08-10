@@ -274,6 +274,71 @@ raid fight).
   against the engine (not just reasoned through): confirmed the two
   entries now carry distinct seq numbers, which is what actually
   restores the effect re-firing.
+- ~~"Send All Idle" erroring with "no idle heroes have an open contract"
+  even though heroes were plainly idle~~ -- resolved (patch 0120). Same
+  root cause as the next bullet below: `QuestManager.start` hard-failed
+  the whole send with "Not enough consumables for that loadout" the
+  moment a hero's equipped consumable slot pointed at an item already
+  used up on a *previous* send, and `sendAllIdle` silently `continue`s
+  past any hero that errors rather than surfacing which one or why --
+  so a single affected hero (or all of them, if the loadout came from
+  Auto-Chain reuse) read as "nothing to send" instead of a specific,
+  fixable problem.
+- ~~A hero whose equipped consumable ran out doesn't unequip it, so the
+  next send fails~~ -- resolved (patch 0120). Equipping a consumable
+  (`equipConsumable`) never touched `state.inventory` by design -- the
+  actual deduction only ever happened inside `QuestManager.start`, at
+  the moment a hero carrying it departed. Nothing, though, ever cleared
+  `hero.equippedConsumables` afterward, so a slot kept pointing at an
+  item with zero copies left indefinitely, and the pre-send availability
+  check (`InventoryManager.count(...) < 1`) then hard-failed every future
+  send for that hero until the player noticed and manually unequipped it
+  by hand. Fixed by reconciling instead of failing outright:
+  `QuestManager.start` now filters the hero's consumable list down to
+  whatever's actually still in stock (partial availability is honored
+  too, not just all-or-nothing) and writes that corrected list straight
+  back to `hero.equippedConsumables`, so a used-up slot clears itself the
+  moment it's exhausted rather than silently blocking every send after.
+  Also added the auto-fill toggle floated alongside this report: a new
+  opt-in, off-by-default `autoEquipConsumablesOnSend` preference (same
+  shape as `autoRepairEnabled`/`autoEquipOnLoot`) that silently fills a
+  sent hero's *empty* slots with the best available potion right before
+  departure, via a `fillEmptyConsumableSlots` helper extracted from the
+  existing manual "Equip best" button's logic (`equipBestConsumables`) --
+  toggle lives in the Equipment tab next to "Auto-equip loot".
+- ~~Notification banner's close (×) button does nothing~~ -- resolved
+  (patch 0120). Couldn't pin down a definitive reproducible cause by
+  reading alone -- the click handler logic looked correct on paper -- so
+  this was hardened defensively rather than chasing a single root cause:
+  `NotificationBanner.tsx`'s `acknowledge()` previously called
+  `engine.markNotificationsSeen()` *before* `setShown(null)`, meaning any
+  exception thrown by that call (a malformed notification entry missing
+  an `id`, a save-adapter error, anything) would abort before the banner
+  ever actually hid, with nothing visibly indicating why. Reordered so
+  the banner always dismisses first (guaranteed local UI state, can't be
+  blocked by a side-effect), with the `markNotificationsSeen()` call now
+  wrapped in try/catch so it can never gate the close button again.
+  Also added `pointer-events: none` to `.notification-banner-bar` (the
+  decorative countdown strip along the bottom edge, which had no
+  pointer-events rule and technically overlapped the close button's
+  bottom few pixels) and `e.stopPropagation()` on the close button's own
+  click, as belt-and-suspenders in case either was ever a contributing
+  factor. Worth a follow-up report if this recurs -- there may still be a
+  more specific trigger neither of these directly addresses.
+- ~~Harvest catch-burst text shows a fraction of the gained amount
+  repeated across several particles (e.g. "+0.05 Ore!" four times for one
+  0.5-Ore catch), reading as if that fraction had been gained that many
+  times over~~ -- resolved (patch 0120). Redesigned rather than patched
+  in place, per direct request: `NodeLane`'s catch-burst particles in
+  `HarvestPanel.tsx` no longer carry any amount at all -- every one of the
+  (now 5, up from 3) particles shows the same plain "+ Ore!"/"+ Bonus
+  Ore!" text, purely a flourish. The real gained total shows exactly
+  once, via a new `useCountUpDisplay` hook that animates
+  `MaterialCounter`'s own number smoothly toward the true total (~550ms
+  tween, restarts from whatever's currently displayed if another catch
+  lands mid-animation) instead of jumping to it instantly. No more
+  numeric text living in more than one place per catch, so nothing can
+  misrepresent the amount by construction.
 
 ---
 
@@ -3978,6 +4043,25 @@ level log entry underneath it doesn't also demand separate attention.
   bar the first batch set.
 
 ### Platform / distribution
+- **App/taskbar icon -- wiring done (patch 0120), waiting on real art.**
+  Nothing had ever set an icon anywhere: `electron/main.ts`'s
+  `BrowserWindow` had no `icon` option, `package.json`'s `build` block had
+  no per-platform icon paths, and the Tray used an intentionally-empty
+  `nativeImage`. Added a shared `loadAppIcon()` in `electron/main.ts`
+  (reads `build/icon.png`, returns `undefined` safely if it's missing --
+  `nativeImage.createFromPath` on a missing file returns an empty image
+  rather than throwing) wired into the window's own `icon` option and the
+  Tray's fallback, plus `build.win.icon` (`build/icon.ico`),
+  `build.mac.icon` (`build/icon.icns`), and `build.linux.icon`
+  (`build/icon.png`) in `package.json` for electron-builder's own
+  packaged-app icon. `build/ICON-README.md` documents the exact filenames/
+  sizes expected (`icon.png` 512x512 for the live runtime window/taskbar +
+  Linux package; `icon.ico` from a 256x256+ multi-res source for the
+  Windows installer/exe; `icon.icns` from a 1024x1024 source for the macOS
+  app/Dock). Until those three files actually exist in `build/`, everything
+  falls back exactly to today's behavior -- Electron's default icon, blank
+  tray -- nothing breaks with the folder empty. Drop the real files in and
+  it picks them up with no further code changes.
 - **Steam Cloud saves** -- no code work needed yet. Saves already live at
   `app.getPath('userData')`, a stable path suitable for Steam's Auto-Cloud
   file sync, which is configured entirely in the Steamworks partner

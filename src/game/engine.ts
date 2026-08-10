@@ -951,6 +951,7 @@ export class GameEngine {
   startQuest(heroId: string, offer: QuestOffer, _consumables?: string[], chainSteps = false) {
     const hero = this.hero(heroId);
     if (!hero) return;
+    if (this.state.autoEquipConsumablesOnSend) this.fillEmptyConsumableSlots(heroId);
     const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], Date.now());
     if (error) return this.say(error);
     this.state.focusedHeroId = heroId;
@@ -999,6 +1000,7 @@ export class GameEngine {
     let sent = 0;
     for (const hero of this.state.heroes) {
       if (hero.status === 'questing') continue;
+      if (this.state.autoEquipConsumablesOnSend) this.fillEmptyConsumableSlots(hero.id);
       const offer = QuestManager.pickBestQuest(this.state, hero, now);
       if (!offer) continue;
       const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], now);
@@ -1131,6 +1133,25 @@ export class GameEngine {
   equipBestConsumables(heroId: string): number {
     const hero = this.hero(heroId);
     if (!hero) return 0;
+    const filled = this.fillEmptyConsumableSlots(heroId);
+    if (filled > 0) {
+      this.say(`Equipped ${filled} consumable${filled === 1 ? '' : 's'} on ${hero.name}.`);
+      void this.saveNow();
+    } else {
+      this.say(`Nothing spare to equip on ${hero.name}.`);
+    }
+    return filled;
+  }
+
+  /** The actual slot-filling logic behind equipBestConsumables, split out
+   *  so autoEquipConsumablesOnSend (see startQuest/sendAllIdle) can reuse
+   *  it silently -- a toast every single automatic send would be far
+   *  noisier than the opt-in itself is worth, same reasoning as every
+   *  other automation preference (autoRepairEnabled, autoEquipOnLoot) not
+   *  narrating its own routine upkeep. */
+  private fillEmptyConsumableSlots(heroId: string): number {
+    const hero = this.hero(heroId);
+    if (!hero) return 0;
     const maxSlots = ModifierManager.consumableSlots(this.state);
     const working = [...(hero.equippedConsumables ?? [])];
     let filled = 0;
@@ -1146,14 +1167,14 @@ export class GameEngine {
       working.push(available[0].def.id);
       filled++;
     }
-    if (filled > 0) {
-      hero.equippedConsumables = working;
-      this.say(`Equipped ${filled} consumable${filled === 1 ? '' : 's'} on ${hero.name}.`);
-      void this.saveNow();
-    } else {
-      this.say(`Nothing spare to equip on ${hero.name}.`);
-    }
+    if (filled > 0) hero.equippedConsumables = working;
     return filled;
+  }
+
+  /** Opt-in, off by default -- see GameState.autoEquipConsumablesOnSend. */
+  setAutoEquipConsumablesOnSend(enabled: boolean) {
+    this.state.autoEquipConsumablesOnSend = enabled;
+    void this.saveNow();
   }
 
   /**

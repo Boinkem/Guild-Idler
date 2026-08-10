@@ -388,6 +388,12 @@ export function EquipmentPanel() {
         >
           <Toggle value={state.autoEquipOnLoot} onChange={(v) => engine.setAutoEquipOnLoot(v)} />
         </Row>
+        <Row
+          label="Auto-fill consumables on send"
+          hint="Any empty consumable slot fills with the best available potion right before a hero departs -- covers a slot left empty after its last potion ran out, without displacing anything already equipped."
+        >
+          <Toggle value={state.autoEquipConsumablesOnSend} onChange={(v) => engine.setAutoEquipConsumablesOnSend(v)} />
+        </Row>
       </div>
 
       <div className="row wrap" style={{ marginBottom: 10, alignItems: 'center' }}>
