@@ -4,7 +4,7 @@ import { ModifierManager } from '../../game/managers/ModifierManager';
 import { AUTO_CHAIN_RANGES } from '../../game/data/progression';
 import { UpgradeDef } from '../../game/types';
 import { describeMods, formatGold } from '../../game/util';
-import { MaxFlash, useMaxFlash } from '../maxFlash';
+import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
 
 function chainRangeText(level: number): string {
   const range = AUTO_CHAIN_RANGES[level];
@@ -33,6 +33,15 @@ export function GuildPanel() {
       level: GuildManager.upgradeLevel(state, def.id), maxLevel: def.maxLevel,
     })),
   ]);
+  // Same combined facilities+upgrades list useMaxFlash above already
+  // builds, just tracking every level change (not only "just hit max")
+  // for the "Level N/M" pulse -- see usePulsesOnChange's own doc comment
+  // for why this has to be a single batch hook call rather than one per
+  // card.
+  const levelPulses = usePulsesOnChange([
+    ...facilities.map((def) => ({ id: def.id, value: GuildManager.facilityLevel(state, def.id) })),
+    ...generalUpgrades.map((def) => ({ id: def.id, value: GuildManager.upgradeLevel(state, def.id) })),
+  ]);
 
   function upgradeCard(def: UpgradeDef) {
     const level = GuildManager.upgradeLevel(state, def.id);
@@ -43,11 +52,12 @@ export function GuildPanel() {
     // next-purchase cost is covered by current gold right now.
     const affordable = !maxed && cost !== null && state.gold >= cost;
     const flash = flashes[def.id];
+    const pulsing = levelPulses[def.id];
     return (
       <div key={def.id} className={`card ${affordable ? 'affordable' : ''}`} style={{ marginBottom: 0 }}>
         <div className="spread">
           <span className="card-title">{def.name}</span>
-          <span key={level} className="small muted purchase-pulse">{level}/{def.maxLevel}</span>
+          <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
         </div>
         <p className="card-flavour">{def.description}</p>
         <div className="stat-row" style={{ marginBottom: 8 }}>
@@ -63,7 +73,7 @@ export function GuildPanel() {
           )}
         </div>
         <button
-          className="btn-primary"
+          className="btn-yellow"
           disabled={maxed || cost === null || state.gold < cost}
           onClick={() => engine.buyUpgrade(def.id)}
         >
@@ -89,11 +99,12 @@ export function GuildPanel() {
           const maxed = cost === null;
           const affordable = !maxed && state.gold >= cost;
           const flash = flashes[def.id];
+          const pulsing = levelPulses[def.id];
           return (
             <div key={def.id} className={`card ${affordable ? 'affordable' : ''}`} style={{ marginBottom: 0 }}>
               <div className="spread">
                 <span className="card-title">{def.name}</span>
-                <span key={level} className="small muted purchase-pulse">Level {level}/{def.maxLevel}</span>
+                <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>Level {level}/{def.maxLevel}</span>
               </div>
               <p className="card-flavour">{def.description}</p>
               <div className="stat-row" style={{ marginBottom: 8 }}>
@@ -102,7 +113,7 @@ export function GuildPanel() {
                 {def.heroSlotsPerLevel && <span className="gold-text">+1 hero slot per level</span>}
               </div>
               <button
-                className="btn-primary"
+                className="btn-yellow"
                 disabled={maxed || state.gold < cost}
                 onClick={() => engine.upgradeFacility(def.id)}
               >

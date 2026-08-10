@@ -1,15 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useEngine } from '../useEngine';
 import { GUIDE_TOPICS } from '../../game/data/guideTopics';
-
-/** Display labels for the tab ids notifications can point at -- kept local
- *  and small rather than importing MenuWindow's own tab structure, which
- *  isn't exported and shouldn't need to be just for this. */
-const TAB_LABELS: Record<string, string> = {
-  dashboard: 'the Guild', heroes: 'Heroes', equipment: 'Inventory', shop: 'Shop',
-  guild: 'Guild Hall', quests: 'Quests', raids: 'Raids', lore: 'Lore', guide: 'Guide',
-  upgrades: 'Upgrades', prestige: 'Prestige', stats: 'Statistics', settings: 'Settings',
-};
+import { TAB_LABELS } from '../tabLabels';
 
 function timeAgo(ts: number, now: number): string {
   const diffMin = Math.floor((now - ts) / 60000);
@@ -24,6 +16,15 @@ function NotificationsTab() {
   const engine = useEngine();
   const notifications = engine.state.notifications;
   const now = Date.now();
+
+  // Marks the whole log seen the moment this tab is actually being looked
+  // at, and again live if a new notification arrives while it's still
+  // open -- someone reading the Notifications list has, by definition,
+  // seen whatever's in it, the same "looking at it counts as
+  // acknowledging it" idea the header icon/banner both use their own way.
+  useEffect(() => {
+    engine.markNotificationsSeen();
+  }, [engine, notifications[0]?.id]);
 
   if (notifications.length === 0) {
     return <p className="small muted">Nothing yet. Everything that happens in the guild gets logged here.</p>;

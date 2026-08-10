@@ -205,7 +205,7 @@ function QuestCard({
 function HeroTab({ hero, selected, onSelect }: { hero: Hero; selected: boolean; onSelect: () => void }) {
   return (
     <button
-      className={`chip ${selected ? 'on' : ''} ${hero.injuries.length > 0 ? 'risky' : ''}`}
+      className={`hero-tab-chip ${selected ? 'on' : ''} ${hero.injuries.length > 0 ? 'risky' : ''}`}
       onClick={onSelect}
     >
       {hero.name} · Lv {hero.level}

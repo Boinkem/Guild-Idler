@@ -4,6 +4,8 @@ import { QUEST_CHAINS, ChainDef } from '../../game/data/quests';
 import { GUILD_RANK_TIERS, currentGuildRank, nextGuildRank, powerToNextRank, rankTierForLevel } from '../../game/data/guildRank';
 import { outgoingConnections, incomingConnections } from '../../game/data/chainConnections';
 import { RAIDS, RAID_ENCOUNTER_BY_ID, isRaidUnlocked } from '../../game/data/raids';
+import { EQUIPMENT_BY_ID, ITEM_SETS } from '../../game/data/equipment';
+import { describeMods, RARITY_COLOR } from '../../game/util';
 import { useEngine } from '../useEngine';
 
 /** Shared summary/expand toggle button, matching the Heroes tab pattern. */
@@ -327,10 +329,55 @@ function StoryRaidsTab() {
   );
 }
 
+/**
+ * Moved here from the Inventory tab's old "Collection" section -- item
+ * sets and discovery progress are a lore/completionist record of what
+ * the guild has found, same category as Story Quests/Story Raids just
+ * above, not something that belongs mixed in with day-to-day gear
+ * management. Content and logic are unchanged from the original,
+ * just relocated.
+ */
+function CollectionTab() {
+  const engine = useEngine();
+  const state = engine.state;
+
+  return (
+    <>
+      <p className="small muted">
+        {state.discoveredItems.length} of {Object.keys(EQUIPMENT_BY_ID).length} items discovered.
+      </p>
+      {ITEM_SETS.map((set) => {
+        const found = set.pieces.filter((p) => state.discoveredItems.includes(p));
+        return (
+          <div key={set.id} className="card">
+            <div className="spread">
+              <span className="card-title">{set.name}</span>
+              <span className="small muted">{found.length}/{set.pieces.length} found</span>
+            </div>
+            <div className="stat-row" style={{ marginTop: 6 }}>
+              {set.pieces.map((pieceId) => (
+                <span
+                  key={pieceId}
+                  style={{ color: state.discoveredItems.includes(pieceId) ? RARITY_COLOR.legendary : undefined }}
+                >
+                  {EQUIPMENT_BY_ID[pieceId]?.name ?? pieceId}
+                </span>
+              ))}
+            </div>
+            <div className="tiny muted" style={{ marginTop: 6 }}>
+              {set.bonuses.map((b) => `${b.count}-piece ${b.label}: ${describeMods(b.mods).join(', ')}`).join(' · ')}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export function LorePanel() {
   const engine = useEngine();
   const state = engine.state;
-  const [subTab, setSubTab] = useState<'quests' | 'raids'>('quests');
+  const [subTab, setSubTab] = useState<'quests' | 'raids' | 'collection'>('quests');
 
   const rank = currentGuildRank(state);
   const next = nextGuildRank(state);
@@ -359,15 +406,20 @@ export function LorePanel() {
       </div>
 
       <div className="row" style={{ gap: 8, marginBottom: 14 }}>
-        <button className={subTab === 'quests' ? 'btn-primary' : ''} onClick={() => setSubTab('quests')}>
+        <button className={`btn-subtab ${subTab === 'quests' ? 'on' : ''}`} onClick={() => setSubTab('quests')}>
           Story Quests
         </button>
-        <button className={subTab === 'raids' ? 'btn-primary' : ''} onClick={() => setSubTab('raids')}>
+        <button className={`btn-subtab ${subTab === 'raids' ? 'on' : ''}`} onClick={() => setSubTab('raids')}>
           Story Raids
+        </button>
+        <button className={`btn-subtab ${subTab === 'collection' ? 'on' : ''}`} onClick={() => setSubTab('collection')}>
+          Collection
         </button>
       </div>
 
-      {subTab === 'quests' ? <StoryQuestsTab /> : <StoryRaidsTab />}
+      {subTab === 'quests' && <StoryQuestsTab />}
+      {subTab === 'raids' && <StoryRaidsTab />}
+      {subTab === 'collection' && <CollectionTab />}
     </>
   );
 }

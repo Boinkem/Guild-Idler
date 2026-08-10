@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 30;
+export const SAVE_VERSION = 31;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -880,6 +880,35 @@ export interface GameState {
   notifiedSetBonuses: string[];
   /** Every toast ever fired, newest first, capped at 100. */
   notifications: NotificationEntry[];
+  /**
+   * Id of the newest notification the player has actually acknowledged --
+   * by opening the Guide tab's Notifications list, clicking the header
+   * notification icon, or clicking through a banner (see
+   * NotificationBanner.tsx). `null` means nothing has ever been
+   * acknowledged (a genuinely fresh save). The unread count/badge is
+   * computed live from this (how many entries in `notifications` come
+   * before this id, since unshift keeps the array newest-first), not
+   * stored as its own number, so it's always correct regardless of when
+   * notifications arrived.
+   *
+   * Deliberately an id, not a timestamp -- an earlier version of this
+   * compared `notification.timestamp > notificationsSeenAt`, which broke
+   * whenever two notifications landed in the same millisecond (confirmed
+   * directly via a runtime check, not theoretical): the strict `>`
+   * comparison silently swallowed the second one. This is the exact same
+   * class of bug already fixed once in this codebase for Toast.tsx's own
+   * auto-dismiss timer (two toasts with identical text/timing used to
+   * share one effect run) -- same root cause (relying on a value that
+   * isn't guaranteed unique/ordered at sub-millisecond precision), same
+   * fix shape (switch to something that IS guaranteed distinct -- Toast
+   * used a seq counter, this uses the notification's own unique id).
+   * A notification that arrives WHILE this points at the previous
+   * newest one is unambiguously "after" it in array position, with no
+   * timestamp precision to lose. A banner that times out WITHOUT being
+   * clicked deliberately does NOT advance this -- that's the whole point
+   * of "if missed, it counts as unread."
+   */
+  notificationsSeenId: string | null;
   /**
    * Ids of one-time "how to" guidance topics already shown (see
    * GuidanceManager) -- once a topic's fired, it never fires again.

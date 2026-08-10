@@ -10,7 +10,7 @@ import {
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
 import { RaidDifficulty, RaidUpgradeDef } from '../../game/types';
 import { RarityPill } from '../RarityPill';
-import { MaxFlash, useMaxFlash } from '../maxFlash';
+import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
 import { RaidRoomSprite, RaidTorchSprite } from '../sprites/RaidRoomSprite';
 import { formatDuration, describeMods, formatGold, formatNumber, RARITY_COLOR } from '../../game/util';
 
@@ -112,18 +112,22 @@ function RaidUpgradeCard({ def }: { def: RaidUpgradeDef }) {
   // surface in the game missing it entirely.
   const { flashes, dismiss } = useMaxFlash([{ id: def.id, name: def.name, level, maxLevel: def.maxLevel }]);
   const flash = flashes[def.id];
+  // Same "only pulse on a real change, not on every tab-switch remount"
+  // fix as every other level display -- see usePulsesOnChange's own doc
+  // comment in maxFlash.tsx.
+  const levelPulses = usePulsesOnChange([{ id: def.id, value: level }]);
 
   return (
     <div className="card" style={{ marginBottom: 0 }}>
       <div className="spread">
         <span className="card-title">{def.name}</span>
-        <span key={level} className="small muted purchase-pulse">{level}/{def.maxLevel}</span>
+        <span className={`small muted ${levelPulses[def.id] ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
       </div>
       <p className="card-flavour">{def.description}</p>
       <div className="stat-row" style={{ marginBottom: 8 }}>
         {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
       </div>
-      <button className="btn-primary" disabled={maxed || !afford} onClick={() => engine.buyRaidUpgrade(def.id)}>
+      <button className="btn-yellow" disabled={maxed || !afford} onClick={() => engine.buyRaidUpgrade(def.id)}>
         {maxed
           ? 'Fully upgraded'
           : next!.currency === 'gold'
@@ -556,10 +560,10 @@ export function RaidsPanel() {
       </p>
 
       <div className="row" style={{ gap: 8, marginBottom: 14 }}>
-        <button className={subTab === 'raids' ? 'btn-primary' : ''} onClick={() => setSubTab('raids')}>
+        <button className={`btn-subtab ${subTab === 'raids' ? 'on' : ''}`} onClick={() => setSubTab('raids')}>
           Raids
         </button>
-        <button className={subTab === 'quartermaster' ? 'btn-primary' : ''} onClick={() => setSubTab('quartermaster')}>
+        <button className={`btn-subtab ${subTab === 'quartermaster' ? 'on' : ''}`} onClick={() => setSubTab('quartermaster')}>
           Quartermaster
         </button>
       </div>

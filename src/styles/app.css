@@ -266,6 +266,59 @@ button:focus-visible, [tabindex]:focus-visible {
 .btn-green:hover:not(:disabled) { background: var(--moss); color: var(--ink); }
 .btn-green:disabled { opacity: 0.5; }
 
+/* Destructive/irreversible actions (deleting a guild and starting over,
+   currently the only user of this) -- same accent-button convention as
+   .btn-green/.btn-purple above, --blood so it reads as a clear warning
+   rather than an ordinary action, distinct from every other button color
+   already in use. */
+.btn-danger {
+  background: color-mix(in srgb, var(--blood) 55%, var(--panel-2));
+  border-color: var(--blood);
+  color: #fff8e6;
+  font-weight: 700;
+}
+.btn-danger:hover:not(:disabled) { background: var(--blood); color: var(--ink); }
+.btn-danger:disabled { opacity: 0.5; }
+
+/* Every "buy/build/upgrade/expand/level up" leveled-purchase button
+   across Guild Hall, Vendors, Harvest, Prestige, and Raids -- unified
+   under one color so an upgrade purchase reads consistently as "this
+   kind of action" everywhere it appears, distinct from Crafting's
+   --violet and the green bulk-action buttons. --brass, the game's
+   existing gold/yellow accent (already used for gold-text amounts
+   throughout), rather than introducing an unrelated new hue. Ordinary
+   shop purchases (buying equipment/consumables) and non-purchase
+   btn-primary uses (Retire, raid party commit, modal Close) are
+   deliberately NOT included -- this is specifically the "spend on a
+   leveled upgrade" family of buttons. */
+.btn-yellow {
+  background: color-mix(in srgb, var(--brass) 55%, var(--panel-2));
+  border-color: var(--brass);
+  color: var(--ink);
+  font-weight: 700;
+}
+.btn-yellow:hover:not(:disabled) { background: var(--brass); color: var(--ink); }
+.btn-yellow:disabled { opacity: 0.5; }
+
+/* Sub-tab switcher buttons (Vendors' Blacksmith/Alchemist/Enchanter,
+   Harvest's Fields/Warehouse, Raids' Raids/Quartermaster's Den) -- these
+   used to just be plain unstyled buttons that happened to turn
+   .btn-primary (brass) when active, no different from an ordinary
+   confirm button. --sky is the one major accent color not already
+   claimed by a button category (green = bulk actions, purple =
+   crafting, brass/yellow = upgrade purchases, blood/red = destructive),
+   so sub-tab navigation gets its own consistent, recognizable look
+   distinct from all of those. Only the active sub-tab gets the accent
+   (same "on" toggle shape .hero-tab-chip/.chip already use) -- an
+   inactive sub-tab stays plain so the current one is unambiguous. */
+.btn-subtab.on {
+  background: color-mix(in srgb, var(--sky) 55%, var(--panel-2));
+  border-color: var(--sky);
+  color: #fff8e6;
+  font-weight: 700;
+}
+.btn-subtab.on:hover:not(:disabled) { background: var(--sky); color: var(--ink); }
+
 /* ------------------------------ idle companion ------------------------------ */
 
 .idle-root {
@@ -561,9 +614,41 @@ button:focus-visible, [tabindex]:focus-visible {
 .titlebar .spacer { flex: 1; }
 .titlebar button { -webkit-app-region: no-drag; }
 
-.resources { display: flex; gap: 12px; font-size: 0.6875rem; -webkit-app-region: no-drag; }
+.resources { display: flex; gap: 12px; font-size: 0.6875rem; -webkit-app-region: no-drag; align-items: center; }
 .resources .gold { color: var(--brass); }
 .resources .renown { color: var(--violet); }
+
+/* Header notification icon (next to Gold/Renown) -- opens the Guide's
+   Notifications list. Badge only renders when there's an actual unread
+   count (see MenuWindow's own unreadCount, sourced from
+   engine.unreadNotificationCount). */
+.header-notif-icon {
+  position: relative;
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+  font-size: 0.875rem;
+  line-height: 1;
+  -webkit-app-region: no-drag;
+}
+.header-notif-icon:hover { background: var(--panel-3); }
+.header-notif-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--blood);
+  color: #fff;
+  font-size: 0.5rem;
+  font-weight: 700;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+}
 
 .menu-body { flex: 1; display: flex; min-height: 0; }
 
@@ -782,6 +867,32 @@ button:focus-visible, [tabindex]:focus-visible {
 .chip.risky { border-color: var(--blood); color: var(--blood); }
 .chip.risky.on { background: color-mix(in srgb, var(--blood) 20%, var(--panel-2)); }
 
+/* Hero-name selector buttons (Quests' hero tabs, Equipment's hero picker)
+   -- bigger than an ordinary .chip and colored distinctly from it, so
+   switching between heroes reads as its own deliberate navigation
+   control rather than blending into whatever small chips happen to be
+   nearby (the consumable picker in EquipmentPanel also uses plain .chip,
+   which is exactly why this needed its own class rather than just
+   growing .chip itself). Light purple derived from each theme's own
+   --violet via color-mix (lightened toward white) rather than a fixed
+   hex, so it adapts correctly across every theme the same way --violet
+   itself already does, and reads as clearly lighter than Crafting's own
+   plain --violet (.btn-purple) rather than competing with it. */
+.hero-tab-chip {
+  font-size: 0.75rem;
+  padding: 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--violet) 55%, white);
+  background: var(--panel-2);
+  color: color-mix(in srgb, var(--violet) 55%, white);
+}
+.hero-tab-chip.on {
+  border-color: color-mix(in srgb, var(--violet) 35%, white);
+  background: color-mix(in srgb, var(--violet) 25%, var(--panel-2));
+  color: color-mix(in srgb, var(--violet) 30%, white);
+}
+.hero-tab-chip.risky { border-color: var(--blood); color: var(--blood); }
+.hero-tab-chip.risky.on { background: color-mix(in srgb, var(--blood) 20%, var(--panel-2)); }
+
 /* --------------------------------- modals --------------------------------- */
 
 .overlay {
@@ -950,6 +1061,80 @@ button:focus-visible, [tabindex]:focus-visible {
   z-index: 50;
   max-width: 90%;
   text-align: center;
+}
+
+/* --------------------------- notification banner --------------------------- */
+/* Pops in from the top, near the header -- deliberately a different
+   position/shape from .toast above (bottom-center, brief, routine) so
+   the two never compete for the same visual space or read as the same
+   kind of thing. See NotificationBanner.tsx for when this actually
+   fires. */
+.notification-banner {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: stretch;
+  background: var(--panel-2);
+  border: 1px solid var(--brass);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  max-width: min(420px, 90%);
+  z-index: 55;
+  overflow: hidden;
+  animation: notification-banner-pop-in 320ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.notification-banner-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+}
+.notification-banner-message { font-size: 0.6875rem; color: var(--parchment); }
+.notification-banner-goto { color: var(--brass); }
+.notification-banner-close {
+  flex: none;
+  width: 30px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--panel-3);
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--muted);
+}
+.notification-banner-close:hover { color: var(--parchment); background: var(--panel-3); }
+/* The fading countdown bar -- a plain CSS width animation from 100% to 0%
+   over exactly DISPLAY_MS (see NotificationBanner.tsx), not a JS-driven
+   React state loop, since the visual doesn't need to be read by anything
+   else -- the actual auto-dismiss timer is a separate, simpler
+   window.setTimeout matching the same duration. */
+.notification-banner-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--edge);
+}
+.notification-banner-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--brass);
+  animation: notification-banner-countdown 5000ms linear forwards;
+}
+@keyframes notification-banner-pop-in {
+  0% { transform: translateX(-50%) translateY(-16px); opacity: 0; }
+  100% { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+@keyframes notification-banner-countdown {
+  from { width: 100%; }
+  to { width: 0%; }
 }
 
 /* ---------------------------- onboarding tour ---------------------------- */

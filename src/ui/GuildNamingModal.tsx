@@ -13,7 +13,7 @@ import { useEngine } from './useEngine';
  * a one-time setup step. App.tsx also holds the other modals back while this
  * is showing so nothing stacks behind it.
  */
-export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => void }) {
+export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => Promise<void> | void }) {
   const engine = useEngine();
   const [draft, setDraft] = useState('');
   const unnamed = engine.state.guildName === '';
@@ -28,23 +28,52 @@ export function GuildNamingModal({ onNeedsSpace }: { onNeedsSpace: () => void })
   // itself, so that effect only ever fired once, on the very first boot.
   // Confirmed as the actual cause of the naming prompt getting trapped,
   // unusable, inside the tiny idle-companion window after a reset.
+  //
+  // Also owns the input's own focus now (folded in from a separate effect
+  // that used to schedule it via requestAnimationFrame -- see below for
+  // why that wasn't enough on its own). `onNeedsSpace` (App.tsx's
+  // changeMode) now returns the actual promise from the
+  // `window:setMode` IPC call, which only resolves once Electron's main
+  // process has *finished* calling `win.setBounds(...)` -- so awaiting it
+  // here means the window is guaranteed to already be at full menu size
+  // before this ever tries to focus anything, not just "probably, if one
+  // animation frame was enough time."
+  //
+  // The rAF-only version was a real, separate race from the hardReset one
+  // above: on a genuinely fresh launch (not a reset), this modal first
+  // mounts inside the tiny 260x300 idle-companion window, well under the
+  // modal's own layout needs. A same-or-next-frame `.focus()` call could
+  // fire while the window was still that tiny size (or mid-resize) --
+  // the input existed in the DOM and *looked* focused, but real keyboard
+  // input silently went nowhere, matching the reported "can't type until
+  // pressing Escape first" (Escape, or any key, being enough to make
+  // Chromium re-settle real focus once the window had actually finished
+  // growing by then anyway). Awaiting the resize itself removes the
+  // guesswork entirely instead of hoping one frame is always enough.
   useEffect(() => {
-    if (unnamed) onNeedsSpace();
-  }, [unnamed, onNeedsSpace]);
-
-  // Explicit, delayed focus instead of the input's own `autoFocus`.
-  // autoFocus fires synchronously in the same tick this modal mounts --
-  // fine for a genuinely fresh save, but "Start a new guild" in StatsPanel
-  // calls hardReset() from inside a window.confirm() handler, and Chromium
-  // is still in the middle of returning window focus from that just-closed
-  // native dialog at that exact instant. A same-tick .focus() call loses
-  // that race silently: the modal renders correctly, but the input never
-  // actually receives keyboard focus, and typing does nothing. One rAF is
-  // enough to land after the dialog's own focus restoration settles.
-  useEffect(() => {
-    if (!unnamed) return undefined;
-    const raf = requestAnimationFrame(() => inputRef.current?.focus());
-    return () => cancelAnimationFrame(raf);
+    if (!unnamed) return;
+    let live = true;
+    let raf: number | null = null;
+    void Promise.resolve(onNeedsSpace()).then(() => {
+      if (!live) return;
+      // Still one rAF after the resize settles, not focusing immediately --
+      // covers the *other* known race this modal can hit: "Start a new
+      // guild" (StatsPanel) calls hardReset() from inside a
+      // window.confirm() handler, and Chromium can still be mid-way
+      // through returning window focus from that just-closed native
+      // dialog at this exact instant. That race is independent of the
+      // window-resize one above (the window's usually already at menu
+      // size in that path, so the resize promise alone resolves near-
+      // instantly) -- one rAF is enough to land after the dialog's own
+      // focus restoration settles, same fix this modal already had before
+      // the resize-await was added on top of it.
+      raf = requestAnimationFrame(() => inputRef.current?.focus());
+    });
+    return () => {
+      live = false;
+      if (raf !== null) cancelAnimationFrame(raf);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unnamed]);
 
   if (!unnamed) return null;

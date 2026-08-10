@@ -12,6 +12,7 @@ import { HatchReadyModal } from './ui/HatchReadyModal';
 import { HatchRevealModal } from './ui/HatchRevealModal';
 import { AchievementPopup } from './ui/AchievementPopup';
 import { Toast } from './ui/Toast';
+import { NotificationBanner } from './ui/NotificationBanner';
 
 export type ViewMode = 'idle' | 'menu';
 
@@ -46,9 +47,9 @@ export function App() {
     };
   }, [engine]);
 
-  const changeMode = useCallback((next: ViewMode) => {
+  const changeMode = useCallback((next: ViewMode): Promise<void> => {
     setMode(next);
-    void window.littleKnight?.setWindowMode(next);
+    return window.littleKnight?.setWindowMode(next) ?? Promise.resolve();
   }, []);
 
   // The naming modal needs real screen space to render in -- if it shows up
@@ -91,7 +92,7 @@ export function App() {
               tiny idle window; IdleView shows a compact banner instead and
               opens the menu on click. */}
           <OfflineReportModal active={mode === 'menu'} />
-          <QuestResultModal onViewLore={() => changeMode('menu')} />
+          <QuestResultModal onViewLore={() => changeMode('menu')} onNeedsSpace={() => changeMode('menu')} />
           <ChainCompleteModal active={mode === 'menu'} onViewLore={() => changeMode('menu')} />
           <RaidResultModal active={mode === 'menu'} onViewLore={() => changeMode('menu')} />
           <HatchReadyModal active={mode === 'menu'} onView={() => changeMode('menu')} />
@@ -105,6 +106,7 @@ export function App() {
         </>
       )}
       <Toast />
+      <NotificationBanner />
       <AchievementPopup />
     </EngineContext.Provider>
   );

@@ -5,7 +5,7 @@ import { GameEngine } from '../../game/engine';
 import { EquipmentManager } from '../../game/managers/EquipmentManager';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
-import { EQUIPMENT_BY_ID, ITEM_SETS, EQUIP_SLOTS } from '../../game/data/equipment';
+import { EQUIPMENT_BY_ID, EQUIP_SLOTS } from '../../game/data/equipment';
 import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { describeMods, describeStats, formatGold, RARITY_COLOR, RARITY_ORDER } from '../../game/util';
@@ -32,17 +32,24 @@ function CraftedPill() {
   );
 }
 
-function DurabilityBar({ item }: { item: EquipmentItem }) {
+function DurabilityBar({ item, compact = false }: { item: EquipmentItem; compact?: boolean }) {
   const max = EquipmentManager.maxDurability(item);
   const ratio = item.durability / max;
   return (
     <>
-      <div className={`bar dura ${ratio < 0.25 ? 'low' : ''}`} style={{ marginTop: 4 }}>
+      <div className={`bar dura ${ratio < 0.25 ? 'low' : ''}`} style={{ marginTop: compact ? 2 : 4 }}>
         <span style={{ width: `${ratio * 100}%` }} />
       </div>
-      <div className="tiny muted">
-        {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${max}`}
-      </div>
+      {/* Compact mode (the always-visible collapsed card row) skips the
+          text line -- the bar itself, plus its own low-durability red
+          tint, is enough to spot "this needs repair" at a glance across
+          a whole hero's loadout without expanding every card first. The
+          exact number still shows once expanded, same as before. */}
+      {!compact && (
+        <div className="tiny muted">
+          {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${max}`}
+        </div>
+      )}
     </>
   );
 }
@@ -204,6 +211,7 @@ function SlotCard({
           <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
           <RarityPill rarity={def.rarity} />
           {item.customMods && <CraftedPill />}
+          <DurabilityBar item={item} compact />
         </div>
       </div>
       {open && (
@@ -213,7 +221,12 @@ function SlotCard({
           {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
             <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
           )}
-          <DurabilityBar item={item} />
+          {/* The bar itself is already always visible in the collapsed
+              summary above (compact mode) -- just the exact number here,
+              not a second copy of the same bar. */}
+          <div className="tiny muted" style={{ marginTop: 4 }}>
+            {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+          </div>
           <div className="row wrap" style={{ marginTop: 6 }}>
             <button
               style={{ minHeight: 24, padding: '3px 6px' }}
@@ -258,6 +271,7 @@ function StashCard({
           <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
           <RarityPill rarity={def.rarity} />
           {item.customMods && <CraftedPill />}
+          <DurabilityBar item={item} compact />
         </div>
       </div>
       {open && (
@@ -267,7 +281,9 @@ function StashCard({
           {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
             <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
           )}
-          <DurabilityBar item={item} />
+          <div className="tiny muted" style={{ marginTop: 4 }}>
+            {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+          </div>
           <div className="row wrap" style={{ marginTop: 6 }}>
             <button
               className="btn-primary"
@@ -376,7 +392,7 @@ export function EquipmentPanel() {
 
       <div className="row wrap" style={{ marginBottom: 10, alignItems: 'center' }}>
         {state.heroes.map((h) => (
-          <button key={h.id} className={h.id === hero.id ? 'btn-primary' : ''} onClick={() => setHeroId(h.id)}>
+          <button key={h.id} className={`hero-tab-chip ${h.id === hero.id ? 'on' : ''}`} onClick={() => setHeroId(h.id)}>
             {h.name}
           </button>
         ))}
@@ -478,35 +494,6 @@ export function EquipmentPanel() {
           <StashCard key={item.uid} item={item} hero={hero} confirmSell={settings.confirmSell} engine={engine} />
         ))}
       </div>
-
-      <div className="section-heading">Collection</div>
-      <p className="small muted">
-        {state.discoveredItems.length} of {Object.keys(EQUIPMENT_BY_ID).length} items discovered.
-      </p>
-      {ITEM_SETS.map((set) => {
-        const found = set.pieces.filter((p) => state.discoveredItems.includes(p));
-        return (
-          <div key={set.id} className="card">
-            <div className="spread">
-              <span className="card-title">{set.name}</span>
-              <span className="small muted">{found.length}/{set.pieces.length} found</span>
-            </div>
-            <div className="stat-row" style={{ marginTop: 6 }}>
-              {set.pieces.map((pieceId) => (
-                <span
-                  key={pieceId}
-                  style={{ color: state.discoveredItems.includes(pieceId) ? RARITY_COLOR.legendary : undefined }}
-                >
-                  {EQUIPMENT_BY_ID[pieceId]?.name ?? pieceId}
-                </span>
-              ))}
-            </div>
-            <div className="tiny muted" style={{ marginTop: 6 }}>
-              {set.bonuses.map((b) => `${b.count}-piece ${b.label}: ${describeMods(b.mods).join(', ')}`).join(' · ')}
-            </div>
-          </div>
-        );
-      })}
     </>
   );
 }

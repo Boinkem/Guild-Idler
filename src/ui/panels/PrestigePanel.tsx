@@ -5,6 +5,7 @@ import { PrestigeManager } from '../../game/managers/PrestigeManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { PRESTIGE_MIN_LEVEL, PRESTIGE_STREAK_WINDOW_MS, renownEffectiveMaxLevel } from '../../game/data/progression';
 import { describeMods, formatDuration, formatNumber } from '../../game/util';
+import { usePulsesOnChange } from '../maxFlash';
 
 export function PrestigePanel() {
   const engine = useEngine();
@@ -20,6 +21,13 @@ export function PrestigePanel() {
   // `preview.total` for that hero id would already be recomputed against
   // the now-reset hero and show the wrong (tiny) number.
   const [justRetired, setJustRetired] = useState<{ heroId: string; amount: number; key: number } | null>(null);
+
+  // Same "only pulse on a real change, not on every tab-switch remount"
+  // fix Guild Hall/Vendors/Harvest already got -- see usePulsesOnChange's
+  // own doc comment in maxFlash.tsx.
+  const perkLevelPulses = usePulsesOnChange(
+    PrestigeManager.perks().map((def) => ({ id: def.id, value: PrestigeManager.perkLevel(state, def.id) })),
+  );
 
   const streakActive = state.lastPrestigeAt !== null
     && now - state.lastPrestigeAt <= PRESTIGE_STREAK_WINDOW_MS;
@@ -141,7 +149,7 @@ export function PrestigePanel() {
                   {def.name}
                   {inTier2 && <span className="tag" style={{ color: 'var(--violet)', marginLeft: 6 }}>Tier II</span>}
                 </span>
-                <span key={level} className="small muted purchase-pulse">{level}/{cap}</span>
+                <span className={`small muted ${perkLevelPulses[def.id] ? 'purchase-pulse' : ''}`}>{level}/{cap}</span>
               </div>
               <p className="card-flavour">
                 {justUnlocked && def.tier2 ? def.tier2.unlockFlavour : def.description}
@@ -151,7 +159,7 @@ export function PrestigePanel() {
                 {def.heroSlotsPerLevel && <span className="gold-text">+1 hero slot per level</span>}
               </div>
               <button
-                className="btn-primary"
+                className="btn-yellow"
                 disabled={maxed || state.renown < cost}
                 onClick={() => engine.buyPerk(def.id)}
               >

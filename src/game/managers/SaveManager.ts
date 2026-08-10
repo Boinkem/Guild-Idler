@@ -109,6 +109,7 @@ export function createInitialState(now = Date.now()): GameState {
     raidLog: [],
     completedRaidDifficulties: [],
     notifications: [],
+    notificationsSeenId: null,
     seenGuidance: [],
     raidUpgrades: {},
     seenOnboarding: false,
@@ -454,6 +455,19 @@ const MIGRATIONS: Record<number, Migration> = {
     autoRepairEnabled: (save.autoRepairEnabled as boolean | undefined) ?? false,
     autoRepairThresholdPercent: (save.autoRepairThresholdPercent as number | undefined) ?? 50,
     autoEquipOnLoot: (save.autoEquipOnLoot as boolean | undefined) ?? false,
+  }),
+  30: (save) => ({
+    ...save,
+    version: 31,
+    // Points at whatever's currently the newest entry in the existing
+    // log (or null if there's no log yet), not a fresh timestamp -- a
+    // save that predates this system already has up to 100 old
+    // notifications sitting in its log, and treating every single one of
+    // them as newly "unread" would slap a jarring "100 unread" badge on
+    // a guild that's been running fine for ages. Pointing at the current
+    // newest means only notifications that actually arrive AFTER the
+    // update count toward it, which is what "unread" should mean here.
+    notificationsSeenId: (save.notifications as { id: string }[] | undefined)?.[0]?.id ?? null,
   }),
 };
 

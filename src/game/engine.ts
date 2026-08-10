@@ -435,15 +435,15 @@ export class GameEngine {
           if (chainResult.continued) {
             playSound('depart');
             const label = chainResult.via === 'chain' ? 'chain step' : 'streak';
-            this.say(`${chainHero.name} keeps going — ${chainResult.completedCount}/${chainResult.target} in this ${label}.`);
+            this.say(`${chainHero.name} keeps going — ${chainResult.completedCount}/${chainResult.target} in this ${label}.`, 'quests');
           } else if (chainResult.stoppedByFailure) {
             playSound('quest_fail');
             const note = chainResult.via === 'chain' ? 'a failed stage' : 'a failed quest';
-            this.say(`${chainHero.name}'s run stops after ${note} and waits for new orders.`);
+            this.say(`${chainHero.name}'s run stops after ${note} and waits for new orders.`, 'quests');
           } else {
             playSound('chain_complete');
             const n = chainResult.completedCount;
-            this.say(`${chainHero.name} has chained ${n} quest${n === 1 ? '' : 's'} and is waiting for new orders.`);
+            this.say(`${chainHero.name} has chained ${n} quest${n === 1 ? '' : 's'} and is waiting for new orders.`, 'quests');
           }
         }
       }
@@ -849,6 +849,40 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  /**
+   * How many notifications have arrived since the player last actually
+   * looked at the log -- see GameState.notificationsSeenId's own doc
+   * comment for what counts as "looked at," and why this is id-based
+   * (array position) rather than timestamp-based. Computed live rather
+   * than stored, so it's always correct regardless of when/how
+   * notifications arrived. `notifications` is newest-first (unshift), so
+   * this is simply "how many entries come before the last-seen id."
+   */
+  get unreadNotificationCount(): number {
+    if (this.state.notificationsSeenId === null) return this.state.notifications.length;
+    const idx = this.state.notifications.findIndex((n) => n.id === this.state.notificationsSeenId);
+    // Not found means the last-seen entry has since aged out past the
+    // 100-entry cap -- everything currently in the log postdates it, so
+    // the whole log counts as unread rather than guessing at a boundary
+    // that no longer exists.
+    return idx === -1 ? this.state.notifications.length : idx;
+  }
+
+  /** Marks every notification currently in the log as seen -- called when
+   *  the player opens the Guide tab's Notifications list, clicks the
+   *  header notification icon, or clicks through a banner. Deliberately
+   *  NOT called when a banner simply times out unclicked -- that's what
+   *  keeps a missed notification counted as unread. */
+  markNotificationsSeen() {
+    if (this.state.notifications.length === 0) return;
+    const newestId = this.state.notifications[0].id;
+    if (this.state.notificationsSeenId !== newestId) {
+      this.state.notificationsSeenId = newestId;
+      this.notify();
+      void this.saveNow();
+    }
+  }
+
   /** Requests that the menu open (or switch) to a specific tab id. */
   requestTab(id: string) {
     this.requestedTab = id;
@@ -940,7 +974,7 @@ export class GameEngine {
     hero.autoAdvanceChainId = (chainSteps && offer.chain) ? offer.chain.chainId : null;
 
     playSound('depart');
-    this.say(`${hero.name} sets out: ${offer.name}`);
+    this.say(`${hero.name} sets out: ${offer.name}`, 'quests');
     void this.saveNow();
   }
 
@@ -982,7 +1016,7 @@ export class GameEngine {
     }
     if (sent > 0) {
       playSound('depart');
-      this.say(sent === 1 ? '1 hero sent out on a contract.' : `${sent} heroes sent out on contracts.`);
+      this.say(sent === 1 ? '1 hero sent out on a contract.' : `${sent} heroes sent out on contracts.`, 'quests');
       void this.saveNow();
     } else {
       this.say('No idle heroes have an open contract right now.');
@@ -1011,7 +1045,7 @@ export class GameEngine {
     hero.autoChainCount = 0;
     hero.autoAdvanceChainId = null;
     playSound('depart');
-    this.say(`${hero.name} is recalled and heads back to the guild.`);
+    this.say(`${hero.name} is recalled and heads back to the guild.`, 'quests');
     void this.saveNow();
   }
 
@@ -1133,7 +1167,7 @@ export class GameEngine {
     const { error } = RaidManager.start(this.state, raidId, difficulty, heroIds, Date.now());
     if (error) return this.say(error);
     playSound('depart');
-    this.say(`The guild marches on ${RAID_BY_ID[raidId]?.name ?? 'the raid'}. ${heroIds.length} strong.`);
+    this.say(`The guild marches on ${RAID_BY_ID[raidId]?.name ?? 'the raid'}. ${heroIds.length} strong.`, 'raids');
     void this.saveNow();
   }
 
@@ -1173,7 +1207,7 @@ export class GameEngine {
         if (this.state.notifiedSetBonuses.includes(key)) continue;
         this.state.notifiedSetBonuses.push(key);
         playSound('legendary_drop');
-        this.say(`${set.name} — ${bonus.label} unlocked!`);
+        this.say(`${set.name} — ${bonus.label} unlocked!`, 'equipment');
       }
     }
   }
@@ -1534,7 +1568,7 @@ export class GameEngine {
     const error = CraftingManager.craftGear(this.state, recipeId, chosenMods);
     if (error) return this.say(error);
     playSound('purchase');
-    this.say('A new piece, built to spec, lands in the stash.');
+    this.say('A new piece, built to spec, lands in the stash.', 'equipment');
     void this.saveNow();
   }
 
@@ -1550,7 +1584,7 @@ export class GameEngine {
     const error = CraftingManager.enchantItem(this.state, recipeId, itemUid, chosenStats);
     if (error) return this.say(error);
     playSound('purchase');
-    this.say('The Enchanter\u2019s work takes -- the piece carries it now.');
+    this.say('The Enchanter\u2019s work takes -- the piece carries it now.', 'equipment');
     void this.saveNow();
   }
 
@@ -1558,7 +1592,7 @@ export class GameEngine {
     const error = CraftingManager.craftGem(this.state, recipeId);
     if (error) return this.say(error);
     playSound('purchase');
-    this.say('A new gem, ready for the Blacksmith\u2019s Infuse station.');
+    this.say('A new gem, ready for the Blacksmith\u2019s Infuse station.', 'vendors');
     void this.saveNow();
   }
 
@@ -1567,7 +1601,7 @@ export class GameEngine {
   scrapItem(itemUid: string) {
     const error = ShopManager.scrapItem(this.state, itemUid);
     if (error) return this.say(error);
-    this.say('Broken down into scrap.');
+    this.say('Broken down into scrap.', 'vendors');
     void this.saveNow();
   }
 
@@ -1582,7 +1616,7 @@ export class GameEngine {
     const error = CraftingManager.craftAndInfuse(this.state, itemUid, element);
     if (error) return this.say(error);
     playSound('purchase');
-    this.say('The infusion takes.');
+    this.say('The infusion takes.', 'equipment');
     void this.saveNow();
   }
 
@@ -1592,11 +1626,11 @@ export class GameEngine {
     // instead of a generic "no room" -- this is exactly the kind of thing
     // a player new to the systems wouldn't otherwise know to go looking for.
     if (this.state.heroes.length >= this.heroSlots) {
-      return this.say("The guild is out of hero slots. Expand the roster via Guild Hall upgrades or a Renown perk.");
+      return this.say("The guild is out of hero slots. Expand the roster via Guild Hall upgrades or a Renown perk.", 'guild');
     }
     const error = GuildManager.recruit(this.state, heroClass, createRng(uid('recruit')));
     if (error) return this.say(error);
-    this.say('A new hero joins the guild.');
+    this.say('A new hero joins the guild.', 'heroes');
     this.reportAchievements(AchievementManager.checkAll(this.state));
     this.reportGuidance(GuidanceManager.checkAll(this.state));
     void this.saveNow();

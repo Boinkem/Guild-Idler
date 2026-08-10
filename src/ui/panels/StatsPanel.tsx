@@ -101,7 +101,7 @@ export function StatsPanel() {
           Where is my save?
         </button>
         <button
-          className="btn-ghost"
+          className="btn-danger"
           onClick={() => {
             if (confirm('Delete this guild and start over? This cannot be undone.')) engine.hardReset();
           }}

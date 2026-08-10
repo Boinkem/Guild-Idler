@@ -12,7 +12,7 @@ import { EquipmentDef, ConsumableDef, VendorId, UpgradeDef, CraftingRecipeDef } 
 import { describeMods, formatDuration, formatGold, RARITY_COLOR } from '../../game/util';
 import { ItemIcon, ConsumableIcon } from '../icons';
 import { VendorSprite } from '../sprites/VendorSprite';
-import { MaxFlash, useMaxFlash } from '../maxFlash';
+import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
 import { CraftingStation } from '../CraftingStation';
 import { EnhanceStation } from '../EnhanceStation';
 import { WeaponEnchantStation } from '../WeaponEnchantStation';
@@ -36,7 +36,7 @@ export function VendorsPanel() {
 
       <div className="row wrap" style={{ gap: 8, marginBottom: 14 }}>
         {VENDORS.map((v) => (
-          <button key={v.id} className={tab === v.id ? 'btn-primary' : ''} onClick={() => setTab(v.id)}>
+          <button key={v.id} className={`btn-subtab ${tab === v.id ? 'on' : ''}`} onClick={() => setTab(v.id)}>
             {v.name}
           </button>
         ))}
@@ -71,17 +71,27 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
     })),
   ]);
   const vendorFlash = flashes[`vendor:${vendorId}`];
+  // Same combined vendor-level+upgrades list useMaxFlash above already
+  // builds, tracking every change for the "Level N/M" pulse -- see
+  // usePulsesOnChange's own doc comment (maxFlash.tsx) for why a plain
+  // key={level} remount trick isn't enough: it replays on every ordinary
+  // tab switch, not just an actual purchase.
+  const levelPulses = usePulsesOnChange([
+    { id: `vendor:${vendorId}`, value: level },
+    ...upgradeList.map((def) => ({ id: def.id, value: GuildManager.upgradeLevel(state, def.id) })),
+  ]);
 
   function upgradeCard(def: UpgradeDef) {
     const upLevel = GuildManager.upgradeLevel(state, def.id);
     const upCost = GuildManager.nextUpgradeCost(state, def.id);
     const upMaxed = upCost === null && upLevel >= def.maxLevel;
     const flash = flashes[def.id];
+    const pulsing = levelPulses[def.id];
     return (
       <div key={def.id} className="card" style={{ marginBottom: 0 }}>
         <div className="spread">
           <span className="card-title">{def.name}</span>
-          <span key={upLevel} className="small muted purchase-pulse">{upLevel}/{def.maxLevel}</span>
+          <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>{upLevel}/{def.maxLevel}</span>
         </div>
         <p className="card-flavour">{def.description}</p>
         <div className="stat-row" style={{ marginBottom: 8 }}>
@@ -90,7 +100,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
           {def.unlocks === 'blackMarket' && <span className="gold-text">Unlocks the Black Market</span>}
         </div>
         <button
-          className="btn-primary"
+          className="btn-yellow"
           disabled={upMaxed || upCost === null || state.gold < upCost}
           onClick={() => engine.buyUpgrade(def.id)}
         >
@@ -118,12 +128,12 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
           <div style={{ flex: 1 }}>
             <div className="spread">
               <span className="card-title">{vendorDef.name}</span>
-              <span key={level} className="small muted purchase-pulse">Level {level}/{upgradeList.length}</span>
+              <span className={`small muted ${levelPulses[`vendor:${vendorId}`] ? 'purchase-pulse' : ''}`}>Level {level}/{upgradeList.length}</span>
             </div>
             <p className="card-flavour">{vendorDef.blurb}</p>
             <div className="row" style={{ gap: 8 }}>
               <button
-                className="btn-primary"
+                className="btn-yellow"
                 disabled={maxed || cost === null || state.gold < cost}
                 onClick={() => engine.levelUpVendor(vendorId)}
               >

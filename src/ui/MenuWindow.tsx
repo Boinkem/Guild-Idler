@@ -146,6 +146,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   // that change after that.
   const displayGold = useCountUp(engine.state.gold);
   const displayRenown = useCountUp(engine.state.renown);
+  const unreadCount = engine.unreadNotificationCount;
 
   return (
     <div className="menu-root" style={{ position: 'relative' }}>
@@ -172,6 +173,16 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         <div className="resources">
           <span className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
           <span className="renown">✦ {formatNumber(displayRenown)} renown</span>
+          <button
+            className="header-notif-icon"
+            onClick={() => engine.requestTab('guide')}
+            title={unreadCount > 0 ? `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}` : 'Notifications'}
+          >
+            🔔
+            {unreadCount > 0 && (
+              <span className="header-notif-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+            )}
+          </button>
         </div>
         <div className="spacer" />
         <button

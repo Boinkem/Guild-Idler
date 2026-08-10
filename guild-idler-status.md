@@ -3471,6 +3471,229 @@ now accepts an arbitrary string -- plus a direct check that base-class
 sprite URLs are unchanged byte-for-byte and a DLC class resolves to its
 own separate folder.
 
+### UI polish + notification system batch -- built
+A large batch of direct UI feedback, covering two real bugs, several
+visual consistency fixes, a panel reorganization, and a new notification
+system built from scratch. Grouped here since it landed as one
+conversation/patch, not because the items are related to each other.
+
+**Two bugs, both root-caused, not guessed at:**
+
+- **Guild-naming text box unresponsive on a fresh launch.** A genuinely
+  different, subtler race than the one already fixed for the hardReset()
+  + `window.confirm()` case: on a fresh launch (not a reset), the modal
+  first mounts inside the tiny 260x300 idle-companion window, well under
+  its own layout needs, before the app resizes to full menu size. The old
+  `requestAnimationFrame`-based focus attempt could fire before that
+  resize actually finished, landing a `.focus()` call on an input that
+  existed in the DOM but wasn't inside a properly-sized, properly-focused
+  window yet -- looked focused, silently ate no keystrokes, matching the
+  reported "types nothing until Escape is pressed first" (any keypress
+  being enough to make Chromium re-settle real focus once the window had
+  actually finished growing by then anyway). Fixed by making `changeMode`
+  (App.tsx) return the real promise from the `window:setMode` IPC call --
+  which Electron's main process only resolves once `win.setBounds(...)`
+  has actually finished -- and having the modal await that before
+  focusing, with the original hardReset+confirm() fix layered on top
+  (one more `requestAnimationFrame` after the resize settles) rather than
+  replaced, since that's a separate async source entirely.
+- **"Level N/M" numbers flashing gold on every tab switch, not just real
+  purchases.** Reported as "clicking between tabs has the level/numbers
+  enlarge then shrink," narrowed down to Guild Hall/Vendors/Harvest
+  specifically. Root cause: every one of these displays used a
+  `key={level}` remount trick to replay a CSS pulse animation
+  (`.purchase-pulse`, a `scale(1.5) -> scale(1)` bounce) whenever a level
+  actually changed -- correct for a real purchase, but a CSS animation
+  plays on ANY fresh DOM insertion regardless of *why* the element was
+  inserted, and simply navigating away from a tab and back fully
+  unmounts/remounts the whole panel, which counts too. Found and fixed
+  in all 8 instances across 5 files (Guild Hall x2, Vendors x2, Harvest,
+  Prestige, Raids), not just the 3 tabs originally named -- Prestige's
+  renown perks and Raids' upgrades had the exact same bug. Fixed with a
+  new shared `usePulsesOnChange` batch hook (maxFlash.tsx) that tracks
+  each id's previous value via a ref and only flags a pulse on a genuine
+  change between two renders of the SAME mounted instance -- never on
+  first mount, regardless of starting value, same "prev === null never
+  fires" guard `useMaxFlash`/`useLevelUpFlash` already established.
+  Deliberately a *batch* hook (one call per component, an array in, an
+  `{id: boolean}` lookup out) rather than a hook called per-item inside
+  a `.map()` -- most of these panels render each card via a plain helper
+  function invoked in a loop, not a real per-item component instance, so
+  a per-item hook call would have violated the Rules of Hooks.
+
+**Visual consistency fixes:**
+
+- **Durability bars now always visible**, not just when a gear card is
+  expanded -- both equipped gear (`SlotCard`) and stash items
+  (`StashCard`) in `EquipmentPanel.tsx` show a compact bar in the
+  collapsed summary. The full "Durability X/Y" text stays in the
+  expanded detail (de-duplicated to text-only there, since the bar
+  itself is already visible above).
+- **Hero-name buttons** -- new `.hero-tab-chip` class, bigger than the
+  ordinary `.chip` it replaced (0.75rem/6-12px padding vs 0.625rem/3-6px)
+  and light purple, derived from each theme's own `--violet` via
+  `color-mix(in srgb, var(--violet) 55%, white)` rather than a fixed hex
+  -- stays theme-consistent across all 6 themes automatically, and reads
+  as clearly lighter than Crafting's plain `--violet`. Applied to both
+  instances found (Quests' hero tabs, Equipment's hero picker).
+- **Reset Guild button -> red.** New `.btn-danger` class, same
+  accent-button convention `.btn-green`/`.btn-purple` already established.
+- **9 upgrade-purchase buttons -> yellow.** New `.btn-yellow` class using
+  `--brass` (the game's existing gold accent, not a new hue). Applied
+  across Guild Hall (general upgrade Buy, facility Build), Vendors
+  (vendor-specific upgrade Buy, vendor Level Up), Harvest (tool Upgrade,
+  Warehouse Expand, Trade Route unlock), Prestige (renown perk Buy), and
+  Raids (raid upgrade Buy) -- deliberately excluding non-purchase
+  `btn-primary` uses (Retire, raid party commit, modal Close) and
+  ordinary shop item purchases (buying equipment/consumables), which
+  stay `btn-primary` since they're a different category of action.
+- **3 sub-tab switchers -> blue.** New `.btn-subtab` class using `--sky`
+  -- the one major accent color not already claimed by a button category
+  (green = bulk actions, purple = crafting, brass = upgrade purchases,
+  blood = destructive). Applied to Vendors' Blacksmith/Alchemist/
+  Enchanter switcher, Harvest's Fields/Warehouse switcher, and Raids'
+  Raids/Quartermaster's Den switcher.
+
+**Panel reorganization:**
+
+- **Collection moved from Inventory to Lore**, as a new third sub-tab
+  (Story Quests / Story Raids / **Collection**) alongside the two that
+  already existed there -- item-set discovery progress is a lore/
+  completionist record, same category as the other two, not day-to-day
+  gear management. Content and logic unchanged, just relocated; the
+  `ITEM_SETS` import dropped from `EquipmentPanel.tsx` since nothing
+  there needs it anymore.
+
+**Investigated, not fixed (flagged honestly rather than guessed at):**
+
+- **Scrap/Enhance/Enchant/Armour Infusion "overlapping item lists."**
+  Traced the shared `PickerModal` all four of these stations use --
+  confirmed the specific overlap bug already fixed there (an option
+  without an icon shoving its label into the wrong CSS grid column,
+  fixed for Armour Infusion's gem picker specifically per that fix's own
+  comment) is still in place and covers all four consistently, since
+  they all route through the same component. Checked the picker list's
+  own scroll/overflow bounds (properly capped and scrollable) and the
+  possibility of two pickers stacking (blocked by the full-screen
+  overlay each one renders behind). Couldn't find a second, distinct
+  overlap bug through static analysis -- may need a screenshot or exact
+  repro steps to pin down further, since this may already be resolved by
+  the earlier fix and just not yet visible to whoever reported it.
+
+**Notifications now actually route somewhere, not just log text:**
+
+- **Guide's "Go to" button existed but was wired to 1 of 88 notification
+  call sites.** The mechanism (`NotificationEntry.targetTab`, a "Go to"
+  button in the Notifications list) was already built, but `say()`'s
+  optional second argument went unused almost everywhere -- only the
+  GuidanceManager onboarding topics passed it. Also found and fixed
+  `GuidePanel.tsx`'s own `TAB_LABELS` table was stale (`shop`/`upgrades`
+  haven't been real tab ids since the Vendors restructure; `harvest`/
+  `hatchery` were missing entirely) -- factored into a new shared
+  `tabLabels.ts` so a second consumer (the new banner, below) can't
+  duplicate the same staleness risk. Wired `targetTab` into 15 more
+  call sites: Auto-Chain streak continue/stop/complete messages, quest
+  send/recall/Send-All-Idle confirmations (-> quests), raid commit (->
+  raids), recruiting and the out-of-slots message (-> heroes/guild),
+  crafting/enchant/infuse/scrap results (-> equipment/vendors), and
+  set-bonus unlocks (-> equipment). Deliberately left same-tab routine
+  confirmations ("Repaired.", "Sold.") unwired -- a Go-to link is
+  redundant when you're already on the tab that triggered the message.
+
+**New: header notification icon + unread badge + banner, built from
+scratch.**
+
+- **`GameState.notificationsSeenId: string | null`** (new field,
+  `SAVE_VERSION` 30 -> 31) -- the id of the newest notification the
+  player has actually acknowledged. Deliberately id-based (array
+  position), not timestamp-based -- an earlier version compared
+  `notification.timestamp > notificationsSeenAt`, which a direct runtime
+  check caught breaking whenever two notifications landed in the same
+  millisecond (the strict `>` silently swallowed the second one). Same
+  root cause and same fix shape as an already-fixed bug in this exact
+  codebase: Toast.tsx's own auto-dismiss timer used to break on two
+  toasts with identical text/timing for the identical reason (relying on
+  a value that isn't guaranteed unique at sub-millisecond precision) --
+  Toast's fix was a `seq` counter, this fix is the notification's own
+  already-unique `id`. Migration points at whatever's currently newest
+  in an existing save's log (not a fresh timestamp), so nobody sees a
+  jarring "100 unread" badge the moment they update.
+- **`engine.unreadNotificationCount`** (live getter) and
+  **`engine.markNotificationsSeen()`** -- the former counts array
+  position up to the last-seen id (or the full log if that id has since
+  aged out past the 100-entry cap); the latter points the boundary at
+  the current newest entry, called from three places: opening the
+  Guide's Notifications tab (a `useEffect` there, live -- stays cleared
+  even if a new notification arrives while the tab is open), clicking
+  the header icon, or clicking through a banner. Never called when a
+  banner simply times out -- that's what keeps a missed one counted.
+- **New `NotificationBanner.tsx`** -- pops in near the top of the window
+  the moment a genuinely new entry lands in the persistent notification
+  log, separate from the existing bottom-center `Toast` (which fires for
+  every `say()` call regardless of whether it's worth prominent
+  attention -- most toasts are routine confirmations). Detects "new" via
+  the same "prev === null on first mount, never fires" guard used
+  throughout this session (`useMaxFlash`, `useLevelUpFlash`,
+  `usePulsesOnChange`), so it never bannered whatever notification
+  already happened to be at the top of the log on mount. A CSS-only
+  fading countdown bar (`width: 100% -> 0%` over 5000ms, linear) handles
+  the visual; a plain `window.setTimeout` matching the same duration
+  handles the actual auto-dismiss. Clicking the banner (or its own "Go
+  to X" sub-label, if the notification has a `targetTab`) navigates
+  there and acknowledges it; an explicit close button also acknowledges
+  without navigating; letting it simply time out does neither, leaving
+  it counted as unread.
+- **Header icon + badge**, next to Renown in `MenuWindow.tsx` --
+  🔔 with a red count badge (capped display at "99+") that only renders
+  when the count is actually nonzero. Clicking navigates to the Guide
+  tab; since `GuidePanel` already defaults its own local sub-tab state
+  to `'notifications'` and fully remounts on every tab navigation
+  (confirmed this session while diagnosing the level-pulse bug above),
+  this always lands on the Notifications list with no extra pending-
+  sub-tab plumbing needed, unlike Hatchery's own more involved
+  "Go to Pets" mechanism.
+- **Found and fixed one more instance of the exact same class of bug
+  while building this**, before it ever shipped: `createInitialState
+  (now)` takes a `now` parameter that every other timestamp field
+  (`createdAt`, `lastSeen`) consistently uses, but the field was
+  originally written as `notificationsSeenAt: Date.now()` -- a fresh
+  wall-clock call instead of using that same parameter. Caught directly
+  by a runtime check comparing a fake seeded `now` against real
+  `Date.now()` output, not reasoned through after the fact. Fixed before
+  the id-based redesign made the underlying field moot anyway, but kept
+  as a reminder: this file's `createInitialState` has one `now` for a
+  reason, and any new timestamp-shaped field belongs on it.
+
+Verified: `npx tsc --noEmit` and a full `vite build` both pass clean,
+plus 5 runtime checks for the level-pulse fix (first-mount suppression,
+real-change detection, no-change/unchanged-value suppression, multi-item
+isolation, and the exact reported bug scenario reproduced directly) and
+11 for the notification system (unread counting from zero, incrementing
+correctly, `markNotificationsSeen` clearing it, an empty-log no-op, the
+migration default, and -- the one that actually caught the timestamp
+bug -- two notifications sharing an identical millisecond timestamp
+still counted correctly under the id-based redesign).
+
+### Quest result modal requiring an internal scroll on the companion window -- fixed
+Reported directly: the quest-completion popup shown while the tiny
+260x300 idle-companion window (not the full menu) is what's on screen
+needed an internal scroll just to reach its own dismiss button.
+Root cause: `QuestResultModal` is the one result modal that deliberately
+shows its full detail regardless of window size (unlike
+`ChainCompleteModal`/`RaidResultModal`/`HatchReadyModal`, which only
+show once the full menu is already open) -- a quest result is frequent
+enough that gating it behind opening the full menu first would be worse.
+But the card's content (reward burst, loot list, chain/level-up text,
+dismiss button) can easily run taller than the companion window itself,
+and `.modal`'s own `max-height: 100%; overflow-y: auto;` then forced an
+internal scroll to reach the button. Fixed the same way
+`GuildNamingModal` already requests more space: a new `onNeedsSpace`
+prop, called once per result (keyed on `result.questId`), resolving only
+once Electron's own window resize has actually finished -- the window
+now grows to fit the card, instead of the card needing to shrink or
+scroll to fit the window. `npx tsc --noEmit` and a full `vite build` both
+pass clean.
+
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**
   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
@@ -3530,6 +3753,34 @@ own separate folder.
   file sync, which is configured entirely in the Steamworks partner
   backend once a real App ID exists -- not an SDK integration the way
   achievements are. Revisit when actually setting up the Steam page.
+- **Consolidated: everything blocked on a real Steam App ID existing.**
+  Nothing here needs code today -- all of it is either partner-backend
+  configuration or a small, well-scoped follow-up once the account/App ID
+  side is actually in hand. Recorded together so nothing gets missed once
+  that happens:
+  - **Real Steamworks SDK integration.** Achievements are currently a
+    local stub, not talking to Steam at all -- needs an actual Electron
+    binding (e.g. `steamworks.js`) wired in once there's a real App ID to
+    initialize against. Cloud saves and DLC ownership checks (below) both
+    depend on this same integration landing, so it's the one prerequisite
+    everything else in this list waits on.
+  - **Steam Cloud saves setup** -- per the bullet above, partner-backend
+    config only, no code.
+  - **DLC pack registration.** Each cosmetic pack (see "DLC groundwork"
+    entries above) needs its own child App ID registered under the base
+    game in the Steamworks partner backend, plus its depot actually
+    containing that pack's files, before `KNOWN_DLC_PACKS` in
+    `DlcManager.ts` gets that pack's id added. `DlcManager.owns()` today
+    is gated purely by file presence (sufficient for cosmetic-only
+    content); swapping in a real `BIsDlcInstalled` check via the SDK
+    integration above is optional hardening, not required for the
+    groundwork already built to work.
+  - **Achievements** -- the existing local achievement popups/unlock
+    logic (`AchievementManager.ts`, `achievements.json`) need their ids
+    mapped to real Steam achievement ids in the partner backend, then the
+    unlock call swapped from the local stub to the real SDK call.
+  - **Steam leaderboards** (already in Brainstorming below) -- same
+    prerequisite; not otherwise scoped yet.
 
 ---
 
@@ -3591,3 +3842,15 @@ own separate folder.
   worth packaging even looks like. The technical groundwork for this is
   now built, ahead of any actual pack -- see "DLC groundwork -- built"
   in the main patch log above.
+- **Adventurer's idle animation has a weapon-out frame mixed into it** --
+  reported directly, not yet fixed: the base Adventurer class's idle
+  loop includes at least one frame with the weapon drawn, when idle
+  should read as idle only (no weapon out) the same way every other
+  class's idle animation already does. Waiting on the actual sprite
+  sheet files to be sent over before touching this -- recorded here so
+  it isn't lost in the meantime. Likely fix shape once the files are in
+  hand: either the source sheet's idle row needs trimming at import time
+  (`tools/import_characters.py`), or the frame count/range for
+  Adventurer's `idle` animation needs adjusting in the generated
+  `public/heroes/manifest.json` if the weapon-out frame is only a subset
+  of an otherwise-correct row.

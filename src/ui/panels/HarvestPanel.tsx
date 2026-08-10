@@ -11,7 +11,7 @@ import { HarvestManager } from '../../game/managers/HarvestManager';
 import { MaterialId } from '../../game/types';
 import { formatGold, formatMaterial } from '../../game/util';
 import { Ring } from './DashboardPanel';
-import { MaxFlash, useMaxFlash } from '../maxFlash';
+import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
 
 type SubTab = 'warehouse' | 'fields';
 
@@ -75,10 +75,10 @@ export function HarvestPanel() {
       </p>
 
       <div className="row wrap" style={{ gap: 8, marginBottom: 14 }}>
-        <button className={subTab === 'warehouse' ? 'btn-primary' : ''} onClick={() => setSubTab('warehouse')}>
+        <button className={`btn-subtab ${subTab === 'warehouse' ? 'on' : ''}`} onClick={() => setSubTab('warehouse')}>
           Warehouse
         </button>
-        <button className={subTab === 'fields' ? 'btn-primary' : ''} onClick={() => setSubTab('fields')}>
+        <button className={`btn-subtab ${subTab === 'fields' ? 'on' : ''}`} onClick={() => setSubTab('fields')}>
           Fields
         </button>
       </div>
@@ -232,17 +232,21 @@ function ToolUpgradeCard({ nodeId }: { nodeId: MaterialId }) {
   const maxed = cost === null;
   const { flashes, dismiss } = useMaxFlash([{ id: nodeId, name: tool.name, level, maxLevel: tool.maxLevel }]);
   const flash = flashes[nodeId];
+  // Same "only pulse on a real change, not on every tab-switch remount"
+  // fix as Guild Hall/Vendors -- see usePulsesOnChange's own doc comment
+  // in maxFlash.tsx.
+  const levelPulses = usePulsesOnChange([{ id: nodeId, value: level }]);
 
   return (
     <div className="card" style={{ marginBottom: 0 }}>
       <div className="spread">
         <span className="card-title">{tool.name}</span>
-        <span key={level} className="small muted purchase-pulse">Level {level}/{tool.maxLevel}</span>
+        <span className={`small muted ${levelPulses[nodeId] ? 'purchase-pulse' : ''}`}>Level {level}/{tool.maxLevel}</span>
       </div>
       <p className="card-flavour">
         +{tool.yieldBonusPerLevel} yield and a faster respawn per level. ({MATERIAL_BY_ID[nodeId].nodeName})
       </p>
-      <button className="btn-primary" disabled={maxed || state.gold < (cost ?? 0)} onClick={() => engine.upgradeHarvestTool(nodeId)}>
+      <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={() => engine.upgradeHarvestTool(nodeId)}>
         {maxed ? 'Fully upgraded' : `Upgrade · ${formatGold(cost ?? 0)}`}
       </button>
       {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(nodeId)} />}
@@ -286,7 +290,7 @@ function WarehouseTab() {
           </div>
         ))}
         <button
-          className="btn-primary"
+          className="btn-yellow"
           style={{ marginTop: 8 }}
           disabled={warehouseMaxed || state.gold < (warehouseCost ?? 0)}
           onClick={() => engine.upgradeWarehouse()}
@@ -321,7 +325,7 @@ function TradeRouteCard() {
           Opens a market for the guild&rsquo;s surplus materials. Without it, everything gathered has to be used,
           not sold.
         </p>
-        <button className="btn-primary" disabled={state.gold < TRADE_ROUTE_COST} onClick={() => engine.unlockTradeRoute()}>
+        <button className="btn-yellow" disabled={state.gold < TRADE_ROUTE_COST} onClick={() => engine.unlockTradeRoute()}>
           Open · {formatGold(TRADE_ROUTE_COST)}
         </button>
       </div>

@@ -65,7 +65,7 @@ const LEGENDARY_PARTICLES = [
  * and the effect below cancels any in-flight timeout from the one it
  * replaced rather than letting it fire against state it no longer owns.
  */
-export function QuestResultModal({ onViewLore }: { onViewLore?: () => void }) {
+export function QuestResultModal({ onViewLore, onNeedsSpace }: { onViewLore?: () => void; onNeedsSpace?: () => Promise<void> | void }) {
   const engine = useEngine();
   const { settings } = useSettings();
   const result = engine.lastResult;
@@ -76,10 +76,12 @@ export function QuestResultModal({ onViewLore }: { onViewLore?: () => void }) {
 
   if (!result || !settings.questResultPopups) return null;
 
-  return <QuestResultCard key={result.questId} result={result} engine={engine} onViewLore={onViewLore} />;
+  return <QuestResultCard key={result.questId} result={result} engine={engine} onViewLore={onViewLore} onNeedsSpace={onNeedsSpace} />;
 }
 
-function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; engine: GameEngine; onViewLore?: () => void }) {
+function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
+  result: QuestResult; engine: GameEngine; onViewLore?: () => void; onNeedsSpace?: () => Promise<void> | void;
+}) {
   const [dismissing, setDismissing] = useState(false);
   const timeoutRef = useRef<number | null>(null);
   const hasLegendary = result.loot.some((item) => item.rarity === 'legendary');
@@ -90,6 +92,26 @@ function QuestResultCard({ result, engine, onViewLore }: { result: QuestResult; 
   // does.
   const displayGold = useCountUp(result.gold, { from: 0, durationMs: 700 });
   const displayXp = useCountUp(result.xp, { from: 0, durationMs: 700 });
+
+  // This card renders full detail regardless of whether the idle
+  // companion window (260x300, see IDLE_SIZE in electron/main.ts) or the
+  // full menu is what's showing -- unlike ChainCompleteModal/
+  // RaidResultModal/HatchReadyModal, a quest result is frequent/routine
+  // enough that it shouldn't be gated behind the full menu being open
+  // already. But the companion window is small, and this card's content
+  // (reward burst, loot list, chain/level-up text, dismiss button) can
+  // easily run taller than it -- .modal's own `max-height: 100%;
+  // overflow-y: auto;` then forced the player to scroll INSIDE the tiny
+  // window just to reach the dismiss button, which was the reported bug.
+  // Fixed the same way GuildNamingModal already requests more space:
+  // `onNeedsSpace` resolves once Electron's own window resize has
+  // actually finished, so the window grows to fit the card instead of the
+  // card needing to shrink or scroll to fit the window. Once per result
+  // (mount), not on every re-render.
+  useEffect(() => {
+    void onNeedsSpace?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result.questId]);
 
   useEffect(() => () => {
     if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
