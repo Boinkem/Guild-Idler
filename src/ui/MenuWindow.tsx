@@ -139,7 +139,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   }, [engine, engine.requestedTab]);
 
   const Panel = ALL_TABS.find((t) => t.id === tab)!.Panel;
-  const { idleHeroes, eggsReady, brokenGear } = attentionCounts(engine.state);
+  const { idleHeroes, eggsReady, brokenGear, harvestReady } = attentionCounts(engine.state);
   // Nav gold/renown count up to a new value rather than snapping -- the
   // numeric equivalent of the .bar fill transition. No animation on first
   // mount/app launch (see useCountUp's own doc comment); only on values
@@ -210,6 +210,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
                     {t.id === 'quests' && idleHeroes > 0 ? <span className="tab-badge">{idleHeroes}</span> : null}
                     {t.id === 'hatchery' && eggsReady > 0 ? <span className="tab-badge">{eggsReady}</span> : null}
                     {t.id === 'equipment' && brokenGear > 0 ? <span className="tab-badge broken">{brokenGear}</span> : null}
+                    {t.id === 'harvest' && harvestReady > 0 ? <span className="tab-badge">{harvestReady}</span> : null}
                   </button>
                 ))}
             </div>

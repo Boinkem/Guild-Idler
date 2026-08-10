@@ -148,6 +148,36 @@ const SCHEMAS = {
       effect: { type: 'effect', required: true },
     },
   },
+  'materials': {
+    file: 'materials.json',
+    label: 'Materials',
+    idField: 'id',
+    // Only 4 entries (one per Harvest/Gathering node) -- migrated from a
+    // hardcoded TS array specifically so `icon` below could be set without
+    // hand-editing materials.ts directly, same reasoning the quest-chains
+    // migration had at a much bigger scale.
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      name: { type: 'string', required: true },
+      // Sub-tab label -- the node itself ("Quarry"), not the material noun
+      // ("Ore"). See MaterialDef.nodeName's own comment.
+      nodeName: { type: 'string', required: true },
+      description: { type: 'string', required: true },
+      glyph: { type: 'string', required: true },
+      // Single stable icon for static UI (Crafting's materials-needed
+      // list, Warehouse stock, scrap fly-up particles) -- falls back to
+      // glyph when unset, same convention/picker as equipment/consumables.
+      icon: { type: 'string', required: false, picker: 'icon' },
+      // Pool of filenames for the falling-item Harvest animation's own
+      // spawn-to-spawn variety -- deliberately separate from `icon` above
+      // and NOT under the shared item-icons picker, since these live under
+      // public/harvest-icons/ instead. Free-text list rather than a picker
+      // for that reason (no cross-folder picker support in this DevTool
+      // yet) -- same trade-off requiresChainId/dedicatedPetId elsewhere
+      // already accept.
+      icons: { type: 'string[]', required: false },
+    },
+  },
   'pets': {
     file: 'pets.json',
     label: 'Pets',

@@ -361,8 +361,20 @@ export function EquipmentPanel() {
         ))}
       </div>
 
-      <div className="section-heading">
-        Consumable Slots ({(hero.equippedConsumables ?? []).length}/{ModifierManager.consumableSlots(state)})
+      <div className="spread" style={{ alignItems: 'center' }}>
+        <div className="section-heading" style={{ marginBottom: 0 }}>
+          Consumable Slots ({(hero.equippedConsumables ?? []).length}/{ModifierManager.consumableSlots(state)})
+        </div>
+        {(hero.equippedConsumables ?? []).length < ModifierManager.consumableSlots(state) && (
+          <button
+            className="btn-green"
+            style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+            onClick={() => engine.equipBestConsumables(hero.id)}
+            title="Fill this hero's empty consumable slots with the best available potions"
+          >
+            Equip best
+          </button>
+        )}
       </div>
       <div className="item-card-grid">
         {Array.from({ length: ModifierManager.consumableSlots(state) }).map((_, i) => {

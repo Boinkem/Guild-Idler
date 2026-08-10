@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { EquipSlot } from '../game/types';
 
 /**
@@ -16,10 +17,19 @@ const CATEGORY_FALLBACK: Record<'gear' | 'consumable' | 'enchant' | 'gem', strin
 };
 
 function IconBox({ icon, size, fallback }: { icon?: string; size: number; fallback: string }) {
+  // Falls back to the glyph on a 404, not just when `icon` is unset --
+  // the common path for a brand-new material assigned an icon path in
+  // DevTool before the actual file has been dropped into item-icons/ yet
+  // (see MaterialIcon below), same "graceful degradation, never a broken
+  // image" HarvestGlyph already established for the Harvest scene's own
+  // spawn icons. Keyed on `icon` so switching to a different (working)
+  // icon path retries rather than staying stuck failed forever.
+  const [failed, setFailed] = useState(false);
+  const showImage = icon && !failed;
   return (
     <div className="item-icon" style={{ width: size, height: size, fontSize: Math.round(size * 0.55) }}>
-      {icon
-        ? <img src={`./item-icons/${icon}`} alt="" />
+      {showImage
+        ? <img key={icon} src={`./item-icons/${icon}`} alt="" onError={() => setFailed(true)} />
         : <span aria-hidden="true">{fallback}</span>}
     </div>
   );
@@ -37,4 +47,13 @@ export function ConsumableIcon({ icon, glyph, size = 40 }: { icon?: string; glyp
 /** Falls back to a per-category glyph (gear/consumable/enchant/gem) when a recipe has no icon assigned. */
 export function RecipeIcon({ icon, category, size = 40 }: { icon?: string; category: 'gear' | 'consumable' | 'enchant' | 'gem'; size?: number }) {
   return <IconBox icon={icon} size={size} fallback={CATEGORY_FALLBACK[category]} />;
+}
+
+/** Falls back to the material's own glyph when no icon is assigned yet --
+ *  same shape as ConsumableIcon. Used for static/stable material displays
+ *  (Crafting's materials-needed list, Warehouse stock, scrap fly-up
+ *  particles) -- NOT the Harvest scene's own falling-item art, which
+ *  uses HarvestGlyph/harvestIconFor's separate spawn-variety pool instead. */
+export function MaterialIcon({ icon, glyph, size = 40 }: { icon?: string; glyph: string; size?: number }) {
+  return <IconBox icon={icon} size={size} fallback={glyph} />;
 }

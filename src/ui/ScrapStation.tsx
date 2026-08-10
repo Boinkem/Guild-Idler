@@ -1,10 +1,11 @@
-import { useState, CSSProperties } from 'react';
+import { useEffect, useRef, useState, CSSProperties } from 'react';
 import { useEngine } from './useEngine';
 import { EquipmentManager } from '../game/managers/EquipmentManager';
 import { scrapIconFor } from '../game/data/elements';
 import { ItemIcon } from './icons';
 import { PickerModal, SlotBox } from './CraftingStation';
 import type { PickerOption, Rect } from './CraftingStation';
+import { useCountUp } from './useCountUp';
 
 /** Hand-measured against scrap.png's own 1402x1122 canvas, same convention
  *  every other station's SLOT_RECT already uses. */
@@ -15,6 +16,13 @@ const BURST_PARTICLES = [
   { dx: 10, dy: -84, rot: 10, delay: 40 },
   { dx: 32, dy: -58, rot: 18, delay: 90 },
 ];
+
+/** How long the icon takes to fly from the item slot to the corner Scrap
+ *  counter -- also when the counter's own arrival flash fires, so the two
+ *  feel connected rather than the flash firing on a timer unrelated to
+ *  when the icon actually gets there. */
+const FLY_MS = 650;
+const FLASH_MS = 550;
 
 /**
  * Breaks an owned item down into Scrap -- moved here from a per-item
@@ -31,6 +39,26 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
   const [targetUid, setTargetUid] = useState('');
   const [openPicker, setOpenPicker] = useState(false);
   const [burst, setBurst] = useState<{ key: number; gained: number; icon: string } | null>(null);
+  const [flight, setFlight] = useState<{ key: number; dx: number; dy: number; icon: string } | null>(null);
+  const [counterFlash, setCounterFlash] = useState(false);
+
+  // Counts up toward the new Scrap total rather than snapping -- state.scrap
+  // is already updated by the time this renders (engine.scrapItem runs
+  // synchronously in handleScrap below), so this starts climbing the same
+  // moment the flight particle starts its own travel.
+  const displayScrap = useCountUp(state.scrap);
+
+  // originRef anchors the flight's real starting point (the item slot's
+  // center) for measurement only -- always rendered, not just while
+  // bursting, so it's already mounted and measurable the instant a scrap
+  // actually happens. counterRef is the actual on-screen Scrap counter in
+  // the header. Both are measured live via getBoundingClientRect rather
+  // than a hardcoded dx/dy (like BURST_PARTICLES' small local pop still
+  // uses) because the real on-screen distance between them depends on
+  // this modal's rendered size, which isn't fixed the way SLOT_RECT's own
+  // percentage-based position within the scene is.
+  const originRef = useRef<HTMLDivElement>(null);
+  const counterRef = useRef<HTMLSpanElement>(null);
 
   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
   const item = found?.item;
@@ -57,14 +85,34 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
     engine.scrapItem(item.uid);
     const now = Date.now();
     setBurst({ key: now, gained, icon: scrapIconFor(now) });
+    if (originRef.current && counterRef.current) {
+      const originRect = originRef.current.getBoundingClientRect();
+      const targetRect = counterRef.current.getBoundingClientRect();
+      const dx = (targetRect.left + targetRect.width / 2) - (originRect.left + originRect.width / 2);
+      const dy = (targetRect.top + targetRect.height / 2) - (originRect.top + originRect.height / 2);
+      setFlight({ key: now, dx, dy, icon: scrapIconFor(now + 1) });
+    }
     setTargetUid('');
   }
+
+  // Flashes the counter once the flight particle actually lands, timed to
+  // FLY_MS rather than firing immediately -- so the flash reads as "it
+  // arrived" rather than going off before the icon visibly gets there.
+  useEffect(() => {
+    if (!flight) return undefined;
+    const arrive = window.setTimeout(() => setCounterFlash(true), FLY_MS);
+    const clear = window.setTimeout(() => setCounterFlash(false), FLY_MS + FLASH_MS);
+    return () => { window.clearTimeout(arrive); window.clearTimeout(clear); };
+  }, [flight]);
 
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal craft-station-modal" onClick={(e) => e.stopPropagation()}>
         <div className="spread" style={{ marginBottom: 8 }}>
           <span className="card-title">Scrap</span>
+          <span ref={counterRef} className={`tiny scrap-counter ${counterFlash ? 'flash' : ''}`}>
+            ⚙ {displayScrap}
+          </span>
           <button onClick={onClose}>Close</button>
         </div>
 
@@ -77,6 +125,21 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
               onOpen={() => setOpenPicker(true)}
             />
           </div>
+
+          {/* Invisible, always mounted (not just while bursting) so it's
+              already measurable the instant a scrap happens -- see
+              handleScrap's getBoundingClientRect call. Marks the flight's
+              real starting point: the item slot's own center. */}
+          <div
+            ref={originRef}
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              left: `${SLOT_RECT.left + SLOT_RECT.width / 2}%`,
+              top: `${SLOT_RECT.top + SLOT_RECT.height / 2}%`,
+              width: 1, height: 1,
+            }}
+          />
 
           {/* Pops from the item's own slot and fades away -- same
               collect-burst/collect-particle convention Harvest catches
@@ -114,6 +177,30 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
                 </span>
               ))}
             </div>
+          )}
+
+          {/* The actual "flies up and over to the corner counter" particle
+              -- separate from the local burst above, which stays as
+              in-place flavor. This one travels the real measured distance
+              to counterRef (see handleScrap), landing exactly on the
+              Scrap counter regardless of modal size, and its arrival is
+              what triggers the counter's own flash (see the useEffect
+              above, timed to FLY_MS). */}
+          {flight && (
+            <span
+              key={flight.key}
+              className="scrap-fly-to-counter"
+              aria-hidden="true"
+              style={{
+                left: `${SLOT_RECT.left + SLOT_RECT.width / 2}%`,
+                top: `${SLOT_RECT.top + SLOT_RECT.height / 2}%`,
+                '--fly-dx': `${flight.dx}px`,
+                '--fly-dy': `${flight.dy}px`,
+                animationDuration: `${FLY_MS}ms`,
+              } as CSSProperties}
+            >
+              <img src={`./item-icons/${flight.icon}`} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
+            </span>
           )}
         </div>
 

@@ -1044,6 +1044,50 @@ export class GameEngine {
   }
 
   /**
+   * Fills each of a hero's EMPTY consumable slots with the highest-cost
+   * owned consumable still actually available -- the bulk counterpart to
+   * picking one slot at a time. `cost` stands in for "how good it is" the
+   * same way rarity does for gear (consumables have no rarity of their
+   * own), highest first. Only fills gaps; never swaps out or unequips
+   * something already slotted, unlike equipBestGear's tie-breaking --
+   * there's no obvious "better" ordering between two already-chosen
+   * consumables to justify displacing a manual pick the way a higher Gear
+   * Score item justifies displacing worse gear. Availability is computed
+   * the same "owned minus reserved on this hero or any other" way the
+   * manual per-slot picker already does (EquipmentPanel's own
+   * `equippedElsewhereCount`), including reservations made earlier in
+   * this same batch, so it can never try to equip more of one consumable
+   * than the guild actually owns. Returns how many slots were filled.
+   */
+  equipBestConsumables(heroId: string): number {
+    const hero = this.hero(heroId);
+    if (!hero) return 0;
+    const maxSlots = ModifierManager.consumableSlots(this.state);
+    const working = [...(hero.equippedConsumables ?? [])];
+    let filled = 0;
+    while (working.length < maxSlots) {
+      const reservedElsewhere = (defId: string) => this.state.heroes.reduce((sum, other) => {
+        const list = other.id === hero.id ? working : (other.equippedConsumables ?? []);
+        return sum + list.filter((id) => id === defId).length;
+      }, 0);
+      const available = InventoryManager.owned(this.state)
+        .filter(({ def }) => reservedElsewhere(def.id) < InventoryManager.count(this.state, def.id))
+        .sort((a, b) => b.def.cost - a.def.cost);
+      if (available.length === 0) break;
+      working.push(available[0].def.id);
+      filled++;
+    }
+    if (filled > 0) {
+      hero.equippedConsumables = working;
+      this.say(`Equipped ${filled} consumable${filled === 1 ? '' : 's'} on ${hero.name}.`);
+      void this.saveNow();
+    } else {
+      this.say(`Nothing spare to equip on ${hero.name}.`);
+    }
+    return filled;
+  }
+
+  /**
    * Commits a party to a raid. Deliberately no Auto-Chain interaction at
    * all -- raids never auto-continue into anything, on purpose, same
    * reasoning as chain quests being excluded from pickBestQuest: this is a

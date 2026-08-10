@@ -16,6 +16,19 @@ export interface MaterialDef {
   /** Single-glyph fallback shown wherever a material icon can't be sourced yet. */
   glyph: string;
   /**
+   * A single stable icon representing this material wherever a static,
+   * non-animated reference is needed -- the Crafting overlay's materials-
+   * needed indicator, the Warehouse's stock display, and the scrap ->
+   * material-counter fly-up particles. Relative path under
+   * `public/item-icons/`, same convention as EquipmentDef.icon/
+   * ConsumableDef.icon/RecipeDef.icon -- falls back to `glyph` when unset
+   * (see MaterialIcon in icons.tsx). Deliberately separate from `icons`
+   * below: that pool is for spawn-to-spawn *variety* in the falling-item
+   * animation, this is for *consistency* everywhere else a material needs
+   * to be recognizable as the same thing at a glance.
+   */
+  icon?: string;
+  /**
    * Pool of real icon filenames for this material, read from
    * `public/harvest-icons/<filename>` -- one is picked at random per spawn
    * (see `harvestIconFor` below), so the same node doesn't show the exact
@@ -29,54 +42,18 @@ export interface MaterialDef {
   icons?: string[];
 }
 
-export const MATERIALS: MaterialDef[] = [
-  {
-    id: 'ore', name: 'Ore', nodeName: 'Quarry',
-    description: 'Raw stone and metal, hauled up from the guild\u2019s own quarry pit.',
-    glyph: '\u26cf\ufe0f',
-    icons: ['Ore1.png', 'Ore2.png', 'Ore3.png'],
-  },
-  {
-    id: 'timber', name: 'Timber', nodeName: 'Woodyard',
-    description: 'Felled and split lumber, stacked to season by the woodyard.',
-    glyph: '\ud83e\udeb5',
-    icons: ['Wood1.png', 'Wood2.png', 'Wood3.png'],
-  },
-  {
-    id: 'herbs', name: 'Herbs', nodeName: 'Herb Garden',
-    description: 'Cuttings and roots from the herb garden -- the backbone of every potion.',
-    glyph: '\ud83c\udf3f',
-    icons: ['Herb1.png', 'Herb2.png', 'Herb3.png'],
-  },
-  {
-    id: 'fish', name: 'Food', nodeName: 'Provisions Dock',
-    // Broadened from a fish-only theme, per direct request -- "fish" as a
-    // material was too narrow to build varied recipe flavor around (a
-    // hunter's ration or a forager's bundle shouldn't have to pretend
-    // they're made of fish just because that's the only food material
-    // that exists). The underlying id stays 'fish' on purpose -- renaming
-    // it would mean migrating every existing save's `materials.fish`,
-    // `harvestNodes.fish`, and `harvestTools.fish` keys for a change
-    // that's purely cosmetic, not worth the risk. The dock itself (and
-    // its shared spot in fields.jpg) still visually reads as a fishing
-    // wharf -- read as "where the guild's whole food supply comes
-    // through," not just the catch itself, fish included but not
-    // exclusive.
-    description: 'Whatever the day\u2019s supply run brings in -- the catch off the dock, salted meat, foraged berries. Anything that keeps a hero fed on the road.',
-    glyph: '\ud83e\udffa',
-    // Real art landed as Fish1/Fish2/fish3.png (note the inconsistent
-    // case on the third file -- kept exactly as delivered rather than
-    // renamed, since the filename here has to match the actual file on
-    // disk byte-for-byte on a case-sensitive deploy target even though a
-    // typical Windows dev machine won't notice the mismatch locally).
-    // Only 3 icons, not the original 4-icon "Food1-4.png" placeholder
-    // name list this was scaffolded with before any real art existed --
-    // the icon filenames don't need to match the material's display name
-    // ("Food"), same as ore/timber/herbs' own icon files don't spell out
-    // "Ore"/"Timber"/"Herb" as a requirement, just a coincidence they do.
-    icons: ['Fish1.png', 'Fish2.png', 'fish3.png'],
-  },
-];
+/**
+ * Materials live in json/materials.json so they can be edited via
+ * tools/devtool without touching TypeScript -- same reasoning and same
+ * pattern equipment.ts/consumables.ts already use for their own data.
+ * Only 4 entries today (one per Harvest node), but a hardcoded TS array
+ * meant `icon` above could only ever be set by hand-editing this file
+ * directly; DevTool's schema-driven UI (adding a `materials` entry to
+ * SCHEMAS in server.mjs was the only change needed -- the tab itself is
+ * generated automatically from that) picks this straight up.
+ */
+import materialsJson from './json/materials.json';
+export const MATERIALS: MaterialDef[] = materialsJson as MaterialDef[];
 
 export const MATERIAL_BY_ID: Record<MaterialId, MaterialDef> = Object.fromEntries(
   MATERIALS.map((m) => [m.id, m]),

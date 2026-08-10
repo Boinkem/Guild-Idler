@@ -2658,21 +2658,25 @@ any particular order.
 - ~~**Ready-to-collect digest** (Dashboard) -- a glanceable "needs
   attention" card instead of hunting across tabs.~~ -- done, see
   "Attention digest -- built" below.
-- **Sort/filter contracts by success chance or reward** -- the quest
+- ~~**Sort/filter contracts by success chance or reward** -- the quest
   board only sorts by difficulty tier ascending today; once a hero's
   board gets crowded (freeze slot + reroll in play) a value-based sort
-  would help more.
-- **Equip best consumable** -- same one-click idea as Equip Best Gear,
-  for a hero's consumable slots instead of gear slots.
-- **"Materials needed" indicator** on the Crafting overlay -- show what's
+  would help more.~~ -- done, see "Four QOL items -- built" below.
+- ~~**Equip best consumable** -- same one-click idea as Equip Best Gear,
+  for a hero's consumable slots instead of gear slots.~~ -- done, see
+  "Four QOL items -- built" below.
+- ~~**"Materials needed" indicator** on the Crafting overlay -- show what's
   missing (and how much) for a recipe the player can't afford yet,
-  instead of just disabling the button with no explanation.
-- **A "ready to collect" badge on the Harvest tab itself** -- distinct
-  from the Dashboard digest above; the fall/click mechanic is easy to
-  miss from another tab. Not attempted this round: Harvest's spawn state
-  looked like client-side animation state rather than something tracked
-  in persisted `GameState`, so this would need its own investigation
-  before it's clear how cheap or expensive it'd be to surface a count.
+  instead of just disabling the button with no explanation.~~ -- done,
+  see "Materials icons + Crafting indicator + Scrap fly-to-counter --
+  built" below.
+- ~~**A "ready to collect" badge on the Harvest tab itself**~~ -- done,
+  see "Four QOL items -- built" below. Correction to this bullet's own
+  premise: `HarvestNodeState.pending` turned out to already be fully
+  persisted `GameState` (ticked forward in `GameEngine.refreshWorld`,
+  same as the quest board), not client-side animation state as guessed
+  here -- the earlier "would need its own investigation" note was overly
+  cautious; the actual investigation took minutes once looked at directly.
 - ~~**Extend nav tab badges** (Hatchery + Equipment) -- the idle-heroes
   badge already existed on Quests; extend the same pattern to eggs ready
   and broken gear.~~ -- done, see "Attention nav badges -- built" below.
@@ -3049,6 +3053,115 @@ time midpoint, and a decreasing target working the same as an
 increasing one), the offline report's cross-source legendary detection
 (quest-only vs. raid-only), and its levelsGained summation.
 
+### Materials icons + Crafting indicator + Scrap fly-to-counter -- built
+Three connected pieces from the same conversation, all aimed at the
+materials/crafting economy having no real visual feedback loop:
+
+**Materials are now DevTool-editable.** `MATERIALS` lived as a hardcoded
+TS array (`src/game/data/materials.ts`) -- fine for the 4 fixed entries
+themselves, but it meant a new `icon` field (see below) could only ever
+be set by hand-editing that file directly, unlike equipment/consumables/
+recipes which have all been JSON+DevTool-editable for a while. Migrated
+to `src/game/data/json/materials.json`, same import-and-retype pattern
+`equipment.ts`/`consumables.ts` already use for their own data, and added
+a `materials` entry to the DevTool's `SCHEMAS` (`tools/devtool/server.mjs`)
+-- confirmed the DevTool's frontend generates its tab list directly from
+`Object.keys(state.schema)`, so this was the only change needed; no
+`app.js` edits. `harvestIconFor`, `MATERIAL_BY_ID`, `NODE_ORDER`, and
+`FEEDABLE_MATERIALS` all carried over unchanged.
+
+**New stable `icon` field, distinct from the existing spawn-variety
+pool.** `MaterialDef.icons: string[]` already existed (random pick per
+Harvest spawn, for visual variety) but there was no single, stable icon
+to represent a material in a static UI context -- the Crafting overlay's
+new indicator below, Warehouse stock rows, the Scrap counter. Added
+`icon?: string`, same convention as `EquipmentDef.icon`/
+`ConsumableDef.icon` (relative path under `public/item-icons/`, falls
+back to `glyph` when unset), with its own DevTool `picker: 'icon'` entry
+-- browses the same shared `item-icons/` folder those already do, no new
+picker endpoint needed. New `MaterialIcon` component in `icons.tsx`,
+same shape as the existing `ConsumableIcon`. Also gave the shared
+`IconBox` (used by every icon component) an `onError` fallback -- it
+previously assumed an assigned `icon` path always resolves to a real
+file, which held for equipment/consumables since most already have real
+art, but won't hold for materials starting out with DevTool-assigned
+paths and no files yet. A failed load now falls back to the glyph
+instead of showing a broken image, keyed on the icon path so switching
+to a working one retries rather than staying stuck failed.
+
+**Crafting overlay materials-needed indicator.** The old display was one
+flat sentence ("2 Ore + 1 Timber + 40 gold") with no indication of what
+was actually missing without doing the subtraction yourself. Replaced in
+`CraftingStation.tsx` with a per-requirement row: each material's icon
+(new `MaterialIcon`) next to a `have/need` count, colored green when
+covered and red when short, same treatment extended to Scrap and gold.
+
+**Scrap fly-to-counter animation.** The specific scenario described:
+scrapping an item should send its gained resource flying to a visible
+counter, with that counter counting up and flashing on arrival. Built
+in `ScrapStation.tsx`: a live "⚙ Scrap" counter now sits in the modal's
+own header (using `useCountUp` from the engagement-review round --
+starts climbing toward the new total the instant `engine.scrapItem`
+updates `state.scrap`), and a new flight particle travels from the
+scrapped item's slot to that counter. The travel distance is measured
+live via `getBoundingClientRect()` on an invisible origin anchor (always
+mounted at the slot's center, not just while a burst is playing, so it's
+measurable the instant a scrap happens) and the counter itself, rather
+than a hardcoded pixel offset -- the existing small local burst particles
+use a fixed offset because they're a small in-place pop that doesn't
+need to land anywhere specific, but this one has to actually arrive at a
+real on-screen element regardless of how large the modal renders. The
+counter's arrival flash (`.scrap-counter.flash`, a brief gold pulse) is
+timed to `FLY_MS` (650ms) rather than firing immediately, so it reads as
+"the icon just landed" rather than an unrelated timer.
+
+Verified together: `npx tsc --noEmit` and a full `vite build` both pass
+clean, the DevTool server's own syntax checks clean, and 5 runtime
+checks confirm the JSON migration preserved every entry (including the
+Fish material's deliberately-lowercase `fish3.png` filename) and that no
+material has an `icon` set yet, matching the intended "placeholder now,
+fill in later via DevTool" starting state.
+
+### Four QOL items -- built
+The remaining open QOL backlog items, all four in one pass:
+
+- **Sort quest board by success chance or reward.** `QuestPanel.tsx`
+  gained a `sortMode` dropdown (Tier / Best odds / Best reward) next to
+  Reroll. Odds sort uses the same `QuestManager.previewSuccess` the
+  board's own preview text already computes per-offer; reward sorts on
+  `rewardGold` directly. Tier (difficulty-ascending) stays the default,
+  matching prior behavior exactly when untouched.
+- **Equip Best Consumables.** New `engine.equipBestConsumables(heroId)`,
+  the bulk counterpart to picking one consumable slot at a time. Only
+  fills empty slots -- unlike Equip Best Gear, there's no obvious
+  "better" ordering between two already-chosen consumables (no rarity
+  axis the way gear has) to justify displacing a manual pick, so this
+  never swaps out something already equipped. Consumable "quality" stands
+  in as `cost`, highest first. Availability is computed the exact same
+  "owned minus reserved on this hero or any other" way the manual picker
+  in `EquipmentPanel.tsx` already did (`equippedElsewhereCount`), extended
+  to also account for reservations made earlier in the same batch, so it
+  can never try to equip more of one consumable than the guild actually
+  owns. New "Equip best" button next to the Consumable Slots heading,
+  only shown when there's an empty slot to fill.
+- **Harvest ready-to-collect badge.** Turned out to be a non-issue rather
+  than the investigation the backlog note expected:
+  `HarvestNodeState.pending` is already fully persisted `GameState`,
+  ticked forward in `GameEngine.refreshWorld` the same way the quest
+  board is -- a non-null reading is always genuinely still catchable,
+  since `refreshWorld` already clears it back to null the instant it
+  expires. Added `harvestReady` to the shared `attentionCounts()` helper
+  (counts nodes with a live pending spawn across all 4), wired into a new
+  Harvest nav tab badge (`MenuWindow.tsx`, same `.tab-badge` pattern the
+  other three tabs already use) and a new line in the Dashboard's
+  "Needs attention" digest.
+
+Verified together: `npx tsc --noEmit` and a full `vite build` both pass
+clean, plus 11 runtime checks covering both sort modes' actual ordering,
+Equip Best Consumables picking the highest-cost item first and never
+over-equipping beyond what's owned, and `harvestReady` counting correctly
+across 0/1/2/3 simultaneously-pending nodes.
+
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**
   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
@@ -3148,3 +3261,14 @@ increasing one), the offline report's cross-source legendary detection
 - **Steam leaderboards** -- mentioned early as a distinct, larger feature;
   the Guild Rank tooltip in the Lore tab was deliberately worded to become
   literally true if this ever ships, without needing a rewrite.
+- **Post-launch DLC strategy** -- direction set for whenever this reaches
+  Steam, not scoped or scheduled yet. Base game stays $6.99 with free
+  quest-chain/feature drops (matches the pricing already locked in the
+  project brief); paid DLC is planned to be cosmetic-only -- skins, pets,
+  recolours. New story content, mechanics, and systems are meant to stay
+  free forever rather than gated behind a purchase, on purpose -- the
+  monetization split is "pay for how your guild looks," not "pay to see
+  what happens next." No concrete DLC pack has been scoped yet (which
+  skins, which pets, bundling/pricing per pack) -- revisit once the base
+  game is actually on Steam and it's clear what the roster of cosmetics
+  worth packaging even looks like.

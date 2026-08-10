@@ -7,7 +7,7 @@ import { CRAFTING_RECIPES } from '../game/data/craftingRecipes';
 import { MATERIAL_BY_ID } from '../game/data/materials';
 import { CraftingRecipeDef, MaterialId, Modifiers, Stats } from '../game/types';
 import { formatGold, MOD_LABEL, STAT_LABEL } from '../game/util';
-import { RecipeIcon, ItemIcon } from './icons';
+import { RecipeIcon, ItemIcon, MaterialIcon } from './icons';
 
 type Category = CraftingRecipeDef['category'];
 
@@ -418,14 +418,6 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
     </div>
   );
 
-  const materialCostLine = recipe
-    ? [
-      ...Object.entries(recipe.materialCost).map(([id, amt]) => `${amt} ${MATERIAL_BY_ID[id as MaterialId].name}`),
-      ...(recipe.scrapCost ? [`${recipe.scrapCost} Scrap`] : []),
-      `${formatGold(recipe.goldCost)} gold`,
-    ].join(' + ')
-    : null;
-
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal craft-station-modal" onClick={(e) => e.stopPropagation()}>
@@ -437,9 +429,43 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
         {scene}
 
         {recipe && (
-          <p className="tiny muted" style={{ margin: '8px 0' }}>
-            {recipe.name} &mdash; {materialCostLine}
-          </p>
+          <div style={{ margin: '8px 0' }}>
+            <p className="tiny muted" style={{ margin: '0 0 4px' }}>{recipe.name}</p>
+            {/* Per-requirement icon + have/need count, color-coded --
+                replaces what used to be a single flat sentence
+                ("2 Ore + 1 Timber + 40 gold") with something that shows
+                what's actually missing (and how much) at a glance, rather
+                than making the player do the subtraction themselves or
+                open the materials picker just to see a have/need number
+                that picker already computed internally. */}
+            <div className="row wrap" style={{ gap: 10, alignItems: 'center' }}>
+              {materialIds.map((id) => {
+                const material = MATERIAL_BY_ID[id];
+                const need = recipe.materialCost[id] ?? 0;
+                const have = state.materials[id] ?? 0;
+                const short = have < need;
+                return (
+                  <span
+                    key={id}
+                    className="row"
+                    style={{ gap: 4, alignItems: 'center' }}
+                    title={`${material.name}: have ${have}, need ${need}`}
+                  >
+                    <MaterialIcon icon={material.icon} glyph={material.glyph} size={20} />
+                    <span className={`tiny ${short ? 'bad' : 'good'}`}>{have}/{need}</span>
+                  </span>
+                );
+              })}
+              {!!recipe.scrapCost && (
+                <span className={`tiny ${state.scrap < recipe.scrapCost ? 'bad' : 'good'}`}>
+                  ⚙ {state.scrap}/{recipe.scrapCost}
+                </span>
+              )}
+              <span className={`tiny ${state.gold < recipe.goldCost ? 'bad' : 'good'}`}>
+                ◆ {formatGold(state.gold)}/{formatGold(recipe.goldCost)}
+              </span>
+            </div>
+          </div>
         )}
         {!recipe && (
           <p className="tiny muted" style={{ margin: '8px 0' }}>

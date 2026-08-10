@@ -22,7 +22,7 @@ import { formatGold, formatNumber } from '../../game/util';
 function AttentionDigest() {
   const engine = useEngine();
   const state = engine.state;
-  const { idleHeroes, eggsReady, brokenGear } = attentionCounts(state);
+  const { idleHeroes, eggsReady, brokenGear, harvestReady } = attentionCounts(state);
 
   const items: { key: string; label: string; tab: string }[] = [];
   if (idleHeroes > 0) {
@@ -46,6 +46,13 @@ function AttentionDigest() {
       tab: 'equipment',
     });
   }
+  if (harvestReady > 0) {
+    items.push({
+      key: 'harvest',
+      label: `${harvestReady} Harvest node${harvestReady === 1 ? '' : 's'} ready to collect`,
+      tab: 'harvest',
+    });
+  }
 
   if (items.length === 0) return null;
 
@@ -60,7 +67,7 @@ function AttentionDigest() {
             style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
             onClick={() => engine.requestTab(item.tab)}
           >
-            Go to {item.tab === 'quests' ? 'Quests' : item.tab === 'hatchery' ? 'Hatchery' : 'Inventory'}
+            Go to {item.tab === 'quests' ? 'Quests' : item.tab === 'hatchery' ? 'Hatchery' : item.tab === 'harvest' ? 'Harvest' : 'Inventory'}
           </button>
         </div>
       ))}

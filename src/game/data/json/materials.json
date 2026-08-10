@@ -1,0 +1,34 @@
+[
+  {
+    "id": "ore",
+    "name": "Ore",
+    "nodeName": "Quarry",
+    "description": "Raw stone and metal, hauled up from the guild\u2019s own quarry pit.",
+    "glyph": "\u26cf\ufe0f",
+    "icons": ["Ore1.png", "Ore2.png", "Ore3.png"]
+  },
+  {
+    "id": "timber",
+    "name": "Timber",
+    "nodeName": "Woodyard",
+    "description": "Felled and split lumber, stacked to season by the woodyard.",
+    "glyph": "\ud83e\udeb5",
+    "icons": ["Wood1.png", "Wood2.png", "Wood3.png"]
+  },
+  {
+    "id": "herbs",
+    "name": "Herbs",
+    "nodeName": "Herb Garden",
+    "description": "Cuttings and roots from the herb garden -- the backbone of every potion.",
+    "glyph": "\ud83c\udf3f",
+    "icons": ["Herb1.png", "Herb2.png", "Herb3.png"]
+  },
+  {
+    "id": "fish",
+    "name": "Food",
+    "nodeName": "Provisions Dock",
+    "description": "Whatever the day\u2019s supply run brings in -- the catch off the dock, salted meat, foraged berries. Anything that keeps a hero fed on the road.",
+    "glyph": "\ud83e\udffa",
+    "icons": ["Fish1.png", "Fish2.png", "fish3.png"]
+  }
+]

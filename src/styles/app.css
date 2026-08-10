@@ -862,6 +862,46 @@ button:focus-visible, [tabindex]:focus-visible {
   color: var(--brass-dim);
   text-shadow: 0 0 8px color-mix(in srgb, var(--brass-dim) 70%, transparent);
 }
+/* The single particle that actually travels to the corner Scrap counter
+   (ScrapStation.tsx) -- deliberately its own class, not .collect-particle,
+   since it needs a real measured travel distance (--fly-dx/--fly-dy, set
+   inline from a live getBoundingClientRect diff) rather than a small fixed
+   local pop. Positioned absolutely at the item slot's own center (left/top
+   set inline to match SLOT_RECT) and animates outward from there. */
+.scrap-fly-to-counter {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 7;
+  animation-name: scrap-fly;
+  animation-timing-function: cubic-bezier(0.3, 0, 0.7, 1);
+  animation-fill-mode: forwards;
+}
+@keyframes scrap-fly {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  75% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--fly-dx)), calc(-50% + var(--fly-dy))) scale(0.35);
+  }
+}
+/* The corner counter itself (ScrapStation.tsx header) -- pulses gold the
+   moment the flight particle above actually lands (see FLY_MS-timed
+   useEffect in ScrapStation.tsx), so the flash reads as "arrived" rather
+   than firing on an unrelated timer. The number inside climbs via
+   useCountUp independently -- this class only handles the color/scale
+   pulse around it. */
+.scrap-counter { display: inline-block; }
+.scrap-counter.flash { animation: scrap-counter-flash 550ms ease-out; }
+@keyframes scrap-counter-flash {
+  0% { color: inherit; text-shadow: none; transform: scale(1); }
+  30% {
+    color: var(--brass);
+    text-shadow: 0 0 10px color-mix(in srgb, var(--brass) 80%, transparent);
+    transform: scale(1.3);
+  }
+  100% { color: inherit; text-shadow: none; transform: scale(1); }
+}
 /* Legendary loot's own star burst -- same fly-and-fade shape as every
    other collect-particle, but bigger and with a stronger glow so it
    visibly outranks an ordinary coin/XP particle rather than just being

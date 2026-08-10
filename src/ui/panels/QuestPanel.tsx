@@ -252,6 +252,12 @@ export function QuestPanel() {
   }, [state.heroes, selectedHeroId]);
   const selectedHero = state.heroes.find((h) => h.id === selectedHeroId) ?? state.heroes[0];
 
+  // How the contract board is currently ordered -- tier ascending was
+  // always the only option; once the freeze slot and reroll put more
+  // contracts in front of a player at once, sorting by what actually
+  // matters (odds, or payout) became worth having too.
+  const [sortMode, setSortMode] = useState<'tier' | 'success' | 'reward'>('tier');
+
   // This hero's own contract pool, sorted by difficulty tier ascending --
   // the closest board-offer analogue to "rarity", since a plain quest
   // offer has no rarity field of its own.
@@ -267,11 +273,17 @@ export function QuestPanel() {
   // board doesn't visibly change": the board really did rotate in state,
   // this memo just kept returning its stale cached value against an
   // unchanged Record reference.
-  const contractOffers = useMemo(
-    () => [...(state.questBoards[selectedHero.id] ?? [])]
-      .sort((a, b) => DIFFICULTY_ORDER.indexOf(a.difficulty) - DIFFICULTY_ORDER.indexOf(b.difficulty)),
-    [state.questBoards[selectedHero.id], selectedHero.id],
-  );
+  const contractOffers = useMemo(() => {
+    const offers = [...(state.questBoards[selectedHero.id] ?? [])];
+    if (sortMode === 'success') {
+      return offers.sort((a, b) => QuestManager.previewSuccess(state, selectedHero, b, [], now)
+        - QuestManager.previewSuccess(state, selectedHero, a, [], now));
+    }
+    if (sortMode === 'reward') {
+      return offers.sort((a, b) => b.rewardGold - a.rewardGold);
+    }
+    return offers.sort((a, b) => DIFFICULTY_ORDER.indexOf(a.difficulty) - DIFFICULTY_ORDER.indexOf(b.difficulty));
+  }, [state.questBoards[selectedHero.id], selectedHero, sortMode, now]);
 
   // Chain-stage offers are still guild-wide -- a chain's progress is
   // tracked once, not per hero, so every hero who's eligible for it sees
@@ -422,6 +434,19 @@ export function QuestPanel() {
           <div className="spread" style={{ alignItems: 'center' }}>
             <div className="section-heading" style={{ marginBottom: 0 }}>{selectedHero.name}'s Contracts</div>
             <div className="row" style={{ gap: 6 }}>
+              <select
+                value={sortMode}
+                onChange={(e) => setSortMode(e.target.value as typeof sortMode)}
+                title="Sort this hero's contracts"
+                style={{
+                  background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+                  color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.625rem',
+                }}
+              >
+                <option value="tier">Sort: Tier</option>
+                <option value="success">Sort: Best odds</option>
+                <option value="reward">Sort: Best reward</option>
+              </select>
               <button
                 className="btn-ghost"
                 style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
