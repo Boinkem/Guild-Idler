@@ -74,7 +74,7 @@
     "tier": "modest",
     "weight": 8,
     "kind": "goldFlat",
-    "goldAmount": 35,
+    "goldAmount": 15,
     "flavorText": "\"Don't spend it all,\" he says, handing over more than he clearly meant to."
   },
   {
@@ -118,7 +118,7 @@
     "tier": "good",
     "weight": 10,
     "kind": "scrap",
-    "scrapAmount": 10,
+    "scrapAmount": 4,
     "flavorText": "A box that rattles promisingly. \"Someone's old gear,\" he says. \"Don't ask.\""
   },
   {
@@ -126,13 +126,13 @@
     "tier": "good",
     "weight": 8,
     "kind": "equipment",
-    "itemId": "rusty_sword",
+    "itemId": "woodcutter_axe",
     "flavorText": "He looks personally offended having to hand over something that actually works."
   },
   {
     "id": "good_gear_uncommon",
     "tier": "good",
-    "weight": 5,
+    "weight": 2,
     "kind": "equipment",
     "itemId": "knights_blade",
     "flavorText": "\"That one's real,\" he says, sounding surprised himself."
@@ -140,7 +140,7 @@
   {
     "id": "jackpot_egg",
     "tier": "jackpot",
-    "weight": 4,
+    "weight": 2,
     "kind": "egg",
     "eggRarity": "rare",
     "flavorText": "He won't look you in the eye handing this one over. It's warm. It's definitely real."
@@ -148,7 +148,7 @@
   {
     "id": "jackpot_material_haul",
     "tier": "jackpot",
-    "weight": 3,
+    "weight": 7,
     "kind": "material",
     "materialId": "ore",
     "materialAmount": 40,
@@ -157,7 +157,7 @@
   {
     "id": "jackpot_gear_epic",
     "tier": "jackpot",
-    "weight": 3,
+    "weight": 1,
     "kind": "equipment",
     "itemId": "grasp_of_avarice",
     "flavorText": "For once, Grimsby has absolutely nothing sleazy to say. That's how you know it's good."

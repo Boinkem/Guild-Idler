@@ -2912,10 +2912,10 @@
     "id": "peddler.feeCostPerLevel",
     "label": "Grimsby: fee scaling per guild level",
     "category": "peddler",
-    "value": 2,
-    "default": 2,
+    "value": 0.5,
+    "default": 0.5,
     "min": 0,
-    "description": "Gold added to the card-pick fee per level of the guild's highest hero -- see PeddlerManager.feeCost."
+    "description": "Gold added to the card-pick fee per level of the guild's highest hero -- see PeddlerManager.feeCost. Deliberately gentle (0.5/level, not a round number) -- verified via direct EV-vs-fee simulation against the real card pool and real equipment values that this keeps the expected-loss ratio reasonably consistent (roughly 0.82 down to 0.49 EV/fee across levels 1-50) rather than swinging from a near-breakeven gamble early to a punishing one late, which a steeper per-level cost produced."
   },
   {
     "id": "peddler.tierWeight.bust",

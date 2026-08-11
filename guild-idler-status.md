@@ -4434,6 +4434,74 @@ the real fee). Zero console errors across every run. The bug above was
 caught by this same live-browser testing, not by code review -- static
 analysis had no way to catch a compositor-timing issue.
 
+### Grimsby: card-pool balance pass -- fixed a real net-positive gamble
+Direct follow-up on the "first pass, not a balance pass" caveat the
+initial build shipped with -- actually computed expected value against
+the real fee and real game data (equipment.json's own `value` field,
+Harvest's own material sell price) rather than eyeballing the numbers,
+and found the gamble was, on average, **not a gamble at all**:
+
+- **Good tier alone averaged 404g EV** against a 32g starting fee.
+  Root cause: `good_gear_common` referenced `rusty_sword`, which turned
+  out to carry a pre-existing data anomaly in the base game -- every
+  other common-rarity item is priced 20-45g, `rusty_sword` is priced
+  999g. Not something to silently "fix" as part of this pass (unrelated
+  pre-existing data, out of scope for a card-pool balance patch) but
+  the card was accidentally the best expected value in the entire pool
+  by a huge margin, entirely by riding a bug that had nothing to do
+  with this feature. Swapped to `woodcutter_axe` (45g, top of the
+  normal common range) instead.
+- **Jackpot's epic-gear entry (`grasp_of_avarice`, 2000g -- a real
+  epic-tier weapon) contributed ~600g to the tier average on its own**,
+  despite Jackpot already being the rarest tier (3% of picks). Rebalanced
+  the jackpot pool's own internal weights so the epic-gear result is
+  the rarest possible outcome from a cheap gamble (weight 1 of 10
+  within Jackpot, was 3 of 10) rather than a roughly-1-in-3 jackpot
+  result -- material haul (a genuine windfall without single-handedly
+  wrecking the EV math) becomes Jackpot's most common outcome instead,
+  egg stays a solid secondary.
+- Trimmed a few other individually-too-generous entries found the same
+  way: `good_scrap`'s amount (10 -> 4, was worth more than the fee on
+  its own), `modest_gold` (35 -> 15 flat, was nearly break-even by
+  itself on a tier that should read as a clear loss), `good_gear_uncommon`
+  (`knights_blade`, 160g) reweighted rarer within Good (5 -> 2 of 23)
+  rather than its value being changed.
+- **Fee's per-level scaling was too steep on its own terms.** Even after
+  fixing the content-side numbers above, simulating across the full
+  1-50 level range showed EV/fee swinging from 0.78 (a reasonable early
+  gamble) down to 0.26 (a punishing one) purely because
+  `peddler.feeCostPerLevel` (2/level) outpaced the card pool's flat
+  reward values, which don't scale with level at all. Tested 2, 1, and
+  0.5 gold-per-level directly against the same simulation before
+  picking 0.5 -- flattens the curve to a much gentler 0.82 -> 0.49 across
+  the same level range, still clearly a net-negative gamble throughout
+  (never breakeven-or-better), just without the 3x swing in how
+  punishing it feels between early and late game.
+
+**Target shape, stated explicitly for whoever tunes this next:**
+non-jackpot tiers should read as a real, typical loss (roughly 45-65%
+of the fee back on average); Jackpot should be a genuine rare windfall
+that doesn't dominate the overall average on its own. Verified via a
+standalone simulation script (not just read through) computing
+per-tier and overall EV/fee at levels 1/5/10/25/50 against the actual
+live tuning values, real card weights, and real equipment/material
+values -- confirmed the fix lands at 0.78/0.65/0.53/0.37/0.26 before the
+fee-curve change and 0.82/0.72/0.61/0.49 (levels 1/10/25/50) after both
+changes together. Re-verified live in the running game afterward (not
+just the simulation) -- the Pick Your Card button now correctly reads
+"30 gold" at level 1, down from 32, matching the tuned values exactly.
+`npx tsc --noEmit` still passes clean; this patch only touches two JSON
+content files, no code changes.
+
+**Known estimation caveat, flagged rather than hidden:** egg values
+used in this simulation (200/400/800/1600/3200g by rarity) are rough
+estimates -- eggs aren't a purchasable item anywhere in the game, so
+there's no real gold-equivalent price to anchor to the way equipment's
+own `value` field or Harvest's sell price provide. If a future pass
+wants to refine this further, real playtesting data (how much a player
+actually seems to value landing an egg vs. gold vs. gear) would be a
+better anchor than a guessed number.
+
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**
   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
