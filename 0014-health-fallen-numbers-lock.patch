@@ -1,0 +1,80 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index e5d26e4..896ed3a 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -4206,20 +4206,48 @@ level log entry underneath it doesn't also demand separate attention.
+     (e.g. `success: -(100 - healthPercent) * 0.3`) -- a hero at low
+     health is worse odds, never unsendable. This is what avoids the
+     "auto-fail because he's on 0 health" problem raised in discussion.
+-  - **Regen, two rates.** Full idle regen at the guild (~1 hour to fully
+-    heal at baseline, finally giving the long-defined-but-unused
+-    `REST_TICK` constant in `items.ts` a job) plus a smaller passive
+-    trickle rate while a hero is actively out on a quest, so a long quest
+-    isn't a total recovery freeze, just slower than resting. A new 6th
+-    guild facility, **Infirmary** (alongside Barracks/Treasury/Workshop/
+-    Library/Tavern, same cost-curve shape), reduces both rates' time per
+-    level.
++  - **Regen, two rates, both scaling with the new Infirmary facility.**
++    Idle regen at the guild starts at 60 minutes to fully heal with no
++    Infirmary; each Infirmary level cuts 10 minutes off that, down to a
++    floor of 10 minutes at level 5 (no further gain past max level). A
++    smaller passive trickle rate applies while a hero is actively out on
++    a quest, so a long quest isn't a total recovery freeze, just slower
++    than resting -- exact trickle fraction still open, but it should scale
++    down proportionally as Infirmary levels reduce the idle time too.
++    **Correction from the original plan:** regen can't reuse the fixed
++    30-minute `REST_TICK` constant in `items.ts` as a tick interval once
++    Infirmary pushes the floor down to 10 minutes -- a fixed 30-min tick
++    can't produce a 10-min full heal. Regen needs to be a continuous rate
++    derived from the current target heal time (`100% / healTimeMinutes`
++    per minute) instead. `REST_TICK` likely gets repurposed for something
++    else or dropped rather than reused here.
++  - **Infirmary facility, cost locked in:** a new 6th guild facility
++    (alongside Barracks/Treasury/Workshop/Library/Tavern), using the
++    exact same `cost(level) = floor(baseCost * costGrowth^level *
++    earlyTierDiscount(level))` formula and `EARLY_TIER_DISCOUNT` curve
++    every other facility already uses. `baseCost`/`costGrowth` match
++    Workshop's (600 / 1.85) -- the closest existing analog, since
++    Workshop is likewise a utility facility with no direct
++    gold/xp/success reward, just a background quality-of-life effect.
++    `maxLevel` = 5, since exactly 5 steps of -10 minutes walks the heal
++    time from 60 down to the 10-minute floor with nothing wasted.
+   - **Fallen state (the "death" mechanic) triggers at exactly 0 Health.**
+     Not permadeath -- nothing permanent is lost, matching the game's
+     existing philosophy of never wiping long-term progress on a setback
+     (same spirit as retirement preserving guild facilities). A Fallen
+     hero keeps their level, gear, and XP; they just can't be sent on
+     quests until revived.
++    - **Does not touch Guild Power.** A Fallen hero's existing
++      stats/gear/ascension contribution simply stops accruing further
++      while they're down -- it isn't subtracted, they just aren't
++      building more of it until revived. Retiring a Fallen hero to bank
++      ascension and rebuild from a fresh recruit remains a valid escape
++      valve instead of waiting out a revival, exactly like retiring an
++      uninjured hero today.
++    - **Still occupies their guild hero slot.** They're down, not gone --
++      a Fallen hero blocks recruiting a replacement into that slot the
++      same as any other living-but-unavailable hero would, until either
++      revived or retired.
+     - **Revival, dual path reusing the exact pattern `treatInjury`
+       already implements:** free after a long fixed timer (a day,
+       roughly) with no action needed, or an instant paid revive whose
+@@ -4239,12 +4267,12 @@ level log entry underneath it doesn't also demand separate attention.
+       asset instead -- a small pixel-art tombstone standing in for the
+       hero in roster/idle views while Fallen, swapped back once revived.
+       New art, not a reuse of the existing animation set.
+-  **Still open:** exact constants (max-health formula coefficients,
+-  per-injury `healthDamagePercent` values, revival cost formula, Infirmary
+-  cost/growth/maxLevel/effect-per-level); whether a Fallen hero still
+-  occupies their guild hero slot (assumed yes -- they're down, not gone)
+-  or still counts toward Guild Power while Fallen; and the tombstone art
+-  asset itself.
++  **Still open:** max-health formula coefficients (`X`/`Y` in `100 +
++  sqrt(endurance)*X + level*Y`); per-injury `healthDamagePercent` values;
++  the revival cost formula's actual scale factor (confirmed to scale with
++  hero level, matching `treatmentCost`'s shape -- exact numbers not
++  picked yet); the on-quest trickle-regen fraction relative to idle rate;
++  and the tombstone art asset itself.
+ 
+ - **Melee/Ranged/Caster hero roles** -- scoping discussion started, no
+   code yet. Concrete shape proposed so far: a role (Melee/Ranged/Caster)
