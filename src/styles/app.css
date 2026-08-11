@@ -2426,30 +2426,86 @@ button.harvest-item:hover {
 }
 .peddler-card-facedown:disabled { cursor: default; opacity: 0.6; }
 
+/* Plays on the two cards that WEREN'T picked once a result comes back --
+   they never flip face-up at all now (see PeddlerCardModal.tsx's own
+   comment: showing their outcomes, then discarding that info, was
+   exactly what the "remove that" playtest note was about). They just
+   shrink and fade in place, still face-down, before the result summary
+   for the picked card appears. `animation-fill-mode: forwards` (via the
+   shorthand below) holds the end state for the ~ties-to-UNPICKED_FADE_MS
+   window before PeddlerCardModal actually unmounts them. */
+.peddler-card-fading-out {
+  animation: peddler-card-fade-out 480ms ease forwards;
+  pointer-events: none;
+}
+@keyframes peddler-card-fade-out {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.82); }
+}
+
 .peddler-card-revealed {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 4px;
   padding: 8px;
   cursor: pointer;
   background: color-mix(in srgb, var(--panel-2) 92%, transparent);
   color: var(--parchment);
   font: inherit;
-  /* Grows to fit expanded flavor text instead of inheriting .peddler-
-     card's fixed 150px height -- found via a real screenshot, not
-     assumed: the fixed height let expanded details overlap
-     .peddler-result-summary below. min-height keeps the collapsed grid
-     tidy and consistent with the face-down cards' own fixed size; only
-     the expanded state actually grows past it. */
-  height: auto;
-  min-height: 150px;
+  /* Fixed height again, matching the face-down cards exactly -- this no
+     longer needs to grow for inline flavor text (that content moved into
+     its own overlay, see .peddler-card-detail-box below), so there's no
+     reason for it to differ from .peddler-card's own 150px anymore. */
+  height: 150px;
 }
 .peddler-card-revealed:hover { border-color: var(--brass); }
 .peddler-card-picked { border-color: var(--brass); border-width: 2px; box-shadow: 0 0 10px color-mix(in srgb, var(--brass) 45%, transparent); }
 .peddler-card-name { font-size: 11px; font-weight: bold; text-align: center; }
-.peddler-card-details { margin-top: 4px; max-width: 100px; }
+
+/* The picked card's details, laid over the modal as their own small card
+   rather than grown in place -- clicking the revealed card used to
+   expand it inline, which (inside a modal that's now a fixed size, see
+   .peddler-modal above) just pushed everything else around and read as
+   the whole thing "zooming." An absolutely-positioned overlay shows the
+   same info without touching the modal's own layout at all. Positioned
+   against .peddler-modal itself (already `position: relative` via
+   .modal), not .peddler-card-row, so it's centered in the whole card
+   game rather than wherever the row happens to sit. */
+.peddler-card-detail-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--night) 55%, transparent);
+  z-index: 5;
+  border-radius: inherit;
+}
+.peddler-card-detail-box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 200px;
+  padding: 18px 16px 16px;
+  background: var(--panel-2);
+  border: 1px solid var(--brass-dim);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  animation: modal-pop-in 200ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.peddler-card-detail-close {
+  position: absolute;
+  top: 4px; right: 4px;
+  min-height: 0;
+  width: 22px; height: 22px;
+  padding: 0;
+  line-height: 1;
+  border-radius: 50%;
+}
 
 .peddler-result-summary {
   margin-top: 6px;

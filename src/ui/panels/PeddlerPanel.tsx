@@ -37,7 +37,7 @@ export function PeddlerPanel() {
 
       <div className="card vendor-card" style={{ marginBottom: 12 }}>
         <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
-          <GrimsbySprite animation="idle" height={72} />
+          <GrimsbySprite animation="idle" height={144} />
           <div style={{ flex: 1 }}>
             <div className="spread">
               <span className="card-title">Grimsby</span>

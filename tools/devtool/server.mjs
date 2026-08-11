@@ -365,6 +365,13 @@ const SCHEMAS = {
       // kind: joke/nothing (no real item to look an icon up from), and
       // as the final fallback for any other kind. Optional.
       glyph: { type: 'string', required: false },
+      // Real icon for the generic kinds (nothing/joke/goldFlat/goldRefund/
+      // scrap) -- e.g. a sack-of-gold icon for a goldFlat card. Same
+      // picker/fallback-to-glyph convention as equipment/consumables/
+      // materials' own `icon` fields above. material/equipment/egg kinds
+      // still pull their icon from the referenced def instead -- this is
+      // only useful for kinds that have no def to look one up from.
+      icon: { type: 'string', required: false, picker: 'icon' },
     },
   },
   'raids': {

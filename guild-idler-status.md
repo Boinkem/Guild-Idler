@@ -4631,6 +4631,98 @@ quick playtest pass next time the game's actually run to confirm all
 four visually, especially the modal min-height against the tallest
 real state (three expanded revealed cards + the result summary).
 
+### Grimsby: card-reveal rework, DevTool icons, sprite sizing -- and a new background music system
+Second round of playtest feedback on the card modal, plus one unrelated
+feature request bundled into the same pass (background music). This
+round's TypeScript/build changes verified via `npx tsc --noEmit` and a
+full `npm run build:web` against a fresh clone -- both pass clean. No
+live playtest (no dev environment available this pass, same caveat as
+the entry just above).
+
+**Card reveal, reworked:**
+- **Unpicked cards no longer flip at all.** Previously all three cards
+  revealed simultaneously (showing what the two you didn't pick would
+  have been), which is exactly what this round's feedback said to
+  remove. They now stay face-down and just shrink-and-fade away
+  (`.peddler-card-fading-out`, ~480ms) once a pick resolves -- their
+  outcome is never shown. The result summary ("You got: ...") is gated
+  on that fade actually finishing (`revealStage: 'idle' | 'fading' |
+  'settled'` in `PeddlerCardModal.tsx`, driven by a local effect watching
+  `engine.lastGrimsbyResult`, independent of the engine's own instant
+  resolution) so the picked card's result never appears mid-fade.
+- **Clicking the picked card no longer expands it in place.** That
+  inline `height: auto` growth was what actually caused the earlier
+  "whole thing zooms" complaint -- expanding the card inside a modal
+  that's now a fixed size (see the min-height fix above) just shoved
+  everything else around. Replaced with `PeddlerCardDetailOverlay`, a
+  small card laid over the top via `position: absolute` (anchored to
+  `.peddler-modal`, already `position: relative` via `.modal`) showing
+  the same icon/name/tier/flavor-text -- opening it never touches the
+  modal's own layout at all.
+- `.peddler-card-revealed` went back to a fixed 150px height (it no
+  longer needs to grow for inline flavor text, since that content moved
+  into the overlay) and dropped the now-meaningless "Not picked / You
+  picked this one" label -- there's only ever one revealed card now, so
+  labeling it was redundant.
+
+**DevTool: real icons for the generic card kinds.** `PeddlerCardDef`
+gained an `icon` field (same picker/fallback-to-glyph convention as
+equipment/materials/consumables' own `icon` fields), and the DevTool's
+`peddler-cards` schema now exposes it with `picker: 'icon'` -- no
+frontend changes needed there, `app.js` already renders any field with
+that picker generically. `PeddlerOutcomeIcon`'s gold/scrap/joke/nothing
+cases now render via `ConsumableIcon` (icon-falls-back-to-glyph) instead
+of a hardcoded emoji-in-a-box, so e.g. a goldFlat card can finally get an
+actual sack-of-gold icon instead of being stuck with ◆.
+`material`/`equipment`/`egg` kinds are unaffected -- they already pulled
+their icon from the referenced def, not from the card entry itself.
+
+**Grimsby's sprite, doubled.** `height={72} -> 144` on the main
+PeddlerPanel tab, `height={80} -> 160` in the card modal header.
+**Flagged, not resolved:** the ask was also to match the Vendors sprite
+size, but Vendors' own sprites (Blacksmith/Alchemist/Enchanter) are
+*also* `height={72}` right now -- doubling only Grimsby means he's now
+bigger than them, not matched. Went with "double his size" as the
+explicit, actionable half of the request; left Vendors untouched rather
+than guessing. If matching is what's actually wanted, bumping Vendors to
+144 too is a one-line change in `VendorsPanel.tsx`.
+
+**New: background music.** Separate from `sound.ts`'s synthesized SFX
+cues on purpose (that file exists specifically to avoid shipping a real
+audio file at all -- see its own top comment) -- this is a real track
+the player supplies themselves.
+- `src/game/music.ts` -- new `MusicManager`, one `HTMLAudioElement` for
+  the app's whole lifetime (not one per `MenuWindow` mount, which
+  happens on every menu open/close and would both glitch the loop and
+  throw away an in-progress fade). `enterGuildMenu()` starts playback
+  and fades up over 3s; `leaveGuildMenu()` fades to silence over 0.7s and
+  pauses, UNLESS `musicContinuesWhenMinimized` is on, in which case it's
+  left running untouched. `applySettingsChange()` re-applies a live
+  toggle/slider change from Settings without waiting for the next
+  menu transition.
+- Wired into `App.tsx` via two effects keyed off `mode` (idle/menu) and
+  the three new settings respectively -- see that file's own comment for
+  why it's two effects rather than one (avoids re-triggering the full
+  enter/leave sequence, including its multi-second fade duration, on
+  every settings tweak; a settings-only change instead goes through the
+  faster `applySettingsChange` path).
+- **New Settings -> Music section**: on/off toggle, volume slider,
+  and "Keep playing when minimized" toggle (off by default, matching
+  the "close = off immediately unless checked" spec exactly).
+  `Toggle` (in `SettingsPanel.tsx`) gained an optional `disabled` prop
+  to support graying out "keep playing" when music itself is off --
+  didn't need one before this.
+- **The actual drop-in spot**: `public/audio/background-music.mp3`,
+  documented in a new `public/audio/README.md`. Gitignored (see
+  `.gitignore`'s own comment) since it's almost certainly licensed audio
+  -- same "the folder/README are tracked, the actual asset isn't"
+  treatment `public/heroes`/`public/vendors`/`public/pets` already get.
+  No file dropped in yet -> `MusicManager` fails silently, same "missing
+  art paints/plays nothing" convention as every sprite pack in this
+  game -- confirmed this is genuinely silent-safe by reading through
+  every call site, not run live (no audio file available in this
+  environment to test against).
+
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**
   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { GameEngine } from './game/engine';
+import { MusicManager } from './game/music';
 import { EngineContext } from './ui/useEngine';
+import { useSettings } from './ui/useSettings';
 import { IdleView } from './ui/IdleView';
 import { MenuWindow } from './ui/MenuWindow';
 import { GuildNamingModal } from './ui/GuildNamingModal';
@@ -51,6 +53,23 @@ export function App() {
     setMode(next);
     return window.littleKnight?.setWindowMode(next) ?? Promise.resolve();
   }, []);
+
+  // Background music: fades in when the guild menu opens, fades out (or
+  // keeps playing, if musicContinuesWhenMinimized is on) when it closes.
+  // Re-runs on every relevant settings change too, not just on `mode`
+  // changing, so dragging the volume slider or flipping the toggle in
+  // Settings takes effect immediately rather than waiting for the next
+  // menu open/close -- see MusicManager.applySettingsChange.
+  const { settings } = useSettings();
+  useEffect(() => {
+    if (mode === 'menu') MusicManager.enterGuildMenu();
+    else MusicManager.leaveGuildMenu();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+  useEffect(() => {
+    MusicManager.applySettingsChange(settings, mode === 'menu');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.musicEnabled, settings.musicVolume, settings.musicContinuesWhenMinimized]);
 
   // The naming modal needs real screen space to render in -- if it shows up
   // while the app is still in the tiny idle-companion window (the default

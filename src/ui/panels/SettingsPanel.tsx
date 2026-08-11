@@ -41,12 +41,13 @@ function Segmented<T extends string | number>({
   );
 }
 
-export function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+export function Toggle({ value, onChange, disabled }: { value: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
     <button
       className={`toggle ${value ? 'on' : ''}`}
       role="switch"
       aria-checked={value}
+      disabled={disabled}
       onClick={() => onChange(!value)}
     >
       <span className="knob" />
@@ -204,6 +205,29 @@ export function SettingsPanel() {
             Test
           </button>
         </div>
+      </Row>
+
+      <div className="section-heading">Music</div>
+
+      <Row label="Background music" hint="Ambient track behind the guild menu -- fades in when you open it.">
+        <Toggle value={settings.musicEnabled} onChange={set('musicEnabled')} />
+      </Row>
+
+      <Row label="Music volume" hint={`${Math.round(settings.musicVolume * 100)}%`}>
+        <input
+          type="range" min={0} max={1} step={0.05}
+          value={settings.musicVolume}
+          disabled={!settings.musicEnabled}
+          onChange={(e) => update('musicVolume', Number(e.target.value))}
+        />
+      </Row>
+
+      <Row label="Keep playing when minimized" hint="Off cuts the music the moment you close the guild menu. On leaves it running behind the idle companion.">
+        <Toggle
+          value={settings.musicContinuesWhenMinimized}
+          onChange={set('musicContinuesWhenMinimized')}
+          disabled={!settings.musicEnabled}
+        />
       </Row>
 
       <div className="section-heading">Quality of life</div>

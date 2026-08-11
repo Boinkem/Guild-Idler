@@ -13,6 +13,14 @@ public/vendors
 
 # Regenerate with:  python3 tools/import_pets.py --src <folder with the raw sheets> --out public/pets
 public/pets
+
+# Background music track -- likely licensed audio, not redistributable
+# as a file. Drop your own track at public/audio/background-music.mp3;
+# see public/audio/README.md for details. The folder/README stay
+# committed, just not whatever audio file lands in it.
+public/audio/*
+!public/audio/README.md
+
 tools/__pycache__
 tools/devtool/public/*.bak
 src/game/data/json/*.bak

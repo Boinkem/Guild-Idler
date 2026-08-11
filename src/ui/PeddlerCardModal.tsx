@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useEngine } from './useEngine';
 import { PeddlerCardDef, PeddlerCardTier } from '../game/types';
 import { MATERIAL_BY_ID } from '../game/data/materials';
 import { EQUIPMENT_BY_ID } from '../game/data/equipment';
 import { RARITY_COLOR } from '../game/util';
 import { GrimsbySprite } from './sprites/GrimsbySprite';
-import { ItemIcon, MaterialIcon } from './icons';
+import { ItemIcon, MaterialIcon, ConsumableIcon } from './icons';
 import { EggIcon } from './EggIcon';
 
 /**
@@ -28,6 +28,12 @@ const TIER_LABEL: Record<PeddlerCardTier, string> = {
   bust: 'Nothing', refund: 'Partial Refund', modest: 'Modest Find', good: 'Good Find', jackpot: 'JACKPOT',
 };
 
+/** How long the two unpicked cards take to fade away before the result
+ *  summary appears -- shared between the CSS animation (see .peddler-
+ *  card-fading-out in app.css) and the setTimeout that gates the summary,
+ *  so they can never drift out of sync with each other. */
+const UNPICKED_FADE_MS = 480;
+
 function outcomeDisplayName(outcome: PeddlerCardDef): string {
   switch (outcome.kind) {
     case 'nothing': return 'Nothing';
@@ -42,14 +48,25 @@ function outcomeDisplayName(outcome: PeddlerCardDef): string {
   }
 }
 
+function tierColorFor(tier: PeddlerCardTier): string {
+  return tier === 'jackpot' ? RARITY_COLOR.legendary
+    : tier === 'good' ? RARITY_COLOR.rare
+      : tier === 'modest' ? RARITY_COLOR.uncommon
+        : 'var(--muted)';
+}
+
 /**
  * Resolves a card outcome to a real, already-established icon component
  * wherever one exists (ItemIcon for equipment, MaterialIcon for
  * materials, EggIcon for eggs -- all reused as-is, same fallback-to-
- * glyph behavior every other item display in this game already has),
- * and to a plain glyph-in-a-box (matching the same `.item-icon` styling)
- * for the kinds that were never real items to begin with (gold, scrap,
- * joke/nothing).
+ * glyph behavior every other item display in this game already has). The
+ * generic kinds that were never real items to begin with (gold, scrap,
+ * joke/nothing) now reuse ConsumableIcon instead of a hardcoded glyph
+ * box -- same icon-falls-back-to-glyph shape everything else already
+ * has, just reading PeddlerCardDef's own `icon` field (see its comment
+ * in types.ts) rather than a def looked up elsewhere. This is what lets
+ * the DevTool assign a real "sack of gold" icon to a goldFlat card
+ * instead of being stuck with an emoji.
  */
 function PeddlerOutcomeIcon({ outcome, size = 48 }: { outcome: PeddlerCardDef; size?: number }) {
   switch (outcome.kind) {
@@ -66,52 +83,45 @@ function PeddlerOutcomeIcon({ outcome, size = 48 }: { outcome: PeddlerCardDef; s
       return <EggIcon rarity={outcome.eggRarity ?? 'common'} size={size} />;
     case 'goldFlat':
     case 'goldRefund':
-      return (
-        <div className="item-icon" style={{ width: size, height: size }}>
-          <span aria-hidden="true" style={{ fontSize: size * 0.5 }}>◆</span>
-        </div>
-      );
+      return <ConsumableIcon icon={outcome.icon} glyph={outcome.glyph ?? '\u25c6'} size={size} />;
     case 'scrap':
-      return (
-        <div className="item-icon" style={{ width: size, height: size }}>
-          <span aria-hidden="true" style={{ fontSize: size * 0.5 }}>{outcome.glyph ?? '\ud83d\udd29'}</span>
-        </div>
-      );
+      return <ConsumableIcon icon={outcome.icon} glyph={outcome.glyph ?? '\ud83d\udd29'} size={size} />;
     case 'nothing':
     case 'joke':
     default:
-      return (
-        <div className="item-icon" style={{ width: size, height: size }}>
-          <span aria-hidden="true" style={{ fontSize: size * 0.5 }}>{outcome.glyph ?? '\u2753'}</span>
-        </div>
-      );
+      return <ConsumableIcon icon={outcome.icon} glyph={outcome.glyph ?? '\u2753'} size={size} />;
   }
 }
 
-/** One face-down or revealed card. Face-down: plain highlight on hover
- *  (border/outline color change only -- no shake/transform, which used
- *  to intermittently blank the large background-image mid-animation).
- *  Revealed: icon + short name always visible, flavor text (and the
- *  tier label) tucked behind a click-to-expand toggle -- both a native
- *  `title` tooltip AND a click work, covering hover-capable and
- *  touch-only alike. */
+/** One face-down or revealed card.
+ *
+ *  Face-down: plain highlight on hover (border/outline color change only
+ *  -- no shake/transform, which used to intermittently blank the large
+ *  background-image mid-animation). Also used, disabled and optionally
+ *  fading, for the two cards that weren't picked once a result comes
+ *  back -- they never flip (see PeddlerCardModal below for why).
+ *
+ *  Revealed: icon + short name always visible. Clicking opens the detail
+ *  overlay (tier + flavor text) as a new card laid over the top, via
+ *  onOpenDetails -- deliberately NOT an inline expand-in-place anymore,
+ *  since growing the card itself inside the fixed-size modal read as the
+ *  whole thing "zooming." */
 function PeddlerCard({
-  faceUp, backIndex, outcome, isPicked, onClick, disabled,
+  faceUp, backIndex, outcome, onClick, onOpenDetails, disabled, fadingOut,
 }: {
   faceUp: boolean;
   backIndex: number;
   outcome?: PeddlerCardDef;
-  isPicked?: boolean;
   onClick?: () => void;
+  onOpenDetails?: () => void;
   disabled?: boolean;
+  fadingOut?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
-
   if (!faceUp) {
     return (
       <button
         type="button"
-        className="peddler-card peddler-card-facedown"
+        className={`peddler-card peddler-card-facedown ${fadingOut ? 'peddler-card-fading-out' : ''}`}
         style={{ backgroundImage: `url(./peddler/cards/back_${backIndex}.png)` }}
         onClick={onClick}
         disabled={disabled}
@@ -120,28 +130,36 @@ function PeddlerCard({
     );
   }
 
-  const tierColor = outcome?.tier === 'jackpot' ? RARITY_COLOR.legendary
-    : outcome?.tier === 'good' ? RARITY_COLOR.rare
-      : outcome?.tier === 'modest' ? RARITY_COLOR.uncommon
-        : 'var(--muted)';
-
   return (
     <button
       type="button"
-      className={`peddler-card peddler-card-revealed ${isPicked ? 'peddler-card-picked' : ''}`}
-      onClick={() => setExpanded((v) => !v)}
+      className="peddler-card peddler-card-revealed peddler-card-picked"
+      onClick={onOpenDetails}
       title={outcome?.flavorText}
     >
-      <div className="tiny muted">{isPicked ? 'You picked this one' : 'Not picked'}</div>
       {outcome && <PeddlerOutcomeIcon outcome={outcome} size={48} />}
       <div className="peddler-card-name">{outcome ? outcomeDisplayName(outcome) : ''}</div>
-      {expanded && outcome && (
-        <div className="peddler-card-details">
-          <div className="tiny" style={{ color: tierColor, fontWeight: 'bold' }}>{TIER_LABEL[outcome.tier]}</div>
-          <p className="tiny muted" style={{ fontStyle: 'italic' }}>{outcome.flavorText}</p>
-        </div>
-      )}
     </button>
+  );
+}
+
+/** The "new card laid over the top" detail view for the picked card --
+ *  an absolutely-positioned layer inside .peddler-modal (which is
+ *  already `position: relative` via .modal) rather than a growing inline
+ *  block, so opening it never resizes or reflows the modal around it. */
+function PeddlerCardDetailOverlay({ outcome, onClose }: { outcome: PeddlerCardDef; onClose: () => void }) {
+  return (
+    <div className="peddler-card-detail-overlay" onClick={onClose}>
+      <div className="peddler-card-detail-box" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="peddler-card-detail-close" onClick={onClose} aria-label="Close">×</button>
+        <PeddlerOutcomeIcon outcome={outcome} size={64} />
+        <div className="peddler-card-name">{outcomeDisplayName(outcome)}</div>
+        <div className="tiny" style={{ color: tierColorFor(outcome.tier), fontWeight: 'bold' }}>
+          {TIER_LABEL[outcome.tier]}
+        </div>
+        <p className="tiny muted" style={{ fontStyle: 'italic' }}>{outcome.flavorText}</p>
+      </div>
+    </div>
   );
 }
 
@@ -152,8 +170,23 @@ export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
     Math.floor(Math.random() * 3), Math.floor(Math.random() * 3), Math.floor(Math.random() * 3),
   ]);
   const [browsingLine] = useState(() => BROWSING_LINES[Math.floor(Math.random() * BROWSING_LINES.length)]);
+  const [detailOpen, setDetailOpen] = useState(false);
+  // 'idle' until a result comes in, then 'fading' while the two unpicked
+  // cards animate away, then 'settled' once only the picked card (and the
+  // result summary) remain. Local UI sequencing, independent of the
+  // engine's own (instant) result resolution -- see the effect below.
+  const [revealStage, setRevealStage] = useState<'idle' | 'fading' | 'settled'>('idle');
 
   const result = engine.lastGrimsbyResult;
+
+  useEffect(() => {
+    if (result && revealStage === 'idle') {
+      setRevealStage('fading');
+      const t = window.setTimeout(() => setRevealStage('settled'), UNPICKED_FADE_MS);
+      return () => window.clearTimeout(t);
+    }
+    return undefined;
+  }, [result, revealStage]);
 
   const handlePick = (index: number) => {
     setShowCards(true); // already true by the time this is reachable, kept for clarity
@@ -165,6 +198,8 @@ export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
     onClose();
   };
 
+  const pickedCard = result?.cards[result.pickedIndex];
+
   return (
     <div className="overlay" onClick={handleClose}>
       <div
@@ -173,7 +208,7 @@ export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="peddler-modal-header">
-          <GrimsbySprite animation={result ? 'approval' : 'wave'} height={80} />
+          <GrimsbySprite animation={result ? 'approval' : 'wave'} height={160} />
           {!result && <p className="peddler-corner-comment tiny">{browsingLine}</p>}
         </div>
 
@@ -194,19 +229,42 @@ export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
         {result && (
           <>
             <div className="peddler-card-row">
-              {result.cards.map((c, i) => (
-                <PeddlerCard
-                  key={i}
-                  faceUp
-                  backIndex={c.backIndex}
-                  outcome={c.outcome}
-                  isPicked={i === result.pickedIndex}
-                />
-              ))}
+              {result.cards.map((c, i) => {
+                const isPicked = i === result.pickedIndex;
+                if (!isPicked && revealStage === 'settled') return null;
+                // Unpicked cards never flip -- they just fade away face-
+                // down, so their outcome is never shown at all (see the
+                // reasoning in app.css next to .peddler-card-fading-out).
+                if (!isPicked) {
+                  return (
+                    <PeddlerCard
+                      key={i}
+                      faceUp={false}
+                      backIndex={c.backIndex}
+                      disabled
+                      fadingOut={revealStage === 'fading'}
+                    />
+                  );
+                }
+                return (
+                  <PeddlerCard
+                    key={i}
+                    faceUp
+                    backIndex={c.backIndex}
+                    outcome={c.outcome}
+                    onOpenDetails={() => setDetailOpen(true)}
+                  />
+                );
+              })}
             </div>
-            <div className="peddler-result-summary">
-              <p><b>You got:</b> {result.rewardSummary}</p>
-            </div>
+            {revealStage === 'settled' && (
+              <div className="peddler-result-summary">
+                <p><b>You got:</b> {result.rewardSummary}</p>
+              </div>
+            )}
+            {detailOpen && pickedCard && (
+              <PeddlerCardDetailOverlay outcome={pickedCard.outcome} onClose={() => setDetailOpen(false)} />
+            )}
           </>
         )}
 

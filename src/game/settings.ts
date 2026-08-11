@@ -101,6 +101,18 @@ export interface Settings {
   soundEnabled: boolean;
   /** 0 - 1. */
   soundVolume: number;
+
+  /** Master switch for the background music track (separate from
+   *  soundEnabled, which only gates the short synthesized SFX cues). */
+  musicEnabled: boolean;
+  /** 0 - 1. Deliberately quiet by default -- ambience behind the guild
+   *  menu, not a soundtrack moment fighting for attention. See
+   *  MusicManager.enterGuildMenu's own comment for the fade-in. */
+  musicVolume: number;
+  /** Off by default: closing the guild menu (back to the idle companion)
+   *  cuts the music immediately. Turning this on leaves it playing
+   *  uninterrupted instead. */
+  musicContinuesWhenMinimized: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -123,6 +135,9 @@ export const DEFAULT_SETTINGS: Settings = {
   reduceMotion: false,
   soundEnabled: true,
   soundVolume: 0.5,
+  musicEnabled: true,
+  musicVolume: 0.18,
+  musicContinuesWhenMinimized: false,
 };
 
 /* --------------------------------- themes --------------------------------- */

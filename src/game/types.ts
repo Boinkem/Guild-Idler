@@ -1482,6 +1482,17 @@ export interface PeddlerCardDef {
    * generic '?' if even this is unset.
    */
   glyph?: string;
+  /**
+   * Optional real icon for the generic (non-item-referencing) kinds --
+   * 'nothing' / 'joke' / 'goldFlat' / 'goldRefund' / 'scrap' -- e.g. a
+   * sack-of-gold icon for a goldFlat card. Same convention/picker as
+   * MaterialDef.icon/ConsumableDef.icon (falls back to `glyph`, which
+   * falls back to a generic '?'). 'material'/'equipment'/'egg' kinds
+   * keep pulling their icon from the referenced def instead (see
+   * PeddlerOutcomeIcon) -- this field only matters for kinds that have
+   * no def to look one up from.
+   */
+  icon?: string;
 }
 
 /**
