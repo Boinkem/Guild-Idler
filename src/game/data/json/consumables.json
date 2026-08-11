@@ -100,6 +100,28 @@
     }
   },
   {
+    "id": "restorative_draught",
+    "name": "Restorative Draught",
+    "description": "Restores a portion of Health immediately. Doesn't revive a Fallen hero -- see the Infirmary or pay to revive directly.",
+    "cost": 80,
+    "glyph": "♥",
+    "icon": "potions/Potion_20.png",
+    "effect": {
+      "restoreHealth": 40
+    }
+  },
+  {
+    "id": "greater_restorative_draught",
+    "name": "Greater Restorative Draught",
+    "description": "Restores a large portion of Health immediately. Doesn't revive a Fallen hero -- see the Infirmary or pay to revive directly.",
+    "cost": 180,
+    "glyph": "♥",
+    "icon": "potions/Potion_28.png",
+    "effect": {
+      "restoreHealth": 80
+    }
+  },
+  {
     "id": "pet_treat",
     "name": "Pet Treat",
     "description": "Crafted, not foraged -- a pet's own happiness bar goes up further per treat than raw scraps would give it. Fed directly from the Hatchery's Pets tab, not sent out on quests -- carries no quest effect.",
