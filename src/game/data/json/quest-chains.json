@@ -819,5 +819,43 @@
         "durationMinutes": 1800
       }
     ]
+  },
+  {
+    "id": "the_man_who_sells_maybe",
+    "name": "The Man Who Sells Maybe",
+    "description": "A cart's been working the roads outside town for a week, selling something described only as \"a chance.\" Three separate people have already asked the guild to look into it, each for a different reason, none of them flattering.",
+    "reqLevel": 5,
+    "rewardGold": 300,
+    "rewardItems": [],
+    "rewardRenown": 1,
+    "title": "The One He Doesn't Cheat",
+    "grantsPeddler": true,
+    "epilogue": "Grimsby never did give a straight answer about where the cart came from, or where the coin under the floorboard was headed. What he did give, once he stopped trying to talk his way out of it, was his word -- worth exactly as much as anyone's word is worth once someone's actually checked it. He still turns up unannounced. He still charges for the privilege. But the deck's real now, and everyone involved knows it, which is apparently the most honest thing Grimsby has ever agreed to.",
+    "stages": [
+      {
+        "name": "A Cart That Wasn't There Yesterday",
+        "flavour": "The wheel ruts run in a perfect circle and go nowhere -- whoever's cart this is, it never actually left. A hand-lettered sign out front promises \"a fair chance, for a fair price,\" which is the kind of sentence that means the opposite of both halves. Three townsfolk are already lined up, each certain they're about to win big.",
+        "tag": "explore",
+        "difficulty": "easy",
+        "goldMultiplier": 1.2,
+        "durationMinutes": 60
+      },
+      {
+        "name": "The Deck Has an Opinion",
+        "flavour": "A little patience is all it takes: the same three cards come up jackpot for the man running the table, and only for him, four times running. He's good -- good enough that nobody else has caught it yet -- but not good enough for someone actually watching for it. He notices the exact moment he's been made, and doesn't even look surprised.",
+        "tag": "stealth",
+        "difficulty": "normal",
+        "goldMultiplier": 1.4,
+        "durationMinutes": 90
+      },
+      {
+        "name": "What Grimsby Actually Owes",
+        "flavour": "Caught cold, he doesn't run and he doesn't grovel -- he negotiates, like getting caught was always going to be step two of the plan. Turns out the real trouble isn't the rigged table; it's the two much less patient men he still owes for the cart itself, and they've just watched the same show everyone else did. \"Fair chance\" was never the pitch. Buying enough goodwill to still be standing tomorrow is.",
+        "tag": "defense",
+        "difficulty": "normal",
+        "goldMultiplier": 1.6,
+        "durationMinutes": 120
+      }
+    ]
   }
 ]

@@ -5,6 +5,7 @@ import { AchievementManager } from './AchievementManager';
 import { UPGRADES, vendorUpgrades } from '../data/progression';
 import { NODE_ORDER } from '../data/materials';
 import { Tuning } from '../data/tuning';
+import { PeddlerManager } from './PeddlerManager';
 
 /** Storage abstraction so the game also runs in a plain browser tab for testing. */
 export interface SaveAdapter {
@@ -137,6 +138,12 @@ export function createInitialState(now = Date.now()): GameState {
     autoEquipOnLoot: false,
     autoEquipConsumablesOnSend: false,
     pendingHatchReadyNotice: false,
+    peddlerUnlocked: false,
+    pendingPeddlerSpotlight: false,
+    questsSinceGrimsby: 0,
+    grimsbyThreshold: PeddlerManager.rollThreshold(),
+    grimsbyArrivedAt: null,
+    grimsbyLeavesAt: null,
   };
 }
 
@@ -518,6 +525,23 @@ const MIGRATIONS: Record<number, Migration> = {
       harvestNodes,
     };
   },
+  33: (save) => ({
+    ...save,
+    version: 34,
+    // Grimsby/peddler system -- false/0/null is exactly "never unlocked
+    // yet, no visits, nothing pending," the correct starting state for a
+    // save that predates this entirely, not a placeholder needing
+    // correction. A save already past the unlock chain's reqLevel band
+    // still has to actually complete "The Man Who Sells Maybe" like any
+    // other chain -- same "undiscovered content stays undiscovered,
+    // never force-unlocked by a migration" treatment grantsHatchery got.
+    peddlerUnlocked: (save.peddlerUnlocked as boolean | undefined) ?? false,
+    pendingPeddlerSpotlight: (save.pendingPeddlerSpotlight as boolean | undefined) ?? false,
+    questsSinceGrimsby: (save.questsSinceGrimsby as number | undefined) ?? 0,
+    grimsbyThreshold: (save.grimsbyThreshold as number | undefined) ?? PeddlerManager.rollThreshold(),
+    grimsbyArrivedAt: (save.grimsbyArrivedAt as number | null | undefined) ?? null,
+    grimsbyLeavesAt: (save.grimsbyLeavesAt as number | null | undefined) ?? null,
+  }),
 };
 
 export const SaveManager = {

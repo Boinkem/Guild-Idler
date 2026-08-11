@@ -4,6 +4,7 @@ import { OnboardingTour } from './OnboardingTour';
 import { ChainDiscoveryModal } from './ChainDiscoveryModal';
 import { formatGold, formatNumber } from '../game/util';
 import { attentionCounts } from '../game/attention';
+import { PeddlerManager } from '../game/managers/PeddlerManager';
 import { useCountUp } from './useCountUp';
 import { useFlyTargetRef } from './flyTarget';
 import { QuestPanel } from './panels/QuestPanel';
@@ -13,6 +14,7 @@ import { VendorsPanel } from './panels/VendorsPanel';
 import { GuildPanel } from './panels/GuildPanel';
 import { HarvestPanel } from './panels/HarvestPanel';
 import { HatcheryPanel } from './panels/HatcheryPanel';
+import { PeddlerPanel } from './panels/PeddlerPanel';
 import { GuidePanel } from './panels/GuidePanel';
 import { LorePanel } from './panels/LorePanel';
 import { RaidsPanel } from './panels/RaidsPanel';
@@ -57,6 +59,7 @@ const GUILD_GROUP = {
     { id: 'guild', label: 'Guild Hall', Panel: GuildPanel, tooltip: 'Facility and permanent upgrades that boost the whole guild.' },
     { id: 'harvest', label: 'Harvest', Panel: HarvestPanel, tooltip: 'Idle heroes gather materials here -- spend the stock crafting or sell it.' },
     { id: 'hatchery', label: 'Hatchery', Panel: HatcheryPanel, tooltip: 'Incubate eggs into pets, then equip one to accompany the guild.' },
+    { id: 'peddler', label: 'Grimsby', Panel: PeddlerPanel, tooltip: 'A wandering chance merchant -- pay for a card, see what happens.' },
   ],
 } as const;
 const ADVENTURE_GROUP = {
@@ -163,7 +166,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         aria-hidden="true"
         style={{
           position: 'absolute', inset: 0,
-          backgroundImage: `url(${tab === 'raids' ? './lore/raids-bg.jpg' : tab === 'hatchery' ? './lore/hatchery-bg.jpg' : './lore/guild-hall-bg.jpg'})`,
+          backgroundImage: `url(${tab === 'raids' ? './lore/raids-bg.jpg' : tab === 'hatchery' ? './lore/hatchery-bg.jpg' : tab === 'peddler' ? './lore/peddler-bg.png' : './lore/guild-hall-bg.jpg'})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           opacity: 0.35,
@@ -205,12 +208,13 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
             <div key={group.label ?? `pinned-${gi}`} className="tabs-group">
               {group.label && <div className="tabs-group-label">{group.label}</div>}
               {group.tabs
-                // Hatchery is the one nav entry that doesn't always exist --
-                // hidden entirely until its intro chain completes, rather
-                // than shown-but-locked the way e.g. Raids' own internal
-                // gating works. Every other tab id has no visibility
-                // condition at all, hence the `?? true`.
-                .filter((t) => (t.id === 'hatchery' ? engine.state.hatcheryUnlocked : true))
+                // Hatchery/Grimsby are the nav entries that don't always
+                // exist -- both hidden entirely until their own intro
+                // chain completes, rather than shown-but-locked the way
+                // e.g. Raids' own internal gating works. Every other tab
+                // id has no visibility condition at all, hence `?? true`.
+                .filter((t) => (t.id === 'hatchery' ? engine.state.hatcheryUnlocked
+                  : t.id === 'peddler' ? engine.state.peddlerUnlocked : true))
                 .map((t) => (
                   <button
                     key={t.id}
@@ -224,6 +228,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
                     {t.id === 'hatchery' && eggsReady > 0 ? <span className="tab-badge">{eggsReady}</span> : null}
                     {t.id === 'equipment' && brokenGear > 0 ? <span className="tab-badge broken">{brokenGear}</span> : null}
                     {t.id === 'harvest' && harvestReady > 0 ? <span className="tab-badge">{harvestReady}</span> : null}
+                    {t.id === 'peddler' && engine.state.peddlerUnlocked && PeddlerManager.isPresent(engine.state) ? <span className="tab-badge">!</span> : null}
                   </button>
                 ))}
             </div>
@@ -250,7 +255,9 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
           // (nonexistent) nav button would just return null and produce a
           // broken step. It gets its own single-step spotlight instead, the
           // moment it actually unlocks -- see pendingHatcherySpotlight below.
-          steps={ALL_TABS.filter((t) => t.id !== 'testing' && t.id !== 'hatchery').map((t) => ({ id: t.id, label: t.label }))}
+          // 'peddler' excluded for the exact same reason -- its own
+          // spotlight is pendingPeddlerSpotlight, just below Hatchery's.
+          steps={ALL_TABS.filter((t) => t.id !== 'testing' && t.id !== 'hatchery' && t.id !== 'peddler').map((t) => ({ id: t.id, label: t.label }))}
           onTabChange={(id) => setTab(id as TabId)}
           onDone={() => engine.dismissOnboarding()}
         />
@@ -271,6 +278,17 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
           steps={[{ id: 'hatchery', label: 'Hatchery' }]}
           onTabChange={(id) => setTab(id as TabId)}
           onDone={() => engine.dismissHatcherySpotlight()}
+        />
+      )}
+      {/* Same one-step reuse again, fired the moment "The Man Who Sells
+          Maybe" completes rather than a fixed tour step -- his timing
+          depends on when that chain finishes, not a fixed step count,
+          same reasoning as the Hatchery's own spotlight just above. */}
+      {engine.state.guildName !== '' && engine.state.pendingPeddlerSpotlight && (
+        <OnboardingTour
+          steps={[{ id: 'peddler', label: 'Grimsby' }]}
+          onTabChange={(id) => setTab(id as TabId)}
+          onDone={() => engine.dismissPeddlerSpotlight()}
         />
       )}
     </div>

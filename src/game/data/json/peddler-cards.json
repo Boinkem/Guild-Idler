@@ -1,0 +1,165 @@
+[
+  {
+    "id": "bust_nothing_blank",
+    "tier": "bust",
+    "weight": 10,
+    "kind": "nothing",
+    "flavorText": "Grimsby shrugs. \"Card's blank. Wasn't me who printed it.\""
+  },
+  {
+    "id": "bust_nothing_proud",
+    "tier": "bust",
+    "weight": 10,
+    "kind": "nothing",
+    "flavorText": "Absolutely nothing happens. Grimsby looks almost proud of that."
+  },
+  {
+    "id": "bust_joke_rock",
+    "tier": "bust",
+    "weight": 8,
+    "kind": "joke",
+    "jokeItemName": "A Rock",
+    "flavorText": "\"That's a good rock,\" Grimsby says, entirely serious."
+  },
+  {
+    "id": "bust_joke_button",
+    "tier": "bust",
+    "weight": 8,
+    "kind": "joke",
+    "jokeItemName": "A Single Button",
+    "flavorText": "\"Matches nothing you own. That's the fun part.\""
+  },
+  {
+    "id": "bust_joke_iou",
+    "tier": "bust",
+    "weight": 6,
+    "kind": "joke",
+    "jokeItemName": "An IOU (From Grimsby, To Grimsby)",
+    "flavorText": "He hands you a slip of paper he owes himself. You're not sure what to do with it either."
+  },
+  {
+    "id": "bust_joke_pebble",
+    "tier": "bust",
+    "weight": 8,
+    "kind": "joke",
+    "jokeItemName": "A Suspiciously Round Pebble",
+    "flavorText": "\"Lucky,\" he says. \"For someone. Not you, evidently.\""
+  },
+  {
+    "id": "refund_small",
+    "tier": "refund",
+    "weight": 10,
+    "kind": "goldRefund",
+    "refundPercent": 20,
+    "flavorText": "He counts out a fraction of your own coin, looking personally wounded by it."
+  },
+  {
+    "id": "refund_medium",
+    "tier": "refund",
+    "weight": 10,
+    "kind": "goldRefund",
+    "refundPercent": 40,
+    "flavorText": "\"Consider it a discount on disappointment,\" he says, pressing coins into your hand."
+  },
+  {
+    "id": "refund_large",
+    "tier": "refund",
+    "weight": 6,
+    "kind": "goldRefund",
+    "refundPercent": 60,
+    "flavorText": "Grimsby sighs like it costs him something. It does -- most of your fee, anyway."
+  },
+  {
+    "id": "modest_gold",
+    "tier": "modest",
+    "weight": 8,
+    "kind": "goldFlat",
+    "goldAmount": 35,
+    "flavorText": "\"Don't spend it all,\" he says, handing over more than he clearly meant to."
+  },
+  {
+    "id": "modest_material_ore",
+    "tier": "modest",
+    "weight": 8,
+    "kind": "material",
+    "materialId": "ore",
+    "materialAmount": 6,
+    "flavorText": "\"Fell off a cart,\" he says. Somebody's cart. Not his."
+  },
+  {
+    "id": "modest_material_timber",
+    "tier": "modest",
+    "weight": 8,
+    "kind": "material",
+    "materialId": "timber",
+    "materialAmount": 6,
+    "flavorText": "A bundle of good timber, still warm. He doesn't explain why."
+  },
+  {
+    "id": "modest_material_herbs",
+    "tier": "modest",
+    "weight": 8,
+    "kind": "material",
+    "materialId": "herbs",
+    "materialAmount": 6,
+    "flavorText": "\"Smells familiar,\" he admits, \"but only 'cause I grow it myself.\""
+  },
+  {
+    "id": "modest_material_fish",
+    "tier": "modest",
+    "weight": 8,
+    "kind": "material",
+    "materialId": "fish",
+    "materialAmount": 6,
+    "flavorText": "Still fresh, more or less. He won't say how he knows that."
+  },
+  {
+    "id": "good_scrap",
+    "tier": "good",
+    "weight": 10,
+    "kind": "scrap",
+    "scrapAmount": 10,
+    "flavorText": "A box that rattles promisingly. \"Someone's old gear,\" he says. \"Don't ask.\""
+  },
+  {
+    "id": "good_gear_common",
+    "tier": "good",
+    "weight": 8,
+    "kind": "equipment",
+    "itemId": "rusty_sword",
+    "flavorText": "He looks personally offended having to hand over something that actually works."
+  },
+  {
+    "id": "good_gear_uncommon",
+    "tier": "good",
+    "weight": 5,
+    "kind": "equipment",
+    "itemId": "knights_blade",
+    "flavorText": "\"That one's real,\" he says, sounding surprised himself."
+  },
+  {
+    "id": "jackpot_egg",
+    "tier": "jackpot",
+    "weight": 4,
+    "kind": "egg",
+    "eggRarity": "rare",
+    "flavorText": "He won't look you in the eye handing this one over. It's warm. It's definitely real."
+  },
+  {
+    "id": "jackpot_material_haul",
+    "tier": "jackpot",
+    "weight": 3,
+    "kind": "material",
+    "materialId": "ore",
+    "materialAmount": 40,
+    "flavorText": "A whole crate, still nailed shut. \"Found it,\" he says, unconvincingly."
+  },
+  {
+    "id": "jackpot_gear_epic",
+    "tier": "jackpot",
+    "weight": 3,
+    "kind": "equipment",
+    "itemId": "grasp_of_avarice",
+    "flavorText": "For once, Grimsby has absolutely nothing sleazy to say. That's how you know it's good."
+  }
+]

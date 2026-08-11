@@ -4321,6 +4321,119 @@ picker's own verification already surfaced and documented above) --
 confirmed the actual tested value round-tripped correctly and reverted
 the cosmetic-only diff via `git checkout` before finalizing this patch.
 
+### Grimsby, the wandering chance merchant -- built
+A brand-new gamble/variance feature, scoped and designed across a few
+planning rounds before any code was written (see the design doc's own
+list of locked decisions -- card backs are appearance-only, all three
+cards reveal on pick, counter reduction not guaranteed-arrival for the
+enticement item, burst quests excluded from his cooldown). Built
+end-to-end in one pass: new manager, new content type, new quest chain,
+new consumable, and a full tab UI, all wired into the existing systems
+rather than bolted on beside them.
+
+**Unlock.** A new low-level chain, "The Man Who Sells Maybe" (reqLevel
+5, 3 stages) -- the guild catches Grimsby running a rigged card table,
+and instead of running him off, the payoff is he starts dealing
+honestly with this guild specifically. Same `grantsHatchery`-shaped
+mechanism (`ChainDef.grantsPeddler` -> `state.peddlerUnlocked` +
+one-time spotlight), same "hidden entirely until unlocked, never
+force-unlocked by a migration" tab-visibility convention Hatchery
+already established.
+
+**Arrival & cooldown.** `PeddlerManager` tracks a quest-completion
+counter (`state.questsSinceGrimsby`) against a randomized 5-10 threshold
+(`peddler.cooldownMin/MaxQuests`, re-rolled every visit) -- incremented
+from `QuestManager.resolve`, the exact same place `dailyBurstBonus`
+already identifies burst-mode quests, which are explicitly excluded
+here too (a cheap, frequent action shouldn't be able to fast-forward a
+separately-balanced system -- the same lesson the original burst-taper
+fix already had to learn once). He leaves after a real-time window if
+never interacted with (`peddler.leaveWindowMs`, ticked from
+`GameEngine.refreshWorld` the same place Harvest's own despawn timer
+already lives), and the arrival banner only fires from the live tick
+loop, not offline catch-up -- same "you were actually watching"
+treatment chain-complete celebrations already get. A new craftable
+consumable, Beckoning Charm (Alchemist recipe, herbs+ore+gold), shaves
+a flat amount off the counter -- deliberately NOT routed through
+`InventoryManager.useOnHero` (it's not hero-targeted, it's a guild-wide
+counter), so it gets its own `GameEngine.usePeddlerCharm` action instead.
+
+**The card pool.** A genuinely new DevTool content type,
+`peddler-cards.json` (20 entries across bust/refund/modest/good/jackpot),
+not a reuse of the general equipment/loot pool -- an outcome needs its
+own weight, its own flavor line, and a `kind` discriminator none of the
+existing loot-table shapes carry, and it needs to support pure joke
+entries ("A Rock," "An IOU From Grimsby, To Grimsby") that structurally
+can't leak into the real shop/loot pools, since they don't exist
+anywhere outside this one file. Selection is two-level: which TIER rolls
+is a pure Tuning-registry balance knob (`peddler.tierWeight.*`, 45/25/
+18/9/3 starting split); which specific entry within that tier is
+content, weighted by its own `weight` field. Jackpot is rare
+material/gold/egg/epic gear only, no cosmetics, per an explicit design
+call. Found the real established DevTool precedent for a single-item
+reference while building the schema (crafting-recipes' `resultDefId` is
+plain free text, no picker -- the `lootTable` picker is for `string[]`
+"defId@chance" LISTS, not single fields) rather than inventing a new
+picker unnecessarily.
+
+**All three cards flip**, not just the picked one -- a real design
+decision, not a placeholder: `PeddlerManager.resolveFlip` rolls three
+fully independent outcomes, applies only the picked one to state, and
+returns all three so the "so close" tension is real (a missed card can
+genuinely have been the jackpot). Card-BACK art (which of the 3
+uploaded designs each face-down card shows) is rolled independently of
+outcome, on purpose -- it must never correlate with tier, or players
+would just always pick the same-looking card and the entire point of
+three cards collapses.
+
+**UI.** New `PeddlerPanel.tsx` tab (hidden until unlocked, nav badge
+while he's present), Grimsby's own sprite pack (`GrimsbySprite.tsx`,
+same manifest-driven multi-animation pattern `PetSprite`/`VendorSprite`
+already established -- idle/idle2/wave/approval/dialogue, all real
+frame counts measured directly from the uploaded art rather than
+guessed) over a full-scene "Take a Chance" tarot-stall backdrop. Hover
+on a face-down card highlights and shakes it (CSS-only); picking spawns
+a random Grimsby one-liner in a corner speech bubble, then all three
+cards flip to reveal tier/reward/flavor-text, with the picked one
+visually marked.
+
+**A real rendering bug found and fixed during verification, not
+shipped:** genuinely hovering a face-down card (not just a screenshot
+timing fluke -- confirmed by holding a real cursor position across
+several frames) could intermittently repaint it as a blank box with
+Chromium's broken-image glyph mid-shake-animation. Root cause: the
+uploaded card-back art was ~530KB at 1024px tall for a ~176px display
+box, and animating `transform` on the same element carrying that large
+raster background-image without a compositing hint occasionally caught
+Chromium mid-recomposite. Fixed two ways at once -- downsized the
+source art to 400px tall (~95KB, still 2.3x the display size), and
+added `will-change: transform` so the browser promotes the layer before
+the animation starts rather than deciding mid-animation. Re-verified
+with the exact same reproduction (10 consecutive held-hover frames,
+screenshotted) with zero blanking after the fix.
+
+**Verified end-to-end via an actual running build, not just reasoned
+through:** `npx tsc --noEmit` and a full `vite build` both pass clean.
+The DevTool server was started and its new `peddler-cards` schema
+exercised directly (`/api/schema`, `/api/data/peddler-cards`, and a full
+unmodified re-save round-trip with zero diff). Beyond that, this was
+tested in the actual running game via `npm run dev:web` (the browser
+build, no Electron needed) driven by real Playwright automation, not
+just the DevTool: confirmed the tab is genuinely absent before unlock
+and appears after; forced Grimsby's arrival via a new Testing-tab
+button (`testForceGrimsbyArrival`); clicked through the real "Pick Your
+Card" flow end to end; confirmed exactly 3 face-down cards spawn, the
+corner flavor line appears, all 3 reveal on pick with the correct one
+visually marked, and the result summary matches; and independently
+verified the gold math against the live UI's own displayed total for
+two separate real rolls (50 start gold, 32 fee at level 1 -- one run
+landed a refund_small entry for +6 back at 24 remaining, a second
+independent run landed refund_medium for +12 back at 30 remaining, both
+matching their JSON entries' exact `refundPercent` values applied to
+the real fee). Zero console errors across every run. The bug above was
+caught by this same live-browser testing, not by code review -- static
+analysis had no way to catch a compositor-timing issue.
+
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**
   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry

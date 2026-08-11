@@ -18,6 +18,7 @@ import { Tuning } from '../data/tuning';
 import { EquipmentManager } from './EquipmentManager';
 import { ModifierManager } from './ModifierManager';
 import { PetManager } from './PetManager';
+import { PeddlerManager } from './PeddlerManager';
 import { rerollDay, rerollsUsedToday, nextRerollCost } from '../data/reroll';
 import { rollElementTags, elementalBonusForHero } from '../data/elements';
 
@@ -711,6 +712,17 @@ export const QuestManager = {
     const newlyReadyEggs = PetManager.addHatchXp(state, xp);
     if (newlyReadyEggs.length > 0) state.pendingHatchReadyNotice = true;
 
+    // Grimsby's cooldown counter, same account-wide shape -- doesn't care
+    // which hero completed the quest, only whether it was burst-mode
+    // (excluded) or not. Identified the same way this function's own
+    // dailyBurstBonus check already does (duration within the tier's own
+    // burst range), computed independently here since dailyBurstBonus's
+    // own check is gated on `hero` existing and this isn't.
+    const isBurstQuest = cfg.burstMaxDuration !== undefined && quest.offer.duration <= cfg.burstMaxDuration;
+    const grimsbyWasPresent = PeddlerManager.isPresent(state);
+    PeddlerManager.registerQuestCompletion(state, isBurstQuest, resolvedAt);
+    const grimsbyArrived = !grimsbyWasPresent && PeddlerManager.isPresent(state);
+
     const storage = ModifierManager.goldStorage(state);
     state.gold = Math.min(storage, state.gold + gold);
 
@@ -786,6 +798,17 @@ export const QuestManager = {
             state.hatcheryUnlocked = true;
             state.pendingHatcherySpotlight = true;
           }
+          // Grimsby's own intro -- same shape as grantsHatchery just
+          // above. His actual arrival still goes through the normal
+          // registerQuestCompletion/threshold path (not an immediate
+          // visit on unlock) -- unlocking the tab and him actually
+          // showing up are deliberately separate moments, matching how
+          // completing the_last_clutch doesn't drop an egg-ready pet
+          // notice either.
+          if (chain.grantsPeddler) {
+            state.peddlerUnlocked = true;
+            state.pendingPeddlerSpotlight = true;
+          }
         }
       } else {
         active.failedStages += 1;
@@ -828,6 +851,7 @@ export const QuestManager = {
       eggDropped,
       dailyBurstBonus: dailyBurstBonus || undefined,
       critBonus: critBonus || undefined,
+      grimsbyArrived: grimsbyArrived || undefined,
     };
     state.log.unshift(result);
     if (state.log.length > 60) state.log.length = 60;

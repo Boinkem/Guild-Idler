@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 33;
+export const SAVE_VERSION = 34;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -184,6 +184,16 @@ export interface ConsumableDef {
      *  consumable effects. */
     petHealth?: number;
     petRevivalDiscount?: number;
+    /**
+     * Flat reduction to GameState.questsSinceGrimsby, applied immediately
+     * on use -- NOT routed through InventoryManager.useOnHero (this isn't
+     * hero-targeted at all, it's a guild-wide counter), see
+     * GameEngine.usePeddlerCharm instead. Only ever set on "enticement"
+     * consumables (Beckoning Charm being the first); every other
+     * consumable leaves this undefined. See PeddlerManager for the
+     * counter/threshold this actually reduces.
+     */
+    peddlerCounterReduction?: number;
   };
 }
 
@@ -510,6 +520,14 @@ export interface QuestResult {
    *  informational for the result modal's celebration. Independent of,
    *  and can stack with, dailyBurstBonus on the same quest. */
   critBonus?: boolean;
+  /** True when this specific quest's completion pushed
+   *  questsSinceGrimsby past its threshold and triggered his arrival --
+   *  purely informational, GameEngine reads this to fire the arrival
+   *  banner at the one call site that actually calls resolve(), rather
+   *  than diffing GameState.grimsbyArrivedAt before/after at every call
+   *  site (of which there are several -- the live tick loop and offline
+   *  catch-up both resolve quests). See PeddlerManager.registerQuestCompletion. */
+  grimsbyArrived?: boolean;
 }
 
 /**
@@ -1190,6 +1208,41 @@ export interface GameState {
    *  under-equipped until the player notices and revisits the Equipment
    *  tab by hand. */
   autoEquipConsumablesOnSend: boolean;
+
+  /* ------------------------- Grimsby / the peddler ------------------------- */
+  /** True once the intro chain that grants Grimsby has been completed --
+   *  gates the tab's visibility entirely, same convention hatcheryUnlocked
+   *  already established (see MenuWindow). */
+  peddlerUnlocked: boolean;
+  /** Set the moment peddlerUnlocked flips true -- same one-time spotlight
+   *  reuse of OnboardingTour that pendingHatcherySpotlight already does. */
+  pendingPeddlerSpotlight: boolean;
+  /**
+   * Non-burst quest completions since Grimsby's last visit (or since
+   * unlock, if he's never visited yet). Burst-mode quests never increment
+   * this -- identified the same way QuestManager.resolve's own
+   * dailyBurstBonus check already does (duration within the tier's own
+   * burst range) -- see the design writeup for why burst was explicitly
+   * excluded (the exact class of exploit the original burst-taper fix was
+   * about: a cheap, frequent action shouldn't be able to fast-forward a
+   * separately-balanced system). Frozen (not incremented further) while
+   * he's actually present -- see grimsbyArrivedAt.
+   */
+  questsSinceGrimsby: number;
+  /** This cycle's randomized target for questsSinceGrimsby (5-10,
+   *  re-rolled every time he leaves) -- see PeddlerManager.rollThreshold. */
+  grimsbyThreshold: number;
+  /** Epoch ms he arrived, or null if he's not currently here. Distinct
+   *  from questsSinceGrimsby reaching 0 -- that also happens right after
+   *  he leaves, this is the actual presence flag every UI/logic check
+   *  should read instead of inferring presence from the counter. */
+  grimsbyArrivedAt: number | null;
+  /** Epoch ms he'll pack up and leave if never interacted with --
+   *  computed once at arrival (grimsbyArrivedAt + the Tuning-driven
+   *  leave window), not recomputed on every tick. Checked in
+   *  GameEngine.refreshWorld the same place Harvest's own despawn timers
+   *  already are. */
+  grimsbyLeavesAt: number | null;
 }
 
 /**
@@ -1373,3 +1426,81 @@ export interface CraftingRecipeDef {
    *  two separate consumable recipes rather than one with a picker. */
   resultGem?: { kind: 'elemental' | 'resist'; element: ElementType };
 }
+
+/* ----------------------------- Grimsby / the peddler ----------------------------- */
+
+export type PeddlerCardTier = 'bust' | 'refund' | 'modest' | 'good' | 'jackpot';
+
+/**
+ * One possible outcome living in a face-down card, defined in
+ * json/peddler-cards.json (devtool-editable, own schema -- see
+ * server.mjs's 'peddler-cards' entry). Deliberately its own content type
+ * rather than reusing the general equipment/loot pool: an outcome needs
+ * its own weight, its own flavor line, and a `kind` discriminator none
+ * of the existing loot-table shapes carry, AND it needs to support pure
+ * joke/flavor entries (kind: 'joke') that must never leak into the real
+ * shop/black-market/quest-loot pools -- see the design doc's "Rock rule."
+ *
+ * Selection is two-level: PeddlerManager rolls a `tier` first, weighted
+ * by the Tuning registry's peddler.tierWeight.* knobs (pure balance,
+ * content-free), THEN picks one entry from that tier's own pool here,
+ * weighted by this def's own `weight` (content, tier-probability-free).
+ * See guild-idler-status.md's Grimsby writeup for the full design.
+ */
+export interface PeddlerCardDef {
+  id: string;
+  tier: PeddlerCardTier;
+  /** Relative weight among other entries in the SAME tier, not global. */
+  weight: number;
+  kind: 'nothing' | 'joke' | 'goldFlat' | 'goldRefund' | 'material' | 'scrap' | 'equipment' | 'egg';
+  /** Grimsby's own line when this specific card flips -- sleazy/comic
+   *  register regardless of tier, even on a good outcome. */
+  flavorText: string;
+  /** kind: 'joke' only -- a display name for the flipped card ("A Rock").
+   *  Never a real item id; nothing else reads this. */
+  jokeItemName?: string;
+  /** kind: 'goldFlat' only. */
+  goldAmount?: number;
+  /** kind: 'goldRefund' only -- percentage of the fee just paid. */
+  refundPercent?: number;
+  /** kind: 'material' only. */
+  materialId?: MaterialId;
+  materialAmount?: number;
+  /** kind: 'scrap' only. */
+  scrapAmount?: number;
+  /** kind: 'equipment' only -- an EquipmentDef id. */
+  itemId?: string;
+  /** kind: 'egg' only -- same shape as ChainDef.rewardEgg. */
+  eggRarity?: Rarity;
+  dedicatedPetId?: string;
+}
+
+/**
+ * One concrete, already-rolled outcome ready to display and (for the
+ * picked one) apply -- the resolved form of a PeddlerCardDef, with its
+ * cosmetic card-back art attached. `backIndex` is purely which of the 3
+ * uploaded card-back designs this card shows face-down (see
+ * PeddlerManager.resolveFlip's own comment: this is randomized
+ * independently of `outcome`, on purpose, so the art never telegraphs
+ * the tier).
+ */
+export interface PeddlerFlipCard {
+  backIndex: 0 | 1 | 2;
+  outcome: PeddlerCardDef;
+}
+
+/** All three cards from one "Pick Your Card" flip -- `pickedIndex` is
+ *  which of the three was actually chosen and paid out; the other two
+ *  are shown too (per design: reveal all three, "so close" tension is
+ *  the point), but their outcomes were never applied to GameState. */
+export interface PeddlerFlipResult {
+  cards: [PeddlerFlipCard, PeddlerFlipCard, PeddlerFlipCard];
+  pickedIndex: 0 | 1 | 2;
+  feePaid: number;
+  /** Concrete reward text for the picked card, already resolved against
+   *  live game data (item name, etc.) -- UI display convenience so
+   *  PeddlerPanel doesn't need to re-look-up EQUIPMENT_BY_ID/MATERIAL_BY_ID
+   *  itself. */
+  rewardSummary: string;
+}
+

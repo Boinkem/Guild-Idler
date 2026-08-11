@@ -227,6 +227,14 @@ export interface ChainDef {
    */
   grantsHatchery?: boolean;
   /**
+   * True for exactly one chain -- Grimsby's own intro ("The Man Who
+   * Sells Maybe"). Same shape as grantsHatchery: flips
+   * state.peddlerUnlocked and queues the one-time spotlight prompt,
+   * handled in QuestManager.resolve's chain-completion block right
+   * alongside it. See guild-idler-status.md's Grimsby writeup.
+   */
+  grantsPeddler?: boolean;
+  /**
    * A guaranteed egg on completion -- the egg equivalent of rewardItems
    * above, same "always granted, not a chance roll" contract. Optional
    * dedicatedPetId locks in a specific species from the dedicated pool

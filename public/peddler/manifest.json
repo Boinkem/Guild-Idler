@@ -1,0 +1,11 @@
+{
+  "frameW": 128,
+  "frameH": 128,
+  "animations": {
+    "idle": 6,
+    "idle2": 7,
+    "wave": 11,
+    "approval": 8,
+    "dialogue": 16
+  }
+}

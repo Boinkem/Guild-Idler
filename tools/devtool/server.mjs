@@ -319,6 +319,50 @@ const SCHEMAS = {
       eggLoot: { type: 'string[]', required: false },
     },
   },
+  'peddler-cards': {
+    file: 'peddler-cards.json',
+    label: 'Peddler Cards',
+    idField: 'id',
+    // Grimsby's card outcome pool -- a genuinely separate content type
+    // from equipment/loot, not a reuse of the 'lootTable' picker (that
+    // picker is built for string[] "defId@chance" LISTS, e.g.
+    // raid-encounters' own `loot` field, not a single-item reference).
+    // For a single-item reference, `itemId` below follows the exact
+    // precedent crafting-recipes' own `resultDefId` already set: a plain
+    // free-text string, no picker. Selection is two-level: `tier` is
+    // rolled against the Tuning registry's peddler.tierWeight.* knobs
+    // (pure balance, lives outside this file entirely), THEN one entry
+    // from that tier's own pool here is picked weighted by `weight`
+    // (content, tier-probability-free) -- see PeddlerManager.resolveFlip
+    // and PeddlerCardDef's own comment in types.ts for the full design.
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      tier: { type: 'enum', required: true, options: ['bust', 'refund', 'modest', 'good', 'jackpot'] },
+      // Relative weight within this entry's OWN tier, not global -- see
+      // the schema's own top comment.
+      weight: { type: 'number', required: true },
+      kind: {
+        type: 'enum', required: true,
+        options: ['nothing', 'joke', 'goldFlat', 'goldRefund', 'material', 'scrap', 'equipment', 'egg'],
+      },
+      // Grimsby's own line when THIS specific card flips -- sleazy/comic
+      // register throughout, even on a good outcome.
+      flavorText: { type: 'string', required: true },
+      // kind: 'joke' only -- display name on the flipped card ("A Rock").
+      // Never a real item id; nothing outside this one field reads it,
+      // which is exactly what keeps a joke entry from ever being
+      // mistaken for (or leaking into) the real equipment/loot pools.
+      jokeItemName: { type: 'string', required: false },
+      goldAmount: { type: 'number', required: false }, // kind: goldFlat
+      refundPercent: { type: 'number', required: false }, // kind: goldRefund, % of the fee just paid
+      materialId: { type: 'enum', required: false, options: ['ore', 'timber', 'herbs', 'fish'] }, // kind: material
+      materialAmount: { type: 'number', required: false }, // kind: material
+      scrapAmount: { type: 'number', required: false }, // kind: scrap
+      itemId: { type: 'string', required: false }, // kind: equipment -- an equipment.json id, free text (see top comment)
+      eggRarity: { type: 'enum', required: false, options: ['common', 'uncommon', 'rare', 'epic', 'legendary'] }, // kind: egg
+      dedicatedPetId: { type: 'string', required: false }, // kind: egg, optional
+    },
+  },
   'raids': {
     file: 'raids.json',
     label: 'Raids',

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useEngine } from '../useEngine';
 import { formatGold, formatDuration, RARITY_ORDER } from '../../game/util';
 import { PETS } from '../../game/data/pets';
+import { PeddlerManager } from '../../game/managers/PeddlerManager';
 
 const HOUR = 3600000;
 
@@ -121,6 +122,14 @@ export function TestingPanel() {
           <button key={def.id} onClick={() => engine.testAddPet(def.id)}>+ {def.name}</button>
         ))}
       </div>
+
+      <div className="section-heading">Grimsby</div>
+      <p className="small muted" style={{ marginBottom: 8 }}>
+        {state.peddlerUnlocked
+          ? (PeddlerManager.isPresent(state) ? 'He\u2019s here right now.' : 'Unlocked, but not currently around.')
+          : 'Locked -- the button below unlocks and force-spawns him immediately.'}
+      </p>
+      <button onClick={() => engine.testForceGrimsbyArrival()}>Force Grimsby to arrive now</button>
 
       <div className="section-heading">Current state</div>
       <p className="small muted">

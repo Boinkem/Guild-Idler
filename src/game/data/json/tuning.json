@@ -2869,5 +2869,111 @@
     "min": 0,
     "max": 1,
     "description": "Same 10% shape as health.bulkReviveDiscount, for reviving every Fallen pet at once."
+  },
+  {
+    "id": "peddler.cooldownMinQuests",
+    "label": "Grimsby: min quests between visits",
+    "category": "peddler",
+    "value": 5,
+    "default": 5,
+    "min": 1,
+    "max": 50,
+    "description": "Lower bound of the randomized non-burst-quest threshold rolled each time Grimsby leaves (see PeddlerManager.rollThreshold)."
+  },
+  {
+    "id": "peddler.cooldownMaxQuests",
+    "label": "Grimsby: max quests between visits",
+    "category": "peddler",
+    "value": 10,
+    "default": 10,
+    "min": 1,
+    "max": 50,
+    "description": "Upper bound of the randomized non-burst-quest threshold rolled each time Grimsby leaves."
+  },
+  {
+    "id": "peddler.leaveWindowMs",
+    "label": "Grimsby: leaves if ignored after (ms)",
+    "category": "peddler",
+    "value": 900000,
+    "default": 900000,
+    "min": 60000,
+    "description": "Real-time window after arrival before Grimsby packs up and leaves untouched -- 900000 = 15 minutes."
+  },
+  {
+    "id": "peddler.feeBaseCost",
+    "label": "Grimsby: base card-pick fee (gold)",
+    "category": "peddler",
+    "value": 30,
+    "default": 30,
+    "min": 0,
+    "description": "Flat gold cost floor for a single Pick Your Card flip, before the per-level scaling below."
+  },
+  {
+    "id": "peddler.feeCostPerLevel",
+    "label": "Grimsby: fee scaling per guild level",
+    "category": "peddler",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "description": "Gold added to the card-pick fee per level of the guild's highest hero -- see PeddlerManager.feeCost."
+  },
+  {
+    "id": "peddler.tierWeight.bust",
+    "label": "Grimsby: tier weight - Bust",
+    "category": "peddler",
+    "value": 45,
+    "default": 45,
+    "min": 0,
+    "max": 100,
+    "description": "Relative weight for the Bust tier in the tier-selection roll -- see PeddlerManager.resolveFlip. All five tierWeight.* entries are relative to each other, not independent percentages."
+  },
+  {
+    "id": "peddler.tierWeight.refund",
+    "label": "Grimsby: tier weight - Refund",
+    "category": "peddler",
+    "value": 25,
+    "default": 25,
+    "min": 0,
+    "max": 100,
+    "description": "Relative weight for the Refund tier in the tier-selection roll."
+  },
+  {
+    "id": "peddler.tierWeight.modest",
+    "label": "Grimsby: tier weight - Modest",
+    "category": "peddler",
+    "value": 18,
+    "default": 18,
+    "min": 0,
+    "max": 100,
+    "description": "Relative weight for the Modest tier in the tier-selection roll."
+  },
+  {
+    "id": "peddler.tierWeight.good",
+    "label": "Grimsby: tier weight - Good",
+    "category": "peddler",
+    "value": 9,
+    "default": 9,
+    "min": 0,
+    "max": 100,
+    "description": "Relative weight for the Good tier in the tier-selection roll."
+  },
+  {
+    "id": "peddler.tierWeight.jackpot",
+    "label": "Grimsby: tier weight - Jackpot",
+    "category": "peddler",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "max": 100,
+    "description": "Relative weight for the Jackpot tier in the tier-selection roll -- deliberately the smallest, per design (rare material/gold/egg/epic gear, no cosmetics)."
+  },
+  {
+    "id": "peddler.beckoningCharmReduction",
+    "label": "Beckoning Charm: counter reduction",
+    "category": "peddler",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "description": "Flat amount shaved off questsSinceGrimsby when a Beckoning Charm is used -- see GameEngine.usePeddlerCharm."
   }
 ]

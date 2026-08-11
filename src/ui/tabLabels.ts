@@ -11,7 +11,7 @@
  */
 export const TAB_LABELS: Record<string, string> = {
   dashboard: 'the Guild', heroes: 'Heroes', equipment: 'Inventory', vendors: 'Vendors',
-  guild: 'Guild Hall', harvest: 'Harvest', hatchery: 'Hatchery', quests: 'Quests',
+  guild: 'Guild Hall', harvest: 'Harvest', hatchery: 'Hatchery', peddler: 'Grimsby', quests: 'Quests',
   raids: 'Raids', lore: 'Lore', guide: 'Guide', prestige: 'Prestige',
   stats: 'Statistics', settings: 'Settings',
 };

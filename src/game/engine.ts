@@ -1,4 +1,4 @@
-import { ActiveQuest, ElementType, GameState, Hero, HeroClass, MaterialId, Modifiers, Pet, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Stats } from './types';
+import { ActiveQuest, ElementType, GameState, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Stats } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -15,6 +15,7 @@ import { AchievementManager } from './managers/AchievementManager';
 import { GuidanceManager, GuidanceTopic } from './managers/GuidanceManager';
 import { HarvestManager } from './managers/HarvestManager';
 import { PetManager } from './managers/PetManager';
+import { PeddlerManager } from './managers/PeddlerManager';
 import { CraftingManager } from './managers/CraftingManager';
 import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
 import { EQUIPMENT_BY_ID, SET_BY_ID, GEAR_SCORE_BY_RARITY, EQUIP_SLOTS } from './data/equipment';
@@ -67,6 +68,10 @@ export class GameEngine {
    * safely in state.pets either way, this is only the one-shot reveal.
    */
   lastHatchedPet: Pet | null = null;
+  /** Set by pickPeddlerCard, cleared by dismissGrimsbyResult -- same
+   *  transient (unsaved), read-then-cleared shape as lastResult/
+   *  lastHatchedPet. Feeds PeddlerPanel's three-card reveal. */
+  lastGrimsbyResult: PeddlerFlipResult | null = null;
   /**
    * Queued rather than a single overwritable value -- simultaneous events
    * (a quest finishing right as it unlocks something) now show one after
@@ -447,6 +452,13 @@ export class GameEngine {
       if (result.eggDropped) {
         this.say(`Found a ${result.eggDropped.rarity} egg! Equip it in the Hatchery to start it incubating.`, 'hatchery');
       }
+      // Grimsby's arrival -- same "live play only, offline catch-up never
+      // reaches here" treatment as everything else in this block. A
+      // flavor-first banner rather than a plain announcement, matching
+      // his character; "Go to" points straight at his tab.
+      if (result.grimsbyArrived) {
+        this.say('A cart rattles up outside the gate, one wheel squeaking like it\u2019s begging to be replaced.', 'peddler');
+      }
       this.reportAchievements(AchievementManager.checkAll(this.state, now));
       this.reportGuidance(GuidanceManager.checkAll(this.state));
 
@@ -546,6 +558,16 @@ export class GameEngine {
       changed = true;
     }
     if (HarvestManager.ensureSpawns(this.state, now)) changed = true;
+    // Grimsby leaves if ignored -- same "the world doesn't pause just
+    // because you're not looking at it" tick as Harvest's own despawn
+    // timer just above. Fires even during offline catch-up (refreshWorld
+    // itself doesn't distinguish live vs. offline, unlike the quest-
+    // resolution loop above) -- same as Harvest items quietly expiring
+    // while the app was closed, nothing to announce retroactively.
+    if (PeddlerManager.checkExpiry(this.state, now)) {
+      changed = true;
+      this.say('The cart\u2019s gone when you look again. Guess he had somewhere else to be.', 'peddler');
+    }
     // Auto-repair -- opt-in (GameState.autoRepairEnabled), ticks every
     // refreshWorld call the same way Harvest's spawn timer does. Uses the
     // exact same EquipmentManager.allItems(state) scope repairAll() uses
@@ -786,6 +808,19 @@ export class GameEngine {
   testUnlockHatchery() {
     if (!TESTING_TOOLS_ENABLED) return;
     this.state.hatcheryUnlocked = true;
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Unlocks Grimsby's tab directly and forces him to arrive right now,
+   *  bypassing both the intro chain and the quest-count cooldown --
+   *  testing the card-flip flow otherwise means actually playing "The
+   *  Man Who Sells Maybe" and then grinding out 5-10 real quests every
+   *  single time. */
+  testForceGrimsbyArrival() {
+    if (!TESTING_TOOLS_ENABLED) return;
+    this.state.peddlerUnlocked = true;
+    PeddlerManager.arrive(this.state, Date.now());
     this.notify();
     void this.saveNow();
   }
@@ -1893,6 +1928,61 @@ export class GameEngine {
       return this.say('That tombstone style is not unlocked yet.');
     }
     this.state.selectedTombstoneStyle = styleId;
+    this.notify();
+    void this.saveNow();
+  }
+
+  /* ------------------------- Grimsby / the peddler ------------------------- */
+
+  /** Dismisses the one-time "you've unlocked Grimsby" spotlight -- same
+   *  pattern as dismissHatcherySpotlight. */
+  dismissPeddlerSpotlight() {
+    this.state.pendingPeddlerSpotlight = false;
+    void this.saveNow();
+  }
+
+  /**
+   * The "Pick Your Card" action -- pays the fee, resolves all three
+   * cards (see PeddlerManager.resolveFlip), and stores the result in
+   * lastGrimsbyResult for PeddlerPanel to render, same "mutate state, UI
+   * reads a transient field" shape lastResult/lastHatchedPet already use.
+   * Jackpot gets its own sound cue (reusing legendary_drop, same one a
+   * real legendary quest loot roll or a fresh hatch already uses) rather
+   * than blending into the ordinary purchase/collect cues -- it's meant
+   * to stand out the same way those moments already do.
+   */
+  pickPeddlerCard(cardIndex: 0 | 1 | 2) {
+    if (!PeddlerManager.isPresent(this.state)) return this.say('There\u2019s no one there right now.');
+    const fee = PeddlerManager.feeCost(this.state);
+    if (this.state.gold < fee) return this.say('Not enough gold.');
+    const result = PeddlerManager.resolveFlip(this.state, cardIndex, Date.now());
+    if (!result) return this.say('Something about that didn\u2019t work.');
+    this.lastGrimsbyResult = result;
+    playSound(result.cards[result.pickedIndex].outcome.tier === 'jackpot' ? 'legendary_drop' : 'purchase');
+    this.notify();
+    void this.saveNow();
+  }
+
+  dismissGrimsbyResult() {
+    this.lastGrimsbyResult = null;
+    this.notify();
+  }
+
+  /**
+   * Uses an enticement consumable (e.g. Beckoning Charm) -- deliberately
+   * NOT routed through InventoryManager.useOnHero the way healing/injury
+   * consumables are, since this isn't hero-targeted at all, it's a flat
+   * reduction to the guild-wide questsSinceGrimsby counter. Reuses
+   * InventoryManager.remove directly for the same inventory-decrement
+   * behavior useOnHero itself relies on.
+   */
+  usePeddlerCharm(defId: string) {
+    const def = InventoryManager.resolveDef(this.state, defId);
+    const reduction = def?.effect.peddlerCounterReduction ?? 0;
+    if (!def || reduction <= 0) return this.say('That doesn\u2019t do anything here.');
+    if (!InventoryManager.remove(this.state, defId)) return this.say('None left.');
+    this.state.questsSinceGrimsby = Math.max(0, this.state.questsSinceGrimsby - reduction);
+    playSound('collect');
     this.notify();
     void this.saveNow();
   }
