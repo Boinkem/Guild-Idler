@@ -218,7 +218,7 @@ button {
   transition: background 90ms linear, transform 90ms linear;
 }
 
-button:hover:not(:disabled) { background: var(--panel-3); }
+button:hover:not(:disabled) { background-color: var(--panel-3); }
 button:active:not(:disabled) { transform: translateY(1px); }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 button:focus-visible, [tabindex]:focus-visible {
@@ -2361,9 +2361,22 @@ button.harvest-item:hover {
    since it needs to comfortably fit 3 cards side by side. */
 .peddler-modal {
   max-width: 640px;
+  min-height: 440px;
   background-size: cover;
   background-position: center;
   text-align: center;
+  /* Same box every state (browsing / cards laid out / result) instead of
+     shrinking to fit whatever's currently rendered -- space-between keeps
+     the header pinned to the top and the close button pinned to the
+     bottom, with the middle content (button, card row, or card row +
+     result) centered in whatever room is left. */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  /* .modal's own padding-top (16px) was tight enough that Grimsby's
+     sprite/glow in the header clipped against the top edge on some
+     zoom levels. */
+  padding-top: 22px;
 }
 .peddler-modal-header {
   display: flex;
@@ -2390,6 +2403,12 @@ button.harvest-item:hover {
   background-color: var(--panel);
 }
 .peddler-card-facedown {
+  /* .peddler-card's background-color (var(--panel)) was showing through
+     the transparent margin baked into the card-back art itself -- the
+     art doesn't fill its own canvas edge-to-edge, so "cover" alone
+     doesn't hide it. Dropping the fill here lets it read as intended:
+     just the card, no grey box behind it. */
+  background-color: transparent;
   background-size: cover;
   background-position: center;
   cursor: pointer;

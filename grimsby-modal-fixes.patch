@@ -1,0 +1,104 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 2160000..5ef9498 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -4587,6 +4587,50 @@ fresh clone of current `main` rather than the older commit this round
+ of work happened to start from, so nothing from the balance pass
+ double-applies or conflicts.
+ 
++### Grimsby: modal-sizing and card-art playtest fixes
++Four more concrete complaints from playing the shipped card modal, all CSS-only, no JSX changes needed.
++
++- **Modal no longer resizes between states.** `.peddler-modal` had no
++  height of its own -- it just shrank/grew to fit whichever content was
++  currently rendered (browsing button vs. laid-out cards vs. the result
++  + summary), so the box visibly jumped size on "Lay out the cards."
++  Given `min-height: 440px` plus `display: flex; flex-direction: column;
++  justify-content: space-between;` so the header stays pinned to the
++  top and the close button stays pinned to the bottom in every state,
++  with whatever's in between centered in the remaining space -- same
++  box, every time.
++- **Found the actual cause of the hover "zoom."** Not a transform (that
++  was already removed in the prior pass) -- the *global* `button:hover
++  { background: var(--panel-3); }` rule uses the `background` shorthand,
++  which resets every background sub-property it doesn't mention,
++  including `background-position` (-> `0% 0%`) and `background-size`
++  (-> `auto`). Specificity-wise that generic rule (`button:hover:not
++  (:disabled)`) actually beats `.peddler-card-facedown`'s own
++  `background-position: center; background-size: cover;`, so on hover
++  the card art snapped to its native resolution anchored top-left --
++  exactly the "zooms in to the far left" symptom, and not specific to
++  Grimsby at all, just never visible elsewhere since no other button
++  uses a background-image. Fixed at the source: the global rule now
++  sets `background-color` instead of the `background` shorthand, so it
++  only ever touches the color it's meant to.
++- **Top-of-modal clipping.** `.modal`'s default `padding-top` (16px)
++  was tight enough that Grimsby's header sprite/glow clipped against
++  the modal's top edge at some zoom levels. Bumped to `padding-top:
++  22px` on `.peddler-modal` specifically rather than touching the
++  shared `.modal` padding everywhere else.
++- **Dark-grey box behind the transparent card-back art.** The card-back
++  PNGs don't fill their own canvas edge-to-edge -- there's transparent
++  margin baked into the file itself, and `.peddler-card`'s
++  `background-color: var(--panel)` was showing straight through it even
++  with `background-size: cover`. Fixed by setting `background-color:
++  transparent` on `.peddler-card-facedown` specifically (the revealed
++  state's own intentional card-back fill is untouched).
++
++Not yet re-verified live (no dev environment in this pass) -- worth a
++quick playtest pass next time the game's actually run to confirm all
++four visually, especially the modal min-height against the tallest
++real state (three expanded revealed cards + the result summary).
++
+ ### Bigger, still-undecided
+ - **Queued from the same conversation as the UX/economy batch above:**
+   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 2dd1abe..93439e6 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -218,7 +218,7 @@ button {
+   transition: background 90ms linear, transform 90ms linear;
+ }
+ 
+-button:hover:not(:disabled) { background: var(--panel-3); }
++button:hover:not(:disabled) { background-color: var(--panel-3); }
+ button:active:not(:disabled) { transform: translateY(1px); }
+ button:disabled { opacity: 0.4; cursor: not-allowed; }
+ button:focus-visible, [tabindex]:focus-visible {
+@@ -2361,9 +2361,22 @@ button.harvest-item:hover {
+    since it needs to comfortably fit 3 cards side by side. */
+ .peddler-modal {
+   max-width: 640px;
++  min-height: 440px;
+   background-size: cover;
+   background-position: center;
+   text-align: center;
++  /* Same box every state (browsing / cards laid out / result) instead of
++     shrinking to fit whatever's currently rendered -- space-between keeps
++     the header pinned to the top and the close button pinned to the
++     bottom, with the middle content (button, card row, or card row +
++     result) centered in whatever room is left. */
++  display: flex;
++  flex-direction: column;
++  justify-content: space-between;
++  /* .modal's own padding-top (16px) was tight enough that Grimsby's
++     sprite/glow in the header clipped against the top edge on some
++     zoom levels. */
++  padding-top: 22px;
+ }
+ .peddler-modal-header {
+   display: flex;
+@@ -2390,6 +2403,12 @@ button.harvest-item:hover {
+   background-color: var(--panel);
+ }
+ .peddler-card-facedown {
++  /* .peddler-card's background-color (var(--panel)) was showing through
++     the transparent margin baked into the card-back art itself -- the
++     art doesn't fill its own canvas edge-to-edge, so "cover" alone
++     doesn't hide it. Dropping the fill here lets it read as intended:
++     just the card, no grey box behind it. */
++  background-color: transparent;
+   background-size: cover;
+   background-position: center;
+   cursor: pointer;

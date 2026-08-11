@@ -4587,6 +4587,50 @@ fresh clone of current `main` rather than the older commit this round
 of work happened to start from, so nothing from the balance pass
 double-applies or conflicts.
 
+### Grimsby: modal-sizing and card-art playtest fixes
+Four more concrete complaints from playing the shipped card modal, all CSS-only, no JSX changes needed.
+
+- **Modal no longer resizes between states.** `.peddler-modal` had no
+  height of its own -- it just shrank/grew to fit whichever content was
+  currently rendered (browsing button vs. laid-out cards vs. the result
+  + summary), so the box visibly jumped size on "Lay out the cards."
+  Given `min-height: 440px` plus `display: flex; flex-direction: column;
+  justify-content: space-between;` so the header stays pinned to the
+  top and the close button stays pinned to the bottom in every state,
+  with whatever's in between centered in the remaining space -- same
+  box, every time.
+- **Found the actual cause of the hover "zoom."** Not a transform (that
+  was already removed in the prior pass) -- the *global* `button:hover
+  { background: var(--panel-3); }` rule uses the `background` shorthand,
+  which resets every background sub-property it doesn't mention,
+  including `background-position` (-> `0% 0%`) and `background-size`
+  (-> `auto`). Specificity-wise that generic rule (`button:hover:not
+  (:disabled)`) actually beats `.peddler-card-facedown`'s own
+  `background-position: center; background-size: cover;`, so on hover
+  the card art snapped to its native resolution anchored top-left --
+  exactly the "zooms in to the far left" symptom, and not specific to
+  Grimsby at all, just never visible elsewhere since no other button
+  uses a background-image. Fixed at the source: the global rule now
+  sets `background-color` instead of the `background` shorthand, so it
+  only ever touches the color it's meant to.
+- **Top-of-modal clipping.** `.modal`'s default `padding-top` (16px)
+  was tight enough that Grimsby's header sprite/glow clipped against
+  the modal's top edge at some zoom levels. Bumped to `padding-top:
+  22px` on `.peddler-modal` specifically rather than touching the
+  shared `.modal` padding everywhere else.
+- **Dark-grey box behind the transparent card-back art.** The card-back
+  PNGs don't fill their own canvas edge-to-edge -- there's transparent
+  margin baked into the file itself, and `.peddler-card`'s
+  `background-color: var(--panel)` was showing straight through it even
+  with `background-size: cover`. Fixed by setting `background-color:
+  transparent` on `.peddler-card-facedown` specifically (the revealed
+  state's own intentional card-back fill is untouched).
+
+Not yet re-verified live (no dev environment in this pass) -- worth a
+quick playtest pass next time the game's actually run to confirm all
+four visually, especially the modal min-height against the tallest
+real state (three expanded revealed cards + the result summary).
+
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**
   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
