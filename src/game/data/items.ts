@@ -1,5 +1,6 @@
 import { ConsumableDef, Difficulty, Injury } from '../types';
-import { HOUR, MINUTE } from '../util';
+import { HOUR } from '../util';
+import { Tuning } from './tuning';
 
 /**
  * Consumables live in json/consumables.json so they can be edited via
@@ -53,4 +54,19 @@ export const INJURIES: InjuryDef[] = (injuriesJson as InjuryJson[]).map((j) => (
   minDifficulty: j.minDifficulty,
 }));
 
-export const REST_TICK = 30 * MINUTE;
+export const INJURY_BY_ID: Record<string, InjuryDef> = Object.fromEntries(
+  INJURIES.map((i) => [i.id, i]),
+);
+
+/**
+ * Health damage (as a percent of Max Health) an injury deals, derived
+ * directly from its own existing durationMs rather than authored as a new
+ * field -- self-corrects if an injury's duration ever changes, same
+ * philosophy the burst-quest cap already uses. See guild-idler-status.md's
+ * Health stat + Fallen/death mechanic section for the worked examples
+ * across all 9 current injuries (5%-60%).
+ */
+export function healthDamagePercentForInjuryDef(def: InjuryDef): number {
+  const hours = def.durationMs / HOUR;
+  return hours * Tuning.get('health.injuryDamagePercentPerDurationHour');
+}

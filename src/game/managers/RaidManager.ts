@@ -3,6 +3,7 @@ import {
 } from '../types';
 import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty } from '../data/raids';
 import { EQUIPMENT_BY_ID } from '../data/equipment';
+import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
 import { MIN_SUCCESS, MAX_SUCCESS } from './QuestManager';
 import { HeroManager } from './HeroManager';
 import { EquipmentManager } from './EquipmentManager';
@@ -156,6 +157,7 @@ export const RaidManager = {
       const hero = state.heroes.find((h) => h.id === id);
       if (!hero) return { ok: false, error: 'Unknown hero in the party.' };
       if (hero.status === 'questing') return { ok: false, error: `${hero.name} is already away.` };
+      if (hero.status === 'fallen') return { ok: false, error: `${hero.name} is Fallen and needs to be revived first.` };
       if (hero.level < raid.reqLevel) return { ok: false, error: `${hero.name} is below the required level (${raid.reqLevel}).` };
     }
     return { ok: true };
@@ -274,8 +276,14 @@ export const RaidManager = {
         injury.healsAt = resolvedAt + (injury.healsAt - Date.now());
         hero.injuries.push(injury);
         injuries.push({ heroId: hero.id, heroName: hero.name, injury });
+        // Same Health-damage piggyback as QuestManager.resolve's injury
+        // roll -- see items.ts's healthDamagePercentForInjuryDef.
+        const def = INJURY_BY_ID[injury.id];
+        if (def) HeroManager.applyHealthDamage(hero, healthDamagePercentForInjuryDef(def));
       }
-      hero.status = 'idle';
+      // Don't stomp Fallen back to idle -- see QuestManager.resolve's
+      // identical guard for the full reasoning.
+      if (hero.status !== 'fallen') hero.status = 'idle';
     }
 
     const result: RaidResult = {

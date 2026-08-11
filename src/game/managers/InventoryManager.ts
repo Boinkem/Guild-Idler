@@ -1,5 +1,6 @@
 import { CONSUMABLE_BY_ID, CONSUMABLES } from '../data/items';
 import { ConsumableDef, GameState, Hero, Modifiers } from '../types';
+import { HeroManager } from './HeroManager';
 
 export const InventoryManager = {
   /**
@@ -57,10 +58,27 @@ export const InventoryManager = {
   useOnHero(state: GameState, hero: Hero, defId: string): string | null {
     const def = InventoryManager.resolveDef(state, defId);
     if (!def) return 'Unknown item.';
-    if (!def.effect.healInjury) return 'Apply that one when sending a hero out.';
-    if (hero.injuries.length === 0) return `${hero.name} is not injured.`;
+    const healsInjury = !!def.effect.healInjury;
+    const restoresHealth = (def.effect.restoreHealth ?? 0) > 0;
+    if (!healsInjury && !restoresHealth) return 'Apply that one when sending a hero out.';
+    if (healsInjury && hero.injuries.length === 0 && !restoresHealth) {
+      return `${hero.name} is not injured.`;
+    }
     if (!InventoryManager.remove(state, defId)) return 'None left.';
-    hero.injuries.shift();
+    if (healsInjury && hero.injuries.length > 0) hero.injuries.shift();
+    if (restoresHealth) {
+      const max = HeroManager.maxHealth(hero);
+      const current = HeroManager.currentHealth(hero);
+      // Deliberately does NOT revive a Fallen hero -- restoreHealth tops
+      // up an already-standing hero. Reviving from 0 goes through
+      // engine.reviveHero (paid) or the Infirmary auto-revive timer, not
+      // a potion -- see guild-idler-status.md's Health stat + Fallen/
+      // death mechanic section for why that split is intentional (a
+      // potion shouldn't quietly bypass the revival cost/wait).
+      if (hero.status !== 'fallen') {
+        hero.health = Math.min(max, current + (def.effect.restoreHealth! / 100) * max);
+      }
+    }
     return null;
   },
 

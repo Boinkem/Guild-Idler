@@ -380,10 +380,17 @@ export class GameEngine {
     this.state.lastSeen = now;
 
     let changed = false;
+    const infirmaryLevel = this.state.guild.infirmary ?? 0;
     for (const hero of this.state.heroes) {
       const before = hero.injuries.length;
       HeroManager.pruneInjuries(hero, now);
       if (hero.injuries.length !== before) changed = true;
+      HeroManager.regenHealth(hero, delta, infirmaryLevel, hero.status === 'questing');
+      if (hero.status === 'fallen' && HeroManager.autoReviveDue(hero, now)) {
+        HeroManager.revive(hero);
+        changed = true;
+        this.say(`${hero.name} has recovered and returns to the roster.`, 'heroes');
+      }
     }
 
     const due = this.state.activeQuests.filter((q) => q.endsAt <= now);
@@ -598,6 +605,25 @@ export class GameEngine {
       if (hero) this.tryContinueAutoChain(hero, quest.endsAt, result.success);
     }
     for (const hero of this.state.heroes) HeroManager.pruneInjuries(hero, now);
+
+    // Health regen and auto-revive across the offline gap -- reuses the
+    // same `elapsed` this whole function already computed from
+    // lastSeen, rather than a per-tick delta (there were no ticks while
+    // the app was closed). Approximates each hero's status as constant
+    // across the whole gap (whatever it settled to after the quest/raid
+    // resolution above) rather than slicing sub-intervals around exactly
+    // when each quest finished -- consistent with how offline catch-up
+    // already treats other systems somewhat coarsely.
+    {
+      const infirmaryLevel = this.state.guild.infirmary ?? 0;
+      for (const hero of this.state.heroes) {
+        HeroManager.regenHealth(hero, elapsed, infirmaryLevel, hero.status === 'questing');
+        if (hero.status === 'fallen' && HeroManager.autoReviveDue(hero, now)) {
+          HeroManager.revive(hero);
+          this.archive(`${hero.name} has recovered and returns to the roster.`, 'heroes');
+        }
+      }
+    }
 
     // A raid resolves as a single event when its total duration has
     // elapsed, same as the loop above does for individual quests -- only
@@ -1419,6 +1445,26 @@ export class GameEngine {
     this.state.stats.goldSpent += injury.treatmentCost;
     hero.injuries = hero.injuries.filter((i) => i !== injury);
     this.say(`${hero.name} is treated for ${injury.name.toLowerCase()}.`);
+    void this.saveNow();
+  }
+
+  /**
+   * Pay-to-skip instant revive for a Fallen hero -- the only path below
+   * Infirmary's max level (see infirmaryAutoReviveUnlocked); still
+   * available even once auto-revive is unlocked, for anyone who doesn't
+   * want to wait out the timer. Mirrors treatInjury's exact shape. See
+   * guild-idler-status.md's Health stat + Fallen/death mechanic section.
+   */
+  reviveHero(heroId: string) {
+    const hero = this.hero(heroId);
+    if (!hero) return;
+    if (hero.status !== 'fallen') return;
+    const cost = HeroManager.revivalCost(hero);
+    if (this.state.gold < cost) return this.say('Not enough gold for revival.');
+    this.state.gold -= cost;
+    this.state.stats.goldSpent += cost;
+    HeroManager.revive(hero);
+    this.say(`${hero.name} is revived and returns to the roster.`, 'heroes');
     void this.saveNow();
   }
 

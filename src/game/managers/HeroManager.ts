@@ -1,10 +1,11 @@
 import { EQUIPMENT_BY_ID, GEAR_SCORE_BY_RARITY, SET_BY_ID } from '../data/equipment';
 import { INJURIES } from '../data/items';
-import { HERO_CLASSES, RECRUIT_START_LEVEL, xpForLevel } from '../data/progression';
+import { HERO_CLASSES, RECRUIT_START_LEVEL, xpForLevel, infirmaryHealTimeMinutes } from '../data/progression';
 import { DIFFICULTY_ORDER } from '../data/quests';
+import { Tuning } from '../data/tuning';
 import { Difficulty, Hero, HeroClass, Injury, Modifiers, Stats } from '../types';
 import { Rng, uid } from '../rng';
-import { scaleMods, sumMods } from '../util';
+import { MINUTE, scaleMods, sumMods } from '../util';
 
 export const HeroManager = {
   create(heroClass: HeroClass, rng: Rng, nameOverride?: string): Hero {
@@ -135,6 +136,128 @@ export const HeroManager = {
     };
   },
 
+  /* ------------------------------- health -------------------------------- */
+
+  /**
+   * Max Health -- a base floor, plus sqrt(endurance) (same shape
+   * statMods already uses for injuryResist) and a flat per-level term,
+   * plus any flat `health` bonus gear rolls (EquipmentDef.mods.health,
+   * summed the normal way via equipmentMods). Since Health damage is
+   * always expressed as a % of this max rather than a flat amount, these
+   * coefficients mostly govern feel/display -- see
+   * guild-idler-status.md's Health stat + Fallen/death mechanic section.
+   */
+  maxHealth(hero: Hero): number {
+    const endurance = HeroManager.totalStats(hero).endurance;
+    const base = Tuning.get('health.maxHealthBase')
+      + Math.sqrt(endurance) * Tuning.get('health.maxHealthEnduranceCoefficient')
+      + hero.level * Tuning.get('health.maxHealthLevelCoefficient');
+    const gearBonus = HeroManager.equipmentMods(hero).health ?? 0;
+    return Math.round(base + gearBonus);
+  },
+
+  /**
+   * Current Health, defaulting to full whenever `hero.health` is
+   * undefined -- see Hero.health's own comment for why this is the one
+   * place that default should be applied. Also clamps to the current
+   * max, so a Health value stored while more heavily geared doesn't
+   * read as "healed above max" after gear changes lower it back down.
+   */
+  currentHealth(hero: Hero): number {
+    const max = HeroManager.maxHealth(hero);
+    return Math.min(hero.health ?? max, max);
+  },
+
+  healthPercent(hero: Hero): number {
+    const max = HeroManager.maxHealth(hero);
+    if (max <= 0) return 0;
+    return (HeroManager.currentHealth(hero) / max) * 100;
+  },
+
+  /**
+   * Applies Health damage as a percent of max, piggybacking on the
+   * existing injury roll rather than a separate trigger -- see
+   * items.ts's healthDamagePercentForInjuryDef for where the percent
+   * itself comes from. No floor: reaching (or going below, in one hit)
+   * 0 flips the hero to 'fallen' -- see the Fallen state's own comment
+   * on HeroStatus and reviveHero/checkAutoRevive below. Deliberately
+   * does nothing if the hero is already fallen -- damage can't stack
+   * past 0 in a way that matters.
+   */
+  applyHealthDamage(hero: Hero, damagePercent: number): void {
+    if (hero.status === 'fallen') return;
+    const max = HeroManager.maxHealth(hero);
+    const current = HeroManager.currentHealth(hero);
+    const damage = (damagePercent / 100) * max;
+    const remaining = Math.max(0, current - damage);
+    hero.health = remaining;
+    if (remaining <= 0) {
+      hero.status = 'fallen';
+      hero.fallenAt = Date.now();
+    }
+  },
+
+  /**
+   * Passive regen -- a continuous rate derived from the current target
+   * heal time (100% / minutes), NOT a fixed tick. A fixed-interval tick
+   * (the original plan reused the dormant REST_TICK constant) can't work
+   * once Infirmary's heal time drops to 10 minutes at max level while
+   * REST_TICK was a fixed 30 -- see guild-idler-status.md's correction
+   * note. `elapsedMs` is whatever real time has actually passed since
+   * the last tick/offline-catchup calculation, same "compute from
+   * elapsed time, not a counted tick" approach QuestManager's offline
+   * resolution already uses elsewhere. Rate is halved to
+   * health.questRegenFraction while `questing` is true, so a long quest
+   * isn't a total recovery freeze, just slower than resting at the guild.
+   * No-ops for a Fallen hero -- Health regen is irrelevant until revived.
+   */
+  regenHealth(hero: Hero, elapsedMs: number, infirmaryLevel: number, questing: boolean): void {
+    if (hero.status === 'fallen') return;
+    const max = HeroManager.maxHealth(hero);
+    const current = HeroManager.currentHealth(hero);
+    if (current >= max) {
+      hero.health = max;
+      return;
+    }
+    const healTimeMinutes = infirmaryHealTimeMinutes(infirmaryLevel);
+    const fraction = questing ? Tuning.get('health.questRegenFraction') : 1;
+    const percentPerMinute = (100 / healTimeMinutes) * fraction;
+    const regen = (elapsedMs / MINUTE) * percentPerMinute * (max / 100);
+    hero.health = Math.min(max, current + regen);
+  },
+
+  /** Gold cost to instantly revive a Fallen hero -- see fallen.revivalCostBase/PerLevel. */
+  revivalCost(hero: Hero): number {
+    return Math.round(
+      Tuning.get('fallen.revivalCostBase') + hero.level * Tuning.get('fallen.revivalCostPerLevel'),
+    );
+  },
+
+  /**
+   * Brings a Fallen hero back at full Health -- shared by both the paid
+   * instant-revive path and the free auto-revive path once Infirmary
+   * hits max level. Deliberately does NOT touch level/xp/gear/ascension
+   * -- nothing permanent was lost, see guild-idler-status.md.
+   */
+  revive(hero: Hero): void {
+    hero.status = 'idle';
+    hero.health = HeroManager.maxHealth(hero);
+    hero.fallenAt = null;
+  },
+
+  /**
+   * True once a Fallen hero has waited out Infirmary's free auto-revive
+   * timer -- only reachable at all once infirmaryAutoReviveUnlocked(level)
+   * is true; below max Infirmary level there is no free path, only
+   * paid (see revivalCost above). Checked from the engine tick, same
+   * "compute from elapsed real time" shape regenHealth already uses.
+   */
+  autoReviveDue(hero: Hero, now: number): boolean {
+    if (hero.status !== 'fallen' || !hero.fallenAt) return false;
+    const hours = Tuning.get('guild_facility.infirmary.autoReviveHours');
+    return now - hero.fallenAt >= hours * 60 * MINUTE;
+  },
+
   /**
    * Stats convert to modifiers on a deliberately gentle curve so that gear and
    * upgrades stay relevant deep into the game.
@@ -223,6 +346,19 @@ export const HeroManager = {
     return sumMods(...hero.injuries.filter((i) => i.healsAt > now).map((i) => i.mods));
   },
 
+  /**
+   * Success points lost to missing Health, folded in the same way
+   * injuryMods already is -- a soft penalty, never a hard gate, so a
+   * hero at low Health is worse odds but never literally unsendable
+   * (that's what avoids the "auto-fail on 0 health" problem this system
+   * was designed around). Zero once fully healed.
+   */
+  healthMods(hero: Hero): Partial<Modifiers> {
+    const missing = 100 - HeroManager.healthPercent(hero);
+    if (missing <= 0) return {};
+    return { success: -missing * Tuning.get('health.successPenaltyPerMissingPercent') };
+  },
+
   /** Everything the hero personally contributes, before guild/upgrade bonuses. */
   heroMods(hero: Hero, now: number): Modifiers {
     const classDef = HERO_CLASSES[hero.heroClass];
@@ -231,6 +367,7 @@ export const HeroManager = {
       HeroManager.statMods(HeroManager.totalStats(hero)),
       HeroManager.equipmentMods(hero),
       HeroManager.injuryMods(hero, now),
+      HeroManager.healthMods(hero),
       { success: hero.level * 0.4 },
     );
   },

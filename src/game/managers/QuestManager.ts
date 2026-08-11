@@ -5,6 +5,7 @@ import {
 import { HERO_CLASSES } from '../data/progression';
 import { fastQuestCapsPerHour, fastQuestFloorPerHour } from '../data/balance';
 import { questEggDropChance } from '../data/pets';
+import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
 import {
   ActiveQuest, Difficulty, GameState, Hero, QuestOffer, QuestResult, Rarity,
 } from '../types';
@@ -462,6 +463,7 @@ export const QuestManager = {
     state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number,
   ): { quest?: ActiveQuest; error?: string } {
     if (hero.status === 'questing') return { error: `${hero.name} is already out.` };
+    if (hero.status === 'fallen') return { error: `${hero.name} is Fallen and needs to be revived first.` };
 
     // A hero's equipped consumable slots can end up pointing at an item the
     // guild no longer actually has -- the previous version of this hard-
@@ -646,6 +648,17 @@ export const QuestManager = {
     if (quest.injuryResist < 100 && rng.chance(injuryRisk)) {
       injury = HeroManager.rollInjury(rng, quest.offer.difficulty);
       injury.healsAt = resolvedAt + (injury.healsAt - Date.now());
+      // Health damage piggybacks directly on this same roll rather than a
+      // separate trigger -- see items.ts's healthDamagePercentForInjuryDef
+      // and guild-idler-status.md's Health stat + Fallen/death mechanic
+      // section. A hero can be sent home Fallen from an ordinary quest,
+      // same as any other injury outcome -- there's no special handling
+      // needed here beyond applying the damage; HeroManager.applyHealthDamage
+      // itself flips hero.status to 'fallen' if this drops them to 0.
+      if (hero) {
+        const def = INJURY_BY_ID[injury.id];
+        if (def) HeroManager.applyHealthDamage(hero, healthDamagePercentForInjuryDef(def));
+      }
     }
 
     /* ----------------------------- durability ----------------------------- */
@@ -659,7 +672,12 @@ export const QuestManager = {
     if (hero) {
       levelsGained = HeroManager.grantXp(hero, xp);
       if (injury) hero.injuries.push(injury);
-      hero.status = 'idle';
+      // Don't stomp Fallen back to idle -- HeroManager.applyHealthDamage
+      // (above, in the injury block) may have just set this hero to
+      // 'fallen' as part of resolving THIS quest. They still came home
+      // (activeQuestId clears either way), they just can't be sent back
+      // out until revived.
+      if (hero.status !== 'fallen') hero.status = 'idle';
       hero.activeQuestId = null;
       hero.questsCompleted += 1;
     }

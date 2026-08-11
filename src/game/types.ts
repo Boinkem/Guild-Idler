@@ -337,6 +337,15 @@ export interface Hero {
    * above 0).
    */
   health?: number;
+  /**
+   * Epoch ms when this hero's Health hit 0 and they became 'fallen', or
+   * null once revived/never applicable. Drives the free auto-revive
+   * timer (HeroManager.autoReviveDue) once Infirmary reaches max level --
+   * see guild-idler-status.md's Health stat + Fallen/death mechanic
+   * section. Optional/undefined for any hero who has never been Fallen,
+   * same defensive convention as health above.
+   */
+  fallenAt?: number | null;
 }
 
 /* ----------------------------- quests ----------------------------- */
