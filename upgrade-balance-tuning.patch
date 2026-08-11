@@ -1,0 +1,143 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 0f83763..562f6bd 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -5268,3 +5268,112 @@ message body still correctly navigate and dismiss, with only the X
+ failing? Or does nothing on the banner respond at that point? Worth
+ double-checking against a freshly built copy too, in case this predates
+ a fix already in the current code.
++
++### Upgrade balance review: two fixes applied, several more flagged
++Direct report that Better Weapons Training (flat 50% success at max
++level) and Mounted Travel's quest-speed reduction (flat 60% at max) felt
++busted -- both confirmed against the real numbers, both fixed, plus a
++full pass over every other percentage-scaling upgrade/perk/facility in
++the game looking for the same pattern. Everything below reads straight
++from `src/game/data/json/tuning.json` (the live tuning registry every
++`UPGRADES`/`RENOWN_PERKS`/facility entry in `progression.ts` pulls its
++numbers from -- see that file's own top comment) and `PrestigeManager`'s
++tier2 mechanic (renown perks' `tier2.maxLevel` is the perk's *total*
++level cap across both tiers combined, not additional levels on top --
++`ModifierManager` scales `modsPerLevel` by that full level count, so a
++perk's real max bonus is `modsPerLevel × tier2.maxLevel`, not `×
++maxLevel`).
++
++**Fixed, exactly as requested:**
++- `upgrade.weapons_training.successPerLevel`: 5 -> 1 (10 levels = 10%
++  max, down from 50%).
++- `upgrade.mounted_travel.speedPerLevel`: 10 -> 3 (6 levels = 18% max,
++  down from 60%, landing exactly on the requested cap).
++
++Both are pure `tuning.json` value/default edits -- no code changes
++needed, since every `UPGRADES` entry already reads its numbers from the
++registry rather than a literal. Verified via `npx tsc --noEmit` and
++`npm run build:web`.
++
++**Flagged, not yet touched -- same pattern, larger scope.** The two
++fixed above turn out to be the SMALLEST offenders in their own
++categories. Every system below stacks additively with the others
++targeting the same mod, so the combined total (not just any one
++system's own max) is what actually determines how much gear/consumables
++end up mattering:
++
++- **Quest success** (`success` mod) -- weapons_training's fixed 10% is
++  now the smallest contributor. Still stacking on top of it:
++  - `guild_facility.barracks.successPerLevel` = 3, maxLevel 10 -> **30%**
++  - `renown_perk.renowned_skill.successPerLevel` = 3, tier2 max level 25
++    -> **75%** (the single largest success-chance system in the game --
++    larger than the original weapons_training bug by itself)
++  - `upgrade.master_adventurer.successPerLevel` = 3, maxLevel 1 -> 3%
++    (single level, also gates Legendary quest unlock -- probably fine
++    left as a small symbolic bonus tied to that unlock)
++  - **Combined max, even after the weapons_training fix: 10 + 30 + 75 +
++    3 = 118%** -- still enough on its own to push success chance to its
++    ceiling regardless of gear, stats, or consumables.
++
++- **Quest speed** (`speed` mod) -- same shape, mounted_travel's fixed
++  18% is now the smallest:
++  - `renown_perk.swift_legend.speedPerLevel` = 5, tier2 max level 13 ->
++    **65%**
++  - `raid_speed.speedPerLevel` = 8, maxLevel 10 -> **80%** (raids
++    specifically, a separate upgrade track from regular quests, but the
++    same shape of problem)
++
++- **Gold** (`gold` mod):
++  - `upgrade.efficient_adventuring.goldPerLevel` = 10, maxLevel 10 ->
++    **100%** (flat doubles quest gold on its own)
++  - `renown_perk.legacy_of_wealth.goldPerLevel` = 15, tier2 max level 25
++    -> **375%** (the largest single number found in this entire review
++    -- effectively an ~4.75x gold multiplier from one perk)
++  - `guild_facility.treasury.goldPerLevel` = 4, maxLevel 12 -> 48%
++    (comparatively modest, probably fine)
++  - Combined max: **523%**, roughly 6x base gold.
++
++- **XP** (`xp` mod):
++  - `upgrade.war_stories.xpPerLevel` = 15, maxLevel 8 -> **120%**
++  - `renown_perk.scholars_legacy.xpPerLevel` = 20, tier2 max level 19 ->
++    **380%** (second-largest number in the review, right behind
++    legacy_of_wealth above)
++  - `guild_facility.library.xpPerLevel` = 12, maxLevel 10 -> **120%**
++  - Combined max: **620%**, over 7x base XP gain.
++
++- **Loot** (`loot` mod):
++  - `upgrade.veteran_explorer.lootPerLevel` = 5, maxLevel 8 -> 40%
++  - `renown_perk.collectors_eye.lootPerLevel` = 4, tier2 max level 15 ->
++    **60%**
++  - `guild_facility.tavern.lootPerLevel` = 2, maxLevel 5 -> 10% (modest)
++  - Combined max: 110% -- large, but the least extreme of the stat
++    categories reviewed.
++
++- **Injury resist** (`injuryResist` mod):
++  - `upgrade.field_medicine.injuryResistPerLevel` = 8, maxLevel 8 -> 64%
++  - `renown_perk.enduring_legend.injuryResistPerLevel` = 10, tier2 max
++    level 13 -> **130%** -- exceeds 100% on its own, meaning it's
++    possible this alone already fully negates injury chance/damage
++    depending on how the mod is clamped downstream; worth checking
++    whether that clamp exists before touching the number itself.
++  - `raid_recovery.injuryResistPerLevel` = 18, maxLevel 2 -> 36%
++    (low level cap, probably fine)
++
++- **Durability** (`durability` mod) -- flagged for completeness, lowest
++  priority since it's not really a "power" stat the same way the others
++  are (gear lasting longer doesn't trivialize needing gear):
++  - `upgrade.armourers_contract.durabilityPerLevel` = 10, maxLevel 6 ->
++    60%
++  - `guild_facility.workshop.durabilityPerLevel` = 8, maxLevel 10 -> 80%
++  - Combined: 140% (gear lasts ~2.4x longer at full investment).
++
++**Not touched, deliberately:** only the two systems with numbers
++explicitly given (weapons_training, mounted_travel). Everything above
++needs real target numbers before editing -- unlike the two fixed
++systems, several of these interact across multiple sources feeding the
++same stat, so the "right" number for e.g. `renowned_skill` depends on
++what barracks and master_adventurer are also doing, not just its own
++max level in isolation. Worth a follow-up pass once there's a target
++philosophy for each stat category (e.g. "combined bonus from all
++sources should cap around X%"), rather than guessing per-system numbers
++here.
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index b9d09a0..6406d9a 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -1636,8 +1636,8 @@
+     "id": "upgrade.weapons_training.successPerLevel",
+     "label": "Better Weapons Training: success bonus per level",
+     "category": "vendor_upgrades",
+-    "value": 5,
+-    "default": 5,
++    "value": 1,
++    "default": 1,
+     "description": "Better Weapons Training's success bonus per level.",
+     "min": 0
+   },
+@@ -1744,8 +1744,8 @@
+     "id": "upgrade.mounted_travel.speedPerLevel",
+     "label": "Mounted Travel: speed bonus per level",
+     "category": "vendor_upgrades",
+-    "value": 10,
+-    "default": 10,
++    "value": 3,
++    "default": 3,
+     "description": "Mounted Travel's speed bonus per level.",
+     "min": 0
+   },

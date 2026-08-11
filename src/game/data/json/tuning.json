@@ -1636,8 +1636,8 @@
     "id": "upgrade.weapons_training.successPerLevel",
     "label": "Better Weapons Training: success bonus per level",
     "category": "vendor_upgrades",
-    "value": 5,
-    "default": 5,
+    "value": 1,
+    "default": 1,
     "description": "Better Weapons Training's success bonus per level.",
     "min": 0
   },
@@ -1744,8 +1744,8 @@
     "id": "upgrade.mounted_travel.speedPerLevel",
     "label": "Mounted Travel: speed bonus per level",
     "category": "vendor_upgrades",
-    "value": 10,
-    "default": 10,
+    "value": 3,
+    "default": 3,
     "description": "Mounted Travel's speed bonus per level.",
     "min": 0
   },
