@@ -1473,6 +1473,15 @@ export interface PeddlerCardDef {
   /** kind: 'egg' only -- same shape as ChainDef.rewardEgg. */
   eggRarity?: Rarity;
   dedicatedPetId?: string;
+  /**
+   * Single-emoji fallback shown in the icon-only card result display --
+   * same role ConsumableDef.glyph/MaterialDef.glyph already play. Used
+   * for kind: 'joke'/'nothing' (which have no real item to look an icon
+   * up from) and as the final fallback for any other kind whose real
+   * icon can't be resolved. Optional; PeddlerOutcomeIcon falls back to a
+   * generic '?' if even this is unset.
+   */
+  glyph?: string;
 }
 
 /**

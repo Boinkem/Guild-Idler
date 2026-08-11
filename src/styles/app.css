@@ -2346,36 +2346,34 @@ button.harvest-item:hover {
   100% { transform: scale(1); text-shadow: 0 0 6px color-mix(in srgb, var(--gear-score-color, transparent) 55%, transparent); }
 }
 
+
 /* ------------------------------ Grimsby / the peddler ------------------------------ */
-/* Same "full-scene backdrop with content laid over it" shape the crafting
-   stations and hatchery-select already use, just without a fixed
-   aspect-ratio lock (peddler-bg.png's own canvas is 1536x1024, wide enough
-   that a hard aspect-ratio box felt cramped for a scrollable tab body --
-   cover/center instead, same as the per-tab menu backdrop itself). */
-.peddler-scene {
-  position: relative;
-  min-height: 360px;
+
+/* Tab presentation reuses .vendor-card as-is (no new class needed) --
+   see PeddlerPanel.tsx's own comment for why this replaced the earlier
+   full-scene background treatment. */
+
+/* The card-game modal -- own background image (a tabletop scene, not
+   yet supplied as of this patch), same "missing file just fails to
+   paint" convention as every other art asset here; .modal's own solid
+   panel background underneath means an unset image still looks
+   intentional, not broken. Wider than the default .modal max-width
+   since it needs to comfortably fit 3 cards side by side. */
+.peddler-modal {
+  max-width: 640px;
   background-size: cover;
   background-position: center;
-  background-color: var(--night);
-  border-radius: var(--radius);
-  border: 1px solid var(--edge);
-  padding: 16px;
+  text-align: center;
+}
+.peddler-modal-header {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  text-align: center;
-}
-.peddler-waiting, .peddler-offer {
-  background: color-mix(in srgb, var(--night) 70%, transparent);
-  border: 1px solid var(--edge);
-  border-radius: var(--radius);
-  padding: 12px 16px;
-  max-width: 420px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 .peddler-corner-comment {
-  background: color-mix(in srgb, var(--night) 75%, transparent);
+  background: color-mix(in srgb, var(--night) 80%, transparent);
   border: 1px solid var(--brass-dim);
   border-radius: var(--radius);
   padding: 6px 10px;
@@ -2383,10 +2381,10 @@ button.harvest-item:hover {
   color: var(--parchment);
 }
 
-.peddler-card-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+.peddler-card-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin: 10px 0; }
 
 .peddler-card {
-  width: 110px; height: 176px;
+  width: 110px; height: 150px;
   border-radius: 4px;
   border: 1px solid var(--edge);
   background-color: var(--panel);
@@ -2396,48 +2394,46 @@ button.harvest-item:hover {
   background-position: center;
   cursor: pointer;
   padding: 0;
-  transition: transform 120ms ease;
 }
+/* Plain highlight on hover -- no shake/transform. A CSS transform
+   animation on the same element as a large background-image was found
+   to intermittently repaint it blank (Chromium broken-image glyph) mid-
+   animation on genuine sustained hover, confirmed via direct repeated-
+   frame screenshots, not just a one-off. Removing the animation removes
+   the root cause entirely rather than just mitigating it. */
 .peddler-card-facedown:hover {
   border-color: var(--brass);
   outline: 2px solid var(--brass);
-  animation: peddler-card-shake 320ms ease-in-out infinite;
-  /* Hints the compositor to promote this element to its own layer before
-     the transform animation starts, rather than deciding mid-animation --
-     without this, Chromium was observed (headless, but reproducible on
-     genuine sustained hover, not just a screenshot-timing fluke)
-     occasionally repainting the large background-image as a blank box
-     with a broken-image glyph for a frame or two while an untransformed
-     large raster background was mid-composite. Confirmed via direct
-     before/after screenshots across several held-hover frames; also
-     paired with downsizing the source card-back art (was ~530KB at
-     1024px tall for a ~176px display box -- now ~95KB at 400px), which
-     independently reduces the same per-frame raster/composite cost. */
-  will-change: transform;
 }
-/* Hover-highlight + shake, entirely CSS -- no JS animation needed. The
-   shake is a small alternating rotation, fast enough to read as
-   "eager"/nervous rather than broken. */
-
-.peddler-card-facedown:disabled { cursor: default; opacity: 0.6; animation: none; }
-@keyframes peddler-card-shake {
-  0%, 100% { transform: rotate(0deg); }
-  25% { transform: rotate(-3deg); }
-  75% { transform: rotate(3deg); }
-}
+.peddler-card-facedown:disabled { cursor: default; opacity: 0.6; }
 
 .peddler-card-revealed {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 10px 8px;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 8px;
+  cursor: pointer;
   background: color-mix(in srgb, var(--panel-2) 92%, transparent);
+  color: var(--parchment);
+  font: inherit;
+  /* Grows to fit expanded flavor text instead of inheriting .peddler-
+     card's fixed 150px height -- found via a real screenshot, not
+     assumed: the fixed height let expanded details overlap
+     .peddler-result-summary below. min-height keeps the collapsed grid
+     tidy and consistent with the face-down cards' own fixed size; only
+     the expanded state actually grows past it. */
+  height: auto;
+  min-height: 150px;
 }
+.peddler-card-revealed:hover { border-color: var(--brass); }
 .peddler-card-picked { border-color: var(--brass); border-width: 2px; box-shadow: 0 0 10px color-mix(in srgb, var(--brass) 45%, transparent); }
+.peddler-card-name { font-size: 11px; font-weight: bold; text-align: center; }
+.peddler-card-details { margin-top: 4px; max-width: 100px; }
 
 .peddler-result-summary {
-  margin-top: 10px;
+  margin-top: 6px;
   background: color-mix(in srgb, var(--night) 70%, transparent);
   border: 1px solid var(--edge);
   border-radius: var(--radius);

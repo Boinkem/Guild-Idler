@@ -4502,6 +4502,91 @@ wants to refine this further, real playtesting data (how much a player
 actually seems to value landing an egg vs. gold vs. gear) would be a
 better anchor than a guessed number.
 
+### Grimsby: UI rework -- fixed real playtest feedback, not just polish
+Direct follow-up after actually playing the shipped feature -- five
+concrete complaints, all addressed, two more real bugs caught along the
+way while fixing them.
+
+- **Hover shake removed entirely, replaced with a plain highlight.**
+  Wasn't just an aesthetic call: removing the `transform` animation
+  removes the *root cause* of the blank-card rendering bug from the
+  previous pass (that bug only ever existed because something was
+  animating `transform` on the same element as a large background-
+  image) rather than just mitigating it with `will-change`. Re-ran the
+  exact same 8-consecutive-held-hover-frame reproduction that caught it
+  originally -- zero blanking now, by construction, not just luck.
+- **Card results are icon-only now**, not a wall of text. New
+  `PeddlerOutcomeIcon` in `PeddlerCardModal.tsx` reuses the game's
+  already-established icon components as-is -- `ItemIcon` for
+  equipment, `MaterialIcon` for materials, `EggIcon` for eggs, each with
+  their existing icon-or-glyph-fallback behavior already built in, no
+  new fallback logic needed. Gold/scrap/joke outcomes get a plain glyph
+  in the same `.item-icon` box styling everything else already uses.
+  `PeddlerCardDef` gained an optional `glyph` field (same role
+  `ConsumableDef.glyph`/`MaterialDef.glyph` already play) for the
+  joke/nothing entries, which have no real item to look an icon up
+  from -- populated for all 6 existing joke/bust entries. Full flavor
+  text lives behind both a hover tooltip and a click-to-expand toggle,
+  covering hover-capable and touch-only alike.
+- **Tab no longer duplicates the modal's own art.** The "Take a Chance"
+  tarot-stall scene stays exactly where it already correctly was (the
+  MenuWindow-level faded per-tab backdrop, same treatment
+  hatchery-bg.jpg/raids-bg.jpg get) -- it was ALSO being rendered as a
+  bold foreground box inside the tab itself, which is what actually
+  felt daunting. Removed that duplicate foreground use entirely.
+- **Grimsby's own presentation now matches the Vendors convention
+  exactly** -- sprite + name in a `.vendor-card` box (the existing
+  class, reused directly, no new CSS needed) instead of a full-bleed
+  scene with his sprite floating in open space.
+- **The card game moved into its own modal**, same "tab is a plain
+  destination, the special moment is its own overlay" shape
+  CraftingStation/EnhanceStation etc. already establish from each
+  vendor's own page. New `PeddlerCardModal.tsx` references a new
+  tabletop background image (`./lore/peddler-table.png`, not supplied
+  yet as of this patch) -- same "missing file just fails to paint"
+  convention as everywhere else; `.modal`'s own solid panel background
+  underneath means it looks intentional, not broken, until that art
+  lands.
+
+**Two real bugs caught and fixed while building the above, not shipped:**
+
+1. A gold-icon glyph was written as literal JSX text
+   (`>\u25c6</span>`, not inside a JS expression) -- outside a `{}`
+   wrapper or a JS string literal, that's not a valid unicode escape at
+   all, it's eight literal characters. Would have rendered as garbled
+   text instead of the ◆ symbol. Caught by grepping the file for the
+   escape pattern immediately after writing it, not by visual
+   inspection -- fixed by using the real character directly in the JSX
+   text node.
+2. A real layout bug, caught via screenshot: `.peddler-card`'s fixed
+   150px height applied to the revealed state too, so a card's
+   click-to-expand flavor text overflowed straight through
+   `.peddler-result-summary` below it rather than pushing it down.
+   Fixed by giving `.peddler-card-revealed` `height: auto; min-height:
+   150px` instead of inheriting the fixed height -- collapsed cards
+   still line up tidily with the face-down ones, only the expanded
+   state actually grows. Re-verified with all three cards expanded
+   simultaneously (the worst case) before calling it fixed.
+
+**Verified end-to-end again, not assumed fixed from the description
+alone:** `npx tsc --noEmit` and a full `vite build` both pass clean.
+Live-tested via `npm run dev:web` + Playwright exactly as the original
+build was: tab now shows the vendor-card presentation with the old
+full-scene class confirmed absent; the modal opens and shows the
+tabletop-styled overlay; hovering a face-down card was held across 8
+consecutive frames with the background-image checked on every one
+(never blank) and the computed `animationName` confirmed `none`;
+picking reveals all three with real icons present; clicking a revealed
+card expands its details; the layout-overflow screenshot test above
+confirmed clean with all three cards expanded at once; and the full
+gold-spend-and-reward round trip still matches (50 -> 20 gold on a
+30-gold fee with a +6-material outcome, exactly as expected). Zero
+console errors throughout. This patch is scoped cleanly on top of the
+already-merged balance-fix commit -- confirmed by diffing against a
+fresh clone of current `main` rather than the older commit this round
+of work happened to start from, so nothing from the balance pass
+double-applies or conflicts.
+
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**
   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry

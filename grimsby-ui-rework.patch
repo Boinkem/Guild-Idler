@@ -1,0 +1,812 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index bcd4e22..2160000 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -4502,6 +4502,91 @@ wants to refine this further, real playtesting data (how much a player
+ actually seems to value landing an egg vs. gold vs. gear) would be a
+ better anchor than a guessed number.
+ 
++### Grimsby: UI rework -- fixed real playtest feedback, not just polish
++Direct follow-up after actually playing the shipped feature -- five
++concrete complaints, all addressed, two more real bugs caught along the
++way while fixing them.
++
++- **Hover shake removed entirely, replaced with a plain highlight.**
++  Wasn't just an aesthetic call: removing the `transform` animation
++  removes the *root cause* of the blank-card rendering bug from the
++  previous pass (that bug only ever existed because something was
++  animating `transform` on the same element as a large background-
++  image) rather than just mitigating it with `will-change`. Re-ran the
++  exact same 8-consecutive-held-hover-frame reproduction that caught it
++  originally -- zero blanking now, by construction, not just luck.
++- **Card results are icon-only now**, not a wall of text. New
++  `PeddlerOutcomeIcon` in `PeddlerCardModal.tsx` reuses the game's
++  already-established icon components as-is -- `ItemIcon` for
++  equipment, `MaterialIcon` for materials, `EggIcon` for eggs, each with
++  their existing icon-or-glyph-fallback behavior already built in, no
++  new fallback logic needed. Gold/scrap/joke outcomes get a plain glyph
++  in the same `.item-icon` box styling everything else already uses.
++  `PeddlerCardDef` gained an optional `glyph` field (same role
++  `ConsumableDef.glyph`/`MaterialDef.glyph` already play) for the
++  joke/nothing entries, which have no real item to look an icon up
++  from -- populated for all 6 existing joke/bust entries. Full flavor
++  text lives behind both a hover tooltip and a click-to-expand toggle,
++  covering hover-capable and touch-only alike.
++- **Tab no longer duplicates the modal's own art.** The "Take a Chance"
++  tarot-stall scene stays exactly where it already correctly was (the
++  MenuWindow-level faded per-tab backdrop, same treatment
++  hatchery-bg.jpg/raids-bg.jpg get) -- it was ALSO being rendered as a
++  bold foreground box inside the tab itself, which is what actually
++  felt daunting. Removed that duplicate foreground use entirely.
++- **Grimsby's own presentation now matches the Vendors convention
++  exactly** -- sprite + name in a `.vendor-card` box (the existing
++  class, reused directly, no new CSS needed) instead of a full-bleed
++  scene with his sprite floating in open space.
++- **The card game moved into its own modal**, same "tab is a plain
++  destination, the special moment is its own overlay" shape
++  CraftingStation/EnhanceStation etc. already establish from each
++  vendor's own page. New `PeddlerCardModal.tsx` references a new
++  tabletop background image (`./lore/peddler-table.png`, not supplied
++  yet as of this patch) -- same "missing file just fails to paint"
++  convention as everywhere else; `.modal`'s own solid panel background
++  underneath means it looks intentional, not broken, until that art
++  lands.
++
++**Two real bugs caught and fixed while building the above, not shipped:**
++
++1. A gold-icon glyph was written as literal JSX text
++   (`>\u25c6</span>`, not inside a JS expression) -- outside a `{}`
++   wrapper or a JS string literal, that's not a valid unicode escape at
++   all, it's eight literal characters. Would have rendered as garbled
++   text instead of the ◆ symbol. Caught by grepping the file for the
++   escape pattern immediately after writing it, not by visual
++   inspection -- fixed by using the real character directly in the JSX
++   text node.
++2. A real layout bug, caught via screenshot: `.peddler-card`'s fixed
++   150px height applied to the revealed state too, so a card's
++   click-to-expand flavor text overflowed straight through
++   `.peddler-result-summary` below it rather than pushing it down.
++   Fixed by giving `.peddler-card-revealed` `height: auto; min-height:
++   150px` instead of inheriting the fixed height -- collapsed cards
++   still line up tidily with the face-down ones, only the expanded
++   state actually grows. Re-verified with all three cards expanded
++   simultaneously (the worst case) before calling it fixed.
++
++**Verified end-to-end again, not assumed fixed from the description
++alone:** `npx tsc --noEmit` and a full `vite build` both pass clean.
++Live-tested via `npm run dev:web` + Playwright exactly as the original
++build was: tab now shows the vendor-card presentation with the old
++full-scene class confirmed absent; the modal opens and shows the
++tabletop-styled overlay; hovering a face-down card was held across 8
++consecutive frames with the background-image checked on every one
++(never blank) and the computed `animationName` confirmed `none`;
++picking reveals all three with real icons present; clicking a revealed
++card expands its details; the layout-overflow screenshot test above
++confirmed clean with all three cards expanded at once; and the full
++gold-spend-and-reward round trip still matches (50 -> 20 gold on a
++30-gold fee with a +6-material outcome, exactly as expected). Zero
++console errors throughout. This patch is scoped cleanly on top of the
++already-merged balance-fix commit -- confirmed by diffing against a
++fresh clone of current `main` rather than the older commit this round
++of work happened to start from, so nothing from the balance pass
++double-applies or conflicts.
++
+ ### Bigger, still-undecided
+ - **Queued from the same conversation as the UX/economy batch above:**
+   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
+diff --git a/src/game/data/json/peddler-cards.json b/src/game/data/json/peddler-cards.json
+index edba1b5..c4af90f 100644
+--- a/src/game/data/json/peddler-cards.json
++++ b/src/game/data/json/peddler-cards.json
+@@ -4,14 +4,16 @@
+     "tier": "bust",
+     "weight": 10,
+     "kind": "nothing",
+-    "flavorText": "Grimsby shrugs. \"Card's blank. Wasn't me who printed it.\""
++    "flavorText": "Grimsby shrugs. \"Card's blank. Wasn't me who printed it.\"",
++    "glyph": "\ud83d\udcc4"
+   },
+   {
+     "id": "bust_nothing_proud",
+     "tier": "bust",
+     "weight": 10,
+     "kind": "nothing",
+-    "flavorText": "Absolutely nothing happens. Grimsby looks almost proud of that."
++    "flavorText": "Absolutely nothing happens. Grimsby looks almost proud of that.",
++    "glyph": "\ud83c\udfad"
+   },
+   {
+     "id": "bust_joke_rock",
+@@ -19,7 +21,8 @@
+     "weight": 8,
+     "kind": "joke",
+     "jokeItemName": "A Rock",
+-    "flavorText": "\"That's a good rock,\" Grimsby says, entirely serious."
++    "flavorText": "\"That's a good rock,\" Grimsby says, entirely serious.",
++    "glyph": "\ud83e\udea8"
+   },
+   {
+     "id": "bust_joke_button",
+@@ -27,7 +30,8 @@
+     "weight": 8,
+     "kind": "joke",
+     "jokeItemName": "A Single Button",
+-    "flavorText": "\"Matches nothing you own. That's the fun part.\""
++    "flavorText": "\"Matches nothing you own. That's the fun part.\"",
++    "glyph": "\ud83d\udd18"
+   },
+   {
+     "id": "bust_joke_iou",
+@@ -35,7 +39,8 @@
+     "weight": 6,
+     "kind": "joke",
+     "jokeItemName": "An IOU (From Grimsby, To Grimsby)",
+-    "flavorText": "He hands you a slip of paper he owes himself. You're not sure what to do with it either."
++    "flavorText": "He hands you a slip of paper he owes himself. You're not sure what to do with it either.",
++    "glyph": "\ud83d\udcdd"
+   },
+   {
+     "id": "bust_joke_pebble",
+@@ -43,7 +48,8 @@
+     "weight": 8,
+     "kind": "joke",
+     "jokeItemName": "A Suspiciously Round Pebble",
+-    "flavorText": "\"Lucky,\" he says. \"For someone. Not you, evidently.\""
++    "flavorText": "\"Lucky,\" he says. \"For someone. Not you, evidently.\"",
++    "glyph": "\u26aa"
+   },
+   {
+     "id": "refund_small",
+diff --git a/src/game/types.ts b/src/game/types.ts
+index cb58ccd..3ec13af 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -1473,6 +1473,15 @@ export interface PeddlerCardDef {
+   /** kind: 'egg' only -- same shape as ChainDef.rewardEgg. */
+   eggRarity?: Rarity;
+   dedicatedPetId?: string;
++  /**
++   * Single-emoji fallback shown in the icon-only card result display --
++   * same role ConsumableDef.glyph/MaterialDef.glyph already play. Used
++   * for kind: 'joke'/'nothing' (which have no real item to look an icon
++   * up from) and as the final fallback for any other kind whose real
++   * icon can't be resolved. Optional; PeddlerOutcomeIcon falls back to a
++   * generic '?' if even this is unset.
++   */
++  glyph?: string;
+ }
+ 
+ /**
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 21fd1d4..2dd1abe 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -2346,36 +2346,34 @@ button.harvest-item:hover {
+   100% { transform: scale(1); text-shadow: 0 0 6px color-mix(in srgb, var(--gear-score-color, transparent) 55%, transparent); }
+ }
+ 
++
+ /* ------------------------------ Grimsby / the peddler ------------------------------ */
+-/* Same "full-scene backdrop with content laid over it" shape the crafting
+-   stations and hatchery-select already use, just without a fixed
+-   aspect-ratio lock (peddler-bg.png's own canvas is 1536x1024, wide enough
+-   that a hard aspect-ratio box felt cramped for a scrollable tab body --
+-   cover/center instead, same as the per-tab menu backdrop itself). */
+-.peddler-scene {
+-  position: relative;
+-  min-height: 360px;
++
++/* Tab presentation reuses .vendor-card as-is (no new class needed) --
++   see PeddlerPanel.tsx's own comment for why this replaced the earlier
++   full-scene background treatment. */
++
++/* The card-game modal -- own background image (a tabletop scene, not
++   yet supplied as of this patch), same "missing file just fails to
++   paint" convention as every other art asset here; .modal's own solid
++   panel background underneath means an unset image still looks
++   intentional, not broken. Wider than the default .modal max-width
++   since it needs to comfortably fit 3 cards side by side. */
++.peddler-modal {
++  max-width: 640px;
+   background-size: cover;
+   background-position: center;
+-  background-color: var(--night);
+-  border-radius: var(--radius);
+-  border: 1px solid var(--edge);
+-  padding: 16px;
++  text-align: center;
++}
++.peddler-modal-header {
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+-  gap: 10px;
+-  text-align: center;
+-}
+-.peddler-waiting, .peddler-offer {
+-  background: color-mix(in srgb, var(--night) 70%, transparent);
+-  border: 1px solid var(--edge);
+-  border-radius: var(--radius);
+-  padding: 12px 16px;
+-  max-width: 420px;
++  gap: 8px;
++  margin-bottom: 12px;
+ }
+ .peddler-corner-comment {
+-  background: color-mix(in srgb, var(--night) 75%, transparent);
++  background: color-mix(in srgb, var(--night) 80%, transparent);
+   border: 1px solid var(--brass-dim);
+   border-radius: var(--radius);
+   padding: 6px 10px;
+@@ -2383,10 +2381,10 @@ button.harvest-item:hover {
+   color: var(--parchment);
+ }
+ 
+-.peddler-card-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
++.peddler-card-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin: 10px 0; }
+ 
+ .peddler-card {
+-  width: 110px; height: 176px;
++  width: 110px; height: 150px;
+   border-radius: 4px;
+   border: 1px solid var(--edge);
+   background-color: var(--panel);
+@@ -2396,48 +2394,46 @@ button.harvest-item:hover {
+   background-position: center;
+   cursor: pointer;
+   padding: 0;
+-  transition: transform 120ms ease;
+ }
++/* Plain highlight on hover -- no shake/transform. A CSS transform
++   animation on the same element as a large background-image was found
++   to intermittently repaint it blank (Chromium broken-image glyph) mid-
++   animation on genuine sustained hover, confirmed via direct repeated-
++   frame screenshots, not just a one-off. Removing the animation removes
++   the root cause entirely rather than just mitigating it. */
+ .peddler-card-facedown:hover {
+   border-color: var(--brass);
+   outline: 2px solid var(--brass);
+-  animation: peddler-card-shake 320ms ease-in-out infinite;
+-  /* Hints the compositor to promote this element to its own layer before
+-     the transform animation starts, rather than deciding mid-animation --
+-     without this, Chromium was observed (headless, but reproducible on
+-     genuine sustained hover, not just a screenshot-timing fluke)
+-     occasionally repainting the large background-image as a blank box
+-     with a broken-image glyph for a frame or two while an untransformed
+-     large raster background was mid-composite. Confirmed via direct
+-     before/after screenshots across several held-hover frames; also
+-     paired with downsizing the source card-back art (was ~530KB at
+-     1024px tall for a ~176px display box -- now ~95KB at 400px), which
+-     independently reduces the same per-frame raster/composite cost. */
+-  will-change: transform;
+-}
+-/* Hover-highlight + shake, entirely CSS -- no JS animation needed. The
+-   shake is a small alternating rotation, fast enough to read as
+-   "eager"/nervous rather than broken. */
+-
+-.peddler-card-facedown:disabled { cursor: default; opacity: 0.6; animation: none; }
+-@keyframes peddler-card-shake {
+-  0%, 100% { transform: rotate(0deg); }
+-  25% { transform: rotate(-3deg); }
+-  75% { transform: rotate(3deg); }
+ }
++.peddler-card-facedown:disabled { cursor: default; opacity: 0.6; }
+ 
+ .peddler-card-revealed {
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+-  justify-content: center;
+-  padding: 10px 8px;
++  justify-content: flex-start;
++  gap: 4px;
++  padding: 8px;
++  cursor: pointer;
+   background: color-mix(in srgb, var(--panel-2) 92%, transparent);
+-}
++  color: var(--parchment);
++  font: inherit;
++  /* Grows to fit expanded flavor text instead of inheriting .peddler-
++     card's fixed 150px height -- found via a real screenshot, not
++     assumed: the fixed height let expanded details overlap
++     .peddler-result-summary below. min-height keeps the collapsed grid
++     tidy and consistent with the face-down cards' own fixed size; only
++     the expanded state actually grows past it. */
++  height: auto;
++  min-height: 150px;
++}
++.peddler-card-revealed:hover { border-color: var(--brass); }
+ .peddler-card-picked { border-color: var(--brass); border-width: 2px; box-shadow: 0 0 10px color-mix(in srgb, var(--brass) 45%, transparent); }
++.peddler-card-name { font-size: 11px; font-weight: bold; text-align: center; }
++.peddler-card-details { margin-top: 4px; max-width: 100px; }
+ 
+ .peddler-result-summary {
+-  margin-top: 10px;
++  margin-top: 6px;
+   background: color-mix(in srgb, var(--night) 70%, transparent);
+   border: 1px solid var(--edge);
+   border-radius: var(--radius);
+diff --git a/src/ui/PeddlerCardModal.tsx b/src/ui/PeddlerCardModal.tsx
+new file mode 100644
+index 0000000..c87d12b
+--- /dev/null
++++ b/src/ui/PeddlerCardModal.tsx
+@@ -0,0 +1,219 @@
++import { useState } from 'react';
++import { useEngine } from './useEngine';
++import { PeddlerCardDef, PeddlerCardTier } from '../game/types';
++import { MATERIAL_BY_ID } from '../game/data/materials';
++import { EQUIPMENT_BY_ID } from '../game/data/equipment';
++import { RARITY_COLOR } from '../game/util';
++import { GrimsbySprite } from './sprites/GrimsbySprite';
++import { ItemIcon, MaterialIcon } from './icons';
++import { EggIcon } from './EggIcon';
++
++/**
++ * Random one-liners Grimsby fires off the moment the cards spawn --
++ * deliberately separate from PeddlerCardDef.flavorText (which is tied to
++ * a SPECIFIC resolved outcome and only makes sense once a card is
++ * flipped). Small enough to keep inline here rather than needing their
++ * own DevTool content type for six lines of banter.
++ */
++const BROWSING_LINES = [
++  "\"Don't overthink it. That's MY job.\"",
++  '"Every one of these is a winner. Statistically, that\u2019s a lie, but every one of these is a winner."',
++  '"Pick with your heart. Or your least favorite hand, doesn\u2019t matter to me."',
++  '"I\u2019d pick the middle one. Or maybe that\u2019s what I want you to think."',
++  '"No refunds. Well -- sometimes. Depends on the card, doesn\u2019t it."',
++  '"Careful now. These have been shuffled at least once."',
++];
++
++const TIER_LABEL: Record<PeddlerCardTier, string> = {
++  bust: 'Nothing', refund: 'Partial Refund', modest: 'Modest Find', good: 'Good Find', jackpot: 'JACKPOT',
++};
++
++function outcomeDisplayName(outcome: PeddlerCardDef): string {
++  switch (outcome.kind) {
++    case 'nothing': return 'Nothing';
++    case 'joke': return outcome.jokeItemName ?? 'A Joke, Apparently';
++    case 'goldFlat': return `${outcome.goldAmount ?? 0} Gold`;
++    case 'goldRefund': return 'Partial Refund';
++    case 'material': return MATERIAL_BY_ID[outcome.materialId!]?.name ?? 'Materials';
++    case 'scrap': return `${outcome.scrapAmount ?? 0} Scrap`;
++    case 'equipment': return EQUIPMENT_BY_ID[outcome.itemId!]?.name ?? 'Mystery Gear';
++    case 'egg': return `${outcome.eggRarity ?? 'common'} Egg`;
++    default: return 'Something';
++  }
++}
++
++/**
++ * Resolves a card outcome to a real, already-established icon component
++ * wherever one exists (ItemIcon for equipment, MaterialIcon for
++ * materials, EggIcon for eggs -- all reused as-is, same fallback-to-
++ * glyph behavior every other item display in this game already has),
++ * and to a plain glyph-in-a-box (matching the same `.item-icon` styling)
++ * for the kinds that were never real items to begin with (gold, scrap,
++ * joke/nothing).
++ */
++function PeddlerOutcomeIcon({ outcome, size = 48 }: { outcome: PeddlerCardDef; size?: number }) {
++  switch (outcome.kind) {
++    case 'material': {
++      const def = outcome.materialId ? MATERIAL_BY_ID[outcome.materialId] : undefined;
++      return <MaterialIcon icon={def?.icon} glyph={def?.glyph ?? outcome.glyph ?? '\u2753'} size={size} />;
++    }
++    case 'equipment': {
++      const def = outcome.itemId ? EQUIPMENT_BY_ID[outcome.itemId] : undefined;
++      if (!def) return <div className="item-icon" style={{ width: size, height: size, fontSize: size * 0.55 }}>?</div>;
++      return <ItemIcon slot={def.slot} icon={def.icon} size={size} />;
++    }
++    case 'egg':
++      return <EggIcon rarity={outcome.eggRarity ?? 'common'} size={size} />;
++    case 'goldFlat':
++    case 'goldRefund':
++      return (
++        <div className="item-icon" style={{ width: size, height: size }}>
++          <span aria-hidden="true" style={{ fontSize: size * 0.5 }}>◆</span>
++        </div>
++      );
++    case 'scrap':
++      return (
++        <div className="item-icon" style={{ width: size, height: size }}>
++          <span aria-hidden="true" style={{ fontSize: size * 0.5 }}>{outcome.glyph ?? '\ud83d\udd29'}</span>
++        </div>
++      );
++    case 'nothing':
++    case 'joke':
++    default:
++      return (
++        <div className="item-icon" style={{ width: size, height: size }}>
++          <span aria-hidden="true" style={{ fontSize: size * 0.5 }}>{outcome.glyph ?? '\u2753'}</span>
++        </div>
++      );
++  }
++}
++
++/** One face-down or revealed card. Face-down: plain highlight on hover
++ *  (border/outline color change only -- no shake/transform, which used
++ *  to intermittently blank the large background-image mid-animation).
++ *  Revealed: icon + short name always visible, flavor text (and the
++ *  tier label) tucked behind a click-to-expand toggle -- both a native
++ *  `title` tooltip AND a click work, covering hover-capable and
++ *  touch-only alike. */
++function PeddlerCard({
++  faceUp, backIndex, outcome, isPicked, onClick, disabled,
++}: {
++  faceUp: boolean;
++  backIndex: number;
++  outcome?: PeddlerCardDef;
++  isPicked?: boolean;
++  onClick?: () => void;
++  disabled?: boolean;
++}) {
++  const [expanded, setExpanded] = useState(false);
++
++  if (!faceUp) {
++    return (
++      <button
++        type="button"
++        className="peddler-card peddler-card-facedown"
++        style={{ backgroundImage: `url(./peddler/cards/back_${backIndex}.png)` }}
++        onClick={onClick}
++        disabled={disabled}
++        aria-label="Pick this card"
++      />
++    );
++  }
++
++  const tierColor = outcome?.tier === 'jackpot' ? RARITY_COLOR.legendary
++    : outcome?.tier === 'good' ? RARITY_COLOR.rare
++      : outcome?.tier === 'modest' ? RARITY_COLOR.uncommon
++        : 'var(--muted)';
++
++  return (
++    <button
++      type="button"
++      className={`peddler-card peddler-card-revealed ${isPicked ? 'peddler-card-picked' : ''}`}
++      onClick={() => setExpanded((v) => !v)}
++      title={outcome?.flavorText}
++    >
++      <div className="tiny muted">{isPicked ? 'You picked this one' : 'Not picked'}</div>
++      {outcome && <PeddlerOutcomeIcon outcome={outcome} size={48} />}
++      <div className="peddler-card-name">{outcome ? outcomeDisplayName(outcome) : ''}</div>
++      {expanded && outcome && (
++        <div className="peddler-card-details">
++          <div className="tiny" style={{ color: tierColor, fontWeight: 'bold' }}>{TIER_LABEL[outcome.tier]}</div>
++          <p className="tiny muted" style={{ fontStyle: 'italic' }}>{outcome.flavorText}</p>
++        </div>
++      )}
++    </button>
++  );
++}
++
++export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
++  const engine = useEngine();
++  const [showCards, setShowCards] = useState(false);
++  const [localBacks] = useState<[number, number, number]>(() => [
++    Math.floor(Math.random() * 3), Math.floor(Math.random() * 3), Math.floor(Math.random() * 3),
++  ]);
++  const [browsingLine] = useState(() => BROWSING_LINES[Math.floor(Math.random() * BROWSING_LINES.length)]);
++
++  const result = engine.lastGrimsbyResult;
++
++  const handlePick = (index: number) => {
++    setShowCards(true); // already true by the time this is reachable, kept for clarity
++    engine.pickPeddlerCard(index as 0 | 1 | 2);
++  };
++
++  const handleClose = () => {
++    if (result) engine.dismissGrimsbyResult();
++    onClose();
++  };
++
++  return (
++    <div className="overlay" onClick={handleClose}>
++      <div
++        className="modal peddler-modal"
++        style={{ backgroundImage: 'url(./lore/peddler-table.png)' }}
++        onClick={(e) => e.stopPropagation()}
++      >
++        <div className="peddler-modal-header">
++          <GrimsbySprite animation={result ? 'approval' : 'wave'} height={80} />
++          {!result && <p className="peddler-corner-comment tiny">{browsingLine}</p>}
++        </div>
++
++        {!showCards && !result && (
++          <div className="row" style={{ justifyContent: 'center' }}>
++            <button className="btn-primary" onClick={() => setShowCards(true)}>Lay out the cards</button>
++          </div>
++        )}
++
++        {showCards && !result && (
++          <div className="peddler-card-row">
++            {localBacks.map((back, i) => (
++              <PeddlerCard key={i} faceUp={false} backIndex={back} onClick={() => handlePick(i)} />
++            ))}
++          </div>
++        )}
++
++        {result && (
++          <>
++            <div className="peddler-card-row">
++              {result.cards.map((c, i) => (
++                <PeddlerCard
++                  key={i}
++                  faceUp
++                  backIndex={c.backIndex}
++                  outcome={c.outcome}
++                  isPicked={i === result.pickedIndex}
++                />
++              ))}
++            </div>
++            <div className="peddler-result-summary">
++              <p><b>You got:</b> {result.rewardSummary}</p>
++            </div>
++          </>
++        )}
++
++        <div className="row end" style={{ marginTop: 14 }}>
++          <button onClick={handleClose}>{result ? 'Thanks, I think' : 'Never mind'}</button>
++        </div>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/ui/panels/PeddlerPanel.tsx b/src/ui/panels/PeddlerPanel.tsx
+index 0c189f0..7e7322e 100644
+--- a/src/ui/panels/PeddlerPanel.tsx
++++ b/src/ui/panels/PeddlerPanel.tsx
+@@ -1,112 +1,32 @@
+ import { useState } from 'react';
+ import { useEngine, useNow } from '../useEngine';
+ import { PeddlerManager } from '../../game/managers/PeddlerManager';
+-import { MATERIAL_BY_ID } from '../../game/data/materials';
+-import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
+-import { PeddlerCardDef, PeddlerCardTier } from '../../game/types';
+-import { formatGold, formatDuration, RARITY_COLOR } from '../../game/util';
++import { formatGold, formatDuration } from '../../game/util';
+ import { GrimsbySprite } from '../sprites/GrimsbySprite';
++import { PeddlerCardModal } from '../PeddlerCardModal';
+ 
+ /**
+- * Random one-liners Grimsby fires off the moment the cards spawn --
+- * deliberately separate from PeddlerCardDef.flavorText (which is tied to
+- * a SPECIFIC resolved outcome and only makes sense once a card is
+- * flipped). These are just "waiting for you to pick" filler, small
+- * enough to keep inline here rather than needing their own DevTool
+- * content type for six lines of banter.
++ * Same "vendor-card" presentation the Blacksmith/Alchemist/Enchanter
++ * already use (VendorsPanel.tsx) -- sprite + name on a dark card,
++ * blurb, action button -- rather than a bespoke full-scene background.
++ * The actual card game lives in its own modal (PeddlerCardModal), same
++ * "tab is a plain destination, the special moment is its own overlay"
++ * shape CraftingStation/EnhanceStation etc. already use from each
++ * vendor's own page. peddler-bg.png stays as the tab's faded backdrop
++ * (wired at the MenuWindow level, same as hatchery-bg.jpg/raids-bg.jpg)
++ * -- it doesn't also need to be a bold foreground element here too.
+  */
+-const BROWSING_LINES = [
+-  "\"Don't overthink it. That's MY job.\"",
+-  '"Every one of these is a winner. Statistically, that\u2019s a lie, but every one of these is a winner."',
+-  '"Pick with your heart. Or your least favorite hand, doesn\u2019t matter to me."',
+-  '"I\u2019d pick the middle one. Or maybe that\u2019s what I want you to think."',
+-  '"No refunds. Well -- sometimes. Depends on the card, doesn\u2019t it."',
+-  '"Careful now. These have been shuffled at least once."',
+-];
+-
+-const TIER_LABEL: Record<PeddlerCardTier, string> = {
+-  bust: 'Nothing', refund: 'Partial Refund', modest: 'Modest Find', good: 'Good Find', jackpot: 'JACKPOT',
+-};
+-
+-function outcomeDisplayName(outcome: PeddlerCardDef): string {
+-  switch (outcome.kind) {
+-    case 'nothing': return 'Nothing';
+-    case 'joke': return outcome.jokeItemName ?? 'A Joke, Apparently';
+-    case 'goldFlat': return `${outcome.goldAmount ?? 0} Gold`;
+-    case 'goldRefund': return 'Partial Refund';
+-    case 'material': return MATERIAL_BY_ID[outcome.materialId!]?.name ?? 'Materials';
+-    case 'scrap': return `${outcome.scrapAmount ?? 0} Scrap`;
+-    case 'equipment': return EQUIPMENT_BY_ID[outcome.itemId!]?.name ?? 'Mystery Gear';
+-    case 'egg': return `${outcome.eggRarity ?? 'common'} Egg`;
+-    default: return 'Something';
+-  }
+-}
+-
+-/** One face-down or revealed card. Hover-shake is CSS-only (see
+- *  app.css's .peddler-card:hover), no JS animation needed. */
+-function PeddlerCard({
+-  faceUp, backIndex, outcome, isPicked, onClick, disabled,
+-}: {
+-  faceUp: boolean;
+-  backIndex: number;
+-  outcome?: PeddlerCardDef;
+-  isPicked?: boolean;
+-  onClick?: () => void;
+-  disabled?: boolean;
+-}) {
+-  if (!faceUp) {
+-    return (
+-      <button
+-        type="button"
+-        className="peddler-card peddler-card-facedown"
+-        style={{ backgroundImage: `url(./peddler/cards/back_${backIndex}.png)` }}
+-        onClick={onClick}
+-        disabled={disabled}
+-        aria-label="Pick this card"
+-      />
+-    );
+-  }
+-  const tierColor = outcome?.tier === 'jackpot' ? RARITY_COLOR.legendary
+-    : outcome?.tier === 'good' ? RARITY_COLOR.rare
+-      : outcome?.tier === 'modest' ? RARITY_COLOR.uncommon
+-        : 'var(--muted)';
+-  return (
+-    <div className={`peddler-card peddler-card-revealed ${isPicked ? 'peddler-card-picked' : ''}`}>
+-      <div className="tiny muted" style={{ marginBottom: 4 }}>{isPicked ? 'You picked this one' : 'You didn\u2019t pick this one'}</div>
+-      <div className="card-title" style={{ color: tierColor, fontSize: 13 }}>
+-        {outcome ? TIER_LABEL[outcome.tier] : ''}
+-      </div>
+-      <div style={{ margin: '6px 0' }}>{outcome ? outcomeDisplayName(outcome) : ''}</div>
+-      <p className="tiny muted" style={{ fontStyle: 'italic' }}>{outcome?.flavorText}</p>
+-    </div>
+-  );
+-}
+-
+ export function PeddlerPanel() {
+   const engine = useEngine();
+   const state = engine.state;
+   const now = useNow(1000);
+-  const [showCards, setShowCards] = useState(false);
+-  const [localBacks] = useState<[number, number, number]>(() => [
+-    Math.floor(Math.random() * 3), Math.floor(Math.random() * 3), Math.floor(Math.random() * 3),
+-  ]);
+-  const [browsingLine] = useState(() => BROWSING_LINES[Math.floor(Math.random() * BROWSING_LINES.length)]);
++  const [showModal, setShowModal] = useState(false);
+ 
+   const present = PeddlerManager.isPresent(state);
+-  const result = engine.lastGrimsbyResult;
+   const fee = PeddlerManager.feeCost(state);
+   const canAfford = state.gold >= fee;
+   const charmCount = state.inventory.beckoning_charm ?? 0;
+ 
+-  const handlePick = (index: number) => {
+-    engine.pickPeddlerCard(index as 0 | 1 | 2);
+-  };
+-
+-  const handleCollect = () => {
+-    engine.dismissGrimsbyResult();
+-    setShowCards(false);
+-  };
+-
+   return (
+     <>
+       <h2>Grimsby</h2>
+@@ -115,71 +35,53 @@ export function PeddlerPanel() {
+         happens -- he swears the odds are fair. He would say that either way.
+       </p>
+ 
+-      <div
+-        className="peddler-scene"
+-        style={{ backgroundImage: 'url(./lore/peddler-bg.png)' }}
+-      >
+-        <GrimsbySprite
+-          animation={showCards && !result ? 'wave' : present ? 'approval' : 'idle2'}
+-          height={110}
+-        />
++      <div className="card vendor-card" style={{ marginBottom: 12 }}>
++        <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
++          <GrimsbySprite animation="idle" height={72} />
++          <div style={{ flex: 1 }}>
++            <div className="spread">
++              <span className="card-title">Grimsby</span>
++              {present && (
++                <span className="tiny muted">
++                  {formatDuration(Math.max(0, (state.grimsbyLeavesAt ?? now) - now))} left
++                </span>
++              )}
++            </div>
+ 
+-        {!present && (
+-          <div className="peddler-waiting">
+-            <p>The cart's not here right now. He turns up unannounced, every so often, and doesn't stick around long once he does.</p>
+-            {charmCount > 0 && (
+-              <button onClick={() => engine.usePeddlerCharm('beckoning_charm')}>
+-                Use a Beckoning Charm ({charmCount})
+-              </button>
++            {present ? (
++              <>
++                <p className="card-flavour">
++                  "Well? Card's a card. Fair chance, for a fair price."
++                </p>
++                <div className="row" style={{ gap: 8 }}>
++                  <button
++                    className="btn-primary"
++                    disabled={!canAfford}
++                    onClick={() => setShowModal(true)}
++                    title={canAfford ? undefined : 'Not enough gold'}
++                  >
++                    Pick Your Card -- {formatGold(fee)} gold
++                  </button>
++                </div>
++              </>
++            ) : (
++              <>
++                <p className="card-flavour muted">
++                  The cart's not here right now. He turns up unannounced, every so often, and doesn't
++                  stick around long once he does.
++                </p>
++                {charmCount > 0 && (
++                  <button onClick={() => engine.usePeddlerCharm('beckoning_charm')}>
++                    Use a Beckoning Charm ({charmCount})
++                  </button>
++                )}
++              </>
+             )}
+           </div>
+-        )}
+-
+-        {present && !showCards && !result && (
+-          <div className="peddler-offer">
+-            <p>"Well? Card's a card. Fair chance, for a fair price." <span className="tiny muted">({formatDuration(Math.max(0, (state.grimsbyLeavesAt ?? now) - now))} left before he wanders off)</span></p>
+-            <button
+-              className="btn-primary"
+-              disabled={!canAfford}
+-              onClick={() => setShowCards(true)}
+-              title={canAfford ? undefined : 'Not enough gold'}
+-            >
+-              Pick Your Card -- {formatGold(fee)} gold
+-            </button>
+-          </div>
+-        )}
+-
+-        {present && showCards && !result && (
+-          <>
+-            <p className="peddler-corner-comment tiny">{browsingLine}</p>
+-            <div className="peddler-card-row">
+-              {localBacks.map((back, i) => (
+-                <PeddlerCard key={i} faceUp={false} backIndex={back} onClick={() => handlePick(i)} />
+-              ))}
+-            </div>
+-          </>
+-        )}
+-
+-        {present && result && (
+-          <>
+-            <div className="peddler-card-row">
+-              {result.cards.map((c, i) => (
+-                <PeddlerCard
+-                  key={i}
+-                  faceUp
+-                  backIndex={c.backIndex}
+-                  outcome={c.outcome}
+-                  isPicked={i === result.pickedIndex}
+-                />
+-              ))}
+-            </div>
+-            <div className="peddler-result-summary">
+-              <p><b>You got:</b> {result.rewardSummary}</p>
+-              <button className="btn-primary" onClick={handleCollect}>Thanks, I think</button>
+-            </div>
+-          </>
+-        )}
++        </div>
+       </div>
++
++      {showModal && <PeddlerCardModal onClose={() => setShowModal(false)} />}
+     </>
+   );
+ }
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 413d3ef..d73fe4f 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -361,6 +361,10 @@ const SCHEMAS = {
+       itemId: { type: 'string', required: false }, // kind: equipment -- an equipment.json id, free text (see top comment)
+       eggRarity: { type: 'enum', required: false, options: ['common', 'uncommon', 'rare', 'epic', 'legendary'] }, // kind: egg
+       dedicatedPetId: { type: 'string', required: false }, // kind: egg, optional
++      // Single-emoji fallback for the icon-only card display -- used for
++      // kind: joke/nothing (no real item to look an icon up from), and
++      // as the final fallback for any other kind. Optional.
++      glyph: { type: 'string', required: false },
+     },
+   },
+   'raids': {

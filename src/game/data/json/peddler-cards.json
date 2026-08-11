@@ -4,14 +4,16 @@
     "tier": "bust",
     "weight": 10,
     "kind": "nothing",
-    "flavorText": "Grimsby shrugs. \"Card's blank. Wasn't me who printed it.\""
+    "flavorText": "Grimsby shrugs. \"Card's blank. Wasn't me who printed it.\"",
+    "glyph": "\ud83d\udcc4"
   },
   {
     "id": "bust_nothing_proud",
     "tier": "bust",
     "weight": 10,
     "kind": "nothing",
-    "flavorText": "Absolutely nothing happens. Grimsby looks almost proud of that."
+    "flavorText": "Absolutely nothing happens. Grimsby looks almost proud of that.",
+    "glyph": "\ud83c\udfad"
   },
   {
     "id": "bust_joke_rock",
@@ -19,7 +21,8 @@
     "weight": 8,
     "kind": "joke",
     "jokeItemName": "A Rock",
-    "flavorText": "\"That's a good rock,\" Grimsby says, entirely serious."
+    "flavorText": "\"That's a good rock,\" Grimsby says, entirely serious.",
+    "glyph": "\ud83e\udea8"
   },
   {
     "id": "bust_joke_button",
@@ -27,7 +30,8 @@
     "weight": 8,
     "kind": "joke",
     "jokeItemName": "A Single Button",
-    "flavorText": "\"Matches nothing you own. That's the fun part.\""
+    "flavorText": "\"Matches nothing you own. That's the fun part.\"",
+    "glyph": "\ud83d\udd18"
   },
   {
     "id": "bust_joke_iou",
@@ -35,7 +39,8 @@
     "weight": 6,
     "kind": "joke",
     "jokeItemName": "An IOU (From Grimsby, To Grimsby)",
-    "flavorText": "He hands you a slip of paper he owes himself. You're not sure what to do with it either."
+    "flavorText": "He hands you a slip of paper he owes himself. You're not sure what to do with it either.",
+    "glyph": "\ud83d\udcdd"
   },
   {
     "id": "bust_joke_pebble",
@@ -43,7 +48,8 @@
     "weight": 8,
     "kind": "joke",
     "jokeItemName": "A Suspiciously Round Pebble",
-    "flavorText": "\"Lucky,\" he says. \"For someone. Not you, evidently.\""
+    "flavorText": "\"Lucky,\" he says. \"For someone. Not you, evidently.\"",
+    "glyph": "\u26aa"
   },
   {
     "id": "refund_small",

@@ -361,6 +361,10 @@ const SCHEMAS = {
       itemId: { type: 'string', required: false }, // kind: equipment -- an equipment.json id, free text (see top comment)
       eggRarity: { type: 'enum', required: false, options: ['common', 'uncommon', 'rare', 'epic', 'legendary'] }, // kind: egg
       dedicatedPetId: { type: 'string', required: false }, // kind: egg, optional
+      // Single-emoji fallback for the icon-only card display -- used for
+      // kind: joke/nothing (no real item to look an icon up from), and
+      // as the final fallback for any other kind. Optional.
+      glyph: { type: 'string', required: false },
     },
   },
   'raids': {
