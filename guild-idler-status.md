@@ -344,6 +344,73 @@ raid fight).
 
 ## Backlog
 
+### Health-related gold sinks -- scoped, not yet built
+Grew directly out of the Health/Fallen system above -- five separate
+ideas, each independent of the others, none requiring changes to the
+core Health/Fallen logic already shipped:
+
+- **Vitality Training** -- a new standalone general upgrade (no vendor),
+  living in the existing Upgrades list alongside things like Efficient
+  Adventuring, deliberately separate from the Infirmary facility's own
+  cost curve. +5 Max Health per level via the standard
+  `modsPerLevel: { health: 5 }` (reuses the existing linear
+  `scaleMods(modsPerLevel, level)` machinery -- no new code), 4 levels,
+  cumulative +20 HP at max. Cost via the same shared `upgradeCost`
+  formula every other upgrade already uses -- `baseCost: 300,
+  costGrowth: 1.3` lands at roughly 45/136/304/560g, chosen to
+  approximate the original 50/100/200/500g target as closely as that
+  formula's early-tier-discount curve allows (it's tuned for
+  facility-scale prices, not tiny upgrades, so an exact match isn't
+  possible without a bespoke cost table -- this was judged close enough
+  to ship as-is and fine-tune later via the Tuning registry rather than
+  writing one-off cost code for a single upgrade).
+- **Tombstone variants (cosmetic).** Same shape as the existing hero
+  skins/liveries system, but global rather than per-hero -- since going
+  Fallen is meant to stay rare, one purchasable "Tombstone Style" applies
+  to whichever hero falls, rather than needing a skin per hero. Proposing
+  3-4 purchasable styles with actual personality (e.g. "Mossy Marker,"
+  "Ornate Monument"), escalating gold cost, picked via the same style of
+  row the Livery picker already uses. Zero mechanical effect, pure vanity
+  -- same spirit as Rusty's Retirement's cosmetic-only supporter pack
+  (see the comp-pricing research in the project brief). **Needs real art
+  per variant** -- same asset-pipeline note as the original tombstone
+  (HeroTombstone.png); not blocked on anything else, just needs the
+  images.
+- **Revival cost discount** -- a new cheap early/mid-game Upgrade (same
+  category as Vitality Training), percentage discount on
+  `HeroManager.revivalCost` per level. Deliberately a separate lever from
+  Infirmary's free-auto-revive-at-max-level -- this one makes the *paid*
+  path cheaper over time instead of eventually free, so both playstyles
+  (pay it down vs. wait it out) get their own investment target rather
+  than competing for the same one.
+- **A Renown Perk for Max Health** -- distinct from Vitality Training on
+  purpose rather than redundant with it: Vitality Training is a cheap
+  early/mid-game gold sink, this is a late-game, prestige-loop lever
+  using Renown Perks' existing two-tier gold-then-Renown cost shape. The
+  game already stacks Max Health from several small independent sources
+  (base formula, gear's `health` mod, Vitality Training) -- one more
+  aimed specifically at the infinite renown/ascension loop rather than
+  early guild economy fits that existing pattern rather than breaking it.
+- **Guardian's Retainer (consumable).** Distinct from the existing
+  Restorative Draughts (Stage 4) -- those heal Health back *after* damage
+  lands, this mitigates it *before*. Needs a new `healthDamageReduction`
+  consumable effect key, read the same way `preventInjury` already is
+  inside `QuestManager` (`loadout.preventInjury ? 100 :
+  mods.injuryResist`) -- reduces the Health damage percent on that one
+  quest rather than being an immediate-use bandage-style item like the
+  Draughts. Belongs in the per-quest loadout system, not
+  `InventoryManager.useOnHero`.
+- **Bulk revive.** A `reviveAllFallen()` engine action for whenever
+  several heroes are Fallen at once -- cost is the sum of each Fallen
+  hero's own `HeroManager.revivalCost`, with a proposed ~10% bulk
+  discount so it reads as a genuine convenience purchase rather than
+  just the same button pressed multiple times.
+
+None of these are built yet -- flagged here as scoped and ready
+whenever implementation time comes, in roughly the order listed (Vitality
+Training is the simplest, pure-content addition; tombstone variants and
+Guardian's Retainer need the most new groundwork).
+
 ### Rename to Guildbound -- complete (display text only)
 Game renamed from "Guild Idler" to **Guildbound**. Scope was deliberately
 kept to display-facing text only -- title bar/window title (`index.html`),
