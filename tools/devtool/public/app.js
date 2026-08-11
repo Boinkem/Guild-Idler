@@ -8,7 +8,15 @@
  * here with no frontend changes needed.
  */
 
-const state = { schema: null, kind: null, rows: [], dirty: false, icons: null, banners: null, equipmentList: null };
+const state = {
+  schema: null, kind: null, rows: [], dirty: false, icons: null, banners: null, equipmentList: null,
+  // Tuning's own grouped-view state -- kept here (not local to
+  // renderTuningView) so it survives the full re-renders every edit/save
+  // triggers: which categories are expanded, the current search text, and
+  // whether the user has explicitly asked for the raw table instead (see
+  // renderTable's dispatch).
+  tuningViewMode: 'grouped', tuningExpanded: new Set(), tuningFilter: '',
+};
 
 const tabsEl = document.getElementById('tabs');
 const appEl = document.getElementById('app');
@@ -75,7 +83,23 @@ function displayColumns(schema) {
   return Object.keys(schema.fields).filter((f) => priority.includes(f)).sort((a, b) => priority.indexOf(a) - priority.indexOf(b));
 }
 
+/** Dispatches to the tuning content type's own dedicated grouped view
+ *  (see renderTuningView below) instead of the generic flat table, unless
+ *  the user has explicitly asked to see the raw table (the "Table view"
+ *  toggle inside renderTuningView itself, or its own reciprocal "Grouped
+ *  view" button below) -- the generic table+modal-editor flow is still
+ *  fully correct and available for tuning, just no longer the default,
+ *  since 286 flat rows with no category grouping was the actual pain
+ *  point being fixed here. Every other content type is unaffected. */
 function renderTable() {
+  if (state.kind === 'tuning' && state.tuningViewMode !== 'table') {
+    renderTuningView();
+    return;
+  }
+  renderGenericTable();
+}
+
+function renderGenericTable() {
   const schema = state.schema[state.kind];
   const cols = displayColumns(schema);
   // The icon field (if this content type has one) gets its own leading
@@ -94,6 +118,7 @@ function renderTable() {
   toolbar.className = 'toolbar';
   toolbar.innerHTML = `
     <button class="primary" id="addBtn">+ Add ${schema.label.replace(/s$/, '')}</button>
+    ${state.kind === 'tuning' ? '<button id="tuningGroupedViewBtn">Grouped view</button>' : ''}
     <span class="spacer"></span>
     <span style="color: var(--muted); font-size: 11px;">${state.rows.length} entries</span>
   `;
@@ -147,9 +172,232 @@ function renderTable() {
   appEl.appendChild(table);
 
   document.getElementById('addBtn').onclick = () => openEditor(null);
+  const groupedViewBtn = document.getElementById('tuningGroupedViewBtn');
+  if (groupedViewBtn) groupedViewBtn.onclick = () => { state.tuningViewMode = 'grouped'; renderTable(); };
   tbody.querySelectorAll('[data-edit]').forEach((b) => b.onclick = () => openEditor(+b.dataset.edit));
   tbody.querySelectorAll('[data-dup]').forEach((b) => b.onclick = () => duplicateRow(+b.dataset.dup));
   tbody.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => deleteRow(+b.dataset.del));
+}
+
+/* ------------------------------------------------------------- tuning --- */
+// A dedicated grouped view for the `tuning` content type specifically --
+// 286 flat rows with no category grouping and no current-vs-default
+// distinction was the actual pain point (flagged as a wanted follow-up
+// back when the tuning registry itself was first exposed to the DevTool,
+// and never built). Deliberately its own view rather than a generalization
+// of the generic table: no other content type has a "value vs. default"
+// pair or benefits from category grouping the same way, and folding this
+// in as options on the generic renderer would have made that function
+// harder to follow for every content type that doesn't need any of it.
+//
+// Editing model: each value input auto-saves on change (blur/Enter, not
+// per-keystroke) via the same saveToServer/full-array POST every other
+// edit in this tool already uses -- deliberately NOT a separate "batch up
+// local edits, click one big Save button" model, because switching tabs
+// (selectTab) does a fresh GET that would silently discard anything not
+// yet persisted. Auto-save keeps this view's edits exactly as durable as
+// every other edit already is, with no new way to lose changes.
+
+/** Matches a tuning row against the current search box text -- checked
+ *  against id/label/category/description together, so searching either
+ *  the human label or the underlying dotted id (e.g. "raid_speed.") finds
+ *  the same entries. */
+function tuningRowMatches(row, filter) {
+  if (!filter) return true;
+  return [row.id, row.label, row.category, row.description]
+    .some((v) => String(v ?? '').toLowerCase().includes(filter));
+}
+
+/** Category ids are raw snake_case ("raid_upgrades") -- display-only Title
+ *  Case for the section header. CSS text-transform: capitalize alone can't
+ *  do this correctly (it only capitalizes the first letter of each
+ *  whitespace-separated word, so an underscored id renders as
+ *  "Raid_upgrades" rather than "Raid Upgrades"). The raw id is still what
+ *  gets used for grouping/matching/data-toggle-cat -- this only touches
+ *  what's shown. */
+function formatCategoryLabel(cat) {
+  return cat.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function renderTuningView() {
+  const filter = state.tuningFilter.trim().toLowerCase();
+  // Real index into state.rows travels with each entry (not the filtered
+  // position) -- every edit/reset/full-edit action needs to mutate and
+  // save the actual row, and state.rows is otherwise in whatever order
+  // the JSON file itself lists entries in, not grouped by category.
+  const filtered = state.rows
+    .map((row, realIndex) => ({ row, realIndex }))
+    .filter(({ row }) => tuningRowMatches(row, filter));
+
+  const byCategory = new Map();
+  filtered.forEach((entry) => {
+    const cat = entry.row.category ?? '(uncategorized)';
+    if (!byCategory.has(cat)) byCategory.set(cat, []);
+    byCategory.get(cat).push(entry);
+  });
+  const categories = [...byCategory.keys()].sort((a, b) => a.localeCompare(b));
+
+  // Searching auto-expands every matching category -- without this, a
+  // search that matches something inside a collapsed section would show
+  // zero visible results with no indication anything matched at all.
+  if (filter) categories.forEach((c) => state.tuningExpanded.add(c));
+
+  const totalChanged = state.rows.filter((r) => r.value !== r.default).length;
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'toolbar tuning-toolbar';
+  toolbar.innerHTML = `
+    <input type="text" id="tuningSearch" placeholder="Search id, label, category, description…"
+           value="${escapeHtml(state.tuningFilter)}" class="tuning-search" />
+    <button id="tuningExpandAll">Expand all</button>
+    <button id="tuningCollapseAll">Collapse all</button>
+    <span class="spacer"></span>
+    <button id="tuningTableViewBtn">Table view</button>
+    <button class="primary" id="addBtn">+ Add Tuning Entry</button>
+  `;
+
+  const summary = document.createElement('div');
+  summary.className = 'tiny muted tuning-summary';
+  summary.textContent = filter
+    ? `${filtered.length} of ${state.rows.length} entries match · ${totalChanged} changed from default overall`
+    : `${state.rows.length} entries across ${categories.length} categories · ${totalChanged} changed from default`;
+
+  const container = document.createElement('div');
+  container.className = 'tuning-groups';
+
+  if (categories.length === 0) {
+    container.innerHTML = '<div class="empty">No tuning entries match that search.</div>';
+  }
+
+  categories.forEach((cat) => {
+    const entries = byCategory.get(cat);
+    const changedCount = entries.filter(({ row }) => row.value !== row.default).length;
+    const expanded = state.tuningExpanded.has(cat);
+
+    const section = document.createElement('div');
+    section.className = 'tuning-section';
+    section.innerHTML = `
+      <button type="button" class="tuning-section-head" data-toggle-cat="${escapeHtml(cat)}">
+        <span class="tuning-section-arrow">${expanded ? '▾' : '▸'}</span>
+        <span class="tuning-section-name">${escapeHtml(formatCategoryLabel(cat))}</span>
+        <span class="tuning-section-count tiny muted">${entries.length}</span>
+        ${changedCount > 0 ? `<span class="tuning-section-changed">${changedCount} changed</span>` : ''}
+      </button>
+      <div class="tuning-section-body"${expanded ? '' : ' style="display:none;"'}>
+        ${entries.map(({ row, realIndex }) => tuningRowHtml(row, realIndex)).join('')}
+      </div>
+    `;
+    container.appendChild(section);
+  });
+
+  // Re-rendering fully rebuilds the DOM (same "small enough not to bother
+  // patching in place" approach every other field in this tool already
+  // takes), which would otherwise steal focus out from under the search
+  // box on every keystroke -- restore it explicitly afterward.
+  const searchWasFocused = document.activeElement?.id === 'tuningSearch';
+  const caret = searchWasFocused ? document.activeElement.selectionStart : null;
+
+  appEl.innerHTML = '';
+  appEl.appendChild(toolbar);
+  appEl.appendChild(summary);
+  appEl.appendChild(container);
+
+  const searchInput = document.getElementById('tuningSearch');
+  searchInput.oninput = () => { state.tuningFilter = searchInput.value; renderTuningView(); };
+  if (searchWasFocused) {
+    searchInput.focus();
+    if (caret !== null) searchInput.setSelectionRange(caret, caret);
+  }
+
+  document.getElementById('tuningExpandAll').onclick = () => {
+    categories.forEach((c) => state.tuningExpanded.add(c));
+    renderTuningView();
+  };
+  document.getElementById('tuningCollapseAll').onclick = () => {
+    state.tuningExpanded.clear();
+    renderTuningView();
+  };
+  document.getElementById('tuningTableViewBtn').onclick = () => {
+    state.tuningViewMode = 'table';
+    renderTable();
+  };
+  document.getElementById('addBtn').onclick = () => openEditor(null);
+
+  wireTuningRows(container);
+}
+
+/** One tuning entry's row: label/id/description on the left, an editable
+ *  value input (pre-populated with its own min/max as real HTML
+ *  attributes, unlike the generic modal editor's plain number input for
+ *  this same field) plus the default and a conditional Reset button on
+ *  the right. `changed` styling is purely `value !== default` -- the same
+ *  comparison the category header's own "N changed" count uses. */
+function tuningRowHtml(row, realIndex) {
+  const changed = row.value !== row.default;
+  const hasRange = row.min !== undefined || row.max !== undefined;
+  return `
+    <div class="tuning-row ${changed ? 'tuning-row-changed' : ''}">
+      <div class="tuning-row-main">
+        <div class="tuning-row-label">${escapeHtml(row.label)}</div>
+        <div class="tuning-row-id tiny muted">${escapeHtml(row.id)}</div>
+        ${row.description ? `<div class="tuning-row-desc tiny muted">${escapeHtml(row.description)}</div>` : ''}
+      </div>
+      <div class="tuning-row-controls">
+        <label class="tuning-value-wrap">
+          <input type="number" step="any" class="tuning-value-input" data-tuning-value="${realIndex}"
+                 value="${row.value}"
+                 ${row.min !== undefined ? `min="${row.min}"` : ''}
+                 ${row.max !== undefined ? `max="${row.max}"` : ''} />
+        </label>
+        ${hasRange ? `<span class="tiny muted tuning-range">range ${row.min ?? '−∞'}–${row.max ?? '∞'}</span>` : ''}
+        <span class="tiny muted tuning-default">default ${row.default}</span>
+        ${changed ? `<button type="button" class="tuning-reset" data-tuning-reset="${realIndex}" title="Reset to default">Reset</button>` : ''}
+        <button type="button" class="tuning-full-edit" data-edit="${realIndex}" title="Edit id/label/category/min/max/description">Edit</button>
+      </div>
+    </div>
+  `;
+}
+
+function wireTuningRows(container) {
+  container.querySelectorAll('[data-toggle-cat]').forEach((btn) => {
+    btn.onclick = () => {
+      const cat = btn.dataset.toggleCat;
+      if (state.tuningExpanded.has(cat)) state.tuningExpanded.delete(cat); else state.tuningExpanded.add(cat);
+      renderTuningView();
+    };
+  });
+
+  container.querySelectorAll('[data-tuning-value]').forEach((input) => {
+    input.addEventListener('change', () => {
+      const idx = +input.dataset.tuningValue;
+      const row = state.rows[idx];
+      const raw = parseFloat(input.value);
+      if (Number.isNaN(raw)) { input.value = row.value; return; } // revert garbage input, don't save it
+      // Clamp to the entry's own min/max, same bounds shown right next to
+      // the input -- these aren't enforced server-side (min/max are
+      // descriptive on every schema, not just this one), so this is the
+      // one place a typed value actually gets kept inside them.
+      let clamped = raw;
+      if (row.min !== undefined) clamped = Math.max(row.min, clamped);
+      if (row.max !== undefined) clamped = Math.min(row.max, clamped);
+      if (clamped === row.value) { input.value = row.value; return; } // no real change, skip a needless save
+      state.rows[idx] = { ...row, value: clamped };
+      saveToServer(`Updated ${row.label}.`);
+    });
+  });
+
+  container.querySelectorAll('[data-tuning-reset]').forEach((btn) => {
+    btn.onclick = () => {
+      const idx = +btn.dataset.tuningReset;
+      const row = state.rows[idx];
+      state.rows[idx] = { ...row, value: row.default };
+      saveToServer(`Reset ${row.label} to default.`);
+    };
+  });
+
+  container.querySelectorAll('[data-edit]').forEach((btn) => {
+    btn.onclick = () => openEditor(+btn.dataset.edit);
+  });
 }
 
 function duplicateRow(index) {

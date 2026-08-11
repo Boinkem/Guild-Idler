@@ -262,3 +262,54 @@ td.icon-cell { width: 1%; padding-right: 0; }
   max-height: 220px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
   background: var(--panel); border: 1px solid var(--panel3); padding: 6px 8px; font-size: 10px;
 }
+
+/* --------------------------------- shared text utilities ---------------------------------- */
+/* Used throughout app.js (loot/banner pickers, tuning view, etc.) but never
+   actually defined -- previously rendered as plain unstyled text wherever
+   used. Defined properly here rather than left as dead classes. */
+.tiny { font-size: 11px; }
+.muted { color: var(--muted); }
+
+/* --------------------------------- tuning view ---------------------------------- */
+
+.tuning-toolbar .tuning-search {
+  flex: 1; max-width: 320px; background: var(--panel2); border: 1px solid var(--panel3);
+  color: var(--text); padding: 7px 8px; font: inherit;
+}
+.tuning-summary { margin-bottom: 12px; }
+
+.tuning-groups { display: flex; flex-direction: column; gap: 8px; }
+.tuning-section { border: 1px solid var(--panel3); background: var(--panel); }
+.tuning-section-head {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  background: var(--panel2); border: none; color: var(--text);
+  padding: 9px 12px; cursor: pointer; text-align: left;
+}
+.tuning-section-head:hover { background: var(--panel3); }
+.tuning-section-arrow { width: 10px; color: var(--brass); flex: none; }
+.tuning-section-name { font-weight: bold; }
+.tuning-section-count { flex: none; }
+.tuning-section-changed {
+  flex: none; font-size: 10px; color: var(--brass); border: 1px solid var(--brass);
+  border-radius: 10px; padding: 1px 8px;
+}
+
+.tuning-section-body { display: flex; flex-direction: column; }
+.tuning-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 9px 12px; border-top: 1px solid var(--panel3); flex-wrap: wrap;
+}
+.tuning-row-changed { border-left: 3px solid var(--brass); }
+.tuning-row-main { min-width: 220px; flex: 2; }
+.tuning-row-label { font-size: 12px; }
+.tuning-row-id { font-family: monospace; }
+.tuning-row-desc { margin-top: 2px; max-width: 480px; }
+
+.tuning-row-controls { display: flex; align-items: center; gap: 8px; flex: none; flex-wrap: wrap; }
+.tuning-value-input {
+  width: 90px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text);
+  padding: 5px 7px; font: inherit;
+}
+.tuning-row-changed .tuning-value-input { border-color: var(--brass); }
+.tuning-range, .tuning-default { white-space: nowrap; }
+.tuning-reset, .tuning-full-edit { padding: 4px 8px; font-size: 11px; }

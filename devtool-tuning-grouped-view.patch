@@ -1,0 +1,439 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 9532031..15e0bbe 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -4166,6 +4166,87 @@ out-of-range `focusX: 999`. The patch was also re-applied to a
+ completely fresh clone and re-typechecked there independently, to rule
+ out any environment-specific leftover state.
+ 
++### DevTool: Tuning tab -- category grouping + current-vs-default view -- built
++Follow-up to a QOL review of the DevTool done alongside the banner
++picker work above. `tuning.json` has grown to 286 entries across 13
++categories with no grouping and no way to see at a glance which values
++had actually been tuned away from their defaults -- flagged as a wanted
++follow-up back when the tuning registry was first exposed to the
++DevTool, never built until now.
++
++**New default view for the Tuning tab**, replacing the flat table (still
++fully available via a "Table view" toggle, unchanged):
++
++- **Collapsible category sections** (Elemental, Guild Facilities,
++  Harvest, Harvest Tools, Health System, Pets, Progression, Quests, Raid
++  Difficulty, Raid Upgrades, Renown Perks, Reroll, Vendor Upgrades),
++  collapsed by default, each showing its entry count and a live "N
++  changed" badge whenever any entry inside differs from its default.
++  Expand/Collapse-all buttons, plus per-section toggling.
++- **Search box** matching id/label/category/description together,
++  auto-expanding any category with a match so a hit is never hidden
++  inside a collapsed section. Search text and expand/collapse state both
++  live on `state` (not local to the render function), so they survive
++  the full re-render every edit/search keystroke triggers -- including
++  keeping the search input focused with its caret position intact while
++  typing, which a naive full-DOM-rebuild-per-keystroke would otherwise
++  break.
++- **Inline value editing.** Each row shows the current value next to its
++  own min/max range and default, pulled directly from the schema (the
++  old modal editor's plain number input showed none of this context).
++  Editing auto-saves on blur/Enter -- deliberately not a separate
++  "batch up local edits, click one big Save" model, since switching tabs
++  already does a fresh GET that would silently discard anything not yet
++  persisted; auto-save keeps this exactly as durable as every other edit
++  in this tool already is. A typed value is clamped to the entry's own
++  min/max before saving (min/max aren't enforced server-side for any
++  schema, so this is the one place that actually happens); a row whose
++  value differs from its default gets a highlighted left border, a
++  "changed" state, and a one-click Reset button that snaps it back.
++- **Real bugs found and fixed while building this, not new ones
++  introduced:** `.tiny`/`.muted` -- classes already used throughout the
++  DevTool frontend (loot/banner pickers, and now this view) -- were never
++  actually defined in `style.css`, silently rendering as plain unstyled
++  text everywhere they appeared. Defined properly rather than left dead.
++  Separately, category ids are raw snake_case (`raid_upgrades`); relying
++  on CSS `text-transform: capitalize` alone renders that as
++  "Raid_upgrades" (it only capitalizes the first letter of each
++  whitespace-separated word, and an underscore isn't whitespace) --
++  replaced with a small `formatCategoryLabel` helper that title-cases the
++  space-converted string properly, used for display only (the raw id is
++  still what's used for grouping, filtering, and the toggle state key).
++
++**Verified end-to-end via an actual headless Chromium (Playwright), not
++just read through:** `npx tsc --noEmit` and a full `vite build` both
++pass clean (this patch only touches DevTool frontend files, so neither
++was ever really at risk, but confirmed regardless). Beyond that, the
++real DevTool server was started and driven through a real browser for
++24 separate checks: correct default-collapsed state on fresh load;
++expanding one section leaves every other section collapsed; Expand
++all/Collapse all both work; search correctly narrows to matching
++entries and auto-expands their category; the search box keeps focus and
++its typed value through the resulting re-render; a target entry's
++min/max/default render as the right values; editing a value to 99 on a
++0-50-range entry correctly saves as clamped to 50, marks the row and its
++category changed, and the category badge reads the right count; Reset
++correctly restores the value and clears the changed state; the Table
++view / Grouped view toggle both directions work and the table still
++shows all 286 rows; and switching away to another tab and back doesn't
++break anything. Caught and fixed two real test-script bugs of my own
++along the way rather than mistaking them for app bugs (a stale DOM
++element handle held across a full re-render, and a CSS string match
++missing a space) -- confirmed by directly inspecting the live rendered
++`style` attribute before concluding the app was correct. The console's
++only errors were 19 pre-existing, expected 404s for quest chains that
++don't have banner art yet (unrelated to this feature, same "missing file
++just fails to paint" convention already documented above). Live save
++round-trips during testing left two harmless JSON re-serialization
++artifacts on disk (`2.0` written back as `2` -- identical numeric value,
++just different literal notation, same class of artifact the banner
++picker's own verification already surfaced and documented above) --
++confirmed the actual tested value round-tripped correctly and reverted
++the cosmetic-only diff via `git checkout` before finalizing this patch.
++
+ ### Bigger, still-undecided
+ - **Queued from the same conversation as the UX/economy batch above:**
+   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index 2076393..40e4124 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -8,7 +8,15 @@
+  * here with no frontend changes needed.
+  */
+ 
+-const state = { schema: null, kind: null, rows: [], dirty: false, icons: null, banners: null, equipmentList: null };
++const state = {
++  schema: null, kind: null, rows: [], dirty: false, icons: null, banners: null, equipmentList: null,
++  // Tuning's own grouped-view state -- kept here (not local to
++  // renderTuningView) so it survives the full re-renders every edit/save
++  // triggers: which categories are expanded, the current search text, and
++  // whether the user has explicitly asked for the raw table instead (see
++  // renderTable's dispatch).
++  tuningViewMode: 'grouped', tuningExpanded: new Set(), tuningFilter: '',
++};
+ 
+ const tabsEl = document.getElementById('tabs');
+ const appEl = document.getElementById('app');
+@@ -75,7 +83,23 @@ function displayColumns(schema) {
+   return Object.keys(schema.fields).filter((f) => priority.includes(f)).sort((a, b) => priority.indexOf(a) - priority.indexOf(b));
+ }
+ 
++/** Dispatches to the tuning content type's own dedicated grouped view
++ *  (see renderTuningView below) instead of the generic flat table, unless
++ *  the user has explicitly asked to see the raw table (the "Table view"
++ *  toggle inside renderTuningView itself, or its own reciprocal "Grouped
++ *  view" button below) -- the generic table+modal-editor flow is still
++ *  fully correct and available for tuning, just no longer the default,
++ *  since 286 flat rows with no category grouping was the actual pain
++ *  point being fixed here. Every other content type is unaffected. */
+ function renderTable() {
++  if (state.kind === 'tuning' && state.tuningViewMode !== 'table') {
++    renderTuningView();
++    return;
++  }
++  renderGenericTable();
++}
++
++function renderGenericTable() {
+   const schema = state.schema[state.kind];
+   const cols = displayColumns(schema);
+   // The icon field (if this content type has one) gets its own leading
+@@ -94,6 +118,7 @@ function renderTable() {
+   toolbar.className = 'toolbar';
+   toolbar.innerHTML = `
+     <button class="primary" id="addBtn">+ Add ${schema.label.replace(/s$/, '')}</button>
++    ${state.kind === 'tuning' ? '<button id="tuningGroupedViewBtn">Grouped view</button>' : ''}
+     <span class="spacer"></span>
+     <span style="color: var(--muted); font-size: 11px;">${state.rows.length} entries</span>
+   `;
+@@ -147,11 +172,234 @@ function renderTable() {
+   appEl.appendChild(table);
+ 
+   document.getElementById('addBtn').onclick = () => openEditor(null);
++  const groupedViewBtn = document.getElementById('tuningGroupedViewBtn');
++  if (groupedViewBtn) groupedViewBtn.onclick = () => { state.tuningViewMode = 'grouped'; renderTable(); };
+   tbody.querySelectorAll('[data-edit]').forEach((b) => b.onclick = () => openEditor(+b.dataset.edit));
+   tbody.querySelectorAll('[data-dup]').forEach((b) => b.onclick = () => duplicateRow(+b.dataset.dup));
+   tbody.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => deleteRow(+b.dataset.del));
+ }
+ 
++/* ------------------------------------------------------------- tuning --- */
++// A dedicated grouped view for the `tuning` content type specifically --
++// 286 flat rows with no category grouping and no current-vs-default
++// distinction was the actual pain point (flagged as a wanted follow-up
++// back when the tuning registry itself was first exposed to the DevTool,
++// and never built). Deliberately its own view rather than a generalization
++// of the generic table: no other content type has a "value vs. default"
++// pair or benefits from category grouping the same way, and folding this
++// in as options on the generic renderer would have made that function
++// harder to follow for every content type that doesn't need any of it.
++//
++// Editing model: each value input auto-saves on change (blur/Enter, not
++// per-keystroke) via the same saveToServer/full-array POST every other
++// edit in this tool already uses -- deliberately NOT a separate "batch up
++// local edits, click one big Save button" model, because switching tabs
++// (selectTab) does a fresh GET that would silently discard anything not
++// yet persisted. Auto-save keeps this view's edits exactly as durable as
++// every other edit already is, with no new way to lose changes.
++
++/** Matches a tuning row against the current search box text -- checked
++ *  against id/label/category/description together, so searching either
++ *  the human label or the underlying dotted id (e.g. "raid_speed.") finds
++ *  the same entries. */
++function tuningRowMatches(row, filter) {
++  if (!filter) return true;
++  return [row.id, row.label, row.category, row.description]
++    .some((v) => String(v ?? '').toLowerCase().includes(filter));
++}
++
++/** Category ids are raw snake_case ("raid_upgrades") -- display-only Title
++ *  Case for the section header. CSS text-transform: capitalize alone can't
++ *  do this correctly (it only capitalizes the first letter of each
++ *  whitespace-separated word, so an underscored id renders as
++ *  "Raid_upgrades" rather than "Raid Upgrades"). The raw id is still what
++ *  gets used for grouping/matching/data-toggle-cat -- this only touches
++ *  what's shown. */
++function formatCategoryLabel(cat) {
++  return cat.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
++}
++
++function renderTuningView() {
++  const filter = state.tuningFilter.trim().toLowerCase();
++  // Real index into state.rows travels with each entry (not the filtered
++  // position) -- every edit/reset/full-edit action needs to mutate and
++  // save the actual row, and state.rows is otherwise in whatever order
++  // the JSON file itself lists entries in, not grouped by category.
++  const filtered = state.rows
++    .map((row, realIndex) => ({ row, realIndex }))
++    .filter(({ row }) => tuningRowMatches(row, filter));
++
++  const byCategory = new Map();
++  filtered.forEach((entry) => {
++    const cat = entry.row.category ?? '(uncategorized)';
++    if (!byCategory.has(cat)) byCategory.set(cat, []);
++    byCategory.get(cat).push(entry);
++  });
++  const categories = [...byCategory.keys()].sort((a, b) => a.localeCompare(b));
++
++  // Searching auto-expands every matching category -- without this, a
++  // search that matches something inside a collapsed section would show
++  // zero visible results with no indication anything matched at all.
++  if (filter) categories.forEach((c) => state.tuningExpanded.add(c));
++
++  const totalChanged = state.rows.filter((r) => r.value !== r.default).length;
++
++  const toolbar = document.createElement('div');
++  toolbar.className = 'toolbar tuning-toolbar';
++  toolbar.innerHTML = `
++    <input type="text" id="tuningSearch" placeholder="Search id, label, category, description…"
++           value="${escapeHtml(state.tuningFilter)}" class="tuning-search" />
++    <button id="tuningExpandAll">Expand all</button>
++    <button id="tuningCollapseAll">Collapse all</button>
++    <span class="spacer"></span>
++    <button id="tuningTableViewBtn">Table view</button>
++    <button class="primary" id="addBtn">+ Add Tuning Entry</button>
++  `;
++
++  const summary = document.createElement('div');
++  summary.className = 'tiny muted tuning-summary';
++  summary.textContent = filter
++    ? `${filtered.length} of ${state.rows.length} entries match · ${totalChanged} changed from default overall`
++    : `${state.rows.length} entries across ${categories.length} categories · ${totalChanged} changed from default`;
++
++  const container = document.createElement('div');
++  container.className = 'tuning-groups';
++
++  if (categories.length === 0) {
++    container.innerHTML = '<div class="empty">No tuning entries match that search.</div>';
++  }
++
++  categories.forEach((cat) => {
++    const entries = byCategory.get(cat);
++    const changedCount = entries.filter(({ row }) => row.value !== row.default).length;
++    const expanded = state.tuningExpanded.has(cat);
++
++    const section = document.createElement('div');
++    section.className = 'tuning-section';
++    section.innerHTML = `
++      <button type="button" class="tuning-section-head" data-toggle-cat="${escapeHtml(cat)}">
++        <span class="tuning-section-arrow">${expanded ? '▾' : '▸'}</span>
++        <span class="tuning-section-name">${escapeHtml(formatCategoryLabel(cat))}</span>
++        <span class="tuning-section-count tiny muted">${entries.length}</span>
++        ${changedCount > 0 ? `<span class="tuning-section-changed">${changedCount} changed</span>` : ''}
++      </button>
++      <div class="tuning-section-body"${expanded ? '' : ' style="display:none;"'}>
++        ${entries.map(({ row, realIndex }) => tuningRowHtml(row, realIndex)).join('')}
++      </div>
++    `;
++    container.appendChild(section);
++  });
++
++  // Re-rendering fully rebuilds the DOM (same "small enough not to bother
++  // patching in place" approach every other field in this tool already
++  // takes), which would otherwise steal focus out from under the search
++  // box on every keystroke -- restore it explicitly afterward.
++  const searchWasFocused = document.activeElement?.id === 'tuningSearch';
++  const caret = searchWasFocused ? document.activeElement.selectionStart : null;
++
++  appEl.innerHTML = '';
++  appEl.appendChild(toolbar);
++  appEl.appendChild(summary);
++  appEl.appendChild(container);
++
++  const searchInput = document.getElementById('tuningSearch');
++  searchInput.oninput = () => { state.tuningFilter = searchInput.value; renderTuningView(); };
++  if (searchWasFocused) {
++    searchInput.focus();
++    if (caret !== null) searchInput.setSelectionRange(caret, caret);
++  }
++
++  document.getElementById('tuningExpandAll').onclick = () => {
++    categories.forEach((c) => state.tuningExpanded.add(c));
++    renderTuningView();
++  };
++  document.getElementById('tuningCollapseAll').onclick = () => {
++    state.tuningExpanded.clear();
++    renderTuningView();
++  };
++  document.getElementById('tuningTableViewBtn').onclick = () => {
++    state.tuningViewMode = 'table';
++    renderTable();
++  };
++  document.getElementById('addBtn').onclick = () => openEditor(null);
++
++  wireTuningRows(container);
++}
++
++/** One tuning entry's row: label/id/description on the left, an editable
++ *  value input (pre-populated with its own min/max as real HTML
++ *  attributes, unlike the generic modal editor's plain number input for
++ *  this same field) plus the default and a conditional Reset button on
++ *  the right. `changed` styling is purely `value !== default` -- the same
++ *  comparison the category header's own "N changed" count uses. */
++function tuningRowHtml(row, realIndex) {
++  const changed = row.value !== row.default;
++  const hasRange = row.min !== undefined || row.max !== undefined;
++  return `
++    <div class="tuning-row ${changed ? 'tuning-row-changed' : ''}">
++      <div class="tuning-row-main">
++        <div class="tuning-row-label">${escapeHtml(row.label)}</div>
++        <div class="tuning-row-id tiny muted">${escapeHtml(row.id)}</div>
++        ${row.description ? `<div class="tuning-row-desc tiny muted">${escapeHtml(row.description)}</div>` : ''}
++      </div>
++      <div class="tuning-row-controls">
++        <label class="tuning-value-wrap">
++          <input type="number" step="any" class="tuning-value-input" data-tuning-value="${realIndex}"
++                 value="${row.value}"
++                 ${row.min !== undefined ? `min="${row.min}"` : ''}
++                 ${row.max !== undefined ? `max="${row.max}"` : ''} />
++        </label>
++        ${hasRange ? `<span class="tiny muted tuning-range">range ${row.min ?? '−∞'}–${row.max ?? '∞'}</span>` : ''}
++        <span class="tiny muted tuning-default">default ${row.default}</span>
++        ${changed ? `<button type="button" class="tuning-reset" data-tuning-reset="${realIndex}" title="Reset to default">Reset</button>` : ''}
++        <button type="button" class="tuning-full-edit" data-edit="${realIndex}" title="Edit id/label/category/min/max/description">Edit</button>
++      </div>
++    </div>
++  `;
++}
++
++function wireTuningRows(container) {
++  container.querySelectorAll('[data-toggle-cat]').forEach((btn) => {
++    btn.onclick = () => {
++      const cat = btn.dataset.toggleCat;
++      if (state.tuningExpanded.has(cat)) state.tuningExpanded.delete(cat); else state.tuningExpanded.add(cat);
++      renderTuningView();
++    };
++  });
++
++  container.querySelectorAll('[data-tuning-value]').forEach((input) => {
++    input.addEventListener('change', () => {
++      const idx = +input.dataset.tuningValue;
++      const row = state.rows[idx];
++      const raw = parseFloat(input.value);
++      if (Number.isNaN(raw)) { input.value = row.value; return; } // revert garbage input, don't save it
++      // Clamp to the entry's own min/max, same bounds shown right next to
++      // the input -- these aren't enforced server-side (min/max are
++      // descriptive on every schema, not just this one), so this is the
++      // one place a typed value actually gets kept inside them.
++      let clamped = raw;
++      if (row.min !== undefined) clamped = Math.max(row.min, clamped);
++      if (row.max !== undefined) clamped = Math.min(row.max, clamped);
++      if (clamped === row.value) { input.value = row.value; return; } // no real change, skip a needless save
++      state.rows[idx] = { ...row, value: clamped };
++      saveToServer(`Updated ${row.label}.`);
++    });
++  });
++
++  container.querySelectorAll('[data-tuning-reset]').forEach((btn) => {
++    btn.onclick = () => {
++      const idx = +btn.dataset.tuningReset;
++      const row = state.rows[idx];
++      state.rows[idx] = { ...row, value: row.default };
++      saveToServer(`Reset ${row.label} to default.`);
++    };
++  });
++
++  container.querySelectorAll('[data-edit]').forEach((btn) => {
++    btn.onclick = () => openEditor(+btn.dataset.edit);
++  });
++}
++
+ function duplicateRow(index) {
+   const schema = state.schema[state.kind];
+   const copy = JSON.parse(JSON.stringify(state.rows[index]));
+diff --git a/tools/devtool/public/style.css b/tools/devtool/public/style.css
+index e6f7006..ec8747b 100644
+--- a/tools/devtool/public/style.css
++++ b/tools/devtool/public/style.css
+@@ -262,3 +262,54 @@ td.icon-cell { width: 1%; padding-right: 0; }
+   max-height: 220px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+   background: var(--panel); border: 1px solid var(--panel3); padding: 6px 8px; font-size: 10px;
+ }
++
++/* --------------------------------- shared text utilities ---------------------------------- */
++/* Used throughout app.js (loot/banner pickers, tuning view, etc.) but never
++   actually defined -- previously rendered as plain unstyled text wherever
++   used. Defined properly here rather than left as dead classes. */
++.tiny { font-size: 11px; }
++.muted { color: var(--muted); }
++
++/* --------------------------------- tuning view ---------------------------------- */
++
++.tuning-toolbar .tuning-search {
++  flex: 1; max-width: 320px; background: var(--panel2); border: 1px solid var(--panel3);
++  color: var(--text); padding: 7px 8px; font: inherit;
++}
++.tuning-summary { margin-bottom: 12px; }
++
++.tuning-groups { display: flex; flex-direction: column; gap: 8px; }
++.tuning-section { border: 1px solid var(--panel3); background: var(--panel); }
++.tuning-section-head {
++  width: 100%; display: flex; align-items: center; gap: 8px;
++  background: var(--panel2); border: none; color: var(--text);
++  padding: 9px 12px; cursor: pointer; text-align: left;
++}
++.tuning-section-head:hover { background: var(--panel3); }
++.tuning-section-arrow { width: 10px; color: var(--brass); flex: none; }
++.tuning-section-name { font-weight: bold; }
++.tuning-section-count { flex: none; }
++.tuning-section-changed {
++  flex: none; font-size: 10px; color: var(--brass); border: 1px solid var(--brass);
++  border-radius: 10px; padding: 1px 8px;
++}
++
++.tuning-section-body { display: flex; flex-direction: column; }
++.tuning-row {
++  display: flex; align-items: center; justify-content: space-between; gap: 16px;
++  padding: 9px 12px; border-top: 1px solid var(--panel3); flex-wrap: wrap;
++}
++.tuning-row-changed { border-left: 3px solid var(--brass); }
++.tuning-row-main { min-width: 220px; flex: 2; }
++.tuning-row-label { font-size: 12px; }
++.tuning-row-id { font-family: monospace; }
++.tuning-row-desc { margin-top: 2px; max-width: 480px; }
++
++.tuning-row-controls { display: flex; align-items: center; gap: 8px; flex: none; flex-wrap: wrap; }
++.tuning-value-input {
++  width: 90px; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text);
++  padding: 5px 7px; font: inherit;
++}
++.tuning-row-changed .tuning-value-input { border-color: var(--brass); }
++.tuning-range, .tuning-default { white-space: nowrap; }
++.tuning-reset, .tuning-full-edit { padding: 4px 8px; font-size: 11px; }

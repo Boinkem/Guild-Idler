@@ -4166,6 +4166,87 @@ out-of-range `focusX: 999`. The patch was also re-applied to a
 completely fresh clone and re-typechecked there independently, to rule
 out any environment-specific leftover state.
 
+### DevTool: Tuning tab -- category grouping + current-vs-default view -- built
+Follow-up to a QOL review of the DevTool done alongside the banner
+picker work above. `tuning.json` has grown to 286 entries across 13
+categories with no grouping and no way to see at a glance which values
+had actually been tuned away from their defaults -- flagged as a wanted
+follow-up back when the tuning registry was first exposed to the
+DevTool, never built until now.
+
+**New default view for the Tuning tab**, replacing the flat table (still
+fully available via a "Table view" toggle, unchanged):
+
+- **Collapsible category sections** (Elemental, Guild Facilities,
+  Harvest, Harvest Tools, Health System, Pets, Progression, Quests, Raid
+  Difficulty, Raid Upgrades, Renown Perks, Reroll, Vendor Upgrades),
+  collapsed by default, each showing its entry count and a live "N
+  changed" badge whenever any entry inside differs from its default.
+  Expand/Collapse-all buttons, plus per-section toggling.
+- **Search box** matching id/label/category/description together,
+  auto-expanding any category with a match so a hit is never hidden
+  inside a collapsed section. Search text and expand/collapse state both
+  live on `state` (not local to the render function), so they survive
+  the full re-render every edit/search keystroke triggers -- including
+  keeping the search input focused with its caret position intact while
+  typing, which a naive full-DOM-rebuild-per-keystroke would otherwise
+  break.
+- **Inline value editing.** Each row shows the current value next to its
+  own min/max range and default, pulled directly from the schema (the
+  old modal editor's plain number input showed none of this context).
+  Editing auto-saves on blur/Enter -- deliberately not a separate
+  "batch up local edits, click one big Save" model, since switching tabs
+  already does a fresh GET that would silently discard anything not yet
+  persisted; auto-save keeps this exactly as durable as every other edit
+  in this tool already is. A typed value is clamped to the entry's own
+  min/max before saving (min/max aren't enforced server-side for any
+  schema, so this is the one place that actually happens); a row whose
+  value differs from its default gets a highlighted left border, a
+  "changed" state, and a one-click Reset button that snaps it back.
+- **Real bugs found and fixed while building this, not new ones
+  introduced:** `.tiny`/`.muted` -- classes already used throughout the
+  DevTool frontend (loot/banner pickers, and now this view) -- were never
+  actually defined in `style.css`, silently rendering as plain unstyled
+  text everywhere they appeared. Defined properly rather than left dead.
+  Separately, category ids are raw snake_case (`raid_upgrades`); relying
+  on CSS `text-transform: capitalize` alone renders that as
+  "Raid_upgrades" (it only capitalizes the first letter of each
+  whitespace-separated word, and an underscore isn't whitespace) --
+  replaced with a small `formatCategoryLabel` helper that title-cases the
+  space-converted string properly, used for display only (the raw id is
+  still what's used for grouping, filtering, and the toggle state key).
+
+**Verified end-to-end via an actual headless Chromium (Playwright), not
+just read through:** `npx tsc --noEmit` and a full `vite build` both
+pass clean (this patch only touches DevTool frontend files, so neither
+was ever really at risk, but confirmed regardless). Beyond that, the
+real DevTool server was started and driven through a real browser for
+24 separate checks: correct default-collapsed state on fresh load;
+expanding one section leaves every other section collapsed; Expand
+all/Collapse all both work; search correctly narrows to matching
+entries and auto-expands their category; the search box keeps focus and
+its typed value through the resulting re-render; a target entry's
+min/max/default render as the right values; editing a value to 99 on a
+0-50-range entry correctly saves as clamped to 50, marks the row and its
+category changed, and the category badge reads the right count; Reset
+correctly restores the value and clears the changed state; the Table
+view / Grouped view toggle both directions work and the table still
+shows all 286 rows; and switching away to another tab and back doesn't
+break anything. Caught and fixed two real test-script bugs of my own
+along the way rather than mistaking them for app bugs (a stale DOM
+element handle held across a full re-render, and a CSS string match
+missing a space) -- confirmed by directly inspecting the live rendered
+`style` attribute before concluding the app was correct. The console's
+only errors were 19 pre-existing, expected 404s for quest chains that
+don't have banner art yet (unrelated to this feature, same "missing file
+just fails to paint" convention already documented above). Live save
+round-trips during testing left two harmless JSON re-serialization
+artifacts on disk (`2.0` written back as `2` -- identical numeric value,
+just different literal notation, same class of artifact the banner
+picker's own verification already surfaced and documented above) --
+confirmed the actual tested value round-tripped correctly and reverted
+the cosmetic-only diff via `git checkout` before finalizing this patch.
+
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**
   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
