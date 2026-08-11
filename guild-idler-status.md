@@ -4286,13 +4286,41 @@ level log entry underneath it doesn't also demand separate attention.
       broken/distressing rather than as a status. Needs a distinct static
       asset instead -- a small pixel-art tombstone standing in for the
       hero in roster/idle views while Fallen, swapped back once revived.
-      New art, not a reuse of the existing animation set.
-  **Still open:** the tombstone art asset itself (proposing one universal
-  asset rather than a per-class variant, to keep this from becoming a
-  full art pipeline pass like the licensed hero packs -- this is original
-  art with no licensing question, unlike those); and whether Fallen
-  status should show anywhere outside the roster/idle view (e.g. a
-  Dashboard or Statistics callout) or stays scoped to just those two.
+      New art, not a reuse of the existing animation set. **Asset now
+      provided** (`HeroTombstone.png`, one universal design, not
+      per-class) -- source was a large 1536x1024 canvas with a lot of
+      surrounding whitespace, auto-cropped to content and rendered
+      transparent-background at 64px and 128px for actual in-game use.
+      Still needs dropping into the actual art pipeline at whatever path
+      the roster/idle views end up reading from (something like
+      `public/hero-status/tombstone.png`, matching the existing
+      `public/<category>-icons/` convention raid/harvest icons already
+      use) -- not committed as part of a text patch, needs to be copied
+      in directly.
+    - **Scope confirmed narrow, closing the earlier open question:**
+      Fallen only prevents sending that hero on a new quest. It does not
+      need to surface on the Dashboard, Statistics, or anywhere else --
+      the tombstone in the roster/idle view is the only visual, and
+      blocked sending is the only mechanical effect.
+  - **New: a visible Health bar per hero, mirroring the existing
+    Durability bar exactly.** `EquipmentPanel.tsx` already has a
+    reusable pattern for this -- a generic `.bar` CSS class with a
+    `dura` modifier (brass fill, switching to a `low` red variant under
+    25%) and matching `<DurabilityBar>` component. A `<HealthBar>`
+    component follows the identical shape: `.bar.health` (moss-green
+    fill, matching the existing `--moss` color already used for XP/good
+    states) with the same `.low` threshold/red-tint behavior `.bar.dura`
+    already has. Shown per hero in the roster (`HeroesPanel`), the same
+    place Gear Score and the XP bar already live -- Health and
+    Durability become two equally-visible, equally-styled bars a player
+    tracks the same way, rather than Health being a hidden number you
+    only discover after a bad string of injuries.
+  **Cross-reference:** this Health/Fallen system is intended to feed
+  directly into the still-brainstormed Guild Area duel arena above --
+  Max Health, the `health` gear modifier, and Damage Reduction (from
+  endurance/shield gear) were already scoped with that arena's stat
+  mapping in mind. Revisit both together once Guild Area design resumes
+  rather than re-deriving its combat stats from scratch.
   Formulas, costs, and the auto-revive/pay-to-skip split above are all
   locked in as first-pass numbers, tunable later same as everything else
   in the tuning registry.
