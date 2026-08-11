@@ -2366,13 +2366,15 @@ button.harvest-item:hover {
   background-position: center;
   text-align: center;
   /* Same box every state (browsing / cards laid out / result) instead of
-     shrinking to fit whatever's currently rendered -- space-between keeps
-     the header pinned to the top and the close button pinned to the
-     bottom, with the middle content (button, card row, or card row +
-     result) centered in whatever room is left. */
+     shrinking to fit whatever's currently rendered -- header pinned top,
+     footer (close button) pinned bottom, .peddler-modal-body's own
+     flex: 1 (below) absorbs whatever room is left between them and
+     centers its own content there, rather than the button/card row
+     getting shoved toward the bottom edge the way plain space-between
+     across 3 very differently-sized siblings (a tall header, thin
+     footer) did. */
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   /* .modal's own padding-top (16px) was tight enough that Grimsby's
      sprite/glow in the header clipped against the top edge on some
      zoom levels. */
@@ -2385,6 +2387,22 @@ button.harvest-item:hover {
   gap: 8px;
   margin-bottom: 12px;
 }
+/* Everything between the header and the close button -- the "Lay out
+   the cards" button, the card row, and (moved here from the header,
+   per playtest feedback) Grimsby's own corner-comment line, which now
+   renders AFTER the cards/button instead of above them. flex: 1 lets
+   this genuinely center in whatever vertical room remains rather than
+   being pinned to wherever it naturally falls in document flow, which
+   is what was reading as "cards pushed low / cut off at the top." */
+.peddler-modal-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
 .peddler-corner-comment {
   background: color-mix(in srgb, var(--night) 80%, transparent);
   border: 1px solid var(--brass-dim);
@@ -2394,7 +2412,7 @@ button.harvest-item:hover {
   color: var(--parchment);
 }
 
-.peddler-card-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin: 10px 0; }
+.peddler-card-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin: 0; }
 
 .peddler-card {
   width: 110px; height: 150px;
@@ -2508,7 +2526,6 @@ button.harvest-item:hover {
 }
 
 .peddler-result-summary {
-  margin-top: 6px;
   background: color-mix(in srgb, var(--night) 70%, transparent);
   border: 1px solid var(--edge);
   border-radius: var(--radius);

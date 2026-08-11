@@ -4723,6 +4723,39 @@ the player supplies themselves.
   every call site, not run live (no audio file available in this
   environment to test against).
 
+### Grimsby: card-modal layout recalibration
+Third round of feedback on the same card modal -- purely positional this
+time, no logic changes. `npx tsc --noEmit` and `npm run build:web` both
+verified clean against a fresh clone; no live playtest available in this
+pass (same caveat as the two entries above).
+
+- **Cards were sitting low and cramped against the bottom of the modal,
+  not centered.** Root cause: the button/card row was a direct child of
+  `.peddler-modal` right alongside a tall header (Grimsby's now-doubled
+  160px sprite) and a thin footer (just the close button) -- `justify-
+  content: space-between` across three that unevenly-sized still only
+  produces two equal-sized gaps, which reads as "shoved toward whichever
+  side has the smaller neighbor," not as centered. Fixed by giving the
+  variable middle content its own wrapper, `.peddler-modal-body`, with
+  `flex: 1` (absorbing whatever room is actually left between header and
+  footer) and its own `justify-content: center` -- the cards now
+  genuinely center in the available space rather than approximately
+  falling wherever space-between happened to leave them.
+- **Grimsby's corner-comment line moved from the header to the body**,
+  now rendering AFTER the button/card row instead of above it -- i.e.
+  under the cards, per this round's ask. Same `.peddler-corner-comment`
+  styling, just relocated in the JSX (and the CSS section comment above
+  it in app.css updated to match).
+- **Card top-clipping**: not a distinct fix of its own -- the working
+  theory is this was a symptom of the same low/cramped positioning above
+  (cards sitting close enough to the modal's lower content that there
+  wasn't real breathing room, with whatever margin existed reading as
+  clipped against something above instead), and re-centering via
+  `.peddler-modal-body` should resolve it as a side effect. Flagged as
+  unconfirmed -- worth a specific look next playtest pass in case the
+  clipping turns out to be a genuinely separate cause (e.g. the card-back
+  art itself) that centering alone doesn't fix.
+
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**
   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry

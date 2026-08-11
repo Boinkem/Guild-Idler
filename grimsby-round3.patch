@@ -1,0 +1,236 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index f9486d4..cc7fb0e 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -4723,6 +4723,39 @@ the player supplies themselves.
+   every call site, not run live (no audio file available in this
+   environment to test against).
+ 
++### Grimsby: card-modal layout recalibration
++Third round of feedback on the same card modal -- purely positional this
++time, no logic changes. `npx tsc --noEmit` and `npm run build:web` both
++verified clean against a fresh clone; no live playtest available in this
++pass (same caveat as the two entries above).
++
++- **Cards were sitting low and cramped against the bottom of the modal,
++  not centered.** Root cause: the button/card row was a direct child of
++  `.peddler-modal` right alongside a tall header (Grimsby's now-doubled
++  160px sprite) and a thin footer (just the close button) -- `justify-
++  content: space-between` across three that unevenly-sized still only
++  produces two equal-sized gaps, which reads as "shoved toward whichever
++  side has the smaller neighbor," not as centered. Fixed by giving the
++  variable middle content its own wrapper, `.peddler-modal-body`, with
++  `flex: 1` (absorbing whatever room is actually left between header and
++  footer) and its own `justify-content: center` -- the cards now
++  genuinely center in the available space rather than approximately
++  falling wherever space-between happened to leave them.
++- **Grimsby's corner-comment line moved from the header to the body**,
++  now rendering AFTER the button/card row instead of above it -- i.e.
++  under the cards, per this round's ask. Same `.peddler-corner-comment`
++  styling, just relocated in the JSX (and the CSS section comment above
++  it in app.css updated to match).
++- **Card top-clipping**: not a distinct fix of its own -- the working
++  theory is this was a symptom of the same low/cramped positioning above
++  (cards sitting close enough to the modal's lower content that there
++  wasn't real breathing room, with whatever margin existed reading as
++  clipped against something above instead), and re-centering via
++  `.peddler-modal-body` should resolve it as a side effect. Flagged as
++  unconfirmed -- worth a specific look next playtest pass in case the
++  clipping turns out to be a genuinely separate cause (e.g. the card-back
++  art itself) that centering alone doesn't fix.
++
+ ### Bigger, still-undecided
+ - **Queued from the same conversation as the UX/economy batch above:**
+   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry
+diff --git a/src/styles/app.css b/src/styles/app.css
+index f222e1b..cab85c9 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -2366,13 +2366,15 @@ button.harvest-item:hover {
+   background-position: center;
+   text-align: center;
+   /* Same box every state (browsing / cards laid out / result) instead of
+-     shrinking to fit whatever's currently rendered -- space-between keeps
+-     the header pinned to the top and the close button pinned to the
+-     bottom, with the middle content (button, card row, or card row +
+-     result) centered in whatever room is left. */
++     shrinking to fit whatever's currently rendered -- header pinned top,
++     footer (close button) pinned bottom, .peddler-modal-body's own
++     flex: 1 (below) absorbs whatever room is left between them and
++     centers its own content there, rather than the button/card row
++     getting shoved toward the bottom edge the way plain space-between
++     across 3 very differently-sized siblings (a tall header, thin
++     footer) did. */
+   display: flex;
+   flex-direction: column;
+-  justify-content: space-between;
+   /* .modal's own padding-top (16px) was tight enough that Grimsby's
+      sprite/glow in the header clipped against the top edge on some
+      zoom levels. */
+@@ -2385,6 +2387,22 @@ button.harvest-item:hover {
+   gap: 8px;
+   margin-bottom: 12px;
+ }
++/* Everything between the header and the close button -- the "Lay out
++   the cards" button, the card row, and (moved here from the header,
++   per playtest feedback) Grimsby's own corner-comment line, which now
++   renders AFTER the cards/button instead of above them. flex: 1 lets
++   this genuinely center in whatever vertical room remains rather than
++   being pinned to wherever it naturally falls in document flow, which
++   is what was reading as "cards pushed low / cut off at the top." */
++.peddler-modal-body {
++  flex: 1;
++  min-height: 0;
++  display: flex;
++  flex-direction: column;
++  align-items: center;
++  justify-content: center;
++  gap: 10px;
++}
+ .peddler-corner-comment {
+   background: color-mix(in srgb, var(--night) 80%, transparent);
+   border: 1px solid var(--brass-dim);
+@@ -2394,7 +2412,7 @@ button.harvest-item:hover {
+   color: var(--parchment);
+ }
+ 
+-.peddler-card-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin: 10px 0; }
++.peddler-card-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin: 0; }
+ 
+ .peddler-card {
+   width: 110px; height: 150px;
+@@ -2508,7 +2526,6 @@ button.harvest-item:hover {
+ }
+ 
+ .peddler-result-summary {
+-  margin-top: 6px;
+   background: color-mix(in srgb, var(--night) 70%, transparent);
+   border: 1px solid var(--edge);
+   border-radius: var(--radius);
+diff --git a/src/ui/PeddlerCardModal.tsx b/src/ui/PeddlerCardModal.tsx
+index f9a12d8..23ddade 100644
+--- a/src/ui/PeddlerCardModal.tsx
++++ b/src/ui/PeddlerCardModal.tsx
+@@ -209,64 +209,75 @@ export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
+       >
+         <div className="peddler-modal-header">
+           <GrimsbySprite animation={result ? 'approval' : 'wave'} height={160} />
+-          {!result && <p className="peddler-corner-comment tiny">{browsingLine}</p>}
+         </div>
+ 
+-        {!showCards && !result && (
+-          <div className="row" style={{ justifyContent: 'center' }}>
+-            <button className="btn-primary" onClick={() => setShowCards(true)}>Lay out the cards</button>
+-          </div>
+-        )}
+-
+-        {showCards && !result && (
+-          <div className="peddler-card-row">
+-            {localBacks.map((back, i) => (
+-              <PeddlerCard key={i} faceUp={false} backIndex={back} onClick={() => handlePick(i)} />
+-            ))}
+-          </div>
+-        )}
++        {/* Everything that varies by state lives in this one flex-centered
++            body now (see .peddler-modal-body in app.css) -- previously the
++            button/card row was a direct child of .peddler-modal alongside
++            a tall header and a thin footer, and plain space-between across
++            those three very unevenly-sized siblings is what was reading
++            as "cards pushed low, clipped at the top." Grimsby's corner-
++            comment also moved down here, after the cards/button, per
++            playtest feedback -- it used to sit in the header, above them. */}
++        <div className="peddler-modal-body">
++          {!showCards && !result && (
++            <div className="row" style={{ justifyContent: 'center' }}>
++              <button className="btn-primary" onClick={() => setShowCards(true)}>Lay out the cards</button>
++            </div>
++          )}
+ 
+-        {result && (
+-          <>
++          {showCards && !result && (
+             <div className="peddler-card-row">
+-              {result.cards.map((c, i) => {
+-                const isPicked = i === result.pickedIndex;
+-                if (!isPicked && revealStage === 'settled') return null;
+-                // Unpicked cards never flip -- they just fade away face-
+-                // down, so their outcome is never shown at all (see the
+-                // reasoning in app.css next to .peddler-card-fading-out).
+-                if (!isPicked) {
++              {localBacks.map((back, i) => (
++                <PeddlerCard key={i} faceUp={false} backIndex={back} onClick={() => handlePick(i)} />
++              ))}
++            </div>
++          )}
++
++          {!result && <p className="peddler-corner-comment tiny">{browsingLine}</p>}
++
++          {result && (
++            <>
++              <div className="peddler-card-row">
++                {result.cards.map((c, i) => {
++                  const isPicked = i === result.pickedIndex;
++                  if (!isPicked && revealStage === 'settled') return null;
++                  // Unpicked cards never flip -- they just fade away face-
++                  // down, so their outcome is never shown at all (see the
++                  // reasoning in app.css next to .peddler-card-fading-out).
++                  if (!isPicked) {
++                    return (
++                      <PeddlerCard
++                        key={i}
++                        faceUp={false}
++                        backIndex={c.backIndex}
++                        disabled
++                        fadingOut={revealStage === 'fading'}
++                      />
++                    );
++                  }
+                   return (
+                     <PeddlerCard
+                       key={i}
+-                      faceUp={false}
++                      faceUp
+                       backIndex={c.backIndex}
+-                      disabled
+-                      fadingOut={revealStage === 'fading'}
++                      outcome={c.outcome}
++                      onOpenDetails={() => setDetailOpen(true)}
+                     />
+                   );
+-                }
+-                return (
+-                  <PeddlerCard
+-                    key={i}
+-                    faceUp
+-                    backIndex={c.backIndex}
+-                    outcome={c.outcome}
+-                    onOpenDetails={() => setDetailOpen(true)}
+-                  />
+-                );
+-              })}
+-            </div>
+-            {revealStage === 'settled' && (
+-              <div className="peddler-result-summary">
+-                <p><b>You got:</b> {result.rewardSummary}</p>
++                })}
+               </div>
+-            )}
+-            {detailOpen && pickedCard && (
+-              <PeddlerCardDetailOverlay outcome={pickedCard.outcome} onClose={() => setDetailOpen(false)} />
+-            )}
+-          </>
+-        )}
++              {revealStage === 'settled' && (
++                <div className="peddler-result-summary">
++                  <p><b>You got:</b> {result.rewardSummary}</p>
++                </div>
++              )}
++              {detailOpen && pickedCard && (
++                <PeddlerCardDetailOverlay outcome={pickedCard.outcome} onClose={() => setDetailOpen(false)} />
++              )}
++            </>
++          )}
++        </div>
+ 
+         <div className="row end" style={{ marginTop: 14 }}>
+           <button onClick={handleClose}>{result ? 'Thanks, I think' : 'Never mind'}</button>

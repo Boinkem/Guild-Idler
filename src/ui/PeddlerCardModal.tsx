@@ -209,64 +209,75 @@ export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
       >
         <div className="peddler-modal-header">
           <GrimsbySprite animation={result ? 'approval' : 'wave'} height={160} />
-          {!result && <p className="peddler-corner-comment tiny">{browsingLine}</p>}
         </div>
 
-        {!showCards && !result && (
-          <div className="row" style={{ justifyContent: 'center' }}>
-            <button className="btn-primary" onClick={() => setShowCards(true)}>Lay out the cards</button>
-          </div>
-        )}
+        {/* Everything that varies by state lives in this one flex-centered
+            body now (see .peddler-modal-body in app.css) -- previously the
+            button/card row was a direct child of .peddler-modal alongside
+            a tall header and a thin footer, and plain space-between across
+            those three very unevenly-sized siblings is what was reading
+            as "cards pushed low, clipped at the top." Grimsby's corner-
+            comment also moved down here, after the cards/button, per
+            playtest feedback -- it used to sit in the header, above them. */}
+        <div className="peddler-modal-body">
+          {!showCards && !result && (
+            <div className="row" style={{ justifyContent: 'center' }}>
+              <button className="btn-primary" onClick={() => setShowCards(true)}>Lay out the cards</button>
+            </div>
+          )}
 
-        {showCards && !result && (
-          <div className="peddler-card-row">
-            {localBacks.map((back, i) => (
-              <PeddlerCard key={i} faceUp={false} backIndex={back} onClick={() => handlePick(i)} />
-            ))}
-          </div>
-        )}
-
-        {result && (
-          <>
+          {showCards && !result && (
             <div className="peddler-card-row">
-              {result.cards.map((c, i) => {
-                const isPicked = i === result.pickedIndex;
-                if (!isPicked && revealStage === 'settled') return null;
-                // Unpicked cards never flip -- they just fade away face-
-                // down, so their outcome is never shown at all (see the
-                // reasoning in app.css next to .peddler-card-fading-out).
-                if (!isPicked) {
+              {localBacks.map((back, i) => (
+                <PeddlerCard key={i} faceUp={false} backIndex={back} onClick={() => handlePick(i)} />
+              ))}
+            </div>
+          )}
+
+          {!result && <p className="peddler-corner-comment tiny">{browsingLine}</p>}
+
+          {result && (
+            <>
+              <div className="peddler-card-row">
+                {result.cards.map((c, i) => {
+                  const isPicked = i === result.pickedIndex;
+                  if (!isPicked && revealStage === 'settled') return null;
+                  // Unpicked cards never flip -- they just fade away face-
+                  // down, so their outcome is never shown at all (see the
+                  // reasoning in app.css next to .peddler-card-fading-out).
+                  if (!isPicked) {
+                    return (
+                      <PeddlerCard
+                        key={i}
+                        faceUp={false}
+                        backIndex={c.backIndex}
+                        disabled
+                        fadingOut={revealStage === 'fading'}
+                      />
+                    );
+                  }
                   return (
                     <PeddlerCard
                       key={i}
-                      faceUp={false}
+                      faceUp
                       backIndex={c.backIndex}
-                      disabled
-                      fadingOut={revealStage === 'fading'}
+                      outcome={c.outcome}
+                      onOpenDetails={() => setDetailOpen(true)}
                     />
                   );
-                }
-                return (
-                  <PeddlerCard
-                    key={i}
-                    faceUp
-                    backIndex={c.backIndex}
-                    outcome={c.outcome}
-                    onOpenDetails={() => setDetailOpen(true)}
-                  />
-                );
-              })}
-            </div>
-            {revealStage === 'settled' && (
-              <div className="peddler-result-summary">
-                <p><b>You got:</b> {result.rewardSummary}</p>
+                })}
               </div>
-            )}
-            {detailOpen && pickedCard && (
-              <PeddlerCardDetailOverlay outcome={pickedCard.outcome} onClose={() => setDetailOpen(false)} />
-            )}
-          </>
-        )}
+              {revealStage === 'settled' && (
+                <div className="peddler-result-summary">
+                  <p><b>You got:</b> {result.rewardSummary}</p>
+                </div>
+              )}
+              {detailOpen && pickedCard && (
+                <PeddlerCardDetailOverlay outcome={pickedCard.outcome} onClose={() => setDetailOpen(false)} />
+              )}
+            </>
+          )}
+        </div>
 
         <div className="row end" style={{ marginTop: 14 }}>
           <button onClick={handleClose}>{result ? 'Thanks, I think' : 'Never mind'}</button>
