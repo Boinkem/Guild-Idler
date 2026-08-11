@@ -344,6 +344,163 @@ raid fight).
 
 ## Backlog
 
+### Health stat + Fallen/death mechanic -- built
+Grew directly out of the Guild Area discussion above (heroes having no
+HP at all was the gap that raised it), scoped in its own follow-up pass
+-- and since fully built out. Deliberately kept inside the existing
+%-based outcome model rather than becoming a second combat system --
+Health is a persistent resource to manage alongside gold/durability,
+not a new resolver.
+
+- **Trigger reuses the existing injury roll exactly as-is** -- no new
+  tag-gating. `QuestManager`'s current injury check
+  (`35 + tierIndex*8 - injuryResist` on failure, a small forced-event
+  chance on success) already fires regardless of quest tag, matching
+  that a hero can get hurt exploring, not just fighting. Health damage
+  piggybacks on that same roll rather than adding a second one.
+- **Severity, locked in as a derived formula rather than new authored
+  data:** `healthDamagePercent = durationHours * 2.5`, computed
+  directly from each `InjuryDef`'s existing `durationHours` -- no new
+  JSON field needed at all. Applied to the current 9 injuries this
+  gives `bruised` 5%, `sprained_ankle` 10%, `exhausted` 8%, `poisoned`
+  15%, `cracked_ribs` 25%, `dragonfire_scorch` 35%, `shattered_spirit`
+  40%, `void_touched` 45%, `world_ender_mark` 60%. Same
+  self-correcting philosophy the burst-quest cap already uses --
+  changing an injury's duration in devtool automatically updates its
+  health cost too, no separate curve to re-tune by hand. (An override
+  field could still be added later if one specific injury ever needs
+  to deviate from the curve.)
+- **Max Health, locked in:** `100 + sqrt(endurance)*10 + level*3` --
+  same `sqrt(endurance)` shape `injuryResist` already uses. A fresh
+  level-1 hero lands around ~125 HP; a well-geared level 55 lands
+  roughly 350-400. Since damage is defined as a % of max rather than a
+  flat amount, these coefficients mostly govern feel/display rather
+  than real balance -- the injury-derived percentages above are what
+  actually drives how many bad hits a hero can take.
+- **No hard floor.** Health can reach 0 -- see Fallen state below.
+- **Two new modifier hooks, gear and consumables separately:** a new
+  `health` key added to the `Modifiers` pool so weapons/armor can roll
+  it exactly like `success`/`gold`/`xp` do today (flat bonus to max
+  HP); and a new `restoreHealth` key in `ConsumableDef.effect`, sitting
+  next to the existing `healInjury`/`preventInjury` keys, which heals
+  current HP on use.
+- **Feeds success as a soft modifier, never a hard gate.** Missing
+  health folds into `heroMods` the same way `injuryMods` already does
+  (e.g. `success: -(100 - healthPercent) * 0.3`) -- a hero at low
+  health is worse odds, never unsendable. This is what avoids the
+  "auto-fail because he's on 0 health" problem raised in discussion.
+- **Regen, two rates, both scaling with the new Infirmary facility.**
+  Idle regen at the guild starts at 60 minutes to fully heal with no
+  Infirmary; each Infirmary level cuts 10 minutes off that, down to a
+  floor of 10 minutes at level 5 (no further gain past max level). A
+  passive trickle rate applies while a hero is actively out on a quest,
+  **locked at 1/4 of the current idle rate** -- still meaningfully
+  slower than resting, but a long quest isn't a total recovery freeze
+  either. Since it's a fraction of the idle rate, it automatically
+  scales down as Infirmary levels reduce that idle time too, with no
+  separate curve to tune.
+  **Correction from the original plan:** regen can't reuse the fixed
+  30-minute `REST_TICK` constant in `items.ts` as a tick interval once
+  Infirmary pushes the floor down to 10 minutes -- a fixed 30-min tick
+  can't produce a 10-min full heal. Regen needs to be a continuous rate
+  derived from the current target heal time (`100% / healTimeMinutes`
+  per minute) instead. `REST_TICK` likely gets repurposed for something
+  else or dropped rather than reused here.
+- **Infirmary facility, cost locked in:** a new 6th guild facility
+  (alongside Barracks/Treasury/Workshop/Library/Tavern), using the
+  exact same `cost(level) = floor(baseCost * costGrowth^level *
+  earlyTierDiscount(level))` formula and `EARLY_TIER_DISCOUNT` curve
+  every other facility already uses. `baseCost`/`costGrowth` match
+  Workshop's (600 / 1.85) -- the closest existing analog, since
+  Workshop is likewise a utility facility with no direct
+  gold/xp/success reward, just a background quality-of-life effect.
+  `maxLevel` = 5, since exactly 5 steps of -10 minutes walks the heal
+  time from 60 down to the 10-minute floor with nothing wasted.
+- **Fallen state (the "death" mechanic) triggers at exactly 0 Health.**
+  Not permadeath -- nothing permanent is lost, matching the game's
+  existing philosophy of never wiping long-term progress on a setback
+  (same spirit as retirement preserving guild facilities). A Fallen
+  hero keeps their level, gear, and XP; they just can't be sent on
+  quests until revived.
+  - **Does not touch Guild Power.** A Fallen hero's existing
+    stats/gear/ascension contribution simply stops accruing further
+    while they're down -- it isn't subtracted, they just aren't
+    building more of it until revived. Retiring a Fallen hero to bank
+    ascension and rebuild from a fresh recruit remains a valid escape
+    valve instead of waiting out a revival, exactly like retiring an
+    uninjured hero today.
+  - **Still occupies their guild hero slot.** They're down, not gone --
+    a Fallen hero blocks recruiting a replacement into that slot the
+    same as any other living-but-unavailable hero would, until either
+    revived or retired.
+  - **Revival, corrected from the original "always free eventually"
+    plan.** Pay-to-skip is the only reliable path by default: an
+    instant revive costing `100 + hero.level * 40` gold, same shape as
+    `treatmentCost` scaling with severity and reusing the exact UI
+    button pattern already built in `HeroesPanel`. There is **no free
+    auto-revive at lower Infirmary levels at all** -- a Fallen hero
+    with an unmaxed Infirmary either gets paid for, or sits Fallen
+    until retired. **Free auto-revive is instead the payoff for maxing
+    Infirmary to level 5** -- the same level that already hits the
+    10-minute heal-time floor also unlocks a 12-hour automatic revive
+    timer, no gold needed. Paying to skip that 12-hour wait early
+    remains available even at max Infirmary, for anyone who doesn't
+    want to wait it out. This makes Infirmary's top level a genuine
+    capstone payoff rather than just the last step of a shrinking
+    number, consistent with how Tavern's own top-level effect already
+    bundles more than one thing (+1 hero slot, +2% loot) rather than
+    splitting into a 6th facility.
+  - **Not toggleable in Settings -- always on, by design.** Intended to
+    stay effectively invisible at low/easy content (where injury rolls
+    are rare and mild) and only start mattering once content gets hard
+    enough to stack severe injuries back-to-back -- by which point gear
+    with the new `health` mod and `restoreHealth` consumables should
+    already be in circulation to manage it.
+  - **Visual treatment: explicitly NOT the existing `death` sprite
+    animation looping in the idle guild view.** A looping death
+    animation on a hero standing around the guild hall would read as
+    broken/distressing rather than as a status. Needs a distinct static
+    asset instead -- a small pixel-art tombstone standing in for the
+    hero in roster/idle views while Fallen, swapped back once revived.
+    New art, not a reuse of the existing animation set. **Asset now
+    provided** (`HeroTombstone.png`, one universal design, not
+    per-class) -- source was a large 1536x1024 canvas with a lot of
+    surrounding whitespace, auto-cropped to content and rendered
+    transparent-background at 64px and 128px for actual in-game use.
+    Still needs dropping into the actual art pipeline at whatever path
+    the roster/idle views end up reading from (something like
+    `public/hero-status/tombstone.png`, matching the existing
+    `public/<category>-icons/` convention raid/harvest icons already
+    use) -- not committed as part of a text patch, needs to be copied
+    in directly.
+  - **Scope confirmed narrow, closing the earlier open question:**
+    Fallen only prevents sending that hero on a new quest. It does not
+    need to surface on the Dashboard, Statistics, or anywhere else --
+    the tombstone in the roster/idle view is the only visual, and
+    blocked sending is the only mechanical effect.
+- **New: a visible Health bar per hero, mirroring the existing
+  Durability bar exactly.** `EquipmentPanel.tsx` already has a
+  reusable pattern for this -- a generic `.bar` CSS class with a
+  `dura` modifier (brass fill, switching to a `low` red variant under
+  25%) and matching `<DurabilityBar>` component. A `<HealthBar>`
+  component follows the identical shape: `.bar.health` (moss-green
+  fill, matching the existing `--moss` color already used for XP/good
+  states) with the same `.low` threshold/red-tint behavior `.bar.dura`
+  already has. Shown per hero in the roster (`HeroesPanel`), the same
+  place Gear Score and the XP bar already live -- Health and
+  Durability become two equally-visible, equally-styled bars a player
+  tracks the same way, rather than Health being a hidden number you
+  only discover after a bad string of injuries.
+**Cross-reference:** this Health/Fallen system is intended to feed
+directly into the still-brainstormed Guild Area duel arena above --
+Max Health, the `health` gear modifier, and Damage Reduction (from
+endurance/shield gear) were already scoped with that arena's stat
+mapping in mind. Revisit both together once Guild Area design resumes
+rather than re-deriving its combat stats from scratch.
+Formulas, costs, and the auto-revive/pay-to-skip split above are all
+locked in as first-pass numbers, tunable later same as everything else
+in the tuning registry.
+
 ### Pet Health/Fallen + real per-hero pairing -- complete
 Grew out of a request to mirror the Hero Health/Fallen system onto pets.
 Surfaced a real architectural gap along the way: pets were guild-wide
@@ -4919,161 +5076,6 @@ pass (same caveat as the two entries above).
   panel, likely alongside Raids rather than inside it); and the actual
   turn-by-turn damage formula (how Attack Damage, Damage Reduction, crit,
   and elemental bonus/resist combine into a final hit).
-
-- **Health stat + Fallen/death mechanic** -- grew directly out of the
-  Guild Area discussion above (heroes having no HP at all was the gap
-  that raised it), scoped in its own follow-up pass. Deliberately kept
-  inside the existing % -based outcome model rather than becoming a
-  second combat system -- Health is a persistent resource to manage
-  alongside gold/durability, not a new resolver.
-  - **Trigger reuses the existing injury roll exactly as-is** -- no new
-    tag-gating. `QuestManager`'s current injury check
-    (`35 + tierIndex*8 - injuryResist` on failure, a small forced-event
-    chance on success) already fires regardless of quest tag, matching
-    that a hero can get hurt exploring, not just fighting. Health damage
-    piggybacks on that same roll rather than adding a second one.
-  - **Severity, locked in as a derived formula rather than new authored
-    data:** `healthDamagePercent = durationHours * 2.5`, computed
-    directly from each `InjuryDef`'s existing `durationHours` -- no new
-    JSON field needed at all. Applied to the current 9 injuries this
-    gives `bruised` 5%, `sprained_ankle` 10%, `exhausted` 8%, `poisoned`
-    15%, `cracked_ribs` 25%, `dragonfire_scorch` 35%, `shattered_spirit`
-    40%, `void_touched` 45%, `world_ender_mark` 60%. Same
-    self-correcting philosophy the burst-quest cap already uses --
-    changing an injury's duration in devtool automatically updates its
-    health cost too, no separate curve to re-tune by hand. (An override
-    field could still be added later if one specific injury ever needs
-    to deviate from the curve.)
-  - **Max Health, locked in:** `100 + sqrt(endurance)*10 + level*3` --
-    same `sqrt(endurance)` shape `injuryResist` already uses. A fresh
-    level-1 hero lands around ~125 HP; a well-geared level 55 lands
-    roughly 350-400. Since damage is defined as a % of max rather than a
-    flat amount, these coefficients mostly govern feel/display rather
-    than real balance -- the injury-derived percentages above are what
-    actually drives how many bad hits a hero can take.
-  - **No hard floor.** Health can reach 0 -- see Fallen state below.
-  - **Two new modifier hooks, gear and consumables separately:** a new
-    `health` key added to the `Modifiers` pool so weapons/armor can roll
-    it exactly like `success`/`gold`/`xp` do today (flat bonus to max
-    HP); and a new `restoreHealth` key in `ConsumableDef.effect`, sitting
-    next to the existing `healInjury`/`preventInjury` keys, which heals
-    current HP on use.
-  - **Feeds success as a soft modifier, never a hard gate.** Missing
-    health folds into `heroMods` the same way `injuryMods` already does
-    (e.g. `success: -(100 - healthPercent) * 0.3`) -- a hero at low
-    health is worse odds, never unsendable. This is what avoids the
-    "auto-fail because he's on 0 health" problem raised in discussion.
-  - **Regen, two rates, both scaling with the new Infirmary facility.**
-    Idle regen at the guild starts at 60 minutes to fully heal with no
-    Infirmary; each Infirmary level cuts 10 minutes off that, down to a
-    floor of 10 minutes at level 5 (no further gain past max level). A
-    passive trickle rate applies while a hero is actively out on a quest,
-    **locked at 1/4 of the current idle rate** -- still meaningfully
-    slower than resting, but a long quest isn't a total recovery freeze
-    either. Since it's a fraction of the idle rate, it automatically
-    scales down as Infirmary levels reduce that idle time too, with no
-    separate curve to tune.
-    **Correction from the original plan:** regen can't reuse the fixed
-    30-minute `REST_TICK` constant in `items.ts` as a tick interval once
-    Infirmary pushes the floor down to 10 minutes -- a fixed 30-min tick
-    can't produce a 10-min full heal. Regen needs to be a continuous rate
-    derived from the current target heal time (`100% / healTimeMinutes`
-    per minute) instead. `REST_TICK` likely gets repurposed for something
-    else or dropped rather than reused here.
-  - **Infirmary facility, cost locked in:** a new 6th guild facility
-    (alongside Barracks/Treasury/Workshop/Library/Tavern), using the
-    exact same `cost(level) = floor(baseCost * costGrowth^level *
-    earlyTierDiscount(level))` formula and `EARLY_TIER_DISCOUNT` curve
-    every other facility already uses. `baseCost`/`costGrowth` match
-    Workshop's (600 / 1.85) -- the closest existing analog, since
-    Workshop is likewise a utility facility with no direct
-    gold/xp/success reward, just a background quality-of-life effect.
-    `maxLevel` = 5, since exactly 5 steps of -10 minutes walks the heal
-    time from 60 down to the 10-minute floor with nothing wasted.
-  - **Fallen state (the "death" mechanic) triggers at exactly 0 Health.**
-    Not permadeath -- nothing permanent is lost, matching the game's
-    existing philosophy of never wiping long-term progress on a setback
-    (same spirit as retirement preserving guild facilities). A Fallen
-    hero keeps their level, gear, and XP; they just can't be sent on
-    quests until revived.
-    - **Does not touch Guild Power.** A Fallen hero's existing
-      stats/gear/ascension contribution simply stops accruing further
-      while they're down -- it isn't subtracted, they just aren't
-      building more of it until revived. Retiring a Fallen hero to bank
-      ascension and rebuild from a fresh recruit remains a valid escape
-      valve instead of waiting out a revival, exactly like retiring an
-      uninjured hero today.
-    - **Still occupies their guild hero slot.** They're down, not gone --
-      a Fallen hero blocks recruiting a replacement into that slot the
-      same as any other living-but-unavailable hero would, until either
-      revived or retired.
-    - **Revival, corrected from the original "always free eventually"
-      plan.** Pay-to-skip is the only reliable path by default: an
-      instant revive costing `100 + hero.level * 40` gold, same shape as
-      `treatmentCost` scaling with severity and reusing the exact UI
-      button pattern already built in `HeroesPanel`. There is **no free
-      auto-revive at lower Infirmary levels at all** -- a Fallen hero
-      with an unmaxed Infirmary either gets paid for, or sits Fallen
-      until retired. **Free auto-revive is instead the payoff for maxing
-      Infirmary to level 5** -- the same level that already hits the
-      10-minute heal-time floor also unlocks a 12-hour automatic revive
-      timer, no gold needed. Paying to skip that 12-hour wait early
-      remains available even at max Infirmary, for anyone who doesn't
-      want to wait it out. This makes Infirmary's top level a genuine
-      capstone payoff rather than just the last step of a shrinking
-      number, consistent with how Tavern's own top-level effect already
-      bundles more than one thing (+1 hero slot, +2% loot) rather than
-      splitting into a 6th facility.
-    - **Not toggleable in Settings -- always on, by design.** Intended to
-      stay effectively invisible at low/easy content (where injury rolls
-      are rare and mild) and only start mattering once content gets hard
-      enough to stack severe injuries back-to-back -- by which point gear
-      with the new `health` mod and `restoreHealth` consumables should
-      already be in circulation to manage it.
-    - **Visual treatment: explicitly NOT the existing `death` sprite
-      animation looping in the idle guild view.** A looping death
-      animation on a hero standing around the guild hall would read as
-      broken/distressing rather than as a status. Needs a distinct static
-      asset instead -- a small pixel-art tombstone standing in for the
-      hero in roster/idle views while Fallen, swapped back once revived.
-      New art, not a reuse of the existing animation set. **Asset now
-      provided** (`HeroTombstone.png`, one universal design, not
-      per-class) -- source was a large 1536x1024 canvas with a lot of
-      surrounding whitespace, auto-cropped to content and rendered
-      transparent-background at 64px and 128px for actual in-game use.
-      Still needs dropping into the actual art pipeline at whatever path
-      the roster/idle views end up reading from (something like
-      `public/hero-status/tombstone.png`, matching the existing
-      `public/<category>-icons/` convention raid/harvest icons already
-      use) -- not committed as part of a text patch, needs to be copied
-      in directly.
-    - **Scope confirmed narrow, closing the earlier open question:**
-      Fallen only prevents sending that hero on a new quest. It does not
-      need to surface on the Dashboard, Statistics, or anywhere else --
-      the tombstone in the roster/idle view is the only visual, and
-      blocked sending is the only mechanical effect.
-  - **New: a visible Health bar per hero, mirroring the existing
-    Durability bar exactly.** `EquipmentPanel.tsx` already has a
-    reusable pattern for this -- a generic `.bar` CSS class with a
-    `dura` modifier (brass fill, switching to a `low` red variant under
-    25%) and matching `<DurabilityBar>` component. A `<HealthBar>`
-    component follows the identical shape: `.bar.health` (moss-green
-    fill, matching the existing `--moss` color already used for XP/good
-    states) with the same `.low` threshold/red-tint behavior `.bar.dura`
-    already has. Shown per hero in the roster (`HeroesPanel`), the same
-    place Gear Score and the XP bar already live -- Health and
-    Durability become two equally-visible, equally-styled bars a player
-    tracks the same way, rather than Health being a hidden number you
-    only discover after a bad string of injuries.
-  **Cross-reference:** this Health/Fallen system is intended to feed
-  directly into the still-brainstormed Guild Area duel arena above --
-  Max Health, the `health` gear modifier, and Damage Reduction (from
-  endurance/shield gear) were already scoped with that arena's stat
-  mapping in mind. Revisit both together once Guild Area design resumes
-  rather than re-deriving its combat stats from scratch.
-  Formulas, costs, and the auto-revive/pay-to-skip split above are all
-  locked in as first-pass numbers, tunable later same as everything else
-  in the tuning registry.
 
 - **Melee/Ranged/Caster hero roles** -- scoping discussion started, no
   code yet. Concrete shape proposed so far: a role (Melee/Ranged/Caster)
