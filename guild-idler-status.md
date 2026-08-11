@@ -344,6 +344,89 @@ raid fight).
 
 ## Backlog
 
+### Injury resist headroom fix + gold/XP cost-curve tuning
+Direct follow-up to the quest-success rebalance and the fuller
+gold/XP/loot/injury-resist review above -- talked through as two
+separate problems needing two separate fixes, not one shared number
+change. `npx tsc --noEmit` and `npm run build:web` both verified clean
+against a fresh clone; no live playtest (no dev environment).
+
+**Injury resist: same headroom problem as success, plus a worse
+bypass.** `injuryRisk = clamp(35 + tier*8 - injuryResist, 0, 90)` had no
+protected floor -- unlike success's `MIN_SUCCESS=5`, nothing stopped
+stacked resist from reaching exactly 0% risk. Worse, a separate check
+(`quest.injuryResist < 100`) skipped the roll entirely above that
+threshold -- and passive stacking alone (`field_medicine` 64% +
+`enduring_legend` 130% + `raid_recovery` 36% = 230% at the old numbers)
+already blew past 100 with zero deliberate choice involved. That
+`< 100` gate turned out to exist on purpose, just aimed at the wrong
+thing: the `preventInjury` loadout consumable was ALSO encoded as
+`injuryResist = 100` -- a deliberate "this potion fully wards off
+injury this trip" effect got tangled up with ordinary passive resist
+accidentally reaching the same number.
+- **Decoupled the two.** `Quest` gained a real `injuryImmune: boolean`
+  field, set from `loadout.preventInjury` directly at send time.
+  `injuryResist` on the quest record is now pure passive resist with no
+  magic sentinel value -- `resolve()` checks `!quest.injuryImmune`
+  instead of `quest.injuryResist < 100`. Passive stacking, however high,
+  can now never trigger full immunity; only the deliberate consumable
+  can.
+- **Added `MIN_INJURY_RISK = 3`** (`QuestManager.ts`, right next to
+  `MIN_SUCCESS`/`MAX_SUCCESS`) and floored the clamp there instead of at
+  0 -- same "always some headroom" reasoning as success, deliberately a
+  much smaller floor since a 3% chance is a rare bad-luck roll, not a
+  routine one. Applied to `RaidManager`'s own separate injury-risk
+  clamp too (`clamp(30 + successPenalty - resist ..., 0, 90)` had the
+  identical floor-of-0 gap, no `injuryImmune`-equivalent bypass to worry
+  about there since raids don't consume loadout items the same way).
+- **Trimmed the actual numbers**, same early-vs-late-game split success
+  got: `field_medicine.injuryResistPerLevel` 8 -> 3 (24% max, gold-only,
+  early-accessible), `enduring_legend.injuryResistPerLevel` 10 -> 2 (26%
+  max at full tier2, genuinely late-game/Prestige-gated),
+  `raid_recovery.injuryResistPerLevel` 18 -> 10 (20% max, raid-specific
+  content already gated by its own difficulty). Combined max across all
+  three: 70% -- Legendary tier (base risk 67 before resist) now lands
+  right at the new floor only at full investment across every source,
+  matching the same "capped only at the true extreme" shape the success
+  rebalance landed on, rather than being reachable from gold alone.
+
+**Gold/XP: cost, not a cap.** Talked through as a genuinely different
+problem from success/injury-resist -- gold and XP are pure uncapped
+multipliers (`1 + mods.gold/100`, `1 + mods.xp/100`), no clamp
+anywhere, so there's no natural ceiling to restore headroom under the
+way MAX_SUCCESS=95 was quietly doing for success. Decided explicitly
+NOT to add a soft-cap/diminishing-returns curve to the multiplier
+itself -- large, silly-feeling gold/XP multipliers are fine and fun on
+their own. Instead, raised the *cost* of reaching them: a `costGrowth`
+bump (not `baseCost`, so the very first purchase at any of these is
+completely unaffected) on exactly the six systems the earlier review
+flagged as gold/XP contributors:
+- `upgrade.efficient_adventuring.costGrowth`: 1.8 -> 1.84
+- `upgrade.war_stories.costGrowth`: 1.85 -> 1.89
+- `guild_facility.treasury.costGrowth`: 1.7 -> 1.74
+- `guild_facility.library.costGrowth`: 1.8 -> 1.84
+- `renown_perk.legacy_of_wealth.costGrowth`: 1.6 -> 1.64 (tier1),
+  `.tier2CostGrowth`: 1.12 -> 1.15
+- `renown_perk.scholars_legacy.costGrowth`: 1.6 -> 1.64 (tier1),
+  `.tier2CostGrowth`: 1.12 -> 1.15
+
+Since cost compounds as `costGrowth^level`, a small bump to the growth
+rate itself produces exactly the requested shape without touching
+`baseCost` or needing any new code path: level 0/1 barely move (a
+couple percent at most), a representative mid-level (~5) lands right in
+the requested 10-15% band across all six, and it keeps compounding
+naturally further out -- 16-29% extra by the last level for the five
+gold-currency systems. **Legacy of Wealth/Scholar's Legacy's tier1
+curve is the one outlier worth double-checking**: because tier1 runs a
+full 20 levels (vs. 8-12 for the vendor/facility systems), the same
+small growth-rate bump compounds to ~60% extra by level 19, paid in
+Renown rather than gold -- a much scarcer currency than gold, so that
+compounding lands heavier in practice than the raw percentage suggests.
+Worth a specific look at real Renown income rates before calling this
+one settled; may need a smaller bump specifically on the tier1 curve if
+it turns out to choke Renown spending too hard well before tier2 even
+opens up.
+
 ### Health stat + Fallen/death mechanic -- built
 Grew directly out of the Guild Area discussion above (heroes having no
 HP at all was the gap that raised it), scoped in its own follow-up pass

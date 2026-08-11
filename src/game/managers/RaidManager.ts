@@ -4,7 +4,7 @@ import {
 import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty } from '../data/raids';
 import { EQUIPMENT_BY_ID } from '../data/equipment';
 import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
-import { MIN_SUCCESS, MAX_SUCCESS } from './QuestManager';
+import { MIN_SUCCESS, MAX_SUCCESS, MIN_INJURY_RISK } from './QuestManager';
 import { HeroManager } from './HeroManager';
 import { EquipmentManager } from './EquipmentManager';
 import { ModifierManager } from './ModifierManager';
@@ -269,7 +269,7 @@ export const RaidManager = {
     const injuries: RaidResult['injuries'] = [];
     for (const hero of heroes) {
       const resist = sumMods(HeroManager.heroMods(state, hero, resolvedAt), ModifierManager.global(state)).injuryResist ?? 0;
-      const risk = clamp(30 + diffCfg.successPenalty - resist + (fullClear ? -10 : 10), 0, 90);
+      const risk = clamp(30 + diffCfg.successPenalty - resist + (fullClear ? -10 : 10), MIN_INJURY_RISK, 90);
       if (rng.chance(risk)) {
         const questDifficulty = active.difficulty === 'mythic' ? 'legendary' : active.difficulty === 'heroic' ? 'epic' : 'hard';
         const injury = HeroManager.rollInjury(rng, questDifficulty);

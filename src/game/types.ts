@@ -475,7 +475,18 @@ export interface ActiveQuest {
   goldMultiplier: number;
   xpMultiplier: number;
   lootBonus: number;
+  /** Passive resist only -- upgrades/facilities/renown/gear/stats. NOT
+   *  the preventInjury consumable's full immunity anymore (see
+   *  injuryImmune below); kept as a plain number with no magic
+   *  sentinel value so stacking passive sources can never accidentally
+   *  reach the same full-immunity effect a deliberate consumable grants. */
   injuryResist: number;
+  /** True only when the preventInjury loadout consumable was used --
+   *  a deliberate, active choice for this specific quest, fully separate
+   *  from passive injuryResist stacking. See QuestManager.resolve's own
+   *  comment for why this used to be encoded as injuryResist===100 and
+   *  why that was a real bug (passive upgrades could reach 100 too). */
+  injuryImmune: boolean;
   consumables: string[];
   guaranteedGoodEvent: boolean;
   /**

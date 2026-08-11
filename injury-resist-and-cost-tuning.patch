@@ -1,0 +1,305 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 494d491..93173c2 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -344,6 +344,89 @@ raid fight).
+ 
+ ## Backlog
+ 
++### Injury resist headroom fix + gold/XP cost-curve tuning
++Direct follow-up to the quest-success rebalance and the fuller
++gold/XP/loot/injury-resist review above -- talked through as two
++separate problems needing two separate fixes, not one shared number
++change. `npx tsc --noEmit` and `npm run build:web` both verified clean
++against a fresh clone; no live playtest (no dev environment).
++
++**Injury resist: same headroom problem as success, plus a worse
++bypass.** `injuryRisk = clamp(35 + tier*8 - injuryResist, 0, 90)` had no
++protected floor -- unlike success's `MIN_SUCCESS=5`, nothing stopped
++stacked resist from reaching exactly 0% risk. Worse, a separate check
++(`quest.injuryResist < 100`) skipped the roll entirely above that
++threshold -- and passive stacking alone (`field_medicine` 64% +
++`enduring_legend` 130% + `raid_recovery` 36% = 230% at the old numbers)
++already blew past 100 with zero deliberate choice involved. That
++`< 100` gate turned out to exist on purpose, just aimed at the wrong
++thing: the `preventInjury` loadout consumable was ALSO encoded as
++`injuryResist = 100` -- a deliberate "this potion fully wards off
++injury this trip" effect got tangled up with ordinary passive resist
++accidentally reaching the same number.
++- **Decoupled the two.** `Quest` gained a real `injuryImmune: boolean`
++  field, set from `loadout.preventInjury` directly at send time.
++  `injuryResist` on the quest record is now pure passive resist with no
++  magic sentinel value -- `resolve()` checks `!quest.injuryImmune`
++  instead of `quest.injuryResist < 100`. Passive stacking, however high,
++  can now never trigger full immunity; only the deliberate consumable
++  can.
++- **Added `MIN_INJURY_RISK = 3`** (`QuestManager.ts`, right next to
++  `MIN_SUCCESS`/`MAX_SUCCESS`) and floored the clamp there instead of at
++  0 -- same "always some headroom" reasoning as success, deliberately a
++  much smaller floor since a 3% chance is a rare bad-luck roll, not a
++  routine one. Applied to `RaidManager`'s own separate injury-risk
++  clamp too (`clamp(30 + successPenalty - resist ..., 0, 90)` had the
++  identical floor-of-0 gap, no `injuryImmune`-equivalent bypass to worry
++  about there since raids don't consume loadout items the same way).
++- **Trimmed the actual numbers**, same early-vs-late-game split success
++  got: `field_medicine.injuryResistPerLevel` 8 -> 3 (24% max, gold-only,
++  early-accessible), `enduring_legend.injuryResistPerLevel` 10 -> 2 (26%
++  max at full tier2, genuinely late-game/Prestige-gated),
++  `raid_recovery.injuryResistPerLevel` 18 -> 10 (20% max, raid-specific
++  content already gated by its own difficulty). Combined max across all
++  three: 70% -- Legendary tier (base risk 67 before resist) now lands
++  right at the new floor only at full investment across every source,
++  matching the same "capped only at the true extreme" shape the success
++  rebalance landed on, rather than being reachable from gold alone.
++
++**Gold/XP: cost, not a cap.** Talked through as a genuinely different
++problem from success/injury-resist -- gold and XP are pure uncapped
++multipliers (`1 + mods.gold/100`, `1 + mods.xp/100`), no clamp
++anywhere, so there's no natural ceiling to restore headroom under the
++way MAX_SUCCESS=95 was quietly doing for success. Decided explicitly
++NOT to add a soft-cap/diminishing-returns curve to the multiplier
++itself -- large, silly-feeling gold/XP multipliers are fine and fun on
++their own. Instead, raised the *cost* of reaching them: a `costGrowth`
++bump (not `baseCost`, so the very first purchase at any of these is
++completely unaffected) on exactly the six systems the earlier review
++flagged as gold/XP contributors:
++- `upgrade.efficient_adventuring.costGrowth`: 1.8 -> 1.84
++- `upgrade.war_stories.costGrowth`: 1.85 -> 1.89
++- `guild_facility.treasury.costGrowth`: 1.7 -> 1.74
++- `guild_facility.library.costGrowth`: 1.8 -> 1.84
++- `renown_perk.legacy_of_wealth.costGrowth`: 1.6 -> 1.64 (tier1),
++  `.tier2CostGrowth`: 1.12 -> 1.15
++- `renown_perk.scholars_legacy.costGrowth`: 1.6 -> 1.64 (tier1),
++  `.tier2CostGrowth`: 1.12 -> 1.15
++
++Since cost compounds as `costGrowth^level`, a small bump to the growth
++rate itself produces exactly the requested shape without touching
++`baseCost` or needing any new code path: level 0/1 barely move (a
++couple percent at most), a representative mid-level (~5) lands right in
++the requested 10-15% band across all six, and it keeps compounding
++naturally further out -- 16-29% extra by the last level for the five
++gold-currency systems. **Legacy of Wealth/Scholar's Legacy's tier1
++curve is the one outlier worth double-checking**: because tier1 runs a
++full 20 levels (vs. 8-12 for the vendor/facility systems), the same
++small growth-rate bump compounds to ~60% extra by level 19, paid in
++Renown rather than gold -- a much scarcer currency than gold, so that
++compounding lands heavier in practice than the raw percentage suggests.
++Worth a specific look at real Renown income rates before calling this
++one settled; may need a smaller bump specifically on the tier1 curve if
++it turns out to choke Renown spending too hard well before tier2 even
++opens up.
++
+ ### Health stat + Fallen/death mechanic -- built
+ Grew directly out of the Guild Area discussion above (heroes having no
+ HP at all was the gap that raised it), scoped in its own follow-up pass
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 87fb010..cad4f9d 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -194,8 +194,8 @@
+     "id": "guild_facility.treasury.costGrowth",
+     "label": "Treasury: cost growth",
+     "category": "guild_facilities",
+-    "value": 1.7,
+-    "default": 1.7,
++    "value": 1.74,
++    "default": 1.74,
+     "min": 1,
+     "max": 5,
+     "description": "Multiplier applied per level, before the early-tier discount."
+@@ -270,8 +270,8 @@
+     "id": "guild_facility.library.costGrowth",
+     "label": "Library: cost growth",
+     "category": "guild_facilities",
+-    "value": 1.8,
+-    "default": 1.8,
++    "value": 1.84,
++    "default": 1.84,
+     "min": 1,
+     "max": 5,
+     "description": "Multiplier applied per level, before the early-tier discount."
+@@ -1132,8 +1132,8 @@
+     "id": "raid_recovery.injuryResistPerLevel",
+     "label": "Raid Recovery: injury resist per level",
+     "category": "raid_upgrades",
+-    "value": 18,
+-    "default": 18,
++    "value": 10,
++    "default": 10,
+     "description": "Injury-resist bonus (percentage points) granted per Raid Recovery upgrade level.",
+     "min": 0
+   },
+@@ -1267,8 +1267,8 @@
+     "id": "renown_perk.legacy_of_wealth.costGrowth",
+     "label": "Legacy of Wealth: cost growth",
+     "category": "renown_perks",
+-    "value": 1.6,
+-    "default": 1.6,
++    "value": 1.64,
++    "default": 1.64,
+     "description": "Multiplier applied per level to Legacy of Wealth's cost.",
+     "min": 1
+   },
+@@ -1312,8 +1312,8 @@
+     "id": "renown_perk.legacy_of_wealth.tier2CostGrowth",
+     "label": "Legacy of Wealth: tier-2 cost growth",
+     "category": "renown_perks",
+-    "value": 1.12,
+-    "default": 1.12,
++    "value": 1.15,
++    "default": 1.15,
+     "description": "Multiplier applied per level within Legacy of Wealth's tier-2 curve.",
+     "min": 1
+   },
+@@ -1474,8 +1474,8 @@
+     "id": "renown_perk.enduring_legend.injuryResistPerLevel",
+     "label": "Enduring Legend: injuryResist per level",
+     "category": "renown_perks",
+-    "value": 10,
+-    "default": 10,
++    "value": 2,
++    "default": 2,
+     "description": "injuryResist bonus granted per Enduring Legend level.",
+     "min": 0
+   },
+@@ -1519,8 +1519,8 @@
+     "id": "renown_perk.scholars_legacy.costGrowth",
+     "label": "Scholar's Legacy: cost growth",
+     "category": "renown_perks",
+-    "value": 1.6,
+-    "default": 1.6,
++    "value": 1.64,
++    "default": 1.64,
+     "description": "Multiplier applied per level to Scholar's Legacy's cost.",
+     "min": 1
+   },
+@@ -1564,8 +1564,8 @@
+     "id": "renown_perk.scholars_legacy.tier2CostGrowth",
+     "label": "Scholar's Legacy: tier-2 cost growth",
+     "category": "renown_perks",
+-    "value": 1.12,
+-    "default": 1.12,
++    "value": 1.15,
++    "default": 1.15,
+     "description": "Multiplier applied per level within Scholar's Legacy's tier-2 curve.",
+     "min": 1
+   },
+@@ -1654,8 +1654,8 @@
+     "id": "upgrade.efficient_adventuring.costGrowth",
+     "label": "Efficient Adventuring: cost growth",
+     "category": "vendor_upgrades",
+-    "value": 1.8,
+-    "default": 1.8,
++    "value": 1.84,
++    "default": 1.84,
+     "description": "Multiplier applied per level to Efficient Adventuring's cost.",
+     "min": 1
+   },
+@@ -1780,8 +1780,8 @@
+     "id": "upgrade.field_medicine.injuryResistPerLevel",
+     "label": "Restorative Tinctures: injury-resist bonus per level",
+     "category": "vendor_upgrades",
+-    "value": 8,
+-    "default": 8,
++    "value": 3,
++    "default": 3,
+     "description": "Restorative Tinctures's injury-resist bonus per level.",
+     "min": 0
+   },
+@@ -1834,8 +1834,8 @@
+     "id": "upgrade.war_stories.costGrowth",
+     "label": "Runic Insight: cost growth",
+     "category": "vendor_upgrades",
+-    "value": 1.85,
+-    "default": 1.85,
++    "value": 1.89,
++    "default": 1.89,
+     "description": "Multiplier applied per level to Runic Insight's cost.",
+     "min": 1
+   },
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 71fbe49..694edbd 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -26,6 +26,15 @@ export const BOARD_SIZE = 6;
+ export const BOARD_REFRESH_MS = 30 * MINUTE;
+ export const MIN_SUCCESS = 5;
+ export const MAX_SUCCESS = 95;
++/** Passive injuryResist stacking (upgrades/facilities/renown/gear/stats)
++ *  can bring risk down close to zero but never quite reach it -- same
++ *  "always some headroom" reasoning as MIN_SUCCESS above. Deliberately
++ *  much smaller than MIN_SUCCESS's 5, since a 3% floor here is a rare
++ *  bad-luck injury roll, not a routine one -- the preventInjury
++ *  consumable (see Quest.injuryImmune) remains the only way to actually
++ *  reach true zero, as a deliberate active choice rather than something
++ *  passive stacking should ever fully replicate. */
++export const MIN_INJURY_RISK = 3;
+ 
+ export const CHAIN_BY_ID: Record<string, ChainDef> = Object.fromEntries(QUEST_CHAINS.map((c) => [c.id, c]));
+ 
+@@ -511,7 +520,8 @@ export const QuestManager = {
+       goldMultiplier: 1 + mods.gold / 100,
+       xpMultiplier: 1 + mods.xp / 100,
+       lootBonus: mods.loot,
+-      injuryResist: loadout.preventInjury ? 100 : mods.injuryResist,
++      injuryResist: mods.injuryResist,
++      injuryImmune: loadout.preventInjury,
+       consumables,
+       guaranteedGoodEvent: loadout.guaranteedGoodEvent,
+       healthDamageReduction: loadout.healthDamageReduction,
+@@ -646,8 +656,8 @@ export const QuestManager = {
+     let injury: QuestResult['injury'];
+     const injuryRisk = success
+       ? (events.forcedInjury ? 25 : 0)
+-      : clamp(35 + DIFFICULTY_ORDER.indexOf(quest.offer.difficulty) * 8 - quest.injuryResist, 0, 90);
+-    if (quest.injuryResist < 100 && rng.chance(injuryRisk)) {
++      : clamp(35 + DIFFICULTY_ORDER.indexOf(quest.offer.difficulty) * 8 - quest.injuryResist, MIN_INJURY_RISK, 90);
++    if (!quest.injuryImmune && rng.chance(injuryRisk)) {
+       injury = HeroManager.rollInjury(rng, quest.offer.difficulty);
+       injury.healsAt = resolvedAt + (injury.healsAt - Date.now());
+       // Health damage piggybacks directly on this same roll rather than a
+diff --git a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
+index 3017714..c0ab25b 100644
+--- a/src/game/managers/RaidManager.ts
++++ b/src/game/managers/RaidManager.ts
+@@ -4,7 +4,7 @@ import {
+ import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty } from '../data/raids';
+ import { EQUIPMENT_BY_ID } from '../data/equipment';
+ import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
+-import { MIN_SUCCESS, MAX_SUCCESS } from './QuestManager';
++import { MIN_SUCCESS, MAX_SUCCESS, MIN_INJURY_RISK } from './QuestManager';
+ import { HeroManager } from './HeroManager';
+ import { EquipmentManager } from './EquipmentManager';
+ import { ModifierManager } from './ModifierManager';
+@@ -269,7 +269,7 @@ export const RaidManager = {
+     const injuries: RaidResult['injuries'] = [];
+     for (const hero of heroes) {
+       const resist = sumMods(HeroManager.heroMods(state, hero, resolvedAt), ModifierManager.global(state)).injuryResist ?? 0;
+-      const risk = clamp(30 + diffCfg.successPenalty - resist + (fullClear ? -10 : 10), 0, 90);
++      const risk = clamp(30 + diffCfg.successPenalty - resist + (fullClear ? -10 : 10), MIN_INJURY_RISK, 90);
+       if (rng.chance(risk)) {
+         const questDifficulty = active.difficulty === 'mythic' ? 'legendary' : active.difficulty === 'heroic' ? 'epic' : 'hard';
+         const injury = HeroManager.rollInjury(rng, questDifficulty);
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 18f22eb..a568809 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -475,7 +475,18 @@ export interface ActiveQuest {
+   goldMultiplier: number;
+   xpMultiplier: number;
+   lootBonus: number;
++  /** Passive resist only -- upgrades/facilities/renown/gear/stats. NOT
++   *  the preventInjury consumable's full immunity anymore (see
++   *  injuryImmune below); kept as a plain number with no magic
++   *  sentinel value so stacking passive sources can never accidentally
++   *  reach the same full-immunity effect a deliberate consumable grants. */
+   injuryResist: number;
++  /** True only when the preventInjury loadout consumable was used --
++   *  a deliberate, active choice for this specific quest, fully separate
++   *  from passive injuryResist stacking. See QuestManager.resolve's own
++   *  comment for why this used to be encoded as injuryResist===100 and
++   *  why that was a real bug (passive upgrades could reach 100 too). */
++  injuryImmune: boolean;
+   consumables: string[];
+   guaranteedGoodEvent: boolean;
+   /**

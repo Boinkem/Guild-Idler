@@ -26,6 +26,15 @@ export const BOARD_SIZE = 6;
 export const BOARD_REFRESH_MS = 30 * MINUTE;
 export const MIN_SUCCESS = 5;
 export const MAX_SUCCESS = 95;
+/** Passive injuryResist stacking (upgrades/facilities/renown/gear/stats)
+ *  can bring risk down close to zero but never quite reach it -- same
+ *  "always some headroom" reasoning as MIN_SUCCESS above. Deliberately
+ *  much smaller than MIN_SUCCESS's 5, since a 3% floor here is a rare
+ *  bad-luck injury roll, not a routine one -- the preventInjury
+ *  consumable (see Quest.injuryImmune) remains the only way to actually
+ *  reach true zero, as a deliberate active choice rather than something
+ *  passive stacking should ever fully replicate. */
+export const MIN_INJURY_RISK = 3;
 
 export const CHAIN_BY_ID: Record<string, ChainDef> = Object.fromEntries(QUEST_CHAINS.map((c) => [c.id, c]));
 
@@ -511,7 +520,8 @@ export const QuestManager = {
       goldMultiplier: 1 + mods.gold / 100,
       xpMultiplier: 1 + mods.xp / 100,
       lootBonus: mods.loot,
-      injuryResist: loadout.preventInjury ? 100 : mods.injuryResist,
+      injuryResist: mods.injuryResist,
+      injuryImmune: loadout.preventInjury,
       consumables,
       guaranteedGoodEvent: loadout.guaranteedGoodEvent,
       healthDamageReduction: loadout.healthDamageReduction,
@@ -646,8 +656,8 @@ export const QuestManager = {
     let injury: QuestResult['injury'];
     const injuryRisk = success
       ? (events.forcedInjury ? 25 : 0)
-      : clamp(35 + DIFFICULTY_ORDER.indexOf(quest.offer.difficulty) * 8 - quest.injuryResist, 0, 90);
-    if (quest.injuryResist < 100 && rng.chance(injuryRisk)) {
+      : clamp(35 + DIFFICULTY_ORDER.indexOf(quest.offer.difficulty) * 8 - quest.injuryResist, MIN_INJURY_RISK, 90);
+    if (!quest.injuryImmune && rng.chance(injuryRisk)) {
       injury = HeroManager.rollInjury(rng, quest.offer.difficulty);
       injury.healsAt = resolvedAt + (injury.healsAt - Date.now());
       // Health damage piggybacks directly on this same roll rather than a
