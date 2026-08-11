@@ -344,72 +344,65 @@ raid fight).
 
 ## Backlog
 
-### Health-related gold sinks -- scoped, not yet built
-Grew directly out of the Health/Fallen system above -- five separate
-ideas, each independent of the others, none requiring changes to the
-core Health/Fallen logic already shipped:
+### Health-related gold sinks -- complete (tombstone art still pending)
+All five ideas shipped. Verified end-to-end, not just compiled --
+Guardian's Retainer specifically was checked statistically through the
+real quest-resolution path (500 trials with vs. without: damage ratio
+0.494 against an expected 0.5).
 
-- **Vitality Training** -- a new standalone general upgrade (no vendor),
-  living in the existing Upgrades list alongside things like Efficient
-  Adventuring, deliberately separate from the Infirmary facility's own
-  cost curve. +5 Max Health per level via the standard
-  `modsPerLevel: { health: 5 }` (reuses the existing linear
-  `scaleMods(modsPerLevel, level)` machinery -- no new code), 4 levels,
+- **Vitality Training** -- live as a standalone general upgrade (no
+  vendor). +5 Max Health per level via `modsPerLevel: { health: 5 }`
+  (the existing linear `scaleMods` machinery, no new code), 4 levels,
   cumulative +20 HP at max. Cost via the same shared `upgradeCost`
-  formula every other upgrade already uses -- `baseCost: 300,
-  costGrowth: 1.3` lands at roughly 45/136/304/560g, chosen to
-  approximate the original 50/100/200/500g target as closely as that
-  formula's early-tier-discount curve allows (it's tuned for
-  facility-scale prices, not tiny upgrades, so an exact match isn't
-  possible without a bespoke cost table -- this was judged close enough
-  to ship as-is and fine-tune later via the Tuning registry rather than
-  writing one-off cost code for a single upgrade).
-- **Tombstone variants (cosmetic).** Same shape as the existing hero
-  skins/liveries system, but global rather than per-hero -- since going
-  Fallen is meant to stay rare, one purchasable "Tombstone Style" applies
-  to whichever hero falls, rather than needing a skin per hero. Proposing
-  3-4 purchasable styles with actual personality (e.g. "Mossy Marker,"
-  "Ornate Monument"), escalating gold cost, picked via the same style of
-  row the Livery picker already uses. Zero mechanical effect, pure vanity
-  -- same spirit as Rusty's Retirement's cosmetic-only supporter pack
-  (see the comp-pricing research in the project brief). **Needs real art
-  per variant** -- same asset-pipeline note as the original tombstone
-  (HeroTombstone.png); not blocked on anything else, just needs the
-  images.
-- **Revival cost discount** -- a new cheap early/mid-game Upgrade (same
-  category as Vitality Training), percentage discount on
-  `HeroManager.revivalCost` per level. Deliberately a separate lever from
-  Infirmary's free-auto-revive-at-max-level -- this one makes the *paid*
-  path cheaper over time instead of eventually free, so both playstyles
-  (pay it down vs. wait it out) get their own investment target rather
-  than competing for the same one.
-- **A Renown Perk for Max Health** -- distinct from Vitality Training on
-  purpose rather than redundant with it: Vitality Training is a cheap
-  early/mid-game gold sink, this is a late-game, prestige-loop lever
-  using Renown Perks' existing two-tier gold-then-Renown cost shape. The
-  game already stacks Max Health from several small independent sources
-  (base formula, gear's `health` mod, Vitality Training) -- one more
-  aimed specifically at the infinite renown/ascension loop rather than
-  early guild economy fits that existing pattern rather than breaking it.
-- **Guardian's Retainer (consumable).** Distinct from the existing
-  Restorative Draughts (Stage 4) -- those heal Health back *after* damage
-  lands, this mitigates it *before*. Needs a new `healthDamageReduction`
-  consumable effect key, read the same way `preventInjury` already is
-  inside `QuestManager` (`loadout.preventInjury ? 100 :
-  mods.injuryResist`) -- reduces the Health damage percent on that one
-  quest rather than being an immediate-use bandage-style item like the
-  Draughts. Belongs in the per-quest loadout system, not
-  `InventoryManager.useOnHero`.
-- **Bulk revive.** A `reviveAllFallen()` engine action for whenever
-  several heroes are Fallen at once -- cost is the sum of each Fallen
-  hero's own `HeroManager.revivalCost`, with a proposed ~10% bulk
-  discount so it reads as a genuine convenience purchase rather than
-  just the same button pressed multiple times.
-
-None of these are built yet -- flagged here as scoped and ready
-whenever implementation time comes, in roughly the order listed (Vitality
-Training is the simplest, pure-content addition; tombstone variants and
-Guardian's Retainer need the most new groundwork).
+  formula every other upgrade uses -- `baseCost: 300, costGrowth: 1.3`
+  landed at 45/136/304/560g (verified), close to but not exactly the
+  original 50/100/200/500g target -- that formula is tuned for
+  facility-scale prices, not tiny upgrades, so an exact match wasn't
+  possible without a bespoke cost table. Needed zero UI work --
+  `GuildPanel` already renders every general upgrade generically.
+- **Undertaker's Favor** -- new standalone upgrade, 6% discount on
+  `HeroManager.revivalCost` per level, 5 levels, 30% max discount.
+  Deliberately separate from Infirmary's free-auto-revive-at-max-level --
+  paying-it-down and waiting-it-out are two independent investment
+  targets. `revivalCost` now takes the discount as a parameter
+  (`HeroManager.revivalCost(hero, discountPercent)`) rather than reading
+  state directly, so it stays a pure function of the hero.
+- **Vital Legacy** -- new Renown Perk, +5 Max Health per level, same
+  two-tier gold-then-Renown shape as Renowned Skill (20 levels tier 1,
+  extends to 25 at a steeper Renown cost). Distinct from Vitality
+  Training on purpose -- this is the late-game, prestige-loop version of
+  the same +5/level idea, not a replacement for the early upgrade.
+- **Guardian's Retainer** -- new loadout consumable (90g,
+  `healthDamageReduction: 50`), equipped before sending a hero out the
+  same way `protection_charm` already is. A new `ActiveQuest.healthDamageReduction`
+  field is baked in at send time (same pattern as `injuryResist`/
+  `guaranteedGoodEvent`) and applied in `QuestManager.resolve()` as a
+  straight percentage cut of the Health damage -- the injury and its own
+  success/speed mods still happen, only the Health cost is softened.
+  Confirmed raids have no per-hero consumable/loadout system at all, so
+  this doesn't touch `RaidManager`.
+- **Bulk revive** -- `engine.reviveAllFallen()`, sums each Fallen hero's
+  own (already Undertaker's-Favor-discounted) `revivalCost`, then takes a
+  further 10% off the total (`health.bulkReviveDiscount`). A "Revive All
+  (N) · cost" button appears in `HeroesPanel` whenever 2+ heroes are
+  Fallen at once.
+- **Tombstone variants (cosmetic)** -- code complete, **art still
+  pending**. `TOMBSTONE_STYLES` (plain/mossy/ornate/cursed at
+  0/400/1200/3000g) lives in `progression.ts`; purchase/selection is
+  global rather than per-hero (`engine.buyTombstoneStyle`/
+  `selectTombstoneStyle`, mirroring the existing skin-purchase pattern
+  exactly) since going Fallen is meant to stay rare enough that a
+  per-hero picker would be overkill. `unlockedTombstoneStyles`/
+  `selectedTombstoneStyle` are optional `GameState` fields -- same
+  defensive convention as `Hero.health`, no save migration needed. The
+  `Tombstone` component in `HeroesPanel` already reads whichever style is
+  selected and falls back gracefully to the plain skull glyph for any
+  style whose art file (under `public/hero-status/`) hasn't been dropped
+  in yet -- so `mossy`/`ornate`/`cursed` are fully purchasable and
+  selectable right now, they just all render as the fallback glyph until
+  `tombstone-mossy.png`/`tombstone-ornate.png`/`tombstone-cursed.png`
+  actually exist. Dropping those three files in is the only remaining
+  step; no code changes needed when that happens.
 
 ### Rename to Guildbound -- complete (display text only)
 Game renamed from "Guild Idler" to **Guildbound**. Scope was deliberately
