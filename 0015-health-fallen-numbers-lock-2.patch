@@ -1,0 +1,111 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 896ed3a..e1ce2f5 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -4182,18 +4182,25 @@ level log entry underneath it doesn't also demand separate attention.
+     chance on success) already fires regardless of quest tag, matching
+     that a hero can get hurt exploring, not just fighting. Health damage
+     piggybacks on that same roll rather than adding a second one.
+-  - **Severity scales off each injury's own existing data** -- a new
+-    `healthDamagePercent` field per `InjuryDef` (edited via devtool same
+-    as everything else in `injuries.json`), scaled roughly with each
+-    injury's existing `durationHours`/`weight`. The common, low-weight
+-    injuries (`bruised`, `sprained_ankle`) barely dent the pool; only
+-    stacking the rare, high-weight ones (`dragonfire_scorch`,
+-    `world_ender_mark`) meaningfully drains it -- self-balancing off data
+-    that already exists rather than a new severity curve to hand-tune.
+-  - **Max Health** -- both endurance and level, same shape `injuryResist`
+-    already uses (`Math.sqrt(stats.endurance) * 2.0`): something like
+-    `100 + sqrt(endurance)*X + level*Y`, baseline high enough that a
+-    fresh level-1 hero isn't fragile.
++  - **Severity, locked in as a derived formula rather than new authored
++    data:** `healthDamagePercent = durationHours * 2.5`, computed
++    directly from each `InjuryDef`'s existing `durationHours` -- no new
++    JSON field needed at all. Applied to the current 9 injuries this
++    gives `bruised` 5%, `sprained_ankle` 10%, `exhausted` 8%, `poisoned`
++    15%, `cracked_ribs` 25%, `dragonfire_scorch` 35%, `shattered_spirit`
++    40%, `void_touched` 45%, `world_ender_mark` 60%. Same
++    self-correcting philosophy the burst-quest cap already uses --
++    changing an injury's duration in devtool automatically updates its
++    health cost too, no separate curve to re-tune by hand. (An override
++    field could still be added later if one specific injury ever needs
++    to deviate from the curve.)
++  - **Max Health, locked in:** `100 + sqrt(endurance)*10 + level*3` --
++    same `sqrt(endurance)` shape `injuryResist` already uses. A fresh
++    level-1 hero lands around ~125 HP; a well-geared level 55 lands
++    roughly 350-400. Since damage is defined as a % of max rather than a
++    flat amount, these coefficients mostly govern feel/display rather
++    than real balance -- the injury-derived percentages above are what
++    actually drives how many bad hits a hero can take.
+   - **No hard floor.** Health can reach 0 -- see Fallen state below.
+   - **Two new modifier hooks, gear and consumables separately:** a new
+     `health` key added to the `Modifiers` pool so weapons/armor can roll
+@@ -4210,10 +4217,12 @@ level log entry underneath it doesn't also demand separate attention.
+     Idle regen at the guild starts at 60 minutes to fully heal with no
+     Infirmary; each Infirmary level cuts 10 minutes off that, down to a
+     floor of 10 minutes at level 5 (no further gain past max level). A
+-    smaller passive trickle rate applies while a hero is actively out on
+-    a quest, so a long quest isn't a total recovery freeze, just slower
+-    than resting -- exact trickle fraction still open, but it should scale
+-    down proportionally as Infirmary levels reduce the idle time too.
++    passive trickle rate applies while a hero is actively out on a quest,
++    **locked at 1/4 of the current idle rate** -- still meaningfully
++    slower than resting, but a long quest isn't a total recovery freeze
++    either. Since it's a fraction of the idle rate, it automatically
++    scales down as Infirmary levels reduce that idle time too, with no
++    separate curve to tune.
+     **Correction from the original plan:** regen can't reuse the fixed
+     30-minute `REST_TICK` constant in `items.ts` as a tick interval once
+     Infirmary pushes the floor down to 10 minutes -- a fixed 30-min tick
+@@ -4248,12 +4257,23 @@ level log entry underneath it doesn't also demand separate attention.
+       a Fallen hero blocks recruiting a replacement into that slot the
+       same as any other living-but-unavailable hero would, until either
+       revived or retired.
+-    - **Revival, dual path reusing the exact pattern `treatInjury`
+-      already implements:** free after a long fixed timer (a day,
+-      roughly) with no action needed, or an instant paid revive whose
+-      gold cost scales with hero level -- same shape as `treatmentCost`
+-      already scaling with injury severity, same UI button pattern
+-      already built in `HeroesPanel`.
++    - **Revival, corrected from the original "always free eventually"
++      plan.** Pay-to-skip is the only reliable path by default: an
++      instant revive costing `100 + hero.level * 40` gold, same shape as
++      `treatmentCost` scaling with severity and reusing the exact UI
++      button pattern already built in `HeroesPanel`. There is **no free
++      auto-revive at lower Infirmary levels at all** -- a Fallen hero
++      with an unmaxed Infirmary either gets paid for, or sits Fallen
++      until retired. **Free auto-revive is instead the payoff for maxing
++      Infirmary to level 5** -- the same level that already hits the
++      10-minute heal-time floor also unlocks a 12-hour automatic revive
++      timer, no gold needed. Paying to skip that 12-hour wait early
++      remains available even at max Infirmary, for anyone who doesn't
++      want to wait it out. This makes Infirmary's top level a genuine
++      capstone payoff rather than just the last step of a shrinking
++      number, consistent with how Tavern's own top-level effect already
++      bundles more than one thing (+1 hero slot, +2% loot) rather than
++      splitting into a 6th facility.
+     - **Not toggleable in Settings -- always on, by design.** Intended to
+       stay effectively invisible at low/easy content (where injury rolls
+       are rare and mild) and only start mattering once content gets hard
+@@ -4267,12 +4287,15 @@ level log entry underneath it doesn't also demand separate attention.
+       asset instead -- a small pixel-art tombstone standing in for the
+       hero in roster/idle views while Fallen, swapped back once revived.
+       New art, not a reuse of the existing animation set.
+-  **Still open:** max-health formula coefficients (`X`/`Y` in `100 +
+-  sqrt(endurance)*X + level*Y`); per-injury `healthDamagePercent` values;
+-  the revival cost formula's actual scale factor (confirmed to scale with
+-  hero level, matching `treatmentCost`'s shape -- exact numbers not
+-  picked yet); the on-quest trickle-regen fraction relative to idle rate;
+-  and the tombstone art asset itself.
++  **Still open:** the tombstone art asset itself (proposing one universal
++  asset rather than a per-class variant, to keep this from becoming a
++  full art pipeline pass like the licensed hero packs -- this is original
++  art with no licensing question, unlike those); and whether Fallen
++  status should show anywhere outside the roster/idle view (e.g. a
++  Dashboard or Statistics callout) or stays scoped to just those two.
++  Formulas, costs, and the auto-revive/pay-to-skip split above are all
++  locked in as first-pass numbers, tunable later same as everything else
++  in the tuning registry.
+ 
+ - **Melee/Ranged/Caster hero roles** -- scoping discussion started, no
+   code yet. Concrete shape proposed so far: a role (Melee/Ranged/Caster)
