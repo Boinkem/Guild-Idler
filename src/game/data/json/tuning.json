@@ -2619,5 +2619,255 @@
     "min": 0,
     "max": 1,
     "description": "Fraction knocked off the summed individual revival costs when using Revive All instead of reviving each Fallen hero one at a time."
+  },
+  {
+    "id": "guild_facility.kennel.baseCost",
+    "label": "Kennel: base cost",
+    "category": "guild_facilities",
+    "value": 600,
+    "default": 600,
+    "min": 0,
+    "description": "Same starting shape as Infirmary -- a fully separate facility, not a reuse of it."
+  },
+  {
+    "id": "guild_facility.kennel.costGrowth",
+    "label": "Kennel: cost growth",
+    "category": "guild_facilities",
+    "value": 1.85,
+    "default": 1.85,
+    "min": 1,
+    "max": 5,
+    "description": "Matches Infirmary's own growth rate."
+  },
+  {
+    "id": "guild_facility.kennel.maxLevel",
+    "label": "Kennel: max level",
+    "category": "guild_facilities",
+    "value": 5,
+    "default": 5,
+    "min": 1,
+    "description": "Highest level Kennel can reach -- same 5-level shape as Infirmary."
+  },
+  {
+    "id": "guild_facility.kennel.baseHealTimeMinutes",
+    "label": "Kennel: base heal time (minutes)",
+    "category": "guild_facilities",
+    "value": 60,
+    "default": 60,
+    "min": 1,
+    "description": "Minutes for a pet to fully heal Health with no Kennel levels bought yet."
+  },
+  {
+    "id": "guild_facility.kennel.healTimeReductionMinutesPerLevel",
+    "label": "Kennel: heal-time reduction per level (minutes)",
+    "category": "guild_facilities",
+    "value": 10,
+    "default": 10,
+    "min": 0,
+    "description": "Minutes shaved off the pet heal time per Kennel level."
+  },
+  {
+    "id": "guild_facility.kennel.minHealTimeMinutes",
+    "label": "Kennel: minimum heal time (minutes)",
+    "category": "guild_facilities",
+    "value": 10,
+    "default": 10,
+    "min": 1,
+    "description": "Floor on pet heal time -- reached at Kennel's max level."
+  },
+  {
+    "id": "guild_facility.kennel.autoReviveHours",
+    "label": "Kennel: free auto-revive time (hours)",
+    "category": "guild_facilities",
+    "value": 12,
+    "default": 12,
+    "min": 1,
+    "description": "Hours until a Fallen pet is automatically revived for free, once Kennel has reached its max level. Below max level there is no free auto-revive at all."
+  },
+  {
+    "id": "upgrade.companion_vitality.baseCost",
+    "label": "Companion Vitality: base cost",
+    "category": "vendor_upgrades",
+    "value": 300,
+    "default": 300,
+    "min": 0,
+    "description": "Same shape as Vitality Training -- a fully separate upgrade, not a reuse of it."
+  },
+  {
+    "id": "upgrade.companion_vitality.costGrowth",
+    "label": "Companion Vitality: cost growth",
+    "category": "vendor_upgrades",
+    "value": 1.3,
+    "default": 1.3,
+    "min": 1,
+    "max": 5,
+    "description": "Matches Vitality Training's own growth rate."
+  },
+  {
+    "id": "upgrade.companion_vitality.maxLevel",
+    "label": "Companion Vitality: max level",
+    "category": "vendor_upgrades",
+    "value": 4,
+    "default": 4,
+    "min": 1,
+    "description": "Matches Vitality Training's own level cap."
+  },
+  {
+    "id": "upgrade.companion_vitality.petHealthPerLevel",
+    "label": "Companion Vitality: pet Max Health per level",
+    "category": "vendor_upgrades",
+    "value": 5,
+    "default": 5,
+    "min": 0,
+    "description": "Same +5/level as Vitality Training, applied to petHealth instead of health."
+  },
+  {
+    "id": "upgrade.kennel_keepers_favor.baseCost",
+    "label": "Kennel Keeper's Favor: base cost",
+    "category": "vendor_upgrades",
+    "value": 400,
+    "default": 400,
+    "min": 0,
+    "description": "Same shape as Undertaker's Favor -- a fully separate upgrade."
+  },
+  {
+    "id": "upgrade.kennel_keepers_favor.costGrowth",
+    "label": "Kennel Keeper's Favor: cost growth",
+    "category": "vendor_upgrades",
+    "value": 1.6,
+    "default": 1.6,
+    "min": 1,
+    "max": 5,
+    "description": "Matches Undertaker's Favor's own growth rate."
+  },
+  {
+    "id": "upgrade.kennel_keepers_favor.maxLevel",
+    "label": "Kennel Keeper's Favor: max level",
+    "category": "vendor_upgrades",
+    "value": 5,
+    "default": 5,
+    "min": 1,
+    "description": "Matches Undertaker's Favor's own level cap."
+  },
+  {
+    "id": "upgrade.kennel_keepers_favor.discountPerLevel",
+    "label": "Kennel Keeper's Favor: pet revival discount % per level",
+    "category": "vendor_upgrades",
+    "value": 6,
+    "default": 6,
+    "min": 0,
+    "max": 100,
+    "description": "Same 6%/level, 30% max shape as Undertaker's Favor, applied to petRevivalDiscount instead."
+  },
+  {
+    "id": "renown_perk.companion_legacy.cost",
+    "label": "Companion Legacy: base Renown cost",
+    "category": "renown_perks",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "description": "Same starting shape as Vital Legacy."
+  },
+  {
+    "id": "renown_perk.companion_legacy.costGrowth",
+    "label": "Companion Legacy: Renown cost growth",
+    "category": "renown_perks",
+    "value": 1.6,
+    "default": 1.6,
+    "min": 1,
+    "max": 5,
+    "description": "Matches Vital Legacy's own growth rate."
+  },
+  {
+    "id": "renown_perk.companion_legacy.maxLevel",
+    "label": "Companion Legacy: max level (tier 1)",
+    "category": "renown_perks",
+    "value": 20,
+    "default": 20,
+    "min": 1,
+    "description": "Matches Vital Legacy's own tier-1 cap."
+  },
+  {
+    "id": "renown_perk.companion_legacy.petHealthPerLevel",
+    "label": "Companion Legacy: pet Max Health per level",
+    "category": "renown_perks",
+    "value": 5,
+    "default": 5,
+    "min": 0,
+    "description": "Same +5/level as Vital Legacy, applied to petHealth instead of health."
+  },
+  {
+    "id": "renown_perk.companion_legacy.tier2MaxLevel",
+    "label": "Companion Legacy: max level (tier 2)",
+    "category": "renown_perks",
+    "value": 25,
+    "default": 25,
+    "min": 1,
+    "description": "Matches Vital Legacy's own tier-2 cap."
+  },
+  {
+    "id": "renown_perk.companion_legacy.tier2StartCost",
+    "label": "Companion Legacy: tier 2 starting Renown cost",
+    "category": "renown_perks",
+    "value": 9822,
+    "default": 9822,
+    "min": 0,
+    "description": "Matches Vital Legacy's own tier-2 starting cost."
+  },
+  {
+    "id": "renown_perk.companion_legacy.tier2CostGrowth",
+    "label": "Companion Legacy: tier 2 Renown cost growth",
+    "category": "renown_perks",
+    "value": 1.12,
+    "default": 1.12,
+    "min": 1,
+    "max": 5,
+    "description": "Matches Vital Legacy's own tier-2 growth rate."
+  },
+  {
+    "id": "pets.maxHealthBase",
+    "label": "Pets: Max Health base",
+    "category": "pets",
+    "value": 60,
+    "default": 60,
+    "min": 0,
+    "description": "Flat baseline for PetManager.maxHealth -- roughly half a fresh hero's own baseline, since a pet is an auxiliary companion, not the one taking the brunt of a fight."
+  },
+  {
+    "id": "pets.maxHealthPerLevel",
+    "label": "Pets: Max Health per pet-level",
+    "category": "pets",
+    "value": 4,
+    "default": 4,
+    "min": 0,
+    "description": "Flat Max Health granted per pet level (PetManager.levelForXp's flat curve, not a hero's exponential one)."
+  },
+  {
+    "id": "pets.revivalCostBase",
+    "label": "Pets: revival cost base",
+    "category": "pets",
+    "value": 50,
+    "default": 50,
+    "min": 0,
+    "description": "Smaller scale than a hero's own fallen.revivalCostBase -- reviving a companion costs less than reviving a hero."
+  },
+  {
+    "id": "pets.revivalCostPerLevel",
+    "label": "Pets: revival cost per pet-level",
+    "category": "pets",
+    "value": 15,
+    "default": 15,
+    "min": 0,
+    "description": "Gold added per pet level to the instant-revive cost."
+  },
+  {
+    "id": "pets.bulkReviveDiscount",
+    "label": "Pets: bulk revive discount",
+    "category": "pets",
+    "value": 0.1,
+    "default": 0.1,
+    "min": 0,
+    "max": 1,
+    "description": "Same 10% shape as health.bulkReviveDiscount, for reviving every Fallen pet at once."
   }
 ]

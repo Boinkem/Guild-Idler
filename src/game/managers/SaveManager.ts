@@ -53,7 +53,7 @@ export function defaultAdapter(): SaveAdapter {
 }
 
 const EMPTY_GUILD: Record<GuildFacility, number> = {
-  barracks: 0, treasury: 0, workshop: 0, library: 0, tavern: 0, infirmary: 0,
+  barracks: 0, treasury: 0, workshop: 0, library: 0, tavern: 0, infirmary: 0, kennel: 0,
 };
 
 export function createInitialState(now = Date.now()): GameState {
@@ -132,7 +132,6 @@ export function createInitialState(now = Date.now()): GameState {
     incubatingEggs: [],
     eggStorage: [],
     pets: [],
-    equippedPetIds: [],
     autoRepairEnabled: false,
     autoRepairThresholdPercent: 50,
     autoEquipOnLoot: false,
@@ -378,7 +377,6 @@ const MIGRATIONS: Record<number, Migration> = {
     pendingHatcherySpotlight: (save.pendingHatcherySpotlight as boolean | undefined) ?? false,
     incubatingEggs: (save.incubatingEggs as unknown[] | undefined) ?? [],
     pets: (save.pets as unknown[] | undefined) ?? [],
-    equippedPetIds: (save.equippedPetIds as string[] | undefined) ?? [],
   }),
   23: (save) => ({
     ...save,

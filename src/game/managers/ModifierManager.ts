@@ -1,7 +1,7 @@
 import { GUILD_BY_ID, RENOWN_BY_ID, UPGRADE_BY_ID, BASE_GOLD_STORAGE } from '../data/progression';
 import { RAID_UPGRADE_BY_ID } from '../data/raidUpgrades';
 import { BASE_INCUBATION_SLOTS } from '../data/pets';
-import { GameState, Modifiers, PetBonusType } from '../types';
+import { GameState, Hero, Modifiers } from '../types';
 import { scaleMods, sumMods } from '../util';
 import { PetManager } from './PetManager';
 
@@ -59,24 +59,35 @@ export const ModifierManager = {
    * this isn't a flat modsPerLevel table (each pet rolled its own type and
    * magnitude at hatch), so it's built directly here rather than through
    * scaleMods.
+   *
+   * Per-hero now, not guild-wide -- reads hero.equippedPetId instead of
+   * the old state.equippedPetIds list, so only the ONE pet paired with
+   * THIS hero contributes, and only when this specific hero's mods are
+   * being computed (see HeroManager.heroMods). A Fallen pet contributes
+   * nothing at all -- no soft penalty the way a hero's own Health does,
+   * since a downed pet doesn't block its hero from questing. See
+   * guild-idler-status.md's Pet Health/Fallen entry.
    */
-  petMods(state: GameState, now = Date.now()): Partial<Modifiers> {
-    const result: Partial<Record<PetBonusType, number>> = {};
-    for (const petId of state.equippedPetIds) {
-      const pet = state.pets.find((p) => p.uid === petId);
-      if (!pet) continue;
-      const value = PetManager.effectiveBonus(pet, now);
-      result[pet.bonusType] = (result[pet.bonusType] ?? 0) + value;
-    }
-    return result;
+  petModsForHero(state: GameState, hero: Hero, now = Date.now()): Partial<Modifiers> {
+    if (!hero.equippedPetId) return {};
+    const pet = state.pets.find((p) => p.uid === hero.equippedPetId);
+    if (!pet || PetManager.isFallen(pet)) return {};
+    const value = PetManager.effectiveBonus(pet, now);
+    return { [pet.bonusType]: value };
   },
 
+  /**
+   * Guild-wide mods only -- NOT including pets anymore (see
+   * petModsForHero above). Every call site that used to rely on
+   * `global()` alone picking up pet bonuses now needs
+   * HeroManager.heroMods (which folds petModsForHero in per-hero)
+   * summed alongside it, same as it already sums equipment/injury/etc.
+   */
   global(state: GameState): Modifiers {
     return sumMods(
       ModifierManager.upgradeMods(state),
       ModifierManager.guildMods(state),
       ModifierManager.renownMods(state),
-      ModifierManager.petMods(state),
     );
   },
 

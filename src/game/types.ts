@@ -86,10 +86,26 @@ export interface Modifiers {
    * describeMods) needs no special case for this one.
    */
   revivalDiscount: number;
+  /**
+   * Flat bonus to PetManager.maxHealth -- deliberately a SEPARATE key
+   * from `health` above rather than reused, since these two pools sum
+   * through the exact same generic Modifiers/sumMods machinery and
+   * reusing one key would incorrectly let a hero-health source (e.g. a
+   * shield's `health` mod) bleed into pet Max Health and vice versa.
+   * Sourced from Companion Vitality (Upgrade) and a future Companion
+   * Legacy Renown Perk -- the pet-specific parallels to Vitality
+   * Training/Vital Legacy. See guild-idler-status.md's Pet Health/Fallen
+   * entry.
+   */
+  petHealth: number;
+  /** Pet-specific parallel to revivalDiscount above, from Kennel
+   *  Keeper's Favor -- same reasoning for staying a separate key. */
+  petRevivalDiscount: number;
 }
 
 export const ZERO_MODS: Modifiers = {
   success: 0, gold: 0, xp: 0, loot: 0, injuryResist: 0, speed: 0, durability: 0, health: 0, revivalDiscount: 0,
+  petHealth: 0, petRevivalDiscount: 0,
 };
 
 export interface Stats {
@@ -161,6 +177,13 @@ export interface ConsumableDef {
      *  every other effect here has, so this stays Upgrade-only
      *  (Undertaker's Favor) rather than ever being craftable. */
     revivalDiscount?: number;
+    /** Same "unused by any current recipe, typed for completeness against
+     *  Modifiers" note as durability/revivalDiscount above -- pet Max
+     *  Health and pet revival discount are Upgrade/Renown-Perk-only
+     *  sources (Companion Vitality, Kennel Keeper's Favor), not
+     *  consumable effects. */
+    petHealth?: number;
+    petRevivalDiscount?: number;
   };
 }
 
@@ -371,6 +394,18 @@ export interface Hero {
    * same defensive convention as health above.
    */
   fallenAt?: number | null;
+  /**
+   * The one pet paired with this hero, replacing the old guild-wide
+   * `GameState.equippedPetIds` list entirely -- a pet now genuinely
+   * accompanies a SPECIFIC hero rather than passively boosting every
+   * quest regardless of who's sent. Enforced at PetManager.equip: a pet
+   * can only be assigned to one hero at a time, and the total count of
+   * heroes with a pet assigned across the roster is capped at
+   * ModifierManager.petSlots(state), same cap concept as before, just
+   * counted differently. Optional/undefined for any hero with no pet
+   * assigned. See guild-idler-status.md's Pet Health/Fallen entry.
+   */
+  equippedPetId?: string | null;
 }
 
 /* ----------------------------- quests ----------------------------- */
@@ -748,7 +783,7 @@ export interface UpgradeDef {
   freezeChangesPerLevel?: number;
 }
 
-export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern' | 'infirmary';
+export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern' | 'infirmary' | 'kennel';
 
 export interface GuildDef {
   id: GuildFacility;
@@ -1118,11 +1153,6 @@ export interface GameState {
    * individually once they get there.
    */
   pendingHatchReadyNotice: boolean;
-  /** Which owned pets currently accompany the guild -- feeds ModifierManager's
-   *  global mods and is the only thing that gains a pet post-hatch xp (see
-   *  PetManager). Capped at ModifierManager.petSlots(state), same
-   *  "array, not a fixed-size struct" shape as Hero.equippedConsumables. */
-  equippedPetIds: string[];
 
   /* ------------------------- automation preferences -------------------------
      Both opt-in, both off by default. Live in GameState (not Settings) on
@@ -1272,6 +1302,25 @@ export interface Pet {
   happiness: number;
   happinessUpdatedAt: number;
   hatchedAt: number;
+  /**
+   * Mirrors Hero.health exactly, including the "no floor, reaches 0 ->
+   * Fallen" shape -- optional/undefined defaults to full via
+   * PetManager.currentHealth, same defensive convention, no migration.
+   * Takes the SAME damagePercent its paired hero does on an injury roll
+   * (see QuestManager.resolve) -- not a separate roll, not scaled by the
+   * pet's own stats (pets have none). See guild-idler-status.md's Pet
+   * Health/Fallen entry.
+   */
+  health?: number;
+  /**
+   * Epoch ms this pet's Health hit 0, mirroring Hero.fallenAt -- drives
+   * the free auto-revive timer once Kennel (the pet-specific parallel to
+   * Infirmary) reaches its max level. A Fallen pet contributes zero
+   * bonus while down (no soft penalty the way Hero's success roll gets --
+   * a downed pet doesn't block its hero from still questing, so there's
+   * no "auto-fail" problem to soften here).
+   */
+  fallenAt?: number | null;
 }
 
 /**

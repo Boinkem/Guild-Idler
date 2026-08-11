@@ -164,7 +164,7 @@ export function HeroesPanel() {
         const classDef = HERO_CLASSES[hero.heroClass];
         const total = HeroManager.totalStats(hero);
         const toNext = HeroManager.xpToNext(hero);
-        const mods = HeroManager.heroMods(hero, now);
+        const mods = HeroManager.heroMods(state, hero, now);
         const sets = HeroManager.activeSetBonuses(hero);
         const isOpen = expanded.has(hero.id);
         const showingOnDesktop = engine.displayedHero.id === hero.id;

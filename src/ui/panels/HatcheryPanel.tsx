@@ -7,7 +7,7 @@ import { PET_BY_ID, hatchXpThreshold } from '../../game/data/pets';
 import { FEEDABLE_MATERIALS } from '../../game/data/materials';
 import { EggInstance, MaterialId, Pet } from '../../game/types';
 import { RarityPill } from '../RarityPill';
-import { formatMaterial, RARITY_COLOR } from '../../game/util';
+import { formatGold, formatMaterial, RARITY_COLOR } from '../../game/util';
 import { PetSprite } from '../sprites/PetSprite';
 import { PetEnlargedModal } from '../PetEnlargedModal';
 import { EggIcon } from '../EggIcon';
@@ -160,8 +160,8 @@ function PetsTab() {
   return (
     <>
       <p className="tiny muted" style={{ marginBottom: 10 }}>
-        {state.equippedPetIds.length}/{petSlots} companion slots filled. More come from the Companion Bond
-        upgrade in Guild Hall.
+        {state.heroes.filter((h) => h.equippedPetId).length}/{petSlots} companion slots filled. Pair a pet with a
+        hero below -- more slots come from the Companion Bond upgrade in Guild Hall.
       </p>
       {state.pets.length === 0 && (
         <div className="card"><p className="card-flavour">No pets hatched yet -- check the Nests tab.</p></div>
@@ -186,7 +186,14 @@ function PetCard({ pet }: { pet: Pet }) {
   const happiness = PetManager.currentHappiness(pet, now);
   const bonus = PetManager.effectiveBonus(pet, now);
   const level = PetManager.levelForXp(pet.xp);
-  const equipped = state.equippedPetIds.includes(pet.uid);
+  // A pet is "equipped" by being paired with a specific hero now (see
+  // Hero.equippedPetId) rather than sitting in a guild-wide list --
+  // find whichever hero (if any) currently has this exact pet.
+  const boundHero = state.heroes.find((h) => h.equippedPetId === pet.uid);
+  const fallen = PetManager.isFallen(pet);
+  const maxHealth = PetManager.maxHealth(state, pet);
+  const currentHealth = PetManager.currentHealth(state, pet);
+  const healthRatio = maxHealth > 0 ? currentHealth / maxHealth : 0;
   const treatCount = state.inventory.pet_treat ?? 0;
 
   const saveName = () => {
@@ -288,12 +295,47 @@ function PetCard({ pet }: { pet: Pet }) {
         </button>
       </div>
 
-      <button
-        className={equipped ? 'btn-primary' : ''}
-        onClick={() => (equipped ? engine.unequipPet(pet.uid) : engine.equipPet(pet.uid))}
-      >
-        {equipped ? 'Equipped -- unequip' : 'Equip'}
-      </button>
+      <div className="tiny muted" style={{ marginTop: 8, marginBottom: 3 }}>
+        Health {Math.round(currentHealth)}/{maxHealth}
+      </div>
+      <div className={`bar health ${healthRatio < 0.25 ? 'low' : ''}`}>
+        <span style={{ width: `${healthRatio * 100}%` }} />
+      </div>
+
+      {fallen ? (
+        <div className="spread" style={{ marginTop: 8 }}>
+          <span className="small bad">Fallen -- can't be paired until revived</span>
+          <button
+            onClick={() => engine.revivePet(pet.uid)}
+            disabled={state.gold < PetManager.revivalCost(pet, ModifierManager.global(state).petRevivalDiscount ?? 0)}
+          >
+            Revive · {formatGold(PetManager.revivalCost(pet, ModifierManager.global(state).petRevivalDiscount ?? 0))}
+          </button>
+        </div>
+      ) : (
+        <div className="row" style={{ gap: 6, marginTop: 8, alignItems: 'center' }}>
+          <span className="tiny muted">Paired with:</span>
+          <select
+            value={boundHero?.id ?? ''}
+            onChange={(e) => {
+              const heroId = e.target.value;
+              if (!heroId) {
+                if (boundHero) engine.unequipPet(boundHero.id);
+              } else {
+                engine.equipPet(heroId, pet.uid);
+              }
+            }}
+            style={{ flex: 1, minWidth: 0, background: 'var(--panel-2)', border: '1px solid var(--panel-3)', color: 'var(--parchment)', padding: '4px 6px' }}
+          >
+            <option value="">Unassigned</option>
+            {state.heroes.map((h) => (
+              <option key={h.id} value={h.id} disabled={!!h.equippedPetId && h.equippedPetId !== pet.uid}>
+                {h.name}{h.equippedPetId && h.equippedPetId !== pet.uid ? ' (has a companion)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {enlarged && <PetEnlargedModal pet={pet} onClose={() => setEnlarged(false)} />}
     </div>

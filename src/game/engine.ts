@@ -394,6 +394,20 @@ export class GameEngine {
       }
     }
 
+    // Pets regen/auto-revive independently of their paired hero's own
+    // status -- a benched (unpaired) pet still heals over time, same as
+    // an unpaired one would just sit there otherwise. See
+    // guild-idler-status.md's Pet Health/Fallen entry.
+    const kennelLevel = this.state.guild.kennel ?? 0;
+    for (const pet of this.state.pets) {
+      PetManager.regenHealth(this.state, pet, delta, kennelLevel);
+      if (PetManager.isFallen(pet) && PetManager.autoReviveDue(pet, now)) {
+        PetManager.revive(this.state, pet);
+        changed = true;
+        this.say(`${pet.name} has recovered.`, 'heroes');
+      }
+    }
+
     const due = this.state.activeQuests.filter((q) => q.endsAt <= now);
     for (const quest of due) {
       const result = QuestManager.resolve(this.state, quest, quest.endsAt);
@@ -622,6 +636,14 @@ export class GameEngine {
         if (hero.status === 'fallen' && HeroManager.autoReviveDue(hero, now)) {
           HeroManager.revive(hero);
           this.archive(`${hero.name} has recovered and returns to the roster.`, 'heroes');
+        }
+      }
+      const kennelLevel = this.state.guild.kennel ?? 0;
+      for (const pet of this.state.pets) {
+        PetManager.regenHealth(this.state, pet, elapsed, kennelLevel);
+        if (PetManager.isFallen(pet) && PetManager.autoReviveDue(pet, now)) {
+          PetManager.revive(this.state, pet);
+          this.archive(`${pet.name} has recovered.`, 'heroes');
         }
       }
     }
@@ -1647,17 +1669,53 @@ export class GameEngine {
     void this.saveNow();
   }
 
-  equipPet(petUid: string) {
-    const error = PetManager.equip(this.state, petUid);
+  /** Pairs a pet with a specific hero -- see Hero.equippedPetId and
+   *  PetManager.equip for the full per-hero pairing design. */
+  equipPet(heroId: string, petUid: string) {
+    const error = PetManager.equip(this.state, heroId, petUid);
     if (error) return this.say(error);
     playSound('purchase');
     this.notify();
     void this.saveNow();
   }
 
-  unequipPet(petUid: string) {
-    PetManager.unequip(this.state, petUid);
+  unequipPet(heroId: string) {
+    PetManager.unequip(this.state, heroId);
     this.notify();
+    void this.saveNow();
+  }
+
+  /** Pay-to-skip instant revive for a Fallen pet -- pet-specific parallel
+   *  to engine.reviveHero, smaller gold scale, own discount source
+   *  (Kennel Keeper's Favor via petRevivalDiscount). */
+  revivePet(petUid: string) {
+    const pet = this.state.pets.find((p) => p.uid === petUid);
+    if (!pet) return;
+    if (!PetManager.isFallen(pet)) return;
+    const discount = ModifierManager.global(this.state).petRevivalDiscount ?? 0;
+    const cost = PetManager.revivalCost(pet, discount);
+    if (this.state.gold < cost) return this.say('Not enough gold for revival.');
+    this.state.gold -= cost;
+    this.state.stats.goldSpent += cost;
+    PetManager.revive(this.state, pet);
+    this.say(`${pet.name} is revived.`, 'heroes');
+    void this.saveNow();
+  }
+
+  /** Pet-specific parallel to engine.reviveAllFallen. */
+  reviveAllFallenPets() {
+    const fallen = this.state.pets.filter((p) => PetManager.isFallen(p));
+    if (fallen.length === 0) return;
+    const discount = ModifierManager.global(this.state).petRevivalDiscount ?? 0;
+    const total = Math.round(
+      fallen.reduce((sum, p) => sum + PetManager.revivalCost(p, discount), 0)
+        * (1 - Tuning.get('pets.bulkReviveDiscount')),
+    );
+    if (this.state.gold < total) return this.say('Not enough gold to revive every companion.');
+    this.state.gold -= total;
+    this.state.stats.goldSpent += total;
+    for (const pet of fallen) PetManager.revive(this.state, pet);
+    this.say(`${fallen.length} Fallen companions are revived.`, 'heroes');
     void this.saveNow();
   }
 

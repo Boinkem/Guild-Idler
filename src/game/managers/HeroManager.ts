@@ -3,9 +3,10 @@ import { INJURIES } from '../data/items';
 import { HERO_CLASSES, RECRUIT_START_LEVEL, xpForLevel, infirmaryHealTimeMinutes } from '../data/progression';
 import { DIFFICULTY_ORDER } from '../data/quests';
 import { Tuning } from '../data/tuning';
-import { Difficulty, Hero, HeroClass, Injury, Modifiers, Stats } from '../types';
+import { Difficulty, GameState, Hero, HeroClass, Injury, Modifiers, Stats } from '../types';
 import { Rng, uid } from '../rng';
 import { MINUTE, scaleMods, sumMods } from '../util';
+import { ModifierManager } from './ModifierManager';
 
 export const HeroManager = {
   create(heroClass: HeroClass, rng: Rng, nameOverride?: string): Hero {
@@ -366,8 +367,15 @@ export const HeroManager = {
     return { success: -missing * Tuning.get('health.successPenaltyPerMissingPercent') };
   },
 
-  /** Everything the hero personally contributes, before guild/upgrade bonuses. */
-  heroMods(hero: Hero, now: number): Modifiers {
+  /**
+   * Everything the hero personally contributes, before guild/upgrade
+   * bonuses -- now including its own paired pet's bonus (see
+   * ModifierManager.petModsForHero), since a pet is no longer a
+   * guild-wide passive the way it used to be. Signature grew a `state`
+   * param purely for that lookup (pets live in state.pets, not on the
+   * hero object) -- every call site already had `state` in scope.
+   */
+  heroMods(state: GameState, hero: Hero, now: number): Modifiers {
     const classDef = HERO_CLASSES[hero.heroClass];
     return sumMods(
       classDef.mods,
@@ -375,6 +383,7 @@ export const HeroManager = {
       HeroManager.equipmentMods(hero),
       HeroManager.injuryMods(hero, now),
       HeroManager.healthMods(hero),
+      ModifierManager.petModsForHero(state, hero, now),
       { success: hero.level * 0.4 },
     );
   },

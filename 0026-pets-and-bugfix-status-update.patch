@@ -1,0 +1,85 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 15e0bbe..fcd4eed 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -344,6 +344,80 @@ raid fight).
+ 
+ ## Backlog
+ 
++### Pet Health/Fallen + real per-hero pairing -- complete
++Grew out of a request to mirror the Hero Health/Fallen system onto pets.
++Surfaced a real architectural gap along the way: pets were guild-wide
++(`GameState.equippedPetIds`), not tied to any specific hero, despite the
++"joins the hero on missions" framing. Fixed as part of this pass rather
++than worked around -- confirmed acceptable since no players exist yet
++(pre-launch), so there was no live-balance nerf to manage.
++
++- **Real per-hero pairing.** `equippedPetIds` removed entirely. A pet now
++  lives on `Hero.equippedPetId?` -- one hero, one pet, enforced at
++  `PetManager.equip` (moving an already-paired pet to a different hero
++  doesn't cost a slot; a genuinely new pairing does, same
++  `ModifierManager.petSlots(state)` cap as before, just counted
++  differently). `HeroManager.heroMods()` gained a `state` parameter to
++  fold in `ModifierManager.petModsForHero` -- a pet's bonus now only
++  applies to sends by ITS OWN paired hero, not guild-wide. Verified with
++  a real test: a hero with a paired pet got its bonus in `heroMods`, an
++  unpaired hero got exactly zero.
++- **Pet Health/Fallen, mirroring Hero's shape exactly:** `maxHealth`
++  (base + flat per-pet-level term, since pets have no stats --
++  `pets.maxHealthBase`/`maxHealthPerLevel`), the same no-floor-reaches-0
++  Fallen state, the same continuous-rate regen reasoning. Whenever the
++  paired hero takes Health damage on an injury roll (in both
++  `QuestManager.resolve` and `RaidManager.resolve`), the pet takes the
++  *exact same damagePercent* against its own Max Health -- confirmed
++  statistically, 300 real trials through the actual quest-resolution
++  path, 100/100 injuries producing an exact percentage match between
++  hero and pet damage. Guardian's Retainer protects both for free, since
++  the reduction is baked into damagePercent before either side applies
++  it. A Fallen pet contributes zero bonus, full stop -- no soft penalty
++  the way a hero's own success roll gets, since a downed pet doesn't
++  block its hero from still questing.
++- **Kennel -- the parallel gold-sink system, fully separate from
++  Infirmary as decided (not a shared reuse):**
++  - **Kennel** (Guild Facility): 60->10 minute pet heal time across 5
++    levels, free auto-revive at max level, own cost curve
++    (`baseCost: 600, costGrowth: 1.85`) -- verified identical curve
++    shape to Infirmary, just its own facility entirely.
++  - **Companion Vitality** (Upgrade): +5 pet Max Health/level x4 levels,
++    45/136/304/560g -- verified identical costs to Vitality Training.
++  - **Kennel Keeper's Favor** (Upgrade): 6%/level pet revival discount
++    x5 levels (30% max) -- verified identical shape to Undertaker's
++    Favor, its own `petRevivalDiscount` Modifiers key so it can't bleed
++    into the hero-only `revivalDiscount`.
++  - **Companion Legacy** (Renown Perk): +5 pet Max Health/level, same
++    two-tier gold-then-Renown shape as Vital Legacy.
++  - `engine.revivePet`/`reviveAllFallenPets` mirror the hero
++    pay-to-skip/bulk-revive actions, smaller gold scale
++    (`pets.revivalCostBase/PerLevel`).
++- **A real bug found and fixed during verification, not after:** the
++  first version of `PetManager.equip`'s slot-cap check only looked at
++  whether the *target* hero already had a pet, not whether the pet being
++  assigned was already equipped elsewhere -- so moving an equipped pet
++  to a second hero (a net-zero change in total equipped count)
++  incorrectly hit the cap as if it were a new pairing. Confirmed with an
++  actual repro before shipping, then re-verified both the fix and that a
++  genuinely new second pairing still correctly hits the cap.
++- **UI:** `HatcheryPanel`'s pet cards now show a Health bar, a Revive
++  button when Fallen, and a hero-picker dropdown (replacing the old
++  single global Equip toggle) that disables heroes already holding a
++  different pet. `IdleView`'s desktop companion now shows the currently
++  *displayed* hero's own paired pet, not "whichever pet happened to be
++  first in the old guild-wide list."
++
++### AutoEquip bug fix -- complete
++`engine.equipBestGear`'s failure message always blamed "already
++equipped" gear, even when the hero had nothing equipped at all. Root
++cause: a stash item silently failing the `hero.level < def.reqLevel`
++check (via a bare `continue`) produced the exact same generic failure
++message as genuinely-already-optimal gear. Now distinguishes four honest
++outcomes (equipped something / gear already optimal / stash is
++level-gated / stash has nothing matching at all), verified with real
++fixtures for each case.
++
+ ### Health-related gold sinks -- complete (tombstone art still pending)
+ All five ideas shipped. Verified end-to-end, not just compiled --
+ Guardian's Retainer specifically was checked statistically through the

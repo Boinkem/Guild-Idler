@@ -1,8 +1,9 @@
-import { EggInstance, GameState, MaterialId, Pet, PetBonusType, Rarity } from '../types';
+import { EggInstance, GameState, Hero, MaterialId, Pet, PetBonusType, Rarity } from '../types';
 import { uid } from '../rng';
 import { clamp } from '../util';
 import { Tuning } from '../data/tuning';
 import { PET_BY_ID, hatchXpThreshold, pickHatchedPetDefId } from '../data/pets';
+import { kennelHealTimeMinutes } from '../data/progression';
 import { ModifierManager } from './ModifierManager';
 
 const PET_TREAT_ID = 'pet_treat';
@@ -156,19 +157,19 @@ export const PetManager = {
   },
 
   /**
-   * Grants each currently-equipped pet its share of a quest's raw xp
-   * reward. Benched pets gain nothing -- this is the actual reason to
-   * equip one rather than leaving every hatched pet in a drawer. Called
+   * Grants each hero's own paired pet its share of a quest's raw xp
+   * reward -- per-hero now, not every equipped pet guild-wide (see
+   * Hero.equippedPetId's own comment for why). Only the specific hero
+   * who actually went on this quest can feed their own pet; a pet paired
+   * with a different, idle hero gains nothing from this send. Called
    * alongside HeroManager.grantXp, same call site as addHatchXp above.
    */
-  grantEquippedXp(state: GameState, questXp: number): void {
-    if (questXp <= 0 || state.equippedPetIds.length === 0) return;
+  grantEquippedXp(state: GameState, hero: Hero, questXp: number): void {
+    if (questXp <= 0 || !hero.equippedPetId) return;
+    const pet = state.pets.find((p) => p.uid === hero.equippedPetId);
+    if (!pet) return;
     const share = Math.floor(questXp * (Tuning.get('pets.xpShareOfQuestXpPercent') / 100));
-    if (share <= 0) return;
-    for (const petId of state.equippedPetIds) {
-      const pet = state.pets.find((p) => p.uid === petId);
-      if (pet) pet.xp += share;
-    }
+    if (share > 0) pet.xp += share;
   },
 
   rename(state: GameState, petUid: string, name: string): string | null {
@@ -180,17 +181,43 @@ export const PetManager = {
     return null;
   },
 
-  equip(state: GameState, petUid: string): string | null {
+  /**
+   * Pairs a pet with a specific hero -- replacing the old guild-wide
+   * equip entirely (see Hero.equippedPetId). If the pet was already
+   * paired with a different hero, it's moved rather than duplicated. The
+   * ModifierManager.petSlots(state) cap now counts heroes-with-a-pet
+   * across the roster instead of a flat list length, but the cap concept
+   * itself is unchanged.
+   */
+  equip(state: GameState, heroId: string, petUid: string): string | null {
+    const hero = state.heroes.find((h) => h.id === heroId);
+    if (!hero) return 'No such hero.';
     const pet = state.pets.find((p) => p.uid === petUid);
     if (!pet) return 'No such pet.';
-    if (state.equippedPetIds.includes(petUid)) return null;
-    if (state.equippedPetIds.length >= ModifierManager.petSlots(state)) return 'Every companion slot is already full.';
-    state.equippedPetIds.push(petUid);
+    if (PetManager.isFallen(pet)) return `${pet.name} is Fallen and needs to be revived first.`;
+    if (hero.equippedPetId === petUid) return null;
+    // Only a genuinely new pairing counts against the cap -- moving a
+    // pet that's already equipped somewhere else is a net-zero change in
+    // the total (one hero loses it, one gains it), not a new slot use.
+    // Checking whether THIS pet is already equipped anywhere (not just
+    // whether the TARGET hero has a different pet) is what the original
+    // version of this got wrong -- confirmed by an actual repro: moving
+    // an equipped pet to a second hero incorrectly hit the cap.
+    const petAlreadyEquippedElsewhere = state.heroes.some((h) => h.equippedPetId === petUid);
+    if (!petAlreadyEquippedElsewhere) {
+      const totalEquipped = state.heroes.filter((h) => h.equippedPetId).length;
+      if (totalEquipped >= ModifierManager.petSlots(state)) return 'Every companion slot is already full.';
+    }
+    for (const h of state.heroes) {
+      if (h.equippedPetId === petUid) h.equippedPetId = undefined;
+    }
+    hero.equippedPetId = petUid;
     return null;
   },
 
-  unequip(state: GameState, petUid: string): void {
-    state.equippedPetIds = state.equippedPetIds.filter((id) => id !== petUid);
+  unequip(state: GameState, heroId: string): void {
+    const hero = state.heroes.find((h) => h.id === heroId);
+    if (hero) hero.equippedPetId = undefined;
   },
 
   /** Cheaper, smaller-gain feed option -- consumes pets.feedMaterialBatchSize
@@ -219,6 +246,94 @@ export const PetManager = {
     const current = PetManager.currentHappiness(pet, now);
     pet.happiness = clamp(current + gain, 0, 100);
     pet.happinessUpdatedAt = now;
+  },
+
+  /* ---------------------------- pet health --------------------------- */
+  /* Mirrors HeroManager's Health/Fallen block exactly in shape -- see
+   * guild-idler-status.md's Pet Health/Fallen entry for the full design.
+   * Kept independent rather than sharing code with HeroManager since a
+   * Pet has no stats/level in the hero sense (levelForXp above is a
+   * flat, slow curve, deliberately not xpForLevel) and the failure mode
+   * is simpler (zero contribution while Fallen, no soft success penalty
+   * to compute since a pet doesn't roll its own success). */
+
+  /** Max Health -- base + a flat per-level term (levelForXp's flat curve,
+   *  not endurance -- pets have no stats), plus any petHealth mod from
+   *  Companion Vitality / a future Companion Legacy Renown Perk. */
+  maxHealth(state: GameState, pet: Pet): number {
+    const level = PetManager.levelForXp(pet.xp);
+    const base = Tuning.get('pets.maxHealthBase') + level * Tuning.get('pets.maxHealthPerLevel');
+    const bonus = ModifierManager.global(state).petHealth ?? 0;
+    return Math.round(base + bonus);
+  },
+
+  currentHealth(state: GameState, pet: Pet): number {
+    const max = PetManager.maxHealth(state, pet);
+    return Math.min(pet.health ?? max, max);
+  },
+
+  healthPercent(state: GameState, pet: Pet): number {
+    const max = PetManager.maxHealth(state, pet);
+    if (max <= 0) return 0;
+    return (PetManager.currentHealth(state, pet) / max) * 100;
+  },
+
+  isFallen(pet: Pet): boolean {
+    return (pet.health ?? 1) <= 0;
+  },
+
+  /**
+   * Applies the SAME damagePercent its paired hero just took (see
+   * QuestManager.resolve) to the pet's own Max Health -- not a separate
+   * roll, not scaled by anything pet-specific. No floor, same as Hero.
+   */
+  applyHealthDamage(state: GameState, pet: Pet, damagePercent: number): void {
+    if (PetManager.isFallen(pet)) return;
+    const max = PetManager.maxHealth(state, pet);
+    const current = PetManager.currentHealth(state, pet);
+    const damage = (damagePercent / 100) * max;
+    const remaining = Math.max(0, current - damage);
+    pet.health = remaining;
+    if (remaining <= 0) pet.fallenAt = Date.now();
+  },
+
+  /** Continuous-rate regen, same reasoning as HeroManager.regenHealth --
+   *  Kennel's own heal-time floor can drop below a fixed tick interval,
+   *  so this can't be tick-based. No on-quest/idle rate split the way
+   *  heroes get -- a pet is either paired with a hero (in which case it's
+   *  "with" them regardless of questing) or benched entirely, so there's
+   *  no separate "resting at the guild" state to give a faster rate. */
+  regenHealth(state: GameState, pet: Pet, elapsedMs: number, kennelLevel: number): void {
+    if (PetManager.isFallen(pet)) return;
+    const max = PetManager.maxHealth(state, pet);
+    const current = PetManager.currentHealth(state, pet);
+    if (current >= max) { pet.health = max; return; }
+    const healTimeMinutes = kennelHealTimeMinutes(kennelLevel);
+    const percentPerMinute = 100 / healTimeMinutes;
+    const regen = (elapsedMs / 60_000) * percentPerMinute * (max / 100);
+    pet.health = Math.min(max, current + regen);
+  },
+
+  /** Gold cost to instantly revive a Fallen pet -- smaller scale than a
+   *  hero's, see pets.revivalCostBase/PerLevel. discountPercent comes
+   *  from Kennel Keeper's Favor (ModifierManager.global(state).petRevivalDiscount). */
+  revivalCost(pet: Pet, discountPercent = 0): number {
+    const level = PetManager.levelForXp(pet.xp);
+    const base = Tuning.get('pets.revivalCostBase') + level * Tuning.get('pets.revivalCostPerLevel');
+    return Math.round(base * (1 - Math.min(100, Math.max(0, discountPercent)) / 100));
+  },
+
+  revive(state: GameState, pet: Pet): void {
+    pet.health = PetManager.maxHealth(state, pet);
+    pet.fallenAt = null;
+  },
+
+  /** Mirrors HeroManager.autoReviveDue -- only reachable at all once
+   *  kennelAutoReviveUnlocked(level) is true (Kennel at max level). */
+  autoReviveDue(pet: Pet, now: number): boolean {
+    if (!PetManager.isFallen(pet) || !pet.fallenAt) return false;
+    const hours = Tuning.get('guild_facility.kennel.autoReviveHours');
+    return now - pet.fallenAt >= hours * 60 * 60_000;
   },
 };
 

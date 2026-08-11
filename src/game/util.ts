@@ -103,6 +103,8 @@ export const MOD_LABEL: Record<keyof Modifiers, string> = {
   durability: 'Gear wear reduction',
   health: 'Max Health',
   revivalDiscount: 'Revival discount',
+  petHealth: 'Pet Max Health',
+  petRevivalDiscount: 'Pet revival discount',
 };
 
 /**
@@ -115,7 +117,7 @@ export const MOD_LABEL: Record<keyof Modifiers, string> = {
  * is a percentage.
  */
 function formatModValue(key: keyof Modifiers, value: number): string {
-  if (key === 'health') return `${value > 0 ? '+' : ''}${value}`;
+  if (key === 'health' || key === 'petHealth') return `${value > 0 ? '+' : ''}${value}`;
   return pct(value);
 }
 

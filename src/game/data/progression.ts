@@ -210,6 +210,22 @@ export const UPGRADES: UpgradeDef[] = [
     maxLevel: Tuning.get('upgrade.undertakers_favor.maxLevel'),
     modsPerLevel: { revivalDiscount: Tuning.get('upgrade.undertakers_favor.discountPerLevel') },
   },
+  {
+    id: 'companion_vitality', name: 'Companion Vitality',
+    description: "The same idea as Vitality Training, just aimed at whoever's riding along instead of whoever's swinging the sword.",
+    baseCost: Tuning.get('upgrade.companion_vitality.baseCost'),
+    costGrowth: Tuning.get('upgrade.companion_vitality.costGrowth'),
+    maxLevel: Tuning.get('upgrade.companion_vitality.maxLevel'),
+    modsPerLevel: { petHealth: Tuning.get('upgrade.companion_vitality.petHealthPerLevel') },
+  },
+  {
+    id: 'kennel_keepers_favor', name: "Kennel Keeper's Favor",
+    description: "Undertaker's Favor's own arrangement, extended to cover the guild's companions too.",
+    baseCost: Tuning.get('upgrade.kennel_keepers_favor.baseCost'),
+    costGrowth: Tuning.get('upgrade.kennel_keepers_favor.costGrowth'),
+    maxLevel: Tuning.get('upgrade.kennel_keepers_favor.maxLevel'),
+    modsPerLevel: { petRevivalDiscount: Tuning.get('upgrade.kennel_keepers_favor.discountPerLevel') },
+  },
 ];
 
 /**
@@ -359,6 +375,19 @@ export const GUILD_FACILITIES: GuildDef[] = [
     modsPerLevel: {},
     healTimeReductionMinutesPerLevel: Tuning.get('guild_facility.infirmary.healTimeReductionMinutesPerLevel'),
   },
+  {
+    id: 'kennel', name: 'Kennel',
+    description: 'A warm, dry place for a companion to actually rest, rather than just '
+      + 'trailing along injured. Entirely separate from the Infirmary -- pets get '
+      + 'their own corner of the guild, not a shared cot.',
+    baseCost: Tuning.get('guild_facility.kennel.baseCost'),
+    costGrowth: Tuning.get('guild_facility.kennel.costGrowth'),
+    maxLevel: Tuning.get('guild_facility.kennel.maxLevel'),
+    // Same reasoning as Infirmary: heal-time reduction and the free
+    // auto-revive unlock at max level aren't flat Modifiers bonuses.
+    modsPerLevel: {},
+    healTimeReductionMinutesPerLevel: Tuning.get('guild_facility.kennel.healTimeReductionMinutesPerLevel'),
+  },
 ];
 
 export const GUILD_BY_ID: Record<string, GuildDef> = Object.fromEntries(GUILD_FACILITIES.map((g) => [g.id, g]));
@@ -388,6 +417,21 @@ export function infirmaryHealTimeMinutes(infirmaryLevel: number): number {
 export function infirmaryAutoReviveUnlocked(infirmaryLevel: number): boolean {
   const max = GUILD_BY_ID.infirmary?.maxLevel ?? Infinity;
   return infirmaryLevel >= max;
+}
+
+/** Pet-specific parallel to infirmaryHealTimeMinutes -- fully separate
+ *  facility, own Tuning values, same formula shape. */
+export function kennelHealTimeMinutes(kennelLevel: number): number {
+  const base = Tuning.get('guild_facility.kennel.baseHealTimeMinutes');
+  const perLevel = GUILD_BY_ID.kennel?.healTimeReductionMinutesPerLevel ?? 0;
+  const min = Tuning.get('guild_facility.kennel.minHealTimeMinutes');
+  return Math.max(min, base - perLevel * kennelLevel);
+}
+
+/** Pet-specific parallel to infirmaryAutoReviveUnlocked. */
+export function kennelAutoReviveUnlocked(kennelLevel: number): boolean {
+  const max = GUILD_BY_ID.kennel?.maxLevel ?? Infinity;
+  return kennelLevel >= max;
 }
 
 export function guildCost(def: GuildDef, currentLevel: number): number {
@@ -508,6 +552,20 @@ export const RENOWN_PERKS: RenownPerkDef[] = [
       startCost: Tuning.get('renown_perk.vital_legacy.tier2StartCost'),
       costGrowth: Tuning.get('renown_perk.vital_legacy.tier2CostGrowth'),
       unlockFlavour: 'The old wounds that used to end a career barely slow one down now.',
+    },
+  },
+  {
+    id: 'companion_legacy', name: 'Companion Legacy',
+    description: 'Vital Legacy, extended to whoever rides along -- every retirement toughens the guild\'s companions too.',
+    cost: Tuning.get('renown_perk.companion_legacy.cost'),
+    costGrowth: Tuning.get('renown_perk.companion_legacy.costGrowth'),
+    maxLevel: Tuning.get('renown_perk.companion_legacy.maxLevel'),
+    modsPerLevel: { petHealth: Tuning.get('renown_perk.companion_legacy.petHealthPerLevel') },
+    tier2: {
+      maxLevel: Tuning.get('renown_perk.companion_legacy.tier2MaxLevel'),
+      startCost: Tuning.get('renown_perk.companion_legacy.tier2StartCost'),
+      costGrowth: Tuning.get('renown_perk.companion_legacy.tier2CostGrowth'),
+      unlockFlavour: "Even a scrap of the guild's fortune is enough to keep a companion standing.",
     },
   },
 ];

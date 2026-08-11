@@ -115,14 +115,14 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
     + engine.state.chainBoard.filter((o) => hero.level >= o.reqLevel).length;
   const injured = hero.injuries.length > 0;
 
-  // The desktop companion shows at most one pet -- the first equipped slot
-  // -- trailing beside the hero rather than a full party lineup, which
-  // would crowd a window this small fast. Its animation deliberately
-  // mirrors the hero's own coarse state (idle vs moving) rather than
-  // tracking the hero's fuller attack-flash detail, since most equipped
-  // species (red panda, crow) don't have anything analogous to attack
-  // frames anyway.
-  const equippedPet = engine.state.pets.find((p) => p.uid === engine.state.equippedPetIds[0]);
+  // The desktop companion shows this hero's own paired pet (see
+  // Hero.equippedPetId) trailing beside them, rather than a full party
+  // lineup, which would crowd a window this small fast. Its animation
+  // deliberately mirrors the hero's own coarse state (idle vs moving)
+  // rather than tracking the hero's fuller attack-flash detail, since
+  // most equipped species (red panda, crow) don't have anything
+  // analogous to attack frames anyway.
+  const equippedPet = hero.equippedPetId ? engine.state.pets.find((p) => p.uid === hero.equippedPetId) : undefined;
   const petDef = equippedPet ? PET_BY_ID[equippedPet.defId] : null;
 
   /**

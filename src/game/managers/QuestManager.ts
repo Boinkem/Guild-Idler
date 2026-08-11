@@ -424,7 +424,7 @@ export const QuestManager = {
     // is actually about.
     const preferred = classDef.preferred.includes(offer.tag) ? classDef.preferredBonus : 0;
     const mods = sumMods(
-      HeroManager.heroMods(hero, now),
+      HeroManager.heroMods(state, hero, now),
       ModifierManager.global(state),
       loadout.mods,
       { success: preferred },
@@ -438,7 +438,7 @@ export const QuestManager = {
   },
 
   previewDuration(state: GameState, hero: Hero, offer: QuestOffer, now: number): number {
-    const mods = sumMods(HeroManager.heroMods(hero, now), ModifierManager.global(state));
+    const mods = sumMods(HeroManager.heroMods(state, hero, now), ModifierManager.global(state));
     const factor = clamp(1 - mods.speed / 100, 0.25, 1.75);
     return Math.max(MINUTE, Math.floor(offer.duration * factor));
   },
@@ -494,7 +494,7 @@ export const QuestManager = {
     const classDef = HERO_CLASSES[hero.heroClass];
     const preferred = classDef.preferred.includes(offer.tag) ? classDef.preferredBonus : 0;
     const mods = sumMods(
-      HeroManager.heroMods(hero, now),
+      HeroManager.heroMods(state, hero, now),
       ModifierManager.global(state),
       loadout.mods,
       { success: preferred },
@@ -667,6 +667,16 @@ export const QuestManager = {
           const reduction = quest.healthDamageReduction ?? 0;
           const damagePercent = healthDamagePercentForInjuryDef(def) * (1 - reduction / 100);
           HeroManager.applyHealthDamage(hero, damagePercent);
+          // Real per-hero pet pairing (see Hero.equippedPetId): whichever
+          // pet is paired with THIS hero shares the exact same
+          // damagePercent -- same % of ITS OWN Max Health, not a
+          // separate roll, not scaled down. Guardian's Retainer already
+          // protects both for free since the reduction is baked into
+          // damagePercent before either applies it.
+          if (hero.equippedPetId) {
+            const pet = state.pets.find((p) => p.uid === hero.equippedPetId);
+            if (pet) PetManager.applyHealthDamage(state, pet, damagePercent);
+          }
         }
       }
     }
@@ -690,17 +700,16 @@ export const QuestManager = {
       if (hero.status !== 'fallen') hero.status = 'idle';
       hero.activeQuestId = null;
       hero.questsCompleted += 1;
+      // Only THIS hero's own paired pet can earn from this specific
+      // quest now -- see PetManager.grantEquippedXp's own comment for
+      // why this moved from an account-wide call to a per-hero one.
+      PetManager.grantEquippedXp(state, hero, xp);
     }
 
-    // Hatchery progress and equipped-pet xp both key off the same raw xp
-    // reward as the hero's own grantXp call above, but are account-wide --
-    // an incubating egg or an equipped pet doesn't care which specific
-    // hero earned it. See PetManager for why this lives here rather than
-    // inside HeroManager.grantXp itself (that function only ever sees one
-    // hero, not the full GameState an egg/pet needs).
+    // Hatchery progress stays account-wide -- an incubating egg doesn't
+    // care which specific hero earned the xp reward.
     const newlyReadyEggs = PetManager.addHatchXp(state, xp);
     if (newlyReadyEggs.length > 0) state.pendingHatchReadyNotice = true;
-    PetManager.grantEquippedXp(state, xp);
 
     const storage = ModifierManager.goldStorage(state);
     state.gold = Math.min(storage, state.gold + gold);
@@ -841,7 +850,7 @@ export const QuestManager = {
     state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number,
   ): { name: string; rarity: Rarity; chance: number }[] {
     const loadout = InventoryManager.loadoutEffects(state, consumables);
-    const mods = sumMods(HeroManager.heroMods(hero, now), ModifierManager.global(state), loadout.mods);
+    const mods = sumMods(HeroManager.heroMods(state, hero, now), ModifierManager.global(state), loadout.mods);
     const lootChance = DIFFICULTIES[offer.difficulty].lootChance + mods.loot;
     // Mirrors resolve()'s own two-stage math exactly -- see the comment
     // there and on HeroManager.personalLootBonus.

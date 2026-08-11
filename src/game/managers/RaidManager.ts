@@ -60,7 +60,7 @@ export const RaidManager = {
     if (heroes.length === 0) return 0;
     const contributions = heroes
       .map((h) => {
-        const raw = sumMods(HeroManager.heroMods(h, now), ModifierManager.global(state)).success ?? 0;
+        const raw = sumMods(HeroManager.heroMods(state, h, now), ModifierManager.global(state)).success ?? 0;
         const baselineStats = HeroManager.baselineStats(h.heroClass, reqLevel);
         const baselineOffset = (HeroManager.statMods(baselineStats).success ?? 0) + reqLevel * 0.4;
         return raw - baselineOffset;
@@ -93,12 +93,12 @@ export const RaidManager = {
   partyEconomyMods(state: GameState, heroes: Hero[], now: number) {
     const zero = { gold: 0, xp: 0, loot: 0, speed: 0 };
     if (heroes.length === 0) return zero;
-    const withGlobal = heroes.map((h) => sumMods(HeroManager.heroMods(h, now), ModifierManager.global(state)));
+    const withGlobal = heroes.map((h) => sumMods(HeroManager.heroMods(state, h, now), ModifierManager.global(state)));
     // speed = personal (stats + gear) + the dedicated Raid Guild Upgrade
     // channel (ModifierManager.raidMods) -- still never global(), so quest
     // upgrades like Mounted Travel still don't touch raid duration. This is
     // the lever RAID_UPGRADES writes into.
-    const raidOnly = heroes.map((h) => sumMods(HeroManager.heroMods(h, now), ModifierManager.raidMods(state)));
+    const raidOnly = heroes.map((h) => sumMods(HeroManager.heroMods(state, h, now), ModifierManager.raidMods(state)));
     const avg = (arr: Modifiers[], key: keyof Modifiers) =>
       arr.reduce((sum, m) => sum + (m[key] ?? 0), 0) / arr.length;
     return {
@@ -268,7 +268,7 @@ export const RaidManager = {
     // Risk scales with difficulty and eases if the run was a full clear.
     const injuries: RaidResult['injuries'] = [];
     for (const hero of heroes) {
-      const resist = sumMods(HeroManager.heroMods(hero, resolvedAt), ModifierManager.global(state)).injuryResist ?? 0;
+      const resist = sumMods(HeroManager.heroMods(state, hero, resolvedAt), ModifierManager.global(state)).injuryResist ?? 0;
       const risk = clamp(30 + diffCfg.successPenalty - resist + (fullClear ? -10 : 10), 0, 90);
       if (rng.chance(risk)) {
         const questDifficulty = active.difficulty === 'mythic' ? 'legendary' : active.difficulty === 'heroic' ? 'epic' : 'hard';
@@ -279,7 +279,18 @@ export const RaidManager = {
         // Same Health-damage piggyback as QuestManager.resolve's injury
         // roll -- see items.ts's healthDamagePercentForInjuryDef.
         const def = INJURY_BY_ID[injury.id];
-        if (def) HeroManager.applyHealthDamage(hero, healthDamagePercentForInjuryDef(def));
+        if (def) {
+          const damagePercent = healthDamagePercentForInjuryDef(def);
+          HeroManager.applyHealthDamage(hero, damagePercent);
+          // Same per-hero pet pairing as QuestManager.resolve -- raids
+          // have no loadout/consumable system, so there's no Guardian's
+          // Retainer-style reduction to bake in here, just the raw
+          // damagePercent shared as-is.
+          if (hero.equippedPetId) {
+            const pet = state.pets.find((p) => p.uid === hero.equippedPetId);
+            if (pet) PetManager.applyHealthDamage(state, pet, damagePercent);
+          }
+        }
       }
       // Don't stomp Fallen back to idle -- see QuestManager.resolve's
       // identical guard for the full reasoning.
