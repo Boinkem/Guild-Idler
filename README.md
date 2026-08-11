@@ -1,4 +1,4 @@
-# Guild Idler
+# Guildbound
 
 A cozy desktop companion idle game. A small pixel adventurer stands in the corner of your screen and goes on quests while you work. Contracts run for hours or days, resolve whether or not the app is open, and the guild behind him grows over months.
 

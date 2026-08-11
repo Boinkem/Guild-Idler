@@ -1,4 +1,4 @@
-# Guild-Idler — World Truths & Pantheon
+# Guildbound — World Truths & Pantheon
 
 A reference doc for future narrative expansion, not in-game text. Two
 capstone-tier chains have established two distinct kinds of divinity in this

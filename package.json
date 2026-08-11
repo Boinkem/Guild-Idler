@@ -2,7 +2,7 @@
   "name": "little-knight",
   "version": "8.10.1",
   "description": "A cozy desktop companion idle game. Send heroes on quests, manage your guild's vendors, and grow a fantasy guild that runs while you work.",
-  "author": "Guild Idler",
+  "author": "Guildbound",
   "license": "MIT",
   "main": "dist-electron/main.js",
   "type": "module",
@@ -33,7 +33,7 @@
   },
   "build": {
     "appId": "com.littleknight.app",
-    "productName": "Guild Idler",
+    "productName": "Guildbound",
     "files": [
       "dist/**/*",
       "dist-electron/**/*"

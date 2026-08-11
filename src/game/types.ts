@@ -1,5 +1,5 @@
 /* =========================================================================
- * Guild Idler — shared type definitions
+ * Guildbound — shared type definitions
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 

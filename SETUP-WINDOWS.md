@@ -1,4 +1,4 @@
-# Getting Guild Idler running on Windows
+# Getting Guildbound running on Windows
 
 ## What the error means
 

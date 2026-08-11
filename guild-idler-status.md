@@ -1,4 +1,4 @@
-# Guild Idler — Status & Roadmap
+# Guildbound — Status & Roadmap
 
 Companion to `guild-idler-project-brief.md`, not a replacement. The brief holds
 formulas, constants, and "don't re-derive this" findings. This file holds the
@@ -343,6 +343,23 @@ raid fight).
 ---
 
 ## Backlog
+
+### Rename to Guildbound -- complete (display text only)
+Game renamed from "Guild Idler" to **Guildbound**. Scope was deliberately
+kept to display-facing text only -- title bar/window title (`index.html`),
+`package.json`'s `productName`/`author`, the in-menu guild-name fallback
+(`MenuWindow.tsx`), the dev tool page, and doc/README/comment headers.
+
+**Not touched, on purpose:** `package.json`'s `name` field, the
+`com.littleknight.app` appId, and every `little-knight`-prefixed save/
+settings path in `electron/main.ts` and `SaveManager.ts`. The comment
+already sitting above `app.setName('little-knight')` anticipated exactly
+this -- the internal app name is intentionally decoupled from the display
+name so a rename can't silently redirect existing testers to an empty
+save folder. If a full internal rename (`appId`, save folder) is ever
+wanted, it needs a save-path migration (check the old `little-knight`
+userData folder first) as its own follow-up, not bundled into a text-only
+pass.
 
 ### Raids batch -- complete
 All five items done: Raid Quartermaster + its own sub-tab, raid card ->

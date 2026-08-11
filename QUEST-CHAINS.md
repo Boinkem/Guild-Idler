@@ -1,4 +1,4 @@
-# Guild Idler — Quest Chain Outline
+# Guildbound — Quest Chain Outline
 
 18 chains, levels 2–55. Organized in the order a player actually encounters
 them. Three throughlines exist (marked below); everything else is

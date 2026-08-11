@@ -1,4 +1,4 @@
-# Guild Idler — Project Brief
+# Guildbound — Project Brief
 
 Paste this into a Claude **Project's instructions**. It'll auto-load into every
 new chat in that project, so you don't need to re-explain the game, re-paste
@@ -9,7 +9,7 @@ reference this brief plus the file links below.
 
 ## What this game is
 
-**Guild Idler** — a desktop-companion idle RPG (Electron/TypeScript). A pixel
+**Guildbound** — a desktop-companion idle RPG (Electron/TypeScript). A pixel
 hero sits in the corner of the screen, goes on quests/raids, gains gear across
 rarities/sets, has multiple hero classes with licensed sprites, prestige
 (retire/ascension), a guild-facility economy, quest chains with banner art,

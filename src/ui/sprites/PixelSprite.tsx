@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 
 /**
- * Sprite art for Guild Idler.
+ * Sprite art for Guildbound.
  *
  * Frames are character grids, 32x32, authored as flat material regions and then
  * given a directional shading ramp (light from the upper left). Every material

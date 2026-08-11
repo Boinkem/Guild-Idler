@@ -1,0 +1,214 @@
+diff --git a/QUEST-CHAINS.md b/QUEST-CHAINS.md
+index b952fd2..3d9f867 100644
+--- a/QUEST-CHAINS.md
++++ b/QUEST-CHAINS.md
+@@ -1,4 +1,4 @@
+-# Guild Idler — Quest Chain Outline
++# Guildbound — Quest Chain Outline
+ 
+ 18 chains, levels 2–55. Organized in the order a player actually encounters
+ them. Three throughlines exist (marked below); everything else is
+diff --git a/README.md b/README.md
+index 1b5eeb7..f449177 100644
+--- a/README.md
++++ b/README.md
+@@ -1,4 +1,4 @@
+-# Guild Idler
++# Guildbound
+ 
+ A cozy desktop companion idle game. A small pixel adventurer stands in the corner of your screen and goes on quests while you work. Contracts run for hours or days, resolve whether or not the app is open, and the guild behind him grows over months.
+ 
+diff --git a/SETUP-WINDOWS.md b/SETUP-WINDOWS.md
+index 79b9eaf..e36c4ea 100644
+--- a/SETUP-WINDOWS.md
++++ b/SETUP-WINDOWS.md
+@@ -1,4 +1,4 @@
+-# Getting Guild Idler running on Windows
++# Getting Guildbound running on Windows
+ 
+ ## What the error means
+ 
+diff --git a/WORKFLOW.md b/WORKFLOW.md
+index 703075d..456750a 100644
+--- a/WORKFLOW.md
++++ b/WORKFLOW.md
+@@ -1,4 +1,4 @@
+-# Working on Guild Idler — the day-to-day guide
++# Working on Guildbound — the day-to-day guide
+ 
+ This is the practical loop for making changes, testing them, and handing builds
+ to playtesters. No prior git knowledge assumed.
+@@ -120,7 +120,7 @@ npm version patch          # 0.1.0 -> 0.1.1, commits and tags automatically
+ # 3. build installers
+ npm run package            # lands in release/
+ 
+-# 4. hand out release/Guild Idler Setup 0.1.1.exe
++# 4. hand out release/Guildbound Setup 0.1.1.exe
+ ```
+ 
+ Two steps people forget, both with silent consequences:
+diff --git a/guild-idler-project-brief.md b/guild-idler-project-brief.md
+index 038c8d4..1c5cac4 100644
+--- a/guild-idler-project-brief.md
++++ b/guild-idler-project-brief.md
+@@ -1,4 +1,4 @@
+-# Guild Idler — Project Brief
++# Guildbound — Project Brief
+ 
+ Paste this into a Claude **Project's instructions**. It'll auto-load into every
+ new chat in that project, so you don't need to re-explain the game, re-paste
+@@ -9,7 +9,7 @@ reference this brief plus the file links below.
+ 
+ ## What this game is
+ 
+-**Guild Idler** — a desktop-companion idle RPG (Electron/TypeScript). A pixel
++**Guildbound** — a desktop-companion idle RPG (Electron/TypeScript). A pixel
+ hero sits in the corner of the screen, goes on quests/raids, gains gear across
+ rarities/sets, has multiple hero classes with licensed sprites, prestige
+ (retire/ascension), a guild-facility economy, quest chains with banner art,
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index ac25cc0..0e15f4d 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -1,4 +1,4 @@
+-# Guild Idler — Status & Roadmap
++# Guildbound — Status & Roadmap
+ 
+ Companion to `guild-idler-project-brief.md`, not a replacement. The brief holds
+ formulas, constants, and "don't re-derive this" findings. This file holds the
+@@ -344,6 +344,23 @@ raid fight).
+ 
+ ## Backlog
+ 
++### Rename to Guildbound -- complete (display text only)
++Game renamed from "Guild Idler" to **Guildbound**. Scope was deliberately
++kept to display-facing text only -- title bar/window title (`index.html`),
++`package.json`'s `productName`/`author`, the in-menu guild-name fallback
++(`MenuWindow.tsx`), the dev tool page, and doc/README/comment headers.
++
++**Not touched, on purpose:** `package.json`'s `name` field, the
++`com.littleknight.app` appId, and every `little-knight`-prefixed save/
++settings path in `electron/main.ts` and `SaveManager.ts`. The comment
++already sitting above `app.setName('little-knight')` anticipated exactly
++this -- the internal app name is intentionally decoupled from the display
++name so a rename can't silently redirect existing testers to an empty
++save folder. If a full internal rename (`appId`, save folder) is ever
++wanted, it needs a save-path migration (check the old `little-knight`
++userData folder first) as its own follow-up, not bundled into a text-only
++pass.
++
+ ### Raids batch -- complete
+ All five items done: Raid Quartermaster + its own sub-tab, raid card ->
+ modal conversion (with banner art support, also applied to quest chains'
+diff --git a/index.html b/index.html
+index 8bb0a0e..a8969d3 100644
+--- a/index.html
++++ b/index.html
+@@ -3,7 +3,7 @@
+   <head>
+     <meta charset="UTF-8" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+-    <title>Guild Idler</title>
++    <title>Guildbound</title>
+   </head>
+   <body>
+     <div id="root"></div>
+diff --git a/package.json b/package.json
+index b283657..21985e5 100644
+--- a/package.json
++++ b/package.json
+@@ -2,7 +2,7 @@
+   "name": "little-knight",
+   "version": "8.10.1",
+   "description": "A cozy desktop companion idle game. Send heroes on quests, manage your guild's vendors, and grow a fantasy guild that runs while you work.",
+-  "author": "Guild Idler",
++  "author": "Guildbound",
+   "license": "MIT",
+   "main": "dist-electron/main.js",
+   "type": "module",
+@@ -33,7 +33,7 @@
+   },
+   "build": {
+     "appId": "com.littleknight.app",
+-    "productName": "Guild Idler",
++    "productName": "Guildbound",
+     "files": [
+       "dist/**/*",
+       "dist-electron/**/*"
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 83377a9..5b878d3 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -1,5 +1,5 @@
+ /* =========================================================================
+- * Guild Idler — shared type definitions
++ * Guildbound — shared type definitions
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 0af61b4..768ccdf 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -1,5 +1,5 @@
+ /* =========================================================================
+-   Guild Idler — visual system
++   Guildbound — visual system
+    Palette: candlelit guild hall. Deep plum shadow, oiled parchment, brass.
+    Type: a chunky pixel/mono display face for headings, a readable mono body.
+    ========================================================================= */
+diff --git a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+index 6c893f4..7573587 100644
+--- a/src/ui/MenuWindow.tsx
++++ b/src/ui/MenuWindow.tsx
+@@ -171,7 +171,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+         }}
+       />
+       <header className="titlebar" style={{ position: 'relative' }}>
+-        <h1>{engine.state.guildName || 'Guild Idler'}</h1>
++        <h1>{engine.state.guildName || 'Guildbound'}</h1>
+         <div className="resources">
+           <span ref={goldRef} className="gold">◆ {formatGold(displayGold)} / {formatGold(engine.goldStorage)}</span>
+           <span className="renown">✦ {formatNumber(displayRenown)} renown</span>
+diff --git a/src/ui/sprites/PixelSprite.tsx b/src/ui/sprites/PixelSprite.tsx
+index ea3f1da..3b64953 100644
+--- a/src/ui/sprites/PixelSprite.tsx
++++ b/src/ui/sprites/PixelSprite.tsx
+@@ -1,7 +1,7 @@
+ import { useMemo } from 'react';
+ 
+ /**
+- * Sprite art for Guild Idler.
++ * Sprite art for Guildbound.
+  *
+  * Frames are character grids, 32x32, authored as flat material regions and then
+  * given a directional shading ramp (light from the upper left). Every material
+diff --git a/tools/devtool/public/index.html b/tools/devtool/public/index.html
+index dd0cc68..bd9b9c4 100644
+--- a/tools/devtool/public/index.html
++++ b/tools/devtool/public/index.html
+@@ -2,12 +2,12 @@
+ <html lang="en">
+ <head>
+   <meta charset="UTF-8" />
+-  <title>Guild Idler — Dev Tool</title>
++  <title>Guildbound — Dev Tool</title>
+   <link rel="stylesheet" href="style.css" />
+ </head>
+ <body>
+   <header class="topbar">
+-    <h1>Guild Idler <span>Dev Tool</span></h1>
++    <h1>Guildbound <span>Dev Tool</span></h1>
+     <nav id="tabs"></nav>
+     <div class="topbar-status" id="status"></div>
+   </header>
+diff --git a/world-lore-pantheon.md b/world-lore-pantheon.md
+index 675b43e..bea8c3a 100644
+--- a/world-lore-pantheon.md
++++ b/world-lore-pantheon.md
+@@ -1,4 +1,4 @@
+-# Guild-Idler — World Truths & Pantheon
++# Guildbound — World Truths & Pantheon
+ 
+ A reference doc for future narrative expansion, not in-game text. Two
+ capstone-tier chains have established two distinct kinds of divinity in this
