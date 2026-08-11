@@ -462,7 +462,19 @@ function validateEntry(schema, entry, index) {
         if (!spec.options.includes(value)) errors.push(`entry ${index}: "${key}" must be one of ${spec.options.join(', ')}`);
         break;
       case 'string[]':
-        if (!Array.isArray(value) || value.length === 0 || value.some((v) => typeof v !== 'string')) {
+        // An optional list field (e.g. rewardItems, or raid-encounters'
+        // loot/lootHeroic/lootMythic/eggLoot) legitimately means "nothing
+        // to award/drop here" as an empty array -- the_last_clutch's
+        // rewardItems is exactly this: [] on purpose, since its guaranteed
+        // reward is an egg (rewardEgg), not an item. Only a genuinely
+        // required list field (quest-templates' subjects/flavour) should
+        // reject being empty; this used to reject both cases identically,
+        // which meant any save touching quest-chains.json failed outright
+        // the moment it validated the_last_clutch or last_pilgrimage,
+        // regardless of what was actually being edited.
+        if (!Array.isArray(value) || value.some((v) => typeof v !== 'string')) {
+          errors.push(`entry ${index}: "${key}" must be a list of text`);
+        } else if (spec.required && value.length === 0) {
           errors.push(`entry ${index}: "${key}" must be a non-empty list of text`);
         }
         break;
