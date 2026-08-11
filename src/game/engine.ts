@@ -1184,6 +1184,7 @@ export class GameEngine {
     const maxSlots = ModifierManager.consumableSlots(this.state);
     if (current.length >= maxSlots) return this.say('No free consumable slots.');
     hero.equippedConsumables = [...current, defId];
+    playSound('equip');
     void this.saveNow();
   }
 
@@ -1219,6 +1220,7 @@ export class GameEngine {
     if (!hero) return 0;
     const filled = this.fillEmptyConsumableSlots(heroId);
     if (filled > 0) {
+      playSound('equip');
       this.say(`Equipped ${filled} consumable${filled === 1 ? '' : 's'} on ${hero.name}.`);
       void this.saveNow();
     } else {
@@ -1332,6 +1334,7 @@ export class GameEngine {
     if (!found) return;
     const error = EquipmentManager.repair(this.state, found.item, this.state.guild.workshop ?? 0);
     if (error) return this.say(error);
+    playSound('repair');
     this.say('Repaired.');
     void this.saveNow();
   }
@@ -1346,6 +1349,7 @@ export class GameEngine {
         spent += cost;
       }
     }
+    if (spent > 0) playSound('repair');
     this.say(spent > 0 ? `Repaired everything for ${spent} gold.` : 'Nothing needed repairing.');
     void this.saveNow();
   }
@@ -1450,6 +1454,7 @@ export class GameEngine {
       }
     }
     if (changed > 0) {
+      playSound('equip');
       this.checkSetBonusMilestones(hero);
       this.say(`Equipped ${changed} better item${changed === 1 ? '' : 's'} on ${hero.name}.`);
       void this.saveNow();

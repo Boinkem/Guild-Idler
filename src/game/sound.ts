@@ -13,7 +13,7 @@ import { SettingsStore } from './settings';
 export type SoundCue =
   | 'quest_success' | 'quest_fail' | 'level_up' | 'legendary_drop'
   | 'chain_complete' | 'purchase' | 'error' | 'depart' | 'achievement' | 'collect'
-  | 'equip' | 'sell' | 'scrap' | 'craft' | 'enhance' | 'infuse' | 'enchant' | 'prestige_upgrade';
+  | 'equip' | 'sell' | 'scrap' | 'craft' | 'enhance' | 'infuse' | 'enchant' | 'prestige_upgrade' | 'repair';
 
 let ctx: AudioContext | null = null;
 
@@ -146,6 +146,17 @@ const CUES: Record<SoundCue, Tone[]> = {
     { freq: 493.88, start: 0, duration: 0.08, type: 'triangle', gain: 0.4 },
     { freq: 739.99, start: 0.07, duration: 0.1, type: 'triangle', gain: 0.42 },
     { freq: 1108.73, start: 0.15, duration: 0.2, type: 'sine', gain: 0.45 },
+  ],
+  // A soft double-tap mend, lower and warmer than `craft`'s hammer-tap
+  // pair -- fixing something that already exists rather than making
+  // something new. Manual repair (single and "Repair Everything") had
+  // played nothing at all before this; auto-repair stays deliberately
+  // silent (see its own comment in engine.ts), same as every other
+  // background-automation preference.
+  repair: [
+    { freq: 350, start: 0, duration: 0.05, type: 'triangle', gain: 0.28 },
+    { freq: 420, start: 0.06, duration: 0.06, type: 'triangle', gain: 0.3 },
+    { freq: 550, start: 0.13, duration: 0.12, type: 'sine', gain: 0.32 },
   ],
 };
 

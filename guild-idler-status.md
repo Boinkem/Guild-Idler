@@ -5134,21 +5134,22 @@ pass (same caveat as the two entries above).
   now built, ahead of any actual pack -- see "DLC groundwork -- built"
   in the main patch log above.
 - **Adventurer's idle animation has a weapon-out frame mixed into it** --
-  reported directly, still not fixed, but now reviewed. 6 reference
-  frames were sent over (adventurer-idle-00 through 03, plus a -2-01/
-  -2-02 pair), each 50x37px, all confirmed on review to show a calm,
-  weapon-sheathed idle pose with no flourish -- a good, correct reference
-  set. Not yet actually usable to fix this, though: they're loose
-  individual frame files, not the single horizontal sprite-strip format
-  `tools/import_characters.py` / the generated `public/heroes/
-  manifest.json` actually expect (one wide PNG per animation, frame
-  count times frameW across, same convention every other class's idle
-  strip already uses) -- and binary art can't travel through a code
-  patch regardless of format, so this needs the actual strip file placed
-  locally and the import script re-run, not something fixable from here
-  directly. Next step whenever that's ready: either compile these 6 (or
-  however many the real idle loop uses) into one strip and drop it in,
-  or send the strip directly for review.
+  the 4 core reference frames (adventurer-idle-00 through 03, 50x37px
+  each) sent over previously have now been compiled into a single
+  200x37px horizontal strip (`tools/assemble_strips.py`, unmodified) and
+  delivered as `idle.png`. All four frames confirmed on review to show
+  the calm, weapon-sheathed idle pose with no flourish, matching the
+  earlier reference-frame review. Still needs a manual step outside this
+  patch: binary art can't travel through a code patch regardless of
+  format, so `idle.png` needs to be dropped into
+  `public/heroes/adventurer/<skin>/idle.png` locally (once per skin, or
+  regenerate via the recolour step for the other four) and
+  `tools/import_characters.py` re-run to refresh `manifest.json`. The
+  earlier-mentioned `-2-01`/`-2-02` merge pair (an occasional extra
+  gesture blended into the loop) was not part of this batch -- only the
+  plain 4-frame idle was sent, so that merge is still outstanding if it's
+  still wanted; re-run `assemble_strips.py --merge "idle,idle-2=idle"`
+  once those two extra frames are available.
 
 ### Big feedback batch: audio, shop UX, gear score overrides, and several small polish items
 Wide-ranging playtest round covering audio feedback, buying UX, item
@@ -5270,6 +5271,45 @@ message body still correctly navigate and dismiss, with only the X
 failing? Or does nothing on the banner respond at that point? Worth
 double-checking against a freshly built copy too, in case this predates
 a fix already in the current code.
+
+### Sound cue coverage audit -- two real gaps fixed (patch 0121)
+Flagged from a polish review noting several of the newer distinct audio
+cues (`equip`, `scrap`, `enhance`, `enchant`, `infuse`,
+`prestige_upgrade`) each had exactly one call site, worth checking they
+were actually wired everywhere the underlying action can trigger. Traced
+every equip/repair code path by hand rather than guessing:
+
+- **`equipBestGear()` and `equipBestConsumables()` (manual bulk-equip
+  buttons) played nothing at all**, while their single-item counterparts
+  (`equip()`, and now `equipConsumable()`) did or now do -- inconsistent
+  between the one-at-a-time and "do it for everything" version of the
+  same player-initiated action. Both now play `'equip'` when they
+  actually change something (`changed > 0` / `filled > 0`), silent on a
+  no-op same as before.
+- **`equipConsumable()` (the single-slot manual picker) was completely
+  silent** -- not missing a distinct cue, missing *any* cue, unlike gear
+  equip which at least had one on its single-item path. Now plays
+  `'equip'` too, so gear and consumables read the same way at the point
+  of equipping either kind of item.
+- **`repair()` and `repairAll()` (manual, both single-item and "Repair
+  Everything") played nothing at all**, not even the generic `'purchase'`
+  blip every other gold-spending action already had. Added a new
+  dedicated `repair` cue to `sound.ts` (soft double-tap mend, lower/
+  warmer than `craft`'s hammer-tap pair -- fixing something that already
+  exists reads differently from making something new) rather than
+  reusing `enhance` or `purchase`, matching how every other action in
+  this batch got its own distinct cue instead of sharing one.
+
+**Deliberately left untouched, not gaps:** the `autoRepairEnabled` tick
+and `QuestManager`'s auto-equip-on-loot path both stay silent on
+purpose -- there's an existing comment on `fillEmptyConsumableSlots`
+explicitly reasoning that background automation shouldn't narrate its
+own routine upkeep with a toast, and the same logic applies to sound.
+Confirmed both of those comments are still accurate to the current code
+before leaving them alone, not just trusting old comments blindly.
+
+`npx tsc --noEmit` clean against the full `src/` tree after these
+changes (not just `src/game/**`).
 
 ### Upgrade balance review: two fixes applied, several more flagged
 Direct report that Better Weapons Training (flat 50% success at max
