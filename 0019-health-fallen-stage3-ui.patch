@@ -1,0 +1,178 @@
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 768ccdf..da2bdb8 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -844,6 +844,14 @@ button:focus-visible, [tabindex]:focus-visible {
+ .bar.xp > span { background: var(--sky); }
+ .bar.dura > span { background: var(--brass); }
+ .bar.dura.low > span { background: var(--blood); }
++/* Health bar -- deliberately the same green .bar.xp/default already uses
++   for "good", switching to the same .low red tint durability uses under
++   25%. Mirrors .bar.dura exactly so Health and Durability read as two
++   equally-weighted things to track, not one primary and one afterthought.
++   See guild-idler-status.md's Health stat + Fallen/death mechanic
++   section. */
++.bar.health > span { background: var(--moss); }
++.bar.health.low > span { background: var(--blood); }
+ 
+ .muted { color: var(--muted); }
+ .good { color: var(--moss); }
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index 083e1f3..db828f6 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -5,9 +5,10 @@ import { HeroManager } from '../../game/managers/HeroManager';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import { PrestigeManager } from '../../game/managers/PrestigeManager';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+-import { HERO_CLASSES, RECRUIT_COST, SKINS } from '../../game/data/progression';
+-import { HeroClass, Stats } from '../../game/types';
+-import { describeMods, formatDuration, formatGold } from '../../game/util';
++import { HERO_CLASSES, RECRUIT_COST, SKINS, infirmaryAutoReviveUnlocked } from '../../game/data/progression';
++import { Tuning } from '../../game/data/tuning';
++import { HeroClass, Hero, Stats } from '../../game/types';
++import { describeMods, formatDuration, formatGold, HOUR } from '../../game/util';
+ import { HeroSprite } from '../sprites/HeroSprite';
+ import { GearScoreBadge } from '../GearScoreBadge';
+ import { useLevelUpFlash, LevelUpFlash } from '../levelFlash';
+@@ -15,6 +16,60 @@ import { registerFlyTarget } from '../flyTarget';
+ 
+ const STAT_KEYS: (keyof Stats)[] = ['strength', 'endurance', 'luck', 'wisdom'];
+ 
++/**
++ * Static art for a Fallen hero, deliberately NOT the existing `death`
++ * sprite animation -- a looping death animation standing around the idle
++ * guild view would read as broken/distressing rather than as a status.
++ * Same graceful-missing-asset pattern HarvestPanel's HarvestGlyph already
++ * uses: falls back to a plain glyph if the real file (dropped into
++ * public/hero-status/tombstone.png) hasn't been added yet, rather than a
++ * broken image icon. See guild-idler-status.md's Health stat + Fallen/
++ * death mechanic section.
++ */
++function Tombstone({ height }: { height: number }) {
++  const [failed, setFailed] = useState(false);
++  if (failed) {
++    return (
++      <div style={{ height, width: height, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: height * 0.6 }}>
++        💀
++      </div>
++    );
++  }
++  return (
++    <img
++      src="./hero-status/tombstone.png"
++      alt="Fallen"
++      onError={() => setFailed(true)}
++      style={{ height, width: 'auto', objectFit: 'contain' }}
++    />
++  );
++}
++
++/**
++ * Mirrors DurabilityBar (EquipmentPanel.tsx) exactly -- same `.bar`
++ * class, same `low` threshold/red-tint behaviour, just reading Health
++ * instead of gear durability. Two equally-visible, equally-styled bars a
++ * player tracks the same way, rather than Health being a hidden number
++ * you only discover after a bad string of injuries.
++ */
++function HealthBar({ hero, compact = false }: { hero: Hero; compact?: boolean }) {
++  const max = HeroManager.maxHealth(hero);
++  const current = HeroManager.currentHealth(hero);
++  const ratio = max > 0 ? current / max : 0;
++  return (
++    <>
++      <div className={`bar health ${ratio < 0.25 ? 'low' : ''}`} style={{ marginTop: compact ? 2 : 4 }}>
++        <span style={{ width: `${ratio * 100}%` }} />
++      </div>
++      {!compact && (
++        <div className="tiny muted">
++          Health {Math.round(current)}/{max}
++        </div>
++      )}
++    </>
++  );
++}
++
+ export function HeroesPanel() {
+   const engine = useEngine();
+   const now = useNow();
+@@ -72,12 +127,16 @@ export function HeroesPanel() {
+               aria-expanded={isOpen}
+               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpanded(hero.id); } }}
+             >
+-              <HeroSprite
+-                heroClass={hero.heroClass}
+-                skin={hero.skin}
+-                animation={hero.injuries.length > 0 ? 'hurt' : 'idle'}
+-                height={Math.round((isOpen ? 76 : 44) * settings.spriteScale)}
+-              />
++              {hero.status === 'fallen' ? (
++                <Tombstone height={Math.round((isOpen ? 76 : 44) * settings.spriteScale)} />
++              ) : (
++                <HeroSprite
++                  heroClass={hero.heroClass}
++                  skin={hero.skin}
++                  animation={hero.injuries.length > 0 ? 'hurt' : 'idle'}
++                  height={Math.round((isOpen ? 76 : 44) * settings.spriteScale)}
++                />
++              )}
+               <div style={{ flex: 1, minWidth: 0 }}>
+                 <div className="spread">
+                   <span className="card-title hero-card-name">
+@@ -99,9 +158,12 @@ export function HeroesPanel() {
+                 >
+                   <span style={{ width: `${(hero.xp / toNext) * 100}%` }} />
+                 </div>
++                <HealthBar hero={hero} compact />
+                 {!isOpen && (
+                   <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+-                    {hero.status === 'questing' ? 'away on a quest' : 'at the guild'}
++                    {hero.status === 'fallen'
++                      ? <span className="bad">Fallen</span>
++                      : (hero.status === 'questing' ? 'away on a quest' : 'at the guild')}
+                     {hero.injuries.length > 0 && <span className="bad"> · {hero.injuries.map((i) => i.name).join(', ')}</span>}
+                     {showingOnDesktop && <span className="good"> · showing on desktop</span>}
+                   </p>
+@@ -133,6 +195,11 @@ export function HeroesPanel() {
+                 </div>
+                 <div className="bar xp"><span style={{ width: `${(hero.xp / toNext) * 100}%` }} /></div>
+ 
++                <div className="small muted" style={{ marginTop: 8, marginBottom: 3 }}>
++                  Health
++                </div>
++                <HealthBar hero={hero} />
++
+                 <div className="stat-row" style={{ marginTop: 8 }}>
+                   {STAT_KEYS.map((key) => (
+                     <span key={key}>
+@@ -189,10 +256,29 @@ export function HeroesPanel() {
+                   </div>
+                 )}
+ 
++                {hero.status === 'fallen' && (
++                  <div className="spread" style={{ marginTop: 8 }}>
++                    <span className="small bad">
++                      Fallen
++                      {infirmaryAutoReviveUnlocked(GuildManager.facilityLevel(state, 'infirmary')) && hero.fallenAt
++                        ? ` — recovers on its own in ${formatDuration(
++                            hero.fallenAt + Tuning.get('guild_facility.infirmary.autoReviveHours') * HOUR - now,
++                          )}, or pay to skip`
++                        : ' — needs to be revived before being sent out again'}
++                    </span>
++                    <button
++                      onClick={() => engine.reviveHero(hero.id)}
++                      disabled={state.gold < HeroManager.revivalCost(hero)}
++                    >
++                      Revive · {formatGold(HeroManager.revivalCost(hero))}
++                    </button>
++                  </div>
++                )}
++
+                 <p className="tiny muted" style={{ marginTop: 8 }}>
+                   Prefers {classDef.preferred.join(', ')} contracts (+{classDef.preferredBonus}% success) ·
+                   {' '}{hero.questsCompleted} quests completed ·
+-                  {' '}{hero.status === 'questing' ? 'away on a quest' : 'at the guild'}
++                  {' '}{hero.status === 'fallen' ? 'Fallen' : (hero.status === 'questing' ? 'away on a quest' : 'at the guild')}
+                 </p>
+ 
+                 <div className="row wrap" style={{ marginTop: 6, alignItems: 'center' }}>

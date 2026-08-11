@@ -844,6 +844,14 @@ button:focus-visible, [tabindex]:focus-visible {
 .bar.xp > span { background: var(--sky); }
 .bar.dura > span { background: var(--brass); }
 .bar.dura.low > span { background: var(--blood); }
+/* Health bar -- deliberately the same green .bar.xp/default already uses
+   for "good", switching to the same .low red tint durability uses under
+   25%. Mirrors .bar.dura exactly so Health and Durability read as two
+   equally-weighted things to track, not one primary and one afterthought.
+   See guild-idler-status.md's Health stat + Fallen/death mechanic
+   section. */
+.bar.health > span { background: var(--moss); }
+.bar.health.low > span { background: var(--blood); }
 
 .muted { color: var(--muted); }
 .good { color: var(--moss); }
