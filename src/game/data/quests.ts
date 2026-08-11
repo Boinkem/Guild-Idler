@@ -99,7 +99,7 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
     reqLevel: 1, weight: 30, color: '#79a86b',
   },
   normal: {
-    id: 'normal', label: 'Normal', baseSuccess: 60,
+    id: 'normal', label: 'Normal', baseSuccess: 58,
     minDuration: 2 * HOUR, maxDuration: 4 * HOUR,
     // Rarer than Easy's medium roll (25% vs 35%) -- Normal is already the
     // step up from "quick check-in" territory, so full-length offers should
@@ -110,13 +110,13 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
     reqLevel: 3, weight: 28, color: '#5b8fd6',
   },
   hard: {
-    id: 'hard', label: 'Hard', baseSuccess: 50,
+    id: 'hard', label: 'Hard', baseSuccess: 44,
     minDuration: 4 * HOUR, maxDuration: 6 * HOUR,
     minGold: 60, maxGold: 150, xpMultiplier: 5, lootChance: 30,
     reqLevel: 8, weight: 22, color: '#c98b3a',
   },
   epic: {
-    id: 'epic', label: 'Epic', baseSuccess: 40,
+    id: 'epic', label: 'Epic', baseSuccess: 30,
     minDuration: 6 * HOUR, maxDuration: 12 * HOUR,
     // xpMultiplier raised 11 -> 12. Verified directly: at 11, Epic's xp/hr
     // (17.0) was actually LOWER than Hard's (17.3) despite requiring a
@@ -128,7 +128,7 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
     reqLevel: 15, weight: 14, color: '#a874d6',
   },
   legendary: {
-    id: 'legendary', label: 'Legendary', baseSuccess: 30,
+    id: 'legendary', label: 'Legendary', baseSuccess: 18,
     minDuration: 12 * HOUR, maxDuration: 24 * HOUR,
     // Same fix, same reasoning -- 26 put Legendary's xp/hr (16.5) below
     // BOTH Hard and Epic. 30 lands it at ~19.0 xp/hr, now the actual best

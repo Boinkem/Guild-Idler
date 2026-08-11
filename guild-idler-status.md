@@ -5377,3 +5377,100 @@ max level in isolation. Worth a follow-up pass once there's a target
 philosophy for each stat category (e.g. "combined bonus from all
 sources should cap around X%"), rather than guessing per-system numbers
 here.
+
+### Quest success: full formula traced, first-pass rebalance
+Direct follow-up to the upgrade balance review above -- specifically
+digging into quest success chance, per the request to understand base
+value / upgrade contribution / gear contribution as three separate
+layers before touching any more numbers. `npx tsc --noEmit` and `npm
+run build:web` both verified clean against a fresh clone; no live
+playtest (no dev environment).
+
+**The actual formula** (`QuestManager.previewSuccess`):
+```
+success = clamp(
+  DIFFICULTIES[tier].baseSuccess
+  + mods.success          // upgrades + facilities + renown perks + gear + stats + consumables + class bonus + hero.level*0.4
+  + elemental
+  - baselineOffset         // exactly cancels out the "free" level/stat bonus a hero standing at reqLevel with zero investment would carry
+  - overLevelPenalty,       // only applies when attempting a quest above the hero's own level
+  MIN_SUCCESS=5, MAX_SUCCESS=95
+)
+```
+The `baselineOffset` subtraction is doing real, deliberate work already
+(confirmed by reading its own comment in the code): it's exactly what a
+bare, zero-investment hero standing right at `reqLevel` would carry from
+raw level/stats alone, so `DIFFICULTIES[tier].baseSuccess` (70/60/50/40/
+30 before this pass) really is "what a hero gets with nothing invested,
+standing exactly at the quest's own level requirement" -- not a number
+that already has some hidden padding baked in. Everything ABOVE that
+baseline -- upgrades, facilities, renown perks, gear, stat investment,
+consumables -- adds directly and flatly on top, with a hard 5/95 clamp
+as the only floor/ceiling.
+
+**Quantified the actual problem** before touching anything: with
+weapons_training/mounted_travel already fixed (prior entry above), the
+upgrade systems still reachable with nothing but gold (weapons_training
++ master_adventurer + barracks -- no Prestige/renown required) summed to
+**43%** flat success. Added straight onto baseSuccess with zero gear and
+zero stat investment: **Easy and Normal both already clamped at 95%,
+Hard landed at 93%** -- so the core complaint (upgrades alone crowd out
+gear) was still fully present even after the previous round's fixes,
+just one layer further down (barracks was doing what weapons_training
+used to).
+
+**Changes made, all `tuning.json` value/default edits plus one
+`quests.ts` data edit -- no logic changes:**
+- `guild_facility.barracks.successPerLevel`: 3 -> 1 (10 levels = 10%,
+  down from 30%)
+- `renown_perk.renowned_skill.successPerLevel`: 3 -> 1 (25 levels with
+  tier2 = 25%, down from 75%) -- kept deliberately separate from the
+  early-game systems above: this is genuinely late-game (Prestige
+  requires hero level 30, past even Legendary's own reqLevel 25), so a
+  real but smaller ceiling here is a different design question than the
+  gold-only upgrades everyone hits early.
+- `DIFFICULTIES.baseSuccess` (`quests.ts`): Easy unchanged at 70 (new-
+  player experience shouldn't get harder); Normal 60 -> 58 (token nudge);
+  **Hard 50 -> 44, Epic 40 -> 30, Legendary 30 -> 18** -- the three tiers
+  where "we expect a hero to have gear and a few tavern upgrades" per
+  the actual request, pulled down more the higher the tier climbs, so
+  accumulated investment has real room to matter instead of immediately
+  hitting the ceiling.
+
+**Result, same zero-investment stress test with the new numbers:**
+Easy 93%, Normal 81%, Hard 67%, Epic 53%, Legendary 41% -- upgrades
+alone no longer clamp anything, and there's now real headroom at every
+tier for gear/stats to actually move the needle. A realistic mid-game
+snapshot (Hard/Epic, upgrades roughly half-invested rather than fully
+maxed, a few uncommon/rare pieces + light stat spend) lands around
+75%/62% -- comfortably below the cap, matching "closer and closer to
+not being there, never actually gone." Fully-maxed EVERYTHING including
+the late-game renown perk still doesn't reach a guaranteed-success
+world: Legendary tops out at 66% even at that extreme -- which reads as
+acceptable rather than a problem, since reaching full renowned_skill
+requires many completed Prestige cycles well past being able to
+trivially clear Legendary content anyway.
+
+**One real side effect surfaced, not compensated for in this pass:**
+`fastQuestCapsPerHour` (in `balance.ts`, gates burst/medium quest reward
+caps) derives its cap from an expected-value calculation that uses
+`DIFFICULTIES[tier].baseSuccess` directly as its success-rate
+assumption. Lowering baseSuccess therefore also lowers those tiers'
+burst/medium reward caps as a byproduct -- a 12% relative drop at Hard,
+25% at Epic, and a real **40% relative drop at Legendary**. This wasn't
+requested and isn't compensated for here; it's a genuine interaction
+between two systems that happened to share a number, not a bug, but
+worth a specific look/playtest at Legendary-tier burst quest rewards
+before calling this pass fully settled -- may need its own follow-up if
+that reward-cap drop turns out to feel too harsh in practice.
+
+**Not touched:** `master_adventurer` (3%, single level, tied to the
+Legendary-quest unlock -- left as a small symbolic bonus rather than
+folded into the broader cut, per the earlier review's own note). Gear's
+own success values (`EquipmentDef.mods.success`, up to 16-28 on a
+single legendary-tier item) and stat-derived success
+(`HeroManager.statMods`) are both completely untouched -- this pass
+only moved numbers in the upgrade/baseSuccess layer, exactly as scoped.
+
+These are first-pass numbers, not treated as final -- flagged as open
+to iteration once there's been a chance to actually play against them.
