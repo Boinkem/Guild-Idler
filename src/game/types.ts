@@ -578,6 +578,17 @@ export interface RaidDef {
    * can be gated by a chain, another raid, both, or neither.
    */
   requiresChainId?: string;
+  /**
+   * Optional banner-art override + focus point, editable via the DevTool's
+   * banner picker (see server.mjs's `bannerImage` field type). `path` is
+   * relative to public/lore/ (e.g. "raids/foo.jpg") and overrides the
+   * default raids/<id>.jpg naming convention RaidBanner otherwise falls
+   * back to -- omitted entirely, nothing changes from before this existed.
+   * focusX/focusY are 0-100 percentages fed straight into CSS
+   * backgroundPosition (50/50 = center, the same default every banner used
+   * unconditionally before this).
+   */
+  banner?: { path?: string; focusX?: number; focusY?: number };
 }
 
 export interface RaidDifficultyConfig {

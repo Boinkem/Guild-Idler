@@ -4066,6 +4066,68 @@ closely related) log entry. Acknowledging here gives these summaries the
 "memory" they were missing -- once the headline's been seen, the detail-
 level log entry underneath it doesn't also demand separate attention.
 
+### DevTool: banner art picker + focus-point preview -- built
+Chain/raid banner art (`ChainBanner`/`ChainQuestBanner`/`RaidBanner`) was
+pure convention until now -- always `public/lore/chains/<id>.jpg` or
+`public/lore/raids/<id>.jpg`, always dead-center `backgroundPosition`, no
+DevTool field for either. Added a real editor for both pieces:
+
+- **New `bannerImage` field type** (`server.mjs`), on a new optional
+  `banner` field on both the `quest-chains` and `raids` schemas --
+  `{ path?, focusX?, focusY? }`. Fully backward compatible: omitted
+  entirely (every existing entry, on save) falls back to exactly the old
+  behavior (`<folder>/<id>.jpg` at center), so nothing already-placed
+  art-wise needed touching. `path` is validated as a relative image path
+  under `public/lore/`; `focusX`/`focusY` as 0-100 numbers. Same
+  `defaultFolder` hint pattern `picker: 'icon'` already uses for its own
+  frontend-only routing (`chains` for quest-chains, `raids` for raids).
+- **Art picker.** New `BANNERS_DIR` (`public/lore/`) + `listBanners()`,
+  mirroring `listIcons()`'s existing folder-scan shape exactly, with one
+  addition: `public/lore/` also has real loose files sitting directly in
+  its root (`guild-hall-bg.jpg`, etc), not just inside subfolders, so
+  those get grouped under a synthetic `(general)` label rather than
+  dropped. New `/api/banners` endpoint and `/lore-art/<path>` static
+  route (same path-traversal guard as `/item-icons/`). Frontend
+  `openBannerPicker` is `openIconPicker`'s same overlay-grid pattern,
+  sized for wide banner thumbnails instead of small square icons, with
+  the schema's preferred folder sorted first (chains before raids or vice
+  versa) but every folder still fully browsable.
+- **Focus-point preview.** `renderBannerField` shows a live, actual-size-
+  ratio preview strip with a crosshair marker at the current focus point
+  -- click or drag anywhere on it to reposition (pointer-capture based,
+  bound directly to the preview box rather than any window-level
+  listener, so nothing leaks or needs manual cleanup across repeated
+  edits/re-renders). "Center focus" resets to 50/50; "Use default" clears
+  a path override without touching the focus point. A brand-new entry's
+  preview (no art yet) still shows the crosshair and stays interactive,
+  with a plain "no banner art yet" placeholder instead of a broken image
+  -- same "missing file just fails to paint" convention as every other
+  banner in this game. Preview also live-updates as the id field is typed
+  on a new entry, so the fallback-path guess tracks what's actually being
+  typed rather than staying stuck on whatever it was when the editor
+  opened.
+- **Table thumbnails.** The entries table now shows a small banner
+  thumbnail column for any schema with a `bannerImage` field (same
+  convention the existing icon-thumbnail column already used for
+  equipment/consumables), resolving the same override-or-default path
+  logic so what's shown matches what the card will actually render.
+- **Game-side.** `ChainDef.banner`/`RaidDef.banner` added (both
+  `{ path?, focusX?, focusY? }`), read by `ChainBanner`/`ChainQuestBanner`
+  /`RaidBanner` with the same fallback: `banner?.path` overrides the
+  `<id>.jpg` convention path when set, `banner?.focusX ?? 50` /
+  `banner?.focusY ?? 50` feed `backgroundPosition` directly in place of
+  the old hardcoded `'center'`.
+
+**Verified so far:** `node --check` passes clean on both
+`tools/devtool/server.mjs` and `tools/devtool/public/app.js`; every
+TS/TSX change is additive and optional-chained (`banner?.path`,
+`ChainDef['banner']`), and every call site (`LorePanel.tsx` x2,
+`QuestPanel.tsx`, `RaidsPanel.tsx` x2) was checked by hand for the new
+prop actually being in scope at each one. **Not yet run** in this
+environment (no `node_modules` available to install): `npx tsc --noEmit`,
+a full `vite build`, or the DevTool server actually started end-to-end --
+worth doing before this ships, same as any other patch.
+
 ### Bigger, still-undecided
 - **Queued from the same conversation as the UX/economy batch above:**
   - ~~Consumable stats/mods~~ -- done, see "Consumables can now carry

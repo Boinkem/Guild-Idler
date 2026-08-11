@@ -8,7 +8,7 @@ import {
   isRaidUnlocked, parseLootEntry, lootForDifficulty,
 } from '../../game/data/raids';
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
-import { RaidDifficulty, RaidUpgradeDef } from '../../game/types';
+import { RaidDifficulty, RaidUpgradeDef, RaidDef } from '../../game/types';
 import { RarityPill } from '../RarityPill';
 import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
 import { RaidRoomSprite, RaidTorchSprite } from '../sprites/RaidRoomSprite';
@@ -41,15 +41,20 @@ const DIFFICULTY_UNLOCK_LABEL: Record<RaidDifficulty, string> = {
  * before any of it shows. A plain fixed-height strip rather than a full
  * background wash (unlike chainCardStyle) -- this is meant to read as an
  * actual header image, not a textured backdrop behind text.
+ *
+ * `banner` is the raid's optional DevTool-assigned override + focus point
+ * (RaidDef.banner) -- unset falls all the way back to the original
+ * id-convention path at dead-center focus, exactly as before this existed.
  */
-function RaidBanner({ raidId }: { raidId: string }) {
+function RaidBanner({ raidId, banner }: { raidId: string; banner?: RaidDef['banner'] }) {
+  const src = banner?.path ? `./lore/${banner.path}` : `./lore/raids/${raidId}.jpg`;
   return (
     <div
       aria-hidden="true"
       style={{
-        backgroundImage: `url(./lore/raids/${raidId}.jpg)`,
+        backgroundImage: `url(${src})`,
         backgroundSize: 'cover',
-        backgroundPosition: 'center',
+        backgroundPosition: `${banner?.focusX ?? 50}% ${banner?.focusY ?? 50}%`,
         height: 90,
         marginBottom: 10,
         borderRadius: 4,
@@ -341,7 +346,7 @@ function RaidDetailModal({
     <>
       <div className="overlay" onClick={onClose}>
         <div className="modal raid-detail-modal" onClick={(e) => e.stopPropagation()}>
-          <RaidBanner raidId={raid.id} />
+          <RaidBanner raidId={raid.id} banner={raid.banner} />
           <div className="spread">
             <span className="card-title hero-card-name">{raid.name}</span>
             <span className="tiny gold-text">Lv {raid.reqLevel}</span>
@@ -493,7 +498,7 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: 
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
       >
-        <RaidBanner raidId={raid.id} />
+        <RaidBanner raidId={raid.id} banner={raid.banner} />
         <div className="spread">
           <span className="card-title hero-card-name">{raid.name}</span>
           <span className="tiny gold-text">Lv {raid.reqLevel}</span>

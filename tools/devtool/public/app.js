@@ -8,7 +8,7 @@
  * here with no frontend changes needed.
  */
 
-const state = { schema: null, kind: null, rows: [], dirty: false, icons: null, equipmentList: null };
+const state = { schema: null, kind: null, rows: [], dirty: false, icons: null, banners: null, equipmentList: null };
 
 const tabsEl = document.getElementById('tabs');
 const appEl = document.getElementById('app');
@@ -83,6 +83,12 @@ function renderTable() {
   // columns above -- a name/rarity/etc. row is still useful as plain text,
   // but "which icon is this assigned" is only really legible as an image.
   const iconKey = Object.entries(schema.fields).find(([, spec]) => spec.picker === 'icon')?.[0];
+  // Same idea for a bannerImage field (quest-chains/raids) -- shows
+  // whatever the row would actually render in-game (the override if set,
+  // else the folder/id.jpg convention), not just "has one been assigned."
+  const bannerKey = Object.entries(schema.fields).find(([, spec]) => spec.type === 'bannerImage')?.[0];
+  const bannerSpec = bannerKey ? schema.fields[bannerKey] : null;
+  const extraCols = (iconKey ? 1 : 0) + (bannerKey ? 1 : 0);
 
   const toolbar = document.createElement('div');
   toolbar.className = 'toolbar';
@@ -94,12 +100,12 @@ function renderTable() {
 
   const table = document.createElement('table');
   const thead = document.createElement('thead');
-  thead.innerHTML = `<tr>${iconKey ? '<th></th>' : ''}${cols.map((c) => `<th>${c}</th>`).join('')}<th></th></tr>`;
+  thead.innerHTML = `<tr>${iconKey ? '<th></th>' : ''}${bannerKey ? '<th></th>' : ''}${cols.map((c) => `<th>${c}</th>`).join('')}<th></th></tr>`;
   const tbody = document.createElement('tbody');
 
   if (state.rows.length === 0) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="${cols.length + (iconKey ? 2 : 1)}"><div class="empty">Nothing here yet.</div></td>`;
+    tr.innerHTML = `<td colspan="${cols.length + extraCols + 1}"><div class="empty">Nothing here yet.</div></td>`;
     tbody.appendChild(tr);
   }
 
@@ -110,13 +116,22 @@ function renderTable() {
           ? `<img src="/item-icons/${escapeHtml(row[iconKey])}" alt="" class="table-icon" />`
           : '<span class="table-icon-empty">—</span>'}</td>`
       : '';
+    const bannerCell = bannerKey
+      ? (() => {
+          const b = row[bannerKey];
+          const rel = b?.path || (bannerSpec?.defaultFolder && row.id ? `${bannerSpec.defaultFolder}/${row.id}.jpg` : null);
+          return `<td class="icon-cell">${rel
+            ? `<span class="table-banner" style="background-image:url('/lore-art/${escapeHtml(rel)}');"></span>`
+            : '<span class="table-icon-empty">—</span>'}</td>`;
+        })()
+      : '';
     const cells = cols.map((c) => {
       let val = row[c];
       if (Array.isArray(val)) val = val.slice(0, 2).join(', ') + (val.length > 2 ? '…' : '');
       const cls = c === 'rarity' ? `rarity-${val}` : c === 'kind' ? `kind-${val}` : '';
       return `<td class="${cls}">${val ?? ''}</td>`;
     }).join('');
-    tr.innerHTML = `${iconCell}${cells}<td class="actions">
+    tr.innerHTML = `${iconCell}${bannerCell}${cells}<td class="actions">
       <button data-edit="${index}">Edit</button>
       <button data-dup="${index}">Duplicate</button>
       <button class="danger" data-del="${index}">Delete</button>
@@ -169,6 +184,14 @@ function fieldControl(spec, key, value) {
     // async fetch of the equipment list first, which can't happen while
     // building this HTML string synchronously).
     return `<div class="loot-field" id="${id}" data-value='${escapeHtml(JSON.stringify(value ?? []))}'></div>`;
+  }
+  if (spec.type === 'bannerImage') {
+    // Same deferred-render approach as the icon field -- a bare container
+    // filled in by renderBannerField once attached to the DOM (it needs the
+    // sibling id-field's current value to compute the fallback preview
+    // path, and an async fetch of the available banner art). `data-folder`
+    // carries the schema's `defaultFolder` hint through to the picker.
+    return `<div class="banner-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-folder="${escapeHtml(spec.defaultFolder ?? '')}"></div>`;
   }
   if (spec.type === 'string' && (key === 'description' || key === 'flavour')) {
     return `<textarea id="${id}">${escapeHtml(value ?? '')}</textarea>`;
@@ -380,6 +403,190 @@ function renderIconField(field) {
 
 function wireIconFields(container) {
   container.querySelectorAll('.icon-field').forEach((field) => renderIconField(field));
+}
+
+/* --------------------------------------------------------- banner field --- */
+// Same session-cache reasoning as ensureIcons -- public/lore/ only changes
+// when someone drops new art in, which means a tool restart anyway.
+async function ensureBanners() {
+  if (state.banners) return state.banners;
+  state.banners = await api('/api/banners');
+  return state.banners;
+}
+
+// Matches server.mjs's GENERAL_BANNER_FOLDER -- loose files sitting
+// directly in public/lore/ (not inside a chains/raids/etc subfolder) are
+// grouped under this label for display, but their real on-disk path has no
+// folder prefix at all, so picking one must NOT prepend the label.
+const BANNER_GENERAL_LABEL = '(general)';
+
+function bannerRelPath(folderName, file) {
+  return folderName === BANNER_GENERAL_LABEL ? file : `${folderName}/${file}`;
+}
+
+/** The folder/id.jpg path a chain or raid falls back to when no explicit
+ *  override is chosen -- mirrors ChainBanner/RaidBanner's own fallback
+ *  exactly. Reads the sibling id-field's live value (not the value this
+ *  editor opened with), so a brand-new entry's preview keeps up as its id
+ *  is typed -- see the input listener wired in wireBannerFields below. */
+function bannerDefaultPath(field) {
+  const folder = field.dataset.folder;
+  const idInput = field.closest('.editor')?.querySelector('#f_id');
+  const entryId = idInput ? idInput.value.trim() : '';
+  if (!folder || !entryId) return null;
+  return `${folder}/${entryId}.jpg`;
+}
+
+/** Fills in and wires a .banner-field container: a live preview strip that
+ *  doubles as a focus-point picker (click or drag sets the crosshair, which
+ *  is exactly what backgroundPosition uses in-game), plus buttons to choose
+ *  an art override, revert to the default path, or reset focus to center.
+ *  Full re-render on every value change, same "small enough not to bother
+ *  patching in place" reasoning as renderIconField. */
+function renderBannerField(field) {
+  const override = field.dataset.path || '';
+  const focusX = parseFloat(field.dataset.focusX);
+  const focusY = parseFloat(field.dataset.focusY);
+  const fx = Number.isFinite(focusX) ? focusX : 50;
+  const fy = Number.isFinite(focusY) ? focusY : 50;
+  const defaultPath = bannerDefaultPath(field);
+  const previewPath = override || defaultPath;
+
+  field.innerHTML = `
+    <div class="banner-preview-box" data-drag-target
+         style="${previewPath ? `background-image:url('/lore-art/${escapeHtml(previewPath)}');` : ''}background-position:${fx}% ${fy}%;">
+      ${previewPath ? '' : '<span class="banner-preview-empty">No banner art yet — click/drag still sets focus for when art is added</span>'}
+      <div class="banner-focus-marker" style="left:${fx}%; top:${fy}%;"></div>
+    </div>
+    <div class="banner-field-controls">
+      <span class="banner-field-name">${override ? escapeHtml(override) : (defaultPath ? `Using default: ${escapeHtml(defaultPath)}` : 'Set an id first to see the default path')}</span>
+      <span class="banner-field-focus tiny muted" data-focus-readout>Focus: ${Math.round(fx)}%, ${Math.round(fy)}%</span>
+      <div class="banner-field-buttons">
+        <button type="button" data-choose-banner>${override ? 'Change' : 'Choose banner'}</button>
+        ${override ? '<button type="button" class="remove" data-clear-banner-path>Use default</button>' : ''}
+        <button type="button" data-reset-focus>Center focus</button>
+      </div>
+    </div>`;
+
+  const box = field.querySelector('[data-drag-target]');
+  const marker = field.querySelector('.banner-focus-marker');
+  const readout = field.querySelector('[data-focus-readout]');
+
+  // In-place updates only (no renderBannerField call) while dragging --
+  // re-rendering mid-drag would tear down `box` itself and break pointer
+  // capture below.
+  const setFocusFromEvent = (e) => {
+    const rect = box.getBoundingClientRect();
+    const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+    field.dataset.focusX = x.toFixed(1);
+    field.dataset.focusY = y.toFixed(1);
+    box.style.backgroundPosition = `${x}% ${y}%`;
+    marker.style.left = `${x}%`;
+    marker.style.top = `${y}%`;
+    readout.textContent = `Focus: ${Math.round(x)}%, ${Math.round(y)}%`;
+  };
+
+  // Pointer capture keeps drag tracking even if the cursor leaves the box
+  // mid-drag, without needing any window-level listener -- since these are
+  // bound directly to `box`, they're discarded for free the moment this
+  // field next re-renders (a fresh box replaces this one), no manual
+  // cleanup or accumulating global listeners across repeated edits.
+  let dragging = false;
+  box.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    box.setPointerCapture(e.pointerId);
+    setFocusFromEvent(e);
+  });
+  box.addEventListener('pointermove', (e) => { if (dragging) setFocusFromEvent(e); });
+  box.addEventListener('pointerup', () => { dragging = false; });
+
+  field.querySelector('[data-choose-banner]').onclick = async () => {
+    const folders = await ensureBanners();
+    openBannerPicker(folders, field.dataset.path, field.dataset.folder, (chosen) => {
+      field.dataset.path = chosen;
+      renderBannerField(field);
+    });
+  };
+  const clearBtn = field.querySelector('[data-clear-banner-path]');
+  if (clearBtn) clearBtn.onclick = () => { field.dataset.path = ''; renderBannerField(field); };
+  field.querySelector('[data-reset-focus]').onclick = () => {
+    field.dataset.focusX = '50';
+    field.dataset.focusY = '50';
+    renderBannerField(field);
+  };
+}
+
+function wireBannerFields(container) {
+  container.querySelectorAll('.banner-field').forEach((field) => renderBannerField(field));
+  // Keep a new entry's default-path preview in sync as its id is typed --
+  // existing entries rarely change id, but nothing stops it, and this is
+  // free either way. Only reruns for fields with no explicit override,
+  // since an overridden field's preview doesn't depend on id at all.
+  const idInput = container.querySelector('#f_id');
+  if (idInput) {
+    idInput.addEventListener('input', () => {
+      container.querySelectorAll('.banner-field').forEach((field) => {
+        if (!field.dataset.path) renderBannerField(field);
+      });
+    });
+  }
+}
+
+/** Same overlay-on-overlay pattern as openIconPicker, sized for wide banner
+ *  art instead of small square icons -- thumbnails use background-size:
+ *  cover, matching how the game itself renders these strips, so what's
+ *  picked here previews close to the real in-game look. `preferredFolder`
+ *  (the schema's defaultFolder hint -- "chains" or "raids") is just sorted
+ *  first; everything stays fully browsable, this only saves a scroll for
+ *  the common case. */
+function openBannerPicker(folders, currentValue, preferredFolder, onPick) {
+  const overlay = document.createElement('div');
+  overlay.className = 'editor-overlay icon-picker-overlay';
+  const panel = document.createElement('div');
+  panel.className = 'editor icon-picker banner-picker';
+
+  const ordered = [...folders].sort((a, b) => {
+    if (a.name === preferredFolder) return -1;
+    if (b.name === preferredFolder) return 1;
+    return 0;
+  });
+
+  const sectionsHtml = ordered.length === 0
+    ? '<p class="tiny muted">No banner art found in public/lore/. Drop .jpg/.png files into it (or its chains/raids/harvest/crafting subfolders) and reopen this picker.</p>'
+    : ordered.map((f) => `
+        <div class="icon-picker-section">
+          <div class="icon-picker-folder">${escapeHtml(f.name)} (${f.files.length})</div>
+          <div class="banner-picker-grid">
+            ${f.files.map((file) => {
+              const rel = bannerRelPath(f.name, file);
+              const selected = rel === currentValue;
+              return `<button type="button" class="banner-picker-item ${selected ? 'selected' : ''}" data-banner="${escapeHtml(rel)}" title="${escapeHtml(rel)}">
+                <span class="banner-picker-thumb" style="background-image:url('/lore-art/${escapeHtml(rel)}');"></span>
+                <span class="banner-picker-name tiny muted">${escapeHtml(file)}</span>
+              </button>`;
+            }).join('')}
+          </div>
+        </div>`).join('');
+
+  panel.innerHTML = `
+    <h2>Choose a banner</h2>
+    <div class="icon-picker-body">${sectionsHtml}</div>
+    <div class="editor-actions">
+      <button id="bannerPickerCancel">Cancel</button>
+    </div>`;
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  panel.querySelectorAll('[data-banner]').forEach((btn) => {
+    btn.onclick = () => {
+      onPick(btn.dataset.banner);
+      overlay.remove();
+    };
+  });
+  panel.querySelector('#bannerPickerCancel').onclick = () => overlay.remove();
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 }
 
 /* ---------------------------------------------------------- loot field --- */
@@ -614,6 +821,19 @@ function readField(spec, key) {
   const el = document.getElementById(`f_${key}`);
   if (spec.picker === 'icon') return el.dataset.value || '';
   if (spec.picker === 'lootTable') return el.__getLootValue ? el.__getLootValue() : [];
+  if (spec.type === 'bannerImage') {
+    const path = el.dataset.path || '';
+    const fx = parseFloat(el.dataset.focusX);
+    const fy = parseFloat(el.dataset.focusY);
+    const out = {};
+    if (path) out.path = path;
+    // Only recorded when actually off-center -- an untouched field (still
+    // sitting at the 50/50 default) should save as fully omitted, same as
+    // before this feature existed, not as an explicit "centered" entry.
+    if (Number.isFinite(fx) && Math.round(fx * 10) !== 500) out.focusX = Math.round(fx * 10) / 10;
+    if (Number.isFinite(fy) && Math.round(fy * 10) !== 500) out.focusY = Math.round(fy * 10) / 10;
+    return out;
+  }
   if (spec.type === 'string' || spec.type === 'enum') return el.value;
   if (spec.type === 'number') return parseFloat(el.value) || 0;
   if (spec.type === 'boolean') return el.checked;
@@ -695,6 +915,7 @@ function openEditor(index) {
   document.body.appendChild(overlay);
   wireListInput(editor);
   wireIconFields(editor);
+  wireBannerFields(editor);
   wireLootFields(editor);
   wireStagesInput(editor);
   wireEggRewardInput(editor);

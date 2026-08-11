@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
 import { GuildManager } from '../../game/managers/GuildManager';
-import { DIFFICULTIES, DIFFICULTY_ORDER } from '../../game/data/quests';
+import { DIFFICULTIES, DIFFICULTY_ORDER, ChainDef } from '../../game/data/quests';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { QuestOffer, Hero } from '../../game/types';
 import { formatDuration, formatGold } from '../../game/util';
@@ -14,15 +14,18 @@ type Offer = QuestOffer;
 /** Banner strip for a chain's quest-board entry, matching ChainBanner in
  *  LorePanel and RaidBanner in RaidsPanel exactly -- same asset, same
  *  "missing file just fails to paint" convention, so a chain's art shows
- *  up here automatically once it exists, no separate art needed. */
-function ChainQuestBanner({ chainId }: { chainId: string }) {
+ *  up here automatically once it exists, no separate art needed. `banner`
+ *  is the same optional DevTool-assigned override + focus point ChainBanner
+ *  reads (ChainDef.banner) -- see its own comment in LorePanel.tsx. */
+function ChainQuestBanner({ chainId, banner }: { chainId: string; banner?: ChainDef['banner'] }) {
+  const src = banner?.path ? `./lore/${banner.path}` : `./lore/chains/${chainId}.jpg`;
   return (
     <div
       aria-hidden="true"
       style={{
-        backgroundImage: `url(./lore/chains/${chainId}.jpg)`,
+        backgroundImage: `url(${src})`,
         backgroundSize: 'cover',
-        backgroundPosition: 'center',
+        backgroundPosition: `${banner?.focusX ?? 50}% ${banner?.focusY ?? 50}%`,
         height: 70,
         marginBottom: 8,
         borderRadius: 4,
@@ -65,7 +68,7 @@ function QuestCard({
 
   return (
     <div className={`card quest-card ${offer.difficulty} ${offer.chain ? 'chain' : ''}`}>
-      {offer.chain && <ChainQuestBanner chainId={offer.chain.chainId} />}
+      {offer.chain && <ChainQuestBanner chainId={offer.chain.chainId} banner={chain?.banner} />}
       <div
         className="card-head hero-card-summary"
         onClick={() => onToggleExpanded(offer.id)}

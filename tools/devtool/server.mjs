@@ -34,6 +34,14 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 // armor, shields, etc.) -- lives in the main project's own public/ folder,
 // not the devtool's, so the game itself can serve these too later.
 const ICONS_DIR = path.join(ROOT, 'public', 'item-icons');
+// Chain/raid banner art -- public/lore/ itself (loose backdrop images like
+// guild-hall-bg.jpg), plus its subfolders (chains/, raids/, harvest/,
+// crafting/), grouped and served the same way ICONS_DIR is below. Kept as
+// its own dir constant rather than reusing ICONS_DIR's folder-listing
+// output directly, since the two trees are rooted in different places and
+// public/lore/ (unlike item-icons/) also has real loose files sitting
+// directly in the root instead of only inside subfolders.
+const BANNERS_DIR = path.join(ROOT, 'public', 'lore');
 const PORT = 5175;
 
 /* --------------------------------------------------------------- schema --- */
@@ -113,6 +121,12 @@ const SCHEMAS = {
       // optional dedicatedPetId (free-text pet id, same no-cross-entry-
       // lookup trade-off as requiresChainId).
       rewardEgg: { type: 'eggReward', required: false },
+      // `defaultFolder` is a frontend-only hint (like `picker` elsewhere in
+      // this file) -- which public/lore/ subfolder the banner picker opens
+      // to first, and which folder+id.jpg the preview falls back to
+      // showing when no explicit path override is chosen yet. Server-side
+      // this validates the same as raids.json's own `banner` field below.
+      banner: { type: 'bannerImage', required: false, defaultFolder: 'chains' },
       stages: { type: 'chainStages', required: true },
     },
   },
@@ -319,6 +333,10 @@ const SCHEMAS = {
       // order they're listed here, stopping at the first failed encounter.
       encounterIds: { type: 'string[]', required: true },
       unlocksRaidId: { type: 'string', required: false },
+      // See quest-chains' own `banner` field comment above -- identical
+      // shape, just defaulting to the raids/ subfolder and the
+      // raids/<id>.jpg naming convention RaidBanner already used.
+      banner: { type: 'bannerImage', required: false, defaultFolder: 'raids' },
     },
   },
   'crafting-recipes': {
@@ -492,6 +510,31 @@ function validateEntry(schema, entry, index) {
           for (const k of Object.keys(value)) {
             if (k !== 'rarity' && k !== 'dedicatedPetId') errors.push(`entry ${index}: unknown key "${k}" in "${key}"`);
           }
+        }
+        break;
+      case 'bannerImage':
+        // Optional -- omitted means "use the folder/id.jpg convention at
+        // dead-center focus," same as before this field existed at all
+        // (see ChainBanner/RaidBanner's own fallback). When present it's
+        // always an object (readField in app.js never emits a bare string
+        // or omits it entirely unless there's truly nothing to record).
+        if (typeof value !== 'object' || Array.isArray(value) || value === null) {
+          errors.push(`entry ${index}: "${key}" must be an object`);
+          break;
+        }
+        if (value.path !== undefined) {
+          if (typeof value.path !== 'string' || !/^[\w-]+(\/[\w.-]+)*\.(png|jpg|jpeg|webp|gif)$/i.test(value.path)) {
+            errors.push(`entry ${index}: "${key}.path" must be a relative image path under public/lore/ (e.g. "chains/foo.jpg")`);
+          }
+        }
+        for (const axis of ['focusX', 'focusY']) {
+          if (value[axis] === undefined) continue;
+          if (typeof value[axis] !== 'number' || value[axis] < 0 || value[axis] > 100) {
+            errors.push(`entry ${index}: "${key}.${axis}" must be a number between 0 and 100`);
+          }
+        }
+        for (const k of Object.keys(value)) {
+          if (!['path', 'focusX', 'focusY'].includes(k)) errors.push(`entry ${index}: unknown key "${k}" in "${key}"`);
         }
         break;
       case 'resultGem':
@@ -715,6 +758,48 @@ async function listIcons() {
   return folders;
 }
 
+// Same shape as listIcons's output ({name, files}[]), but public/lore/ also
+// has real loose images sitting directly in its root (guild-hall-bg.jpg,
+// raids-bg.jpg, etc) rather than only inside subfolders -- those get
+// grouped under a synthetic "(general)" entry rather than being dropped,
+// since a banner override is free to point at any of them, not just the
+// chains/ or raids/ subfolder its own content type defaults to.
+const GENERAL_BANNER_FOLDER = '(general)';
+
+async function listBanners() {
+  let topEntries;
+  try {
+    topEntries = await fs.readdir(BANNERS_DIR, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const folders = [];
+  const rootFiles = topEntries
+    .filter((e) => e.isFile() && ICON_EXTENSIONS.test(e.name))
+    .map((e) => e.name)
+    .sort();
+  if (rootFiles.length > 0) folders.push({ name: GENERAL_BANNER_FOLDER, files: rootFiles });
+  for (const entry of topEntries) {
+    if (!entry.isDirectory()) continue;
+    const folderPath = path.join(BANNERS_DIR, entry.name);
+    let files;
+    try {
+      files = (await fs.readdir(folderPath)).filter((f) => ICON_EXTENSIONS.test(f));
+    } catch {
+      continue;
+    }
+    if (files.length > 0) folders.push({ name: entry.name, files: files.sort() });
+  }
+  // "(general)" first (it's the loose-file catch-all, not a real category),
+  // everything else alphabetical after it.
+  folders.sort((a, b) => {
+    if (a.name === GENERAL_BANNER_FOLDER) return -1;
+    if (b.name === GENERAL_BANNER_FOLDER) return 1;
+    return a.name.localeCompare(b.name);
+  });
+  return folders;
+}
+
 /* ------------------------------- dev server -------------------------------- */
 // `npm run dev` doesn't exit — it starts Vite and Electron and runs until
 // stopped. That's a different shape from check/apply/commit/build (which run
@@ -912,6 +997,10 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, await listIcons());
   }
 
+  if (url.pathname === '/api/banners' && req.method === 'GET') {
+    return json(res, 200, await listBanners());
+  }
+
   // Serves the actual icon image bytes for <img> previews in the picker and
   // table thumbnails. Same path-traversal guard as serveStatic below, just
   // rooted at ICONS_DIR instead of PUBLIC_DIR since these live outside the
@@ -920,6 +1009,28 @@ const server = http.createServer(async (req, res) => {
     const rel = decodeURIComponent(url.pathname.slice('/item-icons/'.length)).split('?')[0];
     const filePath = path.join(ICONS_DIR, rel);
     if (!filePath.startsWith(ICONS_DIR)) { res.writeHead(403); res.end(); return; }
+    try {
+      const body = await fs.readFile(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' }[ext]
+        ?? 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': mime });
+      res.end(body);
+    } catch {
+      res.writeHead(404);
+      res.end('Not found');
+    }
+    return;
+  }
+
+  // Same idea, rooted at BANNERS_DIR (public/lore/) for the banner picker's
+  // thumbnails and the live focus-point preview -- '(general)' entries
+  // (see listBanners) are loose root files, so their "rel" path has no
+  // folder prefix at all, same as any other file under this root.
+  if (url.pathname.startsWith('/lore-art/')) {
+    const rel = decodeURIComponent(url.pathname.slice('/lore-art/'.length)).split('?')[0];
+    const filePath = path.join(BANNERS_DIR, rel);
+    if (!filePath.startsWith(BANNERS_DIR)) { res.writeHead(403); res.end(); return; }
     try {
       const body = await fs.readFile(filePath);
       const ext = path.extname(filePath).toLowerCase();

@@ -237,6 +237,17 @@ export interface ChainDef {
    * carry a rewardEgg once the Hatchery already exists.
    */
   rewardEgg?: { rarity: Rarity; dedicatedPetId?: string };
+  /**
+   * Optional banner-art override + focus point, editable via the DevTool's
+   * banner picker (see server.mjs's `bannerImage` field type). `path` is
+   * relative to public/lore/ (e.g. "chains/foo.jpg") and overrides the
+   * default chains/<id>.jpg naming convention ChainBanner otherwise falls
+   * back to -- omitted entirely, nothing changes from before this existed.
+   * focusX/focusY are 0-100 percentages fed straight into CSS
+   * backgroundPosition (50/50 = center, the same default every banner used
+   * unconditionally before this). Same shape as RaidDef.banner in types.ts.
+   */
+  banner?: { path?: string; focusX?: number; focusY?: number };
 }
 
 /**

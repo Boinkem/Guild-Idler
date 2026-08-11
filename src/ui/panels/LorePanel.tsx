@@ -42,15 +42,21 @@ function chainCardStyle(chain: ChainDef): CSSProperties {
  * actual separation instead of washing the image down to nothing -- same
  * "missing file just fails to paint" convention as before, still rolls
  * out gradually as art lands in public/lore/chains/<id>.jpg.
+ *
+ * `banner` is the chain's optional DevTool-assigned override + focus point
+ * (ChainDef.banner) -- unset for a chain that hasn't had one assigned, in
+ * which case this falls all the way back to the original id-convention
+ * path at dead-center focus, exactly as before this existed.
  */
-function ChainBanner({ chainId }: { chainId: string }) {
+function ChainBanner({ chainId, banner }: { chainId: string; banner?: ChainDef['banner'] }) {
+  const src = banner?.path ? `./lore/${banner.path}` : `./lore/chains/${chainId}.jpg`;
   return (
     <div
       aria-hidden="true"
       style={{
-        backgroundImage: `url(./lore/chains/${chainId}.jpg)`,
+        backgroundImage: `url(${src})`,
         backgroundSize: 'cover',
-        backgroundPosition: 'center',
+        backgroundPosition: `${banner?.focusX ?? 50}% ${banner?.focusY ?? 50}%`,
         height: 90,
         marginBottom: 10,
         borderRadius: 4,
@@ -86,7 +92,7 @@ function CompletedEntry({ chain, completedIds }: { chain: ChainDef; completedIds
   const [open, setOpen] = useState(false);
   return (
     <div className="card lore-card lore-completed" style={chainCardStyle(chain)}>
-      <ChainBanner chainId={chain.id} />
+      <ChainBanner chainId={chain.id} banner={chain.banner} />
       <div
         className="spread hero-card-summary"
         onClick={() => setOpen((v) => !v)}
@@ -131,7 +137,7 @@ function InProgressEntry({ chain, stage }: { chain: ChainDef; stage: number }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="card lore-card lore-in-progress" style={chainCardStyle(chain)}>
-      <ChainBanner chainId={chain.id} />
+      <ChainBanner chainId={chain.id} banner={chain.banner} />
       <div
         className="spread hero-card-summary"
         onClick={() => setOpen((v) => !v)}
