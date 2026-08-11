@@ -328,9 +328,51 @@ export const GUILD_FACILITIES: GuildDef[] = [
     modsPerLevel: { loot: Tuning.get('guild_facility.tavern.lootPerLevel') },
     heroSlotsPerLevel: 1,
   },
+  {
+    id: 'infirmary', name: 'Infirmary',
+    description: 'A cot, clean bandages, and someone who knows how to use '
+      + 'them. Heroes recover from Health loss faster -- and at its best, '
+      + "no one stays down for good without you choosing it.",
+    baseCost: Tuning.get('guild_facility.infirmary.baseCost'),
+    costGrowth: Tuning.get('guild_facility.infirmary.costGrowth'),
+    maxLevel: Tuning.get('guild_facility.infirmary.maxLevel'),
+    // No generic Modifiers bonus -- Infirmary's effect (heal-time
+    // reduction, and the free auto-revive unlock at max level) isn't
+    // expressible as a flat Modifiers key, same reasoning Tavern's own
+    // heroSlotsPerLevel already uses instead of a mod.
+    modsPerLevel: {},
+    healTimeReductionMinutesPerLevel: Tuning.get('guild_facility.infirmary.healTimeReductionMinutesPerLevel'),
+  },
 ];
 
 export const GUILD_BY_ID: Record<string, GuildDef> = Object.fromEntries(GUILD_FACILITIES.map((g) => [g.id, g]));
+
+/**
+ * Minutes for a hero to fully heal Health while idle at the guild, at a
+ * given Infirmary level. 60 minutes at level 0, -10 per level, floored at
+ * 10 -- Infirmary's own maxLevel (5) is exactly the number of -10 steps
+ * needed to walk 60 down to that floor with nothing wasted, so this
+ * doesn't need re-deriving if maxLevel ever changes; it already reads
+ * from the same Tuning values the facility's own cost curve uses. See
+ * guild-idler-status.md's Health stat + Fallen/death mechanic section.
+ */
+export function infirmaryHealTimeMinutes(infirmaryLevel: number): number {
+  const base = Tuning.get('guild_facility.infirmary.baseHealTimeMinutes');
+  const perLevel = GUILD_BY_ID.infirmary?.healTimeReductionMinutesPerLevel ?? 0;
+  const min = Tuning.get('guild_facility.infirmary.minHealTimeMinutes');
+  return Math.max(min, base - perLevel * infirmaryLevel);
+}
+
+/**
+ * Free auto-revive for Fallen heroes is deliberately NOT available below
+ * Infirmary's max level -- pay-to-skip (see HeroManager's revival cost)
+ * is the only path until this facility is fully built. Reaching max
+ * level is what turns it on, at guild_facility.infirmary.autoReviveHours.
+ */
+export function infirmaryAutoReviveUnlocked(infirmaryLevel: number): boolean {
+  const max = GUILD_BY_ID.infirmary?.maxLevel ?? Infinity;
+  return infirmaryLevel >= max;
+}
 
 export function guildCost(def: GuildDef, currentLevel: number): number {
   return Math.floor(def.baseCost * Math.pow(def.costGrowth, currentLevel) * earlyTierDiscount(currentLevel));

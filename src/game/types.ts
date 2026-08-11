@@ -50,7 +50,7 @@ export type HeroClass = string;
  */
 export type HeroSkin = string;
 
-export type HeroStatus = 'idle' | 'questing' | 'resting';
+export type HeroStatus = 'idle' | 'questing' | 'resting' | 'fallen';
 
 export type QuestTag = 'combat' | 'escort' | 'explore' | 'arcane' | 'stealth' | 'defense';
 
@@ -70,10 +70,17 @@ export interface Modifiers {
   speed: number;
   /** Percentage reduction of durability lost per quest. */
   durability: number;
+  /**
+   * Flat bonus added directly to a hero's Max Health pool (see
+   * HeroManager.maxHealth) -- gear/consumable sourced, same additive
+   * pool every other modifier already sums through via sumMods. See
+   * guild-idler-status.md's Health stat + Fallen/death mechanic section.
+   */
+  health: number;
 }
 
 export const ZERO_MODS: Modifiers = {
-  success: 0, gold: 0, xp: 0, loot: 0, injuryResist: 0, speed: 0, durability: 0,
+  success: 0, gold: 0, xp: 0, loot: 0, injuryResist: 0, speed: 0, durability: 0, health: 0,
 };
 
 export interface Stats {
@@ -112,9 +119,23 @@ export interface ConsumableDef {
      *  `keyof Modifiers` range types cleanly against this object
      *  (CraftingManager.craftConsumable indexes it generically). */
     durability?: number;
+    /** Same "unused by hand-authored recipes, typed for completeness
+     *  against Modifiers" note as durability above -- a crafted
+     *  variant could grant a flat Max Health bonus this way. Distinct
+     *  from restoreHealth below: this widens the pool, restoreHealth
+     *  fills it. */
+    health?: number;
     preventInjury?: boolean;
     guaranteedGoodEvent?: boolean;
     healInjury?: boolean;
+    /**
+     * Percentage of Max Health restored immediately on use, via the
+     * same bandage-style "Apply" action healInjury already uses
+     * (InventoryManager.useOnHero / engine.useConsumable) -- not a
+     * per-quest loadout effect. See guild-idler-status.md's Health stat
+     * + Fallen/death mechanic section.
+     */
+    restoreHealth?: number;
   };
 }
 
@@ -303,6 +324,19 @@ export interface Hero {
    * equippedConsumables/autoAdvanceChainId above -- no migration needed.
    */
   lastBurstBonusDay?: number;
+  /**
+   * Current Health, out of HeroManager.maxHealth(hero). Optional/undefined
+   * for any hero who hasn't taken health damage yet -- same defensive
+   * convention as equippedConsumables/lastBurstBonusDay above, so no
+   * save migration is needed. Treat as "full" (maxHealth(hero)) wherever
+   * undefined; HeroManager.currentHealth(hero) is the one place that
+   * default should be applied, so callers never repeat the `?? max`
+   * fallback themselves. Reaches 0 -> hero.status becomes 'fallen' (see
+   * guild-idler-status.md's Health stat + Fallen/death mechanic section
+   * for the full design, including why there's deliberately no floor
+   * above 0).
+   */
+  health?: number;
 }
 
 /* ----------------------------- quests ----------------------------- */
@@ -657,7 +691,7 @@ export interface UpgradeDef {
   freezeChangesPerLevel?: number;
 }
 
-export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern';
+export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern' | 'infirmary';
 
 export interface GuildDef {
   id: GuildFacility;
@@ -670,6 +704,17 @@ export interface GuildDef {
   /** Treasury adds storage; tavern adds hero slots. */
   storagePerLevel?: number;
   heroSlotsPerLevel?: number;
+  /**
+   * Infirmary's structural effect -- same "not expressible as a flat
+   * Modifiers bonus" reasoning as storagePerLevel/heroSlotsPerLevel
+   * above. Minutes shaved off the idle Health heal-time per level (see
+   * progression.ts's infirmaryHealTimeMinutes) rather than a generic
+   * mod. Infirmary's modsPerLevel is deliberately empty -- see
+   * guild-idler-status.md's Health stat + Fallen/death mechanic section
+   * for the full design, including the free-auto-revive payoff for
+   * reaching this facility's max level.
+   */
+  healTimeReductionMinutesPerLevel?: number;
 }
 
 export interface RenownPerkTier2 {

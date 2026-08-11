@@ -1,0 +1,360 @@
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index f678e07..94b2d16 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -333,6 +333,70 @@
+     "max": 20,
+     "description": "Flat loot percentage granted per level, guild-wide. heroSlotsPerLevel (+1 hero slot) is a separate, still-hardcoded field -- not included in this pass."
+   },
++  {
++    "id": "guild_facility.infirmary.baseCost",
++    "label": "Infirmary: base cost",
++    "category": "guild_facilities",
++    "value": 600,
++    "default": 600,
++    "min": 0,
++    "description": "Cost of the first (level 0) Infirmary upgrade. Matches Workshop's base cost -- the closest existing analog, a utility facility with no direct gold/xp/success reward."
++  },
++  {
++    "id": "guild_facility.infirmary.costGrowth",
++    "label": "Infirmary: cost growth",
++    "category": "guild_facilities",
++    "value": 1.85,
++    "default": 1.85,
++    "min": 1,
++    "max": 5,
++    "description": "Multiplier applied per level, before the early-tier discount. Matches Workshop's growth rate."
++  },
++  {
++    "id": "guild_facility.infirmary.maxLevel",
++    "label": "Infirmary: max level",
++    "category": "guild_facilities",
++    "value": 5,
++    "default": 5,
++    "min": 1,
++    "description": "Highest level Infirmary can reach -- exactly 5 steps of -10 minutes walks the heal time from 60 down to the 10-minute floor with nothing wasted. Reaching this level also unlocks free auto-revive for Fallen heroes -- see healTimeReductionMinutesPerLevel/autoReviveHours below."
++  },
++  {
++    "id": "guild_facility.infirmary.baseHealTimeMinutes",
++    "label": "Infirmary: base heal time (minutes)",
++    "category": "guild_facilities",
++    "value": 60,
++    "default": 60,
++    "min": 1,
++    "description": "Minutes for a hero to fully heal Health while idle at the guild, with no Infirmary levels bought yet."
++  },
++  {
++    "id": "guild_facility.infirmary.healTimeReductionMinutesPerLevel",
++    "label": "Infirmary: heal-time reduction per level (minutes)",
++    "category": "guild_facilities",
++    "value": 10,
++    "default": 10,
++    "min": 0,
++    "description": "Minutes shaved off the idle heal time per Infirmary level. Structural, not a generic Modifiers bonus -- see GuildDef.healTimeReductionMinutesPerLevel."
++  },
++  {
++    "id": "guild_facility.infirmary.minHealTimeMinutes",
++    "label": "Infirmary: minimum heal time (minutes)",
++    "category": "guild_facilities",
++    "value": 10,
++    "default": 10,
++    "min": 1,
++    "description": "Floor on idle heal time -- reached exactly at Infirmary's max level (5 levels x 10 minutes off the 60-minute base)."
++  },
++  {
++    "id": "guild_facility.infirmary.autoReviveHours",
++    "label": "Infirmary: free auto-revive time (hours)",
++    "category": "guild_facilities",
++    "value": 12,
++    "default": 12,
++    "min": 1,
++    "description": "Hours until a Fallen hero is automatically revived for free, once Infirmary has reached its max level. Below max level there is no free auto-revive at all -- pay-to-skip (see fallen.revivalCostBase/PerLevel) is the only path."
++  },
+   {
+     "id": "harvest.baseSpawnIntervalMs",
+     "label": "Harvest: base spawn interval (ms)",
+@@ -2332,5 +2396,78 @@
+     "default": 0.85,
+     "description": "Fraction of full price the fourth purchase of a given leveled item costs. Level 4+ is always full price (1.0), not itself a tuning entry.",
+     "min": 0
++  },
++  {
++    "id": "health.maxHealthBase",
++    "label": "Health: Max Health base",
++    "category": "health_system",
++    "value": 100,
++    "default": 100,
++    "min": 0,
++    "description": "Flat baseline added before the endurance/level terms in HeroManager.maxHealth -- see guild-idler-status.md's Health stat + Fallen/death mechanic section."
++  },
++  {
++    "id": "health.maxHealthEnduranceCoefficient",
++    "label": "Health: Max Health endurance coefficient",
++    "category": "health_system",
++    "value": 10,
++    "default": 10,
++    "min": 0,
++    "description": "Multiplies sqrt(endurance) in HeroManager.maxHealth, same sqrt(endurance) shape statMods already uses for injuryResist."
++  },
++  {
++    "id": "health.maxHealthLevelCoefficient",
++    "label": "Health: Max Health level coefficient",
++    "category": "health_system",
++    "value": 3,
++    "default": 3,
++    "min": 0,
++    "description": "Flat Max Health granted per hero level in HeroManager.maxHealth."
++  },
++  {
++    "id": "health.injuryDamagePercentPerDurationHour",
++    "label": "Health: damage % per injury duration-hour",
++    "category": "health_system",
++    "value": 2.5,
++    "default": 2.5,
++    "min": 0,
++    "description": "Health damage on injury, as a percent of Max Health, is derived as durationHours * this value rather than authored per-injury -- see items.ts's healthDamagePercentForInjury. Self-corrects if an injury's durationHours ever changes."
++  },
++  {
++    "id": "health.successPenaltyPerMissingPercent",
++    "label": "Health: success penalty per missing Health %",
++    "category": "health_system",
++    "value": 0.3,
++    "default": 0.3,
++    "min": 0,
++    "description": "Success-chance points lost per percentage point of Health missing, folded into heroMods the same way injuryMods already is. A hero at low Health is worse odds, never unsendable -- there is no hard gate."
++  },
++  {
++    "id": "health.questRegenFraction",
++    "label": "Health: on-quest regen fraction",
++    "category": "health_system",
++    "value": 0.25,
++    "default": 0.25,
++    "min": 0,
++    "max": 1,
++    "description": "Passive Health regen rate while a hero is actively out on a quest, as a fraction of the current idle regen rate. Scales down automatically as Infirmary shrinks the idle heal time too."
++  },
++  {
++    "id": "fallen.revivalCostBase",
++    "label": "Fallen: revival cost base",
++    "category": "health_system",
++    "value": 100,
++    "default": 100,
++    "min": 0,
++    "description": "Flat gold cost floor for instantly (pay-to-skip) reviving a Fallen hero, before the per-level term. See fallen.revivalCostPerLevel."
++  },
++  {
++    "id": "fallen.revivalCostPerLevel",
++    "label": "Fallen: revival cost per hero level",
++    "category": "health_system",
++    "value": 40,
++    "default": 40,
++    "min": 0,
++    "description": "Gold added per hero level to the instant-revive cost -- same shape as treatmentCost scaling with injury severity, here scaling with hero level instead."
+   }
+ ]
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 921639f..d25614a 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -328,10 +328,52 @@ export const GUILD_FACILITIES: GuildDef[] = [
+     modsPerLevel: { loot: Tuning.get('guild_facility.tavern.lootPerLevel') },
+     heroSlotsPerLevel: 1,
+   },
++  {
++    id: 'infirmary', name: 'Infirmary',
++    description: 'A cot, clean bandages, and someone who knows how to use '
++      + 'them. Heroes recover from Health loss faster -- and at its best, '
++      + "no one stays down for good without you choosing it.",
++    baseCost: Tuning.get('guild_facility.infirmary.baseCost'),
++    costGrowth: Tuning.get('guild_facility.infirmary.costGrowth'),
++    maxLevel: Tuning.get('guild_facility.infirmary.maxLevel'),
++    // No generic Modifiers bonus -- Infirmary's effect (heal-time
++    // reduction, and the free auto-revive unlock at max level) isn't
++    // expressible as a flat Modifiers key, same reasoning Tavern's own
++    // heroSlotsPerLevel already uses instead of a mod.
++    modsPerLevel: {},
++    healTimeReductionMinutesPerLevel: Tuning.get('guild_facility.infirmary.healTimeReductionMinutesPerLevel'),
++  },
+ ];
+ 
+ export const GUILD_BY_ID: Record<string, GuildDef> = Object.fromEntries(GUILD_FACILITIES.map((g) => [g.id, g]));
+ 
++/**
++ * Minutes for a hero to fully heal Health while idle at the guild, at a
++ * given Infirmary level. 60 minutes at level 0, -10 per level, floored at
++ * 10 -- Infirmary's own maxLevel (5) is exactly the number of -10 steps
++ * needed to walk 60 down to that floor with nothing wasted, so this
++ * doesn't need re-deriving if maxLevel ever changes; it already reads
++ * from the same Tuning values the facility's own cost curve uses. See
++ * guild-idler-status.md's Health stat + Fallen/death mechanic section.
++ */
++export function infirmaryHealTimeMinutes(infirmaryLevel: number): number {
++  const base = Tuning.get('guild_facility.infirmary.baseHealTimeMinutes');
++  const perLevel = GUILD_BY_ID.infirmary?.healTimeReductionMinutesPerLevel ?? 0;
++  const min = Tuning.get('guild_facility.infirmary.minHealTimeMinutes');
++  return Math.max(min, base - perLevel * infirmaryLevel);
++}
++
++/**
++ * Free auto-revive for Fallen heroes is deliberately NOT available below
++ * Infirmary's max level -- pay-to-skip (see HeroManager's revival cost)
++ * is the only path until this facility is fully built. Reaching max
++ * level is what turns it on, at guild_facility.infirmary.autoReviveHours.
++ */
++export function infirmaryAutoReviveUnlocked(infirmaryLevel: number): boolean {
++  const max = GUILD_BY_ID.infirmary?.maxLevel ?? Infinity;
++  return infirmaryLevel >= max;
++}
++
+ export function guildCost(def: GuildDef, currentLevel: number): number {
+   return Math.floor(def.baseCost * Math.pow(def.costGrowth, currentLevel) * earlyTierDiscount(currentLevel));
+ }
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index f5ec20c..d0a0931 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -53,7 +53,7 @@ export function defaultAdapter(): SaveAdapter {
+ }
+ 
+ const EMPTY_GUILD: Record<GuildFacility, number> = {
+-  barracks: 0, treasury: 0, workshop: 0, library: 0, tavern: 0,
++  barracks: 0, treasury: 0, workshop: 0, library: 0, tavern: 0, infirmary: 0,
+ };
+ 
+ export function createInitialState(now = Date.now()): GameState {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 5b878d3..06d41af 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -50,7 +50,7 @@ export type HeroClass = string;
+  */
+ export type HeroSkin = string;
+ 
+-export type HeroStatus = 'idle' | 'questing' | 'resting';
++export type HeroStatus = 'idle' | 'questing' | 'resting' | 'fallen';
+ 
+ export type QuestTag = 'combat' | 'escort' | 'explore' | 'arcane' | 'stealth' | 'defense';
+ 
+@@ -70,10 +70,17 @@ export interface Modifiers {
+   speed: number;
+   /** Percentage reduction of durability lost per quest. */
+   durability: number;
++  /**
++   * Flat bonus added directly to a hero's Max Health pool (see
++   * HeroManager.maxHealth) -- gear/consumable sourced, same additive
++   * pool every other modifier already sums through via sumMods. See
++   * guild-idler-status.md's Health stat + Fallen/death mechanic section.
++   */
++  health: number;
+ }
+ 
+ export const ZERO_MODS: Modifiers = {
+-  success: 0, gold: 0, xp: 0, loot: 0, injuryResist: 0, speed: 0, durability: 0,
++  success: 0, gold: 0, xp: 0, loot: 0, injuryResist: 0, speed: 0, durability: 0, health: 0,
+ };
+ 
+ export interface Stats {
+@@ -112,9 +119,23 @@ export interface ConsumableDef {
+      *  `keyof Modifiers` range types cleanly against this object
+      *  (CraftingManager.craftConsumable indexes it generically). */
+     durability?: number;
++    /** Same "unused by hand-authored recipes, typed for completeness
++     *  against Modifiers" note as durability above -- a crafted
++     *  variant could grant a flat Max Health bonus this way. Distinct
++     *  from restoreHealth below: this widens the pool, restoreHealth
++     *  fills it. */
++    health?: number;
+     preventInjury?: boolean;
+     guaranteedGoodEvent?: boolean;
+     healInjury?: boolean;
++    /**
++     * Percentage of Max Health restored immediately on use, via the
++     * same bandage-style "Apply" action healInjury already uses
++     * (InventoryManager.useOnHero / engine.useConsumable) -- not a
++     * per-quest loadout effect. See guild-idler-status.md's Health stat
++     * + Fallen/death mechanic section.
++     */
++    restoreHealth?: number;
+   };
+ }
+ 
+@@ -303,6 +324,19 @@ export interface Hero {
+    * equippedConsumables/autoAdvanceChainId above -- no migration needed.
+    */
+   lastBurstBonusDay?: number;
++  /**
++   * Current Health, out of HeroManager.maxHealth(hero). Optional/undefined
++   * for any hero who hasn't taken health damage yet -- same defensive
++   * convention as equippedConsumables/lastBurstBonusDay above, so no
++   * save migration is needed. Treat as "full" (maxHealth(hero)) wherever
++   * undefined; HeroManager.currentHealth(hero) is the one place that
++   * default should be applied, so callers never repeat the `?? max`
++   * fallback themselves. Reaches 0 -> hero.status becomes 'fallen' (see
++   * guild-idler-status.md's Health stat + Fallen/death mechanic section
++   * for the full design, including why there's deliberately no floor
++   * above 0).
++   */
++  health?: number;
+ }
+ 
+ /* ----------------------------- quests ----------------------------- */
+@@ -657,7 +691,7 @@ export interface UpgradeDef {
+   freezeChangesPerLevel?: number;
+ }
+ 
+-export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern';
++export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern' | 'infirmary';
+ 
+ export interface GuildDef {
+   id: GuildFacility;
+@@ -670,6 +704,17 @@ export interface GuildDef {
+   /** Treasury adds storage; tavern adds hero slots. */
+   storagePerLevel?: number;
+   heroSlotsPerLevel?: number;
++  /**
++   * Infirmary's structural effect -- same "not expressible as a flat
++   * Modifiers bonus" reasoning as storagePerLevel/heroSlotsPerLevel
++   * above. Minutes shaved off the idle Health heal-time per level (see
++   * progression.ts's infirmaryHealTimeMinutes) rather than a generic
++   * mod. Infirmary's modsPerLevel is deliberately empty -- see
++   * guild-idler-status.md's Health stat + Fallen/death mechanic section
++   * for the full design, including the free-auto-revive payoff for
++   * reaching this facility's max level.
++   */
++  healTimeReductionMinutesPerLevel?: number;
+ }
+ 
+ export interface RenownPerkTier2 {
+diff --git a/src/game/util.ts b/src/game/util.ts
+index 9680c2c..d7f74c2 100644
+--- a/src/game/util.ts
++++ b/src/game/util.ts
+@@ -101,12 +101,27 @@ export const MOD_LABEL: Record<keyof Modifiers, string> = {
+   injuryResist: 'Injury resist',
+   speed: 'Quest speed',
+   durability: 'Gear wear reduction',
++  health: 'Max Health',
+ };
+ 
++/**
++ * Every other Modifiers key is already percentage-flavoured (even
++ * injuryResist/loot, which are flat, are flat PERCENTAGE POINTS), so
++ * pct() (which appends "%") reads correctly for all of them. `health`
++ * is the first key that's a flat point value with no percent meaning at
++ * all -- formatted separately here rather than teaching pct() a special
++ * case, since every other current and future caller of pct() genuinely
++ * is a percentage.
++ */
++function formatModValue(key: keyof Modifiers, value: number): string {
++  if (key === 'health') return `${value > 0 ? '+' : ''}${value}`;
++  return pct(value);
++}
++
+ export function describeMods(mods: Partial<Modifiers>): string[] {
+   return (Object.keys(MOD_LABEL) as (keyof Modifiers)[])
+     .filter((key) => (mods[key] ?? 0) !== 0)
+-    .map((key) => `${MOD_LABEL[key]} ${pct(mods[key] ?? 0)}`);
++    .map((key) => `${MOD_LABEL[key]} ${formatModValue(key, mods[key] ?? 0)}`);
+ }
+ 
+ export const STAT_LABEL: Record<keyof Stats, string> = {

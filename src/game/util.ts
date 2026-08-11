@@ -101,12 +101,27 @@ export const MOD_LABEL: Record<keyof Modifiers, string> = {
   injuryResist: 'Injury resist',
   speed: 'Quest speed',
   durability: 'Gear wear reduction',
+  health: 'Max Health',
 };
+
+/**
+ * Every other Modifiers key is already percentage-flavoured (even
+ * injuryResist/loot, which are flat, are flat PERCENTAGE POINTS), so
+ * pct() (which appends "%") reads correctly for all of them. `health`
+ * is the first key that's a flat point value with no percent meaning at
+ * all -- formatted separately here rather than teaching pct() a special
+ * case, since every other current and future caller of pct() genuinely
+ * is a percentage.
+ */
+function formatModValue(key: keyof Modifiers, value: number): string {
+  if (key === 'health') return `${value > 0 ? '+' : ''}${value}`;
+  return pct(value);
+}
 
 export function describeMods(mods: Partial<Modifiers>): string[] {
   return (Object.keys(MOD_LABEL) as (keyof Modifiers)[])
     .filter((key) => (mods[key] ?? 0) !== 0)
-    .map((key) => `${MOD_LABEL[key]} ${pct(mods[key] ?? 0)}`);
+    .map((key) => `${MOD_LABEL[key]} ${formatModValue(key, mods[key] ?? 0)}`);
 }
 
 export const STAT_LABEL: Record<keyof Stats, string> = {
