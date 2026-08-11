@@ -1,0 +1,64 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 0e15f4d..4ec2bf5 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -4117,6 +4117,59 @@ level log entry underneath it doesn't also demand separate attention.
+ 
+ ## Brainstorming / not yet committed
+ 
++- **Guild Area (name to be confirmed)** -- endgame 1v1 duel arena, scoped
++  in a discussion pass but not yet built. Gated behind a new Guild
++  facility (same cost-curve shape as Barracks/Treasury/etc.), so it's an
++  endgame system rather than something available from the start. Key
++  decisions locked in from that discussion:
++  - **One hero at a time, like a duel** -- not a party fight. Keeps the
++    combat resolver simple and sidesteps needing turn-order/aggro logic
++    across multiple actors.
++  - **Auto-battle by default, manual optional** (Melvor-style) -- the
++    engine runs one deterministic turn-by-turn resolver either way;
++    auto-battle just plays it out instantly/unattended, manual mode
++    paces the same resolver with animations and a real Action/Item/
++    Defend menu each turn. No second combat model to maintain.
++  - **Rewards: both** -- normal gold/xp/loot same as quests, plus a new
++    small dedicated Arena currency on top. That currency's actual sink
++    (a dedicated shop? cosmetic? renown-adjacent perk track?) is still
++    open.
++  - **Losing applies an existing injury** -- reuses the current
++    injury/bench-to-heal system rather than inventing a new fail state.
++    No new "death" or permanent-loss consequence.
++  - **HP is NOT a persistent hero field.** Heroes have no health bar
++    anywhere else in the game (risk is represented entirely by
++    injuries), and this is deliberately not changing that globally --
++    max HP for a duel is computed fresh from the hero's existing stats
++    only for the duration of that fight, then discarded. No new
++    save-data field, no rest/regen system needed.
++  - **Stat mapping reuses existing hero stats rather than a parallel
++    combat stat block:** `strength` -> Attack Damage (further boosted by
++    weapon modifiers); `endurance` -> max HP *and* a flat Damage
++    Reduction value (the new "shield" number -- shield-slot items grant
++    it directly, armor slots a smaller amount); `luck` -> crit chance;
++    `wisdom` -> reserved for a possible future Skill menu option
++    (elemental/mana-flavoured) beyond the base Action.
++  - **Elemental damage/resist is reused as-is** from the existing
++    `elementalDamage` (weapons) / `elementalResist` (armor) fields and
++    the infusion/enchant stations -- no new elemental system, just a real
++    damage formula finally consuming what those fields already carry
++    instead of the current success-roll percentage nudge.
++  - Narratively low-stakes on purpose -- native-monster flavor (goblins,
++    beasts, rival duelists per `world-lore-pantheon.md`'s "Native"
++    category), no god or capstone weight, since this is a mechanical
++    endgame system, not a story chain.
++  **Still open, needs another pass before implementation starts:** enemy
++  roster/data shape (a new `EnemyDef` table -- HP, attack, defense,
++  elemental tags, sprite ref, reqLevel/tier, rewards); where the Arena
++  currency actually spends; whether enemy sprite assets exist/are
++  licensed yet (none currently exist in the repo -- only the hero packs
++  and the item spritesheet, both under the same kind of "usable, not
++  redistributable" license the hero packs went through); UI home (own
++  panel, likely alongside Raids rather than inside it); and the actual
++  turn-by-turn damage formula (how Attack Damage, Damage Reduction, crit,
++  and elemental bonus/resist combine into a final hit).
++
+ - **Melee/Ranged/Caster hero roles** -- scoping discussion started, no
+   code yet. Concrete shape proposed so far: a role (Melee/Ranged/Caster)
+   sits alongside a hero's existing class, with quest offers carrying a
