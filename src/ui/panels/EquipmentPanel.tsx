@@ -172,13 +172,13 @@ function ConsumableSlotCard({
   );
 }
 
-/** A single worn-gear slot. Collapsed shows just the icon, name, and rarity
- *  pill; clicking expands to the full mod breakdown, durability, and the
- *  repair/remove actions -- same collapse-by-default pattern used on
- *  the Quest Board and Lore tab. "Refine" (the +N upgrade, which also
- *  raises the durability cap) now lives on the Blacksmith's own Enhance
- *  station instead of a button here -- plain repair (restore to whatever
- *  the cap already is, no cap increase) stays here as a quick action. */
+/** A single worn-gear slot. The collapsed card just shows icon, name, and
+ *  rarity pill; clicking opens the full mod breakdown, durability, and
+ *  the repair/remove actions in an overlay modal -- previously this
+ *  expanded in place, which read as the whole card jumping/resizing
+ *  when clicked. Same .overlay/.modal shape the shop item cards
+ *  (EquipmentShopCard/ConsumableShopCard) and PeddlerCardDetailOverlay
+ *  already use. */
 function SlotCard({
   slot, item, workshop, hero, engine,
 }: { slot: EquipSlot; item: EquipmentItem | undefined; workshop: number; hero: Hero; engine: GameEngine }) {
@@ -198,57 +198,70 @@ function SlotCard({
   }
 
   return (
-    <div className={`item-card ${open ? 'open' : ''}`}>
+    <>
       <div
-        className="item-card-summary"
-        onClick={() => setOpen((v) => !v)}
+        className="item-card"
+        onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
       >
-        <ItemIcon slot={def.slot} icon={def.icon} />
-        <div className="item-card-body">
-          <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
-          <RarityPill rarity={def.rarity} />
-          {item.customMods && <CraftedPill />}
-          <DurabilityBar item={item} compact />
+        <div className="item-card-summary">
+          <ItemIcon slot={def.slot} icon={def.icon} />
+          <div className="item-card-body">
+            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
+            <RarityPill rarity={def.rarity} />
+            {item.customMods && <CraftedPill />}
+            <DurabilityBar item={item} compact />
+          </div>
         </div>
       </div>
+
       {open && (
-        <div className="item-card-details">
-          <div className="tiny muted">{slot} · requires level {def.reqLevel}</div>
-          <div className="tiny muted" style={{ marginTop: 2 }}>{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
-          {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
-            <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
-          )}
-          {/* The bar itself is already always visible in the collapsed
-              summary above (compact mode) -- just the exact number here,
-              not a second copy of the same bar. */}
-          <div className="tiny muted" style={{ marginTop: 4 }}>
-            {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
-          </div>
-          <div className="row wrap" style={{ marginTop: 6 }}>
-            <button
-              style={{ minHeight: 24, padding: '3px 6px' }}
-              onClick={() => engine.repair(item.uid)}
-              disabled={EquipmentManager.repairCost(item, workshop) === 0}
-            >
-              Repair {formatGold(EquipmentManager.repairCost(item, workshop))}
-            </button>
-            <button
-              style={{ minHeight: 24, padding: '3px 6px' }}
-              onClick={() => engine.unequip(hero.id, slot)}
-            >
-              Remove
-            </button>
+        <div className="overlay" onClick={() => setOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
+              <ItemIcon slot={def.slot} icon={def.icon} size={48} />
+              <div>
+                <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>
+                  {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
+                </span>
+                <div className="tiny muted">{slot} · requires level {def.reqLevel}</div>
+              </div>
+            </div>
+            <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
+              <RarityPill rarity={def.rarity} />
+              {item.customMods && <CraftedPill />}
+            </div>
+            <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
+            {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
+              <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
+            )}
+            <div className="tiny muted" style={{ marginTop: 4 }}>
+              {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+            </div>
+            <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+              <button onClick={() => setOpen(false)}>Close</button>
+              <button
+                disabled={EquipmentManager.repairCost(item, workshop) === 0}
+                onClick={() => { engine.repair(item.uid); setOpen(false); }}
+              >
+                Repair {formatGold(EquipmentManager.repairCost(item, workshop))}
+              </button>
+              <button onClick={() => { engine.unequip(hero.id, slot); setOpen(false); }}>
+                Remove
+              </button>
+            </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
 /** A single stash item, same collapsed-card pattern as SlotCard. */
+/** A single stash item -- same overlay-modal treatment as SlotCard above,
+ *  replacing the previous inline expand. */
 function StashCard({
   item, hero, confirmSell, engine,
 }: { item: EquipmentItem; hero: Hero; confirmSell: boolean; engine: GameEngine }) {
@@ -258,52 +271,70 @@ function StashCard({
   const canEquip = EquipmentManager.canEquip(hero, item);
 
   return (
-    <div className={`item-card ${open ? 'open' : ''}`}>
+    <>
       <div
-        className="item-card-summary"
-        onClick={() => setOpen((v) => !v)}
+        className="item-card"
+        onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
       >
-        <ItemIcon slot={def.slot} icon={def.icon} />
-        <div className="item-card-body">
-          <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
-          <RarityPill rarity={def.rarity} />
-          {item.customMods && <CraftedPill />}
-          <DurabilityBar item={item} compact />
+        <div className="item-card-summary">
+          <ItemIcon slot={def.slot} icon={def.icon} />
+          <div className="item-card-body">
+            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
+            <RarityPill rarity={def.rarity} />
+            {item.customMods && <CraftedPill />}
+            <DurabilityBar item={item} compact />
+          </div>
         </div>
       </div>
+
       {open && (
-        <div className="item-card-details">
-          <div className="tiny muted">{def.slot} · requires level {def.reqLevel}</div>
-          <div className="tiny muted" style={{ marginTop: 2 }}>{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
-          {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
-            <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
-          )}
-          <div className="tiny muted" style={{ marginTop: 4 }}>
-            {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
-          </div>
-          <div className="row wrap" style={{ marginTop: 6 }}>
-            <button
-              className="btn-primary"
-              style={{ minHeight: 26 }}
-              disabled={!canEquip.ok}
-              onClick={() => engine.equip(hero.id, item.uid)}
-              title={canEquip.reason}
-            >
-              Equip on {hero.name}
-            </button>
-            <button
-              style={{ minHeight: 26 }}
-              onClick={() => { if (!confirmSell || confirm('Sell this item?')) engine.sellItem(item.uid); }}
-            >
-              Sell {formatGold(EquipmentManager.sellValue(item))}
-            </button>
+        <div className="overlay" onClick={() => setOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
+              <ItemIcon slot={def.slot} icon={def.icon} size={48} />
+              <div>
+                <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>
+                  {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
+                </span>
+                <div className="tiny muted">{def.slot} · requires level {def.reqLevel}</div>
+              </div>
+            </div>
+            <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
+              <RarityPill rarity={def.rarity} />
+              {item.customMods && <CraftedPill />}
+            </div>
+            <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
+            {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
+              <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
+            )}
+            <div className="tiny muted" style={{ marginTop: 4 }}>
+              {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+            </div>
+            <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+              <button onClick={() => setOpen(false)}>Close</button>
+              <button
+                className="btn-primary"
+                disabled={!canEquip.ok}
+                onClick={() => { engine.equip(hero.id, item.uid); setOpen(false); }}
+                title={canEquip.reason}
+              >
+                Equip on {hero.name}
+              </button>
+              <button
+                onClick={() => {
+                  if (!confirmSell || confirm('Sell this item?')) { engine.sellItem(item.uid); setOpen(false); }
+                }}
+              >
+                Sell {formatGold(EquipmentManager.sellValue(item))}
+              </button>
+            </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

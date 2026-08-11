@@ -1,0 +1,1005 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index cc7fb0e..0f83763 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -5147,3 +5147,124 @@ pass (same caveat as the two entries above).
+   directly. Next step whenever that's ready: either compile these 6 (or
+   however many the real idle loop uses) into one strip and drop it in,
+   or send the strip directly for review.
++
++### Big feedback batch: audio, shop UX, gear score overrides, and several small polish items
++Wide-ranging playtest round covering audio feedback, buying UX, item
++detail UX, Grimsby polish, retire confirmations, a header mute button,
++Harvest particle count, and a DevTool content override. `npx tsc
++--noEmit` and `npm run build:web` both verified clean against a fresh
++clone; no live playtest available in this pass (no dev environment).
++
++**Audio feedback, filled in.** `sound.ts` gained 8 new distinct cues --
++`equip`, `sell`, `scrap`, `craft`, `enhance`, `infuse`, `enchant`,
++`prestige_upgrade` -- replacing a mix of "plays nothing" and "reuses the
++generic `purchase` blip for everything." Specifically:
++- **Previously silent, now play something**: `equip()` (`'equip'`),
++  `sellItem()` (`'sell'`), `scrapItem()` (`'scrap'`), `upgradeItem()` i.e.
++  the Blacksmith's Enhance station (`'enhance'`), `buyPerk()` i.e.
++  spending Renown on a Prestige perk (`'prestige_upgrade'`).
++- **Previously all shared the generic `'purchase'` cue, now distinct**:
++  `craftGear`/`craftConsumable`/`craftGem` -> `'craft'`; `enchantItem`
++  (the Enchanter's stat-roll recipes) -> `'enchant'`; `infuseItem` (which
++  covers BOTH Weapon Enchanting and Armour Infusion under one engine
++  method, per its own existing comment) -> `'infuse'`. `sellJunk` (bulk
++  sell) also moved off `'purchase'` onto the new `'sell'` cue, matching
++  `sellItem`.
++- Ordinary buying (`buyConsumable`, `buyShopEquipment`,
++  `buyBlackMarketEquipment`, `rerollShop`, vendor/upgrade purchases) is
++  untouched -- those are the cases `'purchase'` was actually named for
++  and still fits.
++
++**Buy ×5.** `ConsumableShopCard` (Vendors' consumable shop modal --
++Alchemist's own stock, but shared by any vendor selling consumables)
++gained a second button next to the existing Buy ×1: `InventoryManager
++.buy` already accepted an `amount` param, so this was purely a UI change
++-- `canAfford`/`onBuy` props widened from a plain boolean/callback to
++`(amount: number) => boolean`/`(amount: number) => void`.
++
++**Inventory items open a modal instead of expanding in place.**
++`SlotCard` (worn gear) and `StashCard` (stash) in `EquipmentPanel.tsx`
++both moved from inline `.item-card-details` expansion to a proper
++`.overlay`/`.modal` popup -- same shape the Vendors shop item cards and
++PeddlerCardDetailOverlay already use. **Scoped to gear specifically**:
++`ConsumableInfoCard` and `ConsumableSlotCard` (the consumables list and
++the per-hero consumable-equip picker, same file) were left as inline
++expand/pick UI -- converting a *selection* picker to a modal is a
++different UX shape than converting an *info* expand, and wasn't clearly
++what "clicking an item" was asking for. Worth flagging if that should
++change too.
++
++**Grimsby polish, three pieces:**
++- "Pick Your Card" button (`PeddlerPanel.tsx`) is now `btn-purple`
++  instead of `btn-primary` (brass/gold), matching the Vendors action-
++  button color (Crafting/Enhance/Scrap/etc. all already use
++  `btn-purple`).
++- Grimsby's header sprite in the card modal no longer loops `wave`/
++  `approval` indefinitely -- both are one-shot gestures now, playing
++  once via `GrimsbySprite`'s existing (previously unused here)
++  `once`/`onComplete` props and settling to `idle` once done. Two
++  separate "done" flags (`waveDone`/`approvalDone`), not one shared
++  flag, since a player should still see the fresh approval gesture play
++  out after the wave already finished, not have it skipped.
++
++**Retire / Early Retire confirmations, restyled.** Both previously used
++the native browser `confirm()` -- a plain OS dialog next to everything
++else in this game having its own themed chrome, which is almost
++certainly what "unstyled" was describing (there was no missing CSS
++class to find; the popup itself was never an in-game element).
++`PrestigePanel.tsx`'s hero row got pulled out into its own
++`HeroRetireCard` component (needed real per-hero state for which
++confirm, if either, is open) with a new shared `RetireConfirmModal` --
++same `.overlay`/`.modal` shape as everywhere else, brass `btn-primary`
++for the real Retire, plain `btn-ghost` for Early Retire so it doesn't
++look like the inviting option it isn't.
++
++**Header quick-mute.** A speaker button next to On Top / Back to
++Desktop in `MenuWindow.tsx`'s header -- 🔊/🔇, toggles `soundEnabled`
+++ `musicEnabled` together (both settings already exist in Settings ->
++Sound / Settings -> Music; this is the same state, just reachable
++without leaving whatever tab you're on, not a third independent
++setting). Reflects "is anything audible right now" (either one on
++counts as unmuted) and flips both to the opposite of that.
++
++**Harvest catch-burst text, cut from 5 particles to 2.** `BURST_PARTICLES`
++in `HarvestPanel.tsx` -- a >50% reduction, matching "reduce by half at
++least." None of them ever carried the real gained amount (that's on the
++always-visible counter), so this is purely trimming visual clutter, no
++behavior change.
++
++**DevTool: Gear Score override.** `EquipmentDef` gained an optional
++`gearScoreOverride?: number`, exposed in the DevTool's `equipment`
++schema as a plain number field. `HeroManager.gearScore()` now checks
++`def.gearScoreOverride ?? GEAR_SCORE_BY_RARITY[def.rarity]` per item
++instead of always the flat per-rarity table. Built for exactly the case
++described: a future higher-level raid (e.g. a level-60 raid) dropping
++"legendary" armour that should read as a bigger Gear Score jump than an
++ordinary legendary from earlier content, without inventing a new rarity
++tier just for that. Unset items are completely unaffected (falls back
++to the exact same flat table as before). Not touched: `GEAR_SCORE_MAX`
++(still `9 * GEAR_SCORE_BY_RARITY.legendary`, used for old max-possible-
++score math) and sell value/other rarity-derived numbers -- the ask was
++specifically Gear Score, so this stayed scoped to that one system rather
++than reworking what rarity means everywhere. `GearScoreBadge`'s own
++progress-bar math already clamps with `Math.min(1, ...)`, so an
++overridden score exceeding the old flat max won't visually overflow a
++bar -- confirmed by reading it, not by rendering it live.
++
++**Notification banner close button -- investigated, not changed.**
++Reread `NotificationBanner.tsx` end to end against this specific
++complaint. The dismiss logic already looks correct: `acknowledge()`
++calls `setShown(null)` (hiding the banner) before the
++`markNotificationsSeen()` side effect, matching a comment already in the
++file describing this exact symptom having been fixed once before; the
++close button's own `stopPropagation()` has nothing to conflict with
++(it's a sibling of the message button, not nested inside it); the CSS
++countdown bar is explicitly `pointer-events: none` for exactly this
++reason; and no other element's z-index sits between the banner's (55)
++and the click target. Did not find a bug to fix, so left the file
++untouched rather than making a change that wouldn't actually do
++anything. Needs more detail to make progress: does clicking the
++message body still correctly navigate and dismiss, with only the X
++failing? Or does nothing on the banner respond at that point? Worth
++double-checking against a freshly built copy too, in case this predates
++a fix already in the current code.
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 361ea3c..10536cb 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -1282,6 +1282,7 @@ export class GameEngine {
+     if (!hero || !item) return;
+     const error = EquipmentManager.equip(this.state, hero, item);
+     if (error) return this.say(error);
++    playSound('equip');
+     this.checkSetBonusMilestones(hero);
+     this.notify();
+     void this.saveNow();
+@@ -1371,6 +1372,7 @@ export class GameEngine {
+     if (!found) return;
+     const error = EquipmentManager.upgrade(this.state, found.item, this.state.guild.workshop ?? 0);
+     if (error) return this.say(error);
++    playSound('enhance');
+     this.say(`Refined to +${found.item.plus}.`);
+     void this.saveNow();
+   }
+@@ -1378,6 +1380,7 @@ export class GameEngine {
+   sellItem(itemUid: string) {
+     const error = ShopManager.sell(this.state, itemUid);
+     if (error) return this.say(error);
++    playSound('sell');
+     this.say('Sold.');
+     void this.saveNow();
+   }
+@@ -1390,7 +1393,7 @@ export class GameEngine {
+   sellJunk(maxRarity: Rarity) {
+     const { count, gold } = ShopManager.sellBelowRarity(this.state, maxRarity);
+     if (count === 0) return this.say('Nothing in the stash qualifies.');
+-    playSound('purchase');
++    playSound('sell');
+     this.say(`Sold ${count} item${count === 1 ? '' : 's'} for ${gold} gold.`);
+     void this.saveNow();
+   }
+@@ -1764,7 +1767,7 @@ export class GameEngine {
+   craftGear(recipeId: string, chosenMods: (keyof Modifiers)[]) {
+     const error = CraftingManager.craftGear(this.state, recipeId, chosenMods);
+     if (error) return this.say(error);
+-    playSound('purchase');
++    playSound('craft');
+     this.say('A new piece, built to spec, lands in the stash.', 'equipment');
+     void this.saveNow();
+   }
+@@ -1772,7 +1775,7 @@ export class GameEngine {
+   craftConsumable(recipeId: string, chosenMods: (keyof Modifiers)[] = []) {
+     const error = CraftingManager.craftConsumable(this.state, recipeId, chosenMods);
+     if (error) return this.say(error);
+-    playSound('purchase');
++    playSound('craft');
+     this.notify();
+     void this.saveNow();
+   }
+@@ -1780,7 +1783,7 @@ export class GameEngine {
+   enchantItem(recipeId: string, itemUid: string, chosenStats: (keyof Stats)[]) {
+     const error = CraftingManager.enchantItem(this.state, recipeId, itemUid, chosenStats);
+     if (error) return this.say(error);
+-    playSound('purchase');
++    playSound('enchant');
+     this.say('The Enchanter\u2019s work takes -- the piece carries it now.', 'equipment');
+     void this.saveNow();
+   }
+@@ -1788,7 +1791,7 @@ export class GameEngine {
+   craftGem(recipeId: string) {
+     const error = CraftingManager.craftGem(this.state, recipeId);
+     if (error) return this.say(error);
+-    playSound('purchase');
++    playSound('craft');
+     this.say('A new gem, ready for the Blacksmith\u2019s Infuse station.', 'vendors');
+     void this.saveNow();
+   }
+@@ -1798,6 +1801,7 @@ export class GameEngine {
+   scrapItem(itemUid: string) {
+     const error = ShopManager.scrapItem(this.state, itemUid);
+     if (error) return this.say(error);
++    playSound('scrap');
+     this.say('Broken down into scrap.', 'vendors');
+     void this.saveNow();
+   }
+@@ -1812,7 +1816,7 @@ export class GameEngine {
+   infuseItem(itemUid: string, element: ElementType) {
+     const error = CraftingManager.craftAndInfuse(this.state, itemUid, element);
+     if (error) return this.say(error);
+-    playSound('purchase');
++    playSound('infuse');
+     this.say('The infusion takes.', 'equipment');
+     void this.saveNow();
+   }
+@@ -1836,6 +1840,7 @@ export class GameEngine {
+   buyPerk(id: string) {
+     const error = PrestigeManager.buyPerk(this.state, id);
+     if (error) return this.say(error);
++    playSound('prestige_upgrade');
+     this.notify();
+     void this.saveNow();
+   }
+diff --git a/src/game/managers/HeroManager.ts b/src/game/managers/HeroManager.ts
+index 2d86cbc..431c324 100644
+--- a/src/game/managers/HeroManager.ts
++++ b/src/game/managers/HeroManager.ts
+@@ -108,12 +108,14 @@ export const HeroManager = {
+   },
+ 
+   /**
+-   * Sum of GEAR_SCORE_BY_RARITY across every equipped item. Deliberately
+-   * flat per tier (see GEAR_SCORE_BY_RARITY) rather than reading the item's
+-   * rolled stats -- this is a badge of "how well is this hero geared",
+-   * separate from and in addition to the combat-stat bonus gear already
+-   * grants via equipmentStats(). Broken/zero-durability items still count:
+-   * the badge represents what's equipped, not what's currently usable.
++   * Sum of GEAR_SCORE_BY_RARITY across every equipped item, UNLESS an
++   * item sets its own gearScoreOverride (see EquipmentDef's own comment
++   * for why that field exists) -- otherwise flat per tier rather than
++   * reading the item's rolled stats. This is a badge of "how well is
++   * this hero geared", separate from and in addition to the combat-stat
++   * bonus gear already grants via equipmentStats(). Broken/zero-
++   * durability items still count: the badge represents what's equipped,
++   * not what's currently usable.
+    */
+   gearScore(hero: Hero): number {
+     let total = 0;
+@@ -121,7 +123,7 @@ export const HeroManager = {
+       if (!item) continue;
+       const def = EQUIPMENT_BY_ID[item.defId];
+       if (!def) continue;
+-      total += GEAR_SCORE_BY_RARITY[def.rarity] ?? 0;
++      total += def.gearScoreOverride ?? GEAR_SCORE_BY_RARITY[def.rarity] ?? 0;
+     }
+     return total;
+   },
+diff --git a/src/game/sound.ts b/src/game/sound.ts
+index c6ed2d6..fb90322 100644
+--- a/src/game/sound.ts
++++ b/src/game/sound.ts
+@@ -12,7 +12,8 @@ import { SettingsStore } from './settings';
+ 
+ export type SoundCue =
+   | 'quest_success' | 'quest_fail' | 'level_up' | 'legendary_drop'
+-  | 'chain_complete' | 'purchase' | 'error' | 'depart' | 'achievement' | 'collect';
++  | 'chain_complete' | 'purchase' | 'error' | 'depart' | 'achievement' | 'collect'
++  | 'equip' | 'sell' | 'scrap' | 'craft' | 'enhance' | 'infuse' | 'enchant' | 'prestige_upgrade';
+ 
+ let ctx: AudioContext | null = null;
+ 
+@@ -93,6 +94,59 @@ const CUES: Record<SoundCue, Tone[]> = {
+     { freq: 1108.73, start: 0.04, duration: 0.06, type: 'triangle', gain: 0.32 },
+     { freq: 1318.51, start: 0.09, duration: 0.14, type: 'sine', gain: 0.38 },
+   ],
++  // A short, solid metallic snap -- gear settling into a slot, not a
++  // purchase. Previously equip() played nothing at all.
++  equip: [
++    { freq: 660, start: 0, duration: 0.03, type: 'square', gain: 0.28 },
++    { freq: 440, start: 0.025, duration: 0.07, type: 'triangle', gain: 0.32 },
++  ],
++  // Coin-drop, descending -- deliberately the mirror image of `purchase`
++  // (which rises) so selling and buying read as opposite actions by ear
++  // alone, not the same blip both ways.
++  sell: [
++    { freq: 900, start: 0, duration: 0.04, type: 'square', gain: 0.22 },
++    { freq: 700, start: 0.03, duration: 0.05, type: 'square', gain: 0.2 },
++  ],
++  // A dull, low crunch -- breaking an item down, not selling it whole.
++  scrap: [
++    { freq: 220, start: 0, duration: 0.05, type: 'square', gain: 0.3 },
++    { freq: 160, start: 0.04, duration: 0.09, type: 'square', gain: 0.28 },
++  ],
++  // A quick hammer-tap pair -- crafting something new at a station.
++  craft: [
++    { freq: 500, start: 0, duration: 0.03, type: 'square', gain: 0.3 },
++    { freq: 500, start: 0.06, duration: 0.03, type: 'square', gain: 0.3 },
++    { freq: 740, start: 0.12, duration: 0.1, type: 'triangle', gain: 0.35 },
++  ],
++  // A light ascending sparkle -- refining an item's +N, deliberately
++  // smaller/quicker than level_up's full fanfare since this happens far
++  // more often per session.
++  enhance: [
++    { freq: 587.33, start: 0, duration: 0.06, type: 'triangle', gain: 0.35 },
++    { freq: 880.0, start: 0.05, duration: 0.14, type: 'triangle', gain: 0.4 },
++  ],
++  // A short magical shimmer -- applying an elemental gem to gear.
++  infuse: [
++    { freq: 740, start: 0, duration: 0.08, type: 'sine', gain: 0.3 },
++    { freq: 988, start: 0.05, duration: 0.08, type: 'sine', gain: 0.32 },
++    { freq: 1245, start: 0.1, duration: 0.12, type: 'sine', gain: 0.34 },
++  ],
++  // A brighter, slightly slower twinkle than infuse -- rolling a stat
++  // enchant onto a piece, meant to feel distinct from (not identical to)
++  // the elemental-gem shimmer above even though both are "arcane."
++  enchant: [
++    { freq: 659.25, start: 0, duration: 0.07, type: 'sine', gain: 0.3 },
++    { freq: 987.77, start: 0.06, duration: 0.09, type: 'triangle', gain: 0.34 },
++    { freq: 1318.51, start: 0.14, duration: 0.16, type: 'sine', gain: 0.38 },
++  ],
++  // Spending Renown on a permanent perk -- weightier than a plain
++  // `purchase` blip (this is a much rarer, bigger-stakes spend), but
++  // shorter than achievement/level_up since it's not a milestone moment.
++  prestige_upgrade: [
++    { freq: 493.88, start: 0, duration: 0.08, type: 'triangle', gain: 0.4 },
++    { freq: 739.99, start: 0.07, duration: 0.1, type: 'triangle', gain: 0.42 },
++    { freq: 1108.73, start: 0.15, duration: 0.2, type: 'sine', gain: 0.45 },
++  ],
+ };
+ 
+ export function playSound(cue: SoundCue): void {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 9d2f07f..18f22eb 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -237,6 +237,17 @@ export interface EquipmentDef {
+    * the EquipmentItem itself, see customMods below, not the def.
+    */
+   craftable?: boolean;
++  /**
++   * Overrides HeroManager.gearScore's flat per-rarity value
++   * (GEAR_SCORE_BY_RARITY) for this specific item. Exists for cases
++   * where rarity alone doesn't capture how strong a piece actually is --
++   * e.g. a future high-level raid (say, a level-60 raid) dropping
++   * "legendary" armour that should read as a bigger Gear Score jump than
++   * an ordinary legendary from earlier content, without inventing a new
++   * rarity tier just for that. Optional; unset items fall back to the
++   * normal flat rarity table exactly as before.
++   */
++  gearScoreOverride?: number;
+ }
+ 
+ /** A concrete item the player owns. */
+diff --git a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+index f156be0..2d05ae4 100644
+--- a/src/ui/MenuWindow.tsx
++++ b/src/ui/MenuWindow.tsx
+@@ -1,5 +1,6 @@
+ import { useEffect, useState } from 'react';
+ import { useEngine } from './useEngine';
++import { useSettings } from './useSettings';
+ import { OnboardingTour } from './OnboardingTour';
+ import { ChainDiscoveryModal } from './ChainDiscoveryModal';
+ import { formatGold, formatNumber } from '../game/util';
+@@ -116,6 +117,7 @@ const ALL_TABS = TAB_GROUPS.flatMap((g) => g.tabs);
+ 
+ export function MenuWindow({ onClose }: { onClose: () => void }) {
+   const engine = useEngine();
++  const { settings, update } = useSettings();
+   const [tab, setTab] = useState<TabId>(() => (engine.consumeRequestedTab() as TabId) ?? 'dashboard');
+   const [onTop, setOnTop] = useState(true);
+ 
+@@ -190,6 +192,24 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+           </button>
+         </div>
+         <div className="spacer" />
++        {/* Quick mute -- same underlying settings as Settings -> Sound /
++            Settings -> Music (soundEnabled + musicEnabled together), just
++            reachable without leaving whatever tab you're on. Reflects
++            "is anything actually audible right now" (either one being on
++            counts as unmuted) and toggles both to the opposite of that
++            combined state -- a genuine master mute/unmute, not a third
++            independent setting to keep in sync with the other two. */}
++        <button
++          className="btn-ghost"
++          onClick={() => {
++            const next = !(settings.soundEnabled || settings.musicEnabled);
++            update('soundEnabled', next);
++            update('musicEnabled', next);
++          }}
++          title={settings.soundEnabled || settings.musicEnabled ? 'Mute all audio' : 'Unmute audio'}
++        >
++          {settings.soundEnabled || settings.musicEnabled ? '\ud83d\udd0a' : '\ud83d\udd07'}
++        </button>
+         <button
+           className="btn-ghost"
+           onClick={async () => {
+diff --git a/src/ui/PeddlerCardModal.tsx b/src/ui/PeddlerCardModal.tsx
+index 23ddade..d1f3f04 100644
+--- a/src/ui/PeddlerCardModal.tsx
++++ b/src/ui/PeddlerCardModal.tsx
+@@ -176,6 +176,16 @@ export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
+   // result summary) remain. Local UI sequencing, independent of the
+   // engine's own (instant) result resolution -- see the effect below.
+   const [revealStage, setRevealStage] = useState<'idle' | 'fading' | 'settled'>('idle');
++  // Grimsby's header sprite used to loop 'wave'/'approval' indefinitely --
++  // both are one-shot gestures (a wave hello, a nod of approval), not
++  // idle loops, so they should play once and settle back to 'idle'
++  // rather than repeating for as long as the modal happens to stay open.
++  // Two separate flags (not one) since a player can watch the wave
++  // finish, then still see the approval gesture play out fresh once a
++  // result comes in -- collapsing to a single "seenGesture" boolean would
++  // wrongly skip the second one.
++  const [waveDone, setWaveDone] = useState(false);
++  const [approvalDone, setApprovalDone] = useState(false);
+ 
+   const result = engine.lastGrimsbyResult;
+ 
+@@ -199,6 +209,9 @@ export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
+   };
+ 
+   const pickedCard = result?.cards[result.pickedIndex];
++  const headerAnimation = result
++    ? (approvalDone ? 'idle' : 'approval')
++    : (waveDone ? 'idle' : 'wave');
+ 
+   return (
+     <div className="overlay" onClick={handleClose}>
+@@ -208,7 +221,15 @@ export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
+         onClick={(e) => e.stopPropagation()}
+       >
+         <div className="peddler-modal-header">
+-          <GrimsbySprite animation={result ? 'approval' : 'wave'} height={160} />
++          <GrimsbySprite
++            animation={headerAnimation}
++            height={160}
++            once={headerAnimation !== 'idle'}
++            onComplete={() => {
++              if (headerAnimation === 'wave') setWaveDone(true);
++              else if (headerAnimation === 'approval') setApprovalDone(true);
++            }}
++          />
+         </div>
+ 
+         {/* Everything that varies by state lives in this one flex-centered
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 0cbac32..0b7c6c4 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -172,13 +172,13 @@ function ConsumableSlotCard({
+   );
+ }
+ 
+-/** A single worn-gear slot. Collapsed shows just the icon, name, and rarity
+- *  pill; clicking expands to the full mod breakdown, durability, and the
+- *  repair/remove actions -- same collapse-by-default pattern used on
+- *  the Quest Board and Lore tab. "Refine" (the +N upgrade, which also
+- *  raises the durability cap) now lives on the Blacksmith's own Enhance
+- *  station instead of a button here -- plain repair (restore to whatever
+- *  the cap already is, no cap increase) stays here as a quick action. */
++/** A single worn-gear slot. The collapsed card just shows icon, name, and
++ *  rarity pill; clicking opens the full mod breakdown, durability, and
++ *  the repair/remove actions in an overlay modal -- previously this
++ *  expanded in place, which read as the whole card jumping/resizing
++ *  when clicked. Same .overlay/.modal shape the shop item cards
++ *  (EquipmentShopCard/ConsumableShopCard) and PeddlerCardDetailOverlay
++ *  already use. */
+ function SlotCard({
+   slot, item, workshop, hero, engine,
+ }: { slot: EquipSlot; item: EquipmentItem | undefined; workshop: number; hero: Hero; engine: GameEngine }) {
+@@ -198,57 +198,70 @@ function SlotCard({
+   }
+ 
+   return (
+-    <div className={`item-card ${open ? 'open' : ''}`}>
++    <>
+       <div
+-        className="item-card-summary"
+-        onClick={() => setOpen((v) => !v)}
++        className="item-card"
++        onClick={() => setOpen(true)}
+         role="button"
+         tabIndex={0}
+-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
++        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
+       >
+-        <ItemIcon slot={def.slot} icon={def.icon} />
+-        <div className="item-card-body">
+-          <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
+-          <RarityPill rarity={def.rarity} />
+-          {item.customMods && <CraftedPill />}
+-          <DurabilityBar item={item} compact />
++        <div className="item-card-summary">
++          <ItemIcon slot={def.slot} icon={def.icon} />
++          <div className="item-card-body">
++            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
++            <RarityPill rarity={def.rarity} />
++            {item.customMods && <CraftedPill />}
++            <DurabilityBar item={item} compact />
++          </div>
+         </div>
+       </div>
++
+       {open && (
+-        <div className="item-card-details">
+-          <div className="tiny muted">{slot} · requires level {def.reqLevel}</div>
+-          <div className="tiny muted" style={{ marginTop: 2 }}>{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
+-          {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
+-            <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
+-          )}
+-          {/* The bar itself is already always visible in the collapsed
+-              summary above (compact mode) -- just the exact number here,
+-              not a second copy of the same bar. */}
+-          <div className="tiny muted" style={{ marginTop: 4 }}>
+-            {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+-          </div>
+-          <div className="row wrap" style={{ marginTop: 6 }}>
+-            <button
+-              style={{ minHeight: 24, padding: '3px 6px' }}
+-              onClick={() => engine.repair(item.uid)}
+-              disabled={EquipmentManager.repairCost(item, workshop) === 0}
+-            >
+-              Repair {formatGold(EquipmentManager.repairCost(item, workshop))}
+-            </button>
+-            <button
+-              style={{ minHeight: 24, padding: '3px 6px' }}
+-              onClick={() => engine.unequip(hero.id, slot)}
+-            >
+-              Remove
+-            </button>
++        <div className="overlay" onClick={() => setOpen(false)}>
++          <div className="modal" onClick={(e) => e.stopPropagation()}>
++            <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
++              <ItemIcon slot={def.slot} icon={def.icon} size={48} />
++              <div>
++                <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>
++                  {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
++                </span>
++                <div className="tiny muted">{slot} · requires level {def.reqLevel}</div>
++              </div>
++            </div>
++            <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
++              <RarityPill rarity={def.rarity} />
++              {item.customMods && <CraftedPill />}
++            </div>
++            <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
++            {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
++              <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
++            )}
++            <div className="tiny muted" style={{ marginTop: 4 }}>
++              {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
++            </div>
++            <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
++              <button onClick={() => setOpen(false)}>Close</button>
++              <button
++                disabled={EquipmentManager.repairCost(item, workshop) === 0}
++                onClick={() => { engine.repair(item.uid); setOpen(false); }}
++              >
++                Repair {formatGold(EquipmentManager.repairCost(item, workshop))}
++              </button>
++              <button onClick={() => { engine.unequip(hero.id, slot); setOpen(false); }}>
++                Remove
++              </button>
++            </div>
+           </div>
+         </div>
+       )}
+-    </div>
++    </>
+   );
+ }
+ 
+ /** A single stash item, same collapsed-card pattern as SlotCard. */
++/** A single stash item -- same overlay-modal treatment as SlotCard above,
++ *  replacing the previous inline expand. */
+ function StashCard({
+   item, hero, confirmSell, engine,
+ }: { item: EquipmentItem; hero: Hero; confirmSell: boolean; engine: GameEngine }) {
+@@ -258,52 +271,70 @@ function StashCard({
+   const canEquip = EquipmentManager.canEquip(hero, item);
+ 
+   return (
+-    <div className={`item-card ${open ? 'open' : ''}`}>
++    <>
+       <div
+-        className="item-card-summary"
+-        onClick={() => setOpen((v) => !v)}
++        className="item-card"
++        onClick={() => setOpen(true)}
+         role="button"
+         tabIndex={0}
+-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
++        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
+       >
+-        <ItemIcon slot={def.slot} icon={def.icon} />
+-        <div className="item-card-body">
+-          <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
+-          <RarityPill rarity={def.rarity} />
+-          {item.customMods && <CraftedPill />}
+-          <DurabilityBar item={item} compact />
++        <div className="item-card-summary">
++          <ItemIcon slot={def.slot} icon={def.icon} />
++          <div className="item-card-body">
++            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
++            <RarityPill rarity={def.rarity} />
++            {item.customMods && <CraftedPill />}
++            <DurabilityBar item={item} compact />
++          </div>
+         </div>
+       </div>
++
+       {open && (
+-        <div className="item-card-details">
+-          <div className="tiny muted">{def.slot} · requires level {def.reqLevel}</div>
+-          <div className="tiny muted" style={{ marginTop: 2 }}>{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
+-          {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
+-            <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
+-          )}
+-          <div className="tiny muted" style={{ marginTop: 4 }}>
+-            {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+-          </div>
+-          <div className="row wrap" style={{ marginTop: 6 }}>
+-            <button
+-              className="btn-primary"
+-              style={{ minHeight: 26 }}
+-              disabled={!canEquip.ok}
+-              onClick={() => engine.equip(hero.id, item.uid)}
+-              title={canEquip.reason}
+-            >
+-              Equip on {hero.name}
+-            </button>
+-            <button
+-              style={{ minHeight: 26 }}
+-              onClick={() => { if (!confirmSell || confirm('Sell this item?')) engine.sellItem(item.uid); }}
+-            >
+-              Sell {formatGold(EquipmentManager.sellValue(item))}
+-            </button>
++        <div className="overlay" onClick={() => setOpen(false)}>
++          <div className="modal" onClick={(e) => e.stopPropagation()}>
++            <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
++              <ItemIcon slot={def.slot} icon={def.icon} size={48} />
++              <div>
++                <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>
++                  {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
++                </span>
++                <div className="tiny muted">{def.slot} · requires level {def.reqLevel}</div>
++              </div>
++            </div>
++            <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
++              <RarityPill rarity={def.rarity} />
++              {item.customMods && <CraftedPill />}
++            </div>
++            <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
++            {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
++              <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
++            )}
++            <div className="tiny muted" style={{ marginTop: 4 }}>
++              {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
++            </div>
++            <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
++              <button onClick={() => setOpen(false)}>Close</button>
++              <button
++                className="btn-primary"
++                disabled={!canEquip.ok}
++                onClick={() => { engine.equip(hero.id, item.uid); setOpen(false); }}
++                title={canEquip.reason}
++              >
++                Equip on {hero.name}
++              </button>
++              <button
++                onClick={() => {
++                  if (!confirmSell || confirm('Sell this item?')) { engine.sellItem(item.uid); setOpen(false); }
++                }}
++              >
++                Sell {formatGold(EquipmentManager.sellValue(item))}
++              </button>
++            </div>
+           </div>
+         </div>
+       )}
+-    </div>
++    </>
+   );
+ }
+ 
+diff --git a/src/ui/panels/HarvestPanel.tsx b/src/ui/panels/HarvestPanel.tsx
+index e167a9b..ae014cd 100644
+--- a/src/ui/panels/HarvestPanel.tsx
++++ b/src/ui/panels/HarvestPanel.tsx
+@@ -35,18 +35,17 @@ function spawnPositionPercent(spawnedAt: number, nodeId: MaterialId): number {
+   return laneStart + padding + frac * (laneWidth - padding * 2);
+ }
+ 
+-// Five little "+ Ore!" pings per catch, purely a visual flourish -- none of
+-// them carry the actual gained amount anymore (see the burst render below
+-// for why: showing a fraction of the real total on every single one of
+-// several particles read as if that fraction had been gained several times
+-// over, when only one lot was ever actually caught). The real number lives
+-// solely in the counter above, via useCountUpDisplay.
++// Two little "+ Ore!" pings per catch (was five, cut down per direct
++// feedback that a single catch spawned too much "+item" text at once),
++// purely a visual flourish -- none of them carry the actual gained
++// amount anymore (see the burst render below for why: showing a
++// fraction of the real total on every single one of several particles
++// read as if that fraction had been gained several times over, when
++// only one lot was ever actually caught). The real number lives solely
++// in the counter above, via useCountUpDisplay.
+ const BURST_PARTICLES = [
+-  { dx: -24, dy: -66, rot: -14, delay: 0 },
+-  { dx: -8, dy: -86, rot: -4, delay: 60 },
+-  { dx: 10, dy: -92, rot: 8, delay: 120 },
+-  { dx: 26, dy: -78, rot: 16, delay: 180 },
+-  { dx: 34, dy: -54, rot: 22, delay: 240 },
++  { dx: -18, dy: -70, rot: -10, delay: 0 },
++  { dx: 20, dy: -84, rot: 12, delay: 90 },
+ ];
+ 
+ /**
+diff --git a/src/ui/panels/PeddlerPanel.tsx b/src/ui/panels/PeddlerPanel.tsx
+index 244119b..1c0c23e 100644
+--- a/src/ui/panels/PeddlerPanel.tsx
++++ b/src/ui/panels/PeddlerPanel.tsx
+@@ -55,7 +55,7 @@ export function PeddlerPanel() {
+                 </p>
+                 <div className="row" style={{ gap: 8 }}>
+                   <button
+-                    className="btn-primary"
++                    className="btn-purple"
+                     disabled={!canAfford}
+                     onClick={() => setShowModal(true)}
+                     title={canAfford ? undefined : 'Not enough gold'}
+diff --git a/src/ui/panels/PrestigePanel.tsx b/src/ui/panels/PrestigePanel.tsx
+index 9d6d4ef..a823e45 100644
+--- a/src/ui/panels/PrestigePanel.tsx
++++ b/src/ui/panels/PrestigePanel.tsx
+@@ -6,6 +6,124 @@ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { PRESTIGE_MIN_LEVEL, PRESTIGE_STREAK_WINDOW_MS, renownEffectiveMaxLevel } from '../../game/data/progression';
+ import { describeMods, formatDuration, formatNumber } from '../../game/util';
+ import { usePulsesOnChange } from '../maxFlash';
++import { Hero } from '../../game/types';
++
++/**
++ * Replaces the native browser confirm() previously used for both Retire
++ * and Early Retire -- a plain OS dialog box read as visually broken next
++ * to everything else in this game having its own themed chrome ("card is
++ * unstyled" was the actual feedback). Same .overlay/.modal shape every
++ * other in-game confirmation/detail popup already uses (PeddlerCard's
++ * detail overlay, the Vendors shop item modals). `tone` picks which
++ * button color signals the stakes: 'primary' (brass) for the real
++ * Retire, which is a genuine reward; 'ghost' (plain) for Early Retire,
++ * which gives up the renown/streak entirely and shouldn't look inviting.
++ */
++function RetireConfirmModal({
++  title, body, confirmLabel, tone, onConfirm, onCancel,
++}: {
++  title: string; body: string; confirmLabel: string; tone: 'primary' | 'ghost';
++  onConfirm: () => void; onCancel: () => void;
++}) {
++  return (
++    <div className="overlay" onClick={onCancel}>
++      <div className="modal" onClick={(e) => e.stopPropagation()}>
++        <h3 style={{ marginTop: 0 }}>{title}</h3>
++        <p className="small muted">{body}</p>
++        <div className="row end" style={{ gap: 8, marginTop: 12 }}>
++          <button onClick={onCancel}>Cancel</button>
++          <button className={tone === 'primary' ? 'btn-primary' : 'btn-ghost'} onClick={onConfirm}>
++            {confirmLabel}
++          </button>
++        </div>
++      </div>
++    </div>
++  );
++}
++
++/** One hero's retire row -- owns its own confirm-modal visibility (which
++ *  of Retire/Early Retire, if either, is currently confirming) rather
++ *  than PrestigePanel tracking that per-hero itself. */
++function HeroRetireCard({
++  hero, state, now, confirmRetire, justRetired, onRetire, onEarlyRetire,
++}: {
++  hero: Hero;
++  state: Parameters<typeof PrestigeManager.streakPreview>[0];
++  now: number;
++  confirmRetire: boolean;
++  justRetired: { heroId: string; amount: number; key: number } | null;
++  onRetire: (heroId: string, amount: number) => void;
++  onEarlyRetire: (heroId: string) => void;
++}) {
++  const [confirming, setConfirming] = useState<'retire' | 'early' | null>(null);
++  const eligible = PrestigeManager.canRetire(hero);
++  const preview = PrestigeManager.streakPreview(state, hero, now);
++  const rank = PrestigeManager.rankFor(hero);
++
++  const doRetire = () => { setConfirming(null); onRetire(hero.id, preview.total); };
++  const doEarlyRetire = () => { setConfirming(null); onEarlyRetire(hero.id); };
++
++  return (
++    <div className="spread card" style={{ position: 'relative' }}>
++      {justRetired?.heroId === hero.id && (
++        <span key={justRetired.key} className="retire-burst" aria-hidden="true">
++          +{justRetired.amount} ✦
++        </span>
++      )}
++      <div>
++        <div className="card-title">
++          {rank && <span className="hero-title">{rank}</span>}
++          {hero.name}
++          {hero.ascension > 0 && <span className="tiny muted" style={{ marginLeft: 6 }}>ascended ×{hero.ascension}</span>}
++        </div>
++        <div className="tiny muted">
++          Level {hero.level} · {hero.questsCompleted} quests · would grant{' '}
++          <b className="gold-text">✦ {formatNumber(preview.total)}</b>
++          {preview.bonusPct > 0 && <span> (base {PrestigeManager.renownPreview(hero)} + streak {preview.bonusPct}%)</span>}
++        </div>
++      </div>
++      <div className="row" style={{ gap: 6 }}>
++        <button
++          className="btn-primary"
++          disabled={!eligible}
++          onClick={() => { if (confirmRetire) setConfirming('retire'); else doRetire(); }}
++        >
++          {eligible ? 'Retire' : `Needs level ${PRESTIGE_MIN_LEVEL}`}
++        </button>
++        {/* Only offered before a hero actually qualifies for a real
++            Retire -- once eligible, early retirement is strictly
++            worse (same freed slot, nothing gained), so there's
++            nothing left for this to usefully offer. */}
++        {!eligible && PrestigeManager.canEarlyRetire(hero) && (
++          <button className="btn-ghost" onClick={() => setConfirming('early')}>
++            Early Retire
++          </button>
++        )}
++      </div>
++
++      {confirming === 'retire' && (
++        <RetireConfirmModal
++          title={`Retire ${hero.name}?`}
++          body={`They return to level 1 and the guild gains ${formatNumber(preview.total)} renown. This can't be undone.`}
++          confirmLabel="Retire"
++          tone="primary"
++          onConfirm={doRetire}
++          onCancel={() => setConfirming(null)}
++        />
++      )}
++      {confirming === 'early' && (
++        <RetireConfirmModal
++          title={`Early-retire ${hero.name}?`}
++          body={`No renown, no bonus -- this just frees the slot right now instead of waiting for level ${PRESTIGE_MIN_LEVEL}.`}
++          confirmLabel="Early Retire"
++          tone="ghost"
++          onConfirm={doEarlyRetire}
++          onCancel={() => setConfirming(null)}
++        />
++      )}
++    </div>
++  );
++}
+ 
+ export function PrestigePanel() {
+   const engine = useEngine();
+@@ -74,64 +192,22 @@ export function PrestigePanel() {
+       </div>
+ 
+       <div className="section-heading">Retire a hero</div>
+-      {state.heroes.map((hero) => {
+-        const eligible = PrestigeManager.canRetire(hero);
+-        const preview = PrestigeManager.streakPreview(state, hero, now);
+-        const rank = PrestigeManager.rankFor(hero);
+-        return (
+-          <div key={hero.id} className="spread card" style={{ position: 'relative' }}>
+-            {justRetired?.heroId === hero.id && (
+-              <span key={justRetired.key} className="retire-burst" aria-hidden="true">
+-                +{justRetired.amount} ✦
+-              </span>
+-            )}
+-            <div>
+-              <div className="card-title">
+-                {rank && <span className="hero-title">{rank}</span>}
+-                {hero.name}
+-                {hero.ascension > 0 && <span className="tiny muted" style={{ marginLeft: 6 }}>ascended ×{hero.ascension}</span>}
+-              </div>
+-              <div className="tiny muted">
+-                Level {hero.level} · {hero.questsCompleted} quests · would grant{' '}
+-                <b className="gold-text">✦ {formatNumber(preview.total)}</b>
+-                {preview.bonusPct > 0 && <span> (base {PrestigeManager.renownPreview(hero)} + streak {preview.bonusPct}%)</span>}
+-              </div>
+-            </div>
+-            <div className="row" style={{ gap: 6 }}>
+-              <button
+-                className="btn-primary"
+-                disabled={!eligible}
+-                onClick={() => {
+-                  if (!settings.confirmRetire
+-                    || confirm(`Retire ${hero.name}? They return to level 1 and the guild gains ${formatNumber(preview.total)} renown.`)) {
+-                    setJustRetired({ heroId: hero.id, amount: preview.total, key: Date.now() });
+-                    window.setTimeout(() => setJustRetired(null), 2200);
+-                    engine.retire(hero.id);
+-                  }
+-                }}
+-              >
+-                {eligible ? 'Retire' : `Needs level ${PRESTIGE_MIN_LEVEL}`}
+-              </button>
+-              {/* Only offered before a hero actually qualifies for a real
+-                  Retire -- once eligible, early retirement is strictly
+-                  worse (same freed slot, nothing gained), so there's
+-                  nothing left for this to usefully offer. */}
+-              {!eligible && PrestigeManager.canEarlyRetire(hero) && (
+-                <button
+-                  className="btn-ghost"
+-                  onClick={() => {
+-                    if (confirm(`Early-retire ${hero.name}? No renown, no bonus -- this just frees the slot right now instead of waiting for level ${PRESTIGE_MIN_LEVEL}.`)) {
+-                      engine.earlyRetire(hero.id);
+-                    }
+-                  }}
+-                >
+-                  Early Retire
+-                </button>
+-              )}
+-            </div>
+-          </div>
+-        );
+-      })}
++      {state.heroes.map((hero) => (
++        <HeroRetireCard
++          key={hero.id}
++          hero={hero}
++          state={state}
++          now={now}
++          confirmRetire={settings.confirmRetire}
++          justRetired={justRetired}
++          onRetire={(heroId, amount) => {
++            setJustRetired({ heroId, amount, key: Date.now() });
++            window.setTimeout(() => setJustRetired(null), 2200);
++            engine.retire(heroId);
++          }}
++          onEarlyRetire={(heroId) => engine.earlyRetire(heroId)}
++        />
++      ))}
+ 
+       <div className="section-heading">Spend renown</div>
+       <div className="grid two">
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index 1cd9e98..1ba26bf 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -282,8 +282,8 @@ function SuppliesStock() {
+           <ConsumableShopCard
+             key={entry.defId}
+             def={CONSUMABLE_BY_ID[entry.defId]}
+-            canAfford={state.gold >= (CONSUMABLE_BY_ID[entry.defId]?.cost ?? Infinity)}
+-            onBuy={() => engine.buyConsumable(entry.defId)}
++            canAfford={(amount) => state.gold >= (CONSUMABLE_BY_ID[entry.defId]?.cost ?? Infinity) * amount}
++            onBuy={(amount) => engine.buyConsumable(entry.defId, amount)}
+           />
+         ))}
+       </div>
+@@ -387,7 +387,7 @@ function EquipmentShopCard({
+ function ConsumableShopCard({
+   def, canAfford, onBuy,
+ }: {
+-  def: ConsumableDef | undefined; canAfford: boolean; onBuy: () => void;
++  def: ConsumableDef | undefined; canAfford: (amount: number) => boolean; onBuy: (amount: number) => void;
+ }) {
+   const [showModal, setShowModal] = useState(false);
+   if (!def) return null;
+@@ -421,9 +421,17 @@ function ConsumableShopCard({
+             <p className="card-flavour">{def.description}</p>
+             <div className="row end" style={{ gap: 8, marginTop: 8 }}>
+               <button onClick={() => setShowModal(false)}>Close</button>
+-              <button className="btn-primary" disabled={!canAfford} onClick={() => { onBuy(); setShowModal(false); }}>
++              <button className="btn-primary" disabled={!canAfford(1)} onClick={() => { onBuy(1); setShowModal(false); }}>
+                 Buy · {formatGold(def.cost)}
+               </button>
++              {/* Alchemist stock (potions, charms) gets bought through
++                  repeatedly far more than gear does -- a x5 button here
++                  cuts five separate clicks (open modal, buy, close,
++                  repeat) down to one, on the item people actually stock
++                  up on. */}
++              <button className="btn-primary" disabled={!canAfford(5)} onClick={() => { onBuy(5); setShowModal(false); }}>
++                Buy ×5 · {formatGold(def.cost * 5)}
++              </button>
+             </div>
+           </div>
+         </div>
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index efa7149..3c2413e 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -160,6 +160,12 @@ const SCHEMAS = {
+       // rejects an entry for losing a field it didn't know about.
+       raidExclusive: { type: 'boolean', required: false },
+       craftable: { type: 'boolean', required: false },
++      // Overrides HeroManager.gearScore's flat per-rarity value for this
++      // item specifically -- for content where rarity alone undersells
++      // how strong a piece actually is, e.g. a future higher-level raid's
++      // "legendary" armour that should read as a bigger jump than an
++      // ordinary legendary. Leave unset for the normal flat-rarity score.
++      gearScoreOverride: { type: 'number', required: false },
+     },
+   },
+   'consumables': {

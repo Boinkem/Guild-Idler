@@ -282,8 +282,8 @@ function SuppliesStock() {
           <ConsumableShopCard
             key={entry.defId}
             def={CONSUMABLE_BY_ID[entry.defId]}
-            canAfford={state.gold >= (CONSUMABLE_BY_ID[entry.defId]?.cost ?? Infinity)}
-            onBuy={() => engine.buyConsumable(entry.defId)}
+            canAfford={(amount) => state.gold >= (CONSUMABLE_BY_ID[entry.defId]?.cost ?? Infinity) * amount}
+            onBuy={(amount) => engine.buyConsumable(entry.defId, amount)}
           />
         ))}
       </div>
@@ -387,7 +387,7 @@ function EquipmentShopCard({
 function ConsumableShopCard({
   def, canAfford, onBuy,
 }: {
-  def: ConsumableDef | undefined; canAfford: boolean; onBuy: () => void;
+  def: ConsumableDef | undefined; canAfford: (amount: number) => boolean; onBuy: (amount: number) => void;
 }) {
   const [showModal, setShowModal] = useState(false);
   if (!def) return null;
@@ -421,8 +421,16 @@ function ConsumableShopCard({
             <p className="card-flavour">{def.description}</p>
             <div className="row end" style={{ gap: 8, marginTop: 8 }}>
               <button onClick={() => setShowModal(false)}>Close</button>
-              <button className="btn-primary" disabled={!canAfford} onClick={() => { onBuy(); setShowModal(false); }}>
+              <button className="btn-primary" disabled={!canAfford(1)} onClick={() => { onBuy(1); setShowModal(false); }}>
                 Buy · {formatGold(def.cost)}
+              </button>
+              {/* Alchemist stock (potions, charms) gets bought through
+                  repeatedly far more than gear does -- a x5 button here
+                  cuts five separate clicks (open modal, buy, close,
+                  repeat) down to one, on the item people actually stock
+                  up on. */}
+              <button className="btn-primary" disabled={!canAfford(5)} onClick={() => { onBuy(5); setShowModal(false); }}>
+                Buy ×5 · {formatGold(def.cost * 5)}
               </button>
             </div>
           </div>

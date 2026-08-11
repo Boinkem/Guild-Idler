@@ -176,6 +176,16 @@ export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
   // result summary) remain. Local UI sequencing, independent of the
   // engine's own (instant) result resolution -- see the effect below.
   const [revealStage, setRevealStage] = useState<'idle' | 'fading' | 'settled'>('idle');
+  // Grimsby's header sprite used to loop 'wave'/'approval' indefinitely --
+  // both are one-shot gestures (a wave hello, a nod of approval), not
+  // idle loops, so they should play once and settle back to 'idle'
+  // rather than repeating for as long as the modal happens to stay open.
+  // Two separate flags (not one) since a player can watch the wave
+  // finish, then still see the approval gesture play out fresh once a
+  // result comes in -- collapsing to a single "seenGesture" boolean would
+  // wrongly skip the second one.
+  const [waveDone, setWaveDone] = useState(false);
+  const [approvalDone, setApprovalDone] = useState(false);
 
   const result = engine.lastGrimsbyResult;
 
@@ -199,6 +209,9 @@ export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
   };
 
   const pickedCard = result?.cards[result.pickedIndex];
+  const headerAnimation = result
+    ? (approvalDone ? 'idle' : 'approval')
+    : (waveDone ? 'idle' : 'wave');
 
   return (
     <div className="overlay" onClick={handleClose}>
@@ -208,7 +221,15 @@ export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="peddler-modal-header">
-          <GrimsbySprite animation={result ? 'approval' : 'wave'} height={160} />
+          <GrimsbySprite
+            animation={headerAnimation}
+            height={160}
+            once={headerAnimation !== 'idle'}
+            onComplete={() => {
+              if (headerAnimation === 'wave') setWaveDone(true);
+              else if (headerAnimation === 'approval') setApprovalDone(true);
+            }}
+          />
         </div>
 
         {/* Everything that varies by state lives in this one flex-centered

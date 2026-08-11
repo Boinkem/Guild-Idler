@@ -5147,3 +5147,124 @@ pass (same caveat as the two entries above).
   directly. Next step whenever that's ready: either compile these 6 (or
   however many the real idle loop uses) into one strip and drop it in,
   or send the strip directly for review.
+
+### Big feedback batch: audio, shop UX, gear score overrides, and several small polish items
+Wide-ranging playtest round covering audio feedback, buying UX, item
+detail UX, Grimsby polish, retire confirmations, a header mute button,
+Harvest particle count, and a DevTool content override. `npx tsc
+--noEmit` and `npm run build:web` both verified clean against a fresh
+clone; no live playtest available in this pass (no dev environment).
+
+**Audio feedback, filled in.** `sound.ts` gained 8 new distinct cues --
+`equip`, `sell`, `scrap`, `craft`, `enhance`, `infuse`, `enchant`,
+`prestige_upgrade` -- replacing a mix of "plays nothing" and "reuses the
+generic `purchase` blip for everything." Specifically:
+- **Previously silent, now play something**: `equip()` (`'equip'`),
+  `sellItem()` (`'sell'`), `scrapItem()` (`'scrap'`), `upgradeItem()` i.e.
+  the Blacksmith's Enhance station (`'enhance'`), `buyPerk()` i.e.
+  spending Renown on a Prestige perk (`'prestige_upgrade'`).
+- **Previously all shared the generic `'purchase'` cue, now distinct**:
+  `craftGear`/`craftConsumable`/`craftGem` -> `'craft'`; `enchantItem`
+  (the Enchanter's stat-roll recipes) -> `'enchant'`; `infuseItem` (which
+  covers BOTH Weapon Enchanting and Armour Infusion under one engine
+  method, per its own existing comment) -> `'infuse'`. `sellJunk` (bulk
+  sell) also moved off `'purchase'` onto the new `'sell'` cue, matching
+  `sellItem`.
+- Ordinary buying (`buyConsumable`, `buyShopEquipment`,
+  `buyBlackMarketEquipment`, `rerollShop`, vendor/upgrade purchases) is
+  untouched -- those are the cases `'purchase'` was actually named for
+  and still fits.
+
+**Buy ×5.** `ConsumableShopCard` (Vendors' consumable shop modal --
+Alchemist's own stock, but shared by any vendor selling consumables)
+gained a second button next to the existing Buy ×1: `InventoryManager
+.buy` already accepted an `amount` param, so this was purely a UI change
+-- `canAfford`/`onBuy` props widened from a plain boolean/callback to
+`(amount: number) => boolean`/`(amount: number) => void`.
+
+**Inventory items open a modal instead of expanding in place.**
+`SlotCard` (worn gear) and `StashCard` (stash) in `EquipmentPanel.tsx`
+both moved from inline `.item-card-details` expansion to a proper
+`.overlay`/`.modal` popup -- same shape the Vendors shop item cards and
+PeddlerCardDetailOverlay already use. **Scoped to gear specifically**:
+`ConsumableInfoCard` and `ConsumableSlotCard` (the consumables list and
+the per-hero consumable-equip picker, same file) were left as inline
+expand/pick UI -- converting a *selection* picker to a modal is a
+different UX shape than converting an *info* expand, and wasn't clearly
+what "clicking an item" was asking for. Worth flagging if that should
+change too.
+
+**Grimsby polish, three pieces:**
+- "Pick Your Card" button (`PeddlerPanel.tsx`) is now `btn-purple`
+  instead of `btn-primary` (brass/gold), matching the Vendors action-
+  button color (Crafting/Enhance/Scrap/etc. all already use
+  `btn-purple`).
+- Grimsby's header sprite in the card modal no longer loops `wave`/
+  `approval` indefinitely -- both are one-shot gestures now, playing
+  once via `GrimsbySprite`'s existing (previously unused here)
+  `once`/`onComplete` props and settling to `idle` once done. Two
+  separate "done" flags (`waveDone`/`approvalDone`), not one shared
+  flag, since a player should still see the fresh approval gesture play
+  out after the wave already finished, not have it skipped.
+
+**Retire / Early Retire confirmations, restyled.** Both previously used
+the native browser `confirm()` -- a plain OS dialog next to everything
+else in this game having its own themed chrome, which is almost
+certainly what "unstyled" was describing (there was no missing CSS
+class to find; the popup itself was never an in-game element).
+`PrestigePanel.tsx`'s hero row got pulled out into its own
+`HeroRetireCard` component (needed real per-hero state for which
+confirm, if either, is open) with a new shared `RetireConfirmModal` --
+same `.overlay`/`.modal` shape as everywhere else, brass `btn-primary`
+for the real Retire, plain `btn-ghost` for Early Retire so it doesn't
+look like the inviting option it isn't.
+
+**Header quick-mute.** A speaker button next to On Top / Back to
+Desktop in `MenuWindow.tsx`'s header -- 🔊/🔇, toggles `soundEnabled`
++ `musicEnabled` together (both settings already exist in Settings ->
+Sound / Settings -> Music; this is the same state, just reachable
+without leaving whatever tab you're on, not a third independent
+setting). Reflects "is anything audible right now" (either one on
+counts as unmuted) and flips both to the opposite of that.
+
+**Harvest catch-burst text, cut from 5 particles to 2.** `BURST_PARTICLES`
+in `HarvestPanel.tsx` -- a >50% reduction, matching "reduce by half at
+least." None of them ever carried the real gained amount (that's on the
+always-visible counter), so this is purely trimming visual clutter, no
+behavior change.
+
+**DevTool: Gear Score override.** `EquipmentDef` gained an optional
+`gearScoreOverride?: number`, exposed in the DevTool's `equipment`
+schema as a plain number field. `HeroManager.gearScore()` now checks
+`def.gearScoreOverride ?? GEAR_SCORE_BY_RARITY[def.rarity]` per item
+instead of always the flat per-rarity table. Built for exactly the case
+described: a future higher-level raid (e.g. a level-60 raid) dropping
+"legendary" armour that should read as a bigger Gear Score jump than an
+ordinary legendary from earlier content, without inventing a new rarity
+tier just for that. Unset items are completely unaffected (falls back
+to the exact same flat table as before). Not touched: `GEAR_SCORE_MAX`
+(still `9 * GEAR_SCORE_BY_RARITY.legendary`, used for old max-possible-
+score math) and sell value/other rarity-derived numbers -- the ask was
+specifically Gear Score, so this stayed scoped to that one system rather
+than reworking what rarity means everywhere. `GearScoreBadge`'s own
+progress-bar math already clamps with `Math.min(1, ...)`, so an
+overridden score exceeding the old flat max won't visually overflow a
+bar -- confirmed by reading it, not by rendering it live.
+
+**Notification banner close button -- investigated, not changed.**
+Reread `NotificationBanner.tsx` end to end against this specific
+complaint. The dismiss logic already looks correct: `acknowledge()`
+calls `setShown(null)` (hiding the banner) before the
+`markNotificationsSeen()` side effect, matching a comment already in the
+file describing this exact symptom having been fixed once before; the
+close button's own `stopPropagation()` has nothing to conflict with
+(it's a sibling of the message button, not nested inside it); the CSS
+countdown bar is explicitly `pointer-events: none` for exactly this
+reason; and no other element's z-index sits between the banner's (55)
+and the click target. Did not find a bug to fix, so left the file
+untouched rather than making a change that wouldn't actually do
+anything. Needs more detail to make progress: does clicking the
+message body still correctly navigate and dismiss, with only the X
+failing? Or does nothing on the banner respond at that point? Worth
+double-checking against a freshly built copy too, in case this predates
+a fix already in the current code.

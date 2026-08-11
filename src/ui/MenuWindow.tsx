@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useEngine } from './useEngine';
+import { useSettings } from './useSettings';
 import { OnboardingTour } from './OnboardingTour';
 import { ChainDiscoveryModal } from './ChainDiscoveryModal';
 import { formatGold, formatNumber } from '../game/util';
@@ -116,6 +117,7 @@ const ALL_TABS = TAB_GROUPS.flatMap((g) => g.tabs);
 
 export function MenuWindow({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
+  const { settings, update } = useSettings();
   const [tab, setTab] = useState<TabId>(() => (engine.consumeRequestedTab() as TabId) ?? 'dashboard');
   const [onTop, setOnTop] = useState(true);
 
@@ -190,6 +192,24 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="spacer" />
+        {/* Quick mute -- same underlying settings as Settings -> Sound /
+            Settings -> Music (soundEnabled + musicEnabled together), just
+            reachable without leaving whatever tab you're on. Reflects
+            "is anything actually audible right now" (either one being on
+            counts as unmuted) and toggles both to the opposite of that
+            combined state -- a genuine master mute/unmute, not a third
+            independent setting to keep in sync with the other two. */}
+        <button
+          className="btn-ghost"
+          onClick={() => {
+            const next = !(settings.soundEnabled || settings.musicEnabled);
+            update('soundEnabled', next);
+            update('musicEnabled', next);
+          }}
+          title={settings.soundEnabled || settings.musicEnabled ? 'Mute all audio' : 'Unmute audio'}
+        >
+          {settings.soundEnabled || settings.musicEnabled ? '\ud83d\udd0a' : '\ud83d\udd07'}
+        </button>
         <button
           className="btn-ghost"
           onClick={async () => {

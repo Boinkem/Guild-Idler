@@ -55,7 +55,7 @@ export function PeddlerPanel() {
                 </p>
                 <div className="row" style={{ gap: 8 }}>
                   <button
-                    className="btn-primary"
+                    className="btn-purple"
                     disabled={!canAfford}
                     onClick={() => setShowModal(true)}
                     title={canAfford ? undefined : 'Not enough gold'}

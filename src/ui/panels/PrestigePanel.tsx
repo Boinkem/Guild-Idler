@@ -6,6 +6,124 @@ import { ModifierManager } from '../../game/managers/ModifierManager';
 import { PRESTIGE_MIN_LEVEL, PRESTIGE_STREAK_WINDOW_MS, renownEffectiveMaxLevel } from '../../game/data/progression';
 import { describeMods, formatDuration, formatNumber } from '../../game/util';
 import { usePulsesOnChange } from '../maxFlash';
+import { Hero } from '../../game/types';
+
+/**
+ * Replaces the native browser confirm() previously used for both Retire
+ * and Early Retire -- a plain OS dialog box read as visually broken next
+ * to everything else in this game having its own themed chrome ("card is
+ * unstyled" was the actual feedback). Same .overlay/.modal shape every
+ * other in-game confirmation/detail popup already uses (PeddlerCard's
+ * detail overlay, the Vendors shop item modals). `tone` picks which
+ * button color signals the stakes: 'primary' (brass) for the real
+ * Retire, which is a genuine reward; 'ghost' (plain) for Early Retire,
+ * which gives up the renown/streak entirely and shouldn't look inviting.
+ */
+function RetireConfirmModal({
+  title, body, confirmLabel, tone, onConfirm, onCancel,
+}: {
+  title: string; body: string; confirmLabel: string; tone: 'primary' | 'ghost';
+  onConfirm: () => void; onCancel: () => void;
+}) {
+  return (
+    <div className="overlay" onClick={onCancel}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ marginTop: 0 }}>{title}</h3>
+        <p className="small muted">{body}</p>
+        <div className="row end" style={{ gap: 8, marginTop: 12 }}>
+          <button onClick={onCancel}>Cancel</button>
+          <button className={tone === 'primary' ? 'btn-primary' : 'btn-ghost'} onClick={onConfirm}>
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** One hero's retire row -- owns its own confirm-modal visibility (which
+ *  of Retire/Early Retire, if either, is currently confirming) rather
+ *  than PrestigePanel tracking that per-hero itself. */
+function HeroRetireCard({
+  hero, state, now, confirmRetire, justRetired, onRetire, onEarlyRetire,
+}: {
+  hero: Hero;
+  state: Parameters<typeof PrestigeManager.streakPreview>[0];
+  now: number;
+  confirmRetire: boolean;
+  justRetired: { heroId: string; amount: number; key: number } | null;
+  onRetire: (heroId: string, amount: number) => void;
+  onEarlyRetire: (heroId: string) => void;
+}) {
+  const [confirming, setConfirming] = useState<'retire' | 'early' | null>(null);
+  const eligible = PrestigeManager.canRetire(hero);
+  const preview = PrestigeManager.streakPreview(state, hero, now);
+  const rank = PrestigeManager.rankFor(hero);
+
+  const doRetire = () => { setConfirming(null); onRetire(hero.id, preview.total); };
+  const doEarlyRetire = () => { setConfirming(null); onEarlyRetire(hero.id); };
+
+  return (
+    <div className="spread card" style={{ position: 'relative' }}>
+      {justRetired?.heroId === hero.id && (
+        <span key={justRetired.key} className="retire-burst" aria-hidden="true">
+          +{justRetired.amount} ✦
+        </span>
+      )}
+      <div>
+        <div className="card-title">
+          {rank && <span className="hero-title">{rank}</span>}
+          {hero.name}
+          {hero.ascension > 0 && <span className="tiny muted" style={{ marginLeft: 6 }}>ascended ×{hero.ascension}</span>}
+        </div>
+        <div className="tiny muted">
+          Level {hero.level} · {hero.questsCompleted} quests · would grant{' '}
+          <b className="gold-text">✦ {formatNumber(preview.total)}</b>
+          {preview.bonusPct > 0 && <span> (base {PrestigeManager.renownPreview(hero)} + streak {preview.bonusPct}%)</span>}
+        </div>
+      </div>
+      <div className="row" style={{ gap: 6 }}>
+        <button
+          className="btn-primary"
+          disabled={!eligible}
+          onClick={() => { if (confirmRetire) setConfirming('retire'); else doRetire(); }}
+        >
+          {eligible ? 'Retire' : `Needs level ${PRESTIGE_MIN_LEVEL}`}
+        </button>
+        {/* Only offered before a hero actually qualifies for a real
+            Retire -- once eligible, early retirement is strictly
+            worse (same freed slot, nothing gained), so there's
+            nothing left for this to usefully offer. */}
+        {!eligible && PrestigeManager.canEarlyRetire(hero) && (
+          <button className="btn-ghost" onClick={() => setConfirming('early')}>
+            Early Retire
+          </button>
+        )}
+      </div>
+
+      {confirming === 'retire' && (
+        <RetireConfirmModal
+          title={`Retire ${hero.name}?`}
+          body={`They return to level 1 and the guild gains ${formatNumber(preview.total)} renown. This can't be undone.`}
+          confirmLabel="Retire"
+          tone="primary"
+          onConfirm={doRetire}
+          onCancel={() => setConfirming(null)}
+        />
+      )}
+      {confirming === 'early' && (
+        <RetireConfirmModal
+          title={`Early-retire ${hero.name}?`}
+          body={`No renown, no bonus -- this just frees the slot right now instead of waiting for level ${PRESTIGE_MIN_LEVEL}.`}
+          confirmLabel="Early Retire"
+          tone="ghost"
+          onConfirm={doEarlyRetire}
+          onCancel={() => setConfirming(null)}
+        />
+      )}
+    </div>
+  );
+}
 
 export function PrestigePanel() {
   const engine = useEngine();
@@ -74,64 +192,22 @@ export function PrestigePanel() {
       </div>
 
       <div className="section-heading">Retire a hero</div>
-      {state.heroes.map((hero) => {
-        const eligible = PrestigeManager.canRetire(hero);
-        const preview = PrestigeManager.streakPreview(state, hero, now);
-        const rank = PrestigeManager.rankFor(hero);
-        return (
-          <div key={hero.id} className="spread card" style={{ position: 'relative' }}>
-            {justRetired?.heroId === hero.id && (
-              <span key={justRetired.key} className="retire-burst" aria-hidden="true">
-                +{justRetired.amount} ✦
-              </span>
-            )}
-            <div>
-              <div className="card-title">
-                {rank && <span className="hero-title">{rank}</span>}
-                {hero.name}
-                {hero.ascension > 0 && <span className="tiny muted" style={{ marginLeft: 6 }}>ascended ×{hero.ascension}</span>}
-              </div>
-              <div className="tiny muted">
-                Level {hero.level} · {hero.questsCompleted} quests · would grant{' '}
-                <b className="gold-text">✦ {formatNumber(preview.total)}</b>
-                {preview.bonusPct > 0 && <span> (base {PrestigeManager.renownPreview(hero)} + streak {preview.bonusPct}%)</span>}
-              </div>
-            </div>
-            <div className="row" style={{ gap: 6 }}>
-              <button
-                className="btn-primary"
-                disabled={!eligible}
-                onClick={() => {
-                  if (!settings.confirmRetire
-                    || confirm(`Retire ${hero.name}? They return to level 1 and the guild gains ${formatNumber(preview.total)} renown.`)) {
-                    setJustRetired({ heroId: hero.id, amount: preview.total, key: Date.now() });
-                    window.setTimeout(() => setJustRetired(null), 2200);
-                    engine.retire(hero.id);
-                  }
-                }}
-              >
-                {eligible ? 'Retire' : `Needs level ${PRESTIGE_MIN_LEVEL}`}
-              </button>
-              {/* Only offered before a hero actually qualifies for a real
-                  Retire -- once eligible, early retirement is strictly
-                  worse (same freed slot, nothing gained), so there's
-                  nothing left for this to usefully offer. */}
-              {!eligible && PrestigeManager.canEarlyRetire(hero) && (
-                <button
-                  className="btn-ghost"
-                  onClick={() => {
-                    if (confirm(`Early-retire ${hero.name}? No renown, no bonus -- this just frees the slot right now instead of waiting for level ${PRESTIGE_MIN_LEVEL}.`)) {
-                      engine.earlyRetire(hero.id);
-                    }
-                  }}
-                >
-                  Early Retire
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      })}
+      {state.heroes.map((hero) => (
+        <HeroRetireCard
+          key={hero.id}
+          hero={hero}
+          state={state}
+          now={now}
+          confirmRetire={settings.confirmRetire}
+          justRetired={justRetired}
+          onRetire={(heroId, amount) => {
+            setJustRetired({ heroId, amount, key: Date.now() });
+            window.setTimeout(() => setJustRetired(null), 2200);
+            engine.retire(heroId);
+          }}
+          onEarlyRetire={(heroId) => engine.earlyRetire(heroId)}
+        />
+      ))}
 
       <div className="section-heading">Spend renown</div>
       <div className="grid two">

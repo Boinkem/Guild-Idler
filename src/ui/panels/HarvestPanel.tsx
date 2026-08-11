@@ -35,18 +35,17 @@ function spawnPositionPercent(spawnedAt: number, nodeId: MaterialId): number {
   return laneStart + padding + frac * (laneWidth - padding * 2);
 }
 
-// Five little "+ Ore!" pings per catch, purely a visual flourish -- none of
-// them carry the actual gained amount anymore (see the burst render below
-// for why: showing a fraction of the real total on every single one of
-// several particles read as if that fraction had been gained several times
-// over, when only one lot was ever actually caught). The real number lives
-// solely in the counter above, via useCountUpDisplay.
+// Two little "+ Ore!" pings per catch (was five, cut down per direct
+// feedback that a single catch spawned too much "+item" text at once),
+// purely a visual flourish -- none of them carry the actual gained
+// amount anymore (see the burst render below for why: showing a
+// fraction of the real total on every single one of several particles
+// read as if that fraction had been gained several times over, when
+// only one lot was ever actually caught). The real number lives solely
+// in the counter above, via useCountUpDisplay.
 const BURST_PARTICLES = [
-  { dx: -24, dy: -66, rot: -14, delay: 0 },
-  { dx: -8, dy: -86, rot: -4, delay: 60 },
-  { dx: 10, dy: -92, rot: 8, delay: 120 },
-  { dx: 26, dy: -78, rot: 16, delay: 180 },
-  { dx: 34, dy: -54, rot: 22, delay: 240 },
+  { dx: -18, dy: -70, rot: -10, delay: 0 },
+  { dx: 20, dy: -84, rot: 12, delay: 90 },
 ];
 
 /**

@@ -160,6 +160,12 @@ const SCHEMAS = {
       // rejects an entry for losing a field it didn't know about.
       raidExclusive: { type: 'boolean', required: false },
       craftable: { type: 'boolean', required: false },
+      // Overrides HeroManager.gearScore's flat per-rarity value for this
+      // item specifically -- for content where rarity alone undersells
+      // how strong a piece actually is, e.g. a future higher-level raid's
+      // "legendary" armour that should read as a bigger jump than an
+      // ordinary legendary. Leave unset for the normal flat-rarity score.
+      gearScoreOverride: { type: 'number', required: false },
     },
   },
   'consumables': {

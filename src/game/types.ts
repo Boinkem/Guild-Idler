@@ -237,6 +237,17 @@ export interface EquipmentDef {
    * the EquipmentItem itself, see customMods below, not the def.
    */
   craftable?: boolean;
+  /**
+   * Overrides HeroManager.gearScore's flat per-rarity value
+   * (GEAR_SCORE_BY_RARITY) for this specific item. Exists for cases
+   * where rarity alone doesn't capture how strong a piece actually is --
+   * e.g. a future high-level raid (say, a level-60 raid) dropping
+   * "legendary" armour that should read as a bigger Gear Score jump than
+   * an ordinary legendary from earlier content, without inventing a new
+   * rarity tier just for that. Optional; unset items fall back to the
+   * normal flat rarity table exactly as before.
+   */
+  gearScoreOverride?: number;
 }
 
 /** A concrete item the player owns. */

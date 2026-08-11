@@ -1282,6 +1282,7 @@ export class GameEngine {
     if (!hero || !item) return;
     const error = EquipmentManager.equip(this.state, hero, item);
     if (error) return this.say(error);
+    playSound('equip');
     this.checkSetBonusMilestones(hero);
     this.notify();
     void this.saveNow();
@@ -1371,6 +1372,7 @@ export class GameEngine {
     if (!found) return;
     const error = EquipmentManager.upgrade(this.state, found.item, this.state.guild.workshop ?? 0);
     if (error) return this.say(error);
+    playSound('enhance');
     this.say(`Refined to +${found.item.plus}.`);
     void this.saveNow();
   }
@@ -1378,6 +1380,7 @@ export class GameEngine {
   sellItem(itemUid: string) {
     const error = ShopManager.sell(this.state, itemUid);
     if (error) return this.say(error);
+    playSound('sell');
     this.say('Sold.');
     void this.saveNow();
   }
@@ -1390,7 +1393,7 @@ export class GameEngine {
   sellJunk(maxRarity: Rarity) {
     const { count, gold } = ShopManager.sellBelowRarity(this.state, maxRarity);
     if (count === 0) return this.say('Nothing in the stash qualifies.');
-    playSound('purchase');
+    playSound('sell');
     this.say(`Sold ${count} item${count === 1 ? '' : 's'} for ${gold} gold.`);
     void this.saveNow();
   }
@@ -1764,7 +1767,7 @@ export class GameEngine {
   craftGear(recipeId: string, chosenMods: (keyof Modifiers)[]) {
     const error = CraftingManager.craftGear(this.state, recipeId, chosenMods);
     if (error) return this.say(error);
-    playSound('purchase');
+    playSound('craft');
     this.say('A new piece, built to spec, lands in the stash.', 'equipment');
     void this.saveNow();
   }
@@ -1772,7 +1775,7 @@ export class GameEngine {
   craftConsumable(recipeId: string, chosenMods: (keyof Modifiers)[] = []) {
     const error = CraftingManager.craftConsumable(this.state, recipeId, chosenMods);
     if (error) return this.say(error);
-    playSound('purchase');
+    playSound('craft');
     this.notify();
     void this.saveNow();
   }
@@ -1780,7 +1783,7 @@ export class GameEngine {
   enchantItem(recipeId: string, itemUid: string, chosenStats: (keyof Stats)[]) {
     const error = CraftingManager.enchantItem(this.state, recipeId, itemUid, chosenStats);
     if (error) return this.say(error);
-    playSound('purchase');
+    playSound('enchant');
     this.say('The Enchanter\u2019s work takes -- the piece carries it now.', 'equipment');
     void this.saveNow();
   }
@@ -1788,7 +1791,7 @@ export class GameEngine {
   craftGem(recipeId: string) {
     const error = CraftingManager.craftGem(this.state, recipeId);
     if (error) return this.say(error);
-    playSound('purchase');
+    playSound('craft');
     this.say('A new gem, ready for the Blacksmith\u2019s Infuse station.', 'vendors');
     void this.saveNow();
   }
@@ -1798,6 +1801,7 @@ export class GameEngine {
   scrapItem(itemUid: string) {
     const error = ShopManager.scrapItem(this.state, itemUid);
     if (error) return this.say(error);
+    playSound('scrap');
     this.say('Broken down into scrap.', 'vendors');
     void this.saveNow();
   }
@@ -1812,7 +1816,7 @@ export class GameEngine {
   infuseItem(itemUid: string, element: ElementType) {
     const error = CraftingManager.craftAndInfuse(this.state, itemUid, element);
     if (error) return this.say(error);
-    playSound('purchase');
+    playSound('infuse');
     this.say('The infusion takes.', 'equipment');
     void this.saveNow();
   }
@@ -1836,6 +1840,7 @@ export class GameEngine {
   buyPerk(id: string) {
     const error = PrestigeManager.buyPerk(this.state, id);
     if (error) return this.say(error);
+    playSound('prestige_upgrade');
     this.notify();
     void this.saveNow();
   }
