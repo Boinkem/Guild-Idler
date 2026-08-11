@@ -513,6 +513,7 @@ export const QuestManager = {
       injuryResist: loadout.preventInjury ? 100 : mods.injuryResist,
       consumables,
       guaranteedGoodEvent: loadout.guaranteedGoodEvent,
+      healthDamageReduction: loadout.healthDamageReduction,
     };
 
     for (const id of consumables) InventoryManager.remove(state, id);
@@ -657,7 +658,16 @@ export const QuestManager = {
       // itself flips hero.status to 'fallen' if this drops them to 0.
       if (hero) {
         const def = INJURY_BY_ID[injury.id];
-        if (def) HeroManager.applyHealthDamage(hero, healthDamagePercentForInjuryDef(def));
+        if (def) {
+          // Guardian's Retainer-style loadout mitigation, baked into
+          // quest.healthDamageReduction at send time -- applied here as
+          // a straight percentage cut of the damage, not the resolved
+          // injury itself (the injury and its own success/speed mods
+          // still happen; only the Health cost is softened).
+          const reduction = quest.healthDamageReduction ?? 0;
+          const damagePercent = healthDamagePercentForInjuryDef(def) * (1 - reduction / 100);
+          HeroManager.applyHealthDamage(hero, damagePercent);
+        }
       }
     }
 

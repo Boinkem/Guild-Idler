@@ -2469,5 +2469,155 @@
     "default": 40,
     "min": 0,
     "description": "Gold added per hero level to the instant-revive cost -- same shape as treatmentCost scaling with injury severity, here scaling with hero level instead."
+  },
+  {
+    "id": "upgrade.vitality_training.baseCost",
+    "label": "Vitality Training: base cost",
+    "category": "vendor_upgrades",
+    "value": 300,
+    "default": 300,
+    "min": 0,
+    "description": "Approximates an original 50/100/200/500g target as closely as the shared earlyTierDiscount-based upgradeCost formula allows -- see guild-idler-status.md's Health-related gold sinks entry."
+  },
+  {
+    "id": "upgrade.vitality_training.costGrowth",
+    "label": "Vitality Training: cost growth",
+    "category": "vendor_upgrades",
+    "value": 1.3,
+    "default": 1.3,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier applied per level, before the early-tier discount."
+  },
+  {
+    "id": "upgrade.vitality_training.maxLevel",
+    "label": "Vitality Training: max level",
+    "category": "vendor_upgrades",
+    "value": 4,
+    "default": 4,
+    "min": 1,
+    "description": "Highest level Vitality Training can reach."
+  },
+  {
+    "id": "upgrade.vitality_training.healthPerLevel",
+    "label": "Vitality Training: Max Health per level",
+    "category": "vendor_upgrades",
+    "value": 5,
+    "default": 5,
+    "min": 0,
+    "description": "Flat Max Health granted per level, guild-wide (applies to every hero via the standard equipmentMods-style flat health bonus)."
+  },
+  {
+    "id": "upgrade.undertakers_favor.baseCost",
+    "label": "Undertaker's Favor: base cost",
+    "category": "vendor_upgrades",
+    "value": 400,
+    "default": 400,
+    "min": 0,
+    "description": "A cheap early/mid-game upgrade discounting the paid instant-revive path -- deliberately separate from Infirmary's free-auto-revive-at-max-level, so pay-it-down and wait-it-out are two independent investment targets."
+  },
+  {
+    "id": "upgrade.undertakers_favor.costGrowth",
+    "label": "Undertaker's Favor: cost growth",
+    "category": "vendor_upgrades",
+    "value": 1.6,
+    "default": 1.6,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier applied per level, before the early-tier discount."
+  },
+  {
+    "id": "upgrade.undertakers_favor.maxLevel",
+    "label": "Undertaker's Favor: max level",
+    "category": "vendor_upgrades",
+    "value": 5,
+    "default": 5,
+    "min": 1,
+    "description": "Highest level Undertaker's Favor can reach."
+  },
+  {
+    "id": "upgrade.undertakers_favor.discountPerLevel",
+    "label": "Undertaker's Favor: revival discount % per level",
+    "category": "vendor_upgrades",
+    "value": 6,
+    "default": 6,
+    "min": 0,
+    "max": 100,
+    "description": "Percentage points shaved off the paid instant-revive cost per level, up to 30% at max level."
+  },
+  {
+    "id": "renown_perk.vital_legacy.cost",
+    "label": "Vital Legacy: base Renown cost",
+    "category": "renown_perks",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "description": "Same starting shape as the other tier-1 Renown Perks (Renowned Skill etc.)."
+  },
+  {
+    "id": "renown_perk.vital_legacy.costGrowth",
+    "label": "Vital Legacy: Renown cost growth",
+    "category": "renown_perks",
+    "value": 1.6,
+    "default": 1.6,
+    "min": 1,
+    "max": 5,
+    "description": "Matches Renowned Skill's own growth rate."
+  },
+  {
+    "id": "renown_perk.vital_legacy.maxLevel",
+    "label": "Vital Legacy: max level (tier 1)",
+    "category": "renown_perks",
+    "value": 20,
+    "default": 20,
+    "min": 1,
+    "description": "Matches Renowned Skill's own tier-1 cap."
+  },
+  {
+    "id": "renown_perk.vital_legacy.healthPerLevel",
+    "label": "Vital Legacy: Max Health per level",
+    "category": "renown_perks",
+    "value": 5,
+    "default": 5,
+    "min": 0,
+    "description": "Same +5/level increment as Vitality Training on purpose -- same shape, different game-stage (this is the late-game renown/ascension-loop version, not a replacement for the early upgrade)."
+  },
+  {
+    "id": "renown_perk.vital_legacy.tier2MaxLevel",
+    "label": "Vital Legacy: max level (tier 2)",
+    "category": "renown_perks",
+    "value": 25,
+    "default": 25,
+    "min": 1,
+    "description": "Matches Renowned Skill's own tier-2 cap."
+  },
+  {
+    "id": "renown_perk.vital_legacy.tier2StartCost",
+    "label": "Vital Legacy: tier 2 starting Renown cost",
+    "category": "renown_perks",
+    "value": 9822,
+    "default": 9822,
+    "min": 0,
+    "description": "Matches Renowned Skill's own tier-2 starting cost."
+  },
+  {
+    "id": "renown_perk.vital_legacy.tier2CostGrowth",
+    "label": "Vital Legacy: tier 2 Renown cost growth",
+    "category": "renown_perks",
+    "value": 1.12,
+    "default": 1.12,
+    "min": 1,
+    "max": 5,
+    "description": "Matches Renowned Skill's own tier-2 growth rate."
+  },
+  {
+    "id": "health.bulkReviveDiscount",
+    "label": "Health: bulk revive discount",
+    "category": "health_system",
+    "value": 0.1,
+    "default": 0.1,
+    "min": 0,
+    "max": 1,
+    "description": "Fraction knocked off the summed individual revival costs when using Revive All instead of reviving each Fallen hero one at a time."
   }
 ]

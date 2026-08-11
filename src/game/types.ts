@@ -77,10 +77,19 @@ export interface Modifiers {
    * guild-idler-status.md's Health stat + Fallen/death mechanic section.
    */
   health: number;
+  /**
+   * Percentage points shaved off HeroManager.revivalCost -- Undertaker's
+   * Favor's own effect, deliberately separate from Infirmary's free
+   * auto-revive-at-max-level so paying-it-down and waiting-it-out are two
+   * independent investment targets. Percentage-flavoured like every
+   * other key except health, so the shared pct() formatter (via
+   * describeMods) needs no special case for this one.
+   */
+  revivalDiscount: number;
 }
 
 export const ZERO_MODS: Modifiers = {
-  success: 0, gold: 0, xp: 0, loot: 0, injuryResist: 0, speed: 0, durability: 0, health: 0,
+  success: 0, gold: 0, xp: 0, loot: 0, injuryResist: 0, speed: 0, durability: 0, health: 0, revivalDiscount: 0,
 };
 
 export interface Stats {
@@ -136,6 +145,22 @@ export interface ConsumableDef {
      * + Fallen/death mechanic section.
      */
     restoreHealth?: number;
+    /**
+     * Percentage reduction applied to Health damage on the one quest
+     * this is equipped for -- a loadout effect (per-quest, consumed at
+     * send time), distinct from restoreHealth's immediate-use-anytime
+     * shape. Mitigates before damage lands rather than healing after.
+     * See InventoryManager.loadoutEffects and ActiveQuest.healthDamageReduction.
+     */
+    healthDamageReduction?: number;
+    /** Unused by any current recipe -- included only so the full
+     *  `keyof Modifiers` range types cleanly against this object
+     *  (CraftingManager.craftConsumable indexes it generically). A
+     *  consumable granting a standing gold discount on reviving a
+     *  Fallen hero doesn't fit the "per-quest or immediate-use" shape
+     *  every other effect here has, so this stays Upgrade-only
+     *  (Undertaker's Favor) rather than ever being craftable. */
+    revivalDiscount?: number;
   };
 }
 
@@ -397,6 +422,18 @@ export interface ActiveQuest {
   injuryResist: number;
   consumables: string[];
   guaranteedGoodEvent: boolean;
+  /**
+   * Percentage reduction applied to Health damage on THIS quest only,
+   * from a Guardian's Retainer-style loadout consumable -- baked in at
+   * send time the same way injuryResist/guaranteedGoodEvent already are,
+   * since the consumable itself is consumed before resolve() runs. See
+   * ConsumableDef.effect.healthDamageReduction and
+   * guild-idler-status.md's Health-related gold sinks entry. Optional so
+   * pre-existing saved ActiveQuests (from before this field existed)
+   * default to 0 via `?? 0` at the one read site rather than needing a
+   * migration.
+   */
+  healthDamageReduction?: number;
 }
 
 export interface QuestEventResult {
@@ -904,6 +941,16 @@ export interface GameState {
   discoveredItems: string[];
   /** Skins the guild has purchased; usable by any hero of that class. */
   unlockedSkins: string[];
+  /**
+   * Tombstone cosmetics -- global rather than per-hero (see
+   * TombstoneStyleDef's own comment), so these are just an unlocked-ids
+   * list plus a single active choice, not something stored per hero.
+   * Optional/undefined for any save from before this system existed --
+   * same defensive convention as Hero.health -- default to `['plain']`/
+   * `'plain'` wherever read rather than needing a migration.
+   */
+  unlockedTombstoneStyles?: string[];
+  selectedTombstoneStyle?: string;
   /**
    * Which hero the desktop companion shows. Updates automatically whenever a
    * hero is sent on a quest (so departures are always visible), and can be

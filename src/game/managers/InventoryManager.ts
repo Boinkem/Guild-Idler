@@ -87,6 +87,7 @@ export const InventoryManager = {
     mods: Partial<Modifiers>;
     preventInjury: boolean;
     guaranteedGoodEvent: boolean;
+    healthDamageReduction: number;
   } {
     let success = 0;
     let gold = 0;
@@ -96,6 +97,7 @@ export const InventoryManager = {
     let speed = 0;
     let preventInjury = false;
     let guaranteedGoodEvent = false;
+    let healthDamageReduction = 0;
     for (const id of defIds) {
       const def = InventoryManager.resolveDef(state, id);
       if (!def) continue;
@@ -107,7 +109,13 @@ export const InventoryManager = {
       speed += def.effect.speed ?? 0;
       preventInjury ||= !!def.effect.preventInjury;
       guaranteedGoodEvent ||= !!def.effect.guaranteedGoodEvent;
+      healthDamageReduction += def.effect.healthDamageReduction ?? 0;
     }
-    return { mods: { success, gold, xp, loot, injuryResist, speed }, preventInjury, guaranteedGoodEvent };
+    return {
+      mods: { success, gold, xp, loot, injuryResist, speed },
+      preventInjury,
+      guaranteedGoodEvent,
+      healthDamageReduction: Math.min(100, healthDamageReduction),
+    };
   },
 };

@@ -1,0 +1,686 @@
+diff --git a/src/game/data/json/consumables.json b/src/game/data/json/consumables.json
+index 4abdec3..cbc5fee 100644
+--- a/src/game/data/json/consumables.json
++++ b/src/game/data/json/consumables.json
+@@ -121,6 +121,17 @@
+       "restoreHealth": 80
+     }
+   },
++  {
++    "id": "guardians_retainer",
++    "name": "Guardian's Retainer",
++    "description": "Equip before sending a hero out. Softens whatever this quest is about to do to them, rather than patching it up afterward.",
++    "cost": 90,
++    "glyph": "🛡",
++    "icon": "misc/Misc_20.png",
++    "effect": {
++      "healthDamageReduction": 50
++    }
++  },
+   {
+     "id": "pet_treat",
+     "name": "Pet Treat",
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 94b2d16..25a3ca5 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -2469,5 +2469,155 @@
+     "default": 40,
+     "min": 0,
+     "description": "Gold added per hero level to the instant-revive cost -- same shape as treatmentCost scaling with injury severity, here scaling with hero level instead."
++  },
++  {
++    "id": "upgrade.vitality_training.baseCost",
++    "label": "Vitality Training: base cost",
++    "category": "vendor_upgrades",
++    "value": 300,
++    "default": 300,
++    "min": 0,
++    "description": "Approximates an original 50/100/200/500g target as closely as the shared earlyTierDiscount-based upgradeCost formula allows -- see guild-idler-status.md's Health-related gold sinks entry."
++  },
++  {
++    "id": "upgrade.vitality_training.costGrowth",
++    "label": "Vitality Training: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1.3,
++    "default": 1.3,
++    "min": 1,
++    "max": 5,
++    "description": "Multiplier applied per level, before the early-tier discount."
++  },
++  {
++    "id": "upgrade.vitality_training.maxLevel",
++    "label": "Vitality Training: max level",
++    "category": "vendor_upgrades",
++    "value": 4,
++    "default": 4,
++    "min": 1,
++    "description": "Highest level Vitality Training can reach."
++  },
++  {
++    "id": "upgrade.vitality_training.healthPerLevel",
++    "label": "Vitality Training: Max Health per level",
++    "category": "vendor_upgrades",
++    "value": 5,
++    "default": 5,
++    "min": 0,
++    "description": "Flat Max Health granted per level, guild-wide (applies to every hero via the standard equipmentMods-style flat health bonus)."
++  },
++  {
++    "id": "upgrade.undertakers_favor.baseCost",
++    "label": "Undertaker's Favor: base cost",
++    "category": "vendor_upgrades",
++    "value": 400,
++    "default": 400,
++    "min": 0,
++    "description": "A cheap early/mid-game upgrade discounting the paid instant-revive path -- deliberately separate from Infirmary's free-auto-revive-at-max-level, so pay-it-down and wait-it-out are two independent investment targets."
++  },
++  {
++    "id": "upgrade.undertakers_favor.costGrowth",
++    "label": "Undertaker's Favor: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1.6,
++    "default": 1.6,
++    "min": 1,
++    "max": 5,
++    "description": "Multiplier applied per level, before the early-tier discount."
++  },
++  {
++    "id": "upgrade.undertakers_favor.maxLevel",
++    "label": "Undertaker's Favor: max level",
++    "category": "vendor_upgrades",
++    "value": 5,
++    "default": 5,
++    "min": 1,
++    "description": "Highest level Undertaker's Favor can reach."
++  },
++  {
++    "id": "upgrade.undertakers_favor.discountPerLevel",
++    "label": "Undertaker's Favor: revival discount % per level",
++    "category": "vendor_upgrades",
++    "value": 6,
++    "default": 6,
++    "min": 0,
++    "max": 100,
++    "description": "Percentage points shaved off the paid instant-revive cost per level, up to 30% at max level."
++  },
++  {
++    "id": "renown_perk.vital_legacy.cost",
++    "label": "Vital Legacy: base Renown cost",
++    "category": "renown_perks",
++    "value": 1,
++    "default": 1,
++    "min": 0,
++    "description": "Same starting shape as the other tier-1 Renown Perks (Renowned Skill etc.)."
++  },
++  {
++    "id": "renown_perk.vital_legacy.costGrowth",
++    "label": "Vital Legacy: Renown cost growth",
++    "category": "renown_perks",
++    "value": 1.6,
++    "default": 1.6,
++    "min": 1,
++    "max": 5,
++    "description": "Matches Renowned Skill's own growth rate."
++  },
++  {
++    "id": "renown_perk.vital_legacy.maxLevel",
++    "label": "Vital Legacy: max level (tier 1)",
++    "category": "renown_perks",
++    "value": 20,
++    "default": 20,
++    "min": 1,
++    "description": "Matches Renowned Skill's own tier-1 cap."
++  },
++  {
++    "id": "renown_perk.vital_legacy.healthPerLevel",
++    "label": "Vital Legacy: Max Health per level",
++    "category": "renown_perks",
++    "value": 5,
++    "default": 5,
++    "min": 0,
++    "description": "Same +5/level increment as Vitality Training on purpose -- same shape, different game-stage (this is the late-game renown/ascension-loop version, not a replacement for the early upgrade)."
++  },
++  {
++    "id": "renown_perk.vital_legacy.tier2MaxLevel",
++    "label": "Vital Legacy: max level (tier 2)",
++    "category": "renown_perks",
++    "value": 25,
++    "default": 25,
++    "min": 1,
++    "description": "Matches Renowned Skill's own tier-2 cap."
++  },
++  {
++    "id": "renown_perk.vital_legacy.tier2StartCost",
++    "label": "Vital Legacy: tier 2 starting Renown cost",
++    "category": "renown_perks",
++    "value": 9822,
++    "default": 9822,
++    "min": 0,
++    "description": "Matches Renowned Skill's own tier-2 starting cost."
++  },
++  {
++    "id": "renown_perk.vital_legacy.tier2CostGrowth",
++    "label": "Vital Legacy: tier 2 Renown cost growth",
++    "category": "renown_perks",
++    "value": 1.12,
++    "default": 1.12,
++    "min": 1,
++    "max": 5,
++    "description": "Matches Renowned Skill's own tier-2 growth rate."
++  },
++  {
++    "id": "health.bulkReviveDiscount",
++    "label": "Health: bulk revive discount",
++    "category": "health_system",
++    "value": 0.1,
++    "default": 0.1,
++    "min": 0,
++    "max": 1,
++    "description": "Fraction knocked off the summed individual revival costs when using Revive All instead of reviving each Fallen hero one at a time."
+   }
+ ]
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index d25614a..9cd0c24 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -194,6 +194,22 @@ export const UPGRADES: UpgradeDef[] = [
+     maxLevel: Tuning.get('upgrade.board_warden.maxLevel'),
+     modsPerLevel: {}, freezeChangesPerLevel: Tuning.get('upgrade.board_warden.freezeChangesPerLevel'),
+   },
++  {
++    id: 'vitality_training', name: 'Vitality Training',
++    description: 'Conditioning that has nothing to do with winning a fight and everything to do with surviving one.',
++    baseCost: Tuning.get('upgrade.vitality_training.baseCost'),
++    costGrowth: Tuning.get('upgrade.vitality_training.costGrowth'),
++    maxLevel: Tuning.get('upgrade.vitality_training.maxLevel'),
++    modsPerLevel: { health: Tuning.get('upgrade.vitality_training.healthPerLevel') },
++  },
++  {
++    id: 'undertakers_favor', name: "Undertaker's Favor",
++    description: 'A standing arrangement -- the guild pays less to bring someone back, whether or not it ever needs to.',
++    baseCost: Tuning.get('upgrade.undertakers_favor.baseCost'),
++    costGrowth: Tuning.get('upgrade.undertakers_favor.costGrowth'),
++    maxLevel: Tuning.get('upgrade.undertakers_favor.maxLevel'),
++    modsPerLevel: { revivalDiscount: Tuning.get('upgrade.undertakers_favor.discountPerLevel') },
++  },
+ ];
+ 
+ /**
+@@ -480,6 +496,20 @@ export const RENOWN_PERKS: RenownPerkDef[] = [
+       unlockFlavour: 'The guild library runs out of shelf space again.',
+     },
+   },
++  {
++    id: 'vital_legacy', name: 'Vital Legacy',
++    description: 'Every retired knight leaves the ones still standing a little harder to put down.',
++    cost: Tuning.get('renown_perk.vital_legacy.cost'),
++    costGrowth: Tuning.get('renown_perk.vital_legacy.costGrowth'),
++    maxLevel: Tuning.get('renown_perk.vital_legacy.maxLevel'),
++    modsPerLevel: { health: Tuning.get('renown_perk.vital_legacy.healthPerLevel') },
++    tier2: {
++      maxLevel: Tuning.get('renown_perk.vital_legacy.tier2MaxLevel'),
++      startCost: Tuning.get('renown_perk.vital_legacy.tier2StartCost'),
++      costGrowth: Tuning.get('renown_perk.vital_legacy.tier2CostGrowth'),
++      unlockFlavour: 'The old wounds that used to end a career barely slow one down now.',
++    },
++  },
+ ];
+ 
+ export const RENOWN_BY_ID: Record<string, RenownPerkDef> = Object.fromEntries(RENOWN_PERKS.map((p) => [p.id, p]));
+@@ -669,6 +699,54 @@ export const SKINS: SkinDef[] = [
+ 
+ export const SKIN_BY_ID: Record<string, SkinDef> = Object.fromEntries(SKINS.map((s) => [s.id, s]));
+ 
++/* ---------------------------- tombstone styles --------------------------- */
++
++/**
++ * Purely cosmetic -- a global choice (not per-hero, unlike skins above),
++ * since going Fallen is meant to stay rare enough that a per-hero
++ * picker would be overkill. One style applies to whichever hero falls.
++ * Same gold-sink shape as skins (buy once, unlocked forever, pick freely
++ * among owned styles) -- see engine.buyTombstoneStyle/selectTombstoneStyle
++ * and guild-idler-status.md's Health-related gold sinks entry.
++ */
++export interface TombstoneStyleDef {
++  id: string;
++  name: string;
++  description: string;
++  cost: number;
++  /** Filename under public/hero-status/ -- see the Tombstone component's
++   *  own comment in HeroesPanel.tsx for the graceful-missing-asset
++   *  fallback (shows a plain skull glyph until the real file exists). */
++  icon: string;
++}
++
++export const TOMBSTONE_STYLES: TombstoneStyleDef[] = [
++  {
++    id: 'plain', name: 'Plain Marker',
++    description: 'The one you already have. Always owned.',
++    cost: 0, icon: 'tombstone.png',
++  },
++  {
++    id: 'mossy', name: 'Mossy Marker',
++    description: 'Reclaimed by moss and time, like something the ground decided to keep.',
++    cost: 400, icon: 'tombstone-mossy.png',
++  },
++  {
++    id: 'ornate', name: 'Ornate Monument',
++    description: 'A grander marker than most heroes get. Premature, but appreciated.',
++    cost: 1200, icon: 'tombstone-ornate.png',
++  },
++  {
++    id: 'cursed', name: 'Cursed Headstone',
++    description: 'Something about it makes people not want to look at it directly.',
++    cost: 3000, icon: 'tombstone-cursed.png',
++  },
++];
++
++export const TOMBSTONE_STYLE_BY_ID: Record<string, TombstoneStyleDef> = Object.fromEntries(
++  TOMBSTONE_STYLES.map((s) => [s.id, s]),
++);
++
+ /* ----------------------------- level curve ------------------------------ */
+ 
+ export function xpForLevel(level: number): number {
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 7c94e6d..f79c7af 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -16,9 +16,10 @@ import { GuidanceManager, GuidanceTopic } from './managers/GuidanceManager';
+ import { HarvestManager } from './managers/HarvestManager';
+ import { PetManager } from './managers/PetManager';
+ import { CraftingManager } from './managers/CraftingManager';
+-import { SKIN_BY_ID, SKIN_PRICE, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
++import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
+ import { EQUIPMENT_BY_ID, SET_BY_ID, GEAR_SCORE_BY_RARITY, EQUIP_SLOTS } from './data/equipment';
+ import { RAID_BY_ID } from './data/raids';
++import { Tuning } from './data/tuning';
+ import { playSound } from './sound';
+ import { TESTING_TOOLS_ENABLED } from './testingTools';
+ 
+@@ -1459,7 +1460,7 @@ export class GameEngine {
+     const hero = this.hero(heroId);
+     if (!hero) return;
+     if (hero.status !== 'fallen') return;
+-    const cost = HeroManager.revivalCost(hero);
++    const cost = HeroManager.revivalCost(hero, ModifierManager.global(this.state).revivalDiscount ?? 0);
+     if (this.state.gold < cost) return this.say('Not enough gold for revival.');
+     this.state.gold -= cost;
+     this.state.stats.goldSpent += cost;
+@@ -1468,6 +1469,27 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /**
++   * Revives every currently-Fallen hero at once, at a small bulk discount
++   * (health.bulkReviveDiscount) off the sum of each hero's own
++   * (already-Undertaker's-Favor-discounted) individual revivalCost -- a
++   * convenience purchase, not a separate pricing mechanism. No-ops
++   * quietly if nobody is Fallen, so it's safe to always show the button.
++   */
++  reviveAllFallen() {
++    const fallen = this.state.heroes.filter((h) => h.status === 'fallen');
++    if (fallen.length === 0) return;
++    const discount = ModifierManager.global(this.state).revivalDiscount ?? 0;
++    const individual = fallen.map((h) => HeroManager.revivalCost(h, discount));
++    const total = Math.round(individual.reduce((a, b) => a + b, 0) * (1 - Tuning.get('health.bulkReviveDiscount')));
++    if (this.state.gold < total) return this.say('Not enough gold to revive everyone.');
++    this.state.gold -= total;
++    this.state.stats.goldSpent += total;
++    for (const hero of fallen) HeroManager.revive(hero);
++    this.say(`${fallen.length} Fallen heroes are revived and return to the roster.`, 'heroes');
++    void this.saveNow();
++  }
++
+   buyUpgrade(id: string) {
+     const error = GuildManager.buyUpgrade(this.state, id);
+     if (error) return this.say(error);
+@@ -1776,6 +1798,32 @@ export class GameEngine {
+ 
+   get skinPrice() { return SKIN_PRICE; }
+ 
++  /** Buys a tombstone cosmetic style -- global, not per-hero. See TombstoneStyleDef. */
++  buyTombstoneStyle(styleId: string) {
++    const unlocked = this.state.unlockedTombstoneStyles ?? ['plain'];
++    if (unlocked.includes(styleId)) return this.say('Already owned.');
++    const def = TOMBSTONE_STYLE_BY_ID[styleId];
++    if (!def) return this.say('Unknown style.');
++    if (this.state.gold < def.cost) return this.say('Not enough gold.');
++    playSound('purchase');
++    this.state.gold -= def.cost;
++    this.state.stats.goldSpent += def.cost;
++    this.state.unlockedTombstoneStyles = [...unlocked, styleId];
++    this.say(`${def.name} tombstone style unlocked.`);
++    void this.saveNow();
++  }
++
++  /** Applies an owned tombstone style guild-wide. Free once unlocked. */
++  selectTombstoneStyle(styleId: string) {
++    const unlocked = this.state.unlockedTombstoneStyles ?? ['plain'];
++    if (styleId !== 'plain' && !unlocked.includes(styleId)) {
++      return this.say('That tombstone style is not unlocked yet.');
++    }
++    this.state.selectedTombstoneStyle = styleId;
++    this.notify();
++    void this.saveNow();
++  }
++
+   hardReset() {
+     this.state = createInitialState();
+     this.offlineReport = null;
+diff --git a/src/game/managers/HeroManager.ts b/src/game/managers/HeroManager.ts
+index 3e178b1..b29de83 100644
+--- a/src/game/managers/HeroManager.ts
++++ b/src/game/managers/HeroManager.ts
+@@ -226,11 +226,18 @@ export const HeroManager = {
+     hero.health = Math.min(max, current + regen);
+   },
+ 
+-  /** Gold cost to instantly revive a Fallen hero -- see fallen.revivalCostBase/PerLevel. */
+-  revivalCost(hero: Hero): number {
+-    return Math.round(
+-      Tuning.get('fallen.revivalCostBase') + hero.level * Tuning.get('fallen.revivalCostPerLevel'),
+-    );
++  /**
++   * Gold cost to instantly revive a Fallen hero -- see
++   * fallen.revivalCostBase/PerLevel. `discountPercent` comes from
++   * Undertaker's Favor (ModifierManager.global(state).revivalDiscount) --
++   * a parameter rather than reading state directly here, so HeroManager
++   * doesn't need a GameState/ModifierManager import for one field. Callers
++   * (engine.reviveHero, the Revive button, reviveAllFallen) all pass it
++   * through the same way.
++   */
++  revivalCost(hero: Hero, discountPercent = 0): number {
++    const base = Tuning.get('fallen.revivalCostBase') + hero.level * Tuning.get('fallen.revivalCostPerLevel');
++    return Math.round(base * (1 - Math.min(100, Math.max(0, discountPercent)) / 100));
+   },
+ 
+   /**
+diff --git a/src/game/managers/InventoryManager.ts b/src/game/managers/InventoryManager.ts
+index e385125..3743d39 100644
+--- a/src/game/managers/InventoryManager.ts
++++ b/src/game/managers/InventoryManager.ts
+@@ -87,6 +87,7 @@ export const InventoryManager = {
+     mods: Partial<Modifiers>;
+     preventInjury: boolean;
+     guaranteedGoodEvent: boolean;
++    healthDamageReduction: number;
+   } {
+     let success = 0;
+     let gold = 0;
+@@ -96,6 +97,7 @@ export const InventoryManager = {
+     let speed = 0;
+     let preventInjury = false;
+     let guaranteedGoodEvent = false;
++    let healthDamageReduction = 0;
+     for (const id of defIds) {
+       const def = InventoryManager.resolveDef(state, id);
+       if (!def) continue;
+@@ -107,7 +109,13 @@ export const InventoryManager = {
+       speed += def.effect.speed ?? 0;
+       preventInjury ||= !!def.effect.preventInjury;
+       guaranteedGoodEvent ||= !!def.effect.guaranteedGoodEvent;
++      healthDamageReduction += def.effect.healthDamageReduction ?? 0;
+     }
+-    return { mods: { success, gold, xp, loot, injuryResist, speed }, preventInjury, guaranteedGoodEvent };
++    return {
++      mods: { success, gold, xp, loot, injuryResist, speed },
++      preventInjury,
++      guaranteedGoodEvent,
++      healthDamageReduction: Math.min(100, healthDamageReduction),
++    };
+   },
+ };
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 4b968d6..63d9934 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -513,6 +513,7 @@ export const QuestManager = {
+       injuryResist: loadout.preventInjury ? 100 : mods.injuryResist,
+       consumables,
+       guaranteedGoodEvent: loadout.guaranteedGoodEvent,
++      healthDamageReduction: loadout.healthDamageReduction,
+     };
+ 
+     for (const id of consumables) InventoryManager.remove(state, id);
+@@ -657,7 +658,16 @@ export const QuestManager = {
+       // itself flips hero.status to 'fallen' if this drops them to 0.
+       if (hero) {
+         const def = INJURY_BY_ID[injury.id];
+-        if (def) HeroManager.applyHealthDamage(hero, healthDamagePercentForInjuryDef(def));
++        if (def) {
++          // Guardian's Retainer-style loadout mitigation, baked into
++          // quest.healthDamageReduction at send time -- applied here as
++          // a straight percentage cut of the damage, not the resolved
++          // injury itself (the injury and its own success/speed mods
++          // still happen; only the Health cost is softened).
++          const reduction = quest.healthDamageReduction ?? 0;
++          const damagePercent = healthDamagePercentForInjuryDef(def) * (1 - reduction / 100);
++          HeroManager.applyHealthDamage(hero, damagePercent);
++        }
+       }
+     }
+ 
+diff --git a/src/game/types.ts b/src/game/types.ts
+index b0af0f5..bfbad2e 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -77,10 +77,19 @@ export interface Modifiers {
+    * guild-idler-status.md's Health stat + Fallen/death mechanic section.
+    */
+   health: number;
++  /**
++   * Percentage points shaved off HeroManager.revivalCost -- Undertaker's
++   * Favor's own effect, deliberately separate from Infirmary's free
++   * auto-revive-at-max-level so paying-it-down and waiting-it-out are two
++   * independent investment targets. Percentage-flavoured like every
++   * other key except health, so the shared pct() formatter (via
++   * describeMods) needs no special case for this one.
++   */
++  revivalDiscount: number;
+ }
+ 
+ export const ZERO_MODS: Modifiers = {
+-  success: 0, gold: 0, xp: 0, loot: 0, injuryResist: 0, speed: 0, durability: 0, health: 0,
++  success: 0, gold: 0, xp: 0, loot: 0, injuryResist: 0, speed: 0, durability: 0, health: 0, revivalDiscount: 0,
+ };
+ 
+ export interface Stats {
+@@ -136,6 +145,22 @@ export interface ConsumableDef {
+      * + Fallen/death mechanic section.
+      */
+     restoreHealth?: number;
++    /**
++     * Percentage reduction applied to Health damage on the one quest
++     * this is equipped for -- a loadout effect (per-quest, consumed at
++     * send time), distinct from restoreHealth's immediate-use-anytime
++     * shape. Mitigates before damage lands rather than healing after.
++     * See InventoryManager.loadoutEffects and ActiveQuest.healthDamageReduction.
++     */
++    healthDamageReduction?: number;
++    /** Unused by any current recipe -- included only so the full
++     *  `keyof Modifiers` range types cleanly against this object
++     *  (CraftingManager.craftConsumable indexes it generically). A
++     *  consumable granting a standing gold discount on reviving a
++     *  Fallen hero doesn't fit the "per-quest or immediate-use" shape
++     *  every other effect here has, so this stays Upgrade-only
++     *  (Undertaker's Favor) rather than ever being craftable. */
++    revivalDiscount?: number;
+   };
+ }
+ 
+@@ -397,6 +422,18 @@ export interface ActiveQuest {
+   injuryResist: number;
+   consumables: string[];
+   guaranteedGoodEvent: boolean;
++  /**
++   * Percentage reduction applied to Health damage on THIS quest only,
++   * from a Guardian's Retainer-style loadout consumable -- baked in at
++   * send time the same way injuryResist/guaranteedGoodEvent already are,
++   * since the consumable itself is consumed before resolve() runs. See
++   * ConsumableDef.effect.healthDamageReduction and
++   * guild-idler-status.md's Health-related gold sinks entry. Optional so
++   * pre-existing saved ActiveQuests (from before this field existed)
++   * default to 0 via `?? 0` at the one read site rather than needing a
++   * migration.
++   */
++  healthDamageReduction?: number;
+ }
+ 
+ export interface QuestEventResult {
+@@ -904,6 +941,16 @@ export interface GameState {
+   discoveredItems: string[];
+   /** Skins the guild has purchased; usable by any hero of that class. */
+   unlockedSkins: string[];
++  /**
++   * Tombstone cosmetics -- global rather than per-hero (see
++   * TombstoneStyleDef's own comment), so these are just an unlocked-ids
++   * list plus a single active choice, not something stored per hero.
++   * Optional/undefined for any save from before this system existed --
++   * same defensive convention as Hero.health -- default to `['plain']`/
++   * `'plain'` wherever read rather than needing a migration.
++   */
++  unlockedTombstoneStyles?: string[];
++  selectedTombstoneStyle?: string;
+   /**
+    * Which hero the desktop companion shows. Updates automatically whenever a
+    * hero is sent on a quest (so departures are always visible), and can be
+diff --git a/src/game/util.ts b/src/game/util.ts
+index d7f74c2..98df927 100644
+--- a/src/game/util.ts
++++ b/src/game/util.ts
+@@ -102,6 +102,7 @@ export const MOD_LABEL: Record<keyof Modifiers, string> = {
+   speed: 'Quest speed',
+   durability: 'Gear wear reduction',
+   health: 'Max Health',
++  revivalDiscount: 'Revival discount',
+ };
+ 
+ /**
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index db828f6..218f6f5 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -3,9 +3,10 @@ import { useEngine, useNow } from '../useEngine';
+ import { useSettings } from '../useSettings';
+ import { HeroManager } from '../../game/managers/HeroManager';
+ import { GuildManager } from '../../game/managers/GuildManager';
++import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { PrestigeManager } from '../../game/managers/PrestigeManager';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+-import { HERO_CLASSES, RECRUIT_COST, SKINS, infirmaryAutoReviveUnlocked } from '../../game/data/progression';
++import { HERO_CLASSES, RECRUIT_COST, SKINS, infirmaryAutoReviveUnlocked, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
+ import { Tuning } from '../../game/data/tuning';
+ import { HeroClass, Hero, Stats } from '../../game/types';
+ import { describeMods, formatDuration, formatGold, HOUR } from '../../game/util';
+@@ -26,7 +27,25 @@ const STAT_KEYS: (keyof Stats)[] = ['strength', 'endurance', 'luck', 'wisdom'];
+  * broken image icon. See guild-idler-status.md's Health stat + Fallen/
+  * death mechanic section.
+  */
+-function Tombstone({ height }: { height: number }) {
++/**
++ * Static art for a Fallen hero, deliberately NOT the existing `death`
++ * sprite animation -- a looping death animation standing around the idle
++ * guild view would read as broken/distressing rather than as a status.
++ * Same graceful-missing-asset pattern HarvestPanel's HarvestGlyph already
++ * uses: falls back to a plain glyph if the real file (dropped into
++ * public/hero-status/<icon>) hasn't been added yet, rather than a broken
++ * image icon. `icon` comes from the globally-selected TombstoneStyleDef
++ * (see TOMBSTONE_STYLES) -- `key={icon}` forces a fresh mount whenever the
++ * style changes, so a previous style's fallback state doesn't leak onto a
++ * newly-selected one that might have real art. See guild-idler-status.md's
++ * Health stat + Fallen/death mechanic section and its Health-related gold
++ * sinks follow-up (tombstone variants).
++ */
++function Tombstone({ height, icon }: { height: number; icon: string }) {
++  return <TombstoneImg key={icon} height={height} icon={icon} />;
++}
++
++function TombstoneImg({ height, icon }: { height: number; icon: string }) {
+   const [failed, setFailed] = useState(false);
+   if (failed) {
+     return (
+@@ -37,7 +56,7 @@ function Tombstone({ height }: { height: number }) {
+   }
+   return (
+     <img
+-      src="./hero-status/tombstone.png"
++      src={`./hero-status/${icon}`}
+       alt="Fallen"
+       onError={() => setFailed(true)}
+       style={{ height, width: 'auto', objectFit: 'contain' }}
+@@ -95,11 +114,52 @@ export function HeroesPanel() {
+     state.heroes.map((h) => ({ id: h.id, level: h.level })),
+   );
+ 
++  const revivalDiscount = ModifierManager.global(state).revivalDiscount ?? 0;
++  const fallenHeroes = state.heroes.filter((h) => h.status === 'fallen');
++  const bulkReviveCost = Math.round(
++    fallenHeroes.reduce((sum, h) => sum + HeroManager.revivalCost(h, revivalDiscount), 0)
++      * (1 - Tuning.get('health.bulkReviveDiscount')),
++  );
++  const unlockedTombstoneStyles = state.unlockedTombstoneStyles ?? ['plain'];
++  const selectedTombstoneStyleId = state.selectedTombstoneStyle ?? 'plain';
++  const tombstoneIcon = TOMBSTONE_STYLE_BY_ID[selectedTombstoneStyleId]?.icon ?? 'tombstone.png';
++
+   return (
+     <>
+       <h2>Heroes</h2>
+       <p className="subtitle">{state.heroes.length} of {slots} slots filled. Every hero shares the guild's gold and bonuses.</p>
+ 
++      {fallenHeroes.length > 1 && (
++        <button
++          className="chip"
++          style={{ marginBottom: 10 }}
++          onClick={() => engine.reviveAllFallen()}
++          disabled={state.gold < bulkReviveCost}
++          title={`Revive all ${fallenHeroes.length} Fallen heroes at once, ${Math.round(Tuning.get('health.bulkReviveDiscount') * 100)}% cheaper than one at a time`}
++        >
++          Revive All ({fallenHeroes.length}) · {formatGold(bulkReviveCost)}
++        </button>
++      )}
++
++      <div className="row wrap" style={{ marginBottom: 12, alignItems: 'center' }}>
++        <span className="tiny muted">Tombstone style:</span>
++        {TOMBSTONE_STYLES.map((style) => {
++          const owned = style.id === 'plain' || unlockedTombstoneStyles.includes(style.id);
++          const active = selectedTombstoneStyleId === style.id;
++          return (
++            <button
++              key={style.id}
++              className={`chip ${active ? 'on' : ''}`}
++              title={owned ? style.description : `${style.description} — ${formatGold(style.cost)}`}
++              onClick={() => (owned ? engine.selectTombstoneStyle(style.id) : engine.buyTombstoneStyle(style.id))}
++              disabled={!owned && state.gold < style.cost}
++            >
++              {style.name}{!owned && ` · ${formatGold(style.cost)}`}
++            </button>
++          );
++        })}
++      </div>
++
+       {state.heroes.map((hero) => {
+         const classDef = HERO_CLASSES[hero.heroClass];
+         const total = HeroManager.totalStats(hero);
+@@ -128,7 +188,7 @@ export function HeroesPanel() {
+               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpanded(hero.id); } }}
+             >
+               {hero.status === 'fallen' ? (
+-                <Tombstone height={Math.round((isOpen ? 76 : 44) * settings.spriteScale)} />
++                <Tombstone height={Math.round((isOpen ? 76 : 44) * settings.spriteScale)} icon={tombstoneIcon} />
+               ) : (
+                 <HeroSprite
+                   heroClass={hero.heroClass}
+@@ -268,9 +328,9 @@ export function HeroesPanel() {
+                     </span>
+                     <button
+                       onClick={() => engine.reviveHero(hero.id)}
+-                      disabled={state.gold < HeroManager.revivalCost(hero)}
++                      disabled={state.gold < HeroManager.revivalCost(hero, revivalDiscount)}
+                     >
+-                      Revive · {formatGold(HeroManager.revivalCost(hero))}
++                      Revive · {formatGold(HeroManager.revivalCost(hero, revivalDiscount))}
+                     </button>
+                   </div>
+                 )}

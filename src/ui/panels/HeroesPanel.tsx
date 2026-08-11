@@ -3,9 +3,10 @@ import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { GuildManager } from '../../game/managers/GuildManager';
+import { ModifierManager } from '../../game/managers/ModifierManager';
 import { PrestigeManager } from '../../game/managers/PrestigeManager';
 import { InventoryManager } from '../../game/managers/InventoryManager';
-import { HERO_CLASSES, RECRUIT_COST, SKINS, infirmaryAutoReviveUnlocked } from '../../game/data/progression';
+import { HERO_CLASSES, RECRUIT_COST, SKINS, infirmaryAutoReviveUnlocked, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
 import { Tuning } from '../../game/data/tuning';
 import { HeroClass, Hero, Stats } from '../../game/types';
 import { describeMods, formatDuration, formatGold, HOUR } from '../../game/util';
@@ -26,7 +27,25 @@ const STAT_KEYS: (keyof Stats)[] = ['strength', 'endurance', 'luck', 'wisdom'];
  * broken image icon. See guild-idler-status.md's Health stat + Fallen/
  * death mechanic section.
  */
-function Tombstone({ height }: { height: number }) {
+/**
+ * Static art for a Fallen hero, deliberately NOT the existing `death`
+ * sprite animation -- a looping death animation standing around the idle
+ * guild view would read as broken/distressing rather than as a status.
+ * Same graceful-missing-asset pattern HarvestPanel's HarvestGlyph already
+ * uses: falls back to a plain glyph if the real file (dropped into
+ * public/hero-status/<icon>) hasn't been added yet, rather than a broken
+ * image icon. `icon` comes from the globally-selected TombstoneStyleDef
+ * (see TOMBSTONE_STYLES) -- `key={icon}` forces a fresh mount whenever the
+ * style changes, so a previous style's fallback state doesn't leak onto a
+ * newly-selected one that might have real art. See guild-idler-status.md's
+ * Health stat + Fallen/death mechanic section and its Health-related gold
+ * sinks follow-up (tombstone variants).
+ */
+function Tombstone({ height, icon }: { height: number; icon: string }) {
+  return <TombstoneImg key={icon} height={height} icon={icon} />;
+}
+
+function TombstoneImg({ height, icon }: { height: number; icon: string }) {
   const [failed, setFailed] = useState(false);
   if (failed) {
     return (
@@ -37,7 +56,7 @@ function Tombstone({ height }: { height: number }) {
   }
   return (
     <img
-      src="./hero-status/tombstone.png"
+      src={`./hero-status/${icon}`}
       alt="Fallen"
       onError={() => setFailed(true)}
       style={{ height, width: 'auto', objectFit: 'contain' }}
@@ -95,10 +114,51 @@ export function HeroesPanel() {
     state.heroes.map((h) => ({ id: h.id, level: h.level })),
   );
 
+  const revivalDiscount = ModifierManager.global(state).revivalDiscount ?? 0;
+  const fallenHeroes = state.heroes.filter((h) => h.status === 'fallen');
+  const bulkReviveCost = Math.round(
+    fallenHeroes.reduce((sum, h) => sum + HeroManager.revivalCost(h, revivalDiscount), 0)
+      * (1 - Tuning.get('health.bulkReviveDiscount')),
+  );
+  const unlockedTombstoneStyles = state.unlockedTombstoneStyles ?? ['plain'];
+  const selectedTombstoneStyleId = state.selectedTombstoneStyle ?? 'plain';
+  const tombstoneIcon = TOMBSTONE_STYLE_BY_ID[selectedTombstoneStyleId]?.icon ?? 'tombstone.png';
+
   return (
     <>
       <h2>Heroes</h2>
       <p className="subtitle">{state.heroes.length} of {slots} slots filled. Every hero shares the guild's gold and bonuses.</p>
+
+      {fallenHeroes.length > 1 && (
+        <button
+          className="chip"
+          style={{ marginBottom: 10 }}
+          onClick={() => engine.reviveAllFallen()}
+          disabled={state.gold < bulkReviveCost}
+          title={`Revive all ${fallenHeroes.length} Fallen heroes at once, ${Math.round(Tuning.get('health.bulkReviveDiscount') * 100)}% cheaper than one at a time`}
+        >
+          Revive All ({fallenHeroes.length}) · {formatGold(bulkReviveCost)}
+        </button>
+      )}
+
+      <div className="row wrap" style={{ marginBottom: 12, alignItems: 'center' }}>
+        <span className="tiny muted">Tombstone style:</span>
+        {TOMBSTONE_STYLES.map((style) => {
+          const owned = style.id === 'plain' || unlockedTombstoneStyles.includes(style.id);
+          const active = selectedTombstoneStyleId === style.id;
+          return (
+            <button
+              key={style.id}
+              className={`chip ${active ? 'on' : ''}`}
+              title={owned ? style.description : `${style.description} — ${formatGold(style.cost)}`}
+              onClick={() => (owned ? engine.selectTombstoneStyle(style.id) : engine.buyTombstoneStyle(style.id))}
+              disabled={!owned && state.gold < style.cost}
+            >
+              {style.name}{!owned && ` · ${formatGold(style.cost)}`}
+            </button>
+          );
+        })}
+      </div>
 
       {state.heroes.map((hero) => {
         const classDef = HERO_CLASSES[hero.heroClass];
@@ -128,7 +188,7 @@ export function HeroesPanel() {
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpanded(hero.id); } }}
             >
               {hero.status === 'fallen' ? (
-                <Tombstone height={Math.round((isOpen ? 76 : 44) * settings.spriteScale)} />
+                <Tombstone height={Math.round((isOpen ? 76 : 44) * settings.spriteScale)} icon={tombstoneIcon} />
               ) : (
                 <HeroSprite
                   heroClass={hero.heroClass}
@@ -268,9 +328,9 @@ export function HeroesPanel() {
                     </span>
                     <button
                       onClick={() => engine.reviveHero(hero.id)}
-                      disabled={state.gold < HeroManager.revivalCost(hero)}
+                      disabled={state.gold < HeroManager.revivalCost(hero, revivalDiscount)}
                     >
-                      Revive · {formatGold(HeroManager.revivalCost(hero))}
+                      Revive · {formatGold(HeroManager.revivalCost(hero, revivalDiscount))}
                     </button>
                   </div>
                 )}

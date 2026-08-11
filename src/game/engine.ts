@@ -16,9 +16,10 @@ import { GuidanceManager, GuidanceTopic } from './managers/GuidanceManager';
 import { HarvestManager } from './managers/HarvestManager';
 import { PetManager } from './managers/PetManager';
 import { CraftingManager } from './managers/CraftingManager';
-import { SKIN_BY_ID, SKIN_PRICE, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
+import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
 import { EQUIPMENT_BY_ID, SET_BY_ID, GEAR_SCORE_BY_RARITY, EQUIP_SLOTS } from './data/equipment';
 import { RAID_BY_ID } from './data/raids';
+import { Tuning } from './data/tuning';
 import { playSound } from './sound';
 import { TESTING_TOOLS_ENABLED } from './testingTools';
 
@@ -1459,12 +1460,33 @@ export class GameEngine {
     const hero = this.hero(heroId);
     if (!hero) return;
     if (hero.status !== 'fallen') return;
-    const cost = HeroManager.revivalCost(hero);
+    const cost = HeroManager.revivalCost(hero, ModifierManager.global(this.state).revivalDiscount ?? 0);
     if (this.state.gold < cost) return this.say('Not enough gold for revival.');
     this.state.gold -= cost;
     this.state.stats.goldSpent += cost;
     HeroManager.revive(hero);
     this.say(`${hero.name} is revived and returns to the roster.`, 'heroes');
+    void this.saveNow();
+  }
+
+  /**
+   * Revives every currently-Fallen hero at once, at a small bulk discount
+   * (health.bulkReviveDiscount) off the sum of each hero's own
+   * (already-Undertaker's-Favor-discounted) individual revivalCost -- a
+   * convenience purchase, not a separate pricing mechanism. No-ops
+   * quietly if nobody is Fallen, so it's safe to always show the button.
+   */
+  reviveAllFallen() {
+    const fallen = this.state.heroes.filter((h) => h.status === 'fallen');
+    if (fallen.length === 0) return;
+    const discount = ModifierManager.global(this.state).revivalDiscount ?? 0;
+    const individual = fallen.map((h) => HeroManager.revivalCost(h, discount));
+    const total = Math.round(individual.reduce((a, b) => a + b, 0) * (1 - Tuning.get('health.bulkReviveDiscount')));
+    if (this.state.gold < total) return this.say('Not enough gold to revive everyone.');
+    this.state.gold -= total;
+    this.state.stats.goldSpent += total;
+    for (const hero of fallen) HeroManager.revive(hero);
+    this.say(`${fallen.length} Fallen heroes are revived and return to the roster.`, 'heroes');
     void this.saveNow();
   }
 
@@ -1775,6 +1797,32 @@ export class GameEngine {
   }
 
   get skinPrice() { return SKIN_PRICE; }
+
+  /** Buys a tombstone cosmetic style -- global, not per-hero. See TombstoneStyleDef. */
+  buyTombstoneStyle(styleId: string) {
+    const unlocked = this.state.unlockedTombstoneStyles ?? ['plain'];
+    if (unlocked.includes(styleId)) return this.say('Already owned.');
+    const def = TOMBSTONE_STYLE_BY_ID[styleId];
+    if (!def) return this.say('Unknown style.');
+    if (this.state.gold < def.cost) return this.say('Not enough gold.');
+    playSound('purchase');
+    this.state.gold -= def.cost;
+    this.state.stats.goldSpent += def.cost;
+    this.state.unlockedTombstoneStyles = [...unlocked, styleId];
+    this.say(`${def.name} tombstone style unlocked.`);
+    void this.saveNow();
+  }
+
+  /** Applies an owned tombstone style guild-wide. Free once unlocked. */
+  selectTombstoneStyle(styleId: string) {
+    const unlocked = this.state.unlockedTombstoneStyles ?? ['plain'];
+    if (styleId !== 'plain' && !unlocked.includes(styleId)) {
+      return this.say('That tombstone style is not unlocked yet.');
+    }
+    this.state.selectedTombstoneStyle = styleId;
+    this.notify();
+    void this.saveNow();
+  }
 
   hardReset() {
     this.state = createInitialState();

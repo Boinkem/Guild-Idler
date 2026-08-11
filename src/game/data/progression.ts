@@ -194,6 +194,22 @@ export const UPGRADES: UpgradeDef[] = [
     maxLevel: Tuning.get('upgrade.board_warden.maxLevel'),
     modsPerLevel: {}, freezeChangesPerLevel: Tuning.get('upgrade.board_warden.freezeChangesPerLevel'),
   },
+  {
+    id: 'vitality_training', name: 'Vitality Training',
+    description: 'Conditioning that has nothing to do with winning a fight and everything to do with surviving one.',
+    baseCost: Tuning.get('upgrade.vitality_training.baseCost'),
+    costGrowth: Tuning.get('upgrade.vitality_training.costGrowth'),
+    maxLevel: Tuning.get('upgrade.vitality_training.maxLevel'),
+    modsPerLevel: { health: Tuning.get('upgrade.vitality_training.healthPerLevel') },
+  },
+  {
+    id: 'undertakers_favor', name: "Undertaker's Favor",
+    description: 'A standing arrangement -- the guild pays less to bring someone back, whether or not it ever needs to.',
+    baseCost: Tuning.get('upgrade.undertakers_favor.baseCost'),
+    costGrowth: Tuning.get('upgrade.undertakers_favor.costGrowth'),
+    maxLevel: Tuning.get('upgrade.undertakers_favor.maxLevel'),
+    modsPerLevel: { revivalDiscount: Tuning.get('upgrade.undertakers_favor.discountPerLevel') },
+  },
 ];
 
 /**
@@ -480,6 +496,20 @@ export const RENOWN_PERKS: RenownPerkDef[] = [
       unlockFlavour: 'The guild library runs out of shelf space again.',
     },
   },
+  {
+    id: 'vital_legacy', name: 'Vital Legacy',
+    description: 'Every retired knight leaves the ones still standing a little harder to put down.',
+    cost: Tuning.get('renown_perk.vital_legacy.cost'),
+    costGrowth: Tuning.get('renown_perk.vital_legacy.costGrowth'),
+    maxLevel: Tuning.get('renown_perk.vital_legacy.maxLevel'),
+    modsPerLevel: { health: Tuning.get('renown_perk.vital_legacy.healthPerLevel') },
+    tier2: {
+      maxLevel: Tuning.get('renown_perk.vital_legacy.tier2MaxLevel'),
+      startCost: Tuning.get('renown_perk.vital_legacy.tier2StartCost'),
+      costGrowth: Tuning.get('renown_perk.vital_legacy.tier2CostGrowth'),
+      unlockFlavour: 'The old wounds that used to end a career barely slow one down now.',
+    },
+  },
 ];
 
 export const RENOWN_BY_ID: Record<string, RenownPerkDef> = Object.fromEntries(RENOWN_PERKS.map((p) => [p.id, p]));
@@ -668,6 +698,54 @@ export const SKINS: SkinDef[] = [
 ];
 
 export const SKIN_BY_ID: Record<string, SkinDef> = Object.fromEntries(SKINS.map((s) => [s.id, s]));
+
+/* ---------------------------- tombstone styles --------------------------- */
+
+/**
+ * Purely cosmetic -- a global choice (not per-hero, unlike skins above),
+ * since going Fallen is meant to stay rare enough that a per-hero
+ * picker would be overkill. One style applies to whichever hero falls.
+ * Same gold-sink shape as skins (buy once, unlocked forever, pick freely
+ * among owned styles) -- see engine.buyTombstoneStyle/selectTombstoneStyle
+ * and guild-idler-status.md's Health-related gold sinks entry.
+ */
+export interface TombstoneStyleDef {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  /** Filename under public/hero-status/ -- see the Tombstone component's
+   *  own comment in HeroesPanel.tsx for the graceful-missing-asset
+   *  fallback (shows a plain skull glyph until the real file exists). */
+  icon: string;
+}
+
+export const TOMBSTONE_STYLES: TombstoneStyleDef[] = [
+  {
+    id: 'plain', name: 'Plain Marker',
+    description: 'The one you already have. Always owned.',
+    cost: 0, icon: 'tombstone.png',
+  },
+  {
+    id: 'mossy', name: 'Mossy Marker',
+    description: 'Reclaimed by moss and time, like something the ground decided to keep.',
+    cost: 400, icon: 'tombstone-mossy.png',
+  },
+  {
+    id: 'ornate', name: 'Ornate Monument',
+    description: 'A grander marker than most heroes get. Premature, but appreciated.',
+    cost: 1200, icon: 'tombstone-ornate.png',
+  },
+  {
+    id: 'cursed', name: 'Cursed Headstone',
+    description: 'Something about it makes people not want to look at it directly.',
+    cost: 3000, icon: 'tombstone-cursed.png',
+  },
+];
+
+export const TOMBSTONE_STYLE_BY_ID: Record<string, TombstoneStyleDef> = Object.fromEntries(
+  TOMBSTONE_STYLES.map((s) => [s.id, s]),
+);
 
 /* ----------------------------- level curve ------------------------------ */
 

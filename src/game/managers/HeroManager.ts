@@ -226,11 +226,18 @@ export const HeroManager = {
     hero.health = Math.min(max, current + regen);
   },
 
-  /** Gold cost to instantly revive a Fallen hero -- see fallen.revivalCostBase/PerLevel. */
-  revivalCost(hero: Hero): number {
-    return Math.round(
-      Tuning.get('fallen.revivalCostBase') + hero.level * Tuning.get('fallen.revivalCostPerLevel'),
-    );
+  /**
+   * Gold cost to instantly revive a Fallen hero -- see
+   * fallen.revivalCostBase/PerLevel. `discountPercent` comes from
+   * Undertaker's Favor (ModifierManager.global(state).revivalDiscount) --
+   * a parameter rather than reading state directly here, so HeroManager
+   * doesn't need a GameState/ModifierManager import for one field. Callers
+   * (engine.reviveHero, the Revive button, reviveAllFallen) all pass it
+   * through the same way.
+   */
+  revivalCost(hero: Hero, discountPercent = 0): number {
+    const base = Tuning.get('fallen.revivalCostBase') + hero.level * Tuning.get('fallen.revivalCostPerLevel');
+    return Math.round(base * (1 - Math.min(100, Math.max(0, discountPercent)) / 100));
   },
 
   /**

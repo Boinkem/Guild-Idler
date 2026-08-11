@@ -122,6 +122,17 @@
     }
   },
   {
+    "id": "guardians_retainer",
+    "name": "Guardian's Retainer",
+    "description": "Equip before sending a hero out. Softens whatever this quest is about to do to them, rather than patching it up afterward.",
+    "cost": 90,
+    "glyph": "🛡",
+    "icon": "misc/Misc_20.png",
+    "effect": {
+      "healthDamageReduction": 50
+    }
+  },
+  {
     "id": "pet_treat",
     "name": "Pet Treat",
     "description": "Crafted, not foraged -- a pet's own happiness bar goes up further per treat than raw scraps would give it. Fed directly from the Hatchery's Pets tab, not sent out on quests -- carries no quest effect.",

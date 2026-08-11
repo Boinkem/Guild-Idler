@@ -102,6 +102,7 @@ export const MOD_LABEL: Record<keyof Modifiers, string> = {
   speed: 'Quest speed',
   durability: 'Gear wear reduction',
   health: 'Max Health',
+  revivalDiscount: 'Revival discount',
 };
 
 /**
