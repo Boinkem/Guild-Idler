@@ -9,7 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * Electron derives the userData folder (where saves live) from app.getName(),
  * which defaults to package.json's name/productName. Locking it explicitly
  * here means the display name (productName, window titles, installer name)
- * can change freely — as it just did, Little Knight -> Guild Idler — without
+ * can change freely — as it already has twice now, Little Knight -> Guild Idler -> Guildbound — without
  * silently redirecting existing testers to a new, empty save folder. This
  * must run before any app.getPath('userData') call, including ones inside
  * imported modules that might run at import time.
@@ -301,7 +301,7 @@ function createTray() {
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() },
   ]);
-  tray.setToolTip('Guild Idler');
+  tray.setToolTip('Guildbound');
   tray.setContextMenu(menu);
 }
 
