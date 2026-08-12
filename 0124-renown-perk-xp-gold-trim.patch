@@ -1,0 +1,141 @@
+From e06d37d3e55dc054bb2188be2d3290256c08f6cb Mon Sep 17 00:00:00 2001
+From: Guild Idler Bot <bot@guildidler.local>
+Date: Wed, 12 Aug 2026 21:50:10 +0000
+Subject: [PATCH] Trim Scholar's Legacy / Legacy of Wealth renown perks
+
+Follow-up to the previous patch's flagged-not-fixed outliers, per
+explicit go-ahead:
+
+- renown_perk.scholars_legacy.xpPerLevel: 20 -> 10 (380% -> 190% XP
+  at cap; tier2MaxLevel left at 19).
+- renown_perk.legacy_of_wealth.goldPerLevel: 15 -> 8 (375% -> 200%
+  gold at cap; tier2MaxLevel left at 25).
+
+Pure tuning.json edits, no code changes. Combined XP-track max across
+every source: 620% -> 314%. Combined gold-track max: 523% -> 348%.
+guild-idler-status.md updated.
+
+Verified: npx tsc --noEmit and vite build both clean; RENOWN_BY_ID
+totals confirmed at runtime.
+---
+ guild-idler-status.md          | 72 +++++++++++++++++++++++++++-------
+ src/game/data/json/tuning.json |  8 ++--
+ 2 files changed, 61 insertions(+), 19 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index c76e5fe..00701b1 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -7117,22 +7117,19 @@ registry):
+ 
+ **Found while re-checking the wider XP/gold stacking picture (see the
+ existing "Upgrade balance review" entry above, which already flagged
+-this) -- NOT touched this pass, flagging again since it's now the
+-clearly dominant outlier:** `renown_perk.scholars_legacy.xpPerLevel` = 20,
+-`tier2MaxLevel` = 19 -> **380% XP on its own**, over 3x either of the two
++this) -- fixed in a same-day follow-up below, see "Scholar's Legacy /
++Legacy of Wealth trim" further down. At the time this section was first
++written, both were still unfixed and the numbers below described that
++state:** `renown_perk.scholars_legacy.xpPerLevel` was 20,
++`tier2MaxLevel` 19 -> 380% XP on its own, over 3x either of the two
+ upgrades just fixed, and still the single largest number in the entire
+-XP stack even after this pass (combined XP max across every source is
+-now 124% + 380% = ~504%, down from ~620%, but Scholar's Legacy alone is
+-still doing most of the damage). Its gold-side twin,
+-`renown_perk.legacy_of_wealth.goldPerLevel` = 15, `tier2MaxLevel` = 25 ->
+-**375% gold**, is the same shape and wasn't touched either -- Efficient
+-Adventuring (100%) and Treasury (48%, see above) are comparatively minor
+-next to it. Neither renown perk was in this request's scope and both
+-have real design weight behind their numbers (they're the capstone payoff
+-for the Renown/Prestige system specifically, not an early-game guild
+-upgrade), so left alone pending an explicit call on whether/how far to
+-bring them down -- same "needs a target number, not a guess" reasoning
+-the earlier review already gave for not touching them.
++XP stack even after this pass (combined XP max across every source was
++124% + 380% = ~504% at that point, down from ~620% before this pass, but
++Scholar's Legacy alone was doing most of the damage). Its gold-side
++twin, `renown_perk.legacy_of_wealth.goldPerLevel`, was 15,
++`tier2MaxLevel` 25 -> 375% gold, the same shape and also unfixed at that
++point -- Efficient Adventuring (100%) and Treasury (48%, see above) were
++comparatively minor next to it.
+ 
+ **Recall confirmation -- fixed.** The Recall button
+ (`QuestPanel.tsx`, cancels a hero's active quest) used a native
+@@ -7156,3 +7153,48 @@ weren't part of this request.
+ Verified via `npx tsc --noEmit` and `vite build`, both clean, plus the
+ runtime checks called out inline above (Treasury gold-mod clamp, raid
+ clearance rejection with and without each clearance upgrade).
++
++### Scholar's Legacy / Legacy of Wealth trim -- same-day follow-up
++
++Explicit go-ahead to also fix the two renown perks flagged (not
++touched) in the entry immediately above. Same pattern as Library/Runic
++Insight: pure `tuning.json` edits, no code changes, since
++`RenownPerkDef.modsPerLevel` already reads from the tuning registry the
++same way every other upgrade/facility does.
++
++- `renown_perk.scholars_legacy.xpPerLevel`: 20 -> 10.
++  `tier2MaxLevel` left at 19 (a level-count/cost-curve knob, not a
++  per-level-bloat one -- cutting it would also devalue the Renown
++  already spent climbing tier 2, which isn't the problem being fixed
++  here). Total at cap: 380% -> **190%**.
++- `renown_perk.legacy_of_wealth.goldPerLevel`: 15 -> 8. `tier2MaxLevel`
++  left at 25, same reasoning. Total at cap: 375% -> **200%**.
++
++Roughly the same ~50% cut ratio already applied to Library (12->6) and
++Runic Insight (15->8) earlier in this pass, for consistency rather than
++picking an unrelated target.
++
++**Full combined picture, before this whole batch vs. after:**
++- XP: Library (120%) + Runic Insight (120%) + Scholar's Legacy (380%) =
++  **620%** before -> Library (60%) + Runic Insight (64%) + Scholar's
++  Legacy (190%) = **314%** after -- essentially the intended "cut it
++  roughly in half" outcome, just spread proportionally across all three
++  sources instead of hitting one.
++- Gold: Efficient Adventuring (100%, untouched -- out of scope, wasn't
++  flagged as this pass's target) + Treasury (48%, unchanged ceiling per
++  the modsMaxLevel fix above) + Legacy of Wealth (375% -> 200%) = **523%
++  before -> 348% after**.
++
++Verified at runtime: `RENOWN_BY_ID.scholars_legacy` now resolves to
++`xpPerLevel: 10` × `tier2.maxLevel: 19` = 190 total;
++`RENOWN_BY_ID.legacy_of_wealth` resolves to `goldPerLevel: 8` ×
++`tier2.maxLevel: 25` = 200 total. `npx tsc --noEmit` and `vite build`
++both pass clean.
++
++**Still not touched, still flagged (unchanged from the entry above):**
++quest success (118% combined), quest speed (raids' own 80% +
++non-raid 65%+18%), loot (110%), injury resist (Enduring Legend's 130%
++alone exceeds 100%, worth checking whether the downstream clamp handles
++that before touching the number), and durability (140%, lowest priority
++since it's not a reward stat). None of these were part of this request
++either.
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 1005ae4..3bb2667 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -1285,8 +1285,8 @@
+     "id": "renown_perk.legacy_of_wealth.goldPerLevel",
+     "label": "Legacy of Wealth: gold per level",
+     "category": "renown_perks",
+-    "value": 15,
+-    "default": 15,
++    "value": 8,
++    "default": 8,
+     "description": "gold bonus granted per Legacy of Wealth level.",
+     "min": 0
+   },
+@@ -1537,8 +1537,8 @@
+     "id": "renown_perk.scholars_legacy.xpPerLevel",
+     "label": "Scholar's Legacy: xp per level",
+     "category": "renown_perks",
+-    "value": 20,
+-    "default": 20,
++    "value": 10,
++    "default": 10,
+     "description": "xp bonus granted per Scholar's Legacy level.",
+     "min": 0
+   },
+-- 
+2.43.0
+

@@ -1,0 +1,484 @@
+From 208d72de2d4000d35fb84e4c80c4af97980900d3 Mon Sep 17 00:00:00 2001
+From: Guild Idler Bot <bot@guildidler.local>
+Date: Wed, 12 Aug 2026 22:13:51 +0000
+Subject: [PATCH] Raid-clearance bypass fix, Treasury extended, XP/gold-track
+ trim, styled Recall confirm
+
+Combined patch (supersedes 0123 + 0124, apply this OR that pair, not both):
+
+- RaidManager.canStart now enforces Raid Charter / Heroic Clearance /
+  Mythic Clearance server-side (previously UI-only in RaidsPanel).
+- Board Warden audited: base 1 freeze/day floor confirmed intentional.
+- Treasury maxLevel 12 -> 20 (storage keeps scaling); new
+  GuildDef.modsMaxLevel caps its gold% bonus at the old level-12
+  ceiling.
+- Library xpPerLevel 12 -> 6, Runic Insight xpPerLevel 15 -> 8.
+- Scholar's Legacy xpPerLevel 20 -> 10, Legacy of Wealth
+  goldPerLevel 15 -> 8 (tier2MaxLevel left unchanged on both).
+- Combined XP-track max across every source: 620% -> 314%.
+  Combined gold-track max: 523% -> 348%.
+- New ConfirmModal.tsx replaces the native window.confirm() on the
+  Quest tab's Recall button.
+- guild-idler-status.md updated with the full writeup.
+
+Verified: npx tsc --noEmit and vite build both clean.
+---
+ guild-idler-status.md                | 164 +++++++++++++++++++++++++++
+ src/game/data/json/tuning.json       |  20 ++--
+ src/game/data/progression.ts         |  16 +++
+ src/game/managers/ModifierManager.ts |  11 +-
+ src/game/managers/RaidManager.ts     |  20 ++++
+ src/game/types.ts                    |  11 ++
+ src/ui/ConfirmModal.tsx              |  54 +++++++++
+ src/ui/panels/QuestPanel.tsx         |  25 +++-
+ 8 files changed, 307 insertions(+), 14 deletions(-)
+ create mode 100644 src/ui/ConfirmModal.tsx
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index c09a741..00701b1 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -7034,3 +7034,167 @@ duplicate the title; retirement clears both `titles` and `activeTitle`;
+ both migration paths (a hero with a prior title, and a hero with none)
+ convert correctly with no leftover `.title` field; all 8 raids carry a
+ title. `npx tsc --noEmit` and `vite build` both pass clean.
++
++### Board Warden audit, raid-clearance bypass fixed, Treasury extended, XP-track trim, Recall confirmation restyled
++
++Batch of reports: whether Board Warden's freeze allowance can be
++bypassed, whether any other "unlocks a new function" upgrade has the
++same risk, Treasury extended as a longer-tail gold sink, Library/Runic
++Insight's XP bonus brought down, and the Recall prompt's unstyled native
++dialog.
++
++**Board Warden -- audited, not a bug.** Confirmed against
++`ModifierManager.freezeChangesPerDay`: base 1 freeze/day is a
++permanent floor regardless of whether Board Warden is owned, same
++`1 + bonus` shape `questFreeRerolls` (Board Runner) and
++`vendorFreeRerolls` (Trade Favor) already use. This is deliberate,
++matches those two established systems, and is documented as such in the
++upgrade's own code comment from when the freeze slot was originally
++built -- not something this pass needed to change.
++
++**Real bypass bug found while auditing the same pattern elsewhere:
++raid difficulty clearance was never enforced outside the UI.**
++`RaidManager.canStart` checked party composition, hero status/level, and
++whether the raid itself was unlocked (`isRaidUnlocked`) -- but never
++checked Raid Charter, Heroic Clearance, or Mythic Clearance ownership at
++all. Those three were enforced *only* by `RaidsPanel.tsx`'s difficulty
++circles (`DIFFICULTY_UNLOCK` map, UI-side). Per the project's own "one
++mutable state, one mutation path" architecture, the manager is supposed
++to be the actual source of truth; any other call into `startRaid` (a
++future UI surface, a bug in the modal's own gating, a hand-edited save)
++could have committed a party straight to Heroic or Mythic difficulty, or
++raided at all, without ever owning the gating upgrade. Fixed by mirroring
++`RaidsPanel`'s own unlock map directly inside `RaidManager.canStart`:
++`ModifierManager.hasUnlock(state, 'raids' | 'raidsHeroic' | 'raidsMythic')`
++checked before the existing party/level checks, each with its own error
++string. Verified at runtime: a fresh save with no `raid_charter` correctly
++rejects even a Normal-difficulty start; owning `raid_charter` but not
++`raid_heroic_clearance` correctly rejects a Heroic start with the new
++error message.
++
++**Other unlock-gated upgrades checked for the same pattern, confirmed
++clean:** `legendaryQuests` (`QuestManager.generateContractsForHero`
++filters the Legendary tier out entirely unless
++`hasUnlock(state, 'legendaryQuests')`), `chains`
++(`QuestManager.generateChainBoard` gates the whole chain board behind
++`hasUnlock(state, 'chains')`), `autoChain` (every streak-start site in
++`engine.ts` reads `state.upgrades['auto_chain'] ?? 0` and only rolls a
++streak when `level > 0`), and `blackMarket`
++(`engine.ts`'s stock-refresh path is itself gated on
++`hasUnlock(state, 'blackMarket')`). Raids was the one gap.
++
++**Treasury -- extended to level 20, decoupled from its own gold% bonus.**
++Per request ("keep scaling up to say 20, from where it is" -- was capped
++at 12): `guild_facility.treasury.maxLevel` 12 -> 20 in `tuning.json`.
++Extending `maxLevel` alone would have also silently taken Treasury's
++`gold` modifier from 48% to 80% at cap (its `modsPerLevel.gold` scales
++with the same level as storage), compounding the exact stacked-bonus
++problem flagged for XP below and already flagged for gold in the earlier
++"Upgrade balance review" entry. Instead: new `GuildDef.modsMaxLevel?:
++number` field (types.ts), read by `ModifierManager.guildMods` to clamp
++which level counts toward the flat `Modifiers` bonus, independent of the
++facility's real level. Treasury sets `modsMaxLevel: 12` -- the gold%
++bonus stays frozen at its old 48% ceiling, while `storagePerLevel`
++(already an uncapped, structural field read straight off the real level
++in `ModifierManager.goldStorage`) keeps growing all the way to 20,
++purely as the requested longer-tail gold sink. Cost curve itself
++untouched (`baseCost`/`costGrowth` unchanged) -- levels 13-20 come out
++to roughly 536K -> 25.9M gold each, which reads as intentional for a
++late-game dump once storage is the only thing still worth buying.
++Verified at runtime: `guildMods().gold` is identical at treasury level
++12 and level 20 (48 both times); `goldStorage()` at level 20 correctly
++reflects the full uncapped 20 levels.
++
++**Library + Runic Insight -- XP bonus brought down, per request.**
++Both were pure `tuning.json` edits, no code changes (every `UPGRADES`/
++`GUILD_FACILITIES` entry already reads its numbers from the tuning
++registry):
++- `guild_facility.library.xpPerLevel`: 12 -> 6 (10 levels: 120% -> 60%
++  max).
++- `upgrade.war_stories.xpPerLevel` (Runic Insight): 15 -> 8 (8 levels:
++  120% -> 64% max).
++- Combined XP-track max from these two alone: 240% -> 124%.
++
++**Found while re-checking the wider XP/gold stacking picture (see the
++existing "Upgrade balance review" entry above, which already flagged
++this) -- fixed in a same-day follow-up below, see "Scholar's Legacy /
++Legacy of Wealth trim" further down. At the time this section was first
++written, both were still unfixed and the numbers below described that
++state:** `renown_perk.scholars_legacy.xpPerLevel` was 20,
++`tier2MaxLevel` 19 -> 380% XP on its own, over 3x either of the two
++upgrades just fixed, and still the single largest number in the entire
++XP stack even after this pass (combined XP max across every source was
++124% + 380% = ~504% at that point, down from ~620% before this pass, but
++Scholar's Legacy alone was doing most of the damage). Its gold-side
++twin, `renown_perk.legacy_of_wealth.goldPerLevel`, was 15,
++`tier2MaxLevel` 25 -> 375% gold, the same shape and also unfixed at that
++point -- Efficient Adventuring (100%) and Treasury (48%, see above) were
++comparatively minor next to it.
++
++**Recall confirmation -- fixed.** The Recall button
++(`QuestPanel.tsx`, cancels a hero's active quest) used a native
++`confirm('Cancel the current quest and bring the hero home?')` -- an
++unstyled OS dialog, visually out of place next to every other
++confirmation surface in the game. New `ConfirmModal.tsx`: a small,
++generic overlay+modal component using the same `.overlay`/`.modal`
++shell, pop-in animation, and `.btn-primary`/`.btn-ghost`/`.btn-danger`
++button conventions every other modal already establishes -- title,
++message, and two labeled buttons (`confirmLabel`/`cancelLabel`), plus an
++optional `danger` flag for `.btn-danger` styling on destructive
++confirmations. `QuestPanel.tsx`'s `recall()` now sets local state
++(`pendingRecallHeroId`) instead of calling `confirm()` directly, with the
++actual `engine.recallHero()` call moved into a `confirmRecall()` handler
++wired to the modal's `onConfirm`. Scoped deliberately narrow -- this is
++the *only* native-`confirm()` call site touched. `StatsPanel`'s hard-reset
++button and Send-All-Idle's own confirmation still use native `confirm()`
++and are good candidates to move onto the same `ConfirmModal` later, but
++weren't part of this request.
++
++Verified via `npx tsc --noEmit` and `vite build`, both clean, plus the
++runtime checks called out inline above (Treasury gold-mod clamp, raid
++clearance rejection with and without each clearance upgrade).
++
++### Scholar's Legacy / Legacy of Wealth trim -- same-day follow-up
++
++Explicit go-ahead to also fix the two renown perks flagged (not
++touched) in the entry immediately above. Same pattern as Library/Runic
++Insight: pure `tuning.json` edits, no code changes, since
++`RenownPerkDef.modsPerLevel` already reads from the tuning registry the
++same way every other upgrade/facility does.
++
++- `renown_perk.scholars_legacy.xpPerLevel`: 20 -> 10.
++  `tier2MaxLevel` left at 19 (a level-count/cost-curve knob, not a
++  per-level-bloat one -- cutting it would also devalue the Renown
++  already spent climbing tier 2, which isn't the problem being fixed
++  here). Total at cap: 380% -> **190%**.
++- `renown_perk.legacy_of_wealth.goldPerLevel`: 15 -> 8. `tier2MaxLevel`
++  left at 25, same reasoning. Total at cap: 375% -> **200%**.
++
++Roughly the same ~50% cut ratio already applied to Library (12->6) and
++Runic Insight (15->8) earlier in this pass, for consistency rather than
++picking an unrelated target.
++
++**Full combined picture, before this whole batch vs. after:**
++- XP: Library (120%) + Runic Insight (120%) + Scholar's Legacy (380%) =
++  **620%** before -> Library (60%) + Runic Insight (64%) + Scholar's
++  Legacy (190%) = **314%** after -- essentially the intended "cut it
++  roughly in half" outcome, just spread proportionally across all three
++  sources instead of hitting one.
++- Gold: Efficient Adventuring (100%, untouched -- out of scope, wasn't
++  flagged as this pass's target) + Treasury (48%, unchanged ceiling per
++  the modsMaxLevel fix above) + Legacy of Wealth (375% -> 200%) = **523%
++  before -> 348% after**.
++
++Verified at runtime: `RENOWN_BY_ID.scholars_legacy` now resolves to
++`xpPerLevel: 10` × `tier2.maxLevel: 19` = 190 total;
++`RENOWN_BY_ID.legacy_of_wealth` resolves to `goldPerLevel: 8` ×
++`tier2.maxLevel: 25` = 200 total. `npx tsc --noEmit` and `vite build`
++both pass clean.
++
++**Still not touched, still flagged (unchanged from the entry above):**
++quest success (118% combined), quest speed (raids' own 80% +
++non-raid 65%+18%), loot (110%), injury resist (Enduring Legend's 130%
++alone exceeds 100%, worth checking whether the downstream clamp handles
++that before touching the number), and durability (140%, lowest priority
++since it's not a reward stat). None of these were part of this request
++either.
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index cfe54ad..3bb2667 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -204,8 +204,8 @@
+     "id": "guild_facility.treasury.maxLevel",
+     "label": "Treasury: max level",
+     "category": "guild_facilities",
+-    "value": 12,
+-    "default": 12,
++    "value": 20,
++    "default": 20,
+     "min": 1,
+     "description": "Highest level Treasury can reach."
+   },
+@@ -289,8 +289,8 @@
+     "id": "guild_facility.library.xpPerLevel",
+     "label": "Library: xp % per level",
+     "category": "guild_facilities",
+-    "value": 12,
+-    "default": 12,
++    "value": 6,
++    "default": 6,
+     "min": 0,
+     "max": 40,
+     "description": "Flat xp percentage granted per level, guild-wide."
+@@ -1285,8 +1285,8 @@
+     "id": "renown_perk.legacy_of_wealth.goldPerLevel",
+     "label": "Legacy of Wealth: gold per level",
+     "category": "renown_perks",
+-    "value": 15,
+-    "default": 15,
++    "value": 8,
++    "default": 8,
+     "description": "gold bonus granted per Legacy of Wealth level.",
+     "min": 0
+   },
+@@ -1537,8 +1537,8 @@
+     "id": "renown_perk.scholars_legacy.xpPerLevel",
+     "label": "Scholar's Legacy: xp per level",
+     "category": "renown_perks",
+-    "value": 20,
+-    "default": 20,
++    "value": 10,
++    "default": 10,
+     "description": "xp bonus granted per Scholar's Legacy level.",
+     "min": 0
+   },
+@@ -1852,8 +1852,8 @@
+     "id": "upgrade.war_stories.xpPerLevel",
+     "label": "Runic Insight: xp bonus per level",
+     "category": "vendor_upgrades",
+-    "value": 15,
+-    "default": 15,
++    "value": 8,
++    "default": 8,
+     "description": "Runic Insight's xp bonus per level.",
+     "min": 0
+   },
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 2019b0f..f378d94 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -331,8 +331,24 @@ export const GUILD_FACILITIES: GuildDef[] = [
+     description: 'Raises how much gold the guild can hold at once.',
+     baseCost: Tuning.get('guild_facility.treasury.baseCost'),
+     costGrowth: Tuning.get('guild_facility.treasury.costGrowth'),
++    // Extended 12 -> 20: Treasury is meant to keep working as a gold sink
++    // (storage headroom) well past where its other, "real" balance
++    // effects should keep growing. storagePerLevel below stays uncapped
++    // and structural, same as before -- levels 13-20 are purely about
++    // storage headroom, not more gold%. See modsMaxLevel below and
++    // ModifierManager.guildMods for how that's actually enforced.
+     maxLevel: Tuning.get('guild_facility.treasury.maxLevel'),
+     modsPerLevel: { gold: Tuning.get('guild_facility.treasury.goldPerLevel') },
++    // Gold% bonus still stops scaling at the old level-12 ceiling even
++    // though the facility itself now goes to 20 -- levels 13-20 buy pure
++    // storage, nothing else. Without this, extending maxLevel alone would
++    // have silently taken Treasury's own gold bonus from 48% to 80% on
++    // top of Efficient Adventuring's separate gold track, compounding the
++    // exact kind of stacked-bonus bloat this pass is trying to trim
++    // elsewhere (see Library/Runic Insight below). Hardcoded rather than
++    // tuning-driven, same "structural, not a balance knob" reasoning
++    // storagePerLevel/heroSlotsPerLevel already use.
++    modsMaxLevel: 12,
+     storagePerLevel: 5000,
+   },
+   {
+diff --git a/src/game/managers/ModifierManager.ts b/src/game/managers/ModifierManager.ts
+index f978d1b..39914aa 100644
+--- a/src/game/managers/ModifierManager.ts
++++ b/src/game/managers/ModifierManager.ts
+@@ -23,7 +23,16 @@ export const ModifierManager = {
+     return sumMods(
+       ...Object.entries(state.guild).map(([id, level]) => {
+         const def = GUILD_BY_ID[id];
+-        return def ? scaleMods(def.modsPerLevel, level) : {};
++        if (!def) return {};
++        // modsMaxLevel (Treasury only, currently) clamps how many levels'
++        // worth of the flat Modifiers bonus count, independent of the
++        // facility's real level -- lets a facility keep selling levels
++        // past that point for a purely structural effect (Treasury's own
++        // storagePerLevel, read straight off state.guild.treasury with no
++        // clamp in ModifierManager.goldStorage) without the % bonus
++        // growing forever alongside it. See GuildDef.modsMaxLevel.
++        const modLevel = def.modsMaxLevel !== undefined ? Math.min(level, def.modsMaxLevel) : level;
++        return scaleMods(def.modsPerLevel, modLevel);
+       }),
+     );
+   },
+diff --git a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
+index 57b16fd..7dc0f4a 100644
+--- a/src/game/managers/RaidManager.ts
++++ b/src/game/managers/RaidManager.ts
+@@ -148,6 +148,26 @@ export const RaidManager = {
+     if (!raid) return { ok: false, error: 'Unknown raid.' };
+     if (!isRaidUnlocked(raidId, state.completedRaids, state.completedChains)) return { ok: false, error: 'This raid has not been unlocked yet.' };
+ 
++    // Raid Charter / Heroic Clearance / Mythic Clearance were previously
++    // enforced only by RaidsPanel.tsx's difficulty circles (UI-only) --
++    // this manager, the actual single mutation path per the project's own
++    // "one mutable state, one mutation path" architecture, never checked
++    // them at all. That meant any other call into startRaid (a future UI
++    // surface, a bug in the modal's own gating, a bad save edit) could
++    // commit a party to a raid -- or straight to Heroic/Mythic -- without
++    // ever owning the upgrade that's supposed to gate it. Mirrors
++    // RaidsPanel's own DIFFICULTY_UNLOCK map exactly, just enforced here
++    // where it can't be bypassed.
++    if (!ModifierManager.hasUnlock(state, 'raids')) {
++      return { ok: false, error: 'The guild needs a Raid Charter before it can commit to a raid.' };
++    }
++    if (difficulty === 'heroic' && !ModifierManager.hasUnlock(state, 'raidsHeroic')) {
++      return { ok: false, error: 'Heroic Clearance is required to raid at this difficulty.' };
++    }
++    if (difficulty === 'mythic' && !ModifierManager.hasUnlock(state, 'raidsMythic')) {
++      return { ok: false, error: 'Mythic Clearance is required to raid at this difficulty.' };
++    }
++
+     const cfg = RAID_DIFFICULTIES[difficulty];
+     if (heroIds.length !== cfg.partySize) {
+       return { ok: false, error: `${cfg.difficulty[0].toUpperCase()}${cfg.difficulty.slice(1)} requires exactly ${cfg.partySize} heroes.` };
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 690264e..6117dc9 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -925,6 +925,17 @@ export interface GuildDef {
+    * reaching this facility's max level.
+    */
+   healTimeReductionMinutesPerLevel?: number;
++  /**
++   * Caps how many levels' worth of `modsPerLevel` actually count, even
++   * when `maxLevel` (the purchasable ceiling) goes higher -- lets a
++   * facility keep scaling one structural effect (Treasury's own
++   * `storagePerLevel`, uncapped) as a long-tail gold sink without its
++   * flat Modifiers bonus (Treasury's `gold` %) silently growing right
++   * alongside it forever. Undefined means no cap, same as before this
++   * field existed. See ModifierManager.guildMods and
++   * guild-idler-status.md's "Treasury -- extended to level 20" entry.
++   */
++  modsMaxLevel?: number;
+   /**
+    * Music Hall's structural effect -- same "not a flat Modifiers bonus"
+    * reasoning as storagePerLevel/heroSlotsPerLevel/
+diff --git a/src/ui/ConfirmModal.tsx b/src/ui/ConfirmModal.tsx
+new file mode 100644
+index 0000000..44d94dd
+--- /dev/null
++++ b/src/ui/ConfirmModal.tsx
+@@ -0,0 +1,54 @@
++/**
++ * A small, reusable styled confirm/cancel prompt -- the in-theme
++ * replacement for a native `window.confirm()` call. Same `.overlay`/
++ * `.modal` shell and `.modal-pop-in` animation every other modal in the
++ * game already uses (GuildNamingModal, PickerModal, etc.), so this reads
++ * as part of the game rather than a browser chrome dialog dropped on top
++ * of it.
++ *
++ * Deliberately generic (message + two labeled buttons) rather than
++ * one-off per caller -- Recall is the first consumer (see QuestPanel.tsx),
++ * but the native-`confirm()` convention is still used a few other places
++ * (StatsPanel's hard reset, Send-All-Idle) that can move onto this same
++ * component later without needing their own bespoke modal each time. See
++ * guild-idler-status.md's "Recall confirmation -- fixed" entry for the
++ * full writeup and the deliberately-narrow scope of this pass.
++ */
++export function ConfirmModal({
++  title,
++  message,
++  confirmLabel = 'Confirm',
++  cancelLabel = 'Cancel',
++  danger = false,
++  onConfirm,
++  onCancel,
++}: {
++  title?: string;
++  message: string;
++  confirmLabel?: string;
++  cancelLabel?: string;
++  /** Renders the confirm button as .btn-danger instead of .btn-primary --
++   *  same "destructive/irreversible action" accent StatsPanel's own hard
++   *  reset button already uses. Recall isn't destructive in that sense
++   *  (no gold/progress lost beyond the in-flight quest, which is exactly
++   *  what the prompt is warning about), so it stays the default
++   *  .btn-primary rather than reaching for red. */
++  danger?: boolean;
++  onConfirm: () => void;
++  onCancel: () => void;
++}) {
++  return (
++    <div className="overlay" onClick={onCancel}>
++      <div className="modal" style={{ maxWidth: 360 }} onClick={(e) => e.stopPropagation()}>
++        {title && <h3 style={{ marginTop: 0 }}>{title}</h3>}
++        <p className="small" style={{ marginTop: title ? 0 : undefined }}>{message}</p>
++        <div className="row end" style={{ gap: 8, marginTop: 16 }}>
++          <button className="btn-ghost" onClick={onCancel}>{cancelLabel}</button>
++          <button className={danger ? 'btn-danger' : 'btn-primary'} onClick={onConfirm} autoFocus>
++            {confirmLabel}
++          </button>
++        </div>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/ui/panels/QuestPanel.tsx b/src/ui/panels/QuestPanel.tsx
+index 134ceb4..3c71ba1 100644
+--- a/src/ui/panels/QuestPanel.tsx
++++ b/src/ui/panels/QuestPanel.tsx
+@@ -8,6 +8,7 @@ import { QuestOffer, Hero } from '../../game/types';
+ import { formatDuration, formatGold } from '../../game/util';
+ import { RarityPill } from '../RarityPill';
+ import { EggIcon } from '../EggIcon';
++import { ConfirmModal } from '../ConfirmModal';
+ 
+ type Offer = QuestOffer;
+ 
+@@ -322,9 +323,16 @@ export function QuestPanel() {
+   // forfeits whatever that quest would have paid out, and (per
+   // recallHero) also drops any Auto-Chain streak or chain-stepping they
+   // had queued up, so this isn't something to trigger by an accidental
+-  // click.
+-  const recall = (heroId: string) => {
+-    if (confirm('Cancel the current quest and bring the hero home?')) engine.recallHero(heroId);
++  // click. Routed through the in-theme ConfirmModal (state holds which
++  // hero, if any, is pending a recall confirmation) instead of a native
++  // `confirm()` -- that dialog rendered as an unstyled OS text box, out
++  // of place next to everything else in the game. See
++  // guild-idler-status.md's "Recall confirmation -- fixed" entry.
++  const [pendingRecallHeroId, setPendingRecallHeroId] = useState<string | null>(null);
++  const recall = (heroId: string) => setPendingRecallHeroId(heroId);
++  const confirmRecall = () => {
++    if (pendingRecallHeroId) engine.recallHero(pendingRecallHeroId);
++    setPendingRecallHeroId(null);
+   };
+ 
+   // Roster-wide count of heroes not currently questing -- drives the "Send
+@@ -511,6 +519,17 @@ export function QuestPanel() {
+           )}
+         </>
+       )}
++
++      {pendingRecallHeroId && (
++        <ConfirmModal
++          title="Recall hero"
++          message="Cancel the current quest and bring the hero home? The quest's reward is forfeited."
++          confirmLabel="Recall"
++          cancelLabel="Keep going"
++          onConfirm={confirmRecall}
++          onCancel={() => setPendingRecallHeroId(null)}
++        />
++      )}
+     </>
+   );
+ }
+-- 
+2.43.0
+

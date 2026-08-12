@@ -926,6 +926,17 @@ export interface GuildDef {
    */
   healTimeReductionMinutesPerLevel?: number;
   /**
+   * Caps how many levels' worth of `modsPerLevel` actually count, even
+   * when `maxLevel` (the purchasable ceiling) goes higher -- lets a
+   * facility keep scaling one structural effect (Treasury's own
+   * `storagePerLevel`, uncapped) as a long-tail gold sink without its
+   * flat Modifiers bonus (Treasury's `gold` %) silently growing right
+   * alongside it forever. Undefined means no cap, same as before this
+   * field existed. See ModifierManager.guildMods and
+   * guild-idler-status.md's "Treasury -- extended to level 20" entry.
+   */
+  modsMaxLevel?: number;
+  /**
    * Music Hall's structural effect -- same "not a flat Modifiers bonus"
    * reasoning as storagePerLevel/heroSlotsPerLevel/
    * healTimeReductionMinutesPerLevel above. Each level unlocks exactly

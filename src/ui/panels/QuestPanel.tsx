@@ -8,6 +8,7 @@ import { QuestOffer, Hero } from '../../game/types';
 import { formatDuration, formatGold } from '../../game/util';
 import { RarityPill } from '../RarityPill';
 import { EggIcon } from '../EggIcon';
+import { ConfirmModal } from '../ConfirmModal';
 
 type Offer = QuestOffer;
 
@@ -322,9 +323,16 @@ export function QuestPanel() {
   // forfeits whatever that quest would have paid out, and (per
   // recallHero) also drops any Auto-Chain streak or chain-stepping they
   // had queued up, so this isn't something to trigger by an accidental
-  // click.
-  const recall = (heroId: string) => {
-    if (confirm('Cancel the current quest and bring the hero home?')) engine.recallHero(heroId);
+  // click. Routed through the in-theme ConfirmModal (state holds which
+  // hero, if any, is pending a recall confirmation) instead of a native
+  // `confirm()` -- that dialog rendered as an unstyled OS text box, out
+  // of place next to everything else in the game. See
+  // guild-idler-status.md's "Recall confirmation -- fixed" entry.
+  const [pendingRecallHeroId, setPendingRecallHeroId] = useState<string | null>(null);
+  const recall = (heroId: string) => setPendingRecallHeroId(heroId);
+  const confirmRecall = () => {
+    if (pendingRecallHeroId) engine.recallHero(pendingRecallHeroId);
+    setPendingRecallHeroId(null);
   };
 
   // Roster-wide count of heroes not currently questing -- drives the "Send
@@ -510,6 +518,17 @@ export function QuestPanel() {
             </>
           )}
         </>
+      )}
+
+      {pendingRecallHeroId && (
+        <ConfirmModal
+          title="Recall hero"
+          message="Cancel the current quest and bring the hero home? The quest's reward is forfeited."
+          confirmLabel="Recall"
+          cancelLabel="Keep going"
+          onConfirm={confirmRecall}
+          onCancel={() => setPendingRecallHeroId(null)}
+        />
       )}
     </>
   );

@@ -7034,3 +7034,167 @@ duplicate the title; retirement clears both `titles` and `activeTitle`;
 both migration paths (a hero with a prior title, and a hero with none)
 convert correctly with no leftover `.title` field; all 8 raids carry a
 title. `npx tsc --noEmit` and `vite build` both pass clean.
+
+### Board Warden audit, raid-clearance bypass fixed, Treasury extended, XP-track trim, Recall confirmation restyled
+
+Batch of reports: whether Board Warden's freeze allowance can be
+bypassed, whether any other "unlocks a new function" upgrade has the
+same risk, Treasury extended as a longer-tail gold sink, Library/Runic
+Insight's XP bonus brought down, and the Recall prompt's unstyled native
+dialog.
+
+**Board Warden -- audited, not a bug.** Confirmed against
+`ModifierManager.freezeChangesPerDay`: base 1 freeze/day is a
+permanent floor regardless of whether Board Warden is owned, same
+`1 + bonus` shape `questFreeRerolls` (Board Runner) and
+`vendorFreeRerolls` (Trade Favor) already use. This is deliberate,
+matches those two established systems, and is documented as such in the
+upgrade's own code comment from when the freeze slot was originally
+built -- not something this pass needed to change.
+
+**Real bypass bug found while auditing the same pattern elsewhere:
+raid difficulty clearance was never enforced outside the UI.**
+`RaidManager.canStart` checked party composition, hero status/level, and
+whether the raid itself was unlocked (`isRaidUnlocked`) -- but never
+checked Raid Charter, Heroic Clearance, or Mythic Clearance ownership at
+all. Those three were enforced *only* by `RaidsPanel.tsx`'s difficulty
+circles (`DIFFICULTY_UNLOCK` map, UI-side). Per the project's own "one
+mutable state, one mutation path" architecture, the manager is supposed
+to be the actual source of truth; any other call into `startRaid` (a
+future UI surface, a bug in the modal's own gating, a hand-edited save)
+could have committed a party straight to Heroic or Mythic difficulty, or
+raided at all, without ever owning the gating upgrade. Fixed by mirroring
+`RaidsPanel`'s own unlock map directly inside `RaidManager.canStart`:
+`ModifierManager.hasUnlock(state, 'raids' | 'raidsHeroic' | 'raidsMythic')`
+checked before the existing party/level checks, each with its own error
+string. Verified at runtime: a fresh save with no `raid_charter` correctly
+rejects even a Normal-difficulty start; owning `raid_charter` but not
+`raid_heroic_clearance` correctly rejects a Heroic start with the new
+error message.
+
+**Other unlock-gated upgrades checked for the same pattern, confirmed
+clean:** `legendaryQuests` (`QuestManager.generateContractsForHero`
+filters the Legendary tier out entirely unless
+`hasUnlock(state, 'legendaryQuests')`), `chains`
+(`QuestManager.generateChainBoard` gates the whole chain board behind
+`hasUnlock(state, 'chains')`), `autoChain` (every streak-start site in
+`engine.ts` reads `state.upgrades['auto_chain'] ?? 0` and only rolls a
+streak when `level > 0`), and `blackMarket`
+(`engine.ts`'s stock-refresh path is itself gated on
+`hasUnlock(state, 'blackMarket')`). Raids was the one gap.
+
+**Treasury -- extended to level 20, decoupled from its own gold% bonus.**
+Per request ("keep scaling up to say 20, from where it is" -- was capped
+at 12): `guild_facility.treasury.maxLevel` 12 -> 20 in `tuning.json`.
+Extending `maxLevel` alone would have also silently taken Treasury's
+`gold` modifier from 48% to 80% at cap (its `modsPerLevel.gold` scales
+with the same level as storage), compounding the exact stacked-bonus
+problem flagged for XP below and already flagged for gold in the earlier
+"Upgrade balance review" entry. Instead: new `GuildDef.modsMaxLevel?:
+number` field (types.ts), read by `ModifierManager.guildMods` to clamp
+which level counts toward the flat `Modifiers` bonus, independent of the
+facility's real level. Treasury sets `modsMaxLevel: 12` -- the gold%
+bonus stays frozen at its old 48% ceiling, while `storagePerLevel`
+(already an uncapped, structural field read straight off the real level
+in `ModifierManager.goldStorage`) keeps growing all the way to 20,
+purely as the requested longer-tail gold sink. Cost curve itself
+untouched (`baseCost`/`costGrowth` unchanged) -- levels 13-20 come out
+to roughly 536K -> 25.9M gold each, which reads as intentional for a
+late-game dump once storage is the only thing still worth buying.
+Verified at runtime: `guildMods().gold` is identical at treasury level
+12 and level 20 (48 both times); `goldStorage()` at level 20 correctly
+reflects the full uncapped 20 levels.
+
+**Library + Runic Insight -- XP bonus brought down, per request.**
+Both were pure `tuning.json` edits, no code changes (every `UPGRADES`/
+`GUILD_FACILITIES` entry already reads its numbers from the tuning
+registry):
+- `guild_facility.library.xpPerLevel`: 12 -> 6 (10 levels: 120% -> 60%
+  max).
+- `upgrade.war_stories.xpPerLevel` (Runic Insight): 15 -> 8 (8 levels:
+  120% -> 64% max).
+- Combined XP-track max from these two alone: 240% -> 124%.
+
+**Found while re-checking the wider XP/gold stacking picture (see the
+existing "Upgrade balance review" entry above, which already flagged
+this) -- fixed in a same-day follow-up below, see "Scholar's Legacy /
+Legacy of Wealth trim" further down. At the time this section was first
+written, both were still unfixed and the numbers below described that
+state:** `renown_perk.scholars_legacy.xpPerLevel` was 20,
+`tier2MaxLevel` 19 -> 380% XP on its own, over 3x either of the two
+upgrades just fixed, and still the single largest number in the entire
+XP stack even after this pass (combined XP max across every source was
+124% + 380% = ~504% at that point, down from ~620% before this pass, but
+Scholar's Legacy alone was doing most of the damage). Its gold-side
+twin, `renown_perk.legacy_of_wealth.goldPerLevel`, was 15,
+`tier2MaxLevel` 25 -> 375% gold, the same shape and also unfixed at that
+point -- Efficient Adventuring (100%) and Treasury (48%, see above) were
+comparatively minor next to it.
+
+**Recall confirmation -- fixed.** The Recall button
+(`QuestPanel.tsx`, cancels a hero's active quest) used a native
+`confirm('Cancel the current quest and bring the hero home?')` -- an
+unstyled OS dialog, visually out of place next to every other
+confirmation surface in the game. New `ConfirmModal.tsx`: a small,
+generic overlay+modal component using the same `.overlay`/`.modal`
+shell, pop-in animation, and `.btn-primary`/`.btn-ghost`/`.btn-danger`
+button conventions every other modal already establishes -- title,
+message, and two labeled buttons (`confirmLabel`/`cancelLabel`), plus an
+optional `danger` flag for `.btn-danger` styling on destructive
+confirmations. `QuestPanel.tsx`'s `recall()` now sets local state
+(`pendingRecallHeroId`) instead of calling `confirm()` directly, with the
+actual `engine.recallHero()` call moved into a `confirmRecall()` handler
+wired to the modal's `onConfirm`. Scoped deliberately narrow -- this is
+the *only* native-`confirm()` call site touched. `StatsPanel`'s hard-reset
+button and Send-All-Idle's own confirmation still use native `confirm()`
+and are good candidates to move onto the same `ConfirmModal` later, but
+weren't part of this request.
+
+Verified via `npx tsc --noEmit` and `vite build`, both clean, plus the
+runtime checks called out inline above (Treasury gold-mod clamp, raid
+clearance rejection with and without each clearance upgrade).
+
+### Scholar's Legacy / Legacy of Wealth trim -- same-day follow-up
+
+Explicit go-ahead to also fix the two renown perks flagged (not
+touched) in the entry immediately above. Same pattern as Library/Runic
+Insight: pure `tuning.json` edits, no code changes, since
+`RenownPerkDef.modsPerLevel` already reads from the tuning registry the
+same way every other upgrade/facility does.
+
+- `renown_perk.scholars_legacy.xpPerLevel`: 20 -> 10.
+  `tier2MaxLevel` left at 19 (a level-count/cost-curve knob, not a
+  per-level-bloat one -- cutting it would also devalue the Renown
+  already spent climbing tier 2, which isn't the problem being fixed
+  here). Total at cap: 380% -> **190%**.
+- `renown_perk.legacy_of_wealth.goldPerLevel`: 15 -> 8. `tier2MaxLevel`
+  left at 25, same reasoning. Total at cap: 375% -> **200%**.
+
+Roughly the same ~50% cut ratio already applied to Library (12->6) and
+Runic Insight (15->8) earlier in this pass, for consistency rather than
+picking an unrelated target.
+
+**Full combined picture, before this whole batch vs. after:**
+- XP: Library (120%) + Runic Insight (120%) + Scholar's Legacy (380%) =
+  **620%** before -> Library (60%) + Runic Insight (64%) + Scholar's
+  Legacy (190%) = **314%** after -- essentially the intended "cut it
+  roughly in half" outcome, just spread proportionally across all three
+  sources instead of hitting one.
+- Gold: Efficient Adventuring (100%, untouched -- out of scope, wasn't
+  flagged as this pass's target) + Treasury (48%, unchanged ceiling per
+  the modsMaxLevel fix above) + Legacy of Wealth (375% -> 200%) = **523%
+  before -> 348% after**.
+
+Verified at runtime: `RENOWN_BY_ID.scholars_legacy` now resolves to
+`xpPerLevel: 10` × `tier2.maxLevel: 19` = 190 total;
+`RENOWN_BY_ID.legacy_of_wealth` resolves to `goldPerLevel: 8` ×
+`tier2.maxLevel: 25` = 200 total. `npx tsc --noEmit` and `vite build`
+both pass clean.
+
+**Still not touched, still flagged (unchanged from the entry above):**
+quest success (118% combined), quest speed (raids' own 80% +
+non-raid 65%+18%), loot (110%), injury resist (Enduring Legend's 130%
+alone exceeds 100%, worth checking whether the downstream clamp handles
+that before touching the number), and durability (140%, lowest priority
+since it's not a reward stat). None of these were part of this request
+either.

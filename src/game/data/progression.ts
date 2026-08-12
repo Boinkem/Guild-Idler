@@ -331,8 +331,24 @@ export const GUILD_FACILITIES: GuildDef[] = [
     description: 'Raises how much gold the guild can hold at once.',
     baseCost: Tuning.get('guild_facility.treasury.baseCost'),
     costGrowth: Tuning.get('guild_facility.treasury.costGrowth'),
+    // Extended 12 -> 20: Treasury is meant to keep working as a gold sink
+    // (storage headroom) well past where its other, "real" balance
+    // effects should keep growing. storagePerLevel below stays uncapped
+    // and structural, same as before -- levels 13-20 are purely about
+    // storage headroom, not more gold%. See modsMaxLevel below and
+    // ModifierManager.guildMods for how that's actually enforced.
     maxLevel: Tuning.get('guild_facility.treasury.maxLevel'),
     modsPerLevel: { gold: Tuning.get('guild_facility.treasury.goldPerLevel') },
+    // Gold% bonus still stops scaling at the old level-12 ceiling even
+    // though the facility itself now goes to 20 -- levels 13-20 buy pure
+    // storage, nothing else. Without this, extending maxLevel alone would
+    // have silently taken Treasury's own gold bonus from 48% to 80% on
+    // top of Efficient Adventuring's separate gold track, compounding the
+    // exact kind of stacked-bonus bloat this pass is trying to trim
+    // elsewhere (see Library/Runic Insight below). Hardcoded rather than
+    // tuning-driven, same "structural, not a balance knob" reasoning
+    // storagePerLevel/heroSlotsPerLevel already use.
+    modsMaxLevel: 12,
     storagePerLevel: 5000,
   },
   {

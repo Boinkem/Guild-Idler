@@ -23,7 +23,16 @@ export const ModifierManager = {
     return sumMods(
       ...Object.entries(state.guild).map(([id, level]) => {
         const def = GUILD_BY_ID[id];
-        return def ? scaleMods(def.modsPerLevel, level) : {};
+        if (!def) return {};
+        // modsMaxLevel (Treasury only, currently) clamps how many levels'
+        // worth of the flat Modifiers bonus count, independent of the
+        // facility's real level -- lets a facility keep selling levels
+        // past that point for a purely structural effect (Treasury's own
+        // storagePerLevel, read straight off state.guild.treasury with no
+        // clamp in ModifierManager.goldStorage) without the % bonus
+        // growing forever alongside it. See GuildDef.modsMaxLevel.
+        const modLevel = def.modsMaxLevel !== undefined ? Math.min(level, def.modsMaxLevel) : level;
+        return scaleMods(def.modsPerLevel, modLevel);
       }),
     );
   },

@@ -148,6 +148,26 @@ export const RaidManager = {
     if (!raid) return { ok: false, error: 'Unknown raid.' };
     if (!isRaidUnlocked(raidId, state.completedRaids, state.completedChains)) return { ok: false, error: 'This raid has not been unlocked yet.' };
 
+    // Raid Charter / Heroic Clearance / Mythic Clearance were previously
+    // enforced only by RaidsPanel.tsx's difficulty circles (UI-only) --
+    // this manager, the actual single mutation path per the project's own
+    // "one mutable state, one mutation path" architecture, never checked
+    // them at all. That meant any other call into startRaid (a future UI
+    // surface, a bug in the modal's own gating, a bad save edit) could
+    // commit a party to a raid -- or straight to Heroic/Mythic -- without
+    // ever owning the upgrade that's supposed to gate it. Mirrors
+    // RaidsPanel's own DIFFICULTY_UNLOCK map exactly, just enforced here
+    // where it can't be bypassed.
+    if (!ModifierManager.hasUnlock(state, 'raids')) {
+      return { ok: false, error: 'The guild needs a Raid Charter before it can commit to a raid.' };
+    }
+    if (difficulty === 'heroic' && !ModifierManager.hasUnlock(state, 'raidsHeroic')) {
+      return { ok: false, error: 'Heroic Clearance is required to raid at this difficulty.' };
+    }
+    if (difficulty === 'mythic' && !ModifierManager.hasUnlock(state, 'raidsMythic')) {
+      return { ok: false, error: 'Mythic Clearance is required to raid at this difficulty.' };
+    }
+
     const cfg = RAID_DIFFICULTIES[difficulty];
     if (heroIds.length !== cfg.partySize) {
       return { ok: false, error: `${cfg.difficulty[0].toUpperCase()}${cfg.difficulty.slice(1)} requires exactly ${cfg.partySize} heroes.` };
