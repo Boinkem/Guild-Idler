@@ -144,6 +144,7 @@ export function createInitialState(now = Date.now()): GameState {
     grimsbyThreshold: PeddlerManager.rollThreshold(),
     grimsbyArrivedAt: null,
     grimsbyLeavesAt: null,
+    grimsbyHighRollerUnlocked: false,
   };
 }
 
@@ -541,6 +542,7 @@ const MIGRATIONS: Record<number, Migration> = {
     grimsbyThreshold: (save.grimsbyThreshold as number | undefined) ?? PeddlerManager.rollThreshold(),
     grimsbyArrivedAt: (save.grimsbyArrivedAt as number | null | undefined) ?? null,
     grimsbyLeavesAt: (save.grimsbyLeavesAt as number | null | undefined) ?? null,
+    grimsbyHighRollerUnlocked: (save.grimsbyHighRollerUnlocked as boolean | undefined) ?? false,
   }),
 };
 

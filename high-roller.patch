@@ -1,0 +1,600 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 8e3c618..9bf5a1e 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -363,41 +363,69 @@ and fox-run reports above already got:
+   (update the two existing recolour skins vs. add new "gilded" variants
+   alongside them isn't decided yet).
+ 
+-### High Roller -- a Grimsby feature, scoped but not built
+-A second, bigger card game sitting alongside Grimsby's existing one,
+-unlocked as an upgrade on his own page. Concrete shape as described:
+-- **Unlocked via an upgrade on Grimsby's main panel** -- shows once
+-  bought that "you've got the goods," i.e. a purchased, persistent
+-  unlock rather than a one-off toggle. Likely the same `UpgradeDef`
+-  shape every other vendor upgrade already uses (`baseCost`/
+-  `costGrowth`/`maxLevel`, tuning-registry-driven), though a single-
+-  purchase unlock (`maxLevel: 1`) rather than a scaling per-level bonus
+-  -- closer to `master_adventurer`'s shape (gates the Legendary card
+-  pool) than to a stacking upgrade like Weapons Training.
+-- **A secondary card game**, separate from the existing Lay-Out-The-
+-  Cards flow, not a modifier on it.
+-- **3x the cost, 3x the reward** -- both the entry fee and the payout
+-  scaled up together from the existing game's numbers.
+-
+-**Open questions before implementation starts** (same "scope first,
+-build second" treatment Guild Area got above, given this is a new game
+-mode rather than a numbers tweak):
+-- Does "3x reward" mean literally the same `PeddlerCardDef` outcome pool
+-  with every value tripled, or a separate curated pool with its own
+-  entries (so High Roller can have its own flavor text/rarer jackpot
+-  tier, not just "the same cards but bigger numbers")? The former is a
+-  much smaller change (multiply at resolution time); the latter needs
+-  real new content authored per outcome.
+-- Same three-card-pick shape as today, or does "bigger stakes" call for
+-  a different format (more cards, a different reveal, higher variance)?
+-  Nothing in the request implies a new format is wanted -- defaulting to
+-  "same mechanic, bigger numbers" unless told otherwise.
+-- Where does the upgrade live exactly -- alongside Grimsby's existing
+-  fee-to-play button, or does buying it change what the main "Pick Your
+-  Card" button itself offers (e.g. a toggle/second button once owned)?
+-- Any cooldown/frequency limit on High Roller specifically, independent
+-  of the regular game's own cadence, or does it share the same
+-  availability window?
++### High Roller -- built
++Follow-up to the scoping pass -- all three open questions resolved
++directly: same `PeddlerCardDef` pool tripled at resolution time (no new
++content authored), same three-card-pick format, separate persistent
++unlock so regular and High Roller stay two independent choices rather
++than one replacing the other. `npx tsc --noEmit` and `npm run
++build:web` both verified clean against a fresh clone; no live playtest
++(no dev environment).
++
++- **`GameState.grimsbyHighRollerUnlocked: boolean`** -- a one-time,
++  persistent flag, not a per-level `UpgradeDef` after all. Grimsby isn't
++  a vendor (no `UPGRADES`/`vendorUpgrades()` list to plug into), and
++  every other Grimsby-specific number already lives in its own
++  `peddler.*` tuning namespace rather than that shared system -- a
++  dedicated boolean plus a flat one-time cost matched that existing
++  pattern better than force-fitting the vendor upgrade shape onto a
++  system that was never one. Migrated for existing saves (`??  false`),
++  defaulted for new ones, same convention every other boolean flag in
++  `SaveManager.ts` already uses.
++- **Two new tuning entries**: `peddler.highRollerUnlockCost` (flat 8000
++  gold, one-time -- a first-pass number in the same ballpark as
++  `master_adventurer`'s 5000, priced a bit higher since this is a
++  standing economy multiplier rather than a one-time quest-tier gate)
++  and `peddler.highRollerMultiplier` (3, applied to both fee and
++  reward -- tunable as one shared number rather than two that could
++  drift apart).
++- **`PeddlerManager.resolveFlip`** gained a `highRoller` param: same
++  `rollOneOutcome()`/tier-weight roll as the regular flip (literally the
++  same function call, no separate pool), fee multiplied by
++  `highRollerMultiplier` up front, and that multiplier threaded into
++  `applyOutcome`/`summarizeReward` for the payout. Kind-by-kind, since
++  "tripled" doesn't mean the same thing for every outcome shape:
++  - `goldFlat`/`material`/`scrap` -- flat amounts, straightforwardly
++    multiplied.
++  - `goldRefund` -- deliberately NOT multiplied a second time here: it's
++    already a percentage of `feePaid`, which is itself the tripled fee
++    by the time it reaches this code, so the multiplier is already
++    baked in structurally. Multiplying again would have silently made a
++    refund-tier win 9x instead of 3x.
++  - `equipment`/`egg` -- discrete, one-of drops with no partial amount
++    to scale up. "3x reward" for these means literally 3 copies of
++    whatever was rolled (3 stash pushes / 3 `grantEgg` calls), not a
++    stronger version of the same item -- the simplest reading of
++    "tripled" that still means something for a non-numeric reward.
++- **`GameEngine.pickPeddlerCard(cardIndex, highRoller = false)`** and a
++  new **`unlockHighRoller()`** method, both following the existing
++  `say()`-on-failure/`playSound`/`saveNow` shape every other engine
++  action already uses. `pickPeddlerCard` checks
++  `grimsbyHighRollerUnlocked` before even attempting a High Roller flip,
++  same defensive-guard treatment `resolveFlip` itself also has, so a
++  stale/replayed call can't bypass the unlock.
++- **UI**: `PeddlerPanel.tsx` shows a second "High Roller" button
++  (brass/`btn-primary`, deliberately distinct from the regular game's
++  `btn-purple`) next to the existing one once unlocked, and a
++  `.locked-upgrade`-styled unlock card below (same dashed/dimmed
++  treatment vendor upgrades already use for an untrained tier) when it
++  isn't -- visible and purchasable regardless of whether Grimsby is
++  currently present, since it's a permanent account purchase, not tied
++  to a visit; only the actual play button needs him to be there.
++  `PeddlerCardModal.tsx` takes a new `highRoller` prop, threaded through
++  to `pickPeddlerCard`, with its own small set of flavor lines and a
++  gold "HIGH ROLLER" badge in the header so the two flows are never
++  visually ambiguous mid-session.
+ 
+ ### Injury resist headroom fix + gold/XP cost-curve tuning
+ Direct follow-up to the quest-success rebalance and the fuller
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index cad4f9d..f3db891 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -2975,5 +2975,23 @@
+     "default": 3,
+     "min": 0,
+     "description": "Flat amount shaved off questsSinceGrimsby when a Beckoning Charm is used -- see GameEngine.usePeddlerCharm."
++  },
++  {
++    "id": "peddler.highRollerUnlockCost",
++    "label": "High Roller: unlock cost",
++    "category": "peddler",
++    "value": 8000,
++    "default": 8000,
++    "min": 0,
++    "description": "One-time gold cost to unlock the High Roller flip on Grimsby's own page. Flat, not per-level -- see GameState.grimsbyHighRollerUnlocked."
++  },
++  {
++    "id": "peddler.highRollerMultiplier",
++    "label": "High Roller: fee/reward multiplier",
++    "category": "peddler",
++    "value": 3,
++    "default": 3,
++    "min": 1,
++    "description": "Both the fee and the reward for a High Roller flip are this many times the regular flip's -- see PeddlerManager.resolveFlip."
+   }
+ ]
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index fbf2b96..777ce5a 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -1959,13 +1959,16 @@ export class GameEngine {
+    * Jackpot gets its own sound cue (reusing legendary_drop, same one a
+    * real legendary quest loot roll or a fresh hatch already uses) rather
+    * than blending into the ordinary purchase/collect cues -- it's meant
+-   * to stand out the same way those moments already do.
++   * to stand out the same way those moments already do. `highRoller`
++   * plays the exact same way, just at peddler.highRollerMultiplier's
++   * fee/reward scale -- see PeddlerManager.resolveFlip's own comment.
+    */
+-  pickPeddlerCard(cardIndex: 0 | 1 | 2) {
++  pickPeddlerCard(cardIndex: 0 | 1 | 2, highRoller = false) {
+     if (!PeddlerManager.isPresent(this.state)) return this.say('There\u2019s no one there right now.');
+-    const fee = PeddlerManager.feeCost(this.state);
++    if (highRoller && !this.state.grimsbyHighRollerUnlocked) return this.say('High Roller isn\u2019t unlocked yet.');
++    const fee = highRoller ? PeddlerManager.highRollerFeeCost(this.state) : PeddlerManager.feeCost(this.state);
+     if (this.state.gold < fee) return this.say('Not enough gold.');
+-    const result = PeddlerManager.resolveFlip(this.state, cardIndex, Date.now());
++    const result = PeddlerManager.resolveFlip(this.state, cardIndex, Date.now(), highRoller);
+     if (!result) return this.say('Something about that didn\u2019t work.');
+     this.lastGrimsbyResult = result;
+     playSound(result.cards[result.pickedIndex].outcome.tier === 'jackpot' ? 'legendary_drop' : 'purchase');
+@@ -1978,6 +1981,16 @@ export class GameEngine {
+     this.notify();
+   }
+ 
++  /** Buys the High Roller unlock -- see PeddlerManager.unlockHighRoller
++   *  and GameState.grimsbyHighRollerUnlocked's own comments. */
++  unlockHighRoller() {
++    if (!PeddlerManager.canUnlockHighRoller(this.state)) return this.say('Not enough gold.');
++    PeddlerManager.unlockHighRoller(this.state);
++    playSound('purchase');
++    this.say('Grimsby raises an eyebrow. \u201cOh, you\u2019ve got the goods now, do you?\u201d', 'vendors');
++    void this.saveNow();
++  }
++
+   /**
+    * Uses an enticement consumable (e.g. Beckoning Charm) -- deliberately
+    * NOT routed through InventoryManager.useOnHero the way healing/injury
+diff --git a/src/game/managers/PeddlerManager.ts b/src/game/managers/PeddlerManager.ts
+index ffa0239..ea78fea 100644
+--- a/src/game/managers/PeddlerManager.ts
++++ b/src/game/managers/PeddlerManager.ts
+@@ -67,26 +67,33 @@ function rollOneOutcome(): PeddlerCardDef {
+ /** Human-readable summary of what a resolved outcome actually was, for
+  *  the picked card's own result line in the UI -- resolves real item/
+  *  material names against live game data so PeddlerPanel doesn't need
+- *  to re-look those up itself. */
+-function summarizeReward(outcome: PeddlerCardDef, feePaid: number): string {
++ *  to re-look those up itself. `multiplier` is 1 for a regular flip, or
++ *  peddler.highRollerMultiplier for a High Roller one (see
++ *  applyOutcome's own comment for why goldRefund doesn't need it
++ *  applied a second time here). */
++function summarizeReward(outcome: PeddlerCardDef, feePaid: number, multiplier: number): string {
+   switch (outcome.kind) {
+     case 'nothing': return 'Nothing at all.';
+     case 'joke': return outcome.jokeItemName ?? 'Something, technically.';
+-    case 'goldFlat': return `+${outcome.goldAmount ?? 0} gold`;
++    case 'goldFlat': return `+${(outcome.goldAmount ?? 0) * multiplier} gold`;
+     case 'goldRefund': {
+       const amt = Math.floor((feePaid * (outcome.refundPercent ?? 0)) / 100);
+       return `+${amt} gold back`;
+     }
+     case 'material': {
+       const def = outcome.materialId ? MATERIAL_BY_ID[outcome.materialId] : undefined;
+-      return `+${outcome.materialAmount ?? 0} ${def?.name ?? outcome.materialId ?? 'material'}`;
++      return `+${(outcome.materialAmount ?? 0) * multiplier} ${def?.name ?? outcome.materialId ?? 'material'}`;
+     }
+-    case 'scrap': return `+${outcome.scrapAmount ?? 0} Scrap`;
++    case 'scrap': return `+${(outcome.scrapAmount ?? 0) * multiplier} Scrap`;
+     case 'equipment': {
+       const def = outcome.itemId ? EQUIPMENT_BY_ID[outcome.itemId] : undefined;
+-      return def ? def.name : 'A mystery item.';
++      const name = def ? def.name : 'A mystery item.';
++      return multiplier > 1 ? `${name} ×${multiplier}` : name;
++    }
++    case 'egg': {
++      const label = `A ${outcome.eggRarity ?? 'common'} egg`;
++      return multiplier > 1 ? `${label} ×${multiplier}` : label;
+     }
+-    case 'egg': return `A ${outcome.eggRarity ?? 'common'} egg`;
+     default: return 'Something.';
+   }
+ }
+@@ -107,6 +114,45 @@ export const PeddlerManager = {
+     return Math.floor(base + topLevel * perLevel);
+   },
+ 
++  /** Fee for a High Roller flip -- always exactly the regular fee times
++   *  peddler.highRollerMultiplier, never its own independent curve, so
++   *  the two stay in lockstep as feeBaseCost/feeCostPerLevel get tuned. */
++  highRollerFeeCost(state: GameState): number {
++    return PeddlerManager.feeCost(state) * Tuning.get('peddler.highRollerMultiplier');
++  },
++
++  /** Just the multiplier itself, for UI copy ("3x the fee, 3x the
++   *  payout") -- everywhere else reads highRollerFeeCost/applyOutcome's
++   *  own multiplier param instead of re-deriving it. */
++  highRollerMultiplier(): number {
++    return Tuning.get('peddler.highRollerMultiplier');
++  },
++
++  /** One-time gold cost to unlock High Roller at all -- flat, not
++   *  per-level, same shape master_adventurer's own single-purchase
++   *  unlock uses. */
++  highRollerUnlockCost(): number {
++    return Tuning.get('peddler.highRollerUnlockCost');
++  },
++
++  canUnlockHighRoller(state: GameState): boolean {
++    return !state.grimsbyHighRollerUnlocked && state.gold >= PeddlerManager.highRollerUnlockCost();
++  },
++
++  /** Buys the High Roller unlock outright -- caller (GameEngine) is
++   *  expected to have already checked canUnlockHighRoller; this is just
++   *  a defensive guard against a stale/replayed call, same convention
++   *  resolveFlip's own early-return already uses. */
++  unlockHighRoller(state: GameState): boolean {
++    if (state.grimsbyHighRollerUnlocked) return false;
++    const cost = PeddlerManager.highRollerUnlockCost();
++    if (state.gold < cost) return false;
++    state.gold -= cost;
++    state.stats.goldSpent += cost;
++    state.grimsbyHighRollerUnlocked = true;
++    return true;
++  },
++
+   /** True once he's actually here and interactable. Distinct from
+    *  questsSinceGrimsby reaching 0 -- see GameState.grimsbyArrivedAt's
+    *  own comment for why this is the flag to check, not the counter. */
+@@ -171,14 +217,24 @@ export const PeddlerManager = {
+    * purpose -- see PeddlerCardDef's own comment for why appearance must
+    * never correlate with tier.
+    *
+-   * Returns null if he isn't actually here or the fee can't be paid --
+-   * callers (GameEngine) are expected to have already checked
+-   * isPresent/feeCost before offering the button at all; this is just a
++   * `highRoller` -- same card pool, same tier weights, same format as
++   * the regular flip (per design: keep it simple for now, no separate
++   * content). The only difference is scale: fee and reward both
++   * multiplied by peddler.highRollerMultiplier. Requires
++   * grimsbyHighRollerUnlocked; a stale/replayed call without it is
++   * treated the same as not being able to afford it.
++   *
++   * Returns null if he isn't actually here, High Roller was requested
++   * but isn't unlocked, or the fee can't be paid -- callers (GameEngine)
++   * are expected to have already checked isPresent/feeCost/
++   * highRollerFeeCost before offering the button at all; this is just a
+    * defensive guard against a stale/replayed call.
+    */
+-  resolveFlip(state: GameState, pickedIndex: 0 | 1 | 2, now: number): PeddlerFlipResult | null {
++  resolveFlip(state: GameState, pickedIndex: 0 | 1 | 2, now: number, highRoller = false): PeddlerFlipResult | null {
+     if (state.grimsbyArrivedAt === null) return null;
+-    const fee = PeddlerManager.feeCost(state);
++    if (highRoller && !state.grimsbyHighRollerUnlocked) return null;
++    const multiplier = highRoller ? Tuning.get('peddler.highRollerMultiplier') : 1;
++    const fee = PeddlerManager.feeCost(state) * multiplier;
+     if (state.gold < fee) return null;
+ 
+     state.gold -= fee;
+@@ -193,13 +249,14 @@ export const PeddlerManager = {
+     })) as [PeddlerFlipCard, PeddlerFlipCard, PeddlerFlipCard];
+ 
+     const picked = outcomes[pickedIndex];
+-    PeddlerManager.applyOutcome(state, picked, fee, now);
++    PeddlerManager.applyOutcome(state, picked, fee, now, multiplier);
+ 
+     return {
+       cards,
+       pickedIndex,
+       feePaid: fee,
+-      rewardSummary: summarizeReward(picked, fee),
++      highRoller,
++      rewardSummary: summarizeReward(picked, fee, multiplier),
+     };
+   },
+ 
+@@ -209,15 +266,25 @@ export const PeddlerManager = {
+    * accidentally on the two cosmetic-only reveals. Respects the same
+    * caps every other source of that reward type already respects (gold
+    * storage, warehouse capacity) rather than being a way to bypass them.
++   *
++   * `multiplier` (1 for a regular flip, peddler.highRollerMultiplier for
++   * a High Roller one) scales the reward -- but not every kind the same
++   * way: goldFlat/material/scrap are flat amounts, straightforwardly
++   * multiplied; goldRefund is a PERCENTAGE of feePaid, which is already
++   * the multiplied fee by the time it gets here, so applying the
++   * multiplier a second time would double-count it -- left alone on
++   * purpose. equipment/egg are discrete, one-of drops with no partial
++   * amount to scale, so "3x reward" for those means literally 3 copies
++   * of whatever was rolled, not a stronger version of it.
+    */
+-  applyOutcome(state: GameState, outcome: PeddlerCardDef, feePaid: number, now: number): void {
++  applyOutcome(state: GameState, outcome: PeddlerCardDef, feePaid: number, now: number, multiplier = 1): void {
+     switch (outcome.kind) {
+       case 'nothing':
+       case 'joke':
+         break;
+       case 'goldFlat': {
+         const storage = ModifierManager.goldStorage(state);
+-        state.gold = Math.min(storage, state.gold + (outcome.goldAmount ?? 0));
++        state.gold = Math.min(storage, state.gold + (outcome.goldAmount ?? 0) * multiplier);
+         break;
+       }
+       case 'goldRefund': {
+@@ -230,23 +297,27 @@ export const PeddlerManager = {
+         if (!outcome.materialId) break;
+         const cap = warehouseCapacity(state.warehouseLevel);
+         const current = state.materials[outcome.materialId];
+-        const gain = Math.max(0, Math.min(outcome.materialAmount ?? 0, cap - current));
++        const gain = Math.max(0, Math.min((outcome.materialAmount ?? 0) * multiplier, cap - current));
+         state.materials[outcome.materialId] = current + gain;
+         break;
+       }
+       case 'scrap':
+-        state.scrap += outcome.scrapAmount ?? 0;
++        state.scrap += (outcome.scrapAmount ?? 0) * multiplier;
+         break;
+       case 'equipment': {
+         if (!outcome.itemId) break;
+-        const item = EquipmentManager.instantiate(outcome.itemId);
+-        if (item) state.stash.push(item);
++        for (let i = 0; i < multiplier; i += 1) {
++          const item = EquipmentManager.instantiate(outcome.itemId);
++          if (item) state.stash.push(item);
++        }
+         if (!state.discoveredItems.includes(outcome.itemId)) state.discoveredItems.push(outcome.itemId);
+-        state.stats.itemsFound += 1;
++        state.stats.itemsFound += multiplier;
+         break;
+       }
+       case 'egg':
+-        PetManager.grantEgg(state, outcome.eggRarity ?? 'common', outcome.dedicatedPetId, now);
++        for (let i = 0; i < multiplier; i += 1) {
++          PetManager.grantEgg(state, outcome.eggRarity ?? 'common', outcome.dedicatedPetId, now);
++        }
+         break;
+       default:
+         break;
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 994ec57..7241c34 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -144,6 +144,7 @@ export function createInitialState(now = Date.now()): GameState {
+     grimsbyThreshold: PeddlerManager.rollThreshold(),
+     grimsbyArrivedAt: null,
+     grimsbyLeavesAt: null,
++    grimsbyHighRollerUnlocked: false,
+   };
+ }
+ 
+@@ -541,6 +542,7 @@ const MIGRATIONS: Record<number, Migration> = {
+     grimsbyThreshold: (save.grimsbyThreshold as number | undefined) ?? PeddlerManager.rollThreshold(),
+     grimsbyArrivedAt: (save.grimsbyArrivedAt as number | null | undefined) ?? null,
+     grimsbyLeavesAt: (save.grimsbyLeavesAt as number | null | undefined) ?? null,
++    grimsbyHighRollerUnlocked: (save.grimsbyHighRollerUnlocked as boolean | undefined) ?? false,
+   }),
+ };
+ 
+diff --git a/src/game/types.ts b/src/game/types.ts
+index a568809..79ac699 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -1265,6 +1265,17 @@ export interface GameState {
+    *  GameEngine.refreshWorld the same place Harvest's own despawn timers
+    *  already are. */
+   grimsbyLeavesAt: number | null;
++  /** True once the High Roller upgrade has been bought on Grimsby's own
++   *  page -- a one-time, persistent unlock (not a per-level stacking
++   *  upgrade), same "flip once, stays flipped" shape peddlerUnlocked
++   *  itself already uses. Once true, PeddlerPanel offers a second,
++   *  separate flip alongside the regular one: same card pool/format,
++   *  fee and reward both scaled by peddler.highRollerMultiplier (see
++   *  PeddlerManager.resolveFlip). Deliberately its own boolean rather
++   *  than folded into the shared vendor UPGRADES list -- Grimsby isn't
++   *  a vendor, and every other Grimsby-specific number already lives in
++   *  its own `peddler.*` tuning namespace rather than that shared list. */
++  grimsbyHighRollerUnlocked: boolean;
+ }
+ 
+ /**
+@@ -1539,6 +1550,10 @@ export interface PeddlerFlipResult {
+   cards: [PeddlerFlipCard, PeddlerFlipCard, PeddlerFlipCard];
+   pickedIndex: 0 | 1 | 2;
+   feePaid: number;
++  /** True if this was a High Roller flip (3x fee, 3x reward, same card
++   *  pool/format) rather than the regular one -- see
++   *  GameState.grimsbyHighRollerUnlocked's own comment. */
++  highRoller: boolean;
+   /** Concrete reward text for the picked card, already resolved against
+    *  live game data (item name, etc.) -- UI display convenience so
+    *  PeddlerPanel doesn't need to re-look-up EQUIPMENT_BY_ID/MATERIAL_BY_ID
+diff --git a/src/styles/app.css b/src/styles/app.css
+index cab85c9..1945094 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -2387,6 +2387,19 @@ button.harvest-item:hover {
+   gap: 8px;
+   margin-bottom: 12px;
+ }
++/* Grimsby's own card game already has a purple button (btn-purple);
++   High Roller gets its own brass/gold treatment throughout -- this
++   badge, and the btn-primary color on its trigger button in
++   PeddlerPanel.tsx -- so the two are never visually ambiguous mid-flip. */
++.high-roller-badge {
++  font-size: 0.625rem;
++  font-weight: bold;
++  letter-spacing: 0.08em;
++  color: var(--ink);
++  background: var(--brass);
++  border-radius: 999px;
++  padding: 2px 10px;
++}
+ /* Everything between the header and the close button -- the "Lay out
+    the cards" button, the card row, and (moved here from the header,
+    per playtest feedback) Grimsby's own corner-comment line, which now
+diff --git a/src/ui/PeddlerCardModal.tsx b/src/ui/PeddlerCardModal.tsx
+index d1f3f04..579017a 100644
+--- a/src/ui/PeddlerCardModal.tsx
++++ b/src/ui/PeddlerCardModal.tsx
+@@ -24,6 +24,15 @@ const BROWSING_LINES = [
+   '"Careful now. These have been shuffled at least once."',
+ ];
+ 
++/** Same cards, same odds -- just a bit more personality for the bigger-
++ *  stakes version, since that's the one moment High Roller actually
++ *  looks different from the regular game. */
++const HIGH_ROLLER_LINES = [
++  '"Ah, THIS deck. Careful now -- these ones bite harder, both ways."',
++  '"Big spender. I like that. I also like your gold either way."',
++  '"Same cart, same cards. Just... more feeling behind the flip, isn\u2019t there?"',
++];
++
+ const TIER_LABEL: Record<PeddlerCardTier, string> = {
+   bust: 'Nothing', refund: 'Partial Refund', modest: 'Modest Find', good: 'Good Find', jackpot: 'JACKPOT',
+ };
+@@ -163,13 +172,16 @@ function PeddlerCardDetailOverlay({ outcome, onClose }: { outcome: PeddlerCardDe
+   );
+ }
+ 
+-export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
++export function PeddlerCardModal({ highRoller = false, onClose }: { highRoller?: boolean; onClose: () => void }) {
+   const engine = useEngine();
+   const [showCards, setShowCards] = useState(false);
+   const [localBacks] = useState<[number, number, number]>(() => [
+     Math.floor(Math.random() * 3), Math.floor(Math.random() * 3), Math.floor(Math.random() * 3),
+   ]);
+-  const [browsingLine] = useState(() => BROWSING_LINES[Math.floor(Math.random() * BROWSING_LINES.length)]);
++  const [browsingLine] = useState(() => {
++    const pool = highRoller ? HIGH_ROLLER_LINES : BROWSING_LINES;
++    return pool[Math.floor(Math.random() * pool.length)];
++  });
+   const [detailOpen, setDetailOpen] = useState(false);
+   // 'idle' until a result comes in, then 'fading' while the two unpicked
+   // cards animate away, then 'settled' once only the picked card (and the
+@@ -200,7 +212,7 @@ export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
+ 
+   const handlePick = (index: number) => {
+     setShowCards(true); // already true by the time this is reachable, kept for clarity
+-    engine.pickPeddlerCard(index as 0 | 1 | 2);
++    engine.pickPeddlerCard(index as 0 | 1 | 2, highRoller);
+   };
+ 
+   const handleClose = () => {
+@@ -230,6 +242,7 @@ export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
+               else if (headerAnimation === 'approval') setApprovalDone(true);
+             }}
+           />
++          {highRoller && <div className="high-roller-badge">HIGH ROLLER</div>}
+         </div>
+ 
+         {/* Everything that varies by state lives in this one flex-centered
+diff --git a/src/ui/panels/PeddlerPanel.tsx b/src/ui/panels/PeddlerPanel.tsx
+index 1c0c23e..1bc5e23 100644
+--- a/src/ui/panels/PeddlerPanel.tsx
++++ b/src/ui/panels/PeddlerPanel.tsx
+@@ -20,13 +20,20 @@ export function PeddlerPanel() {
+   const engine = useEngine();
+   const state = engine.state;
+   const now = useNow(1000);
+-  const [showModal, setShowModal] = useState(false);
++  const [openModal, setOpenModal] = useState<'none' | 'regular' | 'highRoller'>('none');
+ 
+   const present = PeddlerManager.isPresent(state);
+   const fee = PeddlerManager.feeCost(state);
+   const canAfford = state.gold >= fee;
+   const charmCount = state.inventory.beckoning_charm ?? 0;
+ 
++  const highRollerUnlocked = state.grimsbyHighRollerUnlocked;
++  const highRollerFee = PeddlerManager.highRollerFeeCost(state);
++  const canAffordHighRoller = state.gold >= highRollerFee;
++  const multiplier = PeddlerManager.highRollerMultiplier();
++  const unlockCost = PeddlerManager.highRollerUnlockCost();
++  const canAffordUnlock = PeddlerManager.canUnlockHighRoller(state);
++
+   return (
+     <>
+       <h2>Grimsby</h2>
+@@ -53,15 +60,25 @@ export function PeddlerPanel() {
+                 <p className="card-flavour">
+                   "Well? Card's a card. Fair chance, for a fair price."
+                 </p>
+-                <div className="row" style={{ gap: 8 }}>
++                <div className="row wrap" style={{ gap: 8 }}>
+                   <button
+                     className="btn-purple"
+                     disabled={!canAfford}
+-                    onClick={() => setShowModal(true)}
++                    onClick={() => setOpenModal('regular')}
+                     title={canAfford ? undefined : 'Not enough gold'}
+                   >
+                     Pick Your Card -- {formatGold(fee)} gold
+                   </button>
++                  {highRollerUnlocked && (
++                    <button
++                      className="btn-primary"
++                      disabled={!canAffordHighRoller}
++                      onClick={() => setOpenModal('highRoller')}
++                      title={canAffordHighRoller ? 'Same cards, bigger stakes.' : 'Not enough gold'}
++                    >
++                      High Roller -- {formatGold(highRollerFee)} gold
++                    </button>
++                  )}
+                 </div>
+               </>
+             ) : (
+@@ -81,7 +98,32 @@ export function PeddlerPanel() {
+         </div>
+       </div>
+ 
+-      {showModal && <PeddlerCardModal onClose={() => setShowModal(false)} />}
++      {/* Permanent, one-time unlock -- not tied to whether he's actually
++          here right now, same "buy it whenever, use it on the next
++          visit" shape a vendor upgrade already has. Once bought, this
++          card is gone for good; the second button above is the only
++          remaining trace of it. */}
++      {!highRollerUnlocked && (
++        <div className="card locked-upgrade">
++          <div className="card-title">High Roller</div>
++          <p className="card-flavour muted">
++            He's noticed you've got the goods now. Same cards, same odds --
++            {' '}{multiplier}x the fee, {multiplier}x the payout.
++          </p>
++          <button
++            className="btn-primary"
++            disabled={!canAffordUnlock}
++            onClick={() => engine.unlockHighRoller()}
++            title={canAffordUnlock ? undefined : 'Not enough gold'}
++          >
++            Unlock -- {formatGold(unlockCost)} gold
++          </button>
++        </div>
++      )}
++
++      {openModal !== 'none' && (
++        <PeddlerCardModal highRoller={openModal === 'highRoller'} onClose={() => setOpenModal('none')} />
++      )}
+     </>
+   );
+ }

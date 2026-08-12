@@ -2975,5 +2975,23 @@
     "default": 3,
     "min": 0,
     "description": "Flat amount shaved off questsSinceGrimsby when a Beckoning Charm is used -- see GameEngine.usePeddlerCharm."
+  },
+  {
+    "id": "peddler.highRollerUnlockCost",
+    "label": "High Roller: unlock cost",
+    "category": "peddler",
+    "value": 8000,
+    "default": 8000,
+    "min": 0,
+    "description": "One-time gold cost to unlock the High Roller flip on Grimsby's own page. Flat, not per-level -- see GameState.grimsbyHighRollerUnlocked."
+  },
+  {
+    "id": "peddler.highRollerMultiplier",
+    "label": "High Roller: fee/reward multiplier",
+    "category": "peddler",
+    "value": 3,
+    "default": 3,
+    "min": 1,
+    "description": "Both the fee and the reward for a High Roller flip are this many times the regular flip's -- see PeddlerManager.resolveFlip."
   }
 ]

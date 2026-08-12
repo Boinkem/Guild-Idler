@@ -1265,6 +1265,17 @@ export interface GameState {
    *  GameEngine.refreshWorld the same place Harvest's own despawn timers
    *  already are. */
   grimsbyLeavesAt: number | null;
+  /** True once the High Roller upgrade has been bought on Grimsby's own
+   *  page -- a one-time, persistent unlock (not a per-level stacking
+   *  upgrade), same "flip once, stays flipped" shape peddlerUnlocked
+   *  itself already uses. Once true, PeddlerPanel offers a second,
+   *  separate flip alongside the regular one: same card pool/format,
+   *  fee and reward both scaled by peddler.highRollerMultiplier (see
+   *  PeddlerManager.resolveFlip). Deliberately its own boolean rather
+   *  than folded into the shared vendor UPGRADES list -- Grimsby isn't
+   *  a vendor, and every other Grimsby-specific number already lives in
+   *  its own `peddler.*` tuning namespace rather than that shared list. */
+  grimsbyHighRollerUnlocked: boolean;
 }
 
 /**
@@ -1539,6 +1550,10 @@ export interface PeddlerFlipResult {
   cards: [PeddlerFlipCard, PeddlerFlipCard, PeddlerFlipCard];
   pickedIndex: 0 | 1 | 2;
   feePaid: number;
+  /** True if this was a High Roller flip (3x fee, 3x reward, same card
+   *  pool/format) rather than the regular one -- see
+   *  GameState.grimsbyHighRollerUnlocked's own comment. */
+  highRoller: boolean;
   /** Concrete reward text for the picked card, already resolved against
    *  live game data (item name, etc.) -- UI display convenience so
    *  PeddlerPanel doesn't need to re-look-up EQUIPMENT_BY_ID/MATERIAL_BY_ID

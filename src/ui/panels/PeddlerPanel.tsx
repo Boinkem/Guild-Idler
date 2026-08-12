@@ -20,12 +20,19 @@ export function PeddlerPanel() {
   const engine = useEngine();
   const state = engine.state;
   const now = useNow(1000);
-  const [showModal, setShowModal] = useState(false);
+  const [openModal, setOpenModal] = useState<'none' | 'regular' | 'highRoller'>('none');
 
   const present = PeddlerManager.isPresent(state);
   const fee = PeddlerManager.feeCost(state);
   const canAfford = state.gold >= fee;
   const charmCount = state.inventory.beckoning_charm ?? 0;
+
+  const highRollerUnlocked = state.grimsbyHighRollerUnlocked;
+  const highRollerFee = PeddlerManager.highRollerFeeCost(state);
+  const canAffordHighRoller = state.gold >= highRollerFee;
+  const multiplier = PeddlerManager.highRollerMultiplier();
+  const unlockCost = PeddlerManager.highRollerUnlockCost();
+  const canAffordUnlock = PeddlerManager.canUnlockHighRoller(state);
 
   return (
     <>
@@ -53,15 +60,25 @@ export function PeddlerPanel() {
                 <p className="card-flavour">
                   "Well? Card's a card. Fair chance, for a fair price."
                 </p>
-                <div className="row" style={{ gap: 8 }}>
+                <div className="row wrap" style={{ gap: 8 }}>
                   <button
                     className="btn-purple"
                     disabled={!canAfford}
-                    onClick={() => setShowModal(true)}
+                    onClick={() => setOpenModal('regular')}
                     title={canAfford ? undefined : 'Not enough gold'}
                   >
                     Pick Your Card -- {formatGold(fee)} gold
                   </button>
+                  {highRollerUnlocked && (
+                    <button
+                      className="btn-primary"
+                      disabled={!canAffordHighRoller}
+                      onClick={() => setOpenModal('highRoller')}
+                      title={canAffordHighRoller ? 'Same cards, bigger stakes.' : 'Not enough gold'}
+                    >
+                      High Roller -- {formatGold(highRollerFee)} gold
+                    </button>
+                  )}
                 </div>
               </>
             ) : (
@@ -81,7 +98,32 @@ export function PeddlerPanel() {
         </div>
       </div>
 
-      {showModal && <PeddlerCardModal onClose={() => setShowModal(false)} />}
+      {/* Permanent, one-time unlock -- not tied to whether he's actually
+          here right now, same "buy it whenever, use it on the next
+          visit" shape a vendor upgrade already has. Once bought, this
+          card is gone for good; the second button above is the only
+          remaining trace of it. */}
+      {!highRollerUnlocked && (
+        <div className="card locked-upgrade">
+          <div className="card-title">High Roller</div>
+          <p className="card-flavour muted">
+            He's noticed you've got the goods now. Same cards, same odds --
+            {' '}{multiplier}x the fee, {multiplier}x the payout.
+          </p>
+          <button
+            className="btn-primary"
+            disabled={!canAffordUnlock}
+            onClick={() => engine.unlockHighRoller()}
+            title={canAffordUnlock ? undefined : 'Not enough gold'}
+          >
+            Unlock -- {formatGold(unlockCost)} gold
+          </button>
+        </div>
+      )}
+
+      {openModal !== 'none' && (
+        <PeddlerCardModal highRoller={openModal === 'highRoller'} onClose={() => setOpenModal('none')} />
+      )}
     </>
   );
 }

@@ -363,41 +363,69 @@ and fox-run reports above already got:
   (update the two existing recolour skins vs. add new "gilded" variants
   alongside them isn't decided yet).
 
-### High Roller -- a Grimsby feature, scoped but not built
-A second, bigger card game sitting alongside Grimsby's existing one,
-unlocked as an upgrade on his own page. Concrete shape as described:
-- **Unlocked via an upgrade on Grimsby's main panel** -- shows once
-  bought that "you've got the goods," i.e. a purchased, persistent
-  unlock rather than a one-off toggle. Likely the same `UpgradeDef`
-  shape every other vendor upgrade already uses (`baseCost`/
-  `costGrowth`/`maxLevel`, tuning-registry-driven), though a single-
-  purchase unlock (`maxLevel: 1`) rather than a scaling per-level bonus
-  -- closer to `master_adventurer`'s shape (gates the Legendary card
-  pool) than to a stacking upgrade like Weapons Training.
-- **A secondary card game**, separate from the existing Lay-Out-The-
-  Cards flow, not a modifier on it.
-- **3x the cost, 3x the reward** -- both the entry fee and the payout
-  scaled up together from the existing game's numbers.
+### High Roller -- built
+Follow-up to the scoping pass -- all three open questions resolved
+directly: same `PeddlerCardDef` pool tripled at resolution time (no new
+content authored), same three-card-pick format, separate persistent
+unlock so regular and High Roller stay two independent choices rather
+than one replacing the other. `npx tsc --noEmit` and `npm run
+build:web` both verified clean against a fresh clone; no live playtest
+(no dev environment).
 
-**Open questions before implementation starts** (same "scope first,
-build second" treatment Guild Area got above, given this is a new game
-mode rather than a numbers tweak):
-- Does "3x reward" mean literally the same `PeddlerCardDef` outcome pool
-  with every value tripled, or a separate curated pool with its own
-  entries (so High Roller can have its own flavor text/rarer jackpot
-  tier, not just "the same cards but bigger numbers")? The former is a
-  much smaller change (multiply at resolution time); the latter needs
-  real new content authored per outcome.
-- Same three-card-pick shape as today, or does "bigger stakes" call for
-  a different format (more cards, a different reveal, higher variance)?
-  Nothing in the request implies a new format is wanted -- defaulting to
-  "same mechanic, bigger numbers" unless told otherwise.
-- Where does the upgrade live exactly -- alongside Grimsby's existing
-  fee-to-play button, or does buying it change what the main "Pick Your
-  Card" button itself offers (e.g. a toggle/second button once owned)?
-- Any cooldown/frequency limit on High Roller specifically, independent
-  of the regular game's own cadence, or does it share the same
-  availability window?
+- **`GameState.grimsbyHighRollerUnlocked: boolean`** -- a one-time,
+  persistent flag, not a per-level `UpgradeDef` after all. Grimsby isn't
+  a vendor (no `UPGRADES`/`vendorUpgrades()` list to plug into), and
+  every other Grimsby-specific number already lives in its own
+  `peddler.*` tuning namespace rather than that shared system -- a
+  dedicated boolean plus a flat one-time cost matched that existing
+  pattern better than force-fitting the vendor upgrade shape onto a
+  system that was never one. Migrated for existing saves (`??  false`),
+  defaulted for new ones, same convention every other boolean flag in
+  `SaveManager.ts` already uses.
+- **Two new tuning entries**: `peddler.highRollerUnlockCost` (flat 8000
+  gold, one-time -- a first-pass number in the same ballpark as
+  `master_adventurer`'s 5000, priced a bit higher since this is a
+  standing economy multiplier rather than a one-time quest-tier gate)
+  and `peddler.highRollerMultiplier` (3, applied to both fee and
+  reward -- tunable as one shared number rather than two that could
+  drift apart).
+- **`PeddlerManager.resolveFlip`** gained a `highRoller` param: same
+  `rollOneOutcome()`/tier-weight roll as the regular flip (literally the
+  same function call, no separate pool), fee multiplied by
+  `highRollerMultiplier` up front, and that multiplier threaded into
+  `applyOutcome`/`summarizeReward` for the payout. Kind-by-kind, since
+  "tripled" doesn't mean the same thing for every outcome shape:
+  - `goldFlat`/`material`/`scrap` -- flat amounts, straightforwardly
+    multiplied.
+  - `goldRefund` -- deliberately NOT multiplied a second time here: it's
+    already a percentage of `feePaid`, which is itself the tripled fee
+    by the time it reaches this code, so the multiplier is already
+    baked in structurally. Multiplying again would have silently made a
+    refund-tier win 9x instead of 3x.
+  - `equipment`/`egg` -- discrete, one-of drops with no partial amount
+    to scale up. "3x reward" for these means literally 3 copies of
+    whatever was rolled (3 stash pushes / 3 `grantEgg` calls), not a
+    stronger version of the same item -- the simplest reading of
+    "tripled" that still means something for a non-numeric reward.
+- **`GameEngine.pickPeddlerCard(cardIndex, highRoller = false)`** and a
+  new **`unlockHighRoller()`** method, both following the existing
+  `say()`-on-failure/`playSound`/`saveNow` shape every other engine
+  action already uses. `pickPeddlerCard` checks
+  `grimsbyHighRollerUnlocked` before even attempting a High Roller flip,
+  same defensive-guard treatment `resolveFlip` itself also has, so a
+  stale/replayed call can't bypass the unlock.
+- **UI**: `PeddlerPanel.tsx` shows a second "High Roller" button
+  (brass/`btn-primary`, deliberately distinct from the regular game's
+  `btn-purple`) next to the existing one once unlocked, and a
+  `.locked-upgrade`-styled unlock card below (same dashed/dimmed
+  treatment vendor upgrades already use for an untrained tier) when it
+  isn't -- visible and purchasable regardless of whether Grimsby is
+  currently present, since it's a permanent account purchase, not tied
+  to a visit; only the actual play button needs him to be there.
+  `PeddlerCardModal.tsx` takes a new `highRoller` prop, threaded through
+  to `pickPeddlerCard`, with its own small set of flavor lines and a
+  gold "HIGH ROLLER" badge in the header so the two flows are never
+  visually ambiguous mid-session.
 
 ### Injury resist headroom fix + gold/XP cost-curve tuning
 Direct follow-up to the quest-success rebalance and the fuller

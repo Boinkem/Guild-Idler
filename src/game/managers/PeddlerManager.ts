@@ -67,26 +67,33 @@ function rollOneOutcome(): PeddlerCardDef {
 /** Human-readable summary of what a resolved outcome actually was, for
  *  the picked card's own result line in the UI -- resolves real item/
  *  material names against live game data so PeddlerPanel doesn't need
- *  to re-look those up itself. */
-function summarizeReward(outcome: PeddlerCardDef, feePaid: number): string {
+ *  to re-look those up itself. `multiplier` is 1 for a regular flip, or
+ *  peddler.highRollerMultiplier for a High Roller one (see
+ *  applyOutcome's own comment for why goldRefund doesn't need it
+ *  applied a second time here). */
+function summarizeReward(outcome: PeddlerCardDef, feePaid: number, multiplier: number): string {
   switch (outcome.kind) {
     case 'nothing': return 'Nothing at all.';
     case 'joke': return outcome.jokeItemName ?? 'Something, technically.';
-    case 'goldFlat': return `+${outcome.goldAmount ?? 0} gold`;
+    case 'goldFlat': return `+${(outcome.goldAmount ?? 0) * multiplier} gold`;
     case 'goldRefund': {
       const amt = Math.floor((feePaid * (outcome.refundPercent ?? 0)) / 100);
       return `+${amt} gold back`;
     }
     case 'material': {
       const def = outcome.materialId ? MATERIAL_BY_ID[outcome.materialId] : undefined;
-      return `+${outcome.materialAmount ?? 0} ${def?.name ?? outcome.materialId ?? 'material'}`;
+      return `+${(outcome.materialAmount ?? 0) * multiplier} ${def?.name ?? outcome.materialId ?? 'material'}`;
     }
-    case 'scrap': return `+${outcome.scrapAmount ?? 0} Scrap`;
+    case 'scrap': return `+${(outcome.scrapAmount ?? 0) * multiplier} Scrap`;
     case 'equipment': {
       const def = outcome.itemId ? EQUIPMENT_BY_ID[outcome.itemId] : undefined;
-      return def ? def.name : 'A mystery item.';
+      const name = def ? def.name : 'A mystery item.';
+      return multiplier > 1 ? `${name} ×${multiplier}` : name;
     }
-    case 'egg': return `A ${outcome.eggRarity ?? 'common'} egg`;
+    case 'egg': {
+      const label = `A ${outcome.eggRarity ?? 'common'} egg`;
+      return multiplier > 1 ? `${label} ×${multiplier}` : label;
+    }
     default: return 'Something.';
   }
 }
@@ -105,6 +112,45 @@ export const PeddlerManager = {
     const base = Tuning.get('peddler.feeBaseCost');
     const perLevel = Tuning.get('peddler.feeCostPerLevel');
     return Math.floor(base + topLevel * perLevel);
+  },
+
+  /** Fee for a High Roller flip -- always exactly the regular fee times
+   *  peddler.highRollerMultiplier, never its own independent curve, so
+   *  the two stay in lockstep as feeBaseCost/feeCostPerLevel get tuned. */
+  highRollerFeeCost(state: GameState): number {
+    return PeddlerManager.feeCost(state) * Tuning.get('peddler.highRollerMultiplier');
+  },
+
+  /** Just the multiplier itself, for UI copy ("3x the fee, 3x the
+   *  payout") -- everywhere else reads highRollerFeeCost/applyOutcome's
+   *  own multiplier param instead of re-deriving it. */
+  highRollerMultiplier(): number {
+    return Tuning.get('peddler.highRollerMultiplier');
+  },
+
+  /** One-time gold cost to unlock High Roller at all -- flat, not
+   *  per-level, same shape master_adventurer's own single-purchase
+   *  unlock uses. */
+  highRollerUnlockCost(): number {
+    return Tuning.get('peddler.highRollerUnlockCost');
+  },
+
+  canUnlockHighRoller(state: GameState): boolean {
+    return !state.grimsbyHighRollerUnlocked && state.gold >= PeddlerManager.highRollerUnlockCost();
+  },
+
+  /** Buys the High Roller unlock outright -- caller (GameEngine) is
+   *  expected to have already checked canUnlockHighRoller; this is just
+   *  a defensive guard against a stale/replayed call, same convention
+   *  resolveFlip's own early-return already uses. */
+  unlockHighRoller(state: GameState): boolean {
+    if (state.grimsbyHighRollerUnlocked) return false;
+    const cost = PeddlerManager.highRollerUnlockCost();
+    if (state.gold < cost) return false;
+    state.gold -= cost;
+    state.stats.goldSpent += cost;
+    state.grimsbyHighRollerUnlocked = true;
+    return true;
   },
 
   /** True once he's actually here and interactable. Distinct from
@@ -171,14 +217,24 @@ export const PeddlerManager = {
    * purpose -- see PeddlerCardDef's own comment for why appearance must
    * never correlate with tier.
    *
-   * Returns null if he isn't actually here or the fee can't be paid --
-   * callers (GameEngine) are expected to have already checked
-   * isPresent/feeCost before offering the button at all; this is just a
+   * `highRoller` -- same card pool, same tier weights, same format as
+   * the regular flip (per design: keep it simple for now, no separate
+   * content). The only difference is scale: fee and reward both
+   * multiplied by peddler.highRollerMultiplier. Requires
+   * grimsbyHighRollerUnlocked; a stale/replayed call without it is
+   * treated the same as not being able to afford it.
+   *
+   * Returns null if he isn't actually here, High Roller was requested
+   * but isn't unlocked, or the fee can't be paid -- callers (GameEngine)
+   * are expected to have already checked isPresent/feeCost/
+   * highRollerFeeCost before offering the button at all; this is just a
    * defensive guard against a stale/replayed call.
    */
-  resolveFlip(state: GameState, pickedIndex: 0 | 1 | 2, now: number): PeddlerFlipResult | null {
+  resolveFlip(state: GameState, pickedIndex: 0 | 1 | 2, now: number, highRoller = false): PeddlerFlipResult | null {
     if (state.grimsbyArrivedAt === null) return null;
-    const fee = PeddlerManager.feeCost(state);
+    if (highRoller && !state.grimsbyHighRollerUnlocked) return null;
+    const multiplier = highRoller ? Tuning.get('peddler.highRollerMultiplier') : 1;
+    const fee = PeddlerManager.feeCost(state) * multiplier;
     if (state.gold < fee) return null;
 
     state.gold -= fee;
@@ -193,13 +249,14 @@ export const PeddlerManager = {
     })) as [PeddlerFlipCard, PeddlerFlipCard, PeddlerFlipCard];
 
     const picked = outcomes[pickedIndex];
-    PeddlerManager.applyOutcome(state, picked, fee, now);
+    PeddlerManager.applyOutcome(state, picked, fee, now, multiplier);
 
     return {
       cards,
       pickedIndex,
       feePaid: fee,
-      rewardSummary: summarizeReward(picked, fee),
+      highRoller,
+      rewardSummary: summarizeReward(picked, fee, multiplier),
     };
   },
 
@@ -209,15 +266,25 @@ export const PeddlerManager = {
    * accidentally on the two cosmetic-only reveals. Respects the same
    * caps every other source of that reward type already respects (gold
    * storage, warehouse capacity) rather than being a way to bypass them.
+   *
+   * `multiplier` (1 for a regular flip, peddler.highRollerMultiplier for
+   * a High Roller one) scales the reward -- but not every kind the same
+   * way: goldFlat/material/scrap are flat amounts, straightforwardly
+   * multiplied; goldRefund is a PERCENTAGE of feePaid, which is already
+   * the multiplied fee by the time it gets here, so applying the
+   * multiplier a second time would double-count it -- left alone on
+   * purpose. equipment/egg are discrete, one-of drops with no partial
+   * amount to scale, so "3x reward" for those means literally 3 copies
+   * of whatever was rolled, not a stronger version of it.
    */
-  applyOutcome(state: GameState, outcome: PeddlerCardDef, feePaid: number, now: number): void {
+  applyOutcome(state: GameState, outcome: PeddlerCardDef, feePaid: number, now: number, multiplier = 1): void {
     switch (outcome.kind) {
       case 'nothing':
       case 'joke':
         break;
       case 'goldFlat': {
         const storage = ModifierManager.goldStorage(state);
-        state.gold = Math.min(storage, state.gold + (outcome.goldAmount ?? 0));
+        state.gold = Math.min(storage, state.gold + (outcome.goldAmount ?? 0) * multiplier);
         break;
       }
       case 'goldRefund': {
@@ -230,23 +297,27 @@ export const PeddlerManager = {
         if (!outcome.materialId) break;
         const cap = warehouseCapacity(state.warehouseLevel);
         const current = state.materials[outcome.materialId];
-        const gain = Math.max(0, Math.min(outcome.materialAmount ?? 0, cap - current));
+        const gain = Math.max(0, Math.min((outcome.materialAmount ?? 0) * multiplier, cap - current));
         state.materials[outcome.materialId] = current + gain;
         break;
       }
       case 'scrap':
-        state.scrap += outcome.scrapAmount ?? 0;
+        state.scrap += (outcome.scrapAmount ?? 0) * multiplier;
         break;
       case 'equipment': {
         if (!outcome.itemId) break;
-        const item = EquipmentManager.instantiate(outcome.itemId);
-        if (item) state.stash.push(item);
+        for (let i = 0; i < multiplier; i += 1) {
+          const item = EquipmentManager.instantiate(outcome.itemId);
+          if (item) state.stash.push(item);
+        }
         if (!state.discoveredItems.includes(outcome.itemId)) state.discoveredItems.push(outcome.itemId);
-        state.stats.itemsFound += 1;
+        state.stats.itemsFound += multiplier;
         break;
       }
       case 'egg':
-        PetManager.grantEgg(state, outcome.eggRarity ?? 'common', outcome.dedicatedPetId, now);
+        for (let i = 0; i < multiplier; i += 1) {
+          PetManager.grantEgg(state, outcome.eggRarity ?? 'common', outcome.dedicatedPetId, now);
+        }
         break;
       default:
         break;

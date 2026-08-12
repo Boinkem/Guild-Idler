@@ -24,6 +24,15 @@ const BROWSING_LINES = [
   '"Careful now. These have been shuffled at least once."',
 ];
 
+/** Same cards, same odds -- just a bit more personality for the bigger-
+ *  stakes version, since that's the one moment High Roller actually
+ *  looks different from the regular game. */
+const HIGH_ROLLER_LINES = [
+  '"Ah, THIS deck. Careful now -- these ones bite harder, both ways."',
+  '"Big spender. I like that. I also like your gold either way."',
+  '"Same cart, same cards. Just... more feeling behind the flip, isn\u2019t there?"',
+];
+
 const TIER_LABEL: Record<PeddlerCardTier, string> = {
   bust: 'Nothing', refund: 'Partial Refund', modest: 'Modest Find', good: 'Good Find', jackpot: 'JACKPOT',
 };
@@ -163,13 +172,16 @@ function PeddlerCardDetailOverlay({ outcome, onClose }: { outcome: PeddlerCardDe
   );
 }
 
-export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
+export function PeddlerCardModal({ highRoller = false, onClose }: { highRoller?: boolean; onClose: () => void }) {
   const engine = useEngine();
   const [showCards, setShowCards] = useState(false);
   const [localBacks] = useState<[number, number, number]>(() => [
     Math.floor(Math.random() * 3), Math.floor(Math.random() * 3), Math.floor(Math.random() * 3),
   ]);
-  const [browsingLine] = useState(() => BROWSING_LINES[Math.floor(Math.random() * BROWSING_LINES.length)]);
+  const [browsingLine] = useState(() => {
+    const pool = highRoller ? HIGH_ROLLER_LINES : BROWSING_LINES;
+    return pool[Math.floor(Math.random() * pool.length)];
+  });
   const [detailOpen, setDetailOpen] = useState(false);
   // 'idle' until a result comes in, then 'fading' while the two unpicked
   // cards animate away, then 'settled' once only the picked card (and the
@@ -200,7 +212,7 @@ export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
 
   const handlePick = (index: number) => {
     setShowCards(true); // already true by the time this is reachable, kept for clarity
-    engine.pickPeddlerCard(index as 0 | 1 | 2);
+    engine.pickPeddlerCard(index as 0 | 1 | 2, highRoller);
   };
 
   const handleClose = () => {
@@ -230,6 +242,7 @@ export function PeddlerCardModal({ onClose }: { onClose: () => void }) {
               else if (headerAnimation === 'approval') setApprovalDone(true);
             }}
           />
+          {highRoller && <div className="high-roller-badge">HIGH ROLLER</div>}
         </div>
 
         {/* Everything that varies by state lives in this one flex-centered

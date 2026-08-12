@@ -1959,13 +1959,16 @@ export class GameEngine {
    * Jackpot gets its own sound cue (reusing legendary_drop, same one a
    * real legendary quest loot roll or a fresh hatch already uses) rather
    * than blending into the ordinary purchase/collect cues -- it's meant
-   * to stand out the same way those moments already do.
+   * to stand out the same way those moments already do. `highRoller`
+   * plays the exact same way, just at peddler.highRollerMultiplier's
+   * fee/reward scale -- see PeddlerManager.resolveFlip's own comment.
    */
-  pickPeddlerCard(cardIndex: 0 | 1 | 2) {
+  pickPeddlerCard(cardIndex: 0 | 1 | 2, highRoller = false) {
     if (!PeddlerManager.isPresent(this.state)) return this.say('There\u2019s no one there right now.');
-    const fee = PeddlerManager.feeCost(this.state);
+    if (highRoller && !this.state.grimsbyHighRollerUnlocked) return this.say('High Roller isn\u2019t unlocked yet.');
+    const fee = highRoller ? PeddlerManager.highRollerFeeCost(this.state) : PeddlerManager.feeCost(this.state);
     if (this.state.gold < fee) return this.say('Not enough gold.');
-    const result = PeddlerManager.resolveFlip(this.state, cardIndex, Date.now());
+    const result = PeddlerManager.resolveFlip(this.state, cardIndex, Date.now(), highRoller);
     if (!result) return this.say('Something about that didn\u2019t work.');
     this.lastGrimsbyResult = result;
     playSound(result.cards[result.pickedIndex].outcome.tier === 'jackpot' ? 'legendary_drop' : 'purchase');
@@ -1976,6 +1979,16 @@ export class GameEngine {
   dismissGrimsbyResult() {
     this.lastGrimsbyResult = null;
     this.notify();
+  }
+
+  /** Buys the High Roller unlock -- see PeddlerManager.unlockHighRoller
+   *  and GameState.grimsbyHighRollerUnlocked's own comments. */
+  unlockHighRoller() {
+    if (!PeddlerManager.canUnlockHighRoller(this.state)) return this.say('Not enough gold.');
+    PeddlerManager.unlockHighRoller(this.state);
+    playSound('purchase');
+    this.say('Grimsby raises an eyebrow. \u201cOh, you\u2019ve got the goods now, do you?\u201d', 'vendors');
+    void this.saveNow();
   }
 
   /**
