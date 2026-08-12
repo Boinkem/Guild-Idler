@@ -424,6 +424,22 @@ const SCHEMAS = {
       // order they're listed here, stopping at the first failed encounter.
       encounterIds: { type: 'string[]', required: true },
       unlocksRaidId: { type: 'string', required: false },
+      // Was defined on RaidDef and read by isRaidUnlocked (raids.ts) since
+      // what_got_out/requiem_last_god shipped, but never actually exposed
+      // here -- both of those raids' chain gate has only ever been
+      // editable by hand-editing raids.json directly, not via this tool.
+      // Same free-text, no-cross-entry-lookup trade-off as quest-chains'
+      // own requiresChainId field above. Found while adding
+      // successModifier below; fixed alongside it rather than filed
+      // separately.
+      requiresChainId: { type: 'string', required: false },
+      // Flat percentage points added to every encounter's success chance
+      // in this raid, independent of the global Normal/Heroic/Mythic
+      // tiers -- see RaidDef.successModifier's own comment in types.ts.
+      // Usually a small negative number for "slightly harder than its
+      // baseSuccess numbers alone suggest"; optional, defaults to no
+      // change.
+      successModifier: { type: 'number', required: false },
       // See quest-chains' own `banner` field comment above -- identical
       // shape, just defaulting to the raids/ subfolder and the
       // raids/<id>.jpg naming convention RaidBanner already used.

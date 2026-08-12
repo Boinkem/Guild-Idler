@@ -120,7 +120,8 @@ export const RaidManager = {
     const bonus = RaidManager.partySuccessBonus(state, heroes, now, raid.reqLevel);
     const penalty = RAID_DIFFICULTIES[difficulty].successPenalty;
     const elemental = RaidManager.elementalBonus(heroes, encounter);
-    return clamp(encounter.baseSuccess - penalty + bonus + elemental, MIN_SUCCESS, MAX_SUCCESS);
+    const override = raid.successModifier ?? 0;
+    return clamp(encounter.baseSuccess - penalty + bonus + elemental + override, MIN_SUCCESS, MAX_SUCCESS);
   },
 
   /**
@@ -214,7 +215,8 @@ export const RaidManager = {
       const encounter = RAID_ENCOUNTER_BY_ID[encounterId];
       if (!encounter) continue; // devtool data drift safety -- an unknown id is skipped, not a crash
       const elemental = RaidManager.elementalBonus(heroes, encounter);
-      const chance = clamp(encounter.baseSuccess - diffCfg.successPenalty + active.partySuccessBonus + elemental, MIN_SUCCESS, MAX_SUCCESS);
+      const override = raid?.successModifier ?? 0;
+      const chance = clamp(encounter.baseSuccess - diffCfg.successPenalty + active.partySuccessBonus + elemental + override, MIN_SUCCESS, MAX_SUCCESS);
       if (!rng.chance(chance)) break;
 
       encountersCleared += 1;

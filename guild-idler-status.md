@@ -32,23 +32,64 @@ longer appear in either shop's stock).
 **Guild facilities & Permanent Upgrades** — vendor-style upgrade trees,
 guild-wide bonuses, gold storage.
 
-**Quest chains** — 19 total. 17 rewritten in the current narrative style
-(vivid/scene-painting); `world_ender` and the Last God successor content
-match that style natively. Chain prerequisite gating exists
-(`requiresChainId`) — 8 confirmed dependencies wired in. Chain info lives
-only in the Quest tab (Discovered Quests, board-driven) and the Lore tab
-(Story, full history/roadmap) -- `GuildPanel.tsx` had its own leftover
-"Quest chains" list from before the Quest Tab rework, listing every chain
-by name regardless of discovery state; removed (patch 0105) since it was
-both a duplicate and a minor spoiler.
+**Quest chains** — 28 total (was previously logged here as "19 total";
+corrected during this pass -- the live JSON had actually already grown to
+21 by the time anyone checked, and 7 more (below) were added in the same
+pass that caught the discrepancy. Lesson for next time: re-verify counts
+like this straight from `quest-chains.json` rather than trusting this
+doc's running total, since it's exactly the kind of thing that goes stale
+silently). 17 of the original chains are rewritten in the current
+narrative style (vivid/scene-painting); `world_ender` and the Last God
+successor content match that style natively, and all 7 new chains below
+were authored directly in that style from the start. Chain prerequisite
+gating exists (`requiresChainId`) — 10 confirmed dependencies wired in
+(8 original + `the_loom_beneath` -> `quiet_in_millbrook`, `house_of_bones`
+raid -> `hunt_a_lich`). Chain info lives only in the Quest tab (Discovered
+Quests, board-driven) and the Lore tab (Story, full history/roadmap) --
+`GuildPanel.tsx` had its own leftover "Quest chains" list from before the
+Quest Tab rework, listing every chain by name regardless of discovery
+state; removed (patch 0105) since it was both a duplicate and a minor
+spoiler.
 
-**Raids** — 5 total: Blackford Keep (8) -> The Frozen Wyrmkeep (18) ->
+**New standalone chains -- built**, filling several level ranges that had
+no dedicated chain/raid content at all (identified by pulling every
+chain/raid's `reqLevel` straight from the live JSON and sorting -- see
+"Level-gap content pass" below for the full before/after picture):
+- `bandits_on_the_old_road` (4) -- a self-styled "bandit king" unifying
+  smaller crews by force along the old trade road. Fully standalone,
+  resolved ending.
+- `something_big_in_the_foothills` (12) -- an ogre warband nesting in the
+  foothills rather than just passing through. Standalone, resolved.
+- `full_moon_over_ashvale` (17) -- werewolf hunt with a twist (one of the
+  people the guild is protecting is already turned). Standalone, resolved.
+- `body_snatcher_problem` (29) -- something copying people from the
+  inside rather than raising or shapeshifting them; deliberately not the
+  same mechanism as the game's existing undead threats. Standalone,
+  resolved.
+- `hunt_a_lich` (37) -- a minor lich consolidating power, ties directly
+  into the existing Harrower thread (see world-lore-pantheon.md) without
+  contradicting the rule that the Harrower itself stays unconfronted
+  until it gets its own dedicated chain. Ends unresolved; leads into the
+  new `house_of_bones` raid below.
+- `quiet_in_millbrook` (35) -> `the_loom_beneath` (39, requires
+  `quiet_in_millbrook`) -- two-part arc: a town gone hivemind-flat, then
+  tracing it to a single directing intelligence living underneath it (**The
+  Loom** -- named this instead of an earlier "Choir-Mind" working title,
+  same abstract-descriptive-title convention as Harrower/World-Ender/Last
+  God, deliberately avoiding any existing-IP-adjacent phrasing). Both
+  chains end unresolved by design, matching `harrowers_foot`'s own
+  "epilogue plants the next hook" pattern; the arc's actual confrontation
+  is the new `silence_the_loom` raid below, not a third chain.
+
+**Raids** — 8 total: Blackford Keep (8) -> The Frozen Wyrmkeep (18) ->
 Bonewrought Vault (22) -> What Got Out (26, gated by completing the
-`demon_fortress` chain) -> Requiem for the Last God (55, gated by the
-`last_pilgrimage` investigation chain). Raid Guild Upgrades tree has three
-upgrades (Raid Speed, Raid Loot, Raid Recovery), visualized as a
-static-image progression in the Raid Quartermaster's Den (weapon rack /
-skull / shelf, plus a torch reflecting the Raid Charter) -- now its own
+`demon_fortress` chain) -> Black Dragon Nest (30, standalone) -> House of
+Bones (41, gated by completing `hunt_a_lich`) -> Silence the Loom (43,
+gated by completing `the_loom_beneath`) -> Requiem for the Last God (55,
+gated by the `last_pilgrimage` investigation chain). Raid Guild Upgrades
+tree has three upgrades (Raid Speed, Raid Loot, Raid Recovery), visualized
+as a static-image progression in the Raid Quartermaster's Den (weapon rack
+/ skull / shelf, plus a torch reflecting the Raid Charter) -- now its own
 sub-tab within Raids rather than sharing space with the raid list. Raid
 cards are click-to-open-modal rather than inline-expand, with banner art
 support (`public/lore/raids/<id>.jpg`). Raid Charter restructured: a cheap
@@ -60,6 +101,70 @@ loot on most of their encounters -- needs `equipment.json` to fill in
 properly. (This used to say "same flagged gap as the Last God raid's
 tiered loot" -- that one's done now, see the struck-through Cleanup item;
 this note was stale.)
+
+**New raids -- built:**
+- **Black Dragon Nest** (30, standalone, 3 encounters: Keepers ->
+  Hatchlings -> Brood Mother). Full loot set (`cinderfang`, 6 pieces,
+  Normal/Heroic/Mythic tiers on every piece). The Brood Mother encounter
+  also carries an `eggLoot` roll (`epic:black_dragonling@8`) granting a
+  guaranteed-species **Black Dragonling** pet, same dedicated-egg
+  mechanism `the_last_clutch`'s Hatchery Hound already established --
+  `PetDef` entry is in place (`dedicatedOnly: true`), but its sprite
+  still needs dropping into `public/pets/black_dragonling/` directly (art
+  can't travel through a text patch, same standing note as the
+  adventurer-idle-frame issue elsewhere in this doc).
+- **House of Bones** (41, requires `hunt_a_lich`, 3 encounters: The Marrow
+  Eater (a sewn-together, not-fully-humanoid abomination) -> The
+  Phylactery (a hunt-and-destroy beat rather than a straight fight,
+  different rhythm from a normal boss ladder) -> The Lich, stopped mid-
+  ritual before he can reach the Harrower and give it a foothold to
+  cross. Epilogue deliberately frames this as a delay, not a resolution --
+  keeps the Harrower's "still out there, still unconfronted" status
+  intact for a future dedicated chain rather than closing that thread
+  early. Full loot set (`grimward`, 6 pieces, all three tiers).
+- **Silence the Loom** (43, requires `the_loom_beneath`) -- the game's
+  first **single-encounter raid** (`encounterIds` length 1 rather than the
+  usual 3); mechanically this needed no new code at all, `RaidManager`
+  already resolves `encounterIds` generically. What *did* need new code:
+  a **raid-level `successModifier`** field (`RaidDef.successModifier`,
+  optional, flat percentage points, default unset = no change), read in
+  both `RaidManager.previewEncounterSuccess` and `.resolve`, for "this
+  specific raid should read as harder than its baseSuccess numbers alone
+  suggest" without hand-distorting the shared Normal/Heroic/Mythic tier
+  promise every other raid relies on (`RAID_DIFFICULTIES` stays a global
+  constant, untouched). Set to -8 here per the original ask ("slightly
+  harder"). New DevTool field (`successModifier: number`, optional) on
+  the `raids` schema in `server.mjs`. Verified at runtime: a 3-hero
+  Normal-difficulty party at exactly the raid's reqLevel previews at
+  50.7% with the modifier zeroed out and 42.7% with it set to -8 -- an
+  exact 8-point shift, not swallowed by clamping (confirmed separately
+  that testing this at Mythic instead was a mistake during verification --
+  Mythic's own successPenalty already pushes a bare-minimum party down to
+  the 5% floor, which masked the modifier entirely until the test was
+  rerun at Normal). Full loot set (`loom`, 3 pieces: helmet, cloak,
+  legendary weapon).
+
+**Fixed alongside the above, found while adding `successModifier`:** the
+DevTool's `raids` schema was missing `requiresChainId` entirely, despite
+`RaidDef.requiresChainId` existing in code and already being used by two
+raids (`what_got_out`, `requiem_last_god`) since before this pass --
+same class of silent gap as the Equipment `raidExclusive`/`craftable`
+bug logged elsewhere in this doc (a real field, quietly uneditable via
+the tool that's supposed to be the source of truth for this content).
+Fixed by adding the field to the schema; no data migration needed since
+the two existing raids' JSON already had the field set correctly, it was
+only ever the *editor* that couldn't see it.
+
+**Level-gap content pass -- the full before/after.** Started from a
+direct request to table every chain/raid's `reqLevel` to find zones with
+no dedicated content. Pulled straight from the live JSON rather than this
+doc's (stale) summary -- see the correction note above. Real gaps found:
+3-5 (thin), 9-10, 12-14, 17-18, the big one at 27-31, an even bigger one
+at 35-43, and 46-54 (still open, see below). This pass's 7 chains + 3
+raids land at: 4, 12, 17, 29 & 30 (paired), 35 & 37 & 39 & 41 & 43 (five
+pieces covering the 35-43 stretch). **46-54 is still an open gap** --
+nothing from this pass was earmarked for it; worth its own idea whenever
+there's time before the level-55 finale raid.
 
 **Renown / Prestige** — retirement, renown perks (two-tier, gold-then-
 renown cost curves), prestige streak bonus.

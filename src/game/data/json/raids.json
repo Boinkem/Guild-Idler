@@ -62,5 +62,42 @@
       "gotout_cornered"
     ],
     "requiresChainId": "demon_fortress"
+  },
+  {
+    "id": "black_dragon_nest",
+    "name": "The Black Dragon Nest",
+    "description": "A stretch of the eastern ridge has gone black with soot and quiet with fear -- something's nested up there, brought a whole clutch with it, and doesn't intend to be a passing problem the way most dragon sightings turn out to be.",
+    "epilogue": "The nest is ash and empty shell now, the brood mother's watch finally over. Whatever drew her to that ridge in the first place is still a mystery nobody's especially eager to go looking for -- for now, the mountain's quiet again, and that's enough.",
+    "reqLevel": 30,
+    "encounterIds": [
+      "blackdragon_the_keepers",
+      "blackdragon_the_hatchlings",
+      "blackdragon_the_brood_mother"
+    ]
+  },
+  {
+    "id": "house_of_bones",
+    "name": "The House of Bones",
+    "description": "The ossuary the guild traced the lich to isn't a hideout so much as a workshop -- generations of the dead, sorted, stored, and put to use, all in service of a ritual that was never about raising an army in the first place.",
+    "epilogue": "The lich is gone, his phylactery in pieces, and whatever he was trying to reach on the other side of that ritual didn't get through -- not this time. The guild is treating this as a delay, not an ending; something was listening on the other end of that ritual, and it's very unlikely to have forgotten the attempt.",
+    "reqLevel": 41,
+    "requiresChainId": "hunt_a_lich",
+    "encounterIds": [
+      "hob_the_marrow_eater",
+      "hob_the_phylactery",
+      "hob_the_lich"
+    ]
+  },
+  {
+    "id": "silence_the_loom",
+    "name": "Silence the Loom",
+    "description": "There is no approach, no outer ring of guards, no lesser threat to clear first -- just a long walk down into the dark and, at the end of it, the thing itself, already aware the guild is coming and entirely unbothered by the fact.",
+    "epilogue": "The Loom doesn't scream when it finally comes apart -- it just goes quiet, one borrowed voice at a time, until there's nothing left speaking through Millbrook at all. The town will need a long time to remember how to answer a question honestly again. That's a problem for people who aren't the guild to solve now.",
+    "reqLevel": 43,
+    "requiresChainId": "the_loom_beneath",
+    "encounterIds": [
+      "loom_the_presiding_intelligence"
+    ],
+    "successModifier": -8
   }
 ]

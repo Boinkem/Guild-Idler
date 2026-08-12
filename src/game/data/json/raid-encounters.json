@@ -334,5 +334,179 @@
       "cornered_fang_mythic@5",
       "desperate_ends_crown_mythic@4"
     ]
+  },
+  {
+    "id": "blackdragon_the_keepers",
+    "name": "The Keepers",
+    "flavour": "They don't guard the nest so much as tend it -- clearing debris, warming the eggs, keeping predators (and the occasional guild) at a respectful distance with fire that's meant to warn first and kill second.",
+    "baseSuccess": 70,
+    "durationHours": 3,
+    "rewardGold": 1600,
+    "rewardXp": 300,
+    "loot": [
+      "cinderfang_gauntlets@10",
+      "wyrmwardens_cloak@9"
+    ],
+    "lootHeroic": [
+      "cinderfang_gauntlets_heroic@10",
+      "wyrmwardens_cloak_heroic@9"
+    ],
+    "lootMythic": [
+      "cinderfang_gauntlets_mythic@10",
+      "wyrmwardens_cloak_mythic@9"
+    ],
+    "vulnerableTo": [
+      "frost"
+    ],
+    "dealsElement": [
+      "fire"
+    ]
+  },
+  {
+    "id": "blackdragon_the_hatchlings",
+    "name": "The Hatchlings",
+    "flavour": "A whole clutch, already out of the shell and already breathing fire they haven't learned to aim yet -- which somehow makes wading through a dozen of them worse, not better.",
+    "baseSuccess": 60,
+    "durationHours": 4,
+    "rewardGold": 2600,
+    "rewardXp": 500,
+    "loot": [
+      "scaleknit_boots@9",
+      "brood_fang_dagger@7"
+    ],
+    "lootHeroic": [
+      "scaleknit_boots_heroic@9",
+      "brood_fang_dagger_heroic@7"
+    ],
+    "lootMythic": [
+      "scaleknit_boots_mythic@9",
+      "brood_fang_dagger_mythic@7"
+    ],
+    "vulnerableTo": [
+      "frost"
+    ],
+    "dealsElement": [
+      "fire"
+    ]
+  },
+  {
+    "id": "blackdragon_the_brood_mother",
+    "name": "The Brood Mother",
+    "flavour": "She's old enough to remember when this ridge had a different name, and considerably less patient about visitors than her keepers were trained to be. Every hatchling the guild has already cleared, she remembers by weight.",
+    "baseSuccess": 50,
+    "durationHours": 5,
+    "rewardGold": 4400,
+    "rewardXp": 820,
+    "loot": [
+      "blackscale_helm@5",
+      "broodmothers_crown@4"
+    ],
+    "lootHeroic": [
+      "blackscale_helm_heroic@5",
+      "broodmothers_crown_heroic@4"
+    ],
+    "lootMythic": [
+      "blackscale_helm_mythic@5",
+      "broodmothers_crown_mythic@4"
+    ],
+    "eggLoot": [
+      "epic:black_dragonling@8"
+    ],
+    "vulnerableTo": [
+      "frost"
+    ],
+    "dealsElement": [
+      "fire"
+    ],
+    "immuneTo": [
+      "fire"
+    ]
+  },
+  {
+    "id": "hob_the_marrow_eater",
+    "name": "The Marrow Eater",
+    "flavour": "It was never one body -- it's dozens, sewn and stitched into something with too many arms and not nearly enough of them matching, built by someone with a great deal of practice and no aesthetic sense whatsoever.",
+    "baseSuccess": 70,
+    "durationHours": 3,
+    "rewardGold": 2700,
+    "rewardXp": 500,
+    "loot": [
+      "sewn_maw_greataxe@8",
+      "stitched_hide_vest@8"
+    ],
+    "lootHeroic": [
+      "sewn_maw_greataxe_heroic@8",
+      "stitched_hide_vest_heroic@8"
+    ],
+    "lootMythic": [
+      "sewn_maw_greataxe_mythic@8",
+      "stitched_hide_vest_mythic@8"
+    ]
+  },
+  {
+    "id": "hob_the_phylactery",
+    "name": "The Phylactery",
+    "flavour": "It's hidden well, but not well enough -- a small, unassuming box tucked into a hollow behind an ossuary wall, humming faintly with a heartbeat that isn't its own. Finding it is the hard part. Destroying it is the easy part.",
+    "baseSuccess": 55,
+    "durationHours": 4,
+    "rewardGold": 4300,
+    "rewardXp": 780,
+    "loot": [
+      "phylactery_shard_ring@7",
+      "unbinding_gauntlets@7"
+    ],
+    "lootHeroic": [
+      "phylactery_shard_ring_heroic@7",
+      "unbinding_gauntlets_heroic@7"
+    ],
+    "lootMythic": [
+      "phylactery_shard_ring_mythic@7",
+      "unbinding_gauntlets_mythic@7"
+    ]
+  },
+  {
+    "id": "hob_the_lich",
+    "name": "The Lich",
+    "flavour": "With his phylactery gone he's mortal again in every way that matters, but he doesn't fight like it -- he fights like someone who was midway through a ritual to speak with something far older than himself, and very much resents the interruption.",
+    "baseSuccess": 45,
+    "durationHours": 5,
+    "rewardGold": 7400,
+    "rewardXp": 1350,
+    "loot": [
+      "lichbound_diadem@5",
+      "grimward_amulet@4"
+    ],
+    "lootHeroic": [
+      "lichbound_diadem_heroic@5",
+      "grimward_amulet_heroic@4"
+    ],
+    "lootMythic": [
+      "lichbound_diadem_mythic@5",
+      "grimward_amulet_mythic@4"
+    ]
+  },
+  {
+    "id": "loom_the_presiding_intelligence",
+    "name": "The Presiding Intelligence",
+    "flavour": "It has no true mouth of its own, so it borrows every one nearby at once, arguing with itself in a dozen stolen voices right up until the moment it stops arguing entirely and simply reaches for the guild the same way it reached for Millbrook.",
+    "baseSuccess": 65,
+    "durationHours": 6,
+    "rewardGold": 13000,
+    "rewardXp": 2400,
+    "loot": [
+      "woven_mind_circlet@6",
+      "unraveling_cloak@6",
+      "threadcutter@3"
+    ],
+    "lootHeroic": [
+      "woven_mind_circlet_heroic@6",
+      "unraveling_cloak_heroic@6",
+      "threadcutter_heroic@3"
+    ],
+    "lootMythic": [
+      "woven_mind_circlet_mythic@6",
+      "unraveling_cloak_mythic@6",
+      "threadcutter_mythic@3"
+    ]
   }
 ]

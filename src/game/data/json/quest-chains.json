@@ -857,5 +857,263 @@
         "durationMinutes": 120
       }
     ]
+  },
+  {
+    "id": "bandits_on_the_old_road",
+    "name": "Bandits on the Old Road",
+    "description": "Every caravan coming up the old trade road tells the same story: a toll demanded at knifepoint, sometimes by a different crew than the week before. Too many bandits, too well coordinated, for this to be a handful of desperate strangers acting alone.",
+    "reqLevel": 4,
+    "rewardGold": 450,
+    "rewardItems": [
+      "tollbreakers_gloves"
+    ],
+    "rewardRenown": 1,
+    "title": "Roadwarden",
+    "epilogue": "The self-styled king of the old road answered for every toll he ever collected, all at once. The road's clear again -- for now. Someone always notices an unguarded stretch of road eventually, but that's a problem for whoever's watching next season.",
+    "stages": [
+      {
+        "name": "The Toll Nobody Asked For",
+        "flavour": "A merchant's convoy limps into town short two wagons and several fingers' worth of coin, describing the same crew that's hit half a dozen others this month -- organized, patient, and entirely too polite about the robbing.",
+        "tag": "combat",
+        "difficulty": "easy",
+        "goldMultiplier": 1.2,
+        "durationMinutes": 60
+      },
+      {
+        "name": "Whose Colors Are These",
+        "flavour": "A torn banner left behind at the ambush site doesn't match any crew the guild's dealt with before -- and asking around town turns up three other 'independent' bandit gangs flying the same colors, like someone's been recruiting rather than competing.",
+        "tag": "explore",
+        "difficulty": "easy",
+        "goldMultiplier": 1.3,
+        "durationMinutes": 90
+      },
+      {
+        "name": "The Self-Crowned King of the Old Road",
+        "flavour": "He's built himself a proper little court out of a collapsed watchtower, complete with a title nobody gave him and a small army of bandits who apparently didn't have a better offer. Someone should probably tell him how this usually ends.",
+        "tag": "combat",
+        "difficulty": "normal",
+        "goldMultiplier": 1.6,
+        "durationMinutes": 150
+      }
+    ]
+  },
+  {
+    "id": "something_big_in_the_foothills",
+    "name": "Something Big in the Foothills",
+    "description": "Herders in the foothills keep losing whole flocks overnight, and what's left behind isn't the tidy work of wolves or the opportunistic mess of bears -- fence posts are uprooted, not chewed through, and the tracks are wrong in a way nobody wants to think too hard about.",
+    "reqLevel": 12,
+    "rewardGold": 2100,
+    "rewardItems": [
+      "ridgebreakers_pauldron"
+    ],
+    "rewardRenown": 1,
+    "title": "Ridgebreaker",
+    "epilogue": "The warband's broken up and scattered back up the ridge, minus its biggest member. The foothills will probably see another one eventually -- ogres don't so much get wiped out as get bored and move on -- but that's a problem for a different season.",
+    "stages": [
+      {
+        "name": "Torn Fences, Missing Herds",
+        "flavour": "The fence wasn't broken so much as removed, posts and all, and the drag marks leading up into the hills are wide enough that two grown men could walk them side by side without touching the edges.",
+        "tag": "explore",
+        "difficulty": "normal",
+        "goldMultiplier": 1.5,
+        "durationMinutes": 480
+      },
+      {
+        "name": "The Ridge Warband",
+        "flavour": "This isn't one hungry animal passing through -- it's a proper warband, half a dozen strong, with a crude but very functional camp built out of stolen timber and whatever livestock they haven't already gotten around to eating.",
+        "tag": "combat",
+        "difficulty": "hard",
+        "goldMultiplier": 1.8,
+        "durationMinutes": 600
+      },
+      {
+        "name": "The Ridgebreaker",
+        "flavour": "The warband's biggest member earned that name honestly -- there's a boulder near the camp with a very deliberate, very deep dent in it, apparently just to make a point to the rest of the group.",
+        "tag": "combat",
+        "difficulty": "epic",
+        "goldMultiplier": 2.2,
+        "durationMinutes": 780
+      }
+    ]
+  },
+  {
+    "id": "full_moon_over_ashvale",
+    "name": "Full Moon Over Ashvale",
+    "description": "The hunting-lodge town of Ashvale wants a wolf problem solved before the next full moon, except the tracks are shaped wrong, the attacks only escalate on a schedule, and at least one of the survivors is starting to act like they're waiting for something.",
+    "reqLevel": 17,
+    "rewardGold": 3400,
+    "rewardItems": [
+      "moonsilver_fang"
+    ],
+    "rewardRenown": 2,
+    "title": "Moonhunter",
+    "epilogue": "The pack's gone quiet, its alpha put down before the moon finished rising. Ashvale's grateful, if a little rattled -- one of the people the guild was sent to protect didn't make it through the last stage of this the way anyone would have wanted. Nobody's saying that part out loud yet.",
+    "stages": [
+      {
+        "name": "Not Wolves",
+        "flavour": "The bite radius is wrong for a wolf, the kills are too organized for a pack of animals, and every attack so far has landed within a day of the moon's phase -- which is either an enormous coincidence or exactly what it looks like.",
+        "tag": "explore",
+        "difficulty": "normal",
+        "goldMultiplier": 1.5,
+        "durationMinutes": 420
+      },
+      {
+        "name": "The Turned Neighbor",
+        "flavour": "One of the survivors the guild was sent to protect stopped answering to their own name three nights ago, and by the time anyone noticed, it was already too late to do anything gentle about it.",
+        "tag": "combat",
+        "difficulty": "hard",
+        "goldMultiplier": 1.8,
+        "durationMinutes": 600
+      },
+      {
+        "name": "Under a Full Moon",
+        "flavour": "The pack's run wild under a full sky before, and it'll happen again unless the guild reaches the alpha before moonrise finishes -- after that, there won't be a version of this fight anyone walks away from clean.",
+        "tag": "combat",
+        "difficulty": "epic",
+        "goldMultiplier": 2.3,
+        "durationMinutes": 900
+      }
+    ]
+  },
+  {
+    "id": "body_snatcher_problem",
+    "name": "The Body Snatcher Problem",
+    "description": "A prominent Ironrest household has started acting subtly wrong -- right words, wrong rhythm, a laugh that lands a half-second late every single time. Nobody can point to what's actually different. Everyone agrees something is.",
+    "reqLevel": 29,
+    "rewardGold": 7800,
+    "rewardItems": [
+      "unravelers_mark"
+    ],
+    "rewardRenown": 3,
+    "title": "Unmasker",
+    "epilogue": "Whatever was wearing that household is gone now, and so is whatever it was actually made of underneath. The real question -- how long it had been doing this, and to how many other households nobody's checked yet -- goes conveniently unasked by everyone who'd rather not know the answer.",
+    "stages": [
+      {
+        "name": "Wrong Rhythm",
+        "flavour": "Every answer the family gives is technically correct and somehow still feels rehearsed, like something learned the shape of a normal household from watching it rather than living in it.",
+        "tag": "explore",
+        "difficulty": "hard",
+        "goldMultiplier": 2,
+        "durationMinutes": 660
+      },
+      {
+        "name": "The Grave-Robbers' Trail",
+        "flavour": "A disturbed plot in the family crypt leads to a much larger operation than one household's worth of graves -- someone, or something, has been quietly harvesting bodies for a lot longer than anyone's noticed.",
+        "tag": "stealth",
+        "difficulty": "epic",
+        "goldMultiplier": 2.4,
+        "durationMinutes": 900
+      },
+      {
+        "name": "What Wears Them Now",
+        "flavour": "It isn't undead, and it isn't wearing a stolen face the way a shapeshifter would -- it's copying, methodically, from the inside out, and it very much does not want to stop being interrupted.",
+        "tag": "combat",
+        "difficulty": "epic",
+        "goldMultiplier": 2.8,
+        "durationMinutes": 1080
+      }
+    ]
+  },
+  {
+    "id": "hunt_a_lich",
+    "name": "Hunt-a-Lich",
+    "description": "Raised dead have been getting bolder and considerably better organized than any ordinary wight problem -- someone, or something, is directing them with real intent, and the pattern only makes sense as the early moves of someone playing a much longer game.",
+    "reqLevel": 37,
+    "rewardGold": 19000,
+    "rewardItems": [
+      "lichfinders_compass"
+    ],
+    "rewardRenown": 5,
+    "title": "Grave-Marked",
+    "epilogue": "The guild found where he's holed up -- an old ossuary nobody's bothered mapping in decades -- but not what he's actually planning underneath it, only that whatever it is, he's confident enough in it to have stopped hiding. That confidence should worry everyone more than it currently does.",
+    "stages": [
+      {
+        "name": "The Dead Don't Usually Plan",
+        "flavour": "These aren't the shambling, purposeless dead the guild has cleared out before -- they're taking positions, falling back when overwhelmed, and regrouping somewhere the guild hasn't found yet. Something is thinking for them.",
+        "tag": "explore",
+        "difficulty": "epic",
+        "goldMultiplier": 2.7,
+        "durationMinutes": 1140
+      },
+      {
+        "name": "A Name in the Dark",
+        "flavour": "A captured ritual circlet, still warm, carries the trace of the same signature over and over -- a name half-erased by time and deliberately obscured the rest of the way, belonging to someone who was supposed to have died a very long time ago.",
+        "tag": "arcane",
+        "difficulty": "epic",
+        "goldMultiplier": 3,
+        "durationMinutes": 1320
+      },
+      {
+        "name": "The Door He Didn't Bother Locking",
+        "flavour": "The ossuary door isn't warded, isn't guarded, isn't hidden -- which either means he doesn't know the guild is close, or means he wants them to walk in exactly like this, on his own schedule instead of theirs.",
+        "tag": "stealth",
+        "difficulty": "legendary",
+        "goldMultiplier": 3.6,
+        "durationMinutes": 1560
+      }
+    ]
+  },
+  {
+    "id": "quiet_in_millbrook",
+    "name": "Quiet in Millbrook",
+    "description": "Every report out of Millbrook says the same unsettling thing in a different way: the town looks fine, sounds fine, and isn't. Flat affect, identical answers from people who've never met, a whole community suddenly agreeing on everything a little too easily.",
+    "reqLevel": 35,
+    "rewardGold": 15000,
+    "rewardItems": [
+      "millbrook_ledger_page"
+    ],
+    "rewardRenown": 4,
+    "title": "Watcher of Millbrook",
+    "epilogue": "Nobody in Millbrook is lying, exactly -- they answer every question, and every answer is true, and every answer arrives at the same conclusion no matter what was actually asked. The guild traced the compulsion to something underneath the town before the trail went dark. Whatever it is, it noticed them looking.",
+    "stages": [
+      {
+        "name": "Flat Answers",
+        "flavour": "Every resident gives the same measured, reasonable, faintly rehearsed answer to a completely different question, right down to the same half-second pause before speaking -- as if they're all listening to something before they respond.",
+        "tag": "explore",
+        "difficulty": "epic",
+        "goldMultiplier": 2.6,
+        "durationMinutes": 1080
+      },
+      {
+        "name": "The Trail Goes Quiet",
+        "flavour": "Whatever's directing Millbrook doesn't panic when it's noticed -- it simply goes quieter, tightening its grip rather than loosening it, right up until every lead the guild had goes suddenly, deliberately cold.",
+        "tag": "arcane",
+        "difficulty": "epic",
+        "goldMultiplier": 3,
+        "durationMinutes": 1320
+      }
+    ]
+  },
+  {
+    "id": "the_loom_beneath",
+    "name": "The Loom Beneath",
+    "description": "Whatever went quiet under Millbrook hasn't stopped -- it's simply stopped being subtle about it. Tracing the compulsion back to its root leads underground, into something that was never a person and has apparently been weaving a great many of them together for longer than anyone in Millbrook has been alive.",
+    "reqLevel": 39,
+    "rewardGold": 24000,
+    "rewardItems": [
+      "loomsplinter_shard"
+    ],
+    "rewardRenown": 6,
+    "title": "Thread-Walker",
+    "epilogue": "The guild has a name for it now -- the Loom, for lack of anything it's ever called itself -- and a location, and a fairly complete picture of what it's been doing to Millbrook and probably other towns nobody's checked yet. What the guild does not have is any plan that doesn't end with someone going down there to end it directly.",
+    "requiresChainId": "quiet_in_millbrook",
+    "stages": [
+      {
+        "name": "Underneath",
+        "flavour": "The tunnels beneath Millbrook weren't dug by anything with hands -- the walls are smooth in a way that looks grown rather than carved, and every thread of pale fiber running through the stone pulls, faintly, toward the same direction.",
+        "tag": "explore",
+        "difficulty": "legendary",
+        "goldMultiplier": 3.4,
+        "durationMinutes": 1440
+      },
+      {
+        "name": "One Voice, Too Many Mouths",
+        "flavour": "It doesn't attack. It talks, calmly, through every captured townsperson at once, in perfect unison, asking the guild in a dozen borrowed voices why they'd want to unravel something that's finally made everyone agree.",
+        "tag": "arcane",
+        "difficulty": "legendary",
+        "goldMultiplier": 3.8,
+        "durationMinutes": 1560
+      }
+    ]
   }
 ]

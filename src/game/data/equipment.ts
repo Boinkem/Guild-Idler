@@ -257,6 +257,38 @@ export const ITEM_SETS: ItemSet[] = [
       { count: 4, mods: { success: 30, gold: 34, loot: 14, injuryResist: 12 }, label: 'Cornered' },
     ],
   },
+  // Three new raids -- Black Dragon Nest, House of Bones, Silence the Loom
+  // (see guild-idler-status.md) -- each gets the same one-set-per-raid
+  // treatment as blackford/bonewrought/wyrmkeep/what_got_out above.
+  {
+    id: 'cinderfang',
+    name: 'Cinderfang Set',
+    pieces: ['cinderfang_gauntlets', 'wyrmwardens_cloak', 'scaleknit_boots', 'brood_fang_dagger', 'blackscale_helm', 'broodmothers_crown'],
+    bonuses: [
+      { count: 2, mods: { success: 10, injuryResist: 10 }, label: 'Nest-Touched' },
+      { count: 4, mods: { success: 18, injuryResist: 18, gold: 12 }, label: 'Ridge-Scorched' },
+      { count: 6, mods: { success: 28, injuryResist: 26, gold: 20, loot: 12 }, label: 'The Nest Is Ash' },
+    ],
+  },
+  {
+    id: 'grimward',
+    name: 'Grimward Set',
+    pieces: ['sewn_maw_greataxe', 'stitched_hide_vest', 'phylactery_shard_ring', 'unbinding_gauntlets', 'lichbound_diadem', 'grimward_amulet'],
+    bonuses: [
+      { count: 2, mods: { success: 12, injuryResist: 14 }, label: 'Ossuary-Marked' },
+      { count: 4, mods: { success: 22, injuryResist: 24, xp: 16 }, label: 'Phylactery Broken' },
+      { count: 6, mods: { success: 34, injuryResist: 32, xp: 26, gold: 16 }, label: 'The Ritual Ended' },
+    ],
+  },
+  {
+    id: 'loom',
+    name: "The Loom's Set",
+    pieces: ['woven_mind_circlet', 'unraveling_cloak', 'threadcutter'],
+    bonuses: [
+      { count: 2, mods: { success: 16, xp: 18 }, label: 'One Thread Cut' },
+      { count: 3, mods: { success: 28, xp: 30, speed: 14, gold: 18 }, label: 'Unraveled' },
+    ],
+  },
 ];
 
 export const SET_BY_ID: Record<string, ItemSet> = Object.fromEntries(ITEM_SETS.map((s) => [s.id, s]));

@@ -62,5 +62,13 @@
     "glyph": "\ud83d\udc15",
     "spriteFolder": "hatchery_hound",
     "dedicatedOnly": true
+  },
+  {
+    "id": "black_dragonling",
+    "name": "Black Dragonling",
+    "description": "Small enough to perch on a shoulder, for now. Still lets out a puff of real smoke when startled, and has already learned that food arrives faster if it looks pitiful about asking.",
+    "glyph": "\ud83d\udc09",
+    "spriteFolder": "black_dragonling",
+    "dedicatedOnly": true
   }
 ]

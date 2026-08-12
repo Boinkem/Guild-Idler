@@ -664,6 +664,22 @@ export interface RaidDef {
    * unconditionally before this).
    */
   banner?: { path?: string; focusX?: number; focusY?: number };
+  /**
+   * Flat percentage points added directly to every encounter's success
+   * chance in this raid, independent of RAID_DIFFICULTIES' Normal/Heroic/
+   * Mythic tiers -- a raid-level knob for "this specific raid should read
+   * as harder (or easier) than its baseSuccess numbers alone suggest,"
+   * without hand-editing every encounter's baseSuccess or distorting the
+   * shared N/H/M tier promise every other raid relies on (see raids.ts's
+   * own comment on why those stay global constants). Usually negative
+   * (harder); a positive value is valid too, just currently unused.
+   * Introduced for `silence_the_loom`, a single-encounter raid that
+   * wanted a small extra difficulty bump the standard tier system
+   * couldn't express on its own. See RaidManager.previewEncounterSuccess/
+   * resolve for the read side, and server.mjs's `raids` schema for the
+   * DevTool field.
+   */
+  successModifier?: number;
 }
 
 export interface RaidDifficultyConfig {
