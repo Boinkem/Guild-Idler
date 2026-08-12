@@ -3,7 +3,7 @@ import {
   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES,
 } from '../data/quests';
 import { HERO_CLASSES } from '../data/progression';
-import { fastQuestCapsPerHour, fastQuestFloorPerHour } from '../data/balance';
+import { fastQuestCapsPerHour, fastQuestFloorPerHour, easyFastModeChances } from '../data/balance';
 import { questEggDropChance } from '../data/pets';
 import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
 import { NODE_ORDER, MATERIAL_BY_ID } from '../data/materials';
@@ -102,7 +102,14 @@ export const QuestManager = {
     // individually, not just a one-hero guild -- guaranteed unconditionally
     // (this used to be gated on state.heroes.length <= 1, back when a
     // second hero could just pull from the same shared pool instead).
-    if (!offers.some((o) => o.difficulty === 'easy' && o.duration <= 5 * MINUTE)) {
+    // Skipped once burst itself has been tapered to 0% for this hero's own
+    // level (see easyFastModeChances) -- forcing one on regardless would
+    // silently override the taper's whole point. Medium/standard already
+    // cover the "something to do soon" need by that point.
+    if (
+      easyFastModeChances(hero.level).burstChance > 0
+      && !offers.some((o) => o.difficulty === 'easy' && o.duration <= 5 * MINUTE)
+    ) {
       offers[offers.length - 1] = QuestManager.generateOffer('easy', rng, `q:${window}:${hero.id}:${salt}:guaranteed`, hero.level, true, legendaryUnlocked);
     }
 
@@ -311,8 +318,19 @@ export const QuestManager = {
     // generateContractsForHero's own "don't run dry on real quests" guarantee
     // to force a genuine full-length offer regardless of what the burst/
     // medium rolls would have produced.
-    const useBurst = !forceStandard && (forceBurst || (cfg.burstChance !== undefined && rng.chance(cfg.burstChance)));
-    const useMedium = !forceStandard && !useBurst && cfg.mediumChance !== undefined && rng.chance(cfg.mediumChance);
+    //
+    // Easy's own burst/medium chance is overridden by level -- see
+    // easyFastModeChances's own comment. Every other tier still reads
+    // straight off DIFFICULTIES, since burst/medium currently only exist
+    // on Easy at all.
+    const fastChances = difficulty === 'easy' ? easyFastModeChances(topLevel) : undefined;
+    const effectiveBurstChance = fastChances ? fastChances.burstChance : cfg.burstChance;
+    const effectiveMediumChance = fastChances ? fastChances.mediumChance : cfg.mediumChance;
+    const useBurst = !forceStandard && (forceBurst || (
+      effectiveBurstChance !== undefined && effectiveBurstChance > 0 && rng.chance(effectiveBurstChance)
+    ));
+    const useMedium = !forceStandard && !useBurst
+      && effectiveMediumChance !== undefined && effectiveMediumChance > 0 && rng.chance(effectiveMediumChance);
     const durMin = useBurst ? cfg.burstMinDuration! : useMedium ? cfg.mediumMinDuration! : cfg.minDuration;
     const durMax = useBurst ? cfg.burstMaxDuration! : useMedium ? cfg.mediumMaxDuration! : cfg.maxDuration;
     const duration = rng.int(durMin, durMax);
@@ -458,32 +476,44 @@ export const QuestManager = {
   /**
    * Success chance preview, used by the UI and locked in at departure.
    *
-   * The level/stat-derived portion of `heroMods` (the flat `level * 0.4`
-   * term, plus the str/end curve inside statMods) both scale off the
+   * The level/stat-derived portion of a hero's mods (the flat `level *
+   * 0.4` term, plus the str/end curve inside statMods) both scale off the
    * hero's *raw* level -- which used to mean a hero standing exactly at a
    * quest's own reqLevel, with zero gear or spent stat points, was still
    * carrying the full "free" bonus of every level it took to get there.
-   * reqLevel ended up barely gating anything.
+   * reqLevel ended up barely gating anything. That part -- the automatic,
+   * zero-investment growth every hero of this class gets just from being
+   * hero.level -- is still fully isolated out below via `baselineStats`/
+   * `autoGrowthStats`, same as before, and still flows through completely
+   * uncurved: it's what makes genuinely out-levelling a quest (not just
+   * gearing up for one at your own level) the one lever that can still
+   * reach MAX_SUCCESS on its own. HeroManager.heroMods/statMods
+   * themselves are left untouched throughout (they're also used for the
+   * Heroes panel's raw stat display and for raids, neither of which has
+   * this "gated by reqLevel" framing) -- only this preview does any of
+   * this split.
    *
-   * `baselineOffset` below is exactly what a bare, zero-investment hero of
-   * this class would carry in these two terms if it were standing right at
-   * offer.reqLevel -- HeroManager.heroMods/statMods themselves are left
-   * untouched (they're also used for the Heroes panel's raw stat display
-   * and for raids, neither of which has this same "gated by reqLevel"
-   * framing), and only this preview subtracts it.
-   *
-   * With that in place, `DIFFICULTIES[tier].baseSuccess` is now exactly
-   * what a hero standing at reqLevel with nothing invested actually gets
-   * (tuned directly to 70/60/50/40/30 for Easy/Normal/Hard/Epic/Legendary
-   * -- see DIFFICULTIES in quests.ts) -- there's no separate flat
-   * difficulty-tier penalty layered on top anymore; baseSuccess already
-   * fully encodes the tier, so a second penalty was only ever redundant
-   * once reqLevel itself stopped being a formality. Any class-identity
-   * success mod (Samurai's, Lizardman's) still lands a specific class a
-   * little above that baseline, intentionally. Out-leveling the
-   * requirement, or investing in stats/gear/upgrades/consumables, is what
-   * should move the needle from there -- and does, since all of those
-   * raise the hero's *actual* mods above this now-tier-accurate floor.
+   * Everything else -- equipped gear, consumables, guild facilities,
+   * renown perks, spent stat points, elemental matchups, the
+   * preferred-tag bonus -- is real, active *investment*, and now goes
+   * through `QuestManager.curveInvestment` as one combined total before
+   * being added on top of baseSuccess. This replaced an earlier flat cap
+   * (a hard ceiling on at-level success, tuned against real playtest
+   * numbers) once it became clear a hard wall kills the incentive to
+   * bother with the last few points of investment at all -- once a build
+   * was capped, a consumable or an elemental-matched enchant did
+   * literally nothing, which is exactly backwards for a stat a player is
+   * meant to keep optimizing. A smooth diminishing curve keeps every
+   * source worthwhile (each additional point of investment still helps,
+   * just by less and less) while still preventing modest gear alone from
+   * blowing through a tier's own baseSuccess the way pure linear stacking
+   * did. `quest.investmentLinearThreshold` (raw points that still count
+   * 1:1) and `quest.investmentDiminishingCapExtra`/`Decay` (the
+   * asymptotic extra beyond that, approached but never quite reached) are
+   * all tunable -- see guild-idler-status.md's "Quest success rebalance"
+   * writeup for the before/after numbers these were checked against,
+   * including real gear pulled from equipment.json against two actual
+   * playtester heroes.
    *
    * Going the other way -- attempting a quest *above* the hero's own
    * level -- is a deliberate, opt-in trade now rather than blocked
@@ -492,7 +522,8 @@ export const QuestManager = {
    * (tunable, default 10) success points per level of gap between the
    * hero and offer.reqLevel, on top of everything else. A hero already
    * at or above reqLevel pays nothing extra here -- this only ever
-   * subtracts, never adds.
+   * subtracts, never adds. Left uncurved, same as the outlevel bonus --
+   * both are level-gap terms, not investment.
    */
   previewSuccess(state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number): number {
     const loadout = InventoryManager.loadoutEffects(state, consumables);
@@ -504,18 +535,66 @@ export const QuestManager = {
     // ordinary board contracts now, matching whatever that specific stage
     // is actually about.
     const preferred = classDef.preferred.includes(offer.tag) ? classDef.preferredBonus : 0;
-    const mods = sumMods(
-      HeroManager.heroMods(state, hero, now),
+
+    // Split the hero's stat-derived success into the automatic half (zero
+    // gear/points spent, same shape baselineStats already computes for a
+    // quest's own reqLevel -- just evaluated at the hero's OWN level too)
+    // and the invested half (gear + spent stat points on top of that).
+    // Only the invested half is curved below.
+    const autoGrowthStats = HeroManager.baselineStats(hero.heroClass, hero.level);
+    const baselineStats = HeroManager.baselineStats(hero.heroClass, offer.reqLevel);
+    const autoGrowthSuccess = HeroManager.statMods(autoGrowthStats).success ?? 0;
+    const baselineSuccess = HeroManager.statMods(baselineStats).success ?? 0;
+    const totalStatSuccess = HeroManager.statMods(HeroManager.totalStats(hero)).success ?? 0;
+    const investedStatSuccess = totalStatSuccess - autoGrowthSuccess;
+
+    const investedMods = sumMods(
+      classDef.mods,
+      HeroManager.equipmentMods(hero),
+      HeroManager.injuryMods(hero, now),
+      HeroManager.healthMods(hero),
+      ModifierManager.petModsForHero(state, hero, now),
       ModifierManager.global(state),
       loadout.mods,
       { success: preferred },
     );
-    const baselineStats = HeroManager.baselineStats(hero.heroClass, offer.reqLevel);
-    const baselineOffset = (HeroManager.statMods(baselineStats).success ?? 0) + offer.reqLevel * 0.4;
+    const elemental = elementalBonusForHero(hero, offer);
+    const investmentRaw = investedStatSuccess + (investedMods.success ?? 0) + elemental;
+    const investmentCurved = QuestManager.curveInvestment(investmentRaw);
+
+    const outlevelBonus = (autoGrowthSuccess - baselineSuccess) + (hero.level - offer.reqLevel) * 0.4;
     const levelGap = Math.max(0, offer.reqLevel - hero.level);
     const overLevelPenalty = levelGap * Tuning.get('quest.overLevelPenaltyPercent');
-    const elemental = elementalBonusForHero(hero, offer);
-    return clamp(offer.baseSuccess + mods.success + elemental - baselineOffset - overLevelPenalty, MIN_SUCCESS, MAX_SUCCESS);
+
+    return clamp(
+      offer.baseSuccess + investmentCurved + outlevelBonus - overLevelPenalty,
+      MIN_SUCCESS,
+      MAX_SUCCESS,
+    );
+  },
+
+  /**
+   * Diminishing-returns curve applied to a hero's combined *invested*
+   * success bonus -- see previewSuccess's own comment above for the full
+   * reasoning. The first `investmentLinearThreshold` raw points still
+   * count fully 1:1 (early gear/potions feel exactly as good as they used
+   * to). Past that, each further point buys less: a continuous
+   * exponential approach to `investmentLinearThreshold +
+   * investmentDiminishingCapExtra`, with slope exactly 1 at the threshold
+   * itself so there's no discontinuous jump. Never a hard wall -- one
+   * more enchant or potion always helps a little, it just gets harder and
+   * harder to matter, which is what keeps min-maxing worthwhile instead
+   * of pointless once a hero's gear already covers the easy points.
+   * Negative input (an injury, missing Health) passes through unchanged
+   * below the threshold -- penalties should never be softened by this.
+   */
+  curveInvestment(raw: number): number {
+    const threshold = Tuning.get('quest.investmentLinearThreshold');
+    if (raw <= threshold) return raw;
+    const capExtra = Tuning.get('quest.investmentDiminishingCapExtra');
+    const decay = Tuning.get('quest.investmentDiminishingDecay');
+    const excess = raw - threshold;
+    return threshold + capExtra * (1 - Math.exp(-excess / decay));
   },
 
   previewDuration(state: GameState, hero: Hero, offer: QuestOffer, now: number): number {

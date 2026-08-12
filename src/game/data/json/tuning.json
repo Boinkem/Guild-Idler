@@ -3041,5 +3041,115 @@
     "min": 1,
     "max": 200,
     "description": "Flat material units granted per hour of a Gathering Bounty's duration on success. Calibrated below the ~50/hr a hero could get manually clicking the Harvest minigame at zero tool investment (45s base spawn interval, 0.5 base yield, 12% chance of a 3x bonus glint) -- a fire-and-forget bounty is meant to pay slightly less than optimal manual play, same 80-85%-of-best-manual-rate shape fastQuestCapsPerHour already uses elsewhere."
+  },
+  {
+    "id": "quest.investmentLinearThreshold",
+    "label": "Quest success: investment linear threshold",
+    "category": "quests",
+    "value": 8,
+    "default": 8,
+    "min": 0,
+    "max": 50,
+    "description": "Raw invested success points (gear + consumables + facilities/renown + spent stat points + elemental + preferred-tag, combined) that still count fully 1:1 before curveInvestment starts diminishing. See QuestManager.previewSuccess/curveInvestment."
+  },
+  {
+    "id": "quest.investmentDiminishingCapExtra",
+    "label": "Quest success: investment diminishing cap (extra)",
+    "category": "quests",
+    "value": 30,
+    "default": 30,
+    "min": 0,
+    "max": 100,
+    "description": "Asymptotic extra success points invested sources can contribute beyond quest.investmentLinearThreshold -- approached but never fully reached (exponential approach, continuous slope at the threshold). Raising this lets heavy investment climb further before diminishing returns bite hard."
+  },
+  {
+    "id": "quest.investmentDiminishingDecay",
+    "label": "Quest success: investment diminishing decay",
+    "category": "quests",
+    "value": 30,
+    "default": 30,
+    "min": 1,
+    "max": 100,
+    "description": "Decay constant for the same curve as quest.investmentDiminishingCapExtra -- kept equal to it by default so the curve's slope is exactly 1 right at the threshold (no discontinuous jump). Lower values saturate faster (diminishing returns bite sooner)."
+  },
+  {
+    "id": "quest.easyBurstChanceTier1",
+    "label": "Easy burst chance: level 1-5",
+    "category": "quests",
+    "value": 45,
+    "default": 45,
+    "min": 0,
+    "max": 100,
+    "description": "Burst-mode chance on Easy offers for a hero at level 1-5 -- unchanged from the original onboarding-hook value. See balance.ts's easyFastModeChances."
+  },
+  {
+    "id": "quest.easyMediumChanceTier1",
+    "label": "Easy medium chance: level 1-5",
+    "category": "quests",
+    "value": 35,
+    "default": 35,
+    "min": 0,
+    "max": 100,
+    "description": "Medium-mode chance on Easy offers for a hero at level 1-5 (only rolled if burst didn't hit) -- unchanged from the original value."
+  },
+  {
+    "id": "quest.easyBurstChanceTier2",
+    "label": "Easy burst chance: level 6-10",
+    "category": "quests",
+    "value": 30,
+    "default": 30,
+    "min": 0,
+    "max": 100,
+    "description": "Burst-mode chance on Easy offers for a hero at level 6-10 -- first taper step, shifting weight toward Medium as burst's own short duration starts producing trivial absolute rewards under the live per-hour cap."
+  },
+  {
+    "id": "quest.easyMediumChanceTier2",
+    "label": "Easy medium chance: level 6-10",
+    "category": "quests",
+    "value": 45,
+    "default": 45,
+    "min": 0,
+    "max": 100,
+    "description": "Medium-mode chance on Easy offers for a hero at level 6-10 -- raised to absorb the share tapered off burst."
+  },
+  {
+    "id": "quest.easyBurstChanceTier3",
+    "label": "Easy burst chance: level 11-15",
+    "category": "quests",
+    "value": 15,
+    "default": 15,
+    "min": 0,
+    "max": 100,
+    "description": "Burst-mode chance on Easy offers for a hero at level 11-15 -- burst becomes rare."
+  },
+  {
+    "id": "quest.easyMediumChanceTier3",
+    "label": "Easy medium chance: level 11-15",
+    "category": "quests",
+    "value": 55,
+    "default": 55,
+    "min": 0,
+    "max": 100,
+    "description": "Medium-mode chance on Easy offers for a hero at level 11-15."
+  },
+  {
+    "id": "quest.easyBurstChanceTier4",
+    "label": "Easy burst chance: level 16+",
+    "category": "quests",
+    "value": 0,
+    "default": 0,
+    "min": 0,
+    "max": 100,
+    "description": "Burst-mode chance on Easy offers for a hero at level 16+ -- retired entirely. Standard/Medium fully take over; see easyFastModeChances and generateContractsForHero's own guard against forcing a burst guarantee once this is 0."
+  },
+  {
+    "id": "quest.easyMediumChanceTier4",
+    "label": "Easy medium chance: level 16+",
+    "category": "quests",
+    "value": 60,
+    "default": 60,
+    "min": 0,
+    "max": 100,
+    "description": "Medium-mode chance on Easy offers for a hero at level 16+, absorbing burst's entire retired share."
   }
 ]

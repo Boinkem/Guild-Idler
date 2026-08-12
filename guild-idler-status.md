@@ -12,15 +12,118 @@ stale sections here are worse than no section at all.
 
 **Core loop** — quest board (30-min refresh windows), offline catch-up,
 Auto-Chain streaks, burst quests (capped live against the best-unlocked
-tier rather than a flat taper), one freezable contract per hero (survives
-a refresh, reroll, or Auto-Chain restock -- see "Quest board freeze slot
--- built" below). Auto-Chain now stops itself the moment
-any quest fails ("as far as you can go") instead of grinding on toward
-its target count regardless of outcome, and story chains have their own
-independent auto-continue -- see "Auto-queue / chain stepping rework"
-below. Each hero now generates and keeps their own contract pool, scaled
-to their own level rather than the guild's top hero -- see "Quest Tab
-hero-log rework" below.
+tier rather than a flat taper, and now tapering out entirely by level 16
+-- see "Burst quest reward taper -- built" below), one freezable contract
+per hero (survives a refresh, reroll, or Auto-Chain restock -- see "Quest
+board freeze slot -- built" below). Auto-Chain now stops itself the
+moment any quest fails ("as far as you can go") instead of grinding on
+toward its target count regardless of outcome, and story chains have
+their own independent auto-continue -- see "Auto-queue / chain stepping
+rework" below. Each hero now generates and keeps their own contract pool,
+scaled to their own level rather than the guild's top hero -- see "Quest
+Tab hero-log rework" below. Quest success now runs through a combined
+diminishing-returns curve rather than pure linear stacking -- see "Quest
+success rebalance -- built" below.
+
+### Quest success rebalance -- built
+
+A live playtest report (two testers, real gear from `equipment.json`)
+confirmed a genuine bug: `previewSuccess`'s old formula let gear,
+consumables, guild facilities, and renown perks all stack fully linearly
+into the same success total, with only a flat MAX_SUCCESS=95 clamp at the
+top. A hero standing at a quest's own level, wearing nothing more than
+tier-appropriate gear, could already hit the 95% ceiling on 3 of 5
+difficulty tiers -- leaving no gearing room to grow into, which was the
+entire point of the review. One tester's Knight (level 7, modest common/
+uncommon gear) was measured hitting Easy's 95% cap in-game; a from-scratch
+model using his exact equipped items (Knight's Blade +5 success, +3
+strength, nothing else) only accounted for ~81% on its own, confirming the
+rest came from other uncapped-additive sources (facility levels, renown,
+his class's preferred-tag bonus) compounding on top -- not gear alone.
+
+**Root cause:** `baselineOffset` correctly zeroed out the "free" bonus a
+hero gets just from existing at a quest's reqLevel, but nothing stopped
+*investment* (gear + consumables + facilities + renown, every source
+combined) from stacking without limit past that baseline.
+
+**Fix, in two parts, both in `QuestManager.previewSuccess`:**
+
+1. Every invested success source (equipped gear, consumables, guild
+   facility levels, renown perks, spent stat points beyond automatic
+   per-level growth, elemental affinity, the class preferred-tag bonus)
+   is now summed into one `investmentRaw` total and passed through
+   `QuestManager.curveInvestment` before being added to `baseSuccess`.
+   The first `quest.investmentLinearThreshold` (8) raw points still count
+   fully 1:1 -- early gear/potions feel exactly as rewarding as before.
+   Past that, each further point buys less: a continuous exponential
+   approach to `investmentLinearThreshold + investmentDiminishingCapExtra`
+   (8+30=38), with slope exactly 1 at the threshold so there's no
+   discontinuous jump. Deliberately **not** a hard ceiling -- an earlier
+   draft of this fix used a flat cap tied to level, and direct feedback
+   during design caught a real problem with it: once a build hit the
+   wall, a consumable or an elemental-matched enchant did *nothing*,
+   killing the incentive to keep optimizing at all. The smooth curve
+   keeps every source worthwhile arbitrarily far into a min-maxed build,
+   just with steeply shrinking returns, which is what actually
+   preserves the "chase the last few percent" feeling instead of
+   removing it.
+2. The hero's automatic, zero-investment stat growth from levelling (the
+   same shape `HeroManager.baselineStats` already computes for a quest's
+   own reqLevel, now also evaluated at the hero's own level) is split out
+   and kept completely uncurved, alongside the existing flat `0.4`-per-
+   level-of-gap term. This is what still lets a hero who's genuinely
+   out-levelled a tier reach true 95% through levelling alone, with zero
+   gear -- that lever was explicitly preserved on purpose, distinct from
+   investment. The existing `overLevelPenalty` (attempting a quest above
+   your own level) is untouched.
+
+The two together produce a real, felt decline in achievable success as
+difficulty climbs at a hero's own level (baseSuccess 70/58/44/30/18 for
+Easy/Normal/Hard/Epic/Legendary is the honest zero-gear floor for all of
+them, unchanged), while investment can meaningfully close most of that
+gap without ever fully trivializing it, and out-levelling old content to
+95% still works exactly as it always has. New tunables, all in the
+`quests` tuning category: `quest.investmentLinearThreshold` (8),
+`quest.investmentDiminishingCapExtra` (30), `quest.investmentDiminishingDecay`
+(30).
+
+### Burst quest reward taper -- built
+
+Also flagged from the same playtest report: a level-8 Easy burst quest
+(5m58s) was paying 1 gold / 2 xp -- reads as broken, not "a small quick
+reward." Traced to `balance.ts`'s live per-hour cap (burst is capped to
+82.5% of whatever the player's best-unlocked tier pays per hour, to stop
+burst-spamming from being the dominant strategy): once Hard unlocks at
+level 8, that cap sits around 9 gold/hr, and a sub-6-minute duration
+divided into that rate rounds down to 1 regardless of the floor meant to
+protect against exactly this. **Confirmed directly that stretching
+burst's own duration doesn't fix it** -- even a 60% longer burst (~9.5
+min) still rounds to 1 gold at that level, because the bottleneck is the
+capped per-hour rate itself, not the rounding window; a duration long
+enough to clear it (~20min+) is just Medium mode's own range already,
+which already pays fine (5g/6xp at 30min) with no changes needed there.
+
+Fix: `balance.ts`'s new `easyFastModeChances(level)` tapers Easy's
+`burstChance`/`mediumChance` by level band instead of leaving them flat
+constants, shifting weight from burst toward Medium as a hero climbs,
+until burst is retired entirely:
+
+| Level | Burst chance | Medium chance |
+|-------|--------------|----------------|
+| 1-5   | 45% (unchanged -- the deliberate onboarding hook) | 35% (unchanged) |
+| 6-10  | 30% | 45% |
+| 11-15 | 15% | 55% |
+| 16+   | 0% (retired) | 60% |
+
+`QuestManager.generateOffer` reads the hero's own level through this
+function for Easy specifically (every other tier is untouched, since
+burst/medium only exist on Easy today); `generateContractsForHero`'s
+"always guarantee one fast option" fallback now also checks the taper
+first, so it stops force-injecting a burst offer once burst itself has
+been tapered to 0% for that hero -- forcing one back in at that point
+would have silently overridden the whole fix. All eight percentages are
+new tunables in the `quests` category (`quest.easyBurstChanceTier1-4`,
+`quest.easyMediumChanceTier1-4`).
 
 **Heroes** — recruiting, leveling, stat allocation, injuries, skins,
 ascension/prestige, retirement with streak bonus.
@@ -515,6 +618,48 @@ raid fight).
 ---
 
 ## Backlog
+
+### Mythic quest tier (above Legendary) -- idea logged, not scoped
+Raised during the quest success rebalance discussion (see "Quest success
+rebalance -- built" above): worth double-checking whether the new curve
+leaves Legendary genuinely unsatisfying at very high hero levels once
+gearing catches up. Direct simulation says **no** on success specifically
+-- a level-55 hero (30 levels past Legendary's own reqLevel 25) in full
+current best-in-slot gear still only hits ~75%, so there's real headroom
+left deep into the endgame; a new tier isn't needed to fix success rate.
+The actual gap is **rewards**: Legendary's gold/xp ranges are flat
+constants like every other tier, so a level 55 hero grinding Legendary
+earns exactly what a level 26 hero just unlocking it does, even though
+the guild's own gold sink (1.16M to max facilities) and the hero's own
+power have grown enormously in between -- the same reward-scaling problem
+a fully level-relative quest system (seriously considered and explicitly
+rejected, see below) would have needed to solve anyway, just now scoped
+to one new top tier instead of the whole board. Not scoped yet -- open
+questions include its own reqLevel/baseSuccess/reward range, whether it
+needs new gear rarity above legendary or reuses existing loot tables, and
+whether it gates behind its own unlock the way Legendary needs the
+Enchanted Seal.
+
+### Level-relative quest scaling -- seriously explored, rejected
+Considered as an alternative to the success-formula fix above: instead of
+fixed reqLevel per difficulty tier (1/3/8/15/25), quests would roll
+`reqLevel ≈ hero.level` (±1-2 jitter) with difficulty becoming a pure
+risk/reward dial available at any level, Legendary still gated behind the
+Enchanted Seal regardless of level. Rejected before implementation, for
+two reasons: (1) it would have required a genuinely new reward-scaling
+system (current gold/xp ranges are flat per tier, calibrated once around
+each tier's fixed reqLevel -- under level-scaling they'd need to grow
+continuously with hero level, which is a fresh economy design, not a
+formula tweak, and risked breaking the facility-cost pacing the 90-day
+balance sim already validates); (2) it fights the genre identity more
+than it fixes anything -- outlevelling old content and finding gear tied
+to a specific tier/level are core RPG-idler feelings (Melvor, Rusty's
+Retirement, Cozy Grove, Desktop Raid all use fixed zones, not full
+level-scaling), and losing "go back and stomp Easy at level 40" in
+exchange for "nothing is ever trivial" is a worse fit for this game
+specifically. The fixed-tier-plus-diminishing-curve approach above
+achieves the actual goal (gear can't trivially cap success at your own
+level) without either cost.
 
 ### Steam-launch completeness pass -- findings logged, working through the list
 A full systems review was requested specifically to answer "is this a

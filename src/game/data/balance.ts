@@ -1,6 +1,7 @@
 import { DIFFICULTIES, DIFFICULTY_ORDER, DifficultyConfig } from './quests';
 import { Difficulty } from '../types';
 import { HOUR } from '../util';
+import { Tuning } from './tuning';
 
 /**
  * Replaces the old flat burstTaper(topLevel) curve in QuestManager with a
@@ -101,5 +102,54 @@ export function fastQuestFloorPerHour(cfg: DifficultyConfig): { gold: number; xp
   return {
     gold: expectedRatePerHour(cfg, 'gold'),
     xp: expectedRatePerHour(cfg, 'xp'),
+  };
+}
+
+/**
+ * Burst/medium chance taper for the Easy tier, by hero level -- see
+ * guild-idler-status.md's "Burst quest reward taper" writeup for the full
+ * before/after numbers this was checked against. Burst's own duration is
+ * short enough (2-8min) that even a level-appropriate live per-hour cap
+ * (fastQuestCapsPerHour above) rounds down to a trivial 1 gold / 1-2 xp
+ * once a hero is a handful of levels in -- confirmed directly against a
+ * real playtest report, not assumed. Stretching burst's own duration
+ * range doesn't fix this: the cap itself is the bottleneck, not the
+ * rounding window, and a duration long enough to clear it (~20min+) is
+ * just Medium's own range already. So the fix shifts weight away from
+ * burst and toward Medium as a hero levels, rather than growing burst's
+ * own duration -- Medium already produces healthy absolute numbers at
+ * its 20-40min range with no changes needed there.
+ *
+ * Untouched through level 5, same onboarding-hook reasoning
+ * MIN_LEVEL_FOR_CAP above already uses -- burst is still the deliberate
+ * fast-turnaround hook for a brand new guild. From level 16 on, burst is
+ * retired entirely (0% chance): by that point a hero has Hard and likely
+ * Epic unlocked, and a sub-10-minute Easy quest can never pay a
+ * respectable absolute reward under the live cap regardless of how it's
+ * tuned, so the board stops offering it rather than offering something
+ * that reads as broken.
+ */
+export function easyFastModeChances(level: number): { burstChance: number; mediumChance: number } {
+  if (level <= 5) {
+    return {
+      burstChance: Tuning.get('quest.easyBurstChanceTier1'),
+      mediumChance: Tuning.get('quest.easyMediumChanceTier1'),
+    };
+  }
+  if (level <= 10) {
+    return {
+      burstChance: Tuning.get('quest.easyBurstChanceTier2'),
+      mediumChance: Tuning.get('quest.easyMediumChanceTier2'),
+    };
+  }
+  if (level <= 15) {
+    return {
+      burstChance: Tuning.get('quest.easyBurstChanceTier3'),
+      mediumChance: Tuning.get('quest.easyMediumChanceTier3'),
+    };
+  }
+  return {
+    burstChance: Tuning.get('quest.easyBurstChanceTier4'),
+    mediumChance: Tuning.get('quest.easyMediumChanceTier4'),
   };
 }
