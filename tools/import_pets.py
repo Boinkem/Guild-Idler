@@ -79,13 +79,24 @@ class PetSpec:
         self.species_id = species_id
         self.frame_w = frame_w
         self.frame_h = frame_h
-        # Two mutually-exclusive source shapes, exactly one set per spec:
-        #  - sheet_file + rows: one row-grid sheet, sliced by this script
-        #    (every species so far except the Hound).
-        #  - anim_files: the pack already ships one pre-cut horizontal strip
-        #    file per animation (just frame_w-wide cells, one row) --
-        #    nothing to slice, only recolour. The Hound's Saint Bernard
-        #    pack came this way.
+        # Two source shapes, no longer strictly mutually exclusive as of
+        # Rooftail's idle fix below -- a spec can now mix both at once:
+        #  - sheet_file + rows: animations sliced from one row-grid sheet
+        #    (still every species' default shape).
+        #  - anim_files: one or more animations that have since been
+        #    REPLACED by an individually-supplied pre-cut strip file
+        #    (frame_w-wide cells, one row), overriding whatever that same
+        #    animation name would have sliced from sheet_file/rows. Started
+        #    as an all-or-nothing shape (the Hound's whole pack came this
+        #    way, then Ashwing's full replacement) -- Rooftail's idle-only
+        #    fix is the first case needing a MIX: idle2/movement/sleep
+        #    stay on the original sheet, only idle moves to its own fixed
+        #    file (the original sheet's idle row baked in 2 fully blank
+        #    trailing frames -- confirmed directly by inspecting the
+        #    original file's pixel alpha channel, not assumed from the
+        #    visual "blinks out" symptom alone -- so the fix is a
+        #    corrected replacement file, not a code-side workaround).
+        #    If the same animation name appears in both, anim_files wins.
         self.sheet_file = sheet_file
         self.rows = rows or {}
         self.anim_files = anim_files or {}
@@ -126,10 +137,20 @@ RED_PANDA = PetSpec(
     sheet_file='Red_Panda_Sprite_Sheet.png',
     frame_w=32, frame_h=32,
     rows={
-        'idle': (0, 0, 8),
+        # 'idle' removed from here -- the sheet's own idle row baked in 2
+        # fully blank trailing frames (confirmed by inspecting the actual
+        # alpha channel: frames 0-5 all had ~148 opaque pixels, frames 6-7
+        # had zero), which read in-game as the animation "blinking out"
+        # every loop before jumping back to frame 0. Overridden below via
+        # anim_files with a corrected, already-trimmed 6-frame
+        # replacement rather than patched in place, so the original sheet
+        # file itself never needs re-touching.
         'idle2': (1, 0, 8),
         'movement': (2, 0, 8),
         'sleep': (6, 0, 8),
+    },
+    anim_files={
+        'idle': 'Red-Panda-idle-fixed.png',
     },
     recolor=['#d67941', '#9d5021', '#694129', '#825235'],  # bright + dark fur tones
     keep=['#2f2f2e', '#ffffff', '#b8b8b8'],
@@ -371,6 +392,13 @@ def main() -> None:
     for spec in targets:
         counts: Dict[str, int] = {}
         raw_strips: Dict[str, Image.Image] = {}
+        # Per-animation source label, purely for the per-anim print line
+        # below (row-sliced vs. a specific replacement filename) -- kept
+        # separate from raw_strips/counts so both source shapes can merge
+        # into the exact same dicts below without losing that detail.
+        source_label: Dict[str, str] = {}
+        missing = False
+        sheet: Image.Image | None = None
 
         if spec.sheet_file:
             src_path = os.path.join(args.src, spec.sheet_file)
@@ -378,27 +406,57 @@ def main() -> None:
                 print(f'  skip {spec.species_id}: {spec.sheet_file} not found in {args.src}')
                 continue
             sheet = Image.open(src_path)
-            print(f'{spec.species_id} ({spec.sheet_file}):')
 
+        # Sheet-sliced rows first, then anim_files -- anim_files wins on a
+        # name collision (see PetSpec's own comment on why: a replacement
+        # file is a deliberate override of that one animation, not an
+        # accident). Rooftail's idle fix is the first spec to actually
+        # rely on this ordering; every prior spec only ever populated one
+        # side or the other, so this is a no-op change in behaviour for
+        # all of them.
+        if sheet is not None:
             for anim, (row, start_col, count) in spec.rows.items():
                 counts[anim] = count
                 raw_strips[anim] = slice_strip(sheet, spec, row, start_col, count)
+                source_label[anim] = f'row {row}'
 
-            trim = ground_trim_for(raw_strips, spec.frame_w)
-            frame_h = spec.frame_h - trim
-            if trim > 0:
-                print(f'    grounding: trimming {trim}px of empty canvas off every frame\'s bottom ({spec.frame_h} -> {frame_h}px)')
+        for anim, filename in spec.anim_files.items():
+            src_path = os.path.join(args.src, filename)
+            if not os.path.exists(src_path):
+                print(f'  skip {spec.species_id}: {filename} not found in {args.src}')
+                missing = True
+                break
+            strip = Image.open(src_path)
+            counts[anim] = strip.width // spec.frame_w
+            raw_strips[anim] = strip
+            source_label[anim] = filename
+        if missing:
+            continue
 
-            for anim, strip in raw_strips.items():
-                cropped = strip.crop((0, 0, strip.width, frame_h)) if trim > 0 else strip
-                for tier in RARITY_LIVERY:
-                    mapping = build_map(spec, tier)
-                    recoloured = recolor_image(cropped, mapping)
-                    dest_dir = os.path.join(args.out, spec.species_id, tier)
-                    os.makedirs(dest_dir, exist_ok=True)
-                    recoloured.save(os.path.join(dest_dir, f'{anim}.png'), optimize=True)
-                print(f'    {anim}: row {spec.rows[anim][0]}, {counts[anim]} frames -> all 5 rarity tiers')
+        if not raw_strips:
+            print(f'  skip {spec.species_id}: no sheet_file or anim_files produced any frames')
+            continue
 
+        label = spec.sheet_file if (spec.sheet_file and not spec.anim_files) else \
+            (f'{spec.sheet_file} + {len(spec.anim_files)} replacement file(s)' if spec.sheet_file else 'pre-cut strips')
+        print(f'{spec.species_id} ({label}):')
+
+        trim = ground_trim_for(raw_strips, spec.frame_w)
+        frame_h = spec.frame_h - trim
+        if trim > 0:
+            print(f'    grounding: trimming {trim}px of empty canvas off every frame\'s bottom ({spec.frame_h} -> {frame_h}px)')
+
+        for anim, strip in raw_strips.items():
+            cropped = strip.crop((0, 0, strip.width, frame_h)) if trim > 0 else strip
+            for tier in RARITY_LIVERY:
+                mapping = build_map(spec, tier)
+                recoloured = recolor_image(cropped, mapping)
+                dest_dir = os.path.join(args.out, spec.species_id, tier)
+                os.makedirs(dest_dir, exist_ok=True)
+                recoloured.save(os.path.join(dest_dir, f'{anim}.png'), optimize=True)
+            print(f'    {anim}: {source_label[anim]}, {counts[anim]} frames -> all 5 rarity tiers')
+
+        if sheet is not None:
             for name, (row, col) in spec.extras.items():
                 box = (col * spec.frame_w, row * spec.frame_h, (col + 1) * spec.frame_w, (row + 1) * spec.frame_h)
                 frame = sheet.crop(box)
@@ -409,36 +467,6 @@ def main() -> None:
                     os.makedirs(dest_dir, exist_ok=True)
                     recoloured.save(os.path.join(dest_dir, f'extra_{name}.png'), optimize=True)
                 print(f'    extra "{name}": row {row} col {col} -> all 5 rarity tiers')
-
-        else:
-            print(f'{spec.species_id} (pre-cut strips):')
-            missing = False
-            for anim, filename in spec.anim_files.items():
-                src_path = os.path.join(args.src, filename)
-                if not os.path.exists(src_path):
-                    print(f'  skip {spec.species_id}: {filename} not found in {args.src}')
-                    missing = True
-                    break
-                strip = Image.open(src_path)
-                counts[anim] = strip.width // spec.frame_w
-                raw_strips[anim] = strip
-            if missing:
-                continue
-
-            trim = ground_trim_for(raw_strips, spec.frame_w)
-            frame_h = spec.frame_h - trim
-            if trim > 0:
-                print(f'    grounding: trimming {trim}px of empty canvas off every frame\'s bottom ({spec.frame_h} -> {frame_h}px)')
-
-            for anim, strip in raw_strips.items():
-                cropped = strip.crop((0, 0, strip.width, frame_h)) if trim > 0 else strip
-                for tier in RARITY_LIVERY:
-                    mapping = build_map(spec, tier)
-                    recoloured = recolor_image(cropped, mapping)
-                    dest_dir = os.path.join(args.out, spec.species_id, tier)
-                    os.makedirs(dest_dir, exist_ok=True)
-                    recoloured.save(os.path.join(dest_dir, f'{anim}.png'), optimize=True)
-                print(f'    {anim}: {spec.anim_files[anim]}, {counts[anim]} frames -> all 5 rarity tiers')
 
         manifest[spec.species_id] = {'frameW': spec.frame_w, 'frameH': frame_h, 'animations': counts}
 

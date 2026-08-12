@@ -3064,6 +3064,51 @@ consistent with everything else Warehouse-related (capacity, Trade
 Route) living in one administrative spot rather than scattered across
 the tab.
 
+### Rooftail (Red Panda) idle "blinking out" -- fixed, and a real pipeline capability gap closed along the way
+Direct report: the equipped Rooftail's idle animation appeared to blink
+out then reappear partway through its loop. Root cause confirmed by
+inspecting the actual source file's alpha channel, not assumed from the
+visual symptom: the sheet's idle row's last 2 frames (of 8) were fully,
+zero-opacity blank -- the loop played 6 real frames, then 2 invisible
+ones, then jumped back to frame 0, reading exactly as "blinks out, then
+reappears."
+
+Fixed with a corrected, already-trimmed 6-frame replacement file for
+idle specifically -- `idle2`/`movement`/`sleep` stay exactly as they
+were, still sliced from the original `Red_Panda_Sprite_Sheet.png`. This
+is the first species needing a genuine MIX of both source shapes at
+once (some animations still row-sliced from a sheet, one overridden by
+an individually-supplied file), which the pipeline didn't actually
+support -- `PetSpec`'s two source shapes (`sheet_file`+`rows` vs.
+`anim_files`) were strictly either/or, enforced by the script's own
+if/else structure, not just by convention. Extended `import_pets.py`'s
+`main()` to merge both sources into the same per-animation dict before
+the shared grounding-trim/recolor step, with `anim_files` winning on a
+name collision (a replacement file is a deliberate override, not an
+accident) -- every prior spec only ever populated one side or the
+other, so this is a no-op behavior change for Fox/Crow/Hound/the 5 dogs,
+confirmed by re-running the actual pipeline against their real files
+alongside Rooftail's in the same invocation and diffing the output
+against a pre-refactor run.
+
+Verified thoroughly given this touched shared pipeline code, not just
+one species' spec: re-ran the real, refactored script against every
+species I had real source art for in this conversation (the 5 dogs,
+Ashwing's replacement files) plus a synthetic stand-in sheet for
+Rooftail (built specifically to exercise the sheet+override merge path,
+since the real `Red_Panda_Sprite_Sheet.png` wasn't available in this
+session to re-test against directly) -- confirmed the merged manifest
+entry correctly lists `idle: 6` alongside `idle2`/`movement`/`sleep`
+all still at `8`, confirmed `idle2`'s output pixels still come from the
+sheet (sampled a pixel from both Common and Legendary output, tracked
+the expected recolor shift), and visually confirmed the corrected
+6-frame idle renders cleanly across all 5 rarity tiers with the
+species' existing palette. Full `tsc --noEmit` and `vite build` both
+pass clean. Art itself is gitignored same as every other species --
+regenerate via `python3 tools/import_pets.py --src <folder with
+Red_Panda_Sprite_Sheet.png and Red-Panda-idle-fixed.png> --out
+public/pets --only rooftail`.
+
 ### Ashwing (Crow) simplified to idle+run, replacing its 6-animation set -- built
 Direct request/correction: the crow's existing `perched` animation
 (what `idle` was actually resolving to, per `resolveAnimation`'s own
