@@ -3064,6 +3064,55 @@ consistent with everything else Warehouse-related (capacity, Trade
 Route) living in one administrative spot rather than scattered across
 the tab.
 
+### Ashwing (Crow) simplified to idle+run, replacing its 6-animation set -- built
+Direct request/correction: the crow's existing `perched` animation
+(what `idle` was actually resolving to, per `resolveAnimation`'s own
+fallback chain) turned out to already be a walking/pecking pose, not a
+true stationary perch -- and separately, per direct request, the whole
+6-animation set (`perched`/`sitting`/`laying`/`eating`/`walking`/
+`flying`, plus 3 standalone extras: crumbs/food/fish) was more than this
+species needs. Simplified down to the same idle+movement shape every
+other pet in the game already uses, replacing the old
+`sheet_file`+`rows` row-grid `PetSpec` entirely with the newer
+`anim_files` pre-cut-strip shape (same as the Hound/dog batch above):
+`idle` now comes from a new walking-pose strip (the file is literally
+named `perched.png`, an artifact of the source pack's own naming -- the
+pose inside it is the walking one being promoted to idle, not a
+renaming mistake), and `movement` comes from a new flying-pose strip,
+matching how this species' locomotion always read as flight-first
+anyway. The 3 standalone extras are dropped along with the rest of the
+old row-grid -- not reachable from two pre-cut strips, and nothing in
+the game currently renders them outside the old sheet's own row layout.
+
+Recolor/keep palette is completely unchanged from the previous spec
+(`#222034` recolor, `#000000`/`#696a6a` keep) -- same art style, same
+near-monochrome-with-one-hued-navy body, just fewer poses sliced from
+different source files. `ashwing`'s own `PetDef` entry in `pets.json`
+(name/description/glyph/spriteFolder) is untouched; this is purely an
+animation-set change.
+
+Verified by actually running the real pipeline against the real
+uploaded files: grounding-trim correctly computed 2px (the new files
+are already nearly tight, unlike the dog batch's 33-42px), frame counts
+came out exactly right (7 idle / 5 movement, matching the source
+images), and the common-through-legendary rarity progression was
+visually confirmed for both animations -- the recolor's signature subtle
+iridescent sheen still reads correctly across all 5 tiers with no
+regression from the spec change. Every existing UI call site that
+renders a pet (`IdleView`'s desktop companion, `PetEnlargedModal`,
+`HatcheryPanel`, `HatchRevealModal`) already requests only the generic
+`idle`/`movement`/`sleep`/`damage` verbs, never a crow-specific pose
+name directly, and `PetSprite.resolveAnimation`'s existing fallback
+chain already degrades a `sleep` request to `idle` for any species
+without one (confirmed already true for the 5 new dogs above, same
+2-animation shape) -- so no UI code needed any change for this
+simplification to be fully safe. Full `tsc --noEmit` and `vite build`
+both pass clean. Art itself (`public/pets/ashwing/`) is gitignored same
+as every other species -- generate/replace via `python3
+tools/import_pets.py --src <folder with perched.png/flying.png> --out
+public/pets --only ashwing`, which overwrites just this species'
+existing files and manifest entry in place.
+
 ### Five new dog breeds added to the general pet pool -- built
 Direct request, same licensed pack as the existing Saint Bernard/
 `hatchery_hound`: Golden Retriever, Akita, Great Dane, Schnauzer, and

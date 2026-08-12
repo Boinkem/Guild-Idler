@@ -137,27 +137,38 @@ RED_PANDA = PetSpec(
 
 CROW = PetSpec(
     species_id='ashwing',
-    sheet_file='Crow.png',
-    frame_w=48, frame_h=48,
-    rows={
-        'perched': (0, 0, 7),
-        # Confirmed: row1 settles into a seated pose (Sitting), row2 flattens
-        # into a fluffed breathing ball (Laying) -- the two were genuinely
-        # ambiguous without this confirmation.
-        'sitting': (1, 0, 7),
-        'laying': (2, 0, 4),  # frames 4-6 of this row are a spare stand-up transition, unused
-        'eating': (3, 0, 7),
-        'walking': (4, 4, 3),
-        # Row 5's col 5 is the baked-in "CAW" text graphic, not a real
-        # frame -- deliberately excluded, not a bug.
-        'flying': (5, 0, 5),
+    frame_w=48, frame_h=39,
+    # Replaced entirely per direct request -- the old 6-animation row-grid
+    # sheet (perched/sitting/laying/eating/walking/flying + 3 extras) is
+    # gone, simplified down to the same idle+movement shape every other
+    # pet already uses. Two new pre-cut strip files, confirmed by
+    # direct inspection to already be trimmed to the full 39px content
+    # height with no export padding (unlike the Hound/dog batch, which
+    # needed 33-42px trimmed off) -- ground_trim_for below still runs
+    # unconditionally same as always, it just correctly computes 0 here
+    # rather than being skipped as a special case.
+    #
+    # The filenames are a red herring, not a mistake: 'perched.png' is
+    # the file's own name from the source pack, but the pose inside it is
+    # actually a walking/pecking stance -- confirmed directly by the
+    # person supplying the art, who pointed out the CURRENT idle
+    # (resolved from the old 'perched' animation) was already secretly a
+    # walking pose, not a true stationary perch. Rather than fight that,
+    # it's embraced as the new 'idle' outright. 'flying.png' becomes
+    # 'movement' (this species' run) for the same reason the Crow's
+    # locomotion was always more flight than walk -- see the old spec's
+    # own row comments above this one's history.
+    anim_files={
+        'idle': 'perched.png',
+        'movement': 'flying.png',
     },
-    extras={'crumbs': (4, 1), 'food': (4, 2), 'fish': (4, 3)},
     # The body is near-monochrome (mostly pure black), so the ONE colour
     # with any real hue (#222034, a dark navy-black) is what actually
     # carries the recolour -- true black stays pure outline. This produces
     # a subtle iridescent-sheen effect on higher rarities, which happens to
     # match how real corvid feathers actually catch colour in light.
+    # Unchanged from the previous sheet-based spec -- same art style, same
+    # palette, just fewer poses.
     recolor=['#222034'],
     keep=['#000000', '#696a6a'],
 )
