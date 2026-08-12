@@ -1501,7 +1501,27 @@ export interface PeddlerCardDef {
   materialAmount?: number;
   /** kind: 'scrap' only. */
   scrapAmount?: number;
-  /** kind: 'equipment' only -- an EquipmentDef id. */
+  /**
+   * kind: 'equipment' only. Two ways to specify what drops, resolved in
+   * PeddlerManager.rollOneOutcome (baked into the outcome once at roll
+   * time, so the revealed card and the actually-granted item are
+   * guaranteed to be the same roll, not two independent ones):
+   * - `itemRarity` set -> rolls a random EquipmentDef at that rarity
+   *   from the general pool, excluding raidExclusive (Heroic/Mythic
+   *   raid-only loot), craftable (empty-mods crafting bases, not real
+   *   drops), and anything appearing in any ChainDef.rewardItems (a
+   *   chain's own guaranteed reward shouldn't also be handed out as a
+   *   random gamble). This is the intended, recommended way to author
+   *   an equipment card now -- "a jackpot epic," not one specific item.
+   * - `itemId` set instead (and `itemRarity` unset) -> the old fixed-
+   *   item behavior, unchanged, for the rare case a specific named item
+   *   is actually wanted here on purpose.
+   * If `itemRarity`'s pool comes up empty (e.g. a rarity with nothing
+   * eligible left after exclusions), falls back to whatever `itemId`
+   * already was -- same "degrade gracefully, never throw" precedent
+   * every other content-driven roll in this game already follows.
+   */
+  itemRarity?: Rarity;
   itemId?: string;
   /** kind: 'egg' only -- same shape as ChainDef.rewardEgg. */
   eggRarity?: Rarity;

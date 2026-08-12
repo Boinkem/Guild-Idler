@@ -1,0 +1,221 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 25c2864..37efc43 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -363,6 +363,61 @@ and fox-run reports above already got:
+   (update the two existing recolour skins vs. add new "gilded" variants
+   alongside them isn't decided yet).
+ 
++### Grimsby's equipment cards: rolled by rarity tier instead of a fixed item
++Direct report: every equipment-kind card in `peddler-cards.json` was
++pinned to one specific item (`good_gear_common` -> always
++`woodcutter_axe`, `good_gear_uncommon` -> always `knights_blade`,
++`jackpot_gear_epic` -> always `grasp_of_avarice`) -- landing that card
++always handed out the exact same named item, never any variety within
++the tier. `npx tsc --noEmit` and `npm run build:web` both verified
++clean against a fresh clone; the exclusion logic itself verified with a
++real simulation (500 rolls against the actual `equipment.json`/
++`quest-chains.json` content, not just reasoned through -- see below);
++no live playtest (no dev environment).
++
++- **`PeddlerCardDef` gained `itemRarity?: Rarity`**, resolved in
++  `PeddlerManager.rollOneOutcome` (once, at roll time -- baked into a
++  new outcome object so the revealed card face and the item actually
++  granted on pick are guaranteed the same roll, never two independent
++  ones) into a uniform random pick from every eligible `EquipmentDef`
++  at that rarity. The older `itemId` field (pin one specific item) stays
++  fully supported for the rare case that's actually wanted -- an
++  outcome with `itemRarity` set takes priority; one without it falls
++  back to `itemId` exactly as before.
++- **Exclusions, exactly as requested:**
++  - `raidExclusive` -- Heroic/Mythic raid-only loot ("raid only for
++    sure"). Already an existing flag on `EquipmentDef`, just needed
++    wiring into this specific roll.
++  - `craftable` -- crafting-only bases with deliberately empty `mods`
++    (a crafted instance's real stats live on `customMods`, not the
++    def) -- handing one out via Grimsby would've been a broken, useless
++    "reward."
++  - **Chain-reward items, newly computed** -- `CHAIN_REWARD_ITEM_IDS`,
++    every id appearing in any `ChainDef.rewardItems` across all 21
++    chains, computed once at module load. There was no existing flag
++    for "this is a quest-specific reward" the way `raidExclusive`
++    exists for raids, so this is derived automatically from the chain
++    data itself rather than needing every relevant item hand-flagged
++    (and stays correct automatically as new chains are added, rather
++    than needing to remember to flag each new chain's reward item too).
++- **Verified with a real simulation, not just read through**: loaded the
++  actual `equipment.json`/`quest-chains.json` content directly and ran
++  500 rolls at the epic tier -- confirmed all 11 eligible items actually
++  turn up across enough rolls (not silently biased toward one), and
++  confirmed zero raidExclusive/craftable/chain-reward item ever leaked
++  through the filter. Pool sizes per rarity, for reference: common 16,
++  uncommon 15, rare 14, epic 11, legendary 18 -- healthy variety at
++  every tier, nothing accidentally emptied out by the exclusions.
++- **DevTool**: `peddler-cards` schema gained an `itemRarity` enum field
++  (common/uncommon/rare/epic/legendary) alongside the existing `itemId`
++  text field, with a comment steering new cards toward `itemRarity` as
++  the preferred choice going forward.
++- **Content updated**: all three existing equipment cards
++  (`good_gear_common`/`good_gear_uncommon`/`jackpot_gear_epic`) switched
++  from a fixed `itemId` to the matching `itemRarity`, so the fix applies
++  to every equipment card already in the game, not just the one example
++  mentioned in the report.
++
+ ### High Roller: notification bug fix + a reward-burst fly system + tombstone DevTool support
+ Three-part follow-up: a real one-line bug from High Roller's own launch,
+ a new visual flourish for Grimsby's card game, and a genuinely
+diff --git a/src/game/data/json/peddler-cards.json b/src/game/data/json/peddler-cards.json
+index c4af90f..04a9644 100644
+--- a/src/game/data/json/peddler-cards.json
++++ b/src/game/data/json/peddler-cards.json
+@@ -132,16 +132,16 @@
+     "tier": "good",
+     "weight": 8,
+     "kind": "equipment",
+-    "itemId": "woodcutter_axe",
+-    "flavorText": "He looks personally offended having to hand over something that actually works."
++    "flavorText": "He looks personally offended having to hand over something that actually works.",
++    "itemRarity": "common"
+   },
+   {
+     "id": "good_gear_uncommon",
+     "tier": "good",
+     "weight": 2,
+     "kind": "equipment",
+-    "itemId": "knights_blade",
+-    "flavorText": "\"That one's real,\" he says, sounding surprised himself."
++    "flavorText": "\"That one's real,\" he says, sounding surprised himself.",
++    "itemRarity": "uncommon"
+   },
+   {
+     "id": "jackpot_egg",
+@@ -165,7 +165,7 @@
+     "tier": "jackpot",
+     "weight": 1,
+     "kind": "equipment",
+-    "itemId": "grasp_of_avarice",
+-    "flavorText": "For once, Grimsby has absolutely nothing sleazy to say. That's how you know it's good."
++    "flavorText": "For once, Grimsby has absolutely nothing sleazy to say. That's how you know it's good.",
++    "itemRarity": "epic"
+   }
+ ]
+diff --git a/src/game/managers/PeddlerManager.ts b/src/game/managers/PeddlerManager.ts
+index ea78fea..41ee891 100644
+--- a/src/game/managers/PeddlerManager.ts
++++ b/src/game/managers/PeddlerManager.ts
+@@ -1,8 +1,9 @@
+ import {
+-  GameState, PeddlerCardDef, PeddlerCardTier, PeddlerFlipCard, PeddlerFlipResult,
++  GameState, PeddlerCardDef, PeddlerCardTier, PeddlerFlipCard, PeddlerFlipResult, Rarity,
+ } from '../types';
+ import { PEDDLER_CARDS_BY_TIER } from '../data/peddler';
+-import { EQUIPMENT_BY_ID } from '../data/equipment';
++import { EQUIPMENT, EQUIPMENT_BY_ID } from '../data/equipment';
++import { QUEST_CHAINS } from '../data/quests';
+ import { MATERIAL_BY_ID } from '../data/materials';
+ import { warehouseCapacity } from '../data/harvestUpgrades';
+ import { Tuning } from '../data/tuning';
+@@ -61,7 +62,50 @@ function rollCardFromTier(tier: PeddlerCardTier): PeddlerCardDef {
+ }
+ 
+ function rollOneOutcome(): PeddlerCardDef {
+-  return rollCardFromTier(rollTier());
++  return resolveEquipmentRoll(rollCardFromTier(rollTier()));
++}
++
++/** Every EquipmentDef id that's a chain's own guaranteed completion
++ *  reward (ChainDef.rewardItems) -- excluded from Grimsby's random
++ *  equipment roll below so a chain's specific reward item can never
++ *  also turn up as a random gamble drop. Computed once at module load,
++ *  not per-roll -- QUEST_CHAINS is static content, not something that
++ *  changes at runtime. */
++const CHAIN_REWARD_ITEM_IDS = new Set(QUEST_CHAINS.flatMap((c) => c.rewardItems));
++
++/** Every EquipmentDef at the given rarity that's fair game for Grimsby
++ *  to hand out at random -- excludes raidExclusive (Heroic/Mythic raid-
++ *  only loot, per direct request: "raid only for sure"), craftable
++ *  (empty-mods crafting bases, not real drops), and anything in
++ *  CHAIN_REWARD_ITEM_IDS above (a chain's own guaranteed reward). */
++function eligibleEquipmentForRarity(rarity: Rarity): typeof EQUIPMENT {
++  return EQUIPMENT.filter((def) => (
++    def.rarity === rarity
++    && !def.raidExclusive
++    && !def.craftable
++    && !CHAIN_REWARD_ITEM_IDS.has(def.id)
++  ));
++}
++
++/**
++ * Resolves an outcome's `itemRarity` (if set) into a concrete `itemId`
++ * -- a uniform random pick among everything eligibleEquipmentForRarity
++ * returns for that rarity. Baked into a NEW outcome object at roll time
++ * (not re-rolled separately later) so the revealed card face and the
++ * item actually granted on pick are guaranteed to be the exact same
++ * roll. Outcomes with no `itemRarity` (either not an equipment card, or
++ * an equipment card still using the older fixed `itemId` field) pass
++ * through completely unchanged. An empty eligible pool (nothing left
++ * after exclusions at that rarity) falls back to whatever `itemId`
++ * already was on the card -- same "degrade gracefully" precedent
++ * rollCardFromTier's own empty-pool fallback above already sets.
++ */
++function resolveEquipmentRoll(outcome: PeddlerCardDef): PeddlerCardDef {
++  if (outcome.kind !== 'equipment' || !outcome.itemRarity) return outcome;
++  const pool = eligibleEquipmentForRarity(outcome.itemRarity);
++  if (pool.length === 0) return outcome;
++  const picked = pool[Math.floor(Math.random() * pool.length)];
++  return { ...outcome, itemId: picked.id };
+ }
+ 
+ /** Human-readable summary of what a resolved outcome actually was, for
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 79ac699..c206686 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -1501,7 +1501,27 @@ export interface PeddlerCardDef {
+   materialAmount?: number;
+   /** kind: 'scrap' only. */
+   scrapAmount?: number;
+-  /** kind: 'equipment' only -- an EquipmentDef id. */
++  /**
++   * kind: 'equipment' only. Two ways to specify what drops, resolved in
++   * PeddlerManager.rollOneOutcome (baked into the outcome once at roll
++   * time, so the revealed card and the actually-granted item are
++   * guaranteed to be the same roll, not two independent ones):
++   * - `itemRarity` set -> rolls a random EquipmentDef at that rarity
++   *   from the general pool, excluding raidExclusive (Heroic/Mythic
++   *   raid-only loot), craftable (empty-mods crafting bases, not real
++   *   drops), and anything appearing in any ChainDef.rewardItems (a
++   *   chain's own guaranteed reward shouldn't also be handed out as a
++   *   random gamble). This is the intended, recommended way to author
++   *   an equipment card now -- "a jackpot epic," not one specific item.
++   * - `itemId` set instead (and `itemRarity` unset) -> the old fixed-
++   *   item behavior, unchanged, for the rare case a specific named item
++   *   is actually wanted here on purpose.
++   * If `itemRarity`'s pool comes up empty (e.g. a rarity with nothing
++   * eligible left after exclusions), falls back to whatever `itemId`
++   * already was -- same "degrade gracefully, never throw" precedent
++   * every other content-driven roll in this game already follows.
++   */
++  itemRarity?: Rarity;
+   itemId?: string;
+   /** kind: 'egg' only -- same shape as ChainDef.rewardEgg. */
+   eggRarity?: Rarity;
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index c847a49..f282e03 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -386,6 +386,14 @@ const SCHEMAS = {
+       materialId: { type: 'enum', required: false, options: ['ore', 'timber', 'herbs', 'fish'] }, // kind: material
+       materialAmount: { type: 'number', required: false }, // kind: material
+       scrapAmount: { type: 'number', required: false }, // kind: scrap
++      // kind: equipment -- two ways to specify what drops (see
++      // PeddlerCardDef.itemRarity's own comment in types.ts):
++      // itemRarity rolls a random eligible item at that rarity
++      // (excludes raidExclusive/craftable/chain-reward items
++      // automatically); itemId pins one specific item by id instead,
++      // for the rare case that's actually wanted. Prefer itemRarity for
++      // new cards -- itemId stays supported for existing/manual use.
++      itemRarity: { type: 'enum', required: false, options: ['common', 'uncommon', 'rare', 'epic', 'legendary'] },
+       itemId: { type: 'string', required: false }, // kind: equipment -- an equipment.json id, free text (see top comment)
+       eggRarity: { type: 'enum', required: false, options: ['common', 'uncommon', 'rare', 'epic', 'legendary'] }, // kind: egg
+       dedicatedPetId: { type: 'string', required: false }, // kind: egg, optional

@@ -363,6 +363,61 @@ and fox-run reports above already got:
   (update the two existing recolour skins vs. add new "gilded" variants
   alongside them isn't decided yet).
 
+### Grimsby's equipment cards: rolled by rarity tier instead of a fixed item
+Direct report: every equipment-kind card in `peddler-cards.json` was
+pinned to one specific item (`good_gear_common` -> always
+`woodcutter_axe`, `good_gear_uncommon` -> always `knights_blade`,
+`jackpot_gear_epic` -> always `grasp_of_avarice`) -- landing that card
+always handed out the exact same named item, never any variety within
+the tier. `npx tsc --noEmit` and `npm run build:web` both verified
+clean against a fresh clone; the exclusion logic itself verified with a
+real simulation (500 rolls against the actual `equipment.json`/
+`quest-chains.json` content, not just reasoned through -- see below);
+no live playtest (no dev environment).
+
+- **`PeddlerCardDef` gained `itemRarity?: Rarity`**, resolved in
+  `PeddlerManager.rollOneOutcome` (once, at roll time -- baked into a
+  new outcome object so the revealed card face and the item actually
+  granted on pick are guaranteed the same roll, never two independent
+  ones) into a uniform random pick from every eligible `EquipmentDef`
+  at that rarity. The older `itemId` field (pin one specific item) stays
+  fully supported for the rare case that's actually wanted -- an
+  outcome with `itemRarity` set takes priority; one without it falls
+  back to `itemId` exactly as before.
+- **Exclusions, exactly as requested:**
+  - `raidExclusive` -- Heroic/Mythic raid-only loot ("raid only for
+    sure"). Already an existing flag on `EquipmentDef`, just needed
+    wiring into this specific roll.
+  - `craftable` -- crafting-only bases with deliberately empty `mods`
+    (a crafted instance's real stats live on `customMods`, not the
+    def) -- handing one out via Grimsby would've been a broken, useless
+    "reward."
+  - **Chain-reward items, newly computed** -- `CHAIN_REWARD_ITEM_IDS`,
+    every id appearing in any `ChainDef.rewardItems` across all 21
+    chains, computed once at module load. There was no existing flag
+    for "this is a quest-specific reward" the way `raidExclusive`
+    exists for raids, so this is derived automatically from the chain
+    data itself rather than needing every relevant item hand-flagged
+    (and stays correct automatically as new chains are added, rather
+    than needing to remember to flag each new chain's reward item too).
+- **Verified with a real simulation, not just read through**: loaded the
+  actual `equipment.json`/`quest-chains.json` content directly and ran
+  500 rolls at the epic tier -- confirmed all 11 eligible items actually
+  turn up across enough rolls (not silently biased toward one), and
+  confirmed zero raidExclusive/craftable/chain-reward item ever leaked
+  through the filter. Pool sizes per rarity, for reference: common 16,
+  uncommon 15, rare 14, epic 11, legendary 18 -- healthy variety at
+  every tier, nothing accidentally emptied out by the exclusions.
+- **DevTool**: `peddler-cards` schema gained an `itemRarity` enum field
+  (common/uncommon/rare/epic/legendary) alongside the existing `itemId`
+  text field, with a comment steering new cards toward `itemRarity` as
+  the preferred choice going forward.
+- **Content updated**: all three existing equipment cards
+  (`good_gear_common`/`good_gear_uncommon`/`jackpot_gear_epic`) switched
+  from a fixed `itemId` to the matching `itemRarity`, so the fix applies
+  to every equipment card already in the game, not just the one example
+  mentioned in the report.
+
 ### High Roller: notification bug fix + a reward-burst fly system + tombstone DevTool support
 Three-part follow-up: a real one-line bug from High Roller's own launch,
 a new visual flourish for Grimsby's card game, and a genuinely

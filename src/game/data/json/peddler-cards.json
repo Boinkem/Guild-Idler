@@ -132,16 +132,16 @@
     "tier": "good",
     "weight": 8,
     "kind": "equipment",
-    "itemId": "woodcutter_axe",
-    "flavorText": "He looks personally offended having to hand over something that actually works."
+    "flavorText": "He looks personally offended having to hand over something that actually works.",
+    "itemRarity": "common"
   },
   {
     "id": "good_gear_uncommon",
     "tier": "good",
     "weight": 2,
     "kind": "equipment",
-    "itemId": "knights_blade",
-    "flavorText": "\"That one's real,\" he says, sounding surprised himself."
+    "flavorText": "\"That one's real,\" he says, sounding surprised himself.",
+    "itemRarity": "uncommon"
   },
   {
     "id": "jackpot_egg",
@@ -165,7 +165,7 @@
     "tier": "jackpot",
     "weight": 1,
     "kind": "equipment",
-    "itemId": "grasp_of_avarice",
-    "flavorText": "For once, Grimsby has absolutely nothing sleazy to say. That's how you know it's good."
+    "flavorText": "For once, Grimsby has absolutely nothing sleazy to say. That's how you know it's good.",
+    "itemRarity": "epic"
   }
 ]

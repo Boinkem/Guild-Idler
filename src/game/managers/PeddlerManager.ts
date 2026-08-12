@@ -1,8 +1,9 @@
 import {
-  GameState, PeddlerCardDef, PeddlerCardTier, PeddlerFlipCard, PeddlerFlipResult,
+  GameState, PeddlerCardDef, PeddlerCardTier, PeddlerFlipCard, PeddlerFlipResult, Rarity,
 } from '../types';
 import { PEDDLER_CARDS_BY_TIER } from '../data/peddler';
-import { EQUIPMENT_BY_ID } from '../data/equipment';
+import { EQUIPMENT, EQUIPMENT_BY_ID } from '../data/equipment';
+import { QUEST_CHAINS } from '../data/quests';
 import { MATERIAL_BY_ID } from '../data/materials';
 import { warehouseCapacity } from '../data/harvestUpgrades';
 import { Tuning } from '../data/tuning';
@@ -61,7 +62,50 @@ function rollCardFromTier(tier: PeddlerCardTier): PeddlerCardDef {
 }
 
 function rollOneOutcome(): PeddlerCardDef {
-  return rollCardFromTier(rollTier());
+  return resolveEquipmentRoll(rollCardFromTier(rollTier()));
+}
+
+/** Every EquipmentDef id that's a chain's own guaranteed completion
+ *  reward (ChainDef.rewardItems) -- excluded from Grimsby's random
+ *  equipment roll below so a chain's specific reward item can never
+ *  also turn up as a random gamble drop. Computed once at module load,
+ *  not per-roll -- QUEST_CHAINS is static content, not something that
+ *  changes at runtime. */
+const CHAIN_REWARD_ITEM_IDS = new Set(QUEST_CHAINS.flatMap((c) => c.rewardItems));
+
+/** Every EquipmentDef at the given rarity that's fair game for Grimsby
+ *  to hand out at random -- excludes raidExclusive (Heroic/Mythic raid-
+ *  only loot, per direct request: "raid only for sure"), craftable
+ *  (empty-mods crafting bases, not real drops), and anything in
+ *  CHAIN_REWARD_ITEM_IDS above (a chain's own guaranteed reward). */
+function eligibleEquipmentForRarity(rarity: Rarity): typeof EQUIPMENT {
+  return EQUIPMENT.filter((def) => (
+    def.rarity === rarity
+    && !def.raidExclusive
+    && !def.craftable
+    && !CHAIN_REWARD_ITEM_IDS.has(def.id)
+  ));
+}
+
+/**
+ * Resolves an outcome's `itemRarity` (if set) into a concrete `itemId`
+ * -- a uniform random pick among everything eligibleEquipmentForRarity
+ * returns for that rarity. Baked into a NEW outcome object at roll time
+ * (not re-rolled separately later) so the revealed card face and the
+ * item actually granted on pick are guaranteed to be the exact same
+ * roll. Outcomes with no `itemRarity` (either not an equipment card, or
+ * an equipment card still using the older fixed `itemId` field) pass
+ * through completely unchanged. An empty eligible pool (nothing left
+ * after exclusions at that rarity) falls back to whatever `itemId`
+ * already was on the card -- same "degrade gracefully" precedent
+ * rollCardFromTier's own empty-pool fallback above already sets.
+ */
+function resolveEquipmentRoll(outcome: PeddlerCardDef): PeddlerCardDef {
+  if (outcome.kind !== 'equipment' || !outcome.itemRarity) return outcome;
+  const pool = eligibleEquipmentForRarity(outcome.itemRarity);
+  if (pool.length === 0) return outcome;
+  const picked = pool[Math.floor(Math.random() * pool.length)];
+  return { ...outcome, itemId: picked.id };
 }
 
 /** Human-readable summary of what a resolved outcome actually was, for

@@ -386,6 +386,14 @@ const SCHEMAS = {
       materialId: { type: 'enum', required: false, options: ['ore', 'timber', 'herbs', 'fish'] }, // kind: material
       materialAmount: { type: 'number', required: false }, // kind: material
       scrapAmount: { type: 'number', required: false }, // kind: scrap
+      // kind: equipment -- two ways to specify what drops (see
+      // PeddlerCardDef.itemRarity's own comment in types.ts):
+      // itemRarity rolls a random eligible item at that rarity
+      // (excludes raidExclusive/craftable/chain-reward items
+      // automatically); itemId pins one specific item by id instead,
+      // for the rare case that's actually wanted. Prefer itemRarity for
+      // new cards -- itemId stays supported for existing/manual use.
+      itemRarity: { type: 'enum', required: false, options: ['common', 'uncommon', 'rare', 'epic', 'legendary'] },
       itemId: { type: 'string', required: false }, // kind: equipment -- an equipment.json id, free text (see top comment)
       eggRarity: { type: 'enum', required: false, options: ['common', 'uncommon', 'rare', 'epic', 'legendary'] }, // kind: egg
       dedicatedPetId: { type: 'string', required: false }, // kind: egg, optional
