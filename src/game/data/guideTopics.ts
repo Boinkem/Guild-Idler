@@ -40,4 +40,44 @@ export const GUIDE_TOPICS: GuideTopic[] = [
     title: 'Prestige',
     body: "Retiring a high-level hero grants Renown -- permanent, account-wide bonuses that carry across every future hero. It's the long-term progression path once levelling alone starts to slow.",
   },
+  {
+    id: 'harvest',
+    title: 'Harvest & Gathering',
+    body: 'Unlocked by a quest chain. Four nodes spawn materials over time -- catch them from the Harvest tab, then spend them at Vendors\u2019 Crafting stations to make your own gear and consumables.',
+  },
+  {
+    id: 'crafting',
+    title: 'Crafting',
+    body: 'Each Vendor (Blacksmith, Alchemist, Enchanter) has its own Crafting station. Recipes cost materials plus gold, and some let you pick which bonus the finished item carries instead of leaving it to chance.',
+  },
+  {
+    id: 'pets',
+    title: 'Pets & Hatchery',
+    body: 'Unlocked by a quest chain. Eggs found on quests incubate in a Nest and hatch into a companion with its own rolled bonus. Only an equipped pet earns XP -- keep one slotted to actually grow its bonus over time.',
+  },
+  {
+    id: 'peddler',
+    title: 'Grimsby',
+    body: "A travelling peddler who visits on his own unpredictable schedule (unlocked by a quest chain). His Pick Your Card flips cost gold for a chance at gear, materials, or a jackpot -- pure gamble, no guaranteed value.",
+  },
+  {
+    id: 'black_market',
+    title: 'Black Market',
+    body: 'A permanent Guild Hall upgrade unlocks a second, rarer stock rotation in Vendors -- separate refresh timer from the regular shop, better odds at higher rarities.',
+  },
+  {
+    id: 'item_sets',
+    title: 'Item Sets',
+    body: "Some gear belongs to a set -- equip enough pieces on one hero and a bonus kicks in automatically. Check an equipped item's tooltip to see the set's progress and which bonus is currently active.",
+  },
+  {
+    id: 'elemental',
+    title: 'Elemental Damage & Resist',
+    body: "Weapons can be infused with an element at the Enchanter; armor can resist one. Matching a quest or raid encounter's own element adds a success bonus on top of everything else.",
+  },
+  {
+    id: 'music_hall',
+    title: 'Music Hall',
+    body: "A Guild Hall facility that unlocks purchasable background tracks, one per level. Once you've bought at least one, pick a specific track or shuffle daily through everything unlocked from the Track option in Settings.",
+  },
 ];

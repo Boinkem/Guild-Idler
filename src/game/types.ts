@@ -585,6 +585,20 @@ export interface NotificationEntry {
    *  a "Go to" button in the Guide tab's Notifications list. Omitted for
    *  messages with no obvious single destination (most of them). */
   targetTab?: string;
+  /**
+   * Whether this entry is prominent enough to earn the top banner
+   * (NotificationBanner.tsx), on top of the ordinary bottom Toast every
+   * archived message already gets. Defaults to false/omitted -- routine
+   * confirmations (repair, craft, sell, equip, etc.) stay Toast-only, same
+   * as they always have. Only GuidanceManager's one-time "how to" nudges
+   * set this true today (see GameEngine.reportGuidance), since those are
+   * exactly the "worth surfacing prominently" moments the banner was
+   * originally meant for -- see guild-idler-status.md's notification
+   * banner/Toast dedup writeup for why this exists: before this field,
+   * every single archived message triggered the banner too, not just
+   * genuinely notable ones.
+   */
+  banner?: boolean;
 }
 
 export interface ActiveChain {
@@ -1141,6 +1155,19 @@ export interface GameState {
    * of "if missed, it counts as unread."
    */
   notificationsSeenId: string | null;
+  /**
+   * Id of the newest notification the top banner has ever actually been
+   * displayed for -- separate from notificationsSeenId (acknowledgment)
+   * above, and deliberately durable across app restarts rather than
+   * living only in NotificationBanner's own component state. Updated the
+   * instant a banner is shown (see GameEngine.markBannerShown), not on
+   * dismiss/timeout/click -- so a banner the player quits the app before
+   * even seeing time out never gets replayed on the next launch either.
+   * `null` means no banner has ever been shown (a genuinely fresh save).
+   * Only entries with `NotificationEntry.banner === true` are candidates
+   * for this at all -- see that field's own comment.
+   */
+  lastBannerShownId: string | null;
   /**
    * Ids of one-time "how to" guidance topics already shown (see
    * GuidanceManager) -- once a topic's fired, it never fires again.

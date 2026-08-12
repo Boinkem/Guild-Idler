@@ -1,5 +1,6 @@
 import { GameState } from '../types';
 import { ModifierManager } from './ModifierManager';
+import { GuildManager } from './GuildManager';
 
 /**
  * A one-time "how to" nudge, tied to a real state condition. Fires exactly
@@ -51,6 +52,36 @@ const TOPICS: GuidanceTopic[] = [
     messages: ["Raids are open -- multi-hero expeditions with bigger rewards and longer odds. You'll need a full, exact-size party before sending one out."],
     targetTab: 'raids',
   },
+  {
+    id: 'black_market_unlocked',
+    messages: ["A Black Market has opened up in Vendors -- rarer stock than the regular shop, refreshed on its own rotation."],
+    targetTab: 'vendors',
+  },
+  {
+    id: 'legendary_quests_unlocked',
+    messages: ["Legendary-tier contracts can now appear on the board -- the best rewards in the game, alongside the worst odds."],
+    targetTab: 'quests',
+  },
+  {
+    id: 'raids_heroic_unlocked',
+    messages: ["Heroic-difficulty raids are cleared for takeoff -- harsher odds and longer expeditions, with loot to match."],
+    targetTab: 'raids',
+  },
+  {
+    id: 'raids_mythic_unlocked',
+    messages: ["Mythic raids are open -- the hardest content in the game, and the only tier where the very best loot drops."],
+    targetTab: 'raids',
+  },
+  {
+    id: 'auto_chain_unlocked',
+    messages: ["A hero can now keep taking the next contract on their own for a while, instead of waiting for fresh orders each time -- toggle it from a hero's own Quest Tab entry."],
+    targetTab: 'quests',
+  },
+  {
+    id: 'music_hall_unlocked',
+    messages: ["The guild bard has a song ready -- pick it (or shuffle through everything you've unlocked) from the Track option in Settings."],
+    targetTab: 'settings',
+  },
 ];
 
 type Check = (state: GameState) => boolean;
@@ -61,6 +92,17 @@ const CHECKS: Record<string, Check> = {
   first_chain_seen: (state) => state.chainBoard.length > 0,
   hero_slots_full: (state) => state.heroes.length >= ModifierManager.heroSlots(state),
   raids_unlocked: (state) => ModifierManager.hasUnlock(state, 'raids'),
+  black_market_unlocked: (state) => ModifierManager.hasUnlock(state, 'blackMarket'),
+  legendary_quests_unlocked: (state) => ModifierManager.hasUnlock(state, 'legendaryQuests'),
+  raids_heroic_unlocked: (state) => ModifierManager.hasUnlock(state, 'raidsHeroic'),
+  raids_mythic_unlocked: (state) => ModifierManager.hasUnlock(state, 'raidsMythic'),
+  // autoChain isn't part of hasUnlock's own checked union (it's read
+  // directly off the upgrade level elsewhere -- see QuestPanel.tsx/
+  // GuildPanel.tsx), so this checks the same upgrade id GuildManager
+  // already keys off of rather than extending hasUnlock's own type just
+  // for one more caller.
+  auto_chain_unlocked: (state) => GuildManager.upgradeLevel(state, 'auto_chain') > 0,
+  music_hall_unlocked: (state) => (state.guild.music_hall ?? 0) >= 1,
 };
 
 export const GuidanceManager = {

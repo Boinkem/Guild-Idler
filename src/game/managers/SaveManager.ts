@@ -114,6 +114,7 @@ export function createInitialState(now = Date.now()): GameState {
     completedRaidDifficulties: [],
     notifications: [],
     notificationsSeenId: null,
+    lastBannerShownId: null,
     seenGuidance: [],
     raidUpgrades: {},
     seenOnboarding: false,

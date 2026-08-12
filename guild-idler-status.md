@@ -6174,3 +6174,103 @@ anyone who's already resized the window once keeps their own saved
 size regardless.
 
 `npx tsc --noEmit` and `vite build` both pass clean.
+
+### Notification banner replay bug + Toast/banner dedup + unlock guidance sweep -- complete
+Two direct bug reports plus a systems audit, all touching the same
+notification pipeline.
+
+**Bug 1: the top banner replayed the same stale notification every
+relaunch.** Root cause traced past the obvious suspect: `NotificationBanner
+.tsx`'s old "only bannner what arrives after mount" guard was a plain
+`useRef`, i.e. session-local only -- it says nothing about whether THIS
+exact entry was already shown in a prior session. A banner left
+unclicked-and-timed-out (deliberately not marked "seen," so the unread
+badge stays honest -- see `notificationsSeenId`'s own doc comment) simply
+stayed the newest entry, and the ref-based guard offered it no
+protection against being re-displayed on every subsequent app launch for
+as long as it remained on top. Fixed with real persisted memory: new
+`state.lastBannerShownId` (same id-based shape `notificationsSeenId`
+already uses), updated by a new `GameEngine.markBannerShown(id)` the
+instant a banner is actually shown -- not on dismiss/timeout/click, so
+quitting mid-display can't leave it un-recorded either. Deliberately
+independent of `notificationsSeenId`: "shown once" and "acknowledged"
+are different questions -- a banner that times out unclicked still only
+ever *displays* once now, but correctly still counts as unread until
+actually clicked or opened from the Guide tab.
+
+**Bug 2: routine actions were bannering as prominently as genuine
+unlocks.** Investigated the reported "Blacksmith notifications still
+show on a leftover card below" -- checked every Blacksmith-adjacent
+component (CraftingStation, EnhanceStation, ScrapStation,
+WeaponEnchantStation, VendorsPanel) for a legacy inline notice card;
+found none. The actual cause: `archive()` (called by every single
+`say()`) updated `state.notifications`, and the old banner reacted to
+*any* change there -- so literally every routine confirmation
+("Repaired.", "Sold.", "Equipped 2 items on Finn.") triggered both the
+top banner AND the bottom Toast popup, contrary to what `NotificationBanner
+`'s own top comment already claimed the design was ("separate from
+Toast's...every say() call...this is specifically the worth-surfacing-
+prominently layer") -- that distinction was never actually implemented.
+Not Blacksmith-specific in code; just the panel generating the most
+frequent traffic during the reported session.
+
+Fixed by giving `NotificationEntry` a `banner?: boolean` flag (default
+false) and threading it through `archive()`/`say()`. `GameEngine
+.reportGuidance` -- the one central function every GuidanceManager topic
+already funnels through -- now passes `banner: true`, since one-time
+"how to"/"you've unlocked X" nudges are exactly the moments the banner
+was meant for. Every other `say()` call site (116 of them across
+engine.ts) needed zero changes -- they all default to `banner: false`
+and now correctly stay Toast-only, exactly matching the split confirmed
+directly with the person reporting this. `first_chain_seen` (which
+already gets its own richer `ChainDiscoveryModal`) and achievement
+unlocks (own dedicated popup) both stay banner-free on purpose too --
+same "one prominent moment, not two competing ones" reasoning already
+established elsewhere in this codebase for chain completion.
+
+**Guide tab audit: `GUIDE_TOPICS` was stale.** Had 6 entries (Stats/
+Recruiting/Equipment/Chains/Raids/Prestige) against a much larger real
+feature set. Added 8: Harvest & Gathering, Crafting, Pets & Hatchery,
+Grimsby, Black Market, Item Sets, Elemental Damage & Resist, Music Hall.
+
+**Unlock-gated systems audit.** Checked every system sitting behind a
+real unlock condition for whether the player gets told when it opens
+up:
+- **Harvest, Hatchery, Grimsby** -- already fully covered, and by
+  something richer than a notification: each gets its own one-time
+  `OnboardingTour` spotlight (`pendingHarvestSpotlight`/
+  `pendingHatcherySpotlight`/`pendingPeddlerSpotlight`) the moment its
+  unlock chain completes, actually highlighting the new tab rather than
+  just describing it. No changes needed here -- confirmed working as
+  intended, not a gap.
+- **Genuinely missing, now added as GuidanceManager topics** (which,
+  after the banner-selectivity fix above, correctly surface as a
+  prominent top banner + permanent Notification-log entry + "Go to"
+  button, not just a routine toast): Black Market, Legendary Quests,
+  Heroic raids, Mythic raids, Auto-Chain, and the new Music Hall/Bard.
+  The last one's message points at Settings specifically ("pick it, or
+  shuffle...from the Track option"), directly answering "how do I change
+  the music" the moment it becomes a real question.
+- **A second real gap found and fixed along the way:** none of these
+  topics were actually checked at the moment of purchase.
+  `GuidanceManager.checkAll` was already called after quest/raid
+  resolution, recruiting, retiring, and buying a skin or Black Market
+  item -- but never after `buyUpgrade` or `upgradeFacility`, the two
+  methods that actually flip every one of these unlocks. Before this
+  fix, a newly-bought unlock's guidance nudge would only fire
+  "eventually," whenever the player next happened to do something
+  unrelated that already called `checkAll` -- not at the moment of
+  purchase, which is clearly the expected UX. Added the same
+  `reportGuidance(GuidanceManager.checkAll(...))` call to both.
+
+Verified at runtime, not just typechecked: confirmed a routine `say()`
+call (`equipBestGear`'s level-gated message, the exact one from the bug
+report) archives with `banner: false`; confirmed `markBannerShown` sets
+and persists `lastBannerShownId`, is idempotent on a repeat call for the
+same id, and a fresh save starts at `null`; confirmed all 11
+GuidanceManager topics (5 pre-existing + 6 new) trigger correctly against
+synthetic state for each of their real conditions (`music_hall` level
+at least 1, `raid_heroic_clearance`/`raid_mythic_clearance`/`auto_chain`
+upgrade levels at least 1, etc.), fire exactly once, and don't re-trigger
+on a second `checkAll` pass. `npx tsc --noEmit` and `vite build` both
+pass clean.

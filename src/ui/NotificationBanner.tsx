@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useEngine } from './useEngine';
 import { NotificationEntry } from '../game/types';
 import { TAB_LABELS } from './tabLabels';
@@ -11,44 +11,55 @@ import { TAB_LABELS } from './tabLabels';
 const DISPLAY_MS = 5000;
 
 /**
- * Pops up near the header the moment a genuinely NEW entry lands in the
- * persistent notification log (state.notifications) -- separate from
- * Toast.tsx's existing bottom-center popup, which fires for every say()
- * call regardless of whether it's worth a player's attention (most
- * toasts are routine confirmations like "Sold."/"Repaired."). This is
- * specifically the "worth surfacing prominently" layer, tied into the
- * header unread-count badge: clicking the banner (or its own "Go to"
- * target, if it has one) acknowledges it -- same as opening the Guide's
- * Notifications list or clicking the header icon -- but letting it
- * simply time out unclicked deliberately does NOT acknowledge it, so a
- * missed banner still shows up as unread later. That's the entire point
- * of having both a banner AND a persistent badge: the banner is a
- * chance to catch it live, the badge is the fallback for whenever that
- * chance is missed.
+ * Pops up near the header the moment a genuinely new, banner-worthy entry
+ * lands in the persistent notification log (state.notifications) --
+ * separate from Toast.tsx's existing bottom-center popup, which fires for
+ * every archived message regardless of whether it's worth a player's
+ * attention (most are routine confirmations like "Sold."/"Repaired.").
+ * "Banner-worthy" means `NotificationEntry.banner === true` -- today,
+ * only GuidanceManager's one-time "how to"/unlock nudges set that (see
+ * GameEngine.reportGuidance); everything else stays Toast-only.
+ *
+ * Which entry has already been shown is tracked in GameState
+ * (state.lastBannerShownId, an id -- same shape notificationsSeenId
+ * already uses), NOT component-local state. This is deliberate: a
+ * component-lifecycle-only guard (e.g. a ref that's set on first mount)
+ * only protects against replay within a single running session -- it
+ * says nothing about whether this exact entry was already shown in a
+ * PRIOR session, so a banner left unclicked-and-timed-out before the app
+ * closed would otherwise re-display every single time the app reopens,
+ * for as long as it remains the newest banner-worthy entry. Persisting
+ * the "already shown" marker closes that gap entirely.
+ *
+ * This is tied into the header unread-count badge: clicking the banner
+ * (or its own "Go to" target, if it has one) acknowledges it -- same as
+ * opening the Guide's Notifications list or clicking the header icon --
+ * but letting it simply time out unclicked deliberately does NOT
+ * acknowledge it, so a missed banner still shows up as unread later.
+ * That's the entire point of having both a banner AND a persistent
+ * badge: the banner is a chance to catch it live, the badge is the
+ * fallback for whenever that chance is missed. "Shown once" and
+ * "acknowledged" are tracked completely independently for exactly this
+ * reason -- see GameEngine.markBannerShown vs. markNotificationsSeen.
  */
 export function NotificationBanner() {
   const engine = useEngine();
   const state = engine.state;
-  const topId = state.notifications[0]?.id ?? null;
+  // Newest entry that's actually banner-worthy -- not necessarily
+  // notifications[0] itself, since a routine (non-banner) message could
+  // have landed more recently without displacing this from being the
+  // thing that still deserves the top banner.
+  const latestBanner = state.notifications.find((n) => n.banner) ?? null;
 
   const [shown, setShown] = useState<NotificationEntry | null>(null);
-  // Guards against bannering whatever notification already happens to be
-  // at the top of the log the first time this component ever mounts
-  // (app launch) -- only a notification that arrives WHILE this has been
-  // watching counts as new. Same "prev === null on first render, never
-  // fires" shape as every other change-detecting hook built this session
-  // (useMaxFlash, useLevelUpFlash, usePulsesOnChange).
-  const initialized = useRef(false);
 
   useEffect(() => {
-    if (!initialized.current) {
-      initialized.current = true;
-      return;
-    }
-    if (topId === null) return;
-    setShown(state.notifications[0]);
+    if (!latestBanner) return;
+    if (latestBanner.id === state.lastBannerShownId) return;
+    setShown(latestBanner);
+    engine.markBannerShown(latestBanner.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topId]);
+  }, [latestBanner?.id]);
 
   useEffect(() => {
     if (!shown) return undefined;

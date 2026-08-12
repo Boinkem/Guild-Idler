@@ -164,21 +164,31 @@ export class GameEngine {
   }
 
   /** Archives every message into the persistent notification log, capped
-   *  at 100, regardless of whether the toast queue is currently empty. */
-  private archive(message: string, targetTab?: string) {
-    this.state.notifications.unshift({ id: uid('note'), message, timestamp: Date.now(), targetTab });
+   *  at 100, regardless of whether the toast queue is currently empty.
+   *  `banner` marks it as a candidate for the top NotificationBanner, on
+   *  top of the ordinary Toast every archived message already gets --
+   *  see NotificationEntry.banner's own comment for why this exists and
+   *  defaults false. */
+  private archive(message: string, targetTab?: string, banner = false) {
+    this.state.notifications.unshift({
+      id: uid('note'), message, timestamp: Date.now(), targetTab, banner,
+    });
     if (this.state.notifications.length > 100) this.state.notifications.length = 100;
   }
 
-  private say(message: string, targetTab?: string) {
-    this.archive(message, targetTab);
+  private say(message: string, targetTab?: string, banner = false) {
+    this.archive(message, targetTab, banner);
     this.toastQueue.push({ message, seq: this.nextToastSeq++ });
     this.notify();
   }
 
   /** Fires every message a newly-triggered guidance topic has, in order,
    *  onto the same toast queue -- see GuidanceManager for the topics
-   *  themselves. */
+   *  themselves. Every guidance message earns the top banner (banner:
+   *  true) -- these one-time "how to" / "you've unlocked X" nudges are
+   *  exactly the "worth surfacing prominently" moments the banner exists
+   *  for, unlike the vast majority of other say() call sites (routine
+   *  action confirmations), which stay Toast-only. */
   private reportGuidance(topics: GuidanceTopic[]) {
     for (const topic of topics) {
       // The scripted tour's own final beat -- shown as a standalone modal
@@ -187,14 +197,17 @@ export class GameEngine {
       // archived into the Notifications log exactly like every other
       // topic (via archive() inside say() normally) -- just archived
       // directly here instead, since it isn't also going through the
-      // toast queue.
+      // toast queue. Deliberately not banner:true either -- the modal
+      // itself is already the prominent treatment; stacking a banner on
+      // top would be the same "two big moments competing" issue already
+      // avoided elsewhere (see the chain-completion flourish revert).
       if (topic.id === 'first_chain_seen') {
         for (const message of topic.messages) this.archive(message, topic.targetTab);
         this.state.pendingChainDiscovery = true;
         this.notify();
         continue;
       }
-      for (const message of topic.messages) this.say(message, topic.targetTab);
+      for (const message of topic.messages) this.say(message, topic.targetTab, true);
     }
   }
 
@@ -976,6 +989,21 @@ export class GameEngine {
     }
   }
 
+  /** Marks a banner-worthy notification as having actually been displayed
+   *  -- called by NotificationBanner.tsx the instant it decides to show
+   *  one, not on dismiss/timeout/click, so quitting mid-display never
+   *  replays it on the next launch either. Separate from
+   *  markNotificationsSeen/notificationsSeenId (acknowledgment) above --
+   *  "shown once" and "acknowledged" are different things: a banner that
+   *  times out unclicked still only ever displays once, but still counts
+   *  as unread until the player actually opens the Notifications list or
+   *  clicks it. */
+  markBannerShown(id: string) {
+    if (this.state.lastBannerShownId === id) return;
+    this.state.lastBannerShownId = id;
+    void this.saveNow();
+  }
+
   /** Requests that the menu open (or switch) to a specific tab id. */
   requestTab(id: string) {
     this.requestedTab = id;
@@ -1583,6 +1611,13 @@ export class GameEngine {
     const error = GuildManager.buyUpgrade(this.state, id);
     if (error) return this.say(error);
     playSound('purchase');
+    // Some upgrades flip an unlock (legendaryQuests, blackMarket, raids --
+    // see UpgradeDef.unlocks) that a GuidanceManager topic is watching
+    // for. Checked here, immediately, rather than waiting for whatever
+    // unrelated action happens to call reportGuidance next -- "you've
+    // unlocked X" should land the moment X is actually bought, not
+    // whenever the player next resolves a quest.
+    this.reportGuidance(GuidanceManager.checkAll(this.state));
     this.notify();
     void this.saveNow();
   }
@@ -1608,6 +1643,12 @@ export class GameEngine {
     const error = GuildManager.upgradeFacility(this.state, id);
     if (error) return this.say(error);
     playSound('purchase');
+    // Same immediate-check reasoning as buyUpgrade above -- Music Hall's
+    // first level is the one facility purchase with its own guidance
+    // topic (music_hall_unlocked) today, but this covers any future
+    // facility-tied guidance the same way without needing its own
+    // special case.
+    this.reportGuidance(GuidanceManager.checkAll(this.state));
     this.notify();
     void this.saveNow();
   }
