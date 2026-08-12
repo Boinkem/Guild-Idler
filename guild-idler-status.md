@@ -3086,6 +3086,75 @@ consistent with everything else Warehouse-related (capacity, Trade
 Route) living in one administrative spot rather than scattered across
 the tab.
 
+### Two new craft-only item sets -- built (Guildmade + Masterwork)
+Direct request, following a full audit of every existing set's level and
+source (see the table shared in that conversation): confirmed all 8
+raids already have their own dedicated set (nothing to add there), but
+found two real gaps -- no set-bonus gear existed anywhere in levels
+11-17 (Cutpurse's Set at 10, nothing again until Frozen Wyrmkeep at 18),
+and Crafting produced zero set-bonus gear at all, ever (the two
+pre-existing craftable bases, `guildmade_blade`/`guildmade_band`, were
+standalone player-customized pieces with no `setId`). Both fixed with
+one set each, deliberately placed one early and one late per direct
+decision:
+
+- **Guildmade Set** (reqLevel 12, rare, 6 pieces) -- lands exactly in
+  the 11-17 gap, since both pre-existing craftables already happened to
+  sit at reqLevel 12. Those two are retrofitted with `setId: 'guildmade'`
+  rather than left standalone; 4 new craftable pieces
+  (`guildmade_helm`/`guildmade_plate`/`guildmade_boots`/`guildmade_cloak`,
+  4 new recipes) round it out to a full set covering weapon/ring/helmet/
+  chest/boots/cloak. Every piece still crafts with the same 2-pick
+  customMods choice at modValue 6 as before -- the set bonus is a
+  supplement on top of that choice, not the main draw. Bonus tiers
+  (2/4/6 pieces) are additive with each other, same convention every
+  existing set already uses (`HeroManager.equipmentMods` sums every
+  tier a player has enough pieces for, not just the highest one --
+  confirmed directly, not assumed, since it's easy to misread this as
+  "highest tier only" otherwise) -- a full 6-piece set's real total is
+  +36 success, +36 injuryResist, +22 gold, +10 speed, calibrated to land
+  in the same overall power range as Cutpurse's Set (the nearest
+  existing rare-tier, similar-level set) once each set's own full
+  cumulative total is compared piece-for-piece.
+- **Masterwork Set** (reqLevel 50, legendary, 6 pieces) -- the endgame
+  counterpart, deliberately placed between Empyrean (45, a chain-reward
+  capstone) and Requiem (55, the final raid) as a genuine crafting-only
+  chase rather than a byproduct of finishing a specific chain or raid.
+  Fully new items and recipes (`masterwork_warblade`/`_greathelm`/
+  `_plate`/`_gauntlets`/`_sabatons`/`_sigil`), covering weapon/helmet/
+  chest/gloves/boots/amulet. Durability and value calibrated against
+  `empyrean_*`/`requiem_*` items at the same slots. The real
+  differentiator from Guildmade isn't just bigger numbers -- it's
+  `modsToPick: 3` at `modValue: 14` (vs. Guildmade's 2 picks at value 6),
+  letting a min-maxer choose exactly 3 bonuses instead of 2, on top of a
+  full 6-piece cumulative set total of +92 success, +82 injuryResist,
+  +117 gold, +68 loot, +50 xp, +20 speed -- landing in a comparable
+  overall range to the existing Empyrean/Requiem capstones once compared
+  the same cumulative way.
+
+Mechanically this needed zero code changes -- confirmed by reading
+`CraftingManager.craftGear` and `HeroManager.equipmentMods` directly
+before writing a single line of content: a crafting recipe's
+`resultDefId` can already point at any `EquipmentDef` regardless of
+slot, and set-bonus counting reads `def.setId` the exact same way for a
+craftable item as any dropped one, completely independent of whether its
+`mods` come from the def or from `customMods`. This was purely a content
+addition: 10 new `EquipmentDef` entries, 10 new `CraftingRecipeDef`
+entries, 2 new `ItemSet` entries, and a `setId` retrofit on the 2
+pre-existing Guildmade pieces.
+
+Verified end-to-end at runtime, not just checked as static data: actually
+called `CraftingManager.craftGear` for one piece of each set and
+confirmed the real crafted item carries the exact chosen `customMods` at
+the right `modValue`, confirmed every piece in both sets resolves to a
+real `EquipmentDef` with the right `setId`/`reqLevel`/`rarity`/`slot`
+(no two pieces in the same set sharing a slot), confirmed a recipe exists
+producing every new piece, and equipped a full synthetic 6-piece
+Guildmade set onto a real `Hero` object to confirm
+`HeroManager.equipmentMods` actually applies the cumulative set bonus
+through the real code path (not a mocked one). Full `tsc --noEmit` and
+`vite build` both pass clean.
+
 ### Rooftail (Red Panda) idle "blinking out" -- fixed, and a real pipeline capability gap closed along the way
 Direct report: the equipped Rooftail's idle animation appeared to blink
 out then reappear partway through its loop. Root cause confirmed by

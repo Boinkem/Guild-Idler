@@ -289,6 +289,51 @@ export const ITEM_SETS: ItemSet[] = [
       { count: 3, mods: { success: 28, xp: 30, speed: 14, gold: 18 }, label: 'Unraveled' },
     ],
   },
+  // Two new craft-only sets -- direct request, filling two real gaps
+  // found while auditing every existing set's level/source: no level
+  // band 11-17 had ANY set-bonus gear (Cutpurse's Set at 10, nothing
+  // again until Frozen Wyrmkeep at 18), and no set anywhere in the game
+  // was reachable via Crafting at all -- both craftable bases that
+  // existed before this (guildmade_blade, guildmade_band) had no setId,
+  // just standalone player-customizable pieces.
+  {
+    id: 'guildmade',
+    name: 'Guildmade Set',
+    // guildmade_blade/guildmade_band already existed at reqLevel 12,
+    // squarely inside the 11-17 gap -- both retrofitted with this setId
+    // rather than left standalone; 4 new pieces (helm/chest/boots/cloak)
+    // round it out to a full 6. Every piece is still crafted with
+    // player-chosen customMods same as before (2 picks, +6 each) -- the
+    // set bonus below is a supplement on top of that choice, not the
+    // main draw, same balance philosophy the material-tier sets
+    // (Leather/Steel/Cutpurse's) already use at nearby levels.
+    pieces: ['guildmade_blade', 'guildmade_band', 'guildmade_helm', 'guildmade_plate', 'guildmade_boots', 'guildmade_cloak'],
+    bonuses: [
+      { count: 2, mods: { success: 6, injuryResist: 6 }, label: 'Guild Standard' },
+      { count: 4, mods: { success: 12, injuryResist: 12, gold: 8 }, label: 'Built to Spec' },
+      { count: 6, mods: { success: 18, injuryResist: 18, gold: 14, speed: 10 }, label: 'Commissioned Complete' },
+    ],
+  },
+  {
+    id: 'masterwork',
+    name: 'Masterwork Set',
+    // The endgame counterpart to Guildmade above -- reqLevel 50,
+    // deliberately sitting between Empyrean (45, a chain-reward
+    // capstone) and Requiem (55, the final raid) as a genuine crafting-
+    // only chase rather than a byproduct of finishing a specific chain
+    // or raid. Fully new items, no existing base to build on. Durability/
+    // value calibrated against empyrean_*/requiem_* items at the same
+    // slots; modsToPick=3 at modValue=14 (vs. Guildmade's 2 picks at
+    // value 6) is what actually distinguishes an endgame craft from an
+    // early one -- more player-chosen precision, not just bigger flat
+    // numbers.
+    pieces: ['masterwork_warblade', 'masterwork_greathelm', 'masterwork_plate', 'masterwork_gauntlets', 'masterwork_sabatons', 'masterwork_sigil'],
+    bonuses: [
+      { count: 2, mods: { success: 16, injuryResist: 18 }, label: 'Guild-Forged' },
+      { count: 4, mods: { success: 32, gold: 52, loot: 30, injuryResist: 28 }, label: 'Nothing Left to Improve' },
+      { count: 6, mods: { success: 44, gold: 65, loot: 38, injuryResist: 36, xp: 50, speed: 20 }, label: "The Guild's Own Masterwork" },
+    ],
+  },
 ];
 
 export const SET_BY_ID: Record<string, ItemSet> = Object.fromEntries(ITEM_SETS.map((s) => [s.id, s]));

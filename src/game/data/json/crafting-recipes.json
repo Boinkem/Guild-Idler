@@ -359,5 +359,253 @@
     "resultConsumableId": "beckoning_charm",
     "statsToPick": 0,
     "statValue": 0
+  },
+  {
+    "id": "craft_guildmade_helm",
+    "name": "Guildmade Helm",
+    "description": "A helm shaped to one head, not sized to fit a rack of them.",
+    "category": "gear",
+    "icon": "armor/Armor_11.png",
+    "materialCost": {
+      "ore": 18,
+      "timber": 6
+    },
+    "goldCost": 420,
+    "resultDefId": "guildmade_helm",
+    "modOptions": [
+      "success",
+      "gold",
+      "xp",
+      "loot"
+    ],
+    "modsToPick": 2,
+    "modValue": 6,
+    "statsToPick": 0,
+    "statValue": 0
+  },
+  {
+    "id": "craft_guildmade_plate",
+    "name": "Guildmade Plate",
+    "description": "Fitted plate, commissioned rather than pulled off a shop rack.",
+    "category": "gear",
+    "icon": "armor/Armor_08.png",
+    "materialCost": {
+      "ore": 24,
+      "timber": 8
+    },
+    "goldCost": 450,
+    "resultDefId": "guildmade_plate",
+    "modOptions": [
+      "success",
+      "gold",
+      "xp",
+      "loot"
+    ],
+    "modsToPick": 2,
+    "modValue": 6,
+    "statsToPick": 0,
+    "statValue": 0
+  },
+  {
+    "id": "craft_guildmade_boots",
+    "name": "Guildmade Boots",
+    "description": "Broken in on the workshop floor before they ever see real ground.",
+    "category": "gear",
+    "icon": "armor/Armor_75.png",
+    "materialCost": {
+      "ore": 14,
+      "timber": 10
+    },
+    "goldCost": 380,
+    "resultDefId": "guildmade_boots",
+    "modOptions": [
+      "success",
+      "gold",
+      "xp",
+      "loot"
+    ],
+    "modsToPick": 2,
+    "modValue": 6,
+    "statsToPick": 0,
+    "statValue": 0
+  },
+  {
+    "id": "craft_guildmade_cloak",
+    "name": "Guildmade Cloak",
+    "description": "Cut and hemmed to the wearer's own height -- no guessing at the length.",
+    "category": "gear",
+    "icon": "armor/Armor_63.png",
+    "materialCost": {
+      "timber": 16,
+      "herbs": 6
+    },
+    "goldCost": 400,
+    "resultDefId": "guildmade_cloak",
+    "modOptions": [
+      "success",
+      "gold",
+      "xp",
+      "loot"
+    ],
+    "modsToPick": 2,
+    "modValue": 6,
+    "statsToPick": 0,
+    "statValue": 0
+  },
+  {
+    "id": "craft_masterwork_warblade",
+    "name": "Masterwork Warblade",
+    "description": "Everything the guild's forges have learned, poured into one blade for one hero.",
+    "category": "gear",
+    "icon": "weapons/Weapon_48.png",
+    "materialCost": {
+      "ore": 90,
+      "timber": 30,
+      "herbs": 15,
+      "fish": 15
+    },
+    "goldCost": 14000,
+    "resultDefId": "masterwork_warblade",
+    "modOptions": [
+      "success",
+      "gold",
+      "xp",
+      "loot",
+      "speed"
+    ],
+    "modsToPick": 3,
+    "modValue": 14,
+    "statsToPick": 0,
+    "statValue": 0
+  },
+  {
+    "id": "craft_masterwork_greathelm",
+    "name": "Masterwork Greathelm",
+    "description": "No two are ever quite the same -- this one was never meant to be worn by anybody else.",
+    "category": "gear",
+    "icon": "armor/Armor_44.png",
+    "materialCost": {
+      "ore": 85,
+      "timber": 25,
+      "herbs": 15,
+      "fish": 15
+    },
+    "goldCost": 13500,
+    "resultDefId": "masterwork_greathelm",
+    "modOptions": [
+      "success",
+      "gold",
+      "xp",
+      "loot",
+      "injuryResist"
+    ],
+    "modsToPick": 3,
+    "modValue": 14,
+    "statsToPick": 0,
+    "statValue": 0
+  },
+  {
+    "id": "craft_masterwork_plate",
+    "name": "Masterwork Plate",
+    "description": "The guild's smiths call this one finished when they run out of ways to improve it.",
+    "category": "gear",
+    "icon": "armor/Armor_20.png",
+    "materialCost": {
+      "ore": 100,
+      "timber": 30,
+      "herbs": 10,
+      "fish": 10
+    },
+    "goldCost": 14500,
+    "resultDefId": "masterwork_plate",
+    "modOptions": [
+      "success",
+      "gold",
+      "xp",
+      "loot",
+      "injuryResist"
+    ],
+    "modsToPick": 3,
+    "modValue": 14,
+    "statsToPick": 0,
+    "statValue": 0
+  },
+  {
+    "id": "craft_masterwork_gauntlets",
+    "name": "Masterwork Gauntlets",
+    "description": "Articulated at every knuckle -- a season's worth of fitting, for a single pair of hands.",
+    "category": "gear",
+    "icon": "armor/Armor_17.png",
+    "materialCost": {
+      "ore": 70,
+      "timber": 20,
+      "herbs": 10,
+      "fish": 10
+    },
+    "goldCost": 12000,
+    "resultDefId": "masterwork_gauntlets",
+    "modOptions": [
+      "success",
+      "gold",
+      "xp",
+      "loot",
+      "speed"
+    ],
+    "modsToPick": 3,
+    "modValue": 14,
+    "statsToPick": 0,
+    "statValue": 0
+  },
+  {
+    "id": "craft_masterwork_sabatons",
+    "name": "Masterwork Sabatons",
+    "description": "Weighted, balanced, and re-balanced again until the wearer stops noticing they're wearing them at all.",
+    "category": "gear",
+    "icon": "armor/Armor_76.png",
+    "materialCost": {
+      "ore": 70,
+      "timber": 25,
+      "herbs": 10,
+      "fish": 10
+    },
+    "goldCost": 12000,
+    "resultDefId": "masterwork_sabatons",
+    "modOptions": [
+      "success",
+      "gold",
+      "xp",
+      "loot",
+      "speed"
+    ],
+    "modsToPick": 3,
+    "modValue": 14,
+    "statsToPick": 0,
+    "statValue": 0
+  },
+  {
+    "id": "craft_masterwork_sigil",
+    "name": "Masterwork Sigil",
+    "description": "The guild's own mark, cast in gold and never sold -- every one of these was made to order.",
+    "category": "gear",
+    "icon": "accessories/Accessory_23.png",
+    "materialCost": {
+      "ore": 40,
+      "timber": 15,
+      "herbs": 25,
+      "fish": 25
+    },
+    "goldCost": 13000,
+    "resultDefId": "masterwork_sigil",
+    "modOptions": [
+      "success",
+      "gold",
+      "xp",
+      "loot",
+      "injuryResist"
+    ],
+    "modsToPick": 3,
+    "modValue": 14,
+    "statsToPick": 0,
+    "statValue": 0
   }
 ]

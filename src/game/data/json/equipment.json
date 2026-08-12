@@ -2492,7 +2492,8 @@
     "value": 550,
     "icon": "weapons/Weapon_03.png",
     "raidExclusive": false,
-    "craftable": true
+    "craftable": true,
+    "setId": "guildmade"
   },
   {
     "id": "guildmade_band",
@@ -2504,7 +2505,8 @@
     "value": 550,
     "icon": "accessories/Accessory_07.png",
     "raidExclusive": false,
-    "craftable": true
+    "craftable": true,
+    "setId": "guildmade"
   },
   {
     "id": "leather_dagger",
@@ -3961,5 +3963,145 @@
       "luck": 6
     },
     "icon": "accessories/Accessory_22.png"
+  },
+  {
+    "id": "guildmade_helm",
+    "name": "Guildmade Helm",
+    "slot": "helmet",
+    "rarity": "rare",
+    "reqLevel": 12,
+    "maxDurability": 100,
+    "value": 550,
+    "mods": {},
+    "icon": "armor/Armor_11.png",
+    "raidExclusive": false,
+    "craftable": true,
+    "setId": "guildmade"
+  },
+  {
+    "id": "guildmade_plate",
+    "name": "Guildmade Plate",
+    "slot": "chest",
+    "rarity": "rare",
+    "reqLevel": 12,
+    "maxDurability": 100,
+    "value": 550,
+    "mods": {},
+    "icon": "armor/Armor_08.png",
+    "raidExclusive": false,
+    "craftable": true,
+    "setId": "guildmade"
+  },
+  {
+    "id": "guildmade_boots",
+    "name": "Guildmade Boots",
+    "slot": "boots",
+    "rarity": "rare",
+    "reqLevel": 12,
+    "maxDurability": 100,
+    "value": 550,
+    "mods": {},
+    "icon": "armor/Armor_75.png",
+    "raidExclusive": false,
+    "craftable": true,
+    "setId": "guildmade"
+  },
+  {
+    "id": "guildmade_cloak",
+    "name": "Guildmade Cloak",
+    "slot": "cloak",
+    "rarity": "rare",
+    "reqLevel": 12,
+    "maxDurability": 100,
+    "value": 550,
+    "mods": {},
+    "icon": "armor/Armor_63.png",
+    "raidExclusive": false,
+    "craftable": true,
+    "setId": "guildmade"
+  },
+  {
+    "id": "masterwork_warblade",
+    "name": "Masterwork Warblade",
+    "slot": "weapon",
+    "rarity": "legendary",
+    "reqLevel": 50,
+    "maxDurability": 330,
+    "value": 24000,
+    "mods": {},
+    "icon": "weapons/Weapon_48.png",
+    "raidExclusive": false,
+    "craftable": true,
+    "setId": "masterwork"
+  },
+  {
+    "id": "masterwork_greathelm",
+    "name": "Masterwork Greathelm",
+    "slot": "helmet",
+    "rarity": "legendary",
+    "reqLevel": 50,
+    "maxDurability": 320,
+    "value": 22500,
+    "mods": {},
+    "icon": "armor/Armor_44.png",
+    "raidExclusive": false,
+    "craftable": true,
+    "setId": "masterwork"
+  },
+  {
+    "id": "masterwork_plate",
+    "name": "Masterwork Plate",
+    "slot": "chest",
+    "rarity": "legendary",
+    "reqLevel": 50,
+    "maxDurability": 330,
+    "value": 23500,
+    "mods": {},
+    "icon": "armor/Armor_20.png",
+    "raidExclusive": false,
+    "craftable": true,
+    "setId": "masterwork"
+  },
+  {
+    "id": "masterwork_gauntlets",
+    "name": "Masterwork Gauntlets",
+    "slot": "gloves",
+    "rarity": "legendary",
+    "reqLevel": 50,
+    "maxDurability": 310,
+    "value": 21000,
+    "mods": {},
+    "icon": "armor/Armor_17.png",
+    "raidExclusive": false,
+    "craftable": true,
+    "setId": "masterwork"
+  },
+  {
+    "id": "masterwork_sabatons",
+    "name": "Masterwork Sabatons",
+    "slot": "boots",
+    "rarity": "legendary",
+    "reqLevel": 50,
+    "maxDurability": 310,
+    "value": 21000,
+    "mods": {},
+    "icon": "armor/Armor_76.png",
+    "raidExclusive": false,
+    "craftable": true,
+    "setId": "masterwork"
+  },
+  {
+    "id": "masterwork_sigil",
+    "name": "Masterwork Sigil",
+    "slot": "amulet",
+    "rarity": "legendary",
+    "reqLevel": 50,
+    "maxDurability": 320,
+    "value": 23000,
+    "mods": {},
+    "icon": "accessories/Accessory_23.png",
+    "raidExclusive": false,
+    "craftable": true,
+    "setId": "masterwork"
   }
 ]
