@@ -113,6 +113,19 @@ export interface Settings {
    *  cuts the music immediately. Turning this on leaves it playing
    *  uninterrupted instead. */
   musicContinuesWhenMinimized: boolean;
+  /**
+   * Which track actually plays -- 'default' (the always-free ambient
+   * track, same one that's always played until now), 'shuffle' (a new
+   * pick once per real day, see music.ts's resolveTrackSrc), or a
+   * specific BardTrack id unlocked via the Music Hall guild facility.
+   * Purely a playback preference (which of the player's already-unlocked
+   * tracks is currently selected), not save-relevant progress -- lives
+   * here alongside musicEnabled/musicVolume rather than in GameState,
+   * same reasoning that section's own subtitle already draws. Falls back
+   * to 'default' automatically if it ever points at a track the guild
+   * doesn't actually have unlocked (see resolveTrackSrc).
+   */
+  selectedBardTrack: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -138,6 +151,7 @@ export const DEFAULT_SETTINGS: Settings = {
   musicEnabled: true,
   musicVolume: 0.18,
   musicContinuesWhenMinimized: false,
+  selectedBardTrack: 'default',
 };
 
 /* --------------------------------- themes --------------------------------- */

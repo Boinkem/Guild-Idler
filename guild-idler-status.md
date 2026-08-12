@@ -30,7 +30,9 @@ rotation, `raidExclusive` flag (Heroic/Mythic tiered variants can no
 longer appear in either shop's stock).
 
 **Guild facilities & Permanent Upgrades** — vendor-style upgrade trees,
-guild-wide bonuses, gold storage.
+guild-wide bonuses, gold storage. 8 facilities total, the newest being
+Music Hall (a pure cosmetic gold sink -- unlocks purchasable background
+music tracks, no stat effect).
 
 **Quest chains** — 28 total (was previously logged here as "19 total";
 corrected during this pass -- the live JSON had actually already grown to
@@ -6007,3 +6009,103 @@ once the top tier is reached, and a piece dropped to 0 durability
 correctly stops counting toward the set (matches `equipmentMods`'s own
 `durability <= 0` skip). `npx tsc --noEmit` and `vite build` both pass
 clean.
+
+### Music Hall guild facility ("Hire a Bard") + bigger default window -- complete
+Two direct requests, the second surfaced mid-conversation while
+discussing the first and folded into the same patch since it touched a
+neighbouring file for a five-minute change.
+
+**Music Hall.** A new 8th Guild Facility (Barracks/Treasury/Workshop/
+Library/Tavern/Infirmary/Kennel/**Music Hall**), same leveled cost-curve
+shape every other facility already uses, wired into the Tuning registry
+the same way (`guild_facility.music_hall.baseCost/costGrowth/maxLevel`,
+first-pass values 500/1.6/7 -- deliberately gentler growth than the
+1.8-1.85 most facilities use, since front-loading a steep curve onto 7
+purchases would concentrate the whole repertoire's cost into the first
+couple of levels rather than spreading it out). `maxLevel: 7` matches
+the 7 licensed tracks currently available. Like Infirmary/Kennel before
+it, `modsPerLevel` is deliberately empty and a new `tracksPerLevel`
+structural field carries its real effect instead (same "not a flat
+Modifiers bonus" reasoning those two already established) -- this is a
+pure cosmetic gold sink on purpose, no combat/economy effect at all.
+Verified the real cost curve end to end: 500 -> 19,769 total gold to
+fully max all 7 levels (with the existing early-tier-discount curve
+applied to the first purchase same as every other facility), capping
+correctly at level 7 with `nextCost` returning `null` past that.
+
+**Track data + playback.** New `BARD_TRACKS` (`bard.ts` / `bard-tracks
+.json`), same JSON-backed DevTool-editable pattern `materials.ts`
+already established -- 7 placeholder entries (`Track 1`-`Track 7`,
+generic names since real titles weren't available yet) each pointing at
+`public/audio/bard/<id>.mp3`, wired into the DevTool's schema list so
+they can be renamed/reordered/repointed there without touching code.
+Music Hall level N unlocks `BARD_TRACKS[0..N-1]`, in list order -- the
+existing always-free ambient track (`background-music.mp3`) stays
+available regardless of Music Hall level, so nobody who skips this
+facility loses what was already playing.
+
+`music.ts` gained `resolveTrackSrc(selection, musicHallLevel, now)`, a
+pure function (exported standalone for testing) that resolves a
+Settings-panel choice down to an actual audio src:
+- `'default'` -> the existing ambient track, always.
+- a specific unlocked track id -> that track's own path.
+- an id that isn't (or isn't yet, or no longer is) unlocked -> falls back
+  to `'default'` rather than trying to play a locked/missing file --
+  covers both "never unlocked" and a save somehow pointing at a track
+  index past the guild's current Music Hall level.
+- `'shuffle'` -> a new pick once per real day, deterministic (same
+  UTC-epoch-day bucketing `reroll.ts`'s `rerollDay` already
+  established elsewhere, so it doesn't jump mid-session), with the
+  default track always counted as one option in the pool -- a fresh
+  guild at Music Hall level 0 still gets *some* shuffle behaviour
+  (trivially, always the default) rather than shuffle silently doing
+  nothing until the first purchase.
+
+The single `HTMLAudioElement` this module already kept for the app's
+whole lifetime now gets torn down and recreated (not just re-decoded)
+whenever the resolved src actually changes -- necessary since swapping
+an `<audio>` element's `src` mid-playback isn't itself a supported "just
+change the file" operation the way volume is. New element always starts
+silent; the existing caller-side paused-check-then-`fadeTo` in
+`enterGuildMenu`/`applySettingsChange` handles starting it, so a track
+switch mid-session fades in exactly the same way the very first track
+ever did, no separate code path needed for the two cases.
+
+**Settings/GameState split**, same reasoning the existing music toggles
+already draw: which tracks are *unlocked* is real spent-gold progress,
+so it lives in `GameState` (`state.guild.music_hall`, read via the
+existing `GuildManager.facilityLevel`); which one's *currently selected*
+is a device-local playback preference, so `Settings.selectedBardTrack`
+sits right next to `musicEnabled`/`musicVolume`, which that panel's own
+subtitle already promises never touches guild progress. New "Track"
+row in the Music settings section (Guild Theme / each unlocked track by
+name / Shuffle), hidden entirely until Music Hall has unlocked at least
+one track -- a picker with nothing to pick between yet would just be
+clutter.
+
+Verified at runtime, not just typechecked: `resolveTrackSrc` sampled
+across every selection mode (default at level 0 and 7, a specific track
+both locked and unlocked, an unknown/garbage id) -- all correctly
+resolve or fall back exactly as designed. Shuffle sampled across 10
+consecutive days at Music Hall level 7: same day always produces the
+same pick (deterministic), and the pick actually varies across different
+days (not stuck repeating one track). Shuffle at level 0 correctly stays
+on the default track every day, since it's the only thing in the pool.
+`GuildManager.facilityLevel`/`nextCost`/`upgradeFacility` exercised
+directly against a fresh save -- level starts at 0, cost curve matches
+the tuned values, caps at level 7 with `null` past that.
+
+**Window default size.** `MENU_SIZE` (`electron/main.ts`) bumped from
+900x620 to 1350x930 -- exactly 1.5x, per direct request that the
+default felt cramped despite always having been freely resizable.
+Confirmed safe before changing: the requested size is already clamped
+against the current display's actual work area at open time
+(`window:setMode`'s own `Math.min(requested.width, workArea.width)`
+logic, pre-existing), so a bigger default can't open partially
+off-screen on a smaller display -- it'll just clamp down exactly the
+way an oversized remembered user-resize already does today. Only the
+*default* changed; `MENU_MIN_SIZE` (the resize floor) is untouched, and
+anyone who's already resized the window once keeps their own saved
+size regardless.
+
+`npx tsc --noEmit` and `vite build` both pass clean.

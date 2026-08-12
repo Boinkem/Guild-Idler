@@ -839,7 +839,7 @@ export interface UpgradeDef {
   freezeChangesPerLevel?: number;
 }
 
-export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern' | 'infirmary' | 'kennel';
+export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern' | 'infirmary' | 'kennel' | 'music_hall';
 
 export interface GuildDef {
   id: GuildFacility;
@@ -863,6 +863,15 @@ export interface GuildDef {
    * reaching this facility's max level.
    */
   healTimeReductionMinutesPerLevel?: number;
+  /**
+   * Music Hall's structural effect -- same "not a flat Modifiers bonus"
+   * reasoning as storagePerLevel/heroSlotsPerLevel/
+   * healTimeReductionMinutesPerLevel above. Each level unlocks exactly
+   * one more track from BARD_TRACKS (see music.ts) in list order; the
+   * always-free default ambient track isn't counted here at all, so
+   * level 0 already has one track playing before a single gold is spent.
+   */
+  tracksPerLevel?: number;
 }
 
 export interface RenownPerkTier2 {

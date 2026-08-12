@@ -1,9 +1,12 @@
 import type { ReactNode } from 'react';
+import { useEngine } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { HeroSprite } from '../sprites/HeroSprite';
 import { PetSprite } from '../sprites/PetSprite';
 import { Settings, THEMES } from '../../game/settings';
 import { previewSound } from '../../game/sound';
+import { BARD_TRACKS } from '../../game/data/bard';
+import { GuildManager } from '../../game/managers/GuildManager';
 
 /* ------------------------------ small controls ---------------------------- */
 
@@ -58,8 +61,11 @@ export function Toggle({ value, onChange, disabled }: { value: boolean; onChange
 /* --------------------------------- panel ---------------------------------- */
 
 export function SettingsPanel() {
+  const engine = useEngine();
   const { settings, update, reset } = useSettings();
   const set = <K extends keyof Settings>(key: K) => (value: Settings[K]) => update(key, value);
+  const musicHallLevel = GuildManager.facilityLevel(engine.state, 'music_hall');
+  const unlockedTracks = BARD_TRACKS.slice(0, musicHallLevel);
 
   return (
     <>
@@ -229,6 +235,31 @@ export function SettingsPanel() {
           disabled={!settings.musicEnabled}
         />
       </Row>
+
+      {/* Only shown once the Music Hall guild facility (Guild Hall tab)
+          has unlocked at least one track -- before that, "Guild Theme" is
+          the only option there is, so a picker with nothing to pick
+          between would just be clutter. */}
+      {unlockedTracks.length > 0 && (
+        <Row
+          label="Track"
+          hint={
+            settings.selectedBardTrack === 'shuffle'
+              ? 'A different unlocked track plays each day.'
+              : 'Pick a specific track, or let the guild bard rotate through everything you\u2019ve unlocked.'
+          }
+        >
+          <select
+            value={settings.selectedBardTrack}
+            disabled={!settings.musicEnabled}
+            onChange={(e) => update('selectedBardTrack', e.target.value)}
+          >
+            <option value="default">Guild Theme</option>
+            {unlockedTracks.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            <option value="shuffle">Shuffle (daily)</option>
+          </select>
+        </Row>
+      )}
 
       <div className="section-heading">Quality of life</div>
 

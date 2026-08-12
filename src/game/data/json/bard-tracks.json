@@ -1,0 +1,44 @@
+[
+  {
+    "id": "bard_track_1",
+    "name": "Track 1",
+    "path": "bard/bard_track_1.mp3",
+    "credit": ""
+  },
+  {
+    "id": "bard_track_2",
+    "name": "Track 2",
+    "path": "bard/bard_track_2.mp3",
+    "credit": ""
+  },
+  {
+    "id": "bard_track_3",
+    "name": "Track 3",
+    "path": "bard/bard_track_3.mp3",
+    "credit": ""
+  },
+  {
+    "id": "bard_track_4",
+    "name": "Track 4",
+    "path": "bard/bard_track_4.mp3",
+    "credit": ""
+  },
+  {
+    "id": "bard_track_5",
+    "name": "Track 5",
+    "path": "bard/bard_track_5.mp3",
+    "credit": ""
+  },
+  {
+    "id": "bard_track_6",
+    "name": "Track 6",
+    "path": "bard/bard_track_6.mp3",
+    "credit": ""
+  },
+  {
+    "id": "bard_track_7",
+    "name": "Track 7",
+    "path": "bard/bard_track_7.mp3",
+    "credit": ""
+  }
+]

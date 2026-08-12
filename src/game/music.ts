@@ -1,18 +1,22 @@
 /**
- * Background music -- one looping ambient track behind the guild menu.
+ * Background music -- an ambient track behind the guild menu, plus
+ * (since the Music Hall guild facility) a small pool of purchasable
+ * tracks the player can pick between or shuffle across.
  *
  * Deliberately separate from sound.ts's synthesized SFX cues (those exist
  * specifically to avoid ever shipping a real audio file -- see that
  * file's own top comment). This is the opposite trade-off on purpose: a
  * real track the player supplies themselves, dropped in at the path
  * below. Same "missing file just does nothing" convention as every
- * gitignored sprite pack in this game -- no file at MUSIC_SRC means
+ * gitignored sprite pack in this game -- no file at a track's path means
  * playback silently never starts, not an error.
  *
- * DROP YOUR TRACK HERE: public/audio/background-music.mp3
- * (mp3 or ogg both work in Electron/Chromium -- if your file is a
- * different format, either convert it or change MUSIC_SRC below to
- * match its extension.)
+ * DROP YOUR TRACKS HERE:
+ *   public/audio/background-music.mp3       (the always-free default)
+ *   public/audio/bard/<id>.mp3               (one per BARD_TRACKS entry)
+ * (mp3 or ogg both work in Electron/Chromium -- if a file is a different
+ * format, either convert it or change its `path` in bard-tracks.json via
+ * the DevTool.)
  *
  * One HTMLAudioElement for the app's whole lifetime (created lazily, on
  * first use) rather than one per mount -- MenuWindow itself mounts and
@@ -22,25 +26,83 @@
  */
 
 import { Settings, SettingsStore } from './settings';
+import { BARD_TRACKS, BARD_TRACK_BY_ID } from './data/bard';
+import { DAY } from './util';
 
-const MUSIC_SRC = './audio/background-music.mp3';
+const DEFAULT_TRACK_SRC = './audio/background-music.mp3';
 const FADE_IN_MS = 3000;
 const FADE_OUT_MS = 700;
 
 let el: HTMLAudioElement | null = null;
 let fadeHandle: number | null = null;
+/** The src the element is actually currently playing/paused on, tracked
+ *  separately from `el.src` itself -- reading `audio.src` back gives a
+ *  browser-resolved absolute URL, not the relative path this was set
+ *  with, so comparing against that directly would always look "changed"
+ *  even when nothing was. */
+let currentSrc: string | null = null;
 
-function getElement(): HTMLAudioElement | null {
+/**
+ * Tracks unlocked at a given Music Hall level, in unlock order -- level 0
+ * unlocks nothing extra (the default track is always available
+ * regardless), level N unlocks BARD_TRACKS[0..N-1].
+ */
+function unlockedTracks(musicHallLevel: number) {
+  return BARD_TRACKS.slice(0, Math.max(0, musicHallLevel));
+}
+
+/**
+ * Resolves a Settings.selectedBardTrack choice down to an actual audio
+ * src, given how many Music Hall levels are currently bought. Exported
+ * standalone (not just used internally) so it can be unit-tested without
+ * spinning up a real <audio> element.
+ */
+export function resolveTrackSrc(selection: string, musicHallLevel: number, now: number): string {
+  const unlocked = unlockedTracks(musicHallLevel);
+  if (selection === 'shuffle') {
+    // The default track always counts as one option in the shuffle pool,
+    // so a fresh guild with zero Music Hall levels still gets *some*
+    // rotation-flavoured behaviour (trivially, always the default)
+    // rather than shuffle silently doing nothing until the first
+    // purchase. Deterministic per real-world day (same UTC-epoch-day
+    // bucketing every other window-based system in this game already
+    // uses, e.g. reroll.ts's rerollDay), so it doesn't jump mid-session.
+    const pool = ['default', ...unlocked.map((t) => t.id)];
+    const pick = pool[Math.floor(now / DAY) % pool.length];
+    return pick === 'default' ? DEFAULT_TRACK_SRC : `./audio/${BARD_TRACK_BY_ID[pick].path}`;
+  }
+  if (selection !== 'default') {
+    // Falls back to the default track below if this id isn't currently
+    // unlocked -- covers both "never unlocked" and the unusual case of a
+    // save somehow pointing at a track index past the guild's current
+    // Music Hall level (e.g. a save imported onto a build with fewer
+    // Music Hall levels than the one it was made on).
+    const track = unlocked.find((t) => t.id === selection);
+    if (track) return `./audio/${track.path}`;
+  }
+  return DEFAULT_TRACK_SRC;
+}
+
+function getElement(src: string): HTMLAudioElement | null {
   if (typeof window === 'undefined' || typeof Audio === 'undefined') return null;
-  if (!el) {
-    const audio = new Audio(MUSIC_SRC);
+  if (!el || currentSrc !== src) {
+    // Switching tracks mid-session (a live Settings change, not just
+    // first load) tears down the old element and starts the new one
+    // silent -- the caller (enterGuildMenu/applySettingsChange) always
+    // follows this with its own paused-check-then-play plus fadeTo, so
+    // starting at 0 here just means that fade-in looks the same whether
+    // this is the very first track played or a switch mid-session,
+    // rather than needing two different code paths for the two cases.
+    if (el) el.pause();
+    const audio = new Audio(src);
     audio.loop = true;
     audio.volume = 0;
     // No file dropped in yet (or a bad path) -- fail silently, same as a
     // missing sprite sheet elsewhere in this game, rather than spamming
     // the console on every launch.
-    audio.addEventListener('error', () => { el = null; }, { once: true });
+    audio.addEventListener('error', () => { if (el === audio) el = null; }, { once: true });
     el = audio;
+    currentSrc = src;
   }
   return el;
 }
@@ -52,9 +114,7 @@ function cancelFade(): void {
   }
 }
 
-function fadeTo(target: number, durationMs: number, onDone?: () => void): void {
-  const audio = getElement();
-  if (!audio) return;
+function fadeTo(audio: HTMLAudioElement, target: number, durationMs: number, onDone?: () => void): void {
   cancelFade();
   const start = audio.volume;
   const startTime = performance.now();
@@ -78,16 +138,20 @@ function fadeTo(target: number, durationMs: number, onDone?: () => void): void {
 
 export const MusicManager = {
   /**
-   * Call when the guild menu opens. Starts the track (if it isn't
-   * already playing) and fades up to the settings volume over
-   * FADE_IN_MS -- silent at app launch and in the idle companion view by
-   * design, this is ambience for the guild menu specifically, not
-   * something playing the instant the app starts.
+   * Call when the guild menu opens. Starts the currently-selected track
+   * (if it isn't already playing) and fades up to the settings volume
+   * over FADE_IN_MS -- silent at app launch and in the idle companion
+   * view by design, this is ambience for the guild menu specifically,
+   * not something playing the instant the app starts. `musicHallLevel`
+   * comes from the caller's own GameState (GuildManager.facilityLevel
+   * (state, 'music_hall')) -- this module has no notion of game state on
+   * its own, same as it already had none of app view state.
    */
-  enterGuildMenu(): void {
+  enterGuildMenu(musicHallLevel: number): void {
     const settings = SettingsStore.load();
     if (!settings.musicEnabled || settings.musicVolume <= 0) return;
-    const audio = getElement();
+    const src = resolveTrackSrc(settings.selectedBardTrack, musicHallLevel, Date.now());
+    const audio = getElement(src);
     if (!audio) return;
     if (audio.paused) {
       // A fresh AudioContext-style play() call can be rejected before any
@@ -97,7 +161,7 @@ export const MusicManager = {
       // cleanly on its own.
       void audio.play().catch(() => {});
     }
-    fadeTo(settings.musicVolume, FADE_IN_MS);
+    fadeTo(audio, settings.musicVolume, FADE_IN_MS);
   },
 
   /**
@@ -108,26 +172,27 @@ export const MusicManager = {
   leaveGuildMenu(): void {
     const settings = SettingsStore.load();
     if (settings.musicContinuesWhenMinimized) return;
-    const audio = getElement();
-    if (!audio || audio.paused) return;
-    fadeTo(0, FADE_OUT_MS, () => { audio?.pause(); });
+    if (!el || el.paused) return;
+    const audio = el;
+    fadeTo(audio, 0, FADE_OUT_MS, () => { audio.pause(); });
   },
 
   /**
    * Re-applies a live settings change (the Settings panel's toggle/
-   * slider) without waiting for the next menu open/close. `guildMenuOpen`
-   * is passed in rather than read from anywhere here, since this module
-   * has no notion of app view state on its own.
+   * slider/track picker) without waiting for the next menu open/close.
+   * `guildMenuOpen` is passed in rather than read from anywhere here,
+   * same as `musicHallLevel` -- this module tracks none of it itself.
    */
-  applySettingsChange(settings: Settings, guildMenuOpen: boolean): void {
-    const audio = getElement();
-    if (!audio) return;
+  applySettingsChange(settings: Settings, guildMenuOpen: boolean, musicHallLevel: number): void {
     if (!settings.musicEnabled || settings.musicVolume <= 0) {
-      fadeTo(0, 200, () => audio.pause());
+      if (el && !el.paused) fadeTo(el, 0, 200, () => el?.pause());
       return;
     }
     if (!guildMenuOpen && !settings.musicContinuesWhenMinimized) return;
+    const src = resolveTrackSrc(settings.selectedBardTrack, musicHallLevel, Date.now());
+    const audio = getElement(src);
+    if (!audio) return;
     if (audio.paused) void audio.play().catch(() => {});
-    fadeTo(settings.musicVolume, 200);
+    fadeTo(audio, settings.musicVolume, 200);
   },
 };

@@ -1,0 +1,715 @@
+diff --git a/electron/main.ts b/electron/main.ts
+index c95a24e..1a646ce 100644
+--- a/electron/main.ts
++++ b/electron/main.ts
+@@ -37,9 +37,15 @@ function loadAppIcon() {
+   return img.isEmpty() ? undefined : img;
+ }
+ 
+-/** Window sizes. The idle companion is tiny; the menu needs room. */
++/** Window sizes. The idle companion is tiny; the menu needs room.
++ *  MENU_SIZE bumped from 900x620 to 1350x930 (1.5x) per direct request --
++ *  the old default read as cramped even though the window's always been
++ *  freely resizable; this is just a better starting point, not a new
++ *  cap. Still clamped against the display's actual work area at open
++ *  time (see window:setMode below), so this is safe on any screen size
++ *  regardless of how big MENU_SIZE itself gets. */
+ const IDLE_SIZE = { width: 260, height: 300 };
+-const MENU_SIZE = { width: 900, height: 620 };
++const MENU_SIZE = { width: 1350, height: 930 };
+ /** The menu is now user-resizable -- this is a floor, not a cap, so the
+  *  panel layout (nav column + content) never gets squeezed into something
+  *  unusable. No maximum beyond whatever the display itself allows. */
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 3e81103..9fdc17d 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -30,7 +30,9 @@ rotation, `raidExclusive` flag (Heroic/Mythic tiered variants can no
+ longer appear in either shop's stock).
+ 
+ **Guild facilities & Permanent Upgrades** — vendor-style upgrade trees,
+-guild-wide bonuses, gold storage.
++guild-wide bonuses, gold storage. 8 facilities total, the newest being
++Music Hall (a pure cosmetic gold sink -- unlocks purchasable background
++music tracks, no stat effect).
+ 
+ **Quest chains** — 28 total (was previously logged here as "19 total";
+ corrected during this pass -- the live JSON had actually already grown to
+@@ -6007,3 +6009,103 @@ once the top tier is reached, and a piece dropped to 0 durability
+ correctly stops counting toward the set (matches `equipmentMods`'s own
+ `durability <= 0` skip). `npx tsc --noEmit` and `vite build` both pass
+ clean.
++
++### Music Hall guild facility ("Hire a Bard") + bigger default window -- complete
++Two direct requests, the second surfaced mid-conversation while
++discussing the first and folded into the same patch since it touched a
++neighbouring file for a five-minute change.
++
++**Music Hall.** A new 8th Guild Facility (Barracks/Treasury/Workshop/
++Library/Tavern/Infirmary/Kennel/**Music Hall**), same leveled cost-curve
++shape every other facility already uses, wired into the Tuning registry
++the same way (`guild_facility.music_hall.baseCost/costGrowth/maxLevel`,
++first-pass values 500/1.6/7 -- deliberately gentler growth than the
++1.8-1.85 most facilities use, since front-loading a steep curve onto 7
++purchases would concentrate the whole repertoire's cost into the first
++couple of levels rather than spreading it out). `maxLevel: 7` matches
++the 7 licensed tracks currently available. Like Infirmary/Kennel before
++it, `modsPerLevel` is deliberately empty and a new `tracksPerLevel`
++structural field carries its real effect instead (same "not a flat
++Modifiers bonus" reasoning those two already established) -- this is a
++pure cosmetic gold sink on purpose, no combat/economy effect at all.
++Verified the real cost curve end to end: 500 -> 19,769 total gold to
++fully max all 7 levels (with the existing early-tier-discount curve
++applied to the first purchase same as every other facility), capping
++correctly at level 7 with `nextCost` returning `null` past that.
++
++**Track data + playback.** New `BARD_TRACKS` (`bard.ts` / `bard-tracks
++.json`), same JSON-backed DevTool-editable pattern `materials.ts`
++already established -- 7 placeholder entries (`Track 1`-`Track 7`,
++generic names since real titles weren't available yet) each pointing at
++`public/audio/bard/<id>.mp3`, wired into the DevTool's schema list so
++they can be renamed/reordered/repointed there without touching code.
++Music Hall level N unlocks `BARD_TRACKS[0..N-1]`, in list order -- the
++existing always-free ambient track (`background-music.mp3`) stays
++available regardless of Music Hall level, so nobody who skips this
++facility loses what was already playing.
++
++`music.ts` gained `resolveTrackSrc(selection, musicHallLevel, now)`, a
++pure function (exported standalone for testing) that resolves a
++Settings-panel choice down to an actual audio src:
++- `'default'` -> the existing ambient track, always.
++- a specific unlocked track id -> that track's own path.
++- an id that isn't (or isn't yet, or no longer is) unlocked -> falls back
++  to `'default'` rather than trying to play a locked/missing file --
++  covers both "never unlocked" and a save somehow pointing at a track
++  index past the guild's current Music Hall level.
++- `'shuffle'` -> a new pick once per real day, deterministic (same
++  UTC-epoch-day bucketing `reroll.ts`'s `rerollDay` already
++  established elsewhere, so it doesn't jump mid-session), with the
++  default track always counted as one option in the pool -- a fresh
++  guild at Music Hall level 0 still gets *some* shuffle behaviour
++  (trivially, always the default) rather than shuffle silently doing
++  nothing until the first purchase.
++
++The single `HTMLAudioElement` this module already kept for the app's
++whole lifetime now gets torn down and recreated (not just re-decoded)
++whenever the resolved src actually changes -- necessary since swapping
++an `<audio>` element's `src` mid-playback isn't itself a supported "just
++change the file" operation the way volume is. New element always starts
++silent; the existing caller-side paused-check-then-`fadeTo` in
++`enterGuildMenu`/`applySettingsChange` handles starting it, so a track
++switch mid-session fades in exactly the same way the very first track
++ever did, no separate code path needed for the two cases.
++
++**Settings/GameState split**, same reasoning the existing music toggles
++already draw: which tracks are *unlocked* is real spent-gold progress,
++so it lives in `GameState` (`state.guild.music_hall`, read via the
++existing `GuildManager.facilityLevel`); which one's *currently selected*
++is a device-local playback preference, so `Settings.selectedBardTrack`
++sits right next to `musicEnabled`/`musicVolume`, which that panel's own
++subtitle already promises never touches guild progress. New "Track"
++row in the Music settings section (Guild Theme / each unlocked track by
++name / Shuffle), hidden entirely until Music Hall has unlocked at least
++one track -- a picker with nothing to pick between yet would just be
++clutter.
++
++Verified at runtime, not just typechecked: `resolveTrackSrc` sampled
++across every selection mode (default at level 0 and 7, a specific track
++both locked and unlocked, an unknown/garbage id) -- all correctly
++resolve or fall back exactly as designed. Shuffle sampled across 10
++consecutive days at Music Hall level 7: same day always produces the
++same pick (deterministic), and the pick actually varies across different
++days (not stuck repeating one track). Shuffle at level 0 correctly stays
++on the default track every day, since it's the only thing in the pool.
++`GuildManager.facilityLevel`/`nextCost`/`upgradeFacility` exercised
++directly against a fresh save -- level starts at 0, cost curve matches
++the tuned values, caps at level 7 with `null` past that.
++
++**Window default size.** `MENU_SIZE` (`electron/main.ts`) bumped from
++900x620 to 1350x930 -- exactly 1.5x, per direct request that the
++default felt cramped despite always having been freely resizable.
++Confirmed safe before changing: the requested size is already clamped
++against the current display's actual work area at open time
++(`window:setMode`'s own `Math.min(requested.width, workArea.width)`
++logic, pre-existing), so a bigger default can't open partially
++off-screen on a smaller display -- it'll just clamp down exactly the
++way an oversized remembered user-resize already does today. Only the
++*default* changed; `MENU_MIN_SIZE` (the resize floor) is untouched, and
++anyone who's already resized the window once keeps their own saved
++size regardless.
++
++`npx tsc --noEmit` and `vite build` both pass clean.
+diff --git a/src/App.tsx b/src/App.tsx
+index e5fc610..8f536ea 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -1,6 +1,7 @@
+ import { useCallback, useEffect, useState } from 'react';
+ import { GameEngine } from './game/engine';
+ import { MusicManager } from './game/music';
++import { GuildManager } from './game/managers/GuildManager';
+ import { EngineContext } from './ui/useEngine';
+ import { useSettings } from './ui/useSettings';
+ import { IdleView } from './ui/IdleView';
+@@ -57,19 +58,25 @@ export function App() {
+   // Background music: fades in when the guild menu opens, fades out (or
+   // keeps playing, if musicContinuesWhenMinimized is on) when it closes.
+   // Re-runs on every relevant settings change too, not just on `mode`
+-  // changing, so dragging the volume slider or flipping the toggle in
+-  // Settings takes effect immediately rather than waiting for the next
+-  // menu open/close -- see MusicManager.applySettingsChange.
++  // changing, so dragging the volume slider, flipping the toggle, or
++  // picking a different track in Settings takes effect immediately
++  // rather than waiting for the next menu open/close -- see
++  // MusicManager.applySettingsChange. musicHallLevel (which tracks are
++  // actually unlocked) comes from engine.state directly rather than
++  // being tracked inside music.ts itself, same "this module knows
++  // nothing about game/app state on its own" boundary the mode-tracking
++  // already established.
+   const { settings } = useSettings();
++  const musicHallLevel = engine ? GuildManager.facilityLevel(engine.state, 'music_hall') : 0;
+   useEffect(() => {
+-    if (mode === 'menu') MusicManager.enterGuildMenu();
++    if (mode === 'menu') MusicManager.enterGuildMenu(musicHallLevel);
+     else MusicManager.leaveGuildMenu();
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [mode]);
+   useEffect(() => {
+-    MusicManager.applySettingsChange(settings, mode === 'menu');
++    MusicManager.applySettingsChange(settings, mode === 'menu', musicHallLevel);
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+-  }, [settings.musicEnabled, settings.musicVolume, settings.musicContinuesWhenMinimized]);
++  }, [settings.musicEnabled, settings.musicVolume, settings.musicContinuesWhenMinimized, settings.selectedBardTrack, musicHallLevel]);
+ 
+   // The naming modal needs real screen space to render in -- if it shows up
+   // while the app is still in the tiny idle-companion window (the default
+diff --git a/src/game/data/bard.ts b/src/game/data/bard.ts
+new file mode 100644
+index 0000000..dde23ca
+--- /dev/null
++++ b/src/game/data/bard.ts
+@@ -0,0 +1,26 @@
++export interface BardTrack {
++  id: string;
++  name: string;
++  /** Relative to public/audio/ -- e.g. "bard/bard_track_1.mp3". Same
++   *  "missing file just does nothing" convention background-music.mp3
++   *  already established in music.ts; a track can be listed here and
++   *  selectable in Settings well before its actual mp3 is dropped in. */
++  path: string;
++  /** License/attribution line, shown next to the track name in Settings
++   *  when non-empty -- open-license audio commonly requires this. */
++  credit: string;
++}
++
++/**
++ * Bard tracks live in json/bard-tracks.json so they can be edited via
++ * tools/devtool without touching TypeScript -- same pattern
++ * materials.ts/consumables.ts already use for their own data. List order
++ * is the unlock order: Music Hall facility level N unlocks
++ * BARD_TRACKS[N - 1] (see GuildManager/MusicManager for the read side).
++ */
++import bardTracksJson from './json/bard-tracks.json';
++export const BARD_TRACKS: BardTrack[] = bardTracksJson as BardTrack[];
++
++export const BARD_TRACK_BY_ID: Record<string, BardTrack> = Object.fromEntries(
++  BARD_TRACKS.map((t) => [t.id, t]),
++);
+diff --git a/src/game/data/json/bard-tracks.json b/src/game/data/json/bard-tracks.json
+new file mode 100644
+index 0000000..e1a5d7b
+--- /dev/null
++++ b/src/game/data/json/bard-tracks.json
+@@ -0,0 +1,44 @@
++[
++  {
++    "id": "bard_track_1",
++    "name": "Track 1",
++    "path": "bard/bard_track_1.mp3",
++    "credit": ""
++  },
++  {
++    "id": "bard_track_2",
++    "name": "Track 2",
++    "path": "bard/bard_track_2.mp3",
++    "credit": ""
++  },
++  {
++    "id": "bard_track_3",
++    "name": "Track 3",
++    "path": "bard/bard_track_3.mp3",
++    "credit": ""
++  },
++  {
++    "id": "bard_track_4",
++    "name": "Track 4",
++    "path": "bard/bard_track_4.mp3",
++    "credit": ""
++  },
++  {
++    "id": "bard_track_5",
++    "name": "Track 5",
++    "path": "bard/bard_track_5.mp3",
++    "credit": ""
++  },
++  {
++    "id": "bard_track_6",
++    "name": "Track 6",
++    "path": "bard/bard_track_6.mp3",
++    "credit": ""
++  },
++  {
++    "id": "bard_track_7",
++    "name": "Track 7",
++    "path": "bard/bard_track_7.mp3",
++    "credit": ""
++  }
++]
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index f3db891..dd8cdaf 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -2684,6 +2684,34 @@
+     "min": 1,
+     "description": "Hours until a Fallen pet is automatically revived for free, once Kennel has reached its max level. Below max level there is no free auto-revive at all."
+   },
++  {
++    "id": "guild_facility.music_hall.baseCost",
++    "label": "Music Hall: base cost",
++    "category": "guild_facilities",
++    "value": 500,
++    "default": 500,
++    "min": 0,
++    "description": "First-pass number, cheaper than the stat-effect facilities on purpose -- this is a pure cosmetic gold sink, not something gating real power."
++  },
++  {
++    "id": "guild_facility.music_hall.costGrowth",
++    "label": "Music Hall: cost growth",
++    "category": "guild_facilities",
++    "value": 1.6,
++    "default": 1.6,
++    "min": 1,
++    "max": 5,
++    "description": "Gentler than the 1.8-1.85 most facilities use -- 7 levels at a steep growth rate would front-load the whole repertoire's cost onto the first couple of purchases."
++  },
++  {
++    "id": "guild_facility.music_hall.maxLevel",
++    "label": "Music Hall: max level",
++    "category": "guild_facilities",
++    "value": 7,
++    "default": 7,
++    "min": 1,
++    "description": "One level per licensed track currently available (BARD_TRACKS in music.ts). Raise this alongside adding a new track entry if more are added later."
++  },
+   {
+     "id": "upgrade.companion_vitality.baseCost",
+     "label": "Companion Vitality: base cost",
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index eae76ad..2019b0f 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -388,6 +388,20 @@ export const GUILD_FACILITIES: GuildDef[] = [
+     modsPerLevel: {},
+     healTimeReductionMinutesPerLevel: Tuning.get('guild_facility.kennel.healTimeReductionMinutesPerLevel'),
+   },
++  {
++    id: 'music_hall', name: 'Music Hall',
++    description: 'Hire a bard to keep the guild hall from sitting in silence. '
++      + 'Every level buys one more song for the repertoire.',
++    baseCost: Tuning.get('guild_facility.music_hall.baseCost'),
++    costGrowth: Tuning.get('guild_facility.music_hall.costGrowth'),
++    maxLevel: Tuning.get('guild_facility.music_hall.maxLevel'),
++    // Same reasoning as Infirmary/Kennel -- "unlocks a track" isn't a flat
++    // Modifiers bonus, so this is a pure gold sink with no combat/economy
++    // effect at all, deliberately: it exists for the player's ears, not
++    // their stats.
++    modsPerLevel: {},
++    tracksPerLevel: 1,
++  },
+ ];
+ 
+ export const GUILD_BY_ID: Record<string, GuildDef> = Object.fromEntries(GUILD_FACILITIES.map((g) => [g.id, g]));
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 7241c34..418bdca 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -54,7 +54,7 @@ export function defaultAdapter(): SaveAdapter {
+ }
+ 
+ const EMPTY_GUILD: Record<GuildFacility, number> = {
+-  barracks: 0, treasury: 0, workshop: 0, library: 0, tavern: 0, infirmary: 0, kennel: 0,
++  barracks: 0, treasury: 0, workshop: 0, library: 0, tavern: 0, infirmary: 0, kennel: 0, music_hall: 0,
+ };
+ 
+ export function createInitialState(now = Date.now()): GameState {
+diff --git a/src/game/music.ts b/src/game/music.ts
+index b974d5a..c0f857d 100644
+--- a/src/game/music.ts
++++ b/src/game/music.ts
+@@ -1,18 +1,22 @@
+ /**
+- * Background music -- one looping ambient track behind the guild menu.
++ * Background music -- an ambient track behind the guild menu, plus
++ * (since the Music Hall guild facility) a small pool of purchasable
++ * tracks the player can pick between or shuffle across.
+  *
+  * Deliberately separate from sound.ts's synthesized SFX cues (those exist
+  * specifically to avoid ever shipping a real audio file -- see that
+  * file's own top comment). This is the opposite trade-off on purpose: a
+  * real track the player supplies themselves, dropped in at the path
+  * below. Same "missing file just does nothing" convention as every
+- * gitignored sprite pack in this game -- no file at MUSIC_SRC means
++ * gitignored sprite pack in this game -- no file at a track's path means
+  * playback silently never starts, not an error.
+  *
+- * DROP YOUR TRACK HERE: public/audio/background-music.mp3
+- * (mp3 or ogg both work in Electron/Chromium -- if your file is a
+- * different format, either convert it or change MUSIC_SRC below to
+- * match its extension.)
++ * DROP YOUR TRACKS HERE:
++ *   public/audio/background-music.mp3       (the always-free default)
++ *   public/audio/bard/<id>.mp3               (one per BARD_TRACKS entry)
++ * (mp3 or ogg both work in Electron/Chromium -- if a file is a different
++ * format, either convert it or change its `path` in bard-tracks.json via
++ * the DevTool.)
+  *
+  * One HTMLAudioElement for the app's whole lifetime (created lazily, on
+  * first use) rather than one per mount -- MenuWindow itself mounts and
+@@ -22,25 +26,83 @@
+  */
+ 
+ import { Settings, SettingsStore } from './settings';
++import { BARD_TRACKS, BARD_TRACK_BY_ID } from './data/bard';
++import { DAY } from './util';
+ 
+-const MUSIC_SRC = './audio/background-music.mp3';
++const DEFAULT_TRACK_SRC = './audio/background-music.mp3';
+ const FADE_IN_MS = 3000;
+ const FADE_OUT_MS = 700;
+ 
+ let el: HTMLAudioElement | null = null;
+ let fadeHandle: number | null = null;
++/** The src the element is actually currently playing/paused on, tracked
++ *  separately from `el.src` itself -- reading `audio.src` back gives a
++ *  browser-resolved absolute URL, not the relative path this was set
++ *  with, so comparing against that directly would always look "changed"
++ *  even when nothing was. */
++let currentSrc: string | null = null;
+ 
+-function getElement(): HTMLAudioElement | null {
++/**
++ * Tracks unlocked at a given Music Hall level, in unlock order -- level 0
++ * unlocks nothing extra (the default track is always available
++ * regardless), level N unlocks BARD_TRACKS[0..N-1].
++ */
++function unlockedTracks(musicHallLevel: number) {
++  return BARD_TRACKS.slice(0, Math.max(0, musicHallLevel));
++}
++
++/**
++ * Resolves a Settings.selectedBardTrack choice down to an actual audio
++ * src, given how many Music Hall levels are currently bought. Exported
++ * standalone (not just used internally) so it can be unit-tested without
++ * spinning up a real <audio> element.
++ */
++export function resolveTrackSrc(selection: string, musicHallLevel: number, now: number): string {
++  const unlocked = unlockedTracks(musicHallLevel);
++  if (selection === 'shuffle') {
++    // The default track always counts as one option in the shuffle pool,
++    // so a fresh guild with zero Music Hall levels still gets *some*
++    // rotation-flavoured behaviour (trivially, always the default)
++    // rather than shuffle silently doing nothing until the first
++    // purchase. Deterministic per real-world day (same UTC-epoch-day
++    // bucketing every other window-based system in this game already
++    // uses, e.g. reroll.ts's rerollDay), so it doesn't jump mid-session.
++    const pool = ['default', ...unlocked.map((t) => t.id)];
++    const pick = pool[Math.floor(now / DAY) % pool.length];
++    return pick === 'default' ? DEFAULT_TRACK_SRC : `./audio/${BARD_TRACK_BY_ID[pick].path}`;
++  }
++  if (selection !== 'default') {
++    // Falls back to the default track below if this id isn't currently
++    // unlocked -- covers both "never unlocked" and the unusual case of a
++    // save somehow pointing at a track index past the guild's current
++    // Music Hall level (e.g. a save imported onto a build with fewer
++    // Music Hall levels than the one it was made on).
++    const track = unlocked.find((t) => t.id === selection);
++    if (track) return `./audio/${track.path}`;
++  }
++  return DEFAULT_TRACK_SRC;
++}
++
++function getElement(src: string): HTMLAudioElement | null {
+   if (typeof window === 'undefined' || typeof Audio === 'undefined') return null;
+-  if (!el) {
+-    const audio = new Audio(MUSIC_SRC);
++  if (!el || currentSrc !== src) {
++    // Switching tracks mid-session (a live Settings change, not just
++    // first load) tears down the old element and starts the new one
++    // silent -- the caller (enterGuildMenu/applySettingsChange) always
++    // follows this with its own paused-check-then-play plus fadeTo, so
++    // starting at 0 here just means that fade-in looks the same whether
++    // this is the very first track played or a switch mid-session,
++    // rather than needing two different code paths for the two cases.
++    if (el) el.pause();
++    const audio = new Audio(src);
+     audio.loop = true;
+     audio.volume = 0;
+     // No file dropped in yet (or a bad path) -- fail silently, same as a
+     // missing sprite sheet elsewhere in this game, rather than spamming
+     // the console on every launch.
+-    audio.addEventListener('error', () => { el = null; }, { once: true });
++    audio.addEventListener('error', () => { if (el === audio) el = null; }, { once: true });
+     el = audio;
++    currentSrc = src;
+   }
+   return el;
+ }
+@@ -52,9 +114,7 @@ function cancelFade(): void {
+   }
+ }
+ 
+-function fadeTo(target: number, durationMs: number, onDone?: () => void): void {
+-  const audio = getElement();
+-  if (!audio) return;
++function fadeTo(audio: HTMLAudioElement, target: number, durationMs: number, onDone?: () => void): void {
+   cancelFade();
+   const start = audio.volume;
+   const startTime = performance.now();
+@@ -78,16 +138,20 @@ function fadeTo(target: number, durationMs: number, onDone?: () => void): void {
+ 
+ export const MusicManager = {
+   /**
+-   * Call when the guild menu opens. Starts the track (if it isn't
+-   * already playing) and fades up to the settings volume over
+-   * FADE_IN_MS -- silent at app launch and in the idle companion view by
+-   * design, this is ambience for the guild menu specifically, not
+-   * something playing the instant the app starts.
++   * Call when the guild menu opens. Starts the currently-selected track
++   * (if it isn't already playing) and fades up to the settings volume
++   * over FADE_IN_MS -- silent at app launch and in the idle companion
++   * view by design, this is ambience for the guild menu specifically,
++   * not something playing the instant the app starts. `musicHallLevel`
++   * comes from the caller's own GameState (GuildManager.facilityLevel
++   * (state, 'music_hall')) -- this module has no notion of game state on
++   * its own, same as it already had none of app view state.
+    */
+-  enterGuildMenu(): void {
++  enterGuildMenu(musicHallLevel: number): void {
+     const settings = SettingsStore.load();
+     if (!settings.musicEnabled || settings.musicVolume <= 0) return;
+-    const audio = getElement();
++    const src = resolveTrackSrc(settings.selectedBardTrack, musicHallLevel, Date.now());
++    const audio = getElement(src);
+     if (!audio) return;
+     if (audio.paused) {
+       // A fresh AudioContext-style play() call can be rejected before any
+@@ -97,7 +161,7 @@ export const MusicManager = {
+       // cleanly on its own.
+       void audio.play().catch(() => {});
+     }
+-    fadeTo(settings.musicVolume, FADE_IN_MS);
++    fadeTo(audio, settings.musicVolume, FADE_IN_MS);
+   },
+ 
+   /**
+@@ -108,26 +172,27 @@ export const MusicManager = {
+   leaveGuildMenu(): void {
+     const settings = SettingsStore.load();
+     if (settings.musicContinuesWhenMinimized) return;
+-    const audio = getElement();
+-    if (!audio || audio.paused) return;
+-    fadeTo(0, FADE_OUT_MS, () => { audio?.pause(); });
++    if (!el || el.paused) return;
++    const audio = el;
++    fadeTo(audio, 0, FADE_OUT_MS, () => { audio.pause(); });
+   },
+ 
+   /**
+    * Re-applies a live settings change (the Settings panel's toggle/
+-   * slider) without waiting for the next menu open/close. `guildMenuOpen`
+-   * is passed in rather than read from anywhere here, since this module
+-   * has no notion of app view state on its own.
++   * slider/track picker) without waiting for the next menu open/close.
++   * `guildMenuOpen` is passed in rather than read from anywhere here,
++   * same as `musicHallLevel` -- this module tracks none of it itself.
+    */
+-  applySettingsChange(settings: Settings, guildMenuOpen: boolean): void {
+-    const audio = getElement();
+-    if (!audio) return;
++  applySettingsChange(settings: Settings, guildMenuOpen: boolean, musicHallLevel: number): void {
+     if (!settings.musicEnabled || settings.musicVolume <= 0) {
+-      fadeTo(0, 200, () => audio.pause());
++      if (el && !el.paused) fadeTo(el, 0, 200, () => el?.pause());
+       return;
+     }
+     if (!guildMenuOpen && !settings.musicContinuesWhenMinimized) return;
++    const src = resolveTrackSrc(settings.selectedBardTrack, musicHallLevel, Date.now());
++    const audio = getElement(src);
++    if (!audio) return;
+     if (audio.paused) void audio.play().catch(() => {});
+-    fadeTo(settings.musicVolume, 200);
++    fadeTo(audio, settings.musicVolume, 200);
+   },
+ };
+diff --git a/src/game/settings.ts b/src/game/settings.ts
+index 5c8fc40..766a684 100644
+--- a/src/game/settings.ts
++++ b/src/game/settings.ts
+@@ -113,6 +113,19 @@ export interface Settings {
+    *  cuts the music immediately. Turning this on leaves it playing
+    *  uninterrupted instead. */
+   musicContinuesWhenMinimized: boolean;
++  /**
++   * Which track actually plays -- 'default' (the always-free ambient
++   * track, same one that's always played until now), 'shuffle' (a new
++   * pick once per real day, see music.ts's resolveTrackSrc), or a
++   * specific BardTrack id unlocked via the Music Hall guild facility.
++   * Purely a playback preference (which of the player's already-unlocked
++   * tracks is currently selected), not save-relevant progress -- lives
++   * here alongside musicEnabled/musicVolume rather than in GameState,
++   * same reasoning that section's own subtitle already draws. Falls back
++   * to 'default' automatically if it ever points at a track the guild
++   * doesn't actually have unlocked (see resolveTrackSrc).
++   */
++  selectedBardTrack: string;
+ }
+ 
+ export const DEFAULT_SETTINGS: Settings = {
+@@ -138,6 +151,7 @@ export const DEFAULT_SETTINGS: Settings = {
+   musicEnabled: true,
+   musicVolume: 0.18,
+   musicContinuesWhenMinimized: false,
++  selectedBardTrack: 'default',
+ };
+ 
+ /* --------------------------------- themes --------------------------------- */
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 6eefc72..e927c06 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -839,7 +839,7 @@ export interface UpgradeDef {
+   freezeChangesPerLevel?: number;
+ }
+ 
+-export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern' | 'infirmary' | 'kennel';
++export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern' | 'infirmary' | 'kennel' | 'music_hall';
+ 
+ export interface GuildDef {
+   id: GuildFacility;
+@@ -863,6 +863,15 @@ export interface GuildDef {
+    * reaching this facility's max level.
+    */
+   healTimeReductionMinutesPerLevel?: number;
++  /**
++   * Music Hall's structural effect -- same "not a flat Modifiers bonus"
++   * reasoning as storagePerLevel/heroSlotsPerLevel/
++   * healTimeReductionMinutesPerLevel above. Each level unlocks exactly
++   * one more track from BARD_TRACKS (see music.ts) in list order; the
++   * always-free default ambient track isn't counted here at all, so
++   * level 0 already has one track playing before a single gold is spent.
++   */
++  tracksPerLevel?: number;
+ }
+ 
+ export interface RenownPerkTier2 {
+diff --git a/src/ui/panels/GuildPanel.tsx b/src/ui/panels/GuildPanel.tsx
+index 7c97d6f..a36694c 100644
+--- a/src/ui/panels/GuildPanel.tsx
++++ b/src/ui/panels/GuildPanel.tsx
+@@ -111,6 +111,7 @@ export function GuildPanel() {
+                 {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
+                 {def.storagePerLevel && <span>+{formatGold(def.storagePerLevel)} storage per level</span>}
+                 {def.heroSlotsPerLevel && <span className="gold-text">+1 hero slot per level</span>}
++                {def.tracksPerLevel && <span className="gold-text">+1 song per level</span>}
+               </div>
+               <button
+                 className="btn-yellow"
+diff --git a/src/ui/panels/SettingsPanel.tsx b/src/ui/panels/SettingsPanel.tsx
+index 93e4554..7d0f2b4 100644
+--- a/src/ui/panels/SettingsPanel.tsx
++++ b/src/ui/panels/SettingsPanel.tsx
+@@ -1,9 +1,12 @@
+ import type { ReactNode } from 'react';
++import { useEngine } from '../useEngine';
+ import { useSettings } from '../useSettings';
+ import { HeroSprite } from '../sprites/HeroSprite';
+ import { PetSprite } from '../sprites/PetSprite';
+ import { Settings, THEMES } from '../../game/settings';
+ import { previewSound } from '../../game/sound';
++import { BARD_TRACKS } from '../../game/data/bard';
++import { GuildManager } from '../../game/managers/GuildManager';
+ 
+ /* ------------------------------ small controls ---------------------------- */
+ 
+@@ -58,8 +61,11 @@ export function Toggle({ value, onChange, disabled }: { value: boolean; onChange
+ /* --------------------------------- panel ---------------------------------- */
+ 
+ export function SettingsPanel() {
++  const engine = useEngine();
+   const { settings, update, reset } = useSettings();
+   const set = <K extends keyof Settings>(key: K) => (value: Settings[K]) => update(key, value);
++  const musicHallLevel = GuildManager.facilityLevel(engine.state, 'music_hall');
++  const unlockedTracks = BARD_TRACKS.slice(0, musicHallLevel);
+ 
+   return (
+     <>
+@@ -230,6 +236,31 @@ export function SettingsPanel() {
+         />
+       </Row>
+ 
++      {/* Only shown once the Music Hall guild facility (Guild Hall tab)
++          has unlocked at least one track -- before that, "Guild Theme" is
++          the only option there is, so a picker with nothing to pick
++          between would just be clutter. */}
++      {unlockedTracks.length > 0 && (
++        <Row
++          label="Track"
++          hint={
++            settings.selectedBardTrack === 'shuffle'
++              ? 'A different unlocked track plays each day.'
++              : 'Pick a specific track, or let the guild bard rotate through everything you\u2019ve unlocked.'
++          }
++        >
++          <select
++            value={settings.selectedBardTrack}
++            disabled={!settings.musicEnabled}
++            onChange={(e) => update('selectedBardTrack', e.target.value)}
++          >
++            <option value="default">Guild Theme</option>
++            {unlockedTracks.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
++            <option value="shuffle">Shuffle (daily)</option>
++          </select>
++        </Row>
++      )}
++
+       <div className="section-heading">Quality of life</div>
+ 
+       <Row label="Offline summary on launch" hint="Show what happened while the app was closed.">
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index b9e323b..5256151 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -513,6 +513,23 @@ const SCHEMAS = {
+       description: { type: 'string', required: true },
+     },
+   },
++  'bard-tracks': {
++    file: 'bard-tracks.json',
++    label: 'Bard Tracks',
++    idField: 'id',
++    // Music Hall (guild facility, progression.ts) unlocks these in list
++    // order, one per level -- see BardTrack's own comment in bard.ts.
++    // `path` is relative to public/audio/ and follows the same
++    // "missing file just does nothing" convention background-music.mp3
++    // already established in music.ts -- an entry can exist and be
++    // selectable in Settings well before its mp3 actually lands on disk.
++    fields: {
++      id: { type: 'string', required: true, slug: true },
++      name: { type: 'string', required: true },
++      path: { type: 'string', required: true },
++      credit: { type: 'string', required: false },
++    },
++  },
+   'achievements': {
+     file: 'achievements.json',
+     label: 'Achievements',

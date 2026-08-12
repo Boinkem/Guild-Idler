@@ -54,7 +54,7 @@ export function defaultAdapter(): SaveAdapter {
 }
 
 const EMPTY_GUILD: Record<GuildFacility, number> = {
-  barracks: 0, treasury: 0, workshop: 0, library: 0, tavern: 0, infirmary: 0, kennel: 0,
+  barracks: 0, treasury: 0, workshop: 0, library: 0, tavern: 0, infirmary: 0, kennel: 0, music_hall: 0,
 };
 
 export function createInitialState(now = Date.now()): GameState {

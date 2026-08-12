@@ -2685,6 +2685,34 @@
     "description": "Hours until a Fallen pet is automatically revived for free, once Kennel has reached its max level. Below max level there is no free auto-revive at all."
   },
   {
+    "id": "guild_facility.music_hall.baseCost",
+    "label": "Music Hall: base cost",
+    "category": "guild_facilities",
+    "value": 500,
+    "default": 500,
+    "min": 0,
+    "description": "First-pass number, cheaper than the stat-effect facilities on purpose -- this is a pure cosmetic gold sink, not something gating real power."
+  },
+  {
+    "id": "guild_facility.music_hall.costGrowth",
+    "label": "Music Hall: cost growth",
+    "category": "guild_facilities",
+    "value": 1.6,
+    "default": 1.6,
+    "min": 1,
+    "max": 5,
+    "description": "Gentler than the 1.8-1.85 most facilities use -- 7 levels at a steep growth rate would front-load the whole repertoire's cost onto the first couple of purchases."
+  },
+  {
+    "id": "guild_facility.music_hall.maxLevel",
+    "label": "Music Hall: max level",
+    "category": "guild_facilities",
+    "value": 7,
+    "default": 7,
+    "min": 1,
+    "description": "One level per licensed track currently available (BARD_TRACKS in music.ts). Raise this alongside adding a new track entry if more are added later."
+  },
+  {
     "id": "upgrade.companion_vitality.baseCost",
     "label": "Companion Vitality: base cost",
     "category": "vendor_upgrades",

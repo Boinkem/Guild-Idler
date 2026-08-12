@@ -37,9 +37,15 @@ function loadAppIcon() {
   return img.isEmpty() ? undefined : img;
 }
 
-/** Window sizes. The idle companion is tiny; the menu needs room. */
+/** Window sizes. The idle companion is tiny; the menu needs room.
+ *  MENU_SIZE bumped from 900x620 to 1350x930 (1.5x) per direct request --
+ *  the old default read as cramped even though the window's always been
+ *  freely resizable; this is just a better starting point, not a new
+ *  cap. Still clamped against the display's actual work area at open
+ *  time (see window:setMode below), so this is safe on any screen size
+ *  regardless of how big MENU_SIZE itself gets. */
 const IDLE_SIZE = { width: 260, height: 300 };
-const MENU_SIZE = { width: 900, height: 620 };
+const MENU_SIZE = { width: 1350, height: 930 };
 /** The menu is now user-resizable -- this is a floor, not a cap, so the
  *  panel layout (nav column + content) never gets squeezed into something
  *  unusable. No maximum beyond whatever the display itself allows. */

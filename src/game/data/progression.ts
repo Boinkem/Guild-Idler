@@ -388,6 +388,20 @@ export const GUILD_FACILITIES: GuildDef[] = [
     modsPerLevel: {},
     healTimeReductionMinutesPerLevel: Tuning.get('guild_facility.kennel.healTimeReductionMinutesPerLevel'),
   },
+  {
+    id: 'music_hall', name: 'Music Hall',
+    description: 'Hire a bard to keep the guild hall from sitting in silence. '
+      + 'Every level buys one more song for the repertoire.',
+    baseCost: Tuning.get('guild_facility.music_hall.baseCost'),
+    costGrowth: Tuning.get('guild_facility.music_hall.costGrowth'),
+    maxLevel: Tuning.get('guild_facility.music_hall.maxLevel'),
+    // Same reasoning as Infirmary/Kennel -- "unlocks a track" isn't a flat
+    // Modifiers bonus, so this is a pure gold sink with no combat/economy
+    // effect at all, deliberately: it exists for the player's ears, not
+    // their stats.
+    modsPerLevel: {},
+    tracksPerLevel: 1,
+  },
 ];
 
 export const GUILD_BY_ID: Record<string, GuildDef> = Object.fromEntries(GUILD_FACILITIES.map((g) => [g.id, g]));

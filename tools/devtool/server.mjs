@@ -513,6 +513,23 @@ const SCHEMAS = {
       description: { type: 'string', required: true },
     },
   },
+  'bard-tracks': {
+    file: 'bard-tracks.json',
+    label: 'Bard Tracks',
+    idField: 'id',
+    // Music Hall (guild facility, progression.ts) unlocks these in list
+    // order, one per level -- see BardTrack's own comment in bard.ts.
+    // `path` is relative to public/audio/ and follows the same
+    // "missing file just does nothing" convention background-music.mp3
+    // already established in music.ts -- an entry can exist and be
+    // selectable in Settings well before its mp3 actually lands on disk.
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      name: { type: 'string', required: true },
+      path: { type: 'string', required: true },
+      credit: { type: 'string', required: false },
+    },
+  },
   'achievements': {
     file: 'achievements.json',
     label: 'Achievements',
