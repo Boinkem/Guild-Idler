@@ -1,0 +1,118 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 93173c2..8e3c618 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -344,6 +344,61 @@ raid fight).
+ 
+ ## Backlog
+ 
++### Art & content to-do list (added this round)
++Five items flagged directly, none of them code work yet -- recorded here
++so they're tracked rather than lost, same treatment the idle-animation
++and fox-run reports above already got:
++- **Quest chain art** -- to do.
++- **Raid art** -- to do.
++- **Items linked to correct icons** -- to do. (Given `EquipmentDef.icon`
++  already exists and falls back to a per-slot placeholder glyph when
++  unset -- see that field's own comment in `types.ts` -- this likely
++  means going through `equipment.json` via the DevTool's icon picker and
++  actually assigning real icons to whatever's still sitting on the
++  fallback, rather than a missing feature. Worth confirming that's the
++  actual shape of the work before starting, in case something broader is
++  meant.)
++- **Review recolours/skins -- update Infernal and Holy, or add gilded
++  versions with halos and other FX** -- to do, direction still open
++  (update the two existing recolour skins vs. add new "gilded" variants
++  alongside them isn't decided yet).
++
++### High Roller -- a Grimsby feature, scoped but not built
++A second, bigger card game sitting alongside Grimsby's existing one,
++unlocked as an upgrade on his own page. Concrete shape as described:
++- **Unlocked via an upgrade on Grimsby's main panel** -- shows once
++  bought that "you've got the goods," i.e. a purchased, persistent
++  unlock rather than a one-off toggle. Likely the same `UpgradeDef`
++  shape every other vendor upgrade already uses (`baseCost`/
++  `costGrowth`/`maxLevel`, tuning-registry-driven), though a single-
++  purchase unlock (`maxLevel: 1`) rather than a scaling per-level bonus
++  -- closer to `master_adventurer`'s shape (gates the Legendary card
++  pool) than to a stacking upgrade like Weapons Training.
++- **A secondary card game**, separate from the existing Lay-Out-The-
++  Cards flow, not a modifier on it.
++- **3x the cost, 3x the reward** -- both the entry fee and the payout
++  scaled up together from the existing game's numbers.
++
++**Open questions before implementation starts** (same "scope first,
++build second" treatment Guild Area got above, given this is a new game
++mode rather than a numbers tweak):
++- Does "3x reward" mean literally the same `PeddlerCardDef` outcome pool
++  with every value tripled, or a separate curated pool with its own
++  entries (so High Roller can have its own flavor text/rarer jackpot
++  tier, not just "the same cards but bigger numbers")? The former is a
++  much smaller change (multiply at resolution time); the latter needs
++  real new content authored per outcome.
++- Same three-card-pick shape as today, or does "bigger stakes" call for
++  a different format (more cards, a different reveal, higher variance)?
++  Nothing in the request implies a new format is wanted -- defaulting to
++  "same mechanic, bigger numbers" unless told otherwise.
++- Where does the upgrade live exactly -- alongside Grimsby's existing
++  fee-to-play button, or does buying it change what the main "Pick Your
++  Card" button itself offers (e.g. a toggle/second button once owned)?
++- Any cooldown/frequency limit on High Roller specifically, independent
++  of the regular game's own cadence, or does it share the same
++  availability window?
++
+ ### Injury resist headroom fix + gold/XP cost-curve tuning
+ Direct follow-up to the quest-success rebalance and the fuller
+ gold/XP/loot/injury-resist review above -- talked through as two
+@@ -5050,6 +5105,12 @@ pass (same caveat as the two entries above).
+   bar the first batch set.
+ 
+ ### Platform / distribution
++- **To do: create the actual Steamworks partner account and register an
++  App ID.** This is the one action item on this whole list that isn't
++  code or waiting on anyone else -- everything below is either already
++  built and just waiting on that App ID to exist, or is partner-backend
++  configuration that literally can't be started before it does. Doing
++  this unblocks the "Consolidated" list below all at once.
+ - **App/taskbar icon -- wiring done (patch 0120), waiting on real art.**
+   Nothing had ever set an icon anywhere: `electron/main.ts`'s
+   `BrowserWindow` had no `icon` option, `package.json`'s `build` block had
+@@ -5216,23 +5277,23 @@ pass (same caveat as the two entries above).
+   worth packaging even looks like. The technical groundwork for this is
+   now built, ahead of any actual pack -- see "DLC groundwork -- built"
+   in the main patch log above.
+-- **Adventurer's idle animation has a weapon-out frame mixed into it** --
+-  the 4 core reference frames (adventurer-idle-00 through 03, 50x37px
+-  each) sent over previously have now been compiled into a single
+-  200x37px horizontal strip (`tools/assemble_strips.py`, unmodified) and
+-  delivered as `idle.png`. All four frames confirmed on review to show
+-  the calm, weapon-sheathed idle pose with no flourish, matching the
+-  earlier reference-frame review. Still needs a manual step outside this
+-  patch: binary art can't travel through a code patch regardless of
+-  format, so `idle.png` needs to be dropped into
+-  `public/heroes/adventurer/<skin>/idle.png` locally (once per skin, or
+-  regenerate via the recolour step for the other four) and
+-  `tools/import_characters.py` re-run to refresh `manifest.json`. The
++- **Adventurer's idle animation has a weapon-out frame mixed into it --
++  in progress, being applied locally now.** The 4 core reference frames
++  (adventurer-idle-00 through 03, 50x37px each) sent over previously
++  have been compiled into a single 200x37px horizontal strip
++  (`tools/assemble_strips.py`, unmodified) and delivered as `idle.png`.
++  All four frames confirmed on review to show the calm, weapon-sheathed
++  idle pose with no flourish, matching the earlier reference-frame
++  review. No further code work needed on this end -- the remaining step
++  is local and manual (binary art can't travel through a code patch):
++  drop `idle.png` into `public/heroes/adventurer/<skin>/idle.png` (once
++  per skin, or regenerate via the recolour step for the other four) and
++  re-run `tools/import_characters.py` to refresh `manifest.json`. The
+   earlier-mentioned `-2-01`/`-2-02` merge pair (an occasional extra
+   gesture blended into the loop) was not part of this batch -- only the
+-  plain 4-frame idle was sent, so that merge is still outstanding if it's
+-  still wanted; re-run `assemble_strips.py --merge "idle,idle-2=idle"`
+-  once those two extra frames are available.
++  plain 4-frame idle was sent, so that merge is still outstanding if
++  it's still wanted; re-run `assemble_strips.py --merge
++  "idle,idle-2=idle"` once those two extra frames are available.
+ 
+ ### Big feedback batch: audio, shop UX, gear score overrides, and several small polish items
+ Wide-ranging playtest round covering audio feedback, buying UX, item
