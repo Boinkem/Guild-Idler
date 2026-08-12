@@ -1015,6 +1015,27 @@ button:focus-visible, [tabindex]:focus-visible {
     transform: translate(calc(-50% + var(--fly-dx)), calc(-50% + var(--fly-dy))) scale(0.35);
   }
 }
+/* Grimsby's card-game reward flourish (PeddlerCardModal.tsx) -- a small
+   colored glow, rarity/gold-tinted via --glow-color, that reads as a coin
+   or a gem on its own. Built specifically so a real icon can be dropped
+   into `PeddlerCardDef.icon` later without any CSS changes: the glow
+   stays exactly as-is either way, the icon just sits on top of it once
+   one exists (see RewardGlowParticle's own comment). */
+.reward-glow-particle {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--glow-color);
+  box-shadow: 0 0 10px 3px var(--glow-color);
+}
+.reward-glow-particle img {
+  width: 70%;
+  height: 70%;
+  object-fit: contain;
+}
 /* The counter/bar a fly-particle above lands on -- pulses gold the moment
    the flight actually arrives (timed in JS to the flight's own duration),
    so the flash reads as "arrived" rather than firing on an unrelated

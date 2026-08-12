@@ -52,6 +52,28 @@ const PORT = 5175;
 // broken build. Every write is checked against these before it touches disk.
 
 const SCHEMAS = {
+  'tombstone-styles': {
+    file: 'tombstone-styles.json',
+    label: 'Tombstone Styles',
+    idField: 'id',
+    // Cosmetic gold-sink list for a Fallen hero's marker (see
+    // guild-idler-status.md's Health-related gold sinks entry) -- moved
+    // out of a hardcoded array in progression.ts specifically so a new
+    // style, or an icon swap on an existing one, doesn't need a code
+    // patch. `icon` is a plain filename under public/hero-status/, not
+    // the shared item-icons `picker: 'icon'` (that picker/preview is
+    // hardcoded to ICONS_DIR below, a different folder) -- type it by
+    // hand for now; a dedicated picker rooted at public/hero-status/
+    // (same shape bannerImage already has for public/lore/) would be a
+    // reasonable follow-up if that folder ever grows past a handful of
+    // files, but isn't needed yet for four entries.
+    fields: {
+      name: { type: 'string', required: true },
+      description: { type: 'string', required: true },
+      cost: { type: 'number', required: true, min: 0 },
+      icon: { type: 'string', required: true },
+    },
+  },
   'quest-templates': {
     file: 'quest-templates.json',
     label: 'Quest Templates',

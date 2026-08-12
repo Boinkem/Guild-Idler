@@ -363,6 +363,81 @@ and fox-run reports above already got:
   (update the two existing recolour skins vs. add new "gilded" variants
   alongside them isn't decided yet).
 
+### High Roller: notification bug fix + a reward-burst fly system + tombstone DevTool support
+Three-part follow-up: a real one-line bug from High Roller's own launch,
+a new visual flourish for Grimsby's card game, and a genuinely
+unrelated DevTool gap (tombstones) surfaced while looking at "icon
+replacement" more broadly. `npx tsc --noEmit` and `npm run build:web`
+both verified clean against a fresh clone; DevTool server syntax
+checked with `node --check`; no live playtest (no dev environment).
+
+**Bug: High Roller's unlock notification opened Vendors, not
+Grimsby.** Copy-paste error in `unlockHighRoller()` -- `this.say(...,
+'vendors')` instead of `'peddler'` (the actual tab id, confirmed
+against `MenuWindow.tsx`'s own tab list). One-line fix.
+
+**New: reward-burst fly particles for Grimsby's card game.** Any
+positive reward from the picked card now visibly flies off toward
+where it landed, the same fly-to-counter shape Harvest/Scrap/quest
+rewards already use (`flyTarget.ts`'s shared registry) -- previously
+the reward only ever appeared as text in the result summary, with
+nothing visually leaving the card.
+- **Registered a new `'inventory'` fly-target** on the Equipment nav tab
+  in `MenuWindow.tsx` (already labeled "Inventory" in the UI) alongside
+  the existing `'gold'` header target `QuestResultModal`/
+  `RaidResultModal` already fly to. Gold-shaped outcomes
+  (`goldFlat`/`goldRefund`) fly to `'gold'`; material/equipment/egg fly
+  to `'inventory'`; `nothing`/`joke` get no burst at all, nothing to
+  celebrate.
+- **Particle count keyed to the outcome's own tier**, not a raw gold/
+  material amount -- bust/refund get 1, modest 2, good 3, jackpot 5.
+  Those two units genuinely aren't comparable (a flat gold amount vs. a
+  refund percentage vs. a material count aren't on the same scale to
+  begin with), while tier is already a normalized 1-5 "how big a deal is
+  this" signal every outcome already carries -- reads as "more flourish
+  for a better pull," which is what "more depending on the amount" was
+  really asking for. Flagging the substitution explicitly in case a
+  literal amount-based count is wanted instead.
+- **Color**: brass for gold (matching every other gold flourish in the
+  game), real `RARITY_COLOR` for equipment/egg (both carry an actual
+  `Rarity`), a neutral moss tone for material/scrap (no rarity concept
+  exists for those -- "colored on its rarity" only cleanly applies to
+  the two kinds that actually have one).
+- **Built icon-ready from the start, per direct request.** `
+  RewardGlowParticle` (new, `PeddlerCardModal.tsx`) is a colored
+  circular glow ALWAYS present, with an optional icon centered on top if
+  one's set -- never a glow-or-icon either/or. Reads
+  `PeddlerCardDef.icon`, the exact same field `PeddlerOutcomeIcon`
+  already displays on the revealed card face -- assigning an icon to a
+  card lights up both places at once, not a second field to keep in
+  sync. No icon set (today's actual state for every existing card) ->
+  just the glow circle, never a broken-image placeholder.
+- **Not done, deliberately out of scope for this pass:** no
+  arrival-flash on the `'gold'`/`'inventory'` targets themselves (the
+  counter-flash-on-landing treatment `ScrapStation`'s original flight
+  has) -- that needs its own plumbing to signal "a flight just landed"
+  back up to `MenuWindow`, which felt like a separate, smaller follow-up
+  rather than something to fold into this same patch silently.
+
+**DevTool: tombstone/gravestone styles, previously not editable at
+all.** Surfaced while scoping "icon replacement" broadly --
+`TOMBSTONE_STYLES` in `progression.ts` was a hardcoded TS array with no
+JSON file and no schema entry, unlike every other content type in this
+game. Moved to a new `tombstone-styles.json` (byte-identical values to
+the old array) with a matching DevTool schema. **One real constraint
+found, not glossed over**: the DevTool's icon picker/thumbnail preview
+is hardcoded to `public/item-icons/` (`ICONS_DIR` in `server.mjs`);
+tombstones live in `public/hero-status/`, a different folder the picker
+doesn't know about. Rather than build a second full picker (the
+`bannerImage` field type is the actual precedent for "a picker rooted
+at a different folder," used for chain/raid banner art under
+`public/lore/`), `icon` on this schema is a plain text field for now --
+you can still retype/replace the filename directly, just without a
+thumbnail. A dedicated `public/hero-status/`-rooted picker (mirroring
+`bannerImage`) would be a reasonable follow-up if that folder ever
+grows past its current 4 files, but felt like overbuilding for that
+count today.
+
 ### High Roller -- built
 Follow-up to the scoping pass -- all three open questions resolved
 directly: same `PeddlerCardDef` pool tripled at resolution time (no new

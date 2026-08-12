@@ -778,28 +778,13 @@ export interface TombstoneStyleDef {
   icon: string;
 }
 
-export const TOMBSTONE_STYLES: TombstoneStyleDef[] = [
-  {
-    id: 'plain', name: 'Plain Marker',
-    description: 'The one you already have. Always owned.',
-    cost: 0, icon: 'tombstone.png',
-  },
-  {
-    id: 'mossy', name: 'Mossy Marker',
-    description: 'Reclaimed by moss and time, like something the ground decided to keep.',
-    cost: 400, icon: 'tombstone-mossy.png',
-  },
-  {
-    id: 'ornate', name: 'Ornate Monument',
-    description: 'A grander marker than most heroes get. Premature, but appreciated.',
-    cost: 1200, icon: 'tombstone-ornate.png',
-  },
-  {
-    id: 'cursed', name: 'Cursed Headstone',
-    description: 'Something about it makes people not want to look at it directly.',
-    cost: 3000, icon: 'tombstone-cursed.png',
-  },
-];
+// Lives in json/tombstone-styles.json, same devtool-editable-content-file
+// convention peddler-cards.json/equipment.json/etc. already use -- moved
+// out of a hardcoded array specifically so new styles (or icon swaps on
+// existing ones) don't need a code patch. See server.mjs's own
+// 'tombstone-styles' schema entry.
+import tombstoneStylesJson from './json/tombstone-styles.json';
+export const TOMBSTONE_STYLES: TombstoneStyleDef[] = tombstoneStylesJson as TombstoneStyleDef[];
 
 export const TOMBSTONE_STYLE_BY_ID: Record<string, TombstoneStyleDef> = Object.fromEntries(
   TOMBSTONE_STYLES.map((s) => [s.id, s]),

@@ -1987,7 +1987,7 @@ export class GameEngine {
     if (!PeddlerManager.canUnlockHighRoller(this.state)) return this.say('Not enough gold.');
     PeddlerManager.unlockHighRoller(this.state);
     playSound('purchase');
-    this.say('Grimsby raises an eyebrow. \u201cOh, you\u2019ve got the goods now, do you?\u201d', 'vendors');
+    this.say('Grimsby raises an eyebrow. \u201cOh, you\u2019ve got the goods now, do you?\u201d', 'peddler');
     void this.saveNow();
   }
 

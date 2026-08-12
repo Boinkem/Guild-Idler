@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, CSSProperties } from 'react';
 import { useEngine } from './useEngine';
 import { PeddlerCardDef, PeddlerCardTier } from '../game/types';
 import { MATERIAL_BY_ID } from '../game/data/materials';
@@ -7,6 +7,7 @@ import { RARITY_COLOR } from '../game/util';
 import { GrimsbySprite } from './sprites/GrimsbySprite';
 import { ItemIcon, MaterialIcon, ConsumableIcon } from './icons';
 import { EggIcon } from './EggIcon';
+import { measureFlyOffset } from './flyTarget';
 
 /**
  * Random one-liners Grimsby fires off the moment the cards spawn --
@@ -42,6 +43,90 @@ const TIER_LABEL: Record<PeddlerCardTier, string> = {
  *  card-fading-out in app.css) and the setTimeout that gates the summary,
  *  so they can never drift out of sync with each other. */
 const UNPICKED_FADE_MS = 480;
+
+/** How many little glow particles fly off for a given outcome -- keyed
+ *  to the outcome's own tier rather than a raw gold/material amount,
+ *  since those two aren't on a comparable scale to begin with (a flat
+ *  gold amount vs. a refund percentage vs. a material count) but tier
+ *  is already a normalized 1-5 "how big a deal is this" signal every
+ *  outcome already carries. Reads as "more flourish for a better pull,"
+ *  which is what "more depending on the amount" is really getting at. */
+const BURST_PARTICLE_COUNT: Record<PeddlerCardTier, number> = {
+  bust: 1, refund: 1, modest: 2, good: 3, jackpot: 5,
+};
+
+/** Which shared fly-target (see flyTarget.ts) this outcome's reward
+ *  particles head toward, or null for kinds with nothing to fly at all
+ *  (nothing/joke). Gold-shaped kinds fly to the header's own 'gold'
+ *  display (same target QuestResultModal/RaidResultModal already use);
+ *  everything else flies to the Equipment tab (registered as
+ *  'inventory' in MenuWindow.tsx), matching "fly into the inventory"
+ *  directly. */
+function burstTargetFor(kind: PeddlerCardDef['kind']): string | null {
+  switch (kind) {
+    case 'goldFlat':
+    case 'goldRefund':
+      return 'gold';
+    case 'material':
+    case 'scrap':
+    case 'equipment':
+    case 'egg':
+      return 'inventory';
+    default:
+      return null;
+  }
+}
+
+/** Glow color per outcome -- rarity for the two kinds that actually
+ *  have one (equipment/egg both carry a real Rarity), brass for gold
+ *  (matching every other gold flourish in the game), a neutral moss
+ *  tone for material/scrap (no rarity concept to hang a color on). */
+function burstColorFor(outcome: PeddlerCardDef): string {
+  switch (outcome.kind) {
+    case 'goldFlat':
+    case 'goldRefund':
+      return 'var(--brass)';
+    case 'equipment': {
+      const def = outcome.itemId ? EQUIPMENT_BY_ID[outcome.itemId] : undefined;
+      return def ? RARITY_COLOR[def.rarity] : 'var(--brass)';
+    }
+    case 'egg':
+      return RARITY_COLOR[outcome.eggRarity ?? 'common'];
+    default:
+      return 'var(--moss)';
+  }
+}
+
+/**
+ * One flying reward particle -- a colored circular glow (always
+ * present) with an optional icon centered inside it. Deliberately built
+ * so the glow works standalone (today: gold/material/scrap/egg all have
+ * no per-outcome icon set yet) AND continues working once real icons
+ * are assigned via the DevTool later -- `outcome.icon` is the exact
+ * same field PeddlerOutcomeIcon already reads for the revealed card
+ * face, so assigning one there lights up both places at once, not just
+ * this burst. No icon set -> just the glow circle, never a broken-image
+ * placeholder.
+ */
+function RewardGlowParticle({
+  color, icon, x, y, dx, dy, delay, durationMs,
+}: {
+  color: string; icon?: string; x: number; y: number; dx: number; dy: number; delay: number; durationMs: number;
+}) {
+  return (
+    <span
+      className="fly-particle reward-glow-particle"
+      aria-hidden="true"
+      style={{
+        position: 'fixed', left: x, top: y,
+        '--fly-dx': `${dx}px`, '--fly-dy': `${dy}px`, '--glow-color': color,
+        animationDuration: `${durationMs}ms`, animationDelay: `${delay}ms`,
+      } as CSSProperties}
+    >
+      {icon && <img src={`./item-icons/${icon}`} alt="" />}
+    </span>
+  );
+}
 
 function outcomeDisplayName(outcome: PeddlerCardDef): string {
   switch (outcome.kind) {
@@ -198,6 +283,17 @@ export function PeddlerCardModal({ highRoller = false, onClose }: { highRoller?:
   // wrongly skip the second one.
   const [waveDone, setWaveDone] = useState(false);
   const [approvalDone, setApprovalDone] = useState(false);
+  // The picked card's own reward -- gold/material/equipment/egg -- flies
+  // off toward the header gold display or the Equipment ("Inventory")
+  // nav tab once the reveal settles, same fly-to-counter shape Harvest/
+  // Scrap/quest rewards already use (see flyTarget.ts). Computed once
+  // (guarded by the `!burstParticles` check below) rather than on every
+  // render, since measuring/generating it twice would just restart the
+  // same flight from scratch.
+  const burstOriginRef = useRef<HTMLDivElement>(null);
+  const [burstParticles, setBurstParticles] = useState<{
+    x: number; y: number; dx: number; dy: number; color: string; icon?: string; delay: number;
+  }[] | null>(null);
 
   const result = engine.lastGrimsbyResult;
 
@@ -209,6 +305,22 @@ export function PeddlerCardModal({ highRoller = false, onClose }: { highRoller?:
     }
     return undefined;
   }, [result, revealStage]);
+
+  useEffect(() => {
+    if (revealStage !== 'settled' || !result || burstParticles || !burstOriginRef.current) return;
+    const outcome = result.cards[result.pickedIndex].outcome;
+    const targetKey = burstTargetFor(outcome.kind);
+    if (!targetKey) return; // nothing/joke -- nothing to fly, on purpose
+    const offset = measureFlyOffset(burstOriginRef.current, targetKey);
+    if (!offset) return; // target not currently mounted -- skip gracefully, same as every other flight in this game
+    const rect = burstOriginRef.current.getBoundingClientRect();
+    const origin = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    const color = burstColorFor(outcome);
+    const count = BURST_PARTICLE_COUNT[outcome.tier];
+    setBurstParticles(Array.from({ length: count }, (_, i) => ({
+      ...origin, dx: offset.dx, dy: offset.dy, color, icon: outcome.icon, delay: i * 90,
+    })));
+  }, [revealStage, result, burstParticles]);
 
   const handlePick = (index: number) => {
     setShowCards(true); // already true by the time this is reachable, kept for clarity
@@ -272,7 +384,7 @@ export function PeddlerCardModal({ highRoller = false, onClose }: { highRoller?:
 
           {result && (
             <>
-              <div className="peddler-card-row">
+              <div className="peddler-card-row" ref={burstOriginRef}>
                 {result.cards.map((c, i) => {
                   const isPicked = i === result.pickedIndex;
                   if (!isPicked && revealStage === 'settled') return null;
@@ -306,6 +418,14 @@ export function PeddlerCardModal({ highRoller = false, onClose }: { highRoller?:
                   <p><b>You got:</b> {result.rewardSummary}</p>
                 </div>
               )}
+              {burstParticles && burstParticles.map((p, i) => (
+                <RewardGlowParticle
+                  key={i}
+                  x={p.x} y={p.y} dx={p.dx} dy={p.dy}
+                  color={p.color} icon={p.icon} delay={p.delay}
+                  durationMs={700}
+                />
+              ))}
               {detailOpen && pickedCard && (
                 <PeddlerCardDetailOverlay outcome={pickedCard.outcome} onClose={() => setDetailOpen(false)} />
               )}

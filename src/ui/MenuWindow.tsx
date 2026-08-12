@@ -7,7 +7,7 @@ import { formatGold, formatNumber } from '../game/util';
 import { attentionCounts } from '../game/attention';
 import { PeddlerManager } from '../game/managers/PeddlerManager';
 import { useCountUp } from './useCountUp';
-import { useFlyTargetRef } from './flyTarget';
+import { useFlyTargetRef, registerFlyTarget } from './flyTarget';
 import { QuestPanel } from './panels/QuestPanel';
 import { HeroesPanel } from './panels/HeroesPanel';
 import { EquipmentPanel } from './panels/EquipmentPanel';
@@ -242,6 +242,13 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
                     aria-current={t.id === tab}
                     onClick={() => setTab(t.id)}
                     title={t.tooltip}
+                    // The Equipment tab (labeled "Inventory") doubles as the
+                    // shared 'inventory' fly-target -- anywhere a
+                    // material/equipment/egg reward flies toward "the
+                    // inventory" (see Grimsby's own reward-burst) lands
+                    // here, same registry gold already uses for its own
+                    // header target just below in this same nav.
+                    ref={t.id === 'equipment' ? (el) => registerFlyTarget('inventory', el) : undefined}
                   >
                     {t.label}
                     {t.id === 'quests' && idleHeroes > 0 ? <span className="tab-badge">{idleHeroes}</span> : null}
