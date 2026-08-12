@@ -1,0 +1,321 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 7e3704b..3e81103 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -5923,3 +5923,87 @@ only moved numbers in the upgrade/baseSuccess layer, exactly as scoped.
+ 
+ These are first-pass numbers, not treated as final -- flagged as open
+ to iteration once there's been a chance to actually play against them.
++
++### Low-level quest-mix guarantee + set bonuses surfaced in Inventory -- complete
++Three direct player reports, discussed together since two of them turned
++out to be the same underlying gap wearing different clothes.
++
++**1. Low-level heroes running out of good quests.** Confirmed as a
++generation-order problem, not a missing feature -- the medium/burst
++system (see "Medium-length quests" and "Burst/medium reward review"
++above) already exists, but a low-level hero is capped to Easy/Normal
++tiers only (`reqLevel <= hero.level + 2`), exactly where burst/medium
++roll heaviest (Easy: 45% burst + ~19% medium of the remainder), and each
++hero's own contract pool is small at low level (Quest Tab hero-log
++rework). A run of bad RNG could plausibly fill a small pool with nothing
++but short offers and zero genuine full-length ones.
++
++Fixed the same way the existing "no second pair of hands" burst
++guarantee already works: `QuestManager.generateOffer` gained a
++`forceStandard` flag (mirrors `forceBurst`, skips both the burst and
++medium rolls entirely so duration always lands in the tier's real
++range), and `generateContractsForHero` now checks the generated pool for
++at least one offer whose `duration` falls in its own difficulty's real
++`minDuration..maxDuration` span -- "standard" is detected this way
++rather than via a new field on `QuestOffer`, since burst/medium's own
++ranges never reach that far for any tier (Easy's medium tops out at
++40min, well under its own 1hr floor). If none is found, one is forced
++into the second-to-last slot, deliberately never the last slot so it can
++never collide with the existing burst guarantee there. No changes to
++`balance.ts` or any reward math -- this only touches which duration mode
++gets rolled, not what a given mode pays.
++
++Verified at runtime, not just typechecked: 18,000 sampled hero-windows
++across levels 1-6 (the range actually capped to Easy/Normal) -- 0 missing
++a real standard-length offer, 0 missing a real burst offer, pool size
++stayed exactly `BOARD_SIZE` (6) every single sample.
++
++**Discussed, deliberately not built here:** a Guild Hall toggle to prefer
++mixed/burst/standard contract types. Good idea, but a materially bigger
++feature (new UI, per-hero-or-global setting, interaction with the
++existing reroll system) than what this report actually needed --
++logged as a future "Contract Preference" idea rather than bundled in.
++
++**2 & 3. Item sets buried in Lore + no in-context visibility.** Set
++`Collection` (the full browsable/discovery list) stays on the Lore tab
++on purpose -- that move was deliberate (completionist/story framing,
++same category as Story Quests/Raids) and isn't reverted. What was
++actually missing was *contextual* visibility while managing gear, so
++instead of moving the list back wholesale:
++
++- **Item tooltips now show set info.** New `setInfoFor(hero, setId)`
++  helper in `EquipmentPanel.tsx` (same counting rule
++  `HeroManager.equipmentMods`/`activeSetBonuses` already use -- only
++  equipped items above 0 durability count) computes a set's name,
++  pieces-equipped count, every currently-active bonus, and the next
++  threshold. Wired into both `SlotCard`'s modal (an equipped piece --
++  "Active: ...") and `StashCard`'s modal (an unequipped piece -- same
++  info framed as a preview, "Equip this to count toward the set").
++- **Equipped pieces contributing to an active bonus now glow.** New
++  `.item-card.set-active` CSS (teal outline + soft box-shadow) on the
++  collapsed `SlotCard` whenever `setInfoFor(...).active.length > 0`.
++  Deliberately a new `--teal` CSS variable rather than reusing `--brass`
++  -- confirmed `--brass` (`#d9a441`) is the exact same hex as
++  `RARITY_COLOR.legendary`, so a "gold" set-glow would have been
++  genuinely indistinguishable from "this happens to be a legendary
++  item" at a glance. No existing accent colour was free either (`--sky`/
++  `--violet`/`--moss` all double as rare/epic/uncommon's own rarity
++  colour) -- `--teal` has no rarity-tier meaning anywhere else in the
++  palette, so it reads as its own signal.
++- **New "Active Set Bonuses" summary card** at the top of the Inventory
++  panel, per hero -- reuses `HeroManager.activeSetBonuses` directly
++  (already existed, already powered a line in `HeroesPanel`'s expanded
++  hero card; this is the same data surfaced a second place, not a new
++  calculation). Hidden entirely when a hero has no active set bonus,
++  same "don't show an empty state that isn't useful" convention used
++  elsewhere in this panel.
++
++Verified at runtime, not just typechecked: built a hero with 2 then 3
++pieces of the real `dragon_slayer` set equipped and confirmed
++`setInfoFor`'s count/active/next output matches
++`HeroManager.activeSetBonuses` exactly at both the 2-piece (`Scaled
++Guard`) and 3-piece (`Wyrmbane`) thresholds, `next` correctly clears
++once the top tier is reached, and a piece dropped to 0 durability
++correctly stops counting toward the set (matches `equipmentMods`'s own
++`durability <= 0` skip). `npx tsc --noEmit` and `vite build` both pass
++clean.
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 694edbd..98f075a 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -93,6 +93,28 @@ export const QuestManager = {
+     if (!offers.some((o) => o.difficulty === 'easy' && o.duration <= 5 * MINUTE)) {
+       offers[offers.length - 1] = QuestManager.generateOffer('easy', rng, `q:${window}:${hero.id}:${salt}:guaranteed`, hero.level, true, legendaryUnlocked);
+     }
++
++    // Mirror guarantee for the other end of the spread: a heavy run of
++    // burst/medium rolls (both explicitly generous per-offer, see quests.ts)
++    // could otherwise fill a small low-level pool with nothing but short
++    // contracts, leaving a hero with no genuine full-length quest to send on
++    // at all -- a real reported gap, not hypothetical, since a fresh
++    // hero's pool is small and Easy/Normal (the only tiers a low-level hero
++    // is eligible for) are exactly where burst/medium are heaviest. "Standard"
++    // here means an offer whose duration falls in its own difficulty's real
++    // minDuration..maxDuration range -- burst/medium's own ranges never reach
++    // that far (Easy's medium tops out at 40min, well under its own 1hr
++    // floor), so checking against the offer's own difficulty is enough to
++    // tell the modes apart without a dedicated field on QuestOffer. Targets
++    // the second-to-last slot so it can never collide with the burst
++    // guarantee above, which always owns the last slot.
++    if (!offers.some((o) => o.duration >= DIFFICULTIES[o.difficulty].minDuration)) {
++      const difficulty = rng.weighted(available.map((d) => ({ item: d, weight: DIFFICULTIES[d].weight })));
++      const targetIndex = offers.length > 1 ? offers.length - 2 : 0;
++      offers[targetIndex] = QuestManager.generateOffer(
++        difficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-standard`, hero.level, false, legendaryUnlocked, true,
++      );
++    }
+     return offers;
+   },
+ 
+@@ -251,7 +273,7 @@ export const QuestManager = {
+ 
+   generateOffer(
+     difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number,
+-    forceBurst = false, legendaryUnlocked = false,
++    forceBurst = false, legendaryUnlocked = false, forceStandard = false,
+   ): QuestOffer {
+     const cfg = DIFFICULTIES[difficulty];
+     const tierIndex = DIFFICULTY_ORDER.indexOf(difficulty);
+@@ -273,8 +295,12 @@ export const QuestManager = {
+     // but reads as insulting rather than the "numbers going up" feeling
+     // this is supposed to deliver. Burst is checked first, medium only gets
+     // a chance if burst didn't hit, so an offer is never both at once.
+-    const useBurst = forceBurst || (cfg.burstChance !== undefined && rng.chance(cfg.burstChance));
+-    const useMedium = !useBurst && cfg.mediumChance !== undefined && rng.chance(cfg.mediumChance);
++    // forceStandard is the mirror image of forceBurst below -- used by
++    // generateContractsForHero's own "don't run dry on real quests" guarantee
++    // to force a genuine full-length offer regardless of what the burst/
++    // medium rolls would have produced.
++    const useBurst = !forceStandard && (forceBurst || (cfg.burstChance !== undefined && rng.chance(cfg.burstChance)));
++    const useMedium = !forceStandard && !useBurst && cfg.mediumChance !== undefined && rng.chance(cfg.mediumChance);
+     const durMin = useBurst ? cfg.burstMinDuration! : useMedium ? cfg.mediumMinDuration! : cfg.minDuration;
+     const durMax = useBurst ? cfg.burstMaxDuration! : useMedium ? cfg.mediumMaxDuration! : cfg.maxDuration;
+     const duration = rng.int(durMin, durMax);
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 5e6243b..ddce31d 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -19,6 +19,13 @@
+   --blood: #a33a3a;
+   --sky: #5b8fd6;
+   --violet: #a874d6;
++  /* Deliberately NOT reused from RARITY_COLOR / any existing accent (brass
++     doubles as legendary's own colour, sky as rare's, violet as epic's,
++     moss as uncommon's) -- an active-set-bonus glow needs to read as its
++     own signal, not get mistaken for "this happens to be a legendary
++     item" at a glance. Teal has no rarity-tier meaning anywhere else in
++     the palette. */
++  --teal: #3fc1b0;
+ 
+   --font-display: 'Silkscreen', 'Press Start 2P', 'Courier New', ui-monospace, monospace;
+   --font-body: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+@@ -73,6 +80,22 @@
+   cursor: pointer;
+ }
+ .item-card:not(.empty):hover { border-color: var(--brass); }
++/* An equipped piece contributing to at least one currently-active set
++   bonus -- a soft teal outer glow, distinct from the rarity-colour name
++   text/pill already on the same card so the two signals don't compete.
++   Deliberately lighter than a hover border, since this needs to read as
++   "always on" ambient state rather than an interaction affordance. */
++.item-card.set-active {
++  border-color: var(--teal);
++  box-shadow: 0 0 0 1px var(--teal), 0 0 9px color-mix(in srgb, var(--teal) 60%, transparent);
++}
++.item-card.set-active:not(.empty):hover { border-color: var(--teal); }
++.set-info {
++  margin-top: 4px;
++  padding: 6px 8px;
++  border: 1px solid color-mix(in srgb, var(--teal) 45%, var(--panel-3));
++  background: color-mix(in srgb, var(--teal) 10%, transparent);
++}
+ .item-card.empty .item-card-summary { cursor: default; }
+ /* An empty slot that's actually clickable (currently just the consumable
+    slot -- click to equip, unlike an empty gear slot which is a pure
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 0b7c6c4..4b4a482 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -5,7 +5,7 @@ import { GameEngine } from '../../game/engine';
+ import { EquipmentManager } from '../../game/managers/EquipmentManager';
+ import { HeroManager } from '../../game/managers/HeroManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+-import { EQUIPMENT_BY_ID, EQUIP_SLOTS } from '../../game/data/equipment';
++import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID } from '../../game/data/equipment';
+ import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { describeMods, describeStats, formatGold, RARITY_COLOR, RARITY_ORDER } from '../../game/util';
+@@ -54,6 +54,51 @@ function DurabilityBar({ item, compact = false }: { item: EquipmentItem; compact
+   );
+ }
+ 
++/**
++ * Set membership + progress for one item's setId, computed against a
++ * specific hero's current loadout. Reused by both SlotCard (an equipped
++ * piece -- "active" reflects the hero's real current mods, same counting
++ * rule as HeroManager.equipmentMods/activeSetBonuses: only equipped items
++ * above 0 durability count) and StashCard (an unequipped piece -- shown as
++ * progress toward, not a claim of, an active bonus).
++ */
++function setInfoFor(hero: Hero, setId: string) {
++  const set = SET_BY_ID[setId];
++  if (!set) return null;
++  let count = 0;
++  for (const equipped of Object.values(hero.equipment)) {
++    if (!equipped || equipped.durability <= 0) continue;
++    if (EQUIPMENT_BY_ID[equipped.defId]?.setId === setId) count++;
++  }
++  const active = set.bonuses.filter((b) => count >= b.count);
++  const next = set.bonuses.find((b) => count < b.count);
++  return { set, count, active, next };
++}
++
++/** Set info block shown inside an item's expanded tooltip/modal -- teal
++ *  throughout, matching the same glow SlotCard's collapsed card gets when
++ *  a set bonus is actually active (see .set-active / .set-info in
++ *  app.css). `equipped` only changes the wording, not the underlying
++ *  count -- an unequipped stash piece never contributes to `count` either
++ *  way, since setInfoFor only counts what's actually worn. */
++function SetInfoBlock({ hero, setId, equipped }: { hero: Hero; setId: string; equipped: boolean }) {
++  const info = setInfoFor(hero, setId);
++  if (!info) return null;
++  const { set, count, active, next } = info;
++  return (
++    <div className="set-info tiny">
++      <div style={{ color: 'var(--teal)' }}>
++        {set.name} — {count}/{set.pieces.length} equipped on {hero.name}
++      </div>
++      {active.length > 0 && (
++        <div>Active: {active.map((b) => `${b.label} (${b.count})`).join(' · ')}</div>
++      )}
++      {next && <div className="muted">Next at {next.count} pieces: {next.label}</div>}
++      {!equipped && <div className="muted">Equip this to count toward the set.</div>}
++    </div>
++  );
++}
++
+ /**
+  * Same clickable-detail treatment SlotCard/StashCard already use for gear --
+  * a consumable in the stash used to just be a static chip with a title
+@@ -197,10 +242,16 @@ function SlotCard({
+     );
+   }
+ 
++  // Only meaningful once equipped -- an unworn piece can't have an active
++  // bonus regardless of its own setId, so this stays undefined for a
++  // durability-0 (broken) item too, same rule equipmentMods itself uses.
++  const setInfo = def.setId && item.durability > 0 ? setInfoFor(hero, def.setId) : null;
++  const hasActiveSetBonus = (setInfo?.active.length ?? 0) > 0;
++
+   return (
+     <>
+       <div
+-        className="item-card"
++        className={`item-card ${hasActiveSetBonus ? 'set-active' : ''}`}
+         onClick={() => setOpen(true)}
+         role="button"
+         tabIndex={0}
+@@ -237,6 +288,9 @@ function SlotCard({
+             {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
+               <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
+             )}
++            {def.setId && (
++              <SetInfoBlock hero={hero} setId={def.setId} equipped={item.durability > 0} />
++            )}
+             <div className="tiny muted" style={{ marginTop: 4 }}>
+               {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+             </div>
+@@ -310,6 +364,9 @@ function StashCard({
+             {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
+               <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
+             )}
++            {def.setId && (
++              <SetInfoBlock hero={hero} setId={def.setId} equipped={false} />
++            )}
+             <div className="tiny muted" style={{ marginTop: 4 }}>
+               {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+             </div>
+@@ -448,6 +505,27 @@ export function EquipmentPanel() {
+         </button>
+       </div>
+ 
++      {/* Per-hero summary of currently-active set bonuses -- lets someone
++          managing gear see this without leaving Inventory for the Lore tab's
++          Collection sub-tab (that stays the full browsable codex of every
++          discovered set; this is just "what's actually active on this hero
++          right now", reusing HeroManager.activeSetBonuses, which HeroesPanel
++          already relies on for its own expanded-card line). */}
++      {(() => {
++        const activeSets = HeroManager.activeSetBonuses(hero);
++        if (activeSets.length === 0) return null;
++        return (
++          <div className="card set-info" style={{ marginBottom: 10 }}>
++            <div className="section-heading" style={{ marginBottom: 4, color: 'var(--teal)' }}>
++              Active Set Bonuses
++            </div>
++            {activeSets.map((s) => (
++              <div key={`${s.setName}:${s.label}`} className="tiny">{s.setName}: {s.label}</div>
++            ))}
++          </div>
++        );
++      })()}
++
+       <div className="item-card-grid">
+         {SLOTS.map((slot) => (
+           <SlotCard key={slot} slot={slot} item={hero.equipment[slot]} workshop={workshop} hero={hero} engine={engine} />

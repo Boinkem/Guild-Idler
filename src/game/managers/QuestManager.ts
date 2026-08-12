@@ -93,6 +93,28 @@ export const QuestManager = {
     if (!offers.some((o) => o.difficulty === 'easy' && o.duration <= 5 * MINUTE)) {
       offers[offers.length - 1] = QuestManager.generateOffer('easy', rng, `q:${window}:${hero.id}:${salt}:guaranteed`, hero.level, true, legendaryUnlocked);
     }
+
+    // Mirror guarantee for the other end of the spread: a heavy run of
+    // burst/medium rolls (both explicitly generous per-offer, see quests.ts)
+    // could otherwise fill a small low-level pool with nothing but short
+    // contracts, leaving a hero with no genuine full-length quest to send on
+    // at all -- a real reported gap, not hypothetical, since a fresh
+    // hero's pool is small and Easy/Normal (the only tiers a low-level hero
+    // is eligible for) are exactly where burst/medium are heaviest. "Standard"
+    // here means an offer whose duration falls in its own difficulty's real
+    // minDuration..maxDuration range -- burst/medium's own ranges never reach
+    // that far (Easy's medium tops out at 40min, well under its own 1hr
+    // floor), so checking against the offer's own difficulty is enough to
+    // tell the modes apart without a dedicated field on QuestOffer. Targets
+    // the second-to-last slot so it can never collide with the burst
+    // guarantee above, which always owns the last slot.
+    if (!offers.some((o) => o.duration >= DIFFICULTIES[o.difficulty].minDuration)) {
+      const difficulty = rng.weighted(available.map((d) => ({ item: d, weight: DIFFICULTIES[d].weight })));
+      const targetIndex = offers.length > 1 ? offers.length - 2 : 0;
+      offers[targetIndex] = QuestManager.generateOffer(
+        difficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-standard`, hero.level, false, legendaryUnlocked, true,
+      );
+    }
     return offers;
   },
 
@@ -251,7 +273,7 @@ export const QuestManager = {
 
   generateOffer(
     difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number,
-    forceBurst = false, legendaryUnlocked = false,
+    forceBurst = false, legendaryUnlocked = false, forceStandard = false,
   ): QuestOffer {
     const cfg = DIFFICULTIES[difficulty];
     const tierIndex = DIFFICULTY_ORDER.indexOf(difficulty);
@@ -273,8 +295,12 @@ export const QuestManager = {
     // but reads as insulting rather than the "numbers going up" feeling
     // this is supposed to deliver. Burst is checked first, medium only gets
     // a chance if burst didn't hit, so an offer is never both at once.
-    const useBurst = forceBurst || (cfg.burstChance !== undefined && rng.chance(cfg.burstChance));
-    const useMedium = !useBurst && cfg.mediumChance !== undefined && rng.chance(cfg.mediumChance);
+    // forceStandard is the mirror image of forceBurst below -- used by
+    // generateContractsForHero's own "don't run dry on real quests" guarantee
+    // to force a genuine full-length offer regardless of what the burst/
+    // medium rolls would have produced.
+    const useBurst = !forceStandard && (forceBurst || (cfg.burstChance !== undefined && rng.chance(cfg.burstChance)));
+    const useMedium = !forceStandard && !useBurst && cfg.mediumChance !== undefined && rng.chance(cfg.mediumChance);
     const durMin = useBurst ? cfg.burstMinDuration! : useMedium ? cfg.mediumMinDuration! : cfg.minDuration;
     const durMax = useBurst ? cfg.burstMaxDuration! : useMedium ? cfg.mediumMaxDuration! : cfg.maxDuration;
     const duration = rng.int(durMin, durMax);

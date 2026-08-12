@@ -5,7 +5,7 @@ import { GameEngine } from '../../game/engine';
 import { EquipmentManager } from '../../game/managers/EquipmentManager';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
-import { EQUIPMENT_BY_ID, EQUIP_SLOTS } from '../../game/data/equipment';
+import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID } from '../../game/data/equipment';
 import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { describeMods, describeStats, formatGold, RARITY_COLOR, RARITY_ORDER } from '../../game/util';
@@ -51,6 +51,51 @@ function DurabilityBar({ item, compact = false }: { item: EquipmentItem; compact
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Set membership + progress for one item's setId, computed against a
+ * specific hero's current loadout. Reused by both SlotCard (an equipped
+ * piece -- "active" reflects the hero's real current mods, same counting
+ * rule as HeroManager.equipmentMods/activeSetBonuses: only equipped items
+ * above 0 durability count) and StashCard (an unequipped piece -- shown as
+ * progress toward, not a claim of, an active bonus).
+ */
+function setInfoFor(hero: Hero, setId: string) {
+  const set = SET_BY_ID[setId];
+  if (!set) return null;
+  let count = 0;
+  for (const equipped of Object.values(hero.equipment)) {
+    if (!equipped || equipped.durability <= 0) continue;
+    if (EQUIPMENT_BY_ID[equipped.defId]?.setId === setId) count++;
+  }
+  const active = set.bonuses.filter((b) => count >= b.count);
+  const next = set.bonuses.find((b) => count < b.count);
+  return { set, count, active, next };
+}
+
+/** Set info block shown inside an item's expanded tooltip/modal -- teal
+ *  throughout, matching the same glow SlotCard's collapsed card gets when
+ *  a set bonus is actually active (see .set-active / .set-info in
+ *  app.css). `equipped` only changes the wording, not the underlying
+ *  count -- an unequipped stash piece never contributes to `count` either
+ *  way, since setInfoFor only counts what's actually worn. */
+function SetInfoBlock({ hero, setId, equipped }: { hero: Hero; setId: string; equipped: boolean }) {
+  const info = setInfoFor(hero, setId);
+  if (!info) return null;
+  const { set, count, active, next } = info;
+  return (
+    <div className="set-info tiny">
+      <div style={{ color: 'var(--teal)' }}>
+        {set.name} — {count}/{set.pieces.length} equipped on {hero.name}
+      </div>
+      {active.length > 0 && (
+        <div>Active: {active.map((b) => `${b.label} (${b.count})`).join(' · ')}</div>
+      )}
+      {next && <div className="muted">Next at {next.count} pieces: {next.label}</div>}
+      {!equipped && <div className="muted">Equip this to count toward the set.</div>}
+    </div>
   );
 }
 
@@ -197,10 +242,16 @@ function SlotCard({
     );
   }
 
+  // Only meaningful once equipped -- an unworn piece can't have an active
+  // bonus regardless of its own setId, so this stays undefined for a
+  // durability-0 (broken) item too, same rule equipmentMods itself uses.
+  const setInfo = def.setId && item.durability > 0 ? setInfoFor(hero, def.setId) : null;
+  const hasActiveSetBonus = (setInfo?.active.length ?? 0) > 0;
+
   return (
     <>
       <div
-        className="item-card"
+        className={`item-card ${hasActiveSetBonus ? 'set-active' : ''}`}
         onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
@@ -236,6 +287,9 @@ function SlotCard({
             <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
             {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
               <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
+            )}
+            {def.setId && (
+              <SetInfoBlock hero={hero} setId={def.setId} equipped={item.durability > 0} />
             )}
             <div className="tiny muted" style={{ marginTop: 4 }}>
               {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
@@ -309,6 +363,9 @@ function StashCard({
             <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
             {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
               <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
+            )}
+            {def.setId && (
+              <SetInfoBlock hero={hero} setId={def.setId} equipped={false} />
             )}
             <div className="tiny muted" style={{ marginTop: 4 }}>
               {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
@@ -447,6 +504,27 @@ export function EquipmentPanel() {
           Repair everything · {formatGold(repairBill)}
         </button>
       </div>
+
+      {/* Per-hero summary of currently-active set bonuses -- lets someone
+          managing gear see this without leaving Inventory for the Lore tab's
+          Collection sub-tab (that stays the full browsable codex of every
+          discovered set; this is just "what's actually active on this hero
+          right now", reusing HeroManager.activeSetBonuses, which HeroesPanel
+          already relies on for its own expanded-card line). */}
+      {(() => {
+        const activeSets = HeroManager.activeSetBonuses(hero);
+        if (activeSets.length === 0) return null;
+        return (
+          <div className="card set-info" style={{ marginBottom: 10 }}>
+            <div className="section-heading" style={{ marginBottom: 4, color: 'var(--teal)' }}>
+              Active Set Bonuses
+            </div>
+            {activeSets.map((s) => (
+              <div key={`${s.setName}:${s.label}`} className="tiny">{s.setName}: {s.label}</div>
+            ))}
+          </div>
+        );
+      })()}
 
       <div className="item-card-grid">
         {SLOTS.map((slot) => (

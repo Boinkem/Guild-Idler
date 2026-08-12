@@ -5923,3 +5923,87 @@ only moved numbers in the upgrade/baseSuccess layer, exactly as scoped.
 
 These are first-pass numbers, not treated as final -- flagged as open
 to iteration once there's been a chance to actually play against them.
+
+### Low-level quest-mix guarantee + set bonuses surfaced in Inventory -- complete
+Three direct player reports, discussed together since two of them turned
+out to be the same underlying gap wearing different clothes.
+
+**1. Low-level heroes running out of good quests.** Confirmed as a
+generation-order problem, not a missing feature -- the medium/burst
+system (see "Medium-length quests" and "Burst/medium reward review"
+above) already exists, but a low-level hero is capped to Easy/Normal
+tiers only (`reqLevel <= hero.level + 2`), exactly where burst/medium
+roll heaviest (Easy: 45% burst + ~19% medium of the remainder), and each
+hero's own contract pool is small at low level (Quest Tab hero-log
+rework). A run of bad RNG could plausibly fill a small pool with nothing
+but short offers and zero genuine full-length ones.
+
+Fixed the same way the existing "no second pair of hands" burst
+guarantee already works: `QuestManager.generateOffer` gained a
+`forceStandard` flag (mirrors `forceBurst`, skips both the burst and
+medium rolls entirely so duration always lands in the tier's real
+range), and `generateContractsForHero` now checks the generated pool for
+at least one offer whose `duration` falls in its own difficulty's real
+`minDuration..maxDuration` span -- "standard" is detected this way
+rather than via a new field on `QuestOffer`, since burst/medium's own
+ranges never reach that far for any tier (Easy's medium tops out at
+40min, well under its own 1hr floor). If none is found, one is forced
+into the second-to-last slot, deliberately never the last slot so it can
+never collide with the existing burst guarantee there. No changes to
+`balance.ts` or any reward math -- this only touches which duration mode
+gets rolled, not what a given mode pays.
+
+Verified at runtime, not just typechecked: 18,000 sampled hero-windows
+across levels 1-6 (the range actually capped to Easy/Normal) -- 0 missing
+a real standard-length offer, 0 missing a real burst offer, pool size
+stayed exactly `BOARD_SIZE` (6) every single sample.
+
+**Discussed, deliberately not built here:** a Guild Hall toggle to prefer
+mixed/burst/standard contract types. Good idea, but a materially bigger
+feature (new UI, per-hero-or-global setting, interaction with the
+existing reroll system) than what this report actually needed --
+logged as a future "Contract Preference" idea rather than bundled in.
+
+**2 & 3. Item sets buried in Lore + no in-context visibility.** Set
+`Collection` (the full browsable/discovery list) stays on the Lore tab
+on purpose -- that move was deliberate (completionist/story framing,
+same category as Story Quests/Raids) and isn't reverted. What was
+actually missing was *contextual* visibility while managing gear, so
+instead of moving the list back wholesale:
+
+- **Item tooltips now show set info.** New `setInfoFor(hero, setId)`
+  helper in `EquipmentPanel.tsx` (same counting rule
+  `HeroManager.equipmentMods`/`activeSetBonuses` already use -- only
+  equipped items above 0 durability count) computes a set's name,
+  pieces-equipped count, every currently-active bonus, and the next
+  threshold. Wired into both `SlotCard`'s modal (an equipped piece --
+  "Active: ...") and `StashCard`'s modal (an unequipped piece -- same
+  info framed as a preview, "Equip this to count toward the set").
+- **Equipped pieces contributing to an active bonus now glow.** New
+  `.item-card.set-active` CSS (teal outline + soft box-shadow) on the
+  collapsed `SlotCard` whenever `setInfoFor(...).active.length > 0`.
+  Deliberately a new `--teal` CSS variable rather than reusing `--brass`
+  -- confirmed `--brass` (`#d9a441`) is the exact same hex as
+  `RARITY_COLOR.legendary`, so a "gold" set-glow would have been
+  genuinely indistinguishable from "this happens to be a legendary
+  item" at a glance. No existing accent colour was free either (`--sky`/
+  `--violet`/`--moss` all double as rare/epic/uncommon's own rarity
+  colour) -- `--teal` has no rarity-tier meaning anywhere else in the
+  palette, so it reads as its own signal.
+- **New "Active Set Bonuses" summary card** at the top of the Inventory
+  panel, per hero -- reuses `HeroManager.activeSetBonuses` directly
+  (already existed, already powered a line in `HeroesPanel`'s expanded
+  hero card; this is the same data surfaced a second place, not a new
+  calculation). Hidden entirely when a hero has no active set bonus,
+  same "don't show an empty state that isn't useful" convention used
+  elsewhere in this panel.
+
+Verified at runtime, not just typechecked: built a hero with 2 then 3
+pieces of the real `dragon_slayer` set equipped and confirmed
+`setInfoFor`'s count/active/next output matches
+`HeroManager.activeSetBonuses` exactly at both the 2-piece (`Scaled
+Guard`) and 3-piece (`Wyrmbane`) thresholds, `next` correctly clears
+once the top tier is reached, and a piece dropped to 0 durability
+correctly stops counting toward the set (matches `equipmentMods`'s own
+`durability <= 0` skip). `npx tsc --noEmit` and `vite build` both pass
+clean.

@@ -19,6 +19,13 @@
   --blood: #a33a3a;
   --sky: #5b8fd6;
   --violet: #a874d6;
+  /* Deliberately NOT reused from RARITY_COLOR / any existing accent (brass
+     doubles as legendary's own colour, sky as rare's, violet as epic's,
+     moss as uncommon's) -- an active-set-bonus glow needs to read as its
+     own signal, not get mistaken for "this happens to be a legendary
+     item" at a glance. Teal has no rarity-tier meaning anywhere else in
+     the palette. */
+  --teal: #3fc1b0;
 
   --font-display: 'Silkscreen', 'Press Start 2P', 'Courier New', ui-monospace, monospace;
   --font-body: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
@@ -73,6 +80,22 @@
   cursor: pointer;
 }
 .item-card:not(.empty):hover { border-color: var(--brass); }
+/* An equipped piece contributing to at least one currently-active set
+   bonus -- a soft teal outer glow, distinct from the rarity-colour name
+   text/pill already on the same card so the two signals don't compete.
+   Deliberately lighter than a hover border, since this needs to read as
+   "always on" ambient state rather than an interaction affordance. */
+.item-card.set-active {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 1px var(--teal), 0 0 9px color-mix(in srgb, var(--teal) 60%, transparent);
+}
+.item-card.set-active:not(.empty):hover { border-color: var(--teal); }
+.set-info {
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--teal) 45%, var(--panel-3));
+  background: color-mix(in srgb, var(--teal) 10%, transparent);
+}
 .item-card.empty .item-card-summary { cursor: default; }
 /* An empty slot that's actually clickable (currently just the consumable
    slot -- click to equip, unlike an empty gear slot which is a pure
