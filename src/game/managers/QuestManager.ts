@@ -889,7 +889,7 @@ export const QuestManager = {
           state.completedChains.push(chainId);
           state.activeChains = state.activeChains.filter((c) => c.chainId !== chainId);
           state.stats.chainsCompleted += 1;
-          if (chain.title && hero) hero.title = chain.title;
+          if (chain.title && hero) HeroManager.grantTitle(hero, chain.title);
           // The Hatchery's own intro -- see ChainDef.grantsHatchery. Just
           // the unlock+spotlight now; the_last_clutch's actual egg grant
           // goes through the generic rewardEgg path above like any other

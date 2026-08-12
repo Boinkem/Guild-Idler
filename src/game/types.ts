@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 36;
+export const SAVE_VERSION = 37;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -341,8 +341,27 @@ export interface Hero {
    * to base stats.
    */
   bonusStats: Stats;
-  /** Earned by completing certain quest chains. Cleared on retirement. */
-  title?: string;
+  /**
+   * Every title this hero has ever earned -- from completing a quest
+   * chain (ChainDef.title) or fully clearing a raid (RaidDef.title),
+   * append-only, in the order earned. Duplicate grants (re-clearing the
+   * same raid, say) are skipped rather than appended again -- see
+   * HeroManager.grantTitle. Cleared on retirement, same as the old
+   * single-title field always was.
+   */
+  titles: string[];
+  /**
+   * Which entry in `titles` is currently displayed next to this hero's
+   * name -- always a member of `titles` when non-null. `null` means
+   * "show nothing," which is also what a hero with an empty `titles`
+   * array resolves to regardless. Auto-set to the newest title the
+   * moment one's earned (matching the old single-field's "just show
+   * what you got" behavior as the default), but the player can pick any
+   * earlier one instead via the title picker -- see
+   * HeroManager.displayTitle for the read side, EquipmentPanel/
+   * HeroesPanel for the picker UI.
+   */
+  activeTitle: string | null;
   /**
    * Times this specific hero identity has been retired. Persists and grows
    * across retirements (unlike title, which is cleared), and grants a small
@@ -714,6 +733,15 @@ export interface RaidDef {
    * DevTool field.
    */
   successModifier?: number;
+  /**
+   * An epithet granted to every hero in the party on a full clear -- same
+   * Hero.titles/HeroManager.grantTitle mechanism ChainDef.title already
+   * uses, just granted to the whole clearing party at once instead of a
+   * single hero (a raid is a group effort; a quest chain is solo).
+   * Granted at most once per hero per raid regardless of how many times
+   * it's re-cleared -- grantTitle skips a title the hero already holds.
+   */
+  title?: string;
 }
 
 export interface RaidDifficultyConfig {

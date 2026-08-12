@@ -453,6 +453,12 @@ const SCHEMAS = {
       // shape, just defaulting to the raids/ subfolder and the
       // raids/<id>.jpg naming convention RaidBanner already used.
       banner: { type: 'bannerImage', required: false, defaultFolder: 'raids' },
+      // Mirrors quest-chains' own `title` field -- granted to every hero
+      // in the clearing party on a full clear, rather than a single
+      // hero, since a raid is a party effort. See RaidDef.title's own
+      // comment in types.ts and HeroManager.grantTitle for the read/
+      // write side.
+      title: { type: 'string', required: false },
     },
   },
   'crafting-recipes': {

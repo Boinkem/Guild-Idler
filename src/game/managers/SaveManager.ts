@@ -610,6 +610,24 @@ const MIGRATIONS: Record<number, Migration> = {
       },
     };
   },
+  36: (save) => {
+    // Hero.title (single, overwritten by each new chain completion) split
+    // into Hero.titles (full history, append-only) + Hero.activeTitle
+    // (which one displays) -- see HeroManager.grantTitle/displayTitle.
+    // An old save's single title becomes a one-entry history with that
+    // same title active, so nothing about what's currently displayed
+    // changes for anyone migrating through this -- the only new thing is
+    // that a second title earned from here on adds to the list instead
+    // of silently overwriting the first.
+    const heroes = Array.isArray(save.heroes) ? save.heroes as Record<string, unknown>[] : [];
+    for (const h of heroes) {
+      const oldTitle = h.title as string | undefined;
+      h.titles = oldTitle ? [oldTitle] : [];
+      h.activeTitle = oldTitle ?? null;
+      delete h.title;
+    }
+    return { ...save, version: 37, heroes };
+  },
 };
 
 export const SaveManager = {

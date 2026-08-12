@@ -200,7 +200,7 @@ export function HeroesPanel() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="spread">
                   <span className="card-title hero-card-name">
-                    {hero.title && <span className="hero-title">{hero.title}</span>}
+                    {HeroManager.displayTitle(hero) && <span className="hero-title">{HeroManager.displayTitle(hero)}</span>}
                     {hero.name}
                   </span>
                   <span className="small muted">
@@ -249,6 +249,19 @@ export function HeroesPanel() {
                   {showingOnDesktop ? '● Showing on desktop' : 'Show on desktop'}
                 </button>
                 <p className="card-flavour">{classDef.blurb}</p>
+
+                {hero.titles.length > 0 && (
+                  <div className="row" style={{ alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                    <span className="tiny muted">Title</span>
+                    <select
+                      value={hero.activeTitle ?? ''}
+                      onChange={(e) => engine.setActiveTitle(hero.id, e.target.value || null)}
+                    >
+                      <option value="">None</option>
+                      {hero.titles.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                )}
 
                 <div className="small muted" style={{ marginBottom: 3 }}>
                   Experience {hero.xp} / {toNext}

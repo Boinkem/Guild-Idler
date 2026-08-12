@@ -61,12 +61,14 @@ export const PrestigeManager = {
   },
 
   /**
-   * Retiring wipes the hero's level, xp, equipped gear, and title, but keeps
-   * everything the guild owns: upgrades, facilities, discovered items, and
-   * renown perks. Two things persist for this specific hero identity across
-   * the reset: ascension count (and the small permanent stat bonus it
-   * grants), and — guild-wide — the prestige streak, which rewards retiring
-   * again soon rather than letting months pass between retirements.
+   * Retiring wipes the hero's level, xp, equipped gear, and every title
+   * they've earned (titles/activeTitle both reset via HeroManager.create
+   * below), but keeps everything the guild owns: upgrades, facilities,
+   * discovered items, and renown perks. Two things persist for this
+   * specific hero identity across the reset: ascension count (and the
+   * small permanent stat bonus it grants), and — guild-wide — the
+   * prestige streak, which rewards retiring again soon rather than
+   * letting months pass between retirements.
    */
   retire(state: GameState, hero: Hero, rng: Rng, now: number): { renownGained: number; streak: number; ascension: number } | { error: string } {
     if (hero.status === 'questing') return { error: `${hero.name} is out on a quest.` };

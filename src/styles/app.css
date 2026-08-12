@@ -1532,12 +1532,20 @@ input[type='range'] {
 /* --------------------------------- titles ---------------------------------- */
 
 .hero-title {
-  display: block;
   font-size: 0.5625rem;
   color: var(--brass);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: normal;
+  /* Was `display: block`, which forced the title onto its own line above
+     the hero's name inside the same flex row instead of reading as
+     "TITLE Name" on one line -- the actual reason the whole title system
+     looked broken/invisible in practice even though the underlying data
+     (Hero.titles/activeTitle) was always being set correctly. Default
+     inline display plus this margin is the fix -- confirmed the JSX
+     (HeroesPanel.tsx) has no space of its own between the title span and
+     the name text, so the margin is doing that job, not just decoration. */
+  margin-right: 0.35em;
 }
 
 /* ------------------------------ renown tiers ------------------------------ */

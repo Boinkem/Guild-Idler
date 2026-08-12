@@ -245,6 +245,7 @@ function RaidCompletedEntry({ raidId }: { raidId: string }) {
       {open && (
         <div className="hero-card-details">
           <p className="card-flavour">{raid.description}</p>
+          {raid.title && <p className="tiny muted" style={{ margin: '0 0 8px' }}>Grants the title "{raid.title}" to the whole clearing party</p>}
           <ol className="lore-stage-list">
             {raid.encounterIds.map((id) => {
               const enc = RAID_ENCOUNTER_BY_ID[id];

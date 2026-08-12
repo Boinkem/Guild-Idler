@@ -10,7 +10,8 @@
       "blackford_right_hand",
       "blackford_uncrowned"
     ],
-    "unlocksRaidId": "frozen_wyrmkeep"
+    "unlocksRaidId": "frozen_wyrmkeep",
+    "title": "Siegebreaker"
   },
   {
     "id": "bonewrought_vault",
@@ -22,7 +23,8 @@
       "bonewrought_outer_wardens",
       "bonewrought_choir_of_bones",
       "bonewrought_vault_keeper"
-    ]
+    ],
+    "title": "Vault-Breaker"
   },
   {
     "id": "requiem_last_god",
@@ -35,7 +37,8 @@
       "last_god_silence_where_prayer_used_to_work",
       "last_god_what_is_left_of_it"
     ],
-    "requiresChainId": "last_pilgrimage"
+    "requiresChainId": "last_pilgrimage",
+    "title": "Last Mile Walker"
   },
   {
     "id": "frozen_wyrmkeep",
@@ -48,7 +51,8 @@
       "wyrmkeep_wyrm_keepers",
       "wyrmkeep_frozen_wyrm"
     ],
-    "unlocksRaidId": "bonewrought_vault"
+    "unlocksRaidId": "bonewrought_vault",
+    "title": "Wyrmbrood's Bane"
   },
   {
     "id": "what_got_out",
@@ -61,7 +65,8 @@
       "gotout_the_last_loyal",
       "gotout_cornered"
     ],
-    "requiresChainId": "demon_fortress"
+    "requiresChainId": "demon_fortress",
+    "title": "Breach-Sealer"
   },
   {
     "id": "black_dragon_nest",
@@ -73,7 +78,8 @@
       "blackdragon_the_keepers",
       "blackdragon_the_hatchlings",
       "blackdragon_the_brood_mother"
-    ]
+    ],
+    "title": "Nest-Breaker"
   },
   {
     "id": "house_of_bones",
@@ -86,7 +92,8 @@
       "hob_the_marrow_eater",
       "hob_the_phylactery",
       "hob_the_lich"
-    ]
+    ],
+    "title": "Marrow-Ender"
   },
   {
     "id": "silence_the_loom",
@@ -98,6 +105,7 @@
     "encounterIds": [
       "loom_the_presiding_intelligence"
     ],
-    "successModifier": -8
+    "successModifier": -8,
+    "title": "Loom-Silencer"
   }
 ]

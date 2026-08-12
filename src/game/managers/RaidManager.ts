@@ -264,6 +264,16 @@ export const RaidManager = {
     if (fullClear && !state.completedRaidDifficulties.includes(active.difficulty)) {
       state.completedRaidDifficulties.push(active.difficulty);
     }
+    // Every hero in the clearing party earns the raid's title, if it has
+    // one -- unlike a quest chain's title (one hero, since a quest is
+    // solo), a raid is a group effort, so the whole party that actually
+    // finished it shares the credit. grantTitle itself is the guard
+    // against re-granting on a repeat clear (skips a title the hero
+    // already holds), so no separate "first clear only" check is needed
+    // here beyond the fullClear gate itself.
+    if (fullClear && raid?.title) {
+      for (const hero of heroes) HeroManager.grantTitle(hero, raid.title);
+    }
 
     // Independent per-hero injury rolls regardless of how far the raid got --
     // everyone who went in shares the risk, not just whoever caused a stop.

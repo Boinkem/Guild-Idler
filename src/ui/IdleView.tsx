@@ -5,6 +5,7 @@ import { PixelSprite, QUEST_MARK } from './sprites/PixelSprite';
 import { HeroAnimation, HeroSprite } from './sprites/HeroSprite';
 import { PetSprite } from './sprites/PetSprite';
 import { PET_BY_ID } from '../game/data/pets';
+import { HeroManager } from '../game/managers/HeroManager';
 import { formatDuration, formatGold } from '../game/util';
 
 type Anim = 'idle' | 'walking' | 'departing' | 'returning';
@@ -19,6 +20,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
   const now = useNow();
   const { settings, update: updateSettings } = useSettings();
   const hero = engine.displayedHero;
+  const displayTitle = HeroManager.displayTitle(hero);
   const quest = engine.activeQuestFor(hero.id);
   const [anim, setAnim] = useState<Anim>(quest ? 'walking' : 'idle');
   const [locked, setLocked] = useState(true);
@@ -287,8 +289,8 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
           <button
             className={`knight-button ${anim}`}
             onClick={onOpenMenu}
-            title={`${hero.title ? hero.title + ' ' : ''}${hero.name} — click to open the guild menu`}
-            aria-label={`${hero.title ? hero.title + ' ' : ''}${hero.name}, level ${hero.level}. Open the guild menu.`}
+            title={`${displayTitle ? displayTitle + ' ' : ''}${hero.name} — click to open the guild menu`}
+            aria-label={`${displayTitle ? displayTitle + ' ' : ''}${hero.name}, level ${hero.level}. Open the guild menu.`}
           >
             <HeroSprite
               heroClass={hero.heroClass}
@@ -296,7 +298,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
               animation={spriteAnimation}
               flip={facingReturn}
               height={Math.round(120 * settings.spriteScale)}
-              title={`${hero.title ? hero.title + ' ' : ''}${hero.name}, level ${hero.level}`}
+              title={`${displayTitle ? displayTitle + ' ' : ''}${hero.name}, level ${hero.level}`}
             />
             {floatingText && (
               <div className="floating-reward" key={floatingText.key}>

@@ -200,8 +200,11 @@ export interface ChainDef {
   rewardItems: string[];
   rewardRenown: number;
   /**
-   * An epithet granted to whichever hero completes the final stage, shown as
-   * "<Title> <Name>". Cleared if that hero later retires.
+   * An epithet granted to whichever hero completes the final stage --
+   * see Hero.titles/HeroManager.grantTitle for how a hero can hold
+   * several of these and choose which one displays. Never re-granted on
+   * a repeat (chains only complete once anyway, so this is mostly
+   * documentation of that fact, not an active guard).
    */
   title?: string;
   /** A short narrative recap shown on the Lore tab once this chain is completed. */

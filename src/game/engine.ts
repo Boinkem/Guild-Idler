@@ -1962,6 +1962,22 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  /** Switches which of a hero's already-earned titles displays next to
+   *  their name -- purely cosmetic, no gold/gameplay effect, so no error
+   *  path beyond "hero not found" or "doesn't actually hold this title"
+   *  (both silently no-op rather than a user-facing error -- the picker
+   *  UI only ever offers titles the hero actually has, so either
+   *  condition means something's out of sync, not a real user mistake
+   *  worth surfacing). */
+  setActiveTitle(heroId: string, title: string | null) {
+    const hero = this.hero(heroId);
+    if (!hero) return;
+    if (title !== null && !hero.titles.includes(title)) return;
+    hero.activeTitle = title;
+    this.notify();
+    void this.saveNow();
+  }
+
   /** Buys a skin for the guild (usable by any hero of any class). */
   buySkin(skinId: string) {
     if (this.state.unlockedSkins.includes(skinId)) return this.say('Already owned.');

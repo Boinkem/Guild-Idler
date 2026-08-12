@@ -6800,3 +6800,92 @@ at least 1, `raid_heroic_clearance`/`raid_mythic_clearance`/`auto_chain`
 upgrade levels at least 1, etc.), fire exactly once, and don't re-trigger
 on a second `checkAll` pass. `npx tsc --noEmit` and `vite build` both
 pass clean.
+
+### Hero titles: confirmed working, fixed a real display bug, added raid titles + a picker -- complete
+Asked to confirm whether a "titles" system already existed and, if so,
+why it looked broken. It did exist, and the underlying logic genuinely
+worked -- but a real CSS bug made it look non-functional, and raids
+couldn't grant a title at all.
+
+**Investigation first, before touching anything.** `Hero.title`
+(singular) and `ChainDef.title` already existed, with 20+ quest chains
+already carrying a title ("First Real Job", "Dragonbane", "Kingslayer
+Twice Over", etc.), granted on final-stage completion in
+`QuestManager.resolve`. Simulated a full 3-stage chain completion
+end-to-end before assuming anything was broken -- `hero.title` genuinely
+updated. The actual bug was in `app.css`: `.hero-title { display:
+block; }` forced the title onto its own line instead of sitting inline
+before the hero's name inside the same flex row, and the JSX
+(`HeroesPanel.tsx`) had no space between the title span and the name
+text either -- so even un-broken, it would have read "First Real
+JobFinn" glued together. Between the two, the title was either invisible
+(wrapped oddly out of the compact row) or unreadable. Separately,
+`RaidDef` had no `title` field at all and nothing in
+`RaidManager.resolve` ever granted one -- a genuine gap, not a bug,
+confirmed by grep rather than assumed.
+
+**"Title of titles"**, per direct request: a hero can now hold several
+earned titles and choose which one displays, rather than each new one
+silently overwriting the last. `Hero.title?: string` replaced with
+`Hero.titles: string[]` (full history, append-only) + `Hero.activeTitle:
+string | null` (which one's shown). New `HeroManager.grantTitle(hero,
+title)` appends and auto-switches to the newest (matching the old
+overwrite behavior as the default so nothing changes for someone who
+never touches the picker), skipping a title the hero already holds
+rather than duplicating it. New `HeroManager.displayTitle(hero)` resolves
+what actually renders (`activeTitle`, falling back to the most recent
+entry). New engine method `setActiveTitle(heroId, title)` backs a picker
+dropdown added to the Heroes tab's expanded card (only rendered once a
+hero has at least one title), listing every earned title plus "None."
+
+**Raid titles**, per direct request: `RaidDef.title` added, granted to
+every hero in the clearing party (not just one -- a raid is a group
+effort, unlike a solo quest chain) via the same `grantTitle` on a full
+clear. `grantTitle`'s own already-holds-it guard means a repeat clear of
+the same raid doesn't re-grant or duplicate anything, so no separate
+"first clear only" tracking was needed. All 8 raids given a title in the
+same terse-epithet style the chains already use: Siegebreaker,
+Vault-Breaker, Last Mile Walker, Wyrmbrood's Bane, Breach-Sealer,
+Nest-Breaker, Marrow-Ender, Loom-Silencer. Lore tab's completed-raid card
+now shows "Grants the title ... to the whole clearing party," matching
+the line chains already had. DevTool's `raids` schema gained the
+`title` field too.
+
+**Migration.** A real schema change (rename + split), not just an
+additive field, so it needed an explicit per-hero migration rather than
+relying on the generic base-fill: an old save's single `title` becomes a
+one-entry `titles` array with that same title set as `activeTitle` --
+what's currently displayed doesn't change for anyone crossing this
+migration; the only new thing going forward is that a second title adds
+to the list instead of overwriting the first. `SAVE_VERSION` bumped
+36->37.
+
+**A second real bug found and fixed along the way, unprompted:**
+`PrestigeManager.retire`'s doc comment claimed retirement "wipes... and
+title" -- still true after this change (a retired hero is entirely
+replaced via `HeroManager.create`, which now correctly initializes
+`titles: []`/`activeTitle: null`), but confirmed explicitly rather than
+assumed, since a silent leftover title surviving retirement would have
+been an easy regression to miss.
+
+**Reconciliation note:** two unrelated patches (an achievement-system
+expansion, then a single-instance-lock fix) landed on `main` mid-session
+while this work was in progress. Rebuilt this patch against each new
+`main` in turn rather than fighting a stale diff -- resolved the one
+real overlap (both this patch and the achievement patch added a
+`SaveManager` migration entry) by renumbering this one to the next free
+slot (36->37, not colliding with the achievement patch's own 35->36),
+and confirmed `electron/main.ts` carried both the earlier window-size
+fix and the new single-instance-lock addition together correctly.
+
+Verified at runtime, not just typechecked, against the final reconciled
+base: a full simulated chain completion grants and auto-activates a
+title; re-granting an already-held title is a no-op (guarded); a second
+title is added rather than overwriting the first, and auto-activates;
+manually picking an older title via `activeTitle` is correctly reflected
+by `displayTitle`; a simulated raid full clear grants the title to every
+hero in the party, not just one; re-clearing the same raid does not
+duplicate the title; retirement clears both `titles` and `activeTitle`;
+both migration paths (a hero with a prior title, and a hero with none)
+convert correctly with no leftover `.title` field; all 8 raids carry a
+title. `npx tsc --noEmit` and `vite build` both pass clean.

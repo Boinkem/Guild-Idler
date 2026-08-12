@@ -41,6 +41,8 @@ export const HeroManager = {
       autoChainCount: 0,
       autoChainTarget: null,
       bonusStats: { strength: 0, endurance: 0, luck: 0, wisdom: 0 },
+      titles: [],
+      activeTitle: null,
     };
   },
 
@@ -66,6 +68,30 @@ export const HeroManager = {
 
   xpToNext(hero: Hero): number {
     return xpForLevel(hero.level);
+  },
+
+  /**
+   * Adds a newly-earned title to a hero's collection and switches the
+   * displayed one to it, unless the hero already holds it (re-clearing a
+   * raid, or -- not currently possible, but harmless if it ever is --
+   * somehow re-completing a chain). Returns true if the title was
+   * actually new, so a caller (QuestManager.resolve, RaidManager.resolve)
+   * can decide whether a celebration should mention it.
+   */
+  grantTitle(hero: Hero, title: string): boolean {
+    if (hero.titles.includes(title)) return false;
+    hero.titles.push(title);
+    hero.activeTitle = title;
+    return true;
+  },
+
+  /** The title actually shown next to this hero's name -- activeTitle if
+   *  set, otherwise the most recently earned title, otherwise null. A
+   *  hero with titles but no activeTitle only happens via an old save's
+   *  migration (see SaveManager migration 35->36); every other path that
+   *  adds a title also sets activeTitle in the same step. */
+  displayTitle(hero: Hero): string | null {
+    return hero.activeTitle ?? hero.titles[hero.titles.length - 1] ?? null;
   },
 
   /** Adds xp and applies as many level-ups as it earns. Returns levels gained. */
