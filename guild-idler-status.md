@@ -577,23 +577,77 @@ scattered across other sections, so it can be worked through in order:
   below, unchanged by this pass. Genuinely a content-population pass;
   `EquipmentDef.icon` and the DevTool's icon picker already exist and
   work.
-- [ ] **`guild-idler-project-brief.md`'s content-scope line is stale.**
-  Still reads "19 quest chains... 5 raids" -- now 29 chains, 8 raids (30
-  chains once the achievement-expansion pass below is counted against
-  the live JSON, no new chains were added this round though, so still
-  29). Low-priority doc hygiene, not a code fix, but worth a refresh
-  pass since that brief is meant to be a quick-reference cache and is
-  now meaningfully out of date.
-- [ ] **`checkAll` coverage across engine mutators was only spot-fixed,
-  not fully audited.** Found and fixed 8 real instances this round (see
-  "Achievement expansion" below) where a player action could satisfy an
-  achievement condition without ever actually checking for it -- all 8
-  were methods that happen to gate a *new* achievement added this pass.
-  A full audit of every state-mutating method in `engine.ts` for the
-  same gap (independent of whether it currently gates any achievement)
-  would be a good, scoped follow-up rather than continuing to find these
-  one at a time as each unrelated feature happens to touch a
-  neighboring action.
+- [x] **`guild-idler-project-brief.md`'s content-scope line was stale.**
+  Done this round. Was still reading "\~400 quests, quest chains + a
+  LORE tab, raids across 3 difficulties, Steam achievements
+  (leaderboards planned)" -- corrected to the real, live numbers (29
+  quest chains, 8 raids, 65 achievements) with an explicit note pointing
+  back at the live JSON as the source of truth rather than this line,
+  same "don't trust a running total, re-verify it" lesson this doc's own
+  "Quest chains" summary already learned the hard way earlier in this
+  pass.
+- [x] **`checkAll` coverage across engine mutators -- full audit done,
+  one real gap found and fixed.** Script-audited every method in
+  `engine.ts` for the same shape as the 8 fixed in "Achievement
+  expansion" below: calls `saveNow()`, mutates `this.state` directly,
+  but never calls `reportAchievements`/`reportGuidance`. 31 candidates
+  came back; 30 were reviewed individually and confirmed harmless --
+  either pure UI/settings state (`setFocusedHero`, `markNotificationsSeen`,
+  the various `dismiss*Spotlight` one-time-prompt clears), or a real
+  state mutation that just doesn't happen to gate any achievement or
+  guidance topic that currently exists (`equip`, `treatInjury`,
+  `reviveHero`, `buyTombstoneStyle`, etc.). One real gap: `testAddPet`
+  (a testing-tool method, gated behind `TESTING_TOOLS_ENABLED`) mutates
+  `state.pets` directly -- exactly the field `FIRST_PET_HATCHED`/
+  `ALL_PETS_COLLECTED` check -- but never called `checkAll`, so using it
+  to verify `ALL_PETS_COLLECTED` (adding all 10 species one at a time)
+  would never actually show the achievement unlocking from the tool
+  itself. Fixed. `startQuest` was checked specifically since it's the
+  single highest-traffic mutator in the file -- confirmed correct as-is,
+  since nothing achievement-relevant completes on send, only on
+  `resolve()` (already covered).
+
+### Menu window losing its remembered size on a cross-monitor move -- fixed
+Direct report: moving the game to a new window/monitor resets the manual
+resize. Root cause confirmed, not just worked around: `win.on('resized', ...)`
+persisted `menuSize`/`menuWidth`/`menuHeight` on every single native
+'resize' event unconditionally, with no way to tell a genuine manual
+drag-the-edge resize apart from a purely OS-driven one -- and Windows
+generates a real 'resize' event of its own whenever a window crosses onto
+a display running at a *different* display-scaling percentage (a 150%-
+scaled laptop panel and a 100%-scaled external monitor is an extremely
+common real-world combination, not an edge case), silently rescaling the
+window's pixel bounds to preserve its physical size on the new screen.
+That OS-driven rescale was getting written down as if the player had
+deliberately chosen it, overwriting their actual preference the next
+time menu mode reopened.
+
+Fixed with a short-lived suppression flag rather than trying to
+distinguish resize events by origin (Electron doesn't expose that):
+a new `moved` handler tracks which display (by Electron's own numeric
+display id) the window is on, and the instant it detects a change,
+arms `suppressNextResizeSave` for 500ms -- long enough to catch the
+OS's own near-immediate rescale, short enough that a real manual resize
+performed any normal amount of time after finishing the drag still
+saves exactly as before. The window's actual on-screen bounds are never
+touched by this fix either way (no `setBounds` call, no fighting
+Windows' own rescale) -- only whether that one resize gets *written to
+disk* as the new remembered preference is suppressed. Baseline display
+id is captured once at window creation so the very first real move has
+something correct to compare against, not `null`.
+
+Verified two ways: confirmed `getDisplayMatching` and the `500` timeout
+literal both survive minification into the compiled `dist-electron/main.js`
+(a real multi-monitor Electron session can't be driven in this
+environment), and separately re-implemented the exact same state machine
+(display-id tracking + suppression flag + timer) standalone against a
+fake clock and fake display ids to verify the decision logic itself --
+a normal resize saves; the resize immediately following a display change
+does not; a genuine manual resize well after that window still saves
+correctly; moving repeatedly within the same display never suppresses
+anything; and a same-display no-op move doesn't accidentally re-arm the
+guard for the next real resize. Full `tsc --noEmit` and `vite build`
+both pass clean.
 
 ### Achievement expansion -- built
 Direct request: "mock up more achievements... each raid, quest chain,

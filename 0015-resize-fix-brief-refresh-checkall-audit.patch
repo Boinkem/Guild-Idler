@@ -1,0 +1,296 @@
+From bfa53a2ec15d7f747be511d60226631d35a3808c Mon Sep 17 00:00:00 2001
+From: Guild Idler Patch <patch@guild-idler.local>
+Date: Wed, 12 Aug 2026 05:15:10 +0000
+Subject: [PATCH] Fix cross-monitor resize reset, refresh project brief
+ numbers, full checkAll audit
+
+- Menu window losing its remembered custom size on a cross-monitor move
+  (direct report). Root cause: win.on('resized', ...) persisted every
+  native resize event unconditionally, with no way to distinguish a
+  genuine manual drag from Windows' own DPI rescale, which fires a real
+  'resize' event whenever the window crosses onto a display running at a
+  different display-scaling percentage. Fixed with a short-lived
+  suppression flag: a new 'moved' handler tracks the window's current
+  display id, arms a 500ms suppression window the instant it detects a
+  change, and the resize handler skips persisting (without touching the
+  window's actual on-screen bounds) if that flag is set. Verified the
+  compiled bundle contains the fix, and separately re-implemented the
+  exact state machine standalone against a fake clock to confirm the
+  decision logic across 5 scenarios (normal resize, suppressed
+  OS-rescale, real resize after the guard window closes, same-display
+  moves never suppressing, and no accidental re-arming).
+
+- guild-idler-project-brief.md's content-scope line was stale ('~400
+  quests... raids across 3 difficulties... achievements (leaderboards
+  planned)') -- corrected to the real numbers (29 quest chains, 8 raids,
+  65 achievements) with a note pointing back at the live JSON as the
+  source of truth.
+
+- Full checkAll audit across every engine.ts mutator, not just the 8
+  spot-fixed last round. Script-identified 31 candidates (saveNow() +
+  direct state mutation + no reportAchievements/reportGuidance); 30
+  reviewed and confirmed harmless, one real gap found and fixed:
+  testAddPet (a testing-tool method) mutates state.pets directly --
+  exactly what FIRST_PET_HATCHED/ALL_PETS_COLLECTED check -- but never
+  called checkAll, so using it to verify ALL_PETS_COLLECTED wouldn't
+  have actually shown the achievement unlocking.
+
+guild-idler-status.md updated: all three items logged/ticked off in the
+Steam-launch completeness backlog. Full tsc --noEmit and vite build both
+pass clean.
+---
+ electron/main.ts             | 69 ++++++++++++++++++++++++++++
+ guild-idler-project-brief.md | 15 ++++--
+ guild-idler-status.md        | 88 +++++++++++++++++++++++++++++-------
+ src/game/engine.ts           |  9 ++++
+ 4 files changed, 160 insertions(+), 21 deletions(-)
+
+diff --git a/electron/main.ts b/electron/main.ts
+index 2ecbfea..99f75be 100644
+--- a/electron/main.ts
++++ b/electron/main.ts
+@@ -99,6 +99,35 @@ let idleBounds: { x: number; y: number } | null = null;
+ let menuSize: { width: number; height: number } | null = null;
+ /** When locked (default), the idle companion can't be dragged at all. */
+ let companionLocked = true;
++/**
++ * Which display (by Electron's own numeric display id) the window was on as
++ * of the last 'moved' event -- used purely to detect a cross-monitor move,
++ * not read anywhere else. See suppressNextResizeSave below for why this
++ * exists.
++ */
++let lastKnownDisplayId: number | null = null;
++/**
++ * Set for a brief window immediately after detecting the menu window landed
++ * on a DIFFERENT display than it was on before -- guards against a real,
++ * confirmed bug: dragging the window across two monitors running at
++ * different Windows display-scaling percentages (e.g. a 150%-scaled laptop
++ * panel and a 100%-scaled external monitor, an extremely common real-world
++ * setup) makes Windows itself silently rescale the window's pixel bounds to
++ * preserve its physical/DIP size on the new display, firing a genuine
++ * native 'resize' event in the process -- one the OS generated, not the
++ * player dragging an edge. Before this flag existed, the `resized` listener
++ * below couldn't tell that apart from a real manual resize and persisted
++ * the OS-rescaled size as if the player had deliberately chosen it,
++ * corrupting `menuSize`/`menuWidth`/`menuHeight` with a value nobody
++ * actually asked for -- which is exactly what "moving the game to a new
++ * monitor resets the manual resize" was reported as. The window's actual
++ * on-screen bounds are left completely alone either way (this never calls
++ * setBounds or fights Windows' own rescale) -- only whether that
++ * particular resize gets WRITTEN DOWN as the new remembered preference is
++ * suppressed, and only for the one resize event immediately following a
++ * detected display change, not resizes in general.
++ */
++let suppressNextResizeSave = false;
+ 
+ const userDataDir = () => app.getPath('userData');
+ const savePath = () => path.join(userDataDir(), 'little-knight-save.json');
+@@ -203,6 +232,13 @@ async function createWindow() {
+     },
+   });
+ 
++  // Baseline for the cross-monitor detection in the 'moved' listener below
++  // -- set once immediately on creation so the very first real move
++  // compares against the display the window actually opened on, rather
++  // than starting from null and needing a whole extra move before the
++  // detection logic has anything to compare against.
++  lastKnownDisplayId = screen.getDisplayMatching(win.getBounds()).id;
++
+   // 'floating' only sits above normal windows, not exclusive-fullscreen
+   // apps/games. 'screen-saver' (Electron's highest level) fixes that in
+   // principle, but on Windows it's a known bad combination with a
+@@ -229,6 +265,27 @@ async function createWindow() {
+ 
+   win.on('moved', async () => {
+     if (!win) return;
++    // Cross-monitor detection -- runs regardless of currentMode, since a
++    // display change can happen while dragging the window in either mode
++    // (only menu mode's size is ever persisted, but the display itself
++    // doesn't care which mode the window is in). Compared by Electron's
++    // own numeric display id, not bounds/coordinates, since two displays
++    // can legitimately share an edge or overlap in virtual-desktop space.
++    const nowOnDisplayId = screen.getDisplayMatching(win.getBounds()).id;
++    if (lastKnownDisplayId !== null && nowOnDisplayId !== lastKnownDisplayId) {
++      // See suppressNextResizeSave's own comment for the full bug this
++      // guards against. The flag is intentionally cleared on a short
++      // timer rather than left set indefinitely -- Windows' own DPI
++      // rescale fires its 'resize' essentially immediately after the
++      // display change is detected (same tick or the next one in
++      // practice), so a genuine manual resize the player performs any
++      // real time after actually finishing the drag must still save
++      // normally, not get silently swallowed by a flag that never reset.
++      suppressNextResizeSave = true;
++      setTimeout(() => { suppressNextResizeSave = false; }, 500);
++    }
++    lastKnownDisplayId = nowOnDisplayId;
++
+     // Only a move of the IDLE window updates its home position. Dragging the
+     // menu window around (a deliberately supported thing to do) must not
+     // relocate where the companion snaps back to afterward.
+@@ -245,6 +302,18 @@ async function createWindow() {
+     // defensive shape as the moved listener above, in case that ever
+     // changes.
+     if (currentMode !== 'menu') return;
++    // See suppressNextResizeSave's own comment -- this specific resize was
++    // very likely Windows rescaling the window for a new display's DPI
++    // scale factor, not the player dragging an edge. The window's actual
++    // on-screen size is left exactly as Windows/Chromium already set it;
++    // only the write to disk is skipped, so the player's real, previously
++    // chosen size survives to be restored next time menu mode opens
++    // (see window:setMode's own `menuSize ?? MENU_SIZE` fallback) instead
++    // of being overwritten by whatever this move happened to rescale to.
++    if (suppressNextResizeSave) {
++      suppressNextResizeSave = false;
++      return;
++    }
+     const [width, height] = win.getSize();
+     menuSize = { width, height };
+     await writeSettings({ menuWidth: width, menuHeight: height });
+diff --git a/guild-idler-project-brief.md b/guild-idler-project-brief.md
+index 1c5cac4..de46df9 100644
+--- a/guild-idler-project-brief.md
++++ b/guild-idler-project-brief.md
+@@ -16,10 +16,17 @@ rarities/sets, has multiple hero classes with licensed sprites, prestige
+ and offline progression. Genre comps: Rusty's Retirement, Desktop Raid,
+ Cozy Grove, Melvor Idle.
+ 
+-**Content scope:** \~400 quests, quest chains + a LORE tab, raids across 3
+-difficulties, Steam achievements (leaderboards planned), shops, prestige/reset.
+-Roughly "half a year" of story content, with plans for post-launch story-chunk
+-DLC.
++**Content scope:** 29 quest chains + a LORE tab (full history/roadmap), 8
++raids across 3 difficulties (Normal/Heroic/Mythic), 65 Steam achievements
++(local stub today -- see the Steamworks SDK integration note in
++`guild-idler-status.md`'s Platform/distribution section for what's still
++blocking the real thing), shops, prestige/reset. Numbers corrected here as
++of this line's own last edit -- pull straight from the live JSON
++(`quest-chains.json`/`raids.json`/`achievements.json`) rather than trusting
++this line if it's ever been a while, since it's exactly the kind of count
++that goes stale silently (see `guild-idler-status.md`'s own note on this
++same problem, caught and corrected there first). Roughly "half a year" of
++story content, with plans for post-launch story-chunk DLC.
+ 
+ **Pricing decided on:** Base game **$6.99**, story-content DLC **$4.99** each
+ (bundle 2–3 quest chains per DLC drop rather than selling chains individually
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 404f992..94990c4 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -577,23 +577,77 @@ scattered across other sections, so it can be worked through in order:
+   below, unchanged by this pass. Genuinely a content-population pass;
+   `EquipmentDef.icon` and the DevTool's icon picker already exist and
+   work.
+-- [ ] **`guild-idler-project-brief.md`'s content-scope line is stale.**
+-  Still reads "19 quest chains... 5 raids" -- now 29 chains, 8 raids (30
+-  chains once the achievement-expansion pass below is counted against
+-  the live JSON, no new chains were added this round though, so still
+-  29). Low-priority doc hygiene, not a code fix, but worth a refresh
+-  pass since that brief is meant to be a quick-reference cache and is
+-  now meaningfully out of date.
+-- [ ] **`checkAll` coverage across engine mutators was only spot-fixed,
+-  not fully audited.** Found and fixed 8 real instances this round (see
+-  "Achievement expansion" below) where a player action could satisfy an
+-  achievement condition without ever actually checking for it -- all 8
+-  were methods that happen to gate a *new* achievement added this pass.
+-  A full audit of every state-mutating method in `engine.ts` for the
+-  same gap (independent of whether it currently gates any achievement)
+-  would be a good, scoped follow-up rather than continuing to find these
+-  one at a time as each unrelated feature happens to touch a
+-  neighboring action.
++- [x] **`guild-idler-project-brief.md`'s content-scope line was stale.**
++  Done this round. Was still reading "\~400 quests, quest chains + a
++  LORE tab, raids across 3 difficulties, Steam achievements
++  (leaderboards planned)" -- corrected to the real, live numbers (29
++  quest chains, 8 raids, 65 achievements) with an explicit note pointing
++  back at the live JSON as the source of truth rather than this line,
++  same "don't trust a running total, re-verify it" lesson this doc's own
++  "Quest chains" summary already learned the hard way earlier in this
++  pass.
++- [x] **`checkAll` coverage across engine mutators -- full audit done,
++  one real gap found and fixed.** Script-audited every method in
++  `engine.ts` for the same shape as the 8 fixed in "Achievement
++  expansion" below: calls `saveNow()`, mutates `this.state` directly,
++  but never calls `reportAchievements`/`reportGuidance`. 31 candidates
++  came back; 30 were reviewed individually and confirmed harmless --
++  either pure UI/settings state (`setFocusedHero`, `markNotificationsSeen`,
++  the various `dismiss*Spotlight` one-time-prompt clears), or a real
++  state mutation that just doesn't happen to gate any achievement or
++  guidance topic that currently exists (`equip`, `treatInjury`,
++  `reviveHero`, `buyTombstoneStyle`, etc.). One real gap: `testAddPet`
++  (a testing-tool method, gated behind `TESTING_TOOLS_ENABLED`) mutates
++  `state.pets` directly -- exactly the field `FIRST_PET_HATCHED`/
++  `ALL_PETS_COLLECTED` check -- but never called `checkAll`, so using it
++  to verify `ALL_PETS_COLLECTED` (adding all 10 species one at a time)
++  would never actually show the achievement unlocking from the tool
++  itself. Fixed. `startQuest` was checked specifically since it's the
++  single highest-traffic mutator in the file -- confirmed correct as-is,
++  since nothing achievement-relevant completes on send, only on
++  `resolve()` (already covered).
++
++### Menu window losing its remembered size on a cross-monitor move -- fixed
++Direct report: moving the game to a new window/monitor resets the manual
++resize. Root cause confirmed, not just worked around: `win.on('resized', ...)`
++persisted `menuSize`/`menuWidth`/`menuHeight` on every single native
++'resize' event unconditionally, with no way to tell a genuine manual
++drag-the-edge resize apart from a purely OS-driven one -- and Windows
++generates a real 'resize' event of its own whenever a window crosses onto
++a display running at a *different* display-scaling percentage (a 150%-
++scaled laptop panel and a 100%-scaled external monitor is an extremely
++common real-world combination, not an edge case), silently rescaling the
++window's pixel bounds to preserve its physical size on the new screen.
++That OS-driven rescale was getting written down as if the player had
++deliberately chosen it, overwriting their actual preference the next
++time menu mode reopened.
++
++Fixed with a short-lived suppression flag rather than trying to
++distinguish resize events by origin (Electron doesn't expose that):
++a new `moved` handler tracks which display (by Electron's own numeric
++display id) the window is on, and the instant it detects a change,
++arms `suppressNextResizeSave` for 500ms -- long enough to catch the
++OS's own near-immediate rescale, short enough that a real manual resize
++performed any normal amount of time after finishing the drag still
++saves exactly as before. The window's actual on-screen bounds are never
++touched by this fix either way (no `setBounds` call, no fighting
++Windows' own rescale) -- only whether that one resize gets *written to
++disk* as the new remembered preference is suppressed. Baseline display
++id is captured once at window creation so the very first real move has
++something correct to compare against, not `null`.
++
++Verified two ways: confirmed `getDisplayMatching` and the `500` timeout
++literal both survive minification into the compiled `dist-electron/main.js`
++(a real multi-monitor Electron session can't be driven in this
++environment), and separately re-implemented the exact same state machine
++(display-id tracking + suppression flag + timer) standalone against a
++fake clock and fake display ids to verify the decision logic itself --
++a normal resize saves; the resize immediately following a display change
++does not; a genuine manual resize well after that window still saves
++correctly; moving repeatedly within the same display never suppresses
++anything; and a same-display no-op move doesn't accidentally re-arm the
++guard for the next real resize. Full `tsc --noEmit` and `vite build`
++both pass clean.
+ 
+ ### Achievement expansion -- built
+ Direct request: "mock up more achievements... each raid, quest chain,
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index c7f0067..dd1f254 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -868,6 +868,15 @@ export class GameEngine {
+     if (!TESTING_TOOLS_ENABLED) return;
+     this.state.hatcheryUnlocked = true;
+     PetManager.hatch(this.state, { uid: uid('egg'), rarity, dedicatedPetId: defId, hatchXp: 0, startedAt: Date.now() }, Date.now());
++    // Found during a broader checkAll audit: this directly mutates
++    // state.pets, exactly the field FIRST_PET_HATCHED/ALL_PETS_COLLECTED
++    // check, but never checked achievements -- so a developer using this
++    // testing tool to verify ALL_PETS_COLLECTED (adding all 10 species
++    // one at a time) would never actually see it unlock from here, only
++    // whenever some unrelated later action happened to trigger a check.
++    // A genuinely useful testing tool should reflect real game behavior
++    // immediately, not require an extra unrelated step to prove out.
++    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+     this.notify();
+     void this.saveNow();
+   }
+-- 
+2.43.0
+

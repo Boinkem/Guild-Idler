@@ -99,6 +99,35 @@ let idleBounds: { x: number; y: number } | null = null;
 let menuSize: { width: number; height: number } | null = null;
 /** When locked (default), the idle companion can't be dragged at all. */
 let companionLocked = true;
+/**
+ * Which display (by Electron's own numeric display id) the window was on as
+ * of the last 'moved' event -- used purely to detect a cross-monitor move,
+ * not read anywhere else. See suppressNextResizeSave below for why this
+ * exists.
+ */
+let lastKnownDisplayId: number | null = null;
+/**
+ * Set for a brief window immediately after detecting the menu window landed
+ * on a DIFFERENT display than it was on before -- guards against a real,
+ * confirmed bug: dragging the window across two monitors running at
+ * different Windows display-scaling percentages (e.g. a 150%-scaled laptop
+ * panel and a 100%-scaled external monitor, an extremely common real-world
+ * setup) makes Windows itself silently rescale the window's pixel bounds to
+ * preserve its physical/DIP size on the new display, firing a genuine
+ * native 'resize' event in the process -- one the OS generated, not the
+ * player dragging an edge. Before this flag existed, the `resized` listener
+ * below couldn't tell that apart from a real manual resize and persisted
+ * the OS-rescaled size as if the player had deliberately chosen it,
+ * corrupting `menuSize`/`menuWidth`/`menuHeight` with a value nobody
+ * actually asked for -- which is exactly what "moving the game to a new
+ * monitor resets the manual resize" was reported as. The window's actual
+ * on-screen bounds are left completely alone either way (this never calls
+ * setBounds or fights Windows' own rescale) -- only whether that
+ * particular resize gets WRITTEN DOWN as the new remembered preference is
+ * suppressed, and only for the one resize event immediately following a
+ * detected display change, not resizes in general.
+ */
+let suppressNextResizeSave = false;
 
 const userDataDir = () => app.getPath('userData');
 const savePath = () => path.join(userDataDir(), 'little-knight-save.json');
@@ -203,6 +232,13 @@ async function createWindow() {
     },
   });
 
+  // Baseline for the cross-monitor detection in the 'moved' listener below
+  // -- set once immediately on creation so the very first real move
+  // compares against the display the window actually opened on, rather
+  // than starting from null and needing a whole extra move before the
+  // detection logic has anything to compare against.
+  lastKnownDisplayId = screen.getDisplayMatching(win.getBounds()).id;
+
   // 'floating' only sits above normal windows, not exclusive-fullscreen
   // apps/games. 'screen-saver' (Electron's highest level) fixes that in
   // principle, but on Windows it's a known bad combination with a
@@ -229,6 +265,27 @@ async function createWindow() {
 
   win.on('moved', async () => {
     if (!win) return;
+    // Cross-monitor detection -- runs regardless of currentMode, since a
+    // display change can happen while dragging the window in either mode
+    // (only menu mode's size is ever persisted, but the display itself
+    // doesn't care which mode the window is in). Compared by Electron's
+    // own numeric display id, not bounds/coordinates, since two displays
+    // can legitimately share an edge or overlap in virtual-desktop space.
+    const nowOnDisplayId = screen.getDisplayMatching(win.getBounds()).id;
+    if (lastKnownDisplayId !== null && nowOnDisplayId !== lastKnownDisplayId) {
+      // See suppressNextResizeSave's own comment for the full bug this
+      // guards against. The flag is intentionally cleared on a short
+      // timer rather than left set indefinitely -- Windows' own DPI
+      // rescale fires its 'resize' essentially immediately after the
+      // display change is detected (same tick or the next one in
+      // practice), so a genuine manual resize the player performs any
+      // real time after actually finishing the drag must still save
+      // normally, not get silently swallowed by a flag that never reset.
+      suppressNextResizeSave = true;
+      setTimeout(() => { suppressNextResizeSave = false; }, 500);
+    }
+    lastKnownDisplayId = nowOnDisplayId;
+
     // Only a move of the IDLE window updates its home position. Dragging the
     // menu window around (a deliberately supported thing to do) must not
     // relocate where the companion snaps back to afterward.
@@ -245,6 +302,18 @@ async function createWindow() {
     // defensive shape as the moved listener above, in case that ever
     // changes.
     if (currentMode !== 'menu') return;
+    // See suppressNextResizeSave's own comment -- this specific resize was
+    // very likely Windows rescaling the window for a new display's DPI
+    // scale factor, not the player dragging an edge. The window's actual
+    // on-screen size is left exactly as Windows/Chromium already set it;
+    // only the write to disk is skipped, so the player's real, previously
+    // chosen size survives to be restored next time menu mode opens
+    // (see window:setMode's own `menuSize ?? MENU_SIZE` fallback) instead
+    // of being overwritten by whatever this move happened to rescale to.
+    if (suppressNextResizeSave) {
+      suppressNextResizeSave = false;
+      return;
+    }
     const [width, height] = win.getSize();
     menuSize = { width, height };
     await writeSettings({ menuWidth: width, menuHeight: height });

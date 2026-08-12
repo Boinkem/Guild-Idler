@@ -868,6 +868,15 @@ export class GameEngine {
     if (!TESTING_TOOLS_ENABLED) return;
     this.state.hatcheryUnlocked = true;
     PetManager.hatch(this.state, { uid: uid('egg'), rarity, dedicatedPetId: defId, hatchXp: 0, startedAt: Date.now() }, Date.now());
+    // Found during a broader checkAll audit: this directly mutates
+    // state.pets, exactly the field FIRST_PET_HATCHED/ALL_PETS_COLLECTED
+    // check, but never checked achievements -- so a developer using this
+    // testing tool to verify ALL_PETS_COLLECTED (adding all 10 species
+    // one at a time) would never actually see it unlock from here, only
+    // whenever some unrelated later action happened to trigger a check.
+    // A genuinely useful testing tool should reflect real game behavior
+    // immediately, not require an extra unrelated step to prove out.
+    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
     this.notify();
     void this.saveNow();
   }

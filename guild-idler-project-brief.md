@@ -16,10 +16,17 @@ rarities/sets, has multiple hero classes with licensed sprites, prestige
 and offline progression. Genre comps: Rusty's Retirement, Desktop Raid,
 Cozy Grove, Melvor Idle.
 
-**Content scope:** \~400 quests, quest chains + a LORE tab, raids across 3
-difficulties, Steam achievements (leaderboards planned), shops, prestige/reset.
-Roughly "half a year" of story content, with plans for post-launch story-chunk
-DLC.
+**Content scope:** 29 quest chains + a LORE tab (full history/roadmap), 8
+raids across 3 difficulties (Normal/Heroic/Mythic), 65 Steam achievements
+(local stub today -- see the Steamworks SDK integration note in
+`guild-idler-status.md`'s Platform/distribution section for what's still
+blocking the real thing), shops, prestige/reset. Numbers corrected here as
+of this line's own last edit -- pull straight from the live JSON
+(`quest-chains.json`/`raids.json`/`achievements.json`) rather than trusting
+this line if it's ever been a while, since it's exactly the kind of count
+that goes stale silently (see `guild-idler-status.md`'s own note on this
+same problem, caught and corrected there first). Roughly "half a year" of
+story content, with plans for post-launch story-chunk DLC.
 
 **Pricing decided on:** Base game **$6.99**, story-content DLC **$4.99** each
 (bundle 2–3 quest chains per DLC drop rather than selling chains individually
