@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 34;
+export const SAVE_VERSION = 35;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -462,6 +462,18 @@ export interface QuestOffer {
    */
   vulnerableTo?: ElementType[];
   dealsElement?: ElementType[];
+  /**
+   * Set only on a procedurally-rolled "Gathering Bounty" offer (see
+   * QuestManager.generateGatheringOffer) -- guarantees a flat amount of
+   * one Harvest material on success instead of (or alongside) the usual
+   * gold/xp/loot, sending a hero off to fetch it rather than clicking the
+   * Harvest minigame in person. Only ever rolled once `harvestUnlocked`
+   * is true (see GameState.harvestUnlocked / `the_first_haul`'s own
+   * grantsHarvest). `amount` is calibrated below full manual-clicking
+   * yield on purpose -- see quest.gatheringMaterialPerHour's own tuning
+   * description for the exact math.
+   */
+  materialReward?: { materialId: MaterialId; amount: number };
 }
 
 export interface ActiveQuest {
@@ -532,6 +544,14 @@ export interface QuestResult {
    *  not straight into a nest -- see PetManager.grantEgg). Same
    *  optional/not-migrated reasoning as other result-log additions. */
   eggDropped?: { rarity: Rarity };
+  /** Material actually credited from a Gathering Bounty offer (see
+   *  QuestOffer.materialReward), if this quest carried one -- the full
+   *  amount on success, a reduced consolation amount on failure (same
+   *  15%-of-full shape gold's own failure consolation already uses),
+   *  clamped by warehouse capacity same as a manual Harvest catch. Purely
+   *  informational for the result modal; the actual materials mutation
+   *  already happened in QuestManager.resolve by the time this is read. */
+  materialGained?: { materialId: MaterialId; amount: number };
   /** True when this hero's daily first-burst bonus applied to gold/xp
    *  above (already folded into the numbers, not a separate reward) --
    *  see Hero.lastBurstBonusDay. Purely informational, for the result
@@ -1160,6 +1180,34 @@ export interface GameState {
   warehouseLevel: number;
   /** True once the Trade Route upgrade is bought -- gates selling materials for gold. */
   tradeRouteUnlocked: boolean;
+  /**
+   * True once `the_first_haul` (the Harvest tab's own one-time intro
+   * chain) has been completed -- gates the Harvest tab's visibility
+   * entirely, same convention hatcheryUnlocked/peddlerUnlocked already
+   * established (see MenuWindow's tab filter).
+   *
+   * Deliberately NOT given the same "never force-unlocked by a
+   * migration" treatment those two got (see MIGRATIONS[34] in
+   * SaveManager.ts and its own comment) -- Harvest, unlike Hatchery/
+   * Grimsby, was already unconditionally visible to every existing save
+   * before this field existed at all, so defaulting every old save to
+   * locked here would be a real regression (potentially stranding
+   * already-invested Warehouse levels/tool levels/stored materials
+   * behind a chain that didn't exist when that progress was made), not
+   * "undiscovered content staying undiscovered." The migration instead
+   * grandfathers any save with real prior Harvest activity straight to
+   * unlocked; only a save with zero prior activity (materials, tools,
+   * Warehouse level, and Trade Route all still at their fresh-save
+   * defaults) is treated as new enough to go through the chain like a
+   * brand-new game would.
+   */
+  harvestUnlocked: boolean;
+  /** Set the moment harvestUnlocked flips true via the chain (not via the
+   *  migration's grandfather path, which sets harvestUnlocked directly
+   *  without also queuing this) -- same one-time spotlight reuse of
+   *  OnboardingTour that pendingHatcherySpotlight/pendingPeddlerSpotlight
+   *  already do. */
+  pendingHarvestSpotlight: boolean;
 
   /* --------------------------- Elemental infusion --------------------------- */
   /**

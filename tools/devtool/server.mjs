@@ -137,6 +137,15 @@ const SCHEMAS = {
       // not restricted to that here -- see ChainDef.grantsHatchery's own
       // comment for why this is deliberately decoupled from rewardEgg.
       grantsHatchery: { type: 'boolean', required: false },
+      // Was defined on ChainDef and used by the_man_who_sells_maybe's own
+      // JSON entry since Grimsby shipped, but never actually exposed here
+      // -- same class of silent gap as the raids schema's own missing
+      // requiresChainId, found and fixed in this same pass (see that
+      // field's comment further down in this file).
+      grantsPeddler: { type: 'boolean', required: false },
+      // The Harvest tab's own intro (`the_first_haul`) -- same shape as
+      // grantsHatchery/grantsPeddler just above.
+      grantsHarvest: { type: 'boolean', required: false },
       // The egg equivalent of rewardItems above -- always granted on
       // completion, not a chance roll. New 'eggReward' field type (see
       // validateEntry below): an object with a required rarity and an

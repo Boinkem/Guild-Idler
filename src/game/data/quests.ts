@@ -235,6 +235,17 @@ export interface ChainDef {
    */
   grantsPeddler?: boolean;
   /**
+   * True for exactly one chain -- the Harvest tab's own intro
+   * (`the_first_haul`). Same shape as grantsHatchery/grantsPeddler: flips
+   * state.harvestUnlocked and queues the one-time spotlight prompt,
+   * handled in QuestManager.resolve's chain-completion block right
+   * alongside them. See guild-idler-status.md's Harvest-unlock writeup
+   * and GameState.harvestUnlocked's own comment for why this one field
+   * gets different migration treatment than the other two despite
+   * looking identical here.
+   */
+  grantsHarvest?: boolean;
+  /**
    * A guaranteed egg on completion -- the egg equivalent of rewardItems
    * above, same "always granted, not a chance roll" contract. Optional
    * dedicatedPetId locks in a specific species from the dedicated pool

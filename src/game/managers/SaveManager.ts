@@ -125,6 +125,8 @@ export function createInitialState(now = Date.now()): GameState {
     harvestTools: emptyMaterials(),
     warehouseLevel: 0,
     tradeRouteUnlocked: false,
+    harvestUnlocked: false,
+    pendingHarvestSpotlight: false,
     scrap: 0,
     gems: {},
     resistGems: {},
@@ -544,6 +546,42 @@ const MIGRATIONS: Record<number, Migration> = {
     grimsbyLeavesAt: (save.grimsbyLeavesAt as number | null | undefined) ?? null,
     grimsbyHighRollerUnlocked: (save.grimsbyHighRollerUnlocked as boolean | undefined) ?? false,
   }),
+  34: (save) => {
+    // Harvest gets an intro chain (the_first_haul) for the first time --
+    // deliberately NOT the same "never force-unlock, undiscovered content
+    // stays undiscovered" treatment migration 33 above gives Grimsby.
+    // Grimsby/Hatchery were both brand-new systems nobody had ever had
+    // access to before their own unlock chains existed, so defaulting an
+    // old save to locked took nothing away. Harvest is different: every
+    // save at this version already had the tab fully, unconditionally
+    // visible with no gate at all, so defaulting all of them to locked
+    // here would be a real regression -- a save with real Warehouse
+    // levels, tool levels, and stored materials suddenly finding the tab
+    // gone. Grandfathered instead: any save showing genuine prior
+    // Harvest activity (materials in stock, a tool leveled up, the
+    // Warehouse upgraded, or Trade Route bought) unlocks immediately,
+    // matching what it already had. A save with none of that -- which
+    // in practice means "never actually opened the tab," functionally
+    // identical to a save that predates Harvest entirely -- goes through
+    // the_first_haul like a new game would, same as everyone going
+    // forward. pendingHarvestSpotlight deliberately stays false either
+    // way: a grandfathered save doesn't need a "here's your new tab"
+    // tour for a tab it's already used, and a freshly-locked save hasn't
+    // earned the completion moment that spotlight represents yet.
+    const materials = (save.materials as Record<string, number> | undefined) ?? {};
+    const harvestTools = (save.harvestTools as Record<string, number> | undefined) ?? {};
+    const hasHarvestActivity =
+      Object.values(materials).some((v) => (v ?? 0) > 0) ||
+      Object.values(harvestTools).some((v) => (v ?? 0) > 0) ||
+      ((save.warehouseLevel as number | undefined) ?? 0) > 0 ||
+      (save.tradeRouteUnlocked as boolean | undefined) === true;
+    return {
+      ...save,
+      version: 35,
+      harvestUnlocked: hasHarvestActivity,
+      pendingHarvestSpotlight: false,
+    };
+  },
 };
 
 export const SaveManager = {

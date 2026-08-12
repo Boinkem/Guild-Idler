@@ -3021,5 +3021,25 @@
     "default": 3,
     "min": 1,
     "description": "Both the fee and the reward for a High Roller flip are this many times the regular flip's -- see PeddlerManager.resolveFlip."
+  },
+  {
+    "id": "quest.gatheringBountyChance",
+    "label": "Gathering Bounty: chance per board slot",
+    "category": "quests",
+    "value": 15,
+    "default": 15,
+    "min": 0,
+    "max": 100,
+    "description": "Percent chance each generated quest-board slot rolls as a Gathering Bounty (guaranteed material reward) instead of an ordinary offer. Only rolled once harvestUnlocked is true."
+  },
+  {
+    "id": "quest.gatheringMaterialPerHour",
+    "label": "Gathering Bounty: material per hour",
+    "category": "quests",
+    "value": 40,
+    "default": 40,
+    "min": 1,
+    "max": 200,
+    "description": "Flat material units granted per hour of a Gathering Bounty's duration on success. Calibrated below the ~50/hr a hero could get manually clicking the Harvest minigame at zero tool investment (45s base spawn interval, 0.5 base yield, 12% chance of a 3x bonus glint) -- a fire-and-forget bounty is meant to pay slightly less than optimal manual play, same 80-85%-of-best-manual-rate shape fastQuestCapsPerHour already uses elsewhere."
   }
 ]

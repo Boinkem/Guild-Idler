@@ -34,24 +34,30 @@ guild-wide bonuses, gold storage. 8 facilities total, the newest being
 Music Hall (a pure cosmetic gold sink -- unlocks purchasable background
 music tracks, no stat effect).
 
-**Quest chains** — 28 total (was previously logged here as "19 total";
-corrected during this pass -- the live JSON had actually already grown to
-21 by the time anyone checked, and 7 more (below) were added in the same
-pass that caught the discrepancy. Lesson for next time: re-verify counts
-like this straight from `quest-chains.json` rather than trusting this
-doc's running total, since it's exactly the kind of thing that goes stale
-silently). 17 of the original chains are rewritten in the current
-narrative style (vivid/scene-painting); `world_ender` and the Last God
-successor content match that style natively, and all 7 new chains below
-were authored directly in that style from the start. Chain prerequisite
-gating exists (`requiresChainId`) — 10 confirmed dependencies wired in
-(8 original + `the_loom_beneath` -> `quiet_in_millbrook`, `house_of_bones`
-raid -> `hunt_a_lich`). Chain info lives only in the Quest tab (Discovered
-Quests, board-driven) and the Lore tab (Story, full history/roadmap) --
-`GuildPanel.tsx` had its own leftover "Quest chains" list from before the
-Quest Tab rework, listing every chain by name regardless of discovery
-state; removed (patch 0105) since it was both a duplicate and a minor
-spoiler.
+**Quest chains** — 29 total (28 after the level-gap pass below, +1 for
+`the_first_haul` added in this same pass -- was previously logged here as
+"19 total"; corrected during the level-gap pass -- the live JSON had
+actually already grown to 21 by the time anyone checked, and 7 more
+(below) were added in the same pass that caught the discrepancy. Lesson
+for next time: re-verify counts like this straight from
+`quest-chains.json` rather than trusting this doc's running total, since
+it's exactly the kind of thing that goes stale silently). 17 of the
+original chains are rewritten in the current narrative style (vivid/
+scene-painting); `world_ender` and the Last God successor content match
+that style natively, and all 8 new chains below (7 level-gap +
+`the_first_haul`) were authored directly in that style from the start.
+Chain prerequisite gating exists (`requiresChainId`) — 10 confirmed
+dependencies wired in (8 original + `the_loom_beneath` ->
+`quiet_in_millbrook`, `house_of_bones` raid -> `hunt_a_lich`); separately,
+`the_first_haul` uses the newer `grantsHarvest` flag rather than
+`requiresChainId`, since it's a tab-unlock chain, not a narrative
+prerequisite -- see grantsHatchery/grantsPeddler for the two chains that
+already used this pattern before it. Chain info lives only in the Quest
+tab (Discovered Quests, board-driven) and the Lore tab (Story, full
+history/roadmap) -- `GuildPanel.tsx` had its own leftover "Quest chains"
+list from before the Quest Tab rework, listing every chain by name
+regardless of discovery state; removed (patch 0105) since it was both a
+duplicate and a minor spoiler.
 
 **New standalone chains -- built**, filling several level ranges that had
 no dedicated chain/raid content at all (identified by pulling every
@@ -157,6 +163,17 @@ Fixed by adding the field to the schema; no data migration needed since
 the two existing raids' JSON already had the field set correctly, it was
 only ever the *editor* that couldn't see it.
 
+**Same class of gap, found again while adding `grantsHarvest` for
+`the_first_haul`:** the DevTool's `quest-chains` schema was also missing
+`grantsPeddler` entirely, despite `ChainDef.grantsPeddler` existing in
+code and already being set on `the_man_who_sells_maybe`'s own JSON entry
+since Grimsby shipped. Same fix, same no-migration-needed reasoning as
+`requiresChainId` above -- fixed alongside adding `grantsHarvest` in the
+same schema block rather than filed separately. Worth actually auditing
+the rest of this schema file for the same pattern at some point, rather
+than continuing to find these one at a time as each unrelated feature
+happens to touch a neighboring field.
+
 **Level-gap content pass -- the full before/after.** Started from a
 direct request to table every chain/raid's `reqLevel` to find zones with
 no dedicated content. Pulled straight from the live JSON rather than this
@@ -232,6 +249,54 @@ material nodes (Quarry/Woodyard/Herb Garden/Fish Weir) via a click-the-
 falling-item mechanic, spent on a Warehouse-tab Crafting UI (gear with
 player-chosen mods, or fixed consumables) plus a Trade Route for selling
 surplus. See its own section below for the full built-status writeup.
+
+**Harvest unlock + Gathering Bounty -- built.** Two related additions:
+- **`the_first_haul`** (reqLevel 1, 2 short stages, ~75min total, title
+  "Provisioner") is a small one-time intro chain, same shape as
+  `the_last_clutch`/`the_man_who_sells_maybe` -- a quartermaster shows the
+  guild how to gather its own materials instead of buying everything at
+  the shop. Uses a new `ChainDef.grantsHarvest` flag (mirroring
+  `grantsHatchery`/`grantsPeddler` exactly) to flip a new
+  `GameState.harvestUnlocked` and queue a one-time `OnboardingTour`
+  spotlight on completion. The Harvest tab is now hidden until this
+  completes, same as Hatchery/Grimsby's own gating in `MenuWindow.tsx`.
+  **Backward compatibility, deliberately handled differently than
+  Hatchery/Grimsby's own "never force-unlock" precedent**: Harvest,
+  unlike those two, was already unconditionally visible to every existing
+  save before this patch, so defaulting every old save to locked would
+  have been a real regression (stranding already-invested Warehouse
+  levels/tool levels/stored materials behind a chain that didn't exist
+  when that progress was made). SaveManager migration 34->35
+  grandfathers any save already showing real Harvest activity (materials
+  in stock, a tool leveled, Warehouse upgraded, or Trade Route bought)
+  straight to `harvestUnlocked: true` with no spotlight queued; a save
+  with none of that -- functionally identical to one that predates
+  Harvest entirely -- goes through `the_first_haul` like a new game
+  would. Also added `testUnlockHarvest()` alongside the existing
+  `testUnlockHatchery()` dev tool.
+- **Gathering Bounty**: a new procedurally-rolled quest-board offer
+  variant (`QuestManager.generateGatheringOffer`), only ever rolled once
+  `harvestUnlocked` is true (`quest.gatheringBountyChance`, 15% per board
+  slot). Sends a hero off to fetch a specific material instead of the
+  player clicking the Harvest minigame directly -- guarantees a flat
+  `materialReward` on top of the normal gold/xp/duration math every other
+  offer already uses (reuses `generateOffer` wholesale rather than
+  duplicating its burst/medium/cap logic, only overriding name/flavour/
+  tag and attaching the material). Rate is `quest.gatheringMaterialPerHour`
+  = 40/hr, calibrated directly against the actual Harvest tuning values
+  rather than guessed: a zero-tool-investment hero clicking perfectly
+  (45s base spawn interval, 0.5 base yield, 12% chance of a 3x bonus
+  glint) nets ~50/hr, so 40/hr lands the bounty at 80% of optimal manual
+  play -- the same "slightly below best manual rate" shape
+  `fastQuestCapsPerHour` already uses elsewhere for burst/medium quests,
+  not an arbitrary discount. On failure, pays the same 15%-of-full
+  consolation shape gold already does; both branches clamp at warehouse
+  capacity, same as a real `HarvestManager.catch`. New
+  `QuestOffer.materialReward` / `QuestResult.materialGained` fields.
+  Verified at runtime: bounty offers never appear before
+  `harvestUnlocked`, the credited amount matches the duration-scaled
+  40/hr formula exactly, and a payout landing near a full Warehouse
+  clamps rather than overflowing it.
 
 **Pets / Hatchery** — new `hatchery` tab (hidden until the one-time intro
 chain `the_last_clutch` grants it), unlocked via a spotlight prompt reusing

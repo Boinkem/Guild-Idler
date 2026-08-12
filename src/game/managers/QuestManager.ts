@@ -6,8 +6,10 @@ import { HERO_CLASSES } from '../data/progression';
 import { fastQuestCapsPerHour, fastQuestFloorPerHour } from '../data/balance';
 import { questEggDropChance } from '../data/pets';
 import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
+import { NODE_ORDER, MATERIAL_BY_ID } from '../data/materials';
+import { warehouseCapacity } from '../data/harvestUpgrades';
 import {
-  ActiveQuest, Difficulty, GameState, Hero, QuestOffer, QuestResult, Rarity,
+  ActiveQuest, Difficulty, GameState, Hero, MaterialId, QuestOffer, QuestResult, Rarity,
 } from '../types';
 import { createRng, Rng, uid } from '../rng';
 import { clamp, HOUR, MINUTE, sumMods } from '../util';
@@ -82,7 +84,17 @@ export const QuestManager = {
     const offers: QuestOffer[] = [];
     for (let i = 0; i < BOARD_SIZE; i++) {
       const difficulty = rng.weighted(available.map((d) => ({ item: d, weight: DIFFICULTIES[d].weight })));
-      offers.push(QuestManager.generateOffer(difficulty, rng, `q:${window}:${hero.id}:${salt}:${i}`, hero.level, false, legendaryUnlocked));
+      // Gathering Bounties only ever appear once Harvest itself is
+      // unlocked -- a material-fetch offer makes no sense (and points at
+      // a tab the player can't even see yet) before `the_first_haul` is
+      // done. Rolled independently per slot, same shape any other
+      // per-offer chance in this function would use.
+      const seedTag = `q:${window}:${hero.id}:${salt}:${i}`;
+      if (state.harvestUnlocked && rng.chance(Tuning.get('quest.gatheringBountyChance'))) {
+        offers.push(QuestManager.generateGatheringOffer(difficulty, rng, seedTag, hero.level, legendaryUnlocked));
+      } else {
+        offers.push(QuestManager.generateOffer(difficulty, rng, seedTag, hero.level, false, legendaryUnlocked));
+      }
     }
 
     // Every hero's board is their own now, so "no second pair of hands to
@@ -364,6 +376,39 @@ export const QuestManager = {
     };
   },
 
+  /**
+   * A special-case offer variant, rolled instead of an ordinary
+   * generateOffer() result at generateContractsForHero's own chance (see
+   * quest.gatheringBountyChance). Reuses generateOffer for everything
+   * that doesn't need to change (duration/gold/xp/success/loot all still
+   * come from the same difficulty-tier math every other offer uses) and
+   * only overrides name/flavour/tag and attaches the guaranteed
+   * `materialReward` -- deliberately not a parallel implementation, so
+   * this automatically inherits any future tuning change to burst/medium
+   * modes, caps, or elemental rolls without needing its own copy kept in
+   * sync.
+   *
+   * `amount` is duration-scaled off quest.gatheringMaterialPerHour --
+   * see that tuning entry's own description for the exact "slightly
+   * below optimal manual clicking" math it's calibrated against.
+   */
+  generateGatheringOffer(
+    difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number, legendaryUnlocked = false,
+  ): QuestOffer {
+    const base = QuestManager.generateOffer(difficulty, rng, seedTag, topLevel, false, legendaryUnlocked);
+    const materialId: MaterialId = rng.pick(NODE_ORDER);
+    const materialName = MATERIAL_BY_ID[materialId]?.name ?? materialId;
+    const perHour = Tuning.get('quest.gatheringMaterialPerHour');
+    const amount = Math.max(1, Math.round((perHour * base.duration) / HOUR));
+    return {
+      ...base,
+      name: `Gathering Bounty: ${materialName}`,
+      flavour: `A standing request to bring back as much ${materialName.toLowerCase()} as a hero can carry -- less than a full day at the actual gathering grounds would net, but nobody's asking this hero to stand there clicking either.`,
+      tag: 'explore',
+      materialReward: { materialId, amount },
+    };
+  },
+
   chainOffer(chain: ChainDef, stage: number, rng: Rng): QuestOffer {
     const stageDef = chain.stages[stage];
     const cfg = DIFFICULTIES[stageDef.difficulty];
@@ -632,6 +677,25 @@ export const QuestManager = {
     }
     gold = Math.max(0, gold);
 
+    /* --------------------------- gathering bounty --------------------------- */
+    // Independent of the success/failure gold-xp branch above -- a
+    // Gathering Bounty's material payout follows the exact same
+    // full-on-success / 15%-consolation-on-failure shape gold already
+    // does, just applied to state.materials instead. Capped by warehouse
+    // capacity same as a manual HarvestManager.catch, so a bounty landing
+    // while the Warehouse is already full doesn't silently overflow it.
+    let materialGained: QuestResult['materialGained'];
+    if (quest.offer.materialReward) {
+      const { materialId, amount } = quest.offer.materialReward;
+      const rawAmount = success ? amount : Math.floor(amount * 0.15);
+      if (rawAmount > 0) {
+        const cap = warehouseCapacity(state.warehouseLevel);
+        const gained = Math.max(0, Math.min(rawAmount, cap - state.materials[materialId]));
+        state.materials[materialId] += gained;
+        materialGained = { materialId, amount: gained };
+      }
+    }
+
     // Critical Burst -- a rare, purely random spike on top of the normal
     // reward roll, independent of the daily first-burst floor below (both
     // can fire on the same quest, on a very good day -- that's intended,
@@ -845,6 +909,18 @@ export const QuestManager = {
             state.peddlerUnlocked = true;
             state.pendingPeddlerSpotlight = true;
           }
+          // The Harvest tab's own intro -- same shape again. Only ever
+          // reachable by actually completing the_first_haul; the
+          // grandfather path for pre-existing saves (see
+          // GameState.harvestUnlocked's own comment) sets
+          // state.harvestUnlocked directly in a SaveManager migration
+          // instead, deliberately without also setting this spotlight
+          // flag, since a save that's already been using Harvest for
+          // real doesn't need a "here's your new tab" tour.
+          if (chain.grantsHarvest) {
+            state.harvestUnlocked = true;
+            state.pendingHarvestSpotlight = true;
+          }
         }
       } else {
         active.failedStages += 1;
@@ -885,6 +961,7 @@ export const QuestManager = {
       levelsGained,
       chainAdvanced,
       eggDropped,
+      materialGained,
       dailyBurstBonus: dailyBurstBonus || undefined,
       critBonus: critBonus || undefined,
       grimsbyArrived: grimsbyArrived || undefined,

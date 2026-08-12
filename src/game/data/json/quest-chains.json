@@ -1115,5 +1115,35 @@
         "durationMinutes": 1560
       }
     ]
+  },
+  {
+    "id": "the_first_haul",
+    "name": "The First Haul",
+    "description": "A grizzled old quartermaster corners the guild before their first real job is even finished, insisting that buying every scrap of ore and timber from the shop is money any guild worth the name should be keeping for itself -- if someone's willing to clear the bramble off the old gathering grounds first.",
+    "reqLevel": 1,
+    "rewardGold": 120,
+    "rewardItems": [],
+    "rewardRenown": 1,
+    "title": "Provisioner",
+    "epilogue": "The quartermaster's shown the guild everything they know about coaxing ore, timber, herbs, and fish out of the land around Ironrest -- the rest is just standing at a node and paying attention. The guild's supply room already looks less bare, and considerably less like it's bleeding gold at the shop counter.",
+    "grantsHarvest": true,
+    "stages": [
+      {
+        "name": "Clearing the Old Grounds",
+        "flavour": "The gathering grounds haven't been touched in years -- brambles over the quarry mouth, a woodyard nobody's swept, an herb garden gone to weed. None of it's dangerous. All of it needs clearing before anyone can use it again.",
+        "tag": "explore",
+        "difficulty": "easy",
+        "goldMultiplier": 1.1,
+        "durationMinutes": 30
+      },
+      {
+        "name": "A Lesson in the Old Ways",
+        "flavour": "The quartermaster walks the guild through every node personally -- when to strike, when to wait, which glints are worth rushing for. It's less a lesson than a demonstration of forty years of doing this without ever once paying for a single nail.",
+        "tag": "explore",
+        "difficulty": "easy",
+        "goldMultiplier": 1.2,
+        "durationMinutes": 45
+      }
+    ]
   }
 ]

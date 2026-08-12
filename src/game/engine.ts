@@ -812,6 +812,15 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  /** Unlocks Harvest directly, bypassing `the_first_haul` -- same
+   *  reasoning as testUnlockHatchery just above. */
+  testUnlockHarvest() {
+    if (!TESTING_TOOLS_ENABLED) return;
+    this.state.harvestUnlocked = true;
+    this.notify();
+    void this.saveNow();
+  }
+
   /** Unlocks Grimsby's tab directly and forces him to arrive right now,
    *  bypassing both the intro chain and the quest-count cooldown --
    *  testing the card-flip flow otherwise means actually playing "The
@@ -1948,6 +1957,19 @@ export class GameEngine {
    *  pattern as dismissHatcherySpotlight. */
   dismissPeddlerSpotlight() {
     this.state.pendingPeddlerSpotlight = false;
+    void this.saveNow();
+  }
+
+  /* ------------------------------- Harvest ------------------------------- */
+
+  /** Dismisses the one-time "you've unlocked Harvest" spotlight -- same
+   *  pattern as dismissHatcherySpotlight/dismissPeddlerSpotlight. Never
+   *  actually reached for a save that came through the SaveManager
+   *  migration's grandfather path instead of the real chain, since that
+   *  path deliberately never sets pendingHarvestSpotlight true in the
+   *  first place -- see GameState.harvestUnlocked's own comment. */
+  dismissHarvestSpotlight() {
+    this.state.pendingHarvestSpotlight = false;
     void this.saveNow();
   }
 

@@ -228,13 +228,20 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
             <div key={group.label ?? `pinned-${gi}`} className="tabs-group">
               {group.label && <div className="tabs-group-label">{group.label}</div>}
               {group.tabs
-                // Hatchery/Grimsby are the nav entries that don't always
-                // exist -- both hidden entirely until their own intro
-                // chain completes, rather than shown-but-locked the way
-                // e.g. Raids' own internal gating works. Every other tab
-                // id has no visibility condition at all, hence `?? true`.
+                // Hatchery/Grimsby/Harvest are the nav entries that don't
+                // always exist -- all three hidden entirely until their
+                // own intro chain completes, rather than shown-but-locked
+                // the way e.g. Raids' own internal gating works. Every
+                // other tab id has no visibility condition at all, hence
+                // `?? true`. Harvest is the odd one out here (see
+                // GameState.harvestUnlocked's own comment) -- it's the
+                // only one of the three that could already be true for a
+                // save that predates this gate entirely, via the
+                // SaveManager migration's grandfather path rather than
+                // ever actually completing the_first_haul.
                 .filter((t) => (t.id === 'hatchery' ? engine.state.hatcheryUnlocked
-                  : t.id === 'peddler' ? engine.state.peddlerUnlocked : true))
+                  : t.id === 'peddler' ? engine.state.peddlerUnlocked
+                  : t.id === 'harvest' ? engine.state.harvestUnlocked : true))
                 .map((t) => (
                   <button
                     key={t.id}
@@ -316,6 +323,18 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
           steps={[{ id: 'peddler', label: 'Grimsby' }]}
           onTabChange={(id) => setTab(id as TabId)}
           onDone={() => engine.dismissPeddlerSpotlight()}
+        />
+      )}
+      {/* Same one-step reuse again, fired the moment `the_first_haul`
+          completes rather than a fixed tour step -- see
+          pendingHarvestSpotlight's own comment for why a save that
+          reached harvestUnlocked via the SaveManager migration's
+          grandfather path instead never actually reaches this block. */}
+      {engine.state.guildName !== '' && engine.state.pendingHarvestSpotlight && (
+        <OnboardingTour
+          steps={[{ id: 'harvest', label: 'Harvest' }]}
+          onTabChange={(id) => setTab(id as TabId)}
+          onDone={() => engine.dismissHarvestSpotlight()}
         />
       )}
     </div>
