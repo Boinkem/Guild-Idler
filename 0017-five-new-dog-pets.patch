@@ -1,0 +1,264 @@
+From 39b5c294709920aeba76cc9849725ef35edc269f Mon Sep 17 00:00:00 2001
+From: Guild Idler Patch <patch@guild-idler.local>
+Date: Wed, 12 Aug 2026 05:40:12 +0000
+Subject: [PATCH] Add 5 new dog breeds to the general pet pool (Goldenpaw,
+ Farwatch, Longshadow, Briarbeard, Frostrunner)
+
+- 5 new plain (non-dedicatedOnly) pets.json entries -- Golden Retriever,
+  Akita, Great Dane, Schnauzer, Siberian Husky, from the same licensed
+  pack as the existing Saint Bernard/hatchery_hound. Joining
+  GENERAL_PET_POOL automatically, no new drop-chance or weighting logic
+  needed. hatchery_hound stays exactly as-is, still the_last_clutch's
+  dedicated starter egg.
+- 5 new PetSpec entries in tools/import_pets.py, same pre-cut-strip
+  shape as the Hound (anim_files, 100x100 padded frame canvas, 10-frame
+  idle + 8-frame run strips) -- confirmed directly against the real
+  uploaded source files, not assumed. Recolor/keep palettes picked by
+  actually sampling each PNG's colour histogram: Longshadow's harlequin
+  base+patches recolor together as one cohesive palette so the coat
+  pattern survives the hue shift; Frostrunner's genuine cyan eye colour
+  is explicitly protected from the recolor the same way every other
+  species keeps its eyes fixed while its coat tints.
+
+Verified by actually running the real import pipeline against the real
+source files (not just reasoning through the spec): correct manifest
+entries for all 5 species, all 5 rarity tiers rendered correctly for
+both animations with coats shifting hue while eyes/outlines stay fixed
+(visually confirmed), and exact frame counts with no dropped/corrupted
+frames. Separately confirmed at the data layer: GENERAL_PET_POOL and
+pickHatchedPetDefId correctly surface all 5 new species from an ordinary
+egg hatch across a large sample, while hatchery_hound/black_dragonling
+remain correctly excluded. Full tsc --noEmit and vite build pass clean.
+
+Art itself (public/pets/) is gitignored same as every other species and
+isn't part of this patch -- generated separately and handed over
+alongside it; run 'python3 tools/import_pets.py --src <raw sheets> --out
+public/pets --only goldenpaw farwatch longshadow briarbeard frostrunner'
+to regenerate locally, which merges onto the existing manifest without
+touching the other 10 species' entries.
+---
+ guild-idler-status.md        | 73 ++++++++++++++++++++++++++++++++++
+ src/game/data/json/pets.json | 35 ++++++++++++++++
+ tools/import_pets.py         | 77 +++++++++++++++++++++++++++++++++++-
+ 3 files changed, 184 insertions(+), 1 deletion(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 1f56373..6dc2d58 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -3064,6 +3064,79 @@ consistent with everything else Warehouse-related (capacity, Trade
+ Route) living in one administrative spot rather than scattered across
+ the tab.
+ 
++### Five new dog breeds added to the general pet pool -- built
++Direct request, same licensed pack as the existing Saint Bernard/
++`hatchery_hound`: Golden Retriever, Akita, Great Dane, Schnauzer, and
++Siberian Husky, all joining the ordinary random-hatch pool rather than
++being dedicated to any one source (the Saint Bernard stays exactly as-is
++-- still `the_last_clutch`'s dedicated starter egg, untouched). Mechanically
++this needed almost nothing new: `GENERAL_PET_POOL` already resolves to
++"every `PetDef` not flagged `dedicatedOnly`," so five plain new
++`pets.json` entries with no such flag were the entire wiring -- no new
++drop-chance system, no per-species weighting, and no per-species stat
++design either, since a pet's bonus type (success/gold/xp/loot) is already
++rolled independently of species at hatch time.
++
++New species, named in the same in-fiction-reflavor convention every
++other pet already uses (nothing in this pack was named after its literal
++real-world animal): **Goldenpaw** (Golden Retriever), **Farwatch**
++(Akita), **Longshadow** (Great Dane), **Briarbeard** (Schnauzer),
++**Frostrunner** (Siberian Husky).
++
++New `PetSpec` entries added to `tools/import_pets.py`, same pre-cut-
++strip shape the Hound already established (`anim_files`, not a row-grid
++sheet) -- confirmed directly against the real uploaded files rather than
++assumed: all five use the same 100x100 padded frame canvas as the Hound
++(1000x100 = 10-frame idle strip, 800x100 = 8-frame run strip), and the
++grounding-trim logic (`ground_trim_for`) correctly stripped 33-42px of
++empty canvas per species without needing any code changes. Only idle +
++run were provided for these five (no lying-down file the way the Hound
++got one) -- fine, `PetSprite.resolveAnimation`'s existing fallback
++chain already covers a species missing an animation.
++
++Recolor/keep palettes for each were picked by actually sampling the real
++PNGs' colour histograms and visually confirming each colour's role
++against an 8x nearest-neighbour crop, not guessed from the sheet
++thumbnails:
++- **Goldenpaw**: 5 graduated golden/brown fur tones recolored together;
++  near-black eye/nose kept fixed.
++- **Farwatch**: two-tone tan/brown fur + a cream underbelly tone,
++  recolored as one cohesive palette; near-black eye/nose kept fixed.
++- **Longshadow**: a harlequin/mantle coat -- the silver-grey base AND
++  the brown patches are recolored together as one palette (not
++  independently), so the patched pattern itself survives the hue shift
++  rather than one tone drifting out of sync with the other. Two
++  near-black outline/eye shades kept fixed.
++- **Briarbeard**: 7 blue-grey coat tones recolored together; one
++  near-black eye/nose kept fixed.
++- **Frostrunner**: black/grey/white coat tones recolored together --
++  but the husky's genuine cyan eye colour (`#069d9d`, confirmed by
++  sampling the actual sprite, not assumed from the species name) is
++  explicitly kept fixed rather than folded into the fur palette, the
++  same way every other species' eye colour stays constant while its
++  coat tints. A Legendary Frostrunner keeps its blue eyes; only the coat
++  shifts.
++
++Verified by actually running the real pipeline against the real
++uploaded files (not just reasoning through the spec): all 5 species
++produced a correct `manifest.json` entry, all 5 rarity tiers rendered
++for both animations with the coat correctly shifting hue while
++eyes/outlines stayed fixed (visually confirmed via an enlarged
++common-through-legendary comparison strip per species), and frame
++counts matched exactly (10 idle / 8 run) with no dropped or corrupted
++frames. Separately confirmed at the data layer: `GENERAL_PET_POOL` picks
++up all 5 new ids automatically, `pickHatchedPetDefId` actually rolls
++each of them across a large sample of ordinary (non-dedicated) egg
++hatches, and `hatchery_hound`/`black_dragonling` remain correctly
++excluded from that pool, unaffected by this change. Full `tsc --noEmit`
++and `vite build` both pass clean. Art itself (`public/pets/`, gitignored
++same as every other species) isn't part of this patch -- run
++`python3 tools/import_pets.py --src <folder with the raw sheets> --out
++public/pets --only goldenpaw farwatch longshadow briarbeard frostrunner`
++locally to generate it; the script's own existing merge behavior adds
++these 5 onto the existing manifest without touching the other 10
++species' entries.
++
+ ### Pets / Hatchery -- built
+ The full spec below shipped essentially as designed, with a few decisions
+ made concrete along the way (each noted where it resolves an open question
+diff --git a/src/game/data/json/pets.json b/src/game/data/json/pets.json
+index 49053e4..62ba245 100644
+--- a/src/game/data/json/pets.json
++++ b/src/game/data/json/pets.json
+@@ -70,5 +70,40 @@
+     "glyph": "\ud83d\udc09",
+     "spriteFolder": "black_dragonling",
+     "dedicatedOnly": true
++  },
++  {
++    "id": "goldenpaw",
++    "name": "Goldenpaw",
++    "description": "Never once returned from a walk without something in its mouth -- a stick, a glove, occasionally somebody else's dinner. Entirely too pleased with itself about all of it.",
++    "glyph": "\ud83d\udc15",
++    "spriteFolder": "goldenpaw"
++  },
++  {
++    "id": "farwatch",
++    "name": "Farwatch",
++    "description": "Picks one spot near the door and holds it for hours, watching the horizon like something is definitely about to happen. Occasionally something does.",
++    "glyph": "\ud83d\udc15",
++    "spriteFolder": "farwatch"
++  },
++  {
++    "id": "longshadow",
++    "name": "Longshadow",
++    "description": "Takes up an entire doorway just standing in it. Moves like it has never once been in a hurry, and has apparently never needed to be.",
++    "glyph": "\ud83d\udc15",
++    "spriteFolder": "longshadow"
++  },
++  {
++    "id": "briarbeard",
++    "name": "Briarbeard",
++    "description": "Looks personally offended by roughly one out of every three things that happen. The beard does most of the talking.",
++    "glyph": "\ud83d\udc15",
++    "spriteFolder": "briarbeard"
++  },
++  {
++    "id": "frostrunner",
++    "name": "Frostrunner",
++    "description": "Built for distances nobody here is actually travelling. Happiest mid-sprint for no particular reason, gone quiet and thoughtful the moment it has to stop.",
++    "glyph": "\ud83d\udc15",
++    "spriteFolder": "frostrunner"
+   }
+ ]
+diff --git a/tools/import_pets.py b/tools/import_pets.py
+index 115c52e..00ec04a 100644
+--- a/tools/import_pets.py
++++ b/tools/import_pets.py
+@@ -179,7 +179,82 @@ HOUND = PetSpec(
+     keep=['#cbc4c1', '#b9afab', '#9d9592', '#100804'],  # white/grey body + outline
+ )
+ 
+-PETS: List[PetSpec] = [FOX, RED_PANDA, CROW, HOUND]
++# Five more breeds from the same licensed pack as the Hound above -- same
++# pre-cut-strip shape (idle + run only this time, no lying-down file was
++# provided for any of these five), same 100x100 padded frame canvas
++# confirmed directly against the actual uploaded files (1000x100 for a
++# 10-frame idle strip, 800x100 for an 8-frame run strip, exactly like the
++# Hound's own convention). Every recolor/keep list below was picked by
++# actually sampling the real PNGs' colour histograms and visually
++# confirming each colour's role (fur vs. outline/eye) against an 8x
++# nearest-neighbour crop -- not guessed from the sheet thumbnails alone.
++GOLDENPAW = PetSpec(
++    species_id='goldenpaw',
++    frame_w=100, frame_h=100,
++    anim_files={
++        'idle': 'Golden-Retriever-idle.png',
++        'movement': 'Golden-Retriever-run.png',
++    },
++    recolor=['#945d25', '#845321', '#704518', '#b27231', '#a46627'],  # graduated golden/brown fur tones
++    keep=['#202020', '#353434'],  # near-black eye/nose + a dark outline shade
++)
++
++FARWATCH = PetSpec(
++    species_id='farwatch',
++    frame_w=100, frame_h=100,
++    anim_files={
++        'idle': 'Akita-Idle.png',
++        'movement': 'Akita-run.png',
++    },
++    recolor=['#ce9254', '#986838', '#b0a88e', '#e6ddc3'],  # two-tone tan/brown fur + cream underbelly
++    keep=['#180f06', '#bababa'],  # near-black eye/nose + a small light highlight
++)
++
++LONGSHADOW = PetSpec(
++    species_id='longshadow',
++    frame_w=100, frame_h=100,
++    anim_files={
++        'idle': 'Great-Dane-idle.png',
++        'movement': 'Great-Dane-run.png',
++    },
++    # Harlequin/mantle coat -- silver-grey base AND brown patches both
++    # shift together as one cohesive "fur" palette per rarity tier, same
++    # as every other multi-tone coat here, so the patched pattern itself
++    # survives the recolor rather than one tone shifting independently of
++    # the other.
++    recolor=['#a9adae', '#705009', '#494f4f', '#6b7476', '#553d08', '#b7bdc0', '#c8c8c8', '#626b6b', '#adadad'],
++    keep=['#0d1115', '#1d2329'],  # two near-black shades, both outline/eye -- never touched
++)
++
++BRIARBEARD = PetSpec(
++    species_id='briarbeard',
++    frame_w=100, frame_h=100,
++    anim_files={
++        'idle': 'Schnauzer-Idle.png',
++        'movement': 'Schnauzer-run.png',
++    },
++    recolor=['#7c8094', '#676a7c', '#53576a', '#a0a2a2', '#878c8c', '#515362', '#858179'],  # blue-grey coat tones
++    keep=['#282424'],  # near-black eye/nose
++)
++
++FROSTRUNNER = PetSpec(
++    species_id='frostrunner',
++    frame_w=100, frame_h=100,
++    anim_files={
++        'idle': 'Siberian-Husky-Idle.png',
++        'movement': 'Siberian-Husky-run.png',
++    },
++    recolor=['#2a2b2b', '#6d7474', '#191a1a', '#4a5454', '#b9c5c5'],  # black/grey/white coat
++    # #069d9d is the husky's actual cyan eye colour, confirmed by sampling
++    # the real sprite and visually inspecting an enlarged crop -- kept
++    # fixed on purpose across every rarity tier rather than folded into
++    # the recolor list, the same way every other species keeps its eye
++    # colour constant while its coat shifts. A Legendary Frostrunner
++    # keeps its blue eyes; only the coat tints.
++    keep=['#069d9d', '#4a4b4b'],
++)
++
++PETS: List[PetSpec] = [FOX, RED_PANDA, CROW, HOUND, GOLDENPAW, FARWATCH, LONGSHADOW, BRIARBEARD, FROSTRUNNER]
+ 
+ 
+ # -------------------------------------------------------------- recolour ---
+-- 
+2.43.0
+

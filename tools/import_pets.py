@@ -179,7 +179,82 @@ HOUND = PetSpec(
     keep=['#cbc4c1', '#b9afab', '#9d9592', '#100804'],  # white/grey body + outline
 )
 
-PETS: List[PetSpec] = [FOX, RED_PANDA, CROW, HOUND]
+# Five more breeds from the same licensed pack as the Hound above -- same
+# pre-cut-strip shape (idle + run only this time, no lying-down file was
+# provided for any of these five), same 100x100 padded frame canvas
+# confirmed directly against the actual uploaded files (1000x100 for a
+# 10-frame idle strip, 800x100 for an 8-frame run strip, exactly like the
+# Hound's own convention). Every recolor/keep list below was picked by
+# actually sampling the real PNGs' colour histograms and visually
+# confirming each colour's role (fur vs. outline/eye) against an 8x
+# nearest-neighbour crop -- not guessed from the sheet thumbnails alone.
+GOLDENPAW = PetSpec(
+    species_id='goldenpaw',
+    frame_w=100, frame_h=100,
+    anim_files={
+        'idle': 'Golden-Retriever-idle.png',
+        'movement': 'Golden-Retriever-run.png',
+    },
+    recolor=['#945d25', '#845321', '#704518', '#b27231', '#a46627'],  # graduated golden/brown fur tones
+    keep=['#202020', '#353434'],  # near-black eye/nose + a dark outline shade
+)
+
+FARWATCH = PetSpec(
+    species_id='farwatch',
+    frame_w=100, frame_h=100,
+    anim_files={
+        'idle': 'Akita-Idle.png',
+        'movement': 'Akita-run.png',
+    },
+    recolor=['#ce9254', '#986838', '#b0a88e', '#e6ddc3'],  # two-tone tan/brown fur + cream underbelly
+    keep=['#180f06', '#bababa'],  # near-black eye/nose + a small light highlight
+)
+
+LONGSHADOW = PetSpec(
+    species_id='longshadow',
+    frame_w=100, frame_h=100,
+    anim_files={
+        'idle': 'Great-Dane-idle.png',
+        'movement': 'Great-Dane-run.png',
+    },
+    # Harlequin/mantle coat -- silver-grey base AND brown patches both
+    # shift together as one cohesive "fur" palette per rarity tier, same
+    # as every other multi-tone coat here, so the patched pattern itself
+    # survives the recolor rather than one tone shifting independently of
+    # the other.
+    recolor=['#a9adae', '#705009', '#494f4f', '#6b7476', '#553d08', '#b7bdc0', '#c8c8c8', '#626b6b', '#adadad'],
+    keep=['#0d1115', '#1d2329'],  # two near-black shades, both outline/eye -- never touched
+)
+
+BRIARBEARD = PetSpec(
+    species_id='briarbeard',
+    frame_w=100, frame_h=100,
+    anim_files={
+        'idle': 'Schnauzer-Idle.png',
+        'movement': 'Schnauzer-run.png',
+    },
+    recolor=['#7c8094', '#676a7c', '#53576a', '#a0a2a2', '#878c8c', '#515362', '#858179'],  # blue-grey coat tones
+    keep=['#282424'],  # near-black eye/nose
+)
+
+FROSTRUNNER = PetSpec(
+    species_id='frostrunner',
+    frame_w=100, frame_h=100,
+    anim_files={
+        'idle': 'Siberian-Husky-Idle.png',
+        'movement': 'Siberian-Husky-run.png',
+    },
+    recolor=['#2a2b2b', '#6d7474', '#191a1a', '#4a5454', '#b9c5c5'],  # black/grey/white coat
+    # #069d9d is the husky's actual cyan eye colour, confirmed by sampling
+    # the real sprite and visually inspecting an enlarged crop -- kept
+    # fixed on purpose across every rarity tier rather than folded into
+    # the recolor list, the same way every other species keeps its eye
+    # colour constant while its coat shifts. A Legendary Frostrunner
+    # keeps its blue eyes; only the coat tints.
+    keep=['#069d9d', '#4a4b4b'],
+)
+
+PETS: List[PetSpec] = [FOX, RED_PANDA, CROW, HOUND, GOLDENPAW, FARWATCH, LONGSHADOW, BRIARBEARD, FROSTRUNNER]
 
 
 # -------------------------------------------------------------- recolour ---

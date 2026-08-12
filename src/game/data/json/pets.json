@@ -70,5 +70,40 @@
     "glyph": "\ud83d\udc09",
     "spriteFolder": "black_dragonling",
     "dedicatedOnly": true
+  },
+  {
+    "id": "goldenpaw",
+    "name": "Goldenpaw",
+    "description": "Never once returned from a walk without something in its mouth -- a stick, a glove, occasionally somebody else's dinner. Entirely too pleased with itself about all of it.",
+    "glyph": "\ud83d\udc15",
+    "spriteFolder": "goldenpaw"
+  },
+  {
+    "id": "farwatch",
+    "name": "Farwatch",
+    "description": "Picks one spot near the door and holds it for hours, watching the horizon like something is definitely about to happen. Occasionally something does.",
+    "glyph": "\ud83d\udc15",
+    "spriteFolder": "farwatch"
+  },
+  {
+    "id": "longshadow",
+    "name": "Longshadow",
+    "description": "Takes up an entire doorway just standing in it. Moves like it has never once been in a hurry, and has apparently never needed to be.",
+    "glyph": "\ud83d\udc15",
+    "spriteFolder": "longshadow"
+  },
+  {
+    "id": "briarbeard",
+    "name": "Briarbeard",
+    "description": "Looks personally offended by roughly one out of every three things that happen. The beard does most of the talking.",
+    "glyph": "\ud83d\udc15",
+    "spriteFolder": "briarbeard"
+  },
+  {
+    "id": "frostrunner",
+    "name": "Frostrunner",
+    "description": "Built for distances nobody here is actually travelling. Happiest mid-sprint for no particular reason, gone quiet and thoughtful the moment it has to stop.",
+    "glyph": "\ud83d\udc15",
+    "spriteFolder": "frostrunner"
   }
 ]

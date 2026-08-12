@@ -3064,6 +3064,79 @@ consistent with everything else Warehouse-related (capacity, Trade
 Route) living in one administrative spot rather than scattered across
 the tab.
 
+### Five new dog breeds added to the general pet pool -- built
+Direct request, same licensed pack as the existing Saint Bernard/
+`hatchery_hound`: Golden Retriever, Akita, Great Dane, Schnauzer, and
+Siberian Husky, all joining the ordinary random-hatch pool rather than
+being dedicated to any one source (the Saint Bernard stays exactly as-is
+-- still `the_last_clutch`'s dedicated starter egg, untouched). Mechanically
+this needed almost nothing new: `GENERAL_PET_POOL` already resolves to
+"every `PetDef` not flagged `dedicatedOnly`," so five plain new
+`pets.json` entries with no such flag were the entire wiring -- no new
+drop-chance system, no per-species weighting, and no per-species stat
+design either, since a pet's bonus type (success/gold/xp/loot) is already
+rolled independently of species at hatch time.
+
+New species, named in the same in-fiction-reflavor convention every
+other pet already uses (nothing in this pack was named after its literal
+real-world animal): **Goldenpaw** (Golden Retriever), **Farwatch**
+(Akita), **Longshadow** (Great Dane), **Briarbeard** (Schnauzer),
+**Frostrunner** (Siberian Husky).
+
+New `PetSpec` entries added to `tools/import_pets.py`, same pre-cut-
+strip shape the Hound already established (`anim_files`, not a row-grid
+sheet) -- confirmed directly against the real uploaded files rather than
+assumed: all five use the same 100x100 padded frame canvas as the Hound
+(1000x100 = 10-frame idle strip, 800x100 = 8-frame run strip), and the
+grounding-trim logic (`ground_trim_for`) correctly stripped 33-42px of
+empty canvas per species without needing any code changes. Only idle +
+run were provided for these five (no lying-down file the way the Hound
+got one) -- fine, `PetSprite.resolveAnimation`'s existing fallback
+chain already covers a species missing an animation.
+
+Recolor/keep palettes for each were picked by actually sampling the real
+PNGs' colour histograms and visually confirming each colour's role
+against an 8x nearest-neighbour crop, not guessed from the sheet
+thumbnails:
+- **Goldenpaw**: 5 graduated golden/brown fur tones recolored together;
+  near-black eye/nose kept fixed.
+- **Farwatch**: two-tone tan/brown fur + a cream underbelly tone,
+  recolored as one cohesive palette; near-black eye/nose kept fixed.
+- **Longshadow**: a harlequin/mantle coat -- the silver-grey base AND
+  the brown patches are recolored together as one palette (not
+  independently), so the patched pattern itself survives the hue shift
+  rather than one tone drifting out of sync with the other. Two
+  near-black outline/eye shades kept fixed.
+- **Briarbeard**: 7 blue-grey coat tones recolored together; one
+  near-black eye/nose kept fixed.
+- **Frostrunner**: black/grey/white coat tones recolored together --
+  but the husky's genuine cyan eye colour (`#069d9d`, confirmed by
+  sampling the actual sprite, not assumed from the species name) is
+  explicitly kept fixed rather than folded into the fur palette, the
+  same way every other species' eye colour stays constant while its
+  coat tints. A Legendary Frostrunner keeps its blue eyes; only the coat
+  shifts.
+
+Verified by actually running the real pipeline against the real
+uploaded files (not just reasoning through the spec): all 5 species
+produced a correct `manifest.json` entry, all 5 rarity tiers rendered
+for both animations with the coat correctly shifting hue while
+eyes/outlines stayed fixed (visually confirmed via an enlarged
+common-through-legendary comparison strip per species), and frame
+counts matched exactly (10 idle / 8 run) with no dropped or corrupted
+frames. Separately confirmed at the data layer: `GENERAL_PET_POOL` picks
+up all 5 new ids automatically, `pickHatchedPetDefId` actually rolls
+each of them across a large sample of ordinary (non-dedicated) egg
+hatches, and `hatchery_hound`/`black_dragonling` remain correctly
+excluded from that pool, unaffected by this change. Full `tsc --noEmit`
+and `vite build` both pass clean. Art itself (`public/pets/`, gitignored
+same as every other species) isn't part of this patch -- run
+`python3 tools/import_pets.py --src <folder with the raw sheets> --out
+public/pets --only goldenpaw farwatch longshadow briarbeard frostrunner`
+locally to generate it; the script's own existing merge behavior adds
+these 5 onto the existing manifest without touching the other 10
+species' entries.
+
 ### Pets / Hatchery -- built
 The full spec below shipped essentially as designed, with a few decisions
 made concrete along the way (each noted where it resolves an open question
