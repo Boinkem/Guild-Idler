@@ -1,0 +1,877 @@
+From c9ad13b4da8021a464faf1be01e086e4ee0c8858 Mon Sep 17 00:00:00 2001
+From: Guild Idler Patch <patch@guild-idler.local>
+Date: Wed, 12 Aug 2026 04:55:55 +0000
+Subject: [PATCH] Achievement expansion: per-chain, per-raid, vendor/guild
+ completion, Grimsby, Harvest, Pets, Prestige (16 -> 65 total)
+
+- 28 new per-quest-chain completion achievements (every chain except
+  world_ender, already covered by WORLDS_END), auto-generated via a loop
+  over QUEST_CHAINS rather than 28 hand-written checks. Names reuse each
+  chain's own in-fiction title field directly. 5 marked hidden as
+  genuine mystery/reveal or pre-capstone chains.
+- 7 new per-raid clear achievements (every raid except requiem_last_god,
+  covered by LAST_GOD_DEFEATED), same auto-loop treatment. what_got_out
+  and silence_the_loom marked hidden (both built around a reveal).
+- 5 vendor/guild completion achievements: Blacksmith/Alchemist/Enchanter
+  maxed, all 8 Guild facilities maxed, and a grand COMPLETIONIST
+  achievement requiring literally everything maxed at once.
+- 4 Grimsby/Peddler achievements: first flip, jackpot hit, High Roller
+  unlocked, jackpot while playing High Roller. Needed 3 new Statistics
+  counters (peddlerFlips/peddlerJackpots/peddlerHighRollerJackpots),
+  incremented in PeddlerManager.resolveFlip. SAVE_VERSION 35->36 with a
+  migration backfilling all three for existing saves.
+- 2 Harvest achievements (Warehouse maxed, all tools maxed) and 2 Pet
+  achievements (first pet, full menagerie) directly answering this same
+  review's own finding that those systems were under-covered.
+- 1 Prestige achievement (5+ retirements), a third axis alongside the
+  existing RETIREMENT_PARTY and ON_A_ROLL.
+
+Found and fixed 8 real, pre-existing checkAll gaps while wiring this up:
+pickPeddlerCard, unlockHighRoller, buyUpgrade, levelUpVendor,
+upgradeFacility, upgradeHarvestTool, upgradeWarehouse, and hatchEgg in
+engine.ts never called AchievementManager.checkAll, so nothing those
+actions could satisfy would have unlocked at the actual moment it became
+true. Also caught unlockHighRoller was missing notify() entirely. Merged
+cleanly alongside the separately-landed notification/guidance patch,
+which fixed the same class of gap for GuidanceManager in two of the same
+methods (buyUpgrade, upgradeFacility) -- both checkAll calls now coexist
+there.
+
+Also logs the full Steam-launch completeness assessment as a tracked
+backlog list (TESTING_TOOLS_ENABLED flag, missing single-instance lock,
+asset licensing confirmation, Steamworks stub, art/icon population,
+stale project-brief numbers, checkAll audit follow-up).
+
+Verified at runtime: 65 total achievements, no duplicate ids; every
+chain/raid achievement resolves and fires correctly and only for its own
+completion; vendor/facility-maxed achievements fire independently and
+COMPLETIONIST requires genuinely everything; Harvest/Pet/Prestige/
+Peddler achievements fire from exactly the right state and not a lesser
+version of it; the SAVE_VERSION migration backfills correctly while
+preserving existing stats and composing correctly with the other team's
+own new lastBannerShownId field. Full tsc --noEmit and vite build pass
+clean.
+---
+ guild-idler-status.md                   | 166 +++++++++++++
+ src/game/data/json/achievements.json    | 294 ++++++++++++++++++++++++
+ src/game/engine.ts                      |  33 +++
+ src/game/managers/AchievementManager.ts | 107 ++++++++-
+ src/game/managers/PeddlerManager.ts     |  10 +
+ src/game/managers/SaveManager.ts        |  27 +++
+ src/game/types.ts                       |  16 +-
+ 7 files changed, 651 insertions(+), 2 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index f8d6dd7..d6d75de 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -516,6 +516,172 @@ raid fight).
+ 
+ ## Backlog
+ 
++### Steam-launch completeness pass -- findings logged, working through the list
++A full systems review was requested specifically to answer "is this a
++complete game, and what would block a Steam launch." Verdict: yes,
++mechanically and content-wise complete (a real beginning/middle/end,
++every level range has content, every "Known bugs" entry above is already
++resolved) -- but not yet launch-ready, for a short list of concrete,
++mostly non-design items. Logged here as its own tracked list rather than
++scattered across other sections, so it can be worked through in order:
++
++- [x] **Achievements were thin (16 total).** Done this round -- see
++  "Achievement expansion" below for the full writeup. 65 total now.
++- [ ] **`TESTING_TOOLS_ENABLED = true`, hardcoded.** The single highest-
++  priority remaining item. Already self-documented in
++  `testingTools.ts` as "the ONE thing to check before release," but
++  it's currently `true` in the shipped code. Flip to `false` before any
++  build goes out -- full dev/cheat tooling is one click away from every
++  player otherwise. Trivial to do; the risk is purely forgetting it.
++- [ ] **No Electron single-instance lock.** Nothing stops a player
++  launching two copies at once (double-click, a Steam relaunch, etc.).
++  Since saves write on every mutation rather than a batched interval
++  (see "Systems in place" above), two live instances writing the same
++  save file is a real corruption path. Needs
++  `app.requestSingleInstanceLock()` wired into `electron/main.ts` --
++  small, concrete, currently absent.
++- [ ] **Asset licensing needs an explicit "covers a sold, compiled game"
++  confirmation, not just an inferred one.** Hero sprites, the item
++  spritesheet, and vendor art are under a "usable, not redistributable"
++  license, gitignored rather than committed (see the DevTool/Grimsby/
++  Music sections' own gitignore notes). That's sound repo hygiene, but
++  "not redistributable" needs to be re-confirmed as *including*
++  "embedded in a compiled game sold on Steam" -- that's the actual
++  commercial use here, and it's worth having in writing rather than
++  inferred, since it's the one item on this list that could be a real
++  blocker (not just a scheduling one) if the terms turn out narrower
++  than assumed.
++- [ ] **Steamworks integration is entirely a local stub.**
++  Achievements, Cloud saves, and DLC ownership checks all route through
++  placeholder logic today. Already scoped under "Platform /
++  distribution" below -- blocked on registering a real Steamworks App
++  ID first (the one action item on the whole list that isn't code or
++  waiting on anyone else), after which the SDK wiring itself is a
++  well-scoped follow-up, not a redesign.
++- [ ] **Art/icon population, as already tracked.** Quest chain art, raid
++  art, and equipment items pointed at real icons instead of the
++  rarity-based fallback glyph -- see "Art & content to-do list" directly
++  below, unchanged by this pass. Genuinely a content-population pass;
++  `EquipmentDef.icon` and the DevTool's icon picker already exist and
++  work.
++- [ ] **`guild-idler-project-brief.md`'s content-scope line is stale.**
++  Still reads "19 quest chains... 5 raids" -- now 29 chains, 8 raids (30
++  chains once the achievement-expansion pass below is counted against
++  the live JSON, no new chains were added this round though, so still
++  29). Low-priority doc hygiene, not a code fix, but worth a refresh
++  pass since that brief is meant to be a quick-reference cache and is
++  now meaningfully out of date.
++- [ ] **`checkAll` coverage across engine mutators was only spot-fixed,
++  not fully audited.** Found and fixed 8 real instances this round (see
++  "Achievement expansion" below) where a player action could satisfy an
++  achievement condition without ever actually checking for it -- all 8
++  were methods that happen to gate a *new* achievement added this pass.
++  A full audit of every state-mutating method in `engine.ts` for the
++  same gap (independent of whether it currently gates any achievement)
++  would be a good, scoped follow-up rather than continuing to find these
++  one at a time as each unrelated feature happens to touch a
++  neighboring action.
++
++### Achievement expansion -- built
++Direct request: "mock up more achievements... each raid, quest chain,
++full vendor upgrades, getting a jackpot, getting a high roll jackpot,
++unlocking highroller... there should be many notable items." 49 new
++achievements added, 16 -> 65 total:
++- **28 per-quest-chain completion achievements** (every chain except
++  `world_ender`, which the pre-existing `WORLDS_END` already covers --
++  adding a second achievement for the same completion would be a real
++  duplicate, not just redundant naming). Auto-generated via a loop over
++  `QUEST_CHAINS` in `AchievementManager.ts` rather than 28 hand-written
++  one-line checks, since every one is mechanically identical (only the
++  chain id differs) -- a new chain added later gets its completion check
++  for free the moment the module loads, though its `achievements.json`
++  metadata (name/description/hidden) still needs adding by hand, same
++  split this file's own top comment already describes. Achievement
++  names reuse each chain's own in-fiction `title` field directly
++  (`ChainDef.title`, already the reward-title granted to whichever hero
++  finishes it) rather than inventing new names -- "Roadwarden,"
++  "Dragonbane," "Kingslayer Twice Over," etc. already read exactly like
++  achievement names on their own. 5 of the 28 (`hunt_a_lich`,
++  `quiet_in_millbrook`, `the_loom_beneath`, `last_pilgrimage`,
++  `hollow_king`) are marked `hidden: true` -- genuine mystery/reveal
++  arcs or pre-capstone chains, matching the existing precedent
++  `WORLDS_END`/`LAST_GOD_DEFEATED` already set for spoiler-sensitive
++  content, rather than the game's normal "visible by default" treatment.
++- **7 per-raid clear achievements** (every raid except
++  `requiem_last_god`, covered by the pre-existing `LAST_GOD_DEFEATED`).
++  Same auto-loop treatment over `RAIDS`. Checks `completedRaids` --
++  a full clear at ANY difficulty, matching `RAID_NORMAL_CLEARED`'s own
++  established semantics, not a Normal-only or Mythic-only bar. Bespoke
++  short names per raid (e.g. "Siege's End" for Blackford Keep, "Thread
++  Cut" for Silence the Loom) rather than a generic "X Cleared" pattern.
++  `what_got_out` and `silence_the_loom` marked hidden -- both raids'
++  own names/premises are built around a reveal.
++- **5 vendor/guild completion achievements**: `BLACKSMITH_MAXED`/
++  `ALCHEMIST_MAXED`/`ENCHANTER_MAXED` (every `UpgradeDef` tagged to that
++  vendor at its own `maxLevel`), `GUILD_HALL_MAXED` (all 8 facilities
++  maxed), and `COMPLETIONIST` -- a grand-finale achievement requiring
++  literally everything (all 24 `UPGRADES` entries, vendor-tagged and
++  general alike, AND all 8 facilities) maxed at once, matching the
++  ~109-day full-completion timeline already estimated in
++  `guild-idler-project-brief.md`. Deliberately the single rarest,
++  longest-horizon achievement in the game.
++- **4 Grimsby/Peddler achievements**: first flip (`PEDDLER_FIRST_FLIP`),
++  a jackpot-tier flip (`PEDDLER_JACKPOT`), unlocking High Roller
++  (`HIGH_ROLLER_UNLOCKED`), and a jackpot-tier flip while playing High
++  Roller specifically (`PEDDLER_HIGH_ROLLER_JACKPOT`, a strict subset of
++  the plain jackpot one). Needed 3 new `Statistics` counters
++  (`peddlerFlips`/`peddlerJackpots`/`peddlerHighRollerJackpots`, all
++  incremented directly inside `PeddlerManager.resolveFlip`) since
++  nothing tracked flip outcomes at all before this -- `SAVE_VERSION`
++  bumped 35->36 with a migration backfilling all three to 0 for existing
++  saves (nested under `stats`, so the generic `{...base, ...save}` merge
++  in `SaveManager.migrate` would NOT have backfilled them on its own --
++  `save.stats` already exists as a whole object by that point, so the
++  merge takes it wholesale rather than filling in just the missing keys
++  underneath it; spelled out explicitly rather than relying on
++  `undefined >= 1` being falsy-safe-but-still-wrong-forever).
++- **2 Harvest achievements**: `WAREHOUSE_MAXED`, `ALL_TOOLS_MAXED` (every
++  one of the 4 node tools at its own `maxLevel`) -- directly answers this
++  same pass's own finding that Harvest/Pets/Crafting were under-covered
++  by the existing achievement list.
++- **2 Pet achievements**: `FIRST_PET_HATCHED`, `ALL_PETS_COLLECTED`
++  (every one of the 10 species hatched at least once ever). Confirmed
++  pets have no release/delete path anywhere in the game today, so
++  `state.pets` is safe to read as "every species ever hatched," not just
++  "currently owned" -- no separate discovered-pets ledger needed the way
++  `discoveredItems` exists for equipment.
++- **1 Prestige achievement**: `VETERAN_RETIREE` (5+ retirements over the
++  account's lifetime), a third axis alongside the pre-existing
++  `RETIREMENT_PARTY` (>=1 ever) and `ON_A_ROLL` (a same-window streak of
++  5) rather than a duplicate of either.
++
++**Found and fixed 8 real, pre-existing `checkAll` gaps while wiring this
++up** -- `pickPeddlerCard`, `unlockHighRoller`, `buyUpgrade`,
++`levelUpVendor`, `upgradeFacility`, `upgradeHarvestTool`,
++`upgradeWarehouse`, and `hatchEgg` in `engine.ts` never once called
++`AchievementManager.checkAll`, meaning none of the achievements those
++actions now gate (nor, in principle, anything they could have satisfied
++before this pass) would have unlocked at the actual moment they became
++true -- only whenever some unrelated later action happened to trigger a
++check. Fixed all 8. Also caught, while in `unlockHighRoller` for this
++exact reason, that it was missing `this.notify()` entirely -- the gold
++deduction and `grimsbyHighRollerUnlocked` flip both already happened in
++state, just never announced to the UI. Fixed alongside rather than filed
++separately.
++
++Verified at runtime, not just typechecked: 65 total achievements, no
++duplicate ids; every one of the 28 chain / 7 raid achievements resolves
++against a real chain/raid id; completing a chain or clearing a raid
++unlocks exactly its own achievement and no others; maxing one vendor's
++upgrades unlocks only that vendor's achievement, not `COMPLETIONIST`;
++`COMPLETIONIST` requires genuinely everything at once; every Harvest/Pet/
++Prestige/Peddler achievement fires from the exact state that should
++produce it and not from a lesser version of it (e.g. a regular jackpot
++does NOT unlock the High Roller jackpot achievement); and the
++`SAVE_VERSION` 35->36 migration correctly backfills the 3 new stat
++counters to 0 for an old save while preserving its existing stats. Full
++`tsc --noEmit` and `vite build` both pass clean.
++
+ ### Art & content to-do list (added this round)
+ Five items flagged directly, none of them code work yet -- recorded here
+ so they're tracked rather than lost, same treatment the idle-animation
+diff --git a/src/game/data/json/achievements.json b/src/game/data/json/achievements.json
+index fe9a697..d5c0c42 100644
+--- a/src/game/data/json/achievements.json
++++ b/src/game/data/json/achievements.json
+@@ -94,5 +94,299 @@
+     "name": "The Last Mile",
+     "description": "Clear Requiem for the Last God.",
+     "hidden": true
++  },
++  {
++    "id": "CHAIN_MILLERS_PROBLEM",
++    "name": "First Real Job",
++    "description": "Complete \"The Miller's Problem,\" the guild's first real job.",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_THE_LAST_CLUTCH",
++    "name": "Keeper of the Clutch",
++    "description": "Complete \"The Last Clutch\" and open the Hatchery for good.",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_CROWS_WARNING",
++    "name": "Crow-Friend",
++    "description": "Complete \"The Crow's Warning.\"",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_HARROWERS_FOOT",
++    "name": "Ash-Reader",
++    "description": "Complete \"The Harrower's Foot.\"",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_DEMON_GENERALS_LEDGER",
++    "name": "Tally-Breaker",
++    "description": "Break a demon general's ledger.",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_WHAT_THE_CULLED_BECOME",
++    "name": "Grave-Watcher",
++    "description": "Complete \"What the Culled Become.\"",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_PROVING_THE_BASTION",
++    "name": "Lord of the Keep",
++    "description": "Complete \"Proving the Bastion.\"",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_GRANITE_CROSSING",
++    "name": "Garrick's End",
++    "description": "Complete \"Granite Crossing.\"",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_FARM_AT_THE_EDGE",
++    "name": "Farmwarden",
++    "description": "Complete \"The Farm at the Edge.\"",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_THE_PALE_RIDER",
++    "name": "Ashen-Sworn",
++    "description": "Complete \"The Pale Rider.\"",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_DRAGON_HUNT",
++    "name": "Dragonbane",
++    "description": "Complete the Dragon Hunt.",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_LOST_KINGDOM",
++    "name": "Kingdom-Finder",
++    "description": "Complete the Lost Kingdom Expedition.",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_DEMON_FORTRESS",
++    "name": "Hellgate Breaker",
++    "description": "Break the demon fortress assault.",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_ANCIENT_CROWN",
++    "name": "Crownbearer",
++    "description": "Recover the Ancient Crown.",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_GOBLIN_WARBAND",
++    "name": "Warband-Breaker",
++    "description": "Break the Goblin King's warband for good.",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_THIRD_CROWN",
++    "name": "Ridge-Watcher",
++    "description": "Complete \"The Third Crown.\"",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_HOLLOW_CHOIR",
++    "name": "Choir-Silencer",
++    "description": "Silence the Hollow Choir.",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_LAST_PILGRIMAGE",
++    "name": "Pilgrim's Herald",
++    "description": "Complete the Last Pilgrimage.",
++    "hidden": true
++  },
++  {
++    "id": "CHAIN_HOLLOW_KING",
++    "name": "Kingslayer Twice Over",
++    "description": "Face the Hollow King's return.",
++    "hidden": true
++  },
++  {
++    "id": "CHAIN_THE_MAN_WHO_SELLS_MAYBE",
++    "name": "The One He Doesn't Cheat",
++    "description": "Complete \"The Man Who Sells Maybe\" and meet Grimsby.",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_BANDITS_ON_THE_OLD_ROAD",
++    "name": "Roadwarden",
++    "description": "Break up the self-styled king of the old trade road.",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_SOMETHING_BIG_IN_THE_FOOTHILLS",
++    "name": "Ridgebreaker",
++    "description": "Put down whatever's been nesting in the foothills.",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_FULL_MOON_OVER_ASHVALE",
++    "name": "Moonhunter",
++    "description": "Hunt down what's really loose over Ashvale.",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_BODY_SNATCHER_PROBLEM",
++    "name": "Unmasker",
++    "description": "Unmask what's been copying people from the inside out.",
++    "hidden": false
++  },
++  {
++    "id": "CHAIN_HUNT_A_LICH",
++    "name": "Grave-Marked",
++    "description": "Track a lich back to his own front door.",
++    "hidden": true
++  },
++  {
++    "id": "CHAIN_QUIET_IN_MILLBROOK",
++    "name": "Watcher of Millbrook",
++    "description": "Investigate the quiet in Millbrook.",
++    "hidden": true
++  },
++  {
++    "id": "CHAIN_THE_LOOM_BENEATH",
++    "name": "Thread-Walker",
++    "description": "Find what's been directing Millbrook all along.",
++    "hidden": true
++  },
++  {
++    "id": "CHAIN_THE_FIRST_HAUL",
++    "name": "Provisioner",
++    "description": "Complete \"The First Haul\" and open the Harvest tab for good.",
++    "hidden": false
++  },
++  {
++    "id": "RAID_BLACKFORD_KEEP_CLEARED",
++    "name": "Siege's End",
++    "description": "Clear The Siege of Blackford Keep.",
++    "hidden": false
++  },
++  {
++    "id": "RAID_BONEWROUGHT_VAULT_CLEARED",
++    "name": "Vault Broken",
++    "description": "Clear The Bonewrought Vault.",
++    "hidden": false
++  },
++  {
++    "id": "RAID_FROZEN_WYRMKEEP_CLEARED",
++    "name": "Wyrmkeep Thawed",
++    "description": "Clear The Frozen Wyrmkeep.",
++    "hidden": false
++  },
++  {
++    "id": "RAID_WHAT_GOT_OUT_CLEARED",
++    "name": "Put It Back",
++    "description": "Clear What Got Out.",
++    "hidden": true
++  },
++  {
++    "id": "RAID_BLACK_DRAGON_NEST_CLEARED",
++    "name": "Nest Cleared",
++    "description": "Clear The Black Dragon Nest.",
++    "hidden": false
++  },
++  {
++    "id": "RAID_HOUSE_OF_BONES_CLEARED",
++    "name": "Marrow to Ash",
++    "description": "Clear The House of Bones.",
++    "hidden": false
++  },
++  {
++    "id": "RAID_SILENCE_THE_LOOM_CLEARED",
++    "name": "Thread Cut",
++    "description": "Clear Silence the Loom.",
++    "hidden": true
++  },
++  {
++    "id": "BLACKSMITH_MAXED",
++    "name": "Master Smith",
++    "description": "Fully upgrade every Blacksmith training line.",
++    "hidden": false
++  },
++  {
++    "id": "ALCHEMIST_MAXED",
++    "name": "Master Alchemist",
++    "description": "Fully upgrade every Alchemist training line.",
++    "hidden": false
++  },
++  {
++    "id": "ENCHANTER_MAXED",
++    "name": "Master Enchanter",
++    "description": "Fully upgrade every Enchanter training line.",
++    "hidden": false
++  },
++  {
++    "id": "GUILD_HALL_MAXED",
++    "name": "Halls Unshakeable",
++    "description": "Fully upgrade every Guild facility.",
++    "hidden": false
++  },
++  {
++    "id": "COMPLETIONIST",
++    "name": "Nothing Left to Buy",
++    "description": "Fully upgrade every Guild facility and every vendor training line.",
++    "hidden": false
++  },
++  {
++    "id": "WAREHOUSE_MAXED",
++    "name": "Overflowing Stores",
++    "description": "Fully upgrade the Warehouse.",
++    "hidden": false
++  },
++  {
++    "id": "ALL_TOOLS_MAXED",
++    "name": "Master Gatherer",
++    "description": "Fully upgrade every Harvest tool.",
++    "hidden": false
++  },
++  {
++    "id": "FIRST_PET_HATCHED",
++    "name": "New Friend",
++    "description": "Hatch your first pet.",
++    "hidden": false
++  },
++  {
++    "id": "ALL_PETS_COLLECTED",
++    "name": "Full Menagerie",
++    "description": "Hatch every pet species at least once.",
++    "hidden": false
++  },
++  {
++    "id": "VETERAN_RETIREE",
++    "name": "Serial Retiree",
++    "description": "Retire 5 heroes over the guild's history.",
++    "hidden": false
++  },
++  {
++    "id": "PEDDLER_FIRST_FLIP",
++    "name": "A Reasonable Bet",
++    "description": "Flip a card at Grimsby's table.",
++    "hidden": false
++  },
++  {
++    "id": "PEDDLER_JACKPOT",
++    "name": "Jackpot!",
++    "description": "Flip a jackpot-tier card at Grimsby's table.",
++    "hidden": false
++  },
++  {
++    "id": "HIGH_ROLLER_UNLOCKED",
++    "name": "Bigger Bets",
++    "description": "Unlock High Roller at Grimsby's table.",
++    "hidden": false
++  },
++  {
++    "id": "PEDDLER_HIGH_ROLLER_JACKPOT",
++    "name": "The House Loses",
++    "description": "Flip a jackpot-tier card while playing High Roller.",
++    "hidden": false
+   }
+ ]
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index e51cd8a..c7f0067 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -1618,6 +1618,12 @@ export class GameEngine {
+     // unlocked X" should land the moment X is actually bought, not
+     // whenever the player next resolves a quest.
+     this.reportGuidance(GuidanceManager.checkAll(this.state));
++    // BLACKSMITH_MAXED/ALCHEMIST_MAXED/ENCHANTER_MAXED/COMPLETIONIST all
++    // gate on every UPGRADES entry (this method's own domain) reaching
++    // maxLevel -- same "check immediately, don't wait for an unrelated
++    // action" reasoning as the reportGuidance call just above, applied
++    // to achievements instead of guidance topics.
++    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+     this.notify();
+     void this.saveNow();
+   }
+@@ -1636,6 +1642,7 @@ export class GameEngine {
+     playSound('purchase');
+     const def = GuildManager.vendors().find((v) => v.id === vendorId);
+     this.say(`${def?.name ?? 'The vendor'} has more to offer now.`, 'vendors');
++    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+     void this.saveNow();
+   }
+ 
+@@ -1649,6 +1656,8 @@ export class GameEngine {
+     // facility-tied guidance the same way without needing its own
+     // special case.
+     this.reportGuidance(GuidanceManager.checkAll(this.state));
++    // GUILD_HALL_MAXED/COMPLETIONIST gate on this -- same reasoning as buyUpgrade above.
++    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+     this.notify();
+     void this.saveNow();
+   }
+@@ -1684,6 +1693,8 @@ export class GameEngine {
+     const error = HarvestManager.upgradeTool(this.state, nodeId);
+     if (error) return this.say(error);
+     playSound('purchase');
++    // ALL_TOOLS_MAXED/COMPLETIONIST gate on this -- same reasoning as buyUpgrade above.
++    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+     this.notify();
+     void this.saveNow();
+   }
+@@ -1692,6 +1703,8 @@ export class GameEngine {
+     const error = HarvestManager.upgradeWarehouse(this.state);
+     if (error) return this.say(error);
+     playSound('purchase');
++    // WAREHOUSE_MAXED/COMPLETIONIST gate on this -- same reasoning as buyUpgrade above.
++    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+     this.notify();
+     void this.saveNow();
+   }
+@@ -1723,6 +1736,10 @@ export class GameEngine {
+     if (!pet) return this.say('That egg is not ready to hatch yet.');
+     this.lastHatchedPet = pet;
+     playSound('legendary_drop');
++    // FIRST_PET_HATCHED/ALL_PETS_COLLECTED gate on this -- same
++    // missing-checkAll gap as the peddler/purchase methods above, found
++    // and fixed the same way.
++    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+     this.notify();
+     void this.saveNow();
+   }
+@@ -2035,6 +2052,13 @@ export class GameEngine {
+     if (!result) return this.say('Something about that didn\u2019t work.');
+     this.lastGrimsbyResult = result;
+     playSound(result.cards[result.pickedIndex].outcome.tier === 'jackpot' ? 'legendary_drop' : 'purchase');
++    // Real, pre-existing gap found while wiring the new Grimsby
++    // achievements: this method never once called checkAll, so nothing a
++    // flip could grant (gold/equipment/eggs, and now the jackpot/flip
++    // counters below) was ever actually checked against the achievement
++    // list from here -- a jackpot achievement would have sat unearned
++    // until some unrelated later action happened to trigger a check.
++    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+     this.notify();
+     void this.saveNow();
+   }
+@@ -2051,6 +2075,15 @@ export class GameEngine {
+     PeddlerManager.unlockHighRoller(this.state);
+     playSound('purchase');
+     this.say('Grimsby raises an eyebrow. \u201cOh, you\u2019ve got the goods now, do you?\u201d', 'peddler');
++    // Also found while wiring HIGH_ROLLER_UNLOCKED below: this method
++    // never called checkAll (so the new achievement would sit unearned
++    // until some unrelated action happened to trigger a check) OR
++    // notify() (so the UI wouldn't reactively reflect the unlock -- the
++    // gold deduction and grimsbyHighRollerUnlocked flip both already
++    // happened in state, just never announced). Both fixed alongside the
++    // achievement wiring rather than filed separately.
++    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
++    this.notify();
+     void this.saveNow();
+   }
+ 
+diff --git a/src/game/managers/AchievementManager.ts b/src/game/managers/AchievementManager.ts
+index b4f0d70..32522be 100644
+--- a/src/game/managers/AchievementManager.ts
++++ b/src/game/managers/AchievementManager.ts
+@@ -1,10 +1,15 @@
+ import { ACHIEVEMENTS } from '../data/achievements';
+-import { HERO_CLASSES, SKINS } from '../data/progression';
++import { HERO_CLASSES, SKINS, UPGRADES, GUILD_FACILITIES } from '../data/progression';
++import { QUEST_CHAINS } from '../data/quests';
++import { RAIDS } from '../data/raids';
++import { PETS } from '../data/pets';
++import { HARVEST_TOOLS, WAREHOUSE_UPGRADE } from '../data/harvestUpgrades';
+ import { GameState } from '../types';
+ 
+ const ASCENSION_FOR_LIVING_LEGEND = 10;
+ const STREAK_FOR_ON_A_ROLL = 5;
+ const AGAINST_THE_ODDS_THRESHOLD = 30;
++const PRESTIGE_COUNT_FOR_VETERAN_RETIREE = 5;
+ 
+ /**
+  * Every check reads only GameState — no event payload required. That's
+@@ -16,6 +21,9 @@ const AGAINST_THE_ODDS_THRESHOLD = 30;
+  */
+ type Check = (state: GameState) => boolean;
+ 
++const allFacilitiesMaxed = (state: GameState): boolean =>
++  GUILD_FACILITIES.every((f) => (state.guild[f.id] ?? 0) >= f.maxLevel);
++
+ const CHECKS: Record<string, Check> = {
+   FIRST_CONTRACT: (state) => state.stats.totalQuests >= 1,
+ 
+@@ -61,8 +69,105 @@ const CHECKS: Record<string, Check> = {
+     const cleared = new Set(state.completedRaidDifficulties ?? []);
+     return cleared.has('normal') && cleared.has('heroic') && cleared.has('mythic');
+   },
++
++  /* ------------------------- vendor / guild completion ------------------------- */
++  // All four share the same "every relevant UPGRADES entry at its own
++  // maxLevel" shape, just filtered to a different vendor id (or, for
++  // COMPLETIONIST, no filter at all). state.upgrades is keyed by
++  // UpgradeDef.id -- an entry missing entirely (never bought) reads as
++  // level 0 via `?? 0`, same convention every cost-curve lookup in this
++  // game already uses.
++  BLACKSMITH_MAXED: (state) =>
++    UPGRADES.filter((u) => u.vendor === 'blacksmith').every((u) => (state.upgrades[u.id] ?? 0) >= u.maxLevel),
++
++  ALCHEMIST_MAXED: (state) =>
++    UPGRADES.filter((u) => u.vendor === 'alchemist').every((u) => (state.upgrades[u.id] ?? 0) >= u.maxLevel),
++
++  ENCHANTER_MAXED: (state) =>
++    UPGRADES.filter((u) => u.vendor === 'enchanter').every((u) => (state.upgrades[u.id] ?? 0) >= u.maxLevel),
++
++  GUILD_HALL_MAXED: allFacilitiesMaxed,
++
++  // The grand-finale completionist achievement -- every one of the 24
++  // UPGRADES entries (vendor-tagged AND general/Guild-Hall-tagged alike,
++  // hence no `.filter()` here) at its own maxLevel, AND all 8 facilities
++  // maxed via the same allFacilitiesMaxed helper GUILD_HALL_MAXED uses
++  // directly above (not called through CHECKS itself, which isn't fully
++  // initialized yet at this point in its own object literal). Matches
++  // the ~109-day full-completion timeline already estimated in
++  // guild-idler-project-brief.md -- the single rarest, longest-horizon
++  // achievement in the game by design.
++  COMPLETIONIST: (state) =>
++    UPGRADES.every((u) => (state.upgrades[u.id] ?? 0) >= u.maxLevel) && allFacilitiesMaxed(state),
++
++  /* ------------------------------ harvest ------------------------------ */
++  WAREHOUSE_MAXED: (state) => state.warehouseLevel >= WAREHOUSE_UPGRADE.maxLevel,
++
++  ALL_TOOLS_MAXED: (state) =>
++    HARVEST_TOOLS.every((t) => (state.harvestTools[t.nodeId] ?? 0) >= t.maxLevel),
++
++  /* -------------------------------- pets -------------------------------- */
++  FIRST_PET_HATCHED: (state) => (state.pets ?? []).length >= 1,
++
++  // Pets have no release/delete path anywhere in the game today (a hatch
++  // is permanent, unlike an egg which can sit unhatched indefinitely) --
++  // state.pets is therefore safe to read as "every species ever hatched,"
++  // not just "currently owned," with no separate discovered-pets ledger
++  // needed the way discoveredItems exists for equipment.
++  ALL_PETS_COLLECTED: (state) => {
++    const owned = new Set((state.pets ?? []).map((p) => p.defId));
++    return PETS.every((p) => owned.has(p.id));
++  },
++
++  /* ------------------------------ prestige ------------------------------ */
++  // Complements RETIREMENT_PARTY (>=1 retirement, already above) and
++  // ON_A_ROLL (a same-window streak of 5, already above) with a third,
++  // orthogonal axis: total retirements over the account's whole
++  // lifetime, streak or no streak.
++  VETERAN_RETIREE: (state) => state.stats.prestigeCount >= PRESTIGE_COUNT_FOR_VETERAN_RETIREE,
++
++  /* --------------------------- Grimsby / peddler --------------------------- */
++  PEDDLER_FIRST_FLIP: (state) => (state.stats.peddlerFlips ?? 0) >= 1,
++
++  PEDDLER_JACKPOT: (state) => (state.stats.peddlerJackpots ?? 0) >= 1,
++
++  HIGH_ROLLER_UNLOCKED: (state) => state.grimsbyHighRollerUnlocked === true,
++
++  PEDDLER_HIGH_ROLLER_JACKPOT: (state) => (state.stats.peddlerHighRollerJackpots ?? 0) >= 1,
+ };
+ 
++/**
++ * Auto-generated, one per quest chain -- id `CHAIN_<UPPER_SNAKE_ID>`,
++ * checking straight against completedChains. Deliberately a loop rather
++ * than 28 hand-written one-line entries: every one of these is
++ * mechanically identical (only the chain id differs), so writing them by
++ * hand would just be a 28-line transcription exercise with 28 chances to
++ * typo a chain id. `world_ender` is skipped -- it already has its own
++ * bespoke achievement (WORLDS_END above), predating this batch; adding a
++ * second achievement for the same completion would be a real duplicate,
++ * not just redundant naming. A chain added after this ships gets its
++ * completion check for free the moment this module loads; the matching
++ * achievements.json metadata entry (name/description/hidden) still has
++ * to be added by hand, same "data needs a check, a check does nothing
++ * without matching data" split this file's own top comment describes.
++ */
++for (const chain of QUEST_CHAINS) {
++  if (chain.id === 'world_ender') continue;
++  CHECKS[`CHAIN_${chain.id.toUpperCase()}`] = (state) => (state.completedChains ?? []).includes(chain.id);
++}
++
++/**
++ * Same auto-generated treatment for raids -- id
++ * `RAID_<UPPER_SNAKE_ID>_CLEARED`, checking completedRaids (a full clear
++ * at ANY difficulty, same semantics RAID_NORMAL_CLEARED's own comment
++ * already establishes). `requiem_last_god` is skipped -- already covered
++ * by the pre-existing, hidden LAST_GOD_DEFEATED achievement.
++ */
++for (const raid of RAIDS) {
++  if (raid.id === 'requiem_last_god') continue;
++  CHECKS[`RAID_${raid.id.toUpperCase()}_CLEARED`] = (state) => (state.completedRaids ?? []).includes(raid.id);
++}
++
+ export const AchievementManager = {
+   isUnlocked(state: GameState, id: string): boolean {
+     return id in state.unlockedAchievements;
+diff --git a/src/game/managers/PeddlerManager.ts b/src/game/managers/PeddlerManager.ts
+index 41ee891..a4d4c62 100644
+--- a/src/game/managers/PeddlerManager.ts
++++ b/src/game/managers/PeddlerManager.ts
+@@ -295,6 +295,16 @@ export const PeddlerManager = {
+     const picked = outcomes[pickedIndex];
+     PeddlerManager.applyOutcome(state, picked, fee, now, multiplier);
+ 
++    // Achievement-supporting counters -- see Statistics.peddlerFlips'
++    // own comment for why these live here rather than being derived
++    // after the fact. Tier check reads the PICKED card only, never the
++    // two cosmetic-only reveals a player didn't actually choose.
++    state.stats.peddlerFlips += 1;
++    if (picked.tier === 'jackpot') {
++      state.stats.peddlerJackpots += 1;
++      if (highRoller) state.stats.peddlerHighRollerJackpots += 1;
++    }
++
+     return {
+       cards,
+       pickedIndex,
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 0ebc07f..e80c34d 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -97,6 +97,7 @@ export function createInitialState(now = Date.now()): GameState {
+       itemsBroken: 0, chainsCompleted: 0,
+       playTimeMs: 0, offlineTimeMs: 0, prestigeCount: 0, bestPrestigeStreak: 0,
+       lowestSuccessfulChance: null, blackMarketPurchases: 0, firstPlayedAt: now,
++      peddlerFlips: 0, peddlerJackpots: 0, peddlerHighRollerJackpots: 0,
+     },
+     log: [],
+     discoveredItems: [],
+@@ -583,6 +584,32 @@ const MIGRATIONS: Record<number, Migration> = {
+       pendingHarvestSpotlight: false,
+     };
+   },
++  35: (save) => {
++    // New Statistics counters for the Grimsby-related achievement batch
++    // (PEDDLER_FIRST_FLIP/PEDDLER_JACKPOT/PEDDLER_HIGH_ROLLER_JACKPOT) --
++    // a save from before these existed has simply never had a flip
++    // counted toward them, same "0, not a placeholder needing
++    // correction" reasoning migration 33 already used for Grimsby's own
++    // fields. Nested under `stats`, so (unlike a top-level GameState
++    // field) SaveManager.migrate's own `{...base, ...save}` merge would
++    // NOT backfill these automatically -- `save.stats` already exists as
++    // a whole object by this point, so the merge takes it wholesale
++    // rather than filling in just the missing keys underneath it. Spelled
++    // out explicitly here rather than relying on the `undefined >= 1`
++    // being falsy anyway (true, but a counter silently stuck at
++    // `undefined` forever is still wrong, not just harmless).
++    const stats = (save.stats as Record<string, unknown> | undefined) ?? {};
++    return {
++      ...save,
++      version: 36,
++      stats: {
++        ...stats,
++        peddlerFlips: (stats.peddlerFlips as number | undefined) ?? 0,
++        peddlerJackpots: (stats.peddlerJackpots as number | undefined) ?? 0,
++        peddlerHighRollerJackpots: (stats.peddlerHighRollerJackpots as number | undefined) ?? 0,
++      },
++    };
++  },
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 757a747..5b0a9e5 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 35;
++export const SAVE_VERSION = 36;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -972,6 +972,20 @@ export interface Statistics {
+   lowestSuccessfulChance: number | null;
+   blackMarketPurchases: number;
+   firstPlayedAt: number;
++  /** Total Grimsby card flips ever resolved (regular + High Roller both
++   *  count) -- powers a simple "first flip" achievement. Incremented in
++   *  PeddlerManager.resolveFlip regardless of outcome tier. */
++  peddlerFlips: number;
++  /** Flips that landed on the 'jackpot' tier specifically, regardless of
++   *  whether it was a regular or High Roller flip -- see
++   *  peddlerHighRollerJackpots below for the rarer subset. */
++  peddlerJackpots: number;
++  /** Jackpot-tier flips that ALSO happened to be a High Roller flip (3x
++   *  fee, 3x reward) -- a strict subset of peddlerJackpots above, kept as
++   *  its own counter rather than derived, since a flip's tier and its
++   *  highRoller flag are only ever together inside resolveFlip's own
++   *  scope, not separately reconstructable from state afterward. */
++  peddlerHighRollerJackpots: number;
+ }
+ 
+ export interface GameState {
+-- 
+2.43.0
+

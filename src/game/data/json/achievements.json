@@ -94,5 +94,299 @@
     "name": "The Last Mile",
     "description": "Clear Requiem for the Last God.",
     "hidden": true
+  },
+  {
+    "id": "CHAIN_MILLERS_PROBLEM",
+    "name": "First Real Job",
+    "description": "Complete \"The Miller's Problem,\" the guild's first real job.",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_THE_LAST_CLUTCH",
+    "name": "Keeper of the Clutch",
+    "description": "Complete \"The Last Clutch\" and open the Hatchery for good.",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_CROWS_WARNING",
+    "name": "Crow-Friend",
+    "description": "Complete \"The Crow's Warning.\"",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_HARROWERS_FOOT",
+    "name": "Ash-Reader",
+    "description": "Complete \"The Harrower's Foot.\"",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_DEMON_GENERALS_LEDGER",
+    "name": "Tally-Breaker",
+    "description": "Break a demon general's ledger.",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_WHAT_THE_CULLED_BECOME",
+    "name": "Grave-Watcher",
+    "description": "Complete \"What the Culled Become.\"",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_PROVING_THE_BASTION",
+    "name": "Lord of the Keep",
+    "description": "Complete \"Proving the Bastion.\"",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_GRANITE_CROSSING",
+    "name": "Garrick's End",
+    "description": "Complete \"Granite Crossing.\"",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_FARM_AT_THE_EDGE",
+    "name": "Farmwarden",
+    "description": "Complete \"The Farm at the Edge.\"",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_THE_PALE_RIDER",
+    "name": "Ashen-Sworn",
+    "description": "Complete \"The Pale Rider.\"",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_DRAGON_HUNT",
+    "name": "Dragonbane",
+    "description": "Complete the Dragon Hunt.",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_LOST_KINGDOM",
+    "name": "Kingdom-Finder",
+    "description": "Complete the Lost Kingdom Expedition.",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_DEMON_FORTRESS",
+    "name": "Hellgate Breaker",
+    "description": "Break the demon fortress assault.",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_ANCIENT_CROWN",
+    "name": "Crownbearer",
+    "description": "Recover the Ancient Crown.",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_GOBLIN_WARBAND",
+    "name": "Warband-Breaker",
+    "description": "Break the Goblin King's warband for good.",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_THIRD_CROWN",
+    "name": "Ridge-Watcher",
+    "description": "Complete \"The Third Crown.\"",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_HOLLOW_CHOIR",
+    "name": "Choir-Silencer",
+    "description": "Silence the Hollow Choir.",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_LAST_PILGRIMAGE",
+    "name": "Pilgrim's Herald",
+    "description": "Complete the Last Pilgrimage.",
+    "hidden": true
+  },
+  {
+    "id": "CHAIN_HOLLOW_KING",
+    "name": "Kingslayer Twice Over",
+    "description": "Face the Hollow King's return.",
+    "hidden": true
+  },
+  {
+    "id": "CHAIN_THE_MAN_WHO_SELLS_MAYBE",
+    "name": "The One He Doesn't Cheat",
+    "description": "Complete \"The Man Who Sells Maybe\" and meet Grimsby.",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_BANDITS_ON_THE_OLD_ROAD",
+    "name": "Roadwarden",
+    "description": "Break up the self-styled king of the old trade road.",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_SOMETHING_BIG_IN_THE_FOOTHILLS",
+    "name": "Ridgebreaker",
+    "description": "Put down whatever's been nesting in the foothills.",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_FULL_MOON_OVER_ASHVALE",
+    "name": "Moonhunter",
+    "description": "Hunt down what's really loose over Ashvale.",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_BODY_SNATCHER_PROBLEM",
+    "name": "Unmasker",
+    "description": "Unmask what's been copying people from the inside out.",
+    "hidden": false
+  },
+  {
+    "id": "CHAIN_HUNT_A_LICH",
+    "name": "Grave-Marked",
+    "description": "Track a lich back to his own front door.",
+    "hidden": true
+  },
+  {
+    "id": "CHAIN_QUIET_IN_MILLBROOK",
+    "name": "Watcher of Millbrook",
+    "description": "Investigate the quiet in Millbrook.",
+    "hidden": true
+  },
+  {
+    "id": "CHAIN_THE_LOOM_BENEATH",
+    "name": "Thread-Walker",
+    "description": "Find what's been directing Millbrook all along.",
+    "hidden": true
+  },
+  {
+    "id": "CHAIN_THE_FIRST_HAUL",
+    "name": "Provisioner",
+    "description": "Complete \"The First Haul\" and open the Harvest tab for good.",
+    "hidden": false
+  },
+  {
+    "id": "RAID_BLACKFORD_KEEP_CLEARED",
+    "name": "Siege's End",
+    "description": "Clear The Siege of Blackford Keep.",
+    "hidden": false
+  },
+  {
+    "id": "RAID_BONEWROUGHT_VAULT_CLEARED",
+    "name": "Vault Broken",
+    "description": "Clear The Bonewrought Vault.",
+    "hidden": false
+  },
+  {
+    "id": "RAID_FROZEN_WYRMKEEP_CLEARED",
+    "name": "Wyrmkeep Thawed",
+    "description": "Clear The Frozen Wyrmkeep.",
+    "hidden": false
+  },
+  {
+    "id": "RAID_WHAT_GOT_OUT_CLEARED",
+    "name": "Put It Back",
+    "description": "Clear What Got Out.",
+    "hidden": true
+  },
+  {
+    "id": "RAID_BLACK_DRAGON_NEST_CLEARED",
+    "name": "Nest Cleared",
+    "description": "Clear The Black Dragon Nest.",
+    "hidden": false
+  },
+  {
+    "id": "RAID_HOUSE_OF_BONES_CLEARED",
+    "name": "Marrow to Ash",
+    "description": "Clear The House of Bones.",
+    "hidden": false
+  },
+  {
+    "id": "RAID_SILENCE_THE_LOOM_CLEARED",
+    "name": "Thread Cut",
+    "description": "Clear Silence the Loom.",
+    "hidden": true
+  },
+  {
+    "id": "BLACKSMITH_MAXED",
+    "name": "Master Smith",
+    "description": "Fully upgrade every Blacksmith training line.",
+    "hidden": false
+  },
+  {
+    "id": "ALCHEMIST_MAXED",
+    "name": "Master Alchemist",
+    "description": "Fully upgrade every Alchemist training line.",
+    "hidden": false
+  },
+  {
+    "id": "ENCHANTER_MAXED",
+    "name": "Master Enchanter",
+    "description": "Fully upgrade every Enchanter training line.",
+    "hidden": false
+  },
+  {
+    "id": "GUILD_HALL_MAXED",
+    "name": "Halls Unshakeable",
+    "description": "Fully upgrade every Guild facility.",
+    "hidden": false
+  },
+  {
+    "id": "COMPLETIONIST",
+    "name": "Nothing Left to Buy",
+    "description": "Fully upgrade every Guild facility and every vendor training line.",
+    "hidden": false
+  },
+  {
+    "id": "WAREHOUSE_MAXED",
+    "name": "Overflowing Stores",
+    "description": "Fully upgrade the Warehouse.",
+    "hidden": false
+  },
+  {
+    "id": "ALL_TOOLS_MAXED",
+    "name": "Master Gatherer",
+    "description": "Fully upgrade every Harvest tool.",
+    "hidden": false
+  },
+  {
+    "id": "FIRST_PET_HATCHED",
+    "name": "New Friend",
+    "description": "Hatch your first pet.",
+    "hidden": false
+  },
+  {
+    "id": "ALL_PETS_COLLECTED",
+    "name": "Full Menagerie",
+    "description": "Hatch every pet species at least once.",
+    "hidden": false
+  },
+  {
+    "id": "VETERAN_RETIREE",
+    "name": "Serial Retiree",
+    "description": "Retire 5 heroes over the guild's history.",
+    "hidden": false
+  },
+  {
+    "id": "PEDDLER_FIRST_FLIP",
+    "name": "A Reasonable Bet",
+    "description": "Flip a card at Grimsby's table.",
+    "hidden": false
+  },
+  {
+    "id": "PEDDLER_JACKPOT",
+    "name": "Jackpot!",
+    "description": "Flip a jackpot-tier card at Grimsby's table.",
+    "hidden": false
+  },
+  {
+    "id": "HIGH_ROLLER_UNLOCKED",
+    "name": "Bigger Bets",
+    "description": "Unlock High Roller at Grimsby's table.",
+    "hidden": false
+  },
+  {
+    "id": "PEDDLER_HIGH_ROLLER_JACKPOT",
+    "name": "The House Loses",
+    "description": "Flip a jackpot-tier card while playing High Roller.",
+    "hidden": false
   }
 ]

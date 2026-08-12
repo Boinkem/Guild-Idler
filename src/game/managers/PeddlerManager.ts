@@ -295,6 +295,16 @@ export const PeddlerManager = {
     const picked = outcomes[pickedIndex];
     PeddlerManager.applyOutcome(state, picked, fee, now, multiplier);
 
+    // Achievement-supporting counters -- see Statistics.peddlerFlips'
+    // own comment for why these live here rather than being derived
+    // after the fact. Tier check reads the PICKED card only, never the
+    // two cosmetic-only reveals a player didn't actually choose.
+    state.stats.peddlerFlips += 1;
+    if (picked.tier === 'jackpot') {
+      state.stats.peddlerJackpots += 1;
+      if (highRoller) state.stats.peddlerHighRollerJackpots += 1;
+    }
+
     return {
       cards,
       pickedIndex,

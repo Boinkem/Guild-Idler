@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 35;
+export const SAVE_VERSION = 36;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -972,6 +972,20 @@ export interface Statistics {
   lowestSuccessfulChance: number | null;
   blackMarketPurchases: number;
   firstPlayedAt: number;
+  /** Total Grimsby card flips ever resolved (regular + High Roller both
+   *  count) -- powers a simple "first flip" achievement. Incremented in
+   *  PeddlerManager.resolveFlip regardless of outcome tier. */
+  peddlerFlips: number;
+  /** Flips that landed on the 'jackpot' tier specifically, regardless of
+   *  whether it was a regular or High Roller flip -- see
+   *  peddlerHighRollerJackpots below for the rarer subset. */
+  peddlerJackpots: number;
+  /** Jackpot-tier flips that ALSO happened to be a High Roller flip (3x
+   *  fee, 3x reward) -- a strict subset of peddlerJackpots above, kept as
+   *  its own counter rather than derived, since a flip's tier and its
+   *  highRoller flag are only ever together inside resolveFlip's own
+   *  scope, not separately reconstructable from state afterward. */
+  peddlerHighRollerJackpots: number;
 }
 
 export interface GameState {

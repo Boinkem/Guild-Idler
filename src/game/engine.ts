@@ -1618,6 +1618,12 @@ export class GameEngine {
     // unlocked X" should land the moment X is actually bought, not
     // whenever the player next resolves a quest.
     this.reportGuidance(GuidanceManager.checkAll(this.state));
+    // BLACKSMITH_MAXED/ALCHEMIST_MAXED/ENCHANTER_MAXED/COMPLETIONIST all
+    // gate on every UPGRADES entry (this method's own domain) reaching
+    // maxLevel -- same "check immediately, don't wait for an unrelated
+    // action" reasoning as the reportGuidance call just above, applied
+    // to achievements instead of guidance topics.
+    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
     this.notify();
     void this.saveNow();
   }
@@ -1636,6 +1642,7 @@ export class GameEngine {
     playSound('purchase');
     const def = GuildManager.vendors().find((v) => v.id === vendorId);
     this.say(`${def?.name ?? 'The vendor'} has more to offer now.`, 'vendors');
+    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
     void this.saveNow();
   }
 
@@ -1649,6 +1656,8 @@ export class GameEngine {
     // facility-tied guidance the same way without needing its own
     // special case.
     this.reportGuidance(GuidanceManager.checkAll(this.state));
+    // GUILD_HALL_MAXED/COMPLETIONIST gate on this -- same reasoning as buyUpgrade above.
+    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
     this.notify();
     void this.saveNow();
   }
@@ -1684,6 +1693,8 @@ export class GameEngine {
     const error = HarvestManager.upgradeTool(this.state, nodeId);
     if (error) return this.say(error);
     playSound('purchase');
+    // ALL_TOOLS_MAXED/COMPLETIONIST gate on this -- same reasoning as buyUpgrade above.
+    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
     this.notify();
     void this.saveNow();
   }
@@ -1692,6 +1703,8 @@ export class GameEngine {
     const error = HarvestManager.upgradeWarehouse(this.state);
     if (error) return this.say(error);
     playSound('purchase');
+    // WAREHOUSE_MAXED/COMPLETIONIST gate on this -- same reasoning as buyUpgrade above.
+    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
     this.notify();
     void this.saveNow();
   }
@@ -1723,6 +1736,10 @@ export class GameEngine {
     if (!pet) return this.say('That egg is not ready to hatch yet.');
     this.lastHatchedPet = pet;
     playSound('legendary_drop');
+    // FIRST_PET_HATCHED/ALL_PETS_COLLECTED gate on this -- same
+    // missing-checkAll gap as the peddler/purchase methods above, found
+    // and fixed the same way.
+    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
     this.notify();
     void this.saveNow();
   }
@@ -2035,6 +2052,13 @@ export class GameEngine {
     if (!result) return this.say('Something about that didn\u2019t work.');
     this.lastGrimsbyResult = result;
     playSound(result.cards[result.pickedIndex].outcome.tier === 'jackpot' ? 'legendary_drop' : 'purchase');
+    // Real, pre-existing gap found while wiring the new Grimsby
+    // achievements: this method never once called checkAll, so nothing a
+    // flip could grant (gold/equipment/eggs, and now the jackpot/flip
+    // counters below) was ever actually checked against the achievement
+    // list from here -- a jackpot achievement would have sat unearned
+    // until some unrelated later action happened to trigger a check.
+    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
     this.notify();
     void this.saveNow();
   }
@@ -2051,6 +2075,15 @@ export class GameEngine {
     PeddlerManager.unlockHighRoller(this.state);
     playSound('purchase');
     this.say('Grimsby raises an eyebrow. \u201cOh, you\u2019ve got the goods now, do you?\u201d', 'peddler');
+    // Also found while wiring HIGH_ROLLER_UNLOCKED below: this method
+    // never called checkAll (so the new achievement would sit unearned
+    // until some unrelated action happened to trigger a check) OR
+    // notify() (so the UI wouldn't reactively reflect the unlock -- the
+    // gold deduction and grimsbyHighRollerUnlocked flip both already
+    // happened in state, just never announced). Both fixed alongside the
+    // achievement wiring rather than filed separately.
+    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+    this.notify();
     void this.saveNow();
   }
 

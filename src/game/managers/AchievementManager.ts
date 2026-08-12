@@ -1,10 +1,15 @@
 import { ACHIEVEMENTS } from '../data/achievements';
-import { HERO_CLASSES, SKINS } from '../data/progression';
+import { HERO_CLASSES, SKINS, UPGRADES, GUILD_FACILITIES } from '../data/progression';
+import { QUEST_CHAINS } from '../data/quests';
+import { RAIDS } from '../data/raids';
+import { PETS } from '../data/pets';
+import { HARVEST_TOOLS, WAREHOUSE_UPGRADE } from '../data/harvestUpgrades';
 import { GameState } from '../types';
 
 const ASCENSION_FOR_LIVING_LEGEND = 10;
 const STREAK_FOR_ON_A_ROLL = 5;
 const AGAINST_THE_ODDS_THRESHOLD = 30;
+const PRESTIGE_COUNT_FOR_VETERAN_RETIREE = 5;
 
 /**
  * Every check reads only GameState — no event payload required. That's
@@ -15,6 +20,9 @@ const AGAINST_THE_ODDS_THRESHOLD = 30;
  * credit for it. See SaveManager's v8->v9 migration.
  */
 type Check = (state: GameState) => boolean;
+
+const allFacilitiesMaxed = (state: GameState): boolean =>
+  GUILD_FACILITIES.every((f) => (state.guild[f.id] ?? 0) >= f.maxLevel);
 
 const CHECKS: Record<string, Check> = {
   FIRST_CONTRACT: (state) => state.stats.totalQuests >= 1,
@@ -61,7 +69,104 @@ const CHECKS: Record<string, Check> = {
     const cleared = new Set(state.completedRaidDifficulties ?? []);
     return cleared.has('normal') && cleared.has('heroic') && cleared.has('mythic');
   },
+
+  /* ------------------------- vendor / guild completion ------------------------- */
+  // All four share the same "every relevant UPGRADES entry at its own
+  // maxLevel" shape, just filtered to a different vendor id (or, for
+  // COMPLETIONIST, no filter at all). state.upgrades is keyed by
+  // UpgradeDef.id -- an entry missing entirely (never bought) reads as
+  // level 0 via `?? 0`, same convention every cost-curve lookup in this
+  // game already uses.
+  BLACKSMITH_MAXED: (state) =>
+    UPGRADES.filter((u) => u.vendor === 'blacksmith').every((u) => (state.upgrades[u.id] ?? 0) >= u.maxLevel),
+
+  ALCHEMIST_MAXED: (state) =>
+    UPGRADES.filter((u) => u.vendor === 'alchemist').every((u) => (state.upgrades[u.id] ?? 0) >= u.maxLevel),
+
+  ENCHANTER_MAXED: (state) =>
+    UPGRADES.filter((u) => u.vendor === 'enchanter').every((u) => (state.upgrades[u.id] ?? 0) >= u.maxLevel),
+
+  GUILD_HALL_MAXED: allFacilitiesMaxed,
+
+  // The grand-finale completionist achievement -- every one of the 24
+  // UPGRADES entries (vendor-tagged AND general/Guild-Hall-tagged alike,
+  // hence no `.filter()` here) at its own maxLevel, AND all 8 facilities
+  // maxed via the same allFacilitiesMaxed helper GUILD_HALL_MAXED uses
+  // directly above (not called through CHECKS itself, which isn't fully
+  // initialized yet at this point in its own object literal). Matches
+  // the ~109-day full-completion timeline already estimated in
+  // guild-idler-project-brief.md -- the single rarest, longest-horizon
+  // achievement in the game by design.
+  COMPLETIONIST: (state) =>
+    UPGRADES.every((u) => (state.upgrades[u.id] ?? 0) >= u.maxLevel) && allFacilitiesMaxed(state),
+
+  /* ------------------------------ harvest ------------------------------ */
+  WAREHOUSE_MAXED: (state) => state.warehouseLevel >= WAREHOUSE_UPGRADE.maxLevel,
+
+  ALL_TOOLS_MAXED: (state) =>
+    HARVEST_TOOLS.every((t) => (state.harvestTools[t.nodeId] ?? 0) >= t.maxLevel),
+
+  /* -------------------------------- pets -------------------------------- */
+  FIRST_PET_HATCHED: (state) => (state.pets ?? []).length >= 1,
+
+  // Pets have no release/delete path anywhere in the game today (a hatch
+  // is permanent, unlike an egg which can sit unhatched indefinitely) --
+  // state.pets is therefore safe to read as "every species ever hatched,"
+  // not just "currently owned," with no separate discovered-pets ledger
+  // needed the way discoveredItems exists for equipment.
+  ALL_PETS_COLLECTED: (state) => {
+    const owned = new Set((state.pets ?? []).map((p) => p.defId));
+    return PETS.every((p) => owned.has(p.id));
+  },
+
+  /* ------------------------------ prestige ------------------------------ */
+  // Complements RETIREMENT_PARTY (>=1 retirement, already above) and
+  // ON_A_ROLL (a same-window streak of 5, already above) with a third,
+  // orthogonal axis: total retirements over the account's whole
+  // lifetime, streak or no streak.
+  VETERAN_RETIREE: (state) => state.stats.prestigeCount >= PRESTIGE_COUNT_FOR_VETERAN_RETIREE,
+
+  /* --------------------------- Grimsby / peddler --------------------------- */
+  PEDDLER_FIRST_FLIP: (state) => (state.stats.peddlerFlips ?? 0) >= 1,
+
+  PEDDLER_JACKPOT: (state) => (state.stats.peddlerJackpots ?? 0) >= 1,
+
+  HIGH_ROLLER_UNLOCKED: (state) => state.grimsbyHighRollerUnlocked === true,
+
+  PEDDLER_HIGH_ROLLER_JACKPOT: (state) => (state.stats.peddlerHighRollerJackpots ?? 0) >= 1,
 };
+
+/**
+ * Auto-generated, one per quest chain -- id `CHAIN_<UPPER_SNAKE_ID>`,
+ * checking straight against completedChains. Deliberately a loop rather
+ * than 28 hand-written one-line entries: every one of these is
+ * mechanically identical (only the chain id differs), so writing them by
+ * hand would just be a 28-line transcription exercise with 28 chances to
+ * typo a chain id. `world_ender` is skipped -- it already has its own
+ * bespoke achievement (WORLDS_END above), predating this batch; adding a
+ * second achievement for the same completion would be a real duplicate,
+ * not just redundant naming. A chain added after this ships gets its
+ * completion check for free the moment this module loads; the matching
+ * achievements.json metadata entry (name/description/hidden) still has
+ * to be added by hand, same "data needs a check, a check does nothing
+ * without matching data" split this file's own top comment describes.
+ */
+for (const chain of QUEST_CHAINS) {
+  if (chain.id === 'world_ender') continue;
+  CHECKS[`CHAIN_${chain.id.toUpperCase()}`] = (state) => (state.completedChains ?? []).includes(chain.id);
+}
+
+/**
+ * Same auto-generated treatment for raids -- id
+ * `RAID_<UPPER_SNAKE_ID>_CLEARED`, checking completedRaids (a full clear
+ * at ANY difficulty, same semantics RAID_NORMAL_CLEARED's own comment
+ * already establishes). `requiem_last_god` is skipped -- already covered
+ * by the pre-existing, hidden LAST_GOD_DEFEATED achievement.
+ */
+for (const raid of RAIDS) {
+  if (raid.id === 'requiem_last_god') continue;
+  CHECKS[`RAID_${raid.id.toUpperCase()}_CLEARED`] = (state) => (state.completedRaids ?? []).includes(raid.id);
+}
 
 export const AchievementManager = {
   isUnlocked(state: GameState, id: string): boolean {

@@ -516,6 +516,172 @@ raid fight).
 
 ## Backlog
 
+### Steam-launch completeness pass -- findings logged, working through the list
+A full systems review was requested specifically to answer "is this a
+complete game, and what would block a Steam launch." Verdict: yes,
+mechanically and content-wise complete (a real beginning/middle/end,
+every level range has content, every "Known bugs" entry above is already
+resolved) -- but not yet launch-ready, for a short list of concrete,
+mostly non-design items. Logged here as its own tracked list rather than
+scattered across other sections, so it can be worked through in order:
+
+- [x] **Achievements were thin (16 total).** Done this round -- see
+  "Achievement expansion" below for the full writeup. 65 total now.
+- [ ] **`TESTING_TOOLS_ENABLED = true`, hardcoded.** The single highest-
+  priority remaining item. Already self-documented in
+  `testingTools.ts` as "the ONE thing to check before release," but
+  it's currently `true` in the shipped code. Flip to `false` before any
+  build goes out -- full dev/cheat tooling is one click away from every
+  player otherwise. Trivial to do; the risk is purely forgetting it.
+- [ ] **No Electron single-instance lock.** Nothing stops a player
+  launching two copies at once (double-click, a Steam relaunch, etc.).
+  Since saves write on every mutation rather than a batched interval
+  (see "Systems in place" above), two live instances writing the same
+  save file is a real corruption path. Needs
+  `app.requestSingleInstanceLock()` wired into `electron/main.ts` --
+  small, concrete, currently absent.
+- [ ] **Asset licensing needs an explicit "covers a sold, compiled game"
+  confirmation, not just an inferred one.** Hero sprites, the item
+  spritesheet, and vendor art are under a "usable, not redistributable"
+  license, gitignored rather than committed (see the DevTool/Grimsby/
+  Music sections' own gitignore notes). That's sound repo hygiene, but
+  "not redistributable" needs to be re-confirmed as *including*
+  "embedded in a compiled game sold on Steam" -- that's the actual
+  commercial use here, and it's worth having in writing rather than
+  inferred, since it's the one item on this list that could be a real
+  blocker (not just a scheduling one) if the terms turn out narrower
+  than assumed.
+- [ ] **Steamworks integration is entirely a local stub.**
+  Achievements, Cloud saves, and DLC ownership checks all route through
+  placeholder logic today. Already scoped under "Platform /
+  distribution" below -- blocked on registering a real Steamworks App
+  ID first (the one action item on the whole list that isn't code or
+  waiting on anyone else), after which the SDK wiring itself is a
+  well-scoped follow-up, not a redesign.
+- [ ] **Art/icon population, as already tracked.** Quest chain art, raid
+  art, and equipment items pointed at real icons instead of the
+  rarity-based fallback glyph -- see "Art & content to-do list" directly
+  below, unchanged by this pass. Genuinely a content-population pass;
+  `EquipmentDef.icon` and the DevTool's icon picker already exist and
+  work.
+- [ ] **`guild-idler-project-brief.md`'s content-scope line is stale.**
+  Still reads "19 quest chains... 5 raids" -- now 29 chains, 8 raids (30
+  chains once the achievement-expansion pass below is counted against
+  the live JSON, no new chains were added this round though, so still
+  29). Low-priority doc hygiene, not a code fix, but worth a refresh
+  pass since that brief is meant to be a quick-reference cache and is
+  now meaningfully out of date.
+- [ ] **`checkAll` coverage across engine mutators was only spot-fixed,
+  not fully audited.** Found and fixed 8 real instances this round (see
+  "Achievement expansion" below) where a player action could satisfy an
+  achievement condition without ever actually checking for it -- all 8
+  were methods that happen to gate a *new* achievement added this pass.
+  A full audit of every state-mutating method in `engine.ts` for the
+  same gap (independent of whether it currently gates any achievement)
+  would be a good, scoped follow-up rather than continuing to find these
+  one at a time as each unrelated feature happens to touch a
+  neighboring action.
+
+### Achievement expansion -- built
+Direct request: "mock up more achievements... each raid, quest chain,
+full vendor upgrades, getting a jackpot, getting a high roll jackpot,
+unlocking highroller... there should be many notable items." 49 new
+achievements added, 16 -> 65 total:
+- **28 per-quest-chain completion achievements** (every chain except
+  `world_ender`, which the pre-existing `WORLDS_END` already covers --
+  adding a second achievement for the same completion would be a real
+  duplicate, not just redundant naming). Auto-generated via a loop over
+  `QUEST_CHAINS` in `AchievementManager.ts` rather than 28 hand-written
+  one-line checks, since every one is mechanically identical (only the
+  chain id differs) -- a new chain added later gets its completion check
+  for free the moment the module loads, though its `achievements.json`
+  metadata (name/description/hidden) still needs adding by hand, same
+  split this file's own top comment already describes. Achievement
+  names reuse each chain's own in-fiction `title` field directly
+  (`ChainDef.title`, already the reward-title granted to whichever hero
+  finishes it) rather than inventing new names -- "Roadwarden,"
+  "Dragonbane," "Kingslayer Twice Over," etc. already read exactly like
+  achievement names on their own. 5 of the 28 (`hunt_a_lich`,
+  `quiet_in_millbrook`, `the_loom_beneath`, `last_pilgrimage`,
+  `hollow_king`) are marked `hidden: true` -- genuine mystery/reveal
+  arcs or pre-capstone chains, matching the existing precedent
+  `WORLDS_END`/`LAST_GOD_DEFEATED` already set for spoiler-sensitive
+  content, rather than the game's normal "visible by default" treatment.
+- **7 per-raid clear achievements** (every raid except
+  `requiem_last_god`, covered by the pre-existing `LAST_GOD_DEFEATED`).
+  Same auto-loop treatment over `RAIDS`. Checks `completedRaids` --
+  a full clear at ANY difficulty, matching `RAID_NORMAL_CLEARED`'s own
+  established semantics, not a Normal-only or Mythic-only bar. Bespoke
+  short names per raid (e.g. "Siege's End" for Blackford Keep, "Thread
+  Cut" for Silence the Loom) rather than a generic "X Cleared" pattern.
+  `what_got_out` and `silence_the_loom` marked hidden -- both raids'
+  own names/premises are built around a reveal.
+- **5 vendor/guild completion achievements**: `BLACKSMITH_MAXED`/
+  `ALCHEMIST_MAXED`/`ENCHANTER_MAXED` (every `UpgradeDef` tagged to that
+  vendor at its own `maxLevel`), `GUILD_HALL_MAXED` (all 8 facilities
+  maxed), and `COMPLETIONIST` -- a grand-finale achievement requiring
+  literally everything (all 24 `UPGRADES` entries, vendor-tagged and
+  general alike, AND all 8 facilities) maxed at once, matching the
+  ~109-day full-completion timeline already estimated in
+  `guild-idler-project-brief.md`. Deliberately the single rarest,
+  longest-horizon achievement in the game.
+- **4 Grimsby/Peddler achievements**: first flip (`PEDDLER_FIRST_FLIP`),
+  a jackpot-tier flip (`PEDDLER_JACKPOT`), unlocking High Roller
+  (`HIGH_ROLLER_UNLOCKED`), and a jackpot-tier flip while playing High
+  Roller specifically (`PEDDLER_HIGH_ROLLER_JACKPOT`, a strict subset of
+  the plain jackpot one). Needed 3 new `Statistics` counters
+  (`peddlerFlips`/`peddlerJackpots`/`peddlerHighRollerJackpots`, all
+  incremented directly inside `PeddlerManager.resolveFlip`) since
+  nothing tracked flip outcomes at all before this -- `SAVE_VERSION`
+  bumped 35->36 with a migration backfilling all three to 0 for existing
+  saves (nested under `stats`, so the generic `{...base, ...save}` merge
+  in `SaveManager.migrate` would NOT have backfilled them on its own --
+  `save.stats` already exists as a whole object by that point, so the
+  merge takes it wholesale rather than filling in just the missing keys
+  underneath it; spelled out explicitly rather than relying on
+  `undefined >= 1` being falsy-safe-but-still-wrong-forever).
+- **2 Harvest achievements**: `WAREHOUSE_MAXED`, `ALL_TOOLS_MAXED` (every
+  one of the 4 node tools at its own `maxLevel`) -- directly answers this
+  same pass's own finding that Harvest/Pets/Crafting were under-covered
+  by the existing achievement list.
+- **2 Pet achievements**: `FIRST_PET_HATCHED`, `ALL_PETS_COLLECTED`
+  (every one of the 10 species hatched at least once ever). Confirmed
+  pets have no release/delete path anywhere in the game today, so
+  `state.pets` is safe to read as "every species ever hatched," not just
+  "currently owned" -- no separate discovered-pets ledger needed the way
+  `discoveredItems` exists for equipment.
+- **1 Prestige achievement**: `VETERAN_RETIREE` (5+ retirements over the
+  account's lifetime), a third axis alongside the pre-existing
+  `RETIREMENT_PARTY` (>=1 ever) and `ON_A_ROLL` (a same-window streak of
+  5) rather than a duplicate of either.
+
+**Found and fixed 8 real, pre-existing `checkAll` gaps while wiring this
+up** -- `pickPeddlerCard`, `unlockHighRoller`, `buyUpgrade`,
+`levelUpVendor`, `upgradeFacility`, `upgradeHarvestTool`,
+`upgradeWarehouse`, and `hatchEgg` in `engine.ts` never once called
+`AchievementManager.checkAll`, meaning none of the achievements those
+actions now gate (nor, in principle, anything they could have satisfied
+before this pass) would have unlocked at the actual moment they became
+true -- only whenever some unrelated later action happened to trigger a
+check. Fixed all 8. Also caught, while in `unlockHighRoller` for this
+exact reason, that it was missing `this.notify()` entirely -- the gold
+deduction and `grimsbyHighRollerUnlocked` flip both already happened in
+state, just never announced to the UI. Fixed alongside rather than filed
+separately.
+
+Verified at runtime, not just typechecked: 65 total achievements, no
+duplicate ids; every one of the 28 chain / 7 raid achievements resolves
+against a real chain/raid id; completing a chain or clearing a raid
+unlocks exactly its own achievement and no others; maxing one vendor's
+upgrades unlocks only that vendor's achievement, not `COMPLETIONIST`;
+`COMPLETIONIST` requires genuinely everything at once; every Harvest/Pet/
+Prestige/Peddler achievement fires from the exact state that should
+produce it and not from a lesser version of it (e.g. a regular jackpot
+does NOT unlock the High Roller jackpot achievement); and the
+`SAVE_VERSION` 35->36 migration correctly backfills the 3 new stat
+counters to 0 for an old save while preserving its existing stats. Full
+`tsc --noEmit` and `vite build` both pass clean.
+
 ### Art & content to-do list (added this round)
 Five items flagged directly, none of them code work yet -- recorded here
 so they're tracked rather than lost, same treatment the idle-animation

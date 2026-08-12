@@ -97,6 +97,7 @@ export function createInitialState(now = Date.now()): GameState {
       itemsBroken: 0, chainsCompleted: 0,
       playTimeMs: 0, offlineTimeMs: 0, prestigeCount: 0, bestPrestigeStreak: 0,
       lowestSuccessfulChance: null, blackMarketPurchases: 0, firstPlayedAt: now,
+      peddlerFlips: 0, peddlerJackpots: 0, peddlerHighRollerJackpots: 0,
     },
     log: [],
     discoveredItems: [],
@@ -581,6 +582,32 @@ const MIGRATIONS: Record<number, Migration> = {
       version: 35,
       harvestUnlocked: hasHarvestActivity,
       pendingHarvestSpotlight: false,
+    };
+  },
+  35: (save) => {
+    // New Statistics counters for the Grimsby-related achievement batch
+    // (PEDDLER_FIRST_FLIP/PEDDLER_JACKPOT/PEDDLER_HIGH_ROLLER_JACKPOT) --
+    // a save from before these existed has simply never had a flip
+    // counted toward them, same "0, not a placeholder needing
+    // correction" reasoning migration 33 already used for Grimsby's own
+    // fields. Nested under `stats`, so (unlike a top-level GameState
+    // field) SaveManager.migrate's own `{...base, ...save}` merge would
+    // NOT backfill these automatically -- `save.stats` already exists as
+    // a whole object by this point, so the merge takes it wholesale
+    // rather than filling in just the missing keys underneath it. Spelled
+    // out explicitly here rather than relying on the `undefined >= 1`
+    // being falsy anyway (true, but a counter silently stuck at
+    // `undefined` forever is still wrong, not just harmless).
+    const stats = (save.stats as Record<string, unknown> | undefined) ?? {};
+    return {
+      ...save,
+      version: 36,
+      stats: {
+        ...stats,
+        peddlerFlips: (stats.peddlerFlips as number | undefined) ?? 0,
+        peddlerJackpots: (stats.peddlerJackpots as number | undefined) ?? 0,
+        peddlerHighRollerJackpots: (stats.peddlerHighRollerJackpots as number | undefined) ?? 0,
+      },
     };
   },
 };
