@@ -1,0 +1,149 @@
+From 286c8bebc9b8032469deedced2231c1188614880 Mon Sep 17 00:00:00 2001
+From: Guild Idler Patch <patch@guild-idler.local>
+Date: Wed, 12 Aug 2026 05:02:30 +0000
+Subject: [PATCH] Add Electron single-instance lock
+
+- app.requestSingleInstanceLock() called at the very top of
+  electron/main.ts, before any window/app.on/app.whenReady
+  registration -- a losing second instance quits immediately without
+  doing any of that setup.
+- New 'second-instance' listener on the winning instance: restores the
+  window if minimized, switches it into Guild Hall (menu) mode via the
+  same open-guild-hall renderer notification the tray's existing 'Show
+  Guild Hall' item already sends, and focuses it.
+- Addresses a real corruption risk: saves write on every mutation
+  rather than a batched interval, so two live instances writing the
+  same save file was a genuine risk with no protection before this.
+- guild-idler-status.md backlog updated: this item ticked off, the
+  TESTING_TOOLS_ENABLED item reworded to reflect it's being deliberately
+  left open for now per direct request, not forgotten.
+
+Verified: full tsc --noEmit and vite build both pass clean, and the
+compiled dist-electron/main.js was inspected directly to confirm both
+the lock call and the second-instance listener actually made it into
+the bundled output (grew 6.64kB -> 6.83kB), not just the source.
+---
+ electron/main.ts      | 49 +++++++++++++++++++++++++++++++++++++++++++
+ guild-idler-status.md | 39 ++++++++++++++++++++++------------
+ 2 files changed, 75 insertions(+), 13 deletions(-)
+
+diff --git a/electron/main.ts b/electron/main.ts
+index 1a646ce..2ecbfea 100644
+--- a/electron/main.ts
++++ b/electron/main.ts
+@@ -16,6 +16,34 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  */
+ app.setName('little-knight');
+ 
++/**
++ * Single-instance lock -- nothing previously stopped a player launching a
++ * second copy (double-clicking the icon twice, a Steam relaunch, a stray
++ * shortcut, etc.), and since every save-mutating action in this game calls
++ * saveNow() immediately rather than on a batched interval (see
++ * SaveManager.ts's own comment on that), two live instances both reading
++ * and writing the exact same save file is a real corruption path, not a
++ * theoretical one -- whichever instance saves last silently wins, discarding
++ * whatever the other one did in between. `requestSingleInstanceLock()` must
++ * be called this early, before any window is created or any other
++ * `app.on`/`app.whenReady` registration happens, since a losing second
++ * instance needs to quit before it does any of that. The winning instance's
++ * `second-instance` listener (registered down in the lifecycle section
++ * below, alongside `window-all-closed`) is what actually surfaces the
++ * already-running window rather than leaving the player's second launch
++ * attempt looking like it silently did nothing.
++ */
++const gotSingleInstanceLock = app.requestSingleInstanceLock();
++if (!gotSingleInstanceLock) {
++  // This process is the redundant second instance -- Electron has already
++  // notified the original, lock-holding instance via 'second-instance' (see
++  // that listener below) by the time this branch runs. Quit immediately and
++  // don't do anything else: everything below this point (window creation,
++  // ipcMain handlers, the tray) would just be duplicate setup in a process
++  // that's about to exit anyway.
++  app.quit();
++}
++
+ /**
+  * Taskbar/window icon, and the source Tray falls back to once real art
+  * exists. Windows wants an .ico; this .png path is what actually gets read
+@@ -426,6 +454,27 @@ ipcMain.handle('steam:unlockAchievement', (_e, steamApiName: string) => {
+ 
+ /* ------------------------------ lifecycle ------------------------------ */
+ 
++/**
++ * Fired on the ORIGINAL (lock-holding) instance only, the moment a second
++ * launch attempt calls requestSingleInstanceLock() and loses -- see that
++ * call's own comment above. Surfaces the already-running window rather than
++ * leaving a player's second launch attempt looking like nothing happened:
++ * restores it if minimized, switches it into Guild Hall (menu) mode via the
++ * same renderer notification the tray's own "Show Guild Hall" item already
++ * uses (see createTray above), and focuses it. Deliberately the same
++ * behavior as that tray item rather than just re-showing the idle
++ * companion -- a player double-clicking the app icon again is almost
++ * certainly trying to get the game's attention, not just glance at the
++ * corner sprite.
++ */
++app.on('second-instance', () => {
++  if (!win) return;
++  if (win.isMinimized()) win.restore();
++  win.show();
++  win.webContents.send('open-guild-hall');
++  win.focus();
++});
++
+ app.whenReady().then(async () => {
+   await createWindow();
+   createTray();
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index d6d75de..404f992 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -527,19 +527,32 @@ scattered across other sections, so it can be worked through in order:
+ 
+ - [x] **Achievements were thin (16 total).** Done this round -- see
+   "Achievement expansion" below for the full writeup. 65 total now.
+-- [ ] **`TESTING_TOOLS_ENABLED = true`, hardcoded.** The single highest-
+-  priority remaining item. Already self-documented in
+-  `testingTools.ts` as "the ONE thing to check before release," but
+-  it's currently `true` in the shipped code. Flip to `false` before any
+-  build goes out -- full dev/cheat tooling is one click away from every
+-  player otherwise. Trivial to do; the risk is purely forgetting it.
+-- [ ] **No Electron single-instance lock.** Nothing stops a player
+-  launching two copies at once (double-click, a Steam relaunch, etc.).
+-  Since saves write on every mutation rather than a batched interval
+-  (see "Systems in place" above), two live instances writing the same
+-  save file is a real corruption path. Needs
+-  `app.requestSingleInstanceLock()` wired into `electron/main.ts` --
+-  small, concrete, currently absent.
++- [ ] **`TESTING_TOOLS_ENABLED = true`, hardcoded.** Deliberately left
++  as-is per direct request -- the testing tools are still in active use
++  during development, so this stays open on purpose until that's no
++  longer true. Already self-documented in `testingTools.ts` as "the ONE
++  thing to check before release." Flip to `false` before any real build
++  goes out -- full dev/cheat tooling is one click away from every player
++  otherwise.
++- [x] **No Electron single-instance lock.** Done this round. Nothing
++  previously stopped a player launching two copies at once (double-click,
++  a Steam relaunch, a stray shortcut). `app.requestSingleInstanceLock()`
++  now called at the very top of `electron/main.ts`, before any window or
++  `app.on`/`app.whenReady` registration -- a losing second instance quits
++  immediately via `app.quit()` without doing any of that setup. The
++  winning (original) instance gets a new `second-instance` listener,
++  registered alongside the existing `window-all-closed`/`activate` hooks:
++  restores the window if minimized, switches it into Guild Hall (menu)
++  mode via the same `open-guild-hall` renderer notification the tray's
++  existing "Show Guild Hall" item already sends, and focuses it --
++  deliberately the same behavior as that tray item rather than just
++  re-showing the idle companion, since a player double-clicking the app
++  icon again is almost certainly trying to get the game's attention, not
++  just glance at the corner sprite. Verified the compiled
++  `dist-electron/main.js` actually contains both the lock call and the
++  `second-instance` listener, not just the uncompiled source (`main.js`
++  grew from 6.64kB to 6.83kB, and both strings are present in the
++  minified output); full `tsc --noEmit` and `vite build` both pass clean.
+ - [ ] **Asset licensing needs an explicit "covers a sold, compiled game"
+   confirmation, not just an inferred one.** Hero sprites, the item
+   spritesheet, and vendor art are under a "usable, not redistributable"
+-- 
+2.43.0
+

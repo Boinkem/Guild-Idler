@@ -17,6 +17,34 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 app.setName('little-knight');
 
 /**
+ * Single-instance lock -- nothing previously stopped a player launching a
+ * second copy (double-clicking the icon twice, a Steam relaunch, a stray
+ * shortcut, etc.), and since every save-mutating action in this game calls
+ * saveNow() immediately rather than on a batched interval (see
+ * SaveManager.ts's own comment on that), two live instances both reading
+ * and writing the exact same save file is a real corruption path, not a
+ * theoretical one -- whichever instance saves last silently wins, discarding
+ * whatever the other one did in between. `requestSingleInstanceLock()` must
+ * be called this early, before any window is created or any other
+ * `app.on`/`app.whenReady` registration happens, since a losing second
+ * instance needs to quit before it does any of that. The winning instance's
+ * `second-instance` listener (registered down in the lifecycle section
+ * below, alongside `window-all-closed`) is what actually surfaces the
+ * already-running window rather than leaving the player's second launch
+ * attempt looking like it silently did nothing.
+ */
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  // This process is the redundant second instance -- Electron has already
+  // notified the original, lock-holding instance via 'second-instance' (see
+  // that listener below) by the time this branch runs. Quit immediately and
+  // don't do anything else: everything below this point (window creation,
+  // ipcMain handlers, the tray) would just be duplicate setup in a process
+  // that's about to exit anyway.
+  app.quit();
+}
+
+/**
  * Taskbar/window icon, and the source Tray falls back to once real art
  * exists. Windows wants an .ico; this .png path is what actually gets read
  * at runtime for the taskbar/window icon on Windows and Linux (macOS's
@@ -425,6 +453,27 @@ ipcMain.handle('steam:unlockAchievement', (_e, steamApiName: string) => {
 });
 
 /* ------------------------------ lifecycle ------------------------------ */
+
+/**
+ * Fired on the ORIGINAL (lock-holding) instance only, the moment a second
+ * launch attempt calls requestSingleInstanceLock() and loses -- see that
+ * call's own comment above. Surfaces the already-running window rather than
+ * leaving a player's second launch attempt looking like nothing happened:
+ * restores it if minimized, switches it into Guild Hall (menu) mode via the
+ * same renderer notification the tray's own "Show Guild Hall" item already
+ * uses (see createTray above), and focuses it. Deliberately the same
+ * behavior as that tray item rather than just re-showing the idle
+ * companion -- a player double-clicking the app icon again is almost
+ * certainly trying to get the game's attention, not just glance at the
+ * corner sprite.
+ */
+app.on('second-instance', () => {
+  if (!win) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.webContents.send('open-guild-hall');
+  win.focus();
+});
 
 app.whenReady().then(async () => {
   await createWindow();

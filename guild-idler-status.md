@@ -527,19 +527,32 @@ scattered across other sections, so it can be worked through in order:
 
 - [x] **Achievements were thin (16 total).** Done this round -- see
   "Achievement expansion" below for the full writeup. 65 total now.
-- [ ] **`TESTING_TOOLS_ENABLED = true`, hardcoded.** The single highest-
-  priority remaining item. Already self-documented in
-  `testingTools.ts` as "the ONE thing to check before release," but
-  it's currently `true` in the shipped code. Flip to `false` before any
-  build goes out -- full dev/cheat tooling is one click away from every
-  player otherwise. Trivial to do; the risk is purely forgetting it.
-- [ ] **No Electron single-instance lock.** Nothing stops a player
-  launching two copies at once (double-click, a Steam relaunch, etc.).
-  Since saves write on every mutation rather than a batched interval
-  (see "Systems in place" above), two live instances writing the same
-  save file is a real corruption path. Needs
-  `app.requestSingleInstanceLock()` wired into `electron/main.ts` --
-  small, concrete, currently absent.
+- [ ] **`TESTING_TOOLS_ENABLED = true`, hardcoded.** Deliberately left
+  as-is per direct request -- the testing tools are still in active use
+  during development, so this stays open on purpose until that's no
+  longer true. Already self-documented in `testingTools.ts` as "the ONE
+  thing to check before release." Flip to `false` before any real build
+  goes out -- full dev/cheat tooling is one click away from every player
+  otherwise.
+- [x] **No Electron single-instance lock.** Done this round. Nothing
+  previously stopped a player launching two copies at once (double-click,
+  a Steam relaunch, a stray shortcut). `app.requestSingleInstanceLock()`
+  now called at the very top of `electron/main.ts`, before any window or
+  `app.on`/`app.whenReady` registration -- a losing second instance quits
+  immediately via `app.quit()` without doing any of that setup. The
+  winning (original) instance gets a new `second-instance` listener,
+  registered alongside the existing `window-all-closed`/`activate` hooks:
+  restores the window if minimized, switches it into Guild Hall (menu)
+  mode via the same `open-guild-hall` renderer notification the tray's
+  existing "Show Guild Hall" item already sends, and focuses it --
+  deliberately the same behavior as that tray item rather than just
+  re-showing the idle companion, since a player double-clicking the app
+  icon again is almost certainly trying to get the game's attention, not
+  just glance at the corner sprite. Verified the compiled
+  `dist-electron/main.js` actually contains both the lock call and the
+  `second-instance` listener, not just the uncompiled source (`main.js`
+  grew from 6.64kB to 6.83kB, and both strings are present in the
+  minified output); full `tsc --noEmit` and `vite build` both pass clean.
 - [ ] **Asset licensing needs an explicit "covers a sold, compiled game"
   confirmation, not just an inferred one.** Hero sprites, the item
   spritesheet, and vendor art are under a "usable, not redistributable"
