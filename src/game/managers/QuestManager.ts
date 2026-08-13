@@ -97,6 +97,31 @@ export const QuestManager = {
       }
     }
 
+    // Guaranteed on-level offer: a hero could otherwise complete every
+    // Easy contract in their own pool and have the window regenerate
+    // into nothing but a tier they're not actually at yet -- both Easy
+    // (reqLevel 1) and Normal (reqLevel 3) are simultaneously "eligible"
+    // for a level 1-2 hero (the `hero.level + 2 >= reqLevel` window
+    // above deliberately looks two levels ahead), so a run of bad RNG on
+    // a small BOARD_SIZE pool can roll every single slot into the
+    // higher, penalized tier and leave literally nothing the hero is
+    // actually at-or-above level for -- reported directly, reproduced at
+    // level 2 (an all-Normal board) and level 3 (2 Easy landed that
+    // time, same board, pure chance). This is the same "small pool, high
+    // variance" shape as the burst/standard duration guarantees below,
+    // just for difficulty tier instead of duration -- and unlike those
+    // two, going without ever hitting 0% isn't a flavour loss, it's every
+    // offer on the board showing a red "reduced success chance" warning
+    // with nothing else to send the hero on instead. Targets slot 0,
+    // deliberately never colliding with the burst guarantee's last slot
+    // or the standard-duration guarantee's second-to-last slot below.
+    const onLevelDifficulty = [...available].reverse().find((d) => DIFFICULTIES[d].reqLevel <= hero.level) ?? available[0];
+    if (onLevelDifficulty && !offers.some((o) => DIFFICULTIES[o.difficulty].reqLevel <= hero.level)) {
+      offers[0] = QuestManager.generateOffer(
+        onLevelDifficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-on-level`, hero.level, false, legendaryUnlocked,
+      );
+    }
+
     // Every hero's board is their own now, so "no second pair of hands to
     // fall back on while waiting out a long quest" is true of every hero
     // individually, not just a one-hero guild -- guaranteed unconditionally
@@ -467,7 +492,7 @@ export const QuestManager = {
   pickBestQuest(state: GameState, hero: Hero, now: number): QuestOffer | null {
     const eligible = (state.questBoards[hero.id] ?? []).filter((o) => hero.level >= o.reqLevel && !o.chain);
     if (eligible.length === 0) return null;
-    const scored = eligible.map((o) => ({ o, p: QuestManager.previewSuccess(state, hero, o, [], now) }));
+    const scored = eligible.map((o) => ({ o, p: QuestManager.previewSuccess(state, hero, o, hero.equippedConsumables ?? [], now) }));
     const viable = scored.filter((e) => e.p >= 50).sort((a, b) => b.o.rewardGold - a.o.rewardGold);
     if (viable.length > 0) return viable[0].o;
     return scored.sort((a, b) => b.p - a.p)[0].o;

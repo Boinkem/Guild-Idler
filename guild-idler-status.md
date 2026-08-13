@@ -7198,3 +7198,144 @@ alone exceeds 100%, worth checking whether the downstream clamp handles
 that before touching the number), and durability (140%, lowest priority
 since it's not a reward stat). None of these were part of this request
 either.
+
+### Consumables not reflected in previewed success, guaranteed on-level offer, success-rate revert
+
+Direct playtest report against a fresh guild reset, covering three
+separate things.
+
+**1. Equipped consumables never showed up in the previewed success %
+-- fixed, a real bug.** `QuestManager.previewSuccess` takes a
+`consumables` array and correctly folds their mods into the total (via
+`InventoryManager.loadoutEffects`) -- that part was never broken. The
+bug was every UI/logic call site into it hardcoding `[]` instead of the
+hero's actual `hero.equippedConsumables ?? []`: `QuestCard`'s own
+displayed chance, the "sort by success" comparator, and
+`QuestManager.pickBestQuest` (Quick-assign/Send-All-Idle's scoring) all
+ignored whatever was actually equipped. Real quest resolution
+(`QuestManager.start` -> `engine.startQuest`) was never affected -- it
+always correctly read `hero.equippedConsumables` -- so a consumable's
+effect was real, just invisible on the card and unable to influence
+auto-send scoring. All three call sites now pass
+`hero.equippedConsumables ?? []`.
+
+**Separately confirmed NOT a bug:** equipping Leather Cap
+(`injuryResist +3`) and Leather Boots (`speed +3`) correctly didn't move
+success -- neither item's `mods` includes `success` at all. Working as
+designed; there was nothing to fix here.
+
+**2. Guaranteed on-level offer added to `generateContractsForHero` --
+real fix, narrower scope than first thought.** New guarantee: if none
+of a hero's generated 6 offers has `reqLevel <= hero.level` (i.e. every
+slot would show the red "reduced success chance" warning), one slot
+(index 0, never colliding with the existing burst/standard-duration
+guarantees at the end of the array) is forced to the hero's own
+highest genuinely-at-level tier. Verified this specific guarantee holds
+at 0 misses across 18,000 sampled board generations, levels 1-6.
+
+**Important caveat, found while verifying rather than assumed:** this
+guarantee turned out to already be satisfied in practice below level 16
+regardless, because the existing burst-quest guarantee
+(`easyFastModeChances(hero.level).burstChance > 0`) already forces an
+Easy-tier offer onto the board whenever burst hasn't tapered out yet --
+confirmed by running the same 18,000-sample test with the new guarantee
+*removed*: still 0 misses. So this pass's fix adds real, non-redundant
+value specifically for heroes past level ~15 (once burst has fully
+tapered and stops forcing anything), but does **not** explain the
+originally-reported symptom (a level 2 board showing zero Easy offers
+after two were completed).
+
+**The actual reported symptom is very likely mid-window depletion, not
+generation-time RNG, and is NOT fixed by this pass.** The board only
+regenerates on its fixed 30-minute window (or a paid/free reroll) --
+completing an offer removes it from `questBoards[hero.id]`
+(`QuestManager.resolve`) but nothing tops the board back up mid-window.
+A 6-slot board landing ~2 Easy + 4 Normal (well within normal variance
+given Easy/Normal's near-even weights at low level) and then having
+both Easy slots burned through quickly -- especially likely with
+burst-length offers, which can resolve in under 5 minutes -- would
+produce exactly what was reported: a board that's genuinely down to
+Normal-only until the next natural window, with nothing wrong in
+generation. Confirmed this is architecturally different from anything
+`generateContractsForHero` can fix on its own, since it only runs once
+per window. **Not fixed this pass** -- the right shape is likely a
+mid-window top-up (regenerate just a hero's missing on-level slots once
+they run out, independent of the 30-min clock) rather than anything in
+the generation-time guarantee logic. Flagged as a follow-up, not
+guessed at here.
+
+**3. Success-rate formula -- partially reverted, per direct request
+("mostly revert... winning feels fun"), gold/xp untouched.** Reverted
+the tier `baseSuccess` cuts and the `barracks`/`renowned_skill`
+successPerLevel cuts from the earlier "Quest success: full formula
+traced, first-pass rebalance" entry above. Specifically:
+- `DIFFICULTIES.baseSuccess` (`quests.ts`): Normal 58 -> **60**, Hard 44
+  -> **50**, Epic 30 -> **40**, Legendary 18 -> **30**. Easy stays 70 --
+  it was never touched by the original pass either direction.
+- `guild_facility.barracks.successPerLevel`: 1 -> **3** (10 levels: 10%
+  -> 30% max).
+- `renown_perk.renowned_skill.successPerLevel`: 1 -> **3** (tier2 25
+  levels: 25% -> 75% max).
+
+**Deliberately NOT reverted:** `weapons_training.successPerLevel`
+(stays at 1, not the original 5) and `mounted_travel.speedPerLevel`
+(stays at 3, not the original 10) -- both were confirmed genuinely
+"busted" in the earlier "Upgrade balance review" entry via a *separate*,
+explicit request before the later formula pass ever touched
+`baseSuccess`, and reverting them would reintroduce that specific
+bug (50%/60% success/speed from one upgrade alone) rather than address
+what was actually reported this time. The diminishing-returns investment
+curve (`QuestManager.curveInvestment`) also stays -- it fixes a real,
+separate, still-relevant bug (modest gear alone hitting the 95% success
+ceiling on most tiers with zero headroom to grow into), not something
+this report was about.
+
+**Verified the revert's actual effect, both directions:**
+- Zero-investment stress test (fresh hero, own level, no gear/upgrades)
+  at each tier's own reqLevel: Easy 71%, Normal 60%, Hard 48%, Epic 36%,
+  Legendary 23% -- comfortably below the ceiling at every tier, no
+  regression back to "everything caps immediately."
+- Upgrades-maxed (gold-only path: weapons_training + master_adventurer +
+  barracks, zero gear/stats) at each tier's own reqLevel: Easy hits the
+  literal 95% clamp again (baseSuccess 70 + ~30% from three fully-maxed
+  gold upgrades, curved, still crosses the ceiling) -- Normal/Hard/Epic/
+  Legendary do not (88%/78%/67%/56%). This is a real, known trade-off of
+  the revert, isolated to Easy specifically (the one tier whose
+  baseSuccess was never part of either pass) -- flagged rather than
+  silently accepted, since it's the same shape of problem the whole
+  rebalance was originally about, just now scoped to one tier instead
+  of three.
+
+**The specific number reported (Briar's Easy quests around 48-49%) does
+NOT change after this revert -- confirmed directly, not assumed.**
+Recomputed Briar's exact situation (level 3, Health 127/138, Sprained
+Ankle + two stacked Exhausted injuries) against the reverted formula:
+48.5% on Easy, versus the 49% originally reported. Essentially
+unchanged, because Easy's `baseSuccess` was never touched by either
+pass in either direction -- the entire gap is injury/health penalties,
+confirmed as a separate system from the one just reverted.
+
+**Root cause of why a "little hurt" hero swings this hard, found while
+verifying:** `curveInvestment`'s diminishing curve only applies when
+combined investment is *positive* and above its own linear threshold
+(`raw <= threshold` returns `raw` unchanged) -- injury/health penalties,
+being negative, always pass straight through at full, uncurved strength
+regardless of how many stack. Briar's three active injuries
+(Sprained Ankle -5, Exhausted -8 x2 = -21 flat) plus a small missing-
+health penalty apply in full, while a hero's positive gear/stat
+investment above 8 points gets progressively suppressed by the exact
+same curve. This asymmetry -- bonuses diminish, penalties don't -- is
+very likely why a "little hurt" hero (Health 127/138, ~92%) reads as
+"badly hurt" in practice. **Not touched this pass**, per the explicit
+"tune the injury stuff later" -- flagged here with the actual mechanism
+identified (rather than left as a vague "injuries feel bad") so a
+follow-up pass doesn't need to re-derive it. Candidate fixes for later,
+not decided: run injury/health penalties through their own, gentler
+curve (or the same one, made symmetric); reduce individual injury
+`mods.success` magnitudes; or raise `health.successPenaltyPerMissingPercent`'s
+own tuning down from 0.3.
+
+Verified via `npx tsc --noEmit` and `vite build`, both clean, plus the
+runtime checks described inline above (18,000-sample on-level guarantee
+test with and without the fix, zero-investment and upgrades-maxed stress
+tests, and Briar's exact reproduction).

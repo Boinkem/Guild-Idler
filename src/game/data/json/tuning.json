@@ -175,8 +175,8 @@
     "id": "guild_facility.barracks.successPerLevel",
     "label": "Barracks: success % per level",
     "category": "guild_facilities",
-    "value": 1,
-    "default": 1,
+    "value": 3,
+    "default": 3,
     "min": 0,
     "max": 20,
     "description": "Flat success percentage points granted per level, guild-wide."
@@ -1222,8 +1222,8 @@
     "id": "renown_perk.renowned_skill.successPerLevel",
     "label": "Renowned Skill: success per level",
     "category": "renown_perks",
-    "value": 1,
-    "default": 1,
+    "value": 3,
+    "default": 3,
     "description": "success bonus granted per Renowned Skill level.",
     "min": 0
   },

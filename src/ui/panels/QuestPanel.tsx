@@ -62,7 +62,7 @@ function QuestCard({
   const engine = useEngine();
   const state = engine.state;
   const cfg = DIFFICULTIES[offer.difficulty];
-  const chance = QuestManager.previewSuccess(state, hero, offer, [], now);
+  const chance = QuestManager.previewSuccess(state, hero, offer, hero.equippedConsumables ?? [], now);
   const duration = QuestManager.previewDuration(state, hero, offer, now);
   const chain = offer.chain ? CHAIN_BY_ID[offer.chain.chainId] : undefined;
   const levelGap = Math.max(0, offer.reqLevel - hero.level);
@@ -280,8 +280,8 @@ export function QuestPanel() {
   const contractOffers = useMemo(() => {
     const offers = [...(state.questBoards[selectedHero.id] ?? [])];
     if (sortMode === 'success') {
-      return offers.sort((a, b) => QuestManager.previewSuccess(state, selectedHero, b, [], now)
-        - QuestManager.previewSuccess(state, selectedHero, a, [], now));
+      return offers.sort((a, b) => QuestManager.previewSuccess(state, selectedHero, b, selectedHero.equippedConsumables ?? [], now)
+        - QuestManager.previewSuccess(state, selectedHero, a, selectedHero.equippedConsumables ?? [], now));
     }
     if (sortMode === 'reward') {
       return offers.sort((a, b) => b.rewardGold - a.rewardGold);
