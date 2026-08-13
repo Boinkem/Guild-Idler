@@ -423,7 +423,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
       <div className="modal craft-station-modal" onClick={(e) => e.stopPropagation()}>
         <div className="spread" style={{ marginBottom: 8 }}>
           <span className="card-title">{STATION_TITLE[category]}</span>
-          <button onClick={onClose}>Close</button>
+          <button className="btn-primary" onClick={onClose}>Close</button>
         </div>
 
         {scene}

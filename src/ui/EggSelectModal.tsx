@@ -34,7 +34,7 @@ export function EggSelectModal({ onClose }: { onClose: () => void }) {
       <div className="modal craft-station-modal" onClick={(e) => e.stopPropagation()}>
         <div className="spread" style={{ marginBottom: 8 }}>
           <span className="card-title">Choose an Egg</span>
-          <button onClick={onClose}>Close</button>
+          <button className="btn-primary" onClick={onClose}>Close</button>
         </div>
 
         <div className="hatchery-select-scene" style={{ backgroundImage: 'url(./lore/hatchery-select-bg.jpg)' }}>

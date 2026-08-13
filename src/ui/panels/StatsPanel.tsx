@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useEngine } from '../useEngine';
 import { AchievementManager } from '../../game/managers/AchievementManager';
 import { formatGold, formatPlayTime } from '../../game/util';
+import { ConfirmModal } from '../ConfirmModal';
 
 export function StatsPanel() {
   const engine = useEngine();
@@ -9,6 +11,12 @@ export function StatsPanel() {
     ? `${Math.round((stats.successes / stats.totalQuests) * 100)}%`
     : '—';
   const achProgress = AchievementManager.progress(engine.state);
+  // Both previously native `window.alert()`/`window.confirm()` calls --
+  // unstyled OS dialogs, out of place next to every other prompt in the
+  // game already routed through ConfirmModal (Recall, sell confirmations).
+  // See guild-idler-status.md's polish-pass entry for the full writeup.
+  const [saveLocationMessage, setSaveLocationMessage] = useState<string | null>(null);
+  const [pendingHardReset, setPendingHardReset] = useState(false);
 
   const rows: [string, string][] = [
     ['Total quests', stats.totalQuests.toLocaleString()],
@@ -95,20 +103,38 @@ export function StatsPanel() {
           onClick={async () => {
             const folder = await window.littleKnight?.saveFolder();
             engine.clearToast();
-            alert(folder ? `Save file lives in:\n${folder}` : 'Running in a browser: the save is in localStorage.');
+            setSaveLocationMessage(folder ? `Save file lives in:\n${folder}` : 'Running in a browser: the save is in localStorage.');
           }}
         >
           Where is my save?
         </button>
         <button
           className="btn-danger"
-          onClick={() => {
-            if (confirm('Delete this guild and start over? This cannot be undone.')) engine.hardReset();
-          }}
+          onClick={() => setPendingHardReset(true)}
         >
           Start a new guild
         </button>
       </div>
+
+      {saveLocationMessage && (
+        <ConfirmModal
+          title="Where is my save?"
+          message={saveLocationMessage}
+          infoOnly
+          onConfirm={() => setSaveLocationMessage(null)}
+          onCancel={() => setSaveLocationMessage(null)}
+        />
+      )}
+      {pendingHardReset && (
+        <ConfirmModal
+          title="Start a new guild"
+          message="Delete this guild and start over? This cannot be undone."
+          confirmLabel="Delete & start over"
+          danger
+          onConfirm={() => { engine.hardReset(); setPendingHardReset(false); }}
+          onCancel={() => setPendingHardReset(false)}
+        />
+      )}
     </>
   );
 }

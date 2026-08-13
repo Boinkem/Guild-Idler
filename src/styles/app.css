@@ -1136,6 +1136,21 @@ button:focus-visible, [tabindex]:focus-visible {
   color: var(--brass);
   letter-spacing: 0.06em;
 }
+/* Roughly half the game's modals title themselves with <h3> (styled
+   above) and the other half with .card-title (item name, station name,
+   pet name, etc, reused as the modal's own header) -- .card-title on its
+   own has no font-family/color override, so those modals were rendering
+   in the plain body font instead of the same brass/display treatment
+   every <h3>-titled modal gets. Scoped to .modal so this doesn't touch
+   .card-title's many other uses outside a modal (quest/hero/item cards
+   throughout the rest of the UI, which are deliberately NOT brass --
+   only rarity-colored equipment names, which override via inline style
+   and so are unaffected by this class-level rule regardless). */
+.modal .card-title {
+  font-family: var(--font-display);
+  color: var(--brass);
+  letter-spacing: 0.06em;
+}
 
 .toast {
   position: fixed;

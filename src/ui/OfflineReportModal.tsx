@@ -82,8 +82,8 @@ export function OfflineReportModal({ active }: { active: boolean }) {
     || report.raidResults.some((r) => r.loot.some((l) => l.rarity === 'legendary'));
 
   return (
-    <div className="overlay">
-      <div className="modal">
+    <div className="overlay" onClick={() => engine.dismissOfflineReport()}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3>While you were away</h3>
         <p className="small muted" style={{ marginTop: 0 }}>
           The guild ran for {formatDuration(report.elapsedMs)} without you.

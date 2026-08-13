@@ -437,7 +437,7 @@ function RaidDetailModal({
           )}
 
           <div className="row end" style={{ marginTop: 14 }}>
-            <button onClick={onClose}>Close</button>
+            <button className="btn-primary" onClick={onClose}>Close</button>
           </div>
         </div>
       </div>

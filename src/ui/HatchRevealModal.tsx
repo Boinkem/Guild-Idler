@@ -46,7 +46,7 @@ export function HatchRevealModal() {
         </div>
 
         <div className="row end" style={{ marginTop: 14, gap: 8, justifyContent: 'center' }}>
-          <button onClick={() => engine.dismissHatchedPet()}>Close</button>
+          <button className="btn-primary" onClick={() => engine.dismissHatchedPet()}>Close</button>
           <button className="btn-primary" onClick={goToPets}>Go to Pets</button>
         </div>
       </div>

@@ -98,7 +98,7 @@ export function ChainCompleteModal({ active, onViewLore }: { active: boolean; on
         )}
 
         <div className="row end" style={{ marginTop: 16, gap: 8 }}>
-          <button onClick={() => engine.dismissChainCelebration()}>Close</button>
+          <button className="btn-primary" onClick={() => engine.dismissChainCelebration()}>Close</button>
           <button className="btn-primary" onClick={viewLore}>View in Lore</button>
         </div>
 

@@ -17,7 +17,7 @@ export function ChainDiscoveryModal({ onView, onClose }: { onView: () => void; o
           the Quest Board alongside everything else. Complete one stage, and the next becomes available.
         </p>
         <div className="row end" style={{ marginTop: 14, gap: 8 }}>
-          <button onClick={onClose}>Close</button>
+          <button className="btn-primary" onClick={onClose}>Close</button>
           <button className="btn-primary" onClick={onView}>View on Quest Board</button>
         </div>
       </div>

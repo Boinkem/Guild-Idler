@@ -29,7 +29,7 @@ export function PetEnlargedModal({ pet, onClose }: { pet: Pet; onClose: () => vo
       <div className="modal" style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
         <div className="spread" style={{ marginBottom: 4 }}>
           <span className="card-title">{pet.name}</span>
-          <button onClick={onClose}>Close</button>
+          <button className="btn-primary" onClick={onClose}>Close</button>
         </div>
         <div className="row" style={{ justifyContent: 'center', gap: 6, marginBottom: 8 }}>
           <span className="tiny muted">{def?.name ?? 'Unknown species'}</span>

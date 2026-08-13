@@ -28,7 +28,7 @@ export function HatchReadyModal({ active, onView }: { active: boolean; onView: (
           tab and open it to see what came out.
         </p>
         <div className="row end" style={{ marginTop: 14, gap: 8 }}>
-          <button onClick={() => engine.dismissHatchReadyNotice()}>Close</button>
+          <button className="btn-primary" onClick={() => engine.dismissHatchReadyNotice()}>Close</button>
           <button className="btn-primary" onClick={goToHatchery}>Go to Hatchery</button>
         </div>
       </div>

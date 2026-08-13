@@ -13,6 +13,7 @@ import { describeMods, describeStats, formatGold, RARITY_COLOR, RARITY_ORDER } f
 import { ItemIcon, ConsumableIcon } from '../icons';
 import { GearScoreBadge } from '../GearScoreBadge';
 import { Row, Toggle } from './SettingsPanel';
+import { ConfirmModal } from '../ConfirmModal';
 
 const SLOTS = EQUIP_SLOTS;
 
@@ -207,7 +208,7 @@ function ConsumableInfoCard({
             </div>
             <div className="tiny muted">{def.description}</div>
             <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
-              <button onClick={() => setOpen(false)}>Close</button>
+              <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
               {instantUse && (
                 <button
                   className="btn-primary"
@@ -298,7 +299,7 @@ function ConsumableSlotCard({
               </div>
               <div className="tiny muted">{def.description}</div>
               <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
-                <button onClick={() => setOpen(false)}>Close</button>
+                <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
                 <button
                   className="btn-primary"
                   onClick={() => { engine.unequipConsumable(hero.id, def.id); setOpen(false); }}
@@ -352,7 +353,7 @@ function ConsumableSlotCard({
               </div>
             )}
             <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
-              <button onClick={() => setOpen(false)}>Close</button>
+              <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
             </div>
           </div>
         </div>
@@ -446,7 +447,7 @@ function SlotCard({
               {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
             </div>
             <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
-              <button onClick={() => setOpen(false)}>Close</button>
+              <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
               <button
                 className="btn-primary"
                 disabled={EquipmentManager.repairCost(item, workshop) === 0}
@@ -474,9 +475,11 @@ function StashCard({
   item, hero, confirmSell, engine,
 }: { item: EquipmentItem; hero: Hero; confirmSell: boolean; engine: GameEngine }) {
   const [open, setOpen] = useState(false);
+  const [pendingSell, setPendingSell] = useState(false);
   const def = EQUIPMENT_BY_ID[item.defId];
   if (!def) return null;
   const canEquip = EquipmentManager.canEquip(hero, item);
+  const doSell = () => { engine.sellItem(item.uid); setPendingSell(false); setOpen(false); };
 
   return (
     <>
@@ -525,7 +528,7 @@ function StashCard({
               {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
             </div>
             <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
-              <button onClick={() => setOpen(false)}>Close</button>
+              <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
               <button
                 className="btn-primary"
                 disabled={!canEquip.ok}
@@ -536,7 +539,7 @@ function StashCard({
               </button>
               <button
                 onClick={() => {
-                  if (!confirmSell || confirm('Sell this item?')) { engine.sellItem(item.uid); setOpen(false); }
+                  if (!confirmSell) doSell(); else setPendingSell(true);
                 }}
               >
                 Sell {formatGold(EquipmentManager.sellValue(item))}
@@ -544,6 +547,16 @@ function StashCard({
             </div>
           </div>
         </div>
+      )}
+
+      {pendingSell && (
+        <ConfirmModal
+          title="Sell item"
+          message={`Sell ${def.name} for ${formatGold(EquipmentManager.sellValue(item))}?`}
+          confirmLabel="Sell"
+          onConfirm={doSell}
+          onCancel={() => setPendingSell(false)}
+        />
       )}
     </>
   );
@@ -578,11 +591,11 @@ export function EquipmentPanel() {
     return RARITY_ORDER.indexOf(def.rarity) <= junkMaxIndex;
   });
   const junkGold = junkPreview.reduce((sum, item) => sum + EquipmentManager.sellValue(item), 0);
+  const [pendingJunkSell, setPendingJunkSell] = useState(false);
   const sellJunk = () => {
     if (junkPreview.length === 0) return;
-    if (!settings.confirmSell || confirm(`Sell ${junkPreview.length} item${junkPreview.length === 1 ? '' : 's'} (${junkRarity} and below) for ${junkGold} gold?`)) {
-      engine.sellJunk(junkRarity);
-    }
+    if (!settings.confirmSell) engine.sellJunk(junkRarity);
+    else setPendingJunkSell(true);
   };
 
   return (
@@ -766,6 +779,16 @@ export function EquipmentPanel() {
           <StashCard key={item.uid} item={item} hero={hero} confirmSell={settings.confirmSell} engine={engine} />
         ))}
       </div>
+
+      {pendingJunkSell && (
+        <ConfirmModal
+          title="Sell junk"
+          message={`Sell ${junkPreview.length} item${junkPreview.length === 1 ? '' : 's'} (${junkRarity} and below) for ${formatGold(junkGold)}?`}
+          confirmLabel="Sell"
+          onConfirm={() => { engine.sellJunk(junkRarity); setPendingJunkSell(false); }}
+          onCancel={() => setPendingJunkSell(false)}
+        />
+      )}
     </>
   );
 }

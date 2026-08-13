@@ -25,6 +25,73 @@ Tab hero-log rework" below. Quest success now runs through a combined
 diminishing-returns curve rather than pure linear stacking -- see "Quest
 success rebalance -- built" below.
 
+### UI polish pass: native dialogs replaced, modal headers unified, Close buttons standardized -- built
+Direct request to review every prompt box and the notification system for
+consistency, findings reported as a dot-point list before any code
+changed, then all of them fixed in this pass:
+
+- **Two remaining native `window.alert()`/`window.confirm()` calls,
+  replaced.** `StatsPanel.tsx`'s "Where is my save?" (`alert`) and "Start
+  a new guild" hard reset (`confirm`) were the last two native dialogs in
+  the game -- both now route through `ConfirmModal`, same as every other
+  prompt. `ConfirmModal` gained a new `infoOnly` mode (single
+  acknowledgement button, no cancel) specifically for the save-location
+  case, which isn't really a yes/no decision the way every other
+  `ConfirmModal` use is.
+- **Two native `confirm()` calls in `EquipmentPanel.tsx`, replaced.**
+  Single-item sell (`StashCard`) and bulk-sell junk both previously used
+  `confirm()` gated behind the `confirmSell` setting -- `ConfirmModal`
+  already existed for exactly this (its own doc comment named these two
+  as intended future consumers). Both now hold a `pending*` boolean and
+  render `ConfirmModal` instead; the `confirmSell` setting's behavior is
+  unchanged (skips the modal entirely when off), only the modal itself
+  changed shape.
+- **Modal headers unified -- CSS fix, not a markup rewrite.** About half
+  the game's modals title themselves with `<h3>` (which `.modal h3`
+  already themes: brass color, display font) and the other half reuse
+  `.card-title` for the same header role (item name, station name, pet
+  name, raid name) -- but `.card-title` alone has no font-family/color
+  override, so those rendered in the plain body font instead. Fixed with
+  one new scoped rule, `.modal .card-title { font-family: var(--font-
+  display); color: var(--brass); letter-spacing: 0.06em; }`, rather than
+  touching every file's JSX -- deliberately scoped to `.modal` so it
+  doesn't affect `.card-title`'s many other uses elsewhere in the UI
+  (ordinary item/quest/hero cards, which are correctly NOT brass).
+  Rarity-colored equipment names (`style={{ color: RARITY_COLOR[...] }}`)
+  are unaffected, since an inline style always wins over a class rule
+  regardless of specificity -- confirmed by reading the cascade rules,
+  not by guessing.
+- **Every "Close" button standardized to the styled `btn-primary` look.**
+  Direct follow-up correction to the polish request: the default finding
+  would have been "make RaidsPanel's one `btn-primary` Close button match
+  the dozen-plus plain ones" -- inverted per direct instruction to keep
+  the styled version and convert every plain one instead. All ~19 plain
+  `<button onClick={...}>Close</button>` instances across
+  `ArmourInfusionStation`, `ChainCompleteModal`, `ChainDiscoveryModal`,
+  `CraftingStation`, `EggSelectModal`, `EnhanceStation`, `HatchReadyModal`,
+  `HatchRevealModal`, `PetEnlargedModal`, `RaidResultModal`, `ScrapStation`,
+  `WeaponEnchantStation`, `EquipmentPanel` (5), `RaidsPanel`, and
+  `VendorsPanel` (2) now carry `className="btn-primary"`, matching the one
+  in `RaidsPanel`'s `ItemDetailOverlay` that prompted the question.
+- **`OfflineReportModal` now dismisses on backdrop click**, matching
+  every other overlay in the game (its own explicit "Back to work" button
+  is unchanged and still works). Correction to the original finding: a
+  second modal with the same no-backdrop-dismiss behavior was found while
+  fixing this one -- `ChainCompleteModal` ("Expedition Complete")
+  deliberately has no backdrop dismiss either, and was NOT changed here.
+  Unlike the offline report (a routine, every-session summary, where the
+  missing dismiss reads as an oversight), a story-chain completion is a
+  rare narrative climax where preventing an accidental dismissal is a
+  reasonable deliberate choice -- left alone rather than "fixed" to match
+  on the strength of a pattern that doesn't actually hold game-wide.
+- **Notifications -- confirmed already consistent, no change needed.**
+  Every panel routes through the single `engine.say()` -> `NotificationBanner`
+  / Notifications-log path; no ad-hoc parallel toast/error state was found
+  anywhere else in the UI.
+
+`npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` both
+pass clean.
+
 ### Consumables now use the same overlay/modal shape gear does; notification close button confirmed working -- built
 Follow-up to two items left open in "Big feedback batch" (see below):
 

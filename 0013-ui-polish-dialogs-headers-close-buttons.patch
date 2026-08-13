@@ -1,0 +1,601 @@
+From 35c9d5fbd5e787028121b67445474d401d81f9d8 Mon Sep 17 00:00:00 2001
+From: Claude <assistant@anthropic.local>
+Date: Thu, 13 Aug 2026 04:25:41 +0000
+Subject: [PATCH] UI polish: native dialogs replaced, modal headers unified,
+ Close buttons standardized
+
+---
+ guild-idler-status.md            | 67 ++++++++++++++++++++++++++++++++
+ src/styles/app.css               | 15 +++++++
+ src/ui/ArmourInfusionStation.tsx |  2 +-
+ src/ui/ChainCompleteModal.tsx    |  2 +-
+ src/ui/ChainDiscoveryModal.tsx   |  2 +-
+ src/ui/ConfirmModal.tsx          | 30 ++++++++++++--
+ src/ui/CraftingStation.tsx       |  2 +-
+ src/ui/EggSelectModal.tsx        |  2 +-
+ src/ui/EnhanceStation.tsx        |  2 +-
+ src/ui/HatchReadyModal.tsx       |  2 +-
+ src/ui/HatchRevealModal.tsx      |  2 +-
+ src/ui/OfflineReportModal.tsx    |  4 +-
+ src/ui/PetEnlargedModal.tsx      |  2 +-
+ src/ui/RaidResultModal.tsx       |  2 +-
+ src/ui/ScrapStation.tsx          |  2 +-
+ src/ui/WeaponEnchantStation.tsx  |  2 +-
+ src/ui/panels/EquipmentPanel.tsx | 41 ++++++++++++++-----
+ src/ui/panels/RaidsPanel.tsx     |  2 +-
+ src/ui/panels/StatsPanel.tsx     | 34 ++++++++++++++--
+ src/ui/panels/VendorsPanel.tsx   |  4 +-
+ 20 files changed, 188 insertions(+), 33 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index e8b900a..630a0bd 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -25,6 +25,73 @@ Tab hero-log rework" below. Quest success now runs through a combined
+ diminishing-returns curve rather than pure linear stacking -- see "Quest
+ success rebalance -- built" below.
+ 
++### UI polish pass: native dialogs replaced, modal headers unified, Close buttons standardized -- built
++Direct request to review every prompt box and the notification system for
++consistency, findings reported as a dot-point list before any code
++changed, then all of them fixed in this pass:
++
++- **Two remaining native `window.alert()`/`window.confirm()` calls,
++  replaced.** `StatsPanel.tsx`'s "Where is my save?" (`alert`) and "Start
++  a new guild" hard reset (`confirm`) were the last two native dialogs in
++  the game -- both now route through `ConfirmModal`, same as every other
++  prompt. `ConfirmModal` gained a new `infoOnly` mode (single
++  acknowledgement button, no cancel) specifically for the save-location
++  case, which isn't really a yes/no decision the way every other
++  `ConfirmModal` use is.
++- **Two native `confirm()` calls in `EquipmentPanel.tsx`, replaced.**
++  Single-item sell (`StashCard`) and bulk-sell junk both previously used
++  `confirm()` gated behind the `confirmSell` setting -- `ConfirmModal`
++  already existed for exactly this (its own doc comment named these two
++  as intended future consumers). Both now hold a `pending*` boolean and
++  render `ConfirmModal` instead; the `confirmSell` setting's behavior is
++  unchanged (skips the modal entirely when off), only the modal itself
++  changed shape.
++- **Modal headers unified -- CSS fix, not a markup rewrite.** About half
++  the game's modals title themselves with `<h3>` (which `.modal h3`
++  already themes: brass color, display font) and the other half reuse
++  `.card-title` for the same header role (item name, station name, pet
++  name, raid name) -- but `.card-title` alone has no font-family/color
++  override, so those rendered in the plain body font instead. Fixed with
++  one new scoped rule, `.modal .card-title { font-family: var(--font-
++  display); color: var(--brass); letter-spacing: 0.06em; }`, rather than
++  touching every file's JSX -- deliberately scoped to `.modal` so it
++  doesn't affect `.card-title`'s many other uses elsewhere in the UI
++  (ordinary item/quest/hero cards, which are correctly NOT brass).
++  Rarity-colored equipment names (`style={{ color: RARITY_COLOR[...] }}`)
++  are unaffected, since an inline style always wins over a class rule
++  regardless of specificity -- confirmed by reading the cascade rules,
++  not by guessing.
++- **Every "Close" button standardized to the styled `btn-primary` look.**
++  Direct follow-up correction to the polish request: the default finding
++  would have been "make RaidsPanel's one `btn-primary` Close button match
++  the dozen-plus plain ones" -- inverted per direct instruction to keep
++  the styled version and convert every plain one instead. All ~19 plain
++  `<button onClick={...}>Close</button>` instances across
++  `ArmourInfusionStation`, `ChainCompleteModal`, `ChainDiscoveryModal`,
++  `CraftingStation`, `EggSelectModal`, `EnhanceStation`, `HatchReadyModal`,
++  `HatchRevealModal`, `PetEnlargedModal`, `RaidResultModal`, `ScrapStation`,
++  `WeaponEnchantStation`, `EquipmentPanel` (5), `RaidsPanel`, and
++  `VendorsPanel` (2) now carry `className="btn-primary"`, matching the one
++  in `RaidsPanel`'s `ItemDetailOverlay` that prompted the question.
++- **`OfflineReportModal` now dismisses on backdrop click**, matching
++  every other overlay in the game (its own explicit "Back to work" button
++  is unchanged and still works). Correction to the original finding: a
++  second modal with the same no-backdrop-dismiss behavior was found while
++  fixing this one -- `ChainCompleteModal` ("Expedition Complete")
++  deliberately has no backdrop dismiss either, and was NOT changed here.
++  Unlike the offline report (a routine, every-session summary, where the
++  missing dismiss reads as an oversight), a story-chain completion is a
++  rare narrative climax where preventing an accidental dismissal is a
++  reasonable deliberate choice -- left alone rather than "fixed" to match
++  on the strength of a pattern that doesn't actually hold game-wide.
++- **Notifications -- confirmed already consistent, no change needed.**
++  Every panel routes through the single `engine.say()` -> `NotificationBanner`
++  / Notifications-log path; no ad-hoc parallel toast/error state was found
++  anywhere else in the UI.
++
++`npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` both
++pass clean.
++
+ ### Consumables now use the same overlay/modal shape gear does; notification close button confirmed working -- built
+ Follow-up to two items left open in "Big feedback batch" (see below):
+ 
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 3037c78..b9f47a8 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -1136,6 +1136,21 @@ button:focus-visible, [tabindex]:focus-visible {
+   color: var(--brass);
+   letter-spacing: 0.06em;
+ }
++/* Roughly half the game's modals title themselves with <h3> (styled
++   above) and the other half with .card-title (item name, station name,
++   pet name, etc, reused as the modal's own header) -- .card-title on its
++   own has no font-family/color override, so those modals were rendering
++   in the plain body font instead of the same brass/display treatment
++   every <h3>-titled modal gets. Scoped to .modal so this doesn't touch
++   .card-title's many other uses outside a modal (quest/hero/item cards
++   throughout the rest of the UI, which are deliberately NOT brass --
++   only rarity-colored equipment names, which override via inline style
++   and so are unaffected by this class-level rule regardless). */
++.modal .card-title {
++  font-family: var(--font-display);
++  color: var(--brass);
++  letter-spacing: 0.06em;
++}
+ 
+ .toast {
+   position: fixed;
+diff --git a/src/ui/ArmourInfusionStation.tsx b/src/ui/ArmourInfusionStation.tsx
+index 8c0619d..ade225b 100644
+--- a/src/ui/ArmourInfusionStation.tsx
++++ b/src/ui/ArmourInfusionStation.tsx
+@@ -85,7 +85,7 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
+       <div className="modal craft-station-modal" onClick={(e) => e.stopPropagation()}>
+         <div className="spread" style={{ marginBottom: 8 }}>
+           <span className="card-title">Armour Infusion</span>
+-          <button onClick={onClose}>Close</button>
++          <button className="btn-primary" onClick={onClose}>Close</button>
+         </div>
+ 
+         <div className="armor-infusion-scene" style={{ backgroundImage: 'url(./lore/crafting/armor-infusion.jpg)' }}>
+diff --git a/src/ui/ChainCompleteModal.tsx b/src/ui/ChainCompleteModal.tsx
+index 83795ac..67e143c 100644
+--- a/src/ui/ChainCompleteModal.tsx
++++ b/src/ui/ChainCompleteModal.tsx
+@@ -98,7 +98,7 @@ export function ChainCompleteModal({ active, onViewLore }: { active: boolean; on
+         )}
+ 
+         <div className="row end" style={{ marginTop: 16, gap: 8 }}>
+-          <button onClick={() => engine.dismissChainCelebration()}>Close</button>
++          <button className="btn-primary" onClick={() => engine.dismissChainCelebration()}>Close</button>
+           <button className="btn-primary" onClick={viewLore}>View in Lore</button>
+         </div>
+ 
+diff --git a/src/ui/ChainDiscoveryModal.tsx b/src/ui/ChainDiscoveryModal.tsx
+index cb7d6d7..bb30bea 100644
+--- a/src/ui/ChainDiscoveryModal.tsx
++++ b/src/ui/ChainDiscoveryModal.tsx
+@@ -17,7 +17,7 @@ export function ChainDiscoveryModal({ onView, onClose }: { onView: () => void; o
+           the Quest Board alongside everything else. Complete one stage, and the next becomes available.
+         </p>
+         <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+-          <button onClick={onClose}>Close</button>
++          <button className="btn-primary" onClick={onClose}>Close</button>
+           <button className="btn-primary" onClick={onView}>View on Quest Board</button>
+         </div>
+       </div>
+diff --git a/src/ui/ConfirmModal.tsx b/src/ui/ConfirmModal.tsx
+index 44d94dd..5521d8f 100644
+--- a/src/ui/ConfirmModal.tsx
++++ b/src/ui/ConfirmModal.tsx
+@@ -14,12 +14,34 @@
+  * guild-idler-status.md's "Recall confirmation -- fixed" entry for the
+  * full writeup and the deliberately-narrow scope of this pass.
+  */
++/**
++ * A small, reusable styled confirm/cancel prompt -- the in-theme
++ * replacement for a native `window.confirm()` call. Same `.overlay`/
++ * `.modal` shell and `.modal-pop-in` animation every other modal in the
++ * game already uses (GuildNamingModal, PickerModal, etc.), so this reads
++ * as part of the game rather than a browser chrome dialog dropped on top
++ * of it.
++ *
++ * Deliberately generic (message + two labeled buttons) rather than
++ * one-off per caller -- Recall was the first consumer (see
++ * QuestPanel.tsx); StatsPanel's hard reset and EquipmentPanel's sell
++ * confirmations (single item + bulk junk) have since moved onto this same
++ * component too rather than keeping their own native `confirm()` calls.
++ *
++ * `infoOnly` covers the other native-dialog case, `window.alert()` --
++ * a single acknowledgement with no real decision to make (StatsPanel's
++ * "Where is my save?" location readout). Renders one button (labeled by
++ * `confirmLabel`, default "OK") and routes both the backdrop click and
++ * that button through `onConfirm`; `onCancel`/`cancelLabel` are ignored
++ * in this mode since there's nothing to cancel.
++ */
+ export function ConfirmModal({
+   title,
+   message,
+   confirmLabel = 'Confirm',
+   cancelLabel = 'Cancel',
+   danger = false,
++  infoOnly = false,
+   onConfirm,
+   onCancel,
+ }: {
+@@ -34,18 +56,20 @@ export function ConfirmModal({
+    *  what the prompt is warning about), so it stays the default
+    *  .btn-primary rather than reaching for red. */
+   danger?: boolean;
++  /** Single-button acknowledgement mode -- see the doc comment above. */
++  infoOnly?: boolean;
+   onConfirm: () => void;
+   onCancel: () => void;
+ }) {
+   return (
+-    <div className="overlay" onClick={onCancel}>
++    <div className="overlay" onClick={infoOnly ? onConfirm : onCancel}>
+       <div className="modal" style={{ maxWidth: 360 }} onClick={(e) => e.stopPropagation()}>
+         {title && <h3 style={{ marginTop: 0 }}>{title}</h3>}
+         <p className="small" style={{ marginTop: title ? 0 : undefined }}>{message}</p>
+         <div className="row end" style={{ gap: 8, marginTop: 16 }}>
+-          <button className="btn-ghost" onClick={onCancel}>{cancelLabel}</button>
++          {!infoOnly && <button className="btn-ghost" onClick={onCancel}>{cancelLabel}</button>}
+           <button className={danger ? 'btn-danger' : 'btn-primary'} onClick={onConfirm} autoFocus>
+-            {confirmLabel}
++            {infoOnly ? (confirmLabel === 'Confirm' ? 'OK' : confirmLabel) : confirmLabel}
+           </button>
+         </div>
+       </div>
+diff --git a/src/ui/CraftingStation.tsx b/src/ui/CraftingStation.tsx
+index 13fd79e..b78d597 100644
+--- a/src/ui/CraftingStation.tsx
++++ b/src/ui/CraftingStation.tsx
+@@ -423,7 +423,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+       <div className="modal craft-station-modal" onClick={(e) => e.stopPropagation()}>
+         <div className="spread" style={{ marginBottom: 8 }}>
+           <span className="card-title">{STATION_TITLE[category]}</span>
+-          <button onClick={onClose}>Close</button>
++          <button className="btn-primary" onClick={onClose}>Close</button>
+         </div>
+ 
+         {scene}
+diff --git a/src/ui/EggSelectModal.tsx b/src/ui/EggSelectModal.tsx
+index 00f3b66..f51f26c 100644
+--- a/src/ui/EggSelectModal.tsx
++++ b/src/ui/EggSelectModal.tsx
+@@ -34,7 +34,7 @@ export function EggSelectModal({ onClose }: { onClose: () => void }) {
+       <div className="modal craft-station-modal" onClick={(e) => e.stopPropagation()}>
+         <div className="spread" style={{ marginBottom: 8 }}>
+           <span className="card-title">Choose an Egg</span>
+-          <button onClick={onClose}>Close</button>
++          <button className="btn-primary" onClick={onClose}>Close</button>
+         </div>
+ 
+         <div className="hatchery-select-scene" style={{ backgroundImage: 'url(./lore/hatchery-select-bg.jpg)' }}>
+diff --git a/src/ui/EnhanceStation.tsx b/src/ui/EnhanceStation.tsx
+index 76d8b9e..4e0caea 100644
+--- a/src/ui/EnhanceStation.tsx
++++ b/src/ui/EnhanceStation.tsx
+@@ -76,7 +76,7 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
+       <div className="modal craft-station-modal" onClick={(e) => e.stopPropagation()}>
+         <div className="spread" style={{ marginBottom: 8 }}>
+           <span className="card-title">Enhance</span>
+-          <button onClick={onClose}>Close</button>
++          <button className="btn-primary" onClick={onClose}>Close</button>
+         </div>
+ 
+         <div className="craft-scene" style={{ backgroundImage: 'url(./lore/crafting/enhance.jpg)' }}>
+diff --git a/src/ui/HatchReadyModal.tsx b/src/ui/HatchReadyModal.tsx
+index f98bfd6..28e54e4 100644
+--- a/src/ui/HatchReadyModal.tsx
++++ b/src/ui/HatchReadyModal.tsx
+@@ -28,7 +28,7 @@ export function HatchReadyModal({ active, onView }: { active: boolean; onView: (
+           tab and open it to see what came out.
+         </p>
+         <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+-          <button onClick={() => engine.dismissHatchReadyNotice()}>Close</button>
++          <button className="btn-primary" onClick={() => engine.dismissHatchReadyNotice()}>Close</button>
+           <button className="btn-primary" onClick={goToHatchery}>Go to Hatchery</button>
+         </div>
+       </div>
+diff --git a/src/ui/HatchRevealModal.tsx b/src/ui/HatchRevealModal.tsx
+index e3756ca..883374d 100644
+--- a/src/ui/HatchRevealModal.tsx
++++ b/src/ui/HatchRevealModal.tsx
+@@ -46,7 +46,7 @@ export function HatchRevealModal() {
+         </div>
+ 
+         <div className="row end" style={{ marginTop: 14, gap: 8, justifyContent: 'center' }}>
+-          <button onClick={() => engine.dismissHatchedPet()}>Close</button>
++          <button className="btn-primary" onClick={() => engine.dismissHatchedPet()}>Close</button>
+           <button className="btn-primary" onClick={goToPets}>Go to Pets</button>
+         </div>
+       </div>
+diff --git a/src/ui/OfflineReportModal.tsx b/src/ui/OfflineReportModal.tsx
+index c0de204..c01b04c 100644
+--- a/src/ui/OfflineReportModal.tsx
++++ b/src/ui/OfflineReportModal.tsx
+@@ -82,8 +82,8 @@ export function OfflineReportModal({ active }: { active: boolean }) {
+     || report.raidResults.some((r) => r.loot.some((l) => l.rarity === 'legendary'));
+ 
+   return (
+-    <div className="overlay">
+-      <div className="modal">
++    <div className="overlay" onClick={() => engine.dismissOfflineReport()}>
++      <div className="modal" onClick={(e) => e.stopPropagation()}>
+         <h3>While you were away</h3>
+         <p className="small muted" style={{ marginTop: 0 }}>
+           The guild ran for {formatDuration(report.elapsedMs)} without you.
+diff --git a/src/ui/PetEnlargedModal.tsx b/src/ui/PetEnlargedModal.tsx
+index 847fdb8..f39a8d0 100644
+--- a/src/ui/PetEnlargedModal.tsx
++++ b/src/ui/PetEnlargedModal.tsx
+@@ -29,7 +29,7 @@ export function PetEnlargedModal({ pet, onClose }: { pet: Pet; onClose: () => vo
+       <div className="modal" style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+         <div className="spread" style={{ marginBottom: 4 }}>
+           <span className="card-title">{pet.name}</span>
+-          <button onClick={onClose}>Close</button>
++          <button className="btn-primary" onClick={onClose}>Close</button>
+         </div>
+         <div className="row" style={{ justifyContent: 'center', gap: 6, marginBottom: 8 }}>
+           <span className="tiny muted">{def?.name ?? 'Unknown species'}</span>
+diff --git a/src/ui/RaidResultModal.tsx b/src/ui/RaidResultModal.tsx
+index 8603f31..0da6482 100644
+--- a/src/ui/RaidResultModal.tsx
++++ b/src/ui/RaidResultModal.tsx
+@@ -151,7 +151,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
+         )}
+ 
+         <div className="row end" style={{ marginTop: 12, gap: 8 }}>
+-          <button onClick={handleDismiss} disabled={dismissing}>Close</button>
++          <button className="btn-primary" onClick={handleDismiss} disabled={dismissing}>Close</button>
+           <button className="btn-primary" onClick={viewLore} disabled={dismissing}>View in Lore</button>
+         </div>
+ 
+diff --git a/src/ui/ScrapStation.tsx b/src/ui/ScrapStation.tsx
+index 57a0ae6..ad07243 100644
+--- a/src/ui/ScrapStation.tsx
++++ b/src/ui/ScrapStation.tsx
+@@ -129,7 +129,7 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
+           <span ref={counterRef} className={`tiny counter-flash-target ${counterFlash ? 'flash' : ''}`}>
+             ⚙ {displayScrap}
+           </span>
+-          <button onClick={onClose}>Close</button>
++          <button className="btn-primary" onClick={onClose}>Close</button>
+         </div>
+ 
+         <div style={{ position: 'relative' }}>
+diff --git a/src/ui/WeaponEnchantStation.tsx b/src/ui/WeaponEnchantStation.tsx
+index dd3edae..956f140 100644
+--- a/src/ui/WeaponEnchantStation.tsx
++++ b/src/ui/WeaponEnchantStation.tsx
+@@ -67,7 +67,7 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
+       <div className="modal craft-station-modal" onClick={(e) => e.stopPropagation()}>
+         <div className="spread" style={{ marginBottom: 8 }}>
+           <span className="card-title">Weapon Enchanting</span>
+-          <button onClick={onClose}>Close</button>
++          <button className="btn-primary" onClick={onClose}>Close</button>
+         </div>
+ 
+         <div className="craft-scene" style={{ backgroundImage: 'url(./lore/crafting/infuse.jpg)' }}>
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 9ecb6a4..7676144 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -13,6 +13,7 @@ import { describeMods, describeStats, formatGold, RARITY_COLOR, RARITY_ORDER } f
+ import { ItemIcon, ConsumableIcon } from '../icons';
+ import { GearScoreBadge } from '../GearScoreBadge';
+ import { Row, Toggle } from './SettingsPanel';
++import { ConfirmModal } from '../ConfirmModal';
+ 
+ const SLOTS = EQUIP_SLOTS;
+ 
+@@ -207,7 +208,7 @@ function ConsumableInfoCard({
+             </div>
+             <div className="tiny muted">{def.description}</div>
+             <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+-              <button onClick={() => setOpen(false)}>Close</button>
++              <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
+               {instantUse && (
+                 <button
+                   className="btn-primary"
+@@ -298,7 +299,7 @@ function ConsumableSlotCard({
+               </div>
+               <div className="tiny muted">{def.description}</div>
+               <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+-                <button onClick={() => setOpen(false)}>Close</button>
++                <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
+                 <button
+                   className="btn-primary"
+                   onClick={() => { engine.unequipConsumable(hero.id, def.id); setOpen(false); }}
+@@ -352,7 +353,7 @@ function ConsumableSlotCard({
+               </div>
+             )}
+             <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+-              <button onClick={() => setOpen(false)}>Close</button>
++              <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
+             </div>
+           </div>
+         </div>
+@@ -446,7 +447,7 @@ function SlotCard({
+               {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+             </div>
+             <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+-              <button onClick={() => setOpen(false)}>Close</button>
++              <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
+               <button
+                 className="btn-primary"
+                 disabled={EquipmentManager.repairCost(item, workshop) === 0}
+@@ -474,9 +475,11 @@ function StashCard({
+   item, hero, confirmSell, engine,
+ }: { item: EquipmentItem; hero: Hero; confirmSell: boolean; engine: GameEngine }) {
+   const [open, setOpen] = useState(false);
++  const [pendingSell, setPendingSell] = useState(false);
+   const def = EQUIPMENT_BY_ID[item.defId];
+   if (!def) return null;
+   const canEquip = EquipmentManager.canEquip(hero, item);
++  const doSell = () => { engine.sellItem(item.uid); setPendingSell(false); setOpen(false); };
+ 
+   return (
+     <>
+@@ -525,7 +528,7 @@ function StashCard({
+               {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+             </div>
+             <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+-              <button onClick={() => setOpen(false)}>Close</button>
++              <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
+               <button
+                 className="btn-primary"
+                 disabled={!canEquip.ok}
+@@ -536,7 +539,7 @@ function StashCard({
+               </button>
+               <button
+                 onClick={() => {
+-                  if (!confirmSell || confirm('Sell this item?')) { engine.sellItem(item.uid); setOpen(false); }
++                  if (!confirmSell) doSell(); else setPendingSell(true);
+                 }}
+               >
+                 Sell {formatGold(EquipmentManager.sellValue(item))}
+@@ -545,6 +548,16 @@ function StashCard({
+           </div>
+         </div>
+       )}
++
++      {pendingSell && (
++        <ConfirmModal
++          title="Sell item"
++          message={`Sell ${def.name} for ${formatGold(EquipmentManager.sellValue(item))}?`}
++          confirmLabel="Sell"
++          onConfirm={doSell}
++          onCancel={() => setPendingSell(false)}
++        />
++      )}
+     </>
+   );
+ }
+@@ -578,11 +591,11 @@ export function EquipmentPanel() {
+     return RARITY_ORDER.indexOf(def.rarity) <= junkMaxIndex;
+   });
+   const junkGold = junkPreview.reduce((sum, item) => sum + EquipmentManager.sellValue(item), 0);
++  const [pendingJunkSell, setPendingJunkSell] = useState(false);
+   const sellJunk = () => {
+     if (junkPreview.length === 0) return;
+-    if (!settings.confirmSell || confirm(`Sell ${junkPreview.length} item${junkPreview.length === 1 ? '' : 's'} (${junkRarity} and below) for ${junkGold} gold?`)) {
+-      engine.sellJunk(junkRarity);
+-    }
++    if (!settings.confirmSell) engine.sellJunk(junkRarity);
++    else setPendingJunkSell(true);
+   };
+ 
+   return (
+@@ -766,6 +779,16 @@ export function EquipmentPanel() {
+           <StashCard key={item.uid} item={item} hero={hero} confirmSell={settings.confirmSell} engine={engine} />
+         ))}
+       </div>
++
++      {pendingJunkSell && (
++        <ConfirmModal
++          title="Sell junk"
++          message={`Sell ${junkPreview.length} item${junkPreview.length === 1 ? '' : 's'} (${junkRarity} and below) for ${formatGold(junkGold)}?`}
++          confirmLabel="Sell"
++          onConfirm={() => { engine.sellJunk(junkRarity); setPendingJunkSell(false); }}
++          onCancel={() => setPendingJunkSell(false)}
++        />
++      )}
+     </>
+   );
+ }
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index 20c9461..354b91a 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -437,7 +437,7 @@ function RaidDetailModal({
+           )}
+ 
+           <div className="row end" style={{ marginTop: 14 }}>
+-            <button onClick={onClose}>Close</button>
++            <button className="btn-primary" onClick={onClose}>Close</button>
+           </div>
+         </div>
+       </div>
+diff --git a/src/ui/panels/StatsPanel.tsx b/src/ui/panels/StatsPanel.tsx
+index 835d6a0..d1ff91e 100644
+--- a/src/ui/panels/StatsPanel.tsx
++++ b/src/ui/panels/StatsPanel.tsx
+@@ -1,6 +1,8 @@
++import { useState } from 'react';
+ import { useEngine } from '../useEngine';
+ import { AchievementManager } from '../../game/managers/AchievementManager';
+ import { formatGold, formatPlayTime } from '../../game/util';
++import { ConfirmModal } from '../ConfirmModal';
+ 
+ export function StatsPanel() {
+   const engine = useEngine();
+@@ -9,6 +11,12 @@ export function StatsPanel() {
+     ? `${Math.round((stats.successes / stats.totalQuests) * 100)}%`
+     : '—';
+   const achProgress = AchievementManager.progress(engine.state);
++  // Both previously native `window.alert()`/`window.confirm()` calls --
++  // unstyled OS dialogs, out of place next to every other prompt in the
++  // game already routed through ConfirmModal (Recall, sell confirmations).
++  // See guild-idler-status.md's polish-pass entry for the full writeup.
++  const [saveLocationMessage, setSaveLocationMessage] = useState<string | null>(null);
++  const [pendingHardReset, setPendingHardReset] = useState(false);
+ 
+   const rows: [string, string][] = [
+     ['Total quests', stats.totalQuests.toLocaleString()],
+@@ -95,20 +103,38 @@ export function StatsPanel() {
+           onClick={async () => {
+             const folder = await window.littleKnight?.saveFolder();
+             engine.clearToast();
+-            alert(folder ? `Save file lives in:\n${folder}` : 'Running in a browser: the save is in localStorage.');
++            setSaveLocationMessage(folder ? `Save file lives in:\n${folder}` : 'Running in a browser: the save is in localStorage.');
+           }}
+         >
+           Where is my save?
+         </button>
+         <button
+           className="btn-danger"
+-          onClick={() => {
+-            if (confirm('Delete this guild and start over? This cannot be undone.')) engine.hardReset();
+-          }}
++          onClick={() => setPendingHardReset(true)}
+         >
+           Start a new guild
+         </button>
+       </div>
++
++      {saveLocationMessage && (
++        <ConfirmModal
++          title="Where is my save?"
++          message={saveLocationMessage}
++          infoOnly
++          onConfirm={() => setSaveLocationMessage(null)}
++          onCancel={() => setSaveLocationMessage(null)}
++        />
++      )}
++      {pendingHardReset && (
++        <ConfirmModal
++          title="Start a new guild"
++          message="Delete this guild and start over? This cannot be undone."
++          confirmLabel="Delete & start over"
++          danger
++          onConfirm={() => { engine.hardReset(); setPendingHardReset(false); }}
++          onCancel={() => setPendingHardReset(false)}
++        />
++      )}
+     </>
+   );
+ }
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index 1ba26bf..9f26b3e 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -372,7 +372,7 @@ function EquipmentShopCard({
+               {describeMods(def.mods).map((line) => <span key={line}>{line}</span>)}
+             </div>
+             <div className="row end" style={{ gap: 8 }}>
+-              <button onClick={() => setShowModal(false)}>Close</button>
++              <button className="btn-primary" onClick={() => setShowModal(false)}>Close</button>
+               <button className="btn-primary" disabled={!canAfford} onClick={() => { onBuy(); setShowModal(false); }}>
+                 Buy · {formatGold(price)}
+               </button>
+@@ -420,7 +420,7 @@ function ConsumableShopCard({
+             </div>
+             <p className="card-flavour">{def.description}</p>
+             <div className="row end" style={{ gap: 8, marginTop: 8 }}>
+-              <button onClick={() => setShowModal(false)}>Close</button>
++              <button className="btn-primary" onClick={() => setShowModal(false)}>Close</button>
+               <button className="btn-primary" disabled={!canAfford(1)} onClick={() => { onBuy(1); setShowModal(false); }}>
+                 Buy · {formatGold(def.cost)}
+               </button>
+-- 
+2.43.0
+

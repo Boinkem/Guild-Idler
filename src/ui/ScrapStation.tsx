@@ -129,7 +129,7 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
           <span ref={counterRef} className={`tiny counter-flash-target ${counterFlash ? 'flash' : ''}`}>
             ⚙ {displayScrap}
           </span>
-          <button onClick={onClose}>Close</button>
+          <button className="btn-primary" onClick={onClose}>Close</button>
         </div>
 
         <div style={{ position: 'relative' }}>

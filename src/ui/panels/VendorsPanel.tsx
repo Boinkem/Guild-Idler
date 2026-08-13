@@ -372,7 +372,7 @@ function EquipmentShopCard({
               {describeMods(def.mods).map((line) => <span key={line}>{line}</span>)}
             </div>
             <div className="row end" style={{ gap: 8 }}>
-              <button onClick={() => setShowModal(false)}>Close</button>
+              <button className="btn-primary" onClick={() => setShowModal(false)}>Close</button>
               <button className="btn-primary" disabled={!canAfford} onClick={() => { onBuy(); setShowModal(false); }}>
                 Buy · {formatGold(price)}
               </button>
@@ -420,7 +420,7 @@ function ConsumableShopCard({
             </div>
             <p className="card-flavour">{def.description}</p>
             <div className="row end" style={{ gap: 8, marginTop: 8 }}>
-              <button onClick={() => setShowModal(false)}>Close</button>
+              <button className="btn-primary" onClick={() => setShowModal(false)}>Close</button>
               <button className="btn-primary" disabled={!canAfford(1)} onClick={() => { onBuy(1); setShowModal(false); }}>
                 Buy · {formatGold(def.cost)}
               </button>

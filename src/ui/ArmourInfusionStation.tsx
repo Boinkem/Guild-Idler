@@ -85,7 +85,7 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
       <div className="modal craft-station-modal" onClick={(e) => e.stopPropagation()}>
         <div className="spread" style={{ marginBottom: 8 }}>
           <span className="card-title">Armour Infusion</span>
-          <button onClick={onClose}>Close</button>
+          <button className="btn-primary" onClick={onClose}>Close</button>
         </div>
 
         <div className="armor-infusion-scene" style={{ backgroundImage: 'url(./lore/crafting/armor-infusion.jpg)' }}>

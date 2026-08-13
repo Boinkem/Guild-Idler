@@ -151,7 +151,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
         )}
 
         <div className="row end" style={{ marginTop: 12, gap: 8 }}>
-          <button onClick={handleDismiss} disabled={dismissing}>Close</button>
+          <button className="btn-primary" onClick={handleDismiss} disabled={dismissing}>Close</button>
           <button className="btn-primary" onClick={viewLore} disabled={dismissing}>View in Lore</button>
         </div>
 
