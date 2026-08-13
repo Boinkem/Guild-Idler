@@ -55,6 +55,7 @@ export function defaultAdapter(): SaveAdapter {
 
 const EMPTY_GUILD: Record<GuildFacility, number> = {
   barracks: 0, treasury: 0, workshop: 0, library: 0, tavern: 0, infirmary: 0, kennel: 0, music_hall: 0,
+  physicians_charity: 0, smiths_charity: 0,
 };
 
 export function createInitialState(now = Date.now()): GameState {
@@ -69,7 +70,13 @@ export function createInitialState(now = Date.now()): GameState {
     heroes: [starter],
     heroSlots: 1,
     roster: ['adventurer'],
-    inventory: { healing_potion: 1 },
+    // 2 free Field Bandages -- a fresh guild's starting gold (50) can't
+    // actually afford either cure for a real injury (Treat costs
+    // 70-90g, buying a bandage costs 60g), so without this a brand new
+    // player's first injury was mathematically un-curable except by
+    // waiting it out. See guild-idler-status.md's "new-player injury
+    // economy" entry.
+    inventory: { healing_potion: 1, field_bandage: 2 },
     customConsumables: {},
     stash: [],
     questBoards: {},
@@ -81,6 +88,10 @@ export function createInitialState(now = Date.now()): GameState {
     frozenQuestOffers: {},
     freezeChangeDay: 0,
     freezeChangesUsedToday: 0,
+    freeHealDay: 0,
+    freeHealsUsedToday: 0,
+    freeRepairDay: 0,
+    freeRepairsUsedToday: 0,
     boardRefreshedAt: 0,
     activeQuests: [],
     activeChains: [],

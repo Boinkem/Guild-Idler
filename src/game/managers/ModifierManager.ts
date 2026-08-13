@@ -174,6 +174,25 @@ export const ModifierManager = {
     return 1 + bonus;
   },
 
+  /** Physician's Charity's daily free-Treat allowance -- 0 until at
+   *  least level 1 is bought (unlike freezeChangesPerDay's base-1
+   *  floor above, there's no free-by-default allowance here; a hero's
+   *  own one-time usedFreeTreat is the always-available safety net
+   *  instead). See GameEngine.consumeFreeHeal for how this actually
+   *  gets spent against GameState.freeHealDay/freeHealsUsedToday. */
+  freeHealsPerDay(state: GameState): number {
+    const def = GUILD_BY_ID.physicians_charity;
+    const level = state.guild.physicians_charity ?? 0;
+    return (def?.freeHealsPerLevel ?? 0) * level;
+  },
+
+  /** Smith's Charity's twin of freeHealsPerDay above, for Repair. */
+  freeRepairsPerDay(state: GameState): number {
+    const def = GUILD_BY_ID.smiths_charity;
+    const level = state.guild.smiths_charity ?? 0;
+    return (def?.freeRepairsPerLevel ?? 0) * level;
+  },
+
   hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic'): boolean {
     return Object.entries(state.upgrades).some(([id, level]) => {
       const def = UPGRADE_BY_ID[id];

@@ -1,0 +1,734 @@
+From dbe969572b68cba9a116180f14b97cd17c61b457 Mon Sep 17 00:00:00 2001
+From: Guild Idler Bot <bot@guildidler.local>
+Date: Thu, 13 Aug 2026 01:01:02 +0000
+Subject: [PATCH] New-player injury economy: starting bandages, first
+ Treat/Repair free, two new facilities, button visibility
+
+- 2 free Field Bandages in a new guild's starting inventory (root
+  cause confirmed: 50 starting gold can't afford either existing
+  cure -- Treat 70-90g, buying a bandage 60g).
+- New Hero.usedFreeTreat/usedFreeRepair: each hero's first Treat and
+  first Repair ever are free, no gold cost.
+- Two new guild facilities, Physician's Charity and Smith's Charity
+  (5 levels each, 1 free Treat/Repair per day per level, guild-wide).
+  New GuildDef.freeHealsPerLevel/freeRepairsPerLevel structural
+  fields; ModifierManager.freeHealsPerDay/freeRepairsPerDay reads
+  them.
+- GameEngine.consumeFreeHeal/consumeFreeRepair: guild's renewable
+  daily allowance spends first, hero's one-time freebie is the
+  fallback -- verified both apply in that order before gold is ever
+  touched. Wired into treatInjury, repair, and repairAll (batch-safe,
+  applies per item/hero). Auto-repair's background tick deliberately
+  left untouched -- freebies stay a deliberate, noticed action.
+- New GuidanceManager topic (first_injury_or_wear): one combined
+  notification for both systems, explicitly states first Treat/Repair
+  are free and the rest cost gold, points at Heroes tab.
+- Treat/Bandage/Repair/Repair-everything buttons were bare unstyled
+  <button> elements with no class at all -- root cause of them being
+  effectively invisible. All four now use .btn-primary, show 'Free'
+  in the label when a freebie is available, and the collapsed hero
+  card's injury summary now hints '(expand to Treat)'.
+- guild-idler-status.md updated with full writeup.
+
+Verified: npx tsc --noEmit and vite build both clean. Runtime-verified:
+starting bandage count; first-treat-free then gold-required-and-failing
+second treat; guild-daily-then-personal priority order with both
+available; daily allowance resetting on a simulated day boundary;
+single-item and batch repair both freebie-aware across multiple
+items/heroes; new facilities purchasable via the existing generic
+GuildManager.upgradeFacility; the guidance topic firing on a simulated
+injury; and a simulated pre-patch save (every new field deleted)
+migrating and playing through treatInjury with zero crashes.
+---
+ guild-idler-status.md                | 111 +++++++++++++++++++++++++++
+ src/game/data/json/tuning.json       |  76 ++++++++++++++++++
+ src/game/data/progression.ts         |  23 ++++++
+ src/game/engine.ts                   | 102 +++++++++++++++++++++---
+ src/game/managers/GuidanceManager.ts |  11 +++
+ src/game/managers/ModifierManager.ts |  19 +++++
+ src/game/managers/SaveManager.ts     |  13 +++-
+ src/game/types.ts                    |  52 ++++++++++++-
+ src/ui/panels/EquipmentPanel.tsx     |  15 +++-
+ src/ui/panels/HeroesPanel.tsx        |  18 ++++-
+ 10 files changed, 422 insertions(+), 18 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index a623ec6..472ab22 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -7339,3 +7339,114 @@ Verified via `npx tsc --noEmit` and `vite build`, both clean, plus the
+ runtime checks described inline above (18,000-sample on-level guarantee
+ test with and without the fix, zero-investment and upgrades-maxed stress
+ tests, and Briar's exact reproduction).
++
++### New-player injury economy: starting Field Bandages, first Treat/Repair free per hero, Physician's/Smith's Charity, visibility fix
++
++Direct follow-up to the previous entry's finding: a new guild's starting
++gold (50) is less than either existing cure for an injury (Treat's
++typical 70-90g, or buying a Field Bandage at 60g), so a brand new
++player's first injury was mathematically un-curable except by waiting it
++out -- not a gate, a genuine gap. Full request: starting bandages, a
++free first Treat and first Repair per hero, two new upgradeable
++guild facilities for a renewable daily version of the same thing, a
++notification explaining all of it, and fixing why the Treat/Repair
++buttons were apparently invisible.
++
++**1. Two free Field Bandages in a new guild's starting inventory.**
++`SaveManager.createInitialState`: `inventory: { healing_potion: 1,
++field_bandage: 2 }`. New guilds only -- existing saves aren't
++retroactively granted these (see point 6 below for why that's fine).
++
++**2. First Treat free per hero, ever -- new `Hero.usedFreeTreat` flag.**
++**First Repair free per hero, ever -- new `Hero.usedFreeRepair` flag.**
++Both optional/undefined by default (same no-migration-needed convention
++`equippedConsumables`/`autoAdvanceChainId` already use), so an existing
++hero simply reads as "hasn't used it yet" the moment this patch lands --
++see point 6. Repair's freebie only applies to a hero's own *equipped*
++gear (an item needs an owning hero to charge the freebie to); a stashed
++item can only draw on the guild's own daily allowance below, never a
++hero's personal one-time freebie.
++
++**3. Physician's Charity / Smith's Charity -- two new guild facilities,
++a renewable daily version of the same thing, "can be upgraded."** Both
++5 levels, 1 free Treat (or Repair) per calendar day per level guild-wide
++(any hero), so a maxed facility covers 5 free Treats or Repairs every
++day regardless of which hero needed them. Level 0 (not yet bought)
++grants nothing -- deliberately not a base-1-per-day floor the way
++Board Warden's freeze allowance is, since the always-available safety
++net here is each hero's own one-time freebie from point 2, not a
++guild-wide default. New `GuildDef.freeHealsPerLevel`/`freeRepairsPerLevel`
++structural fields (same "not a flat Modifiers bonus" shape
++`storagePerLevel`/`healTimeReductionMinutesPerLevel` already use), read
++by two new `ModifierManager.freeHealsPerDay`/`freeRepairsPerDay`
++helpers. Tuning: 150 base cost, 1.7 growth, both facilities -- cheap and
++fast to reach on purpose, this is meant to be an early build, not a
++late-game payoff.
++
++**Priority order between the renewable daily allowance and the one-time
++per-hero freebie, and why:** the guild's daily allowance spends *first*
++-- `GameEngine.consumeFreeHeal`/`consumeFreeRepair` check
++`ModifierManager.freeHealsPerDay`/`freeRepairsPerDay` against the day's
++usage count (reusing `data/reroll.ts`'s existing day-bucket math despite
++the file predating this use -- same shape as `questRerollDay`/
++`freezeChangeDay`) before ever touching a hero's one-time flag. That
++way a renewable resource that resets every day never sits unused while
++a one-time-forever resource gets spent instead -- verified directly: a
++hero with both an available guild-daily allowance *and* their own unused
++personal freebie gets **both** Treats for free before gold is touched at
++all, in that order.
++
++**4. Guidance notification, combining both as requested rather than two
++separate messages.** New `first_injury_or_wear` topic (`GuidanceManager`),
++firing once ever the moment any hero has an injury or any equipped item's
++durability is below max: explains that a hurt hero or worn gear drags
++down every quest's odds, points at the Heroes tab, and explicitly states
++that each hero's first Treat and first Repair are free before mentioning
++that everything after costs gold (and that Physician's/Smith's Charity
++can add more free ones per day). Same one-time toast+banner mechanism
++`first_level_up`/`first_equipment_found` already use.
++
++**5. Treat/Repair buttons made actually visible -- the reported root
++cause, confirmed.** Every one of these buttons (`Treat`, `Bandage`,
++per-item `Repair`, and `Repair everything`) was a bare, unstyled
++`<button>` -- no `.btn-primary`/`.btn-ghost` class at all, unlike every
++other actionable button in the game. All four now use `.btn-primary`.
++Also: the injury summary in a hero's *collapsed* card (visible without
++expanding at all) now appends "(expand to Treat)" after the injury
++names, so the fix is discoverable without needing to already know to
++open the card first. Both Treat and per-item Repair also now show
++"Free" in the button label itself (mirroring `consumeFreeHeal`/
++`consumeFreeRepair`'s exact priority, computed read-only for display)
++whenever a free cure is actually available, rather than always showing
++a gold cost even when it'll turn out to cost nothing.
++
++**6. Deliberately NOT touched, and why:**
++- **Auto-repair's background tick** (`GameEngine`'s own opt-in
++  `autoRepairEnabled` loop) does not draw on either freebie -- it calls
++  `EquipmentManager.repair` directly, same as before this pass. Kept
++  scoped to deliberate, manually-triggered repairs only, so a freebie is
++  something the player consciously benefits from and notices, not
++  silently consumed by a background process they may not even remember
++  enabling.
++- **Existing saves are not retroactively granted the 2 starting Field
++  Bandages** -- that's specifically a new-guild bonus, and there's no
++  reasonable "when" to backfill it for an established save. They *do*
++  still get the more important half of the fix for free: every
++  existing hero's `usedFreeTreat`/`usedFreeRepair` reads as `undefined`
++  (not yet used) the moment this patch lands, since both fields are
++  optional with no migration needed -- confirmed directly against a
++  simulated pre-patch save.
++
++**Verified beyond `tsc`/`vite build` (both clean):** starting Field
++Bandage count on a fresh guild; a hero's first Treat costing 0 gold and
++consuming `usedFreeTreat`, a second treat on the same hero correctly
++requiring (and failing without) gold; the guild-daily-then-personal
++priority order with both available; the daily allowance correctly
++resetting on a simulated next-day boundary; single-item and batch
++(`repairAll`) repair both applying the same freebie logic across
++multiple items and heroes; the new facilities purchasable through the
++existing generic `GuildManager.upgradeFacility` with no special-casing
++needed; `first_injury_or_wear` firing correctly off a simulated injury;
++and a simulated pre-patch save (every new field explicitly deleted)
++migrating and playing through a full `treatInjury` call with zero
++crashes and the hero-freebie still correctly available.
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 43ef5e8..83d0373 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -2684,6 +2684,82 @@
+     "min": 1,
+     "description": "Hours until a Fallen pet is automatically revived for free, once Kennel has reached its max level. Below max level there is no free auto-revive at all."
+   },
++  {
++    "id": "guild_facility.physicians_charity.baseCost",
++    "label": "Physician's Charity: base cost",
++    "category": "guild_facilities",
++    "value": 150,
++    "default": 150,
++    "min": 0,
++    "description": "Cost of the first (level 0) Physician's Charity upgrade."
++  },
++  {
++    "id": "guild_facility.physicians_charity.costGrowth",
++    "label": "Physician's Charity: cost growth",
++    "category": "guild_facilities",
++    "value": 1.7,
++    "default": 1.7,
++    "min": 1,
++    "max": 5,
++    "description": "Multiplier applied per level, before the early-tier discount."
++  },
++  {
++    "id": "guild_facility.physicians_charity.maxLevel",
++    "label": "Physician's Charity: max level",
++    "category": "guild_facilities",
++    "value": 5,
++    "default": 5,
++    "min": 1,
++    "description": "Highest level Physician's Charity can reach."
++  },
++  {
++    "id": "guild_facility.physicians_charity.freeHealsPerLevel",
++    "label": "Physician's Charity: free Treats per day per level",
++    "category": "guild_facilities",
++    "value": 1,
++    "default": 1,
++    "min": 0,
++    "max": 5,
++    "description": "How many free (0 gold) Treat actions per calendar day, guild-wide, per level. Level 5 = 5 free Treats/day."
++  },
++  {
++    "id": "guild_facility.smiths_charity.baseCost",
++    "label": "Smith's Charity: base cost",
++    "category": "guild_facilities",
++    "value": 150,
++    "default": 150,
++    "min": 0,
++    "description": "Cost of the first (level 0) Smith's Charity upgrade."
++  },
++  {
++    "id": "guild_facility.smiths_charity.costGrowth",
++    "label": "Smith's Charity: cost growth",
++    "category": "guild_facilities",
++    "value": 1.7,
++    "default": 1.7,
++    "min": 1,
++    "max": 5,
++    "description": "Multiplier applied per level, before the early-tier discount."
++  },
++  {
++    "id": "guild_facility.smiths_charity.maxLevel",
++    "label": "Smith's Charity: max level",
++    "category": "guild_facilities",
++    "value": 5,
++    "default": 5,
++    "min": 1,
++    "description": "Highest level Smith's Charity can reach."
++  },
++  {
++    "id": "guild_facility.smiths_charity.freeRepairsPerLevel",
++    "label": "Smith's Charity: free Repairs per day per level",
++    "category": "guild_facilities",
++    "value": 1,
++    "default": 1,
++    "min": 0,
++    "max": 5,
++    "description": "How many free (0 gold) Repair actions per calendar day, guild-wide, per level. Level 5 = 5 free Repairs/day."
++  },
+   {
+     "id": "guild_facility.music_hall.baseCost",
+     "label": "Music Hall: base cost",
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index f378d94..0cd9b27 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -404,6 +404,29 @@ export const GUILD_FACILITIES: GuildDef[] = [
+     modsPerLevel: {},
+     healTimeReductionMinutesPerLevel: Tuning.get('guild_facility.kennel.healTimeReductionMinutesPerLevel'),
+   },
++  {
++    id: 'physicians_charity', name: "Physician's Charity",
++    description: 'The guild covers the first Treat of every day, no questions asked -- '
++      + "everyone's gear and grit wear down eventually, and a hero shouldn't have to "
++      + 'choose between paying for a cure and paying for anything else.',
++    baseCost: Tuning.get('guild_facility.physicians_charity.baseCost'),
++    costGrowth: Tuning.get('guild_facility.physicians_charity.costGrowth'),
++    maxLevel: Tuning.get('guild_facility.physicians_charity.maxLevel'),
++    // Not a flat Modifiers bonus -- see GuildDef.freeHealsPerLevel's own
++    // comment.
++    modsPerLevel: {},
++    freeHealsPerLevel: Tuning.get('guild_facility.physicians_charity.freeHealsPerLevel'),
++  },
++  {
++    id: 'smiths_charity', name: "Smith's Charity",
++    description: "The guild smith fixes the first broken buckle or dulled edge of the day "
++      + 'for free -- Physician\'s Charity\'s twin, for gear instead of injuries.',
++    baseCost: Tuning.get('guild_facility.smiths_charity.baseCost'),
++    costGrowth: Tuning.get('guild_facility.smiths_charity.costGrowth'),
++    maxLevel: Tuning.get('guild_facility.smiths_charity.maxLevel'),
++    modsPerLevel: {},
++    freeRepairsPerLevel: Tuning.get('guild_facility.smiths_charity.freeRepairsPerLevel'),
++  },
+   {
+     id: 'music_hall', name: 'Music Hall',
+     description: 'Hire a bard to keep the guild hall from sitting in silence. '
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 350cef8..7d5a320 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -21,6 +21,7 @@ import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpFor
+ import { EQUIPMENT_BY_ID, SET_BY_ID, GEAR_SCORE_BY_RARITY, EQUIP_SLOTS } from './data/equipment';
+ import { RAID_BY_ID } from './data/raids';
+ import { Tuning } from './data/tuning';
++import { rerollDay, rerollsUsedToday } from './data/reroll';
+ import { playSound } from './sound';
+ import { TESTING_TOOLS_ENABLED } from './testingTools';
+ 
+@@ -1378,25 +1379,47 @@ export class GameEngine {
+   repair(itemUid: string) {
+     const found = EquipmentManager.allItems(this.state).find((e) => e.item.uid === itemUid);
+     if (!found) return;
+-    const error = EquipmentManager.repair(this.state, found.item, this.state.guild.workshop ?? 0);
+-    if (error) return this.say(error);
++    const cost = EquipmentManager.repairCost(found.item, this.state.guild.workshop ?? 0);
++    if (cost === 0) return this.say('Already in perfect condition.');
++    const free = this.consumeFreeRepair(found.heroId, Date.now());
++    if (free) {
++      found.item.durability = EquipmentManager.maxDurability(found.item);
++    } else {
++      const error = EquipmentManager.repair(this.state, found.item, this.state.guild.workshop ?? 0);
++      if (error) return this.say(error);
++    }
+     playSound('repair');
+-    this.say('Repaired.');
++    this.say(free ? 'Repaired, on the house.' : 'Repaired.');
+     void this.saveNow();
+   }
+ 
+   repairAll() {
+     const workshop = this.state.guild.workshop ?? 0;
++    const now = Date.now();
+     let spent = 0;
+-    for (const { item } of EquipmentManager.allItems(this.state)) {
++    let freeCount = 0;
++    for (const { item, heroId } of EquipmentManager.allItems(this.state)) {
+       const cost = EquipmentManager.repairCost(item, workshop);
+-      if (cost > 0 && this.state.gold >= cost) {
++      if (cost === 0) continue;
++      const free = this.consumeFreeRepair(heroId, now);
++      if (free) {
++        item.durability = EquipmentManager.maxDurability(item);
++        freeCount += 1;
++      } else if (this.state.gold >= cost) {
+         EquipmentManager.repair(this.state, item, workshop);
+         spent += cost;
+       }
+     }
+-    if (spent > 0) playSound('repair');
+-    this.say(spent > 0 ? `Repaired everything for ${spent} gold.` : 'Nothing needed repairing.');
++    if (spent > 0 || freeCount > 0) playSound('repair');
++    if (spent === 0 && freeCount === 0) {
++      this.say('Nothing needed repairing.');
++    } else if (freeCount > 0 && spent === 0) {
++      this.say(freeCount === 1 ? 'Repaired one item, on the house.' : `Repaired ${freeCount} items, on the house.`);
++    } else if (freeCount > 0) {
++      this.say(`Repaired everything for ${spent} gold (${freeCount} free).`);
++    } else {
++      this.say(`Repaired everything for ${spent} gold.`);
++    }
+     void this.saveNow();
+   }
+ 
+@@ -1562,16 +1585,73 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /**
++   * The guild's own renewable daily allowance (Physician's Charity)
++   * spends first, so a fresh recruit's one-time usedFreeTreat is saved
++   * for whenever that daily allowance is already used up rather than
++   * burned the moment they're hurt even if the guild could have covered
++   * it. Mutates state (the day counter or the hero flag) only when it's
++   * actually going to grant a free Treat -- callers should check for a
++   * real failure condition (not enough gold, etc.) *before* calling
++   * this, since there's no way to "give back" a freebie once granted.
++   * See guild-idler-status.md's "new-player injury economy" entry for
++   * why this exists at all: starting gold alone couldn't afford either
++   * existing cure.
++   */
++  private consumeFreeHeal(hero: Hero, now: number): boolean {
++    const usedToday = rerollsUsedToday(this.state.freeHealsUsedToday, this.state.freeHealDay, now);
++    if (usedToday < ModifierManager.freeHealsPerDay(this.state)) {
++      this.state.freeHealDay = rerollDay(now);
++      this.state.freeHealsUsedToday = usedToday + 1;
++      return true;
++    }
++    if (!hero.usedFreeTreat) {
++      hero.usedFreeTreat = true;
++      return true;
++    }
++    return false;
++  }
++
++  /**
++   * Smith's Charity's twin of consumeFreeHeal above, for Repair instead
++   * of Treat. `heroId` is null for a stashed item (no owning hero) --
++   * the guild's own daily allowance still applies to those (repairing
++   * is repairing, whether the item is worn or sitting in the stash),
++   * but the one-time-per-hero fallback obviously can't, since there's
++   * no hero to charge it to.
++   */
++  private consumeFreeRepair(heroId: string | null, now: number): boolean {
++    const usedToday = rerollsUsedToday(this.state.freeRepairsUsedToday, this.state.freeRepairDay, now);
++    if (usedToday < ModifierManager.freeRepairsPerDay(this.state)) {
++      this.state.freeRepairDay = rerollDay(now);
++      this.state.freeRepairsUsedToday = usedToday + 1;
++      return true;
++    }
++    if (heroId) {
++      const hero = this.hero(heroId);
++      if (hero && !hero.usedFreeRepair) {
++        hero.usedFreeRepair = true;
++        return true;
++      }
++    }
++    return false;
++  }
++
+   treatInjury(heroId: string, injuryId: string) {
+     const hero = this.hero(heroId);
+     if (!hero) return;
+     const injury = hero.injuries.find((i) => i.id === injuryId);
+     if (!injury) return;
+-    if (this.state.gold < injury.treatmentCost) return this.say('Not enough gold for treatment.');
+-    this.state.gold -= injury.treatmentCost;
+-    this.state.stats.goldSpent += injury.treatmentCost;
++    const free = this.consumeFreeHeal(hero, Date.now());
++    if (!free && this.state.gold < injury.treatmentCost) return this.say('Not enough gold for treatment.');
++    if (!free) {
++      this.state.gold -= injury.treatmentCost;
++      this.state.stats.goldSpent += injury.treatmentCost;
++    }
+     hero.injuries = hero.injuries.filter((i) => i !== injury);
+-    this.say(`${hero.name} is treated for ${injury.name.toLowerCase()}.`);
++    this.say(free
++      ? `${hero.name} is treated for ${injury.name.toLowerCase()}, on the house.`
++      : `${hero.name} is treated for ${injury.name.toLowerCase()}.`);
+     void this.saveNow();
+   }
+ 
+diff --git a/src/game/managers/GuidanceManager.ts b/src/game/managers/GuidanceManager.ts
+index 096836c..5243201 100644
+--- a/src/game/managers/GuidanceManager.ts
++++ b/src/game/managers/GuidanceManager.ts
+@@ -1,6 +1,7 @@
+ import { GameState } from '../types';
+ import { ModifierManager } from './ModifierManager';
+ import { GuildManager } from './GuildManager';
++import { EquipmentManager } from './EquipmentManager';
+ 
+ /**
+  * A one-time "how to" nudge, tied to a real state condition. Fires exactly
+@@ -82,6 +83,14 @@ const TOPICS: GuidanceTopic[] = [
+     messages: ["The guild bard has a song ready -- pick it (or shuffle through everything you've unlocked) from the Track option in Settings."],
+     targetTab: 'settings',
+   },
++  {
++    id: 'first_injury_or_wear',
++    messages: [
++      "A hurt hero or worn-down gear both drag down the odds on every quest, not just the one that caused it -- don't just wait it out. Treat an injury or Repair a piece of gear right from a hero's card in the Heroes tab (or spend a Field Bandage there instead of gold).",
++      "Each hero's very first Treat and first Repair are free, on the guild -- everything after that costs gold. A Physician's Charity or Smith's Charity guild upgrade can make more of each free every day, for every hero.",
++    ],
++    targetTab: 'heroes',
++  },
+ ];
+ 
+ type Check = (state: GameState) => boolean;
+@@ -103,6 +112,8 @@ const CHECKS: Record<string, Check> = {
+   // for one more caller.
+   auto_chain_unlocked: (state) => GuildManager.upgradeLevel(state, 'auto_chain') > 0,
+   music_hall_unlocked: (state) => (state.guild.music_hall ?? 0) >= 1,
++  first_injury_or_wear: (state) => state.heroes.some((h) => h.injuries.length > 0
++    || Object.values(h.equipment).some((item) => item && item.durability < EquipmentManager.maxDurability(item))),
+ };
+ 
+ export const GuidanceManager = {
+diff --git a/src/game/managers/ModifierManager.ts b/src/game/managers/ModifierManager.ts
+index 39914aa..e378b8b 100644
+--- a/src/game/managers/ModifierManager.ts
++++ b/src/game/managers/ModifierManager.ts
+@@ -174,6 +174,25 @@ export const ModifierManager = {
+     return 1 + bonus;
+   },
+ 
++  /** Physician's Charity's daily free-Treat allowance -- 0 until at
++   *  least level 1 is bought (unlike freezeChangesPerDay's base-1
++   *  floor above, there's no free-by-default allowance here; a hero's
++   *  own one-time usedFreeTreat is the always-available safety net
++   *  instead). See GameEngine.consumeFreeHeal for how this actually
++   *  gets spent against GameState.freeHealDay/freeHealsUsedToday. */
++  freeHealsPerDay(state: GameState): number {
++    const def = GUILD_BY_ID.physicians_charity;
++    const level = state.guild.physicians_charity ?? 0;
++    return (def?.freeHealsPerLevel ?? 0) * level;
++  },
++
++  /** Smith's Charity's twin of freeHealsPerDay above, for Repair. */
++  freeRepairsPerDay(state: GameState): number {
++    const def = GUILD_BY_ID.smiths_charity;
++    const level = state.guild.smiths_charity ?? 0;
++    return (def?.freeRepairsPerLevel ?? 0) * level;
++  },
++
+   hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic'): boolean {
+     return Object.entries(state.upgrades).some(([id, level]) => {
+       const def = UPGRADE_BY_ID[id];
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 867f191..9cc8e49 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -55,6 +55,7 @@ export function defaultAdapter(): SaveAdapter {
+ 
+ const EMPTY_GUILD: Record<GuildFacility, number> = {
+   barracks: 0, treasury: 0, workshop: 0, library: 0, tavern: 0, infirmary: 0, kennel: 0, music_hall: 0,
++  physicians_charity: 0, smiths_charity: 0,
+ };
+ 
+ export function createInitialState(now = Date.now()): GameState {
+@@ -69,7 +70,13 @@ export function createInitialState(now = Date.now()): GameState {
+     heroes: [starter],
+     heroSlots: 1,
+     roster: ['adventurer'],
+-    inventory: { healing_potion: 1 },
++    // 2 free Field Bandages -- a fresh guild's starting gold (50) can't
++    // actually afford either cure for a real injury (Treat costs
++    // 70-90g, buying a bandage costs 60g), so without this a brand new
++    // player's first injury was mathematically un-curable except by
++    // waiting it out. See guild-idler-status.md's "new-player injury
++    // economy" entry.
++    inventory: { healing_potion: 1, field_bandage: 2 },
+     customConsumables: {},
+     stash: [],
+     questBoards: {},
+@@ -81,6 +88,10 @@ export function createInitialState(now = Date.now()): GameState {
+     frozenQuestOffers: {},
+     freezeChangeDay: 0,
+     freezeChangesUsedToday: 0,
++    freeHealDay: 0,
++    freeHealsUsedToday: 0,
++    freeRepairDay: 0,
++    freeRepairsUsedToday: 0,
+     boardRefreshedAt: 0,
+     activeQuests: [],
+     activeChains: [],
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 6117dc9..b567c64 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -387,6 +387,23 @@ export interface Hero {
+    * backfills it to [] for anything already saved.
+    */
+   equippedConsumables?: string[];
++  /**
++   * Whether this hero has already spent their one-time free Treat --
++   * every hero's very first injury cure is free, on the guild,
++   * regardless of Physician's Charity's daily allowance (see
++   * GameEngine.consumeFreeHeal, which checks the guild's own renewable
++   * daily freebie first and falls back to this one-time-per-hero freebie
++   * second, so a fresh recruit is never blocked by a starting-gold
++   * shortfall the way the very first injury/repair economy pass turned
++   * out to be -- see guild-idler-status.md's "new-player injury economy"
++   * entry for the actual numbers that motivated this). Optional/
++   * undefined (same as equippedConsumables above) rather than migrated,
++   * since undefined already reads correctly as "hasn't used it yet."
++   */
++  usedFreeTreat?: boolean;
++  /** Same shape as usedFreeTreat, for a hero's first equipped-gear
++   *  Repair instead of an injury Treat -- see GameEngine.consumeFreeRepair. */
++  usedFreeRepair?: boolean;
+   /**
+    * Set when this hero was sent via the "Chain Quest Steps" option on a
+    * story-chain offer -- the chainId being auto-advanced. Independent of
+@@ -901,7 +918,7 @@ export interface UpgradeDef {
+   freezeChangesPerLevel?: number;
+ }
+ 
+-export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern' | 'infirmary' | 'kennel' | 'music_hall';
++export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern' | 'infirmary' | 'kennel' | 'music_hall' | 'physicians_charity' | 'smiths_charity';
+ 
+ export interface GuildDef {
+   id: GuildFacility;
+@@ -945,6 +962,24 @@ export interface GuildDef {
+    * level 0 already has one track playing before a single gold is spent.
+    */
+   tracksPerLevel?: number;
++  /**
++   * Physician's Charity's structural effect -- same "not a flat Modifiers
++   * bonus" reasoning as every other structural field above. How many
++   * Treat-an-injury actions per calendar day are free, guild-wide,
++   * regardless of which hero -- see ModifierManager.freeHealsPerDay for
++   * the read side and GameEngine.consumeFreeHeal for how the daily
++   * counter (GameState.freeHealDay/freeHealsUsedToday) actually gets
++   * spent. Level 0 (not yet purchased) grants none -- the guild-wide
++   * daily freebie is something to build toward, not a given; a brand
++   * new hero's own one-time free first Treat (Hero.usedFreeTreat) is the
++   * separate, always-available safety net for before this is built at
++   * all. See guild-idler-status.md's "new-player injury economy" entry.
++   */
++  freeHealsPerLevel?: number;
++  /** Smith's Charity's twin of freeHealsPerLevel above, for Repair
++   *  instead of Treat -- see ModifierManager.freeRepairsPerDay and
++   *  GameEngine.consumeFreeRepair. */
++  freeRepairsPerLevel?: number;
+ }
+ 
+ export interface RenownPerkTier2 {
+@@ -1108,6 +1143,21 @@ export interface GameState {
+    */
+   freezeChangeDay: number;
+   freezeChangesUsedToday: number;
++  /**
++   * Guild-wide daily free-Treat tracking (Physician's Charity) -- same
++   * lazy day-reset shape as questRerollDay/vendorRerollDay/
++   * freezeChangeDay above, reusing data/reroll.ts's day-bucket math even
++   * though that file predates this specific use. Checked before a
++   * hero's own one-time usedFreeTreat, so the renewable resource spends
++   * first and the one-time one is saved for whenever the daily
++   * allowance is already used up -- see GameEngine.consumeFreeHeal.
++   */
++  freeHealDay: number;
++  freeHealsUsedToday: number;
++  /** Same shape again, independent counter, for Smith's Charity's daily
++   *  free Repair -- see GameEngine.consumeFreeRepair. */
++  freeRepairDay: number;
++  freeRepairsUsedToday: number;
+   boardRefreshedAt: number;
+   activeQuests: ActiveQuest[];
+   activeChains: ActiveChain[];
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 4b4a482..9471894 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -8,6 +8,7 @@ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID } from '../../game/data/equipment';
+ import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
++import { rerollsUsedToday } from '../../game/data/reroll';
+ import { describeMods, describeStats, formatGold, RARITY_COLOR, RARITY_ORDER } from '../../game/util';
+ import { ItemIcon, ConsumableIcon } from '../icons';
+ import { GearScoreBadge } from '../GearScoreBadge';
+@@ -248,6 +249,13 @@ function SlotCard({
+   const setInfo = def.setId && item.durability > 0 ? setInfoFor(hero, def.setId) : null;
+   const hasActiveSetBonus = (setInfo?.active.length ?? 0) > 0;
+ 
++  // Mirrors GameEngine.consumeFreeRepair's own priority (guild daily
++  // allowance first, hero's one-time freebie second) purely for the
++  // button label/enabled-state -- the engine call is still the actual
++  // source of truth when Repair is actually clicked.
++  const repairsUsedToday = rerollsUsedToday(engine.state.freeRepairsUsedToday, engine.state.freeRepairDay, Date.now());
++  const itemFreeRepairAvailable = repairsUsedToday < ModifierManager.freeRepairsPerDay(engine.state) || !hero.usedFreeRepair;
++
+   return (
+     <>
+       <div
+@@ -297,10 +305,13 @@ function SlotCard({
+             <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+               <button onClick={() => setOpen(false)}>Close</button>
+               <button
++                className="btn-primary"
+                 disabled={EquipmentManager.repairCost(item, workshop) === 0}
+                 onClick={() => { engine.repair(item.uid); setOpen(false); }}
+               >
+-                Repair {formatGold(EquipmentManager.repairCost(item, workshop))}
++                {itemFreeRepairAvailable && EquipmentManager.repairCost(item, workshop) > 0
++                  ? 'Repair · Free'
++                  : `Repair ${formatGold(EquipmentManager.repairCost(item, workshop))}`}
+               </button>
+               <button onClick={() => { engine.unequip(hero.id, slot); setOpen(false); }}>
+                 Remove
+@@ -500,7 +511,7 @@ export function EquipmentPanel() {
+         >
+           Equip best from stash
+         </button>
+-        <button onClick={() => engine.repairAll()} disabled={repairBill === 0} style={{ marginLeft: 10 }}>
++        <button className="btn-primary" onClick={() => engine.repairAll()} disabled={repairBill === 0} style={{ marginLeft: 10 }}>
+           Repair everything · {formatGold(repairBill)}
+         </button>
+       </div>
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index 727e68b..455ba78 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -6,6 +6,7 @@ import { GuildManager } from '../../game/managers/GuildManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { PrestigeManager } from '../../game/managers/PrestigeManager';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
++import { rerollsUsedToday } from '../../game/data/reroll';
+ import { HERO_CLASSES, RECRUIT_COST, SKINS, infirmaryAutoReviveUnlocked, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
+ import { Tuning } from '../../game/data/tuning';
+ import { HeroClass, Hero, Stats } from '../../game/types';
+@@ -168,6 +169,12 @@ export function HeroesPanel() {
+         const sets = HeroManager.activeSetBonuses(hero);
+         const isOpen = expanded.has(hero.id);
+         const showingOnDesktop = engine.displayedHero.id === hero.id;
++        // Mirrors GameEngine.consumeFreeHeal's own priority (guild daily
++        // allowance first, hero's one-time freebie second) purely for
++        // the button label/enabled-state -- the engine call is still the
++        // actual source of truth when Treat is actually clicked.
++        const healsUsedToday = rerollsUsedToday(state.freeHealsUsedToday, state.freeHealDay, now);
++        const heroFreeTreatAvailable = healsUsedToday < ModifierManager.freeHealsPerDay(state) || !hero.usedFreeTreat;
+ 
+         return (
+           <div key={hero.id} className="card">
+@@ -224,7 +231,9 @@ export function HeroesPanel() {
+                     {hero.status === 'fallen'
+                       ? <span className="bad">Fallen</span>
+                       : (hero.status === 'questing' ? 'away on a quest' : 'at the guild')}
+-                    {hero.injuries.length > 0 && <span className="bad"> · {hero.injuries.map((i) => i.name).join(', ')}</span>}
++                    {hero.injuries.length > 0 && (
++                      <span className="bad"> · {hero.injuries.map((i) => i.name).join(', ')} (expand to Treat)</span>
++                    )}
+                     {showingOnDesktop && <span className="good"> · showing on desktop</span>}
+                   </p>
+                 )}
+@@ -312,12 +321,15 @@ export function HeroesPanel() {
+                         </span>
+                         <span className="row">
+                           <button
++                            className="btn-primary"
+                             onClick={() => engine.treatInjury(hero.id, injury.id)}
+-                            disabled={state.gold < injury.treatmentCost}
++                            disabled={!heroFreeTreatAvailable && state.gold < injury.treatmentCost}
++                            title={heroFreeTreatAvailable ? 'Free -- on the guild' : undefined}
+                           >
+-                            Treat · {formatGold(injury.treatmentCost)}
++                            {heroFreeTreatAvailable ? 'Treat · Free' : `Treat · ${formatGold(injury.treatmentCost)}`}
+                           </button>
+                           <button
++                            className="btn-primary"
+                             onClick={() => engine.useConsumable(hero.id, 'field_bandage')}
+                             disabled={bandages === 0}
+                           >
+-- 
+2.43.0
+

@@ -21,6 +21,7 @@ import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpFor
 import { EQUIPMENT_BY_ID, SET_BY_ID, GEAR_SCORE_BY_RARITY, EQUIP_SLOTS } from './data/equipment';
 import { RAID_BY_ID } from './data/raids';
 import { Tuning } from './data/tuning';
+import { rerollDay, rerollsUsedToday } from './data/reroll';
 import { playSound } from './sound';
 import { TESTING_TOOLS_ENABLED } from './testingTools';
 
@@ -1378,25 +1379,47 @@ export class GameEngine {
   repair(itemUid: string) {
     const found = EquipmentManager.allItems(this.state).find((e) => e.item.uid === itemUid);
     if (!found) return;
-    const error = EquipmentManager.repair(this.state, found.item, this.state.guild.workshop ?? 0);
-    if (error) return this.say(error);
+    const cost = EquipmentManager.repairCost(found.item, this.state.guild.workshop ?? 0);
+    if (cost === 0) return this.say('Already in perfect condition.');
+    const free = this.consumeFreeRepair(found.heroId, Date.now());
+    if (free) {
+      found.item.durability = EquipmentManager.maxDurability(found.item);
+    } else {
+      const error = EquipmentManager.repair(this.state, found.item, this.state.guild.workshop ?? 0);
+      if (error) return this.say(error);
+    }
     playSound('repair');
-    this.say('Repaired.');
+    this.say(free ? 'Repaired, on the house.' : 'Repaired.');
     void this.saveNow();
   }
 
   repairAll() {
     const workshop = this.state.guild.workshop ?? 0;
+    const now = Date.now();
     let spent = 0;
-    for (const { item } of EquipmentManager.allItems(this.state)) {
+    let freeCount = 0;
+    for (const { item, heroId } of EquipmentManager.allItems(this.state)) {
       const cost = EquipmentManager.repairCost(item, workshop);
-      if (cost > 0 && this.state.gold >= cost) {
+      if (cost === 0) continue;
+      const free = this.consumeFreeRepair(heroId, now);
+      if (free) {
+        item.durability = EquipmentManager.maxDurability(item);
+        freeCount += 1;
+      } else if (this.state.gold >= cost) {
         EquipmentManager.repair(this.state, item, workshop);
         spent += cost;
       }
     }
-    if (spent > 0) playSound('repair');
-    this.say(spent > 0 ? `Repaired everything for ${spent} gold.` : 'Nothing needed repairing.');
+    if (spent > 0 || freeCount > 0) playSound('repair');
+    if (spent === 0 && freeCount === 0) {
+      this.say('Nothing needed repairing.');
+    } else if (freeCount > 0 && spent === 0) {
+      this.say(freeCount === 1 ? 'Repaired one item, on the house.' : `Repaired ${freeCount} items, on the house.`);
+    } else if (freeCount > 0) {
+      this.say(`Repaired everything for ${spent} gold (${freeCount} free).`);
+    } else {
+      this.say(`Repaired everything for ${spent} gold.`);
+    }
     void this.saveNow();
   }
 
@@ -1562,16 +1585,73 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  /**
+   * The guild's own renewable daily allowance (Physician's Charity)
+   * spends first, so a fresh recruit's one-time usedFreeTreat is saved
+   * for whenever that daily allowance is already used up rather than
+   * burned the moment they're hurt even if the guild could have covered
+   * it. Mutates state (the day counter or the hero flag) only when it's
+   * actually going to grant a free Treat -- callers should check for a
+   * real failure condition (not enough gold, etc.) *before* calling
+   * this, since there's no way to "give back" a freebie once granted.
+   * See guild-idler-status.md's "new-player injury economy" entry for
+   * why this exists at all: starting gold alone couldn't afford either
+   * existing cure.
+   */
+  private consumeFreeHeal(hero: Hero, now: number): boolean {
+    const usedToday = rerollsUsedToday(this.state.freeHealsUsedToday, this.state.freeHealDay, now);
+    if (usedToday < ModifierManager.freeHealsPerDay(this.state)) {
+      this.state.freeHealDay = rerollDay(now);
+      this.state.freeHealsUsedToday = usedToday + 1;
+      return true;
+    }
+    if (!hero.usedFreeTreat) {
+      hero.usedFreeTreat = true;
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Smith's Charity's twin of consumeFreeHeal above, for Repair instead
+   * of Treat. `heroId` is null for a stashed item (no owning hero) --
+   * the guild's own daily allowance still applies to those (repairing
+   * is repairing, whether the item is worn or sitting in the stash),
+   * but the one-time-per-hero fallback obviously can't, since there's
+   * no hero to charge it to.
+   */
+  private consumeFreeRepair(heroId: string | null, now: number): boolean {
+    const usedToday = rerollsUsedToday(this.state.freeRepairsUsedToday, this.state.freeRepairDay, now);
+    if (usedToday < ModifierManager.freeRepairsPerDay(this.state)) {
+      this.state.freeRepairDay = rerollDay(now);
+      this.state.freeRepairsUsedToday = usedToday + 1;
+      return true;
+    }
+    if (heroId) {
+      const hero = this.hero(heroId);
+      if (hero && !hero.usedFreeRepair) {
+        hero.usedFreeRepair = true;
+        return true;
+      }
+    }
+    return false;
+  }
+
   treatInjury(heroId: string, injuryId: string) {
     const hero = this.hero(heroId);
     if (!hero) return;
     const injury = hero.injuries.find((i) => i.id === injuryId);
     if (!injury) return;
-    if (this.state.gold < injury.treatmentCost) return this.say('Not enough gold for treatment.');
-    this.state.gold -= injury.treatmentCost;
-    this.state.stats.goldSpent += injury.treatmentCost;
+    const free = this.consumeFreeHeal(hero, Date.now());
+    if (!free && this.state.gold < injury.treatmentCost) return this.say('Not enough gold for treatment.');
+    if (!free) {
+      this.state.gold -= injury.treatmentCost;
+      this.state.stats.goldSpent += injury.treatmentCost;
+    }
     hero.injuries = hero.injuries.filter((i) => i !== injury);
-    this.say(`${hero.name} is treated for ${injury.name.toLowerCase()}.`);
+    this.say(free
+      ? `${hero.name} is treated for ${injury.name.toLowerCase()}, on the house.`
+      : `${hero.name} is treated for ${injury.name.toLowerCase()}.`);
     void this.saveNow();
   }
 

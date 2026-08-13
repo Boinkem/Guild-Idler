@@ -8,6 +8,7 @@ import { ModifierManager } from '../../game/managers/ModifierManager';
 import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID } from '../../game/data/equipment';
 import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
+import { rerollsUsedToday } from '../../game/data/reroll';
 import { describeMods, describeStats, formatGold, RARITY_COLOR, RARITY_ORDER } from '../../game/util';
 import { ItemIcon, ConsumableIcon } from '../icons';
 import { GearScoreBadge } from '../GearScoreBadge';
@@ -248,6 +249,13 @@ function SlotCard({
   const setInfo = def.setId && item.durability > 0 ? setInfoFor(hero, def.setId) : null;
   const hasActiveSetBonus = (setInfo?.active.length ?? 0) > 0;
 
+  // Mirrors GameEngine.consumeFreeRepair's own priority (guild daily
+  // allowance first, hero's one-time freebie second) purely for the
+  // button label/enabled-state -- the engine call is still the actual
+  // source of truth when Repair is actually clicked.
+  const repairsUsedToday = rerollsUsedToday(engine.state.freeRepairsUsedToday, engine.state.freeRepairDay, Date.now());
+  const itemFreeRepairAvailable = repairsUsedToday < ModifierManager.freeRepairsPerDay(engine.state) || !hero.usedFreeRepair;
+
   return (
     <>
       <div
@@ -297,10 +305,13 @@ function SlotCard({
             <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
               <button onClick={() => setOpen(false)}>Close</button>
               <button
+                className="btn-primary"
                 disabled={EquipmentManager.repairCost(item, workshop) === 0}
                 onClick={() => { engine.repair(item.uid); setOpen(false); }}
               >
-                Repair {formatGold(EquipmentManager.repairCost(item, workshop))}
+                {itemFreeRepairAvailable && EquipmentManager.repairCost(item, workshop) > 0
+                  ? 'Repair · Free'
+                  : `Repair ${formatGold(EquipmentManager.repairCost(item, workshop))}`}
               </button>
               <button onClick={() => { engine.unequip(hero.id, slot); setOpen(false); }}>
                 Remove
@@ -500,7 +511,7 @@ export function EquipmentPanel() {
         >
           Equip best from stash
         </button>
-        <button onClick={() => engine.repairAll()} disabled={repairBill === 0} style={{ marginLeft: 10 }}>
+        <button className="btn-primary" onClick={() => engine.repairAll()} disabled={repairBill === 0} style={{ marginLeft: 10 }}>
           Repair everything · {formatGold(repairBill)}
         </button>
       </div>

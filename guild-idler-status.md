@@ -7339,3 +7339,114 @@ Verified via `npx tsc --noEmit` and `vite build`, both clean, plus the
 runtime checks described inline above (18,000-sample on-level guarantee
 test with and without the fix, zero-investment and upgrades-maxed stress
 tests, and Briar's exact reproduction).
+
+### New-player injury economy: starting Field Bandages, first Treat/Repair free per hero, Physician's/Smith's Charity, visibility fix
+
+Direct follow-up to the previous entry's finding: a new guild's starting
+gold (50) is less than either existing cure for an injury (Treat's
+typical 70-90g, or buying a Field Bandage at 60g), so a brand new
+player's first injury was mathematically un-curable except by waiting it
+out -- not a gate, a genuine gap. Full request: starting bandages, a
+free first Treat and first Repair per hero, two new upgradeable
+guild facilities for a renewable daily version of the same thing, a
+notification explaining all of it, and fixing why the Treat/Repair
+buttons were apparently invisible.
+
+**1. Two free Field Bandages in a new guild's starting inventory.**
+`SaveManager.createInitialState`: `inventory: { healing_potion: 1,
+field_bandage: 2 }`. New guilds only -- existing saves aren't
+retroactively granted these (see point 6 below for why that's fine).
+
+**2. First Treat free per hero, ever -- new `Hero.usedFreeTreat` flag.**
+**First Repair free per hero, ever -- new `Hero.usedFreeRepair` flag.**
+Both optional/undefined by default (same no-migration-needed convention
+`equippedConsumables`/`autoAdvanceChainId` already use), so an existing
+hero simply reads as "hasn't used it yet" the moment this patch lands --
+see point 6. Repair's freebie only applies to a hero's own *equipped*
+gear (an item needs an owning hero to charge the freebie to); a stashed
+item can only draw on the guild's own daily allowance below, never a
+hero's personal one-time freebie.
+
+**3. Physician's Charity / Smith's Charity -- two new guild facilities,
+a renewable daily version of the same thing, "can be upgraded."** Both
+5 levels, 1 free Treat (or Repair) per calendar day per level guild-wide
+(any hero), so a maxed facility covers 5 free Treats or Repairs every
+day regardless of which hero needed them. Level 0 (not yet bought)
+grants nothing -- deliberately not a base-1-per-day floor the way
+Board Warden's freeze allowance is, since the always-available safety
+net here is each hero's own one-time freebie from point 2, not a
+guild-wide default. New `GuildDef.freeHealsPerLevel`/`freeRepairsPerLevel`
+structural fields (same "not a flat Modifiers bonus" shape
+`storagePerLevel`/`healTimeReductionMinutesPerLevel` already use), read
+by two new `ModifierManager.freeHealsPerDay`/`freeRepairsPerDay`
+helpers. Tuning: 150 base cost, 1.7 growth, both facilities -- cheap and
+fast to reach on purpose, this is meant to be an early build, not a
+late-game payoff.
+
+**Priority order between the renewable daily allowance and the one-time
+per-hero freebie, and why:** the guild's daily allowance spends *first*
+-- `GameEngine.consumeFreeHeal`/`consumeFreeRepair` check
+`ModifierManager.freeHealsPerDay`/`freeRepairsPerDay` against the day's
+usage count (reusing `data/reroll.ts`'s existing day-bucket math despite
+the file predating this use -- same shape as `questRerollDay`/
+`freezeChangeDay`) before ever touching a hero's one-time flag. That
+way a renewable resource that resets every day never sits unused while
+a one-time-forever resource gets spent instead -- verified directly: a
+hero with both an available guild-daily allowance *and* their own unused
+personal freebie gets **both** Treats for free before gold is touched at
+all, in that order.
+
+**4. Guidance notification, combining both as requested rather than two
+separate messages.** New `first_injury_or_wear` topic (`GuidanceManager`),
+firing once ever the moment any hero has an injury or any equipped item's
+durability is below max: explains that a hurt hero or worn gear drags
+down every quest's odds, points at the Heroes tab, and explicitly states
+that each hero's first Treat and first Repair are free before mentioning
+that everything after costs gold (and that Physician's/Smith's Charity
+can add more free ones per day). Same one-time toast+banner mechanism
+`first_level_up`/`first_equipment_found` already use.
+
+**5. Treat/Repair buttons made actually visible -- the reported root
+cause, confirmed.** Every one of these buttons (`Treat`, `Bandage`,
+per-item `Repair`, and `Repair everything`) was a bare, unstyled
+`<button>` -- no `.btn-primary`/`.btn-ghost` class at all, unlike every
+other actionable button in the game. All four now use `.btn-primary`.
+Also: the injury summary in a hero's *collapsed* card (visible without
+expanding at all) now appends "(expand to Treat)" after the injury
+names, so the fix is discoverable without needing to already know to
+open the card first. Both Treat and per-item Repair also now show
+"Free" in the button label itself (mirroring `consumeFreeHeal`/
+`consumeFreeRepair`'s exact priority, computed read-only for display)
+whenever a free cure is actually available, rather than always showing
+a gold cost even when it'll turn out to cost nothing.
+
+**6. Deliberately NOT touched, and why:**
+- **Auto-repair's background tick** (`GameEngine`'s own opt-in
+  `autoRepairEnabled` loop) does not draw on either freebie -- it calls
+  `EquipmentManager.repair` directly, same as before this pass. Kept
+  scoped to deliberate, manually-triggered repairs only, so a freebie is
+  something the player consciously benefits from and notices, not
+  silently consumed by a background process they may not even remember
+  enabling.
+- **Existing saves are not retroactively granted the 2 starting Field
+  Bandages** -- that's specifically a new-guild bonus, and there's no
+  reasonable "when" to backfill it for an established save. They *do*
+  still get the more important half of the fix for free: every
+  existing hero's `usedFreeTreat`/`usedFreeRepair` reads as `undefined`
+  (not yet used) the moment this patch lands, since both fields are
+  optional with no migration needed -- confirmed directly against a
+  simulated pre-patch save.
+
+**Verified beyond `tsc`/`vite build` (both clean):** starting Field
+Bandage count on a fresh guild; a hero's first Treat costing 0 gold and
+consuming `usedFreeTreat`, a second treat on the same hero correctly
+requiring (and failing without) gold; the guild-daily-then-personal
+priority order with both available; the daily allowance correctly
+resetting on a simulated next-day boundary; single-item and batch
+(`repairAll`) repair both applying the same freebie logic across
+multiple items and heroes; the new facilities purchasable through the
+existing generic `GuildManager.upgradeFacility` with no special-casing
+needed; `first_injury_or_wear` firing correctly off a simulated injury;
+and a simulated pre-patch save (every new field explicitly deleted)
+migrating and playing through a full `treatInjury` call with zero
+crashes and the hero-freebie still correctly available.

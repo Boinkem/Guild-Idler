@@ -405,6 +405,29 @@ export const GUILD_FACILITIES: GuildDef[] = [
     healTimeReductionMinutesPerLevel: Tuning.get('guild_facility.kennel.healTimeReductionMinutesPerLevel'),
   },
   {
+    id: 'physicians_charity', name: "Physician's Charity",
+    description: 'The guild covers the first Treat of every day, no questions asked -- '
+      + "everyone's gear and grit wear down eventually, and a hero shouldn't have to "
+      + 'choose between paying for a cure and paying for anything else.',
+    baseCost: Tuning.get('guild_facility.physicians_charity.baseCost'),
+    costGrowth: Tuning.get('guild_facility.physicians_charity.costGrowth'),
+    maxLevel: Tuning.get('guild_facility.physicians_charity.maxLevel'),
+    // Not a flat Modifiers bonus -- see GuildDef.freeHealsPerLevel's own
+    // comment.
+    modsPerLevel: {},
+    freeHealsPerLevel: Tuning.get('guild_facility.physicians_charity.freeHealsPerLevel'),
+  },
+  {
+    id: 'smiths_charity', name: "Smith's Charity",
+    description: "The guild smith fixes the first broken buckle or dulled edge of the day "
+      + 'for free -- Physician\'s Charity\'s twin, for gear instead of injuries.',
+    baseCost: Tuning.get('guild_facility.smiths_charity.baseCost'),
+    costGrowth: Tuning.get('guild_facility.smiths_charity.costGrowth'),
+    maxLevel: Tuning.get('guild_facility.smiths_charity.maxLevel'),
+    modsPerLevel: {},
+    freeRepairsPerLevel: Tuning.get('guild_facility.smiths_charity.freeRepairsPerLevel'),
+  },
+  {
     id: 'music_hall', name: 'Music Hall',
     description: 'Hire a bard to keep the guild hall from sitting in silence. '
       + 'Every level buys one more song for the repertoire.',

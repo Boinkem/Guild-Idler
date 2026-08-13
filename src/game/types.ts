@@ -388,6 +388,23 @@ export interface Hero {
    */
   equippedConsumables?: string[];
   /**
+   * Whether this hero has already spent their one-time free Treat --
+   * every hero's very first injury cure is free, on the guild,
+   * regardless of Physician's Charity's daily allowance (see
+   * GameEngine.consumeFreeHeal, which checks the guild's own renewable
+   * daily freebie first and falls back to this one-time-per-hero freebie
+   * second, so a fresh recruit is never blocked by a starting-gold
+   * shortfall the way the very first injury/repair economy pass turned
+   * out to be -- see guild-idler-status.md's "new-player injury economy"
+   * entry for the actual numbers that motivated this). Optional/
+   * undefined (same as equippedConsumables above) rather than migrated,
+   * since undefined already reads correctly as "hasn't used it yet."
+   */
+  usedFreeTreat?: boolean;
+  /** Same shape as usedFreeTreat, for a hero's first equipped-gear
+   *  Repair instead of an injury Treat -- see GameEngine.consumeFreeRepair. */
+  usedFreeRepair?: boolean;
+  /**
    * Set when this hero was sent via the "Chain Quest Steps" option on a
    * story-chain offer -- the chainId being auto-advanced. Independent of
    * autoChainTarget/autoChainCount (the ordinary Auto-Chain bounty streak):
@@ -901,7 +918,7 @@ export interface UpgradeDef {
   freezeChangesPerLevel?: number;
 }
 
-export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern' | 'infirmary' | 'kennel' | 'music_hall';
+export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern' | 'infirmary' | 'kennel' | 'music_hall' | 'physicians_charity' | 'smiths_charity';
 
 export interface GuildDef {
   id: GuildFacility;
@@ -945,6 +962,24 @@ export interface GuildDef {
    * level 0 already has one track playing before a single gold is spent.
    */
   tracksPerLevel?: number;
+  /**
+   * Physician's Charity's structural effect -- same "not a flat Modifiers
+   * bonus" reasoning as every other structural field above. How many
+   * Treat-an-injury actions per calendar day are free, guild-wide,
+   * regardless of which hero -- see ModifierManager.freeHealsPerDay for
+   * the read side and GameEngine.consumeFreeHeal for how the daily
+   * counter (GameState.freeHealDay/freeHealsUsedToday) actually gets
+   * spent. Level 0 (not yet purchased) grants none -- the guild-wide
+   * daily freebie is something to build toward, not a given; a brand
+   * new hero's own one-time free first Treat (Hero.usedFreeTreat) is the
+   * separate, always-available safety net for before this is built at
+   * all. See guild-idler-status.md's "new-player injury economy" entry.
+   */
+  freeHealsPerLevel?: number;
+  /** Smith's Charity's twin of freeHealsPerLevel above, for Repair
+   *  instead of Treat -- see ModifierManager.freeRepairsPerDay and
+   *  GameEngine.consumeFreeRepair. */
+  freeRepairsPerLevel?: number;
 }
 
 export interface RenownPerkTier2 {
@@ -1108,6 +1143,21 @@ export interface GameState {
    */
   freezeChangeDay: number;
   freezeChangesUsedToday: number;
+  /**
+   * Guild-wide daily free-Treat tracking (Physician's Charity) -- same
+   * lazy day-reset shape as questRerollDay/vendorRerollDay/
+   * freezeChangeDay above, reusing data/reroll.ts's day-bucket math even
+   * though that file predates this specific use. Checked before a
+   * hero's own one-time usedFreeTreat, so the renewable resource spends
+   * first and the one-time one is saved for whenever the daily
+   * allowance is already used up -- see GameEngine.consumeFreeHeal.
+   */
+  freeHealDay: number;
+  freeHealsUsedToday: number;
+  /** Same shape again, independent counter, for Smith's Charity's daily
+   *  free Repair -- see GameEngine.consumeFreeRepair. */
+  freeRepairDay: number;
+  freeRepairsUsedToday: number;
   boardRefreshedAt: number;
   activeQuests: ActiveQuest[];
   activeChains: ActiveChain[];

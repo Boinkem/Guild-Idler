@@ -2685,6 +2685,82 @@
     "description": "Hours until a Fallen pet is automatically revived for free, once Kennel has reached its max level. Below max level there is no free auto-revive at all."
   },
   {
+    "id": "guild_facility.physicians_charity.baseCost",
+    "label": "Physician's Charity: base cost",
+    "category": "guild_facilities",
+    "value": 150,
+    "default": 150,
+    "min": 0,
+    "description": "Cost of the first (level 0) Physician's Charity upgrade."
+  },
+  {
+    "id": "guild_facility.physicians_charity.costGrowth",
+    "label": "Physician's Charity: cost growth",
+    "category": "guild_facilities",
+    "value": 1.7,
+    "default": 1.7,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier applied per level, before the early-tier discount."
+  },
+  {
+    "id": "guild_facility.physicians_charity.maxLevel",
+    "label": "Physician's Charity: max level",
+    "category": "guild_facilities",
+    "value": 5,
+    "default": 5,
+    "min": 1,
+    "description": "Highest level Physician's Charity can reach."
+  },
+  {
+    "id": "guild_facility.physicians_charity.freeHealsPerLevel",
+    "label": "Physician's Charity: free Treats per day per level",
+    "category": "guild_facilities",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 5,
+    "description": "How many free (0 gold) Treat actions per calendar day, guild-wide, per level. Level 5 = 5 free Treats/day."
+  },
+  {
+    "id": "guild_facility.smiths_charity.baseCost",
+    "label": "Smith's Charity: base cost",
+    "category": "guild_facilities",
+    "value": 150,
+    "default": 150,
+    "min": 0,
+    "description": "Cost of the first (level 0) Smith's Charity upgrade."
+  },
+  {
+    "id": "guild_facility.smiths_charity.costGrowth",
+    "label": "Smith's Charity: cost growth",
+    "category": "guild_facilities",
+    "value": 1.7,
+    "default": 1.7,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier applied per level, before the early-tier discount."
+  },
+  {
+    "id": "guild_facility.smiths_charity.maxLevel",
+    "label": "Smith's Charity: max level",
+    "category": "guild_facilities",
+    "value": 5,
+    "default": 5,
+    "min": 1,
+    "description": "Highest level Smith's Charity can reach."
+  },
+  {
+    "id": "guild_facility.smiths_charity.freeRepairsPerLevel",
+    "label": "Smith's Charity: free Repairs per day per level",
+    "category": "guild_facilities",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 5,
+    "description": "How many free (0 gold) Repair actions per calendar day, guild-wide, per level. Level 5 = 5 free Repairs/day."
+  },
+  {
     "id": "guild_facility.music_hall.baseCost",
     "label": "Music Hall: base cost",
     "category": "guild_facilities",

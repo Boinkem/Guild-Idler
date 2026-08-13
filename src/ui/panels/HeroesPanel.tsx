@@ -6,6 +6,7 @@ import { GuildManager } from '../../game/managers/GuildManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { PrestigeManager } from '../../game/managers/PrestigeManager';
 import { InventoryManager } from '../../game/managers/InventoryManager';
+import { rerollsUsedToday } from '../../game/data/reroll';
 import { HERO_CLASSES, RECRUIT_COST, SKINS, infirmaryAutoReviveUnlocked, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
 import { Tuning } from '../../game/data/tuning';
 import { HeroClass, Hero, Stats } from '../../game/types';
@@ -168,6 +169,12 @@ export function HeroesPanel() {
         const sets = HeroManager.activeSetBonuses(hero);
         const isOpen = expanded.has(hero.id);
         const showingOnDesktop = engine.displayedHero.id === hero.id;
+        // Mirrors GameEngine.consumeFreeHeal's own priority (guild daily
+        // allowance first, hero's one-time freebie second) purely for
+        // the button label/enabled-state -- the engine call is still the
+        // actual source of truth when Treat is actually clicked.
+        const healsUsedToday = rerollsUsedToday(state.freeHealsUsedToday, state.freeHealDay, now);
+        const heroFreeTreatAvailable = healsUsedToday < ModifierManager.freeHealsPerDay(state) || !hero.usedFreeTreat;
 
         return (
           <div key={hero.id} className="card">
@@ -224,7 +231,9 @@ export function HeroesPanel() {
                     {hero.status === 'fallen'
                       ? <span className="bad">Fallen</span>
                       : (hero.status === 'questing' ? 'away on a quest' : 'at the guild')}
-                    {hero.injuries.length > 0 && <span className="bad"> · {hero.injuries.map((i) => i.name).join(', ')}</span>}
+                    {hero.injuries.length > 0 && (
+                      <span className="bad"> · {hero.injuries.map((i) => i.name).join(', ')} (expand to Treat)</span>
+                    )}
                     {showingOnDesktop && <span className="good"> · showing on desktop</span>}
                   </p>
                 )}
@@ -312,12 +321,15 @@ export function HeroesPanel() {
                         </span>
                         <span className="row">
                           <button
+                            className="btn-primary"
                             onClick={() => engine.treatInjury(hero.id, injury.id)}
-                            disabled={state.gold < injury.treatmentCost}
+                            disabled={!heroFreeTreatAvailable && state.gold < injury.treatmentCost}
+                            title={heroFreeTreatAvailable ? 'Free -- on the guild' : undefined}
                           >
-                            Treat · {formatGold(injury.treatmentCost)}
+                            {heroFreeTreatAvailable ? 'Treat · Free' : `Treat · ${formatGold(injury.treatmentCost)}`}
                           </button>
                           <button
+                            className="btn-primary"
                             onClick={() => engine.useConsumable(hero.id, 'field_bandage')}
                             disabled={bandages === 0}
                           >

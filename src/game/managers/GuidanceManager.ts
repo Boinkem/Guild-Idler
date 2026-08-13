@@ -1,6 +1,7 @@
 import { GameState } from '../types';
 import { ModifierManager } from './ModifierManager';
 import { GuildManager } from './GuildManager';
+import { EquipmentManager } from './EquipmentManager';
 
 /**
  * A one-time "how to" nudge, tied to a real state condition. Fires exactly
@@ -82,6 +83,14 @@ const TOPICS: GuidanceTopic[] = [
     messages: ["The guild bard has a song ready -- pick it (or shuffle through everything you've unlocked) from the Track option in Settings."],
     targetTab: 'settings',
   },
+  {
+    id: 'first_injury_or_wear',
+    messages: [
+      "A hurt hero or worn-down gear both drag down the odds on every quest, not just the one that caused it -- don't just wait it out. Treat an injury or Repair a piece of gear right from a hero's card in the Heroes tab (or spend a Field Bandage there instead of gold).",
+      "Each hero's very first Treat and first Repair are free, on the guild -- everything after that costs gold. A Physician's Charity or Smith's Charity guild upgrade can make more of each free every day, for every hero.",
+    ],
+    targetTab: 'heroes',
+  },
 ];
 
 type Check = (state: GameState) => boolean;
@@ -103,6 +112,8 @@ const CHECKS: Record<string, Check> = {
   // for one more caller.
   auto_chain_unlocked: (state) => GuildManager.upgradeLevel(state, 'auto_chain') > 0,
   music_hall_unlocked: (state) => (state.guild.music_hall ?? 0) >= 1,
+  first_injury_or_wear: (state) => state.heroes.some((h) => h.injuries.length > 0
+    || Object.values(h.equipment).some((item) => item && item.durability < EquipmentManager.maxDurability(item))),
 };
 
 export const GuidanceManager = {
