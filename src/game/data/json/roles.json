@@ -1,0 +1,17 @@
+[
+  {
+    "id": "melee",
+    "name": "Melee",
+    "icon": "roles/melee.png"
+  },
+  {
+    "id": "ranged",
+    "name": "Ranged",
+    "icon": "roles/ranged.png"
+  },
+  {
+    "id": "caster",
+    "name": "Caster",
+    "icon": "roles/caster.png"
+  }
+]

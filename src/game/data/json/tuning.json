@@ -3305,5 +3305,50 @@
     "value": 1,
     "default": 1,
     "min": 0
+  },
+  {
+    "id": "role.unlockBaseCost",
+    "label": "Role Training: unlock cost (base)",
+    "category": "hero_roles",
+    "value": 500,
+    "default": 500,
+    "min": 0,
+    "description": "Gold cost of training a hero into a role they have never held before, at level 0."
+  },
+  {
+    "id": "role.unlockCostPerLevel",
+    "label": "Role Training: unlock cost per level",
+    "category": "hero_roles",
+    "value": 50,
+    "default": 50,
+    "min": 0,
+    "description": "Additional gold per hero level, added to the base unlock cost."
+  },
+  {
+    "id": "role.swapBaseCost",
+    "label": "Role Training: swap cost (base)",
+    "category": "hero_roles",
+    "value": 50,
+    "default": 50,
+    "min": 0,
+    "description": "Gold cost of swapping a hero back to a role they already hold, at level 0. Repeatable, no limit."
+  },
+  {
+    "id": "role.swapCostPerLevel",
+    "label": "Role Training: swap cost per level",
+    "category": "hero_roles",
+    "value": 5,
+    "default": 5,
+    "min": 0,
+    "description": "Additional gold per hero level, added to the base swap cost."
+  },
+  {
+    "id": "raid.roleMismatchPenaltyPerSlot",
+    "label": "Raids: role mismatch penalty per unmet slot",
+    "category": "raid_upgrades",
+    "value": 8,
+    "default": 8,
+    "min": 0,
+    "description": "Flat success-percentage points subtracted per unmet requiredRoles slot at raid start."
   }
 ]

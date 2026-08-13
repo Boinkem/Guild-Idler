@@ -38,6 +38,17 @@ export type MaterialId = 'ore' | 'timber' | 'herbs' | 'fish';
  */
 export type HeroClass = string;
 
+/**
+ * A hero's combat role -- Melee/Ranged/Caster. Separate from `HeroClass`
+ * entirely: class still drives stats/growth/mods/preferred-tag bonus
+ * exactly as before, role is a purely additive layer scoped to raid
+ * party composition only (see RaidDef.requiredRoles below and
+ * guild-idler-status.md's "Melee/Ranged/Caster hero roles" backlog
+ * entry for the full design/scope reasoning -- ordinary board/chain
+ * quest success math deliberately does not read this at all).
+ */
+export type Role = 'melee' | 'ranged' | 'caster';
+
 /** Cosmetic recolour skins, applied per hero. */
 
 /**
@@ -437,6 +448,28 @@ export interface Hero {
    * HeroesPanel for the picker UI.
    */
   activeTitle: string | null;
+  /**
+   * Currently active combat role (Melee/Ranged/Caster) -- only ever read
+   * for raid party composition (RaidManager.roleMismatchPenalty), never
+   * board/chain quest math. Optional/undefined for any hero who's never
+   * been trained, same defensive-optional convention as
+   * equippedConsumables/lastBurstBonusDay elsewhere in this file --
+   * HeroManager.activeRole(hero) is the one place the "fall back to the
+   * class's native role" default should be applied, so callers never
+   * repeat that fallback themselves. No save migration needed.
+   */
+  role?: Role;
+  /**
+   * Every role this hero has ever paid the (higher, one-time) Training
+   * unlock cost for -- always includes the class's native role for free
+   * once accessed via HeroManager.unlockedRoles(hero), which is the read
+   * side for this same "optional, computed default" reasoning `role`
+   * above uses. Swapping to a role already in this list only costs the
+   * small repeatable swap fee; swapping to one that isn't costs the
+   * unlock fee AND adds it here, permanently. See HeroManager.roleCost/
+   * trainRole.
+   */
+  unlockedRoles?: Role[];
   /**
    * Times this specific hero identity has been retired. Persists and grows
    * across retirements (unlike title, which is cleared), and grants a small
@@ -841,6 +874,17 @@ export interface RaidDef {
    * it's re-cleared -- grantTitle skips a title the hero already holds.
    */
   title?: string;
+  /**
+   * Per-raid configurable role-slot minimums (e.g. `{ melee: 2 }`) --
+   * optional, defaults to no requirement at all, same "raids without the
+   * field behave exactly as today" reasoning successModifier already
+   * follows. Not a hard block on committing the party (raids don't gate
+   * on anything else today either); an unmet slot instead costs a flat
+   * per-slot success penalty, see RaidManager.roleMismatchPenalty and
+   * the "Raid role requirements" section of guild-idler-status.md's
+   * hero-roles backlog entry for the full design.
+   */
+  requiredRoles?: Partial<Record<Role, number>>;
 }
 
 export interface RaidDifficultyConfig {
@@ -954,6 +998,22 @@ export interface RaidResult {
 /* -------------------------- progression -------------------------- */
 
 export type VendorId = 'blacksmith' | 'alchemist' | 'enchanter';
+
+/**
+ * One entry per Role -- name/icon only, devtool-editable via the new
+ * `roles` content type (roles.json). `icon` reuses the exact same
+ * `picker: 'icon'` machinery equipment/consumables/crafting recipes
+ * already have (rooted at public/item-icons/, just a new `roles/`
+ * subfolder within it) -- falls back to a plain text label wherever
+ * it's shown if unset or the file's missing, same "missing file just
+ * fails to paint" convention every other optional icon in this game
+ * already follows.
+ */
+export interface RoleDef {
+  id: Role;
+  name: string;
+  icon?: string;
+}
 
 export interface UpgradeDef {
   id: string;

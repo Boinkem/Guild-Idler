@@ -8,7 +8,8 @@ import {
   isRaidUnlocked, parseLootEntry, lootForDifficulty,
 } from '../../game/data/raids';
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
-import { RaidDifficulty, RaidUpgradeDef, RaidDef } from '../../game/types';
+import { RaidDifficulty, RaidUpgradeDef, RaidDef, Hero, Role } from '../../game/types';
+import { ROLE_BY_ID } from '../../game/data/progression';
 import { RarityPill } from '../RarityPill';
 import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
 import { RaidRoomSprite, RaidTorchSprite } from '../sprites/RaidRoomSprite';
@@ -283,6 +284,49 @@ function DifficultyCircle({
 }
 
 /**
+ * One per role present in a raid's requiredRoles -- same bordered-icon-
+ * button shape as DifficultyCircle above (img with a text-label fallback
+ * if the icon file's missing, same onError pattern), plus a green check
+ * overlay once the *currently selected* party meets that slot. Doesn't
+ * block committing if unmet -- raids don't hard-gate on anything else
+ * today either, this is a warning (paired with the mismatch-penalty
+ * note next to it) not a lock, same reasoning as the rest of the "Raid
+ * role requirements" section of guild-idler-status.md's hero-roles
+ * backlog entry.
+ */
+function RoleRequirementCircle({ role, needed, have }: { role: Role; needed: number; have: number }) {
+  const def = ROLE_BY_ID[role];
+  const [imgFailed, setImgFailed] = useState(false);
+  const met = have >= needed;
+  return (
+    <div
+      className="raid-diff-circle"
+      style={{ borderColor: met ? 'var(--moss)' : 'var(--brass)', color: 'var(--brass)', position: 'relative' }}
+      title={`${def?.name ?? role} ×${needed} -- ${have}/${needed} in the current selection`}
+    >
+      {def?.icon && !imgFailed ? (
+        <img
+          src={`./item-icons/${def.icon}`}
+          alt=""
+          onError={() => setImgFailed(true)}
+          style={{ width: '60%', height: '60%', objectFit: 'contain' }}
+        />
+      ) : (
+        <span className="tiny">{(def?.name ?? role).slice(0, 1)}</span>
+      )}
+      <span className="tiny" style={{ position: 'absolute', bottom: -2, right: -2 }}>×{needed}</span>
+      {met && (
+        <span
+          className="good"
+          style={{ position: 'absolute', top: -4, left: -4, fontSize: '0.7rem', lineHeight: 1 }}
+          aria-hidden="true"
+        >✓</span>
+      )}
+    </div>
+  );
+}
+
+/**
  * The full raid detail -- everything that used to live inline inside the
  * expanded card now lives here instead, completely unchanged in behaviour.
  * One real difference from the old inline-expand: this unmounts entirely
@@ -404,6 +448,27 @@ function RaidDetailModal({
                 Requires exactly {cfg.partySize} heroes at level {raid.reqLevel}+. Rewards ×{cfg.rewardMultiplier},
                 {' '}{cfg.successPenalty}% harder odds per encounter than Normal.
               </p>
+              {raid.requiredRoles && Object.keys(raid.requiredRoles).length > 0 && (() => {
+                const previewHeroes = previewHeroIds
+                  .map((id) => state.heroes.find((h) => h.id === id))
+                  .filter((h): h is Hero => !!h);
+                const counts = RaidManager.partyRoleCounts(previewHeroes);
+                const penalty = RaidManager.roleMismatchPenalty(previewHeroes, raid.requiredRoles);
+                return (
+                  <div style={{ marginTop: 6, marginBottom: 6 }}>
+                    <div className="row" style={{ gap: 8 }}>
+                      {(Object.entries(raid.requiredRoles) as [Role, number][]).map(([role, needed]) => (
+                        <RoleRequirementCircle key={role} role={role} needed={needed} have={counts[role]} />
+                      ))}
+                    </div>
+                    {penalty > 0 && (
+                      <p className="tiny bad" style={{ marginTop: 4 }}>
+                        Role mix unmet -- {'-'}{penalty}% success this run until it's covered.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
               {idleHeroes.length === 0 ? (
                 <p className="small muted">Every hero is already out. Nobody's free to send.</p>
               ) : (

@@ -6903,131 +6903,10 @@ pass (same caveat as the two entries above).
   turn-by-turn damage formula (how Attack Damage, Damage Reduction, crit,
   and elemental bonus/resist combine into a final hit).
 
-- **Melee/Ranged/Caster hero roles -- fully scoped, ready to build, no
-  code yet.** Raised as feedback alongside the Vendor Upgrades
-  Consolidation work (patch 0133); scoped to completion across several
-  rounds of discussion rather than landed in one pass. Full spec below;
-  this replaces the earlier "scoping discussion started" entry.
-
-  **Scope decision, made early and load-bearing for everything else
-  here:** role-affinity affects raid party composition only, not
-  ordinary board/chain contract success math. The original proposal (a
-  role-affinity modifier on every quest offer, mirroring the existing
-  preferred-tag bonus) was dropped specifically to avoid needing a new
-  axis on `QuestOffer` just to keep two success-bonus sources from
-  double-counting -- raid-only sidesteps that question entirely rather
-  than solving it.
-
-  **Native role per class**, confirmed against the actual sprite art
-  where it mattered (Gladiator carries a bow, so Ranged rather than the
-  Melee its `preferred: ['combat','explore']` tags would otherwise
-  suggest):
-
-  | Class | Native role |
-  |---|---|
-  | Adventurer, Knight, Dwarf Warrior, Samurai, Lizardman | Melee |
-  | Gladiator | Ranged |
-  | Witch, Pyromancer, Wizard | Caster |
-
-  5 Melee / 1 Ranged / 3 Caster -- lopsided, but deliberately accepted
-  rather than forcing a second reassignment: since Training (below) lets
-  any hero become any role, native role only sets the free default and
-  which class gets a given flavour name for free, not what's actually
-  achievable in a raid party.
-
-  **Training system** -- the actual mechanism for changing a hero's
-  role, and the answer to the old "one native role, or a short list of
-  valid retrains" open question: neither: every class can train into
-  either non-native role, at a cost, no restriction on which classes get
-  which options.
-  - `Hero.unlockedRoles: Role[]` -- starts with just the native role.
-    Training into a role not yet on this list is a **first-time unlock**
-    (higher one-time cost, permanent once paid) and adds it.
-  - `Hero.role: Role` -- the currently active one. Swapping to any role
-    already in `unlockedRoles` (including back to native) is a **swap**
-    (small, repair-bill-sized cost, no limit, freely reversible back and
-    forth) rather than a one-off purchase.
-  - Proposed formulas, same "base + per-level" shape `revivalCost`/
-    `recruitCost` already use, fully tunable: unlock `500 + 50×level`,
-    swap `50 + 5×level`.
-  - `hero.heroClass` is untouched by any of this -- stats, growth,
-    equipment mods, and the existing preferred-tag quest bonus all stay
-    keyed to class exactly as today. Role is a purely additive layer on
-    top, not a replacement for class.
-
-  **Naming.** `hero-classes.json` gains `roleFlavors: Record<Role,
-  string>` -- one display name per role per class, native role's own
-  entry equal to the class's own name. First-draft table below, meant to
-  be edited freely rather than treated as final (the full "naming pass
-  across every class" the original entry flagged as necessary before
-  shipping):
-
-  | Class | Melee | Ranged | Caster |
-  |---|---|---|---|
-  | Adventurer | Adventurer *(native)* | Trailblazing Scout | Hedge Mage |
-  | Knight | Knight *(native)* | Crossbow Knight | Rune Knight |
-  | Dwarf Warrior | Dwarf Warrior *(native)* | Dwarven Axe-Thrower | Runesmith |
-  | Gladiator | Arena Duelist | Gladiator *(native)* | Enchanted Champion |
-  | Samurai | Samurai *(native)* | Yumi Marksman | Onmyoji Adept |
-  | Witch | Hexblade | Hexbow Adept | Witch *(native)* |
-  | Lizardman | Lizardman *(native)* | Scaled Hunter | Swampland Shaman |
-  | Pyromancer | Ember Blade | Cinder Marksman | Pyromancer *(native)* |
-  | Wizard | Arcane Swordster | Spellshot | Wizard *(native)* |
-
-  Display integration: `HeroesPanel`'s hero-card summary line currently
-  shows `classDef.name` (e.g. "Wizard · Level 12") -- this is the one
-  spot that swaps to `roleFlavors[hero.role]` once a hero's been
-  trained. No other call site needs to change; class identity for
-  everything mechanical stays `hero.heroClass` as-is.
-
-  **Raid role requirements.** `RaidDef` gains an optional
-  `requiredRoles: Partial<Record<Role, number>>` (e.g. `{ melee: 2 }`) --
-  per-raid configurable minimums, not a fixed "one of each" rule applied
-  everywhere; raids without the field behave exactly as today. At raid
-  start, alongside the existing `partySuccessBonus` calculation, tally
-  how many required role-slots the party's actual composition fails to
-  cover and subtract a flat `Tuning.get('raid.roleMismatchPenalty')`
-  success points per unmet slot -- one more term folded into a formula
-  (`RaidManager.partySuccessBonus`/`resolve`) that already exists,
-  same channel `raid.successModifier` already writes into, rather than a
-  parallel system.
-
-  **Raid UI.** One small circle per role present in `requiredRoles`,
-  directly mirroring the existing `DifficultyCircle` component (same
-  bordered-icon-button shape, same img-with-text-fallback convention) --
-  shows that role's icon plus the count needed (e.g. "⚔ 2"), with a
-  green check overlay once the *currently selected* party meets that
-  slot (recomputed live off `selectedHeroIds`, same pattern the existing
-  success/duration preview already uses on every selection change).
-  Doesn't hard-block sending if unmet -- raids don't block on anything
-  else today either, it's a penalty not a gate -- the circle just stays
-  unchecked as a warning, and the mismatch penalty shows in the same
-  tiny-muted line the difficulty-penalty text already occupies.
-
-  **DevTool coverage**, scoped so every piece of this is editable
-  without a code patch, same as every other content type in this game:
-  - New `roles.json` content type (exactly 3 fixed entries: melee/
-    ranged/caster), each with `id`/`name`/`icon`. The icon field reuses
-    the *existing* `picker: 'icon'` machinery equipment/consumables/
-    crafting recipes already have (rooted at `public/item-icons/`,
-    already supports subfolders) -- icons just need to land in a new
-    `public/item-icons/roles/` subfolder, zero new picker/backend code
-    required. This becomes the single source of truth both the raid
-    circles and anywhere else a role icon shows read from.
-  - `hero-classes.json`'s new `roleFlavors` field needs one small new
-    DevTool field type -- a 3-key free-text map (one labeled box per
-    role), same shape the existing `preferred` (questTagList) editor
-    already has, just text instead of an enum picker.
-  - `raids.json`'s new `requiredRoles` field needs one more small new
-    field type -- a 3-key *number* map this time, same visual shape as
-    the existing generic `mods` editor, just keyed to Role instead of
-    Modifiers.
-
-  **Explicitly out of scope for the first pass:** board/chain contract
-  success math (see the raid-only scope decision above); any change to
-  `hero.heroClass` itself or the existing preferred-tag bonus; hero
-  talent trees (see the next entry -- still blocked on this landing
-  first, unchanged by this scoping pass).
+- **Melee/Ranged/Caster hero roles** -- built, see "Melee/Ranged/Caster
+  Hero Roles -- built (patch 0135)" further down for the full
+  implementation writeup. This entry previously held the full scoping
+  spec; superseded now that it's shipped.
 - **Hero talent trees** -- explicitly parked for a later discussion,
   raised alongside the roles scoping above but deliberately not folded
   into it. Concept: a talent point every 5-10 levels, spent into a small,
@@ -7037,9 +6916,10 @@ pass (same caveat as the two entries above).
   the same way role names would be ("Gritted Teeth" for a Melee Knight,
   etc.). Proposed gating: either a strict prerequisite chain (need talent
   N to unlock talent N+1) or a "up to 2 points in one talent before being
-  allowed to move to the next" alternative -- not decided which. Blocked
-  on the roles system landing first, since talents are described as being
-  scoped per-role.
+  allowed to move to the next" alternative -- not decided which. Its
+  "needs the roles system first" blocker is now cleared (see "Melee/
+  Ranged/Caster Hero Roles -- built (patch 0135)" below) -- still not
+  picked up, no code yet, just no longer blocked.
 - **The Rememberer** -- a future Minor-domain god concept (memory/being
   forgotten, fades because written record-keeping replaced an oral
   practice). Parked in favor of reworking the Last God instead.
@@ -8986,3 +8866,131 @@ confirms the buyback price is genuinely higher than the sale price
 (3 gold sold -> 5 gold buyback, matching the 1.4x tuning value exactly)
 and that buying back correctly restores the exact item to the stash
 and clears the buyback entry.
+
+### Melee/Ranged/Caster Hero Roles -- built (patch 0135)
+
+Full spec was pinned down in the backlog scoping pass referenced above;
+this is the actual implementation, built to that spec with a couple of
+things caught along the way. Rebased twice during the build -- once
+against the Vendor Upgrades Consolidation status.md append point, once
+more after a Tutorial Quest/starter-weapon/vendor-buyback patch landed
+mid-build -- both times by extracting this feature's changes as a clean
+diff and re-applying against the then-current `main`, verified with a
+fresh `tsc --noEmit` each time rather than trusting the merge blind.
+
+**Data model.** `Role = 'melee' | 'ranged' | 'caster'` (types.ts).
+`Hero.role`/`Hero.unlockedRoles` are both optional/undefined-by-default
+-- same defensive-optional convention `equippedConsumables`/
+`lastBurstBonusDay` already use elsewhere in this file, so this needed
+no SAVE_VERSION bump and no migration at all. `HeroManager.activeRole`/
+`unlockedRoles` are the one place the "fall back to the class's native
+role" default gets applied; nothing else should repeat that fallback.
+`hero.heroClass` is completely untouched by any of this -- stats,
+growth, mods, and the existing preferred-tag quest bonus all still work
+exactly as before. Role only ever affects raid party composition, per
+the scope decision made during scoping; ordinary board/chain quest
+math doesn't read it at all.
+
+**Classes.** All 9 get `role` (native) + `roleFlavors` (a name per
+role) in hero-classes.json. Gladiator reassigned to Ranged (confirmed
+against the actual sprite art -- it carries a bow) rather than the
+Melee its own `preferred: ['combat','explore']` tags would otherwise
+suggest. Native split ended up 5 Melee / 1 Ranged / 3 Caster --
+lopsided, deliberately accepted rather than reassigning a second class,
+since Training below makes any hero's role achievable regardless of
+what they started as. First-draft `roleFlavors` table (e.g. a Wizard
+trained into Melee reads as "Arcane Swordster") is meant to be edited
+freely, not treated as final copy.
+
+**Training.** `HeroManager.roleCost`/`trainRole` -- two-tier, same
+"base + per-level" shape `revivalCost`/`recruitCost` already use.
+Training into a role not yet in `unlockedRoles` pays the higher
+one-time unlock price (`role.unlockBaseCost` + `unlockCostPerLevel` ×
+level, defaults 500 + 50/level) and adds it permanently; switching back
+to any role already unlocked only pays the small repeatable swap price
+(`role.swapBaseCost` + `swapCostPerLevel` × level, defaults 50 + 5/
+level), no limit, freely reversible. `GameEngine.trainRole` is the one
+UI-facing action; `HeroesPanel`'s hero card shows a Melee/Ranged/Caster
+chip row (same visual shape the existing Livery skin-chip row already
+has) with live cost/afford state per chip, and its summary line now
+reads `HeroManager.roleDisplayName(hero)` instead of the class's own
+`name` directly, so a trained hero's card shows the flavour name.
+
+**Raids.** `RaidDef.requiredRoles` (optional, per-raid configurable
+minimums, e.g. `{ melee: 2 }`) -- omitted entirely on every raid today,
+so nothing plays differently yet; this is infrastructure waiting for
+specific raids to opt in via the DevTool once that's a deliberate
+balance decision, not something this patch made unilaterally.
+`RaidManager.partyRoleCounts`/`roleMismatchPenalty` tally unmet slots
+and return `Tuning.get('raid.roleMismatchPenaltyPerSlot')` (default 8)
+flat success points per one, folded directly into the existing
+`partySuccessBonus` at both `previewEncounterSuccess` (UI preview) and
+`start` (the actual locked-in value) -- one more term in a formula that
+already existed, same channel `successModifier` already writes into,
+rather than a parallel system. Doesn't block committing an unmet party;
+raids don't hard-gate on anything else today either.
+
+**Raid UI.** `RoleRequirementCircle` in RaidsPanel mirrors
+`DifficultyCircle` exactly -- same bordered-icon-button shape, same
+img-with-text-fallback-on-error convention -- shown per role present in
+`requiredRoles`, with a green check overlay once the *currently
+selected* party meets that slot (recomputed live off `selectedHeroIds`
+via `RaidManager.partyRoleCounts`, same pattern the existing success/
+duration preview already uses). A tiny-muted mismatch-penalty line
+appears alongside it when unmet, same slot the difficulty-penalty text
+already occupies.
+
+**DevTool coverage.** New `roles` content type (roles.json, exactly 3
+entries) -- `id` is an enum dropdown locked to the 3 real Role values
+rather than free-slug like most schemas, specifically so an "Add new"
+click can't produce an entry that doesn't match the actual Role union
+in code. `icon` reuses the *existing* `picker: 'icon'` machinery
+equipment/consumables/crafting recipes already have (rooted at
+public/item-icons/, already supports subfolders) -- icons just need to
+land in a new public/item-icons/roles/ subfolder, zero new picker/
+backend code required; roles.json ships with icon paths already
+pointed there for whenever the art arrives, falling back to a plain
+text label everywhere it's shown until then (`RoleRequirementCircle`'s
+own onError handler). `hero-classes.json` gained a `role` field (the
+existing generic `enum` type, no new machinery) and `roleFlavors` (one
+genuinely new field type -- a required 3-key text map, same kv-grid
+shape `mods`/`stats` already have, `kvGrid` gained a `'text'` kind
+alongside its existing `number`/`mixed` ones for it). `raids.json`
+gained `requiredRoles` (another new field type, a partial 3-key
+*number* map this time, same visual shape as `materials`). All three
+new/changed schemas verified with real POST round-trips against the
+running devtool server -- including three deliberate negative tests
+(an unknown role key in `roleFlavors`, a missing required role in
+`roleFlavors`, an unknown role key in `requiredRoles`) that all came
+back correctly rejected with a clear validation error, not silently
+accepted.
+
+**Found and fixed along the way, not part of the original scoping
+spec:** the devtool's `MOD_KEYS` list (both server.mjs and app.js) was
+never updated for the 5 Modifiers keys the Vendor Upgrades
+Consolidation patch (0133) added (`repairDiscount`/`scrapBonus`/
+`consumableDiscount`/`enchantDiscount`/`blackMarketDiscount`) -- meant
+those keys were silently unassignable on any equipment/consumable/
+recipe mods field via the devtool since that patch shipped. Fixed in
+both files alongside this patch since it was already touching the same
+`MOD_KEYS` neighbourhood for an unrelated reason.
+
+**A rough edge caught during a devtool round-trip test, not left in
+the final diff:** the devtool's JSON round-trip normalizes `1.0` to
+`1` on save (plain JS number serialization) -- harmless numerically,
+but it briefly touched an unrelated hero-class's growth stat as a
+side effect of testing the new fields on a real save. Caught by diffing
+before finalizing and reverted to keep this patch's diff scoped to
+what it actually intended to change.
+
+**Deliberately not done this pass:** no raid actually has
+`requiredRoles` set yet (infrastructure only, balance decision left for
+later); no role icons exist yet (art pending, falls back to text);
+Hero talent trees remain unbuilt (see that entry above -- no longer
+blocked, just not picked up).
+
+**Verified:** `npx tsc --noEmit` clean on the final rebased workspace;
+both devtool JS files pass `node --check`; the devtool server boots and
+all three touched content types (`hero-classes`, `raids`, `roles`) round-
+trip through a real POST save with zero validation errors, plus the
+three negative-validation tests described above.

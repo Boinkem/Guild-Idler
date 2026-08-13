@@ -1,7 +1,8 @@
 import {
-  ActiveRaid, GameState, Hero, Modifiers, RaidDifficulty, RaidEncounterDef, RaidLootDrop, RaidResult,
+  ActiveRaid, GameState, Hero, Modifiers, RaidDifficulty, RaidEncounterDef, RaidLootDrop, RaidResult, Role,
 } from '../types';
 import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty } from '../data/raids';
+import { Tuning } from '../data/tuning';
 import { EQUIPMENT_BY_ID } from '../data/equipment';
 import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
 import { MIN_SUCCESS, MAX_SUCCESS, MIN_INJURY_RISK } from './QuestManager';
@@ -72,6 +73,38 @@ export const RaidManager = {
     return weakest + restAvg * 0.2;
   },
 
+  /** How many heroes in this party are currently active in each role --
+   *  used both by roleMismatchPenalty below and directly by the raid UI's
+   *  role-requirement circles (RaidsPanel) to show live met/unmet status
+   *  as the party selection changes. */
+  partyRoleCounts(heroes: Hero[]): Record<Role, number> {
+    const counts: Record<Role, number> = { melee: 0, ranged: 0, caster: 0 };
+    for (const h of heroes) counts[HeroManager.activeRole(h)] += 1;
+    return counts;
+  },
+
+  /**
+   * Flat success-point penalty for a party that doesn't meet a raid's
+   * requiredRoles minimums -- 0 for a raid with no requirement at all
+   * (the common case, see RaidDef.requiredRoles' own comment), otherwise
+   * Tuning.get('raid.roleMismatchPenaltyPerSlot') per unmet slot (e.g. a
+   * raid wanting 2 melee with only 1 in the party is 1 unmet slot, not a
+   * full penalty). Folded directly into partySuccessBonus at raid start
+   * (see start() below) and into previewEncounterSuccess for the UI
+   * preview -- one more term in a formula that already exists rather
+   * than a parallel system, same reasoning successModifier already
+   * established.
+   */
+  roleMismatchPenalty(heroes: Hero[], requiredRoles?: Partial<Record<Role, number>>): number {
+    if (!requiredRoles) return 0;
+    const counts = RaidManager.partyRoleCounts(heroes);
+    let unmet = 0;
+    for (const [role, needed] of Object.entries(requiredRoles) as [Role, number][]) {
+      unmet += Math.max(0, needed - counts[role]);
+    }
+    return unmet * Tuning.get('raid.roleMismatchPenaltyPerSlot');
+  },
+
   /**
    * Economy contributions (gold/xp/loot/speed) use a plain average across
    * the party instead -- these aren't a pass/fail gate the way success is,
@@ -121,7 +154,8 @@ export const RaidManager = {
     const penalty = RAID_DIFFICULTIES[difficulty].successPenalty;
     const elemental = RaidManager.elementalBonus(heroes, encounter);
     const override = raid.successModifier ?? 0;
-    return clamp(encounter.baseSuccess - penalty + bonus + elemental + override, MIN_SUCCESS, MAX_SUCCESS);
+    const roleMismatch = RaidManager.roleMismatchPenalty(heroes, raid.requiredRoles);
+    return clamp(encounter.baseSuccess - penalty + bonus + elemental + override - roleMismatch, MIN_SUCCESS, MAX_SUCCESS);
   },
 
   /**
@@ -191,7 +225,8 @@ export const RaidManager = {
 
     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)!);
     const raidDef = RAID_BY_ID[raidId]!;
-    const partySuccessBonus = RaidManager.partySuccessBonus(state, heroes, now, raidDef.reqLevel);
+    const roleMismatch = RaidManager.roleMismatchPenalty(heroes, raidDef.requiredRoles);
+    const partySuccessBonus = RaidManager.partySuccessBonus(state, heroes, now, raidDef.reqLevel) - roleMismatch;
     const duration = RaidManager.previewDuration(state, heroIds, raidId, difficulty, now);
 
     const active: ActiveRaid = {

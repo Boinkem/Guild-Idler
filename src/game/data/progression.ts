@@ -1,4 +1,4 @@
-import { GuildDef, HeroClass, Modifiers, QuestTag, RenownPerkDef, Stats, UpgradeDef, VendorId } from '../types';
+import { GuildDef, HeroClass, Modifiers, QuestTag, RenownPerkDef, Role, RoleDef, Stats, UpgradeDef, VendorId } from '../types';
 import { Tuning } from './tuning';
 
 /* --------------------------- permanent upgrades --------------------------- */
@@ -705,6 +705,24 @@ export interface HeroClassDef {
   tier: number;
   names: string[];
   /**
+   * Native combat role -- see types.ts's Role for the full reasoning.
+   * Fixed per class, only ever changed per-hero via Training
+   * (HeroManager.trainRole), never here. Required (every base and DLC
+   * class needs one) rather than optional-with-fallback, matching how
+   * every other structural field on this def (baseStats, growth,
+   * preferred, tier) is already required.
+   */
+  role: Role;
+  /**
+   * Display name per role -- native role's own entry should equal
+   * `name` above; the other two are the flavour names Training swaps
+   * the hero card's summary line to (see HeroManager.roleDisplayName).
+   * Required, all three keys, matching this game's own "full naming
+   * pass across every class" requirement for shipping the roles
+   * feature -- see guild-idler-status.md's hero-roles backlog entry.
+   */
+  roleFlavors: Record<Role, string>;
+  /**
    * Unset for every base-game class (recruitable at HERO_CLASSES/
    * RECRUIT_COST's own values, exactly as today). Set to a DLC pack id
    * for a class that only exists once that pack is owned -- same shape
@@ -791,6 +809,37 @@ export const RECRUIT_COST: Record<HeroClass, number> = Object.fromEntries(
 export const RECRUIT_START_LEVEL: Record<number, number> = {
   0: 1, 1: 3, 2: 8, 3: 15,
 };
+
+/* --------------------------------- roles --------------------------------- */
+
+/**
+ * Roles live in json/roles.json (devtool-editable, new `roles` content
+ * type -- see server.mjs) so an icon swap doesn't need a code patch, same
+ * reasoning as every other content type in this game. Exactly 3 entries,
+ * fixed -- unlike VENDORS this isn't expected to ever grow, but kept as
+ * data rather than a hardcoded TS array anyway purely so the icon field
+ * gets the existing DevTool icon picker for free.
+ */
+import rolesJson from './json/roles.json';
+export const ROLES: RoleDef[] = rolesJson as RoleDef[];
+export const ROLE_BY_ID: Record<Role, RoleDef> = Object.fromEntries(ROLES.map((r) => [r.id, r])) as Record<Role, RoleDef>;
+
+/**
+ * Training cost -- two-tier, same "base + per-level" shape
+ * revivalCost/recruitCost already use. Unlocking a role a hero has never
+ * held before (first entry into Hero.unlockedRoles) is a real decision,
+ * priced accordingly; swapping back and forth between roles already
+ * unlocked is meant to be closer to a repair bill -- cheap, repeatable,
+ * no limit. See HeroManager.roleCost for the read side (which of the two
+ * curves applies) and guild-idler-status.md's hero-roles backlog entry
+ * for the full reasoning.
+ */
+export function roleUnlockCost(level: number): number {
+  return Math.floor(Tuning.get('role.unlockBaseCost') + Tuning.get('role.unlockCostPerLevel') * level);
+}
+export function roleSwapCost(level: number): number {
+  return Math.floor(Tuning.get('role.swapBaseCost') + Tuning.get('role.swapCostPerLevel') * level);
+}
 
 /* -------------------------------- skins --------------------------------- */
 

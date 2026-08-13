@@ -31,7 +31,13 @@
       "Cade",
       "Briar",
       "Wren Ashfield"
-    ]
+    ],
+    "role": "melee",
+    "roleFlavors": {
+      "melee": "Adventurer",
+      "ranged": "Trailblazing Scout",
+      "caster": "Hedge Mage"
+    }
   },
   {
     "id": "knight",
@@ -65,7 +71,13 @@
       "Dame Orla",
       "Sir Corwin",
       "Dame Wren"
-    ]
+    ],
+    "role": "melee",
+    "roleFlavors": {
+      "melee": "Knight",
+      "ranged": "Crossbow Knight",
+      "caster": "Rune Knight"
+    }
   },
   {
     "id": "dwarf",
@@ -100,7 +112,13 @@
       "Thora",
       "Balin",
       "Greta Stoneheel"
-    ]
+    ],
+    "role": "melee",
+    "roleFlavors": {
+      "melee": "Dwarf Warrior",
+      "ranged": "Dwarven Axe-Thrower",
+      "caster": "Runesmith"
+    }
   },
   {
     "id": "gladiator",
@@ -115,7 +133,7 @@
     "growth": {
       "strength": 1.1,
       "endurance": 0.8,
-      "luck": 1.0,
+      "luck": 1,
       "wisdom": 0.4
     },
     "mods": {
@@ -136,7 +154,13 @@
       "Crixus",
       "Vela",
       "Otho the Swift"
-    ]
+    ],
+    "role": "ranged",
+    "roleFlavors": {
+      "melee": "Arena Duelist",
+      "ranged": "Gladiator",
+      "caster": "Enchanted Champion"
+    }
   },
   {
     "id": "samurai",
@@ -170,7 +194,13 @@
       "Ayame",
       "Takeshi",
       "Rin of the Reed"
-    ]
+    ],
+    "role": "melee",
+    "roleFlavors": {
+      "melee": "Samurai",
+      "ranged": "Yumi Marksman",
+      "caster": "Onmyoji Adept"
+    }
   },
   {
     "id": "witch",
@@ -206,7 +236,13 @@
       "Sybil",
       "Nettle",
       "Old Agatha"
-    ]
+    ],
+    "role": "caster",
+    "roleFlavors": {
+      "melee": "Hexblade",
+      "ranged": "Hexbow Adept",
+      "caster": "Witch"
+    }
   },
   {
     "id": "lizardman",
@@ -242,7 +278,13 @@
       "Xala",
       "Threelk",
       "Marsh-King Ozz"
-    ]
+    ],
+    "role": "melee",
+    "roleFlavors": {
+      "melee": "Lizardman",
+      "ranged": "Scaled Hunter",
+      "caster": "Swampland Shaman"
+    }
   },
   {
     "id": "pyromancer",
@@ -277,7 +319,13 @@
       "Ravan",
       "Ember",
       "Lord Vaylen"
-    ]
+    ],
+    "role": "caster",
+    "roleFlavors": {
+      "melee": "Ember Blade",
+      "ranged": "Cinder Marksman",
+      "caster": "Pyromancer"
+    }
   },
   {
     "id": "wizard",
@@ -314,6 +362,12 @@
       "Cassius",
       "Elspeth",
       "Grand Magus Vorn"
-    ]
+    ],
+    "role": "caster",
+    "roleFlavors": {
+      "melee": "Arcane Swordster",
+      "ranged": "Spellshot",
+      "caster": "Wizard"
+    }
   }
 ]

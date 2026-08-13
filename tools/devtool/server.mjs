@@ -105,6 +105,16 @@ const SCHEMAS = {
       unlockTavernLevel: { type: 'number', required: true },
       tier: { type: 'number', required: true },
       names: { type: 'string[]', required: true },
+      // Native combat role (Melee/Ranged/Caster) plus per-role display
+      // names -- see types.ts's Role and HeroClassDef.role/roleFlavors'
+      // own comments in progression.ts for the full reasoning. `role`
+      // reuses the existing generic `enum` field type (no new machinery
+      // needed there); `roleFlavors` is a genuinely new field type, same
+      // shape as `mods`/`stats`'s kv-grid just keyed to the 3 Role values
+      // with required text values instead of optional numbers -- see the
+      // `roleFlavors` case in validateEntry below.
+      role: { type: 'enum', options: ['melee', 'ranged', 'caster'], required: true },
+      roleFlavors: { type: 'roleFlavors', required: true },
       // Unset for every base-game class -- see HeroClassDef.requiresDlc's
       // own comment in progression.ts. Editable here mainly so a future
       // DLC pack's own manifest content could, in principle, be authored
@@ -123,6 +133,26 @@ const SCHEMAS = {
     fields: {
       id: { type: 'string', required: true, slug: true },
       cost: { type: 'number', required: true },
+    },
+  },
+  'roles': {
+    file: 'roles.json',
+    label: 'Roles',
+    idField: 'id',
+    // Exactly 3 fixed entries (melee/ranged/caster) -- name + icon only,
+    // `id` locked to an enum dropdown (not free-slug like most schemas)
+    // since Role is a closed 3-value union in code; a free-text id here
+    // could produce an entry that doesn't match any real Role value.
+    // `icon` reuses the *existing* `picker: 'icon'` machinery equipment/
+    // consumables/crafting recipes already have (rooted at
+    // public/item-icons/, already supports subfolders) rather than
+    // inventing a new picker just for 3 icons -- icons just need to land
+    // in a new public/item-icons/roles/ subfolder. See types.ts's RoleDef
+    // and guild-idler-status.md's hero-roles backlog entry.
+    fields: {
+      id: { type: 'enum', options: ['melee', 'ranged', 'caster'], required: true },
+      name: { type: 'string', required: true },
+      icon: { type: 'string', required: false, picker: 'icon' },
     },
   },
   'quest-templates': {
@@ -602,6 +632,13 @@ const SCHEMAS = {
       // comment in types.ts and HeroManager.grantTitle for the read/
       // write side.
       title: { type: 'string', required: false },
+      // Per-raid configurable role-slot minimums (e.g. { melee: 2 }) --
+      // optional, most raids should leave this unset entirely (no
+      // requirement, exactly today's behaviour). Same kv-grid shape
+      // `materials` already has, just keyed to the 3 Role values instead
+      // -- see the `roleRequirements` case in validateEntry above, and
+      // RaidDef.requiredRoles' own comment in types.ts.
+      requiredRoles: { type: 'roleRequirements', required: false },
     },
   },
   'crafting-recipes': {
@@ -718,7 +755,7 @@ const SCHEMAS = {
 // new key, this list (and app.js's own copy, plus MOD_FIELD_INFO/
 // EFFECT_FIELD_INFO below) needs updating by hand -- there's no automatic
 // sync between the TS type and this plain JS array.
-const MOD_KEYS = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability', 'health', 'revivalDiscount', 'petHealth', 'petRevivalDiscount'];
+const MOD_KEYS = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability', 'health', 'revivalDiscount', 'petHealth', 'petRevivalDiscount', 'repairDiscount', 'scrapBonus', 'consumableDiscount', 'enchantDiscount', 'blackMarketDiscount'];
 // Same 4 elements as ElementType in types.ts -- used by the 'resultGem'
 // field type below (Weapon Enchanting / Armour Infusion gem recipes).
 const ELEMENT_KEYS = ['fire', 'frost', 'lightning', 'poison'];
@@ -746,6 +783,10 @@ const CHAIN_STAGE_TAGS = ['combat', 'escort', 'explore', 'arcane', 'stealth', 'd
 // validates (hero-classes' `preferred` field) rather than borrowing a
 // name that says "chain stage."
 const QUEST_TAG_KEYS = ['combat', 'escort', 'explore', 'arcane', 'stealth', 'defense'];
+// The 3 Role values -- see types.ts's Role. Used by `roleFlavors` (a
+// required 3-key text map on hero-classes) and `roleRequirements` (an
+// optional, partial numeric map on raids).
+const ROLE_KEYS = ['melee', 'ranged', 'caster'];
 const CHAIN_STAGE_DIFFICULTIES = ['easy', 'normal', 'hard', 'epic', 'legendary'];
 // Every field a single stage row needs -- durationMinutes, not duration,
 // same human-friendly-unit convention raid-encounters.json's durationHours
@@ -837,6 +878,35 @@ function validateEntry(schema, entry, index) {
       case 'questTagList':
         if (!Array.isArray(value) || value.length === 0 || value.some((v) => !QUEST_TAG_KEYS.includes(v))) {
           errors.push(`entry ${index}: "${key}" must be a non-empty list containing only ${QUEST_TAG_KEYS.join(', ')}`);
+        }
+        break;
+      case 'roleFlavors':
+        // Every class needs a name for all 3 roles (the native role's own
+        // entry equals its own `name`, the other two are the Training
+        // flavour names) -- required and complete, unlike `mods`/`stats`
+        // which are legitimately partial.
+        if (typeof value !== 'object' || Array.isArray(value)) {
+          errors.push(`entry ${index}: "${key}" must be an object`);
+        } else {
+          for (const k of ROLE_KEYS) {
+            if (typeof value[k] !== 'string' || value[k].trim() === '') {
+              errors.push(`entry ${index}: "${key}.${k}" is required and must be text`);
+            }
+          }
+          for (const k of Object.keys(value)) if (!ROLE_KEYS.includes(k)) errors.push(`entry ${index}: unknown role "${k}" in "${key}"`);
+        }
+        break;
+      case 'roleRequirements':
+        // Partial on purpose -- most raids have no requirement at all
+        // (omit the field entirely), and a raid that does have one
+        // rarely wants all 3 roles specified.
+        if (typeof value !== 'object' || Array.isArray(value)) {
+          errors.push(`entry ${index}: "${key}" must be an object`);
+        } else {
+          for (const k of Object.keys(value)) {
+            if (!ROLE_KEYS.includes(k)) errors.push(`entry ${index}: unknown role "${k}" in "${key}"`);
+            else if (typeof value[k] !== 'number' || value[k] < 0) errors.push(`entry ${index}: "${key}.${k}" must be a non-negative number`);
+          }
         }
         break;
       case 'boolean':

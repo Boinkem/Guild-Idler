@@ -1,4 +1,4 @@
-import { ActiveQuest, ElementType, GameState, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Stats } from './types';
+import { ActiveQuest, ElementType, GameState, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -2109,6 +2109,25 @@ export class GameEngine {
     if (!hero || hero.statPoints <= 0) return;
     hero.statPoints -= 1;
     hero.stats[stat] += 1;
+    this.notify();
+    void this.saveNow();
+  }
+
+  /**
+   * Trains a hero into `role` -- see HeroManager.trainRole for the actual
+   * cost/mutation logic (unlock price the first time into a given role,
+   * cheap repeatable swap price after that). Purely a raid-party-
+   * composition lever; doesn't touch board/chain quest math at all, see
+   * guild-idler-status.md's hero-roles backlog entry for the scope
+   * reasoning.
+   */
+  trainRole(heroId: string, role: Role) {
+    const hero = this.hero(heroId);
+    if (!hero) return;
+    const error = HeroManager.trainRole(this.state, hero, role);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.say(`${hero.name} trained as ${HeroManager.roleDisplayName(hero)}.`);
     this.notify();
     void this.saveNow();
   }

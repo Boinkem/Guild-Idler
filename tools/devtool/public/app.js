@@ -514,6 +514,8 @@ function fieldControl(spec, key, value) {
   if (spec.type === 'mods') return kvGrid(id, MOD_KEYS, value ?? {}, 'number', MOD_FIELD_INFO);
   if (spec.type === 'stats') return kvGrid(id, STAT_KEYS, value ?? {}, 'number', STAT_FIELD_INFO);
   if (spec.type === 'materials') return kvGrid(id, MATERIAL_KEYS, value ?? {}, 'number');
+  if (spec.type === 'roleFlavors') return kvGrid(id, ROLE_KEYS, value ?? {}, 'text');
+  if (spec.type === 'roleRequirements') return kvGrid(id, ROLE_KEYS, value ?? {}, 'number');
   if (spec.type === 'effect') return kvGrid(id, EFFECT_KEYS, value ?? {}, 'mixed', EFFECT_FIELD_INFO);
   if (spec.type === 'eventEffects') return kvGrid(id, EVENT_EFFECT_KEYS, value ?? {}, 'mixed', EVENT_EFFECT_FIELD_INFO);
   if (spec.type === 'eggReward') return eggRewardInput(id, value);
@@ -636,11 +638,14 @@ function stageRowHtml(s) {
 // the real `Modifiers`/ConsumableDef.effect types by hand -- see that
 // file's comments on both lists for the full "found drifted, fixed in
 // the same pass" note.
-const MOD_KEYS = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability', 'health', 'revivalDiscount', 'petHealth', 'petRevivalDiscount'];
+const MOD_KEYS = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability', 'health', 'revivalDiscount', 'petHealth', 'petRevivalDiscount', 'repairDiscount', 'scrapBonus', 'consumableDiscount', 'enchantDiscount', 'blackMarketDiscount'];
 const STAT_KEYS = ['strength', 'endurance', 'luck', 'wisdom'];
 // Same 6 values server.mjs's own QUEST_TAG_KEYS validates against --
 // used by hero-classes' `preferred` field (the questTagList type).
 const QUEST_TAG_KEYS = ['combat', 'escort', 'explore', 'arcane', 'stealth', 'defense'];
+// See server.mjs's own ROLE_KEYS comment -- the 3 Role values, used by
+// roleFlavors (hero-classes) and roleRequirements (raids).
+const ROLE_KEYS = ['melee', 'ranged', 'caster'];
 const MATERIAL_KEYS = ['ore', 'timber', 'herbs', 'fish'];
 const EFFECT_KEYS = [
   'success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability',
@@ -779,6 +784,9 @@ function kvGrid(id, keys, values, kind, fieldInfo) {
     }
     if (kind === 'mixed' && BOOL_KEYS.has(k)) {
       return `${label}<input type="checkbox" data-kv="${k}"${titleAttr} ${values[k] ? 'checked' : ''} />`;
+    }
+    if (kind === 'text') {
+      return `${label}<input type="text" data-kv="${k}"${titleAttr} value="${escapeHtml(values[k] ?? '')}" placeholder="—" />`;
     }
     return `${label}<input type="number" step="any" data-kv="${k}"${titleAttr} value="${values[k] ?? ''}" placeholder="—" />`;
   }).join('');
@@ -1265,7 +1273,7 @@ function readField(spec, key) {
   if (spec.type === 'string[]' || spec.type === 'modKeyList' || spec.type === 'statKeyList' || spec.type === 'questTagList') {
     return [...el.querySelectorAll('[data-list-item]')].map((i) => i.value.trim()).filter(Boolean);
   }
-  if (['mods', 'stats', 'materials', 'effect', 'eventEffects'].includes(spec.type)) {
+  if (['mods', 'stats', 'materials', 'roleRequirements', 'effect', 'eventEffects'].includes(spec.type)) {
     const out = {};
     el.querySelectorAll('[data-kv]').forEach((input) => {
       const k = input.dataset.kv;
@@ -1280,6 +1288,17 @@ function readField(spec, key) {
       } else if (input.value !== '') {
         out[k] = parseFloat(input.value);
       }
+    });
+    return out;
+  }
+  if (spec.type === 'roleFlavors') {
+    // Text values, not numbers -- kvGrid's 'text' kind (see kvGrid's own
+    // comment), so this reads plain trimmed strings rather than
+    // parseFloat like the numeric kv-grids above.
+    const out = {};
+    el.querySelectorAll('[data-kv]').forEach((input) => {
+      const v = input.value.trim();
+      if (v !== '') out[input.dataset.kv] = v;
     });
     return out;
   }

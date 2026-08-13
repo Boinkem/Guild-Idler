@@ -1,9 +1,9 @@
 import { EQUIPMENT_BY_ID, GEAR_SCORE_BY_RARITY, SET_BY_ID } from '../data/equipment';
 import { INJURIES } from '../data/items';
-import { HERO_CLASSES, RECRUIT_START_LEVEL, xpForLevel, infirmaryHealTimeMinutes } from '../data/progression';
+import { HERO_CLASSES, RECRUIT_START_LEVEL, xpForLevel, infirmaryHealTimeMinutes, roleUnlockCost, roleSwapCost } from '../data/progression';
 import { DIFFICULTY_ORDER } from '../data/quests';
 import { Tuning } from '../data/tuning';
-import { Difficulty, GameState, Hero, HeroClass, Injury, Modifiers, Stats } from '../types';
+import { Difficulty, GameState, Hero, HeroClass, Injury, Modifiers, Role, Stats } from '../types';
 import { Rng, uid } from '../rng';
 import { MINUTE, scaleMods, sumMods } from '../util';
 import { ModifierManager } from './ModifierManager';
@@ -68,6 +68,77 @@ export const HeroManager = {
 
   xpToNext(hero: Hero): number {
     return xpForLevel(hero.level);
+  },
+
+  /** The class's fixed native role -- see types.ts's Role for the full
+   *  reasoning. Falls back to 'melee' only for a malformed/unknown
+   *  heroClass id, which shouldn't happen outside a corrupted save. */
+  nativeRole(heroClass: HeroClass): Role {
+    return HERO_CLASSES[heroClass]?.role ?? 'melee';
+  },
+
+  /** A hero's currently active role -- defaults to the class's native
+   *  role for any hero who's never been trained (hero.role is optional/
+   *  undefined until HeroManager.trainRole first sets it), same
+   *  defensive-optional convention as Hero.role's own comment in
+   *  types.ts describes. This is the one place that default should be
+   *  applied -- callers should never repeat the `?? nativeRole` fallback
+   *  themselves. */
+  activeRole(hero: Hero): Role {
+    return hero.role ?? HeroManager.nativeRole(hero.heroClass);
+  },
+
+  /** Every role this hero has ever paid the Training unlock cost for --
+   *  same optional/computed-default shape as activeRole above, always
+   *  includes the native role even for a hero who's never trained at
+   *  all. */
+  unlockedRoles(hero: Hero): Role[] {
+    return hero.unlockedRoles ?? [HeroManager.nativeRole(hero.heroClass)];
+  },
+
+  /**
+   * The name shown for this hero's current build -- the native role's
+   * own flavour name (== the class's own `name`) until trained into
+   * something else, at which point it swaps to that role's flavour name
+   * instead (e.g. a Wizard trained into Melee shows "Arcane Swordster").
+   * Falls back to the class's own name if roleFlavors is somehow missing
+   * an entry (a malformed DLC class def, say) rather than showing
+   * nothing. The one place HeroesPanel's hero-card summary line reads
+   * from -- see guild-idler-status.md's hero-roles backlog entry.
+   */
+  roleDisplayName(hero: Hero): string {
+    const def = HERO_CLASSES[hero.heroClass];
+    if (!def) return hero.heroClass;
+    return def.roleFlavors?.[HeroManager.activeRole(hero)] ?? def.name;
+  },
+
+  /**
+   * Gold cost to train this hero into `role` right now -- the small
+   * repeatable swap price if `role` is already in unlockedRoles, the
+   * larger one-time unlock price otherwise. See roleUnlockCost/
+   * roleSwapCost (progression.ts) for the actual curves.
+   */
+  roleCost(hero: Hero, role: Role): number {
+    const unlocked = HeroManager.unlockedRoles(hero).includes(role);
+    return unlocked ? roleSwapCost(hero.level) : roleUnlockCost(hero.level);
+  },
+
+  /**
+   * Switches a hero's active role, spending roleCost(hero, role) and
+   * permanently adding it to unlockedRoles the first time. The only
+   * mutation path for Hero.role/unlockedRoles -- see GameEngine.trainRole
+   * for the UI-facing action that calls this.
+   */
+  trainRole(state: GameState, hero: Hero, role: Role): string | null {
+    if (HeroManager.activeRole(hero) === role) return 'Already trained in that role.';
+    const cost = HeroManager.roleCost(hero, role);
+    if (state.gold < cost) return 'Not enough gold.';
+    state.gold -= cost;
+    state.stats.goldSpent += cost;
+    const unlocked = HeroManager.unlockedRoles(hero);
+    if (!unlocked.includes(role)) hero.unlockedRoles = [...unlocked, role];
+    hero.role = role;
+    return null;
   },
 
   /**

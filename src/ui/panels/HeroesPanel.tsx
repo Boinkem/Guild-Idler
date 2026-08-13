@@ -7,7 +7,7 @@ import { ModifierManager } from '../../game/managers/ModifierManager';
 import { PrestigeManager } from '../../game/managers/PrestigeManager';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { rerollsUsedToday } from '../../game/data/reroll';
-import { HERO_CLASSES, RECRUIT_COST, SKINS, infirmaryAutoReviveUnlocked, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
+import { HERO_CLASSES, RECRUIT_COST, SKINS, ROLES, infirmaryAutoReviveUnlocked, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
 import { Tuning } from '../../game/data/tuning';
 import { HeroClass, Hero, Stats } from '../../game/types';
 import { describeMods, formatDuration, formatGold, HOUR } from '../../game/util';
@@ -249,7 +249,7 @@ export function HeroesPanel() {
                     {hero.name}
                   </span>
                   <span className="small muted">
-                    {classDef.name} · Level {hero.level}
+                    {HeroManager.roleDisplayName(hero)} · Level {hero.level}
                     {hero.ascension > 0 && (
                       <> · {PrestigeManager.rankFor(hero) ?? `ascended ×${hero.ascension}`}</>
                     )}
@@ -418,6 +418,26 @@ export function HeroesPanel() {
                   {' '}{hero.questsCompleted} quests completed ·
                   {' '}{hero.status === 'fallen' ? 'Fallen' : (hero.status === 'questing' ? 'away on a quest' : 'at the guild')}
                 </p>
+
+                <div className="row wrap" style={{ marginTop: 6, alignItems: 'center' }}>
+                  <span className="tiny muted">Role (raid parties only):</span>
+                  {ROLES.map((roleDef) => {
+                    const unlocked = HeroManager.unlockedRoles(hero).includes(roleDef.id);
+                    const active = HeroManager.activeRole(hero) === roleDef.id;
+                    const cost = HeroManager.roleCost(hero, roleDef.id);
+                    return (
+                      <button
+                        key={roleDef.id}
+                        className={`skin-chip ${active ? 'on' : ''}`}
+                        disabled={active || state.gold < cost}
+                        title={active ? undefined : `Train as ${classDef.roleFlavors[roleDef.id]} -- ${unlocked ? 'swap' : 'unlock'} for ${formatGold(cost)}`}
+                        onClick={() => engine.trainRole(hero.id, roleDef.id)}
+                      >
+                        {roleDef.name}{!active && ` · ${formatGold(cost)}`}
+                      </button>
+                    );
+                  })}
+                </div>
 
                 <div className="row wrap" style={{ marginTop: 6, alignItems: 'center' }}>
                   <span className="tiny muted">Livery:</span>
