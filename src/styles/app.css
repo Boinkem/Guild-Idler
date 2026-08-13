@@ -2590,51 +2590,68 @@ button.harvest-item:hover {
 .peddler-card {
   width: 110px; height: 150px;
   border-radius: 4px;
-  border: 1px solid var(--edge);
   background-color: var(--panel);
 }
+/* No CSS border/outline on the face-down card at all -- removed per
+   direct request. The card-back art already paints its own gold frame
+   right up to its own edge; a second CSS border/outline drawn on top of
+   that just read as a visible rectangular seam floating just outside
+   the art's own painted border, which is what "outline of the image
+   box" was describing. `.peddler-card-revealed` below still gets its
+   own explicit border -- that one has no self-painted frame of its own
+   (it's a plain icon+name content box), so it still needs one. */
 .peddler-card-facedown {
-  /* .peddler-card's background-color (var(--panel)) was showing through
-     the transparent margin baked into the card-back art itself -- the
-     art doesn't fill its own canvas edge-to-edge, so "cover" alone
-     doesn't hide it. Dropping the fill here lets it read as intended:
+  /* `.peddler-card`'s background-color (var(--panel)) was showing
+     through the transparent margin baked into the card-back art itself
+     -- dropped here for the same reason it always was, so this reads as
      just the card, no grey box behind it. */
   background-color: transparent;
-  background-size: cover;
+  border: none;
+  /* `contain`, not `cover` -- `cover` always fully paints the box but
+     crops into the source art on whichever axis the box's aspect ratio
+     doesn't match the art's own (this box is 110:150; the actual card-
+     back files are closer to 1:2) -- normally invisible at rest since
+     the art carries its own transparent bleed around the edge, but
+     GROWING the box on hover (below) changes its aspect ratio too,
+     which is what was cropping into the real art -- not just the bleed
+     -- specifically on hover. `contain` guarantees the whole image,
+     including its own painted gold edge, is always entirely visible, at
+     the cost of a sliver of transparent letterboxing on a mismatched
+     box rather than ever slicing into the art itself. */
+  background-size: contain;
+  background-repeat: no-repeat;
   background-position: center;
   cursor: pointer;
   padding: 0;
-}
-/* Highlight PLUS a "pop out" on hover -- scales the whole button box
-   (border, outline, and the card-back image all together, uniformly,
-   from the center) rather than zooming just the background-image inside
-   a fixed-size box, which used to read as the art zooming in lopsided
-   toward one corner instead of the card itself growing. This is a
-   different animation shape than the shake/transform that was removed
-   after it intermittently blanked the card (see the git history on this
-   rule) -- that was a `transform` applied mid-animation-loop on every
-   frame; this is a single, one-shot :hover transition with `will-change`
-   set so the browser promotes the layer BEFORE the transition starts
-   rather than deciding mid-transition, the same fix proven to work for
-   the original bug, applied here preemptively rather than reactively.
-   transform-origin is explicit (not just relying on the default) so the
-   growth is always centered, never anchored to a corner. z-index needs
-   no extra position:relative here since .peddler-card-row is a flex
-   container and .peddler-card is a direct flex item -- z-index already
-   applies to flex items without an explicit position. */
-.peddler-card-facedown {
-  transition: transform 120ms ease;
-  transform-origin: center;
-  will-change: transform;
+  /* Grows via actual width/height on hover, not `transform: scale` --
+     deliberately. A large background-image on a small element is the
+     one shape this codebase already found Chromium's GPU-compositor
+     transform path unreliable for once before (see this rule's own git
+     history: the original shake animation intermittently blanked the
+     card mid-transform on sustained hover). A width/height transition
+     goes through ordinary layout and paint on every frame instead of a
+     promoted compositing layer, sidestepping that whole class of
+     rendering bug rather than re-risking it with a different transform.
+     The negative margin below exactly cancels the width/height growth
+     (9px each side horizontally, 11px each side vertically, matching
+     the 18px/22px total hover growth), so the card visually grows from
+     its own center and pops out over its neighbors instead of shoving
+     them sideways the way a plain width/height increase inside a flex
+     row normally would. */
+  transition: width 140ms ease, height 140ms ease, margin 140ms ease, box-shadow 140ms ease;
 }
 .peddler-card-facedown:hover {
-  border-color: var(--brass);
-  outline: 2px solid var(--brass);
-  transform: scale(1.08);
+  width: 128px;
+  height: 172px;
+  margin: -11px -9px;
+  /* A soft glow instead of a hard-edged outline -- the highlight cue
+     without reintroducing a visible rectangular box around art that
+     already has its own painted border. */
+  box-shadow: 0 0 0 2px var(--brass), 0 0 16px color-mix(in srgb, var(--brass) 55%, transparent);
   z-index: 1;
 }
 .peddler-card-facedown:disabled { cursor: default; opacity: 0.6; }
-.peddler-card-facedown:disabled:hover { transform: none; }
+.peddler-card-facedown:disabled:hover { width: 110px; height: 150px; margin: 0; box-shadow: none; }
 
 /* Plays on the two cards that WEREN'T picked once a result comes back --
    they never flip face-up at all now (see PeddlerCardModal.tsx's own
@@ -2666,6 +2683,12 @@ button.harvest-item:hover {
   background: color-mix(in srgb, var(--panel-2) 92%, transparent);
   color: var(--parchment);
   font: inherit;
+  /* `.peddler-card` no longer carries a shared border (removed so the
+     face-down card's own painted art edge wouldn't get a redundant CSS
+     outline drawn around it too -- see .peddler-card-facedown's own
+     comment) -- this one still needs its own, since it's a plain
+     icon+name content box with no self-painted frame of its own. */
+  border: 1px solid var(--edge);
   /* Fixed height again, matching the face-down cards exactly -- this no
      longer needs to grow for inline flavor text (that content moved into
      its own overlay, see .peddler-card-detail-box below), so there's no

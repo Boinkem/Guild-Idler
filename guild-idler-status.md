@@ -8175,3 +8175,70 @@ the specificity fight instead of just relocating it.
 renderer bundle and the electron main/preload bundles) against a fresh
 clone of current `main` with this patch applied -- all clean, zero
 errors.**
+
+### Grimsby card hover, follow-up: item 5 above was wrong -- fixed properly this time
+
+A screenshot from actually testing item 5 above showed it hadn't
+worked: the art was visibly cropping into one corner on hover instead
+of the whole card growing cleanly, and separately (not previously
+caught) the settled hover state clipped the top of the card, and the
+plain rectangular box around each card (both at rest and on hover) was
+still reading as an unwanted visible "frame" around the art.
+
+Root cause of the crop: reviving `transform: scale()` for the hover
+growth -- exactly the same shape of fix ("Grimsby: UI rework" above
+had already found unreliable once, when the original shake animation
+on this same card-back-art element intermittently blanked the card
+mid-transform on sustained hover, and was removed entirely rather than
+just mitigated with `will-change`). `will-change: transform` alone
+wasn't a strong enough guarantee to bring `transform` back safely here,
+same lesson as before, just relearned on a differently-shaped
+animation this time.
+
+**Fixed by not using `transform` for this at all.** The hover growth
+now goes through actual `width`/`height` (110x150 -> 128x172) instead,
+which goes through ordinary layout and paint on every frame rather than
+a promoted GPU-compositing layer -- sidesteps the whole class of bug
+instead of re-risking a different transform against it. A matching
+negative `margin` (-9px horizontal, -11px vertical, exactly canceling
+the width/height growth) keeps the card visually growing from its own
+center and popping out over its neighbors, rather than shoving them
+sideways inside the flex row -- confirmed directly via a real headless-
+browser render: the two sibling cards' bounding boxes are pixel-
+identical before and after hovering the third.
+
+**`background-size` also changed, `cover` -> `contain`.** `cover`
+always fully paints the box but crops into whichever axis the box's
+aspect ratio doesn't match the source art's own (the box is 110:150;
+the real card-back files are closer to 1:2) -- invisible at the
+original resting size since the art carries its own transparent bleed
+around the edge, but the mismatch became real cropping once the box's
+own aspect ratio changed on hover. `contain` guarantees the whole
+image, including its own painted gold border, is always entirely
+visible, at the cost of a sliver of transparent letterboxing on a
+mismatched box rather than ever slicing into the art itself.
+
+**`.peddler-card`'s shared CSS border removed entirely, per direct
+request.** The card-back art already paints its own gold frame right
+to its own edge; a second CSS border/outline drawn on top of that was
+reading as a visible rectangular seam floating just outside the art's
+own border -- "the outline of the image box." The hover highlight is
+now a soft `box-shadow` glow instead of a hard border/outline, so
+there's still a highlight cue on hover without reintroducing that seam.
+`.peddler-card-revealed` (the post-flip icon+name card, which has no
+self-painted border of its own to lean on) picked up its own explicit
+`border: 1px solid var(--edge)` so it isn't left without one now that
+the shared rule is gone. `.peddler-card-facedown:disabled` (the two
+unpicked cards once a result lands) resets width/height/margin/
+box-shadow back to resting on hover too, same reasoning as the old
+`transform: none` override it replaces.
+
+**Verified more thoroughly than the attempt above that shipped
+without this:** beyond `npx tsc --noEmit` and a full `vite build`
+(both clean), the actual card-back art files were pulled from the repo
+and rendered through this exact CSS in a real headless-Chromium render
+(Playwright) -- confirmed directly, not just reasoned through: the
+full card (all edges, the art's own painted border included) stays
+visible at rest and at the hover-grown size, no cropping either way;
+and, as above, sibling cards' positions are pixel-identical before and
+after a hover.
