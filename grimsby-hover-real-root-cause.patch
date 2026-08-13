@@ -1,0 +1,156 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index e1cc460..91ea876 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -8336,3 +8336,60 @@ anything to act on. Confirmed via the same headless-browser render used
+ for the last attempt: the box's bounding rect is now numerically
+ identical (110x150) before and after triggering `:hover`, and the full
+ card -- all edges, no cropping -- renders correctly in both states.
++
++### Grimsby card hover, actual root cause found: a CSS shorthand was resetting it every time, unrelated to sizing entirely
++
++The report that the crop was STILL happening even with the box no
++longer resizing at all (previous entry) ruled out every sizing-related
++theory at once, and pointed straight at the one thing none of the last
++three attempts had actually touched: this game's generic
++`button:hover:not(:disabled)` rule (near the top of app.css) sets
++`background: linear-gradient(...)` -- a shorthand. A background
++shorthand resets EVERY background sub-property it doesn't explicitly
++mention -- background-size, background-position, background-repeat,
++background-color -- back to their CSS-initial values, not just the one
++visibly being set. That generic rule has higher specificity (a type
++selector plus two pseudo-classes) than `.peddler-card-facedown`'s own
++base rule (a single class), so on ANY hover it was winning the cascade
++for background-size/position/repeat specifically -- resetting `contain`
++/`center`/`no-repeat` back to their initial `auto`/`0% 0%`/`repeat`.
++`background-size: auto` on card art roughly 2x the box's own size,
++anchored at `0% 0%` (top-left) instead of centered, IS "the art zoomed
++into one corner" -- reproduced directly in an isolated headless-browser
++render with this exact generic rule present, confirmed via
++`getComputedStyle` (`background-size` really did compute to `auto` and
++`background-position` to `0% 0%` on hover), then confirmed fixed the
++same way (both correctly staying `contain`/`50% 50%` after the fix,
++full card rendering with no cropping in a follow-up render).
++
++This is exactly the same class of bug -- the exact same generic rule,
++even -- as the desktop-companion hover-coloring fix from several
++patches back, just never applied here because none of the last three
++attempts at this were actually about background-image sub-properties;
++they were all sizing changes that never touched the real problem.
++
++Fixed by giving `.peddler-card-facedown:hover` the same
++`:not(:disabled)` specificity bump the desktop-sprite fix already used
++(matching the generic rule's own compound shape: class + 2 pseudo-
++classes beats type + 2 pseudo-classes), AND explicitly re-asserting
++`background-size`/`background-position`/`background-repeat`/
++`background-color` in that hover rule -- specificity alone isn't
++enough here, since the fix also has to actually restate the values the
++shorthand would otherwise steal for itself.
++
++**Found and fixed the same latent bug on `.peddler-card-revealed`
++too**, before it ever shipped as a visible problem: the "Results Card"
++background-art feature from two patches ago set its background via
++`background-image` (two layers: a semi-transparent tint over the
++optional configured art), and `.peddler-card-revealed:hover` had the
++exact same specificity gap -- the art would have been silently wiped
++back to the plain button gradient the entire time a result card was
++actually being looked at (hovered), the whole point at which you'd
++most want to see it. Same fix, same reasoning, applied preemptively
++here rather than waiting for a fourth screenshot.
++
++Audited the rest of the codebase for the same pattern while already in
++here: every OTHER element with a custom `backgroundImage` is a plain
++`<div>` (scene backdrops, sprites), not a `<button>` -- the generic
++rule only matches `<button>` at all, so nothing else was actually at
++risk. These two were the only two.
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 875e94e..b78b86d 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -2621,25 +2621,43 @@ button.harvest-item:hover {
+   background-position: center;
+   cursor: pointer;
+   padding: 0;
+-  /* Highlight only on hover -- no size change, no transform, nothing
+-     that touches width/height/margin at all anymore. Two different
+-     "grow on hover" attempts before this one (first `transform: scale`,
+-     then a width/height transition with a compensating negative margin)
+-     both looked fine reasoned through and even rendered correctly in an
+-     isolated headless-browser test with the real art, but both still
+-     showed the art cropping into one corner once actually tested in the
+-     real running app -- something about resizing this exact element (a
+-     large background-image on a small box) doesn't hold up in practice
+-     here, and chasing the exact rendering mechanism a third time wasn't
+-     worth it. This is deliberately the simplest possible version: the
+-     box's size literally never changes between rest and hover, so
+-     there's no `background-size: contain` recomputation happening on
+-     hover at all for anything to go wrong with -- only `box-shadow`
+-     (below) changes, which can't crop or shift the art regardless of
+-     however this element gets painted. */
+   transition: box-shadow 140ms ease;
+ }
+-.peddler-card-facedown:hover {
++/* THE ACTUAL ROOT CAUSE, found at last -- not sizing, not transform, not
++   background-size vs. cover/contain at all. This game's generic
++   `button:hover:not(:disabled)` rule (see near the top of this file)
++   sets `background: linear-gradient(...)` -- a SHORTHAND property. A
++   background shorthand resets EVERY background sub-property it doesn't
++   mention (background-size, background-position, background-repeat,
++   background-color...) back to their CSS-initial values, not just the
++   one it's visibly setting. That generic rule has higher specificity
++   (a type selector + 2 pseudo-classes) than this element's own base
++   `.peddler-card-facedown` rule above (a single class), so on hover --
++   ANY hover, this was never actually about growing the card at all --
++   it was winning the cascade for background-size/position/repeat
++   specifically, resetting `contain`/`center`/`no-repeat` back to their
++   initial `auto`/`0% 0%`/`repeat`. `background-size: auto` on a card-
++   back image roughly 2x the box's own size, anchored at `0% 0%`
++   (top-left) instead of centered, is exactly "the art zoomed into one
++   corner" -- reproduced directly in an isolated headless-browser render
++   with this exact generic button rule present, confirmed via
++   getComputedStyle: `background-size` really did compute to `auto` and
++   `background-position` to `0% 0%` on hover, before this fix.
++   Confirmed the actual root cause, not a guess -- and it explains why
++   every previous attempt (transform, width/height, dropping the resize
++   entirely) never touched it: none of them addressed this specificity
++   gap, because none of them were the actual problem.
++   `:not(:disabled)` here isn't about disabled cards -- it's purely to
++   match the generic rule's own compound specificity (class + 2 pseudo-
++   classes, same shape the desktop-sprite hover fix already used
++   elsewhere in this file for the identical reason) so THIS rule wins
++   the cascade instead, and the background properties it re-asserts
++   below actually stick. */
++.peddler-card-facedown:hover:not(:disabled) {
++  background-color: transparent;
++  background-size: contain;
++  background-repeat: no-repeat;
++  background-position: center;
+   /* A soft glow instead of a hard-edged outline -- the highlight cue
+      without reintroducing a visible rectangular box around art that
+      already has its own painted border. */
+@@ -2709,7 +2727,24 @@ button.harvest-item:hover {
+      reason for it to differ from .peddler-card's own 150px anymore. */
+   height: 150px;
+ }
+-.peddler-card-revealed:hover { border-color: var(--brass); }
++/* Same specificity gap the face-down card's own hover rule (above) was
++   just found to have, and the same fix -- `button:hover:not(:disabled)`
++   sets `background:` as a shorthand, which resets EVERY background
++   sub-property it doesn't mention (including background-image) back to
++   its initial value, and that generic rule's higher specificity would
++   otherwise win on hover and wipe out the two-layer tint+art background
++   above entirely, hiding any configured result-card art the whole time
++   the card is actually being looked at. `:not(:disabled)` matches that
++   rule's own compound specificity so this one wins instead. */
++.peddler-card-revealed:hover:not(:disabled) {
++  border-color: var(--brass);
++  background-image:
++    linear-gradient(color-mix(in srgb, var(--panel-2) 78%, transparent), color-mix(in srgb, var(--panel-2) 78%, transparent)),
++    var(--result-card-bg, none);
++  background-size: cover, cover;
++  background-position: center, var(--result-card-bg-pos, center);
++  background-repeat: no-repeat, no-repeat;
++}
+ .peddler-card-picked { border-color: var(--brass); border-width: 2px; box-shadow: 0 0 10px color-mix(in srgb, var(--brass) 45%, transparent); }
+ .peddler-card-name { font-size: 11px; font-weight: bold; text-align: center; }
+ 
