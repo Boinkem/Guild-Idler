@@ -8393,3 +8393,29 @@ here: every OTHER element with a custom `backgroundImage` is a plain
 `<div>` (scene backdrops, sprites), not a `<button>` -- the generic
 rule only matches `<button>` at all, so nothing else was actually at
 risk. These two were the only two.
+
+### Grimsby modal background "zooming" between states -- fixed, different bug from the card hover ones above
+
+Unrelated to any of the card-hover fixes above -- this was the modal's
+own tabletop backdrop rescaling as the modal itself changed height
+across its three states (browsing / cards laid out / result).
+`.peddler-modal` used `min-height: 440px` -- a comment on that rule
+already claimed the intent was "same box every state," but `min-height`
+is only a FLOOR, not a fixed size: measured directly (a headless-
+browser render of all three states against the real CSS), the "Lay out
+the cards" and result states both settle at exactly that 440px floor,
+but the cards-laid-out state (3 cards plus Grimsby's own corner-comment
+line) needs 491px and was genuinely growing the modal taller to fit --
+a real, measured 51px swing. `background-size: cover` recomputes its
+effective scale from the box's actual height on every render, so that
+51px swing was exactly "the background zooms in when the cards come
+out, and back to normal once you pick one."
+
+Fixed by changing `min-height: 440px` to a fixed `height: 495px` (a few
+px above the measured 491px minimum, so no state sits exactly at the
+edge of needing a scrollbar from `.modal`'s own `overflow-y: auto`).
+Re-measured all three states after the change: identical 495px in
+every one, no overflow in any of them -- confirmed both numerically
+(bounding-box height) and visually (screenshotting all three states
+side by side shows the background art at the identical scale and crop
+in each).
