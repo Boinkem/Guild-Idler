@@ -332,6 +332,23 @@ const SCHEMAS = {
       effect: { type: 'effect', required: true },
     },
   },
+  'curios': {
+    file: 'curios.json',
+    label: 'Curios',
+    idField: 'id',
+    // Sellable odds-and-ends -- see CurioDef's own doc comment in
+    // types.ts. Open-ended list, same shape as 'consumables' just above
+    // (not 'materials' below, which is a fixed 4-entry set with no room
+    // to grow) -- add/remove entries freely here.
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      name: { type: 'string', required: true },
+      description: { type: 'string', required: true },
+      sellValue: { type: 'number', required: true },
+      glyph: { type: 'string', required: true },
+      icon: { type: 'string', required: false, picker: 'icon' },
+    },
+  },
   'materials': {
     file: 'materials.json',
     label: 'Materials',
@@ -497,7 +514,7 @@ const SCHEMAS = {
       weight: { type: 'number', required: true },
       kind: {
         type: 'enum', required: true,
-        options: ['nothing', 'joke', 'goldFlat', 'goldRefund', 'material', 'scrap', 'equipment', 'egg'],
+        options: ['nothing', 'joke', 'goldFlat', 'goldRefund', 'material', 'scrap', 'equipment', 'egg', 'curio'],
       },
       // Grimsby's own line when THIS specific card flips -- sleazy/comic
       // register throughout, even on a good outcome.
@@ -523,6 +540,7 @@ const SCHEMAS = {
       itemId: { type: 'string', required: false }, // kind: equipment -- an equipment.json id, free text (see top comment)
       eggRarity: { type: 'enum', required: false, options: ['common', 'uncommon', 'rare', 'epic', 'legendary'] }, // kind: egg
       dedicatedPetId: { type: 'string', required: false }, // kind: egg, optional
+      curioId: { type: 'string', required: false }, // kind: curio -- a curios.json id, free text (see top comment)
       // Single-emoji fallback for the icon-only card display -- used for
       // kind: joke/nothing (no real item to look an icon up from), and
       // as the final fallback for any other kind. Optional.
@@ -530,9 +548,10 @@ const SCHEMAS = {
       // Real icon for the generic kinds (nothing/joke/goldFlat/goldRefund/
       // scrap) -- e.g. a sack-of-gold icon for a goldFlat card. Same
       // picker/fallback-to-glyph convention as equipment/consumables/
-      // materials' own `icon` fields above. material/equipment/egg kinds
-      // still pull their icon from the referenced def instead -- this is
-      // only useful for kinds that have no def to look one up from.
+      // materials' own `icon` fields above. material/equipment/egg/curio
+      // kinds still pull their icon from the referenced def instead --
+      // this is only useful for kinds that have no def to look one up
+      // from.
       icon: { type: 'string', required: false, picker: 'icon' },
     },
   },

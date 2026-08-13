@@ -6,11 +6,12 @@ import { EquipmentManager } from '../../game/managers/EquipmentManager';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID } from '../../game/data/equipment';
-import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
+import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef, CurioDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
+import { CurioManager } from '../../game/managers/CurioManager';
 import { rerollsUsedToday } from '../../game/data/reroll';
 import { describeMods, describeStats, formatGold, RARITY_COLOR, RARITY_ORDER } from '../../game/util';
-import { ItemIcon, ConsumableIcon } from '../icons';
+import { ItemIcon, ConsumableIcon, CurioIcon } from '../icons';
 import { GearScoreBadge } from '../GearScoreBadge';
 import { Row, Toggle } from './SettingsPanel';
 import { ConfirmModal } from '../ConfirmModal';
@@ -248,6 +249,59 @@ function isLoadoutEffect(def: ConsumableDef): boolean {
  * Beckoning Charm. An item with no actionable effect at all (Pet Treat --
  * fed from the Hatchery instead) shows no button, just the description.
  */
+/**
+ * A single owned curio -- click opens a small modal with its description
+ * and a Sell action, same "click to expand into a modal" shape
+ * ConsumableInfoCard just below uses, rather than an inline expand.
+ * Curios have exactly one action (sell the whole stack), so there's no
+ * equip/use branching to speak of the way ConsumableInfoCard has.
+ */
+function CurioCard({ def, count, engine }: { def: CurioDef; count: number; engine: GameEngine }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <div
+        className="item-card"
+        onClick={() => setOpen(true)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
+      >
+        <div className="item-card-summary">
+          <CurioIcon icon={def.icon} glyph={def.glyph} />
+          <div className="item-card-body">
+            <div className="item-card-name">{def.name} ×{count}</div>
+          </div>
+        </div>
+      </div>
+
+      {open && (
+        <div className="overlay" onClick={() => setOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
+              <CurioIcon icon={def.icon} glyph={def.glyph} size={48} />
+              <div>
+                <span className="card-title">{def.name}</span>
+                <div className="tiny muted">Owned ×{count} · {formatGold(def.sellValue)} each</div>
+              </div>
+            </div>
+            <div className="tiny muted">{def.description}</div>
+            <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+              <button onClick={() => setOpen(false)}>Close</button>
+              <button
+                className="btn-green"
+                onClick={() => { engine.sellCurio(def.id); setOpen(false); }}
+              >
+                Sell all ×{count} · {formatGold(def.sellValue * count)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function ConsumableInfoCard({
   def, count, hero, engine,
 }: { def: ConsumableDef; count: number; hero: Hero; engine: GameEngine }) {
@@ -674,6 +728,7 @@ export function EquipmentPanel() {
     if (!settings.confirmSell) engine.sellJunk(junkRarity);
     else setPendingJunkSell(true);
   };
+  const curiosOwned = CurioManager.owned(state);
 
   return (
     <>
@@ -873,6 +928,33 @@ export function EquipmentPanel() {
           <StashCard key={item.uid} item={item} hero={hero} confirmSell={settings.confirmSell} engine={engine} />
         ))}
       </div>
+
+      {/* Sellable odds-and-ends -- see CurioDef's own doc comment in
+          types.ts. No per-item "confirm sell" the Stash grid's own
+          settings.confirmSell gates -- a curio has no equip/durability/
+          rarity stakes attached, so there's nothing a misclick here could
+          cost beyond the sale itself, same reasoning Sell Junk's own
+          bulk action doesn't gate per-item either. */}
+      {curiosOwned.length > 0 && (
+        <>
+          <div className="spread" style={{ alignItems: 'center' }}>
+            <div className="section-heading" style={{ marginBottom: 0 }}>Curios ({curiosOwned.length})</div>
+            <button
+              className="btn-green"
+              style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+              onClick={() => engine.sellAllCurios()}
+              title="Sells every curio currently in the stash"
+            >
+              Sell All · {formatGold(curiosOwned.reduce((sum, { def, count }) => sum + def.sellValue * count, 0))}
+            </button>
+          </div>
+          <div className="item-card-grid">
+            {curiosOwned.map(({ def, count }) => (
+              <CurioCard key={def.id} def={def} count={count} engine={engine} />
+            ))}
+          </div>
+        </>
+      )}
 
       {pendingJunkSell && (
         <ConfirmModal

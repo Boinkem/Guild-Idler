@@ -57,3 +57,11 @@ export function RecipeIcon({ icon, category, size = 40 }: { icon?: string; categ
 export function MaterialIcon({ icon, glyph, size = 40 }: { icon?: string; glyph: string; size?: number }) {
   return <IconBox icon={icon} size={size} fallback={glyph} />;
 }
+
+/** Falls back to the curio's own glyph when no icon is assigned yet --
+ *  same shape as MaterialIcon/ConsumableIcon. Used wherever a curio
+ *  needs a static display: the Inventory tab's Curios section, and
+ *  Grimsby's own PeddlerOutcomeIcon for kind: 'curio'. */
+export function CurioIcon({ icon, glyph, size = 40 }: { icon?: string; glyph: string; size?: number }) {
+  return <IconBox icon={icon} size={size} fallback={glyph} />;
+}

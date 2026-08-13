@@ -138,6 +138,7 @@ export function createInitialState(now = Date.now()): GameState {
     seenOnboarding: false,
     pendingChainDiscovery: false,
     materials: emptyMaterials(),
+    curios: {},
     harvestNodes: Object.fromEntries(
       NODE_ORDER.map((id) => [id, { nextSpawnAt: now + Tuning.get('harvest.baseSpawnIntervalMs'), pending: null }]),
     ) as GameState['harvestNodes'],
@@ -719,6 +720,16 @@ const MIGRATIONS: Record<number, Migration> = {
       enchanterRerollsUsedToday: 0,
     };
   },
+  38: (save) => ({
+    ...save,
+    version: 39,
+    // New Curios system -- see CurioDef's own doc comment in types.ts.
+    // A save from before this existed has simply never owned any, same
+    // "empty record, not a placeholder needing correction" reasoning
+    // every other new Record<string, number> bucket (materials, back
+    // when it was introduced) already used.
+    curios: (save.curios as Record<string, number> | undefined) ?? {},
+  }),
 };
 
 export const SaveManager = {

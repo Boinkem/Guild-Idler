@@ -8684,3 +8684,90 @@ request, rather than folded in here. `mounted_travel`'s own flavour text
 (a Blacksmith selling horse travel is still a little thematically odd)
 wasn't reworked since it wasn't a duplicate and reworking it wasn't
 asked for -- worth a look whenever Blacksmith copy gets another pass.
+
+### New: Curios -- a third sellable item type (neither Material, Consumable, nor Equipment)
+
+**The system.** `CurioDef` (types.ts) -- id/name/description/sellValue/
+glyph/icon, same shape and same "own JSON file, own DevTool schema"
+pattern as Consumables/Equipment (curios.json/curios.ts/CURIO_BY_ID),
+NOT modeled on Materials (a fixed, hand-authored set of exactly 4 tied
+one-to-one to a Harvest node -- curios needed to be open-ended and
+growable instead). New `GameState.curios: Record<string, number>`
+bucket, same shape as `materials` but with no warehouse-capacity cap --
+curios are pure flavor/sell-fodder, not a resource anything is built
+from, so there's no economy reason to bottleneck how many can pile up.
+Save migration 38 -> 39 backfills `curios: {}` for existing saves, same
+"empty record, nothing to correct" reasoning materials' own
+introduction used. (Landed as migration 38 rather than 37 -- the
+in-flight Vendor Upgrades Consolidation patch claimed 37/SAVE_VERSION
+38 first; rebased onto that rather than colliding with it.)
+
+New `CurioManager` (add/count/owned/sellAll/sellEverything) --
+deliberately small, since selling is the only thing you can ever do
+with one; no buy/use/loadout surface to mirror from InventoryManager.
+New `engine.sellCurio`/`sellAllCurios`, and a new **Curios** section in
+the Inventory tab (EquipmentPanel.tsx) sitting right below the Stash
+grid -- click a curio for its description + a Sell action, or "Sell
+All" for the whole collection in one action, same shape Sell Junk
+already uses for equipment. Seeded with 8 starting entries (Rock, Old
+Portrait, Tarnished Ring, Chipped/Polished Gem, Bent Spoon, Strange
+Coin, Dusty Bauble), sell values deliberately spread 1-60 gold rather
+than clustered -- "might have a lot of value or not much" was the
+explicit ask. Fully DevTool-editable from here -- add, remove, or
+re-price any of them without touching code.
+
+**Where they drop.** Two sources, both requested explicitly:
+- **Grimsby**: `PeddlerCardDef.kind` gained a `'curio'` case (+ a new
+  `curioId` field, DevTool-editable same as every other kind's own
+  fields) -- "getting an actual Rock from Grimsby" was the founding
+  example, and now works exactly that literally. `PeddlerManager.
+  applyOutcome`/`summarizeReward`, `PeddlerCardModal`'s
+  `PeddlerOutcomeIcon`/`outcomeDisplayName`, and a new `CurioIcon`
+  (icons.tsx, same shape as MaterialIcon/ConsumableIcon) all handle it.
+- **Ordinary quest/bounty drops**: new `quest.curioDropChance.*` tuning
+  knobs (one per difficulty, 4%/5%/6%/7%/8% easy->legendary) -- same
+  independent-roll shape `pets.questEggDropChance.*` already
+  established for ordinary egg drops, just far more common on purpose
+  (curios are meant to be everyday flavor, not a rare find the way an
+  egg is). Rolled with the quest's own seeded RNG, not raw Math.random,
+  same determinism convention every other roll in QuestManager already
+  follows.
+
+**Grimsby's rewards flying to a collection point.** This mechanism
+already existed -- `RewardGlowParticle` + `measureFlyOffset` +
+`burstTargetFor()` already routed gold/material/equipment/egg/scrap
+rewards toward the header or the Inventory tab on a pick. It simply
+never fires for 'nothing'/'joke' outcomes (nothing to fly, by design),
+and every screenshot shared while chasing the card-hover bugs earlier
+happened to be a "Nothing" pull -- almost certainly why it read as
+never happening. `burstTargetFor` now includes `'curio'` (routes to
+'inventory', same as material/equipment/egg), so a curio drop gets the
+exact same fly-and-land flourish everything else already has. No new
+animation system needed or built -- the existing one just didn't have
+this case yet.
+
+**Bonus fix, found while wiring curioGained's own display:**
+`QuestResult.materialGained` and `.eggDropped` were both being computed
+by `QuestManager` on every Gathering Bounty / egg-drop roll, but
+neither was ever actually read anywhere in `QuestResultModal.tsx` --
+only `.loot` (equipment) was displayed. A Gathering Bounty's material
+payout and an ordinary egg drop have been landing in inventory/storage
+completely silently, with zero on-screen confirmation, since before
+this patch. Not something this patch introduced -- found opportunistically
+while adding the equivalent curioGained display, and fixed alongside it
+rather than left broken right next to the one now working correctly.
+All three (materials/egg/curio) now show under a new "Also found"
+section in the quest result modal.
+
+**Verified:** `npx tsc --noEmit` (clean, zero errors) and a full
+`vite build` (all three targets: renderer, electron main, preload)
+both clean -- rerun after rebasing onto the Vendor Upgrades
+Consolidation patch that landed mid-task. DevTool server actually
+started and hit live over HTTP -- `/api/schema` confirmed the new
+`curios` schema and the extended `peddler-cards.kind` enum (now
+includes `'curio'`); `/api/data/curios` correctly read back all 8 seed
+entries. curios.json/tuning.json both directly parsed and spot-checked
+(8 unique ids, all positive sell values spanning 1-60 gold, 5 curio-
+drop tuning knobs present with the intended per-difficulty values).
+Migration chain confirmed contiguous (35->36->37->38->39, no gaps or
+collisions) after the rebase.

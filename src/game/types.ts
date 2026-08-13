@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 38;
+export const SAVE_VERSION = 39;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -652,6 +652,13 @@ export interface QuestResult {
    *  informational for the result modal; the actual materials mutation
    *  already happened in QuestManager.resolve by the time this is read. */
   materialGained?: { materialId: MaterialId; amount: number };
+  /** An ordinary curio drop rolled this quest, if any -- same shape and
+   *  same "flat % chance on success, scaled by difficulty" pattern as
+   *  eggDropped above, just for QuestManager's own curio-drop roll
+   *  instead of PetManager's egg one. Purely informational for the
+   *  result modal; the actual `state.curios` mutation already happened
+   *  in QuestManager.resolve by the time this is read. */
+  curioGained?: { curioId: string; amount: number };
   /** True when this hero's daily first-burst bonus applied to gold/xp
    *  above (already folded into the numbers, not a separate reward) --
    *  see Hero.lastBurstBonusDay. Purely informational, for the result
@@ -1375,6 +1382,12 @@ export interface GameState {
   /* ------------------------- Harvest/Gathering ------------------------- */
   /** Current stock of each material, capped by warehouseCapacity(). */
   materials: Record<MaterialId, number>;
+  /** Current stock of each curio, keyed by CurioDef.id -- open-ended (any
+   *  string key), unlike `materials` (a fixed 4-key Record). No capacity
+   *  cap the way materials/warehouseCapacity has -- curios are pure
+   *  flavor/sell-fodder, not a resource anything is built from, so
+   *  there's no economy reason to bottleneck how many can pile up. */
+  curios: Record<string, number>;
   /** Per-node spawn/pending-item state, including each node's own
    *  independent `nextSpawnAt` -- see HarvestManager. Was briefly one
    *  shared GameState-level timestamp for all 4 nodes ("harvest o'clock"),
@@ -1767,7 +1780,7 @@ export interface PeddlerCardDef {
   tier: PeddlerCardTier;
   /** Relative weight among other entries in the SAME tier, not global. */
   weight: number;
-  kind: 'nothing' | 'joke' | 'goldFlat' | 'goldRefund' | 'material' | 'scrap' | 'equipment' | 'egg';
+  kind: 'nothing' | 'joke' | 'goldFlat' | 'goldRefund' | 'material' | 'scrap' | 'equipment' | 'egg' | 'curio';
   /** Grimsby's own line when this specific card flips -- sleazy/comic
    *  register regardless of tier, even on a good outcome. */
   flavorText: string;
@@ -1808,6 +1821,12 @@ export interface PeddlerCardDef {
   /** kind: 'egg' only -- same shape as ChainDef.rewardEgg. */
   eggRarity?: Rarity;
   dedicatedPetId?: string;
+  /** kind: 'curio' only -- see CurioDef's own doc comment. A specific
+   *  named curio, not a rarity-pool roll like equipment's `itemRarity`
+   *  -- curios have no rarity concept to roll against, just a flat
+   *  `sellValue` per def, so there's nothing a pool roll would add over
+   *  just picking the curio directly. */
+  curioId?: string;
   /**
    * Single-emoji fallback shown in the icon-only card result display --
    * same role ConsumableDef.glyph/MaterialDef.glyph already play. Used
@@ -1822,11 +1841,42 @@ export interface PeddlerCardDef {
    * 'nothing' / 'joke' / 'goldFlat' / 'goldRefund' / 'scrap' -- e.g. a
    * sack-of-gold icon for a goldFlat card. Same convention/picker as
    * MaterialDef.icon/ConsumableDef.icon (falls back to `glyph`, which
-   * falls back to a generic '?'). 'material'/'equipment'/'egg' kinds
-   * keep pulling their icon from the referenced def instead (see
+   * falls back to a generic '?'). 'material'/'equipment'/'egg'/'curio'
+   * kinds keep pulling their icon from the referenced def instead (see
    * PeddlerOutcomeIcon) -- this field only matters for kinds that have
    * no def to look one up from.
    */
+  icon?: string;
+}
+
+/**
+ * Sellable odds-and-ends that are neither a crafting Material (fixed 4,
+ * tied one-to-one to a Harvest node) nor a Consumable (has a quest-time
+ * effect) nor Equipment (rolls stats, equips onto a hero) -- pure flavor
+ * collectibles with exactly one thing you can do with them: sell for
+ * gold. "Getting an actual Rock from Grimsby" is the founding example --
+ * see PeddlerCardDef.kind's own 'curio' case, and QuestManager's ordinary
+ * curio-drop roll (same shape as its ordinary egg-drop roll) for the
+ * other way these enter play. Open-ended/DevTool-editable, same
+ * "own JSON file, own schema" pattern as equipment/consumables/peddler-
+ * cards -- NOT modeled on MaterialDef, which is a fixed, hand-authored
+ * set of exactly 4 with no room to grow.
+ */
+export interface CurioDef {
+  id: string;
+  name: string;
+  description: string;
+  /** Flat gold value on sale -- curios have no other use, so this is the
+   *  entire economic reason one is worth picking up at all. Deliberately
+   *  wide-ranging across the pool ("might have a lot of value or not
+   *  much") rather than clustered -- see curios.json's own entries. */
+  sellValue: number;
+  /** Single-glyph fallback, same role as MaterialDef.glyph/
+   *  ConsumableDef.glyph. */
+  glyph: string;
+  /** Relative path under `public/item-icons/`, same convention/fallback
+   *  chain (falls back to `glyph`, which falls back to a generic '?')
+   *  every other def's own `icon` field already follows. */
   icon?: string;
 }
 

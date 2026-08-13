@@ -2,10 +2,11 @@ import { useEffect, useRef, useState, CSSProperties } from 'react';
 import { useEngine } from './useEngine';
 import { PeddlerCardDef, PeddlerCardTier } from '../game/types';
 import { MATERIAL_BY_ID } from '../game/data/materials';
+import { CURIO_BY_ID } from '../game/data/curios';
 import { EQUIPMENT_BY_ID } from '../game/data/equipment';
 import { RARITY_COLOR } from '../game/util';
 import { GrimsbySprite } from './sprites/GrimsbySprite';
-import { ItemIcon, MaterialIcon, ConsumableIcon } from './icons';
+import { ItemIcon, MaterialIcon, ConsumableIcon, CurioIcon } from './icons';
 import { EggIcon } from './EggIcon';
 import { measureFlyOffset } from './flyTarget';
 
@@ -73,6 +74,7 @@ function burstTargetFor(kind: PeddlerCardDef['kind']): string | null {
     case 'scrap':
     case 'equipment':
     case 'egg':
+    case 'curio':
       return 'inventory';
     default:
       return null;
@@ -82,7 +84,9 @@ function burstTargetFor(kind: PeddlerCardDef['kind']): string | null {
 /** Glow color per outcome -- rarity for the two kinds that actually
  *  have one (equipment/egg both carry a real Rarity), brass for gold
  *  (matching every other gold flourish in the game), a neutral moss
- *  tone for material/scrap (no rarity concept to hang a color on). */
+ *  tone for material/scrap/curio (no rarity concept to hang a color
+ *  on -- curio falls through to the same default as material/scrap
+ *  below, not called out as its own case). */
 function burstColorFor(outcome: PeddlerCardDef): string {
   switch (outcome.kind) {
     case 'goldFlat':
@@ -140,6 +144,7 @@ function outcomeDisplayName(outcome: PeddlerCardDef): string {
     case 'scrap': return `${outcome.scrapAmount ?? 0} Scrap`;
     case 'equipment': return EQUIPMENT_BY_ID[outcome.itemId!]?.name ?? 'Mystery Gear';
     case 'egg': return `${outcome.eggRarity ?? 'common'} Egg`;
+    case 'curio': return outcome.curioId ? (CURIO_BY_ID[outcome.curioId]?.name ?? 'A Curio') : 'A Curio';
     default: return 'Something';
   }
 }
@@ -177,6 +182,10 @@ function PeddlerOutcomeIcon({ outcome, size = 48 }: { outcome: PeddlerCardDef; s
     }
     case 'egg':
       return <EggIcon rarity={outcome.eggRarity ?? 'common'} size={size} />;
+    case 'curio': {
+      const def = outcome.curioId ? CURIO_BY_ID[outcome.curioId] : undefined;
+      return <CurioIcon icon={def?.icon} glyph={def?.glyph ?? outcome.glyph ?? '\u2753'} size={size} />;
+    }
     case 'goldFlat':
     case 'goldRefund':
       return <ConsumableIcon icon={outcome.icon} glyph={outcome.glyph ?? '\u25c6'} size={size} />;

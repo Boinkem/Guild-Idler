@@ -919,6 +919,56 @@
     "description": "Flat % chance a successful Legendary-tier quest drops an ordinary egg (Legendary rarity). Deliberately very low."
   },
   {
+    "id": "quest.curioDropChance.easy",
+    "label": "Quest: curio drop chance, Easy quests (%)",
+    "category": "quest",
+    "value": 4,
+    "default": 4,
+    "min": 0,
+    "max": 100,
+    "description": "Flat % chance a successful Easy-tier quest drops an ordinary curio (sellable junk -- see CurioDef). Much more common than an egg drop on purpose -- curios are flavor/gold fodder, not a rare find."
+  },
+  {
+    "id": "quest.curioDropChance.normal",
+    "label": "Quest: curio drop chance, Normal quests (%)",
+    "category": "quest",
+    "value": 5,
+    "default": 5,
+    "min": 0,
+    "max": 100,
+    "description": "Flat % chance a successful Normal-tier quest drops an ordinary curio."
+  },
+  {
+    "id": "quest.curioDropChance.hard",
+    "label": "Quest: curio drop chance, Hard quests (%)",
+    "category": "quest",
+    "value": 6,
+    "default": 6,
+    "min": 0,
+    "max": 100,
+    "description": "Flat % chance a successful Hard-tier quest drops an ordinary curio."
+  },
+  {
+    "id": "quest.curioDropChance.epic",
+    "label": "Quest: curio drop chance, Epic quests (%)",
+    "category": "quest",
+    "value": 7,
+    "default": 7,
+    "min": 0,
+    "max": 100,
+    "description": "Flat % chance a successful Epic-tier quest drops an ordinary curio."
+  },
+  {
+    "id": "quest.curioDropChance.legendary",
+    "label": "Quest: curio drop chance, Legendary quests (%)",
+    "category": "quest",
+    "value": 8,
+    "default": 8,
+    "min": 0,
+    "max": 100,
+    "description": "Flat % chance a successful Legendary-tier quest drops an ordinary curio."
+  },
+  {
     "id": "reroll.questBaseCost",
     "label": "Quest reroll: base gold cost",
     "category": "reroll",

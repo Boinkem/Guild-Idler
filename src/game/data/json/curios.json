@@ -1,0 +1,58 @@
+[
+  {
+    "id": "rock",
+    "name": "A Rock",
+    "description": "It's a rock. Grimsby swears it's a good one.",
+    "sellValue": 1,
+    "glyph": "\ud83e\udea8"
+  },
+  {
+    "id": "old_portrait",
+    "name": "Old Portrait",
+    "description": "A stranger's face, cracked with age. Nobody in the guild recognizes them.",
+    "sellValue": 14,
+    "glyph": "\ud83d\uddbc\ufe0f"
+  },
+  {
+    "id": "tarnished_ring",
+    "name": "Tarnished Ring",
+    "description": "Too small for any hero's finger. Still worth something to the right buyer.",
+    "sellValue": 22,
+    "glyph": "\ud83d\udc8d"
+  },
+  {
+    "id": "chipped_gem",
+    "name": "Chipped Gem",
+    "description": "A real gemstone, mostly. The chip knocks the price down considerably.",
+    "sellValue": 35,
+    "glyph": "\ud83d\udc8e"
+  },
+  {
+    "id": "bent_spoon",
+    "name": "Bent Spoon",
+    "description": "Somebody's kitchen is missing this. It is not this guild's problem.",
+    "sellValue": 2,
+    "glyph": "\ud83e\udd44"
+  },
+  {
+    "id": "strange_coin",
+    "name": "Strange Coin",
+    "description": "Doesn't match any currency anyone here has ever seen. Collectors love that sort of thing.",
+    "sellValue": 18,
+    "glyph": "\ud83e\ude99"
+  },
+  {
+    "id": "polished_gem",
+    "name": "Polished Gem",
+    "description": "No chips, no cracks, no questions asked. A genuinely good find.",
+    "sellValue": 60,
+    "glyph": "\ud83d\udc8e"
+  },
+  {
+    "id": "dusty_bauble",
+    "name": "Dusty Bauble",
+    "description": "Once someone's treasured keepsake. Now it's cluttering the stash.",
+    "sellValue": 6,
+    "glyph": "\u2728"
+  }
+]

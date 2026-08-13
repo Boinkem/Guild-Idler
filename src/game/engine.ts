@@ -7,6 +7,7 @@ import { ShopManager } from './managers/ShopManager';
 import { SaveManager, SaveAdapter, defaultAdapter, createInitialState } from './managers/SaveManager';
 import { EquipmentManager } from './managers/EquipmentManager';
 import { InventoryManager } from './managers/InventoryManager';
+import { CurioManager } from './managers/CurioManager';
 import { DlcManager } from './managers/DlcManager';
 import { GuildManager } from './managers/GuildManager';
 import { PrestigeManager } from './managers/PrestigeManager';
@@ -1471,6 +1472,26 @@ export class GameEngine {
     if (count === 0) return this.say('Nothing in the stash qualifies.');
     playSound('sell');
     this.say(`Sold ${count} item${count === 1 ? '' : 's'} for ${gold} gold.`);
+    void this.saveNow();
+  }
+
+  /** Sells the full stack of one curio -- see CurioManager.sellAll's own
+   *  comment for why this is "whole stack" not "pick a quantity". */
+  sellCurio(curioId: string) {
+    const gold = CurioManager.sellAll(this.state, curioId);
+    if (gold === 0) return this.say("You don't have any of those.");
+    playSound('sell');
+    this.say(`Sold for ${gold} gold.`);
+    void this.saveNow();
+  }
+
+  /** Bulk-sells every owned curio in one action -- the Curios-section
+   *  counterpart to sellJunk above. */
+  sellAllCurios() {
+    const { count, gold } = CurioManager.sellEverything(this.state);
+    if (count === 0) return this.say('No curios to sell.');
+    playSound('sell');
+    this.say(`Sold ${count} curio${count === 1 ? '' : 's'} for ${gold} gold.`);
     void this.saveNow();
   }
 

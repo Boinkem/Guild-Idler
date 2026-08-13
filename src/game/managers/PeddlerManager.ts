@@ -4,11 +4,13 @@ import {
 import { PEDDLER_CARDS_BY_TIER } from '../data/peddler';
 import { EQUIPMENT, EQUIPMENT_BY_ID } from '../data/equipment';
 import { MATERIAL_BY_ID } from '../data/materials';
+import { CURIO_BY_ID } from '../data/curios';
 import { warehouseCapacity } from '../data/harvestUpgrades';
 import { Tuning } from '../data/tuning';
 import { EquipmentManager } from './EquipmentManager';
 import { ModifierManager } from './ModifierManager';
 import { PetManager } from './PetManager';
+import { CurioManager } from './CurioManager';
 
 const TIERS: PeddlerCardTier[] = ['bust', 'refund', 'modest', 'good', 'jackpot'];
 
@@ -133,6 +135,11 @@ function summarizeReward(outcome: PeddlerCardDef, feePaid: number, multiplier: n
     case 'egg': {
       const label = `A ${outcome.eggRarity ?? 'common'} egg`;
       return multiplier > 1 ? `${label} ×${multiplier}` : label;
+    }
+    case 'curio': {
+      const def = outcome.curioId ? CURIO_BY_ID[outcome.curioId] : undefined;
+      const name = def ? def.name : 'A curio.';
+      return multiplier > 1 ? `${name} ×${multiplier}` : name;
     }
     default: return 'Something.';
   }
@@ -368,6 +375,10 @@ export const PeddlerManager = {
         for (let i = 0; i < multiplier; i += 1) {
           PetManager.grantEgg(state, outcome.eggRarity ?? 'common', outcome.dedicatedPetId, now);
         }
+        break;
+      case 'curio':
+        if (!outcome.curioId) break;
+        CurioManager.add(state, outcome.curioId, multiplier);
         break;
       default:
         break;

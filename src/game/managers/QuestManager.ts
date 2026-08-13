@@ -5,6 +5,7 @@ import {
 import { HERO_CLASSES } from '../data/progression';
 import { fastQuestCapsPerHour, fastQuestFloorPerHour, easyFastModeChances } from '../data/balance';
 import { questEggDropChance } from '../data/pets';
+import { CURIOS, questCurioDropChance } from '../data/curios';
 import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
 import { NODE_ORDER, MATERIAL_BY_ID } from '../data/materials';
 import { warehouseCapacity } from '../data/harvestUpgrades';
@@ -20,6 +21,7 @@ import { Tuning } from '../data/tuning';
 import { EquipmentManager } from './EquipmentManager';
 import { ModifierManager } from './ModifierManager';
 import { PetManager } from './PetManager';
+import { CurioManager } from './CurioManager';
 import { PeddlerManager } from './PeddlerManager';
 import { rerollDay, rerollsUsedToday, nextRerollCost } from '../data/reroll';
 import { rollElementTags, elementalBonusForHero } from '../data/elements';
@@ -754,6 +756,7 @@ export const QuestManager = {
     let xp = 0;
     const loot: QuestResult['loot'] = [];
     let eggDropped: QuestResult['eggDropped'];
+    let curioGained: QuestResult['curioGained'];
 
     if (success) {
       gold = Math.floor(quest.offer.rewardGold * quest.goldMultiplier * (1 + events.goldPct)) + events.flatGold;
@@ -785,6 +788,20 @@ export const QuestManager = {
         const rarity = rarities[rarities.length - 1];
         PetManager.grantEgg(state, rarity, undefined, resolvedAt);
         eggDropped = { rarity };
+      }
+      // Ordinary curio drop -- same independent-roll shape as the egg
+      // drop directly above (flat per-difficulty chance, not scaled by
+      // lootChance/personalLoot), just for CurioManager's sellable-junk
+      // pool instead of PetManager's eggs. Uses the quest's own seeded
+      // rng (not raw Math.random) for which curio, same determinism
+      // convention every other roll in this function already follows.
+      // Silently does nothing if CURIOS is empty (no curios authored
+      // yet) -- same "degrade gracefully" precedent as everywhere else
+      // a content pool might come up empty.
+      if (CURIOS.length > 0 && rng.chance(questCurioDropChance(quest.offer.difficulty))) {
+        const picked = CURIOS[rng.int(0, CURIOS.length - 1)];
+        CurioManager.add(state, picked.id, 1);
+        curioGained = { curioId: picked.id, amount: 1 };
       }
     } else {
       // Failure still pays a small consolation and a little experience.
@@ -1078,6 +1095,7 @@ export const QuestManager = {
       chainAdvanced,
       eggDropped,
       materialGained,
+      curioGained,
       dailyBurstBonus: dailyBurstBonus || undefined,
       critBonus: critBonus || undefined,
       grimsbyArrived: grimsbyArrived || undefined,

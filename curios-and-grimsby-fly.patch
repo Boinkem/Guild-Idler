@@ -1,0 +1,903 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index e202899..a1db6c4 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -8684,3 +8684,90 @@ request, rather than folded in here. `mounted_travel`'s own flavour text
+ (a Blacksmith selling horse travel is still a little thematically odd)
+ wasn't reworked since it wasn't a duplicate and reworking it wasn't
+ asked for -- worth a look whenever Blacksmith copy gets another pass.
++
++### New: Curios -- a third sellable item type (neither Material, Consumable, nor Equipment)
++
++**The system.** `CurioDef` (types.ts) -- id/name/description/sellValue/
++glyph/icon, same shape and same "own JSON file, own DevTool schema"
++pattern as Consumables/Equipment (curios.json/curios.ts/CURIO_BY_ID),
++NOT modeled on Materials (a fixed, hand-authored set of exactly 4 tied
++one-to-one to a Harvest node -- curios needed to be open-ended and
++growable instead). New `GameState.curios: Record<string, number>`
++bucket, same shape as `materials` but with no warehouse-capacity cap --
++curios are pure flavor/sell-fodder, not a resource anything is built
++from, so there's no economy reason to bottleneck how many can pile up.
++Save migration 38 -> 39 backfills `curios: {}` for existing saves, same
++"empty record, nothing to correct" reasoning materials' own
++introduction used. (Landed as migration 38 rather than 37 -- the
++in-flight Vendor Upgrades Consolidation patch claimed 37/SAVE_VERSION
++38 first; rebased onto that rather than colliding with it.)
++
++New `CurioManager` (add/count/owned/sellAll/sellEverything) --
++deliberately small, since selling is the only thing you can ever do
++with one; no buy/use/loadout surface to mirror from InventoryManager.
++New `engine.sellCurio`/`sellAllCurios`, and a new **Curios** section in
++the Inventory tab (EquipmentPanel.tsx) sitting right below the Stash
++grid -- click a curio for its description + a Sell action, or "Sell
++All" for the whole collection in one action, same shape Sell Junk
++already uses for equipment. Seeded with 8 starting entries (Rock, Old
++Portrait, Tarnished Ring, Chipped/Polished Gem, Bent Spoon, Strange
++Coin, Dusty Bauble), sell values deliberately spread 1-60 gold rather
++than clustered -- "might have a lot of value or not much" was the
++explicit ask. Fully DevTool-editable from here -- add, remove, or
++re-price any of them without touching code.
++
++**Where they drop.** Two sources, both requested explicitly:
++- **Grimsby**: `PeddlerCardDef.kind` gained a `'curio'` case (+ a new
++  `curioId` field, DevTool-editable same as every other kind's own
++  fields) -- "getting an actual Rock from Grimsby" was the founding
++  example, and now works exactly that literally. `PeddlerManager.
++  applyOutcome`/`summarizeReward`, `PeddlerCardModal`'s
++  `PeddlerOutcomeIcon`/`outcomeDisplayName`, and a new `CurioIcon`
++  (icons.tsx, same shape as MaterialIcon/ConsumableIcon) all handle it.
++- **Ordinary quest/bounty drops**: new `quest.curioDropChance.*` tuning
++  knobs (one per difficulty, 4%/5%/6%/7%/8% easy->legendary) -- same
++  independent-roll shape `pets.questEggDropChance.*` already
++  established for ordinary egg drops, just far more common on purpose
++  (curios are meant to be everyday flavor, not a rare find the way an
++  egg is). Rolled with the quest's own seeded RNG, not raw Math.random,
++  same determinism convention every other roll in QuestManager already
++  follows.
++
++**Grimsby's rewards flying to a collection point.** This mechanism
++already existed -- `RewardGlowParticle` + `measureFlyOffset` +
++`burstTargetFor()` already routed gold/material/equipment/egg/scrap
++rewards toward the header or the Inventory tab on a pick. It simply
++never fires for 'nothing'/'joke' outcomes (nothing to fly, by design),
++and every screenshot shared while chasing the card-hover bugs earlier
++happened to be a "Nothing" pull -- almost certainly why it read as
++never happening. `burstTargetFor` now includes `'curio'` (routes to
++'inventory', same as material/equipment/egg), so a curio drop gets the
++exact same fly-and-land flourish everything else already has. No new
++animation system needed or built -- the existing one just didn't have
++this case yet.
++
++**Bonus fix, found while wiring curioGained's own display:**
++`QuestResult.materialGained` and `.eggDropped` were both being computed
++by `QuestManager` on every Gathering Bounty / egg-drop roll, but
++neither was ever actually read anywhere in `QuestResultModal.tsx` --
++only `.loot` (equipment) was displayed. A Gathering Bounty's material
++payout and an ordinary egg drop have been landing in inventory/storage
++completely silently, with zero on-screen confirmation, since before
++this patch. Not something this patch introduced -- found opportunistically
++while adding the equivalent curioGained display, and fixed alongside it
++rather than left broken right next to the one now working correctly.
++All three (materials/egg/curio) now show under a new "Also found"
++section in the quest result modal.
++
++**Verified:** `npx tsc --noEmit` (clean, zero errors) and a full
++`vite build` (all three targets: renderer, electron main, preload)
++both clean -- rerun after rebasing onto the Vendor Upgrades
++Consolidation patch that landed mid-task. DevTool server actually
++started and hit live over HTTP -- `/api/schema` confirmed the new
++`curios` schema and the extended `peddler-cards.kind` enum (now
++includes `'curio'`); `/api/data/curios` correctly read back all 8 seed
++entries. curios.json/tuning.json both directly parsed and spot-checked
++(8 unique ids, all positive sell values spanning 1-60 gold, 5 curio-
++drop tuning knobs present with the intended per-difficulty values).
++Migration chain confirmed contiguous (35->36->37->38->39, no gaps or
++collisions) after the rebase.
+diff --git a/src/game/data/curios.ts b/src/game/data/curios.ts
+new file mode 100644
+index 0000000..6949406
+--- /dev/null
++++ b/src/game/data/curios.ts
+@@ -0,0 +1,23 @@
++import { CurioDef } from '../types';
++import { Tuning } from './tuning';
++
++/**
++ * Curios live in json/curios.json so they can be edited via tools/devtool
++ * without touching TypeScript -- same reasoning and pattern equipment.ts/
++ * consumables.ts already use for their own data. See CurioDef's own doc
++ * comment in types.ts for why this is a fully open-ended list (like
++ * equipment/consumables) rather than a fixed small set (like materials).
++ */
++import curiosJson from './json/curios.json';
++export const CURIOS: CurioDef[] = curiosJson as CurioDef[];
++
++export const CURIO_BY_ID: Record<string, CurioDef> = Object.fromEntries(
++  CURIOS.map((c) => [c.id, c]),
++);
++
++/** Same shape as pets.ts's own questEggDropChance -- see
++ *  quest.curioDropChance.* in tuning.json for the actual per-difficulty
++ *  values and their own descriptions. */
++export function questCurioDropChance(difficulty: string): number {
++  return Tuning.get(`quest.curioDropChance.${difficulty}`);
++}
+diff --git a/src/game/data/json/curios.json b/src/game/data/json/curios.json
+new file mode 100644
+index 0000000..da37ab5
+--- /dev/null
++++ b/src/game/data/json/curios.json
+@@ -0,0 +1,58 @@
++[
++  {
++    "id": "rock",
++    "name": "A Rock",
++    "description": "It's a rock. Grimsby swears it's a good one.",
++    "sellValue": 1,
++    "glyph": "\ud83e\udea8"
++  },
++  {
++    "id": "old_portrait",
++    "name": "Old Portrait",
++    "description": "A stranger's face, cracked with age. Nobody in the guild recognizes them.",
++    "sellValue": 14,
++    "glyph": "\ud83d\uddbc\ufe0f"
++  },
++  {
++    "id": "tarnished_ring",
++    "name": "Tarnished Ring",
++    "description": "Too small for any hero's finger. Still worth something to the right buyer.",
++    "sellValue": 22,
++    "glyph": "\ud83d\udc8d"
++  },
++  {
++    "id": "chipped_gem",
++    "name": "Chipped Gem",
++    "description": "A real gemstone, mostly. The chip knocks the price down considerably.",
++    "sellValue": 35,
++    "glyph": "\ud83d\udc8e"
++  },
++  {
++    "id": "bent_spoon",
++    "name": "Bent Spoon",
++    "description": "Somebody's kitchen is missing this. It is not this guild's problem.",
++    "sellValue": 2,
++    "glyph": "\ud83e\udd44"
++  },
++  {
++    "id": "strange_coin",
++    "name": "Strange Coin",
++    "description": "Doesn't match any currency anyone here has ever seen. Collectors love that sort of thing.",
++    "sellValue": 18,
++    "glyph": "\ud83e\ude99"
++  },
++  {
++    "id": "polished_gem",
++    "name": "Polished Gem",
++    "description": "No chips, no cracks, no questions asked. A genuinely good find.",
++    "sellValue": 60,
++    "glyph": "\ud83d\udc8e"
++  },
++  {
++    "id": "dusty_bauble",
++    "name": "Dusty Bauble",
++    "description": "Once someone's treasured keepsake. Now it's cluttering the stash.",
++    "sellValue": 6,
++    "glyph": "\u2728"
++  }
++]
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 746812c..8425b30 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -918,6 +918,56 @@
+     "max": 100,
+     "description": "Flat % chance a successful Legendary-tier quest drops an ordinary egg (Legendary rarity). Deliberately very low."
+   },
++  {
++    "id": "quest.curioDropChance.easy",
++    "label": "Quest: curio drop chance, Easy quests (%)",
++    "category": "quest",
++    "value": 4,
++    "default": 4,
++    "min": 0,
++    "max": 100,
++    "description": "Flat % chance a successful Easy-tier quest drops an ordinary curio (sellable junk -- see CurioDef). Much more common than an egg drop on purpose -- curios are flavor/gold fodder, not a rare find."
++  },
++  {
++    "id": "quest.curioDropChance.normal",
++    "label": "Quest: curio drop chance, Normal quests (%)",
++    "category": "quest",
++    "value": 5,
++    "default": 5,
++    "min": 0,
++    "max": 100,
++    "description": "Flat % chance a successful Normal-tier quest drops an ordinary curio."
++  },
++  {
++    "id": "quest.curioDropChance.hard",
++    "label": "Quest: curio drop chance, Hard quests (%)",
++    "category": "quest",
++    "value": 6,
++    "default": 6,
++    "min": 0,
++    "max": 100,
++    "description": "Flat % chance a successful Hard-tier quest drops an ordinary curio."
++  },
++  {
++    "id": "quest.curioDropChance.epic",
++    "label": "Quest: curio drop chance, Epic quests (%)",
++    "category": "quest",
++    "value": 7,
++    "default": 7,
++    "min": 0,
++    "max": 100,
++    "description": "Flat % chance a successful Epic-tier quest drops an ordinary curio."
++  },
++  {
++    "id": "quest.curioDropChance.legendary",
++    "label": "Quest: curio drop chance, Legendary quests (%)",
++    "category": "quest",
++    "value": 8,
++    "default": 8,
++    "min": 0,
++    "max": 100,
++    "description": "Flat % chance a successful Legendary-tier quest drops an ordinary curio."
++  },
+   {
+     "id": "reroll.questBaseCost",
+     "label": "Quest reroll: base gold cost",
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 6c351ca..6fc0443 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -7,6 +7,7 @@ import { ShopManager } from './managers/ShopManager';
+ import { SaveManager, SaveAdapter, defaultAdapter, createInitialState } from './managers/SaveManager';
+ import { EquipmentManager } from './managers/EquipmentManager';
+ import { InventoryManager } from './managers/InventoryManager';
++import { CurioManager } from './managers/CurioManager';
+ import { DlcManager } from './managers/DlcManager';
+ import { GuildManager } from './managers/GuildManager';
+ import { PrestigeManager } from './managers/PrestigeManager';
+@@ -1474,6 +1475,26 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /** Sells the full stack of one curio -- see CurioManager.sellAll's own
++   *  comment for why this is "whole stack" not "pick a quantity". */
++  sellCurio(curioId: string) {
++    const gold = CurioManager.sellAll(this.state, curioId);
++    if (gold === 0) return this.say("You don't have any of those.");
++    playSound('sell');
++    this.say(`Sold for ${gold} gold.`);
++    void this.saveNow();
++  }
++
++  /** Bulk-sells every owned curio in one action -- the Curios-section
++   *  counterpart to sellJunk above. */
++  sellAllCurios() {
++    const { count, gold } = CurioManager.sellEverything(this.state);
++    if (count === 0) return this.say('No curios to sell.');
++    playSound('sell');
++    this.say(`Sold ${count} curio${count === 1 ? '' : 's'} for ${gold} gold.`);
++    void this.saveNow();
++  }
++
+   /**
+    * For each of a hero's 9 equipment slots, equips the highest-Gear-Score
+    * eligible item currently sitting in the stash if it beats what's
+diff --git a/src/game/managers/CurioManager.ts b/src/game/managers/CurioManager.ts
+new file mode 100644
+index 0000000..3bd4338
+--- /dev/null
++++ b/src/game/managers/CurioManager.ts
+@@ -0,0 +1,67 @@
++import { CURIO_BY_ID } from '../data/curios';
++import { CurioDef, GameState } from '../types';
++
++/**
++ * Curios have exactly one thing you can do with them (sell), so this is
++ * deliberately small -- not trying to mirror InventoryManager's full
++ * buy/use/loadout surface, none of which applies here. Same "own bucket,
++ * own manager, same shape as an existing sibling" precedent as
++ * InventoryManager (for `state.inventory`) already set.
++ */
++export const CurioManager = {
++  count(state: GameState, curioId: string): number {
++    return state.curios[curioId] ?? 0;
++  },
++
++  add(state: GameState, curioId: string, amount = 1): void {
++    state.curios[curioId] = (state.curios[curioId] ?? 0) + amount;
++  },
++
++  /** Everything currently owned with stock > 0, resolved against
++   *  CURIO_BY_ID -- a curio id that no longer matches any def (a DevTool
++   *  entry renamed/removed after some were already granted) is silently
++   *  skipped rather than crashing the Inventory tab, same "degrade
++   *  gracefully" precedent as everywhere else content might drift out
++   *  from under an old save. */
++  owned(state: GameState): { def: CurioDef; count: number }[] {
++    return Object.entries(state.curios)
++      .map(([id, count]) => ({ def: CURIO_BY_ID[id], count }))
++      .filter((entry): entry is { def: CurioDef; count: number } => !!entry.def && entry.count > 0);
++  },
++
++  /** Sells the full stack of one curio -- there's no "sell one of five"
++   *  case anywhere in the UI this is used from (see EquipmentPanel.tsx's
++   *  own Curios section), same "one button, whole stack" shape the
++   *  Warehouse's material selling (if it existed) would want, not
++   *  ShopManager.sell's one-uid-at-a-time shape (curios aren't individual
++   *  rollable items with a uid, just a flat count per def). Returns the
++   *  gold earned, or 0 if there was nothing to sell. */
++  sellAll(state: GameState, curioId: string): number {
++    const def = CURIO_BY_ID[curioId];
++    const have = state.curios[curioId] ?? 0;
++    if (!def || have <= 0) return 0;
++    const gold = def.sellValue * have;
++    delete state.curios[curioId];
++    state.gold += gold;
++    state.stats.goldEarned += gold;
++    return gold;
++  },
++
++  /** Sells every owned curio in one action -- the Curios-section
++   *  counterpart to ShopManager.sellBelowRarity's "clear out the junk"
++   *  bulk button. Returns how many distinct curios sold and the total
++   *  gold earned, so the caller can report one summary rather than one
++   *  toast per curio. */
++  sellEverything(state: GameState): { count: number; gold: number } {
++    const owned = CurioManager.owned(state);
++    if (owned.length === 0) return { count: 0, gold: 0 };
++    let gold = 0;
++    for (const { def, count } of owned) {
++      gold += def.sellValue * count;
++      delete state.curios[def.id];
++    }
++    state.gold += gold;
++    state.stats.goldEarned += gold;
++    return { count: owned.length, gold };
++  },
++};
+diff --git a/src/game/managers/PeddlerManager.ts b/src/game/managers/PeddlerManager.ts
+index a873fbb..07a1257 100644
+--- a/src/game/managers/PeddlerManager.ts
++++ b/src/game/managers/PeddlerManager.ts
+@@ -4,11 +4,13 @@ import {
+ import { PEDDLER_CARDS_BY_TIER } from '../data/peddler';
+ import { EQUIPMENT, EQUIPMENT_BY_ID } from '../data/equipment';
+ import { MATERIAL_BY_ID } from '../data/materials';
++import { CURIO_BY_ID } from '../data/curios';
+ import { warehouseCapacity } from '../data/harvestUpgrades';
+ import { Tuning } from '../data/tuning';
+ import { EquipmentManager } from './EquipmentManager';
+ import { ModifierManager } from './ModifierManager';
+ import { PetManager } from './PetManager';
++import { CurioManager } from './CurioManager';
+ 
+ const TIERS: PeddlerCardTier[] = ['bust', 'refund', 'modest', 'good', 'jackpot'];
+ 
+@@ -134,6 +136,11 @@ function summarizeReward(outcome: PeddlerCardDef, feePaid: number, multiplier: n
+       const label = `A ${outcome.eggRarity ?? 'common'} egg`;
+       return multiplier > 1 ? `${label} ×${multiplier}` : label;
+     }
++    case 'curio': {
++      const def = outcome.curioId ? CURIO_BY_ID[outcome.curioId] : undefined;
++      const name = def ? def.name : 'A curio.';
++      return multiplier > 1 ? `${name} ×${multiplier}` : name;
++    }
+     default: return 'Something.';
+   }
+ }
+@@ -369,6 +376,10 @@ export const PeddlerManager = {
+           PetManager.grantEgg(state, outcome.eggRarity ?? 'common', outcome.dedicatedPetId, now);
+         }
+         break;
++      case 'curio':
++        if (!outcome.curioId) break;
++        CurioManager.add(state, outcome.curioId, multiplier);
++        break;
+       default:
+         break;
+     }
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 1ea3bdd..eed3d10 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -5,6 +5,7 @@ import {
+ import { HERO_CLASSES } from '../data/progression';
+ import { fastQuestCapsPerHour, fastQuestFloorPerHour, easyFastModeChances } from '../data/balance';
+ import { questEggDropChance } from '../data/pets';
++import { CURIOS, questCurioDropChance } from '../data/curios';
+ import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
+ import { NODE_ORDER, MATERIAL_BY_ID } from '../data/materials';
+ import { warehouseCapacity } from '../data/harvestUpgrades';
+@@ -20,6 +21,7 @@ import { Tuning } from '../data/tuning';
+ import { EquipmentManager } from './EquipmentManager';
+ import { ModifierManager } from './ModifierManager';
+ import { PetManager } from './PetManager';
++import { CurioManager } from './CurioManager';
+ import { PeddlerManager } from './PeddlerManager';
+ import { rerollDay, rerollsUsedToday, nextRerollCost } from '../data/reroll';
+ import { rollElementTags, elementalBonusForHero } from '../data/elements';
+@@ -754,6 +756,7 @@ export const QuestManager = {
+     let xp = 0;
+     const loot: QuestResult['loot'] = [];
+     let eggDropped: QuestResult['eggDropped'];
++    let curioGained: QuestResult['curioGained'];
+ 
+     if (success) {
+       gold = Math.floor(quest.offer.rewardGold * quest.goldMultiplier * (1 + events.goldPct)) + events.flatGold;
+@@ -786,6 +789,20 @@ export const QuestManager = {
+         PetManager.grantEgg(state, rarity, undefined, resolvedAt);
+         eggDropped = { rarity };
+       }
++      // Ordinary curio drop -- same independent-roll shape as the egg
++      // drop directly above (flat per-difficulty chance, not scaled by
++      // lootChance/personalLoot), just for CurioManager's sellable-junk
++      // pool instead of PetManager's eggs. Uses the quest's own seeded
++      // rng (not raw Math.random) for which curio, same determinism
++      // convention every other roll in this function already follows.
++      // Silently does nothing if CURIOS is empty (no curios authored
++      // yet) -- same "degrade gracefully" precedent as everywhere else
++      // a content pool might come up empty.
++      if (CURIOS.length > 0 && rng.chance(questCurioDropChance(quest.offer.difficulty))) {
++        const picked = CURIOS[rng.int(0, CURIOS.length - 1)];
++        CurioManager.add(state, picked.id, 1);
++        curioGained = { curioId: picked.id, amount: 1 };
++      }
+     } else {
+       // Failure still pays a small consolation and a little experience.
+       gold = Math.floor(quest.offer.rewardGold * 0.15 * quest.goldMultiplier) + Math.max(0, events.flatGold);
+@@ -1078,6 +1095,7 @@ export const QuestManager = {
+       chainAdvanced,
+       eggDropped,
+       materialGained,
++      curioGained,
+       dailyBurstBonus: dailyBurstBonus || undefined,
+       critBonus: critBonus || undefined,
+       grimsbyArrived: grimsbyArrived || undefined,
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 2570b2b..7039755 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -138,6 +138,7 @@ export function createInitialState(now = Date.now()): GameState {
+     seenOnboarding: false,
+     pendingChainDiscovery: false,
+     materials: emptyMaterials(),
++    curios: {},
+     harvestNodes: Object.fromEntries(
+       NODE_ORDER.map((id) => [id, { nextSpawnAt: now + Tuning.get('harvest.baseSpawnIntervalMs'), pending: null }]),
+     ) as GameState['harvestNodes'],
+@@ -719,6 +720,16 @@ const MIGRATIONS: Record<number, Migration> = {
+       enchanterRerollsUsedToday: 0,
+     };
+   },
++  38: (save) => ({
++    ...save,
++    version: 39,
++    // New Curios system -- see CurioDef's own doc comment in types.ts.
++    // A save from before this existed has simply never owned any, same
++    // "empty record, not a placeholder needing correction" reasoning
++    // every other new Record<string, number> bucket (materials, back
++    // when it was introduced) already used.
++    curios: (save.curios as Record<string, number> | undefined) ?? {},
++  }),
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 7510f24..a4d83f2 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 38;
++export const SAVE_VERSION = 39;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -652,6 +652,13 @@ export interface QuestResult {
+    *  informational for the result modal; the actual materials mutation
+    *  already happened in QuestManager.resolve by the time this is read. */
+   materialGained?: { materialId: MaterialId; amount: number };
++  /** An ordinary curio drop rolled this quest, if any -- same shape and
++   *  same "flat % chance on success, scaled by difficulty" pattern as
++   *  eggDropped above, just for QuestManager's own curio-drop roll
++   *  instead of PetManager's egg one. Purely informational for the
++   *  result modal; the actual `state.curios` mutation already happened
++   *  in QuestManager.resolve by the time this is read. */
++  curioGained?: { curioId: string; amount: number };
+   /** True when this hero's daily first-burst bonus applied to gold/xp
+    *  above (already folded into the numbers, not a separate reward) --
+    *  see Hero.lastBurstBonusDay. Purely informational, for the result
+@@ -1375,6 +1382,12 @@ export interface GameState {
+   /* ------------------------- Harvest/Gathering ------------------------- */
+   /** Current stock of each material, capped by warehouseCapacity(). */
+   materials: Record<MaterialId, number>;
++  /** Current stock of each curio, keyed by CurioDef.id -- open-ended (any
++   *  string key), unlike `materials` (a fixed 4-key Record). No capacity
++   *  cap the way materials/warehouseCapacity has -- curios are pure
++   *  flavor/sell-fodder, not a resource anything is built from, so
++   *  there's no economy reason to bottleneck how many can pile up. */
++  curios: Record<string, number>;
+   /** Per-node spawn/pending-item state, including each node's own
+    *  independent `nextSpawnAt` -- see HarvestManager. Was briefly one
+    *  shared GameState-level timestamp for all 4 nodes ("harvest o'clock"),
+@@ -1767,7 +1780,7 @@ export interface PeddlerCardDef {
+   tier: PeddlerCardTier;
+   /** Relative weight among other entries in the SAME tier, not global. */
+   weight: number;
+-  kind: 'nothing' | 'joke' | 'goldFlat' | 'goldRefund' | 'material' | 'scrap' | 'equipment' | 'egg';
++  kind: 'nothing' | 'joke' | 'goldFlat' | 'goldRefund' | 'material' | 'scrap' | 'equipment' | 'egg' | 'curio';
+   /** Grimsby's own line when this specific card flips -- sleazy/comic
+    *  register regardless of tier, even on a good outcome. */
+   flavorText: string;
+@@ -1808,6 +1821,12 @@ export interface PeddlerCardDef {
+   /** kind: 'egg' only -- same shape as ChainDef.rewardEgg. */
+   eggRarity?: Rarity;
+   dedicatedPetId?: string;
++  /** kind: 'curio' only -- see CurioDef's own doc comment. A specific
++   *  named curio, not a rarity-pool roll like equipment's `itemRarity`
++   *  -- curios have no rarity concept to roll against, just a flat
++   *  `sellValue` per def, so there's nothing a pool roll would add over
++   *  just picking the curio directly. */
++  curioId?: string;
+   /**
+    * Single-emoji fallback shown in the icon-only card result display --
+    * same role ConsumableDef.glyph/MaterialDef.glyph already play. Used
+@@ -1822,14 +1841,45 @@ export interface PeddlerCardDef {
+    * 'nothing' / 'joke' / 'goldFlat' / 'goldRefund' / 'scrap' -- e.g. a
+    * sack-of-gold icon for a goldFlat card. Same convention/picker as
+    * MaterialDef.icon/ConsumableDef.icon (falls back to `glyph`, which
+-   * falls back to a generic '?'). 'material'/'equipment'/'egg' kinds
+-   * keep pulling their icon from the referenced def instead (see
++   * falls back to a generic '?'). 'material'/'equipment'/'egg'/'curio'
++   * kinds keep pulling their icon from the referenced def instead (see
+    * PeddlerOutcomeIcon) -- this field only matters for kinds that have
+    * no def to look one up from.
+    */
+   icon?: string;
+ }
+ 
++/**
++ * Sellable odds-and-ends that are neither a crafting Material (fixed 4,
++ * tied one-to-one to a Harvest node) nor a Consumable (has a quest-time
++ * effect) nor Equipment (rolls stats, equips onto a hero) -- pure flavor
++ * collectibles with exactly one thing you can do with them: sell for
++ * gold. "Getting an actual Rock from Grimsby" is the founding example --
++ * see PeddlerCardDef.kind's own 'curio' case, and QuestManager's ordinary
++ * curio-drop roll (same shape as its ordinary egg-drop roll) for the
++ * other way these enter play. Open-ended/DevTool-editable, same
++ * "own JSON file, own schema" pattern as equipment/consumables/peddler-
++ * cards -- NOT modeled on MaterialDef, which is a fixed, hand-authored
++ * set of exactly 4 with no room to grow.
++ */
++export interface CurioDef {
++  id: string;
++  name: string;
++  description: string;
++  /** Flat gold value on sale -- curios have no other use, so this is the
++   *  entire economic reason one is worth picking up at all. Deliberately
++   *  wide-ranging across the pool ("might have a lot of value or not
++   *  much") rather than clustered -- see curios.json's own entries. */
++  sellValue: number;
++  /** Single-glyph fallback, same role as MaterialDef.glyph/
++   *  ConsumableDef.glyph. */
++  glyph: string;
++  /** Relative path under `public/item-icons/`, same convention/fallback
++   *  chain (falls back to `glyph`, which falls back to a generic '?')
++   *  every other def's own `icon` field already follows. */
++  icon?: string;
++}
++
+ /**
+  * NOTE: an earlier version of this file had a PeddlerConfigDef type here
+  * -- a single DevTool-configurable "resultCardBackground" image. That
+diff --git a/src/ui/PeddlerCardModal.tsx b/src/ui/PeddlerCardModal.tsx
+index 5f8c710..4de4134 100644
+--- a/src/ui/PeddlerCardModal.tsx
++++ b/src/ui/PeddlerCardModal.tsx
+@@ -2,10 +2,11 @@ import { useEffect, useRef, useState, CSSProperties } from 'react';
+ import { useEngine } from './useEngine';
+ import { PeddlerCardDef, PeddlerCardTier } from '../game/types';
+ import { MATERIAL_BY_ID } from '../game/data/materials';
++import { CURIO_BY_ID } from '../game/data/curios';
+ import { EQUIPMENT_BY_ID } from '../game/data/equipment';
+ import { RARITY_COLOR } from '../game/util';
+ import { GrimsbySprite } from './sprites/GrimsbySprite';
+-import { ItemIcon, MaterialIcon, ConsumableIcon } from './icons';
++import { ItemIcon, MaterialIcon, ConsumableIcon, CurioIcon } from './icons';
+ import { EggIcon } from './EggIcon';
+ import { measureFlyOffset } from './flyTarget';
+ 
+@@ -73,6 +74,7 @@ function burstTargetFor(kind: PeddlerCardDef['kind']): string | null {
+     case 'scrap':
+     case 'equipment':
+     case 'egg':
++    case 'curio':
+       return 'inventory';
+     default:
+       return null;
+@@ -82,7 +84,9 @@ function burstTargetFor(kind: PeddlerCardDef['kind']): string | null {
+ /** Glow color per outcome -- rarity for the two kinds that actually
+  *  have one (equipment/egg both carry a real Rarity), brass for gold
+  *  (matching every other gold flourish in the game), a neutral moss
+- *  tone for material/scrap (no rarity concept to hang a color on). */
++ *  tone for material/scrap/curio (no rarity concept to hang a color
++ *  on -- curio falls through to the same default as material/scrap
++ *  below, not called out as its own case). */
+ function burstColorFor(outcome: PeddlerCardDef): string {
+   switch (outcome.kind) {
+     case 'goldFlat':
+@@ -140,6 +144,7 @@ function outcomeDisplayName(outcome: PeddlerCardDef): string {
+     case 'scrap': return `${outcome.scrapAmount ?? 0} Scrap`;
+     case 'equipment': return EQUIPMENT_BY_ID[outcome.itemId!]?.name ?? 'Mystery Gear';
+     case 'egg': return `${outcome.eggRarity ?? 'common'} Egg`;
++    case 'curio': return outcome.curioId ? (CURIO_BY_ID[outcome.curioId]?.name ?? 'A Curio') : 'A Curio';
+     default: return 'Something';
+   }
+ }
+@@ -177,6 +182,10 @@ function PeddlerOutcomeIcon({ outcome, size = 48 }: { outcome: PeddlerCardDef; s
+     }
+     case 'egg':
+       return <EggIcon rarity={outcome.eggRarity ?? 'common'} size={size} />;
++    case 'curio': {
++      const def = outcome.curioId ? CURIO_BY_ID[outcome.curioId] : undefined;
++      return <CurioIcon icon={def?.icon} glyph={def?.glyph ?? outcome.glyph ?? '\u2753'} size={size} />;
++    }
+     case 'goldFlat':
+     case 'goldRefund':
+       return <ConsumableIcon icon={outcome.icon} glyph={outcome.glyph ?? '\u25c6'} size={size} />;
+diff --git a/src/ui/QuestResultModal.tsx b/src/ui/QuestResultModal.tsx
+index 3402a06..4ba96ff 100644
+--- a/src/ui/QuestResultModal.tsx
++++ b/src/ui/QuestResultModal.tsx
+@@ -9,6 +9,8 @@ import { formatGold, RARITY_COLOR } from '../game/util';
+ import { RarityPill } from './RarityPill';
+ import { useCountUp } from './useCountUp';
+ import { measureFlyOffset } from './flyTarget';
++import { MATERIAL_BY_ID } from '../game/data/materials';
++import { CURIO_BY_ID } from '../game/data/curios';
+ 
+ /** How long the pop-out + coin/XP burst plays before the modal actually
+  * unmounts. Matches the CSS: modal-pop-out is 320ms, collect-fly is 750ms
+@@ -193,6 +195,40 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
+           </>
+         )}
+ 
++        {/* Gathering Bounty materials, an ordinary egg drop, and an
++            ordinary curio drop -- all three were computed by QuestManager
++            and sitting on `result` already, but none were actually read
++            anywhere in this modal before now (confirmed: only `.loot`
++            was ever displayed). Not a regression from adding curios --
++            materialGained/eggDropped already had this gap; fixed here
++            alongside curioGained rather than leaving two of three
++            "purely informational for the result modal" fields silently
++            broken right next to the one that's now wired up correctly. */}
++        {(result.materialGained || result.eggDropped || result.curioGained) && (
++          <>
++            <div className="section-heading">Also found</div>
++            {result.materialGained && result.materialGained.amount > 0 && (
++              <div className="small" style={{ marginBottom: 2 }}>
++                +{result.materialGained.amount} {MATERIAL_BY_ID[result.materialGained.materialId]?.name ?? result.materialGained.materialId}
++              </div>
++            )}
++            {result.eggDropped && (
++              <div className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 2 }}>
++                <span className="small" style={{ color: RARITY_COLOR[result.eggDropped.rarity] }}>
++                  A {result.eggDropped.rarity} egg
++                </span>
++                <RarityPill rarity={result.eggDropped.rarity} />
++              </div>
++            )}
++            {result.curioGained && (
++              <div className="small" style={{ marginBottom: 2 }}>
++                {CURIO_BY_ID[result.curioGained.curioId]?.name ?? 'A curio'}
++                {result.curioGained.amount > 1 ? ` ×${result.curioGained.amount}` : ''}
++              </div>
++            )}
++          </>
++        )}
++
+         {result.events.length > 0 && (
+           <>
+             <div className="section-heading">On the road</div>
+diff --git a/src/ui/icons.tsx b/src/ui/icons.tsx
+index ef30aa8..38ccb7b 100644
+--- a/src/ui/icons.tsx
++++ b/src/ui/icons.tsx
+@@ -57,3 +57,11 @@ export function RecipeIcon({ icon, category, size = 40 }: { icon?: string; categ
+ export function MaterialIcon({ icon, glyph, size = 40 }: { icon?: string; glyph: string; size?: number }) {
+   return <IconBox icon={icon} size={size} fallback={glyph} />;
+ }
++
++/** Falls back to the curio's own glyph when no icon is assigned yet --
++ *  same shape as MaterialIcon/ConsumableIcon. Used wherever a curio
++ *  needs a static display: the Inventory tab's Curios section, and
++ *  Grimsby's own PeddlerOutcomeIcon for kind: 'curio'. */
++export function CurioIcon({ icon, glyph, size = 40 }: { icon?: string; glyph: string; size?: number }) {
++  return <IconBox icon={icon} size={size} fallback={glyph} />;
++}
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index d6a7682..394d817 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -6,11 +6,12 @@ import { EquipmentManager } from '../../game/managers/EquipmentManager';
+ import { HeroManager } from '../../game/managers/HeroManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID } from '../../game/data/equipment';
+-import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef } from '../../game/types';
++import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef, CurioDef } from '../../game/types';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
++import { CurioManager } from '../../game/managers/CurioManager';
+ import { rerollsUsedToday } from '../../game/data/reroll';
+ import { describeMods, describeStats, formatGold, RARITY_COLOR, RARITY_ORDER } from '../../game/util';
+-import { ItemIcon, ConsumableIcon } from '../icons';
++import { ItemIcon, ConsumableIcon, CurioIcon } from '../icons';
+ import { GearScoreBadge } from '../GearScoreBadge';
+ import { Row, Toggle } from './SettingsPanel';
+ import { ConfirmModal } from '../ConfirmModal';
+@@ -248,6 +249,59 @@ function isLoadoutEffect(def: ConsumableDef): boolean {
+  * Beckoning Charm. An item with no actionable effect at all (Pet Treat --
+  * fed from the Hatchery instead) shows no button, just the description.
+  */
++/**
++ * A single owned curio -- click opens a small modal with its description
++ * and a Sell action, same "click to expand into a modal" shape
++ * ConsumableInfoCard just below uses, rather than an inline expand.
++ * Curios have exactly one action (sell the whole stack), so there's no
++ * equip/use branching to speak of the way ConsumableInfoCard has.
++ */
++function CurioCard({ def, count, engine }: { def: CurioDef; count: number; engine: GameEngine }) {
++  const [open, setOpen] = useState(false);
++  return (
++    <>
++      <div
++        className="item-card"
++        onClick={() => setOpen(true)}
++        role="button"
++        tabIndex={0}
++        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
++      >
++        <div className="item-card-summary">
++          <CurioIcon icon={def.icon} glyph={def.glyph} />
++          <div className="item-card-body">
++            <div className="item-card-name">{def.name} ×{count}</div>
++          </div>
++        </div>
++      </div>
++
++      {open && (
++        <div className="overlay" onClick={() => setOpen(false)}>
++          <div className="modal" onClick={(e) => e.stopPropagation()}>
++            <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
++              <CurioIcon icon={def.icon} glyph={def.glyph} size={48} />
++              <div>
++                <span className="card-title">{def.name}</span>
++                <div className="tiny muted">Owned ×{count} · {formatGold(def.sellValue)} each</div>
++              </div>
++            </div>
++            <div className="tiny muted">{def.description}</div>
++            <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
++              <button onClick={() => setOpen(false)}>Close</button>
++              <button
++                className="btn-green"
++                onClick={() => { engine.sellCurio(def.id); setOpen(false); }}
++              >
++                Sell all ×{count} · {formatGold(def.sellValue * count)}
++              </button>
++            </div>
++          </div>
++        </div>
++      )}
++    </>
++  );
++}
++
+ function ConsumableInfoCard({
+   def, count, hero, engine,
+ }: { def: ConsumableDef; count: number; hero: Hero; engine: GameEngine }) {
+@@ -674,6 +728,7 @@ export function EquipmentPanel() {
+     if (!settings.confirmSell) engine.sellJunk(junkRarity);
+     else setPendingJunkSell(true);
+   };
++  const curiosOwned = CurioManager.owned(state);
+ 
+   return (
+     <>
+@@ -874,6 +929,33 @@ export function EquipmentPanel() {
+         ))}
+       </div>
+ 
++      {/* Sellable odds-and-ends -- see CurioDef's own doc comment in
++          types.ts. No per-item "confirm sell" the Stash grid's own
++          settings.confirmSell gates -- a curio has no equip/durability/
++          rarity stakes attached, so there's nothing a misclick here could
++          cost beyond the sale itself, same reasoning Sell Junk's own
++          bulk action doesn't gate per-item either. */}
++      {curiosOwned.length > 0 && (
++        <>
++          <div className="spread" style={{ alignItems: 'center' }}>
++            <div className="section-heading" style={{ marginBottom: 0 }}>Curios ({curiosOwned.length})</div>
++            <button
++              className="btn-green"
++              style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
++              onClick={() => engine.sellAllCurios()}
++              title="Sells every curio currently in the stash"
++            >
++              Sell All · {formatGold(curiosOwned.reduce((sum, { def, count }) => sum + def.sellValue * count, 0))}
++            </button>
++          </div>
++          <div className="item-card-grid">
++            {curiosOwned.map(({ def, count }) => (
++              <CurioCard key={def.id} def={def} count={count} engine={engine} />
++            ))}
++          </div>
++        </>
++      )}
++
+       {pendingJunkSell && (
+         <ConfirmModal
+           title="Sell junk"
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 6a69123..119efcd 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -332,6 +332,23 @@ const SCHEMAS = {
+       effect: { type: 'effect', required: true },
+     },
+   },
++  'curios': {
++    file: 'curios.json',
++    label: 'Curios',
++    idField: 'id',
++    // Sellable odds-and-ends -- see CurioDef's own doc comment in
++    // types.ts. Open-ended list, same shape as 'consumables' just above
++    // (not 'materials' below, which is a fixed 4-entry set with no room
++    // to grow) -- add/remove entries freely here.
++    fields: {
++      id: { type: 'string', required: true, slug: true },
++      name: { type: 'string', required: true },
++      description: { type: 'string', required: true },
++      sellValue: { type: 'number', required: true },
++      glyph: { type: 'string', required: true },
++      icon: { type: 'string', required: false, picker: 'icon' },
++    },
++  },
+   'materials': {
+     file: 'materials.json',
+     label: 'Materials',
+@@ -497,7 +514,7 @@ const SCHEMAS = {
+       weight: { type: 'number', required: true },
+       kind: {
+         type: 'enum', required: true,
+-        options: ['nothing', 'joke', 'goldFlat', 'goldRefund', 'material', 'scrap', 'equipment', 'egg'],
++        options: ['nothing', 'joke', 'goldFlat', 'goldRefund', 'material', 'scrap', 'equipment', 'egg', 'curio'],
+       },
+       // Grimsby's own line when THIS specific card flips -- sleazy/comic
+       // register throughout, even on a good outcome.
+@@ -523,6 +540,7 @@ const SCHEMAS = {
+       itemId: { type: 'string', required: false }, // kind: equipment -- an equipment.json id, free text (see top comment)
+       eggRarity: { type: 'enum', required: false, options: ['common', 'uncommon', 'rare', 'epic', 'legendary'] }, // kind: egg
+       dedicatedPetId: { type: 'string', required: false }, // kind: egg, optional
++      curioId: { type: 'string', required: false }, // kind: curio -- a curios.json id, free text (see top comment)
+       // Single-emoji fallback for the icon-only card display -- used for
+       // kind: joke/nothing (no real item to look an icon up from), and
+       // as the final fallback for any other kind. Optional.
+@@ -530,9 +548,10 @@ const SCHEMAS = {
+       // Real icon for the generic kinds (nothing/joke/goldFlat/goldRefund/
+       // scrap) -- e.g. a sack-of-gold icon for a goldFlat card. Same
+       // picker/fallback-to-glyph convention as equipment/consumables/
+-      // materials' own `icon` fields above. material/equipment/egg kinds
+-      // still pull their icon from the referenced def instead -- this is
+-      // only useful for kinds that have no def to look one up from.
++      // materials' own `icon` fields above. material/equipment/egg/curio
++      // kinds still pull their icon from the referenced def instead --
++      // this is only useful for kinds that have no def to look one up
++      // from.
+       icon: { type: 'string', required: false, picker: 'icon' },
+     },
+   },

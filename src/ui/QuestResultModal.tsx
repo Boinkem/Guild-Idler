@@ -9,6 +9,8 @@ import { formatGold, RARITY_COLOR } from '../game/util';
 import { RarityPill } from './RarityPill';
 import { useCountUp } from './useCountUp';
 import { measureFlyOffset } from './flyTarget';
+import { MATERIAL_BY_ID } from '../game/data/materials';
+import { CURIO_BY_ID } from '../game/data/curios';
 
 /** How long the pop-out + coin/XP burst plays before the modal actually
  * unmounts. Matches the CSS: modal-pop-out is 320ms, collect-fly is 750ms
@@ -190,6 +192,40 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
                 <RarityPill rarity={item.rarity} />
               </div>
             ))}
+          </>
+        )}
+
+        {/* Gathering Bounty materials, an ordinary egg drop, and an
+            ordinary curio drop -- all three were computed by QuestManager
+            and sitting on `result` already, but none were actually read
+            anywhere in this modal before now (confirmed: only `.loot`
+            was ever displayed). Not a regression from adding curios --
+            materialGained/eggDropped already had this gap; fixed here
+            alongside curioGained rather than leaving two of three
+            "purely informational for the result modal" fields silently
+            broken right next to the one that's now wired up correctly. */}
+        {(result.materialGained || result.eggDropped || result.curioGained) && (
+          <>
+            <div className="section-heading">Also found</div>
+            {result.materialGained && result.materialGained.amount > 0 && (
+              <div className="small" style={{ marginBottom: 2 }}>
+                +{result.materialGained.amount} {MATERIAL_BY_ID[result.materialGained.materialId]?.name ?? result.materialGained.materialId}
+              </div>
+            )}
+            {result.eggDropped && (
+              <div className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 2 }}>
+                <span className="small" style={{ color: RARITY_COLOR[result.eggDropped.rarity] }}>
+                  A {result.eggDropped.rarity} egg
+                </span>
+                <RarityPill rarity={result.eggDropped.rarity} />
+              </div>
+            )}
+            {result.curioGained && (
+              <div className="small" style={{ marginBottom: 2 }}>
+                {CURIO_BY_ID[result.curioGained.curioId]?.name ?? 'A curio'}
+                {result.curioGained.amount > 1 ? ` ×${result.curioGained.amount}` : ''}
+              </div>
+            )}
           </>
         )}
 
