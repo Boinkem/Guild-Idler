@@ -461,11 +461,11 @@ function fieldControl(spec, key, value) {
   if (spec.type === 'boolean') {
     return `<input type="checkbox" id="${id}" ${value ? 'checked' : ''} style="width:18px;height:18px;" />`;
   }
-  if (spec.type === 'mods') return kvGrid(id, MOD_KEYS, value ?? {}, 'number');
-  if (spec.type === 'stats') return kvGrid(id, STAT_KEYS, value ?? {}, 'number');
+  if (spec.type === 'mods') return kvGrid(id, MOD_KEYS, value ?? {}, 'number', MOD_FIELD_INFO);
+  if (spec.type === 'stats') return kvGrid(id, STAT_KEYS, value ?? {}, 'number', STAT_FIELD_INFO);
   if (spec.type === 'materials') return kvGrid(id, MATERIAL_KEYS, value ?? {}, 'number');
-  if (spec.type === 'effect') return kvGrid(id, EFFECT_KEYS, value ?? {}, 'mixed');
-  if (spec.type === 'eventEffects') return kvGrid(id, EVENT_EFFECT_KEYS, value ?? {}, 'mixed');
+  if (spec.type === 'effect') return kvGrid(id, EFFECT_KEYS, value ?? {}, 'mixed', EFFECT_FIELD_INFO);
+  if (spec.type === 'eventEffects') return kvGrid(id, EVENT_EFFECT_KEYS, value ?? {}, 'mixed', EVENT_EFFECT_FIELD_INFO);
   if (spec.type === 'eggReward') return eggRewardInput(id, value);
   if (spec.type === 'resultGem') return resultGemInput(id, value);
   if (spec.type === 'chainStages') return stagesInput(id, value ?? []);
@@ -582,15 +582,116 @@ function stageRowHtml(s) {
     </div>`;
 }
 
-const MOD_KEYS = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability'];
+// Kept in sync with server.mjs's own copy, which is kept in sync with
+// the real `Modifiers`/ConsumableDef.effect types by hand -- see that
+// file's comments on both lists for the full "found drifted, fixed in
+// the same pass" note.
+const MOD_KEYS = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability', 'health', 'revivalDiscount', 'petHealth', 'petRevivalDiscount'];
 const STAT_KEYS = ['strength', 'endurance', 'luck', 'wisdom'];
 // Same 6 values server.mjs's own QUEST_TAG_KEYS validates against --
 // used by hero-classes' `preferred` field (the questTagList type).
 const QUEST_TAG_KEYS = ['combat', 'escort', 'explore', 'arcane', 'stealth', 'defense'];
 const MATERIAL_KEYS = ['ore', 'timber', 'herbs', 'fish'];
-const EFFECT_KEYS = ['success', 'gold', 'preventInjury', 'guaranteedGoodEvent', 'healInjury'];
+const EFFECT_KEYS = [
+  'success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability',
+  'health', 'restoreHealth', 'healthDamageReduction', 'revivalDiscount',
+  'petHealth', 'petRevivalDiscount', 'peddlerCounterReduction',
+  'preventInjury', 'guaranteedGoodEvent', 'healInjury',
+];
 const EVENT_EFFECT_KEYS = ['success', 'goldPct', 'flatGold', 'xpPct', 'loot', 'durability', 'delay', 'injury', 'guaranteedLoot'];
 const BOOL_KEYS = new Set(['preventInjury', 'guaranteedGoodEvent', 'healInjury', 'injury']);
+// guaranteedLoot is eventEffects' one non-numeric, non-boolean key -- a
+// Rarity string, not a percentage or flat amount. Kept as its own named
+// set (rather than generalizing kvGrid to an arbitrary per-key type map,
+// which nothing else here currently needs) since it's a single field on
+// a single content type today. Rendered as a real <select> in kvGrid
+// below instead of falling through to a plain number input, which is
+// what it did before this fix -- typing into that number input saved a
+// garbage number where a rarity string belonged.
+const ENUM_KV_KEYS = { guaranteedLoot: RARITY_KEYS };
+
+/**
+ * Short unit tags + full descriptions shown alongside every kv-grid field
+ * (mods/stats/effect/eventEffects), so a value like "success: -5" doesn't
+ * require already knowing the codebase to read correctly. Grounded
+ * directly in the real doc comments on Modifiers/Stats/ConsumableDef.
+ * effect/EventDef.effects in types.ts and data/events.ts -- not guessed.
+ *
+ * `unit` is the short inline tag next to the label (e.g. "pts", "%mult").
+ * `title` is the fuller sentence, shown as the input's hover tooltip.
+ * Three genuinely different conventions exist across this game's various
+ * percentage-shaped fields, and mixing them up produces a value that's
+ * silently wrong rather than erroring, so the tag distinguishes each one
+ * rather than lumping them all under one generic "%" label:
+ *   - "pts"   -- flat percentage POINTS, added directly (5 = +5%, on top
+ *                of whatever the base already was).
+ *   - "%mult" -- a percentage MULTIPLIER where the number itself IS the
+ *                percentage (10 = +10%, i.e. result * 1.10).
+ *   - "0-1x"  -- a FRACTIONAL multiplier where 1.0 = 100% (0.5 = +50%,
+ *                i.e. result * (1 + 0.5)) -- goldPct/xpPct's own
+ *                convention, confirmed directly against QuestManager.
+ *                resolve's actual formula, and deliberately flagged since
+ *                it's easy to mistake for the "%mult" convention above at
+ *                a glance (both are called a "percentage" in prose, but a
+ *                goldPct of 10 means +1000%, not +10%).
+ *   - "flat"  -- a plain number with no percentage meaning at all.
+ */
+const MOD_FIELD_INFO = {
+  success: { unit: 'pts', title: 'Flat percentage points added to success chance (5 = +5%, -5 = -5%).' },
+  gold: { unit: '%mult', title: 'Percentage multiplier on gold reward (10 = +10% gold).' },
+  xp: { unit: '%mult', title: 'Percentage multiplier on XP reward (10 = +10% XP).' },
+  loot: { unit: 'pts', title: 'Flat percentage points added to rare loot chance.' },
+  injuryResist: { unit: 'pts', title: 'Flat percentage points removed from injury chance.' },
+  speed: { unit: '%mult', title: 'Percentage reduction of quest duration (10 = 10% shorter).' },
+  durability: { unit: '%mult', title: 'Percentage reduction of durability lost per quest.' },
+  health: { unit: 'flat', title: "Flat bonus added directly to a hero's Max Health pool." },
+  revivalDiscount: { unit: 'pts', title: "Percentage points shaved off a hero's revival gold cost." },
+  petHealth: { unit: 'flat', title: 'Flat bonus to pet Max Health -- a separate pool from the hero `health` key above; never mixes with it.' },
+  petRevivalDiscount: { unit: 'pts', title: "Percentage points shaved off a pet's revival cost." },
+};
+const STAT_FIELD_INFO = {
+  // Phrasing matches the Guide tab's own player-facing "Stat Points"
+  // entry (guideTopics.ts) word for word, so this tooltip never
+  // contradicts what a player sees in-game.
+  strength: { unit: '', title: 'Pushes success chance (alongside Endurance).' },
+  endurance: { unit: '', title: 'Pushes success chance (alongside Strength).' },
+  luck: { unit: '', title: 'Pushes gold and loot chance.' },
+  wisdom: { unit: '', title: 'Pushes XP gained.' },
+};
+const EFFECT_FIELD_INFO = {
+  // Same underlying units as MOD_FIELD_INFO above for the 7 keys shared
+  // with Modifiers -- ConsumableDef.effect's own doc comment says so
+  // explicitly ("Same units as Modifiers"), so these entries are the
+  // same tags/titles, not independently re-derived.
+  success: MOD_FIELD_INFO.success,
+  gold: MOD_FIELD_INFO.gold,
+  xp: MOD_FIELD_INFO.xp,
+  loot: MOD_FIELD_INFO.loot,
+  injuryResist: MOD_FIELD_INFO.injuryResist,
+  speed: MOD_FIELD_INFO.speed,
+  durability: MOD_FIELD_INFO.durability,
+  health: { unit: 'flat', title: "Flat bonus added to a hero's Max Health pool -- widens the pool, doesn't fill it. See restoreHealth for immediate healing." },
+  restoreHealth: { unit: 'pts', title: '% of Max Health restored immediately on use (the "Apply" action) -- not a per-quest loadout effect.' },
+  healthDamageReduction: { unit: 'pts', title: '% reduction to Health damage on the one quest this consumable is equipped for -- a loadout effect, consumed at send time.' },
+  revivalDiscount: MOD_FIELD_INFO.revivalDiscount,
+  petHealth: MOD_FIELD_INFO.petHealth,
+  petRevivalDiscount: MOD_FIELD_INFO.petRevivalDiscount,
+  peddlerCounterReduction: { unit: 'flat', title: "Flat reduction to the guild's quest-count counter toward Grimsby's next visit." },
+  preventInjury: { unit: 'bool', title: 'Blocks any injury roll on the quest this is equipped for.' },
+  guaranteedGoodEvent: { unit: 'bool', title: 'Forces the quest event roll (if any fires) to land positive.' },
+  healInjury: { unit: 'bool', title: "Clears the hero's current injury immediately on use." },
+};
+const EVENT_EFFECT_FIELD_INFO = {
+  success: { unit: 'pts', title: 'Percentage points added to the success roll for this quest.' },
+  goldPct: { unit: '0-1x', title: 'Multiplier applied to gold -- 0.5 = +50%. NOT the same convention as Modifiers/effect\'s "gold" key (10 = +10%) -- easy to mix up, confirmed against the real formula in QuestManager.resolve.' },
+  flatGold: { unit: 'flat', title: 'Flat gold added regardless of quest outcome.' },
+  xpPct: { unit: '0-1x', title: 'Multiplier applied to XP -- 0.5 = +50%, same 0-1 convention as goldPct (confirmed against QuestManager.resolve), not Modifiers\' "xp" key\'s 10=+10% convention.' },
+  loot: { unit: 'pts', title: 'Percentage points added to loot chance.' },
+  durability: { unit: 'flat', title: 'Extra durability damage applied.' },
+  delay: { unit: '%mult', title: 'Percentage added to quest duration (resolved as a delay note only).' },
+  injury: { unit: 'bool', title: 'Forces an injury attempt even on an otherwise successful quest.' },
+  guaranteedLoot: { unit: 'rarity', title: 'Guarantees an extra loot roll at this rarity floor or higher.' },
+};
 
 function listInput(id, items) {
   const rows = (items.length ? items : ['']).map((v, i) => `
@@ -601,12 +702,35 @@ function listInput(id, items) {
   return `<div class="list-input" id="${id}">${rows}<button type="button" data-add-item>+ add</button></div>`;
 }
 
-function kvGrid(id, keys, values, kind) {
+/**
+ * `fieldInfo`, if given, is a per-key { unit, title } lookup (see
+ * MOD_FIELD_INFO etc. above) -- renders a short muted unit tag right next
+ * to the label, and a full-sentence hover tooltip on the input itself, so
+ * a value like "success: -5" doesn't require already knowing the
+ * codebase to read correctly (see those constants' own top comment for
+ * why this exists and what each unit tag means). Falls back to no tag/
+ * tooltip for any key without an entry, same as before this existed.
+ *
+ * `ENUM_KV_KEYS[k]`, if present, renders a real `<select>` instead of a
+ * number/checkbox input -- currently only `guaranteedLoot`
+ * (eventEffects), which is a Rarity string, not a number. See that
+ * constant's own comment for the bug this fixes.
+ */
+function kvGrid(id, keys, values, kind, fieldInfo) {
   const rows = keys.map((k) => {
-    if (kind === 'mixed' && BOOL_KEYS.has(k)) {
-      return `<label>${k}</label><input type="checkbox" data-kv="${k}" ${values[k] ? 'checked' : ''} />`;
+    const info = fieldInfo?.[k];
+    const unitTag = info?.unit ? ` <span class="tiny muted">(${escapeHtml(info.unit)})</span>` : '';
+    const titleAttr = info?.title ? ` title="${escapeHtml(info.title)}"` : '';
+    const label = `<label>${k}${unitTag}</label>`;
+    if (ENUM_KV_KEYS[k]) {
+      const opts = ['<option value="">—</option>', ...ENUM_KV_KEYS[k].map((o) =>
+        `<option value="${o}" ${o === values[k] ? 'selected' : ''}>${o}</option>`)].join('');
+      return `${label}<select data-kv="${k}"${titleAttr}>${opts}</select>`;
     }
-    return `<label>${k}</label><input type="number" step="any" data-kv="${k}" value="${values[k] ?? ''}" placeholder="—" />`;
+    if (kind === 'mixed' && BOOL_KEYS.has(k)) {
+      return `${label}<input type="checkbox" data-kv="${k}"${titleAttr} ${values[k] ? 'checked' : ''} />`;
+    }
+    return `${label}<input type="number" step="any" data-kv="${k}"${titleAttr} value="${values[k] ?? ''}" placeholder="—" />`;
   }).join('');
   return `<div class="kv-grid" id="${id}">${rows}</div>`;
 }
@@ -1095,7 +1219,13 @@ function readField(spec, key) {
     const out = {};
     el.querySelectorAll('[data-kv]').forEach((input) => {
       const k = input.dataset.kv;
-      if (input.type === 'checkbox') {
+      if (input.tagName === 'SELECT') {
+        // guaranteedLoot today -- a real enum value (Rarity string), not
+        // a number. See ENUM_KV_KEYS/kvGrid's own comment for the bug
+        // this replaces (a plain number input silently accepting and
+        // saving garbage where a rarity string belonged).
+        if (input.value !== '') out[k] = input.value;
+      } else if (input.type === 'checkbox') {
         if (input.checked) out[k] = true;
       } else if (input.value !== '') {
         out[k] = parseFloat(input.value);

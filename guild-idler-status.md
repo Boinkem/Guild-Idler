@@ -4990,6 +4990,95 @@ actually new) -- clean pass. The patch itself was verified with a real
 confirming it applies cleanly and produces byte-identical output to what
 was tested here.
 
+### DevTool clarity pass: unit hints + two real save-blocking bugs found -- built
+Direct request: the generic mods/stats/effect/eventEffects editor (a
+compact label+input grid, shared across equipment/consumables/injuries/
+events/hero-classes/etc.) shows a raw number like "success: -5" with
+nothing indicating whether that's flat percentage points, a percentage
+multiplier, or something else -- confirmed genuinely ambiguous by
+checking real usage, not dismissed as obvious.
+
+**Three actually different percentage conventions exist across this
+game's fields, not one.** Checked each one directly against the real
+formula that consumes it rather than assuming from the field name:
+- **"pts"** -- flat percentage points, added directly (`success: 5` =
+  +5% on top of whatever the base already was). `Modifiers.success`/
+  `loot`/`injuryResist`, plus the matching keys on `effect`.
+- **"%mult"** -- the number itself IS the percentage (`gold: 10` =
+  +10% gold, i.e. `result * 1.10`). `Modifiers.gold`/`xp`/`speed`/
+  `durability`.
+- **"0-1x"** -- a fractional multiplier where 1.0 = 100%
+  (`goldPct: 0.5` = +50%, i.e. `result * (1 + 0.5)`) -- confirmed
+  directly against `QuestManager.resolve`'s actual formula
+  (`gold = ... * (1 + events.goldPct)`), not guessed from the field's
+  own doc comment alone. `EventDef.effects.goldPct`/`xpPct` only.
+  **This is the one genuinely easy to mix up** with "%mult" above --
+  both read as "a percentage" in prose, but a `goldPct` of 10 means
+  +1000%, not +10%. Flagged explicitly in its own tooltip for exactly
+  this reason.
+- **"flat"** -- a plain number, no percentage meaning at all
+  (`flatGold`, `health`, `petHealth`, `peddlerCounterReduction`).
+
+Every kv-grid field across `mods`/`stats`/`effect`/`eventEffects` now
+shows a short muted unit tag next to its label (`success (pts)`,
+`gold (%mult)`, `goldPct (0-1x)`, etc.) plus a full-sentence hover
+tooltip on the input itself. Descriptions are grounded directly in the
+real doc comments on `Modifiers`/`Stats`/`ConsumableDef.effect`/
+`EventDef.effects` in `types.ts`/`data/events.ts` (Stats' own tooltip
+text matches the Guide tab's player-facing "Stat Points" entry word for
+word, so it can never contradict what a player actually sees in-game),
+not written from memory or guessed.
+
+**Found two real, live bugs while auditing these fields for accuracy,
+not hypothetical ones -- both fixed in the same pass:**
+
+- **`MOD_KEYS`/`EFFECT_KEYS` had drifted behind the real `Modifiers`/
+  `ConsumableDef.effect` types.** `health`/`revivalDiscount`/
+  `petHealth`/`petRevivalDiscount` (4 keys) were missing from
+  `MOD_KEYS`; `xp`/`loot`/`injuryResist`/`speed`/`durability`/`health`/
+  `restoreHealth`/`healthDamageReduction`/`revivalDiscount`/
+  `petHealth`/`petRevivalDiscount`/`peddlerCounterReduction` (12 keys)
+  were missing from `EFFECT_KEYS`. Not a hypothetical gap: confirmed 23
+  real equipment entries already use the `health` mod, and real
+  consumables already use `restoreHealth`/`healthDamageReduction`/
+  `peddlerCounterReduction`. Verified the actual severity directly
+  against the live server, not assumed -- restored the pre-fix
+  `server.mjs`, started the real DevTool server, fetched the real
+  `equipment.json` over its actual API, and re-POSTed it completely
+  unchanged: the save **hard-failed with a 400 and 23 "unknown
+  modifier" validation errors**, meaning the entire Equipment tab was
+  unsaveable through the DevTool at all, for any edit, not just a
+  silent per-field drop the way the earlier `raidExclusive`/`craftable`
+  gap was. Same class of bug, worse blast radius. Re-ran the identical
+  test against the fixed `server.mjs` afterward: real 200, real
+  round-trip, `health: 5` confirmed present before and after the save.
+- **`eventEffects.guaranteedLoot` was rendering as a plain number
+  input.** It's actually a `Rarity` string (`'common'`&hellip;
+  `'legendary'`), the one non-numeric, non-boolean key on
+  `EventDef.effects` -- confirmed by reading the real type, not
+  assumed from the field name. The shared kv-grid only ever branched on
+  checkbox-vs-number, so typing into this field saved a garbage number
+  where a rarity string belonged, and nothing on either the client or
+  server caught it. Fixed on both ends: `app.js`'s `kvGrid` now renders
+  a real `<select>` for this one key (`ENUM_KV_KEYS`, a small per-key
+  override map rather than a general kvGrid rewrite, since nothing else
+  currently needs it), and `server.mjs`'s `eventEffects` validator case
+  gained an explicit rarity-membership check as the backstop, so even a
+  hand-edited JSON file with a bad value gets caught on save.
+
+**Verified end-to-end, not just read through:** `node --check` passes
+clean on both `server.mjs` and `app.js`. Simulated the real
+`validateEntry` logic directly against real content (the 23-entry
+`health` case, real `restoreHealth`/`healthDamageReduction`/
+`peddlerCounterReduction` consumable data, a valid `guaranteedLoot`,
+and a deliberately invalid one) -- all resolve exactly as intended. The
+actual live DevTool server was started twice (once on the original
+`server.mjs`, once on the fixed one) and driven through its real HTTP
+API both times for the equipment save-roundtrip test described above --
+not simulated, an actual `curl`/`urllib` request against a real running
+instance, with the test-only write reverted via `git checkout` afterward
+so no incidental content changes leaked into this patch.
+
 ### Hero Classes + Recruit Costs DevTool migration -- built
 Follow-up "any more DevTool workflow opportunities?" review, this time
 against a real, freshly-cloned copy of the repo (`git clone` via the

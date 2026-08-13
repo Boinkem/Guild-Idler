@@ -673,12 +673,35 @@ const SCHEMAS = {
   },
 };
 
-const MOD_KEYS = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability'];
+// Kept in sync with the real `Modifiers` interface in types.ts by hand --
+// confirmed against it directly (Aug 2026 DevTool clarity pass) after
+// finding this list had drifted behind: `health`/`revivalDiscount`/
+// `petHealth`/`petRevivalDiscount` all existed on the real type and were
+// already being read by live game code, but weren't in this list, so the
+// DevTool's generic `mods` editor would reject them outright as "unknown
+// modifier" -- the same class of silent-gap bug the equipment schema's
+// missing raidExclusive/craftable fields were. If Modifiers ever gains a
+// new key, this list (and app.js's own copy, plus MOD_FIELD_INFO/
+// EFFECT_FIELD_INFO below) needs updating by hand -- there's no automatic
+// sync between the TS type and this plain JS array.
+const MOD_KEYS = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability', 'health', 'revivalDiscount', 'petHealth', 'petRevivalDiscount'];
 // Same 4 elements as ElementType in types.ts -- used by the 'resultGem'
 // field type below (Weapon Enchanting / Armour Infusion gem recipes).
 const ELEMENT_KEYS = ['fire', 'frost', 'lightning', 'poison'];
 const STAT_KEYS = ['strength', 'endurance', 'luck', 'wisdom'];
-const EFFECT_KEYS = ['success', 'gold', 'preventInjury', 'guaranteedGoodEvent', 'healInjury'];
+// Same "found drifted behind the real type, fixed in the same pass"
+// note as MOD_KEYS above -- ConsumableDef.effect (types.ts) has 12 more
+// keys than this list had (xp/loot/injuryResist/speed/durability/health/
+// restoreHealth/healthDamageReduction/revivalDiscount/petHealth/
+// petRevivalDiscount/peddlerCounterReduction), all live on real crafted
+// or hand-authored consumables today -- this was the single biggest gap
+// found in the whole pass, not a hypothetical one.
+const EFFECT_KEYS = [
+  'success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability',
+  'health', 'restoreHealth', 'healthDamageReduction', 'revivalDiscount',
+  'petHealth', 'petRevivalDiscount', 'peddlerCounterReduction',
+  'preventInjury', 'guaranteedGoodEvent', 'healInjury',
+];
 const EVENT_EFFECT_KEYS = ['success', 'goldPct', 'flatGold', 'xpPct', 'loot', 'durability', 'delay', 'injury', 'guaranteedLoot'];
 const MATERIAL_KEYS = ['ore', 'timber', 'herbs', 'fish'];
 const RARITY_KEYS = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
@@ -746,7 +769,22 @@ function validateEntry(schema, entry, index) {
         break;
       case 'eventEffects':
         if (typeof value !== 'object') errors.push(`entry ${index}: "${key}" must be an object`);
-        else for (const k of Object.keys(value)) if (!EVENT_EFFECT_KEYS.includes(k)) errors.push(`entry ${index}: unknown effect key "${k}"`);
+        else {
+          for (const k of Object.keys(value)) if (!EVENT_EFFECT_KEYS.includes(k)) errors.push(`entry ${index}: unknown effect key "${k}"`);
+          // guaranteedLoot is EventDef.effects' one non-numeric,
+          // non-boolean key (a Rarity string, not a percentage or a
+          // flat amount) -- found rendering as a plain number input in
+          // the DevTool's generic kv-grid (same shared editor every
+          // other numeric mods/effects/stats field uses), which meant
+          // typing anything into it saved a garbage number instead of a
+          // real rarity string. Fixed on the frontend (see app.js's
+          // kvGrid, now a rarity <select> for this one key
+          // specifically) -- this server-side check is the backstop, so
+          // a save can't silently accept the old broken shape either.
+          if (value.guaranteedLoot !== undefined && !RARITY_KEYS.includes(value.guaranteedLoot)) {
+            errors.push(`entry ${index}: "${key}.guaranteedLoot" must be one of ${RARITY_KEYS.join(', ')}`);
+          }
+        }
         break;
       case 'materials':
         if (typeof value !== 'object') errors.push(`entry ${index}: "${key}" must be an object`);
