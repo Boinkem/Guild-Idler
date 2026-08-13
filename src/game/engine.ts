@@ -562,6 +562,22 @@ export class GameEngine {
     if (windowRolledOver) {
       this.state.chainBoard = QuestManager.generateChainBoard(this.state, now).filter((o) => !active.has(o.id));
       changed = true;
+      // Checked immediately, right here, rather than left to whichever
+      // unrelated action (buying an upgrade, resolving an unrelated
+      // quest...) happens to next call GuidanceManager.checkAll elsewhere
+      // -- first_chain_seen is the one guidance topic promoted to a
+      // standalone MODAL rather than a toast (see MenuWindow.tsx), so it
+      // reads as a genuine non-sequitur when it surfaces attached to
+      // something the player was doing for an entirely different reason,
+      // in a way a milder toast mistiming wouldn't. Confirmed via a real
+      // repro: setting a hero to level 100 via Testing populates
+      // chainBoard on the very next tick here, well before the player's
+      // next real action -- previously that meant the very next unrelated
+      // thing they did (a Black Market purchase, in the field report that
+      // caught this) triggered the modal instead. checkAll is still safe
+      // to call from every other site unchanged: once seen here, it's
+      // marked seen and every later call is simply a no-op for this topic.
+      this.reportGuidance(GuidanceManager.checkAll(this.state));
     }
     if (ShopManager.needsRefresh(this.state, now) || this.state.shop.equipment.length === 0) {
       ShopManager.refresh(this.state, now, true);

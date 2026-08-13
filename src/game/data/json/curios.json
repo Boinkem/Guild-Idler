@@ -4,55 +4,63 @@
     "name": "A Rock",
     "description": "It's a rock. Grimsby swears it's a good one.",
     "sellValue": 1,
-    "glyph": "\ud83e\udea8"
+    "glyph": "🪨",
+    "icon": "crafting/Crafting_73.png"
   },
   {
     "id": "old_portrait",
     "name": "Old Portrait",
     "description": "A stranger's face, cracked with age. Nobody in the guild recognizes them.",
     "sellValue": 14,
-    "glyph": "\ud83d\uddbc\ufe0f"
+    "glyph": "🖼️",
+    "icon": "armor/Armor_preview.png"
   },
   {
     "id": "tarnished_ring",
     "name": "Tarnished Ring",
     "description": "Too small for any hero's finger. Still worth something to the right buyer.",
     "sellValue": 22,
-    "glyph": "\ud83d\udc8d"
+    "glyph": "💍",
+    "icon": "accessories/Accessory_01.png"
   },
   {
     "id": "chipped_gem",
     "name": "Chipped Gem",
     "description": "A real gemstone, mostly. The chip knocks the price down considerably.",
     "sellValue": 35,
-    "glyph": "\ud83d\udc8e"
+    "glyph": "💎",
+    "icon": "crafting/Crafting_19.png"
   },
   {
     "id": "bent_spoon",
     "name": "Bent Spoon",
     "description": "Somebody's kitchen is missing this. It is not this guild's problem.",
     "sellValue": 2,
-    "glyph": "\ud83e\udd44"
+    "glyph": "🥄",
+    "icon": "misc/Misc_74.png"
   },
   {
     "id": "strange_coin",
     "name": "Strange Coin",
     "description": "Doesn't match any currency anyone here has ever seen. Collectors love that sort of thing.",
     "sellValue": 18,
-    "glyph": "\ud83e\ude99"
+    "glyph": "🪙",
+    "icon": "misc/Misc_25.png"
   },
   {
     "id": "polished_gem",
     "name": "Polished Gem",
     "description": "No chips, no cracks, no questions asked. A genuinely good find.",
     "sellValue": 60,
-    "glyph": "\ud83d\udc8e"
+    "glyph": "💎",
+    "icon": "crafting/Crafting_41.png"
   },
   {
     "id": "dusty_bauble",
     "name": "Dusty Bauble",
     "description": "Once someone's treasured keepsake. Now it's cluttering the stash.",
     "sellValue": 6,
-    "glyph": "\u2728"
+    "glyph": "✨",
+    "icon": "crafting/Crafting_46.png"
   }
 ]

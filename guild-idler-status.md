@@ -8771,3 +8771,39 @@ entries. curios.json/tuning.json both directly parsed and spot-checked
 drop tuning knobs present with the intended per-difficulty values).
 Migration chain confirmed contiguous (35->36->37->38->39, no gaps or
 collisions) after the rebase.
+
+### Fixed: "you've discovered a quest chain" modal firing on an unrelated action
+
+Root cause found, not guessed at: `GuidanceManager.checkAll` is called
+from roughly a dozen different action-specific spots throughout
+engine.ts (buying an upgrade, resolving a quest, resolving a raid...),
+each intentionally checking EVERY topic as a "cheap, safe to call after
+anything" sweep -- fine for the other topics, which surface as mild
+toasts, but `first_chain_seen` is the one topic promoted to a
+standalone MODAL (the scripted tour's own finale). `refreshWorld` --
+the function that actually populates `chainBoard` on a board-refresh
+window rollover -- never called `checkAll` at all. So the modal only
+ever fired as an incidental side effect of whatever OTHER action
+happened to run `checkAll` next, which could be anything, including
+something completely unrelated to the chain that just appeared.
+
+Reproduced directly: setting a hero to level 100 via Testing populates
+`chainBoard` on the very next tick (through the same `refreshWorld`
+path a fresh save's own initial board generation goes through), with
+no natural `checkAll` call anywhere near that moment -- so the very
+next real action taken (a Black Market purchase, in the actual report)
+is what ended up triggering the modal, reading as a total non-sequitur.
+
+Fixed by calling `reportGuidance(GuidanceManager.checkAll(...))`
+immediately inside `refreshWorld`, right after `chainBoard` is
+populated -- the same "check immediately, don't wait for whatever's
+next" pattern `buyUpgrade`/`upgradeFacility` already use for their own
+unlock-tied topics, just applied at the actual place chains appear
+instead. Gated by the same `windowRolledOver` check that already gates
+the `chainBoard` regeneration itself (a 30-minute window, not every
+tick), so this doesn't turn into a new per-second poll. Every other
+`checkAll` call site is untouched and still safe -- once a topic's
+been marked seen here, every later call is simply a no-op for it, same
+as any other topic checked from more than one place already.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` both clean.
