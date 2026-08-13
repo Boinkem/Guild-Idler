@@ -387,19 +387,25 @@ export const HeroManager = {
     return sumMods(...sources);
   },
 
-  activeSetBonuses(hero: Hero): { setName: string; label: string }[] {
+  /**
+   * `mods` is included alongside the flavor `label` (e.g. "Wyrmbane") so a
+   * caller can describe what a bonus actually DOES, not just its name --
+   * see describeMods() in util.ts, and EquipmentPanel.tsx's own "Active Set
+   * Bonuses" mouseover, which is what this was added for.
+   */
+  activeSetBonuses(hero: Hero): { setName: string; label: string; mods: Partial<Modifiers> }[] {
     const setCounts: Record<string, number> = {};
     for (const item of Object.values(hero.equipment)) {
       if (!item || item.durability <= 0) continue;
       const def = EQUIPMENT_BY_ID[item.defId];
       if (def?.setId) setCounts[def.setId] = (setCounts[def.setId] ?? 0) + 1;
     }
-    const out: { setName: string; label: string }[] = [];
+    const out: { setName: string; label: string; mods: Partial<Modifiers> }[] = [];
     for (const [setId, count] of Object.entries(setCounts)) {
       const set = SET_BY_ID[setId];
       if (!set) continue;
       for (const bonus of set.bonuses) {
-        if (count >= bonus.count) out.push({ setName: set.name, label: `${bonus.label} (${bonus.count})` });
+        if (count >= bonus.count) out.push({ setName: set.name, label: `${bonus.label} (${bonus.count})`, mods: bonus.mods });
       }
     }
     return out;

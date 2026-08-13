@@ -41,8 +41,10 @@ const TIER_LABEL: Record<PeddlerCardTier, string> = {
 /** How long the two unpicked cards take to fade away before the result
  *  summary appears -- shared between the CSS animation (see .peddler-
  *  card-fading-out in app.css) and the setTimeout that gates the summary,
- *  so they can never drift out of sync with each other. */
-const UNPICKED_FADE_MS = 480;
+ *  so they can never drift out of sync with each other. Doubled from 480
+ *  -- the original fade read as too abrupt to actually register as a
+ *  fade rather than a snap. */
+const UNPICKED_FADE_MS = 960;
 
 /** How many little glow particles fly off for a given outcome -- keyed
  *  to the outcome's own tier rather than a raw gold/material amount,

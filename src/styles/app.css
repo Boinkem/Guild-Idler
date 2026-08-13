@@ -483,7 +483,16 @@ button:focus-visible, [tabindex]:focus-visible {
      entirely, by which point the variable is long since set). */
   animation: bob calc(2.4s / max(var(--anim-speed, 1), 0.001)) steps(2, end) infinite;
 }
-.knight-button:hover { background: none; transform: none; }
+/* :not(:disabled) added purely for specificity, not behavior -- the
+   generic `button:hover:not(:disabled)` rule above (which paints the
+   panel-gradient background every plain button gets on hover) has HIGHER
+   specificity than a bare `.knight-button:hover` (one type selector plus
+   two pseudo-classes beats one class plus one pseudo-class), so it was
+   silently winning over this override despite coming later in the file --
+   the actual cause of the once-transparent sprite square turning solid
+   on mouseover. Matching the same compound shape here is what actually
+   fixes it, not just moving this rule around. */
+.knight-button:hover:not(:disabled) { background: none; transform: none; }
 
 .knight-button.walking { animation: walk-bob 0.5s steps(2, end) infinite; }
 .knight-button.departing { animation: depart 900ms ease-in forwards; }
@@ -568,7 +577,9 @@ button:focus-visible, [tabindex]:focus-visible {
   filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.4));
   animation: bob calc(2.4s / max(var(--anim-speed, 1), 0.001)) steps(2, end) infinite;
 }
-.pet-companion-button:hover { background: none; transform: none; }
+/* Same specificity fix as .knight-button:hover above -- see its comment
+   for the full reasoning. */
+.pet-companion-button:hover:not(:disabled) { background: none; transform: none; }
 
 .idle-plate {
   margin-top: 8px;
@@ -1289,7 +1300,9 @@ button:focus-visible, [tabindex]:focus-visible {
   display: block;
   height: 100%;
   background: var(--brass);
-  animation: notification-banner-countdown 5000ms linear forwards;
+  /* Matches DISPLAY_MS in NotificationBanner.tsx exactly -- see that
+     constant's own comment. */
+  animation: notification-banner-countdown 10000ms linear forwards;
 }
 @keyframes notification-banner-pop-in {
   0% { transform: translateX(-50%) translateY(-16px); opacity: 0; }
@@ -2592,17 +2605,36 @@ button.harvest-item:hover {
   cursor: pointer;
   padding: 0;
 }
-/* Plain highlight on hover -- no shake/transform. A CSS transform
-   animation on the same element as a large background-image was found
-   to intermittently repaint it blank (Chromium broken-image glyph) mid-
-   animation on genuine sustained hover, confirmed via direct repeated-
-   frame screenshots, not just a one-off. Removing the animation removes
-   the root cause entirely rather than just mitigating it. */
+/* Highlight PLUS a "pop out" on hover -- scales the whole button box
+   (border, outline, and the card-back image all together, uniformly,
+   from the center) rather than zooming just the background-image inside
+   a fixed-size box, which used to read as the art zooming in lopsided
+   toward one corner instead of the card itself growing. This is a
+   different animation shape than the shake/transform that was removed
+   after it intermittently blanked the card (see the git history on this
+   rule) -- that was a `transform` applied mid-animation-loop on every
+   frame; this is a single, one-shot :hover transition with `will-change`
+   set so the browser promotes the layer BEFORE the transition starts
+   rather than deciding mid-transition, the same fix proven to work for
+   the original bug, applied here preemptively rather than reactively.
+   transform-origin is explicit (not just relying on the default) so the
+   growth is always centered, never anchored to a corner. z-index needs
+   no extra position:relative here since .peddler-card-row is a flex
+   container and .peddler-card is a direct flex item -- z-index already
+   applies to flex items without an explicit position. */
+.peddler-card-facedown {
+  transition: transform 120ms ease;
+  transform-origin: center;
+  will-change: transform;
+}
 .peddler-card-facedown:hover {
   border-color: var(--brass);
   outline: 2px solid var(--brass);
+  transform: scale(1.08);
+  z-index: 1;
 }
 .peddler-card-facedown:disabled { cursor: default; opacity: 0.6; }
+.peddler-card-facedown:disabled:hover { transform: none; }
 
 /* Plays on the two cards that WEREN'T picked once a result comes back --
    they never flip face-up at all now (see PeddlerCardModal.tsx's own
@@ -2613,7 +2645,9 @@ button.harvest-item:hover {
    shorthand below) holds the end state for the ~ties-to-UNPICKED_FADE_MS
    window before PeddlerCardModal actually unmounts them. */
 .peddler-card-fading-out {
-  animation: peddler-card-fade-out 480ms ease forwards;
+  /* Matches UNPICKED_FADE_MS in PeddlerCardModal.tsx exactly -- see that
+     constant's own comment. */
+  animation: peddler-card-fade-out 960ms ease forwards;
   pointer-events: none;
 }
 @keyframes peddler-card-fade-out {

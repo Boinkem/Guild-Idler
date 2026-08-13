@@ -208,6 +208,10 @@ async function createWindow() {
     transparent: true,
     resizable: false,
     maximizable: false,
+    // Not fullscreenable at creation time (idle mode never should be) --
+    // window:setMode flips this on/off as the same window enters/leaves
+    // menu mode, via win.setFullScreenable() below, rather than this ever
+    // being a fixed value for the window's whole lifetime.
     fullscreenable: false,
     skipTaskbar: false,
     hasShadow: false,
@@ -302,6 +306,14 @@ async function createWindow() {
     // defensive shape as the moved listener above, in case that ever
     // changes.
     if (currentMode !== 'menu') return;
+    // A fullscreen toggle fires its own 'resized' event (Chromium reports
+    // the new fullscreen bounds as a resize) -- that's not the player
+    // choosing a new windowed size, so it must never overwrite the
+    // remembered menuWidth/menuHeight the way a genuine drag-to-resize
+    // would. Exiting fullscreen back to the windowed size fires another
+    // 'resized' event of its own, which is also skipped here since it's
+    // just restoring the size already on disk, not a new one to save.
+    if (win.isFullScreen()) return;
     // See suppressNextResizeSave's own comment -- this specific resize was
     // very likely Windows rescaling the window for a new display's DPI
     // scale factor, not the player dragging an edge. The window's actual
@@ -470,7 +482,16 @@ ipcMain.handle('window:setMode', (_e, mode: 'idle' | 'menu') => {
       y: Math.round(workArea.y + (workArea.height - size.height) / 2),
     };
     win.setBounds({ ...pos, ...size }, false);
+    // Only the menu window is allowed to go fullscreen at all -- the tiny
+    // idle companion never should be. See window:setFullscreen below.
+    win.setFullScreenable(true);
   } else {
+    // A fullscreened window can't have its bounds set directly (Chromium
+    // ignores/queues it until fullscreen actually exits), so leaving menu
+    // mode while fullscreen has to drop out of fullscreen first, same as
+    // if the player had toggled it off themselves. Guarded on isFullScreen()
+    // so the ordinary (non-fullscreen) path here is completely unchanged.
+    if (win.isFullScreen()) win.setFullScreen(false);
     // Always return to the saved home position, never wherever the menu
     // window currently happens to be sitting.
     const home = idleBounds ?? bottomRight(IDLE_SIZE.width, IDLE_SIZE.height);
@@ -478,10 +499,24 @@ ipcMain.handle('window:setMode', (_e, mode: 'idle' | 'menu') => {
     win.setBounds({ ...pos, ...IDLE_SIZE }, false);
     win.setResizable(false);
     win.setMaximizable(false);
+    win.setFullScreenable(false);
     win.setMinimumSize(IDLE_SIZE.width, IDLE_SIZE.height);
   }
   currentMode = mode;
 });
+
+ipcMain.handle('window:setFullscreen', (_e, value: boolean) => {
+  if (!win) return false;
+  // Fullscreen is only ever meaningful in menu mode -- the idle companion
+  // is never fullscreenable in the first place (see window:setMode), so
+  // this is a defensive no-op rather than something the renderer should
+  // normally be able to trigger from there.
+  if (currentMode !== 'menu') return false;
+  win.setFullScreen(value);
+  return win.isFullScreen();
+});
+
+ipcMain.handle('window:getFullscreen', () => win?.isFullScreen() ?? false);
 
 ipcMain.handle('window:setAlwaysOnTop', (_e, value: boolean) => {
   alwaysOnTop = value;

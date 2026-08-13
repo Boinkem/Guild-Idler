@@ -120,9 +120,14 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   const { settings, update } = useSettings();
   const [tab, setTab] = useState<TabId>(() => (engine.consumeRequestedTab() as TabId) ?? 'dashboard');
   const [onTop, setOnTop] = useState(true);
+  const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
     void window.littleKnight?.getAlwaysOnTop().then(setOnTop);
+  }, []);
+
+  useEffect(() => {
+    void window.littleKnight?.getFullscreen().then(setFullscreen);
   }, []);
 
   useEffect(() => {
@@ -218,6 +223,22 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
           }}
         >
           {onTop ? 'On top: on' : 'On top: off'}
+        </button>
+        {/* Menu-only -- the idle companion is never fullscreenable in the
+            first place (see electron/main.ts's own window:setMode), so this
+            button only ever renders here, not anywhere the companion shows.
+            Falls back to a plain toggle of local state (`!fullscreen`) if
+            littleKnight is unavailable (the browser dev:web build), same
+            shape the "On top" button above already uses. */}
+        <button
+          className="btn-ghost"
+          onClick={async () => {
+            const next = await window.littleKnight?.setFullscreen(!fullscreen);
+            setFullscreen(next ?? !fullscreen);
+          }}
+          title={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+        >
+          {fullscreen ? '🗗 Windowed' : '⛶ Fullscreen'}
         </button>
         <button className="btn-ghost" onClick={onClose}>Back to desktop</button>
       </header>

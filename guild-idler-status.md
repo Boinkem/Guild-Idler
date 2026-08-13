@@ -8078,3 +8078,100 @@ needed; `first_injury_or_wear` firing correctly off a simulated injury;
 and a simulated pre-patch save (every new field explicitly deleted)
 migrating and playing through a full `treatInjury` call with zero
 crashes and the hero-freebie still correctly available.
+
+### Guild Menu batch: fullscreen toggle, set-bonus tooltips, longer timers, Grimsby hover, desktop-sprite hover fix -- built
+
+Five requested items, all small/scoped, batched into one patch.
+
+**1. Fullscreen/Windowed button for the Guild Menu.** The menu and idle
+companion share one `BrowserWindow` instance, created with
+`fullscreenable: false` -- correct for the idle companion (which should
+never go fullscreen) but previously fixed for the menu too, since nothing
+toggled it back on. `window:setMode`'s existing `menu`/`idle` branches now
+flip `win.setFullScreenable()` accordingly (`true` entering menu mode,
+`false` returning to idle), and two new IPC handlers
+(`window:setFullscreen`/`window:getFullscreen`) let the renderer drive it,
+guarded to only ever do anything in menu mode. Leaving menu mode while
+fullscreen now explicitly drops out of fullscreen first
+(`win.setFullScreen(false)`) before `setBounds` runs, since Chromium
+won't reposition a fullscreened window directly. The existing `resized`
+listener (which persists a user-resized `menuWidth`/`menuHeight` to disk)
+now also skips saving while `win.isFullScreen()` -- fullscreen's own
+bounds firing a `resized` event would otherwise silently overwrite the
+real remembered windowed size with the fullscreen one, corrupting it the
+same class of bug `suppressNextResizeSave` already guards against for
+cross-monitor DPI rescales. `preload.ts`/`SaveManager.ts`'s
+`window.littleKnight` type both extended to match. New header button in
+`MenuWindow.tsx` (next to "On top"), same `useState` + `useEffect`-fetch-
+on-mount + async-toggle shape the existing "On top" button already uses,
+so it degrades the same way in the browser dev:web build (no
+`window.littleKnight`, falls back to local-only toggle).
+
+**2. Active Set Bonuses now say what they actually do, not just their
+flavor name.** Previously showed only `bonus.label` (e.g. "Wyrmbane"),
+which is a name, not a description -- a player had no way to see the
+actual `mods` (success/gold/loot/etc.) without leaving to the Lore tab's
+Collection codex. `HeroManager.activeSetBonuses` now also returns each
+bonus's `mods` alongside its `label`; `EquipmentPanel.tsx`'s three
+places showing set-bonus text (the per-hero "Active Set Bonuses" summary
+card, and `SetInfoBlock`'s own "Active:"/"Next at:" lines inside an
+item's detail) all get a `title` mouseover built from the existing
+`describeMods()` helper in `util.ts` (already used elsewhere in this
+same file, e.g. enchant stat previews) -- no new formatting logic
+needed, just wiring an existing one through to a spot that wasn't using
+it yet.
+
+**3. Notification banner display time doubled (5s -> 10s).**
+`NotificationBanner.tsx`'s `DISPLAY_MS` and `app.css`'s
+`.notification-banner-bar > span` countdown animation both changed
+together (5000ms -> 10000ms each), same as the comment on `DISPLAY_MS`
+already requires -- the auto-dismiss timer and the visual countdown bar
+have to match exactly or the bar either finishes early (reading as "it's
+about to close" while it doesn't) or lags the real dismiss.
+
+**4. Grimsby's unpicked-card fade slowed down (480ms -> 960ms).**
+Same shared-constant pattern as above:
+`PeddlerCardModal.tsx`'s `UNPICKED_FADE_MS` and `app.css`'s
+`peddler-card-fade-out` keyframe animation duration both doubled
+together, per `UNPICKED_FADE_MS`'s own comment (the JS timeout that
+gates the result summary appearing has to match the CSS animation
+exactly or the summary would appear before/after the fade visually
+finishes).
+
+**5. Grimsby face-down card hover reworked: highlight retained, whole
+button "pops out" on hover instead of the art zooming.** The
+shake/zoom transform on hover was removed entirely in an earlier pass
+(see "Grimsby: UI rework" above) after it intermittently blanked the
+card art mid-animation on sustained hover -- a real Chromium compositor
+bug tied to animating `transform` continuously on the same element as a
+large background-image. This is a different shape of transform, not a
+revival of the old one: a single one-shot `:hover` transition (not a
+looping animation), `will-change: transform` set proactively (the exact
+mitigation already proven to fix the original bug, applied here up
+front rather than only after a repro), and `transform-origin: center`
+explicit rather than assumed, so the whole button box (border, outline,
+and the card-back image together) grows uniformly from its center --
+reading as the card popping toward the player, not the art zooming
+lopsided into one corner. `.peddler-card-facedown:disabled` (the two
+unpicked cards once a result lands) explicitly gets `transform: none`
+on hover too, since they're momentarily still hoverable-but-inert for
+one render before their own fade-out animation (see item 4) takes over.
+
+**6. Desktop companion hover-coloring bug -- root cause found and
+fixed, not just patched over.** Reported as: hovering the hero or pet
+sprite turns the once-transparent square they sit in solid-colored.
+Both `.knight-button`/`.pet-companion-button` already had their own
+`:hover { background: none; }` overrides -- correct in intent, but
+losing a real CSS specificity fight against the generic
+`button:hover:not(:disabled)` rule every plain button in the game
+picks up (a type selector plus two pseudo-classes beats one class
+selector plus one pseudo-class, regardless of source order). Fixed by
+matching the same compound shape (`.knight-button:hover:not(:disabled)`,
+`.pet-companion-button:hover:not(:disabled)`) rather than reordering
+rules or reaching for `!important` -- this is what actually resolves
+the specificity fight instead of just relocating it.
+
+**Verified via `npx tsc --noEmit` and a full `vite build` (both the
+renderer bundle and the electron main/preload bundles) against a fresh
+clone of current `main` with this patch applied -- all clean, zero
+errors.**

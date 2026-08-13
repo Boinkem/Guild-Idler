@@ -7,8 +7,10 @@ import { TAB_LABELS } from './tabLabels';
  *  CSS countdown-bar animation's own duration exactly (see
  *  .notification-banner-bar's keyframe in app.css) -- if either changes,
  *  the other has to change with it, since the bar is a purely visual
- *  CSS animation and this timer is what actually removes the banner. */
-const DISPLAY_MS = 5000;
+ *  CSS animation and this timer is what actually removes the banner.
+ *  Doubled from 5000 -- the original window read as too quick to
+ *  reliably catch and read before it auto-dismissed. */
+const DISPLAY_MS = 10000;
 
 /**
  * Pops up near the header the moment a genuinely new, banner-worthy entry

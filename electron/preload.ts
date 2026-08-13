@@ -11,6 +11,10 @@ const api = {
   setWindowMode: (mode: 'idle' | 'menu'): Promise<void> => ipcRenderer.invoke('window:setMode', mode),
   setAlwaysOnTop: (value: boolean): Promise<boolean> => ipcRenderer.invoke('window:setAlwaysOnTop', value),
   getAlwaysOnTop: (): Promise<boolean> => ipcRenderer.invoke('window:getAlwaysOnTop'),
+  /** Menu-mode-only -- see main.ts's own window:setFullscreen handler for
+   *  why this is a no-op (returns false) outside menu mode. */
+  setFullscreen: (value: boolean): Promise<boolean> => ipcRenderer.invoke('window:setFullscreen', value),
+  getFullscreen: (): Promise<boolean> => ipcRenderer.invoke('window:getFullscreen'),
   setLocked: (value: boolean): Promise<boolean> => ipcRenderer.invoke('window:setLocked', value),
   getLocked: (): Promise<boolean> => ipcRenderer.invoke('window:getLocked'),
   minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),

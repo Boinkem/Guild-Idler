@@ -110,9 +110,24 @@ function SetInfoBlock({ hero, setId, equipped }: { hero: Hero; setId: string; eq
         {set.name} — {count}/{set.pieces.length} equipped on {hero.name}
       </div>
       {active.length > 0 && (
-        <div>Active: {active.map((b) => `${b.label} (${b.count})`).join(' · ')}</div>
+        <div>
+          Active:{' '}
+          {active.map((b, i) => (
+            <span key={b.label}>
+              {i > 0 && ' · '}
+              <span title={describeMods(b.mods).join(', ')} style={{ cursor: 'help' }}>
+                {b.label} ({b.count})
+              </span>
+            </span>
+          ))}
+        </div>
       )}
-      {next && <div className="muted">Next at {next.count} pieces: {next.label}</div>}
+      {next && (
+        <div className="muted">
+          Next at {next.count} pieces:{' '}
+          <span title={describeMods(next.mods).join(', ')} style={{ cursor: 'help' }}>{next.label}</span>
+        </div>
+      )}
       {!equipped && <div className="muted">Equip this to count toward the set.</div>}
     </div>
   );
@@ -687,7 +702,14 @@ export function EquipmentPanel() {
               Active Set Bonuses
             </div>
             {activeSets.map((s) => (
-              <div key={`${s.setName}:${s.label}`} className="tiny">{s.setName}: {s.label}</div>
+              <div
+                key={`${s.setName}:${s.label}`}
+                className="tiny"
+                title={describeMods(s.mods).join(', ')}
+                style={{ cursor: 'help' }}
+              >
+                {s.setName}: {s.label}
+              </div>
             ))}
           </div>
         );
