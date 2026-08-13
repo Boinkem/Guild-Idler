@@ -8,29 +8,23 @@ export const UPGRADES: UpgradeDef[] = [
   // reads from the tuning registry (tuning.json, category
   // 'vendor_upgrades') rather than being a literal -- editable live via
   // the devtool's Tuning tab without touching this file. See tuning.ts.
+  // --- Vendor Upgrades Consolidation (see guild-idler-status.md) ---
+  // weapons_training/armourers_contract/veteran_explorer/war_stories/
+  // efficient_adventuring used to hand out the exact same generic
+  // Success/Durability/Loot/XP/Gold bonuses the Guild Hall facilities
+  // below already grant, just gated behind a second, unrelated grind.
+  // That power is folded into Barracks/Workshop/Tavern/Library/Treasury
+  // instead (see those facilities' own comments), and every vendor slot
+  // it used to occupy is replaced with something actually themed to
+  // that vendor's own services. Existing saves are refunded the gold
+  // they spent on the removed upgrades -- see SaveManager migration 37.
   {
-    id: 'weapons_training', name: 'Better Weapons Training',
-    description: 'Drill the fundamentals until they are boring.',
-    baseCost: Tuning.get('upgrade.weapons_training.baseCost'),
-    costGrowth: Tuning.get('upgrade.weapons_training.costGrowth'),
-    maxLevel: Tuning.get('upgrade.weapons_training.maxLevel'),
-    modsPerLevel: { success: Tuning.get('upgrade.weapons_training.successPerLevel') }, vendor: 'blacksmith',
-  },
-  {
-    id: 'efficient_adventuring', name: 'Efficient Adventuring',
-    description: 'Negotiate the contract before drawing the sword.',
-    baseCost: Tuning.get('upgrade.efficient_adventuring.baseCost'),
-    costGrowth: Tuning.get('upgrade.efficient_adventuring.costGrowth'),
-    maxLevel: Tuning.get('upgrade.efficient_adventuring.maxLevel'),
-    modsPerLevel: { gold: Tuning.get('upgrade.efficient_adventuring.goldPerLevel') },
-  },
-  {
-    id: 'veteran_explorer', name: 'Alchemical Assay',
-    description: 'Acid, flame, and a practiced eye separate true ore from slag before the cart even leaves the ruin.',
-    baseCost: Tuning.get('upgrade.veteran_explorer.baseCost'),
-    costGrowth: Tuning.get('upgrade.veteran_explorer.costGrowth'),
-    maxLevel: Tuning.get('upgrade.veteran_explorer.maxLevel'),
-    modsPerLevel: { loot: Tuning.get('upgrade.veteran_explorer.lootPerLevel') }, vendor: 'alchemist',
+    id: 'smiths_discount', name: "Smith's Discount",
+    description: "A standing account with the Blacksmith -- Repair costs less the longer you've kept it open.",
+    baseCost: Tuning.get('upgrade.smiths_discount.baseCost'),
+    costGrowth: Tuning.get('upgrade.smiths_discount.costGrowth'),
+    maxLevel: Tuning.get('upgrade.smiths_discount.maxLevel'),
+    modsPerLevel: { repairDiscount: Tuning.get('upgrade.smiths_discount.repairDiscountPerLevel') }, vendor: 'blacksmith',
   },
   {
     id: 'mounted_travel', name: 'Mounted Travel',
@@ -41,6 +35,30 @@ export const UPGRADES: UpgradeDef[] = [
     modsPerLevel: { speed: Tuning.get('upgrade.mounted_travel.speedPerLevel') }, vendor: 'blacksmith',
   },
   {
+    id: 'trade_favor_blacksmith', name: 'Trade Favor: Blacksmith',
+    description: "A standing favor with the Blacksmith -- extra free gear restocks per day before you start paying to hurry.",
+    baseCost: Tuning.get('upgrade.trade_favor_blacksmith.baseCost'),
+    costGrowth: Tuning.get('upgrade.trade_favor_blacksmith.costGrowth'),
+    maxLevel: Tuning.get('upgrade.trade_favor_blacksmith.maxLevel'),
+    modsPerLevel: {}, vendorFreeRerollsPerLevel: Tuning.get('upgrade.trade_favor_blacksmith.vendorFreeRerollsPerLevel'), vendor: 'blacksmith',
+  },
+  {
+    id: 'bulk_scrapper', name: 'Bulk Scrapper',
+    description: "The Blacksmith's own trick for breaking gear down efficiently -- bonus Scrap on everything you scrap.",
+    baseCost: Tuning.get('upgrade.bulk_scrapper.baseCost'),
+    costGrowth: Tuning.get('upgrade.bulk_scrapper.costGrowth'),
+    maxLevel: Tuning.get('upgrade.bulk_scrapper.maxLevel'),
+    modsPerLevel: { scrapBonus: Tuning.get('upgrade.bulk_scrapper.scrapBonusPerLevel') }, vendor: 'blacksmith',
+  },
+  {
+    id: 'apothecary_discount', name: "Apothecary's Discount",
+    description: 'A regular customer discount at the Alchemist -- every potion and charm costs a little less.',
+    baseCost: Tuning.get('upgrade.apothecary_discount.baseCost'),
+    costGrowth: Tuning.get('upgrade.apothecary_discount.costGrowth'),
+    maxLevel: Tuning.get('upgrade.apothecary_discount.maxLevel'),
+    modsPerLevel: { consumableDiscount: Tuning.get('upgrade.apothecary_discount.consumableDiscountPerLevel') }, vendor: 'alchemist',
+  },
+  {
     id: 'field_medicine', name: 'Restorative Tinctures',
     description: 'Bitter draughts, brewed to knit flesh faster than they have any business doing.',
     baseCost: Tuning.get('upgrade.field_medicine.baseCost'),
@@ -49,28 +67,36 @@ export const UPGRADES: UpgradeDef[] = [
     modsPerLevel: { injuryResist: Tuning.get('upgrade.field_medicine.injuryResistPerLevel') }, vendor: 'alchemist',
   },
   {
-    id: 'armourers_contract', name: "Armourer's Contract",
-    description: 'Standing repairs mean gear lasts noticeably longer.',
-    baseCost: Tuning.get('upgrade.armourers_contract.baseCost'),
-    costGrowth: Tuning.get('upgrade.armourers_contract.costGrowth'),
-    maxLevel: Tuning.get('upgrade.armourers_contract.maxLevel'),
-    modsPerLevel: { durability: Tuning.get('upgrade.armourers_contract.durabilityPerLevel') }, vendor: 'blacksmith',
+    id: 'trade_favor_alchemist', name: 'Trade Favor: Alchemist',
+    description: "A standing favor with the Alchemist -- extra free supply restocks per day before you start paying to hurry.",
+    baseCost: Tuning.get('upgrade.trade_favor_alchemist.baseCost'),
+    costGrowth: Tuning.get('upgrade.trade_favor_alchemist.costGrowth'),
+    maxLevel: Tuning.get('upgrade.trade_favor_alchemist.maxLevel'),
+    modsPerLevel: {}, vendorFreeRerollsPerLevel: Tuning.get('upgrade.trade_favor_alchemist.vendorFreeRerollsPerLevel'), vendor: 'alchemist',
   },
   {
-    id: 'war_stories', name: 'Runic Insight',
-    description: 'Wards etched into a hero\'s gear murmur half-remembered lessons back to whoever carries them.',
-    baseCost: Tuning.get('upgrade.war_stories.baseCost'),
-    costGrowth: Tuning.get('upgrade.war_stories.costGrowth'),
-    maxLevel: Tuning.get('upgrade.war_stories.maxLevel'),
-    modsPerLevel: { xp: Tuning.get('upgrade.war_stories.xpPerLevel') }, vendor: 'enchanter',
+    id: 'arcane_discount', name: 'Arcane Discount',
+    description: "The Enchanter's own courtesy rate -- Weapon Enchanting and Armour Infusion cost less, gems included.",
+    baseCost: Tuning.get('upgrade.arcane_discount.baseCost'),
+    costGrowth: Tuning.get('upgrade.arcane_discount.costGrowth'),
+    maxLevel: Tuning.get('upgrade.arcane_discount.maxLevel'),
+    modsPerLevel: { enchantDiscount: Tuning.get('upgrade.arcane_discount.enchantDiscountPerLevel') }, vendor: 'enchanter',
+  },
+  {
+    id: 'trade_favor_enchanter', name: 'Trade Favor: Enchanter',
+    description: "A standing favor with the Enchanter -- an extra free early Black Market turnover per day before you start paying to hurry.",
+    baseCost: Tuning.get('upgrade.trade_favor_enchanter.baseCost'),
+    costGrowth: Tuning.get('upgrade.trade_favor_enchanter.costGrowth'),
+    maxLevel: Tuning.get('upgrade.trade_favor_enchanter.maxLevel'),
+    modsPerLevel: {}, vendorFreeRerollsPerLevel: Tuning.get('upgrade.trade_favor_enchanter.vendorFreeRerollsPerLevel'), vendor: 'enchanter',
   },
   {
     id: 'master_adventurer', name: 'Enchanted Seal',
-    description: 'A ward pressed into the guild charter unlocks Legendary contracts on the quest board -- and lends every hero its quiet protection.',
+    description: 'A ward pressed into the guild charter unlocks Legendary contracts on the quest board -- and the Enchanter throws in a standing discount on Black Market prices, guild to guild.',
     baseCost: Tuning.get('upgrade.master_adventurer.baseCost'),
     costGrowth: Tuning.get('upgrade.master_adventurer.costGrowth'),
     maxLevel: Tuning.get('upgrade.master_adventurer.maxLevel'),
-    modsPerLevel: { success: Tuning.get('upgrade.master_adventurer.successPerLevel') }, unlocks: 'legendaryQuests', vendor: 'enchanter',
+    modsPerLevel: { blackMarketDiscount: Tuning.get('upgrade.master_adventurer.blackMarketDiscountPerLevel') }, unlocks: 'legendaryQuests', vendor: 'enchanter',
   },
   {
     id: 'guild_charter', name: 'Guild Charter',
@@ -167,16 +193,6 @@ export const UPGRADES: UpgradeDef[] = [
     costGrowth: Tuning.get('upgrade.board_runner.costGrowth'),
     maxLevel: Tuning.get('upgrade.board_runner.maxLevel'),
     modsPerLevel: {}, questFreeRerollsPerLevel: Tuning.get('upgrade.board_runner.questFreeRerollsPerLevel'),
-  },
-  {
-    id: 'trade_favor', name: 'Trade Favor',
-    description: 'A standing favor with every stall in the market -- extra free restocks per day before you start paying the vendors to hurry.',
-    // Same shape as Board Runner, independent counter -- see
-    // ModifierManager.vendorFreeRerolls.
-    baseCost: Tuning.get('upgrade.trade_favor.baseCost'),
-    costGrowth: Tuning.get('upgrade.trade_favor.costGrowth'),
-    maxLevel: Tuning.get('upgrade.trade_favor.maxLevel'),
-    modsPerLevel: {}, vendorFreeRerollsPerLevel: Tuning.get('upgrade.trade_favor.vendorFreeRerollsPerLevel'),
   },
   {
     id: 'board_warden', name: 'Board Warden',
@@ -321,6 +337,15 @@ export const GUILD_FACILITIES: GuildDef[] = [
   {
     id: 'barracks', name: 'Barracks',
     description: 'Training yard and drill sergeant. Every hero fights better.',
+    // successPerLevel absorbed the Blacksmith's old Better Weapons
+    // Training vendor upgrade (and Enchanted Seal's old success bonus)
+    // as part of the Vendor Upgrades Consolidation -- 3%/level -> 4%,
+    // same 10-level cap, so the combined total (43%) barely moves (40%)
+    // while costing what it used to cost to max Barracks *alone*
+    // (costGrowth bumped 1.8 -> 1.87 to land close to what it used to
+    // cost to grind all three sources together instead). See
+    // guild-idler-status.md's Vendor Upgrades Consolidation entry for
+    // the full worked numbers.
     baseCost: Tuning.get('guild_facility.barracks.baseCost'),
     costGrowth: Tuning.get('guild_facility.barracks.costGrowth'),
     maxLevel: Tuning.get('guild_facility.barracks.maxLevel'),
@@ -329,6 +354,12 @@ export const GUILD_FACILITIES: GuildDef[] = [
   {
     id: 'treasury', name: 'Treasury',
     description: 'Raises how much gold the guild can hold at once.',
+    // goldPerLevel absorbed the old Efficient Adventuring general
+    // upgrade (which was never even vendor-tied) as part of the Vendor
+    // Upgrades Consolidation -- 4%/level -> 12%, same 12-level mods cap,
+    // landing at almost exactly what it used to cost to max both
+    // sources (costGrowth bumped 1.74 -> 1.79). See
+    // guild-idler-status.md's Vendor Upgrades Consolidation entry.
     baseCost: Tuning.get('guild_facility.treasury.baseCost'),
     costGrowth: Tuning.get('guild_facility.treasury.costGrowth'),
     // Extended 12 -> 20: Treasury is meant to keep working as a gold sink
@@ -354,6 +385,12 @@ export const GUILD_FACILITIES: GuildDef[] = [
   {
     id: 'workshop', name: 'Workshop',
     description: 'Gear wears down more slowly and upgrades cost less.',
+    // durabilityPerLevel absorbed the Blacksmith's old Armourer's
+    // Contract vendor upgrade as part of the Vendor Upgrades
+    // Consolidation -- 8%/level -> 14%, same 10-level cap, landing at
+    // almost exactly what it used to cost to max both sources
+    // (costGrowth bumped 1.85 -> 1.87). See guild-idler-status.md's
+    // Vendor Upgrades Consolidation entry.
     baseCost: Tuning.get('guild_facility.workshop.baseCost'),
     costGrowth: Tuning.get('guild_facility.workshop.costGrowth'),
     maxLevel: Tuning.get('guild_facility.workshop.maxLevel'),
@@ -362,6 +399,11 @@ export const GUILD_FACILITIES: GuildDef[] = [
   {
     id: 'library', name: 'Library',
     description: 'Maps, bestiaries, and a very patient archivist.',
+    // xpPerLevel absorbed the Enchanter's old Runic Insight vendor
+    // upgrade as part of the Vendor Upgrades Consolidation -- 6%/level
+    // -> 12%, same 10-level cap, landing at almost exactly what it used
+    // to cost to max both sources (costGrowth bumped 1.84 -> 1.9). See
+    // guild-idler-status.md's Vendor Upgrades Consolidation entry.
     baseCost: Tuning.get('guild_facility.library.baseCost'),
     costGrowth: Tuning.get('guild_facility.library.costGrowth'),
     maxLevel: Tuning.get('guild_facility.library.maxLevel'),
@@ -370,6 +412,13 @@ export const GUILD_FACILITIES: GuildDef[] = [
   {
     id: 'tavern', name: 'Tavern',
     description: 'Where new heroes are found. Each level opens a hero slot.',
+    // lootPerLevel absorbed the Alchemist's old Alchemical Assay vendor
+    // upgrade as part of the Vendor Upgrades Consolidation -- 2%/level
+    // -> 7%, level cap bumped 5 -> 6 (a straight same-level-count fold
+    // landed too cheap here, since Tavern's own curve is much steeper
+    // than Alchemical Assay's was -- see guild-idler-status.md's Vendor
+    // Upgrades Consolidation entry for the worked numbers behind both
+    // the level bump and the costGrowth bump, 2.4 -> 2.47).
     baseCost: Tuning.get('guild_facility.tavern.baseCost'),
     costGrowth: Tuning.get('guild_facility.tavern.costGrowth'),
     maxLevel: Tuning.get('guild_facility.tavern.maxLevel'),

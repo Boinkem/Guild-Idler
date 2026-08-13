@@ -475,6 +475,7 @@ function SlotCard({
   // source of truth when Repair is actually clicked.
   const repairsUsedToday = rerollsUsedToday(engine.state.freeRepairsUsedToday, engine.state.freeRepairDay, Date.now());
   const itemFreeRepairAvailable = repairsUsedToday < ModifierManager.freeRepairsPerDay(engine.state) || !hero.usedFreeRepair;
+  const repairDiscount = ModifierManager.global(engine.state).repairDiscount ?? 0;
 
   return (
     <>
@@ -526,12 +527,12 @@ function SlotCard({
               <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
               <button
                 className="btn-primary"
-                disabled={EquipmentManager.repairCost(item, workshop) === 0}
+                disabled={EquipmentManager.repairCost(item, workshop, repairDiscount) === 0}
                 onClick={() => { engine.repair(item.uid); setOpen(false); }}
               >
-                {itemFreeRepairAvailable && EquipmentManager.repairCost(item, workshop) > 0
+                {itemFreeRepairAvailable && EquipmentManager.repairCost(item, workshop, repairDiscount) > 0
                   ? 'Repair · Free'
-                  : `Repair ${formatGold(EquipmentManager.repairCost(item, workshop))}`}
+                  : `Repair ${formatGold(EquipmentManager.repairCost(item, workshop, repairDiscount))}`}
               </button>
               <button onClick={() => { engine.unequip(hero.id, slot); setOpen(false); }}>
                 Remove
@@ -647,7 +648,7 @@ export function EquipmentPanel() {
   const hero = state.heroes.find((h) => h.id === heroId) ?? state.heroes[0];
 
   const repairBill = EquipmentManager.allItems(state)
-    .reduce((sum, e) => sum + EquipmentManager.repairCost(e.item, workshop), 0);
+    .reduce((sum, e) => sum + EquipmentManager.repairCost(e.item, workshop, ModifierManager.global(state).repairDiscount ?? 0), 0);
 
   // Sell Junk -- bulk-sells everything in the stash at or below a chosen
   // rarity (see ShopManager.sellBelowRarity). Defaults to Common, the

@@ -1,6 +1,7 @@
 import { CONSUMABLE_BY_ID, CONSUMABLES } from '../data/items';
 import { ConsumableDef, GameState, Hero, Modifiers } from '../types';
 import { HeroManager } from './HeroManager';
+import { ModifierManager } from './ModifierManager';
 
 export const InventoryManager = {
   /**
@@ -15,6 +16,19 @@ export const InventoryManager = {
    */
   resolveDef(state: GameState, defId: string): ConsumableDef | undefined {
     return state.customConsumables[defId] ?? CONSUMABLE_BY_ID[defId];
+  },
+
+  /**
+   * A single consumable's shop price after the Alchemist's own
+   * Apothecary's Discount vendor upgrade (consumableDiscount, guild-wide
+   * via ModifierManager.global) -- the one place this discount is
+   * applied, so the price shown in the Vendors panel always matches what
+   * buy() actually charges. Floored at 1 gold, same "never free" floor
+   * every other discounted cost in the game uses.
+   */
+  price(state: GameState, def: ConsumableDef): number {
+    const discount = ModifierManager.global(state).consumableDiscount ?? 0;
+    return Math.max(1, Math.round(def.cost * (1 - discount / 100)));
   },
 
   count(state: GameState, defId: string): number {
@@ -36,7 +50,7 @@ export const InventoryManager = {
   buy(state: GameState, defId: string, amount = 1): string | null {
     const def = CONSUMABLE_BY_ID[defId];
     if (!def) return 'That item is not for sale.';
-    const cost = def.cost * amount;
+    const cost = InventoryManager.price(state, def) * amount;
     if (state.gold < cost) return 'Not enough gold.';
     state.gold -= cost;
     state.stats.goldSpent += cost;

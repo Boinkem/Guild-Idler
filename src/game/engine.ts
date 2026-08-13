@@ -598,13 +598,14 @@ export class GameEngine {
     // allows on a later tick).
     if (this.state.autoRepairEnabled) {
       const workshop = this.state.guild.workshop ?? 0;
+      const repairDiscount = ModifierManager.global(this.state).repairDiscount ?? 0;
       const threshold = this.state.autoRepairThresholdPercent / 100;
       for (const { item } of EquipmentManager.allItems(this.state)) {
         const max = EquipmentManager.maxDurability(item);
         if (max <= 0 || item.durability / max > threshold) continue;
-        const cost = EquipmentManager.repairCost(item, workshop);
+        const cost = EquipmentManager.repairCost(item, workshop, repairDiscount);
         if (cost > 0 && this.state.gold >= cost) {
-          EquipmentManager.repair(this.state, item, workshop);
+          EquipmentManager.repair(this.state, item, workshop, repairDiscount);
           changed = true;
         }
       }
@@ -1379,13 +1380,14 @@ export class GameEngine {
   repair(itemUid: string) {
     const found = EquipmentManager.allItems(this.state).find((e) => e.item.uid === itemUid);
     if (!found) return;
-    const cost = EquipmentManager.repairCost(found.item, this.state.guild.workshop ?? 0);
+    const repairDiscount = ModifierManager.global(this.state).repairDiscount ?? 0;
+    const cost = EquipmentManager.repairCost(found.item, this.state.guild.workshop ?? 0, repairDiscount);
     if (cost === 0) return this.say('Already in perfect condition.');
     const free = this.consumeFreeRepair(found.heroId, Date.now());
     if (free) {
       found.item.durability = EquipmentManager.maxDurability(found.item);
     } else {
-      const error = EquipmentManager.repair(this.state, found.item, this.state.guild.workshop ?? 0);
+      const error = EquipmentManager.repair(this.state, found.item, this.state.guild.workshop ?? 0, repairDiscount);
       if (error) return this.say(error);
     }
     playSound('repair');
@@ -1395,18 +1397,19 @@ export class GameEngine {
 
   repairAll() {
     const workshop = this.state.guild.workshop ?? 0;
+    const repairDiscount = ModifierManager.global(this.state).repairDiscount ?? 0;
     const now = Date.now();
     let spent = 0;
     let freeCount = 0;
     for (const { item, heroId } of EquipmentManager.allItems(this.state)) {
-      const cost = EquipmentManager.repairCost(item, workshop);
+      const cost = EquipmentManager.repairCost(item, workshop, repairDiscount);
       if (cost === 0) continue;
       const free = this.consumeFreeRepair(heroId, now);
       if (free) {
         item.durability = EquipmentManager.maxDurability(item);
         freeCount += 1;
       } else if (this.state.gold >= cost) {
-        EquipmentManager.repair(this.state, item, workshop);
+        EquipmentManager.repair(this.state, item, workshop, repairDiscount);
         spent += cost;
       }
     }
@@ -1555,14 +1558,35 @@ export class GameEngine {
     void this.saveNow();
   }
 
-  /** Restocks the Vendors shop (equipment + consumables) early -- free
-   *  once a day (more via Trade Favor), gold cost climbing after that.
-   *  Doesn't touch the black market. See ShopManager.rerollShop. */
-  rerollShop() {
-    const error = ShopManager.rerollShop(this.state, Date.now());
+  /** Restocks the Blacksmith's own gear stock early -- free once a day
+   *  (more via Trade Favor: Blacksmith), gold cost climbing after that.
+   *  Independent of the Alchemist/Enchanter's own reroll tracks. See
+   *  ShopManager.rerollBlacksmith. */
+  rerollBlacksmith() {
+    const error = ShopManager.rerollBlacksmith(this.state, Date.now());
     if (error) return this.say(error);
     playSound('purchase');
-    this.say('The vendors restock early.');
+    this.say('The Blacksmith restocks early.');
+    void this.saveNow();
+  }
+
+  /** Same shape as rerollBlacksmith, for the Alchemist's own supplies
+   *  stock. See ShopManager.rerollAlchemist. */
+  rerollAlchemist() {
+    const error = ShopManager.rerollAlchemist(this.state, Date.now());
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.say('The Alchemist restocks early.');
+    void this.saveNow();
+  }
+
+  /** Same shape again, for the Enchanter's Black Market -- previously had
+   *  no manual reroll at all. See ShopManager.rerollEnchanter. */
+  rerollEnchanter() {
+    const error = ShopManager.rerollEnchanter(this.state, Date.now());
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.say("The Enchanter's black-market contact turns over early.");
     void this.saveNow();
   }
 

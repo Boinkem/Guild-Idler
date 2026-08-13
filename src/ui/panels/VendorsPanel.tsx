@@ -5,6 +5,7 @@ import { ShopManager } from '../../game/managers/ShopManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { EquipmentManager } from '../../game/managers/EquipmentManager';
+import { InventoryManager } from '../../game/managers/InventoryManager';
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
 import { CONSUMABLE_BY_ID } from '../../game/data/items';
 import { VENDORS, vendorUpgrades } from '../../game/data/progression';
@@ -193,20 +194,28 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
   );
 }
 
-/** Shared between ArmourStock and SuppliesStock -- both draw from the same
- *  underlying state.shop, so one reroll restocks both at once, and the
- *  button is shown identically on either vendor's page rather than
- *  duplicated logic per page. */
-function ShopRerollButton() {
+/**
+ * One of three -- Blacksmith/Alchemist/Enchanter each reroll their own
+ * stock independently now (own cost curve, own daily counter, own Trade
+ * Favor upgrade), replacing the old single button that restocked
+ * Blacksmith gear and Alchemist supplies together. See
+ * ShopManager.rerollBlacksmith/rerollAlchemist/rerollEnchanter.
+ */
+function ShopRerollButton({ vendorId }: { vendorId: VendorId }) {
   const engine = useEngine();
   const state = engine.state;
   const now = useNow();
-  const cost = ShopManager.vendorRerollCost(state, now);
+  const cost = vendorId === 'blacksmith' ? ShopManager.blacksmithRerollCost(state, now)
+    : vendorId === 'alchemist' ? ShopManager.alchemistRerollCost(state, now)
+    : ShopManager.enchanterRerollCost(state, now);
+  const onClick = vendorId === 'blacksmith' ? () => engine.rerollBlacksmith()
+    : vendorId === 'alchemist' ? () => engine.rerollAlchemist()
+    : () => engine.rerollEnchanter();
   return (
     <button
       className="btn-ghost"
       style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
-      onClick={() => engine.rerollShop()}
+      onClick={onClick}
       disabled={cost > state.gold}
       title={cost > 0 ? `Restock early for ${cost} gold` : 'Restock early -- free today'}
     >
@@ -225,7 +234,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
         <p className="tiny muted" style={{ margin: 0 }}>
           Stock rotates in {formatDuration(ShopManager.timeUntilRefresh(state, now))}. The armourer buys as well as sells.
         </p>
-        <ShopRerollButton />
+        <ShopRerollButton vendorId="blacksmith" />
       </div>
       {state.shop.equipment.length === 0 && <p className="small muted">Sold out. Come back after the next delivery.</p>}
       <div className="grid two">
@@ -275,17 +284,22 @@ function SuppliesStock() {
   return (
     <>
       <div className="row end" style={{ marginBottom: 8 }}>
-        <ShopRerollButton />
+        <ShopRerollButton vendorId="alchemist" />
       </div>
       <div className="grid three">
-        {state.shop.consumables.map((entry) => (
-          <ConsumableShopCard
-            key={entry.defId}
-            def={CONSUMABLE_BY_ID[entry.defId]}
-            canAfford={(amount) => state.gold >= (CONSUMABLE_BY_ID[entry.defId]?.cost ?? Infinity) * amount}
-            onBuy={(amount) => engine.buyConsumable(entry.defId, amount)}
-          />
-        ))}
+        {state.shop.consumables.map((entry) => {
+          const def = CONSUMABLE_BY_ID[entry.defId];
+          const price = def ? InventoryManager.price(state, def) : 0;
+          return (
+            <ConsumableShopCard
+              key={entry.defId}
+              def={def}
+              price={price}
+              canAfford={(amount) => state.gold >= price * amount}
+              onBuy={(amount) => engine.buyConsumable(entry.defId, amount)}
+            />
+          );
+        })}
       </div>
     </>
   );
@@ -307,10 +321,13 @@ function BlackMarketStock({ now }: { now: number }) {
 
   return (
     <>
-      <p className="tiny muted" style={{ marginBottom: 8 }}>
-        Rare, epic, and legendary only. No haggling. Stock turns over in{' '}
-        {formatDuration(ShopManager.timeUntilBlackMarketRefresh(state, now))}.
-      </p>
+      <div className="spread" style={{ alignItems: 'center', marginBottom: 8 }}>
+        <p className="tiny muted" style={{ margin: 0 }}>
+          Rare, epic, and legendary only. No haggling. Stock turns over in{' '}
+          {formatDuration(ShopManager.timeUntilBlackMarketRefresh(state, now))}.
+        </p>
+        <ShopRerollButton vendorId="enchanter" />
+      </div>
       {state.blackMarket.equipment.length === 0 && (
         <p className="small muted">The contact has nothing worth showing right now.</p>
       )}
@@ -385,9 +402,9 @@ function EquipmentShopCard({
 }
 
 function ConsumableShopCard({
-  def, canAfford, onBuy,
+  def, price, canAfford, onBuy,
 }: {
-  def: ConsumableDef | undefined; canAfford: (amount: number) => boolean; onBuy: (amount: number) => void;
+  def: ConsumableDef | undefined; price: number; canAfford: (amount: number) => boolean; onBuy: (amount: number) => void;
 }) {
   const [showModal, setShowModal] = useState(false);
   if (!def) return null;
@@ -406,7 +423,7 @@ function ConsumableShopCard({
           <ConsumableIcon icon={def.icon} glyph={def.glyph} size={36} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div className="card-title">{def.name}</div>
-            <div className="tiny muted">{formatGold(def.cost)}</div>
+            <div className="tiny muted">{formatGold(price)}</div>
           </div>
         </div>
       </div>
@@ -422,7 +439,7 @@ function ConsumableShopCard({
             <div className="row end" style={{ gap: 8, marginTop: 8 }}>
               <button className="btn-primary" onClick={() => setShowModal(false)}>Close</button>
               <button className="btn-primary" disabled={!canAfford(1)} onClick={() => { onBuy(1); setShowModal(false); }}>
-                Buy · {formatGold(def.cost)}
+                Buy · {formatGold(price)}
               </button>
               {/* Alchemist stock (potions, charms) gets bought through
                   repeatedly far more than gear does -- a x5 button here
@@ -430,7 +447,7 @@ function ConsumableShopCard({
                   repeat) down to one, on the item people actually stock
                   up on. */}
               <button className="btn-primary" disabled={!canAfford(5)} onClick={() => { onBuy(5); setShowModal(false); }}>
-                Buy ×5 · {formatGold(def.cost * 5)}
+                Buy ×5 · {formatGold(price * 5)}
               </button>
             </div>
           </div>

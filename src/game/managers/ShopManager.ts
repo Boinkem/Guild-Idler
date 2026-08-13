@@ -22,32 +22,21 @@ export const ShopManager = {
     return now - state.shop.refreshedAt >= SHOP_REFRESH_MS;
   },
 
-  /** Stock is seeded per refresh window so it is stable across restarts.
-   *  `salt` defaults to 0 (fully deterministic per window, for reload
-   *  stability); the Vendors reroll button passes the exact reroll moment
-   *  instead, so a manual reroll produces genuinely new stock rather than
-   *  reproducing the same window-seeded result. */
-  refresh(state: GameState, now: number, force = false, salt: number | string = 0): ShopStock {
-    if (!force && !ShopManager.needsRefresh(state, now)) return state.shop;
-    const window = Math.floor(now / SHOP_REFRESH_MS);
+  /** Equipment half of refresh() below, pulled out standalone so a
+   *  Blacksmith-only reroll (rerollBlacksmith) can regenerate just this
+   *  half without touching Alchemist stock. Same weighted-pick logic as
+   *  before, unchanged. */
+  rollEquipment(state: GameState, seed: number | string) {
     const topLevel = Math.max(1, ...state.heroes.map((h) => h.level));
-    const rng = createRng(`shop:${window}:${state.createdAt}:${salt}`);
-
+    const rng = createRng(`shop-equipment:${seed}:${state.createdAt}`);
     // raidExclusive items (Heroic/Mythic tiered raid loot variants) never
     // belong in a purchasable pool -- see the comment on EquipmentDef itself
-    // for why. This was the actual bug: nothing here previously excluded
-    // them at all. craftable bases get the same treatment, same reasoning
-    // in the opposite direction -- they only ever exist as a Crafting
-    // result, never something you'd find on a shelf.
-    // raidExclusive items (Heroic/Mythic tiered raid loot variants) never
-    // belong in a purchasable pool -- see the comment on EquipmentDef itself
-    // for why. This was the actual bug: nothing here previously excluded
-    // them at all. craftable bases get the same treatment, same reasoning
-    // in the opposite direction -- they only ever exist as a Crafting
-    // result, never something you'd find on a shelf. chainExclusive gets
-    // the same treatment for the same reason: a Quest Chain's guaranteed
-    // reward item showing up for sale before the chain is even discovered
-    // undercuts the whole point of it being a reward.
+    // for why. craftable bases get the same treatment, same reasoning in
+    // the opposite direction -- they only ever exist as a Crafting result,
+    // never something you'd find on a shelf. chainExclusive gets the same
+    // treatment for the same reason: a Quest Chain's guaranteed reward item
+    // showing up for sale before the chain is even discovered undercuts the
+    // whole point of it being a reward.
     const eligible = EQUIPMENT.filter((def) => !def.raidExclusive && !def.craftable && !def.chainExclusive && def.reqLevel <= topLevel + 4);
     const picks = new Set<string>();
     let guard = 0;
@@ -55,15 +44,35 @@ export const ShopManager = {
       const def = rng.weighted(eligible.map((e) => ({ item: e, weight: RARITY_WEIGHT[e.rarity] })));
       picks.add(def.id);
     }
+    return [...picks].map((defId) => ({
+      uid: uid('shopitem'),
+      defId,
+      price: EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]),
+    }));
+  },
 
+  /** Consumables half of refresh() below -- see rollEquipment's own
+   *  comment, mirrored for the Alchemist-only reroll (rerollAlchemist). */
+  rollConsumables(state: GameState, seed: number | string) {
+    const rng = createRng(`shop-consumables:${seed}:${state.createdAt}`);
+    return CONSUMABLES.map((c) => ({ defId: c.id, stock: rng.int(2, 8) }));
+  },
+
+  /** Stock is seeded per refresh window so it is stable across restarts.
+   *  `salt` defaults to 0 (fully deterministic per window, for reload
+   *  stability). The natural 4-hour restock always regenerates both
+   *  halves together via rollEquipment/rollConsumables above; the
+   *  per-vendor manual rerolls (rerollBlacksmith/rerollAlchemist) call
+   *  those two functions directly instead of this one, so rerolling one
+   *  vendor's stock never touches the other's. */
+  refresh(state: GameState, now: number, force = false, salt: number | string = 0): ShopStock {
+    if (!force && !ShopManager.needsRefresh(state, now)) return state.shop;
+    const window = Math.floor(now / SHOP_REFRESH_MS);
+    const seed = `${window}:${salt}`;
     state.shop = {
       refreshedAt: window * SHOP_REFRESH_MS,
-      consumables: CONSUMABLES.map((c) => ({ defId: c.id, stock: rng.int(2, 8) })),
-      equipment: [...picks].map((defId) => ({
-        uid: uid('shopitem'),
-        defId,
-        price: EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]),
-      })),
+      consumables: ShopManager.rollConsumables(state, seed),
+      equipment: ShopManager.rollEquipment(state, seed),
     };
     return state.shop;
   },
@@ -73,41 +82,98 @@ export const ShopManager = {
   },
 
   /**
-   * Gold cost of the *next* Vendors restock reroll -- 0 while still within
-   * today's free allowance (see ModifierManager.vendorFreeRerolls),
-   * climbing per additional paid reroll after that. Same shape as
-   * QuestManager.questRerollCost, entirely independent counter/upgrade.
+   * Gold cost of the Blacksmith's next early gear restock -- 0 while
+   * still within today's free allowance (Trade Favor: Blacksmith),
+   * climbing per additional paid reroll after that. One of three
+   * independent per-vendor reroll tracks, replacing the old single
+   * shared Vendors restock reroll -- see ModifierManager.vendorFreeRerolls
+   * and guild-idler-status.md's Vendor Upgrades Consolidation entry.
    */
-  vendorRerollCost(state: GameState, now: number): number {
-    const used = rerollsUsedToday(state.vendorRerollsUsedToday, state.vendorRerollDay, now);
-    const free = ModifierManager.vendorFreeRerolls(state);
+  blacksmithRerollCost(state: GameState, now: number): number {
+    const used = rerollsUsedToday(state.blacksmithRerollsUsedToday, state.blacksmithRerollDay, now);
+    const free = ModifierManager.vendorFreeRerolls(state, 'blacksmith');
     return nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
   },
 
-  /**
-   * Restocks the Vendors shop (equipment AND consumables -- refresh()
-   * already regenerates both together) early, spending today's next
-   * reroll. Doesn't touch the black market -- that has its own, much
-   * longer natural refresh window, deliberately scarce rather than
-   * something to reroll on demand. `state.shop.refreshedAt` stays pinned
-   * to the current window's own boundary (refresh() sets it from `window`,
-   * not `now`), so a reroll doesn't push back the next scheduled natural
-   * restock either.
-   */
-  rerollShop(state: GameState, now: number): string | null {
+  /** Restocks only the Blacksmith's own equipment stock early, spending
+   *  today's next Blacksmith reroll. Leaves consumables and
+   *  `state.shop.refreshedAt` untouched, same "doesn't push back the
+   *  next scheduled natural restock" guarantee the old shared reroll had. */
+  rerollBlacksmith(state: GameState, now: number): string | null {
     const day = rerollDay(now);
-    if (state.vendorRerollDay !== day) {
-      state.vendorRerollDay = day;
-      state.vendorRerollsUsedToday = 0;
+    if (state.blacksmithRerollDay !== day) {
+      state.blacksmithRerollDay = day;
+      state.blacksmithRerollsUsedToday = 0;
     }
-    const cost = ShopManager.vendorRerollCost(state, now);
+    const cost = ShopManager.blacksmithRerollCost(state, now);
     if (cost > 0) {
       if (state.gold < cost) return `Not enough gold to reroll (needs ${cost}).`;
       state.gold -= cost;
       state.stats.goldSpent += cost;
     }
-    state.vendorRerollsUsedToday += 1;
-    ShopManager.refresh(state, now, true, now);
+    state.blacksmithRerollsUsedToday += 1;
+    state.shop.equipment = ShopManager.rollEquipment(state, now);
+    return null;
+  },
+
+  /** Same shape as blacksmithRerollCost, independent counter, for the
+   *  Alchemist's own supplies stock. */
+  alchemistRerollCost(state: GameState, now: number): number {
+    const used = rerollsUsedToday(state.alchemistRerollsUsedToday, state.alchemistRerollDay, now);
+    const free = ModifierManager.vendorFreeRerolls(state, 'alchemist');
+    return nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
+  },
+
+  /** Restocks only the Alchemist's own consumable stock early -- same
+   *  shape as rerollBlacksmith above, mirrored for consumables. */
+  rerollAlchemist(state: GameState, now: number): string | null {
+    const day = rerollDay(now);
+    if (state.alchemistRerollDay !== day) {
+      state.alchemistRerollDay = day;
+      state.alchemistRerollsUsedToday = 0;
+    }
+    const cost = ShopManager.alchemistRerollCost(state, now);
+    if (cost > 0) {
+      if (state.gold < cost) return `Not enough gold to reroll (needs ${cost}).`;
+      state.gold -= cost;
+      state.stats.goldSpent += cost;
+    }
+    state.alchemistRerollsUsedToday += 1;
+    state.shop.consumables = ShopManager.rollConsumables(state, now);
+    return null;
+  },
+
+  /** Same shape again, for the Enchanter's Black Market -- previously
+   *  had no manual reroll at all (a deliberately scarce, purely
+   *  time-gated rotation). Trade Favor: Enchanter now buys the same
+   *  "pay to hurry the next restock" option every other vendor already
+   *  had, rather than leaving the Enchanter's own vendor-leveling track
+   *  with nothing to spend Trade Favor charges on. */
+  enchanterRerollCost(state: GameState, now: number): number {
+    const used = rerollsUsedToday(state.enchanterRerollsUsedToday, state.enchanterRerollDay, now);
+    const free = ModifierManager.vendorFreeRerolls(state, 'enchanter');
+    return nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
+  },
+
+  /** Forces an early Black Market turnover, spending today's next
+   *  Enchanter reroll. `state.blackMarket.refreshedAt` stays pinned to
+   *  the current window's own boundary (same reasoning as the other two
+   *  rerolls) so this doesn't push back the next scheduled natural
+   *  16-hour restock. */
+  rerollEnchanter(state: GameState, now: number): string | null {
+    const day = rerollDay(now);
+    if (state.enchanterRerollDay !== day) {
+      state.enchanterRerollDay = day;
+      state.enchanterRerollsUsedToday = 0;
+    }
+    const cost = ShopManager.enchanterRerollCost(state, now);
+    if (cost > 0) {
+      if (state.gold < cost) return `Not enough gold to reroll (needs ${cost}).`;
+      state.gold -= cost;
+      state.stats.goldSpent += cost;
+    }
+    state.enchanterRerollsUsedToday += 1;
+    ShopManager.refreshBlackMarket(state, now, true, now);
     return null;
   },
 
@@ -121,11 +187,23 @@ export const ShopManager = {
    * Deliberately does not filter by hero level the way the regular shop does —
    * the point of the black market is gear worth aspiring to, not gear you can
    * use today. reqLevel still gates equipping it once bought.
+   *
+   * `salt` defaults to 0 (fully deterministic per window, for reload
+   * stability), same convention as refresh() above -- rerollEnchanter passes
+   * the exact reroll moment instead, so a manual reroll produces genuinely
+   * new stock rather than reproducing the same window-seeded result.
+   *
+   * Price folds in Enchanted Seal's blackMarketDiscount mod (guild-wide,
+   * via ModifierManager.global) on top of the existing markup -- the
+   * guild's own standing with the Enchanter buys a better rate from
+   * their black-market contact, same "own key, applied at generation
+   * time" shape as everywhere else that reads a Modifiers discount.
    */
-  refreshBlackMarket(state: GameState, now: number, force = false): ShopStock {
+  refreshBlackMarket(state: GameState, now: number, force = false, salt: number | string = 0): ShopStock {
     if (!force && !ShopManager.blackMarketNeedsRefresh(state, now)) return state.blackMarket;
     const window = Math.floor(now / BLACK_MARKET_REFRESH_MS);
-    const rng = createRng(`blackmarket:${window}:${state.createdAt}`);
+    const rng = createRng(`blackmarket:${window}:${state.createdAt}:${salt}`);
+    const discount = ModifierManager.global(state).blackMarketDiscount ?? 0;
 
     const eligible = EQUIPMENT.filter((def) =>
       !def.raidExclusive && !def.craftable && !def.chainExclusive && (BLACK_MARKET_RARITIES as readonly string[]).includes(def.rarity));
@@ -147,7 +225,7 @@ export const ShopManager = {
       equipment: [...picks].map((defId) => ({
         uid: uid('blackmarket'),
         defId,
-        price: Math.ceil(EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]) * BLACK_MARKET_MARKUP),
+        price: Math.ceil(EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]) * BLACK_MARKET_MARKUP * (1 - discount / 100)),
       })),
     };
     return state.blackMarket;
@@ -226,13 +304,16 @@ export const ShopManager = {
     return { count: toSell.length, gold };
   },
 
-  /** Same shape as sell() -- stash-only, same "equipped or missing" error
-   *  -- but converts the item to Scrap instead of gold. See
+  /** Same shape as sell() -- stash-only, same "equipped or missing"
+   *  error -- but converts the item to Scrap instead of gold. Folds in
+   *  the Blacksmith's own Bulk Scrapper vendor upgrade (scrapBonus,
+   *  guild-wide via ModifierManager.global). See
    *  EquipmentManager.scrapValue for the rarity-based payout. */
   scrapItem(state: GameState, itemUid: string): string | null {
     const item = state.stash.find((i) => i.uid === itemUid);
     if (!item) return 'That item is equipped or missing.';
-    const value = EquipmentManager.scrapValue(item);
+    const bonus = ModifierManager.global(state).scrapBonus ?? 0;
+    const value = EquipmentManager.scrapValue(item, bonus);
     state.stash = state.stash.filter((i) => i.uid !== itemUid);
     state.scrap += value;
     return null;

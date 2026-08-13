@@ -85,8 +85,12 @@ export function createInitialState(now = Date.now()): GameState {
     chainBoard: [],
     questRerollDay: 0,
     questRerollsUsedToday: 0,
-    vendorRerollDay: 0,
-    vendorRerollsUsedToday: 0,
+    blacksmithRerollDay: 0,
+    blacksmithRerollsUsedToday: 0,
+    alchemistRerollDay: 0,
+    alchemistRerollsUsedToday: 0,
+    enchanterRerollDay: 0,
+    enchanterRerollsUsedToday: 0,
     frozenQuestOffers: {},
     freezeChangeDay: 0,
     freezeChangesUsedToday: 0,
@@ -640,6 +644,80 @@ const MIGRATIONS: Record<number, Migration> = {
       delete h.title;
     }
     return { ...save, version: 37, heroes };
+  },
+  37: (save) => {
+    // Vendor Upgrades Consolidation -- weapons_training/armourers_contract/
+    // veteran_explorer/war_stories/efficient_adventuring are gone (their
+    // Success/Durability/Loot/XP/Gold bonuses folded into Barracks/
+    // Workshop/Tavern/Library/Treasury instead), and the shared trade_favor
+    // upgrade is split into three per-vendor ones. See
+    // guild-idler-status.md's Vendor Upgrades Consolidation entry for the
+    // full reasoning.
+    //
+    // A save that already spent gold leveling any of the five removed
+    // upgrades gets that gold refunded (using each upgrade's own retired
+    // cost curve, the same earlyTierDiscount-adjusted formula
+    // upgradeCost() still uses for every other upgrade) rather than just
+    // silently losing the levels -- losing a bonus is one thing, losing
+    // the gold spent buying it with no recourse is another. Removed
+    // upgrade keys are deleted from `upgrades` afterward since
+    // UPGRADE_BY_ID no longer has definitions for them; leaving them
+    // would just be dead weight ModifierManager.upgradeMods already
+    // skips harmlessly, but deleting is cleaner and matches migration
+    // 36's own "clean up what changed" precedent.
+    const discount = (level: number) => (level < 4 ? [0.15, 0.35, 0.6, 0.85][level] : 1);
+    const refundCost = (baseCost: number, costGrowth: number, level: number) => {
+      let total = 0;
+      for (let l = 0; l < level; l++) total += Math.floor(baseCost * Math.pow(costGrowth, l) * discount(l));
+      return total;
+    };
+    const REMOVED: Record<string, { baseCost: number; costGrowth: number }> = {
+      weapons_training: { baseCost: 200, costGrowth: 1.75 },
+      armourers_contract: { baseCost: 500, costGrowth: 1.9 },
+      veteran_explorer: { baseCost: 400, costGrowth: 1.9 },
+      war_stories: { baseCost: 450, costGrowth: 1.89 },
+      efficient_adventuring: { baseCost: 250, costGrowth: 1.84 },
+    };
+    const upgrades = { ...(save.upgrades as Record<string, number> | undefined ?? {}) };
+    let refund = 0;
+    for (const [id, { baseCost, costGrowth }] of Object.entries(REMOVED)) {
+      const level = upgrades[id] ?? 0;
+      if (level > 0) refund += refundCost(baseCost, costGrowth, level);
+      delete upgrades[id];
+    }
+    // trade_favor (shared, general) becomes trade_favor_blacksmith +
+    // trade_favor_alchemist at the SAME level it already was (both
+    // vendors used to share the one reroll pool it fed, so this doesn't
+    // change anyone's total free-reroll allowance today) -- and
+    // trade_favor_enchanter, which starts at 0 since the Enchanter never
+    // had a manual reroll to buy free charges for before now.
+    const oldTradeFavorLevel = upgrades.trade_favor ?? 0;
+    delete upgrades.trade_favor;
+    if (oldTradeFavorLevel > 0) {
+      upgrades.trade_favor_blacksmith = oldTradeFavorLevel;
+      upgrades.trade_favor_alchemist = oldTradeFavorLevel;
+    }
+
+    // Reroll counters: blacksmithRerolls*/alchemistRerolls* both inherit
+    // the old shared vendorRerolls* value (see the trade_favor note
+    // above -- both vendors used to restock together off one counter),
+    // enchanterRerolls* starts fresh at 0/0, the correct starting state
+    // for a reroll track that's brand new this patch.
+    const oldRerollDay = (save.vendorRerollDay as number | undefined) ?? 0;
+    const oldRerollUsed = (save.vendorRerollsUsedToday as number | undefined) ?? 0;
+
+    return {
+      ...save,
+      version: 38,
+      gold: (save.gold as number | undefined ?? 0) + refund,
+      upgrades,
+      blacksmithRerollDay: oldRerollDay,
+      blacksmithRerollsUsedToday: oldRerollUsed,
+      alchemistRerollDay: oldRerollDay,
+      alchemistRerollsUsedToday: oldRerollUsed,
+      enchanterRerollDay: 0,
+      enchanterRerollsUsedToday: 0,
+    };
   },
 };
 

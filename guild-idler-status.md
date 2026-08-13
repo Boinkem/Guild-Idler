@@ -477,7 +477,13 @@ longer appear in either shop's stock).
 **Guild facilities & Permanent Upgrades** — vendor-style upgrade trees,
 guild-wide bonuses, gold storage. 8 facilities total, the newest being
 Music Hall (a pure cosmetic gold sink -- unlocks purchasable background
-music tracks, no stat effect).
+music tracks, no stat effect). Vendor upgrades no longer duplicate
+facility stat bonuses -- each generic stat (Success/Gold/Durability/XP/
+Loot) now lives in exactly one place (the owning facility), and every
+vendor's own upgrade slots are themed to that vendor's services
+(repair/scrap discounts at the Blacksmith, consumable discount at the
+Alchemist, enchant/Black-Market discounts at the Enchanter) instead --
+see "Vendor Upgrades Consolidation" below.
 
 **Quest chains** — 29 total (28 after the level-gap pass below, +1 for
 `the_first_haul` added in this same pass -- was previously logged here as
@@ -8544,3 +8550,137 @@ modal itself) -- screenshotted directly, gold border sitting flush
 against the art with no visible gap or seam, all three art variants
 checked individually. `npx tsc --noEmit` and a full `vite build` both
 clean against a fresh clone of `main` with this patch applied.
+
+### Vendor Upgrades Consolidation -- built (patch 0133)
+
+Feedback: leveling a vendor felt like a second, disconnected copy of
+Guild Hall rather than its own thing -- the same generic Success/Gold/
+Durability/XP/Loot stat bonuses were being handed out in two unrelated
+places, gated behind two unrelated grinds, for no thematic reason. Two
+separate asks, handled together since fixing one meant touching the
+other: (1) consolidate every duplicated gold-cost stat upgrade down to
+one location, and (2) rework the vendor upgrade slots that freed up to
+actually be about that vendor's own services (repairs/crafting/
+scrapping/enchanting) instead of another flavourless stat line. Renown
+Perks deliberately excluded from this pass -- different currency,
+different track, not what was reported as feeling redundant.
+
+**What was actually duplicated**, confirmed directly against
+`progression.ts` rather than assumed: Barracks (facility, Success) vs.
+Better Weapons Training (Blacksmith) *and* Enchanted Seal (Enchanter) --
+Success alone was a 3-spot stat. Treasury (facility, Gold) vs.
+Efficient Adventuring (a general upgrade that was never even vendor-
+tied). Workshop (facility, Durability) vs. Armourer's Contract
+(Blacksmith). Library (facility, XP) vs. Runic Insight (Enchanter).
+Tavern (facility, Loot) vs. Alchemical Assay (Alchemist). Restorative
+Tinctures (Alchemist, injury resist) and Mounted Travel (Blacksmith,
+speed) had no duplicate and were left alone.
+
+**Consolidation math, not just "remove and hope it's fine".** Naively
+extending a facility's own level count to match the old *combined*
+total blows up -- cost curves compound geometrically, so bolting 5 more
+levels onto Barracks's existing curve to reach the old 43% Success total
+would cost ~4.0M gold for those 5 levels alone (Treasury's equivalent
+extension: ~430 *billion*). Instead, each facility keeps its existing
+level count and absorbs the removed upgrade's bonus into a bigger
+per-level value, with `costGrowth` retuned so the total gold cost to
+max the facility lands close to what it used to cost to grind *both*
+sources today (this was a deliberate ask -- the upgrade tree is still
+meant to work as a gold sink that extends game time, not get cheaper
+just because it got simpler):
+
+| Facility (stat) | Levels | costGrowth | Per-level | New total | Cost to max | Old combined cost |
+|---|---|---|---|---|---|---|
+| Barracks (Success) | 10 | 1.8 → 1.87 | 3% → 4% | 40% (was 43%) | ~297.7k | ~291.9k |
+| Treasury (Gold) | 12 (modsMaxLevel unchanged) | 1.74 → 1.79 | 4% → 12% | 144% (was 148%) | ~545.7k | ~545.2k |
+| Workshop (Durability) | 10 | 1.85 → 1.87 | 8% → 14% | 140% (was 140%) | ~357.3k | ~351.4k |
+| Library (XP) | 10 | 1.84 → 1.9 | 6% → 12% | 120% (was 124%) | ~371.6k | ~368.0k |
+| Tavern (Loot) | 5 → 6 | 2.4 → 2.47 | 2% → 7% | 42% (was 50%) | -- | -- |
+
+Tavern needed its own call: same-level-count math landed at 10%/level
+(50% total) for only ~37k gold -- a 3x cost drop, because Alchemical
+Assay was carrying 40 of the old 50 points on a much gentler curve than
+Tavern's own steep one. Bumped to 6 levels at 7%/level instead (42%
+total) rather than chasing the old total exactly.
+
+**Removed entirely**, folded into the facility above: `efficient_
+adventuring` (general, gold), `weapons_training` (Blacksmith, success),
+`armourers_contract` (Blacksmith, durability), `veteran_explorer`
+(Alchemist, loot), `war_stories` (Enchanter, xp). `master_adventurer`
+(Enchanted Seal) keeps its Legendary-quest unlock but loses its success
+bonus -- see below for what replaced it.
+
+**New vendor-themed upgrades**, filling the freed slots with something
+actually tied to that vendor's own services rather than another generic
+stat. Five new `Modifiers` keys back these (`repairDiscount`,
+`scrapBonus`, `consumableDiscount`, `enchantDiscount`,
+`blackMarketDiscount`), same "own key, explicitly summed" shape every
+other discount (`revivalDiscount` etc.) already uses:
+
+- **Blacksmith:** Smith's Discount (tier 1, `repairDiscount` -- cuts
+  `EquipmentManager.repairCost`), Mounted Travel (tier 2, unchanged),
+  Trade Favor: Blacksmith (tier 3, see reroll split below), Bulk
+  Scrapper (tier 4, `scrapBonus` -- boosts `EquipmentManager.scrapValue`).
+- **Alchemist:** Apothecary's Discount (tier 1, `consumableDiscount` --
+  cuts consumable shop price via the new `InventoryManager.price`, the
+  one place this is applied so displayed price always matches what
+  `buy()` actually charges), Restorative Tinctures (tier 2, unchanged),
+  Trade Favor: Alchemist (tier 3).
+- **Enchanter:** Arcane Discount (tier 1, `enchantDiscount` -- cuts gold
+  cost on `gem`/`enchant` category crafting recipes specifically, via
+  the new `CraftingManager.goldCost`, so Weapon Enchanting/Armour
+  Infusion/gem crafting/Minor Sigil all get cheaper together), Trade
+  Favor: Enchanter (tier 2), Enchanted Seal (tier 3 -- kept its
+  Legendary-quest unlock, replaced the old Success bonus with
+  `blackMarketDiscount` on Black Market prices; "guaranteed Rare+ Black
+  Market stock" was the original idea but turned out to already be a
+  no-op, since the Black Market has only ever rolled rare/epic/
+  legendary in the first place).
+
+**Reroll split.** The Vendors restock reroll used to be one shared
+action/cost/counter that restocked Blacksmith gear and Alchemist
+consumables together (discovered mid-implementation, not assumed --
+`ShopManager.rerollShop` called the same `refresh()` for both), with the
+Black Market having no manual reroll at all, purely time-gated. Given
+the new per-vendor Trade Favor upgrades needed something to actually
+buy, this got split three ways instead of left alone: `rollEquipment`/
+`rollConsumables` pulled out of the old combined `refresh()` as
+independent functions, `rerollBlacksmith`/`rerollAlchemist`/
+`rerollEnchanter` each with their own cost curve
+(`ModifierManager.vendorFreeRerolls` now takes a `VendorId` and filters
+by it) and daily counter (`state.blacksmithRerollDay`/`alchemistRerollDay`/
+`enchanterRerollDay`, replacing the old single `vendorRerollDay` pair).
+`rerollEnchanter` is a genuinely new capability -- forces
+`refreshBlackMarket` early with a fresh salt, something that didn't
+exist before this patch. The natural periodic restock (every 4h for
+gear/consumables, 16h for Black Market) is untouched either way.
+
+**Save migration (37 → 38).** A save that already spent gold on the
+five removed upgrades gets that gold refunded, computed against each
+upgrade's own retired cost curve (same `earlyTierDiscount`-adjusted
+formula every other upgrade cost still uses) rather than just silently
+eating the loss -- losing the bonus is one thing, losing gold spent
+buying it with no recourse is another. `trade_favor`'s old level carries
+over to *both* `trade_favor_blacksmith` and `trade_favor_alchemist` (the
+two vendors it used to jointly cover), `trade_favor_enchanter` starts at
+0 (brand new). Old `vendorRerollDay`/`vendorRerollsUsedToday` carry into
+both `blacksmithRerolls*` and `alchemistRerolls*`; `enchanterRerolls*`
+starts fresh.
+
+**Verified:** `tsc --noEmit` passes clean under the same strict/
+noUnusedLocals/noUnusedParameters config `npm run build` uses. Every
+display site that shows a repair/scrap/consumable/enchant/Black-Market
+price was hunted down and pointed at the same discount-aware helper the
+actual spend uses (`EquipmentPanel`, `ScrapStation`, `CraftingStation`,
+`WeaponEnchantStation`, `ArmourInfusionStation`, `VendorsPanel`) --
+worth double-checking after future changes to any of those, since a
+displayed price silently drifting from the charged price is an easy
+regression to reintroduce.
+
+**Deliberately not touched this pass:** the vendor happiness/reputation
+meter (discount scaling with usage/purchases over time) raised alongside
+this feedback -- parked for its own dedicated design discussion, per
+request, rather than folded in here. `mounted_travel`'s own flavour text
+(a Blacksmith selling horse travel is still a little thematically odd)
+wasn't reworked since it wasn't a duplicate and reworking it wasn't
+asked for -- worth a look whenever Blacksmith copy gets another pass.

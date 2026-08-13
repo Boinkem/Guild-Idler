@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 37;
+export const SAVE_VERSION = 38;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -101,11 +101,47 @@ export interface Modifiers {
   /** Pet-specific parallel to revivalDiscount above, from Kennel
    *  Keeper's Favor -- same reasoning for staying a separate key. */
   petRevivalDiscount: number;
+  /**
+   * Percentage points shaved off EquipmentManager.repairCost, from the
+   * Blacksmith's own Smith's Discount vendor upgrade -- separate from
+   * Workshop's existing repair discount (which is a flat facility-wide
+   * effect) since this one is specifically a reward for training up the
+   * Blacksmith's own vendor level. Same "own key, own percentage,
+   * explicitly summed rather than folded into an existing one" reasoning
+   * as revivalDiscount/petRevivalDiscount above.
+   */
+  repairDiscount: number;
+  /**
+   * Percentage bonus to EquipmentManager.scrapValue, from the
+   * Blacksmith's Bulk Scrapper vendor upgrade -- see
+   * guild-idler-status.md's Vendor Upgrades Consolidation entry.
+   */
+  scrapBonus: number;
+  /**
+   * Percentage points shaved off a consumable's shop price, from the
+   * Alchemist's own Apothecary's Discount vendor upgrade.
+   */
+  consumableDiscount: number;
+  /**
+   * Percentage points shaved off the gold cost of Weapon Enchanting,
+   * Armour Infusion, and the gem recipes that back both, from the
+   * Enchanter's own Arcane Discount vendor upgrade.
+   */
+  enchantDiscount: number;
+  /**
+   * Percentage points shaved off Black Market price markup, from
+   * Enchanted Seal's top-tier Enchanter perk -- alongside its existing
+   * Legendary-quest unlock, replacing the flat success bonus it used to
+   * carry (folded into Barracks instead, see guild-idler-status.md's
+   * Vendor Upgrades Consolidation entry).
+   */
+  blackMarketDiscount: number;
 }
 
 export const ZERO_MODS: Modifiers = {
   success: 0, gold: 0, xp: 0, loot: 0, injuryResist: 0, speed: 0, durability: 0, health: 0, revivalDiscount: 0,
-  petHealth: 0, petRevivalDiscount: 0,
+  petHealth: 0, petRevivalDiscount: 0, repairDiscount: 0, scrapBonus: 0, consumableDiscount: 0, enchantDiscount: 0,
+  blackMarketDiscount: 0,
 };
 
 export interface Stats {
@@ -184,6 +220,17 @@ export interface ConsumableDef {
      *  consumable effects. */
     petHealth?: number;
     petRevivalDiscount?: number;
+    /** Unused by any current recipe -- typed for completeness against
+     *  Modifiers, same reasoning as revivalDiscount/petHealth above.
+     *  repairDiscount/scrapBonus/consumableDiscount/enchantDiscount/
+     *  blackMarketDiscount are all Upgrade-only sources (Smith's
+     *  Discount, Bulk Scrapper, Apothecary's Discount, Arcane Discount,
+     *  Enchanted Seal), not consumable effects. */
+    repairDiscount?: number;
+    scrapBonus?: number;
+    consumableDiscount?: number;
+    enchantDiscount?: number;
+    blackMarketDiscount?: number;
     /**
      * Flat reduction to GameState.questsSinceGrimsby, applied immediately
      * on use -- NOT routed through InventoryManager.useOnHero (this isn't
@@ -1134,10 +1181,25 @@ export interface GameState {
    */
   questRerollDay: number;
   questRerollsUsedToday: number;
-  /** Same shape again, independent counter, for the Vendors shop restock
-   *  reroll -- see ShopManager.vendorRerollCost/rerollShop. */
-  vendorRerollDay: number;
-  vendorRerollsUsedToday: number;
+  /**
+   * Same shape again, but split three ways -- one independent
+   * day/counter pair per vendor stall, since each now has its own
+   * themed upgrades (and its own Trade Favor free-reroll allowance) and
+   * rerolling one shouldn't spend or gate the others. Replaces the old
+   * single shared vendorRerollDay/vendorRerollsUsedToday pair (migration
+   * 37 carries an existing save's used-today count over to both
+   * blacksmithRerolls* and alchemistRerolls*, since those two used to
+   * restock together as one action; enchanterRerolls* starts fresh --
+   * see ShopManager.blacksmithRerollCost/alchemistRerollCost/
+   * enchanterRerollCost and their matching rerollBlacksmith/
+   * rerollAlchemist/rerollEnchanter actions).
+   */
+  blacksmithRerollDay: number;
+  blacksmithRerollsUsedToday: number;
+  alchemistRerollDay: number;
+  alchemistRerollsUsedToday: number;
+  enchanterRerollDay: number;
+  enchanterRerollsUsedToday: number;
   /**
    * At most one frozen contract per hero, keyed by hero id -- kept as the
    * actual offer object rather than just an id, since a regenerated board

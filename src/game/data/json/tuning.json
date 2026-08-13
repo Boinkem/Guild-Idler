@@ -156,8 +156,8 @@
     "id": "guild_facility.barracks.costGrowth",
     "label": "Barracks: cost growth",
     "category": "guild_facilities",
-    "value": 1.8,
-    "default": 1.8,
+    "value": 1.87,
+    "default": 1.87,
     "min": 1,
     "max": 5,
     "description": "Multiplier applied per level, before the early-tier discount."
@@ -175,8 +175,8 @@
     "id": "guild_facility.barracks.successPerLevel",
     "label": "Barracks: success % per level",
     "category": "guild_facilities",
-    "value": 3,
-    "default": 3,
+    "value": 4,
+    "default": 4,
     "min": 0,
     "max": 20,
     "description": "Flat success percentage points granted per level, guild-wide."
@@ -194,8 +194,8 @@
     "id": "guild_facility.treasury.costGrowth",
     "label": "Treasury: cost growth",
     "category": "guild_facilities",
-    "value": 1.74,
-    "default": 1.74,
+    "value": 1.79,
+    "default": 1.79,
     "min": 1,
     "max": 5,
     "description": "Multiplier applied per level, before the early-tier discount."
@@ -213,8 +213,8 @@
     "id": "guild_facility.treasury.goldPerLevel",
     "label": "Treasury: gold % per level",
     "category": "guild_facilities",
-    "value": 4,
-    "default": 4,
+    "value": 12,
+    "default": 12,
     "min": 0,
     "max": 20,
     "description": "Flat gold percentage granted per level, guild-wide. storagePerLevel (gold storage) is a separate, still-hardcoded field -- not included in this pass."
@@ -232,8 +232,8 @@
     "id": "guild_facility.workshop.costGrowth",
     "label": "Workshop: cost growth",
     "category": "guild_facilities",
-    "value": 1.85,
-    "default": 1.85,
+    "value": 1.87,
+    "default": 1.87,
     "min": 1,
     "max": 5,
     "description": "Multiplier applied per level, before the early-tier discount."
@@ -251,8 +251,8 @@
     "id": "guild_facility.workshop.durabilityPerLevel",
     "label": "Workshop: durability % per level",
     "category": "guild_facilities",
-    "value": 8,
-    "default": 8,
+    "value": 14,
+    "default": 14,
     "min": 0,
     "max": 30,
     "description": "Flat durability percentage granted per level, guild-wide. No reward effect."
@@ -270,8 +270,8 @@
     "id": "guild_facility.library.costGrowth",
     "label": "Library: cost growth",
     "category": "guild_facilities",
-    "value": 1.84,
-    "default": 1.84,
+    "value": 1.9,
+    "default": 1.9,
     "min": 1,
     "max": 5,
     "description": "Multiplier applied per level, before the early-tier discount."
@@ -289,8 +289,8 @@
     "id": "guild_facility.library.xpPerLevel",
     "label": "Library: xp % per level",
     "category": "guild_facilities",
-    "value": 6,
-    "default": 6,
+    "value": 12,
+    "default": 12,
     "min": 0,
     "max": 40,
     "description": "Flat xp percentage granted per level, guild-wide."
@@ -308,8 +308,8 @@
     "id": "guild_facility.tavern.costGrowth",
     "label": "Tavern: cost growth",
     "category": "guild_facilities",
-    "value": 2.4,
-    "default": 2.4,
+    "value": 2.47,
+    "default": 2.47,
     "min": 1,
     "max": 5,
     "description": "Multiplier applied per level, before the early-tier discount."
@@ -318,8 +318,8 @@
     "id": "guild_facility.tavern.maxLevel",
     "label": "Tavern: max level",
     "category": "guild_facilities",
-    "value": 5,
-    "default": 5,
+    "value": 6,
+    "default": 6,
     "min": 1,
     "description": "Highest level Tavern can reach."
   },
@@ -327,8 +327,8 @@
     "id": "guild_facility.tavern.lootPerLevel",
     "label": "Tavern: loot % per level",
     "category": "guild_facilities",
-    "value": 2,
-    "default": 2,
+    "value": 7,
+    "default": 7,
     "min": 0,
     "max": 20,
     "description": "Flat loot percentage granted per level, guild-wide. heroSlotsPerLevel (+1 hero slot) is a separate, still-hardcoded field -- not included in this pass."
@@ -1606,114 +1606,6 @@
     "min": 0
   },
   {
-    "id": "upgrade.weapons_training.baseCost",
-    "label": "Better Weapons Training: base cost",
-    "category": "vendor_upgrades",
-    "value": 200,
-    "default": 200,
-    "description": "Gold cost of Better Weapons Training's first level.",
-    "min": 0
-  },
-  {
-    "id": "upgrade.weapons_training.costGrowth",
-    "label": "Better Weapons Training: cost growth",
-    "category": "vendor_upgrades",
-    "value": 1.75,
-    "default": 1.75,
-    "description": "Multiplier applied per level to Better Weapons Training's cost.",
-    "min": 1
-  },
-  {
-    "id": "upgrade.weapons_training.maxLevel",
-    "label": "Better Weapons Training: max level",
-    "category": "vendor_upgrades",
-    "value": 10,
-    "default": 10,
-    "description": "Level cap for Better Weapons Training.",
-    "min": 0
-  },
-  {
-    "id": "upgrade.weapons_training.successPerLevel",
-    "label": "Better Weapons Training: success bonus per level",
-    "category": "vendor_upgrades",
-    "value": 1,
-    "default": 1,
-    "description": "Better Weapons Training's success bonus per level.",
-    "min": 0
-  },
-  {
-    "id": "upgrade.efficient_adventuring.baseCost",
-    "label": "Efficient Adventuring: base cost",
-    "category": "vendor_upgrades",
-    "value": 250,
-    "default": 250,
-    "description": "Gold cost of Efficient Adventuring's first level.",
-    "min": 0
-  },
-  {
-    "id": "upgrade.efficient_adventuring.costGrowth",
-    "label": "Efficient Adventuring: cost growth",
-    "category": "vendor_upgrades",
-    "value": 1.84,
-    "default": 1.84,
-    "description": "Multiplier applied per level to Efficient Adventuring's cost.",
-    "min": 1
-  },
-  {
-    "id": "upgrade.efficient_adventuring.maxLevel",
-    "label": "Efficient Adventuring: max level",
-    "category": "vendor_upgrades",
-    "value": 10,
-    "default": 10,
-    "description": "Level cap for Efficient Adventuring.",
-    "min": 0
-  },
-  {
-    "id": "upgrade.efficient_adventuring.goldPerLevel",
-    "label": "Efficient Adventuring: gold bonus per level",
-    "category": "vendor_upgrades",
-    "value": 10,
-    "default": 10,
-    "description": "Efficient Adventuring's gold bonus per level.",
-    "min": 0
-  },
-  {
-    "id": "upgrade.veteran_explorer.baseCost",
-    "label": "Alchemical Assay: base cost",
-    "category": "vendor_upgrades",
-    "value": 400,
-    "default": 400,
-    "description": "Gold cost of Alchemical Assay's first level.",
-    "min": 0
-  },
-  {
-    "id": "upgrade.veteran_explorer.costGrowth",
-    "label": "Alchemical Assay: cost growth",
-    "category": "vendor_upgrades",
-    "value": 1.9,
-    "default": 1.9,
-    "description": "Multiplier applied per level to Alchemical Assay's cost.",
-    "min": 1
-  },
-  {
-    "id": "upgrade.veteran_explorer.maxLevel",
-    "label": "Alchemical Assay: max level",
-    "category": "vendor_upgrades",
-    "value": 8,
-    "default": 8,
-    "description": "Level cap for Alchemical Assay.",
-    "min": 0
-  },
-  {
-    "id": "upgrade.veteran_explorer.lootPerLevel",
-    "label": "Alchemical Assay: loot bonus per level",
-    "category": "vendor_upgrades",
-    "value": 5,
-    "default": 5,
-    "description": "Alchemical Assay's loot bonus per level.",
-    "min": 0
-  },
-  {
     "id": "upgrade.mounted_travel.baseCost",
     "label": "Mounted Travel: base cost",
     "category": "vendor_upgrades",
@@ -1786,78 +1678,6 @@
     "min": 0
   },
   {
-    "id": "upgrade.armourers_contract.baseCost",
-    "label": "Armourer's Contract: base cost",
-    "category": "vendor_upgrades",
-    "value": 500,
-    "default": 500,
-    "description": "Gold cost of Armourer's Contract's first level.",
-    "min": 0
-  },
-  {
-    "id": "upgrade.armourers_contract.costGrowth",
-    "label": "Armourer's Contract: cost growth",
-    "category": "vendor_upgrades",
-    "value": 1.9,
-    "default": 1.9,
-    "description": "Multiplier applied per level to Armourer's Contract's cost.",
-    "min": 1
-  },
-  {
-    "id": "upgrade.armourers_contract.maxLevel",
-    "label": "Armourer's Contract: max level",
-    "category": "vendor_upgrades",
-    "value": 6,
-    "default": 6,
-    "description": "Level cap for Armourer's Contract.",
-    "min": 0
-  },
-  {
-    "id": "upgrade.armourers_contract.durabilityPerLevel",
-    "label": "Armourer's Contract: durability bonus per level",
-    "category": "vendor_upgrades",
-    "value": 10,
-    "default": 10,
-    "description": "Armourer's Contract's durability bonus per level.",
-    "min": 0
-  },
-  {
-    "id": "upgrade.war_stories.baseCost",
-    "label": "Runic Insight: base cost",
-    "category": "vendor_upgrades",
-    "value": 450,
-    "default": 450,
-    "description": "Gold cost of Runic Insight's first level.",
-    "min": 0
-  },
-  {
-    "id": "upgrade.war_stories.costGrowth",
-    "label": "Runic Insight: cost growth",
-    "category": "vendor_upgrades",
-    "value": 1.89,
-    "default": 1.89,
-    "description": "Multiplier applied per level to Runic Insight's cost.",
-    "min": 1
-  },
-  {
-    "id": "upgrade.war_stories.maxLevel",
-    "label": "Runic Insight: max level",
-    "category": "vendor_upgrades",
-    "value": 8,
-    "default": 8,
-    "description": "Level cap for Runic Insight.",
-    "min": 0
-  },
-  {
-    "id": "upgrade.war_stories.xpPerLevel",
-    "label": "Runic Insight: xp bonus per level",
-    "category": "vendor_upgrades",
-    "value": 8,
-    "default": 8,
-    "description": "Runic Insight's xp bonus per level.",
-    "min": 0
-  },
-  {
     "id": "upgrade.master_adventurer.baseCost",
     "label": "Enchanted Seal: base cost",
     "category": "vendor_upgrades",
@@ -1882,15 +1702,6 @@
     "value": 1,
     "default": 1,
     "description": "Level cap for Enchanted Seal.",
-    "min": 0
-  },
-  {
-    "id": "upgrade.master_adventurer.successPerLevel",
-    "label": "Enchanted Seal: success bonus per level",
-    "category": "vendor_upgrades",
-    "value": 3,
-    "default": 3,
-    "description": "Enchanted Seal's success bonus per level.",
     "min": 0
   },
   {
@@ -2197,42 +2008,6 @@
     "value": 1,
     "default": 1,
     "description": "Board Runner's free quest-board rerolls per day granted per level.",
-    "min": 0
-  },
-  {
-    "id": "upgrade.trade_favor.baseCost",
-    "label": "Trade Favor: base cost",
-    "category": "vendor_upgrades",
-    "value": 900,
-    "default": 900,
-    "description": "Gold cost of Trade Favor's first level.",
-    "min": 0
-  },
-  {
-    "id": "upgrade.trade_favor.costGrowth",
-    "label": "Trade Favor: cost growth",
-    "category": "vendor_upgrades",
-    "value": 2.0,
-    "default": 2.0,
-    "description": "Multiplier applied per level to Trade Favor's cost.",
-    "min": 1
-  },
-  {
-    "id": "upgrade.trade_favor.maxLevel",
-    "label": "Trade Favor: max level",
-    "category": "vendor_upgrades",
-    "value": 3,
-    "default": 3,
-    "description": "Level cap for Trade Favor.",
-    "min": 0
-  },
-  {
-    "id": "upgrade.trade_favor.vendorFreeRerollsPerLevel",
-    "label": "Trade Favor: free vendor restocks per day granted per level",
-    "category": "vendor_upgrades",
-    "value": 1,
-    "default": 1,
-    "description": "Trade Favor's free vendor restocks per day granted per level.",
     "min": 0
   },
   {
@@ -3227,5 +3002,238 @@
     "min": 0,
     "max": 100,
     "description": "Medium-mode chance on Easy offers for a hero at level 16+, absorbing burst's entire retired share."
+  },
+  {
+    "id": "upgrade.master_adventurer.blackMarketDiscountPerLevel",
+    "label": "Enchanted Seal: Black Market discount per level",
+    "category": "vendor_upgrades",
+    "value": 15,
+    "default": 15,
+    "min": 0,
+    "description": "Enchanted Seal's Black Market price discount per level."
+  },
+  {
+    "id": "upgrade.smiths_discount.baseCost",
+    "label": "Smith's Discount: base cost",
+    "category": "vendor_upgrades",
+    "value": 300,
+    "default": 300,
+    "min": 0
+  },
+  {
+    "id": "upgrade.smiths_discount.costGrowth",
+    "label": "Smith's Discount: cost growth",
+    "category": "vendor_upgrades",
+    "value": 1.8,
+    "default": 1.8,
+    "min": 0
+  },
+  {
+    "id": "upgrade.smiths_discount.maxLevel",
+    "label": "Smith's Discount: max level",
+    "category": "vendor_upgrades",
+    "value": 6,
+    "default": 6,
+    "min": 0
+  },
+  {
+    "id": "upgrade.smiths_discount.repairDiscountPerLevel",
+    "label": "Smith's Discount: repair discount % per level",
+    "category": "vendor_upgrades",
+    "value": 5,
+    "default": 5,
+    "min": 0
+  },
+  {
+    "id": "upgrade.bulk_scrapper.baseCost",
+    "label": "Bulk Scrapper: base cost",
+    "category": "vendor_upgrades",
+    "value": 700,
+    "default": 700,
+    "min": 0
+  },
+  {
+    "id": "upgrade.bulk_scrapper.costGrowth",
+    "label": "Bulk Scrapper: cost growth",
+    "category": "vendor_upgrades",
+    "value": 1.9,
+    "default": 1.9,
+    "min": 0
+  },
+  {
+    "id": "upgrade.bulk_scrapper.maxLevel",
+    "label": "Bulk Scrapper: max level",
+    "category": "vendor_upgrades",
+    "value": 5,
+    "default": 5,
+    "min": 0
+  },
+  {
+    "id": "upgrade.bulk_scrapper.scrapBonusPerLevel",
+    "label": "Bulk Scrapper: scrap bonus % per level",
+    "category": "vendor_upgrades",
+    "value": 8,
+    "default": 8,
+    "min": 0
+  },
+  {
+    "id": "upgrade.apothecary_discount.baseCost",
+    "label": "Apothecary's Discount: base cost",
+    "category": "vendor_upgrades",
+    "value": 350,
+    "default": 350,
+    "min": 0
+  },
+  {
+    "id": "upgrade.apothecary_discount.costGrowth",
+    "label": "Apothecary's Discount: cost growth",
+    "category": "vendor_upgrades",
+    "value": 1.85,
+    "default": 1.85,
+    "min": 0
+  },
+  {
+    "id": "upgrade.apothecary_discount.maxLevel",
+    "label": "Apothecary's Discount: max level",
+    "category": "vendor_upgrades",
+    "value": 6,
+    "default": 6,
+    "min": 0
+  },
+  {
+    "id": "upgrade.apothecary_discount.consumableDiscountPerLevel",
+    "label": "Apothecary's Discount: consumable discount % per level",
+    "category": "vendor_upgrades",
+    "value": 5,
+    "default": 5,
+    "min": 0
+  },
+  {
+    "id": "upgrade.arcane_discount.baseCost",
+    "label": "Arcane Discount: base cost",
+    "category": "vendor_upgrades",
+    "value": 400,
+    "default": 400,
+    "min": 0
+  },
+  {
+    "id": "upgrade.arcane_discount.costGrowth",
+    "label": "Arcane Discount: cost growth",
+    "category": "vendor_upgrades",
+    "value": 1.85,
+    "default": 1.85,
+    "min": 0
+  },
+  {
+    "id": "upgrade.arcane_discount.maxLevel",
+    "label": "Arcane Discount: max level",
+    "category": "vendor_upgrades",
+    "value": 6,
+    "default": 6,
+    "min": 0
+  },
+  {
+    "id": "upgrade.arcane_discount.enchantDiscountPerLevel",
+    "label": "Arcane Discount: enchant discount % per level",
+    "category": "vendor_upgrades",
+    "value": 5,
+    "default": 5,
+    "min": 0
+  },
+  {
+    "id": "upgrade.trade_favor_blacksmith.baseCost",
+    "label": "Trade Favor (Blacksmith): base cost",
+    "category": "vendor_upgrades",
+    "value": 900,
+    "default": 900,
+    "min": 0
+  },
+  {
+    "id": "upgrade.trade_favor_blacksmith.costGrowth",
+    "label": "Trade Favor (Blacksmith): cost growth",
+    "category": "vendor_upgrades",
+    "value": 2.0,
+    "default": 2.0,
+    "min": 0
+  },
+  {
+    "id": "upgrade.trade_favor_blacksmith.maxLevel",
+    "label": "Trade Favor (Blacksmith): max level",
+    "category": "vendor_upgrades",
+    "value": 3,
+    "default": 3,
+    "min": 0
+  },
+  {
+    "id": "upgrade.trade_favor_blacksmith.vendorFreeRerollsPerLevel",
+    "label": "Trade Favor (Blacksmith): free rerolls per level",
+    "category": "vendor_upgrades",
+    "value": 1,
+    "default": 1,
+    "min": 0
+  },
+  {
+    "id": "upgrade.trade_favor_alchemist.baseCost",
+    "label": "Trade Favor (Alchemist): base cost",
+    "category": "vendor_upgrades",
+    "value": 900,
+    "default": 900,
+    "min": 0
+  },
+  {
+    "id": "upgrade.trade_favor_alchemist.costGrowth",
+    "label": "Trade Favor (Alchemist): cost growth",
+    "category": "vendor_upgrades",
+    "value": 2.0,
+    "default": 2.0,
+    "min": 0
+  },
+  {
+    "id": "upgrade.trade_favor_alchemist.maxLevel",
+    "label": "Trade Favor (Alchemist): max level",
+    "category": "vendor_upgrades",
+    "value": 3,
+    "default": 3,
+    "min": 0
+  },
+  {
+    "id": "upgrade.trade_favor_alchemist.vendorFreeRerollsPerLevel",
+    "label": "Trade Favor (Alchemist): free rerolls per level",
+    "category": "vendor_upgrades",
+    "value": 1,
+    "default": 1,
+    "min": 0
+  },
+  {
+    "id": "upgrade.trade_favor_enchanter.baseCost",
+    "label": "Trade Favor (Enchanter): base cost",
+    "category": "vendor_upgrades",
+    "value": 900,
+    "default": 900,
+    "min": 0
+  },
+  {
+    "id": "upgrade.trade_favor_enchanter.costGrowth",
+    "label": "Trade Favor (Enchanter): cost growth",
+    "category": "vendor_upgrades",
+    "value": 2.0,
+    "default": 2.0,
+    "min": 0
+  },
+  {
+    "id": "upgrade.trade_favor_enchanter.maxLevel",
+    "label": "Trade Favor (Enchanter): max level",
+    "category": "vendor_upgrades",
+    "value": 3,
+    "default": 3,
+    "min": 0
+  },
+  {
+    "id": "upgrade.trade_favor_enchanter.vendorFreeRerollsPerLevel",
+    "label": "Trade Favor (Enchanter): free rerolls per level",
+    "category": "vendor_upgrades",
+    "value": 1,
+    "default": 1,
+    "min": 0
   }
 ]

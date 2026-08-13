@@ -461,8 +461,8 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
                   ⚙ {state.scrap}/{recipe.scrapCost}
                 </span>
               )}
-              <span className={`tiny ${state.gold < recipe.goldCost ? 'bad' : 'good'}`}>
-                ◆ {formatGold(state.gold)}/{formatGold(recipe.goldCost)}
+              <span className={`tiny ${state.gold < CraftingManager.goldCost(state, recipe) ? 'bad' : 'good'}`}>
+                ◆ {formatGold(state.gold)}/{formatGold(CraftingManager.goldCost(state, recipe))}
               </span>
             </div>
           </div>

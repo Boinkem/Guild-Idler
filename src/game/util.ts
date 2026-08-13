@@ -103,8 +103,13 @@ export const MOD_LABEL: Record<keyof Modifiers, string> = {
   durability: 'Gear wear reduction',
   health: 'Max Health',
   revivalDiscount: 'Revival discount',
-  petHealth: 'Pet Max Health',
-  petRevivalDiscount: 'Pet revival discount',
+  petHealth: 'Companion Max Health',
+  petRevivalDiscount: 'Companion revival discount',
+  repairDiscount: 'Repair discount',
+  scrapBonus: 'Scrap bonus',
+  consumableDiscount: 'Consumable discount',
+  enchantDiscount: 'Enchanting discount',
+  blackMarketDiscount: 'Black Market discount',
 };
 
 /**

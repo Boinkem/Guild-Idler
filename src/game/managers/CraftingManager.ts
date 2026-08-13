@@ -3,13 +3,28 @@ import { CRAFTING_RECIPE_BY_ID } from '../data/craftingRecipes';
 import { CONSUMABLE_BY_ID } from '../data/items';
 import { EquipmentManager } from './EquipmentManager';
 import { InventoryManager } from './InventoryManager';
+import { ModifierManager } from './ModifierManager';
 import { MATERIAL_BY_ID } from '../data/materials';
 import { MOD_LABEL } from '../util';
 
 export const CraftingManager = {
+  /**
+   * Gold cost of a recipe after the Enchanter's own Arcane Discount
+   * vendor upgrade (enchantDiscount, guild-wide via ModifierManager.global)
+   * -- applies to `gem` and `enchant` category recipes only (the two
+   * categories Weapon Enchanting/Armour Infusion/enchantItem actually
+   * spend gold on), everything else pays the recipe's own goldCost
+   * unchanged. Floored at 0 same as every other cost in the game.
+   */
+  goldCost(state: GameState, recipe: CraftingRecipeDef): number {
+    if (recipe.category !== 'gem' && recipe.category !== 'enchant') return recipe.goldCost;
+    const discount = ModifierManager.global(state).enchantDiscount ?? 0;
+    return Math.max(0, Math.round(recipe.goldCost * (1 - discount / 100)));
+  },
+
   /** What's still missing to afford a recipe, if anything -- used to grey out the Craft button. */
   affordability(state: GameState, recipe: CraftingRecipeDef): { ok: boolean; reason?: string } {
-    if (state.gold < recipe.goldCost) return { ok: false, reason: 'Not enough gold.' };
+    if (state.gold < CraftingManager.goldCost(state, recipe)) return { ok: false, reason: 'Not enough gold.' };
     if ((recipe.scrapCost ?? 0) > state.scrap) return { ok: false, reason: 'Not enough scrap.' };
     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
       if (state.materials[materialId] < amount) {
@@ -35,8 +50,9 @@ export const CraftingManager = {
     const pool = kind === 'elemental' ? state.gems : state.resistGems;
     pool[element] = (pool[element] ?? 0) + 1;
 
-    state.gold -= recipe.goldCost;
-    state.stats.goldSpent += recipe.goldCost;
+    const goldCost = CraftingManager.goldCost(state, recipe);
+    state.gold -= goldCost;
+    state.stats.goldSpent += goldCost;
     state.scrap -= recipe.scrapCost ?? 0;
     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
       state.materials[materialId] -= amount;
@@ -49,16 +65,17 @@ export const CraftingManager = {
    * `ready: true` if a matching gem is already sitting in inventory from
    * an earlier craft (state.gems/resistGems, whichever the item's own
    * slot points at), otherwise the underlying gem recipe's own
-   * scrapCost/goldCost, since craftAndInfuse below will need to craft one
-   * fresh before it can apply it. Used by both Weapon Enchanting and
-   * Armour Infusion to label each element option ("Ready" vs a cost).
+   * scrapCost/goldCost (Arcane-Discounted, via CraftingManager.goldCost),
+   * since craftAndInfuse below will need to craft one fresh before it can
+   * apply it. Used by both Weapon Enchanting and Armour Infusion to label
+   * each element option ("Ready" vs a cost).
    */
   gemCost(state: GameState, isWeapon: boolean, element: ElementType): { ready: boolean; scrapCost: number; goldCost: number } {
     const pool = isWeapon ? state.gems : state.resistGems;
     if ((pool[element] ?? 0) >= 1) return { ready: true, scrapCost: 0, goldCost: 0 };
     const recipeId = isWeapon ? `craft_elemental_gem_${element}` : `craft_resistance_gem_${element}`;
     const recipe = CRAFTING_RECIPE_BY_ID[recipeId];
-    return { ready: false, scrapCost: recipe?.scrapCost ?? 0, goldCost: recipe?.goldCost ?? 0 };
+    return { ready: false, scrapCost: recipe?.scrapCost ?? 0, goldCost: recipe ? CraftingManager.goldCost(state, recipe) : 0 };
   },
 
   /**
@@ -205,8 +222,9 @@ export const CraftingManager = {
     for (const s of chosenStats) updated[s] = (updated[s] ?? 0) + (recipe.statValue ?? 0);
     item.enchantStats = updated;
 
-    state.gold -= recipe.goldCost;
-    state.stats.goldSpent += recipe.goldCost;
+    const goldCost = CraftingManager.goldCost(state, recipe);
+    state.gold -= goldCost;
+    state.stats.goldSpent += goldCost;
     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
       state.materials[materialId] -= amount;
     }

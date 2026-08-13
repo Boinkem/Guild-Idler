@@ -40,14 +40,23 @@ export const EquipmentManager = {
    * purely a spending-side fix -- durability still matters, it just no
    * longer eats the whole paycheck.
    */
-  repairCost(item: EquipmentItem, workshopLevel: number): number {
+  /**
+   * `vendorDiscountPercent` is the Blacksmith's own Smith's Discount
+   * vendor upgrade (ModifierManager.global(state).repairDiscount) --
+   * applied as a second, independent multiplier on top of the existing
+   * Workshop discount, same "own key, own percentage, explicitly summed"
+   * shape revivalDiscount uses. Defaults to 0 so every existing call
+   * site keeps working unchanged until it's threaded through.
+   */
+  repairCost(item: EquipmentItem, workshopLevel: number, vendorDiscountPercent = 0): number {
     const def = EQUIPMENT_BY_ID[item.defId];
     if (!def) return 0;
     const missing = EquipmentManager.maxDurability(item) - item.durability;
     if (missing <= 0) return 0;
     const perPoint = 0.6 * RARITY_PRICE_MULT[def.rarity] * (1 + item.plus * 0.2);
     const discount = 1 - Math.min(0.5, 0.15 + workshopLevel * 0.035);
-    return Math.max(1, Math.ceil(missing * perPoint * discount));
+    const vendorDiscount = 1 - Math.min(0.6, vendorDiscountPercent / 100);
+    return Math.max(1, Math.ceil(missing * perPoint * discount * vendorDiscount));
   },
 
   upgradeCost(item: EquipmentItem, workshopLevel: number): number {
@@ -74,10 +83,17 @@ export const EquipmentManager = {
    * gold-adjacent economy to min-max around -- the rarer the item, the
    * more scrap, full stop.
    */
-  scrapValue(item: EquipmentItem): number {
+  /**
+   * `bonusPercent` is the Blacksmith's own Bulk Scrapper vendor upgrade
+   * (ModifierManager.global(state).scrapBonus) -- applied as a straight
+   * multiplier on the base rarity value. Defaults to 0 so every existing
+   * call site keeps working unchanged until it's threaded through.
+   */
+  scrapValue(item: EquipmentItem, bonusPercent = 0): number {
     const def = EQUIPMENT_BY_ID[item.defId];
     if (!def) return 0;
-    return Tuning.get(`elemental.scrapValue.${def.rarity}`);
+    const base = Tuning.get(`elemental.scrapValue.${def.rarity}`);
+    return Math.max(1, Math.round(base * (1 + bonusPercent / 100)));
   },
 
   shopPrice(def: EquipmentDef): number {
@@ -129,8 +145,8 @@ export const EquipmentManager = {
     return broken;
   },
 
-  repair(state: GameState, item: EquipmentItem, workshopLevel: number): string | null {
-    const cost = EquipmentManager.repairCost(item, workshopLevel);
+  repair(state: GameState, item: EquipmentItem, workshopLevel: number, vendorDiscountPercent = 0): string | null {
+    const cost = EquipmentManager.repairCost(item, workshopLevel, vendorDiscountPercent);
     if (cost === 0) return 'Already in perfect condition.';
     if (state.gold < cost) return 'Not enough gold for the repair.';
     state.gold -= cost;

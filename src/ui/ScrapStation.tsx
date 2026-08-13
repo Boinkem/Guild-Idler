@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, CSSProperties } from 'react';
 import { useEngine } from './useEngine';
 import { EquipmentManager } from '../game/managers/EquipmentManager';
+import { ModifierManager } from '../game/managers/ModifierManager';
 import { scrapIconFor } from '../game/data/elements';
 import { ItemIcon } from './icons';
 import { PickerModal, SlotBox } from './CraftingStation';
@@ -63,7 +64,8 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
   const item = found?.item;
   const def = item ? EquipmentManager.def(item) : undefined;
-  const value = item ? EquipmentManager.scrapValue(item) : 0;
+  const scrapBonus = ModifierManager.global(state).scrapBonus ?? 0;
+  const value = item ? EquipmentManager.scrapValue(item, scrapBonus) : 0;
 
   const options: PickerOption[] = EquipmentManager.allItems(state)
     .map(({ item: i, heroId }): PickerOption | null => {
@@ -73,7 +75,7 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
       return {
         key: i.uid,
         label: d.name,
-        sublabel: `${owner} -- ${EquipmentManager.scrapValue(i)} Scrap`,
+        sublabel: `${owner} -- ${EquipmentManager.scrapValue(i, scrapBonus)} Scrap`,
         icon: <ItemIcon slot={d.slot} icon={d.icon} size={40} />,
       };
     })
@@ -81,7 +83,7 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
 
   function handleScrap() {
     if (!item) return;
-    const gained = EquipmentManager.scrapValue(item);
+    const gained = EquipmentManager.scrapValue(item, scrapBonus);
     engine.scrapItem(item.uid);
     const now = Date.now();
     setBurst({ key: now, gained, icon: scrapIconFor(now) });

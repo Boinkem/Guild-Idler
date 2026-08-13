@@ -1,7 +1,7 @@
 import { GUILD_BY_ID, RENOWN_BY_ID, UPGRADE_BY_ID, BASE_GOLD_STORAGE } from '../data/progression';
 import { RAID_UPGRADE_BY_ID } from '../data/raidUpgrades';
 import { BASE_INCUBATION_SLOTS } from '../data/pets';
-import { GameState, Hero, Modifiers } from '../types';
+import { GameState, Hero, Modifiers, VendorId } from '../types';
 import { scaleMods, sumMods } from '../util';
 import { PetManager } from './PetManager';
 
@@ -153,11 +153,20 @@ export const ModifierManager = {
     return 1 + bonus;
   },
 
-  /** Same shape again, for the Vendors shop restock reroll, via Trade Favor. */
-  vendorFreeRerolls(state: GameState): number {
+  /**
+   * Same shape again, for a single vendor stall's own restock reroll --
+   * now split per vendor (Trade Favor: Blacksmith/Alchemist/Enchanter),
+   * since each stall reroll is its own independent action with its own
+   * cost/counter as of the Vendor Upgrades Consolidation. Filters
+   * vendorFreeRerollsPerLevel-bearing upgrades down to the ones actually
+   * tagged for this vendor, so leveling Blacksmith's Trade Favor doesn't
+   * also grant free Alchemist rerolls.
+   */
+  vendorFreeRerolls(state: GameState, vendorId: VendorId): number {
     const bonus = Object.entries(state.upgrades).reduce((sum, [id, level]) => {
       const def = UPGRADE_BY_ID[id];
-      return sum + (def?.vendorFreeRerollsPerLevel ?? 0) * level;
+      if (!def || def.vendor !== vendorId) return sum;
+      return sum + (def.vendorFreeRerollsPerLevel ?? 0) * level;
     }, 0);
     return 1 + bonus;
   },

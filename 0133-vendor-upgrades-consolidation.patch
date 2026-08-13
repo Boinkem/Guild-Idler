@@ -1,0 +1,2100 @@
+From ba68e7975a0bb5110cbfb4e968756bfd9d49be42 Mon Sep 17 00:00:00 2001
+From: assistant <a@a.com>
+Date: Thu, 13 Aug 2026 12:28:50 +0000
+Subject: [PATCH] 0133: Vendor Upgrades Consolidation
+
+- Fold duplicate gold-cost stat upgrades (Success/Gold/Durability/XP/Loot)
+  into their owning Guild Hall facility; retune costGrowth so total cost
+  to max lands close to what it cost to grind both sources before.
+- Remove weapons_training, armourers_contract, veteran_explorer,
+  war_stories, efficient_adventuring.
+- Add vendor-themed replacements: Smith's Discount, Bulk Scrapper
+  (Blacksmith), Apothecary's Discount (Alchemist), Arcane Discount
+  (Enchanter); Enchanted Seal reworked (drops old success bonus, gains
+  Black Market discount, keeps Legendary-quest unlock).
+- New Modifiers keys: repairDiscount, scrapBonus, consumableDiscount,
+  enchantDiscount, blackMarketDiscount -- wired through EquipmentManager,
+  InventoryManager, CraftingManager, ShopManager, and every UI display
+  site that shows an affected price.
+- Split the old shared Vendors restock reroll into three independent
+  per-vendor rerolls (Blacksmith/Alchemist/Enchanter), each with its own
+  Trade Favor upgrade, cost curve, and daily counter; Enchanter gets a
+  manual Black Market reroll for the first time.
+- SAVE_VERSION 37 -> 38: refunds gold spent on removed upgrades, splits
+  trade_favor's level across the new per-vendor upgrades, migrates
+  reroll counters.
+- guild-idler-status.md updated.
+---
+ guild-idler-status.md                 | 142 +++++++-
+ src/game/data/json/tuning.json        | 504 +++++++++++++-------------
+ src/game/data/progression.ts          | 143 +++++---
+ src/game/engine.ts                    |  48 ++-
+ src/game/managers/CraftingManager.ts  |  36 +-
+ src/game/managers/EquipmentManager.ts |  28 +-
+ src/game/managers/InventoryManager.ts |  16 +-
+ src/game/managers/ModifierManager.ts  |  17 +-
+ src/game/managers/SaveManager.ts      |  82 ++++-
+ src/game/managers/ShopManager.ts      | 199 +++++++---
+ src/game/types.ts                     |  74 +++-
+ src/game/util.ts                      |   9 +-
+ src/ui/CraftingStation.tsx            |   4 +-
+ src/ui/ScrapStation.tsx               |   8 +-
+ src/ui/panels/EquipmentPanel.tsx      |   9 +-
+ src/ui/panels/VendorsPanel.tsx        |  69 ++--
+ 16 files changed, 956 insertions(+), 432 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 17f20ff..f0e2d27 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -477,7 +477,13 @@ longer appear in either shop's stock).
+ **Guild facilities & Permanent Upgrades** — vendor-style upgrade trees,
+ guild-wide bonuses, gold storage. 8 facilities total, the newest being
+ Music Hall (a pure cosmetic gold sink -- unlocks purchasable background
+-music tracks, no stat effect).
++music tracks, no stat effect). Vendor upgrades no longer duplicate
++facility stat bonuses -- each generic stat (Success/Gold/Durability/XP/
++Loot) now lives in exactly one place (the owning facility), and every
++vendor's own upgrade slots are themed to that vendor's services
++(repair/scrap discounts at the Blacksmith, consumable discount at the
++Alchemist, enchant/Black-Market discounts at the Enchanter) instead --
++see "Vendor Upgrades Consolidation" below.
+ 
+ **Quest chains** — 29 total (28 after the level-gap pass below, +1 for
+ `the_first_haul` added in this same pass -- was previously logged here as
+@@ -8457,3 +8463,137 @@ every one, no overflow in any of them -- confirmed both numerically
+ (bounding-box height) and visually (screenshotting all three states
+ side by side shows the background art at the identical scale and crop
+ in each).
++
++### Vendor Upgrades Consolidation -- built (patch 0133)
++
++Feedback: leveling a vendor felt like a second, disconnected copy of
++Guild Hall rather than its own thing -- the same generic Success/Gold/
++Durability/XP/Loot stat bonuses were being handed out in two unrelated
++places, gated behind two unrelated grinds, for no thematic reason. Two
++separate asks, handled together since fixing one meant touching the
++other: (1) consolidate every duplicated gold-cost stat upgrade down to
++one location, and (2) rework the vendor upgrade slots that freed up to
++actually be about that vendor's own services (repairs/crafting/
++scrapping/enchanting) instead of another flavourless stat line. Renown
++Perks deliberately excluded from this pass -- different currency,
++different track, not what was reported as feeling redundant.
++
++**What was actually duplicated**, confirmed directly against
++`progression.ts` rather than assumed: Barracks (facility, Success) vs.
++Better Weapons Training (Blacksmith) *and* Enchanted Seal (Enchanter) --
++Success alone was a 3-spot stat. Treasury (facility, Gold) vs.
++Efficient Adventuring (a general upgrade that was never even vendor-
++tied). Workshop (facility, Durability) vs. Armourer's Contract
++(Blacksmith). Library (facility, XP) vs. Runic Insight (Enchanter).
++Tavern (facility, Loot) vs. Alchemical Assay (Alchemist). Restorative
++Tinctures (Alchemist, injury resist) and Mounted Travel (Blacksmith,
++speed) had no duplicate and were left alone.
++
++**Consolidation math, not just "remove and hope it's fine".** Naively
++extending a facility's own level count to match the old *combined*
++total blows up -- cost curves compound geometrically, so bolting 5 more
++levels onto Barracks's existing curve to reach the old 43% Success total
++would cost ~4.0M gold for those 5 levels alone (Treasury's equivalent
++extension: ~430 *billion*). Instead, each facility keeps its existing
++level count and absorbs the removed upgrade's bonus into a bigger
++per-level value, with `costGrowth` retuned so the total gold cost to
++max the facility lands close to what it used to cost to grind *both*
++sources today (this was a deliberate ask -- the upgrade tree is still
++meant to work as a gold sink that extends game time, not get cheaper
++just because it got simpler):
++
++| Facility (stat) | Levels | costGrowth | Per-level | New total | Cost to max | Old combined cost |
++|---|---|---|---|---|---|---|
++| Barracks (Success) | 10 | 1.8 → 1.87 | 3% → 4% | 40% (was 43%) | ~297.7k | ~291.9k |
++| Treasury (Gold) | 12 (modsMaxLevel unchanged) | 1.74 → 1.79 | 4% → 12% | 144% (was 148%) | ~545.7k | ~545.2k |
++| Workshop (Durability) | 10 | 1.85 → 1.87 | 8% → 14% | 140% (was 140%) | ~357.3k | ~351.4k |
++| Library (XP) | 10 | 1.84 → 1.9 | 6% → 12% | 120% (was 124%) | ~371.6k | ~368.0k |
++| Tavern (Loot) | 5 → 6 | 2.4 → 2.47 | 2% → 7% | 42% (was 50%) | -- | -- |
++
++Tavern needed its own call: same-level-count math landed at 10%/level
++(50% total) for only ~37k gold -- a 3x cost drop, because Alchemical
++Assay was carrying 40 of the old 50 points on a much gentler curve than
++Tavern's own steep one. Bumped to 6 levels at 7%/level instead (42%
++total) rather than chasing the old total exactly.
++
++**Removed entirely**, folded into the facility above: `efficient_
++adventuring` (general, gold), `weapons_training` (Blacksmith, success),
++`armourers_contract` (Blacksmith, durability), `veteran_explorer`
++(Alchemist, loot), `war_stories` (Enchanter, xp). `master_adventurer`
++(Enchanted Seal) keeps its Legendary-quest unlock but loses its success
++bonus -- see below for what replaced it.
++
++**New vendor-themed upgrades**, filling the freed slots with something
++actually tied to that vendor's own services rather than another generic
++stat. Five new `Modifiers` keys back these (`repairDiscount`,
++`scrapBonus`, `consumableDiscount`, `enchantDiscount`,
++`blackMarketDiscount`), same "own key, explicitly summed" shape every
++other discount (`revivalDiscount` etc.) already uses:
++
++- **Blacksmith:** Smith's Discount (tier 1, `repairDiscount` -- cuts
++  `EquipmentManager.repairCost`), Mounted Travel (tier 2, unchanged),
++  Trade Favor: Blacksmith (tier 3, see reroll split below), Bulk
++  Scrapper (tier 4, `scrapBonus` -- boosts `EquipmentManager.scrapValue`).
++- **Alchemist:** Apothecary's Discount (tier 1, `consumableDiscount` --
++  cuts consumable shop price via the new `InventoryManager.price`, the
++  one place this is applied so displayed price always matches what
++  `buy()` actually charges), Restorative Tinctures (tier 2, unchanged),
++  Trade Favor: Alchemist (tier 3).
++- **Enchanter:** Arcane Discount (tier 1, `enchantDiscount` -- cuts gold
++  cost on `gem`/`enchant` category crafting recipes specifically, via
++  the new `CraftingManager.goldCost`, so Weapon Enchanting/Armour
++  Infusion/gem crafting/Minor Sigil all get cheaper together), Trade
++  Favor: Enchanter (tier 2), Enchanted Seal (tier 3 -- kept its
++  Legendary-quest unlock, replaced the old Success bonus with
++  `blackMarketDiscount` on Black Market prices; "guaranteed Rare+ Black
++  Market stock" was the original idea but turned out to already be a
++  no-op, since the Black Market has only ever rolled rare/epic/
++  legendary in the first place).
++
++**Reroll split.** The Vendors restock reroll used to be one shared
++action/cost/counter that restocked Blacksmith gear and Alchemist
++consumables together (discovered mid-implementation, not assumed --
++`ShopManager.rerollShop` called the same `refresh()` for both), with the
++Black Market having no manual reroll at all, purely time-gated. Given
++the new per-vendor Trade Favor upgrades needed something to actually
++buy, this got split three ways instead of left alone: `rollEquipment`/
++`rollConsumables` pulled out of the old combined `refresh()` as
++independent functions, `rerollBlacksmith`/`rerollAlchemist`/
++`rerollEnchanter` each with their own cost curve
++(`ModifierManager.vendorFreeRerolls` now takes a `VendorId` and filters
++by it) and daily counter (`state.blacksmithRerollDay`/`alchemistRerollDay`/
++`enchanterRerollDay`, replacing the old single `vendorRerollDay` pair).
++`rerollEnchanter` is a genuinely new capability -- forces
++`refreshBlackMarket` early with a fresh salt, something that didn't
++exist before this patch. The natural periodic restock (every 4h for
++gear/consumables, 16h for Black Market) is untouched either way.
++
++**Save migration (37 → 38).** A save that already spent gold on the
++five removed upgrades gets that gold refunded, computed against each
++upgrade's own retired cost curve (same `earlyTierDiscount`-adjusted
++formula every other upgrade cost still uses) rather than just silently
++eating the loss -- losing the bonus is one thing, losing gold spent
++buying it with no recourse is another. `trade_favor`'s old level carries
++over to *both* `trade_favor_blacksmith` and `trade_favor_alchemist` (the
++two vendors it used to jointly cover), `trade_favor_enchanter` starts at
++0 (brand new). Old `vendorRerollDay`/`vendorRerollsUsedToday` carry into
++both `blacksmithRerolls*` and `alchemistRerolls*`; `enchanterRerolls*`
++starts fresh.
++
++**Verified:** `tsc --noEmit` passes clean under the same strict/
++noUnusedLocals/noUnusedParameters config `npm run build` uses. Every
++display site that shows a repair/scrap/consumable/enchant/Black-Market
++price was hunted down and pointed at the same discount-aware helper the
++actual spend uses (`EquipmentPanel`, `ScrapStation`, `CraftingStation`,
++`WeaponEnchantStation`, `ArmourInfusionStation`, `VendorsPanel`) --
++worth double-checking after future changes to any of those, since a
++displayed price silently drifting from the charged price is an easy
++regression to reintroduce.
++
++**Deliberately not touched this pass:** the vendor happiness/reputation
++meter (discount scaling with usage/purchases over time) raised alongside
++this feedback -- parked for its own dedicated design discussion, per
++request, rather than folded in here. `mounted_travel`'s own flavour text
++(a Blacksmith selling horse travel is still a little thematically odd)
++wasn't reworked since it wasn't a duplicate and reworking it wasn't
++asked for -- worth a look whenever Blacksmith copy gets another pass.
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 83d0373..746812c 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -156,8 +156,8 @@
+     "id": "guild_facility.barracks.costGrowth",
+     "label": "Barracks: cost growth",
+     "category": "guild_facilities",
+-    "value": 1.8,
+-    "default": 1.8,
++    "value": 1.87,
++    "default": 1.87,
+     "min": 1,
+     "max": 5,
+     "description": "Multiplier applied per level, before the early-tier discount."
+@@ -175,8 +175,8 @@
+     "id": "guild_facility.barracks.successPerLevel",
+     "label": "Barracks: success % per level",
+     "category": "guild_facilities",
+-    "value": 3,
+-    "default": 3,
++    "value": 4,
++    "default": 4,
+     "min": 0,
+     "max": 20,
+     "description": "Flat success percentage points granted per level, guild-wide."
+@@ -194,8 +194,8 @@
+     "id": "guild_facility.treasury.costGrowth",
+     "label": "Treasury: cost growth",
+     "category": "guild_facilities",
+-    "value": 1.74,
+-    "default": 1.74,
++    "value": 1.79,
++    "default": 1.79,
+     "min": 1,
+     "max": 5,
+     "description": "Multiplier applied per level, before the early-tier discount."
+@@ -213,8 +213,8 @@
+     "id": "guild_facility.treasury.goldPerLevel",
+     "label": "Treasury: gold % per level",
+     "category": "guild_facilities",
+-    "value": 4,
+-    "default": 4,
++    "value": 12,
++    "default": 12,
+     "min": 0,
+     "max": 20,
+     "description": "Flat gold percentage granted per level, guild-wide. storagePerLevel (gold storage) is a separate, still-hardcoded field -- not included in this pass."
+@@ -232,8 +232,8 @@
+     "id": "guild_facility.workshop.costGrowth",
+     "label": "Workshop: cost growth",
+     "category": "guild_facilities",
+-    "value": 1.85,
+-    "default": 1.85,
++    "value": 1.87,
++    "default": 1.87,
+     "min": 1,
+     "max": 5,
+     "description": "Multiplier applied per level, before the early-tier discount."
+@@ -251,8 +251,8 @@
+     "id": "guild_facility.workshop.durabilityPerLevel",
+     "label": "Workshop: durability % per level",
+     "category": "guild_facilities",
+-    "value": 8,
+-    "default": 8,
++    "value": 14,
++    "default": 14,
+     "min": 0,
+     "max": 30,
+     "description": "Flat durability percentage granted per level, guild-wide. No reward effect."
+@@ -270,8 +270,8 @@
+     "id": "guild_facility.library.costGrowth",
+     "label": "Library: cost growth",
+     "category": "guild_facilities",
+-    "value": 1.84,
+-    "default": 1.84,
++    "value": 1.9,
++    "default": 1.9,
+     "min": 1,
+     "max": 5,
+     "description": "Multiplier applied per level, before the early-tier discount."
+@@ -289,8 +289,8 @@
+     "id": "guild_facility.library.xpPerLevel",
+     "label": "Library: xp % per level",
+     "category": "guild_facilities",
+-    "value": 6,
+-    "default": 6,
++    "value": 12,
++    "default": 12,
+     "min": 0,
+     "max": 40,
+     "description": "Flat xp percentage granted per level, guild-wide."
+@@ -308,8 +308,8 @@
+     "id": "guild_facility.tavern.costGrowth",
+     "label": "Tavern: cost growth",
+     "category": "guild_facilities",
+-    "value": 2.4,
+-    "default": 2.4,
++    "value": 2.47,
++    "default": 2.47,
+     "min": 1,
+     "max": 5,
+     "description": "Multiplier applied per level, before the early-tier discount."
+@@ -318,8 +318,8 @@
+     "id": "guild_facility.tavern.maxLevel",
+     "label": "Tavern: max level",
+     "category": "guild_facilities",
+-    "value": 5,
+-    "default": 5,
++    "value": 6,
++    "default": 6,
+     "min": 1,
+     "description": "Highest level Tavern can reach."
+   },
+@@ -327,8 +327,8 @@
+     "id": "guild_facility.tavern.lootPerLevel",
+     "label": "Tavern: loot % per level",
+     "category": "guild_facilities",
+-    "value": 2,
+-    "default": 2,
++    "value": 7,
++    "default": 7,
+     "min": 0,
+     "max": 20,
+     "description": "Flat loot percentage granted per level, guild-wide. heroSlotsPerLevel (+1 hero slot) is a separate, still-hardcoded field -- not included in this pass."
+@@ -1605,114 +1605,6 @@
+     "description": "Extra hero roster slots granted per Extra Banner level.",
+     "min": 0
+   },
+-  {
+-    "id": "upgrade.weapons_training.baseCost",
+-    "label": "Better Weapons Training: base cost",
+-    "category": "vendor_upgrades",
+-    "value": 200,
+-    "default": 200,
+-    "description": "Gold cost of Better Weapons Training's first level.",
+-    "min": 0
+-  },
+-  {
+-    "id": "upgrade.weapons_training.costGrowth",
+-    "label": "Better Weapons Training: cost growth",
+-    "category": "vendor_upgrades",
+-    "value": 1.75,
+-    "default": 1.75,
+-    "description": "Multiplier applied per level to Better Weapons Training's cost.",
+-    "min": 1
+-  },
+-  {
+-    "id": "upgrade.weapons_training.maxLevel",
+-    "label": "Better Weapons Training: max level",
+-    "category": "vendor_upgrades",
+-    "value": 10,
+-    "default": 10,
+-    "description": "Level cap for Better Weapons Training.",
+-    "min": 0
+-  },
+-  {
+-    "id": "upgrade.weapons_training.successPerLevel",
+-    "label": "Better Weapons Training: success bonus per level",
+-    "category": "vendor_upgrades",
+-    "value": 1,
+-    "default": 1,
+-    "description": "Better Weapons Training's success bonus per level.",
+-    "min": 0
+-  },
+-  {
+-    "id": "upgrade.efficient_adventuring.baseCost",
+-    "label": "Efficient Adventuring: base cost",
+-    "category": "vendor_upgrades",
+-    "value": 250,
+-    "default": 250,
+-    "description": "Gold cost of Efficient Adventuring's first level.",
+-    "min": 0
+-  },
+-  {
+-    "id": "upgrade.efficient_adventuring.costGrowth",
+-    "label": "Efficient Adventuring: cost growth",
+-    "category": "vendor_upgrades",
+-    "value": 1.84,
+-    "default": 1.84,
+-    "description": "Multiplier applied per level to Efficient Adventuring's cost.",
+-    "min": 1
+-  },
+-  {
+-    "id": "upgrade.efficient_adventuring.maxLevel",
+-    "label": "Efficient Adventuring: max level",
+-    "category": "vendor_upgrades",
+-    "value": 10,
+-    "default": 10,
+-    "description": "Level cap for Efficient Adventuring.",
+-    "min": 0
+-  },
+-  {
+-    "id": "upgrade.efficient_adventuring.goldPerLevel",
+-    "label": "Efficient Adventuring: gold bonus per level",
+-    "category": "vendor_upgrades",
+-    "value": 10,
+-    "default": 10,
+-    "description": "Efficient Adventuring's gold bonus per level.",
+-    "min": 0
+-  },
+-  {
+-    "id": "upgrade.veteran_explorer.baseCost",
+-    "label": "Alchemical Assay: base cost",
+-    "category": "vendor_upgrades",
+-    "value": 400,
+-    "default": 400,
+-    "description": "Gold cost of Alchemical Assay's first level.",
+-    "min": 0
+-  },
+-  {
+-    "id": "upgrade.veteran_explorer.costGrowth",
+-    "label": "Alchemical Assay: cost growth",
+-    "category": "vendor_upgrades",
+-    "value": 1.9,
+-    "default": 1.9,
+-    "description": "Multiplier applied per level to Alchemical Assay's cost.",
+-    "min": 1
+-  },
+-  {
+-    "id": "upgrade.veteran_explorer.maxLevel",
+-    "label": "Alchemical Assay: max level",
+-    "category": "vendor_upgrades",
+-    "value": 8,
+-    "default": 8,
+-    "description": "Level cap for Alchemical Assay.",
+-    "min": 0
+-  },
+-  {
+-    "id": "upgrade.veteran_explorer.lootPerLevel",
+-    "label": "Alchemical Assay: loot bonus per level",
+-    "category": "vendor_upgrades",
+-    "value": 5,
+-    "default": 5,
+-    "description": "Alchemical Assay's loot bonus per level.",
+-    "min": 0
+-  },
+   {
+     "id": "upgrade.mounted_travel.baseCost",
+     "label": "Mounted Travel: base cost",
+@@ -1785,78 +1677,6 @@
+     "description": "Restorative Tinctures's injury-resist bonus per level.",
+     "min": 0
+   },
+-  {
+-    "id": "upgrade.armourers_contract.baseCost",
+-    "label": "Armourer's Contract: base cost",
+-    "category": "vendor_upgrades",
+-    "value": 500,
+-    "default": 500,
+-    "description": "Gold cost of Armourer's Contract's first level.",
+-    "min": 0
+-  },
+-  {
+-    "id": "upgrade.armourers_contract.costGrowth",
+-    "label": "Armourer's Contract: cost growth",
+-    "category": "vendor_upgrades",
+-    "value": 1.9,
+-    "default": 1.9,
+-    "description": "Multiplier applied per level to Armourer's Contract's cost.",
+-    "min": 1
+-  },
+-  {
+-    "id": "upgrade.armourers_contract.maxLevel",
+-    "label": "Armourer's Contract: max level",
+-    "category": "vendor_upgrades",
+-    "value": 6,
+-    "default": 6,
+-    "description": "Level cap for Armourer's Contract.",
+-    "min": 0
+-  },
+-  {
+-    "id": "upgrade.armourers_contract.durabilityPerLevel",
+-    "label": "Armourer's Contract: durability bonus per level",
+-    "category": "vendor_upgrades",
+-    "value": 10,
+-    "default": 10,
+-    "description": "Armourer's Contract's durability bonus per level.",
+-    "min": 0
+-  },
+-  {
+-    "id": "upgrade.war_stories.baseCost",
+-    "label": "Runic Insight: base cost",
+-    "category": "vendor_upgrades",
+-    "value": 450,
+-    "default": 450,
+-    "description": "Gold cost of Runic Insight's first level.",
+-    "min": 0
+-  },
+-  {
+-    "id": "upgrade.war_stories.costGrowth",
+-    "label": "Runic Insight: cost growth",
+-    "category": "vendor_upgrades",
+-    "value": 1.89,
+-    "default": 1.89,
+-    "description": "Multiplier applied per level to Runic Insight's cost.",
+-    "min": 1
+-  },
+-  {
+-    "id": "upgrade.war_stories.maxLevel",
+-    "label": "Runic Insight: max level",
+-    "category": "vendor_upgrades",
+-    "value": 8,
+-    "default": 8,
+-    "description": "Level cap for Runic Insight.",
+-    "min": 0
+-  },
+-  {
+-    "id": "upgrade.war_stories.xpPerLevel",
+-    "label": "Runic Insight: xp bonus per level",
+-    "category": "vendor_upgrades",
+-    "value": 8,
+-    "default": 8,
+-    "description": "Runic Insight's xp bonus per level.",
+-    "min": 0
+-  },
+   {
+     "id": "upgrade.master_adventurer.baseCost",
+     "label": "Enchanted Seal: base cost",
+@@ -1884,15 +1704,6 @@
+     "description": "Level cap for Enchanted Seal.",
+     "min": 0
+   },
+-  {
+-    "id": "upgrade.master_adventurer.successPerLevel",
+-    "label": "Enchanted Seal: success bonus per level",
+-    "category": "vendor_upgrades",
+-    "value": 3,
+-    "default": 3,
+-    "description": "Enchanted Seal's success bonus per level.",
+-    "min": 0
+-  },
+   {
+     "id": "upgrade.guild_charter.baseCost",
+     "label": "Guild Charter: base cost",
+@@ -2199,42 +2010,6 @@
+     "description": "Board Runner's free quest-board rerolls per day granted per level.",
+     "min": 0
+   },
+-  {
+-    "id": "upgrade.trade_favor.baseCost",
+-    "label": "Trade Favor: base cost",
+-    "category": "vendor_upgrades",
+-    "value": 900,
+-    "default": 900,
+-    "description": "Gold cost of Trade Favor's first level.",
+-    "min": 0
+-  },
+-  {
+-    "id": "upgrade.trade_favor.costGrowth",
+-    "label": "Trade Favor: cost growth",
+-    "category": "vendor_upgrades",
+-    "value": 2.0,
+-    "default": 2.0,
+-    "description": "Multiplier applied per level to Trade Favor's cost.",
+-    "min": 1
+-  },
+-  {
+-    "id": "upgrade.trade_favor.maxLevel",
+-    "label": "Trade Favor: max level",
+-    "category": "vendor_upgrades",
+-    "value": 3,
+-    "default": 3,
+-    "description": "Level cap for Trade Favor.",
+-    "min": 0
+-  },
+-  {
+-    "id": "upgrade.trade_favor.vendorFreeRerollsPerLevel",
+-    "label": "Trade Favor: free vendor restocks per day granted per level",
+-    "category": "vendor_upgrades",
+-    "value": 1,
+-    "default": 1,
+-    "description": "Trade Favor's free vendor restocks per day granted per level.",
+-    "min": 0
+-  },
+   {
+     "id": "upgrade.board_warden.baseCost",
+     "label": "Board Warden: base cost",
+@@ -3227,5 +3002,238 @@
+     "min": 0,
+     "max": 100,
+     "description": "Medium-mode chance on Easy offers for a hero at level 16+, absorbing burst's entire retired share."
++  },
++  {
++    "id": "upgrade.master_adventurer.blackMarketDiscountPerLevel",
++    "label": "Enchanted Seal: Black Market discount per level",
++    "category": "vendor_upgrades",
++    "value": 15,
++    "default": 15,
++    "min": 0,
++    "description": "Enchanted Seal's Black Market price discount per level."
++  },
++  {
++    "id": "upgrade.smiths_discount.baseCost",
++    "label": "Smith's Discount: base cost",
++    "category": "vendor_upgrades",
++    "value": 300,
++    "default": 300,
++    "min": 0
++  },
++  {
++    "id": "upgrade.smiths_discount.costGrowth",
++    "label": "Smith's Discount: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1.8,
++    "default": 1.8,
++    "min": 0
++  },
++  {
++    "id": "upgrade.smiths_discount.maxLevel",
++    "label": "Smith's Discount: max level",
++    "category": "vendor_upgrades",
++    "value": 6,
++    "default": 6,
++    "min": 0
++  },
++  {
++    "id": "upgrade.smiths_discount.repairDiscountPerLevel",
++    "label": "Smith's Discount: repair discount % per level",
++    "category": "vendor_upgrades",
++    "value": 5,
++    "default": 5,
++    "min": 0
++  },
++  {
++    "id": "upgrade.bulk_scrapper.baseCost",
++    "label": "Bulk Scrapper: base cost",
++    "category": "vendor_upgrades",
++    "value": 700,
++    "default": 700,
++    "min": 0
++  },
++  {
++    "id": "upgrade.bulk_scrapper.costGrowth",
++    "label": "Bulk Scrapper: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1.9,
++    "default": 1.9,
++    "min": 0
++  },
++  {
++    "id": "upgrade.bulk_scrapper.maxLevel",
++    "label": "Bulk Scrapper: max level",
++    "category": "vendor_upgrades",
++    "value": 5,
++    "default": 5,
++    "min": 0
++  },
++  {
++    "id": "upgrade.bulk_scrapper.scrapBonusPerLevel",
++    "label": "Bulk Scrapper: scrap bonus % per level",
++    "category": "vendor_upgrades",
++    "value": 8,
++    "default": 8,
++    "min": 0
++  },
++  {
++    "id": "upgrade.apothecary_discount.baseCost",
++    "label": "Apothecary's Discount: base cost",
++    "category": "vendor_upgrades",
++    "value": 350,
++    "default": 350,
++    "min": 0
++  },
++  {
++    "id": "upgrade.apothecary_discount.costGrowth",
++    "label": "Apothecary's Discount: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1.85,
++    "default": 1.85,
++    "min": 0
++  },
++  {
++    "id": "upgrade.apothecary_discount.maxLevel",
++    "label": "Apothecary's Discount: max level",
++    "category": "vendor_upgrades",
++    "value": 6,
++    "default": 6,
++    "min": 0
++  },
++  {
++    "id": "upgrade.apothecary_discount.consumableDiscountPerLevel",
++    "label": "Apothecary's Discount: consumable discount % per level",
++    "category": "vendor_upgrades",
++    "value": 5,
++    "default": 5,
++    "min": 0
++  },
++  {
++    "id": "upgrade.arcane_discount.baseCost",
++    "label": "Arcane Discount: base cost",
++    "category": "vendor_upgrades",
++    "value": 400,
++    "default": 400,
++    "min": 0
++  },
++  {
++    "id": "upgrade.arcane_discount.costGrowth",
++    "label": "Arcane Discount: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1.85,
++    "default": 1.85,
++    "min": 0
++  },
++  {
++    "id": "upgrade.arcane_discount.maxLevel",
++    "label": "Arcane Discount: max level",
++    "category": "vendor_upgrades",
++    "value": 6,
++    "default": 6,
++    "min": 0
++  },
++  {
++    "id": "upgrade.arcane_discount.enchantDiscountPerLevel",
++    "label": "Arcane Discount: enchant discount % per level",
++    "category": "vendor_upgrades",
++    "value": 5,
++    "default": 5,
++    "min": 0
++  },
++  {
++    "id": "upgrade.trade_favor_blacksmith.baseCost",
++    "label": "Trade Favor (Blacksmith): base cost",
++    "category": "vendor_upgrades",
++    "value": 900,
++    "default": 900,
++    "min": 0
++  },
++  {
++    "id": "upgrade.trade_favor_blacksmith.costGrowth",
++    "label": "Trade Favor (Blacksmith): cost growth",
++    "category": "vendor_upgrades",
++    "value": 2.0,
++    "default": 2.0,
++    "min": 0
++  },
++  {
++    "id": "upgrade.trade_favor_blacksmith.maxLevel",
++    "label": "Trade Favor (Blacksmith): max level",
++    "category": "vendor_upgrades",
++    "value": 3,
++    "default": 3,
++    "min": 0
++  },
++  {
++    "id": "upgrade.trade_favor_blacksmith.vendorFreeRerollsPerLevel",
++    "label": "Trade Favor (Blacksmith): free rerolls per level",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "min": 0
++  },
++  {
++    "id": "upgrade.trade_favor_alchemist.baseCost",
++    "label": "Trade Favor (Alchemist): base cost",
++    "category": "vendor_upgrades",
++    "value": 900,
++    "default": 900,
++    "min": 0
++  },
++  {
++    "id": "upgrade.trade_favor_alchemist.costGrowth",
++    "label": "Trade Favor (Alchemist): cost growth",
++    "category": "vendor_upgrades",
++    "value": 2.0,
++    "default": 2.0,
++    "min": 0
++  },
++  {
++    "id": "upgrade.trade_favor_alchemist.maxLevel",
++    "label": "Trade Favor (Alchemist): max level",
++    "category": "vendor_upgrades",
++    "value": 3,
++    "default": 3,
++    "min": 0
++  },
++  {
++    "id": "upgrade.trade_favor_alchemist.vendorFreeRerollsPerLevel",
++    "label": "Trade Favor (Alchemist): free rerolls per level",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "min": 0
++  },
++  {
++    "id": "upgrade.trade_favor_enchanter.baseCost",
++    "label": "Trade Favor (Enchanter): base cost",
++    "category": "vendor_upgrades",
++    "value": 900,
++    "default": 900,
++    "min": 0
++  },
++  {
++    "id": "upgrade.trade_favor_enchanter.costGrowth",
++    "label": "Trade Favor (Enchanter): cost growth",
++    "category": "vendor_upgrades",
++    "value": 2.0,
++    "default": 2.0,
++    "min": 0
++  },
++  {
++    "id": "upgrade.trade_favor_enchanter.maxLevel",
++    "label": "Trade Favor (Enchanter): max level",
++    "category": "vendor_upgrades",
++    "value": 3,
++    "default": 3,
++    "min": 0
++  },
++  {
++    "id": "upgrade.trade_favor_enchanter.vendorFreeRerollsPerLevel",
++    "label": "Trade Favor (Enchanter): free rerolls per level",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "min": 0
+   }
+-]
++]
+\ No newline at end of file
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 91a51fa..6428d37 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -8,29 +8,23 @@ export const UPGRADES: UpgradeDef[] = [
+   // reads from the tuning registry (tuning.json, category
+   // 'vendor_upgrades') rather than being a literal -- editable live via
+   // the devtool's Tuning tab without touching this file. See tuning.ts.
+-  {
+-    id: 'weapons_training', name: 'Better Weapons Training',
+-    description: 'Drill the fundamentals until they are boring.',
+-    baseCost: Tuning.get('upgrade.weapons_training.baseCost'),
+-    costGrowth: Tuning.get('upgrade.weapons_training.costGrowth'),
+-    maxLevel: Tuning.get('upgrade.weapons_training.maxLevel'),
+-    modsPerLevel: { success: Tuning.get('upgrade.weapons_training.successPerLevel') }, vendor: 'blacksmith',
+-  },
+-  {
+-    id: 'efficient_adventuring', name: 'Efficient Adventuring',
+-    description: 'Negotiate the contract before drawing the sword.',
+-    baseCost: Tuning.get('upgrade.efficient_adventuring.baseCost'),
+-    costGrowth: Tuning.get('upgrade.efficient_adventuring.costGrowth'),
+-    maxLevel: Tuning.get('upgrade.efficient_adventuring.maxLevel'),
+-    modsPerLevel: { gold: Tuning.get('upgrade.efficient_adventuring.goldPerLevel') },
+-  },
+-  {
+-    id: 'veteran_explorer', name: 'Alchemical Assay',
+-    description: 'Acid, flame, and a practiced eye separate true ore from slag before the cart even leaves the ruin.',
+-    baseCost: Tuning.get('upgrade.veteran_explorer.baseCost'),
+-    costGrowth: Tuning.get('upgrade.veteran_explorer.costGrowth'),
+-    maxLevel: Tuning.get('upgrade.veteran_explorer.maxLevel'),
+-    modsPerLevel: { loot: Tuning.get('upgrade.veteran_explorer.lootPerLevel') }, vendor: 'alchemist',
++  // --- Vendor Upgrades Consolidation (see guild-idler-status.md) ---
++  // weapons_training/armourers_contract/veteran_explorer/war_stories/
++  // efficient_adventuring used to hand out the exact same generic
++  // Success/Durability/Loot/XP/Gold bonuses the Guild Hall facilities
++  // below already grant, just gated behind a second, unrelated grind.
++  // That power is folded into Barracks/Workshop/Tavern/Library/Treasury
++  // instead (see those facilities' own comments), and every vendor slot
++  // it used to occupy is replaced with something actually themed to
++  // that vendor's own services. Existing saves are refunded the gold
++  // they spent on the removed upgrades -- see SaveManager migration 37.
++  {
++    id: 'smiths_discount', name: "Smith's Discount",
++    description: "A standing account with the Blacksmith -- Repair costs less the longer you've kept it open.",
++    baseCost: Tuning.get('upgrade.smiths_discount.baseCost'),
++    costGrowth: Tuning.get('upgrade.smiths_discount.costGrowth'),
++    maxLevel: Tuning.get('upgrade.smiths_discount.maxLevel'),
++    modsPerLevel: { repairDiscount: Tuning.get('upgrade.smiths_discount.repairDiscountPerLevel') }, vendor: 'blacksmith',
+   },
+   {
+     id: 'mounted_travel', name: 'Mounted Travel',
+@@ -40,6 +34,30 @@ export const UPGRADES: UpgradeDef[] = [
+     maxLevel: Tuning.get('upgrade.mounted_travel.maxLevel'),
+     modsPerLevel: { speed: Tuning.get('upgrade.mounted_travel.speedPerLevel') }, vendor: 'blacksmith',
+   },
++  {
++    id: 'trade_favor_blacksmith', name: 'Trade Favor: Blacksmith',
++    description: "A standing favor with the Blacksmith -- extra free gear restocks per day before you start paying to hurry.",
++    baseCost: Tuning.get('upgrade.trade_favor_blacksmith.baseCost'),
++    costGrowth: Tuning.get('upgrade.trade_favor_blacksmith.costGrowth'),
++    maxLevel: Tuning.get('upgrade.trade_favor_blacksmith.maxLevel'),
++    modsPerLevel: {}, vendorFreeRerollsPerLevel: Tuning.get('upgrade.trade_favor_blacksmith.vendorFreeRerollsPerLevel'), vendor: 'blacksmith',
++  },
++  {
++    id: 'bulk_scrapper', name: 'Bulk Scrapper',
++    description: "The Blacksmith's own trick for breaking gear down efficiently -- bonus Scrap on everything you scrap.",
++    baseCost: Tuning.get('upgrade.bulk_scrapper.baseCost'),
++    costGrowth: Tuning.get('upgrade.bulk_scrapper.costGrowth'),
++    maxLevel: Tuning.get('upgrade.bulk_scrapper.maxLevel'),
++    modsPerLevel: { scrapBonus: Tuning.get('upgrade.bulk_scrapper.scrapBonusPerLevel') }, vendor: 'blacksmith',
++  },
++  {
++    id: 'apothecary_discount', name: "Apothecary's Discount",
++    description: 'A regular customer discount at the Alchemist -- every potion and charm costs a little less.',
++    baseCost: Tuning.get('upgrade.apothecary_discount.baseCost'),
++    costGrowth: Tuning.get('upgrade.apothecary_discount.costGrowth'),
++    maxLevel: Tuning.get('upgrade.apothecary_discount.maxLevel'),
++    modsPerLevel: { consumableDiscount: Tuning.get('upgrade.apothecary_discount.consumableDiscountPerLevel') }, vendor: 'alchemist',
++  },
+   {
+     id: 'field_medicine', name: 'Restorative Tinctures',
+     description: 'Bitter draughts, brewed to knit flesh faster than they have any business doing.',
+@@ -49,28 +67,36 @@ export const UPGRADES: UpgradeDef[] = [
+     modsPerLevel: { injuryResist: Tuning.get('upgrade.field_medicine.injuryResistPerLevel') }, vendor: 'alchemist',
+   },
+   {
+-    id: 'armourers_contract', name: "Armourer's Contract",
+-    description: 'Standing repairs mean gear lasts noticeably longer.',
+-    baseCost: Tuning.get('upgrade.armourers_contract.baseCost'),
+-    costGrowth: Tuning.get('upgrade.armourers_contract.costGrowth'),
+-    maxLevel: Tuning.get('upgrade.armourers_contract.maxLevel'),
+-    modsPerLevel: { durability: Tuning.get('upgrade.armourers_contract.durabilityPerLevel') }, vendor: 'blacksmith',
++    id: 'trade_favor_alchemist', name: 'Trade Favor: Alchemist',
++    description: "A standing favor with the Alchemist -- extra free supply restocks per day before you start paying to hurry.",
++    baseCost: Tuning.get('upgrade.trade_favor_alchemist.baseCost'),
++    costGrowth: Tuning.get('upgrade.trade_favor_alchemist.costGrowth'),
++    maxLevel: Tuning.get('upgrade.trade_favor_alchemist.maxLevel'),
++    modsPerLevel: {}, vendorFreeRerollsPerLevel: Tuning.get('upgrade.trade_favor_alchemist.vendorFreeRerollsPerLevel'), vendor: 'alchemist',
+   },
+   {
+-    id: 'war_stories', name: 'Runic Insight',
+-    description: 'Wards etched into a hero\'s gear murmur half-remembered lessons back to whoever carries them.',
+-    baseCost: Tuning.get('upgrade.war_stories.baseCost'),
+-    costGrowth: Tuning.get('upgrade.war_stories.costGrowth'),
+-    maxLevel: Tuning.get('upgrade.war_stories.maxLevel'),
+-    modsPerLevel: { xp: Tuning.get('upgrade.war_stories.xpPerLevel') }, vendor: 'enchanter',
++    id: 'arcane_discount', name: 'Arcane Discount',
++    description: "The Enchanter's own courtesy rate -- Weapon Enchanting and Armour Infusion cost less, gems included.",
++    baseCost: Tuning.get('upgrade.arcane_discount.baseCost'),
++    costGrowth: Tuning.get('upgrade.arcane_discount.costGrowth'),
++    maxLevel: Tuning.get('upgrade.arcane_discount.maxLevel'),
++    modsPerLevel: { enchantDiscount: Tuning.get('upgrade.arcane_discount.enchantDiscountPerLevel') }, vendor: 'enchanter',
++  },
++  {
++    id: 'trade_favor_enchanter', name: 'Trade Favor: Enchanter',
++    description: "A standing favor with the Enchanter -- an extra free early Black Market turnover per day before you start paying to hurry.",
++    baseCost: Tuning.get('upgrade.trade_favor_enchanter.baseCost'),
++    costGrowth: Tuning.get('upgrade.trade_favor_enchanter.costGrowth'),
++    maxLevel: Tuning.get('upgrade.trade_favor_enchanter.maxLevel'),
++    modsPerLevel: {}, vendorFreeRerollsPerLevel: Tuning.get('upgrade.trade_favor_enchanter.vendorFreeRerollsPerLevel'), vendor: 'enchanter',
+   },
+   {
+     id: 'master_adventurer', name: 'Enchanted Seal',
+-    description: 'A ward pressed into the guild charter unlocks Legendary contracts on the quest board -- and lends every hero its quiet protection.',
++    description: 'A ward pressed into the guild charter unlocks Legendary contracts on the quest board -- and the Enchanter throws in a standing discount on Black Market prices, guild to guild.',
+     baseCost: Tuning.get('upgrade.master_adventurer.baseCost'),
+     costGrowth: Tuning.get('upgrade.master_adventurer.costGrowth'),
+     maxLevel: Tuning.get('upgrade.master_adventurer.maxLevel'),
+-    modsPerLevel: { success: Tuning.get('upgrade.master_adventurer.successPerLevel') }, unlocks: 'legendaryQuests', vendor: 'enchanter',
++    modsPerLevel: { blackMarketDiscount: Tuning.get('upgrade.master_adventurer.blackMarketDiscountPerLevel') }, unlocks: 'legendaryQuests', vendor: 'enchanter',
+   },
+   {
+     id: 'guild_charter', name: 'Guild Charter',
+@@ -168,16 +194,6 @@ export const UPGRADES: UpgradeDef[] = [
+     maxLevel: Tuning.get('upgrade.board_runner.maxLevel'),
+     modsPerLevel: {}, questFreeRerollsPerLevel: Tuning.get('upgrade.board_runner.questFreeRerollsPerLevel'),
+   },
+-  {
+-    id: 'trade_favor', name: 'Trade Favor',
+-    description: 'A standing favor with every stall in the market -- extra free restocks per day before you start paying the vendors to hurry.',
+-    // Same shape as Board Runner, independent counter -- see
+-    // ModifierManager.vendorFreeRerolls.
+-    baseCost: Tuning.get('upgrade.trade_favor.baseCost'),
+-    costGrowth: Tuning.get('upgrade.trade_favor.costGrowth'),
+-    maxLevel: Tuning.get('upgrade.trade_favor.maxLevel'),
+-    modsPerLevel: {}, vendorFreeRerollsPerLevel: Tuning.get('upgrade.trade_favor.vendorFreeRerollsPerLevel'),
+-  },
+   {
+     id: 'board_warden', name: 'Board Warden',
+     description: "A standing order to hold one contract back from the board's own churn -- freeze it in place through the next refresh, reroll, or restock. Each level buys an extra freeze per day; letting a contract go is always free.",
+@@ -321,6 +337,15 @@ export const GUILD_FACILITIES: GuildDef[] = [
+   {
+     id: 'barracks', name: 'Barracks',
+     description: 'Training yard and drill sergeant. Every hero fights better.',
++    // successPerLevel absorbed the Blacksmith's old Better Weapons
++    // Training vendor upgrade (and Enchanted Seal's old success bonus)
++    // as part of the Vendor Upgrades Consolidation -- 3%/level -> 4%,
++    // same 10-level cap, so the combined total (43%) barely moves (40%)
++    // while costing what it used to cost to max Barracks *alone*
++    // (costGrowth bumped 1.8 -> 1.87 to land close to what it used to
++    // cost to grind all three sources together instead). See
++    // guild-idler-status.md's Vendor Upgrades Consolidation entry for
++    // the full worked numbers.
+     baseCost: Tuning.get('guild_facility.barracks.baseCost'),
+     costGrowth: Tuning.get('guild_facility.barracks.costGrowth'),
+     maxLevel: Tuning.get('guild_facility.barracks.maxLevel'),
+@@ -329,6 +354,12 @@ export const GUILD_FACILITIES: GuildDef[] = [
+   {
+     id: 'treasury', name: 'Treasury',
+     description: 'Raises how much gold the guild can hold at once.',
++    // goldPerLevel absorbed the old Efficient Adventuring general
++    // upgrade (which was never even vendor-tied) as part of the Vendor
++    // Upgrades Consolidation -- 4%/level -> 12%, same 12-level mods cap,
++    // landing at almost exactly what it used to cost to max both
++    // sources (costGrowth bumped 1.74 -> 1.79). See
++    // guild-idler-status.md's Vendor Upgrades Consolidation entry.
+     baseCost: Tuning.get('guild_facility.treasury.baseCost'),
+     costGrowth: Tuning.get('guild_facility.treasury.costGrowth'),
+     // Extended 12 -> 20: Treasury is meant to keep working as a gold sink
+@@ -354,6 +385,12 @@ export const GUILD_FACILITIES: GuildDef[] = [
+   {
+     id: 'workshop', name: 'Workshop',
+     description: 'Gear wears down more slowly and upgrades cost less.',
++    // durabilityPerLevel absorbed the Blacksmith's old Armourer's
++    // Contract vendor upgrade as part of the Vendor Upgrades
++    // Consolidation -- 8%/level -> 14%, same 10-level cap, landing at
++    // almost exactly what it used to cost to max both sources
++    // (costGrowth bumped 1.85 -> 1.87). See guild-idler-status.md's
++    // Vendor Upgrades Consolidation entry.
+     baseCost: Tuning.get('guild_facility.workshop.baseCost'),
+     costGrowth: Tuning.get('guild_facility.workshop.costGrowth'),
+     maxLevel: Tuning.get('guild_facility.workshop.maxLevel'),
+@@ -362,6 +399,11 @@ export const GUILD_FACILITIES: GuildDef[] = [
+   {
+     id: 'library', name: 'Library',
+     description: 'Maps, bestiaries, and a very patient archivist.',
++    // xpPerLevel absorbed the Enchanter's old Runic Insight vendor
++    // upgrade as part of the Vendor Upgrades Consolidation -- 6%/level
++    // -> 12%, same 10-level cap, landing at almost exactly what it used
++    // to cost to max both sources (costGrowth bumped 1.84 -> 1.9). See
++    // guild-idler-status.md's Vendor Upgrades Consolidation entry.
+     baseCost: Tuning.get('guild_facility.library.baseCost'),
+     costGrowth: Tuning.get('guild_facility.library.costGrowth'),
+     maxLevel: Tuning.get('guild_facility.library.maxLevel'),
+@@ -370,6 +412,13 @@ export const GUILD_FACILITIES: GuildDef[] = [
+   {
+     id: 'tavern', name: 'Tavern',
+     description: 'Where new heroes are found. Each level opens a hero slot.',
++    // lootPerLevel absorbed the Alchemist's old Alchemical Assay vendor
++    // upgrade as part of the Vendor Upgrades Consolidation -- 2%/level
++    // -> 7%, level cap bumped 5 -> 6 (a straight same-level-count fold
++    // landed too cheap here, since Tavern's own curve is much steeper
++    // than Alchemical Assay's was -- see guild-idler-status.md's Vendor
++    // Upgrades Consolidation entry for the worked numbers behind both
++    // the level bump and the costGrowth bump, 2.4 -> 2.47).
+     baseCost: Tuning.get('guild_facility.tavern.baseCost'),
+     costGrowth: Tuning.get('guild_facility.tavern.costGrowth'),
+     maxLevel: Tuning.get('guild_facility.tavern.maxLevel'),
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 7d5a320..6c351ca 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -598,13 +598,14 @@ export class GameEngine {
+     // allows on a later tick).
+     if (this.state.autoRepairEnabled) {
+       const workshop = this.state.guild.workshop ?? 0;
++      const repairDiscount = ModifierManager.global(this.state).repairDiscount ?? 0;
+       const threshold = this.state.autoRepairThresholdPercent / 100;
+       for (const { item } of EquipmentManager.allItems(this.state)) {
+         const max = EquipmentManager.maxDurability(item);
+         if (max <= 0 || item.durability / max > threshold) continue;
+-        const cost = EquipmentManager.repairCost(item, workshop);
++        const cost = EquipmentManager.repairCost(item, workshop, repairDiscount);
+         if (cost > 0 && this.state.gold >= cost) {
+-          EquipmentManager.repair(this.state, item, workshop);
++          EquipmentManager.repair(this.state, item, workshop, repairDiscount);
+           changed = true;
+         }
+       }
+@@ -1379,13 +1380,14 @@ export class GameEngine {
+   repair(itemUid: string) {
+     const found = EquipmentManager.allItems(this.state).find((e) => e.item.uid === itemUid);
+     if (!found) return;
+-    const cost = EquipmentManager.repairCost(found.item, this.state.guild.workshop ?? 0);
++    const repairDiscount = ModifierManager.global(this.state).repairDiscount ?? 0;
++    const cost = EquipmentManager.repairCost(found.item, this.state.guild.workshop ?? 0, repairDiscount);
+     if (cost === 0) return this.say('Already in perfect condition.');
+     const free = this.consumeFreeRepair(found.heroId, Date.now());
+     if (free) {
+       found.item.durability = EquipmentManager.maxDurability(found.item);
+     } else {
+-      const error = EquipmentManager.repair(this.state, found.item, this.state.guild.workshop ?? 0);
++      const error = EquipmentManager.repair(this.state, found.item, this.state.guild.workshop ?? 0, repairDiscount);
+       if (error) return this.say(error);
+     }
+     playSound('repair');
+@@ -1395,18 +1397,19 @@ export class GameEngine {
+ 
+   repairAll() {
+     const workshop = this.state.guild.workshop ?? 0;
++    const repairDiscount = ModifierManager.global(this.state).repairDiscount ?? 0;
+     const now = Date.now();
+     let spent = 0;
+     let freeCount = 0;
+     for (const { item, heroId } of EquipmentManager.allItems(this.state)) {
+-      const cost = EquipmentManager.repairCost(item, workshop);
++      const cost = EquipmentManager.repairCost(item, workshop, repairDiscount);
+       if (cost === 0) continue;
+       const free = this.consumeFreeRepair(heroId, now);
+       if (free) {
+         item.durability = EquipmentManager.maxDurability(item);
+         freeCount += 1;
+       } else if (this.state.gold >= cost) {
+-        EquipmentManager.repair(this.state, item, workshop);
++        EquipmentManager.repair(this.state, item, workshop, repairDiscount);
+         spent += cost;
+       }
+     }
+@@ -1555,14 +1558,35 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
+-  /** Restocks the Vendors shop (equipment + consumables) early -- free
+-   *  once a day (more via Trade Favor), gold cost climbing after that.
+-   *  Doesn't touch the black market. See ShopManager.rerollShop. */
+-  rerollShop() {
+-    const error = ShopManager.rerollShop(this.state, Date.now());
++  /** Restocks the Blacksmith's own gear stock early -- free once a day
++   *  (more via Trade Favor: Blacksmith), gold cost climbing after that.
++   *  Independent of the Alchemist/Enchanter's own reroll tracks. See
++   *  ShopManager.rerollBlacksmith. */
++  rerollBlacksmith() {
++    const error = ShopManager.rerollBlacksmith(this.state, Date.now());
+     if (error) return this.say(error);
+     playSound('purchase');
+-    this.say('The vendors restock early.');
++    this.say('The Blacksmith restocks early.');
++    void this.saveNow();
++  }
++
++  /** Same shape as rerollBlacksmith, for the Alchemist's own supplies
++   *  stock. See ShopManager.rerollAlchemist. */
++  rerollAlchemist() {
++    const error = ShopManager.rerollAlchemist(this.state, Date.now());
++    if (error) return this.say(error);
++    playSound('purchase');
++    this.say('The Alchemist restocks early.');
++    void this.saveNow();
++  }
++
++  /** Same shape again, for the Enchanter's Black Market -- previously had
++   *  no manual reroll at all. See ShopManager.rerollEnchanter. */
++  rerollEnchanter() {
++    const error = ShopManager.rerollEnchanter(this.state, Date.now());
++    if (error) return this.say(error);
++    playSound('purchase');
++    this.say("The Enchanter's black-market contact turns over early.");
+     void this.saveNow();
+   }
+ 
+diff --git a/src/game/managers/CraftingManager.ts b/src/game/managers/CraftingManager.ts
+index 9e0404d..2098f8c 100644
+--- a/src/game/managers/CraftingManager.ts
++++ b/src/game/managers/CraftingManager.ts
+@@ -3,13 +3,28 @@ import { CRAFTING_RECIPE_BY_ID } from '../data/craftingRecipes';
+ import { CONSUMABLE_BY_ID } from '../data/items';
+ import { EquipmentManager } from './EquipmentManager';
+ import { InventoryManager } from './InventoryManager';
++import { ModifierManager } from './ModifierManager';
+ import { MATERIAL_BY_ID } from '../data/materials';
+ import { MOD_LABEL } from '../util';
+ 
+ export const CraftingManager = {
++  /**
++   * Gold cost of a recipe after the Enchanter's own Arcane Discount
++   * vendor upgrade (enchantDiscount, guild-wide via ModifierManager.global)
++   * -- applies to `gem` and `enchant` category recipes only (the two
++   * categories Weapon Enchanting/Armour Infusion/enchantItem actually
++   * spend gold on), everything else pays the recipe's own goldCost
++   * unchanged. Floored at 0 same as every other cost in the game.
++   */
++  goldCost(state: GameState, recipe: CraftingRecipeDef): number {
++    if (recipe.category !== 'gem' && recipe.category !== 'enchant') return recipe.goldCost;
++    const discount = ModifierManager.global(state).enchantDiscount ?? 0;
++    return Math.max(0, Math.round(recipe.goldCost * (1 - discount / 100)));
++  },
++
+   /** What's still missing to afford a recipe, if anything -- used to grey out the Craft button. */
+   affordability(state: GameState, recipe: CraftingRecipeDef): { ok: boolean; reason?: string } {
+-    if (state.gold < recipe.goldCost) return { ok: false, reason: 'Not enough gold.' };
++    if (state.gold < CraftingManager.goldCost(state, recipe)) return { ok: false, reason: 'Not enough gold.' };
+     if ((recipe.scrapCost ?? 0) > state.scrap) return { ok: false, reason: 'Not enough scrap.' };
+     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
+       if (state.materials[materialId] < amount) {
+@@ -35,8 +50,9 @@ export const CraftingManager = {
+     const pool = kind === 'elemental' ? state.gems : state.resistGems;
+     pool[element] = (pool[element] ?? 0) + 1;
+ 
+-    state.gold -= recipe.goldCost;
+-    state.stats.goldSpent += recipe.goldCost;
++    const goldCost = CraftingManager.goldCost(state, recipe);
++    state.gold -= goldCost;
++    state.stats.goldSpent += goldCost;
+     state.scrap -= recipe.scrapCost ?? 0;
+     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
+       state.materials[materialId] -= amount;
+@@ -49,16 +65,17 @@ export const CraftingManager = {
+    * `ready: true` if a matching gem is already sitting in inventory from
+    * an earlier craft (state.gems/resistGems, whichever the item's own
+    * slot points at), otherwise the underlying gem recipe's own
+-   * scrapCost/goldCost, since craftAndInfuse below will need to craft one
+-   * fresh before it can apply it. Used by both Weapon Enchanting and
+-   * Armour Infusion to label each element option ("Ready" vs a cost).
++   * scrapCost/goldCost (Arcane-Discounted, via CraftingManager.goldCost),
++   * since craftAndInfuse below will need to craft one fresh before it can
++   * apply it. Used by both Weapon Enchanting and Armour Infusion to label
++   * each element option ("Ready" vs a cost).
+    */
+   gemCost(state: GameState, isWeapon: boolean, element: ElementType): { ready: boolean; scrapCost: number; goldCost: number } {
+     const pool = isWeapon ? state.gems : state.resistGems;
+     if ((pool[element] ?? 0) >= 1) return { ready: true, scrapCost: 0, goldCost: 0 };
+     const recipeId = isWeapon ? `craft_elemental_gem_${element}` : `craft_resistance_gem_${element}`;
+     const recipe = CRAFTING_RECIPE_BY_ID[recipeId];
+-    return { ready: false, scrapCost: recipe?.scrapCost ?? 0, goldCost: recipe?.goldCost ?? 0 };
++    return { ready: false, scrapCost: recipe?.scrapCost ?? 0, goldCost: recipe ? CraftingManager.goldCost(state, recipe) : 0 };
+   },
+ 
+   /**
+@@ -205,8 +222,9 @@ export const CraftingManager = {
+     for (const s of chosenStats) updated[s] = (updated[s] ?? 0) + (recipe.statValue ?? 0);
+     item.enchantStats = updated;
+ 
+-    state.gold -= recipe.goldCost;
+-    state.stats.goldSpent += recipe.goldCost;
++    const goldCost = CraftingManager.goldCost(state, recipe);
++    state.gold -= goldCost;
++    state.stats.goldSpent += goldCost;
+     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
+       state.materials[materialId] -= amount;
+     }
+diff --git a/src/game/managers/EquipmentManager.ts b/src/game/managers/EquipmentManager.ts
+index cab6889..d02caf4 100644
+--- a/src/game/managers/EquipmentManager.ts
++++ b/src/game/managers/EquipmentManager.ts
+@@ -40,14 +40,23 @@ export const EquipmentManager = {
+    * purely a spending-side fix -- durability still matters, it just no
+    * longer eats the whole paycheck.
+    */
+-  repairCost(item: EquipmentItem, workshopLevel: number): number {
++  /**
++   * `vendorDiscountPercent` is the Blacksmith's own Smith's Discount
++   * vendor upgrade (ModifierManager.global(state).repairDiscount) --
++   * applied as a second, independent multiplier on top of the existing
++   * Workshop discount, same "own key, own percentage, explicitly summed"
++   * shape revivalDiscount uses. Defaults to 0 so every existing call
++   * site keeps working unchanged until it's threaded through.
++   */
++  repairCost(item: EquipmentItem, workshopLevel: number, vendorDiscountPercent = 0): number {
+     const def = EQUIPMENT_BY_ID[item.defId];
+     if (!def) return 0;
+     const missing = EquipmentManager.maxDurability(item) - item.durability;
+     if (missing <= 0) return 0;
+     const perPoint = 0.6 * RARITY_PRICE_MULT[def.rarity] * (1 + item.plus * 0.2);
+     const discount = 1 - Math.min(0.5, 0.15 + workshopLevel * 0.035);
+-    return Math.max(1, Math.ceil(missing * perPoint * discount));
++    const vendorDiscount = 1 - Math.min(0.6, vendorDiscountPercent / 100);
++    return Math.max(1, Math.ceil(missing * perPoint * discount * vendorDiscount));
+   },
+ 
+   upgradeCost(item: EquipmentItem, workshopLevel: number): number {
+@@ -74,10 +83,17 @@ export const EquipmentManager = {
+    * gold-adjacent economy to min-max around -- the rarer the item, the
+    * more scrap, full stop.
+    */
+-  scrapValue(item: EquipmentItem): number {
++  /**
++   * `bonusPercent` is the Blacksmith's own Bulk Scrapper vendor upgrade
++   * (ModifierManager.global(state).scrapBonus) -- applied as a straight
++   * multiplier on the base rarity value. Defaults to 0 so every existing
++   * call site keeps working unchanged until it's threaded through.
++   */
++  scrapValue(item: EquipmentItem, bonusPercent = 0): number {
+     const def = EQUIPMENT_BY_ID[item.defId];
+     if (!def) return 0;
+-    return Tuning.get(`elemental.scrapValue.${def.rarity}`);
++    const base = Tuning.get(`elemental.scrapValue.${def.rarity}`);
++    return Math.max(1, Math.round(base * (1 + bonusPercent / 100)));
+   },
+ 
+   shopPrice(def: EquipmentDef): number {
+@@ -129,8 +145,8 @@ export const EquipmentManager = {
+     return broken;
+   },
+ 
+-  repair(state: GameState, item: EquipmentItem, workshopLevel: number): string | null {
+-    const cost = EquipmentManager.repairCost(item, workshopLevel);
++  repair(state: GameState, item: EquipmentItem, workshopLevel: number, vendorDiscountPercent = 0): string | null {
++    const cost = EquipmentManager.repairCost(item, workshopLevel, vendorDiscountPercent);
+     if (cost === 0) return 'Already in perfect condition.';
+     if (state.gold < cost) return 'Not enough gold for the repair.';
+     state.gold -= cost;
+diff --git a/src/game/managers/InventoryManager.ts b/src/game/managers/InventoryManager.ts
+index 3743d39..7335122 100644
+--- a/src/game/managers/InventoryManager.ts
++++ b/src/game/managers/InventoryManager.ts
+@@ -1,6 +1,7 @@
+ import { CONSUMABLE_BY_ID, CONSUMABLES } from '../data/items';
+ import { ConsumableDef, GameState, Hero, Modifiers } from '../types';
+ import { HeroManager } from './HeroManager';
++import { ModifierManager } from './ModifierManager';
+ 
+ export const InventoryManager = {
+   /**
+@@ -17,6 +18,19 @@ export const InventoryManager = {
+     return state.customConsumables[defId] ?? CONSUMABLE_BY_ID[defId];
+   },
+ 
++  /**
++   * A single consumable's shop price after the Alchemist's own
++   * Apothecary's Discount vendor upgrade (consumableDiscount, guild-wide
++   * via ModifierManager.global) -- the one place this discount is
++   * applied, so the price shown in the Vendors panel always matches what
++   * buy() actually charges. Floored at 1 gold, same "never free" floor
++   * every other discounted cost in the game uses.
++   */
++  price(state: GameState, def: ConsumableDef): number {
++    const discount = ModifierManager.global(state).consumableDiscount ?? 0;
++    return Math.max(1, Math.round(def.cost * (1 - discount / 100)));
++  },
++
+   count(state: GameState, defId: string): number {
+     return state.inventory[defId] ?? 0;
+   },
+@@ -36,7 +50,7 @@ export const InventoryManager = {
+   buy(state: GameState, defId: string, amount = 1): string | null {
+     const def = CONSUMABLE_BY_ID[defId];
+     if (!def) return 'That item is not for sale.';
+-    const cost = def.cost * amount;
++    const cost = InventoryManager.price(state, def) * amount;
+     if (state.gold < cost) return 'Not enough gold.';
+     state.gold -= cost;
+     state.stats.goldSpent += cost;
+diff --git a/src/game/managers/ModifierManager.ts b/src/game/managers/ModifierManager.ts
+index e378b8b..6469be9 100644
+--- a/src/game/managers/ModifierManager.ts
++++ b/src/game/managers/ModifierManager.ts
+@@ -1,7 +1,7 @@
+ import { GUILD_BY_ID, RENOWN_BY_ID, UPGRADE_BY_ID, BASE_GOLD_STORAGE } from '../data/progression';
+ import { RAID_UPGRADE_BY_ID } from '../data/raidUpgrades';
+ import { BASE_INCUBATION_SLOTS } from '../data/pets';
+-import { GameState, Hero, Modifiers } from '../types';
++import { GameState, Hero, Modifiers, VendorId } from '../types';
+ import { scaleMods, sumMods } from '../util';
+ import { PetManager } from './PetManager';
+ 
+@@ -153,11 +153,20 @@ export const ModifierManager = {
+     return 1 + bonus;
+   },
+ 
+-  /** Same shape again, for the Vendors shop restock reroll, via Trade Favor. */
+-  vendorFreeRerolls(state: GameState): number {
++  /**
++   * Same shape again, for a single vendor stall's own restock reroll --
++   * now split per vendor (Trade Favor: Blacksmith/Alchemist/Enchanter),
++   * since each stall reroll is its own independent action with its own
++   * cost/counter as of the Vendor Upgrades Consolidation. Filters
++   * vendorFreeRerollsPerLevel-bearing upgrades down to the ones actually
++   * tagged for this vendor, so leveling Blacksmith's Trade Favor doesn't
++   * also grant free Alchemist rerolls.
++   */
++  vendorFreeRerolls(state: GameState, vendorId: VendorId): number {
+     const bonus = Object.entries(state.upgrades).reduce((sum, [id, level]) => {
+       const def = UPGRADE_BY_ID[id];
+-      return sum + (def?.vendorFreeRerollsPerLevel ?? 0) * level;
++      if (!def || def.vendor !== vendorId) return sum;
++      return sum + (def.vendorFreeRerollsPerLevel ?? 0) * level;
+     }, 0);
+     return 1 + bonus;
+   },
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 8298c00..2570b2b 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -85,8 +85,12 @@ export function createInitialState(now = Date.now()): GameState {
+     chainBoard: [],
+     questRerollDay: 0,
+     questRerollsUsedToday: 0,
+-    vendorRerollDay: 0,
+-    vendorRerollsUsedToday: 0,
++    blacksmithRerollDay: 0,
++    blacksmithRerollsUsedToday: 0,
++    alchemistRerollDay: 0,
++    alchemistRerollsUsedToday: 0,
++    enchanterRerollDay: 0,
++    enchanterRerollsUsedToday: 0,
+     frozenQuestOffers: {},
+     freezeChangeDay: 0,
+     freezeChangesUsedToday: 0,
+@@ -641,6 +645,80 @@ const MIGRATIONS: Record<number, Migration> = {
+     }
+     return { ...save, version: 37, heroes };
+   },
++  37: (save) => {
++    // Vendor Upgrades Consolidation -- weapons_training/armourers_contract/
++    // veteran_explorer/war_stories/efficient_adventuring are gone (their
++    // Success/Durability/Loot/XP/Gold bonuses folded into Barracks/
++    // Workshop/Tavern/Library/Treasury instead), and the shared trade_favor
++    // upgrade is split into three per-vendor ones. See
++    // guild-idler-status.md's Vendor Upgrades Consolidation entry for the
++    // full reasoning.
++    //
++    // A save that already spent gold leveling any of the five removed
++    // upgrades gets that gold refunded (using each upgrade's own retired
++    // cost curve, the same earlyTierDiscount-adjusted formula
++    // upgradeCost() still uses for every other upgrade) rather than just
++    // silently losing the levels -- losing a bonus is one thing, losing
++    // the gold spent buying it with no recourse is another. Removed
++    // upgrade keys are deleted from `upgrades` afterward since
++    // UPGRADE_BY_ID no longer has definitions for them; leaving them
++    // would just be dead weight ModifierManager.upgradeMods already
++    // skips harmlessly, but deleting is cleaner and matches migration
++    // 36's own "clean up what changed" precedent.
++    const discount = (level: number) => (level < 4 ? [0.15, 0.35, 0.6, 0.85][level] : 1);
++    const refundCost = (baseCost: number, costGrowth: number, level: number) => {
++      let total = 0;
++      for (let l = 0; l < level; l++) total += Math.floor(baseCost * Math.pow(costGrowth, l) * discount(l));
++      return total;
++    };
++    const REMOVED: Record<string, { baseCost: number; costGrowth: number }> = {
++      weapons_training: { baseCost: 200, costGrowth: 1.75 },
++      armourers_contract: { baseCost: 500, costGrowth: 1.9 },
++      veteran_explorer: { baseCost: 400, costGrowth: 1.9 },
++      war_stories: { baseCost: 450, costGrowth: 1.89 },
++      efficient_adventuring: { baseCost: 250, costGrowth: 1.84 },
++    };
++    const upgrades = { ...(save.upgrades as Record<string, number> | undefined ?? {}) };
++    let refund = 0;
++    for (const [id, { baseCost, costGrowth }] of Object.entries(REMOVED)) {
++      const level = upgrades[id] ?? 0;
++      if (level > 0) refund += refundCost(baseCost, costGrowth, level);
++      delete upgrades[id];
++    }
++    // trade_favor (shared, general) becomes trade_favor_blacksmith +
++    // trade_favor_alchemist at the SAME level it already was (both
++    // vendors used to share the one reroll pool it fed, so this doesn't
++    // change anyone's total free-reroll allowance today) -- and
++    // trade_favor_enchanter, which starts at 0 since the Enchanter never
++    // had a manual reroll to buy free charges for before now.
++    const oldTradeFavorLevel = upgrades.trade_favor ?? 0;
++    delete upgrades.trade_favor;
++    if (oldTradeFavorLevel > 0) {
++      upgrades.trade_favor_blacksmith = oldTradeFavorLevel;
++      upgrades.trade_favor_alchemist = oldTradeFavorLevel;
++    }
++
++    // Reroll counters: blacksmithRerolls*/alchemistRerolls* both inherit
++    // the old shared vendorRerolls* value (see the trade_favor note
++    // above -- both vendors used to restock together off one counter),
++    // enchanterRerolls* starts fresh at 0/0, the correct starting state
++    // for a reroll track that's brand new this patch.
++    const oldRerollDay = (save.vendorRerollDay as number | undefined) ?? 0;
++    const oldRerollUsed = (save.vendorRerollsUsedToday as number | undefined) ?? 0;
++
++    return {
++      ...save,
++      version: 38,
++      gold: (save.gold as number | undefined ?? 0) + refund,
++      upgrades,
++      blacksmithRerollDay: oldRerollDay,
++      blacksmithRerollsUsedToday: oldRerollUsed,
++      alchemistRerollDay: oldRerollDay,
++      alchemistRerollsUsedToday: oldRerollUsed,
++      enchanterRerollDay: 0,
++      enchanterRerollsUsedToday: 0,
++    };
++  },
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/managers/ShopManager.ts b/src/game/managers/ShopManager.ts
+index 31c72db..40dcb6e 100644
+--- a/src/game/managers/ShopManager.ts
++++ b/src/game/managers/ShopManager.ts
+@@ -22,32 +22,21 @@ export const ShopManager = {
+     return now - state.shop.refreshedAt >= SHOP_REFRESH_MS;
+   },
+ 
+-  /** Stock is seeded per refresh window so it is stable across restarts.
+-   *  `salt` defaults to 0 (fully deterministic per window, for reload
+-   *  stability); the Vendors reroll button passes the exact reroll moment
+-   *  instead, so a manual reroll produces genuinely new stock rather than
+-   *  reproducing the same window-seeded result. */
+-  refresh(state: GameState, now: number, force = false, salt: number | string = 0): ShopStock {
+-    if (!force && !ShopManager.needsRefresh(state, now)) return state.shop;
+-    const window = Math.floor(now / SHOP_REFRESH_MS);
++  /** Equipment half of refresh() below, pulled out standalone so a
++   *  Blacksmith-only reroll (rerollBlacksmith) can regenerate just this
++   *  half without touching Alchemist stock. Same weighted-pick logic as
++   *  before, unchanged. */
++  rollEquipment(state: GameState, seed: number | string) {
+     const topLevel = Math.max(1, ...state.heroes.map((h) => h.level));
+-    const rng = createRng(`shop:${window}:${state.createdAt}:${salt}`);
+-
++    const rng = createRng(`shop-equipment:${seed}:${state.createdAt}`);
+     // raidExclusive items (Heroic/Mythic tiered raid loot variants) never
+     // belong in a purchasable pool -- see the comment on EquipmentDef itself
+-    // for why. This was the actual bug: nothing here previously excluded
+-    // them at all. craftable bases get the same treatment, same reasoning
+-    // in the opposite direction -- they only ever exist as a Crafting
+-    // result, never something you'd find on a shelf.
+-    // raidExclusive items (Heroic/Mythic tiered raid loot variants) never
+-    // belong in a purchasable pool -- see the comment on EquipmentDef itself
+-    // for why. This was the actual bug: nothing here previously excluded
+-    // them at all. craftable bases get the same treatment, same reasoning
+-    // in the opposite direction -- they only ever exist as a Crafting
+-    // result, never something you'd find on a shelf. chainExclusive gets
+-    // the same treatment for the same reason: a Quest Chain's guaranteed
+-    // reward item showing up for sale before the chain is even discovered
+-    // undercuts the whole point of it being a reward.
++    // for why. craftable bases get the same treatment, same reasoning in
++    // the opposite direction -- they only ever exist as a Crafting result,
++    // never something you'd find on a shelf. chainExclusive gets the same
++    // treatment for the same reason: a Quest Chain's guaranteed reward item
++    // showing up for sale before the chain is even discovered undercuts the
++    // whole point of it being a reward.
+     const eligible = EQUIPMENT.filter((def) => !def.raidExclusive && !def.craftable && !def.chainExclusive && def.reqLevel <= topLevel + 4);
+     const picks = new Set<string>();
+     let guard = 0;
+@@ -55,15 +44,35 @@ export const ShopManager = {
+       const def = rng.weighted(eligible.map((e) => ({ item: e, weight: RARITY_WEIGHT[e.rarity] })));
+       picks.add(def.id);
+     }
++    return [...picks].map((defId) => ({
++      uid: uid('shopitem'),
++      defId,
++      price: EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]),
++    }));
++  },
+ 
++  /** Consumables half of refresh() below -- see rollEquipment's own
++   *  comment, mirrored for the Alchemist-only reroll (rerollAlchemist). */
++  rollConsumables(state: GameState, seed: number | string) {
++    const rng = createRng(`shop-consumables:${seed}:${state.createdAt}`);
++    return CONSUMABLES.map((c) => ({ defId: c.id, stock: rng.int(2, 8) }));
++  },
++
++  /** Stock is seeded per refresh window so it is stable across restarts.
++   *  `salt` defaults to 0 (fully deterministic per window, for reload
++   *  stability). The natural 4-hour restock always regenerates both
++   *  halves together via rollEquipment/rollConsumables above; the
++   *  per-vendor manual rerolls (rerollBlacksmith/rerollAlchemist) call
++   *  those two functions directly instead of this one, so rerolling one
++   *  vendor's stock never touches the other's. */
++  refresh(state: GameState, now: number, force = false, salt: number | string = 0): ShopStock {
++    if (!force && !ShopManager.needsRefresh(state, now)) return state.shop;
++    const window = Math.floor(now / SHOP_REFRESH_MS);
++    const seed = `${window}:${salt}`;
+     state.shop = {
+       refreshedAt: window * SHOP_REFRESH_MS,
+-      consumables: CONSUMABLES.map((c) => ({ defId: c.id, stock: rng.int(2, 8) })),
+-      equipment: [...picks].map((defId) => ({
+-        uid: uid('shopitem'),
+-        defId,
+-        price: EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]),
+-      })),
++      consumables: ShopManager.rollConsumables(state, seed),
++      equipment: ShopManager.rollEquipment(state, seed),
+     };
+     return state.shop;
+   },
+@@ -73,41 +82,98 @@ export const ShopManager = {
+   },
+ 
+   /**
+-   * Gold cost of the *next* Vendors restock reroll -- 0 while still within
+-   * today's free allowance (see ModifierManager.vendorFreeRerolls),
+-   * climbing per additional paid reroll after that. Same shape as
+-   * QuestManager.questRerollCost, entirely independent counter/upgrade.
++   * Gold cost of the Blacksmith's next early gear restock -- 0 while
++   * still within today's free allowance (Trade Favor: Blacksmith),
++   * climbing per additional paid reroll after that. One of three
++   * independent per-vendor reroll tracks, replacing the old single
++   * shared Vendors restock reroll -- see ModifierManager.vendorFreeRerolls
++   * and guild-idler-status.md's Vendor Upgrades Consolidation entry.
+    */
+-  vendorRerollCost(state: GameState, now: number): number {
+-    const used = rerollsUsedToday(state.vendorRerollsUsedToday, state.vendorRerollDay, now);
+-    const free = ModifierManager.vendorFreeRerolls(state);
++  blacksmithRerollCost(state: GameState, now: number): number {
++    const used = rerollsUsedToday(state.blacksmithRerollsUsedToday, state.blacksmithRerollDay, now);
++    const free = ModifierManager.vendorFreeRerolls(state, 'blacksmith');
+     return nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
+   },
+ 
+-  /**
+-   * Restocks the Vendors shop (equipment AND consumables -- refresh()
+-   * already regenerates both together) early, spending today's next
+-   * reroll. Doesn't touch the black market -- that has its own, much
+-   * longer natural refresh window, deliberately scarce rather than
+-   * something to reroll on demand. `state.shop.refreshedAt` stays pinned
+-   * to the current window's own boundary (refresh() sets it from `window`,
+-   * not `now`), so a reroll doesn't push back the next scheduled natural
+-   * restock either.
+-   */
+-  rerollShop(state: GameState, now: number): string | null {
++  /** Restocks only the Blacksmith's own equipment stock early, spending
++   *  today's next Blacksmith reroll. Leaves consumables and
++   *  `state.shop.refreshedAt` untouched, same "doesn't push back the
++   *  next scheduled natural restock" guarantee the old shared reroll had. */
++  rerollBlacksmith(state: GameState, now: number): string | null {
++    const day = rerollDay(now);
++    if (state.blacksmithRerollDay !== day) {
++      state.blacksmithRerollDay = day;
++      state.blacksmithRerollsUsedToday = 0;
++    }
++    const cost = ShopManager.blacksmithRerollCost(state, now);
++    if (cost > 0) {
++      if (state.gold < cost) return `Not enough gold to reroll (needs ${cost}).`;
++      state.gold -= cost;
++      state.stats.goldSpent += cost;
++    }
++    state.blacksmithRerollsUsedToday += 1;
++    state.shop.equipment = ShopManager.rollEquipment(state, now);
++    return null;
++  },
++
++  /** Same shape as blacksmithRerollCost, independent counter, for the
++   *  Alchemist's own supplies stock. */
++  alchemistRerollCost(state: GameState, now: number): number {
++    const used = rerollsUsedToday(state.alchemistRerollsUsedToday, state.alchemistRerollDay, now);
++    const free = ModifierManager.vendorFreeRerolls(state, 'alchemist');
++    return nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
++  },
++
++  /** Restocks only the Alchemist's own consumable stock early -- same
++   *  shape as rerollBlacksmith above, mirrored for consumables. */
++  rerollAlchemist(state: GameState, now: number): string | null {
++    const day = rerollDay(now);
++    if (state.alchemistRerollDay !== day) {
++      state.alchemistRerollDay = day;
++      state.alchemistRerollsUsedToday = 0;
++    }
++    const cost = ShopManager.alchemistRerollCost(state, now);
++    if (cost > 0) {
++      if (state.gold < cost) return `Not enough gold to reroll (needs ${cost}).`;
++      state.gold -= cost;
++      state.stats.goldSpent += cost;
++    }
++    state.alchemistRerollsUsedToday += 1;
++    state.shop.consumables = ShopManager.rollConsumables(state, now);
++    return null;
++  },
++
++  /** Same shape again, for the Enchanter's Black Market -- previously
++   *  had no manual reroll at all (a deliberately scarce, purely
++   *  time-gated rotation). Trade Favor: Enchanter now buys the same
++   *  "pay to hurry the next restock" option every other vendor already
++   *  had, rather than leaving the Enchanter's own vendor-leveling track
++   *  with nothing to spend Trade Favor charges on. */
++  enchanterRerollCost(state: GameState, now: number): number {
++    const used = rerollsUsedToday(state.enchanterRerollsUsedToday, state.enchanterRerollDay, now);
++    const free = ModifierManager.vendorFreeRerolls(state, 'enchanter');
++    return nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
++  },
++
++  /** Forces an early Black Market turnover, spending today's next
++   *  Enchanter reroll. `state.blackMarket.refreshedAt` stays pinned to
++   *  the current window's own boundary (same reasoning as the other two
++   *  rerolls) so this doesn't push back the next scheduled natural
++   *  16-hour restock. */
++  rerollEnchanter(state: GameState, now: number): string | null {
+     const day = rerollDay(now);
+-    if (state.vendorRerollDay !== day) {
+-      state.vendorRerollDay = day;
+-      state.vendorRerollsUsedToday = 0;
++    if (state.enchanterRerollDay !== day) {
++      state.enchanterRerollDay = day;
++      state.enchanterRerollsUsedToday = 0;
+     }
+-    const cost = ShopManager.vendorRerollCost(state, now);
++    const cost = ShopManager.enchanterRerollCost(state, now);
+     if (cost > 0) {
+       if (state.gold < cost) return `Not enough gold to reroll (needs ${cost}).`;
+       state.gold -= cost;
+       state.stats.goldSpent += cost;
+     }
+-    state.vendorRerollsUsedToday += 1;
+-    ShopManager.refresh(state, now, true, now);
++    state.enchanterRerollsUsedToday += 1;
++    ShopManager.refreshBlackMarket(state, now, true, now);
+     return null;
+   },
+ 
+@@ -121,11 +187,23 @@ export const ShopManager = {
+    * Deliberately does not filter by hero level the way the regular shop does —
+    * the point of the black market is gear worth aspiring to, not gear you can
+    * use today. reqLevel still gates equipping it once bought.
++   *
++   * `salt` defaults to 0 (fully deterministic per window, for reload
++   * stability), same convention as refresh() above -- rerollEnchanter passes
++   * the exact reroll moment instead, so a manual reroll produces genuinely
++   * new stock rather than reproducing the same window-seeded result.
++   *
++   * Price folds in Enchanted Seal's blackMarketDiscount mod (guild-wide,
++   * via ModifierManager.global) on top of the existing markup -- the
++   * guild's own standing with the Enchanter buys a better rate from
++   * their black-market contact, same "own key, applied at generation
++   * time" shape as everywhere else that reads a Modifiers discount.
+    */
+-  refreshBlackMarket(state: GameState, now: number, force = false): ShopStock {
++  refreshBlackMarket(state: GameState, now: number, force = false, salt: number | string = 0): ShopStock {
+     if (!force && !ShopManager.blackMarketNeedsRefresh(state, now)) return state.blackMarket;
+     const window = Math.floor(now / BLACK_MARKET_REFRESH_MS);
+-    const rng = createRng(`blackmarket:${window}:${state.createdAt}`);
++    const rng = createRng(`blackmarket:${window}:${state.createdAt}:${salt}`);
++    const discount = ModifierManager.global(state).blackMarketDiscount ?? 0;
+ 
+     const eligible = EQUIPMENT.filter((def) =>
+       !def.raidExclusive && !def.craftable && !def.chainExclusive && (BLACK_MARKET_RARITIES as readonly string[]).includes(def.rarity));
+@@ -147,7 +225,7 @@ export const ShopManager = {
+       equipment: [...picks].map((defId) => ({
+         uid: uid('blackmarket'),
+         defId,
+-        price: Math.ceil(EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]) * BLACK_MARKET_MARKUP),
++        price: Math.ceil(EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]) * BLACK_MARKET_MARKUP * (1 - discount / 100)),
+       })),
+     };
+     return state.blackMarket;
+@@ -226,13 +304,16 @@ export const ShopManager = {
+     return { count: toSell.length, gold };
+   },
+ 
+-  /** Same shape as sell() -- stash-only, same "equipped or missing" error
+-   *  -- but converts the item to Scrap instead of gold. See
++  /** Same shape as sell() -- stash-only, same "equipped or missing"
++   *  error -- but converts the item to Scrap instead of gold. Folds in
++   *  the Blacksmith's own Bulk Scrapper vendor upgrade (scrapBonus,
++   *  guild-wide via ModifierManager.global). See
+    *  EquipmentManager.scrapValue for the rarity-based payout. */
+   scrapItem(state: GameState, itemUid: string): string | null {
+     const item = state.stash.find((i) => i.uid === itemUid);
+     if (!item) return 'That item is equipped or missing.';
+-    const value = EquipmentManager.scrapValue(item);
++    const bonus = ModifierManager.global(state).scrapBonus ?? 0;
++    const value = EquipmentManager.scrapValue(item, bonus);
+     state.stash = state.stash.filter((i) => i.uid !== itemUid);
+     state.scrap += value;
+     return null;
+diff --git a/src/game/types.ts b/src/game/types.ts
+index f0741d5..95e88a3 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 37;
++export const SAVE_VERSION = 38;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -101,11 +101,47 @@ export interface Modifiers {
+   /** Pet-specific parallel to revivalDiscount above, from Kennel
+    *  Keeper's Favor -- same reasoning for staying a separate key. */
+   petRevivalDiscount: number;
++  /**
++   * Percentage points shaved off EquipmentManager.repairCost, from the
++   * Blacksmith's own Smith's Discount vendor upgrade -- separate from
++   * Workshop's existing repair discount (which is a flat facility-wide
++   * effect) since this one is specifically a reward for training up the
++   * Blacksmith's own vendor level. Same "own key, own percentage,
++   * explicitly summed rather than folded into an existing one" reasoning
++   * as revivalDiscount/petRevivalDiscount above.
++   */
++  repairDiscount: number;
++  /**
++   * Percentage bonus to EquipmentManager.scrapValue, from the
++   * Blacksmith's Bulk Scrapper vendor upgrade -- see
++   * guild-idler-status.md's Vendor Upgrades Consolidation entry.
++   */
++  scrapBonus: number;
++  /**
++   * Percentage points shaved off a consumable's shop price, from the
++   * Alchemist's own Apothecary's Discount vendor upgrade.
++   */
++  consumableDiscount: number;
++  /**
++   * Percentage points shaved off the gold cost of Weapon Enchanting,
++   * Armour Infusion, and the gem recipes that back both, from the
++   * Enchanter's own Arcane Discount vendor upgrade.
++   */
++  enchantDiscount: number;
++  /**
++   * Percentage points shaved off Black Market price markup, from
++   * Enchanted Seal's top-tier Enchanter perk -- alongside its existing
++   * Legendary-quest unlock, replacing the flat success bonus it used to
++   * carry (folded into Barracks instead, see guild-idler-status.md's
++   * Vendor Upgrades Consolidation entry).
++   */
++  blackMarketDiscount: number;
+ }
+ 
+ export const ZERO_MODS: Modifiers = {
+   success: 0, gold: 0, xp: 0, loot: 0, injuryResist: 0, speed: 0, durability: 0, health: 0, revivalDiscount: 0,
+-  petHealth: 0, petRevivalDiscount: 0,
++  petHealth: 0, petRevivalDiscount: 0, repairDiscount: 0, scrapBonus: 0, consumableDiscount: 0, enchantDiscount: 0,
++  blackMarketDiscount: 0,
+ };
+ 
+ export interface Stats {
+@@ -184,6 +220,17 @@ export interface ConsumableDef {
+      *  consumable effects. */
+     petHealth?: number;
+     petRevivalDiscount?: number;
++    /** Unused by any current recipe -- typed for completeness against
++     *  Modifiers, same reasoning as revivalDiscount/petHealth above.
++     *  repairDiscount/scrapBonus/consumableDiscount/enchantDiscount/
++     *  blackMarketDiscount are all Upgrade-only sources (Smith's
++     *  Discount, Bulk Scrapper, Apothecary's Discount, Arcane Discount,
++     *  Enchanted Seal), not consumable effects. */
++    repairDiscount?: number;
++    scrapBonus?: number;
++    consumableDiscount?: number;
++    enchantDiscount?: number;
++    blackMarketDiscount?: number;
+     /**
+      * Flat reduction to GameState.questsSinceGrimsby, applied immediately
+      * on use -- NOT routed through InventoryManager.useOnHero (this isn't
+@@ -1134,10 +1181,25 @@ export interface GameState {
+    */
+   questRerollDay: number;
+   questRerollsUsedToday: number;
+-  /** Same shape again, independent counter, for the Vendors shop restock
+-   *  reroll -- see ShopManager.vendorRerollCost/rerollShop. */
+-  vendorRerollDay: number;
+-  vendorRerollsUsedToday: number;
++  /**
++   * Same shape again, but split three ways -- one independent
++   * day/counter pair per vendor stall, since each now has its own
++   * themed upgrades (and its own Trade Favor free-reroll allowance) and
++   * rerolling one shouldn't spend or gate the others. Replaces the old
++   * single shared vendorRerollDay/vendorRerollsUsedToday pair (migration
++   * 37 carries an existing save's used-today count over to both
++   * blacksmithRerolls* and alchemistRerolls*, since those two used to
++   * restock together as one action; enchanterRerolls* starts fresh --
++   * see ShopManager.blacksmithRerollCost/alchemistRerollCost/
++   * enchanterRerollCost and their matching rerollBlacksmith/
++   * rerollAlchemist/rerollEnchanter actions).
++   */
++  blacksmithRerollDay: number;
++  blacksmithRerollsUsedToday: number;
++  alchemistRerollDay: number;
++  alchemistRerollsUsedToday: number;
++  enchanterRerollDay: number;
++  enchanterRerollsUsedToday: number;
+   /**
+    * At most one frozen contract per hero, keyed by hero id -- kept as the
+    * actual offer object rather than just an id, since a regenerated board
+diff --git a/src/game/util.ts b/src/game/util.ts
+index 1ba8b2f..a996375 100644
+--- a/src/game/util.ts
++++ b/src/game/util.ts
+@@ -103,8 +103,13 @@ export const MOD_LABEL: Record<keyof Modifiers, string> = {
+   durability: 'Gear wear reduction',
+   health: 'Max Health',
+   revivalDiscount: 'Revival discount',
+-  petHealth: 'Pet Max Health',
+-  petRevivalDiscount: 'Pet revival discount',
++  petHealth: 'Companion Max Health',
++  petRevivalDiscount: 'Companion revival discount',
++  repairDiscount: 'Repair discount',
++  scrapBonus: 'Scrap bonus',
++  consumableDiscount: 'Consumable discount',
++  enchantDiscount: 'Enchanting discount',
++  blackMarketDiscount: 'Black Market discount',
+ };
+ 
+ /**
+diff --git a/src/ui/CraftingStation.tsx b/src/ui/CraftingStation.tsx
+index b78d597..23c0a59 100644
+--- a/src/ui/CraftingStation.tsx
++++ b/src/ui/CraftingStation.tsx
+@@ -461,8 +461,8 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+                   ⚙ {state.scrap}/{recipe.scrapCost}
+                 </span>
+               )}
+-              <span className={`tiny ${state.gold < recipe.goldCost ? 'bad' : 'good'}`}>
+-                ◆ {formatGold(state.gold)}/{formatGold(recipe.goldCost)}
++              <span className={`tiny ${state.gold < CraftingManager.goldCost(state, recipe) ? 'bad' : 'good'}`}>
++                ◆ {formatGold(state.gold)}/{formatGold(CraftingManager.goldCost(state, recipe))}
+               </span>
+             </div>
+           </div>
+diff --git a/src/ui/ScrapStation.tsx b/src/ui/ScrapStation.tsx
+index ad07243..a03c317 100644
+--- a/src/ui/ScrapStation.tsx
++++ b/src/ui/ScrapStation.tsx
+@@ -1,6 +1,7 @@
+ import { useEffect, useRef, useState, CSSProperties } from 'react';
+ import { useEngine } from './useEngine';
+ import { EquipmentManager } from '../game/managers/EquipmentManager';
++import { ModifierManager } from '../game/managers/ModifierManager';
+ import { scrapIconFor } from '../game/data/elements';
+ import { ItemIcon } from './icons';
+ import { PickerModal, SlotBox } from './CraftingStation';
+@@ -63,7 +64,8 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
+   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
+   const item = found?.item;
+   const def = item ? EquipmentManager.def(item) : undefined;
+-  const value = item ? EquipmentManager.scrapValue(item) : 0;
++  const scrapBonus = ModifierManager.global(state).scrapBonus ?? 0;
++  const value = item ? EquipmentManager.scrapValue(item, scrapBonus) : 0;
+ 
+   const options: PickerOption[] = EquipmentManager.allItems(state)
+     .map(({ item: i, heroId }): PickerOption | null => {
+@@ -73,7 +75,7 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
+       return {
+         key: i.uid,
+         label: d.name,
+-        sublabel: `${owner} -- ${EquipmentManager.scrapValue(i)} Scrap`,
++        sublabel: `${owner} -- ${EquipmentManager.scrapValue(i, scrapBonus)} Scrap`,
+         icon: <ItemIcon slot={d.slot} icon={d.icon} size={40} />,
+       };
+     })
+@@ -81,7 +83,7 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
+ 
+   function handleScrap() {
+     if (!item) return;
+-    const gained = EquipmentManager.scrapValue(item);
++    const gained = EquipmentManager.scrapValue(item, scrapBonus);
+     engine.scrapItem(item.uid);
+     const now = Date.now();
+     setBurst({ key: now, gained, icon: scrapIconFor(now) });
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 47a1d07..d6a7682 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -475,6 +475,7 @@ function SlotCard({
+   // source of truth when Repair is actually clicked.
+   const repairsUsedToday = rerollsUsedToday(engine.state.freeRepairsUsedToday, engine.state.freeRepairDay, Date.now());
+   const itemFreeRepairAvailable = repairsUsedToday < ModifierManager.freeRepairsPerDay(engine.state) || !hero.usedFreeRepair;
++  const repairDiscount = ModifierManager.global(engine.state).repairDiscount ?? 0;
+ 
+   return (
+     <>
+@@ -526,12 +527,12 @@ function SlotCard({
+               <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
+               <button
+                 className="btn-primary"
+-                disabled={EquipmentManager.repairCost(item, workshop) === 0}
++                disabled={EquipmentManager.repairCost(item, workshop, repairDiscount) === 0}
+                 onClick={() => { engine.repair(item.uid); setOpen(false); }}
+               >
+-                {itemFreeRepairAvailable && EquipmentManager.repairCost(item, workshop) > 0
++                {itemFreeRepairAvailable && EquipmentManager.repairCost(item, workshop, repairDiscount) > 0
+                   ? 'Repair · Free'
+-                  : `Repair ${formatGold(EquipmentManager.repairCost(item, workshop))}`}
++                  : `Repair ${formatGold(EquipmentManager.repairCost(item, workshop, repairDiscount))}`}
+               </button>
+               <button onClick={() => { engine.unequip(hero.id, slot); setOpen(false); }}>
+                 Remove
+@@ -647,7 +648,7 @@ export function EquipmentPanel() {
+   const hero = state.heroes.find((h) => h.id === heroId) ?? state.heroes[0];
+ 
+   const repairBill = EquipmentManager.allItems(state)
+-    .reduce((sum, e) => sum + EquipmentManager.repairCost(e.item, workshop), 0);
++    .reduce((sum, e) => sum + EquipmentManager.repairCost(e.item, workshop, ModifierManager.global(state).repairDiscount ?? 0), 0);
+ 
+   // Sell Junk -- bulk-sells everything in the stash at or below a chosen
+   // rarity (see ShopManager.sellBelowRarity). Defaults to Common, the
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index 9f26b3e..f3e1115 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -5,6 +5,7 @@ import { ShopManager } from '../../game/managers/ShopManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import { EquipmentManager } from '../../game/managers/EquipmentManager';
++import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
+ import { CONSUMABLE_BY_ID } from '../../game/data/items';
+ import { VENDORS, vendorUpgrades } from '../../game/data/progression';
+@@ -193,20 +194,28 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+   );
+ }
+ 
+-/** Shared between ArmourStock and SuppliesStock -- both draw from the same
+- *  underlying state.shop, so one reroll restocks both at once, and the
+- *  button is shown identically on either vendor's page rather than
+- *  duplicated logic per page. */
+-function ShopRerollButton() {
++/**
++ * One of three -- Blacksmith/Alchemist/Enchanter each reroll their own
++ * stock independently now (own cost curve, own daily counter, own Trade
++ * Favor upgrade), replacing the old single button that restocked
++ * Blacksmith gear and Alchemist supplies together. See
++ * ShopManager.rerollBlacksmith/rerollAlchemist/rerollEnchanter.
++ */
++function ShopRerollButton({ vendorId }: { vendorId: VendorId }) {
+   const engine = useEngine();
+   const state = engine.state;
+   const now = useNow();
+-  const cost = ShopManager.vendorRerollCost(state, now);
++  const cost = vendorId === 'blacksmith' ? ShopManager.blacksmithRerollCost(state, now)
++    : vendorId === 'alchemist' ? ShopManager.alchemistRerollCost(state, now)
++    : ShopManager.enchanterRerollCost(state, now);
++  const onClick = vendorId === 'blacksmith' ? () => engine.rerollBlacksmith()
++    : vendorId === 'alchemist' ? () => engine.rerollAlchemist()
++    : () => engine.rerollEnchanter();
+   return (
+     <button
+       className="btn-ghost"
+       style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+-      onClick={() => engine.rerollShop()}
++      onClick={onClick}
+       disabled={cost > state.gold}
+       title={cost > 0 ? `Restock early for ${cost} gold` : 'Restock early -- free today'}
+     >
+@@ -225,7 +234,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell:
+         <p className="tiny muted" style={{ margin: 0 }}>
+           Stock rotates in {formatDuration(ShopManager.timeUntilRefresh(state, now))}. The armourer buys as well as sells.
+         </p>
+-        <ShopRerollButton />
++        <ShopRerollButton vendorId="blacksmith" />
+       </div>
+       {state.shop.equipment.length === 0 && <p className="small muted">Sold out. Come back after the next delivery.</p>}
+       <div className="grid two">
+@@ -275,17 +284,22 @@ function SuppliesStock() {
+   return (
+     <>
+       <div className="row end" style={{ marginBottom: 8 }}>
+-        <ShopRerollButton />
++        <ShopRerollButton vendorId="alchemist" />
+       </div>
+       <div className="grid three">
+-        {state.shop.consumables.map((entry) => (
+-          <ConsumableShopCard
+-            key={entry.defId}
+-            def={CONSUMABLE_BY_ID[entry.defId]}
+-            canAfford={(amount) => state.gold >= (CONSUMABLE_BY_ID[entry.defId]?.cost ?? Infinity) * amount}
+-            onBuy={(amount) => engine.buyConsumable(entry.defId, amount)}
+-          />
+-        ))}
++        {state.shop.consumables.map((entry) => {
++          const def = CONSUMABLE_BY_ID[entry.defId];
++          const price = def ? InventoryManager.price(state, def) : 0;
++          return (
++            <ConsumableShopCard
++              key={entry.defId}
++              def={def}
++              price={price}
++              canAfford={(amount) => state.gold >= price * amount}
++              onBuy={(amount) => engine.buyConsumable(entry.defId, amount)}
++            />
++          );
++        })}
+       </div>
+     </>
+   );
+@@ -307,10 +321,13 @@ function BlackMarketStock({ now }: { now: number }) {
+ 
+   return (
+     <>
+-      <p className="tiny muted" style={{ marginBottom: 8 }}>
+-        Rare, epic, and legendary only. No haggling. Stock turns over in{' '}
+-        {formatDuration(ShopManager.timeUntilBlackMarketRefresh(state, now))}.
+-      </p>
++      <div className="spread" style={{ alignItems: 'center', marginBottom: 8 }}>
++        <p className="tiny muted" style={{ margin: 0 }}>
++          Rare, epic, and legendary only. No haggling. Stock turns over in{' '}
++          {formatDuration(ShopManager.timeUntilBlackMarketRefresh(state, now))}.
++        </p>
++        <ShopRerollButton vendorId="enchanter" />
++      </div>
+       {state.blackMarket.equipment.length === 0 && (
+         <p className="small muted">The contact has nothing worth showing right now.</p>
+       )}
+@@ -385,9 +402,9 @@ function EquipmentShopCard({
+ }
+ 
+ function ConsumableShopCard({
+-  def, canAfford, onBuy,
++  def, price, canAfford, onBuy,
+ }: {
+-  def: ConsumableDef | undefined; canAfford: (amount: number) => boolean; onBuy: (amount: number) => void;
++  def: ConsumableDef | undefined; price: number; canAfford: (amount: number) => boolean; onBuy: (amount: number) => void;
+ }) {
+   const [showModal, setShowModal] = useState(false);
+   if (!def) return null;
+@@ -406,7 +423,7 @@ function ConsumableShopCard({
+           <ConsumableIcon icon={def.icon} glyph={def.glyph} size={36} />
+           <div style={{ minWidth: 0, flex: 1 }}>
+             <div className="card-title">{def.name}</div>
+-            <div className="tiny muted">{formatGold(def.cost)}</div>
++            <div className="tiny muted">{formatGold(price)}</div>
+           </div>
+         </div>
+       </div>
+@@ -422,7 +439,7 @@ function ConsumableShopCard({
+             <div className="row end" style={{ gap: 8, marginTop: 8 }}>
+               <button className="btn-primary" onClick={() => setShowModal(false)}>Close</button>
+               <button className="btn-primary" disabled={!canAfford(1)} onClick={() => { onBuy(1); setShowModal(false); }}>
+-                Buy · {formatGold(def.cost)}
++                Buy · {formatGold(price)}
+               </button>
+               {/* Alchemist stock (potions, charms) gets bought through
+                   repeatedly far more than gear does -- a x5 button here
+@@ -430,7 +447,7 @@ function ConsumableShopCard({
+                   repeat) down to one, on the item people actually stock
+                   up on. */}
+               <button className="btn-primary" disabled={!canAfford(5)} onClick={() => { onBuy(5); setShowModal(false); }}>
+-                Buy ×5 · {formatGold(def.cost * 5)}
++                Buy ×5 · {formatGold(price * 5)}
+               </button>
+             </div>
+           </div>
+-- 
+2.43.0
+
