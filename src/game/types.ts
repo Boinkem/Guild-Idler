@@ -238,6 +238,23 @@ export interface EquipmentDef {
    */
   craftable?: boolean;
   /**
+   * True for items whose only intended source is a specific Quest Chain's
+   * guaranteed `rewardItems` payout (see QuestChainDef.rewardItems below) --
+   * same "own dedicated source, not the general pool" shape raidExclusive
+   * and craftable already have, added after a direct content review found
+   * 34 items that were nominally chain rewards but had no flag actually
+   * keeping them out of ordinary Shop/Black Market stock or random quest
+   * loot, meaning a player could buy or randomly loot e.g. Dragonplate
+   * Armor before ever touching the chain that's supposed to be its real
+   * source. Shop, quest-loot, and Peddler-card generation all filter this
+   * out the same way the other two flags already do. Unlike raidExclusive/
+   * craftable, this doesn't imply anything about rarity or tiering --
+   * chain-reward items span the same common-to-legendary range as ordinary
+   * gear, this flag is purely about which pool they're allowed to surface
+   * in.
+   */
+  chainExclusive?: boolean;
+  /**
    * Overrides HeroManager.gearScore's flat per-rarity value
    * (GEAR_SCORE_BY_RARITY) for this specific item. Exists for cases
    * where rarity alone doesn't capture how strong a piece actually is --

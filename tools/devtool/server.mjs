@@ -300,6 +300,14 @@ const SCHEMAS = {
       // rejects an entry for losing a field it didn't know about.
       raidExclusive: { type: 'boolean', required: false },
       craftable: { type: 'boolean', required: false },
+      // Third of the three pool-exclusivity flags -- see the other two's
+      // comment just above. True for an item whose only intended source
+      // is a specific Quest Chain's guaranteed rewardItems payout; Shop,
+      // Black Market, ordinary quest loot, and Peddler cards all filter
+      // this out (see EquipmentDef.chainExclusive's own comment in
+      // types.ts for the full writeup, including the direct content
+      // review that found 34 items needing this retroactively).
+      chainExclusive: { type: 'boolean', required: false },
       // Overrides HeroManager.gearScore's flat per-rarity value for this
       // item specifically -- for content where rarity alone undersells
       // how strong a piece actually is, e.g. a future higher-level raid's

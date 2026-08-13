@@ -25,6 +25,66 @@ Tab hero-log rework" below. Quest success now runs through a combined
 diminishing-returns curve rather than pure linear stacking -- see "Quest
 success rebalance -- built" below.
 
+### Equipment source review + new `chainExclusive` flag: Quest Chain rewards excluded from Shop/loot/Peddler pools -- built
+Direct request to review the full equipment pool (`equipment.json`, 219
+defs) grouped by where each item comes from, then make Quest Chain
+reward items exclusive to their chain the same way raid loot and crafted
+bases already are, with DevTool support.
+
+**Review findings, reported before any code changed:**
+- No duplicate ids across all 219 defs.
+- 44 of 219 (~20%) have no `icon` set, falling back to the per-slot
+  placeholder glyph -- not new, matches the existing "Art & content
+  to-do list" backlog entry, now with a real count.
+- `raidExclusive`/`craftable` already cleanly split the pool into Raid
+  Only (84) / Crafted (12) / everything else (123), with zero overlap.
+  Item sets are structurally sound (every multi-tier set repeats the
+  same slot layout across rarities as expected).
+- **First pass missed a fourth real category.** Cross-referencing that
+  "everything else" bucket against `quest-chains.json`'s own
+  `rewardItems` found 34 items that are specific chains' guaranteed
+  completion rewards (e.g. Dragonplate Armor from Demon Fortress
+  Assault, Voidforged Plate from The World-Ender's Vigil) with nothing
+  actually stopping them from also showing up as ordinary Shop stock or
+  random quest loot before the chain ever grants them.
+- Two unrelated data bugs found while cross-checking rarity ordering on
+  raid-tiered pairs: `Knight's Blade` and `Chainmail Hauberk` both have
+  their Mythic variant at the same rarity as the base item (uncommon)
+  while Heroic is correctly bumped to epic -- Mythic reads as strictly
+  worse than Heroic, backwards from every other raid-tiered pair.
+  Flagged, not fixed as part of this pass (out of scope for the
+  source-grouping ask).
+
+**Built:**
+- **New `EquipmentDef.chainExclusive?: boolean`** -- third pool-
+  exclusivity flag alongside the existing `raidExclusive`/`craftable`,
+  same shape, same three call sites. Set `true` on exactly the 34 items
+  found above, written via a script rather than by hand at that count.
+- **`ShopManager.refresh`/`refreshBlackMarket`, `QuestManager`'s
+  ordinary loot table, and `PeddlerManager.eligibleEquipmentForRarity`**
+  all now exclude `chainExclusive` the same way they already excluded
+  `raidExclusive`/`craftable`. Peddler already had its own bespoke
+  exclusion for this exact case (`CHAIN_REWARD_ITEM_IDS`, a `Set`
+  computed at module load from `QUEST_CHAINS.flatMap(c =>
+  c.rewardItems)`) -- removed in favor of reading the new static flag,
+  so all three pools now agree by construction against one authored
+  source of truth instead of Peddler independently deriving the same
+  answer a second way that could in principle drift from the other two.
+- **DevTool schema updated** (`tools/devtool/server.mjs`) -- the editor
+  rebuilds each equipment entry from exactly its schema's field list on
+  save (see `raidExclusive`/`craftable`'s own comment there for the bug
+  this exact gap caused before), so the new field needed adding there
+  too or editing any chain-reward item's other fields would have
+  silently dropped `chainExclusive` on save. Boolean fields render as a
+  checkbox generically already, no frontend template changes needed.
+- Not touched: the Knight's Blade/Chainmail Hauberk rarity inversion
+  bug found during review, and the Stash UI itself -- this pass was
+  scoped to the data pool and DevTool per the direct ask, not a display
+  change.
+
+`npx tsc --noEmit`, `npx vite build --config vite.web.config.ts`, and
+`node --check` on both DevTool files all pass clean.
+
 ### UI polish pass: native dialogs replaced, modal headers unified, Close buttons standardized -- built
 Direct request to review every prompt box and the notification system for
 consistency, findings reported as a dot-point list before any code

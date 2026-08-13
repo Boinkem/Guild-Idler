@@ -102,7 +102,8 @@
       "strength": 12
     },
     "setId": "dragon_slayer",
-    "icon": "weapons/Weapon_60.png"
+    "icon": "weapons/Weapon_60.png",
+    "chainExclusive": true
   },
   {
     "id": "leather_cap",
@@ -169,7 +170,8 @@
     "stats": {
       "wisdom": 8
     },
-    "icon": "armor/Armor_111.png"
+    "icon": "armor/Armor_111.png",
+    "chainExclusive": true
   },
   {
     "id": "dragon_helm",
@@ -187,7 +189,8 @@
       "endurance": 9
     },
     "setId": "dragon_slayer",
-    "icon": "armor/Armor_40.png"
+    "icon": "armor/Armor_40.png",
+    "chainExclusive": true
   },
   {
     "id": "padded_gambeson",
@@ -257,7 +260,8 @@
     "stats": {
       "endurance": 9
     },
-    "icon": "armor/Armor_10.png"
+    "icon": "armor/Armor_10.png",
+    "chainExclusive": true
   },
   {
     "id": "dragon_armor",
@@ -278,7 +282,8 @@
       "endurance": 13
     },
     "setId": "dragon_slayer",
-    "icon": "armor/Armor_19.png"
+    "icon": "armor/Armor_19.png",
+    "chainExclusive": true
   },
   {
     "id": "work_gloves",
@@ -439,7 +444,8 @@
     "stats": {
       "luck": 6
     },
-    "icon": "accessories/Accessory_09.png"
+    "icon": "accessories/Accessory_09.png",
+    "chainExclusive": true
   },
   {
     "id": "signet_of_wardens",
@@ -522,7 +528,8 @@
     "stats": {
       "luck": 9
     },
-    "icon": "accessories/Accessory_11.png"
+    "icon": "accessories/Accessory_11.png",
+    "chainExclusive": true
   },
   {
     "id": "heart_of_the_mountain",
@@ -558,7 +565,8 @@
     "stats": {
       "strength": 3
     },
-    "icon": "weapons/Weapon_26.png"
+    "icon": "weapons/Weapon_26.png",
+    "chainExclusive": true
   },
   {
     "id": "choir_mask",
@@ -577,7 +585,8 @@
       "wisdom": 9
     },
     "icon": "armor/Armor_127.png",
-    "setId": "bonewrought"
+    "setId": "bonewrought",
+    "chainExclusive": true
   },
   {
     "id": "silenced_bell",
@@ -596,7 +605,8 @@
       "wisdom": 6
     },
     "icon": "misc/Misc_25.png",
-    "setId": "bonewrought"
+    "setId": "bonewrought",
+    "chainExclusive": true
   },
   {
     "id": "voidforged_blade",
@@ -619,7 +629,8 @@
     "setId": "voidforged",
     "icon": "weapons/Voidforgedblade.png",
     "raidExclusive": false,
-    "craftable": false
+    "craftable": false,
+    "chainExclusive": true
   },
   {
     "id": "voidforged_crown",
@@ -639,7 +650,8 @@
       "wisdom": 12
     },
     "setId": "voidforged",
-    "icon": "armor/Armor_36.png"
+    "icon": "armor/Armor_36.png",
+    "chainExclusive": true
   },
   {
     "id": "voidforged_plate",
@@ -660,7 +672,8 @@
       "endurance": 16
     },
     "setId": "voidforged",
-    "icon": "armor/Armor_15.png"
+    "icon": "armor/Armor_15.png",
+    "chainExclusive": true
   },
   {
     "id": "voidforged_signet",
@@ -679,7 +692,8 @@
       "luck": 14
     },
     "setId": "voidforged",
-    "icon": "accessories/Accessory_05.png"
+    "icon": "accessories/Accessory_05.png",
+    "chainExclusive": true
   },
   {
     "id": "stormcaller_axe",
@@ -730,7 +744,8 @@
     "stats": {
       "luck": 7
     },
-    "icon": "armor/Armor_76.png"
+    "icon": "armor/Armor_76.png",
+    "chainExclusive": true
   },
   {
     "id": "wardens_bulwark",
@@ -769,7 +784,8 @@
       "luck": 5
     },
     "setId": "empyrean",
-    "icon": "weapons/Weapon_61.png"
+    "icon": "weapons/Weapon_61.png",
+    "chainExclusive": true
   },
   {
     "id": "empyrean_halo",
@@ -789,7 +805,8 @@
       "wisdom": 15
     },
     "setId": "empyrean",
-    "icon": "armor/Armor_112.png"
+    "icon": "armor/Armor_112.png",
+    "chainExclusive": true
   },
   {
     "id": "empyrean_aegis",
@@ -812,7 +829,8 @@
     "setId": "empyrean",
     "icon": "shields/Shield_19.png",
     "raidExclusive": false,
-    "craftable": false
+    "craftable": false,
+    "chainExclusive": true
   },
   {
     "id": "the_last_ember",
@@ -857,7 +875,8 @@
     },
     "icon": "accessories/Accessory_14.png",
     "raidExclusive": false,
-    "craftable": false
+    "craftable": false,
+    "chainExclusive": true
   },
   {
     "id": "crow_feather_charm",
@@ -876,7 +895,8 @@
     },
     "icon": "misc/Misc_04.png",
     "raidExclusive": false,
-    "craftable": false
+    "craftable": false,
+    "chainExclusive": true
   },
   {
     "id": "wardens_signet",
@@ -897,7 +917,8 @@
     },
     "icon": "accessories/Accessory_07.png",
     "raidExclusive": false,
-    "craftable": false
+    "craftable": false,
+    "chainExclusive": true
   },
   {
     "id": "sword_of_the_ashen_hand",
@@ -919,7 +940,8 @@
     "setId": "ashen_hand",
     "icon": "weapons/Weapon_60.png",
     "raidExclusive": false,
-    "craftable": false
+    "craftable": false,
+    "chainExclusive": true
   },
   {
     "id": "bulwark_of_the_war_saint",
@@ -942,7 +964,8 @@
     "setId": "ashen_hand",
     "icon": "shields/Shield_24.png",
     "raidExclusive": false,
-    "craftable": false
+    "craftable": false,
+    "chainExclusive": true
   },
   {
     "id": "ashwoven_charm",
@@ -961,7 +984,8 @@
     },
     "icon": "accessories/Accessory_15.png",
     "raidExclusive": false,
-    "craftable": false
+    "craftable": false,
+    "chainExclusive": true
   },
   {
     "id": "seized_glaive",
@@ -980,7 +1004,8 @@
     },
     "icon": "weapons/Weapon_56.png",
     "raidExclusive": false,
-    "craftable": false
+    "craftable": false,
+    "chainExclusive": true
   },
   {
     "id": "gravewatchers_band",
@@ -1000,7 +1025,8 @@
       "wisdom": 5
     },
     "icon": "accessories/Accessory_10.png",
-    "setId": "bonewrought"
+    "setId": "bonewrought",
+    "chainExclusive": true
   },
   {
     "id": "travelers_band",
@@ -1296,7 +1322,8 @@
     "icon": "accessories/Accessory_02.png",
     "raidExclusive": false,
     "craftable": false,
-    "setId": "blackford"
+    "setId": "blackford",
+    "chainExclusive": true
   },
   {
     "id": "gravewatchers_band_heroic",
@@ -3852,7 +3879,8 @@
     "stats": {
       "strength": 2
     },
-    "icon": "armor/Armor_02.png"
+    "icon": "armor/Armor_02.png",
+    "chainExclusive": true
   },
   {
     "id": "ridgebreakers_pauldron",
@@ -3870,7 +3898,8 @@
       "strength": 5,
       "endurance": 3
     },
-    "icon": "armor/Armor_09.png"
+    "icon": "armor/Armor_09.png",
+    "chainExclusive": true
   },
   {
     "id": "moonsilver_fang",
@@ -3888,7 +3917,8 @@
       "strength": 6,
       "luck": 4
     },
-    "icon": "weapons/Weapon_28.png"
+    "icon": "weapons/Weapon_28.png",
+    "chainExclusive": true
   },
   {
     "id": "unravelers_mark",
@@ -3907,7 +3937,8 @@
       "wisdom": 6,
       "luck": 4
     },
-    "icon": "accessories/Accessory_12.png"
+    "icon": "accessories/Accessory_12.png",
+    "chainExclusive": true
   },
   {
     "id": "lichfinders_compass",
@@ -3925,7 +3956,8 @@
     "stats": {
       "wisdom": 9
     },
-    "icon": "accessories/Accessory_20.png"
+    "icon": "accessories/Accessory_20.png",
+    "chainExclusive": true
   },
   {
     "id": "millbrook_ledger_page",
@@ -3943,7 +3975,8 @@
     "stats": {
       "wisdom": 10
     },
-    "icon": "accessories/Accessory_21.png"
+    "icon": "accessories/Accessory_21.png",
+    "chainExclusive": true
   },
   {
     "id": "loomsplinter_shard",
@@ -3962,7 +3995,8 @@
       "wisdom": 12,
       "luck": 6
     },
-    "icon": "accessories/Accessory_22.png"
+    "icon": "accessories/Accessory_22.png",
+    "chainExclusive": true
   },
   {
     "id": "guildmade_helm",

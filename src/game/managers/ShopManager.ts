@@ -39,7 +39,16 @@ export const ShopManager = {
     // them at all. craftable bases get the same treatment, same reasoning
     // in the opposite direction -- they only ever exist as a Crafting
     // result, never something you'd find on a shelf.
-    const eligible = EQUIPMENT.filter((def) => !def.raidExclusive && !def.craftable && def.reqLevel <= topLevel + 4);
+    // raidExclusive items (Heroic/Mythic tiered raid loot variants) never
+    // belong in a purchasable pool -- see the comment on EquipmentDef itself
+    // for why. This was the actual bug: nothing here previously excluded
+    // them at all. craftable bases get the same treatment, same reasoning
+    // in the opposite direction -- they only ever exist as a Crafting
+    // result, never something you'd find on a shelf. chainExclusive gets
+    // the same treatment for the same reason: a Quest Chain's guaranteed
+    // reward item showing up for sale before the chain is even discovered
+    // undercuts the whole point of it being a reward.
+    const eligible = EQUIPMENT.filter((def) => !def.raidExclusive && !def.craftable && !def.chainExclusive && def.reqLevel <= topLevel + 4);
     const picks = new Set<string>();
     let guard = 0;
     while (picks.size < Math.min(SHOP_EQUIPMENT_SLOTS, eligible.length) && guard++ < 200) {
@@ -119,7 +128,7 @@ export const ShopManager = {
     const rng = createRng(`blackmarket:${window}:${state.createdAt}`);
 
     const eligible = EQUIPMENT.filter((def) =>
-      !def.raidExclusive && !def.craftable && (BLACK_MARKET_RARITIES as readonly string[]).includes(def.rarity));
+      !def.raidExclusive && !def.craftable && !def.chainExclusive && (BLACK_MARKET_RARITIES as readonly string[]).includes(def.rarity));
     const picks = new Set<string>();
     let guard = 0;
     while (picks.size < Math.min(BLACK_MARKET_SLOTS, eligible.length) && guard++ < 200) {

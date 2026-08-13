@@ -3,7 +3,6 @@ import {
 } from '../types';
 import { PEDDLER_CARDS_BY_TIER } from '../data/peddler';
 import { EQUIPMENT, EQUIPMENT_BY_ID } from '../data/equipment';
-import { QUEST_CHAINS } from '../data/quests';
 import { MATERIAL_BY_ID } from '../data/materials';
 import { warehouseCapacity } from '../data/harvestUpgrades';
 import { Tuning } from '../data/tuning';
@@ -65,25 +64,22 @@ function rollOneOutcome(): PeddlerCardDef {
   return resolveEquipmentRoll(rollCardFromTier(rollTier()));
 }
 
-/** Every EquipmentDef id that's a chain's own guaranteed completion
- *  reward (ChainDef.rewardItems) -- excluded from Grimsby's random
- *  equipment roll below so a chain's specific reward item can never
- *  also turn up as a random gamble drop. Computed once at module load,
- *  not per-roll -- QUEST_CHAINS is static content, not something that
- *  changes at runtime. */
-const CHAIN_REWARD_ITEM_IDS = new Set(QUEST_CHAINS.flatMap((c) => c.rewardItems));
-
 /** Every EquipmentDef at the given rarity that's fair game for Grimsby
  *  to hand out at random -- excludes raidExclusive (Heroic/Mythic raid-
  *  only loot, per direct request: "raid only for sure"), craftable
- *  (empty-mods crafting bases, not real drops), and anything in
- *  CHAIN_REWARD_ITEM_IDS above (a chain's own guaranteed reward). */
+ *  (empty-mods crafting bases, not real drops), and chainExclusive (a
+ *  chain's own guaranteed reward -- previously tracked here via its own
+ *  ad-hoc CHAIN_REWARD_ITEM_IDS set computed from ChainDef.rewardItems;
+ *  now that EquipmentDef.chainExclusive exists as the single source of
+ *  truth Shop/QuestManager also read, this reads that instead, so all
+ *  three pools agree by construction rather than by three separately
+ *  maintained exclusion lists). */
 function eligibleEquipmentForRarity(rarity: Rarity): typeof EQUIPMENT {
   return EQUIPMENT.filter((def) => (
     def.rarity === rarity
     && !def.raidExclusive
     && !def.craftable
-    && !CHAIN_REWARD_ITEM_IDS.has(def.id)
+    && !def.chainExclusive
   ));
 }
 
