@@ -3,7 +3,6 @@ import { useEngine } from './useEngine';
 import { PeddlerCardDef, PeddlerCardTier } from '../game/types';
 import { MATERIAL_BY_ID } from '../game/data/materials';
 import { EQUIPMENT_BY_ID } from '../game/data/equipment';
-import { PEDDLER_CONFIG } from '../game/data/peddler';
 import { RARITY_COLOR } from '../game/util';
 import { GrimsbySprite } from './sprites/GrimsbySprite';
 import { ItemIcon, MaterialIcon, ConsumableIcon } from './icons';
@@ -202,9 +201,10 @@ function PeddlerOutcomeIcon({ outcome, size = 48 }: { outcome: PeddlerCardDef; s
  *  overlay (tier + flavor text) as a new card laid over the top, via
  *  onOpenDetails -- deliberately NOT an inline expand-in-place anymore,
  *  since growing the card itself inside the fixed-size modal read as the
- *  whole thing "zooming." */
+ *  whole thing "zooming." (`spotlight` below grows it a different way --
+ *  see that prop's own note.) */
 function PeddlerCard({
-  faceUp, backIndex, outcome, onClick, onOpenDetails, disabled, fadingOut,
+  faceUp, backIndex, outcome, onClick, onOpenDetails, disabled, fadingOut, resultBackIndex, spotlight,
 }: {
   faceUp: boolean;
   backIndex: number;
@@ -213,12 +213,23 @@ function PeddlerCard({
   onOpenDetails?: () => void;
   disabled?: boolean;
   fadingOut?: boolean;
+  /** Revealed cards only -- which of the 3 result_N.png backdrops this
+   *  card uses. Picked once per result by the parent (see
+   *  PeddlerCardModal's own `resultBackIndex` state below), not re-rolled
+   *  per render, the same "pick once, hold it" shape `localBacks` already
+   *  uses for the face-down cards' own back_N.png. */
+  resultBackIndex?: number;
+  /** True only once revealStage is 'settled' -- i.e. only once this is
+   *  the sole card left in the row, the two unpicked ones already faded
+   *  out and removed. Growing the card THEN (not throughout, and not via
+   *  an inline "expand in place" the moment it's picked) is what keeps
+   *  this safe against the exact "whole modal reads as zooming" issue
+   *  the doc comment above warns about -- .peddler-modal's own height is
+   *  fixed regardless (see app.css), and growing a card that's already
+   *  the only flex item in its row doesn't reflow or resize anything
+   *  else around it. */
+  spotlight?: boolean;
 }) {
-  // Read once per render -- PEDDLER_CONFIG is a module-level constant
-  // (loaded from peddler-config.json at import time), not per-hero or
-  // per-outcome state, so there's nothing to memoize here.
-  const resultCardBg = PEDDLER_CONFIG.resultCardBackground;
-
   if (!faceUp) {
     return (
       <button
@@ -235,24 +246,27 @@ function PeddlerCard({
   return (
     <button
       type="button"
-      className="peddler-card peddler-card-revealed peddler-card-picked"
+      className={`peddler-card peddler-card-revealed peddler-card-picked ${spotlight ? 'peddler-card-spotlight' : ''}`}
       onClick={onOpenDetails}
       title={outcome?.flavorText}
-      // Result-card background art is optional and DevTool-configured
-      // (PEDDLER_CONFIG.resultCardBackground, see types.ts's own
-      // PeddlerConfigDef comment) -- passed through as CSS custom
-      // properties rather than a plain backgroundImage style so the CSS
-      // side can layer it underneath the existing semi-transparent panel
-      // tint (see .peddler-card-revealed in app.css) instead of replacing
-      // it outright. Both vars fall back cleanly to `none`/`center` in
-      // CSS when unset, so an unconfigured background is pixel-identical
-      // to before this existed.
-      style={resultCardBg?.path ? {
-        '--result-card-bg': `url(./lore/${resultCardBg.path})`,
-        '--result-card-bg-pos': `${resultCardBg.focusX ?? 50}% ${resultCardBg.focusY ?? 50}%`,
-      } as CSSProperties : undefined}
+      // One of 3 fixed result_N.png backdrops (see resultBackIndex's own
+      // comment above) -- plain backgroundImage now, not the CSS-custom-
+      // property indirection an earlier version of this used. That
+      // indirection existed to let a single DevTool-configured image
+      // stay optional/unset-able; these 3 files always exist and are
+      // never individually unset, so there's nothing left for a fallback
+      // var to do.
+      style={{ backgroundImage: `url(./peddler/cards/result_${resultBackIndex ?? 0}.png)` }}
     >
-      {outcome && <PeddlerOutcomeIcon outcome={outcome} size={48} />}
+      {/* The wrapping div (not the shared icon components themselves,
+          which render elsewhere against very different backgrounds) is
+          what gets the drop-shadow -- see .peddler-card-name's own
+          comment in app.css for why one's needed at all now. */}
+      {outcome && (
+        <div className="peddler-card-icon-shadow">
+          <PeddlerOutcomeIcon outcome={outcome} size={48} />
+        </div>
+      )}
       <div className="peddler-card-name">{outcome ? outcomeDisplayName(outcome) : ''}</div>
     </button>
   );
@@ -284,6 +298,13 @@ export function PeddlerCardModal({ highRoller = false, onClose }: { highRoller?:
   const [localBacks] = useState<[number, number, number]>(() => [
     Math.floor(Math.random() * 3), Math.floor(Math.random() * 3), Math.floor(Math.random() * 3),
   ]);
+  // Which of the 3 result_N.png backdrops the revealed/picked card uses
+  // -- rolled once per modal open, same "pick once, hold it for the
+  // whole open/close lifetime" shape localBacks (above) already uses for
+  // the face-down cards, even though this one won't actually render
+  // until a result exists. Purely cosmetic/decorative, same reasoning as
+  // localBacks -- not read or cared about by the engine at all.
+  const [resultBackIndex] = useState(() => Math.floor(Math.random() * 3));
   const [browsingLine] = useState(() => {
     const pool = highRoller ? HIGH_ROLLER_LINES : BROWSING_LINES;
     return pool[Math.floor(Math.random() * pool.length)];
@@ -429,6 +450,8 @@ export function PeddlerCardModal({ highRoller = false, onClose }: { highRoller?:
                       faceUp
                       backIndex={c.backIndex}
                       outcome={c.outcome}
+                      resultBackIndex={resultBackIndex}
+                      spotlight={revealStage === 'settled'}
                       onOpenDetails={() => setDetailOpen(true)}
                     />
                   );

@@ -536,29 +536,13 @@ const SCHEMAS = {
       icon: { type: 'string', required: false, picker: 'icon' },
     },
   },
-  'peddler-config': {
-    file: 'peddler-config.json',
-    label: 'Peddler Config',
-    idField: 'id',
-    // Single-row settings table -- reuses the same array-of-records
-    // read/write/validate machinery every other content type here uses
-    // (every schema assumes a JSON array on disk), rather than a bespoke
-    // one-off editor for a single field. Only ever meant to hold exactly
-    // one row (id: 'default') -- see PeddlerConfigDef's own comment in
-    // types.ts.
-    fields: {
-      id: { type: 'string', required: true, slug: true },
-      // Shown behind the icon/name on a revealed Peddler card's result
-      // face -- previously a flat panel tint with nothing behind it.
-      // Same bannerImage field/picker chain/raid banners already use
-      // (server-side validation, focus-point preview, the works, all for
-      // free), just pointed at a `peddler/` subfolder by default. The
-      // game renders it at reduced opacity behind the existing panel
-      // tint, not full strength, so the result icon/name stay legible on
-      // top -- see PeddlerCardModal.tsx / app.css's own comments.
-      resultCardBackground: { type: 'bannerImage', required: false, defaultFolder: 'peddler' },
-    },
-  },
+  // NOTE: there used to be a 'peddler-config' schema here -- a single
+  // DevTool-configurable result-card background image. Removed: replaced
+  // by three fixed result-card art files (public/peddler/cards/
+  // result_0/1/2.png), chosen at random per reveal the same way the
+  // face-down cards' own back_0/1/2.png already work -- see
+  // PeddlerCardModal.tsx's own comment on `resultBackIndex`. Those don't
+  // have a DevTool entry either, for the same reason.
   'raids': {
     file: 'raids.json',
     label: 'Raids',

@@ -20,36 +20,68 @@
     "tier": "bust",
     "weight": 8,
     "kind": "joke",
-    "jokeItemName": "A Rock",
     "flavorText": "\"That's a good rock,\" Grimsby says, entirely serious.",
-    "glyph": "🪨"
+    "jokeItemName": "A Rock",
+    "goldAmount": 0,
+    "refundPercent": 0,
+    "materialId": "ore",
+    "materialAmount": 0,
+    "scrapAmount": 0,
+    "itemRarity": "common",
+    "eggRarity": "common",
+    "glyph": "🪨",
+    "icon": "misc/Misc_42.png"
   },
   {
     "id": "bust_joke_button",
     "tier": "bust",
     "weight": 8,
     "kind": "joke",
-    "jokeItemName": "A Single Button",
     "flavorText": "\"Matches nothing you own. That's the fun part.\"",
-    "glyph": "🔘"
+    "jokeItemName": "A Single Button",
+    "goldAmount": 0,
+    "refundPercent": 0,
+    "materialId": "ore",
+    "materialAmount": 0,
+    "scrapAmount": 0,
+    "itemRarity": "common",
+    "eggRarity": "common",
+    "glyph": "🔘",
+    "icon": "misc/Misc_14.png"
   },
   {
     "id": "bust_joke_iou",
     "tier": "bust",
     "weight": 6,
     "kind": "joke",
-    "jokeItemName": "An IOU (From Grimsby, To Grimsby)",
     "flavorText": "He hands you a slip of paper he owes himself. You're not sure what to do with it either.",
-    "glyph": "📝"
+    "jokeItemName": "An IOU (From Grimsby, To Grimsby)",
+    "goldAmount": 0,
+    "refundPercent": 0,
+    "materialId": "ore",
+    "materialAmount": 0,
+    "scrapAmount": 0,
+    "itemRarity": "common",
+    "eggRarity": "common",
+    "glyph": "📝",
+    "icon": "misc/Misc_62.png"
   },
   {
     "id": "bust_joke_pebble",
     "tier": "bust",
     "weight": 8,
     "kind": "joke",
-    "jokeItemName": "A Suspiciously Round Pebble",
     "flavorText": "\"Lucky,\" he says. \"For someone. Not you, evidently.\"",
-    "glyph": "⚪"
+    "jokeItemName": "A Suspiciously Round Pebble",
+    "goldAmount": 0,
+    "refundPercent": 0,
+    "materialId": "ore",
+    "materialAmount": 0,
+    "scrapAmount": 0,
+    "itemRarity": "common",
+    "eggRarity": "common",
+    "glyph": "⚪",
+    "icon": "misc/Misc_86.png"
   },
   {
     "id": "refund_small",
@@ -131,35 +163,60 @@
     "tier": "modest",
     "weight": 8,
     "kind": "material",
+    "flavorText": "A bundle of good timber, still warm. He doesn't explain why.",
+    "goldAmount": 0,
+    "refundPercent": 0,
     "materialId": "timber",
     "materialAmount": 6,
-    "flavorText": "A bundle of good timber, still warm. He doesn't explain why."
+    "scrapAmount": 0,
+    "itemRarity": "common",
+    "eggRarity": "common",
+    "icon": "crafting/Crafting_85.png"
   },
   {
     "id": "modest_material_herbs",
     "tier": "modest",
     "weight": 8,
     "kind": "material",
+    "flavorText": "\"Smells familiar,\" he admits, \"but only 'cause I grow it myself.\"",
+    "goldAmount": 0,
+    "refundPercent": 0,
     "materialId": "herbs",
     "materialAmount": 6,
-    "flavorText": "\"Smells familiar,\" he admits, \"but only 'cause I grow it myself.\""
+    "scrapAmount": 0,
+    "itemRarity": "common",
+    "eggRarity": "common",
+    "icon": "crafting/Crafting_94.png"
   },
   {
     "id": "modest_material_fish",
     "tier": "modest",
     "weight": 8,
     "kind": "material",
+    "flavorText": "Still fresh, more or less. He won't say how he knows that.",
+    "goldAmount": 0,
+    "refundPercent": 0,
     "materialId": "fish",
     "materialAmount": 6,
-    "flavorText": "Still fresh, more or less. He won't say how he knows that."
+    "scrapAmount": 0,
+    "itemRarity": "common",
+    "eggRarity": "common",
+    "icon": "food/Food_41.png"
   },
   {
     "id": "good_scrap",
     "tier": "good",
     "weight": 10,
     "kind": "scrap",
+    "flavorText": "A box that rattles promisingly. \"Someone's old gear,\" he says. \"Don't ask.\"",
+    "goldAmount": 0,
+    "refundPercent": 0,
+    "materialId": "ore",
+    "materialAmount": 0,
     "scrapAmount": 4,
-    "flavorText": "A box that rattles promisingly. \"Someone's old gear,\" he says. \"Don't ask.\""
+    "itemRarity": "common",
+    "eggRarity": "common",
+    "icon": "crafting/Crafting_77.png"
   },
   {
     "id": "good_gear_common",
@@ -167,7 +224,14 @@
     "weight": 8,
     "kind": "equipment",
     "flavorText": "He looks personally offended having to hand over something that actually works.",
-    "itemRarity": "common"
+    "goldAmount": 0,
+    "refundPercent": 0,
+    "materialId": "ore",
+    "materialAmount": 0,
+    "scrapAmount": 0,
+    "itemRarity": "common",
+    "eggRarity": "common",
+    "icon": "armor/Armor_75.png"
   },
   {
     "id": "good_gear_uncommon",
@@ -175,7 +239,14 @@
     "weight": 2,
     "kind": "equipment",
     "flavorText": "\"That one's real,\" he says, sounding surprised himself.",
-    "itemRarity": "uncommon"
+    "goldAmount": 0,
+    "refundPercent": 0,
+    "materialId": "ore",
+    "materialAmount": 0,
+    "scrapAmount": 0,
+    "itemRarity": "uncommon",
+    "eggRarity": "common",
+    "icon": "armor/Armor_71.png"
   },
   {
     "id": "jackpot_egg",
@@ -190,9 +261,15 @@
     "tier": "jackpot",
     "weight": 7,
     "kind": "material",
+    "flavorText": "A whole crate, still nailed shut. \"Found it,\" he says, unconvincingly.",
+    "goldAmount": 0,
+    "refundPercent": 0,
     "materialId": "ore",
     "materialAmount": 40,
-    "flavorText": "A whole crate, still nailed shut. \"Found it,\" he says, unconvincingly."
+    "scrapAmount": 0,
+    "itemRarity": "common",
+    "eggRarity": "common",
+    "icon": "crafting/Crafting_81.png"
   },
   {
     "id": "jackpot_gear_epic",
@@ -200,6 +277,13 @@
     "weight": 1,
     "kind": "equipment",
     "flavorText": "For once, Grimsby has absolutely nothing sleazy to say. That's how you know it's good.",
-    "itemRarity": "epic"
+    "goldAmount": 0,
+    "refundPercent": 0,
+    "materialId": "ore",
+    "materialAmount": 0,
+    "scrapAmount": 0,
+    "itemRarity": "epic",
+    "eggRarity": "common",
+    "icon": "armor/Armor_72.png"
   }
 ]

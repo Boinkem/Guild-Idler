@@ -2711,59 +2711,91 @@ button.harvest-item:hover {
   gap: 4px;
   padding: 8px;
   cursor: pointer;
-  /* Two background-image layers, not background-color + background-image
-     -- background-color always paints BELOW background-image in CSS, so
-     a plain background-color tint would sit fully hidden underneath any
-     configured art rather than legibly over it. A same-color-both-stops
-     linear-gradient works as a "color" layer that CAN be stacked in
-     front of a second, real image layer instead. `--result-card-bg`/
-     `--result-card-bg-pos` are set inline per-render from
-     PEDDLER_CONFIG.resultCardBackground (see PeddlerCardModal.tsx) and
-     fall back to `none`/`center` here when unset -- an unconfigured
-     background renders pixel-identical to the old flat panel tint alone,
-     nothing to migrate. `78%` opacity on the tint (vs. the flat panel's
-     old 92%) is deliberately lower once real art is behind it, so the
-     art actually reads as "semi transparent" rather than nearly hidden. */
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--panel-2) 78%, transparent), color-mix(in srgb, var(--panel-2) 78%, transparent)),
-    var(--result-card-bg, none);
-  background-size: cover, cover;
-  background-position: center, var(--result-card-bg-pos, center);
-  background-repeat: no-repeat, no-repeat;
+  background-color: transparent;
+  /* No CSS border, same reasoning as .peddler-card-facedown's own -- the
+     3 result_N.png files each paint their own gold frame right to their
+     own edge (same art family as the face-down cards' back_N.png), so a
+     second CSS border drawn on top used to read as a visible seam
+     floating just outside the art's own painted border. */
+  border: none;
+  border-radius: 4px;
+  /* Locked to the result-card art's own real aspect ratio (0.65 -- the
+     3 result_N.png files are 499x767/491x758/485x750, average ~0.648,
+     close enough that stretching any of them to a flat 0.65 box is
+     imperceptible) rather than a plain fixed height. Same aspect-ratio +
+     `background-size: 100% 100%` combination the crafting-station scenes
+     already use for their own locked-ratio art (see .craft-scene above)
+     -- guarantees the art's painted border lines up with the card's own
+     edges exactly, no gap on any side, rather than `cover` cropping into
+     it or `contain` leaving a letterboxed gap around it. `width` (not
+     height) is what actually varies between the normal and `.peddler-
+     card-spotlight` sizes below -- aspect-ratio recomputes the used
+     height from it automatically, on every frame of the width
+     transition, so both dimensions grow together for free from a single
+     transitioned property. */
+  aspect-ratio: 13 / 20;
+  width: 110px;
+  /* `.peddler-card` (the shared base class, applied here too) sets a
+     fixed `height: 150px` -- with BOTH width and height landing on
+     definite values, `aspect-ratio` above would have nothing left to
+     compute and gets silently ignored (confirmed the hard way: measured
+     150x150 instead of the intended 150x231 before this line existed).
+     `auto` here is what actually lets aspect-ratio do its job, deriving
+     height from width the way the whole rest of this rule assumes. */
+  height: auto;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
   color: var(--parchment);
   font: inherit;
-  /* `.peddler-card` no longer carries a shared border (removed so the
-     face-down card's own painted art edge wouldn't get a redundant CSS
-     outline drawn around it too -- see .peddler-card-facedown's own
-     comment) -- this one still needs its own, since it's a plain
-     icon+name content box with no self-painted frame of its own. */
-  border: 1px solid var(--edge);
-  /* Fixed height again, matching the face-down cards exactly -- this no
-     longer needs to grow for inline flavor text (that content moved into
-     its own overlay, see .peddler-card-detail-box below), so there's no
-     reason for it to differ from .peddler-card's own 150px anymore. */
-  height: 150px;
+  transition: width 220ms ease, box-shadow 140ms ease;
 }
-/* Same specificity gap the face-down card's own hover rule (above) was
-   just found to have, and the same fix -- `button:hover:not(:disabled)`
-   sets `background:` as a shorthand, which resets EVERY background
-   sub-property it doesn't mention (including background-image) back to
-   its initial value, and that generic rule's higher specificity would
-   otherwise win on hover and wipe out the two-layer tint+art background
-   above entirely, hiding any configured result-card art the whole time
-   the card is actually being looked at. `:not(:disabled)` matches that
-   rule's own compound specificity so this one wins instead. */
+/* Only added once revealStage is 'settled' (see PeddlerCard's own
+   `spotlight` prop comment in PeddlerCardModal.tsx) -- "bigger and
+   central" once the picked card is the sole remaining item in its row,
+   not throughout. 150px keeps the grown card (aspect-ratio locked, so
+   ~231px tall) comfortably inside .peddler-modal's own fixed 495px
+   height with room to spare -- measured directly (a headless-browser
+   render of the settled state against this exact CSS) rather than
+   assumed, the same way .peddler-modal's own fixed height was measured
+   a patch ago. Growing only once the two unpicked cards are already
+   gone (not while they're still fading alongside it) is what keeps this
+   safe against .peddler-modal-body's own flex layout shoving anything
+   else around -- there's nothing left to shove. */
+.peddler-card-spotlight { width: 150px; }
+/* Same specificity gap the face-down card's own hover rule was found to
+   have, same fix -- `button:hover:not(:disabled)` sets `background:` as
+   a shorthand, which resets background-size/position/repeat back to
+   their initial values, and that generic rule's higher specificity would
+   otherwise win on hover, cropping/repositioning the art the same way it
+   used to on the face-down cards. `:not(:disabled)` matches that rule's
+   own compound specificity so this one wins instead. */
 .peddler-card-revealed:hover:not(:disabled) {
-  border-color: var(--brass);
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--panel-2) 78%, transparent), color-mix(in srgb, var(--panel-2) 78%, transparent)),
-    var(--result-card-bg, none);
-  background-size: cover, cover;
-  background-position: center, var(--result-card-bg-pos, center);
-  background-repeat: no-repeat, no-repeat;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-shadow: 0 0 0 2px var(--brass), 0 0 16px color-mix(in srgb, var(--brass) 55%, transparent);
 }
-.peddler-card-picked { border-color: var(--brass); border-width: 2px; box-shadow: 0 0 10px color-mix(in srgb, var(--brass) 45%, transparent); }
-.peddler-card-name { font-size: 11px; font-weight: bold; text-align: center; }
+.peddler-card-picked { box-shadow: 0 0 10px color-mix(in srgb, var(--brass) 45%, transparent); }
+/* Wraps PeddlerOutcomeIcon inside .peddler-card-revealed only -- a
+   `filter: drop-shadow` here rather than touching MaterialIcon/ItemIcon/
+   EggIcon/ConsumableIcon themselves, which render all over the rest of
+   the game against very different backgrounds that don't need this. */
+.peddler-card-icon-shadow { filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.85)); }
+.peddler-card-name {
+  font-size: 11px;
+  font-weight: bold;
+  text-align: center;
+  /* The old flat ~78%-opaque panel tint behind the icon/name is gone --
+     "decrease its transparency/darkness" was asking for less covering
+     the art, not more, and these 3 result_N.png files are dark enough on
+     their own (matching --panel-2/--night territory already) that the
+     icon/text need their own legibility insurance instead of relying on
+     a wash over the whole card. A drop shadow on the text (and
+     PeddlerOutcomeIcon, see its own icons.tsx) does that without
+     darkening the art itself at all. */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
 
 /* The picked card's details, laid over the modal as their own small card
    rather than grown in place -- clicking the revealed card used to

@@ -6,14 +6,18 @@
     "rarity": "common",
     "reqLevel": 1,
     "maxDurability": 40,
-    "value": 999,
+    "value": 10,
     "mods": {
       "success": 2
     },
     "stats": {
       "strength": 1
     },
-    "icon": "weapons/Weapon_01.png"
+    "icon": "weapons/Weapon_01.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "woodcutter_axe",

@@ -8457,3 +8457,90 @@ every one, no overflow in any of them -- confirmed both numerically
 (bounding-box height) and visually (screenshotting all three states
 side by side shows the background art at the identical scale and crop
 in each).
+
+### Grimsby result card: spotlight treatment, 3 real art files, DevTool background picker removed
+
+Several related changes, all from the same request.
+
+**The single DevTool-configurable `resultCardBackground` image is
+gone**, replaced with three fixed result-card art files
+(`public/peddler/cards/result_0/1/2.png`), one picked at random per
+reveal (`resultBackIndex`, rolled once per modal open the same
+"pick once, hold it" way `localBacks` already does for the face-down
+cards' own `back_0/1/2.png`) -- the exact same convention, not a new
+one. `PeddlerConfigDef` (types.ts), `PEDDLER_CONFIG`/`peddler-
+config.json` (peddler.ts), and the `peddler-config` DevTool schema
+(server.mjs) are all removed outright rather than left as unused dead
+weight now that nothing reads them -- same reasoning `back_0/1/2.png`
+never got a DevTool entry of their own either. Swept the whole
+codebase afterward for any leftover reference; none found.
+
+Also found and cleaned up while in `public/peddler/cards/`: three
+stray `back_N - Copy.png` files (different content from their
+originals, not just filesystem duplicates, but not referenced by any
+code path either -- the template literal is always `back_${index}.png`,
+never a "Copy" variant) and a loose `Card1.png` sitting outside the
+`back_N`/`result_N` naming convention entirely. All removed; the one
+real file among them (`Card1.png`) is now `result_0.png`, named
+consistently with its two siblings.
+
+**"No gap between the image and border"** -- root cause was the same
+box/aspect-ratio mismatch class of issue as the face-down cards
+(`.peddler-card-facedown`) were fixed for a few patches back, just
+never applied here since this feature didn't exist yet at the time.
+The 3 result_N.png files are ~499x767/491x758/485x750 (avg aspect
+~0.648), nothing like the box's old fixed 150px height. Fixed with the
+same `aspect-ratio` + `background-size: 100% 100%` pattern the
+crafting-station scenes already established elsewhere in this file
+(`.craft-scene` and siblings) for exactly this "art has its own fixed
+ratio, stretch to fit rather than crop or letterbox" situation --
+`aspect-ratio: 13 / 20` (~0.65, close enough to all three real files
+that the sub-1% stretch is imperceptible). Tripped over one non-obvious
+CSS interaction getting there: `.peddler-card`, the shared base class,
+sets a fixed `height: 150px` -- with both width AND height landing on
+definite values, `aspect-ratio` has nothing left to compute and was
+silently no-op'd entirely (measured 150x150 instead of the intended
+150x231 before catching it). `height: auto` on `.peddler-card-revealed`
+itself is what actually lets aspect-ratio do its job.
+
+**No more CSS border on the revealed card either**, same reasoning as
+the face-down cards' own fix -- these 3 files paint their own gold
+frame right to their own edge (same art family as back_0/1/2.png), so
+a second CSS border on top of that was reading as a seam. The "picked"
+indicator is a `box-shadow` glow now instead (`.peddler-card-picked`).
+
+**"Decrease its transparency/darkness"** -- the old flat ~78%-opaque
+tint layer sitting over the art is gone entirely, not just lightened.
+These 3 files are dark enough on their own (matching --panel-2/--night
+territory already) that covering them in a wash wasn't buying
+legibility, just hiding the art it was meant to show through. Instead:
+a `text-shadow` on `.peddler-card-name` and a `filter: drop-shadow` on
+a small wrapper around `PeddlerOutcomeIcon` (`.peddler-card-icon-
+shadow`, new -- not applied to the shared icon components themselves,
+which render all over the rest of the game against very different
+backgrounds that don't need this) give the icon/text their own
+legibility insurance without darkening the art at all.
+
+**"Bigger and central, as the other two fade off"** -- new
+`.peddler-card-spotlight` modifier class, added only once `revealStage`
+is `'settled'` (the two unpicked cards already faded out AND removed
+from the DOM, not while they're still fading alongside it) via a new
+`spotlight` prop threaded through from the parent. Grows `width` from
+110px to 150px (aspect-ratio recomputes height automatically every
+frame of that transition, so both dimensions grow together for free
+from a single transitioned property) -- deliberately NOT growing
+throughout the whole reveal, and deliberately not the "expand in place"
+approach this same component's own doc comment already warns against
+(it used to read as the whole modal zooming, back when .peddler-modal
+didn't have a fixed height yet -- see the entry above this one).
+Centering is free: it's a flex row with `justify-content: center` and,
+once settled, the sole remaining item in it.
+
+**Verified end to end, not just reasoned through:** a headless-browser
+render of the actual settled state, against the real CSS and all 3 real
+result_N.png files, confirms 150x230.77px for the card in every case
+and the SAME 495px modal height as before (nothing grew or reflowed the
+modal itself) -- screenshotted directly, gold border sitting flush
+against the art with no visible gap or seam, all three art variants
+checked individually. `npx tsc --noEmit` and a full `vite build` both
+clean against a fresh clone of `main` with this patch applied.
