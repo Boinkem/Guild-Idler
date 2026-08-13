@@ -1,0 +1,259 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 1b90d69..8917718 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -8242,3 +8242,68 @@ full card (all edges, the art's own painted border included) stays
+ visible at rest and at the hover-grown size, no cropping either way;
+ and, as above, sibling cards' positions are pixel-identical before and
+ after a hover.
++
++### Grimsby card hover, second follow-up: build-cache mismatch identified, plus a new DevTool result-card background picker
++
++Three more items from the same testing pass as the follow-up directly
++above.
++
++**Hover/outline still showing broken in a fresh screenshot -- traced to
++a stale build, not a code problem, with direct evidence rather than a
++guess.** Re-fetched `main` directly and confirmed the fix from the
++entry above is genuinely there (width/height growth, `contain`, no
++border, box-shadow glow -- not the earlier buggy `transform` version).
++But the screenshot's STATIC, non-hovered cards still showed a visible
++border/gap box around each one -- a state this code produces *zero*
++border in in, unconditionally, hover or not, since `.peddler-card`'s
++shared border was removed outright rather than only suppressed on
++hover. A border showing up in a state the code can't produce it in
++means the running app isn't serving the code that's actually on
++`main` -- almost certainly an Electron dist that wasn't rebuilt, or a
++dev server holding a stale bundle, rather than a real regression.
++Flagged directly rather than guessed at further or re-patched blind;
++whoever's testing next should do a full clean rebuild and complete
++Electron relaunch (not just a reload) before the next screenshot.
++
++**New: DevTool-configurable background art for the revealed "Results
++Card."** Previously a flat panel tint with nothing behind it (see the
++blank "Nothing" card screenshot this was reported against). New
++`peddler-config` DevTool schema -- a single-row settings table (`id:
++'default'`, one row, reusing the same array-of-records read/write/
++validate machinery every other content type already relies on, rather
++than a bespoke one-off editor for a single field) holding one field,
++`resultCardBackground`, typed as the exact same `bannerImage` field
++chain/raid banners already use (full picker UI, focus-point preview,
++server-side path validation, all free). New `PeddlerConfigDef` type in
++types.ts; `peddler.ts` loads `peddler-config.json` the same "own file,
++own schema, this module just types and re-exports it" way
++`peddler-cards.json` already does, resolving straight to the one row
++(`PEDDLER_CONFIG`) so call sites never need to know it's array-backed
++under the hood.
++
++Rendered as two stacked `background-image` layers on
++`.peddler-card-revealed`, not `background-color` + `background-image`
++-- `background-color` always paints BELOW any `background-image` layer
++in CSS, so a plain color tint would sit fully hidden underneath
++configured art rather than legibly over it. A same-color-both-stops
++`linear-gradient` acts as a stackable "color" layer instead, listed
++first (front) with the real art second (behind) -- `~78%` opacity
++(down from the old flat tint's `92%`, now that there's real art behind
++it to actually show through) is what delivers the "semi transparent
++image" look asked for. Both the image path and its focus point are
++passed down from `PEDDLER_CONFIG.resultCardBackground` as inline CSS
++custom properties (`--result-card-bg`/`--result-card-bg-pos`), falling
++back to `none`/`center` in the CSS itself when unset -- an
++unconfigured background (true today) renders pixel-identical to the
++old flat tint alone, nothing to migrate for existing saves or an
++as-yet-unset config row.
++
++**Verified beyond `tsc`/`vite build` (both clean, fresh main +
++patch):** the DevTool server was actually started and hit live over
++HTTP -- `/api/schema` confirms the new `peddler-config` entry is
++present with the right field shape, and `/api/data/peddler-config`
++correctly reads back the single default row from disk. No hardcoded
++per-schema-kind branches anywhere in `server.mjs` needed touching --
++the schema-driven read/write/validate path, and the frontend's schema
++list (driven off `/api/schema`'s own keys), both pick up a brand new
++schema automatically, same as every content type before this one.
+diff --git a/src/game/data/json/peddler-config.json b/src/game/data/json/peddler-config.json
+new file mode 100644
+index 0000000..d51ca5a
+--- /dev/null
++++ b/src/game/data/json/peddler-config.json
+@@ -0,0 +1,5 @@
++[
++  {
++    "id": "default"
++  }
++]
+diff --git a/src/game/data/peddler.ts b/src/game/data/peddler.ts
+index 036897a..06f04a6 100644
+--- a/src/game/data/peddler.ts
++++ b/src/game/data/peddler.ts
+@@ -1,4 +1,4 @@
+-import { PeddlerCardDef, PeddlerCardTier } from '../types';
++import { PeddlerCardDef, PeddlerCardTier, PeddlerConfigDef } from '../types';
+ 
+ /**
+  * Grimsby's card outcome pool lives in json/peddler-cards.json, same
+@@ -17,3 +17,16 @@ export const PEDDLER_CARDS_BY_TIER: Record<PeddlerCardTier, PeddlerCardDef[]> =
+ for (const card of PEDDLER_CARDS) {
+   PEDDLER_CARDS_BY_TIER[card.tier].push(card);
+ }
++
++/**
++ * Single-row settings table -- see PeddlerConfigDef's own doc comment in
++ * types.ts for why this is an array of one rather than a bare object.
++ * `PEDDLER_CONFIG` resolves straight to that one row so call sites
++ * (PeddlerCardModal.tsx) never have to know or care that it's array-
++ * backed under the hood -- same "the JSON shape is a DevTool
++ * implementation detail, not something the game reads directly" idea
++ * PEDDLER_CARDS_BY_TIER already applies just above.
++ */
++import peddlerConfigJson from './json/peddler-config.json';
++export const PEDDLER_CONFIG: PeddlerConfigDef =
++  (peddlerConfigJson as PeddlerConfigDef[])[0] ?? { id: 'default' };
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 5115578..f0741d5 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -1768,6 +1768,34 @@ export interface PeddlerCardDef {
+   icon?: string;
+ }
+ 
++/**
++ * Single-row settings table for Peddler-wide visual config that isn't
++ * tied to any one card outcome -- currently just the revealed-card
++ * background. Modeled as a one-entry array under `id: 'default'` purely
++ * to reuse the DevTool's existing array-of-records read/write/validate
++ * machinery (every schema assumes a JSON array; see server.mjs's own
++ * `Array.isArray(data)` check) rather than building a bespoke single-
++ * object editor for one field.
++ */
++export interface PeddlerConfigDef {
++  id: string;
++  /**
++   * Shown behind the icon/name on a revealed Peddler card's result face
++   * (see PeddlerCardModal.tsx's own `.peddler-card-revealed`) -- was a
++   * flat panel tint with nothing behind it. Same `bannerImage` field/
++   * picker shape (and the exact same optional-chained fallback
++   * convention) ChainDef.banner/RaidDef.banner already use -- `path` is
++   * relative to `public/lore/`, `focusX`/`focusY` default to 50/50
++   * (dead center) when unset. Rendered at reduced opacity in-game (not
++   * full strength) behind the existing panel tint, so the result icon/
++   * name stay legible on top -- see the "semi transparent" ask this was
++   * built for. Unset (or a missing file) just shows the plain panel
++   * tint alone, same "missing file just fails to paint" convention
++   * every other optional art asset in this game already follows.
++   */
++  resultCardBackground?: { path?: string; focusX?: number; focusY?: number };
++}
++
+ /**
+  * One concrete, already-rolled outcome ready to display and (for the
+  * picked one) apply -- the resolved form of a PeddlerCardDef, with its
+diff --git a/src/styles/app.css b/src/styles/app.css
+index f54a932..fe0f2ce 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -2680,7 +2680,25 @@ button.harvest-item:hover {
+   gap: 4px;
+   padding: 8px;
+   cursor: pointer;
+-  background: color-mix(in srgb, var(--panel-2) 92%, transparent);
++  /* Two background-image layers, not background-color + background-image
++     -- background-color always paints BELOW background-image in CSS, so
++     a plain background-color tint would sit fully hidden underneath any
++     configured art rather than legibly over it. A same-color-both-stops
++     linear-gradient works as a "color" layer that CAN be stacked in
++     front of a second, real image layer instead. `--result-card-bg`/
++     `--result-card-bg-pos` are set inline per-render from
++     PEDDLER_CONFIG.resultCardBackground (see PeddlerCardModal.tsx) and
++     fall back to `none`/`center` here when unset -- an unconfigured
++     background renders pixel-identical to the old flat panel tint alone,
++     nothing to migrate. `78%` opacity on the tint (vs. the flat panel's
++     old 92%) is deliberately lower once real art is behind it, so the
++     art actually reads as "semi transparent" rather than nearly hidden. */
++  background-image:
++    linear-gradient(color-mix(in srgb, var(--panel-2) 78%, transparent), color-mix(in srgb, var(--panel-2) 78%, transparent)),
++    var(--result-card-bg, none);
++  background-size: cover, cover;
++  background-position: center, var(--result-card-bg-pos, center);
++  background-repeat: no-repeat, no-repeat;
+   color: var(--parchment);
+   font: inherit;
+   /* `.peddler-card` no longer carries a shared border (removed so the
+diff --git a/src/ui/PeddlerCardModal.tsx b/src/ui/PeddlerCardModal.tsx
+index fdfffce..9b218db 100644
+--- a/src/ui/PeddlerCardModal.tsx
++++ b/src/ui/PeddlerCardModal.tsx
+@@ -3,6 +3,7 @@ import { useEngine } from './useEngine';
+ import { PeddlerCardDef, PeddlerCardTier } from '../game/types';
+ import { MATERIAL_BY_ID } from '../game/data/materials';
+ import { EQUIPMENT_BY_ID } from '../game/data/equipment';
++import { PEDDLER_CONFIG } from '../game/data/peddler';
+ import { RARITY_COLOR } from '../game/util';
+ import { GrimsbySprite } from './sprites/GrimsbySprite';
+ import { ItemIcon, MaterialIcon, ConsumableIcon } from './icons';
+@@ -213,6 +214,11 @@ function PeddlerCard({
+   disabled?: boolean;
+   fadingOut?: boolean;
+ }) {
++  // Read once per render -- PEDDLER_CONFIG is a module-level constant
++  // (loaded from peddler-config.json at import time), not per-hero or
++  // per-outcome state, so there's nothing to memoize here.
++  const resultCardBg = PEDDLER_CONFIG.resultCardBackground;
++
+   if (!faceUp) {
+     return (
+       <button
+@@ -232,6 +238,19 @@ function PeddlerCard({
+       className="peddler-card peddler-card-revealed peddler-card-picked"
+       onClick={onOpenDetails}
+       title={outcome?.flavorText}
++      // Result-card background art is optional and DevTool-configured
++      // (PEDDLER_CONFIG.resultCardBackground, see types.ts's own
++      // PeddlerConfigDef comment) -- passed through as CSS custom
++      // properties rather than a plain backgroundImage style so the CSS
++      // side can layer it underneath the existing semi-transparent panel
++      // tint (see .peddler-card-revealed in app.css) instead of replacing
++      // it outright. Both vars fall back cleanly to `none`/`center` in
++      // CSS when unset, so an unconfigured background is pixel-identical
++      // to before this existed.
++      style={resultCardBg?.path ? {
++        '--result-card-bg': `url(./lore/${resultCardBg.path})`,
++        '--result-card-bg-pos': `${resultCardBg.focusX ?? 50}% ${resultCardBg.focusY ?? 50}%`,
++      } as CSSProperties : undefined}
+     >
+       {outcome && <PeddlerOutcomeIcon outcome={outcome} size={48} />}
+       <div className="peddler-card-name">{outcome ? outcomeDisplayName(outcome) : ''}</div>
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index b1882be..f8b13e1 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -536,6 +536,29 @@ const SCHEMAS = {
+       icon: { type: 'string', required: false, picker: 'icon' },
+     },
+   },
++  'peddler-config': {
++    file: 'peddler-config.json',
++    label: 'Peddler Config',
++    idField: 'id',
++    // Single-row settings table -- reuses the same array-of-records
++    // read/write/validate machinery every other content type here uses
++    // (every schema assumes a JSON array on disk), rather than a bespoke
++    // one-off editor for a single field. Only ever meant to hold exactly
++    // one row (id: 'default') -- see PeddlerConfigDef's own comment in
++    // types.ts.
++    fields: {
++      id: { type: 'string', required: true, slug: true },
++      // Shown behind the icon/name on a revealed Peddler card's result
++      // face -- previously a flat panel tint with nothing behind it.
++      // Same bannerImage field/picker chain/raid banners already use
++      // (server-side validation, focus-point preview, the works, all for
++      // free), just pointed at a `peddler/` subfolder by default. The
++      // game renders it at reduced opacity behind the existing panel
++      // tint, not full strength, so the result icon/name stay legible on
++      // top -- see PeddlerCardModal.tsx / app.css's own comments.
++      resultCardBackground: { type: 'bannerImage', required: false, defaultFolder: 'peddler' },
++    },
++  },
+   'raids': {
+     file: 'raids.json',
+     label: 'Raids',

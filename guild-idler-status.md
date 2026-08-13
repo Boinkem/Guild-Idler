@@ -8242,3 +8242,68 @@ full card (all edges, the art's own painted border included) stays
 visible at rest and at the hover-grown size, no cropping either way;
 and, as above, sibling cards' positions are pixel-identical before and
 after a hover.
+
+### Grimsby card hover, second follow-up: build-cache mismatch identified, plus a new DevTool result-card background picker
+
+Three more items from the same testing pass as the follow-up directly
+above.
+
+**Hover/outline still showing broken in a fresh screenshot -- traced to
+a stale build, not a code problem, with direct evidence rather than a
+guess.** Re-fetched `main` directly and confirmed the fix from the
+entry above is genuinely there (width/height growth, `contain`, no
+border, box-shadow glow -- not the earlier buggy `transform` version).
+But the screenshot's STATIC, non-hovered cards still showed a visible
+border/gap box around each one -- a state this code produces *zero*
+border in in, unconditionally, hover or not, since `.peddler-card`'s
+shared border was removed outright rather than only suppressed on
+hover. A border showing up in a state the code can't produce it in
+means the running app isn't serving the code that's actually on
+`main` -- almost certainly an Electron dist that wasn't rebuilt, or a
+dev server holding a stale bundle, rather than a real regression.
+Flagged directly rather than guessed at further or re-patched blind;
+whoever's testing next should do a full clean rebuild and complete
+Electron relaunch (not just a reload) before the next screenshot.
+
+**New: DevTool-configurable background art for the revealed "Results
+Card."** Previously a flat panel tint with nothing behind it (see the
+blank "Nothing" card screenshot this was reported against). New
+`peddler-config` DevTool schema -- a single-row settings table (`id:
+'default'`, one row, reusing the same array-of-records read/write/
+validate machinery every other content type already relies on, rather
+than a bespoke one-off editor for a single field) holding one field,
+`resultCardBackground`, typed as the exact same `bannerImage` field
+chain/raid banners already use (full picker UI, focus-point preview,
+server-side path validation, all free). New `PeddlerConfigDef` type in
+types.ts; `peddler.ts` loads `peddler-config.json` the same "own file,
+own schema, this module just types and re-exports it" way
+`peddler-cards.json` already does, resolving straight to the one row
+(`PEDDLER_CONFIG`) so call sites never need to know it's array-backed
+under the hood.
+
+Rendered as two stacked `background-image` layers on
+`.peddler-card-revealed`, not `background-color` + `background-image`
+-- `background-color` always paints BELOW any `background-image` layer
+in CSS, so a plain color tint would sit fully hidden underneath
+configured art rather than legibly over it. A same-color-both-stops
+`linear-gradient` acts as a stackable "color" layer instead, listed
+first (front) with the real art second (behind) -- `~78%` opacity
+(down from the old flat tint's `92%`, now that there's real art behind
+it to actually show through) is what delivers the "semi transparent
+image" look asked for. Both the image path and its focus point are
+passed down from `PEDDLER_CONFIG.resultCardBackground` as inline CSS
+custom properties (`--result-card-bg`/`--result-card-bg-pos`), falling
+back to `none`/`center` in the CSS itself when unset -- an
+unconfigured background (true today) renders pixel-identical to the
+old flat tint alone, nothing to migrate for existing saves or an
+as-yet-unset config row.
+
+**Verified beyond `tsc`/`vite build` (both clean, fresh main +
+patch):** the DevTool server was actually started and hit live over
+HTTP -- `/api/schema` confirms the new `peddler-config` entry is
+present with the right field shape, and `/api/data/peddler-config`
+correctly reads back the single default row from disk. No hardcoded
+per-schema-kind branches anywhere in `server.mjs` needed touching --
+the schema-driven read/write/validate path, and the frontend's schema
+list (driven off `/api/schema`'s own keys), both pick up a brand new
+schema automatically, same as every content type before this one.

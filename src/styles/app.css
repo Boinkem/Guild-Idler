@@ -2680,7 +2680,25 @@ button.harvest-item:hover {
   gap: 4px;
   padding: 8px;
   cursor: pointer;
-  background: color-mix(in srgb, var(--panel-2) 92%, transparent);
+  /* Two background-image layers, not background-color + background-image
+     -- background-color always paints BELOW background-image in CSS, so
+     a plain background-color tint would sit fully hidden underneath any
+     configured art rather than legibly over it. A same-color-both-stops
+     linear-gradient works as a "color" layer that CAN be stacked in
+     front of a second, real image layer instead. `--result-card-bg`/
+     `--result-card-bg-pos` are set inline per-render from
+     PEDDLER_CONFIG.resultCardBackground (see PeddlerCardModal.tsx) and
+     fall back to `none`/`center` here when unset -- an unconfigured
+     background renders pixel-identical to the old flat panel tint alone,
+     nothing to migrate. `78%` opacity on the tint (vs. the flat panel's
+     old 92%) is deliberately lower once real art is behind it, so the
+     art actually reads as "semi transparent" rather than nearly hidden. */
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--panel-2) 78%, transparent), color-mix(in srgb, var(--panel-2) 78%, transparent)),
+    var(--result-card-bg, none);
+  background-size: cover, cover;
+  background-position: center, var(--result-card-bg-pos, center);
+  background-repeat: no-repeat, no-repeat;
   color: var(--parchment);
   font: inherit;
   /* `.peddler-card` no longer carries a shared border (removed so the

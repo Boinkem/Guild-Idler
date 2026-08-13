@@ -1769,6 +1769,34 @@ export interface PeddlerCardDef {
 }
 
 /**
+ * Single-row settings table for Peddler-wide visual config that isn't
+ * tied to any one card outcome -- currently just the revealed-card
+ * background. Modeled as a one-entry array under `id: 'default'` purely
+ * to reuse the DevTool's existing array-of-records read/write/validate
+ * machinery (every schema assumes a JSON array; see server.mjs's own
+ * `Array.isArray(data)` check) rather than building a bespoke single-
+ * object editor for one field.
+ */
+export interface PeddlerConfigDef {
+  id: string;
+  /**
+   * Shown behind the icon/name on a revealed Peddler card's result face
+   * (see PeddlerCardModal.tsx's own `.peddler-card-revealed`) -- was a
+   * flat panel tint with nothing behind it. Same `bannerImage` field/
+   * picker shape (and the exact same optional-chained fallback
+   * convention) ChainDef.banner/RaidDef.banner already use -- `path` is
+   * relative to `public/lore/`, `focusX`/`focusY` default to 50/50
+   * (dead center) when unset. Rendered at reduced opacity in-game (not
+   * full strength) behind the existing panel tint, so the result icon/
+   * name stay legible on top -- see the "semi transparent" ask this was
+   * built for. Unset (or a missing file) just shows the plain panel
+   * tint alone, same "missing file just fails to paint" convention
+   * every other optional art asset in this game already follows.
+   */
+  resultCardBackground?: { path?: string; focusX?: number; focusY?: number };
+}
+
+/**
  * One concrete, already-rolled outcome ready to display and (for the
  * picked one) apply -- the resolved form of a PeddlerCardDef, with its
  * cosmetic card-back art attached. `backIndex` is purely which of the 3

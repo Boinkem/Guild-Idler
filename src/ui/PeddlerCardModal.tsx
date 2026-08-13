@@ -3,6 +3,7 @@ import { useEngine } from './useEngine';
 import { PeddlerCardDef, PeddlerCardTier } from '../game/types';
 import { MATERIAL_BY_ID } from '../game/data/materials';
 import { EQUIPMENT_BY_ID } from '../game/data/equipment';
+import { PEDDLER_CONFIG } from '../game/data/peddler';
 import { RARITY_COLOR } from '../game/util';
 import { GrimsbySprite } from './sprites/GrimsbySprite';
 import { ItemIcon, MaterialIcon, ConsumableIcon } from './icons';
@@ -213,6 +214,11 @@ function PeddlerCard({
   disabled?: boolean;
   fadingOut?: boolean;
 }) {
+  // Read once per render -- PEDDLER_CONFIG is a module-level constant
+  // (loaded from peddler-config.json at import time), not per-hero or
+  // per-outcome state, so there's nothing to memoize here.
+  const resultCardBg = PEDDLER_CONFIG.resultCardBackground;
+
   if (!faceUp) {
     return (
       <button
@@ -232,6 +238,19 @@ function PeddlerCard({
       className="peddler-card peddler-card-revealed peddler-card-picked"
       onClick={onOpenDetails}
       title={outcome?.flavorText}
+      // Result-card background art is optional and DevTool-configured
+      // (PEDDLER_CONFIG.resultCardBackground, see types.ts's own
+      // PeddlerConfigDef comment) -- passed through as CSS custom
+      // properties rather than a plain backgroundImage style so the CSS
+      // side can layer it underneath the existing semi-transparent panel
+      // tint (see .peddler-card-revealed in app.css) instead of replacing
+      // it outright. Both vars fall back cleanly to `none`/`center` in
+      // CSS when unset, so an unconfigured background is pixel-identical
+      // to before this existed.
+      style={resultCardBg?.path ? {
+        '--result-card-bg': `url(./lore/${resultCardBg.path})`,
+        '--result-card-bg-pos': `${resultCardBg.focusX ?? 50}% ${resultCardBg.focusY ?? 50}%`,
+      } as CSSProperties : undefined}
     >
       {outcome && <PeddlerOutcomeIcon outcome={outcome} size={48} />}
       <div className="peddler-card-name">{outcome ? outcomeDisplayName(outcome) : ''}</div>
