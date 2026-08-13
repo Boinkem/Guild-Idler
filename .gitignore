@@ -24,3 +24,7 @@ public/audio/*
 tools/__pycache__
 tools/devtool/public/*.bak
 src/game/data/json/*.bak
+
+# Discord webhook URL for the Patches tab's "post a dev update" feature --
+# a local secret, never committed. See tools/devtool/server.mjs.
+tools/devtool/discord.config.json

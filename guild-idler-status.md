@@ -8994,3 +8994,54 @@ both devtool JS files pass `node --check`; the devtool server boots and
 all three touched content types (`hero-classes`, `raids`, `roles`) round-
 trip through a real POST save with zero validation errors, plus the
 three negative-validation tests described above.
+
+### Discord Dev Updates in the Patches tab -- built (patch 0136)
+
+New section at the bottom of the Patches tab (step 9, after the version-bump
+step): a way to post a dev update / patch-notes message to a Discord channel
+via an incoming webhook, without adding a bot, a token, or any dependency --
+`fetch` has been global in Node since 18, already this project's stated
+minimum.
+
+**Where the webhook URL lives.** A new `tools/devtool/discord.config.json`,
+gitignored, holding only `{ webhookUrl }`. Read/written by
+`readDiscordConfig`/`writeDiscordConfig` in `server.mjs`, same
+read-JSON-file-with-a-safe-fallback shape the rest of this file already
+uses elsewhere (e.g. `readPackageVersion`). The URL is never sent back to
+the browser in full -- `GET /api/discord/config` returns only `configured`
+(bool) and a masked `preview` (last 6 characters, e.g. `configured
+(…en-abc)`), so a screen-share of the dev tool doesn't leak it. Saving goes
+through `POST /api/discord/config`, which rejects anything that doesn't
+loosely look like a real Discord webhook URL
+(`^https://(discord\.com|discordapp\.com)/api/webhooks/`) before writing it
+-- catches an obviously-wrong paste (e.g. the channel URL instead of the
+webhook URL) without trying to be the real validator; Discord's own response
+is that.
+
+**Posting.** `POST /api/discord/post` (`{ title, message }`) builds a single
+embed (brass-coloured, matching the dev tool's own accent) and does the
+`fetch` to the webhook itself, entirely server-side -- the webhook URL never
+reaches client-side JS at all, even transiently. A 10s timeout
+(`AbortSignal.timeout`) keeps a slow or unreachable webhook from hanging the
+request indefinitely; a timeout is reported back as a distinct, readable
+error rather than a generic failure.
+
+**Frontend.** `app.js` gets a password-masked webhook input + Save button, a
+status line reflecting the masked preview from above, a message textarea,
+and a "Fill from selected patch" button that seeds the textarea from
+whichever `.patch` file is currently selected in step 1 (same `sel` variable
+the Commit-message default already reads). Post button is disabled until a
+webhook is actually configured. Result rendering reuses the existing
+`resultBlock` helper (the same good/bad card every other step's button
+already produces) by shaping the `{ok, error}` response into the
+`{ok, stdout, stderr}` shape it expects, rather than adding a second result
+renderer.
+
+**Verified:** both `server.mjs` and `app.js` pass `node --check`; the patch
+applies cleanly (`git apply --check`) against the real current `main`. The
+devtool server was booted for real and `/api/discord/config` exercised live
+-- rejects a non-Discord URL with a clear error, accepts and persists a
+real-shaped one, masked preview matches, config file round-trips correctly
+on disk. The actual outbound POST to Discord itself wasn't exercised in this
+pass (no network path to discord.com from the environment this was built
+in) -- worth a real webhook test before relying on it.

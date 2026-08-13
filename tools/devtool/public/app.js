@@ -1440,7 +1440,10 @@ init().catch((err) => setStatus(err.message, 'err'));
 
 /* -------------------------------- patches -------------------------------- */
 
-const patchState = { files: [], gitStatus: null, selected: null, checked: false, applied: false };
+const patchState = {
+  files: [], gitStatus: null, selected: null, checked: false, applied: false,
+  discordConfigured: false, discordPreview: '', discordDraft: '',
+};
 
 function formatBytes(n) {
   if (n < 1024) return `${n} B`;
@@ -1461,16 +1464,19 @@ async function selectPatchesTab() {
   markActiveTab('__patches__');
   setStatus('Loading…');
   try {
-    const [{ files, status }, versionInfo, devStatus] = await Promise.all([
+    const [{ files, status }, versionInfo, devStatus, discordConfig] = await Promise.all([
       api('/api/patches/list'),
       api('/api/version'),
       api('/api/dev/status'),
+      api('/api/discord/config'),
     ]);
     patchState.files = files;
     patchState.gitStatus = status;
     patchState.version = versionInfo.version;
     patchState.tags = versionInfo.tags;
     patchState.devRunning = devStatus.running;
+    patchState.discordConfigured = discordConfig.configured;
+    patchState.discordPreview = discordConfig.preview;
     setStatus('');
     renderPatches();
   } catch (err) {
@@ -1611,6 +1617,29 @@ function renderPatches() {
       <button id="bumpMajorBtn">Bump major (breaking/big)</button>
     </div>
     <div id="versionResult"></div>
+
+    <div class="section-heading" style="margin-top:18px;">9. Post a dev update to Discord</div>
+    <p class="tiny muted">
+      Sends a message to your updates channel via a Discord webhook. The webhook URL is saved
+      locally (<code>tools/devtool/discord.config.json</code>, gitignored) and never leaves this
+      machine except in the request to Discord itself.
+    </p>
+    <div class="row" style="gap: 8px; margin-bottom: 8px;">
+      <input type="password" id="discordWebhookInput" placeholder="https://discord.com/api/webhooks/..."
+        style="flex:1; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+      <button id="discordSaveBtn">Save webhook</button>
+    </div>
+    <p class="tiny muted">
+      Status: ${patchState.discordConfigured ? `🟢 ${escapeHtml(patchState.discordPreview)}` : '⚪ not configured yet'}
+    </p>
+    <textarea id="discordMessageInput" rows="4"
+      placeholder="What changed in this update? (pre-fill from the selected patch below)"
+      style="width:100%; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px; box-sizing: border-box; font-family: inherit;">${escapeHtml(patchState.discordDraft)}</textarea>
+    <div class="row" style="gap:6px; margin-top:8px;">
+      <button id="discordFillBtn" ${!sel ? 'disabled' : ''}>Fill from selected patch</button>
+      <button id="discordPostBtn" class="primary" ${!patchState.discordConfigured ? 'disabled' : ''}>Post to Discord</button>
+    </div>
+    <div id="discordResult"></div>
   `;
 
   document.getElementById('refreshStatusBtn').onclick = () => refreshGitStatus();
@@ -1746,4 +1775,50 @@ function renderPatches() {
       }
     };
   });
+
+  const discordSaveBtn = document.getElementById('discordSaveBtn');
+  discordSaveBtn.onclick = async () => {
+    const input = document.getElementById('discordWebhookInput');
+    const webhookUrl = input.value.trim();
+    discordSaveBtn.disabled = true;
+    discordSaveBtn.textContent = 'Saving…';
+    try {
+      const result = await api('/api/discord/config', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webhookUrl }),
+      });
+      patchState.discordConfigured = result.configured;
+      patchState.discordPreview = result.preview;
+      input.value = '';
+      renderPatches();
+    } catch (err) {
+      alert(err.message || 'Could not save the webhook URL.');
+      discordSaveBtn.disabled = false;
+      discordSaveBtn.textContent = 'Save webhook';
+    }
+  };
+
+  const discordFillBtn = document.getElementById('discordFillBtn');
+  if (discordFillBtn) discordFillBtn.onclick = () => {
+    const name = sel.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ');
+    const messageInput = document.getElementById('discordMessageInput');
+    messageInput.value = `**${name}**\n\nSee the full changelog in guild-idler-status.md.`;
+    patchState.discordDraft = messageInput.value;
+  };
+
+  const discordPostBtn = document.getElementById('discordPostBtn');
+  discordPostBtn.onclick = async () => {
+    const messageInput = document.getElementById('discordMessageInput');
+    patchState.discordDraft = messageInput.value;
+    discordPostBtn.disabled = true;
+    discordPostBtn.textContent = 'Posting…';
+    const outcome = await api('/api/discord/post', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: sel ? sel.replace(/\.patch$/, '') : undefined, message: messageInput.value }),
+    }).catch((err) => ({ ok: false, error: err.message }));
+    discordPostBtn.disabled = !patchState.discordConfigured;
+    discordPostBtn.textContent = 'Post to Discord';
+    const result = { ok: outcome.ok, stdout: outcome.ok ? 'Posted to Discord.' : '', stderr: outcome.error || '' };
+    document.getElementById('discordResult').innerHTML = resultBlock(result, 'Discord post');
+  };
 }

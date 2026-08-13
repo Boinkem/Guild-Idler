@@ -44,6 +44,12 @@ const ICONS_DIR = path.join(ROOT, 'public', 'item-icons');
 const BANNERS_DIR = path.join(ROOT, 'public', 'lore');
 const PORT = 5175;
 
+// Local-only, gitignored (see .gitignore) — holds the Discord webhook URL for
+// the "post a dev update" feature further down. Never committed, never
+// served as a static file (lives outside PUBLIC_DIR), only ever read/written
+// by the /api/discord/* handlers below.
+const DISCORD_CONFIG_PATH = path.join(__dirname, 'discord.config.json');
+
 /* --------------------------------------------------------------- schema --- */
 // Required fields per content type. This is the real safety net: TypeScript's
 // `as Foo[]` cast on the JSON import does NOT validate structure at compile
@@ -1276,6 +1282,74 @@ function devServerStatus() {
   return { running: false };
 }
 
+/* -------------------------------------------------------------- discord --- */
+// Posts dev updates / patch notes to a Discord channel via an incoming
+// webhook. Nothing here needs a bot, a token, or any dependency beyond the
+// `fetch` that's been global in Node since 18 (already the project's stated
+// minimum — see README). The webhook URL itself is treated as a secret: it
+// lives only in DISCORD_CONFIG_PATH (gitignored) and is never echoed back to
+// the client in full, only as a masked preview, so a screen-share of the dev
+// tool doesn't leak it.
+
+async function readDiscordConfig() {
+  try {
+    const raw = await fs.readFile(DISCORD_CONFIG_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    return { webhookUrl: typeof parsed.webhookUrl === 'string' ? parsed.webhookUrl : '' };
+  } catch {
+    return { webhookUrl: '' };
+  }
+}
+
+async function writeDiscordConfig(webhookUrl) {
+  await fs.writeFile(DISCORD_CONFIG_PATH, JSON.stringify({ webhookUrl }, null, 2) + '\n', 'utf8');
+}
+
+function maskWebhookUrl(url) {
+  if (!url) return '';
+  // Discord webhook URLs are .../webhooks/<id>/<token> — keep enough to
+  // recognise which one is configured without exposing the token in full.
+  const tail = url.slice(-6);
+  return `configured (…${tail})`;
+}
+
+/** Very loose shape check — Discord itself is the real validator, this just
+ * catches an obviously-wrong paste (e.g. the channel URL instead of a
+ * webhook URL) before making a network call. */
+function looksLikeDiscordWebhook(url) {
+  return typeof url === 'string' && /^https:\/\/(discord\.com|discordapp\.com)\/api\/webhooks\//.test(url);
+}
+
+async function postDiscordUpdate(title, message) {
+  const { webhookUrl } = await readDiscordConfig();
+  if (!webhookUrl) return { ok: false, error: 'No Discord webhook URL configured yet.' };
+  if (!looksLikeDiscordWebhook(webhookUrl)) {
+    return { ok: false, error: 'Configured URL does not look like a Discord webhook URL.' };
+  }
+  const embed = {
+    title: title && title.trim() ? title.trim() : 'Guild Idler dev update',
+    description: (message ?? '').slice(0, 4000),
+    color: 0xb08d57, // brass, matching the dev tool's own accent colour
+    timestamp: new Date().toISOString(),
+  };
+  try {
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ embeds: [embed] }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      return { ok: false, error: `Discord returned ${res.status}${body ? `: ${body.slice(0, 300)}` : ''}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    const timedOut = err.name === 'TimeoutError' || err.name === 'AbortError';
+    return { ok: false, error: timedOut ? 'Request to Discord timed out after 10s.' : `Request to Discord failed: ${err.message}` };
+  }
+}
+
 /* ------------------------------------------------------------------ http --- */
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
@@ -1404,6 +1478,27 @@ const server = http.createServer(async (req, res) => {
 
   if (url.pathname === '/api/dev/status' && req.method === 'GET') {
     return json(res, 200, devServerStatus());
+  }
+
+  if (url.pathname === '/api/discord/config' && req.method === 'GET') {
+    const { webhookUrl } = await readDiscordConfig();
+    return json(res, 200, { configured: !!webhookUrl, preview: maskWebhookUrl(webhookUrl) });
+  }
+
+  if (url.pathname === '/api/discord/config' && req.method === 'POST') {
+    const body = JSON.parse(await readBody(req));
+    const webhookUrl = typeof body.webhookUrl === 'string' ? body.webhookUrl.trim() : '';
+    if (webhookUrl && !looksLikeDiscordWebhook(webhookUrl)) {
+      return json(res, 400, { error: 'That does not look like a Discord webhook URL (expected https://discord.com/api/webhooks/...).' });
+    }
+    await writeDiscordConfig(webhookUrl);
+    return json(res, 200, { ok: true, configured: !!webhookUrl, preview: maskWebhookUrl(webhookUrl) });
+  }
+
+  if (url.pathname === '/api/discord/post' && req.method === 'POST') {
+    const body = JSON.parse(await readBody(req));
+    const result = await postDiscordUpdate(body.title, body.message);
+    return json(res, result.ok ? 200 : 400, result);
   }
 
   if (url.pathname === '/api/icons' && req.method === 'GET') {

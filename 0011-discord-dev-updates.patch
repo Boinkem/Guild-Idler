@@ -1,0 +1,272 @@
+diff --git a/.gitignore b/.gitignore
+index 50c480f..8dffe85 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -24,3 +24,7 @@ public/audio/*
+ tools/__pycache__
+ tools/devtool/public/*.bak
+ src/game/data/json/*.bak
++
++# Discord webhook URL for the Patches tab's "post a dev update" feature --
++# a local secret, never committed. See tools/devtool/server.mjs.
++tools/devtool/discord.config.json
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index af9ef8f..ed57459 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -52,6 +52,17 @@ gold/Renown-spending surface.
+ 
+ **DevTools** — tuning registry exists but only covers raid coefficients
+ so far (15 entries); loot picker, icon assignment tooling also live here.
++The Patches tab now has a **Discord Dev Updates** section (patch 0011):
++a webhook URL saved once to a local, gitignored
++`tools/devtool/discord.config.json` (never committed, never sent to the
++browser beyond a masked preview), plus a message box that can be
++one-click-filled from the currently selected patch's name. Posting goes
++through a new server-side `POST /api/discord/post`, which builds a
++Discord embed and does the `fetch` to the webhook itself — the webhook
++URL never reaches client-side JS. Lightweight shape validation
++(`https://discord.com/api/webhooks/...` or `discordapp.com` equivalent)
++catches an obviously-wrong paste before a network call; Discord's own
++response is the real validator beyond that.
+ 
+ **World lore** — `world-lore-pantheon.md` is the source of truth for
+ gods/pantheon rules. Recent additions: Starved gods can lash out from the
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index 07b0553..984d89a 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -337,7 +337,10 @@ async function saveToServer(message) {
+ init().catch((err) => setStatus(err.message, 'err'));
+ 
+ /* -------------------------------- patches -------------------------------- */
+-const patchState = { files: [], gitStatus: null, selected: null, checked: false, applied: false };
++const patchState = {
++  files: [], gitStatus: null, selected: null, checked: false, applied: false,
++  discordConfigured: false, discordPreview: '', discordDraft: '',
++};
+ 
+ function formatBytes(n) {
+   if (n < 1024) return `${n} B`;
+@@ -358,16 +361,19 @@ async function selectPatchesTab() {
+   markActiveTab('__patches__');
+   setStatus('Loading…');
+   try {
+-    const [{ files, status }, versionInfo, devStatus] = await Promise.all([
++    const [{ files, status }, versionInfo, devStatus, discordConfig] = await Promise.all([
+       api('/api/patches/list'),
+       api('/api/version'),
+       api('/api/dev/status'),
++      api('/api/discord/config'),
+     ]);
+     patchState.files = files;
+     patchState.gitStatus = status;
+     patchState.version = versionInfo.version;
+     patchState.tags = versionInfo.tags;
+     patchState.devRunning = devStatus.running;
++    patchState.discordConfigured = discordConfig.configured;
++    patchState.discordPreview = discordConfig.preview;
+     setStatus('');
+     renderPatches();
+   } catch (err) {
+@@ -494,6 +500,29 @@ function renderPatches() {
+       <button id="bumpMajorBtn">Bump major (breaking/big)</button>
+     </div>
+     <div id="versionResult"></div>
++
++    <div class="section-heading" style="margin-top:18px;">8. Post a dev update to Discord</div>
++    <p class="tiny muted">
++      Sends a message to your updates channel via a Discord webhook. The webhook URL is saved
++      locally (<code>tools/devtool/discord.config.json</code>, gitignored) and never leaves this
++      machine except in the request to Discord itself.
++    </p>
++    <div class="row" style="gap: 8px; margin-bottom: 8px;">
++      <input type="password" id="discordWebhookInput" placeholder="https://discord.com/api/webhooks/..."
++        style="flex:1; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
++      <button id="discordSaveBtn">Save webhook</button>
++    </div>
++    <p class="tiny muted">
++      Status: ${patchState.discordConfigured ? `🟢 ${escapeHtml(patchState.discordPreview)}` : '⚪ not configured yet'}
++    </p>
++    <textarea id="discordMessageInput" rows="4"
++      placeholder="What changed in this update? (pre-fill from the selected patch below)"
++      style="width:100%; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px; box-sizing: border-box; font-family: inherit;">${escapeHtml(patchState.discordDraft)}</textarea>
++    <div class="row" style="gap:6px; margin-top:8px;">
++      <button id="discordFillBtn" ${!sel ? 'disabled' : ''}>Fill from selected patch</button>
++      <button id="discordPostBtn" class="primary" ${!patchState.discordConfigured ? 'disabled' : ''}>Post to Discord</button>
++    </div>
++    <div id="discordResult"></div>
+   `;
+ 
+   document.getElementById('refreshStatusBtn').onclick = () => refreshGitStatus();
+@@ -614,4 +643,50 @@ function renderPatches() {
+       }
+     };
+   });
++
++  const discordSaveBtn = document.getElementById('discordSaveBtn');
++  discordSaveBtn.onclick = async () => {
++    const input = document.getElementById('discordWebhookInput');
++    const webhookUrl = input.value.trim();
++    discordSaveBtn.disabled = true;
++    discordSaveBtn.textContent = 'Saving…';
++    try {
++      const result = await api('/api/discord/config', {
++        method: 'POST', headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({ webhookUrl }),
++      });
++      patchState.discordConfigured = result.configured;
++      patchState.discordPreview = result.preview;
++      input.value = '';
++      renderPatches();
++    } catch (err) {
++      alert(err.message || 'Could not save the webhook URL.');
++      discordSaveBtn.disabled = false;
++      discordSaveBtn.textContent = 'Save webhook';
++    }
++  };
++
++  const discordFillBtn = document.getElementById('discordFillBtn');
++  if (discordFillBtn) discordFillBtn.onclick = () => {
++    const name = sel.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ');
++    const messageInput = document.getElementById('discordMessageInput');
++    messageInput.value = `**${name}**\n\nSee the full changelog in guild-idler-status.md.`;
++    patchState.discordDraft = messageInput.value;
++  };
++
++  const discordPostBtn = document.getElementById('discordPostBtn');
++  discordPostBtn.onclick = async () => {
++    const messageInput = document.getElementById('discordMessageInput');
++    patchState.discordDraft = messageInput.value;
++    discordPostBtn.disabled = true;
++    discordPostBtn.textContent = 'Posting…';
++    const outcome = await api('/api/discord/post', {
++      method: 'POST', headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify({ title: sel ? sel.replace(/\.patch$/, '') : undefined, message: messageInput.value }),
++    }).catch((err) => ({ ok: false, error: err.message }));
++    discordPostBtn.disabled = !patchState.discordConfigured;
++    discordPostBtn.textContent = 'Post to Discord';
++    const result = { ok: outcome.ok, stdout: outcome.ok ? 'Posted to Discord.' : '', stderr: outcome.error || '' };
++    document.getElementById('discordResult').innerHTML = resultBlock(result, 'Discord post');
++  };
+ }
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index d757e2a..463e477 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -31,6 +31,12 @@ const DATA_DIR = path.join(ROOT, 'src', 'game', 'data', 'json');
+ const PUBLIC_DIR = path.join(__dirname, 'public');
+ const PORT = 5175;
+ 
++// Local-only, gitignored (see .gitignore) — holds the Discord webhook URL for
++// the "post a dev update" feature below. Never committed, never served to the
++// browser as a static file (it lives outside PUBLIC_DIR), and only ever read
++// or written by the two /api/discord/* handlers.
++const DISCORD_CONFIG_PATH = path.join(__dirname, 'discord.config.json');
++
+ /* --------------------------------------------------------------- schema --- */
+ // Required fields per content type. This is the real safety net: TypeScript's
+ // `as Foo[]` cast on the JSON import does NOT validate structure at compile
+@@ -374,6 +380,74 @@ function devServerStatus() {
+   return { running: false };
+ }
+ 
++/* -------------------------------------------------------------- discord --- */
++// Posts dev updates / patch notes to a Discord channel via an incoming
++// webhook. Nothing here needs a bot, a token, or any dependency beyond the
++// `fetch` that's been global in Node since 18 (already the project's stated
++// minimum — see README). The webhook URL itself is treated as a secret: it
++// lives only in DISCORD_CONFIG_PATH (gitignored) and is never echoed back to
++// the client in full, only as a masked preview, so a screen-share of the dev
++// tool doesn't leak it.
++
++async function readDiscordConfig() {
++  try {
++    const raw = await fs.readFile(DISCORD_CONFIG_PATH, 'utf8');
++    const parsed = JSON.parse(raw);
++    return { webhookUrl: typeof parsed.webhookUrl === 'string' ? parsed.webhookUrl : '' };
++  } catch {
++    return { webhookUrl: '' };
++  }
++}
++
++async function writeDiscordConfig(webhookUrl) {
++  await fs.writeFile(DISCORD_CONFIG_PATH, JSON.stringify({ webhookUrl }, null, 2) + '\n', 'utf8');
++}
++
++function maskWebhookUrl(url) {
++  if (!url) return '';
++  // Discord webhook URLs are .../webhooks/<id>/<token> — keep enough to
++  // recognise which one is configured without exposing the token in full.
++  const tail = url.slice(-6);
++  return `configured (…${tail})`;
++}
++
++/** Very loose shape check — Discord itself is the real validator, this just
++ * catches an obviously-wrong paste (e.g. the channel URL instead of a
++ * webhook URL) before making a network call. */
++function looksLikeDiscordWebhook(url) {
++  return typeof url === 'string' && /^https:\/\/(discord\.com|discordapp\.com)\/api\/webhooks\//.test(url);
++}
++
++async function postDiscordUpdate(title, message) {
++  const { webhookUrl } = await readDiscordConfig();
++  if (!webhookUrl) return { ok: false, error: 'No Discord webhook URL configured yet.' };
++  if (!looksLikeDiscordWebhook(webhookUrl)) {
++    return { ok: false, error: 'Configured URL does not look like a Discord webhook URL.' };
++  }
++  const embed = {
++    title: title && title.trim() ? title.trim() : 'Guild Idler dev update',
++    description: (message ?? '').slice(0, 4000),
++    color: 0xb08d57, // brass, matching the dev tool's own accent colour
++    timestamp: new Date().toISOString(),
++  };
++  try {
++    const res = await fetch(webhookUrl, {
++      method: 'POST',
++      headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify({ embeds: [embed] }),
++      signal: AbortSignal.timeout(10_000),
++    });
++    if (!res.ok) {
++      const body = await res.text().catch(() => '');
++      return { ok: false, error: `Discord returned ${res.status}${body ? `: ${body.slice(0, 300)}` : ''}` };
++    }
++    return { ok: true };
++  } catch (err) {
++    const timedOut = err.name === 'TimeoutError' || err.name === 'AbortError';
++    return { ok: false, error: timedOut ? 'Request to Discord timed out after 10s.' : `Request to Discord failed: ${err.message}` };
++  }
++}
++
+ /* ------------------------------------------------------------------ http --- */
+ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
+ 
+@@ -492,6 +566,27 @@ const server = http.createServer(async (req, res) => {
+     return json(res, 200, devServerStatus());
+   }
+ 
++  if (url.pathname === '/api/discord/config' && req.method === 'GET') {
++    const { webhookUrl } = await readDiscordConfig();
++    return json(res, 200, { configured: !!webhookUrl, preview: maskWebhookUrl(webhookUrl) });
++  }
++
++  if (url.pathname === '/api/discord/config' && req.method === 'POST') {
++    const body = JSON.parse(await readBody(req));
++    const webhookUrl = typeof body.webhookUrl === 'string' ? body.webhookUrl.trim() : '';
++    if (webhookUrl && !looksLikeDiscordWebhook(webhookUrl)) {
++      return json(res, 400, { error: 'That does not look like a Discord webhook URL (expected https://discord.com/api/webhooks/...).' });
++    }
++    await writeDiscordConfig(webhookUrl);
++    return json(res, 200, { ok: true, configured: !!webhookUrl, preview: maskWebhookUrl(webhookUrl) });
++  }
++
++  if (url.pathname === '/api/discord/post' && req.method === 'POST') {
++    const body = JSON.parse(await readBody(req));
++    const result = await postDiscordUpdate(body.title, body.message);
++    return json(res, result.ok ? 200 : 400, result);
++  }
++
+   const match = url.pathname.match(/^\/api\/data\/([\w-]+)$/);
+   if (match) {
+     const kind = match[1];
