@@ -16,6 +16,13 @@ const state = {
   // whether the user has explicitly asked for the raw table instead (see
   // renderTable's dispatch).
   tuningViewMode: 'grouped', tuningExpanded: new Set(), tuningFilter: '',
+  // Generic table sort -- which displayed column, if any, and which
+  // direction. Reset whenever the tab changes (selectTab below) so
+  // switching content types doesn't carry over a sort that may not even
+  // apply to the new schema's columns; persists across re-renders within
+  // the same tab (editing/saving a row calls renderTable directly, not
+  // selectTab, so the chosen sort survives that).
+  sortColumn: null, sortDir: 'asc',
 };
 
 const tabsEl = document.getElementById('tabs');
@@ -62,6 +69,8 @@ function markActiveTab(kind) {
 
 async function selectTab(kind) {
   state.kind = kind;
+  state.sortColumn = null;
+  state.sortDir = 'asc';
   markActiveTab(kind);
   setStatus('Loading…');
   try {
@@ -123,9 +132,18 @@ function renderGenericTable() {
     <span style="color: var(--muted); font-size: 11px;">${state.rows.length} entries</span>
   `;
 
+  // Every displayed column is sortable generically (id/name/slot/rarity/
+  // etc., whichever this content type's schema actually has) rather than
+  // hand-picking id/name/slot specifically for Equipment alone -- that
+  // covers the actual ask (Equipment has all three; Consumables has no
+  // slot field at all, so it naturally just offers id/name) without a
+  // per-content-type special case to maintain. Only clears/resets on tab
+  // switch (see selectTab), so it survives edit/save re-renders.
   const table = document.createElement('table');
   const thead = document.createElement('thead');
-  thead.innerHTML = `<tr>${iconKey ? '<th></th>' : ''}${bannerKey ? '<th></th>' : ''}${cols.map((c) => `<th>${c}</th>`).join('')}<th></th></tr>`;
+  const sortArrow = (c) => state.sortColumn === c ? (state.sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+  thead.innerHTML = `<tr>${iconKey ? '<th></th>' : ''}${bannerKey ? '<th></th>' : ''}${cols.map((c) =>
+    `<th class="sortable" data-sort="${c}">${c}${sortArrow(c)}</th>`).join('')}<th></th></tr>`;
   const tbody = document.createElement('tbody');
 
   if (state.rows.length === 0) {
@@ -134,7 +152,27 @@ function renderGenericTable() {
     tbody.appendChild(tr);
   }
 
-  state.rows.forEach((row, index) => {
+  // Carries each row's real index in state.rows alongside it, since the
+  // Edit/Duplicate/Delete buttons below (and the underlying save-to-disk
+  // order) all key off that real index, not display position -- sorting
+  // only ever reorders what's rendered, never state.rows itself.
+  let displayEntries = state.rows.map((row, index) => ({ row, index }));
+  if (state.sortColumn && cols.includes(state.sortColumn)) {
+    const col = state.sortColumn;
+    const isNumeric = schema.fields[col]?.type === 'number';
+    const dir = state.sortDir === 'asc' ? 1 : -1;
+    displayEntries = [...displayEntries].sort((a, b) => {
+      const av = a.row[col];
+      const bv = b.row[col];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (isNumeric) return (Number(av) - Number(bv)) * dir;
+      return String(av).localeCompare(String(bv), undefined, { sensitivity: 'base', numeric: true }) * dir;
+    });
+  }
+
+  displayEntries.forEach(({ row, index }) => {
     const tr = document.createElement('tr');
     const iconCell = iconKey
       ? `<td class="icon-cell">${row[iconKey]
@@ -174,6 +212,18 @@ function renderGenericTable() {
   document.getElementById('addBtn').onclick = () => openEditor(null);
   const groupedViewBtn = document.getElementById('tuningGroupedViewBtn');
   if (groupedViewBtn) groupedViewBtn.onclick = () => { state.tuningViewMode = 'grouped'; renderTable(); };
+  thead.querySelectorAll('th[data-sort]').forEach((th) => {
+    th.onclick = () => {
+      const col = th.dataset.sort;
+      if (state.sortColumn === col) {
+        state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.sortColumn = col;
+        state.sortDir = 'asc';
+      }
+      renderTable();
+    };
+  });
   tbody.querySelectorAll('[data-edit]').forEach((b) => b.onclick = () => openEditor(+b.dataset.edit));
   tbody.querySelectorAll('[data-dup]').forEach((b) => b.onclick = () => duplicateRow(+b.dataset.dup));
   tbody.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => deleteRow(+b.dataset.del));

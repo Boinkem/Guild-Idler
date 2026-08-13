@@ -5,7 +5,7 @@
     "weight": 10,
     "kind": "nothing",
     "flavorText": "Grimsby shrugs. \"Card's blank. Wasn't me who printed it.\"",
-    "glyph": "\ud83d\udcc4"
+    "glyph": "📄"
   },
   {
     "id": "bust_nothing_proud",
@@ -13,7 +13,7 @@
     "weight": 10,
     "kind": "nothing",
     "flavorText": "Absolutely nothing happens. Grimsby looks almost proud of that.",
-    "glyph": "\ud83c\udfad"
+    "glyph": "🎭"
   },
   {
     "id": "bust_joke_rock",
@@ -22,7 +22,7 @@
     "kind": "joke",
     "jokeItemName": "A Rock",
     "flavorText": "\"That's a good rock,\" Grimsby says, entirely serious.",
-    "glyph": "\ud83e\udea8"
+    "glyph": "🪨"
   },
   {
     "id": "bust_joke_button",
@@ -31,7 +31,7 @@
     "kind": "joke",
     "jokeItemName": "A Single Button",
     "flavorText": "\"Matches nothing you own. That's the fun part.\"",
-    "glyph": "\ud83d\udd18"
+    "glyph": "🔘"
   },
   {
     "id": "bust_joke_iou",
@@ -40,7 +40,7 @@
     "kind": "joke",
     "jokeItemName": "An IOU (From Grimsby, To Grimsby)",
     "flavorText": "He hands you a slip of paper he owes himself. You're not sure what to do with it either.",
-    "glyph": "\ud83d\udcdd"
+    "glyph": "📝"
   },
   {
     "id": "bust_joke_pebble",
@@ -49,48 +49,82 @@
     "kind": "joke",
     "jokeItemName": "A Suspiciously Round Pebble",
     "flavorText": "\"Lucky,\" he says. \"For someone. Not you, evidently.\"",
-    "glyph": "\u26aa"
+    "glyph": "⚪"
   },
   {
     "id": "refund_small",
     "tier": "refund",
     "weight": 10,
     "kind": "goldRefund",
+    "flavorText": "He counts out a fraction of your own coin, looking personally wounded by it.",
+    "goldAmount": 0,
     "refundPercent": 20,
-    "flavorText": "He counts out a fraction of your own coin, looking personally wounded by it."
+    "materialId": "ore",
+    "materialAmount": 0,
+    "scrapAmount": 0,
+    "itemRarity": "common",
+    "eggRarity": "common",
+    "icon": "food/Food_12.png"
   },
   {
     "id": "refund_medium",
     "tier": "refund",
     "weight": 10,
     "kind": "goldRefund",
+    "flavorText": "\"Consider it a discount on disappointment,\" he says, pressing coins into your hand.",
+    "goldAmount": 0,
     "refundPercent": 40,
-    "flavorText": "\"Consider it a discount on disappointment,\" he says, pressing coins into your hand."
+    "materialId": "ore",
+    "materialAmount": 0,
+    "scrapAmount": 0,
+    "itemRarity": "common",
+    "eggRarity": "common",
+    "icon": "food/Food_12.png"
   },
   {
     "id": "refund_large",
     "tier": "refund",
     "weight": 6,
     "kind": "goldRefund",
+    "flavorText": "Grimsby sighs like it costs him something. It does -- most of your fee, anyway.",
+    "goldAmount": 0,
     "refundPercent": 60,
-    "flavorText": "Grimsby sighs like it costs him something. It does -- most of your fee, anyway."
+    "materialId": "ore",
+    "materialAmount": 0,
+    "scrapAmount": 0,
+    "itemRarity": "common",
+    "eggRarity": "common",
+    "icon": "food/Food_12.png"
   },
   {
     "id": "modest_gold",
     "tier": "modest",
     "weight": 8,
     "kind": "goldFlat",
-    "goldAmount": 15,
-    "flavorText": "\"Don't spend it all,\" he says, handing over more than he clearly meant to."
+    "flavorText": "\"Don't spend it all,\" he says, handing over more than he clearly meant to.",
+    "goldAmount": 44,
+    "refundPercent": 0,
+    "materialId": "ore",
+    "materialAmount": 0,
+    "scrapAmount": 0,
+    "itemRarity": "common",
+    "eggRarity": "common",
+    "icon": "misc/Misc_28.png"
   },
   {
     "id": "modest_material_ore",
     "tier": "modest",
     "weight": 8,
     "kind": "material",
+    "flavorText": "\"Fell off a cart,\" he says. Somebody's cart. Not his.",
+    "goldAmount": 0,
+    "refundPercent": 0,
     "materialId": "ore",
     "materialAmount": 6,
-    "flavorText": "\"Fell off a cart,\" he says. Somebody's cart. Not his."
+    "scrapAmount": 0,
+    "itemRarity": "common",
+    "eggRarity": "common",
+    "icon": "crafting/Crafting_50.png"
   },
   {
     "id": "modest_material_timber",

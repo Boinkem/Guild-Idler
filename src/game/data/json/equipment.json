@@ -1715,18 +1715,22 @@
     "id": "ranger_boots_heroic",
     "name": "Ranger Boots (Heroic)",
     "slot": "boots",
-    "rarity": "uncommon",
+    "rarity": "epic",
     "reqLevel": 4,
     "maxDurability": 75,
     "value": 176,
     "mods": {
-      "speed": 9
+      "speed": 10
     },
     "stats": {
-      "endurance": 3
+      "endurance": 6
     },
+    "setId": "blackford",
+    "icon": "armor/Armor_46.png",
     "raidExclusive": true,
-    "setId": "blackford"
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "ranger_boots_mythic",
@@ -2594,7 +2598,11 @@
       "gold": 3
     },
     "setId": "leather",
-    "icon": "armor/Armor_04.png"
+    "icon": "armor/Armor_75.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "leather_boots",
@@ -2608,7 +2616,11 @@
       "speed": 3
     },
     "setId": "leather",
-    "icon": "armor/Armor_06.png"
+    "icon": "armor/Armor_47.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "leather_cord_ring",
@@ -2622,7 +2634,11 @@
       "gold": 3
     },
     "setId": "leather",
-    "icon": "accessories/Accessory_03.png"
+    "icon": "armor/Armor_92.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "leather_talisman",
@@ -2650,7 +2666,11 @@
       "speed": 3
     },
     "setId": "leather",
-    "icon": "armor/Armor_07.png"
+    "icon": "armor/Armor_68.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "steel_longsword",
@@ -2686,7 +2706,11 @@
       "endurance": 2
     },
     "setId": "steel",
-    "icon": "armor/Armor_08.png"
+    "icon": "armor/Armor_24.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
   },
   {
     "id": "steel_cuirass",

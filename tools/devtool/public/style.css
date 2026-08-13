@@ -176,6 +176,8 @@ th {
   border-bottom: 1px solid var(--panel3);
   white-space: nowrap;
 }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--text-bright); }
 tbody tr:nth-child(even) td { background: rgba(255, 255, 255, 0.018); }
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover td { background: var(--panel2); }

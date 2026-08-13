@@ -25,6 +25,48 @@ Tab hero-log rework" below. Quest success now runs through a combined
 diminishing-returns curve rather than pure linear stacking -- see "Quest
 success rebalance -- built" below.
 
+### DevTool: sortable table columns (Equipment/Consumables + every other content type) -- built
+Direct request: sort the DevTool's Equipment panel by ID/Name/Slot,
+Consumables too. Implemented generically in the shared table renderer
+(`renderGenericTable`, `app.js`) rather than as an Equipment-specific
+feature, since every content type already renders through this one
+function -- clicking any displayed column header now sorts by that
+column for whichever content type is open, which naturally covers
+ID/Name/Slot for Equipment and ID/Name for Consumables (Consumables has
+no `slot` field to sort by in the first place, so it just isn't offered
+as a column there) without a per-content-type special case.
+
+- Column headers for every currently-displayed field (`displayColumns`'s
+  existing priority list -- id/verb/name/label/slot/rarity/kind/tag/cost/
+  value/weight/reqLevel, whichever the open schema actually has) are now
+  clickable: first click sorts ascending, a second click on the same
+  column reverses to descending, clicking a different column starts that
+  one fresh at ascending. An arrow (▲/▼) on the active column shows
+  current direction.
+- Sort compares numerically for fields the schema marks `type: 'number'`
+  (`reqLevel`, `cost`, `value`, etc.) and does a locale-aware,
+  case-insensitive string compare otherwise (`slot`, `rarity`, `name`,
+  `id`) -- so `epic`/`legendary` don't sort by raw byte value ahead of
+  `common` in a way that fights the tier's actual ordering intuition, and
+  numbered ids/names (`item_2` before `item_10`) sort naturally rather
+  than lexically. Rows missing the sorted field always sink to the
+  bottom regardless of direction.
+- Sorting only ever reorders what's *rendered* -- `state.rows` (the real
+  array that gets written back to the JSON file on save) is never
+  reordered, and every row still carries its real index into that array
+  for Edit/Duplicate/Delete, so a sorted view can't scramble save order
+  or misattribute an action to the wrong row.
+- Sort resets to none the moment a different tab is selected (a chosen
+  sort on Equipment isn't assumed to still make sense once you switch to
+  Consumables), but persists correctly across an edit/save on the same
+  tab, since saving re-renders the table in place rather than reselecting
+  the tab.
+
+Verified via `node --check` on both `app.js` and `server.mjs` (syntax
+only -- no browser available in this environment to click through it
+live); worth a real in-app pass to confirm the click/arrow/persistence
+behaviour feels right before calling this fully closed.
+
 ### `app.css` visual refresh (Claude Design) -- built
 Direct request: a full restyle pass on `src/styles/app.css`, produced
 externally by Claude Design and patched in as-is. Deliberately a
