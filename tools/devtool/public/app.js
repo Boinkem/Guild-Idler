@@ -441,7 +441,7 @@ function fieldControl(spec, key, value) {
     // carries the schema's `defaultFolder` hint through to the picker.
     return `<div class="banner-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-folder="${escapeHtml(spec.defaultFolder ?? '')}"></div>`;
   }
-  if (spec.type === 'string' && (key === 'description' || key === 'flavour')) {
+  if (spec.type === 'string' && (key === 'description' || key === 'flavour' || key === 'blurb')) {
     return `<textarea id="${id}">${escapeHtml(value ?? '')}</textarea>`;
   }
   if (spec.type === 'string') {
@@ -455,7 +455,7 @@ function fieldControl(spec, key, value) {
     const opts = spec.options.map((o) => `<option value="${o}" ${o === value ? 'selected' : ''}>${o}</option>`).join('');
     return `<select id="${id}">${opts}</select>`;
   }
-  if (spec.type === 'string[]' || spec.type === 'modKeyList' || spec.type === 'statKeyList') {
+  if (spec.type === 'string[]' || spec.type === 'modKeyList' || spec.type === 'statKeyList' || spec.type === 'questTagList') {
     return listInput(id, value ?? []);
   }
   if (spec.type === 'boolean') {
@@ -584,6 +584,9 @@ function stageRowHtml(s) {
 
 const MOD_KEYS = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed', 'durability'];
 const STAT_KEYS = ['strength', 'endurance', 'luck', 'wisdom'];
+// Same 6 values server.mjs's own QUEST_TAG_KEYS validates against --
+// used by hero-classes' `preferred` field (the questTagList type).
+const QUEST_TAG_KEYS = ['combat', 'escort', 'explore', 'arcane', 'stealth', 'defense'];
 const MATERIAL_KEYS = ['ore', 'timber', 'herbs', 'fish'];
 const EFFECT_KEYS = ['success', 'gold', 'preventInjury', 'guaranteedGoodEvent', 'healInjury'];
 const EVENT_EFFECT_KEYS = ['success', 'goldPct', 'flatGold', 'xpPct', 'loot', 'durability', 'delay', 'injury', 'guaranteedLoot'];
@@ -1085,7 +1088,7 @@ function readField(spec, key) {
   if (spec.type === 'string' || spec.type === 'enum') return el.value;
   if (spec.type === 'number') return parseFloat(el.value) || 0;
   if (spec.type === 'boolean') return el.checked;
-  if (spec.type === 'string[]' || spec.type === 'modKeyList' || spec.type === 'statKeyList') {
+  if (spec.type === 'string[]' || spec.type === 'modKeyList' || spec.type === 'statKeyList' || spec.type === 'questTagList') {
     return [...el.querySelectorAll('[data-list-item]')].map((i) => i.value.trim()).filter(Boolean);
   }
   if (['mods', 'stats', 'materials', 'effect', 'eventEffects'].includes(spec.type)) {
@@ -1147,6 +1150,7 @@ function openEditor(index) {
       ${spec.slug ? '<div class="hint">Used as the internal id. Lowercase, no spaces.</div>' : ''}
       ${spec.type === 'modKeyList' ? `<div class="hint">One per line, must be one of: ${MOD_KEYS.join(', ')}</div>` : ''}
       ${spec.type === 'statKeyList' ? `<div class="hint">One per line, must be one of: ${STAT_KEYS.join(', ')}</div>` : ''}
+      ${spec.type === 'questTagList' ? `<div class="hint">One per line, must be one of: ${QUEST_TAG_KEYS.join(', ')}. At least one required.</div>` : ''}
     </div>
   `).join('');
 

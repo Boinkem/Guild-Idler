@@ -428,12 +428,14 @@ floor and a remembered size that persists across launches the same way
 the companion's position already does.
 
 **DevTools** — tuning registry now covers raid coefficients (raid_speed's
-cost curve, heroic/mythic difficulty modifiers), all 5 guild facilities'
-cost curves and per-level effect strength (patch 0107), and all of
-Harvest/Gathering's own knobs (patch 0111) -- spawn/despawn/bonus rates,
-all four tools' and the Warehouse's cost curves. `raid_loot`/
-`raid_recovery` are still hardcoded in `raidUpgrades.ts` -- explicitly
-deferred there as a small follow-up, not forgotten. Loot picker, icon
+cost curve, heroic/mythic difficulty modifiers, and -- correction to a
+stale note that lived right here -- `raid_loot`/`raid_recovery` too;
+confirmed directly against `raidUpgrades.ts` that both already read
+every numeric field from `Tuning.get()` the same way `raid_speed` does,
+not still hardcoded as this bullet previously claimed), all 5 guild
+facilities' cost curves and per-level effect strength (patch 0107), and
+all of Harvest/Gathering's own knobs (patch 0111) -- spawn/despawn/bonus
+rates, all four tools' and the Warehouse's cost curves. Loot picker, icon
 assignment tooling also live here. Crafting Recipes (gear/consumable/
 enchant, patch 0115) is now its own DevTool tab -- editable the same way
 equipment/consumables/raids already are, not code. Equipment's schema
@@ -445,11 +447,23 @@ upstream rather than taking a remote/branch as input); Build/Package/Tag
 shifted from steps 5/6/7 to 6/7/8 to make room. New `pets` schema (Pets
 build) needed zero frontend changes -- confirms the schema-driven editor
 generalizes to a genuinely new content type, not just tuning, for free.
-`DIFFICULTIES` (easy/normal/hard/epic/legendary quest tiers) is now
-covered too -- see "DIFFICULTIES DevTool migration -- built" below --
-which closes out the last flagged coverage gap from the DevTool coverage
-review; every content type surveyed there is now either JSON+schema or
-tuning-registry backed.
+`DIFFICULTIES` (easy/normal/hard/epic/legendary quest tiers) is covered
+too -- see "DIFFICULTIES DevTool migration -- built" below -- which
+closed out the last flagged gap from the original DevTool coverage
+review. That review predates the hero roster ever being checked,
+though: a fresh audit of every file under `src/game/data/` (this time
+against a real, freshly-cloned copy of the repo rather than a cached
+one) turned up the actual single biggest remaining gap -- `HERO_CLASSES`
+(all 9 playable classes: stats, growth curves, mods, preferred-tag
+bonuses, tavern-unlock gates, name pools) plus `RECRUIT_COST`, both
+fully hardcoded TypeScript with zero DevTool access. See "Hero Classes +
+Recruit Costs DevTool migration -- built" below. Smaller confirmed
+remaining gaps, not yet migrated: `SKINS`/`ASCENSION_RANKS`/
+`RECRUIT_START_LEVEL` (progression.ts), `GUIDE_TOPICS` (guideTopics.ts),
+`GuidanceManager.ts`'s own onboarding-toast `TOPICS`, and a handful of
+standalone formula constants in `balance.ts`/`progression.ts` (e.g.
+`BURST_CAP_FRACTION`, `PRESTIGE_STREAK_BONUS_PER_STEP`) not yet routed
+through the tuning registry -- none scoped or started yet.
 
 **Harvest/Gathering + Crafting** — new `harvest` tab: idle heroes feed 4
 material nodes (Quarry/Woodyard/Herb Garden/Fish Weir) via a click-the-
@@ -4975,6 +4989,108 @@ actually new) -- clean pass. The patch itself was verified with a real
 `git apply --check` against a fresh checkout of the pre-patch files,
 confirming it applies cleanly and produces byte-identical output to what
 was tested here.
+
+### Hero Classes + Recruit Costs DevTool migration -- built
+Follow-up "any more DevTool workflow opportunities?" review, this time
+against a real, freshly-cloned copy of the repo (`git clone` via the
+sandbox's own network access, rather than a project-knowledge cache --
+see the note at the top of this section on why that mattered: the
+cached copy had been stale enough, twice, to break an applied patch).
+Full sweep of every file under `src/game/data/` plus
+`GuidanceManager.ts` against the real, current `server.mjs`/`tuning.ts`.
+
+**The actual biggest find, bigger than the flagged raid_loot/recovery
+gap** (which turned out to already be fixed -- see the correction in
+this file's DevTools summary bullet above): `HERO_CLASSES`
+(`progression.ts`) -- all 9 playable classes (Adventurer through
+Wizard), each with `baseStats`, per-level `growth`, `mods`, preferred
+quest tags + bonus, tavern-unlock level, power tier, and a 5-name pool
+-- was a fully hardcoded `Record<HeroClass, HeroClassDef>` with zero
+DevTool or Tuning access. This is the actual hero-balance data players
+interact with constantly; tweaking a single class's stat previously
+meant a code patch.
+
+**Migration.** `HERO_CLASSES` moved to `src/game/data/json/
+hero-classes.json` (9-entry array, `id`-keyed) + a new `hero-classes`
+DevTool schema; `progression.ts` imports and reconstructs the
+`Record<HeroClass, HeroClassDef>` shape at load time, same pattern
+`DIFFICULTIES` established. `HeroClass` was already a plain `string`
+type (loosened for DLC extensibility before this session), not a closed
+union, so no type-system changes were needed at all.
+
+**Zero new field types for most of it.** `baseStats`/`growth` both
+reuse the DevTool's existing generic `stats` field type (already used
+by `equipment.json`'s own `stats` field, validated against the same 4
+keys); `mods` reuses the existing generic `mods` field type. Only
+`preferred` (a list of QuestTags) needed anything new: a `questTagList`
+field type, added as the exact same shape `modKeyList`/`statKeyList`
+already have for their own key-list fields (same validator pattern in
+`server.mjs`, same shared list-input dispatch in `app.js`'s
+`fieldControl`/`readField`, same hint-line convention in `openEditor`)
+-- just validated against `QUEST_TAG_KEYS` (combat/escort/explore/
+arcane/stealth/defense) instead. Confirmed unlike `modKeyList`/
+`statKeyList` (which don't currently enforce non-empty even when
+`required: true`, a latent gap in that precedent that didn't matter for
+their own always-optional real-world usage), `questTagList` explicitly
+rejects an empty list -- every real hero class has at least one
+preferred tag, and the schema declares `preferred` as `required: true`,
+so this needed its own explicit non-empty check rather than inheriting
+a gap from the fields it's modeled on.
+
+**`blurb` now renders as a textarea**, not a single-line input -- a
+small, low-risk addition to `app.js`'s existing textarea key-list
+(`description`/`flavour`), for a field that's consistently a full
+sentence or two across all 9 classes.
+
+**`RECRUIT_COST` migrated separately, deliberately not folded into
+`HeroClassDef`.** `DlcManager.ts` already documents exactly why: recruit
+cost is kept as its own record alongside `HERO_CLASSES` on purpose (a
+DLC pack's own manifest follows the same split via its own
+`recruitCosts` field), so merging it into the class schema here would
+fight that existing design rather than match it. New `src/game/data/
+json/recruit-costs.json` (9 simple `{id, cost}` entries) + a matching
+`recruit-costs` schema.
+
+**Confirmed every consuming call site is unaffected**, not just assumed:
+grepped every usage of `HERO_CLASSES`/`RECRUIT_COST` across the codebase
+(`HeroManager.ts`, `GuildManager.ts`, `QuestManager.ts`,
+`AchievementManager.ts`, `DlcManager.ts`, `HeroesPanel.tsx`) --
+`HERO_CLASSES[cls]`, `Object.keys(HERO_CLASSES)`, `Object.values(
+HERO_CLASSES)`, and `classId in HERO_CLASSES` all behave identically
+whether the record was built as a literal or via `Object.fromEntries`
+from JSON, so none of those call sites needed to change. Class order in
+the JSON matches the original literal's order exactly (verified, not
+assumed -- several UI call sites iterate `Object.keys`/`Object.values`
+directly for display order), so recruit-list ordering is unchanged.
+
+**Verified against the real, actually-edited file, not a standalone
+transcription.** Beyond the usual `npx tsc --noEmit` clean pass and a
+simulated `validateEntry` run against both new JSON files (18 entries
+total, zero errors, no duplicate ids), the *real, patched*
+`progression.ts` was compiled with `tsc` and actually **executed** --
+its live `HERO_CLASSES`/`RECRUIT_COST` exports imported and diffed
+field-by-field against the original hardcoded literals for all 9
+classes -- confirmed byte-identical and order-preserved, not just
+type-checked. `node --check` passes clean on both `server.mjs` and
+`app.js`.
+
+**Explicitly not touched this pass** (found during the same audit,
+scoped out on purpose, same "needs its own dedicated pass" discipline
+as every prior migration): `SKINS`, `ASCENSION_RANKS`, and
+`RECRUIT_START_LEVEL` (all still hardcoded in `progression.ts`);
+`GUIDE_TOPICS` (`guideTopics.ts`) and `GuidanceManager.ts`'s own
+onboarding-toast `TOPICS` (both static prose, zero balance impact, but
+currently need a code patch to fix a typo); and a handful of standalone
+formula constants in `balance.ts` (`GOLD_FAILURE_MULTIPLIER`,
+`XP_FAILURE_MULTIPLIER`, `BASE_XP_MIN`/`MAX`, `MIN_LEVEL_FOR_CAP`,
+`BURST_CAP_FRACTION`) and `progression.ts` (`PRESTIGE_MIN_LEVEL`,
+`PRESTIGE_STREAK_WINDOW_MS`/`BONUS_PER_STEP`/`CAP`,
+`ASCENSION_STAT_BONUS`, `xpForLevel`'s own curve constants, `SKIN_PRICE`)
+not yet routed through the tuning registry. `chainConnections.ts` (4
+narrative-only `{from, to}` entries) was also reviewed and deliberately
+left alone -- real content, but too small and too easy to break (typing
+a chain id wrong silently drops a Lore-tab connection) to be worth the
+DevTool schema overhead.
 
 ### DLC groundwork -- built
 Discussed how Steam DLC actually works mechanically (a separate App ID

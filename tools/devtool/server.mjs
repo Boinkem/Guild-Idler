@@ -74,6 +74,57 @@ const SCHEMAS = {
       icon: { type: 'string', required: true },
     },
   },
+  'hero-classes': {
+    file: 'hero-classes.json',
+    label: 'Hero Classes',
+    idField: 'id',
+    // The playable hero roster -- previously a hardcoded TS Record, the
+    // single largest remaining DevTool coverage gap (see quests.ts's own
+    // DIFFICULTIES migration for the precedent this follows). `baseStats`/
+    // `growth` reuse the existing generic `stats` field type; `mods`
+    // reuses the existing generic `mods` field type -- neither needed any
+    // new machinery. `preferred` is the one genuinely new addition here:
+    // a list of QuestTags, same shape modKeyList/statKeyList already have
+    // for their own key-list fields (see the `questTagList` case in
+    // validateEntry below, and app.js's matching support), just validated
+    // against QUEST_TAG_KEYS instead.
+    //
+    // Recruit cost is deliberately NOT a field here -- see the
+    // `recruit-costs` schema just below, and progression.ts's own comment
+    // on why that stays a separate content type (DlcManager.ts already
+    // keeps them split the same way for DLC-added classes).
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      name: { type: 'string', required: true },
+      blurb: { type: 'string', required: true },
+      baseStats: { type: 'stats', required: true },
+      growth: { type: 'stats', required: true },
+      mods: { type: 'mods', required: false },
+      preferred: { type: 'questTagList', required: true },
+      preferredBonus: { type: 'number', required: true },
+      unlockTavernLevel: { type: 'number', required: true },
+      tier: { type: 'number', required: true },
+      names: { type: 'string[]', required: true },
+      // Unset for every base-game class -- see HeroClassDef.requiresDlc's
+      // own comment in progression.ts. Editable here mainly so a future
+      // DLC pack's own manifest content could, in principle, be authored
+      // through the same tooling rather than by hand.
+      requiresDlc: { type: 'string', required: false },
+    },
+  },
+  'recruit-costs': {
+    file: 'recruit-costs.json',
+    label: 'Recruit Costs',
+    idField: 'id',
+    // Kept separate from `hero-classes` above on purpose -- see that
+    // schema's own comment, and progression.ts's RECRUIT_COST comment,
+    // for why. Small (9 entries), flat, no reason to fold it into a
+    // richer schema.
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      cost: { type: 'number', required: true },
+    },
+  },
   'quest-templates': {
     file: 'quest-templates.json',
     label: 'Quest Templates',
@@ -632,6 +683,12 @@ const EVENT_EFFECT_KEYS = ['success', 'goldPct', 'flatGold', 'xpPct', 'loot', 'd
 const MATERIAL_KEYS = ['ore', 'timber', 'herbs', 'fish'];
 const RARITY_KEYS = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 const CHAIN_STAGE_TAGS = ['combat', 'escort', 'explore', 'arcane', 'stealth', 'defense'];
+// Same 6 values as CHAIN_STAGE_TAGS above (both are just QuestTag's full
+// enum) -- kept as its own named constant rather than reused directly,
+// so `questTagList`'s error message reads in terms of what it actually
+// validates (hero-classes' `preferred` field) rather than borrowing a
+// name that says "chain stage."
+const QUEST_TAG_KEYS = ['combat', 'escort', 'explore', 'arcane', 'stealth', 'defense'];
 const CHAIN_STAGE_DIFFICULTIES = ['easy', 'normal', 'hard', 'epic', 'legendary'];
 // Every field a single stage row needs -- durationMinutes, not duration,
 // same human-friendly-unit convention raid-encounters.json's durationHours
@@ -703,6 +760,11 @@ function validateEntry(schema, entry, index) {
       case 'statKeyList':
         if (!Array.isArray(value) || value.some((v) => !STAT_KEYS.includes(v))) {
           errors.push(`entry ${index}: "${key}" must only contain ${STAT_KEYS.join(', ')}`);
+        }
+        break;
+      case 'questTagList':
+        if (!Array.isArray(value) || value.length === 0 || value.some((v) => !QUEST_TAG_KEYS.includes(v))) {
+          errors.push(`entry ${index}: "${key}" must be a non-empty list containing only ${QUEST_TAG_KEYS.join(', ')}`);
         }
         break;
       case 'boolean':

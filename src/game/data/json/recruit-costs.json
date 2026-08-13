@@ -1,0 +1,38 @@
+[
+  {
+    "id": "adventurer",
+    "cost": 150
+  },
+  {
+    "id": "knight",
+    "cost": 150
+  },
+  {
+    "id": "dwarf",
+    "cost": 500
+  },
+  {
+    "id": "gladiator",
+    "cost": 1500
+  },
+  {
+    "id": "samurai",
+    "cost": 5000
+  },
+  {
+    "id": "witch",
+    "cost": 6500
+  },
+  {
+    "id": "lizardman",
+    "cost": 16000
+  },
+  {
+    "id": "pyromancer",
+    "cost": 20000
+  },
+  {
+    "id": "wizard",
+    "cost": 32000
+  }
+]

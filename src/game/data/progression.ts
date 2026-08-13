@@ -668,99 +668,70 @@ export interface HeroClassDef {
   requiresDlc?: string;
 }
 
-export const HERO_CLASSES: Record<HeroClass, HeroClassDef> = {
-  adventurer: {
-    id: 'adventurer', name: 'Adventurer', blurb: 'No banner, no order, just grit and a willingness to go first. The guild starts here.',
-    baseStats: { strength: 6, endurance: 6, luck: 3, wisdom: 3 },
-    growth: { strength: 1.2, endurance: 1.1, luck: 0.4, wisdom: 0.4 },
-    mods: { injuryResist: 5 }, preferred: ['combat', 'defense'], preferredBonus: 6,
-    unlockTavernLevel: 0, tier: 0,
-    names: ['Finn', 'Robin', 'Cade', 'Briar', 'Wren Ashfield'],
-  },
-  knight: {
-    id: 'knight', name: 'Knight', blurb: 'Sworn, drilled, and reliable in a way freelancers rarely are. Cheap for what it brings.',
-    baseStats: { strength: 6, endurance: 7, luck: 2, wisdom: 3 },
-    growth: { strength: 1.15, endurance: 1.25, luck: 0.3, wisdom: 0.4 },
-    mods: { injuryResist: 10 }, preferred: ['combat', 'defense'], preferredBonus: 8,
-    unlockTavernLevel: 0, tier: 0,
-    names: ['Sir Pip', 'Sir Bramble', 'Dame Orla', 'Sir Corwin', 'Dame Wren'],
-  },
-  dwarf: {
-    id: 'dwarf', name: 'Dwarf Warrior', blurb: 'A wall with an axe. Almost impossible to put down, in no particular hurry.',
-    baseStats: { strength: 7, endurance: 9, luck: 2, wisdom: 3 },
-    growth: { strength: 1.1, endurance: 1.5, luck: 0.3, wisdom: 0.5 },
-    mods: { injuryResist: 22, durability: 15, speed: -12 }, preferred: ['defense'], preferredBonus: 12,
-    unlockTavernLevel: 1, tier: 1,
-    names: ['Brenna', 'Durgan', 'Thora', 'Balin', 'Greta Stoneheel'],
-  },
-  gladiator: {
-    id: 'gladiator', name: 'Gladiator', blurb: 'Sword, net, and a bow for the ones that run. Fast and greedy for spoils.',
-    baseStats: { strength: 7, endurance: 5, luck: 6, wisdom: 3 },
-    growth: { strength: 1.1, endurance: 0.8, luck: 1.0, wisdom: 0.4 },
-    mods: { speed: 12, loot: 5, gold: 8 }, preferred: ['combat', 'explore'], preferredBonus: 8,
-    unlockTavernLevel: 1, tier: 1,
-    names: ['Marcus', 'Livia', 'Crixus', 'Vela', 'Otho the Swift'],
-  },
-  samurai: {
-    id: 'samurai', name: 'Samurai', blurb: 'One clean strike. Prizes a perfect kill and the rare blade it earns.',
-    baseStats: { strength: 9, endurance: 6, luck: 5, wisdom: 5 },
-    growth: { strength: 1.4, endurance: 0.9, luck: 0.7, wisdom: 0.7 },
-    mods: { success: 6, loot: 8 }, preferred: ['combat'], preferredBonus: 12,
-    unlockTavernLevel: 2, tier: 2,
-    names: ['Kaede', 'Hiroshi', 'Ayame', 'Takeshi', 'Rin of the Reed'],
-  },
-  witch: {
-    id: 'witch', name: 'Witch', blurb: 'Hexes, bargains, and a nose for what a ruin is really worth. Fragile.',
-    baseStats: { strength: 3, endurance: 4, luck: 8, wisdom: 8 },
-    growth: { strength: 0.5, endurance: 0.6, luck: 1.3, wisdom: 1.3 },
-    mods: { loot: 12, gold: 22, injuryResist: -10 }, preferred: ['arcane', 'stealth'], preferredBonus: 12,
-    unlockTavernLevel: 2, tier: 2,
-    names: ['Morwenna', 'Hazel', 'Sybil', 'Nettle', 'Old Agatha'],
-  },
-  lizardman: {
-    id: 'lizardman', name: 'Lizardman', blurb: 'Scales, claws, and a swamp-born refusal to die. Little sense for coin.',
-    baseStats: { strength: 8, endurance: 8, luck: 4, wisdom: 3 },
-    growth: { strength: 1.3, endurance: 1.3, luck: 0.5, wisdom: 0.3 },
-    mods: { success: 8, injuryResist: 15, gold: -12 }, preferred: ['combat', 'explore'], preferredBonus: 10,
-    unlockTavernLevel: 3, tier: 3,
-    names: ['Sythiss', 'Vorak', 'Xala', 'Threelk', 'Marsh-King Ozz'],
-  },
-  pyromancer: {
-    id: 'pyromancer', name: 'Pyromancer', blurb: 'Answers every problem with fire. Devastating, and made of paper.',
-    baseStats: { strength: 4, endurance: 3, luck: 5, wisdom: 10 },
-    growth: { strength: 0.5, endurance: 0.4, luck: 0.8, wisdom: 1.7 },
-    mods: { xp: 30, gold: 25, injuryResist: -15 }, preferred: ['arcane'], preferredBonus: 16,
-    unlockTavernLevel: 3, tier: 3,
-    names: ['Ignatia', 'Cinder', 'Ravan', 'Ember', 'Lord Vaylen'],
-  },
-  wizard: {
-    id: 'wizard', name: 'Wizard', blurb: 'Decades of study in a pointed hat. Unmatched on anything arcane.',
-    baseStats: { strength: 3, endurance: 4, luck: 5, wisdom: 12 },
-    growth: { strength: 0.4, endurance: 0.6, luck: 0.7, wisdom: 1.9 },
-    mods: { xp: 25, success: 5, loot: 6, injuryResist: -6 }, preferred: ['arcane', 'explore'], preferredBonus: 14,
-    unlockTavernLevel: 4, tier: 3,
-    names: ['Alaric', 'Merewyn', 'Cassius', 'Elspeth', 'Grand Magus Vorn'],
-  },
-};
+/**
+ * HERO_CLASSES lives in json/hero-classes.json so it can be edited via
+ * tools/devtool without touching TypeScript -- same pattern DIFFICULTIES
+ * (quests.ts) already established. This was the single largest remaining
+ * DevTool coverage gap in the game: the actual playable hero roster --
+ * base stats, per-level growth curves, class mods, preferred-tag bonuses,
+ * tavern unlock gates, and each class's 5-name pool -- was fully
+ * hardcoded TypeScript with zero DevTool/Tuning access.
+ *
+ * `baseStats`/`growth` reuse the DevTool's existing generic `stats` field
+ * type (already used by equipment.json's own `stats` field); `mods`
+ * reuses the existing generic `mods` field type. Neither needed any new
+ * DevTool machinery. `preferred` (a list of QuestTags) needed one small
+ * new field type, `questTagList` -- the exact same shape `modKeyList`/
+ * `statKeyList` already have for their own key-list fields, just
+ * validated against the tag enum instead. See server.mjs's own
+ * `questTagList` case and app.js's matching support.
+ *
+ * `RECRUIT_COST` is migrated separately (json/recruit-costs.json), not
+ * folded into this file -- DlcManager.ts already documents exactly why:
+ * recruit cost is deliberately kept as its own record alongside
+ * HERO_CLASSES (and DLC packs follow the same split via their own
+ * `recruitCosts` field), so merging it into HeroClassDef here would
+ * fight that existing design rather than match it.
+ *
+ * Both HERO_CLASSES and RECRUIT_COST are reconstructed as
+ * `Record<HeroClass, X>` at import time, matching every existing call
+ * site exactly (`HERO_CLASSES[cls]`, `Object.keys(HERO_CLASSES)`,
+ * `Object.values(HERO_CLASSES)`, `classId in HERO_CLASSES`, all used
+ * across HeroManager/GuildManager/QuestManager/AchievementManager/
+ * DlcManager/HeroesPanel) -- confirmed none of those call sites needed
+ * to change, since a plain object built via Object.fromEntries behaves
+ * identically to one written as a literal. Class order in the JSON
+ * matches the original literal's order exactly, so `Object.keys`/
+ * `Object.values` iteration order (which several UI call sites rely on
+ * for display order) is unchanged.
+ */
+import heroClassesJson from './json/hero-classes.json';
+export const HERO_CLASSES: Record<HeroClass, HeroClassDef> = Object.fromEntries(
+  (heroClassesJson as HeroClassDef[]).map((c) => [c.id, c]),
+) as Record<HeroClass, HeroClassDef>;
 
-export const RECRUIT_COST: Record<HeroClass, number> = {
-  // Knight and Dwarf cut significantly -- the pacing math showed a fresh
-  // guild needed ~2 weeks of real time just to afford a 3-hero party at the
-  // old prices, almost entirely due to compounding Tavern + recruit costs.
-  // Everything from Gladiator up is untouched; the early on-ramp specifically
-  // was the problem, not the overall curve.
-  // Adventurer priced at 150g (was 0) -- a free recruit sounds generous but
-  // was a real trap: normal retirement requires level 30, so a player who
-  // filled a slot with a free Adventurer had no way to ever get that slot
-  // back except levelling that specific hero all the way up, even if they
-  // immediately regretted the pick. Early Retirement (see PrestigeManager)
-  // is the actual fix for the trap -- this price just stops "free" from
-  // reading as "no real cost to filling a slot" in the first place.
-  adventurer: 150, knight: 150,
-  dwarf: 500, gladiator: 1500,
-  samurai: 5000, witch: 6500,
-  lizardman: 16000, pyromancer: 20000, wizard: 32000,
-};
+/**
+ * Kept separate from HERO_CLASSES above -- see this section's own top
+ * comment for why. Same Record-reconstruction pattern.
+ *
+ * Knight and Dwarf were cut significantly -- the pacing math showed a
+ * fresh guild needed ~2 weeks of real time just to afford a 3-hero party
+ * at the old prices, almost entirely due to compounding Tavern + recruit
+ * costs. Everything from Gladiator up is untouched; the early on-ramp
+ * specifically was the problem, not the overall curve.
+ * Adventurer is priced at 150g (was 0) -- a free recruit sounds generous
+ * but was a real trap: normal retirement requires level 30, so a player
+ * who filled a slot with a free Adventurer had no way to ever get that
+ * slot back except levelling that specific hero all the way up, even if
+ * they immediately regretted the pick. Early Retirement (see
+ * PrestigeManager) is the actual fix for the trap -- this price just
+ * stops "free" from reading as "no real cost to filling a slot" in the
+ * first place.
+ */
+import recruitCostsJson from './json/recruit-costs.json';
+export const RECRUIT_COST: Record<HeroClass, number> = Object.fromEntries(
+  (recruitCostsJson as { id: string; cost: number }[]).map((r) => [r.id, r.cost]),
+) as Record<HeroClass, number>;
 
 /**
  * Higher-tier heroes are expensive, so they start ahead: a fresh hire begins at
