@@ -25,6 +25,75 @@ Tab hero-log rework" below. Quest success now runs through a combined
 diminishing-returns curve rather than pure linear stacking -- see "Quest
 success rebalance -- built" below.
 
+### Auto Heal countdown, Auto-repair threshold tick, and inventory click-to-use/equip -- built
+Three separate, smaller requests bundled into one pass since they all touch
+the Inventory/Heroes UI and none needed its own patch.
+
+- **Auto Heal countdown.** New `HeroManager.healthRegenEtaMs(hero,
+  infirmaryLevel)` -- the same rate formula `regenHealth` already uses
+  (Infirmary heal-time minutes, halved while questing via
+  `health.questRegenFraction`), solved for time-to-full instead of
+  amount-per-elapsed-ms. Purely a display helper; `regenHealth` itself is
+  still the only thing that actually moves `hero.health`. Surfaced as a new
+  `AutoHealBar` component directly under both the compact and expanded
+  Health bars in `HeroesPanel.tsx` -- a teal `.bar.heal-timer` that drains
+  from full to empty as the projected time-to-full closes, plus a "full in
+  Xm" text readout. Renders nothing once a hero is already at full Health
+  or is Fallen (regen doesn't apply to a Fallen hero -- see the auto-revive
+  timer below instead). The drain uses a ref-captured denominator (the ETA
+  at the moment it was first observed for the hero's current `health`
+  value) rather than recomputing its own total every render, since
+  remaining-time-over-itself is always ~1 and would otherwise read as a bar
+  permanently near-empty.
+- **Fallen auto-revive countdown, corrected to a real timer.** The existing
+  Fallen card already had a text-only "recovers in Xh" line once Infirmary
+  hits max level (`infirmaryAutoReviveUnlocked`) -- this is a genuine
+  fixed-duration countdown (`guild_facility.infirmary.autoReviveHours`,
+  currently 12h), unlike the Auto Heal case above, so it gets an exact
+  countdown bar rather than an approximated one: `ratio = remainingMs /
+  totalMs`, same `.bar.heal-timer` styling for visual consistency with the
+  Auto Heal bar above it.
+- **Auto-repair threshold, marked directly on the Durability bar instead of
+  a fake timer.** Auto-repair (`autoRepairEnabled`/
+  `autoRepairThresholdPercent`) is a durability-threshold check on tick, not
+  a scheduled event -- durability only drops in a lump during quest
+  resolution, so there's no real "time until it fires" to count down to.
+  `DurabilityBar` (`EquipmentPanel.tsx`) now takes an optional
+  `thresholdPercent` prop; when Auto-repair is on, both `SlotCard` and
+  `StashCard` pass `state.autoRepairThresholdPercent` through, rendering a
+  thin `.bar-threshold` tick line at that position on the bar itself (new
+  `position: relative` on `.bar`, new absolutely-positioned `.bar-threshold`
+  class in `app.css`). Shows nothing when Auto-repair is off, since there's
+  no threshold to mark.
+- **Consumables in the stash are now clickable to Use or Equip, not just
+  the empty Consumable Slot picker.** `ConsumableInfoCard` gained two new
+  classifier helpers -- `isInstantUseOnHero` (true for `healInjury` and/or
+  `restoreHealth`, the existing hero-targeted "Apply immediately"
+  effects already routed through `InventoryManager.useOnHero` /
+  `engine.useConsumable`) and `isLoadoutEffect` (true for any of the
+  per-quest loadout keys: `success`/`gold`/`xp`/`loot`/`injuryResist`/
+  `speed`/`preventInjury`/`guaranteedGoodEvent`/`healthDamageReduction`).
+  Expanding a stash card now shows a "Use on {hero}" button (instant-use
+  items), an "Equip on {hero}" button (loadout items, calling the same
+  `engine.equipConsumable` the empty-slot picker already used --
+  "No free consumable slots." surfaces as the existing toast if full), or
+  a "Use" button for Beckoning Charm's own guild-wide
+  `engine.usePeddlerCharm` path, all targeting whichever hero is currently
+  selected via the tab strip at the top of the Inventory panel (a new
+  hint line under the "Consumables" heading spells this out). An item with
+  no actionable effect at all (Pet Treat, fed from the Hatchery instead)
+  shows no button. No new consumable *types* were needed for the
+  "instant heal" / "cure 1 debuff" request that prompted this pass --
+  `restorative_draught`/`greater_restorative_draught` (`restoreHealth`)
+  and `field_bandage` (`healInjury`) already existed and already had the
+  correct engine-level support; the gap was purely that the only UI
+  wired to `useOnHero` was HeroesPanel's hardcoded Bandage button. That
+  button is untouched; this just adds a second, general path to the same
+  underlying action.
+
+Verified: `npx tsc --noEmit` and `npx vite build --config vite.web.config.ts`
+both pass clean.
+
 ### Quest success rebalance -- built
 
 A live playtest report (two testers, real gear from `equipment.json`)

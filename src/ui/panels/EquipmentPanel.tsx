@@ -33,13 +33,30 @@ function CraftedPill() {
   );
 }
 
-function DurabilityBar({ item, compact = false }: { item: EquipmentItem; compact?: boolean }) {
+/**
+ * `thresholdPercent`, when passed, marks where Auto-repair (see the
+ * toggle/slider in the Inventory header below) will trigger for this item
+ * -- a thin tick line at that position on the bar itself, so "how close is
+ * this to auto-repairing" is visible at a glance without cross-referencing
+ * the settings card's percentage against this item's own numbers. Purely
+ * visual (position: absolute over .bar, see .bar-threshold in app.css) --
+ * doesn't affect the fill itself. Omitted entirely when Auto-repair is off,
+ * since there's nothing meaningful to mark.
+ */
+function DurabilityBar({ item, compact = false, thresholdPercent }: { item: EquipmentItem; compact?: boolean; thresholdPercent?: number }) {
   const max = EquipmentManager.maxDurability(item);
   const ratio = item.durability / max;
   return (
     <>
       <div className={`bar dura ${ratio < 0.25 ? 'low' : ''}`} style={{ marginTop: compact ? 2 : 4 }}>
         <span style={{ width: `${ratio * 100}%` }} />
+        {thresholdPercent !== undefined && (
+          <i
+            className="bar-threshold"
+            style={{ left: `${thresholdPercent}%` }}
+            title={`Auto-repairs at ${thresholdPercent}% durability`}
+          />
+        )}
       </div>
       {/* Compact mode (the always-visible collapsed card row) skips the
           text line -- the bar itself, plus its own low-durability red
@@ -106,8 +123,46 @@ function SetInfoBlock({ hero, setId, equipped }: { hero: Hero; setId: string; eq
  * tooltip. Now expands to show the real description, matching everything
  * else in this panel.
  */
-function ConsumableInfoCard({ def, count }: { def: ConsumableDef; count: number }) {
+/**
+ * Whether a consumable is used immediately on a hero via
+ * InventoryManager.useOnHero (healInjury and/or restoreHealth) rather than
+ * equipped ahead of a quest send. See ConsumableDef.effect's own comments
+ * in types.ts for why these two are grouped this way.
+ */
+function isInstantUseOnHero(def: ConsumableDef): boolean {
+  return !!def.effect.healInjury || (def.effect.restoreHealth ?? 0) > 0;
+}
+
+/** Whether a consumable is a per-quest loadout pick (equipped into a
+ *  Consumable Slot ahead of sending a hero out), as opposed to an instant-
+ *  use or peddler-charm item. */
+function isLoadoutEffect(def: ConsumableDef): boolean {
+  const e = def.effect;
+  return !!(e.success || e.gold || e.xp || e.loot || e.injuryResist || e.speed
+    || e.preventInjury || e.guaranteedGoodEvent || e.healthDamageReduction);
+}
+
+/**
+ * Stash consumables used to be a static, non-interactive chip -- clicking
+ * only expanded the description. Now offers the actual action inline:
+ * "Use" for a healInjury/restoreHealth item (applied immediately to
+ * whichever hero is selected in this panel, via engine.useConsumable --
+ * same InventoryManager.useOnHero path the hardcoded Bandage button in
+ * HeroesPanel already uses), "Equip" for a per-quest loadout item (drops
+ * it into the selected hero's first empty Consumable Slot via
+ * engine.equipConsumable, same call the slot picker below already makes --
+ * "No free consumable slots." surfaces as a toast if there isn't one), or
+ * the peddler charm's own guild-wide action for Beckoning Charm. An item
+ * with no actionable effect at all (Pet Treat -- fed from the Hatchery
+ * instead) shows no button, just the description.
+ */
+function ConsumableInfoCard({
+  def, count, hero, engine,
+}: { def: ConsumableDef; count: number; hero: Hero; engine: GameEngine }) {
   const [open, setOpen] = useState(false);
+  const instantUse = isInstantUseOnHero(def);
+  const loadout = isLoadoutEffect(def);
+  const peddlerCharm = (def.effect.peddlerCounterReduction ?? 0) > 0;
   return (
     <div className={`item-card ${open ? 'open' : ''}`}>
       <div
@@ -125,6 +180,36 @@ function ConsumableInfoCard({ def, count }: { def: ConsumableDef; count: number 
       {open && (
         <div className="item-card-details">
           <div className="tiny muted">{def.description}</div>
+          <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
+            {instantUse && (
+              <button
+                className="btn-primary"
+                style={{ minHeight: 24, padding: '3px 8px' }}
+                onClick={() => engine.useConsumable(hero.id, def.id)}
+              >
+                Use on {hero.name}
+              </button>
+            )}
+            {loadout && (
+              <button
+                className="btn-primary"
+                style={{ minHeight: 24, padding: '3px 8px' }}
+                onClick={() => engine.equipConsumable(hero.id, def.id)}
+                title={`Equip into ${hero.name}'s next open Consumable Slot`}
+              >
+                Equip on {hero.name}
+              </button>
+            )}
+            {peddlerCharm && (
+              <button
+                className="btn-primary"
+                style={{ minHeight: 24, padding: '3px 8px' }}
+                onClick={() => engine.usePeddlerCharm(def.id)}
+              >
+                Use
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -271,7 +356,7 @@ function SlotCard({
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
             <RarityPill rarity={def.rarity} />
             {item.customMods && <CraftedPill />}
-            <DurabilityBar item={item} compact />
+            <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
           </div>
         </div>
       </div>
@@ -350,7 +435,7 @@ function StashCard({
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
             <RarityPill rarity={def.rarity} />
             {item.customMods && <CraftedPill />}
-            <DurabilityBar item={item} compact />
+            <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
           </div>
         </div>
       </div>
@@ -576,12 +661,15 @@ export function EquipmentPanel() {
       </div>
 
       <div className="section-heading">Consumables</div>
+      <p className="tiny muted" style={{ marginTop: -6, marginBottom: 6 }}>
+        Click one to Use or Equip it on {hero.name} (switch heroes with the tabs above).
+      </p>
       {InventoryManager.owned(state).length === 0 ? (
         <p className="small muted">None on hand. The Shop sells potions and charms.</p>
       ) : (
         <div className="item-card-grid">
           {InventoryManager.owned(state).map(({ def, count }) => (
-            <ConsumableInfoCard key={def.id} def={def} count={count} />
+            <ConsumableInfoCard key={def.id} def={def} count={count} hero={hero} engine={engine} />
           ))}
         </div>
       )}

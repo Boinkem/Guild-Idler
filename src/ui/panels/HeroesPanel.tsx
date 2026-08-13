@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { HeroManager } from '../../game/managers/HeroManager';
@@ -72,6 +72,43 @@ function TombstoneImg({ height, icon }: { height: number; icon: string }) {
  * player tracks the same way, rather than Health being a hidden number
  * you only discover after a bad string of injuries.
  */
+/**
+ * Auto Heal countdown -- a slim second bar directly under Health, DRAINING
+ * from full to empty as the hero's passive Infirmary regen closes the gap
+ * to full Health (mirrors the "full in Xm" text that already exists for
+ * the Fallen/auto-revive timer below, just for the ordinary regen case).
+ * `eta` is the live, currently-projected time-to-full from
+ * HeroManager.healthRegenEtaMs; `initialEta` is captured once via a ref on
+ * mount/health-change so the bar has a stable denominator to drain
+ * against rather than recomputing its own total every render (which would
+ * make it read as permanently ~empty, since remaining-time-over-itself is
+ * always ~1). Renders nothing once the hero is at full Health, Fallen, or
+ * Infirmary hasn't been built yet (healTimeMinutes still applies at
+ * Infirmary level 0, so this is really just "hero is already full" in
+ * practice pre-Infirmary too).
+ */
+function AutoHealBar({ hero, infirmaryLevel }: { hero: Hero; infirmaryLevel: number }) {
+  const eta = HeroManager.healthRegenEtaMs(hero, infirmaryLevel);
+  const initialEtaRef = useRef<{ health: number | undefined; eta: number } | null>(null);
+  if (eta <= 0) {
+    initialEtaRef.current = null;
+    return null;
+  }
+  if (!initialEtaRef.current || initialEtaRef.current.health !== hero.health) {
+    initialEtaRef.current = { health: hero.health, eta };
+  }
+  const total = Math.max(initialEtaRef.current.eta, eta);
+  const ratio = total > 0 ? Math.max(0, Math.min(1, eta / total)) : 0;
+  return (
+    <>
+      <div className="bar heal-timer" style={{ marginTop: 2 }} title="Time until fully healed at the current Infirmary rate">
+        <span style={{ width: `${ratio * 100}%` }} />
+      </div>
+      <div className="tiny muted">Auto Heal — full in {formatDuration(eta)}</div>
+    </>
+  );
+}
+
 function HealthBar({ hero, compact = false }: { hero: Hero; compact?: boolean }) {
   const max = HeroManager.maxHealth(hero);
   const current = HeroManager.currentHealth(hero);
@@ -115,6 +152,7 @@ export function HeroesPanel() {
     state.heroes.map((h) => ({ id: h.id, level: h.level })),
   );
 
+  const infirmaryLevel = GuildManager.facilityLevel(state, 'infirmary');
   const revivalDiscount = ModifierManager.global(state).revivalDiscount ?? 0;
   const fallenHeroes = state.heroes.filter((h) => h.status === 'fallen');
   const bulkReviveCost = Math.round(
@@ -226,6 +264,7 @@ export function HeroesPanel() {
                   <span style={{ width: `${(hero.xp / toNext) * 100}%` }} />
                 </div>
                 <HealthBar hero={hero} compact />
+                <AutoHealBar hero={hero} infirmaryLevel={infirmaryLevel} />
                 {!isOpen && (
                   <p className="tiny muted" style={{ margin: '4px 0 0' }}>
                     {hero.status === 'fallen'
@@ -281,6 +320,7 @@ export function HeroesPanel() {
                   Health
                 </div>
                 <HealthBar hero={hero} />
+                <AutoHealBar hero={hero} infirmaryLevel={infirmaryLevel} />
 
                 <div className="stat-row" style={{ marginTop: 8 }}>
                   {STAT_KEYS.map((key) => (
@@ -342,21 +382,34 @@ export function HeroesPanel() {
                 )}
 
                 {hero.status === 'fallen' && (
-                  <div className="spread" style={{ marginTop: 8 }}>
-                    <span className="small bad">
-                      Fallen
-                      {infirmaryAutoReviveUnlocked(GuildManager.facilityLevel(state, 'infirmary')) && hero.fallenAt
-                        ? ` — recovers on its own in ${formatDuration(
-                            hero.fallenAt + Tuning.get('guild_facility.infirmary.autoReviveHours') * HOUR - now,
-                          )}, or pay to skip`
-                        : ' — needs to be revived before being sent out again'}
-                    </span>
-                    <button
-                      onClick={() => engine.reviveHero(hero.id)}
-                      disabled={state.gold < HeroManager.revivalCost(hero, revivalDiscount)}
-                    >
-                      Revive · {formatGold(HeroManager.revivalCost(hero, revivalDiscount))}
-                    </button>
+                  <div style={{ marginTop: 8 }}>
+                    <div className="spread">
+                      <span className="small bad">
+                        Fallen
+                        {infirmaryAutoReviveUnlocked(infirmaryLevel) && hero.fallenAt
+                          ? ' — recovers on its own, or pay to skip'
+                          : ' — needs to be revived before being sent out again'}
+                      </span>
+                      <button
+                        onClick={() => engine.reviveHero(hero.id)}
+                        disabled={state.gold < HeroManager.revivalCost(hero, revivalDiscount)}
+                      >
+                        Revive · {formatGold(HeroManager.revivalCost(hero, revivalDiscount))}
+                      </button>
+                    </div>
+                    {infirmaryAutoReviveUnlocked(infirmaryLevel) && hero.fallenAt && (() => {
+                      const totalMs = Tuning.get('guild_facility.infirmary.autoReviveHours') * HOUR;
+                      const remainingMs = Math.max(0, hero.fallenAt + totalMs - now);
+                      const ratio = totalMs > 0 ? Math.max(0, Math.min(1, remainingMs / totalMs)) : 0;
+                      return (
+                        <>
+                          <div className="bar heal-timer" style={{ marginTop: 4 }} title="Time until free auto-revive">
+                            <span style={{ width: `${ratio * 100}%` }} />
+                          </div>
+                          <div className="tiny muted">Auto-revive — ready in {formatDuration(remainingMs)}</div>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
 

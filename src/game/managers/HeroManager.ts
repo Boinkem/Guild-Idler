@@ -256,6 +256,33 @@ export const HeroManager = {
   },
 
   /**
+   * Milliseconds until this hero reaches full Health at the CURRENT regen
+   * rate (Infirmary level + questing/idle status) -- a pure display helper,
+   * the same rate formula regenHealth uses, solved for time-to-target
+   * instead of amount-per-elapsed. Not persisted and not authoritative:
+   * regenHealth itself still ticks off real elapsed time each frame/offline
+   * catch-up, this just projects "at this instant's rate, how long until
+   * full" for the Auto Heal countdown bar in HeroesPanel. Returns 0 once
+   * already at max, and 0 for a Fallen hero (regen doesn't apply to them --
+   * see autoReviveDue's own timer for what actually brings a Fallen hero
+   * back). Recomputed live on every render via useNow, so an Infirmary
+   * upgrade or the hero leaving/returning from a quest is reflected
+   * immediately rather than the countdown drifting stale.
+   */
+  healthRegenEtaMs(hero: Hero, infirmaryLevel: number): number {
+    if (hero.status === 'fallen') return 0;
+    const max = HeroManager.maxHealth(hero);
+    const current = HeroManager.currentHealth(hero);
+    if (current >= max) return 0;
+    const healTimeMinutes = infirmaryHealTimeMinutes(infirmaryLevel);
+    const fraction = hero.status === 'questing' ? Tuning.get('health.questRegenFraction') : 1;
+    const percentPerMinute = (100 / healTimeMinutes) * fraction;
+    if (percentPerMinute <= 0) return Infinity;
+    const remainingPercent = 100 - (current / max) * 100;
+    return (remainingPercent / percentPerMinute) * MINUTE;
+  },
+
+  /**
    * Gold cost to instantly revive a Fallen hero -- see
    * fallen.revivalCostBase/PerLevel. `discountPercent` comes from
    * Undertaker's Favor (ModifierManager.global(state).revivalDiscount) --

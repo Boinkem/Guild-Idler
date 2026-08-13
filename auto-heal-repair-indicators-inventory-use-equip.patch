@@ -1,0 +1,460 @@
+From f9925e83ab9cc08704250708b9086c1e6cd154a4 Mon Sep 17 00:00:00 2001
+From: Claude <assistant@anthropic.local>
+Date: Thu, 13 Aug 2026 01:22:33 +0000
+Subject: [PATCH] Auto Heal countdown, Auto-repair threshold tick, inventory
+ click-to-use/equip
+
+---
+ guild-idler-status.md            | 69 ++++++++++++++++++++++
+ src/game/managers/HeroManager.ts | 27 +++++++++
+ src/styles/app.css               | 23 ++++++++
+ src/ui/panels/EquipmentPanel.tsx | 98 ++++++++++++++++++++++++++++++--
+ src/ui/panels/HeroesPanel.tsx    | 85 +++++++++++++++++++++------
+ 5 files changed, 281 insertions(+), 21 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 472ab22..4e0b962 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -25,6 +25,75 @@ Tab hero-log rework" below. Quest success now runs through a combined
+ diminishing-returns curve rather than pure linear stacking -- see "Quest
+ success rebalance -- built" below.
+ 
++### Auto Heal countdown, Auto-repair threshold tick, and inventory click-to-use/equip -- built
++Three separate, smaller requests bundled into one pass since they all touch
++the Inventory/Heroes UI and none needed its own patch.
++
++- **Auto Heal countdown.** New `HeroManager.healthRegenEtaMs(hero,
++  infirmaryLevel)` -- the same rate formula `regenHealth` already uses
++  (Infirmary heal-time minutes, halved while questing via
++  `health.questRegenFraction`), solved for time-to-full instead of
++  amount-per-elapsed-ms. Purely a display helper; `regenHealth` itself is
++  still the only thing that actually moves `hero.health`. Surfaced as a new
++  `AutoHealBar` component directly under both the compact and expanded
++  Health bars in `HeroesPanel.tsx` -- a teal `.bar.heal-timer` that drains
++  from full to empty as the projected time-to-full closes, plus a "full in
++  Xm" text readout. Renders nothing once a hero is already at full Health
++  or is Fallen (regen doesn't apply to a Fallen hero -- see the auto-revive
++  timer below instead). The drain uses a ref-captured denominator (the ETA
++  at the moment it was first observed for the hero's current `health`
++  value) rather than recomputing its own total every render, since
++  remaining-time-over-itself is always ~1 and would otherwise read as a bar
++  permanently near-empty.
++- **Fallen auto-revive countdown, corrected to a real timer.** The existing
++  Fallen card already had a text-only "recovers in Xh" line once Infirmary
++  hits max level (`infirmaryAutoReviveUnlocked`) -- this is a genuine
++  fixed-duration countdown (`guild_facility.infirmary.autoReviveHours`,
++  currently 12h), unlike the Auto Heal case above, so it gets an exact
++  countdown bar rather than an approximated one: `ratio = remainingMs /
++  totalMs`, same `.bar.heal-timer` styling for visual consistency with the
++  Auto Heal bar above it.
++- **Auto-repair threshold, marked directly on the Durability bar instead of
++  a fake timer.** Auto-repair (`autoRepairEnabled`/
++  `autoRepairThresholdPercent`) is a durability-threshold check on tick, not
++  a scheduled event -- durability only drops in a lump during quest
++  resolution, so there's no real "time until it fires" to count down to.
++  `DurabilityBar` (`EquipmentPanel.tsx`) now takes an optional
++  `thresholdPercent` prop; when Auto-repair is on, both `SlotCard` and
++  `StashCard` pass `state.autoRepairThresholdPercent` through, rendering a
++  thin `.bar-threshold` tick line at that position on the bar itself (new
++  `position: relative` on `.bar`, new absolutely-positioned `.bar-threshold`
++  class in `app.css`). Shows nothing when Auto-repair is off, since there's
++  no threshold to mark.
++- **Consumables in the stash are now clickable to Use or Equip, not just
++  the empty Consumable Slot picker.** `ConsumableInfoCard` gained two new
++  classifier helpers -- `isInstantUseOnHero` (true for `healInjury` and/or
++  `restoreHealth`, the existing hero-targeted "Apply immediately"
++  effects already routed through `InventoryManager.useOnHero` /
++  `engine.useConsumable`) and `isLoadoutEffect` (true for any of the
++  per-quest loadout keys: `success`/`gold`/`xp`/`loot`/`injuryResist`/
++  `speed`/`preventInjury`/`guaranteedGoodEvent`/`healthDamageReduction`).
++  Expanding a stash card now shows a "Use on {hero}" button (instant-use
++  items), an "Equip on {hero}" button (loadout items, calling the same
++  `engine.equipConsumable` the empty-slot picker already used --
++  "No free consumable slots." surfaces as the existing toast if full), or
++  a "Use" button for Beckoning Charm's own guild-wide
++  `engine.usePeddlerCharm` path, all targeting whichever hero is currently
++  selected via the tab strip at the top of the Inventory panel (a new
++  hint line under the "Consumables" heading spells this out). An item with
++  no actionable effect at all (Pet Treat, fed from the Hatchery instead)
++  shows no button. No new consumable *types* were needed for the
++  "instant heal" / "cure 1 debuff" request that prompted this pass --
++  `restorative_draught`/`greater_restorative_draught` (`restoreHealth`)
++  and `field_bandage` (`healInjury`) already existed and already had the
++  correct engine-level support; the gap was purely that the only UI
++  wired to `useOnHero` was HeroesPanel's hardcoded Bandage button. That
++  button is untouched; this just adds a second, general path to the same
++  underlying action.
++
++Verified: `npx tsc --noEmit` and `npx vite build --config vite.web.config.ts`
++both pass clean.
++
+ ### Quest success rebalance -- built
+ 
+ A live playtest report (two testers, real gear from `equipment.json`)
+diff --git a/src/game/managers/HeroManager.ts b/src/game/managers/HeroManager.ts
+index 7435ae6..407295c 100644
+--- a/src/game/managers/HeroManager.ts
++++ b/src/game/managers/HeroManager.ts
+@@ -255,6 +255,33 @@ export const HeroManager = {
+     hero.health = Math.min(max, current + regen);
+   },
+ 
++  /**
++   * Milliseconds until this hero reaches full Health at the CURRENT regen
++   * rate (Infirmary level + questing/idle status) -- a pure display helper,
++   * the same rate formula regenHealth uses, solved for time-to-target
++   * instead of amount-per-elapsed. Not persisted and not authoritative:
++   * regenHealth itself still ticks off real elapsed time each frame/offline
++   * catch-up, this just projects "at this instant's rate, how long until
++   * full" for the Auto Heal countdown bar in HeroesPanel. Returns 0 once
++   * already at max, and 0 for a Fallen hero (regen doesn't apply to them --
++   * see autoReviveDue's own timer for what actually brings a Fallen hero
++   * back). Recomputed live on every render via useNow, so an Infirmary
++   * upgrade or the hero leaving/returning from a quest is reflected
++   * immediately rather than the countdown drifting stale.
++   */
++  healthRegenEtaMs(hero: Hero, infirmaryLevel: number): number {
++    if (hero.status === 'fallen') return 0;
++    const max = HeroManager.maxHealth(hero);
++    const current = HeroManager.currentHealth(hero);
++    if (current >= max) return 0;
++    const healTimeMinutes = infirmaryHealTimeMinutes(infirmaryLevel);
++    const fraction = hero.status === 'questing' ? Tuning.get('health.questRegenFraction') : 1;
++    const percentPerMinute = (100 / healTimeMinutes) * fraction;
++    if (percentPerMinute <= 0) return Infinity;
++    const remainingPercent = 100 - (current / max) * 100;
++    return (remainingPercent / percentPerMinute) * MINUTE;
++  },
++
+   /**
+    * Gold cost to instantly revive a Fallen hero -- see
+    * fallen.revivalCostBase/PerLevel. `discountPercent` comes from
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 49f3ff3..3037c78 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -848,6 +848,7 @@ button:focus-visible, [tabindex]:focus-visible {
+   background: var(--edge);
+   border: 1px solid #000;
+   overflow: hidden;
++  position: relative;
+ }
+ /* Every progress bar in the game (XP, durability, harvest, anything else
+    built on .bar) previously snapped straight to its new width on every
+@@ -875,6 +876,28 @@ button:focus-visible, [tabindex]:focus-visible {
+    section. */
+ .bar.health > span { background: var(--moss); }
+ .bar.health.low > span { background: var(--blood); }
++/* Auto-repair threshold tick -- a thin vertical marker sitting ON TOP of
++   a Durability bar (not a fill), showing exactly where Auto-repair's
++   configured percentage sits on that specific item's own current/max
++   durability. `left` is set inline per-item in DurabilityBar; this class
++   only supplies the shared visual (a 2px line, parchment so it reads
++   against both the brass fill and the dark empty-track background).
++   z-index isn't needed -- .bar's own overflow:hidden already keeps this
++   clipped to the bar's bounds the same way the fill span is. */
++.bar-threshold {
++  position: absolute;
++  top: 0;
++  bottom: 0;
++  width: 2px;
++  background: var(--parchment);
++  opacity: 0.85;
++  pointer-events: none;
++}
++/* Auto Heal / Fallen auto-revive countdown -- a distinct teal fill so a
++   "time remaining" bar never reads as another Health/Durability/XP bar at
++   a glance. Drains (not fills) as time passes, per its own component
++   logic in HeroesPanel.tsx -- purely visual here. */
++.bar.heal-timer > span { background: var(--teal); }
+ 
+ .muted { color: var(--muted); }
+ .good { color: var(--moss); }
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 9471894..7605229 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -33,13 +33,30 @@ function CraftedPill() {
+   );
+ }
+ 
+-function DurabilityBar({ item, compact = false }: { item: EquipmentItem; compact?: boolean }) {
++/**
++ * `thresholdPercent`, when passed, marks where Auto-repair (see the
++ * toggle/slider in the Inventory header below) will trigger for this item
++ * -- a thin tick line at that position on the bar itself, so "how close is
++ * this to auto-repairing" is visible at a glance without cross-referencing
++ * the settings card's percentage against this item's own numbers. Purely
++ * visual (position: absolute over .bar, see .bar-threshold in app.css) --
++ * doesn't affect the fill itself. Omitted entirely when Auto-repair is off,
++ * since there's nothing meaningful to mark.
++ */
++function DurabilityBar({ item, compact = false, thresholdPercent }: { item: EquipmentItem; compact?: boolean; thresholdPercent?: number }) {
+   const max = EquipmentManager.maxDurability(item);
+   const ratio = item.durability / max;
+   return (
+     <>
+       <div className={`bar dura ${ratio < 0.25 ? 'low' : ''}`} style={{ marginTop: compact ? 2 : 4 }}>
+         <span style={{ width: `${ratio * 100}%` }} />
++        {thresholdPercent !== undefined && (
++          <i
++            className="bar-threshold"
++            style={{ left: `${thresholdPercent}%` }}
++            title={`Auto-repairs at ${thresholdPercent}% durability`}
++          />
++        )}
+       </div>
+       {/* Compact mode (the always-visible collapsed card row) skips the
+           text line -- the bar itself, plus its own low-durability red
+@@ -106,8 +123,46 @@ function SetInfoBlock({ hero, setId, equipped }: { hero: Hero; setId: string; eq
+  * tooltip. Now expands to show the real description, matching everything
+  * else in this panel.
+  */
+-function ConsumableInfoCard({ def, count }: { def: ConsumableDef; count: number }) {
++/**
++ * Whether a consumable is used immediately on a hero via
++ * InventoryManager.useOnHero (healInjury and/or restoreHealth) rather than
++ * equipped ahead of a quest send. See ConsumableDef.effect's own comments
++ * in types.ts for why these two are grouped this way.
++ */
++function isInstantUseOnHero(def: ConsumableDef): boolean {
++  return !!def.effect.healInjury || (def.effect.restoreHealth ?? 0) > 0;
++}
++
++/** Whether a consumable is a per-quest loadout pick (equipped into a
++ *  Consumable Slot ahead of sending a hero out), as opposed to an instant-
++ *  use or peddler-charm item. */
++function isLoadoutEffect(def: ConsumableDef): boolean {
++  const e = def.effect;
++  return !!(e.success || e.gold || e.xp || e.loot || e.injuryResist || e.speed
++    || e.preventInjury || e.guaranteedGoodEvent || e.healthDamageReduction);
++}
++
++/**
++ * Stash consumables used to be a static, non-interactive chip -- clicking
++ * only expanded the description. Now offers the actual action inline:
++ * "Use" for a healInjury/restoreHealth item (applied immediately to
++ * whichever hero is selected in this panel, via engine.useConsumable --
++ * same InventoryManager.useOnHero path the hardcoded Bandage button in
++ * HeroesPanel already uses), "Equip" for a per-quest loadout item (drops
++ * it into the selected hero's first empty Consumable Slot via
++ * engine.equipConsumable, same call the slot picker below already makes --
++ * "No free consumable slots." surfaces as a toast if there isn't one), or
++ * the peddler charm's own guild-wide action for Beckoning Charm. An item
++ * with no actionable effect at all (Pet Treat -- fed from the Hatchery
++ * instead) shows no button, just the description.
++ */
++function ConsumableInfoCard({
++  def, count, hero, engine,
++}: { def: ConsumableDef; count: number; hero: Hero; engine: GameEngine }) {
+   const [open, setOpen] = useState(false);
++  const instantUse = isInstantUseOnHero(def);
++  const loadout = isLoadoutEffect(def);
++  const peddlerCharm = (def.effect.peddlerCounterReduction ?? 0) > 0;
+   return (
+     <div className={`item-card ${open ? 'open' : ''}`}>
+       <div
+@@ -125,6 +180,36 @@ function ConsumableInfoCard({ def, count }: { def: ConsumableDef; count: number
+       {open && (
+         <div className="item-card-details">
+           <div className="tiny muted">{def.description}</div>
++          <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
++            {instantUse && (
++              <button
++                className="btn-primary"
++                style={{ minHeight: 24, padding: '3px 8px' }}
++                onClick={() => engine.useConsumable(hero.id, def.id)}
++              >
++                Use on {hero.name}
++              </button>
++            )}
++            {loadout && (
++              <button
++                className="btn-primary"
++                style={{ minHeight: 24, padding: '3px 8px' }}
++                onClick={() => engine.equipConsumable(hero.id, def.id)}
++                title={`Equip into ${hero.name}'s next open Consumable Slot`}
++              >
++                Equip on {hero.name}
++              </button>
++            )}
++            {peddlerCharm && (
++              <button
++                className="btn-primary"
++                style={{ minHeight: 24, padding: '3px 8px' }}
++                onClick={() => engine.usePeddlerCharm(def.id)}
++              >
++                Use
++              </button>
++            )}
++          </div>
+         </div>
+       )}
+     </div>
+@@ -271,7 +356,7 @@ function SlotCard({
+             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
+             <RarityPill rarity={def.rarity} />
+             {item.customMods && <CraftedPill />}
+-            <DurabilityBar item={item} compact />
++            <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
+           </div>
+         </div>
+       </div>
+@@ -350,7 +435,7 @@ function StashCard({
+             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
+             <RarityPill rarity={def.rarity} />
+             {item.customMods && <CraftedPill />}
+-            <DurabilityBar item={item} compact />
++            <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
+           </div>
+         </div>
+       </div>
+@@ -576,12 +661,15 @@ export function EquipmentPanel() {
+       </div>
+ 
+       <div className="section-heading">Consumables</div>
++      <p className="tiny muted" style={{ marginTop: -6, marginBottom: 6 }}>
++        Click one to Use or Equip it on {hero.name} (switch heroes with the tabs above).
++      </p>
+       {InventoryManager.owned(state).length === 0 ? (
+         <p className="small muted">None on hand. The Shop sells potions and charms.</p>
+       ) : (
+         <div className="item-card-grid">
+           {InventoryManager.owned(state).map(({ def, count }) => (
+-            <ConsumableInfoCard key={def.id} def={def} count={count} />
++            <ConsumableInfoCard key={def.id} def={def} count={count} hero={hero} engine={engine} />
+           ))}
+         </div>
+       )}
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index 455ba78..e3dd66a 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -1,4 +1,4 @@
+-import { useState } from 'react';
++import { useRef, useState } from 'react';
+ import { useEngine, useNow } from '../useEngine';
+ import { useSettings } from '../useSettings';
+ import { HeroManager } from '../../game/managers/HeroManager';
+@@ -72,6 +72,43 @@ function TombstoneImg({ height, icon }: { height: number; icon: string }) {
+  * player tracks the same way, rather than Health being a hidden number
+  * you only discover after a bad string of injuries.
+  */
++/**
++ * Auto Heal countdown -- a slim second bar directly under Health, DRAINING
++ * from full to empty as the hero's passive Infirmary regen closes the gap
++ * to full Health (mirrors the "full in Xm" text that already exists for
++ * the Fallen/auto-revive timer below, just for the ordinary regen case).
++ * `eta` is the live, currently-projected time-to-full from
++ * HeroManager.healthRegenEtaMs; `initialEta` is captured once via a ref on
++ * mount/health-change so the bar has a stable denominator to drain
++ * against rather than recomputing its own total every render (which would
++ * make it read as permanently ~empty, since remaining-time-over-itself is
++ * always ~1). Renders nothing once the hero is at full Health, Fallen, or
++ * Infirmary hasn't been built yet (healTimeMinutes still applies at
++ * Infirmary level 0, so this is really just "hero is already full" in
++ * practice pre-Infirmary too).
++ */
++function AutoHealBar({ hero, infirmaryLevel }: { hero: Hero; infirmaryLevel: number }) {
++  const eta = HeroManager.healthRegenEtaMs(hero, infirmaryLevel);
++  const initialEtaRef = useRef<{ health: number | undefined; eta: number } | null>(null);
++  if (eta <= 0) {
++    initialEtaRef.current = null;
++    return null;
++  }
++  if (!initialEtaRef.current || initialEtaRef.current.health !== hero.health) {
++    initialEtaRef.current = { health: hero.health, eta };
++  }
++  const total = Math.max(initialEtaRef.current.eta, eta);
++  const ratio = total > 0 ? Math.max(0, Math.min(1, eta / total)) : 0;
++  return (
++    <>
++      <div className="bar heal-timer" style={{ marginTop: 2 }} title="Time until fully healed at the current Infirmary rate">
++        <span style={{ width: `${ratio * 100}%` }} />
++      </div>
++      <div className="tiny muted">Auto Heal — full in {formatDuration(eta)}</div>
++    </>
++  );
++}
++
+ function HealthBar({ hero, compact = false }: { hero: Hero; compact?: boolean }) {
+   const max = HeroManager.maxHealth(hero);
+   const current = HeroManager.currentHealth(hero);
+@@ -115,6 +152,7 @@ export function HeroesPanel() {
+     state.heroes.map((h) => ({ id: h.id, level: h.level })),
+   );
+ 
++  const infirmaryLevel = GuildManager.facilityLevel(state, 'infirmary');
+   const revivalDiscount = ModifierManager.global(state).revivalDiscount ?? 0;
+   const fallenHeroes = state.heroes.filter((h) => h.status === 'fallen');
+   const bulkReviveCost = Math.round(
+@@ -226,6 +264,7 @@ export function HeroesPanel() {
+                   <span style={{ width: `${(hero.xp / toNext) * 100}%` }} />
+                 </div>
+                 <HealthBar hero={hero} compact />
++                <AutoHealBar hero={hero} infirmaryLevel={infirmaryLevel} />
+                 {!isOpen && (
+                   <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+                     {hero.status === 'fallen'
+@@ -281,6 +320,7 @@ export function HeroesPanel() {
+                   Health
+                 </div>
+                 <HealthBar hero={hero} />
++                <AutoHealBar hero={hero} infirmaryLevel={infirmaryLevel} />
+ 
+                 <div className="stat-row" style={{ marginTop: 8 }}>
+                   {STAT_KEYS.map((key) => (
+@@ -342,21 +382,34 @@ export function HeroesPanel() {
+                 )}
+ 
+                 {hero.status === 'fallen' && (
+-                  <div className="spread" style={{ marginTop: 8 }}>
+-                    <span className="small bad">
+-                      Fallen
+-                      {infirmaryAutoReviveUnlocked(GuildManager.facilityLevel(state, 'infirmary')) && hero.fallenAt
+-                        ? ` — recovers on its own in ${formatDuration(
+-                            hero.fallenAt + Tuning.get('guild_facility.infirmary.autoReviveHours') * HOUR - now,
+-                          )}, or pay to skip`
+-                        : ' — needs to be revived before being sent out again'}
+-                    </span>
+-                    <button
+-                      onClick={() => engine.reviveHero(hero.id)}
+-                      disabled={state.gold < HeroManager.revivalCost(hero, revivalDiscount)}
+-                    >
+-                      Revive · {formatGold(HeroManager.revivalCost(hero, revivalDiscount))}
+-                    </button>
++                  <div style={{ marginTop: 8 }}>
++                    <div className="spread">
++                      <span className="small bad">
++                        Fallen
++                        {infirmaryAutoReviveUnlocked(infirmaryLevel) && hero.fallenAt
++                          ? ' — recovers on its own, or pay to skip'
++                          : ' — needs to be revived before being sent out again'}
++                      </span>
++                      <button
++                        onClick={() => engine.reviveHero(hero.id)}
++                        disabled={state.gold < HeroManager.revivalCost(hero, revivalDiscount)}
++                      >
++                        Revive · {formatGold(HeroManager.revivalCost(hero, revivalDiscount))}
++                      </button>
++                    </div>
++                    {infirmaryAutoReviveUnlocked(infirmaryLevel) && hero.fallenAt && (() => {
++                      const totalMs = Tuning.get('guild_facility.infirmary.autoReviveHours') * HOUR;
++                      const remainingMs = Math.max(0, hero.fallenAt + totalMs - now);
++                      const ratio = totalMs > 0 ? Math.max(0, Math.min(1, remainingMs / totalMs)) : 0;
++                      return (
++                        <>
++                          <div className="bar heal-timer" style={{ marginTop: 4 }} title="Time until free auto-revive">
++                            <span style={{ width: `${ratio * 100}%` }} />
++                          </div>
++                          <div className="tiny muted">Auto-revive — ready in {formatDuration(remainingMs)}</div>
++                        </>
++                      );
++                    })()}
+                   </div>
+                 )}
+ 
+-- 
+2.43.0
+

@@ -848,6 +848,7 @@ button:focus-visible, [tabindex]:focus-visible {
   background: var(--edge);
   border: 1px solid #000;
   overflow: hidden;
+  position: relative;
 }
 /* Every progress bar in the game (XP, durability, harvest, anything else
    built on .bar) previously snapped straight to its new width on every
@@ -875,6 +876,28 @@ button:focus-visible, [tabindex]:focus-visible {
    section. */
 .bar.health > span { background: var(--moss); }
 .bar.health.low > span { background: var(--blood); }
+/* Auto-repair threshold tick -- a thin vertical marker sitting ON TOP of
+   a Durability bar (not a fill), showing exactly where Auto-repair's
+   configured percentage sits on that specific item's own current/max
+   durability. `left` is set inline per-item in DurabilityBar; this class
+   only supplies the shared visual (a 2px line, parchment so it reads
+   against both the brass fill and the dark empty-track background).
+   z-index isn't needed -- .bar's own overflow:hidden already keeps this
+   clipped to the bar's bounds the same way the fill span is. */
+.bar-threshold {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--parchment);
+  opacity: 0.85;
+  pointer-events: none;
+}
+/* Auto Heal / Fallen auto-revive countdown -- a distinct teal fill so a
+   "time remaining" bar never reads as another Health/Durability/XP bar at
+   a glance. Drains (not fills) as time passes, per its own component
+   logic in HeroesPanel.tsx -- purely visual here. */
+.bar.heal-timer > span { background: var(--teal); }
 
 .muted { color: var(--muted); }
 .good { color: var(--moss); }
