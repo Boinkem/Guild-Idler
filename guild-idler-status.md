@@ -5057,6 +5057,65 @@ actually new) -- clean pass. The patch itself was verified with a real
 confirming it applies cleanly and produces byte-identical output to what
 was tested here.
 
+### DevTool visual redesign -- built
+Requested a visual upgrade to the DevTool via Claude Design, asked what
+files/prompt to hand it (recommended `style.css` + `index.html` + real
+screenshots of the running tool, since `app.js` generates all markup
+dynamically via JS template strings -- a design-focused tool gets
+nothing useful from reading 79KB of vanilla-JS render logic, and can't
+infer real on-screen layout from code alone). Result came back as a new
+`style.css`: cooler near-black palette off the previous muddy purple,
+brass survives as the one warm accent; higher density (smaller tab
+chips, tighter table rows); fills replaced with borders/underlines
+where a fill was only ever signalling state (active tab, selected
+patch), cutting visual noise per screenful. Explicitly built as a
+reskin, not a rebuild -- same selectors, same markup contract, zero
+`app.js` changes required, matching exactly what was asked for.
+
+**Verified the reskin claim, not just trusted it.** A prompt asking an
+LLM to "keep the same selectors" doesn't guarantee it did -- checked
+directly: extracted every class/id selector from both the old and new
+stylesheets and diffed them. Zero classes or ids present in the old
+file are missing from the new one -- full backward coverage, no
+regressions. Went a level further and cross-referenced against what
+`app.js` *actually generates* at runtime (every `class="..."` template
+string, every `classList.add/toggle`, every dynamic `.className`
+assignment) rather than just diffing stylesheet-to-stylesheet -- 95
+distinct classes in real use, checked each one.
+
+**Found a handful of classes app.js generates that neither the old nor
+the new stylesheet styles** (`.spread`, `.section-heading`,
+`.tuning-value-wrap`, and the bare `.egg-reward`/`.result-gem`/
+`.loot-field` wrapper divs, plus a `.clean` state class on the Patches
+tab's git-status block that only ever gets the unstyled default while
+its sibling `.dirty` gets a real highlight). Confirmed each one
+individually against the OLD file before concluding anything -- every
+single one was already unstyled before this redesign too, so none of
+these are regressions the reskin introduced. Left alone rather than
+silently patched in on the side, since fixing them wasn't what was
+asked for this pass and a couple (`.spread`, `.section-heading`) look
+like they were probably meant to have real styling from the start --
+worth a small, explicitly-scoped follow-up rather than sneaking extra
+changes into a redesign patch.
+
+Also confirmed: brace-balanced (185 open/185 close, no syntax slip),
+and every CSS custom property `app.js` itself references inline via
+`style="...var(--x)..."` (`--brass`/`--muted`/`--panel2`/`--panel3`/
+`--text`) still exists in the new `:root` block -- a renamed or dropped
+variable here would have broken inline styles invisibly, not thrown an
+error.
+
+**Not verified:** an actual rendered screenshot. Started the real
+DevTool server with the new stylesheet applied and confirmed it serves
+correctly over HTTP, but Playwright's Chromium couldn't reach
+`localhost` from inside this sandbox (a browser-subprocess network
+restriction, not a dead server -- same environment limitation noted in
+an earlier session's own verification writeup). The selector-coverage
+and variable-resolution checks above are real and thorough, but a
+human eyeballing the actual rendered tool before considering this fully
+closed is still worth doing, same as any other "verified everything but
+the pixels" patch.
+
 ### DevTool clarity pass: unit hints + two real save-blocking bugs found -- built
 Direct request: the generic mods/stats/effect/eventEffects editor (a
 compact label+input grid, shared across equipment/consumables/injuries/
