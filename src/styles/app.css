@@ -2610,40 +2610,36 @@ button.harvest-item:hover {
   /* `contain`, not `cover` -- `cover` always fully paints the box but
      crops into the source art on whichever axis the box's aspect ratio
      doesn't match the art's own (this box is 110:150; the actual card-
-     back files are closer to 1:2) -- normally invisible at rest since
-     the art carries its own transparent bleed around the edge, but
-     GROWING the box on hover (below) changes its aspect ratio too,
-     which is what was cropping into the real art -- not just the bleed
-     -- specifically on hover. `contain` guarantees the whole image,
-     including its own painted gold edge, is always entirely visible, at
-     the cost of a sliver of transparent letterboxing on a mismatched
-     box rather than ever slicing into the art itself. */
+     back files are closer to 1:2) -- normally invisible since the art
+     carries its own transparent bleed around the edge. `contain`
+     guarantees the whole image, including its own painted gold edge, is
+     always entirely visible, at the cost of a sliver of transparent
+     letterboxing on the mismatched box rather than ever slicing into
+     the art itself. */
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
   cursor: pointer;
   padding: 0;
-  /* Grows via actual width/height on hover, not `transform: scale` --
-     deliberately. A large background-image on a small element is the
-     one shape this codebase already found Chromium's GPU-compositor
-     transform path unreliable for once before (see this rule's own git
-     history: the original shake animation intermittently blanked the
-     card mid-transform on sustained hover). A width/height transition
-     goes through ordinary layout and paint on every frame instead of a
-     promoted compositing layer, sidestepping that whole class of
-     rendering bug rather than re-risking it with a different transform.
-     The negative margin below exactly cancels the width/height growth
-     (9px each side horizontally, 11px each side vertically, matching
-     the 18px/22px total hover growth), so the card visually grows from
-     its own center and pops out over its neighbors instead of shoving
-     them sideways the way a plain width/height increase inside a flex
-     row normally would. */
-  transition: width 140ms ease, height 140ms ease, margin 140ms ease, box-shadow 140ms ease;
+  /* Highlight only on hover -- no size change, no transform, nothing
+     that touches width/height/margin at all anymore. Two different
+     "grow on hover" attempts before this one (first `transform: scale`,
+     then a width/height transition with a compensating negative margin)
+     both looked fine reasoned through and even rendered correctly in an
+     isolated headless-browser test with the real art, but both still
+     showed the art cropping into one corner once actually tested in the
+     real running app -- something about resizing this exact element (a
+     large background-image on a small box) doesn't hold up in practice
+     here, and chasing the exact rendering mechanism a third time wasn't
+     worth it. This is deliberately the simplest possible version: the
+     box's size literally never changes between rest and hover, so
+     there's no `background-size: contain` recomputation happening on
+     hover at all for anything to go wrong with -- only `box-shadow`
+     (below) changes, which can't crop or shift the art regardless of
+     however this element gets painted. */
+  transition: box-shadow 140ms ease;
 }
 .peddler-card-facedown:hover {
-  width: 128px;
-  height: 172px;
-  margin: -11px -9px;
   /* A soft glow instead of a hard-edged outline -- the highlight cue
      without reintroducing a visible rectangular box around art that
      already has its own painted border. */
@@ -2651,7 +2647,7 @@ button.harvest-item:hover {
   z-index: 1;
 }
 .peddler-card-facedown:disabled { cursor: default; opacity: 0.6; }
-.peddler-card-facedown:disabled:hover { width: 110px; height: 150px; margin: 0; box-shadow: none; }
+.peddler-card-facedown:disabled:hover { box-shadow: none; }
 
 /* Plays on the two cards that WEREN'T picked once a result comes back --
    they never flip face-up at all now (see PeddlerCardModal.tsx's own

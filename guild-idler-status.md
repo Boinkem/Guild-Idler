@@ -8307,3 +8307,32 @@ per-schema-kind branches anywhere in `server.mjs` needed touching --
 the schema-driven read/write/validate path, and the frontend's schema
 list (driven off `/api/schema`'s own keys), both pick up a brand new
 schema automatically, same as every content type before this one.
+
+### Grimsby card hover, third attempt: dropped the "grow" behavior entirely, highlight only
+
+Two different "grow on hover" implementations in a row -- first
+`transform: scale()`, then a width/height transition with a
+compensating negative margin -- both looked correct reasoned through,
+and the second one even rendered pixel-perfect in an isolated headless-
+browser test against the real card art (see the follow-up entry
+above). Both still showed the art cropping into one corner once
+actually tested in the real running app. Chasing the exact mechanism a
+third time wasn't worth it, especially once it was confirmed this
+wasn't a stale build (this same testing pass separately confirmed the
+desktop-sprite hover fix, shipped in the same file, WAS showing
+correctly) -- something about resizing this specific element (a large
+background-image on a small box) doesn't hold up in this game's actual
+environment regardless of whether the resize goes through `transform`
+or real layout.
+
+Per direct request, the hover effect no longer changes the card's size
+at all -- `width`/`height`/`margin` are gone from
+`.peddler-card-facedown:hover` entirely, leaving only the `box-shadow`
+glow. The element's box is now IDENTICAL between rest and hover in
+every way that could affect how its `background-size: contain` paints
+-- there's nothing left for a hover state to recompute or get wrong,
+so whatever was causing the crop in the last two attempts no longer has
+anything to act on. Confirmed via the same headless-browser render used
+for the last attempt: the box's bounding rect is now numerically
+identical (110x150) before and after triggering `:hover`, and the full
+card -- all edges, no cropping -- renders correctly in both states.
