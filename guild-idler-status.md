@@ -25,6 +25,42 @@ Tab hero-log rework" below. Quest success now runs through a combined
 diminishing-returns curve rather than pure linear stacking -- see "Quest
 success rebalance -- built" below.
 
+### `app.css` visual refresh (Claude Design) -- built
+Direct request: a full restyle pass on `src/styles/app.css`, produced
+externally by Claude Design and patched in as-is. Deliberately a
+values-only refresh, not a redesign -- every existing class name and
+custom property is unchanged, confirmed directly by diffing the old file
+against the new one before patching: only property *values* (palette,
+gradients, radii, shadows) moved, plus a small number of purely-additive
+helpers (`--grain`, `--bevel`, `--carved-line`) that nothing pre-existing
+reads, so nothing that already depended on the old tokens changes shape
+or breaks.
+
+- **Palette moved from flat hex to `oklch()`** for every color token
+  (`--night`/`--panel`/`--panel-2`/`--panel-3`/`--edge`/`--parchment`/
+  `--ink`/`--muted`/`--brass`/`--brass-dim`/`--moss`/`--blood`/`--sky`/
+  `--violet`/`--teal`) -- same candlelit-guild-hall mood, re-tuned for
+  higher contrast.
+- **New display font**, `Pixelify Sans` (Google Fonts, `@import`ed at the
+  top of the file), ahead of the existing `Silkscreen`/`Press Start 2P`
+  fallback chain rather than replacing it outright.
+- **`--radius` widened 2px -> 8px** -- buttons/cards read noticeably
+  softer/rounder game-wide, a single-token change since virtually
+  everything already keyed off this variable rather than a hardcoded
+  radius.
+- Buttons, `.item-card`, `.item-icon`, and both accent button variants
+  (`.btn-primary`/`.btn-purple`) picked up gradient fills and a shared
+  bevel/inset-shadow treatment (`--bevel`, `--carved-line`) instead of
+  flat fills, plus small `border-radius` additions on a couple of
+  previously-square elements (`.item-card`, `.item-icon`).
+
+**Not verified in this pass** -- no dev environment/browser available
+here, so this was a direct file replacement based on the diff against
+the previous version, not a rendered check. Worth a real in-app look to
+confirm the new `oklch()` values and the Google Fonts `@import` both
+resolve correctly across the actual supported browser targets before
+calling this fully closed.
+
 ### Equipment source review + new `chainExclusive` flag: Quest Chain rewards excluded from Shop/loot/Peddler pools -- built
 Direct request to review the full equipment pool (`equipment.json`, 219
 defs) grouped by where each item comes from, then make Quest Chain

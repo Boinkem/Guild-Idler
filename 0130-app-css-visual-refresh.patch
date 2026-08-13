@@ -1,0 +1,440 @@
+From a37bd059801110194a1d0f71c655e57c63d9f385 Mon Sep 17 00:00:00 2001
+From: Claude Patch Bot <assistant@example.com>
+Date: Thu, 13 Aug 2026 05:51:36 +0000
+Subject: [PATCH] Apply app.css visual refresh (Claude Design restyle)
+
+---
+ guild-idler-status.md |  36 ++++++++++
+ src/styles/app.css    | 161 ++++++++++++++++++++++++++++--------------
+ 2 files changed, 145 insertions(+), 52 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index bea46c7..a9252de 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -25,6 +25,42 @@ Tab hero-log rework" below. Quest success now runs through a combined
+ diminishing-returns curve rather than pure linear stacking -- see "Quest
+ success rebalance -- built" below.
+ 
++### `app.css` visual refresh (Claude Design) -- built
++Direct request: a full restyle pass on `src/styles/app.css`, produced
++externally by Claude Design and patched in as-is. Deliberately a
++values-only refresh, not a redesign -- every existing class name and
++custom property is unchanged, confirmed directly by diffing the old file
++against the new one before patching: only property *values* (palette,
++gradients, radii, shadows) moved, plus a small number of purely-additive
++helpers (`--grain`, `--bevel`, `--carved-line`) that nothing pre-existing
++reads, so nothing that already depended on the old tokens changes shape
++or breaks.
++
++- **Palette moved from flat hex to `oklch()`** for every color token
++  (`--night`/`--panel`/`--panel-2`/`--panel-3`/`--edge`/`--parchment`/
++  `--ink`/`--muted`/`--brass`/`--brass-dim`/`--moss`/`--blood`/`--sky`/
++  `--violet`/`--teal`) -- same candlelit-guild-hall mood, re-tuned for
++  higher contrast.
++- **New display font**, `Pixelify Sans` (Google Fonts, `@import`ed at the
++  top of the file), ahead of the existing `Silkscreen`/`Press Start 2P`
++  fallback chain rather than replacing it outright.
++- **`--radius` widened 2px -> 8px** -- buttons/cards read noticeably
++  softer/rounder game-wide, a single-token change since virtually
++  everything already keyed off this variable rather than a hardcoded
++  radius.
++- Buttons, `.item-card`, `.item-icon`, and both accent button variants
++  (`.btn-primary`/`.btn-purple`) picked up gradient fills and a shared
++  bevel/inset-shadow treatment (`--bevel`, `--carved-line`) instead of
++  flat fills, plus small `border-radius` additions on a couple of
++  previously-square elements (`.item-card`, `.item-icon`).
++
++**Not verified in this pass** -- no dev environment/browser available
++here, so this was a direct file replacement based on the diff against
++the previous version, not a rendered check. Worth a real in-app look to
++confirm the new `oklch()` values and the Google Fonts `@import` both
++resolve correctly across the actual supported browser targets before
++calling this fully closed.
++
+ ### Equipment source review + new `chainExclusive` flag: Quest Chain rewards excluded from Shop/loot/Peddler pools -- built
+ Direct request to review the full equipment pool (`equipment.json`, 219
+ defs) grouped by where each item comes from, then make Quest Chain
+diff --git a/src/styles/app.css b/src/styles/app.css
+index b9f47a8..a2a5a81 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -1,36 +1,42 @@
+ /* =========================================================================
+-   Guildbound — visual system
+-   Palette: candlelit guild hall. Deep plum shadow, oiled parchment, brass.
+-   Type: a chunky pixel/mono display face for headings, a readable mono body.
++   Guildbound — visual system, refreshed.
++   Palette: weathered bronze and verdigris over deep aged ink -- same
++   candlelit-guild-hall mood as before, re-tuned for more contrast and a
++   "modern RPG UI" finish. Type: a cleaner pixel display face for headings,
++   a readable mono body. Every class name and custom property below is
++   unchanged from the previous system -- only the values (plus a few
++   purely-additive helpers nothing previously read) moved.
+    ========================================================================= */
+ 
++@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap');
++
+ :root {
+-  --night: #171320;
+-  --panel: #221c2e;
+-  --panel-2: #2b2338;
+-  --panel-3: #362c46;
+-  --edge: #0e0b14;
+-  --parchment: #f3e6c8;
+-  --ink: #2a2233;
+-  --muted: #a294b5;
+-  --brass: #d9a441;
+-  --brass-dim: #8c6a2a;
+-  --moss: #79a86b;
+-  --blood: #a33a3a;
+-  --sky: #5b8fd6;
+-  --violet: #a874d6;
++  --night: oklch(15% 0.018 55);
++  --panel: oklch(20% 0.022 52);
++  --panel-2: oklch(25% 0.026 50);
++  --panel-3: oklch(31% 0.032 48);
++  --edge: oklch(8% 0.01 50);
++  --parchment: oklch(92% 0.025 80);
++  --ink: oklch(20% 0.03 50);
++  --muted: oklch(64% 0.025 65);
++  --brass: oklch(72% 0.13 72);
++  --brass-dim: oklch(48% 0.09 68);
++  --moss: oklch(60% 0.11 142);
++  --blood: oklch(47% 0.16 24);
++  --sky: oklch(62% 0.08 232);
++  --violet: oklch(56% 0.1 318);
+   /* Deliberately NOT reused from RARITY_COLOR / any existing accent (brass
+      doubles as legendary's own colour, sky as rare's, violet as epic's,
+      moss as uncommon's) -- an active-set-bonus glow needs to read as its
+      own signal, not get mistaken for "this happens to be a legendary
+      item" at a glance. Teal has no rarity-tier meaning anywhere else in
+      the palette. */
+-  --teal: #3fc1b0;
++  --teal: oklch(64% 0.11 194);
+ 
+-  --font-display: 'Silkscreen', 'Press Start 2P', 'Courier New', ui-monospace, monospace;
++  --font-display: 'Pixelify Sans', 'Silkscreen', 'Press Start 2P', 'Courier New', ui-monospace, monospace;
+   --font-body: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+ 
+-  --radius: 2px;
++  --radius: 8px;
+   --tap: 34px;
+ 
+   /* Driven by the settings panel at runtime; these are the fallbacks. */
+@@ -39,6 +45,13 @@
+   --card-pad: 10px 12px;
+   --density-scale: 1;
+   --anim-speed: 1;
++
++  /* Purely additive helpers for the refresh -- no prior rule reads these,
++     so nothing that already depended on the tokens above changes shape. */
++  --grain: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.05) 0px, rgba(255, 255, 255, 0.05) 1px, transparent 1px, transparent 3px),
++    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.07) 0px, rgba(0, 0, 0, 0.07) 1px, transparent 1px, transparent 3px);
++  --bevel: inset 0 1px 0 rgba(255, 255, 255, 0.09), inset 0 -2px 3px rgba(0, 0, 0, 0.4);
++  --carved-line: 0 0 0 1px color-mix(in srgb, var(--brass-dim) 45%, var(--edge));
+ }
+ 
+ /*
+@@ -69,7 +82,9 @@
+ }
+ .item-card {
+   border: 1px solid var(--panel-3);
++  border-radius: 6px;
+   background: color-mix(in srgb, var(--panel-2) 88%, transparent);
++  overflow: hidden;
+ }
+ .item-card.empty { opacity: 0.6; }
+ .item-card-summary {
+@@ -111,6 +126,7 @@
+   justify-content: center;
+   background: var(--panel-3);
+   border: 1px solid var(--edge);
++  border-radius: 4px;
+ }
+ .item-icon img { width: 70%; height: 70%; image-rendering: pixelated; }
+ .item-card-body { min-width: 0; flex: 1; }
+@@ -231,9 +247,9 @@ button {
+   font-family: inherit;
+   font-size: 0.6875rem;
+   color: var(--parchment);
+-  background: var(--panel-2);
+-  border: 1px solid var(--edge);
+-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
++  background: linear-gradient(180deg, color-mix(in srgb, var(--panel-3) 55%, var(--panel-2)), var(--panel-2));
++  border: 1px solid color-mix(in srgb, var(--brass-dim) 30%, var(--edge));
++  box-shadow: var(--bevel), var(--carved-line);
+   padding: calc(7px * var(--density-scale)) calc(10px * var(--density-scale));
+   min-height: calc(var(--tap) * max(0.85, var(--density-scale)));
+   border-radius: var(--radius);
+@@ -241,7 +257,7 @@ button {
+   transition: background 90ms linear, transform 90ms linear;
+ }
+ 
+-button:hover:not(:disabled) { background-color: var(--panel-3); }
++button:hover:not(:disabled) { background: linear-gradient(180deg, var(--panel-3), color-mix(in srgb, var(--panel-3) 80%, var(--brass-dim))); }
+ button:active:not(:disabled) { transform: translateY(1px); }
+ button:disabled { opacity: 0.4; cursor: not-allowed; }
+ button:focus-visible, [tabindex]:focus-visible {
+@@ -250,10 +266,11 @@ button:focus-visible, [tabindex]:focus-visible {
+ }
+ 
+ .btn-primary {
+-  background: var(--brass-dim);
++  background: linear-gradient(180deg, color-mix(in srgb, var(--brass) 25%, var(--brass-dim)), var(--brass-dim));
+   border-color: var(--brass);
+   color: #fff8e6;
+   font-weight: 700;
++  box-shadow: var(--bevel), 0 2px 6px rgba(0, 0, 0, 0.35);
+ }
+ .btn-primary:hover:not(:disabled) { background: var(--brass); color: var(--ink); }
+ 
+@@ -264,10 +281,11 @@ button:focus-visible, [tabindex]:focus-visible {
+    consistent purple accent (Renown uses it too), so this stays legible
+    and on-brand rather than introducing a new one-off color. */
+ .btn-purple {
+-  background: color-mix(in srgb, var(--violet) 55%, var(--panel-2));
++  background: linear-gradient(180deg, color-mix(in srgb, var(--violet) 65%, var(--panel-2)), color-mix(in srgb, var(--violet) 45%, var(--panel-2)));
+   border-color: var(--violet);
+   color: #fff8e6;
+   font-weight: 700;
++  box-shadow: var(--bevel), 0 2px 6px rgba(0, 0, 0, 0.35);
+ }
+ .btn-purple:hover:not(:disabled) { background: var(--violet); color: var(--ink); }
+ .btn-purple:disabled { opacity: 0.5; }
+@@ -281,10 +299,11 @@ button:focus-visible, [tabindex]:focus-visible {
+    touching three different systems (quests, equipment, stash) -- the
+    color is tied to "bulk convenience", not to any one panel. */
+ .btn-green {
+-  background: color-mix(in srgb, var(--moss) 55%, var(--panel-2));
++  background: linear-gradient(180deg, color-mix(in srgb, var(--moss) 65%, var(--panel-2)), color-mix(in srgb, var(--moss) 45%, var(--panel-2)));
+   border-color: var(--moss);
+   color: #fff8e6;
+   font-weight: 700;
++  box-shadow: var(--bevel), 0 2px 6px rgba(0, 0, 0, 0.35);
+ }
+ .btn-green:hover:not(:disabled) { background: var(--moss); color: var(--ink); }
+ .btn-green:disabled { opacity: 0.5; }
+@@ -295,10 +314,11 @@ button:focus-visible, [tabindex]:focus-visible {
+    rather than an ordinary action, distinct from every other button color
+    already in use. */
+ .btn-danger {
+-  background: color-mix(in srgb, var(--blood) 55%, var(--panel-2));
++  background: linear-gradient(180deg, color-mix(in srgb, var(--blood) 65%, var(--panel-2)), color-mix(in srgb, var(--blood) 45%, var(--panel-2)));
+   border-color: var(--blood);
+   color: #fff8e6;
+   font-weight: 700;
++  box-shadow: var(--bevel), 0 2px 6px rgba(0, 0, 0, 0.35);
+ }
+ .btn-danger:hover:not(:disabled) { background: var(--blood); color: var(--ink); }
+ .btn-danger:disabled { opacity: 0.5; }
+@@ -315,10 +335,11 @@ button:focus-visible, [tabindex]:focus-visible {
+    deliberately NOT included -- this is specifically the "spend on a
+    leveled upgrade" family of buttons. */
+ .btn-yellow {
+-  background: color-mix(in srgb, var(--brass) 55%, var(--panel-2));
++  background: linear-gradient(180deg, color-mix(in srgb, var(--brass) 70%, var(--panel-2)), color-mix(in srgb, var(--brass) 45%, var(--panel-2)));
+   border-color: var(--brass);
+   color: var(--ink);
+   font-weight: 700;
++  box-shadow: var(--bevel), 0 2px 6px rgba(0, 0, 0, 0.35);
+ }
+ .btn-yellow:hover:not(:disabled) { background: var(--brass); color: var(--ink); }
+ .btn-yellow:disabled { opacity: 0.5; }
+@@ -335,10 +356,11 @@ button:focus-visible, [tabindex]:focus-visible {
+    (same "on" toggle shape .hero-tab-chip/.chip already use) -- an
+    inactive sub-tab stays plain so the current one is unambiguous. */
+ .btn-subtab.on {
+-  background: color-mix(in srgb, var(--sky) 55%, var(--panel-2));
++  background: linear-gradient(180deg, color-mix(in srgb, var(--sky) 65%, var(--panel-2)), color-mix(in srgb, var(--sky) 45%, var(--panel-2)));
+   border-color: var(--sky);
+   color: #fff8e6;
+   font-weight: 700;
++  box-shadow: var(--bevel), 0 2px 6px rgba(0, 0, 0, 0.35);
+ }
+ .btn-subtab.on:hover:not(:disabled) { background: var(--sky); color: var(--ink); }
+ 
+@@ -611,9 +633,21 @@ button:focus-visible, [tabindex]:focus-visible {
+   height: 100%;
+   display: flex;
+   flex-direction: column;
++  position: relative;
+   background: var(--night);
+-  border: 1px solid var(--edge);
+-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
++  border: 1px solid color-mix(in srgb, var(--brass-dim) 35%, var(--edge));
++  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(0, 0, 0, 0.4);
++}
++.menu-root::before {
++  content: '';
++  position: absolute;
++  inset: 0;
++  background-image: var(--grain);
++  background-size: 140px 140px;
++  opacity: 0.06;
++  mix-blend-mode: overlay;
++  pointer-events: none;
++  z-index: 0;
+ }
+ 
+ .titlebar {
+@@ -628,10 +662,11 @@ button:focus-visible, [tabindex]:focus-visible {
+ 
+ .titlebar h1 {
+   font-family: var(--font-display);
+-  font-size: 0.8125rem;
++  font-size: 0.875rem;
+   margin: 0;
+-  letter-spacing: 0.08em;
++  letter-spacing: 0.1em;
+   color: var(--brass);
++  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+ }
+ 
+ .titlebar .spacer { flex: 1; }
+@@ -733,26 +768,31 @@ button:focus-visible, [tabindex]:focus-visible {
+ 
+ .panel h2 {
+   font-family: var(--font-display);
+-  font-size: 0.875rem;
+-  letter-spacing: 0.06em;
+-  margin: 0 0 2px;
++  font-size: 1rem;
++  font-weight: 700;
++  letter-spacing: 0.05em;
++  margin: 0 0 3px;
+   color: var(--parchment);
++  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+ }
+ 
+ .panel .subtitle {
+   color: var(--muted);
+-  font-size: 0.625rem;
++  font-size: 0.6875rem;
+   margin: 0 0 14px;
++  letter-spacing: 0.01em;
+ }
+ 
+ .section-heading {
+   font-family: var(--font-display);
+-  font-size: 0.6875rem;
++  font-size: 0.75rem;
++  font-weight: 700;
+   color: var(--brass);
+-  letter-spacing: 0.08em;
++  letter-spacing: 0.1em;
+   margin: calc(18px * var(--density-scale)) 0 calc(8px * var(--density-scale));
+-  border-bottom: 1px solid var(--panel-3);
+-  padding-bottom: 4px;
++  border-bottom: 1px solid color-mix(in srgb, var(--brass-dim) 45%, var(--panel-3));
++  padding-bottom: 5px;
++  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+ }
+ 
+ /* --------------------------------- cards --------------------------------- */
+@@ -765,8 +805,10 @@ button:focus-visible, [tabindex]:focus-visible {
+      the same way .idle-plate/.idle-away-banner already are, rather than a
+      hardcoded rgba() that would look wrong on a light theme. */
+   background: color-mix(in srgb, var(--panel) 88%, transparent);
+-  border: 1px solid var(--edge);
++  border: 1px solid color-mix(in srgb, var(--brass-dim) 25%, var(--edge));
+   border-left: 3px solid var(--panel-3);
++  border-radius: var(--radius);
++  box-shadow: var(--bevel), var(--carved-line);
+   /* Cards aren't gridded here (QuestPanel/LorePanel/RaidsPanel just stack
+      them full-panel-width), so without a cap they stretch edge-to-edge on
+      a widened menu window. That's mostly harmless for text, but every
+@@ -782,10 +824,20 @@ button:focus-visible, [tabindex]:focus-visible {
+   margin-bottom: 8px;
+   overflow: hidden;
+ }
++.card::before {
++  content: '';
++  position: absolute;
++  inset: 0;
++  background-image: var(--grain);
++  background-size: 140px 140px;
++  opacity: 0.05;
++  mix-blend-mode: overlay;
++  pointer-events: none;
++}
+ 
+ .card.easy { border-left-color: var(--moss); }
+ .card.normal { border-left-color: var(--sky); }
+-.card.hard { border-left-color: #c98b3a; }
++.card.hard { border-left-color: oklch(58% 0.14 55); }
+ .card.epic { border-left-color: var(--violet); }
+ .card.legendary { border-left-color: var(--brass); }
+ .card.chain { border-left-color: var(--blood); }
+@@ -820,6 +872,7 @@ button:focus-visible, [tabindex]:focus-visible {
+   font-size: 0.6875rem;
+   padding: 2px 7px;
+   border: 1px solid currentColor;
++  border-radius: 3px;
+   letter-spacing: 0.06em;
+   text-transform: uppercase;
+ }
+@@ -847,6 +900,8 @@ button:focus-visible, [tabindex]:focus-visible {
+   height: 6px;
+   background: var(--edge);
+   border: 1px solid #000;
++  border-radius: 3px;
++  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+   overflow: hidden;
+   position: relative;
+ }
+@@ -864,18 +919,18 @@ button:focus-visible, [tabindex]:focus-visible {
+    affected by whatever's causing that. Still correctly respects the
+    deliberate :root[data-motion='off'] override below, which zeroes out
+    transition-duration too, on purpose, for accessibility. */
+-.bar > span { display: block; height: 100%; background: var(--moss); transition: width 500ms ease-out; }
+-.bar.xp > span { background: var(--sky); }
+-.bar.dura > span { background: var(--brass); }
+-.bar.dura.low > span { background: var(--blood); }
++.bar > span { display: block; height: 100%; background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 55%), var(--moss); transition: width 500ms ease-out; }
++.bar.xp > span { background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 55%), var(--sky); }
++.bar.dura > span { background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 55%), var(--brass); }
++.bar.dura.low > span { background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 55%), var(--blood); }
+ /* Health bar -- deliberately the same green .bar.xp/default already uses
+    for "good", switching to the same .low red tint durability uses under
+    25%. Mirrors .bar.dura exactly so Health and Durability read as two
+    equally-weighted things to track, not one primary and one afterthought.
+    See guild-idler-status.md's Health stat + Fallen/death mechanic
+    section. */
+-.bar.health > span { background: var(--moss); }
+-.bar.health.low > span { background: var(--blood); }
++.bar.health > span { background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 55%), var(--moss); }
++.bar.health.low > span { background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 55%), var(--blood); }
+ /* Auto-repair threshold tick -- a thin vertical marker sitting ON TOP of
+    a Durability bar (not a fill), showing exactly where Auto-repair's
+    configured percentage sits on that specific item's own current/max
+@@ -897,7 +952,7 @@ button:focus-visible, [tabindex]:focus-visible {
+    "time remaining" bar never reads as another Health/Durability/XP bar at
+    a glance. Drains (not fills) as time passes, per its own component
+    logic in HeroesPanel.tsx -- purely visual here. */
+-.bar.heal-timer > span { background: var(--teal); }
++.bar.heal-timer > span { background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 55%), var(--teal); }
+ 
+ .muted { color: var(--muted); }
+ .good { color: var(--moss); }
+@@ -913,6 +968,7 @@ button:focus-visible, [tabindex]:focus-visible {
+   font-size: 0.625rem;
+   padding: 3px 6px;
+   border: 1px solid var(--panel-3);
++  border-radius: 4px;
+   background: var(--panel-2);
+ }
+ .chip.on { border-color: var(--brass); color: var(--brass); }
+@@ -964,7 +1020,8 @@ button:focus-visible, [tabindex]:focus-visible {
+   position: relative;
+   background: var(--panel);
+   border: 1px solid var(--brass-dim);
+-  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.7);
++  border-radius: 10px;
++  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.7), 0 0 0 4px color-mix(in srgb, var(--brass-dim) 22%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+   max-width: 460px;
+   width: 100%;
+   max-height: 100%;
+-- 
+2.43.0
+
