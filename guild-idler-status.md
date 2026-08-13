@@ -25,6 +25,36 @@ Tab hero-log rework" below. Quest success now runs through a combined
 diminishing-returns curve rather than pure linear stacking -- see "Quest
 success rebalance -- built" below.
 
+### Consumables now use the same overlay/modal shape gear does; notification close button confirmed working -- built
+Follow-up to two items left open in "Big feedback batch" (see below):
+
+- **`ConsumableInfoCard` (stash list) and `ConsumableSlotCard` (per-hero
+  equip slot) converted from inline `.item-card-details` expansion to the
+  same `.overlay`/`.modal` popup `SlotCard`/`StashCard` already use for
+  gear** -- direct answer to the open question was "match gear."
+  `ConsumableInfoCard`'s modal keeps the exact same Use/Equip/peddler-charm
+  buttons the inline version had (see the previous entry above for what
+  each does), just inside the shared modal chrome instead of an inline
+  expand. `ConsumableSlotCard` got both its states converted: the filled
+  state opens a modal with the equipped item's description and an Unequip
+  button (mirroring `SlotCard`'s equipped-gear modal exactly), and the
+  empty state now opens a modal containing the picker grid instead of
+  expanding the card in place -- the picker's own contents (available
+  potions as chips, "Nothing spare to equip" fallback) are unchanged, only
+  the container moved from an inline `.item-card.open` to `.overlay`/
+  `.modal`, same as everywhere else. Every click handler now closes its
+  modal (`setOpen(false)`) alongside the actual action, matching gear's
+  own pattern of dismissing on click rather than leaving the modal open.
+- **Notification banner close button, confirmed working.** "Big feedback
+  batch" investigated this and found no bug in `NotificationBanner.tsx`
+  but couldn't confirm it actually worked without a live build. Directly
+  confirmed afterward: the X does dismiss the banner correctly. No code
+  change was needed -- closing this out rather than leaving it open
+  pending "more detail."
+
+`npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` both
+pass clean.
+
 ### Auto Heal countdown, Auto-repair threshold tick, and inventory click-to-use/equip -- built
 Three separate, smaller requests bundled into one pass since they all touch
 the Inventory/Heroes UI and none needed its own patch.
@@ -6464,13 +6494,15 @@ gained a second button next to the existing Buy ×1: `InventoryManager
 `SlotCard` (worn gear) and `StashCard` (stash) in `EquipmentPanel.tsx`
 both moved from inline `.item-card-details` expansion to a proper
 `.overlay`/`.modal` popup -- same shape the Vendors shop item cards and
-PeddlerCardDetailOverlay already use. **Scoped to gear specifically**:
+PeddlerCardDetailOverlay already use. **Scoped to gear at the time**:
 `ConsumableInfoCard` and `ConsumableSlotCard` (the consumables list and
 the per-hero consumable-equip picker, same file) were left as inline
 expand/pick UI -- converting a *selection* picker to a modal is a
 different UX shape than converting an *info* expand, and wasn't clearly
-what "clicking an item" was asking for. Worth flagging if that should
-change too.
+what "clicking an item" was asking for at the time. ~~Worth flagging if
+that should change too.~~ Resolved -- direct answer was "match gear" --
+see "Auto Heal countdown, Auto-repair threshold tick, and inventory
+click-to-use/equip -- built" above for the follow-up that converted both.
 
 **Grimsby polish, three pieces:**
 - "Pick Your Card" button (`PeddlerPanel.tsx`) is now `btn-purple`
@@ -6529,7 +6561,7 @@ progress-bar math already clamps with `Math.min(1, ...)`, so an
 overridden score exceeding the old flat max won't visually overflow a
 bar -- confirmed by reading it, not by rendering it live.
 
-**Notification banner close button -- investigated, not changed.**
+**Notification banner close button -- investigated, then confirmed working.**
 Reread `NotificationBanner.tsx` end to end against this specific
 complaint. The dismiss logic already looks correct: `acknowledge()`
 calls `setShown(null)` (hiding the banner) before the
@@ -6539,13 +6571,10 @@ close button's own `stopPropagation()` has nothing to conflict with
 (it's a sibling of the message button, not nested inside it); the CSS
 countdown bar is explicitly `pointer-events: none` for exactly this
 reason; and no other element's z-index sits between the banner's (55)
-and the click target. Did not find a bug to fix, so left the file
-untouched rather than making a change that wouldn't actually do
-anything. Needs more detail to make progress: does clicking the
-message body still correctly navigate and dismiss, with only the X
-failing? Or does nothing on the banner respond at that point? Worth
-double-checking against a freshly built copy too, in case this predates
-a fix already in the current code.
+and the click target. Did not find a bug to fix at the time, so left the
+file untouched. Confirmed directly afterward: the X does dismiss the
+banner correctly in the live game -- no code change was ever needed
+here, closing this out.
 
 ### Sound cue coverage audit -- two real gaps fixed (patch 0121)
 Flagged from a polish review noting several of the newer distinct audio

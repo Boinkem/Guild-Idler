@@ -156,6 +156,21 @@ function isLoadoutEffect(def: ConsumableDef): boolean {
  * with no actionable effect at all (Pet Treat -- fed from the Hatchery
  * instead) shows no button, just the description.
  */
+/**
+ * Stash consumables -- same overlay/modal treatment SlotCard/StashCard
+ * use for gear (see those two above), replacing this card's own previous
+ * inline `.item-card-details` expansion. Offers the actual action inside
+ * the modal: "Use" for a healInjury/restoreHealth item (applied
+ * immediately to whichever hero is selected in this panel, via
+ * engine.useConsumable -- same InventoryManager.useOnHero path the
+ * hardcoded Bandage button in HeroesPanel already uses), "Equip" for a
+ * per-quest loadout item (drops it into the selected hero's first empty
+ * Consumable Slot via engine.equipConsumable, same call the slot picker
+ * below already makes -- "No free consumable slots." surfaces as a toast
+ * if there isn't one), or the peddler charm's own guild-wide action for
+ * Beckoning Charm. An item with no actionable effect at all (Pet Treat --
+ * fed from the Hatchery instead) shows no button, just the description.
+ */
 function ConsumableInfoCard({
   def, count, hero, engine,
 }: { def: ConsumableDef; count: number; hero: Hero; engine: GameEngine }) {
@@ -164,55 +179,65 @@ function ConsumableInfoCard({
   const loadout = isLoadoutEffect(def);
   const peddlerCharm = (def.effect.peddlerCounterReduction ?? 0) > 0;
   return (
-    <div className={`item-card ${open ? 'open' : ''}`}>
+    <>
       <div
-        className="item-card-summary"
-        onClick={() => setOpen((v) => !v)}
+        className="item-card"
+        onClick={() => setOpen(true)}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
       >
-        <ConsumableIcon icon={def.icon} glyph={def.glyph} />
-        <div className="item-card-body">
-          <div className="item-card-name">{def.name} ×{count}</div>
+        <div className="item-card-summary">
+          <ConsumableIcon icon={def.icon} glyph={def.glyph} />
+          <div className="item-card-body">
+            <div className="item-card-name">{def.name} ×{count}</div>
+          </div>
         </div>
       </div>
+
       {open && (
-        <div className="item-card-details">
-          <div className="tiny muted">{def.description}</div>
-          <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
-            {instantUse && (
-              <button
-                className="btn-primary"
-                style={{ minHeight: 24, padding: '3px 8px' }}
-                onClick={() => engine.useConsumable(hero.id, def.id)}
-              >
-                Use on {hero.name}
-              </button>
-            )}
-            {loadout && (
-              <button
-                className="btn-primary"
-                style={{ minHeight: 24, padding: '3px 8px' }}
-                onClick={() => engine.equipConsumable(hero.id, def.id)}
-                title={`Equip into ${hero.name}'s next open Consumable Slot`}
-              >
-                Equip on {hero.name}
-              </button>
-            )}
-            {peddlerCharm && (
-              <button
-                className="btn-primary"
-                style={{ minHeight: 24, padding: '3px 8px' }}
-                onClick={() => engine.usePeddlerCharm(def.id)}
-              >
-                Use
-              </button>
-            )}
+        <div className="overlay" onClick={() => setOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
+              <ConsumableIcon icon={def.icon} glyph={def.glyph} size={48} />
+              <div>
+                <span className="card-title">{def.name}</span>
+                <div className="tiny muted">Owned ×{count}</div>
+              </div>
+            </div>
+            <div className="tiny muted">{def.description}</div>
+            <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+              <button onClick={() => setOpen(false)}>Close</button>
+              {instantUse && (
+                <button
+                  className="btn-primary"
+                  onClick={() => { engine.useConsumable(hero.id, def.id); setOpen(false); }}
+                >
+                  Use on {hero.name}
+                </button>
+              )}
+              {loadout && (
+                <button
+                  className="btn-primary"
+                  onClick={() => { engine.equipConsumable(hero.id, def.id); setOpen(false); }}
+                  title={`Equip into ${hero.name}'s next open Consumable Slot`}
+                >
+                  Equip on {hero.name}
+                </button>
+              )}
+              {peddlerCharm && (
+                <button
+                  className="btn-primary"
+                  onClick={() => { engine.usePeddlerCharm(def.id); setOpen(false); }}
+                >
+                  Use
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -224,82 +249,115 @@ function ConsumableInfoCard({
  * consumable with an unequip action; empty shows a picker built from
  * whatever's owned but not already equipped somewhere.
  */
+/**
+ * A single consumable-equip slot for whichever hero is currently selected --
+ * separate from the gear SLOTS grid above (consumables are used up over a
+ * quest, gear isn't), but placed directly beneath it so it reads as part of
+ * the same "what this hero is carrying" picture. Filled opens a modal with
+ * the consumable's info and an Unequip action, same overlay/modal shape
+ * SlotCard uses for gear; empty opens a modal with the picker instead of
+ * expanding inline, for the same visual-consistency reason.
+ */
 function ConsumableSlotCard({
   hero, equippedDefId, available, engine,
 }: {
   hero: Hero; equippedDefId: string | undefined;
   available: { def: ConsumableDef; count: number }[]; engine: GameEngine;
 }) {
-  const [picking, setPicking] = useState(false);
+  const [open, setOpen] = useState(false);
   const def = equippedDefId ? InventoryManager.resolveDef(engine.state, equippedDefId) : undefined;
 
   if (def) {
     return (
-      <div className="item-card">
-        <div className="item-card-summary">
-          <ConsumableIcon icon={def.icon} glyph={def.glyph} />
-          <div className="item-card-body">
-            <div className="item-card-name">{def.name}</div>
-            <div className="tiny muted">Equipped on {hero.name}</div>
+      <>
+        <div
+          className="item-card"
+          onClick={() => setOpen(true)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
+        >
+          <div className="item-card-summary">
+            <ConsumableIcon icon={def.icon} glyph={def.glyph} />
+            <div className="item-card-body">
+              <div className="item-card-name">{def.name}</div>
+              <div className="tiny muted">Equipped on {hero.name}</div>
+            </div>
           </div>
         </div>
-        <div className="item-card-details">
-          <div className="tiny muted">{def.description}</div>
-          <button
-            style={{ marginTop: 6, minHeight: 24, padding: '3px 6px' }}
-            onClick={() => engine.unequipConsumable(hero.id, def.id)}
-          >
-            Unequip
-          </button>
-        </div>
-      </div>
-    );
-  }
 
-  if (picking) {
-    return (
-      <div className="item-card open">
-        <div className="item-card-details" style={{ paddingTop: 8 }}>
-          {available.length === 0 ? (
-            <p className="tiny muted">Nothing spare to equip. Buy potions in the Shop.</p>
-          ) : (
-            <div className="row wrap" style={{ gap: 4 }}>
-              {available.map(({ def: d, count }) => (
+        {open && (
+          <div className="overlay" onClick={() => setOpen(false)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
+                <ConsumableIcon icon={def.icon} glyph={def.glyph} size={48} />
+                <div>
+                  <span className="card-title">{def.name}</span>
+                  <div className="tiny muted">Equipped on {hero.name}</div>
+                </div>
+              </div>
+              <div className="tiny muted">{def.description}</div>
+              <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+                <button onClick={() => setOpen(false)}>Close</button>
                 <button
-                  key={d.id}
-                  className="chip"
-                  onClick={() => { engine.equipConsumable(hero.id, d.id); setPicking(false); }}
-                  title={d.description}
+                  className="btn-primary"
+                  onClick={() => { engine.unequipConsumable(hero.id, def.id); setOpen(false); }}
                 >
-                  {d.glyph} {d.name} ×{count}
+                  Unequip
                 </button>
-              ))}
+              </div>
             </div>
-          )}
-          <button className="btn-ghost" style={{ marginTop: 6, minHeight: 22 }} onClick={() => setPicking(false)}>
-            Cancel
-          </button>
-        </div>
-      </div>
+          </div>
+        )}
+      </>
     );
   }
 
   return (
-    <div className="item-card empty clickable">
-      <div
-        className="item-card-summary"
-        onClick={() => setPicking(true)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPicking(true); } }}
-      >
-        <div className="item-icon" style={{ width: 40, height: 40, fontSize: 18, display: 'grid', placeItems: 'center' }}>+</div>
-        <div className="item-card-body">
-          <div className="slot-name">consumable</div>
-          <div className="tiny muted">Empty</div>
+    <>
+      <div className="item-card empty clickable">
+        <div
+          className="item-card-summary"
+          onClick={() => setOpen(true)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
+        >
+          <div className="item-icon" style={{ width: 40, height: 40, fontSize: 18, display: 'grid', placeItems: 'center' }}>+</div>
+          <div className="item-card-body">
+            <div className="slot-name">consumable</div>
+            <div className="tiny muted">Empty</div>
+          </div>
         </div>
       </div>
-    </div>
+
+      {open && (
+        <div className="overlay" onClick={() => setOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="card-title" style={{ marginBottom: 8 }}>Equip a consumable on {hero.name}</div>
+            {available.length === 0 ? (
+              <p className="tiny muted">Nothing spare to equip. Buy potions in the Shop.</p>
+            ) : (
+              <div className="row wrap" style={{ gap: 4 }}>
+                {available.map(({ def: d, count }) => (
+                  <button
+                    key={d.id}
+                    className="chip"
+                    onClick={() => { engine.equipConsumable(hero.id, d.id); setOpen(false); }}
+                    title={d.description}
+                  >
+                    {d.glyph} {d.name} ×{count}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+              <button onClick={() => setOpen(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
