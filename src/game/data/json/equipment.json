@@ -1,5 +1,21 @@
 [
   {
+    "id": "wooden_sword",
+    "name": "Wooden Practice Sword",
+    "slot": "weapon",
+    "rarity": "common",
+    "reqLevel": 1,
+    "maxDurability": 10,
+    "value": 2,
+    "mods": {},
+    "stats": {},
+    "icon": "weapons/Weapon_02.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": false,
+    "gearScoreOverride": 0
+  },
+  {
     "id": "rusty_sword",
     "name": "Rusty Sword",
     "slot": "weapon",

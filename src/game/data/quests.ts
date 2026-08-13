@@ -1,4 +1,4 @@
-import { Difficulty, QuestTag, Rarity } from '../types';
+import { Difficulty, QuestOffer, QuestTag, Rarity } from '../types';
 import { HOUR, MINUTE } from '../util';
 
 export interface DifficultyConfig {
@@ -329,3 +329,43 @@ export const QUEST_CHAINS: ChainDef[] = (questChainsJson as ChainDefJson[]).map(
   ...c,
   stages: c.stages.map(({ durationMinutes, ...s }) => ({ ...s, duration: durationMinutes * MINUTE })),
 }));
+
+/**
+ * A fresh guild's very first quest, hand-crafted rather than pulled from
+ * the normal procedural pool -- see SaveManager.createInitialState, the
+ * only place this actually gets placed on a board (directly into the
+ * starter hero's own questBoards entry, so it's guaranteed to be there
+ * and guaranteed to be the only option, rather than competing for
+ * attention against 2-3 freshly-rolled ordinary offers). QuestManager.
+ * resolve() checks this exact id to FORCE an injury and break the
+ * starter Wooden Practice Sword regardless of the normal RNG -- the
+ * whole point of a tutorial quest is that the player learns healing and
+ * repair on quest one, not "maybe, if the dice cooperate." Deliberately
+ * still a real, ordinary-shaped QuestOffer otherwise (goes through the
+ * exact same send/resolve/reward path as everything else) rather than a
+ * scripted cutscene -- the lesson is "this is what a normal quest can
+ * do to you," which only lands if it plays out through the same system
+ * every later quest does.
+ */
+export const TUTORIAL_QUEST_ID = 'tutorial_first_quest';
+export function tutorialQuestOffer(): QuestOffer {
+  return {
+    id: TUTORIAL_QUEST_ID,
+    name: 'A Guild\u2019s First Job',
+    flavour: 'Nothing grand -- a cellar full of rats, or so the farmer swears. Every guild starts somewhere, and it is rarely anywhere glamorous.',
+    difficulty: 'easy',
+    tag: 'combat',
+    duration: 5 * MINUTE,
+    // High on purpose -- this is meant to read as a genuine first
+    // success, not a coin flip. The injury and the broken sword happen
+    // regardless of this roll (see QuestManager.resolve's own tutorial
+    // override), so a high success chance doesn't undercut the lesson,
+    // it just keeps the very first thing a new player sees from also
+    // being a failure screen.
+    baseSuccess: 90,
+    rewardGold: 40,
+    rewardXp: 20,
+    loot: [],
+    reqLevel: 1,
+  };
+}

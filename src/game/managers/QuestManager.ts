@@ -1,6 +1,6 @@
 import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE, GEAR_SCORE_BY_RARITY } from '../data/equipment';
 import {
-  ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES,
+  ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES, TUTORIAL_QUEST_ID,
 } from '../data/quests';
 import { HERO_CLASSES } from '../data/progression';
 import { fastQuestCapsPerHour, fastQuestFloorPerHour, easyFastModeChances } from '../data/balance';
@@ -880,7 +880,16 @@ export const QuestManager = {
     const injuryRisk = success
       ? (events.forcedInjury ? 25 : 0)
       : clamp(35 + DIFFICULTY_ORDER.indexOf(quest.offer.difficulty) * 8 - quest.injuryResist, MIN_INJURY_RISK, 90);
-    if (!quest.injuryImmune && rng.chance(injuryRisk)) {
+    // Tutorial quest: forces this branch regardless of injuryRisk/rng --
+    // see tutorialQuestOffer's own doc comment in quests.ts for why a
+    // guaranteed injury (and guaranteed broken gear, below) is the whole
+    // point of this specific quest rather than a maybe. Still respects
+    // injuryImmune (a genuine preventInjury consumable, deliberately
+    // equipped before this send) -- forcing the LESSON isn't the same as
+    // overriding a player's own deliberate choice on the rare chance
+    // they've already found their way to a Protection Charm by quest one.
+    const isTutorialQuest = quest.offer.id === TUTORIAL_QUEST_ID;
+    if (!quest.injuryImmune && (isTutorialQuest || rng.chance(injuryRisk))) {
       injury = HeroManager.rollInjury(rng, quest.offer.difficulty);
       injury.healsAt = resolvedAt + (injury.healsAt - Date.now());
       // Health damage piggybacks directly on this same roll rather than a
@@ -917,7 +926,13 @@ export const QuestManager = {
 
     /* ----------------------------- durability ----------------------------- */
     const baseWear = 3 + DIFFICULTY_ORDER.indexOf(quest.offer.difficulty) * 2 + (success ? 0 : 4);
-    const wear = baseWear + events.durabilityDelta;
+    // Tutorial quest: forced far past any equipped item's own
+    // maxDurability (the starter Wooden Practice Sword's is 10) so it's
+    // guaranteed to break outright, not just wear down -- same "the
+    // lesson isn't a maybe" reasoning as the forced injury above.
+    // EquipmentManager.applyWear already clamps at 0, so this can't push
+    // durability negative or otherwise misbehave.
+    const wear = isTutorialQuest ? 9999 : baseWear + events.durabilityDelta;
     const globalMods = ModifierManager.global(state);
     const broken = hero ? EquipmentManager.applyWear(hero, wear, globalMods.durability) : [];
 

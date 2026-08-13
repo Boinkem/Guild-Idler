@@ -1,0 +1,496 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 942ced5..55394d9 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -8807,3 +8807,80 @@ been marked seen here, every later call is simply a no-op for it, same
+ as any other topic checked from more than one place already.
+ 
+ **Verified:** `npx tsc --noEmit` and a full `vite build` both clean.
++
++### New: scripted Tutorial Quest, a starter Wooden Practice Sword, and a vendor buyback system
++
++**Tutorial Quest.** A fresh guild's very first quest is no longer an
++ordinary procedural roll -- `tutorialQuestOffer()` (quests.ts) is a
++hand-crafted `QuestOffer`, seeded directly into the starter hero's
++`questBoards` entry in `createInitialState` rather than left for the
++normal generator to fill. It's the ONLY offer on that board at first
++(not one of 2-3 competing options a brand-new player has no context to
++evaluate yet), high `baseSuccess` (90%) so quest one reads as a genuine
++win, 5-minute duration for fast feedback. `QuestManager.resolve()`
++checks this exact quest id and FORCES two outcomes regardless of the
++normal RNG: an injury (respecting a genuine `injuryImmune` consumable,
++if a new player has somehow already found one -- forcing the lesson
++isn't the same as overriding a deliberate player choice) and the
++starter weapon breaking outright (wear forced to 9999, past any
++possible max durability). "Should" only in the loosest sense before
++this -- there was no mechanism anywhere that could guarantee either
++outcome; now there is, and it's exercised through the exact same send/
++resolve/reward path every later quest goes through, not a scripted
++cutscene bolted alongside it.
++
++**Wooden Practice Sword** (new, equipment.json) -- common weapon,
++maxDurability 10 (a fifth of Rusty Sword's 40), no mods or stats at
++all, 2 gold value: a pure starter prop, cheap enough that losing it
++costs nothing and low-durability enough to believably break on quest
++one even independent of the forced override above. `HeroManager.create`
++leaves a fresh hero's `equipment` empty by default (a recruit buys/
++finds their own gear) -- `createInitialState` now equips this directly
++onto the starter hero's weapon slot, since there's no prior item to
++displace into an equally-empty stash.
++
++The existing `first_injury_or_wear` guidance topic (see GuidanceManager
++-- "a hurt hero or worn-down gear both drag down the odds... Treat an
++injury or Repair a piece of gear...") already fires the moment its
++condition becomes true, checked from the same quest-resolution call
++site the tutorial quest resolves through -- no new guidance code
++needed; the forced injury+break above trigger it automatically and
++correctly, closing the healing/repair lesson loop for free. The
++starting `inventory: { healing_potion: 1, field_bandage: 2 }`
++(already existing, from the new-player-injury-economy fix a while
++back) was already sitting there waiting for a reason to matter on
++quest one -- now it has one.
++
++**Vendor buyback.** New `GameState.buyback: BuybackEntry[]` --
++`ShopManager.sell` now records the exact `EquipmentItem` sold (uid,
++durability, plus, customMods, enchantStats, all of it, not just the
++defId) alongside what it sold for, newest first, capped at
++`shop.buybackMaxEntries` (new tuning knob, default 10 -- oldest entry
++drops off past that, a sale eventually becomes permanent again rather
++than this list growing forever). New `ShopManager.buybackPrice`/
++`buyBack`, new `engine.buyBackItem`, and a new "Buy back" section in
++the Blacksmith's own Vendors page (VendorsPanel.tsx), right below the
++existing "Sell from the stash" section it's the mirror image of.
++Buyback price is `soldFor * shop.buybackMarkup` (new tuning knob,
++default 1.4x) -- always MORE than the sale price, per the explicit
++ask, so reversing a sale is a convenience worth paying for rather than
++a way to print gold by selling and immediately rebuying the same item.
++Deliberately scoped to single-item sales only (`ShopManager.sell`),
++not the bulk "Sell Junk" action -- that's common-rarity clutter by
++design, much less likely something a player wants to reverse, and
++folding a dozen items into one buyback list at once would clutter the
++new section for little real value.
++
++**Verified beyond `tsc`/`vite build` (both clean):** a real runtime
++simulation, not just type-checking -- `createInitialState` bundled and
++executed directly under Node (via esbuild), confirming: the starter
++hero really does start with the Wooden Practice Sword equipped and the
++tutorial quest really is the sole board entry; starting, then
++resolving, that exact quest genuinely forces an injury onto the hero
++and breaks the sword to 0 durability (both asserted against the actual
++returned `QuestResult` and the hero's own post-resolve state, not
++inferred); and a full sell-then-buyback round trip on a second item
++confirms the buyback price is genuinely higher than the sale price
++(3 gold sold -> 5 gold buyback, matching the 1.4x tuning value exactly)
++and that buying back correctly restores the exact item to the stash
++and clears the buyback entry.
+diff --git a/src/game/data/json/equipment.json b/src/game/data/json/equipment.json
+index 04a5956..836871b 100644
+--- a/src/game/data/json/equipment.json
++++ b/src/game/data/json/equipment.json
+@@ -1,4 +1,20 @@
+ [
++  {
++    "id": "wooden_sword",
++    "name": "Wooden Practice Sword",
++    "slot": "weapon",
++    "rarity": "common",
++    "reqLevel": 1,
++    "maxDurability": 10,
++    "value": 2,
++    "mods": {},
++    "stats": {},
++    "icon": "weapons/Weapon_02.png",
++    "raidExclusive": false,
++    "craftable": false,
++    "chainExclusive": false,
++    "gearScoreOverride": 0
++  },
+   {
+     "id": "rusty_sword",
+     "name": "Rusty Sword",
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 8425b30..da5d30a 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -1069,6 +1069,26 @@
+     "min": 0,
+     "description": "Same shape as elemental.scrapValue.common, four tiers up -- the rarer the item, the more scrap, per the original ask."
+   },
++  {
++    "id": "shop.buybackMarkup",
++    "label": "Shop: buyback price markup",
++    "category": "shop",
++    "value": 1.4,
++    "default": 1.4,
++    "min": 1,
++    "max": 5,
++    "description": "Multiplier on what an item sold for, when buying it back from the Blacksmith's own buyback list -- always MORE than the sale price, never less, so reversing a sale costs something rather than being a free undo (or, stacked with a second sale, a way to print gold). See ShopManager.sell/buyBack."
++  },
++  {
++    "id": "shop.buybackMaxEntries",
++    "label": "Shop: buyback list max entries",
++    "category": "shop",
++    "value": 10,
++    "default": 10,
++    "min": 1,
++    "max": 50,
++    "description": "How many recently-sold items the Blacksmith's buyback list remembers at once -- oldest entry drops off (sold for good, no longer reversible) once a new sale would exceed this."
++  },
+   {
+     "id": "quest.dailyBurstBonusGold",
+     "label": "Quests: daily first-burst guaranteed gold",
+diff --git a/src/game/data/quests.ts b/src/game/data/quests.ts
+index d83f775..c2fd74d 100644
+--- a/src/game/data/quests.ts
++++ b/src/game/data/quests.ts
+@@ -1,4 +1,4 @@
+-import { Difficulty, QuestTag, Rarity } from '../types';
++import { Difficulty, QuestOffer, QuestTag, Rarity } from '../types';
+ import { HOUR, MINUTE } from '../util';
+ 
+ export interface DifficultyConfig {
+@@ -329,3 +329,43 @@ export const QUEST_CHAINS: ChainDef[] = (questChainsJson as ChainDefJson[]).map(
+   ...c,
+   stages: c.stages.map(({ durationMinutes, ...s }) => ({ ...s, duration: durationMinutes * MINUTE })),
+ }));
++
++/**
++ * A fresh guild's very first quest, hand-crafted rather than pulled from
++ * the normal procedural pool -- see SaveManager.createInitialState, the
++ * only place this actually gets placed on a board (directly into the
++ * starter hero's own questBoards entry, so it's guaranteed to be there
++ * and guaranteed to be the only option, rather than competing for
++ * attention against 2-3 freshly-rolled ordinary offers). QuestManager.
++ * resolve() checks this exact id to FORCE an injury and break the
++ * starter Wooden Practice Sword regardless of the normal RNG -- the
++ * whole point of a tutorial quest is that the player learns healing and
++ * repair on quest one, not "maybe, if the dice cooperate." Deliberately
++ * still a real, ordinary-shaped QuestOffer otherwise (goes through the
++ * exact same send/resolve/reward path as everything else) rather than a
++ * scripted cutscene -- the lesson is "this is what a normal quest can
++ * do to you," which only lands if it plays out through the same system
++ * every later quest does.
++ */
++export const TUTORIAL_QUEST_ID = 'tutorial_first_quest';
++export function tutorialQuestOffer(): QuestOffer {
++  return {
++    id: TUTORIAL_QUEST_ID,
++    name: 'A Guild\u2019s First Job',
++    flavour: 'Nothing grand -- a cellar full of rats, or so the farmer swears. Every guild starts somewhere, and it is rarely anywhere glamorous.',
++    difficulty: 'easy',
++    tag: 'combat',
++    duration: 5 * MINUTE,
++    // High on purpose -- this is meant to read as a genuine first
++    // success, not a coin flip. The injury and the broken sword happen
++    // regardless of this roll (see QuestManager.resolve's own tutorial
++    // override), so a high success chance doesn't undercut the lesson,
++    // it just keeps the very first thing a new player sees from also
++    // being a failure screen.
++    baseSuccess: 90,
++    rewardGold: 40,
++    rewardXp: 20,
++    loot: [],
++    reqLevel: 1,
++  };
++}
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 89ac61b..5f4fceb 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -1471,13 +1471,23 @@ export class GameEngine {
+   }
+ 
+   sellItem(itemUid: string) {
+-    const error = ShopManager.sell(this.state, itemUid);
++    const error = ShopManager.sell(this.state, itemUid, Date.now());
+     if (error) return this.say(error);
+     playSound('sell');
+     this.say('Sold.');
+     void this.saveNow();
+   }
+ 
++  /** Reverses a sale from the Blacksmith's own buyback list -- see
++   *  ShopManager.buyBack's own comment. */
++  buyBackItem(itemUid: string) {
++    const error = ShopManager.buyBack(this.state, itemUid);
++    if (error) return this.say(error);
++    playSound('purchase');
++    this.say('Bought back.');
++    void this.saveNow();
++  }
++
+   /** Bulk-sells every stash item at or below `maxRarity` in one action --
+    *  the "clear out the junk" counterpart to selling one item at a time.
+    *  Crafted and enchanted items are skipped regardless of rarity (see
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index eed3d10..000f325 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -1,6 +1,6 @@
+ import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE, GEAR_SCORE_BY_RARITY } from '../data/equipment';
+ import {
+-  ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES,
++  ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES, TUTORIAL_QUEST_ID,
+ } from '../data/quests';
+ import { HERO_CLASSES } from '../data/progression';
+ import { fastQuestCapsPerHour, fastQuestFloorPerHour, easyFastModeChances } from '../data/balance';
+@@ -880,7 +880,16 @@ export const QuestManager = {
+     const injuryRisk = success
+       ? (events.forcedInjury ? 25 : 0)
+       : clamp(35 + DIFFICULTY_ORDER.indexOf(quest.offer.difficulty) * 8 - quest.injuryResist, MIN_INJURY_RISK, 90);
+-    if (!quest.injuryImmune && rng.chance(injuryRisk)) {
++    // Tutorial quest: forces this branch regardless of injuryRisk/rng --
++    // see tutorialQuestOffer's own doc comment in quests.ts for why a
++    // guaranteed injury (and guaranteed broken gear, below) is the whole
++    // point of this specific quest rather than a maybe. Still respects
++    // injuryImmune (a genuine preventInjury consumable, deliberately
++    // equipped before this send) -- forcing the LESSON isn't the same as
++    // overriding a player's own deliberate choice on the rare chance
++    // they've already found their way to a Protection Charm by quest one.
++    const isTutorialQuest = quest.offer.id === TUTORIAL_QUEST_ID;
++    if (!quest.injuryImmune && (isTutorialQuest || rng.chance(injuryRisk))) {
+       injury = HeroManager.rollInjury(rng, quest.offer.difficulty);
+       injury.healsAt = resolvedAt + (injury.healsAt - Date.now());
+       // Health damage piggybacks directly on this same roll rather than a
+@@ -917,7 +926,13 @@ export const QuestManager = {
+ 
+     /* ----------------------------- durability ----------------------------- */
+     const baseWear = 3 + DIFFICULTY_ORDER.indexOf(quest.offer.difficulty) * 2 + (success ? 0 : 4);
+-    const wear = baseWear + events.durabilityDelta;
++    // Tutorial quest: forced far past any equipped item's own
++    // maxDurability (the starter Wooden Practice Sword's is 10) so it's
++    // guaranteed to break outright, not just wear down -- same "the
++    // lesson isn't a maybe" reasoning as the forced injury above.
++    // EquipmentManager.applyWear already clamps at 0, so this can't push
++    // durability negative or otherwise misbehave.
++    const wear = isTutorialQuest ? 9999 : baseWear + events.durabilityDelta;
+     const globalMods = ModifierManager.global(state);
+     const broken = hero ? EquipmentManager.applyWear(hero, wear, globalMods.durability) : [];
+ 
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 7039755..2a8e36d 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -6,6 +6,8 @@ import { UPGRADES, vendorUpgrades } from '../data/progression';
+ import { NODE_ORDER } from '../data/materials';
+ import { Tuning } from '../data/tuning';
+ import { PeddlerManager } from './PeddlerManager';
++import { EquipmentManager } from './EquipmentManager';
++import { tutorialQuestOffer } from '../data/quests';
+ 
+ /** Storage abstraction so the game also runs in a plain browser tab for testing. */
+ export interface SaveAdapter {
+@@ -63,6 +65,15 @@ const EMPTY_GUILD: Record<GuildFacility, number> = {
+ export function createInitialState(now = Date.now()): GameState {
+   const rng = createRng(`start:${now}`);
+   const starter = HeroManager.create('adventurer', rng);
++  // A starter Wooden Practice Sword, equipped from the very first
++  // moment -- HeroManager.create leaves `equipment` empty by default
++  // (a recruited hero buys/finds their own gear), but the tutorial
++  // quest below is built specifically around this hero having something
++  // to break. Deliberately equipped directly here rather than routed
++  // through EquipmentManager.equip -- there's no prior item to displace
++  // into a stash that doesn't have anything in it yet either.
++  const woodenSword = EquipmentManager.instantiate('wooden_sword');
++  if (woodenSword) starter.equipment.weapon = woodenSword;
+   return {
+     version: SAVE_VERSION,
+     createdAt: now,
+@@ -77,11 +88,24 @@ export function createInitialState(now = Date.now()): GameState {
+     // 70-90g, buying a bandage costs 60g), so without this a brand new
+     // player's first injury was mathematically un-curable except by
+     // waiting it out. See guild-idler-status.md's "new-player injury
+-    // economy" entry.
++    // economy" entry. Doubles now as the tutorial quest's own healing
++    // lesson -- the potion/bandages were already here waiting; the
++    // tutorial quest below is what actually gives a new player a reason
++    // to reach for one on quest one instead of quest ten.
+     inventory: { healing_potion: 1, field_bandage: 2 },
+     customConsumables: {},
+     stash: [],
+-    questBoards: {},
++    buyback: [],
++    // The starter hero's board isn't left empty for the normal
++    // procedural generator to fill -- it's seeded directly with the
++    // scripted tutorial quest (see quests.ts's own tutorialQuestOffer
++    // doc comment), so it's both guaranteed present and the ONLY
++    // choice, rather than competing for attention against 2-3 ordinary
++    // freshly-rolled offers a brand new player has no context to
++    // evaluate yet. refreshWorld's own regeneration only replaces a
++    // hero's board once it's empty or a window rolls over, so this
++    // survives untouched until the tutorial quest is actually sent.
++    questBoards: { [starter.id]: [tutorialQuestOffer()] },
+     chainBoard: [],
+     questRerollDay: 0,
+     questRerollsUsedToday: 0,
+@@ -730,6 +754,20 @@ const MIGRATIONS: Record<number, Migration> = {
+     // when it was introduced) already used.
+     curios: (save.curios as Record<string, number> | undefined) ?? {},
+   }),
++  39: (save) => ({
++    ...save,
++    version: 40,
++    // New vendor buyback system -- an existing save has simply never
++    // sold anything through it yet, same "empty list, nothing to
++    // correct" reasoning every other new array/record field already
++    // uses on introduction. Deliberately NOT retrofitting the starter
++    // Wooden Practice Sword or the scripted tutorial quest onto existing
++    // saves here -- both are createInitialState-only, seeded once for a
++    // genuinely fresh guild, same "never retrofitted onto anyone already
++    // playing" precedent the onboarding tour itself already set (see
++    // seenOnboarding's own migration).
++    buyback: (save.buyback as GameState['buyback'] | undefined) ?? [],
++  }),
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/managers/ShopManager.ts b/src/game/managers/ShopManager.ts
+index 40dcb6e..2ef35e1 100644
+--- a/src/game/managers/ShopManager.ts
++++ b/src/game/managers/ShopManager.ts
+@@ -6,6 +6,7 @@ import { HOUR, RARITY_ORDER } from '../util';
+ import { EquipmentManager } from './EquipmentManager';
+ import { ModifierManager } from './ModifierManager';
+ import { rerollDay, rerollsUsedToday, nextRerollCost } from '../data/reroll';
++import { Tuning } from '../data/tuning';
+ 
+ export const SHOP_REFRESH_MS = 4 * HOUR;
+ const SHOP_EQUIPMENT_SLOTS = 5;
+@@ -264,13 +265,44 @@ export const ShopManager = {
+     return null;
+   },
+ 
+-  sell(state: GameState, itemUid: string): string | null {
++  sell(state: GameState, itemUid: string, now = Date.now()): string | null {
+     const item = state.stash.find((i) => i.uid === itemUid);
+     if (!item) return 'That item is equipped or missing.';
+     const value = EquipmentManager.sellValue(item);
+     state.stash = state.stash.filter((i) => i.uid !== itemUid);
+     state.gold += value;
+     state.stats.goldEarned += value;
++    // Recorded for the buyback list -- the exact item (uid, durability,
++    // plus, customMods, enchantStats, everything), not just its defId, so
++    // buying it back later hands back precisely what was sold rather than
++    // a fresh-rolled equivalent. Newest entry first; oldest dropped once
++    // the list would exceed shop.buybackMaxEntries -- a sale eventually
++    // becomes permanent again rather than this list growing forever.
++    state.buyback.unshift({ item, soldFor: value, soldAt: now });
++    const maxEntries = Tuning.get('shop.buybackMaxEntries');
++    if (state.buyback.length > maxEntries) state.buyback.length = maxEntries;
++    return null;
++  },
++
++  /** Buyback price for a given sale -- always more than it sold for, see
++   *  shop.buybackMarkup's own tuning description for why. */
++  buybackPrice(entry: { soldFor: number }): number {
++    return Math.ceil(entry.soldFor * Tuning.get('shop.buybackMarkup'));
++  },
++
++  /** Reverses a sale -- removes the entry from the buyback list and puts
++   *  the exact same item (same uid, same durability/plus/customMods/
++   *  enchantStats) straight back in the stash, same as if it had never
++   *  been sold, minus the markup paid for the privilege. */
++  buyBack(state: GameState, itemUid: string): string | null {
++    const entry = state.buyback.find((e) => e.item.uid === itemUid);
++    if (!entry) return 'That item is no longer available to buy back.';
++    const price = ShopManager.buybackPrice(entry);
++    if (state.gold < price) return 'Not enough gold.';
++    state.gold -= price;
++    state.stats.goldSpent += price;
++    state.buyback = state.buyback.filter((e) => e.item.uid !== itemUid);
++    state.stash.push(entry.item);
+     return null;
+   },
+ 
+diff --git a/src/game/types.ts b/src/game/types.ts
+index a4d83f2..ee316a1 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 39;
++export const SAVE_VERSION = 40;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -364,6 +364,17 @@ export interface EquipmentItem {
+   elementalResist?: Partial<Record<ElementType, number>>;
+ }
+ 
++/** One reversible sale -- see GameState.buyback's own comment. */
++export interface BuybackEntry {
++  item: EquipmentItem;
++  /** What it actually sold for -- the buyback price is this times
++   *  shop.buybackMarkup (see Tuning), always MORE than this, never less,
++   *  so undoing a sale is a convenience worth paying for, not a way to
++   *  print gold by selling and rebuying the same item. */
++  soldFor: number;
++  soldAt: number;
++}
++
+ export interface ItemSet {
+   id: string;
+   name: string;
+@@ -1160,6 +1171,13 @@ export interface GameState {
+    */
+   customConsumables: Record<string, ConsumableDef>;
+   stash: EquipmentItem[];
++  /** Recently sold equipment, newest first, capped at BUYBACK_MAX_ENTRIES
++   *  (see ShopManager.sell) -- lets a sale be reversed at a markup rather
++   *  than being permanently gone the instant "Sell" is pressed. Stores the
++   *  exact EquipmentItem sold (durability/plus/customMods/enchantStats all
++   *  intact, not just the defId) so buying it back hands back precisely
++   *  what was sold, not a fresh-rolled equivalent. */
++  buyback: BuybackEntry[];
+ 
+   /**
+    * Contract offers, one pool per hero (keyed by hero id) -- each hero
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index f3e1115..7c6d1fd 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -273,6 +273,42 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell:
+           );
+         })}
+       </div>
++
++      {/* Second thoughts, for a price -- every sale made through the
++          button just above lands here, exact item intact (durability,
++          plus, any crafted mods or enchants), buyable back at a markup
++          rather than gone for good the instant "Sell" is pressed. Oldest
++          entry drops off past shop.buybackMaxEntries -- see
++          ShopManager.sell's own comment. */}
++      {state.buyback.length > 0 && (
++        <>
++          <div className="section-heading">Buy back</div>
++          <div className="grid two">
++            {state.buyback.map((entry) => {
++              const def = EQUIPMENT_BY_ID[entry.item.defId];
++              if (!def) return null;
++              const price = ShopManager.buybackPrice(entry);
++              return (
++                <div key={entry.item.uid} className="spread card" style={{ marginBottom: 0 }}>
++                  <div className="row" style={{ gap: 8, alignItems: 'center' }}>
++                    <ItemIcon slot={def.slot} icon={def.icon} size={28} />
++                    <span style={{ color: RARITY_COLOR[def.rarity], fontSize: 11 }}>
++                      {def.name}{entry.item.plus > 0 ? ` +${entry.item.plus}` : ''}
++                    </span>
++                  </div>
++                  <button
++                    onClick={() => engine.buyBackItem(entry.item.uid)}
++                    disabled={state.gold < price}
++                    title={`Sold for ${formatGold(entry.soldFor)}`}
++                  >
++                    Buy back · {formatGold(price)}
++                  </button>
++                </div>
++              );
++            })}
++          </div>
++        </>
++      )}
+     </>
+   );
+ }

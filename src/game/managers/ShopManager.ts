@@ -6,6 +6,7 @@ import { HOUR, RARITY_ORDER } from '../util';
 import { EquipmentManager } from './EquipmentManager';
 import { ModifierManager } from './ModifierManager';
 import { rerollDay, rerollsUsedToday, nextRerollCost } from '../data/reroll';
+import { Tuning } from '../data/tuning';
 
 export const SHOP_REFRESH_MS = 4 * HOUR;
 const SHOP_EQUIPMENT_SLOTS = 5;
@@ -264,13 +265,44 @@ export const ShopManager = {
     return null;
   },
 
-  sell(state: GameState, itemUid: string): string | null {
+  sell(state: GameState, itemUid: string, now = Date.now()): string | null {
     const item = state.stash.find((i) => i.uid === itemUid);
     if (!item) return 'That item is equipped or missing.';
     const value = EquipmentManager.sellValue(item);
     state.stash = state.stash.filter((i) => i.uid !== itemUid);
     state.gold += value;
     state.stats.goldEarned += value;
+    // Recorded for the buyback list -- the exact item (uid, durability,
+    // plus, customMods, enchantStats, everything), not just its defId, so
+    // buying it back later hands back precisely what was sold rather than
+    // a fresh-rolled equivalent. Newest entry first; oldest dropped once
+    // the list would exceed shop.buybackMaxEntries -- a sale eventually
+    // becomes permanent again rather than this list growing forever.
+    state.buyback.unshift({ item, soldFor: value, soldAt: now });
+    const maxEntries = Tuning.get('shop.buybackMaxEntries');
+    if (state.buyback.length > maxEntries) state.buyback.length = maxEntries;
+    return null;
+  },
+
+  /** Buyback price for a given sale -- always more than it sold for, see
+   *  shop.buybackMarkup's own tuning description for why. */
+  buybackPrice(entry: { soldFor: number }): number {
+    return Math.ceil(entry.soldFor * Tuning.get('shop.buybackMarkup'));
+  },
+
+  /** Reverses a sale -- removes the entry from the buyback list and puts
+   *  the exact same item (same uid, same durability/plus/customMods/
+   *  enchantStats) straight back in the stash, same as if it had never
+   *  been sold, minus the markup paid for the privilege. */
+  buyBack(state: GameState, itemUid: string): string | null {
+    const entry = state.buyback.find((e) => e.item.uid === itemUid);
+    if (!entry) return 'That item is no longer available to buy back.';
+    const price = ShopManager.buybackPrice(entry);
+    if (state.gold < price) return 'Not enough gold.';
+    state.gold -= price;
+    state.stats.goldSpent += price;
+    state.buyback = state.buyback.filter((e) => e.item.uid !== itemUid);
+    state.stash.push(entry.item);
     return null;
   },
 

@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 39;
+export const SAVE_VERSION = 40;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -362,6 +362,17 @@ export interface EquipmentItem {
    * attacks, mechanically just another additive success contribution.
    */
   elementalResist?: Partial<Record<ElementType, number>>;
+}
+
+/** One reversible sale -- see GameState.buyback's own comment. */
+export interface BuybackEntry {
+  item: EquipmentItem;
+  /** What it actually sold for -- the buyback price is this times
+   *  shop.buybackMarkup (see Tuning), always MORE than this, never less,
+   *  so undoing a sale is a convenience worth paying for, not a way to
+   *  print gold by selling and rebuying the same item. */
+  soldFor: number;
+  soldAt: number;
 }
 
 export interface ItemSet {
@@ -1160,6 +1171,13 @@ export interface GameState {
    */
   customConsumables: Record<string, ConsumableDef>;
   stash: EquipmentItem[];
+  /** Recently sold equipment, newest first, capped at BUYBACK_MAX_ENTRIES
+   *  (see ShopManager.sell) -- lets a sale be reversed at a markup rather
+   *  than being permanently gone the instant "Sell" is pressed. Stores the
+   *  exact EquipmentItem sold (durability/plus/customMods/enchantStats all
+   *  intact, not just the defId) so buying it back hands back precisely
+   *  what was sold, not a fresh-rolled equivalent. */
+  buyback: BuybackEntry[];
 
   /**
    * Contract offers, one pool per hero (keyed by hero id) -- each hero

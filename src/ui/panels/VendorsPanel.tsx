@@ -273,6 +273,42 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
           );
         })}
       </div>
+
+      {/* Second thoughts, for a price -- every sale made through the
+          button just above lands here, exact item intact (durability,
+          plus, any crafted mods or enchants), buyable back at a markup
+          rather than gone for good the instant "Sell" is pressed. Oldest
+          entry drops off past shop.buybackMaxEntries -- see
+          ShopManager.sell's own comment. */}
+      {state.buyback.length > 0 && (
+        <>
+          <div className="section-heading">Buy back</div>
+          <div className="grid two">
+            {state.buyback.map((entry) => {
+              const def = EQUIPMENT_BY_ID[entry.item.defId];
+              if (!def) return null;
+              const price = ShopManager.buybackPrice(entry);
+              return (
+                <div key={entry.item.uid} className="spread card" style={{ marginBottom: 0 }}>
+                  <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                    <ItemIcon slot={def.slot} icon={def.icon} size={28} />
+                    <span style={{ color: RARITY_COLOR[def.rarity], fontSize: 11 }}>
+                      {def.name}{entry.item.plus > 0 ? ` +${entry.item.plus}` : ''}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => engine.buyBackItem(entry.item.uid)}
+                    disabled={state.gold < price}
+                    title={`Sold for ${formatGold(entry.soldFor)}`}
+                  >
+                    Buy back · {formatGold(price)}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
     </>
   );
 }

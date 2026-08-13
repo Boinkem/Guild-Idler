@@ -8909,3 +8909,80 @@ been marked seen here, every later call is simply a no-op for it, same
 as any other topic checked from more than one place already.
 
 **Verified:** `npx tsc --noEmit` and a full `vite build` both clean.
+
+### New: scripted Tutorial Quest, a starter Wooden Practice Sword, and a vendor buyback system
+
+**Tutorial Quest.** A fresh guild's very first quest is no longer an
+ordinary procedural roll -- `tutorialQuestOffer()` (quests.ts) is a
+hand-crafted `QuestOffer`, seeded directly into the starter hero's
+`questBoards` entry in `createInitialState` rather than left for the
+normal generator to fill. It's the ONLY offer on that board at first
+(not one of 2-3 competing options a brand-new player has no context to
+evaluate yet), high `baseSuccess` (90%) so quest one reads as a genuine
+win, 5-minute duration for fast feedback. `QuestManager.resolve()`
+checks this exact quest id and FORCES two outcomes regardless of the
+normal RNG: an injury (respecting a genuine `injuryImmune` consumable,
+if a new player has somehow already found one -- forcing the lesson
+isn't the same as overriding a deliberate player choice) and the
+starter weapon breaking outright (wear forced to 9999, past any
+possible max durability). "Should" only in the loosest sense before
+this -- there was no mechanism anywhere that could guarantee either
+outcome; now there is, and it's exercised through the exact same send/
+resolve/reward path every later quest goes through, not a scripted
+cutscene bolted alongside it.
+
+**Wooden Practice Sword** (new, equipment.json) -- common weapon,
+maxDurability 10 (a fifth of Rusty Sword's 40), no mods or stats at
+all, 2 gold value: a pure starter prop, cheap enough that losing it
+costs nothing and low-durability enough to believably break on quest
+one even independent of the forced override above. `HeroManager.create`
+leaves a fresh hero's `equipment` empty by default (a recruit buys/
+finds their own gear) -- `createInitialState` now equips this directly
+onto the starter hero's weapon slot, since there's no prior item to
+displace into an equally-empty stash.
+
+The existing `first_injury_or_wear` guidance topic (see GuidanceManager
+-- "a hurt hero or worn-down gear both drag down the odds... Treat an
+injury or Repair a piece of gear...") already fires the moment its
+condition becomes true, checked from the same quest-resolution call
+site the tutorial quest resolves through -- no new guidance code
+needed; the forced injury+break above trigger it automatically and
+correctly, closing the healing/repair lesson loop for free. The
+starting `inventory: { healing_potion: 1, field_bandage: 2 }`
+(already existing, from the new-player-injury-economy fix a while
+back) was already sitting there waiting for a reason to matter on
+quest one -- now it has one.
+
+**Vendor buyback.** New `GameState.buyback: BuybackEntry[]` --
+`ShopManager.sell` now records the exact `EquipmentItem` sold (uid,
+durability, plus, customMods, enchantStats, all of it, not just the
+defId) alongside what it sold for, newest first, capped at
+`shop.buybackMaxEntries` (new tuning knob, default 10 -- oldest entry
+drops off past that, a sale eventually becomes permanent again rather
+than this list growing forever). New `ShopManager.buybackPrice`/
+`buyBack`, new `engine.buyBackItem`, and a new "Buy back" section in
+the Blacksmith's own Vendors page (VendorsPanel.tsx), right below the
+existing "Sell from the stash" section it's the mirror image of.
+Buyback price is `soldFor * shop.buybackMarkup` (new tuning knob,
+default 1.4x) -- always MORE than the sale price, per the explicit
+ask, so reversing a sale is a convenience worth paying for rather than
+a way to print gold by selling and immediately rebuying the same item.
+Deliberately scoped to single-item sales only (`ShopManager.sell`),
+not the bulk "Sell Junk" action -- that's common-rarity clutter by
+design, much less likely something a player wants to reverse, and
+folding a dozen items into one buyback list at once would clutter the
+new section for little real value.
+
+**Verified beyond `tsc`/`vite build` (both clean):** a real runtime
+simulation, not just type-checking -- `createInitialState` bundled and
+executed directly under Node (via esbuild), confirming: the starter
+hero really does start with the Wooden Practice Sword equipped and the
+tutorial quest really is the sole board entry; starting, then
+resolving, that exact quest genuinely forces an injury onto the hero
+and breaks the sword to 0 durability (both asserted against the actual
+returned `QuestResult` and the hero's own post-resolve state, not
+inferred); and a full sell-then-buyback round trip on a second item
+confirms the buyback price is genuinely higher than the sale price
+(3 gold sold -> 5 gold buyback, matching the 1.4x tuning value exactly)
+and that buying back correctly restores the exact item to the stash
+and clears the buyback entry.

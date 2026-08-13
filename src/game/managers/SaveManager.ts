@@ -6,6 +6,8 @@ import { UPGRADES, vendorUpgrades } from '../data/progression';
 import { NODE_ORDER } from '../data/materials';
 import { Tuning } from '../data/tuning';
 import { PeddlerManager } from './PeddlerManager';
+import { EquipmentManager } from './EquipmentManager';
+import { tutorialQuestOffer } from '../data/quests';
 
 /** Storage abstraction so the game also runs in a plain browser tab for testing. */
 export interface SaveAdapter {
@@ -63,6 +65,15 @@ const EMPTY_GUILD: Record<GuildFacility, number> = {
 export function createInitialState(now = Date.now()): GameState {
   const rng = createRng(`start:${now}`);
   const starter = HeroManager.create('adventurer', rng);
+  // A starter Wooden Practice Sword, equipped from the very first
+  // moment -- HeroManager.create leaves `equipment` empty by default
+  // (a recruited hero buys/finds their own gear), but the tutorial
+  // quest below is built specifically around this hero having something
+  // to break. Deliberately equipped directly here rather than routed
+  // through EquipmentManager.equip -- there's no prior item to displace
+  // into a stash that doesn't have anything in it yet either.
+  const woodenSword = EquipmentManager.instantiate('wooden_sword');
+  if (woodenSword) starter.equipment.weapon = woodenSword;
   return {
     version: SAVE_VERSION,
     createdAt: now,
@@ -77,11 +88,24 @@ export function createInitialState(now = Date.now()): GameState {
     // 70-90g, buying a bandage costs 60g), so without this a brand new
     // player's first injury was mathematically un-curable except by
     // waiting it out. See guild-idler-status.md's "new-player injury
-    // economy" entry.
+    // economy" entry. Doubles now as the tutorial quest's own healing
+    // lesson -- the potion/bandages were already here waiting; the
+    // tutorial quest below is what actually gives a new player a reason
+    // to reach for one on quest one instead of quest ten.
     inventory: { healing_potion: 1, field_bandage: 2 },
     customConsumables: {},
     stash: [],
-    questBoards: {},
+    buyback: [],
+    // The starter hero's board isn't left empty for the normal
+    // procedural generator to fill -- it's seeded directly with the
+    // scripted tutorial quest (see quests.ts's own tutorialQuestOffer
+    // doc comment), so it's both guaranteed present and the ONLY
+    // choice, rather than competing for attention against 2-3 ordinary
+    // freshly-rolled offers a brand new player has no context to
+    // evaluate yet. refreshWorld's own regeneration only replaces a
+    // hero's board once it's empty or a window rolls over, so this
+    // survives untouched until the tutorial quest is actually sent.
+    questBoards: { [starter.id]: [tutorialQuestOffer()] },
     chainBoard: [],
     questRerollDay: 0,
     questRerollsUsedToday: 0,
@@ -729,6 +753,20 @@ const MIGRATIONS: Record<number, Migration> = {
     // every other new Record<string, number> bucket (materials, back
     // when it was introduced) already used.
     curios: (save.curios as Record<string, number> | undefined) ?? {},
+  }),
+  39: (save) => ({
+    ...save,
+    version: 40,
+    // New vendor buyback system -- an existing save has simply never
+    // sold anything through it yet, same "empty list, nothing to
+    // correct" reasoning every other new array/record field already
+    // uses on introduction. Deliberately NOT retrofitting the starter
+    // Wooden Practice Sword or the scripted tutorial quest onto existing
+    // saves here -- both are createInitialState-only, seeded once for a
+    // genuinely fresh guild, same "never retrofitted onto anyone already
+    // playing" precedent the onboarding tour itself already set (see
+    // seenOnboarding's own migration).
+    buyback: (save.buyback as GameState['buyback'] | undefined) ?? [],
   }),
 };
 

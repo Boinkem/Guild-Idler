@@ -1471,10 +1471,20 @@ export class GameEngine {
   }
 
   sellItem(itemUid: string) {
-    const error = ShopManager.sell(this.state, itemUid);
+    const error = ShopManager.sell(this.state, itemUid, Date.now());
     if (error) return this.say(error);
     playSound('sell');
     this.say('Sold.');
+    void this.saveNow();
+  }
+
+  /** Reverses a sale from the Blacksmith's own buyback list -- see
+   *  ShopManager.buyBack's own comment. */
+  buyBackItem(itemUid: string) {
+    const error = ShopManager.buyBack(this.state, itemUid);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.say('Bought back.');
     void this.saveNow();
   }
 

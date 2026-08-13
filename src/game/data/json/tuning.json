@@ -1070,6 +1070,26 @@
     "description": "Same shape as elemental.scrapValue.common, four tiers up -- the rarer the item, the more scrap, per the original ask."
   },
   {
+    "id": "shop.buybackMarkup",
+    "label": "Shop: buyback price markup",
+    "category": "shop",
+    "value": 1.4,
+    "default": 1.4,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier on what an item sold for, when buying it back from the Blacksmith's own buyback list -- always MORE than the sale price, never less, so reversing a sale costs something rather than being a free undo (or, stacked with a second sale, a way to print gold). See ShopManager.sell/buyBack."
+  },
+  {
+    "id": "shop.buybackMaxEntries",
+    "label": "Shop: buyback list max entries",
+    "category": "shop",
+    "value": 10,
+    "default": 10,
+    "min": 1,
+    "max": 50,
+    "description": "How many recently-sold items the Blacksmith's buyback list remembers at once -- oldest entry drops off (sold for good, no longer reversible) once a new sale would exceed this."
+  },
+  {
     "id": "quest.dailyBurstBonusGold",
     "label": "Quests: daily first-burst guaranteed gold",
     "category": "quests",
