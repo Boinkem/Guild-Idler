@@ -161,6 +161,64 @@ const SCHEMAS = {
       stages: { type: 'chainStages', required: true },
     },
   },
+  'difficulties': {
+    file: 'difficulties.json',
+    label: 'Quest Difficulties',
+    idField: 'id',
+    // The big one -- ~100 tunable values across 5 tiers, migrated out of a
+    // hardcoded TS Record specifically so this could exist (see
+    // quests.ts's own comment on the migration for the full "why now").
+    // Only easy/normal actually carry burst*/medium* fields on disk today
+    // -- they're optional here, not because every tier COULD have them,
+    // but because hard/epic/legendary genuinely don't (see quests.ts's
+    // own field-level docs on what burst/medium are for).
+    //
+    // Duration fields use hours/minutes here (not raw ms) -- same
+    // friendly-unit-on-disk convention raid-encounters.json
+    // (durationHours) and quest-chains.json (durationMinutes) already
+    // established, converted back to ms in quests.ts at import time.
+    // Every tier's main range is a whole number of hours and every
+    // burst/medium range is a whole number of minutes, so no fractional
+    // precision is lost either direction.
+    //
+    // A 0-valued burstChance/mediumChance is treated identically to the
+    // field being absent on the read side (see quests.ts's `> 0` guard)
+    // specifically because this devtool's own generic number-field editor
+    // always writes an untouched optional number field as 0 rather than
+    // omitting it (see app.js's fieldControl/readField) -- so simply
+    // opening a non-burst tier like Hard and hitting Save would otherwise
+    // plant a spurious burstChance: 0 here. Harmless either way at
+    // runtime, but worth knowing if a save ever adds these fields to a
+    // tier that didn't have them before.
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      label: { type: 'string', required: true },
+      baseSuccess: { type: 'number', required: true },
+      minDurationHours: { type: 'number', required: true },
+      maxDurationHours: { type: 'number', required: true },
+      minGold: { type: 'number', required: true },
+      maxGold: { type: 'number', required: true },
+      xpMultiplier: { type: 'number', required: true },
+      lootChance: { type: 'number', required: true },
+      reqLevel: { type: 'number', required: true },
+      weight: { type: 'number', required: true },
+      color: { type: 'string', required: true },
+      burstChance: { type: 'number', required: false },
+      burstMinDurationMinutes: { type: 'number', required: false },
+      burstMaxDurationMinutes: { type: 'number', required: false },
+      burstMinGold: { type: 'number', required: false },
+      burstMaxGold: { type: 'number', required: false },
+      burstMinXp: { type: 'number', required: false },
+      burstMaxXp: { type: 'number', required: false },
+      mediumChance: { type: 'number', required: false },
+      mediumMinDurationMinutes: { type: 'number', required: false },
+      mediumMaxDurationMinutes: { type: 'number', required: false },
+      mediumMinGold: { type: 'number', required: false },
+      mediumMaxGold: { type: 'number', required: false },
+      mediumMinXp: { type: 'number', required: false },
+      mediumMaxXp: { type: 'number', required: false },
+    },
+  },
   'equipment': {
     file: 'equipment.json',
     label: 'Equipment',

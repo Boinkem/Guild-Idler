@@ -415,6 +415,11 @@ upstream rather than taking a remote/branch as input); Build/Package/Tag
 shifted from steps 5/6/7 to 6/7/8 to make room. New `pets` schema (Pets
 build) needed zero frontend changes -- confirms the schema-driven editor
 generalizes to a genuinely new content type, not just tuning, for free.
+`DIFFICULTIES` (easy/normal/hard/epic/legendary quest tiers) is now
+covered too -- see "DIFFICULTIES DevTool migration -- built" below --
+which closes out the last flagged coverage gap from the DevTool coverage
+review; every content type surveyed there is now either JSON+schema or
+tuning-registry backed.
 
 **Harvest/Gathering + Crafting** — new `harvest` tab: idle heroes feed 4
 material nodes (Quarry/Woodyard/Herb Garden/Fish Weir) via a click-the-
@@ -4861,21 +4866,85 @@ tuning registry). Found and fixed two real gaps, plus one correction:
   implying a color-swatch UI that doesn't exist.
 
 **Found but deliberately not migrated this round:** the `DIFFICULTIES`
-table in `quests.ts` (easy/normal/hard/epic/legendary, roughly 100
-tunable values across base success, duration ranges, and the burst/
-medium sub-configs each tier carries) is the single largest remaining
-gap -- fully hardcoded, zero DevTool/Tuning access, with dense balance
-rationale documented across many of its own comments. Scoped at roughly
-the same size as this round's entire UPGRADES+RENOWN_PERKS+raid_loot/
-recovery migration on its own. Deliberately left for its own dedicated
-pass rather than rushed into an already-large session, same "needs its
-own scoping" treatment the quest-chains DevTool migration got before it
-was actually done properly.
+table in `quests.ts` was left for its own dedicated pass rather than
+rushed into an already-large session -- see "DIFFICULTIES DevTool
+migration -- built" below for that pass.
 
 Verified: `npx tsc --noEmit`, a full `vite build`, and the DevTool
 server's own syntax check all pass clean, plus runtime checks confirming
 `QUEST_PREFIXES` and `GUILD_RANK_TIERS` resolve to byte-identical content
 after their JSON migration.
+
+### DIFFICULTIES DevTool migration -- built
+Closed out the last real DevTool coverage gap flagged in the review
+above: the `DIFFICULTIES` table (easy/normal/hard/epic/legendary) was
+still a hardcoded TS `Record`, the single largest remaining gap at
+roughly the same size as the earlier UPGRADES+RENOWN_PERKS+raid_loot/
+recovery migration on its own -- ~100 tunable values across base
+success, duration ranges, and the burst/medium sub-configs a couple of
+tiers carry.
+
+**Migration.** `DIFFICULTIES` moved to `src/game/data/json/
+difficulties.json` (a 5-entry array, `id`-keyed) + a new `difficulties`
+schema in `server.mjs`; `quests.ts` imports and reconstructs the
+`Record<Difficulty, DifficultyConfig>` shape at load time. Every field
+here is a plain string/number -- no repeatable sub-list the way
+`quest-chains`' `stages` needed, so this needed **zero new DevTool field
+types and zero `app.js` changes**, same "schema-driven editor
+generalizes for free" outcome the `pets`/`materials` migrations already
+confirmed. `label`/`reqLevel`/`weight` were already in `app.js`'s table
+priority-column list from other content types, so the table view didn't
+need touching either.
+
+**Units.** Duration fields follow the same friendly-unit-on-disk
+convention `raid-encounters.json` (`durationHours`) and
+`quest-chains.json` (`durationMinutes`) already established:
+`min/maxDurationHours` for the main range (always a whole number of
+hours across all 5 tiers) and `burst/mediumMin/MaxDurationMinutes` for
+the short-contract ranges (always a whole number of minutes) --
+`quests.ts` converts both back to ms on import. No fractional precision
+lost either direction.
+
+**A real DevTool quirk, guarded against rather than fixed generically.**
+The generic number-field editor (`app.js`'s `fieldControl`/`readField`)
+always renders and saves an untouched optional number field as `0`
+rather than leaving it absent -- confirmed directly, not assumed. Since
+only Easy and Normal actually carry `burst*`/`medium*` values on disk,
+simply opening Hard, Epic, or Legendary in the editor and hitting Save
+would otherwise plant a spurious `burstChance: 0` (and matching
+zero-value siblings) into an entry that never had those fields before.
+Rather than a generic fix to `readField` (out of scope for this pass,
+and every other optional-number field in the tool has the same latent
+quirk), `quests.ts`'s own reconstruction gates on `burstChance > 0` /
+`mediumChance > 0` instead of `!== undefined` -- a 0% chance is already
+functionally identical to the field being absent at every call site that
+reads it, so this is free insurance with no behavior change for real
+data.
+
+**Per-tier balance history** that lived in inline comments on the old
+hardcoded object (JSON can't carry comments, so this needed a new home)
+is now consolidated in a doc-comment block directly above the JSON
+import in `quests.ts`, rather than lost: Easy's burst-duration floor
+(90s -> 2min, guarding against an implied per-hour rate no live cap
+could safely contain), Easy vs. Normal's different medium-roll
+frequencies (35% vs. 25%, since Normal is already a step up from
+"quick check-in" territory), and the Epic/Legendary `xpMultiplier` fixes
+(11->12, 26->30) that corrected both tiers' xp/hr having fallen below
+Hard's, the opposite of what progressing through difficulty should feel
+like.
+
+**Verified byte-identical, not just typechecked:** wrote a standalone
+Node script loading `difficulties.json` and running the exact same
+conversion math `quests.ts` uses, then diffed the result field-by-field
+against the original hardcoded values for all 5 tiers -- confirmed
+identical. Also simulated `server.mjs`'s own `validateEntry` against the
+new JSON directly (all 5 entries clean, no duplicate ids) and ran a full
+`npx tsc --noEmit` against the patched `quests.ts` (stubbing the other
+JSON imports it also depends on, since only `difficulties.json` was
+actually new) -- clean pass. The patch itself was verified with a real
+`git apply --check` against a fresh checkout of the pre-patch files,
+confirming it applies cleanly and produces byte-identical output to what
+was tested here.
 
 ### DLC groundwork -- built
 Discussed how Steam DLC actually works mechanically (a separate App ID
@@ -6347,23 +6416,15 @@ pass (same caveat as the two entries above).
   worth packaging even looks like. The technical groundwork for this is
   now built, ahead of any actual pack -- see "DLC groundwork -- built"
   in the main patch log above.
-- **Adventurer's idle animation has a weapon-out frame mixed into it --
-  in progress, being applied locally now.** The 4 core reference frames
-  (adventurer-idle-00 through 03, 50x37px each) sent over previously
-  have been compiled into a single 200x37px horizontal strip
-  (`tools/assemble_strips.py`, unmodified) and delivered as `idle.png`.
-  All four frames confirmed on review to show the calm, weapon-sheathed
-  idle pose with no flourish, matching the earlier reference-frame
-  review. No further code work needed on this end -- the remaining step
-  is local and manual (binary art can't travel through a code patch):
-  drop `idle.png` into `public/heroes/adventurer/<skin>/idle.png` (once
-  per skin, or regenerate via the recolour step for the other four) and
-  re-run `tools/import_characters.py` to refresh `manifest.json`. The
-  earlier-mentioned `-2-01`/`-2-02` merge pair (an occasional extra
-  gesture blended into the loop) was not part of this batch -- only the
-  plain 4-frame idle was sent, so that merge is still outstanding if
-  it's still wanted; re-run `assemble_strips.py --merge
-  "idle,idle-2=idle"` once those two extra frames are available.
+- ~~Adventurer's idle animation has a weapon-out frame mixed into it~~ --
+  resolved. The assembled `idle.png` strip was dropped into
+  `public/heroes/adventurer/<skin>/idle.png` and `tools/
+  import_characters.py` re-run to refresh `manifest.json`, confirmed
+  fixed directly against the running game. The `-2-01`/`-2-02` merge pair
+  (an occasional extra gesture blended into the loop) was never part of
+  this fix and remains open separately if it's still wanted -- not
+  tracked as part of this item going forward since the actual reported
+  bug (the weapon-out frame) is resolved.
 
 ### Big feedback batch: audio, shop UX, gear score overrides, and several small polish items
 Wide-ranging playtest round covering audio feedback, buying UX, item

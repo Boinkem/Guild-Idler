@@ -62,81 +62,106 @@ export interface DifficultyConfig {
   mediumMaxXp?: number;
 }
 
-export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
-  easy: {
-    id: 'easy', label: 'Easy', baseSuccess: 70,
-    // The original 1-2h range stays the norm; a `burst` chance rolls a short
-    // 90s-8min contract instead, giving new players frequent fast turnaround
-    // without diluting the typical Easy quest into something that's usually
-    // neither fast nor properly idle-friendly.
-    minDuration: 1 * HOUR, maxDuration: 2 * HOUR,
-    // Minimum bumped from 90s to 2min -- see balance.ts's own comment on
-    // fastQuestCapsPerHour for why: a positive-integer reward divided by a
-    // sub-2-minute duration implies a per-hour rate no floor can safely
-    // contain (1 gold / 90s = 40 gold/hr on its own, before any other
-    // factor). Doesn't eliminate the residual (still possible in the
-    // 2-4min band at low levels), but substantially shrinks both its
-    // frequency and severity -- confirmed by direct simulation, not
-    // assumed: the fraction of the burst range where capped reward implies
-    // a rate exceeding real tier content dropped from 76%/50%/16% (at
-    // levels 5/13/30) under the old 90s floor to meaningfully less under
-    // this one, combined with the rate-anchored floor below.
-    burstChance: 45, burstMinDuration: 2 * MINUTE, burstMaxDuration: 8 * MINUTE,
-    // Base burst numbers, before the per-run level taper applied in
-    // QuestManager.generateOffer -- reduced somewhat from their original
-    // values on their own (10/20 xp, 8/16 gold), which measured out to
-    // roughly 10-15x the normal per-hour rate for a hero at reqLevel 1.
-    burstMinGold: 6, burstMaxGold: 12, burstMinXp: 8, burstMaxXp: 14,
-    // Medium: rolled only when burst didn't hit (45% burst, then 35% of the
-    // remainder -- ~19% of all Easy offers land medium, ~36% land full-length).
-    // 20-40min, priced above burst's raw numbers since it's a much longer
-    // commitment, but still well under the full 1-2h range's totals -- the
-    // live per-hour cap (see generateOffer) is what actually keeps this
-    // honest, these are just the pre-cap starting numbers.
-    mediumChance: 35, mediumMinDuration: 20 * MINUTE, mediumMaxDuration: 40 * MINUTE,
-    mediumMinGold: 14, mediumMaxGold: 30, mediumMinXp: 14, mediumMaxXp: 22,
-    minGold: 8, maxGold: 25, xpMultiplier: 1, lootChance: 12,
-    reqLevel: 1, weight: 30, color: '#79a86b',
-  },
-  normal: {
-    id: 'normal', label: 'Normal', baseSuccess: 60,
-    minDuration: 2 * HOUR, maxDuration: 4 * HOUR,
-    // Rarer than Easy's medium roll (25% vs 35%) -- Normal is already the
-    // step up from "quick check-in" territory, so full-length offers should
-    // still dominate its board more than Easy's.
-    mediumChance: 25, mediumMinDuration: 20 * MINUTE, mediumMaxDuration: 40 * MINUTE,
-    mediumMinGold: 20, mediumMaxGold: 45, mediumMinXp: 20, mediumMaxXp: 32,
-    minGold: 25, maxGold: 60, xpMultiplier: 2.4, lootChance: 20,
-    reqLevel: 3, weight: 28, color: '#5b8fd6',
-  },
-  hard: {
-    id: 'hard', label: 'Hard', baseSuccess: 50,
-    minDuration: 4 * HOUR, maxDuration: 6 * HOUR,
-    minGold: 60, maxGold: 150, xpMultiplier: 5, lootChance: 30,
-    reqLevel: 8, weight: 22, color: '#c98b3a',
-  },
-  epic: {
-    id: 'epic', label: 'Epic', baseSuccess: 40,
-    minDuration: 6 * HOUR, maxDuration: 12 * HOUR,
-    // xpMultiplier raised 11 -> 12. Verified directly: at 11, Epic's xp/hr
-    // (17.0) was actually LOWER than Hard's (17.3) despite requiring a
-    // higher level and harder odds -- the opposite of what progressing
-    // through the tiers should feel like. 12 puts Epic at ~18.6 xp/hr,
-    // clearing Hard with real margin. Gold is unaffected and already
-    // climbs correctly tier over tier.
-    minGold: 150, maxGold: 400, xpMultiplier: 12, lootChance: 45,
-    reqLevel: 15, weight: 14, color: '#a874d6',
-  },
-  legendary: {
-    id: 'legendary', label: 'Legendary', baseSuccess: 30,
-    minDuration: 12 * HOUR, maxDuration: 24 * HOUR,
-    // Same fix, same reasoning -- 26 put Legendary's xp/hr (16.5) below
-    // BOTH Hard and Epic. 30 lands it at ~19.0 xp/hr, now the actual best
-    // in the game, matching its own level requirement and odds.
-    minGold: 500, maxGold: 2000, xpMultiplier: 30, lootChance: 70,
-    reqLevel: 25, weight: 6, color: '#d9a441',
-  },
-};
+/**
+ * DIFFICULTIES lives in json/difficulties.json so it can be edited via
+ * tools/devtool without touching TypeScript -- same pattern
+ * QUEST_TEMPLATES/QUEST_PREFIXES/QUEST_CHAINS above already use. This was
+ * the single largest remaining DevTool coverage gap (see
+ * guild-idler-status.md's backlog), tracked separately from the
+ * quest-chains migration specifically because of its own scope: ~100
+ * tunable values across 5 tiers, with dense balance rationale attached to
+ * several of them individually (the burst-floor and Epic/Legendary
+ * xpMultiplier fixes below).
+ *
+ * Duration fields use the same "friendly unit on disk, converted to ms at
+ * import" convention raid-encounters.json (durationHours) and
+ * quest-chains.json (durationMinutes) already established: the main
+ * min/maxDuration range is always a whole number of hours across all 5
+ * tiers, so it's stored as *Hours; burst/medium durations are always a
+ * whole number of minutes, so those are stored as *Minutes. Both convert
+ * to the millisecond values DifficultyConfig actually needs below.
+ *
+ * Per-tier balance history worth keeping, since it doesn't fit anywhere
+ * in a JSON file with no comments (full detail also in
+ * guild-idler-status.md's migration writeup):
+ * - Easy's burst floor was bumped from 90s to 2min -- a sub-2-minute
+ *   duration divided into any positive-integer reward implies a per-hour
+ *   rate no live cap can safely contain. Confirmed by direct simulation,
+ *   not assumed.
+ * - Easy's medium tier is rolled only when burst doesn't hit (45% burst,
+ *   then 35% of the remainder), Normal's less often (25%) since Normal is
+ *   already a step up from "quick check-in" territory.
+ * - Epic's xpMultiplier was raised 11 -> 12 and Legendary's 26 -> 30 --
+ *   verified directly that both tiers' xp/hr had fallen BELOW Hard's at
+ *   their old values, the opposite of what progressing through
+ *   difficulty should feel like. The live per-hour cap in balance.ts is
+ *   what keeps burst/medium's own explicit reward ranges honest against
+ *   whichever tier ends up paying the most per hour.
+ */
+interface DifficultyConfigJson {
+  id: Difficulty;
+  label: string;
+  baseSuccess: number;
+  minDurationHours: number;
+  maxDurationHours: number;
+  minGold: number;
+  maxGold: number;
+  xpMultiplier: number;
+  lootChance: number;
+  reqLevel: number;
+  weight: number;
+  color: string;
+  burstChance?: number;
+  burstMinDurationMinutes?: number;
+  burstMaxDurationMinutes?: number;
+  burstMinGold?: number;
+  burstMaxGold?: number;
+  burstMinXp?: number;
+  burstMaxXp?: number;
+  mediumChance?: number;
+  mediumMinDurationMinutes?: number;
+  mediumMaxDurationMinutes?: number;
+  mediumMinGold?: number;
+  mediumMaxGold?: number;
+  mediumMinXp?: number;
+  mediumMaxXp?: number;
+}
+
+import difficultiesJson from './json/difficulties.json';
+export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = Object.fromEntries(
+  (difficultiesJson as DifficultyConfigJson[]).map((d): [Difficulty, DifficultyConfig] => [
+    d.id,
+    {
+      id: d.id, label: d.label, baseSuccess: d.baseSuccess,
+      minDuration: d.minDurationHours * HOUR, maxDuration: d.maxDurationHours * HOUR,
+      minGold: d.minGold, maxGold: d.maxGold, xpMultiplier: d.xpMultiplier,
+      lootChance: d.lootChance, reqLevel: d.reqLevel, weight: d.weight, color: d.color,
+      // Gated on `> 0`, not `!== undefined` -- the DevTool's own generic
+      // number-field editor always renders/saves an untouched optional
+      // number as 0 rather than leaving it absent (see app.js's
+      // fieldControl/readField), so simply opening Hard/Epic/Legendary in
+      // the editor and hitting Save would otherwise write a spurious
+      // burstChance: 0 (and matching 0-value siblings) into the JSON. A
+      // 0% burst/medium chance is functionally identical to the field
+      // being absent either way, so this guard is free insurance against
+      // that DevTool quirk, not a behavior change for real data.
+      ...(d.burstChance !== undefined && d.burstChance > 0 ? {
+        burstChance: d.burstChance,
+        burstMinDuration: d.burstMinDurationMinutes! * MINUTE,
+        burstMaxDuration: d.burstMaxDurationMinutes! * MINUTE,
+        burstMinGold: d.burstMinGold, burstMaxGold: d.burstMaxGold,
+        burstMinXp: d.burstMinXp, burstMaxXp: d.burstMaxXp,
+      } : {}),
+      ...(d.mediumChance !== undefined && d.mediumChance > 0 ? {
+        mediumChance: d.mediumChance,
+        mediumMinDuration: d.mediumMinDurationMinutes! * MINUTE,
+        mediumMaxDuration: d.mediumMaxDurationMinutes! * MINUTE,
+        mediumMinGold: d.mediumMinGold, mediumMaxGold: d.mediumMaxGold,
+        mediumMinXp: d.mediumMinXp, mediumMaxXp: d.mediumMaxXp,
+      } : {}),
+    },
+  ]),
+) as Record<Difficulty, DifficultyConfig>;
 
 export const DIFFICULTY_ORDER: Difficulty[] = ['easy', 'normal', 'hard', 'epic', 'legendary'];
 
