@@ -25,6 +25,44 @@ Tab hero-log rework" below. Quest success now runs through a combined
 diminishing-returns curve rather than pure linear stacking -- see "Quest
 success rebalance -- built" below.
 
+### Set Bonuses card made clickable, full tier breakdown shown inline -- built
+Tester feedback on the Inventory tab's "Active Set Bonuses" summary card,
+two points from the same conversation:
+
+1. It only ever named the currently-met tier (e.g. "Leather Set:
+   Well-Worn (3)") with the actual bonus text hidden behind a native
+   hover title -- "having it say what each tier of the set actually be
+   giving you would finish it off."
+2. Nothing about the card was interactive; the ask was to make it
+   clickable, show which of the hero's equipped items are that set's
+   pieces, and colour met bonuses to match the teal outline a gear card
+   already gets once a set bonus goes active (`.item-card.set-active`).
+
+**`EquipmentPanel.tsx`:** new `SetBonusCard` component, one per worn set
+with at least one active bonus (same visibility rule the old plain list
+used -- a set below its first threshold has nothing "active" to
+summarise here). Click the set name to expand: lists every piece in the
+set (`ItemSet.pieces`) with a check mark and `(worn by <hero>)` note for
+whichever ones are actually equipped on this hero, then every bonus tier
+with its real `describeMods()` text inline -- met tiers in `var(--teal)`
+(the same token `.item-card.set-active`'s border/glow already use, so
+"blue like the outline of the gear" lines up with an existing colour
+rather than a new one), unmet tiers `.muted`. Collapsed by default so
+the summary card stays compact when several sets are active at once.
+
+`SetInfoBlock` (the per-item expanded-card tooltip shown when clicking
+an equipped or stashed set piece directly) got the same "every tier,
+inline text, teal-if-met" treatment rather than its previous
+active-tier-plus-next-tier-only shape with hover-only bonus text --
+tester feedback #1 above applies just as much there, and it's the same
+underlying data (`setInfoFor`) both components already shared.
+
+Both components read from `setInfoFor(hero, setId)` (pre-existing
+per-hero set-count helper) and `SET_BY_ID`/`EQUIPMENT_BY_ID` for piece
+names -- no new data or manager methods needed, this was purely a
+render-layer change. `npx tsc --noEmit` and `vite build` both pass
+clean.
+
 ### DevTool: sortable table columns (Equipment/Consumables + every other content type) -- built
 Direct request: sort the DevTool's Equipment panel by ID/Name/Slot,
 Consumables too. Implemented generically in the shared table renderer

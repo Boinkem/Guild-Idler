@@ -99,36 +99,97 @@ function setInfoFor(hero: Hero, setId: string) {
  *  a set bonus is actually active (see .set-active / .set-info in
  *  app.css). `equipped` only changes the wording, not the underlying
  *  count -- an unequipped stash piece never contributes to `count` either
- *  way, since setInfoFor only counts what's actually worn. */
+ *  way, since setInfoFor only counts what's actually worn.
+ *
+ *  Lists every tier the set has, not just the ones already met or the
+ *  single next one -- direct tester feedback was that seeing what a tier
+ *  "actually gives you" needed to be readable text, not something buried
+ *  behind a hover title. Met tiers render in `--teal` (the same colour the
+ *  gear card itself outlines in once a bonus goes active); unmet tiers
+ *  stay `.muted` so the two read apart at a glance. */
 function SetInfoBlock({ hero, setId, equipped }: { hero: Hero; setId: string; equipped: boolean }) {
   const info = setInfoFor(hero, setId);
   if (!info) return null;
-  const { set, count, active, next } = info;
+  const { set, count } = info;
   return (
     <div className="set-info tiny">
       <div style={{ color: 'var(--teal)' }}>
         {set.name} — {count}/{set.pieces.length} equipped on {hero.name}
       </div>
-      {active.length > 0 && (
-        <div>
-          Active:{' '}
-          {active.map((b, i) => (
-            <span key={b.label}>
-              {i > 0 && ' · '}
-              <span title={describeMods(b.mods).join(', ')} style={{ cursor: 'help' }}>
-                {b.label} ({b.count})
-              </span>
-            </span>
-          ))}
-        </div>
-      )}
-      {next && (
-        <div className="muted">
-          Next at {next.count} pieces:{' '}
-          <span title={describeMods(next.mods).join(', ')} style={{ cursor: 'help' }}>{next.label}</span>
-        </div>
-      )}
+      {set.bonuses.map((b) => {
+        const met = count >= b.count;
+        return (
+          <div key={b.label} className={met ? '' : 'muted'} style={met ? { color: 'var(--teal)' } : undefined}>
+            ({b.count}) {b.label}: {describeMods(b.mods).join(', ')}
+          </div>
+        );
+      })}
       {!equipped && <div className="muted">Equip this to count toward the set.</div>}
+    </div>
+  );
+}
+
+/**
+ * Expandable per-set entry for the Inventory tab's "Active Set Bonuses"
+ * card (see EquipmentPanel below). Click the header to open it -- shows
+ * every piece in the set with whether this hero currently has it equipped,
+ * plus every bonus tier (met ones in `--teal`, same convention
+ * SetInfoBlock above just established, unmet ones `.muted`). Kept as its
+ * own component (own `open` state) rather than folded into the summary's
+ * render loop, so each set in the list can be expanded independently.
+ */
+function SetBonusCard({ hero, setId }: { hero: Hero; setId: string }) {
+  const [open, setOpen] = useState(false);
+  const info = setInfoFor(hero, setId);
+  if (!info) return null;
+  const { set, count } = info;
+  const equippedDefIds = new Set(
+    Object.values(hero.equipment)
+      .filter((item): item is EquipmentItem => !!item && item.durability > 0)
+      .map((item) => item.defId),
+  );
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setOpen((v) => !v)}
+        onKeyDown={(e) => e.key === 'Enter' && setOpen((v) => !v)}
+        className="tiny"
+        style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', color: 'var(--teal)' }}
+      >
+        <span>
+          {set.name} ({count}/{set.pieces.length})
+        </span>
+        <span className="muted">{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div className="tiny" style={{ marginTop: 4, marginLeft: 4 }}>
+          <div className="muted">Pieces:</div>
+          {set.pieces.map((defId) => {
+            const piece = EQUIPMENT_BY_ID[defId];
+            const worn = equippedDefIds.has(defId);
+            return (
+              <div key={defId} className={worn ? '' : 'muted'} style={worn ? { color: 'var(--teal)' } : undefined}>
+                {worn ? '✓ ' : '· '}
+                {piece?.name ?? defId}
+                {worn ? ` (worn by ${hero.name})` : ''}
+              </div>
+            );
+          })}
+          <div className="muted" style={{ marginTop: 4 }}>
+            Bonuses:
+          </div>
+          {set.bonuses.map((b) => {
+            const met = count >= b.count;
+            return (
+              <div key={b.label} className={met ? '' : 'muted'} style={met ? { color: 'var(--teal)' } : undefined}>
+                ({b.count}) {b.label}: {describeMods(b.mods).join(', ')}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -691,25 +752,35 @@ export function EquipmentPanel() {
           managing gear see this without leaving Inventory for the Lore tab's
           Collection sub-tab (that stays the full browsable codex of every
           discovered set; this is just "what's actually active on this hero
-          right now", reusing HeroManager.activeSetBonuses, which HeroesPanel
-          already relies on for its own expanded-card line). */}
+          right now"). Each set is its own clickable SetBonusCard -- click to
+          expand and see exactly which equipped items are that set's pieces
+          and every tier's actual bonus text, not just the fact that
+          something is "active" (direct tester feedback on both counts).
+          Still only lists sets with at least one bonus currently met, same
+          visibility rule the old plain-list version used -- a set worn
+          below its first threshold has nothing "active" to summarise here
+          yet. */}
       {(() => {
-        const activeSets = HeroManager.activeSetBonuses(hero);
-        if (activeSets.length === 0) return null;
+        const wornSetIds = Array.from(
+          new Set(
+            Object.values(hero.equipment)
+              .filter((item): item is EquipmentItem => !!item && item.durability > 0)
+              .map((item) => EQUIPMENT_BY_ID[item.defId]?.setId)
+              .filter((id): id is string => !!id),
+          ),
+        );
+        const activeSetIds = wornSetIds.filter((setId) => {
+          const info = setInfoFor(hero, setId);
+          return info && info.active.length > 0;
+        });
+        if (activeSetIds.length === 0) return null;
         return (
           <div className="card set-info" style={{ marginBottom: 10 }}>
             <div className="section-heading" style={{ marginBottom: 4, color: 'var(--teal)' }}>
               Active Set Bonuses
             </div>
-            {activeSets.map((s) => (
-              <div
-                key={`${s.setName}:${s.label}`}
-                className="tiny"
-                title={describeMods(s.mods).join(', ')}
-                style={{ cursor: 'help' }}
-              >
-                {s.setName}: {s.label}
-              </div>
+            {activeSetIds.map((setId) => (
+              <SetBonusCard key={setId} hero={hero} setId={setId} />
             ))}
           </div>
         );
