@@ -9132,3 +9132,58 @@ deliberately-wrong number (correctly returned `found: false` with no
 crash); continuity numbers cross-checked by hand against the file's own
 patch-heading list.
 
+### First Dev Update: catching up on everything since the last one -- built (patch 0138)
+
+```discord-update
+Dev Update | Catching Up
+
+- Added the full hero class roster to recruit and build a guild around
+- Overhauled the UI and CSS across the whole game
+- Consolidated guild upgrade paths into cleaner, easier-to-read trees
+- Added vendor-themed guild upgrades
+- Added two new craft-only equipment sets (Guildmade and Masterwork)
+- Added new raids to take on
+- Added a vendor buyback system
+- Added a scripted tutorial quest with a starter Wooden Practice Sword
+- Improved Grimsby's UI and card flow
+- Improved the consumables system
+- Added Pets and the Hatchery
+- Added elemental infusion for weapons, armor, quests, and raids
+- Expanded achievements
+- Added the Health/Fallen mechanic and hero titles
+- Added Curios, a new sellable item type
+- Fixed a long list of smaller bugs along the way
+```
+
+Doc-only patch -- no code changes. This account's Discord webhook (patch
+0136) and the structured-update convention it relies on (patch 0137) both
+landed after a long stretch of undocumented-to-Discord development, so
+there's no single prior patch to point the first post at. This entry
+exists purely to give that first post something real to pull from via
+"Fill from selected patch," covering everything shipped across the
+patches before the Discord feature itself existed rather than starting
+the channel's history mid-stream.
+
+Bullets were compiled by cross-referencing the request against this
+file's own patch-log headings -- confirmed real, shipped entries behind
+each line: hero class roster (`Hero Classes + Recruit Costs DevTool
+migration`, `DLC groundwork, hero classes`, and the class roster
+itself), the CSS/UI overhaul (`` `app.css` visual refresh (Claude
+Design) ``, the several `Grimsby: UI rework` / `UI polish pass` entries),
+upgrade consolidation (`Vendor Upgrades Consolidation -- built (patch
+0133)`, `Upgrade balance review`), craft-only sets (`Two new craft-only
+item sets -- built (Guildmade + Masterwork)`), the buyback/tutorial/
+starter-sword system (`New: scripted Tutorial Quest, a starter Wooden
+Practice Sword, and a vendor buyback system`), and the consumables work
+(`Consumables not reflected in previewed success, guaranteed on-level
+offer, success-rate revert`, plus the earlier overlay/modal-shape
+rework). "Additional raids" and "additional bug patches" cover several
+smaller entries each rather than one specific heading, so no single
+citation for those two.
+
+**Not included:** anything still marked idea-only or rejected in this
+file (Mythic quest tier, level-relative scaling), and DevTool-only
+changes with no player-facing effect (sortable columns, banner-art
+picker, tuning-tab grouping) -- this post is for players, not
+contributors.
+
