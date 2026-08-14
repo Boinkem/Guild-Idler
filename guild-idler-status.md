@@ -10447,3 +10447,56 @@ the current version passes through with an empty list. `resolveTrackSrc`
 sampled directly: default/unlocked/locked-falls-back-to-default/shuffle
 (day 0 vs day 1, pool includes the earned track) all resolve exactly as
 designed.
+
+### Guild Hall maxed-card polish: smaller crest, repositioned wax seal, dimmed backing -- built (patch 0156)
+
+```discord-update
+Dev Update | Guild Hall Visual Polish
+
+- Shrunk the facility crest icon for a tighter card layout
+- Wax seal on fully maxed cards now sits centered over the card face instead of hanging off the corner
+- Maxed cards dim slightly so the seal reads as the one bright thing stamped on top
+```
+
+Design handoff, applied as given (`GuildPanel.tsx`, `app.css`), same
+process as the Guild Hall visual redesign (patch 0152) and wax seal
+(patch 0154) before it -- delivered ready to integrate rather than
+requested feature-by-feature.
+
+**What changed.** `.guild-facility-icon` shrunk 38px -> 32px (font-size
+1rem -> 0.85rem to match) for a tighter crest. `.guild-seal` moved from
+a corner overhang (`top: -22px; right: -22px; width/height: 88px`, plain
+`rotate(14deg)`) to sitting inside the card face (`top: 38%; right:
+90px; width/height: 66px`, `translateY(-50%) rotate(14deg)`). New
+`.guild-facility-card.guild-maxed { filter: brightness(0.6)
+saturate(0.85); }` dims the card underneath so the smaller, now-inset
+seal still reads as the brightest thing on the card. `GuildPanel.tsx`
+adds `guild-maxed`/`guild-maxed-body` conditional classes to both card
+grids (Facilities and Permanent Upgrades) so the dimming applies
+wherever `maxed` is already true.
+
+**Caught before integrating, dropped from the patch:** the supplied
+`GuildPanel.tsx` also re-added a `{def.tracksPerLevel && <span
+className="gold-text">+1 song per level</span>}` line to the Facilities
+stat row -- an artifact of the handoff being built off a `main` pulled
+before patch 0155 removed Music Hall and `tracksPerLevel` entirely.
+Diffed against a fresh `main` before applying (this doc's own workflow
+rule) and confirmed `tracksPerLevel` no longer exists anywhere in
+`types.ts`, `progression.ts`, or the live `app.css`/`GuildPanel.tsx` --
+reintroducing the read would have failed `tsc` outright, since the field
+no longer exists on `UpgradeDef`/`FacilityDef`. Excluded that one hunk;
+every other change in both files applied clean against current `main`
+with no other conflicts.
+
+**Known gap, not blocking:** the supplied `app.css` comments (both new
+and pre-existing) describe reserving a "text-free right-hand strip" on a
+maxed card's body so the description/rail/stat-row text never runs under
+the now-centered seal -- but no `.guild-maxed-body` rule actually ships
+in this handoff to do that reserving. The class is applied in
+`GuildPanel.tsx` (harmless, currently a no-op) so a follow-up patch can
+add the padding rule without touching the component again. Left as-is
+rather than guessing at the intended padding value.
+
+**Verified:** diffed both files against a fresh `main` pull before
+integrating. `npx tsc --noEmit` and `vite build` (web config) both
+clean.

@@ -58,9 +58,9 @@ export function GuildPanel() {
     return (
       <div key={def.id} className="guild-card-wrap">
         {maxed && <img className="guild-seal" src={waxSealComplete} alt="" />}
-        <div className={`card guild-facility-card ${affordable ? 'affordable' : ''}`}>
+        <div className={`card guild-facility-card ${affordable ? 'affordable' : ''} ${maxed ? 'guild-maxed' : ''}`}>
           <div className="guild-facility-icon" aria-hidden="true">{def.name.charAt(0)}</div>
-          <div className="guild-facility-body">
+          <div className={`guild-facility-body ${maxed ? 'guild-maxed-body' : ''}`}>
             <div className="spread">
               <span className="card-title">{def.name}</span>
               <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
@@ -117,9 +117,9 @@ export function GuildPanel() {
           return (
             <div key={def.id} className="guild-card-wrap">
               {maxed && <img className="guild-seal" src={waxSealComplete} alt="" />}
-              <div className={`card guild-facility-card ${affordable ? 'affordable' : ''}`}>
+              <div className={`card guild-facility-card ${affordable ? 'affordable' : ''} ${maxed ? 'guild-maxed' : ''}`}>
                 <div className="guild-facility-icon" aria-hidden="true">{def.name.charAt(0)}</div>
-                <div className="guild-facility-body">
+                <div className={`guild-facility-body ${maxed ? 'guild-maxed-body' : ''}`}>
                   <div className="spread">
                     <span className="card-title">{def.name}</span>
                     <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>Level {level}/{def.maxLevel}</span>

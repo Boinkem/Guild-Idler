@@ -367,8 +367,8 @@
 
 .guild-facility-icon {
   flex: none;
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -376,7 +376,7 @@
   border: 1px solid var(--brass-dim);
   clip-path: polygon(6px 0, 100% 0, 100% 100%, 0 100%, 0 6px);
   font-family: var(--font-display);
-  font-size: 1rem;
+  font-size: 0.85rem;
   font-weight: 700;
   color: var(--brass);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -428,18 +428,27 @@
    wrapper OUTSIDE .guild-facility-card, not as a child of it -- the
    card's own corner-cut clip-path would otherwise clip the seal wherever
    it overhangs the card's edge, and this is meant to sit proudly over
-   the edge like a real stamp, not be boxed in by it. */
+   the edge like a real stamp, not be boxed in by it. Centered over the
+   card face -- the card itself darkens underneath (.guild-maxed below)
+   so the seal reads as the one bright thing stamped on top. */
 .guild-card-wrap { position: relative; }
 .guild-seal {
   position: absolute;
-  top: -22px;
-  right: -22px;
-  width: 88px;
-  height: 88px;
-  transform: rotate(14deg);
+  top: 38%;
+  right: 90px;
+  width: 66px;
+  height: 66px;
+  transform: translateY(-50%) rotate(14deg);
   filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.6));
   pointer-events: none;
   z-index: 3;
+}
+
+/* A card whose facility/upgrade is fully maxed dims to read as "settled,
+   nothing left to do here" underneath the bright seal stamped on top --
+   without this the seal was competing with an equally lively card. */
+.guild-facility-card.guild-maxed {
+  filter: brightness(0.6) saturate(0.85);
 }
 
 * { box-sizing: border-box; }
