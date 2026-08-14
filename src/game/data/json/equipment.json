@@ -1393,7 +1393,7 @@
     "id": "ashwoven_charm_heroic",
     "name": "Ashwoven Charm (Heroic)",
     "slot": "amulet",
-    "rarity": "rare",
+    "rarity": "epic",
     "reqLevel": 11,
     "maxDurability": 169,
     "value": 650,
@@ -1412,7 +1412,7 @@
     "id": "ashwoven_charm_mythic",
     "name": "Ashwoven Charm (Mythic)",
     "slot": "amulet",
-    "rarity": "rare",
+    "rarity": "epic",
     "reqLevel": 11,
     "maxDurability": 220,
     "value": 845,
@@ -1558,7 +1558,7 @@
     "maxDurability": 78,
     "value": 39,
     "mods": {
-      "loot": 1
+      "loot": 2
     },
     "icon": "accessories/Accessory_06.png",
     "raidExclusive": true,
@@ -1573,7 +1573,7 @@
     "maxDurability": 101,
     "value": 51,
     "mods": {
-      "loot": 2
+      "loot": 3
     },
     "icon": "accessories/Accessory_06.png",
     "raidExclusive": true,
@@ -1603,7 +1603,7 @@
     "maxDurability": 31,
     "value": 34,
     "mods": {
-      "gold": 3
+      "gold": 4
     },
     "setId": "blackford",
     "raidExclusive": true,
@@ -1633,7 +1633,7 @@
     "id": "knights_blade_mythic",
     "name": "Knight's Blade (Mythic)",
     "slot": "weapon",
-    "rarity": "uncommon",
+    "rarity": "epic",
     "reqLevel": 5,
     "maxDurability": 118,
     "value": 270,
@@ -1653,7 +1653,7 @@
     "id": "iron_helm_heroic",
     "name": "Iron Helm (Heroic)",
     "slot": "helmet",
-    "rarity": "uncommon",
+    "rarity": "epic",
     "reqLevel": 4,
     "maxDurability": 78,
     "value": 182,
@@ -1714,7 +1714,7 @@
     "id": "chainmail_mythic",
     "name": "Chainmail Hauberk (Mythic)",
     "slot": "chest",
-    "rarity": "uncommon",
+    "rarity": "epic",
     "reqLevel": 6,
     "maxDurability": 127,
     "value": 355,
@@ -1756,7 +1756,7 @@
     "id": "ranger_boots_mythic",
     "name": "Ranger Boots (Mythic)",
     "slot": "boots",
-    "rarity": "uncommon",
+    "rarity": "epic",
     "reqLevel": 4,
     "maxDurability": 98,
     "value": 228,
@@ -1773,7 +1773,7 @@
     "id": "tollkeepers_signet_heroic",
     "name": "Tollkeeper's Signet (Heroic)",
     "slot": "ring",
-    "rarity": "uncommon",
+    "rarity": "epic",
     "reqLevel": 7,
     "maxDurability": 98,
     "value": 195,
@@ -1791,7 +1791,7 @@
     "id": "tollkeepers_signet_mythic",
     "name": "Tollkeeper's Signet (Mythic)",
     "slot": "ring",
-    "rarity": "uncommon",
+    "rarity": "epic",
     "reqLevel": 7,
     "maxDurability": 127,
     "value": 254,

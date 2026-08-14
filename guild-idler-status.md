@@ -9750,3 +9750,95 @@ no reason to lose them.
 
 **Verified:** `npx tsc --noEmit` and a full `vite build` (app + electron
 main + preload) both clean.
+
+### Equipment audit: raid-tier rarity/stat pass -- fixed (patch 0146)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed several Heroic/Mythic Blackford Keep drops that were showing the wrong rarity badge instead of Epic
+- Fixed two Heroic-tier items whose stats hadn't actually improved over their Normal version
+- No other gear was touched -- everything else in the game already scales the way it's meant to
+```
+
+Full audit of all 220 `equipment.json` entries (12 `craftable` template
+entries excluded -- blank `mods`/`stats` is correct for those, players
+roll their own via Crafting) against the design rule "Heroic/Mythic
+pieces are always Epic quality unless a dedicated Legendary, and
+Normal < Heroic < Mythic in both rarity and stats."
+
+**Root-caused the actual bug first, rather than assuming the raid loot
+itself needed rebalancing.** A naive equal-weighted sum of every item's
+`mods`+`stats` values initially looked like it showed real power creep
+-- several Heroic/Mythic raid drops appeared to outclass same-rarity
+gear 15-30 levels higher. Re-ran the comparison properly scaled by
+level and by the game's own existing `GEAR_SCORE_BY_RARITY` ratios
+(`{common:1, uncommon:3, rare:7, epic:15, legendary:30}`, from
+`equipment.ts`) instead of a flat sum, and the picture flipped: the
+Normal -> Heroic -> Mythic stat curve is already consistent everywhere
+in the file, sitting at roughly **Heroic ~= Normal x1.2-1.3, Mythic ~=
+Normal x1.4-1.7**, holding steady across every raid and level range
+checked (Blackford Keep through Requiem for the Last God). The
+"power creep" read was an artifact of the comparison method, not a
+real balance problem -- see the stat-budget note below for the
+corrected model, kept in the project brief so this doesn't get
+re-litigated from scratch next time.
+
+**What was actually broken, and only this:**
+- `ashwoven_charm_heroic`/`_mythic` -- tagged `rare`, should be `epic`
+  (the item this raid drop is based on, `ashwoven_charm`, is itself
+  Rare -- correct for the Normal-tier version; the tiered variants
+  just never got their `rarity` field updated off it)
+- `iron_helm_heroic` -- tagged `uncommon`, should be `epic` (its own
+  `_mythic` sibling was already correctly `epic`)
+- `knights_blade_mythic` -- tagged `uncommon`, should be `epic`
+- `chainmail_mythic` -- tagged `uncommon`, should be `epic`
+- `ranger_boots_mythic` -- tagged `uncommon`, should be `epic`
+- `tollkeepers_signet_heroic`/`_mythic` -- both tagged `uncommon`,
+  should be `epic`
+
+In every one of these six cases the actual `mods`/`stats` values were
+already fine and already climbed correctly Normal -> Heroic -> Mythic
+-- only the `rarity` string itself was stale, almost certainly a
+copy-paste-and-forget-to-update-one-field slip when the tiered variant
+was created off the Normal item. No numeric rebalancing needed or
+done on any of these six.
+
+**Two genuinely dead Heroic tiers, now fixed:**
+- `copper_band_heroic` had `mods.loot: 1`, identical to the Normal
+  `copper_band`'s `loot: 1` -- Heroic wasn't actually better than
+  Normal at all. Bumped to `loot: 2`; `copper_band_mythic` bumped
+  `loot: 2 -> 3` to keep it strictly ahead of the new Heroic value.
+- `work_gloves_heroic` had `mods.gold: 3`, identical to the Normal
+  `work_gloves`'s `gold: 3`. Bumped to `gold: 4`; `work_gloves_mythic`
+  was already `gold: 5`, so no change needed there once Heroic moved.
+
+Both are the two smallest-magnitude items in the whole equipment
+table (Blackford Keep's lowest-tier trinket rewards, `reqLevel: 1`),
+kept intentionally minor in absolute terms rather than pushed up to a
+full Epic-rarity stat budget -- bumping a level-1 ring/glove to the
+same stat weight as a level-19+ Epic accessory would break the early
+game far worse than the bug being fixed.
+
+**Everything else stayed untouched.** All other Heroic/Mythic pairs
+checked (42 total raid-tiered bases across every raid) already satisfy
+Epic-or-better rarity and correct Normal < Heroic < Mythic stat
+ordering. No stat rebalancing was applied anywhere outside the eight
+`rarity` field corrections and the two `loot`/`gold` bumps above.
+
+**Stat-budget model, confirmed and documented (see project brief for
+the version meant to be pasted into future chats):**
+```
+modPowerBudget(level, rarity) = GEAR_SCORE_BY_RARITY[rarity] * (2.5 + level * 0.051)
+Heroic  ~= Normal x 1.2 - 1.3
+Mythic  ~= Normal x 1.4 - 1.7
+```
+Fit against the existing, non-buggy data (endpoints: common ~2-4 power
+at level 1, legendary ~150-180 power at level 55-59's Requiem set) --
+not a new target being imposed on the game, just the curve the
+existing itemization already follows almost everywhere. Useful going
+forward as the check to run against any newly-added equipment before
+it ships, rather than re-deriving a budget from scratch per item.
+
+**Verified:** `npx tsc --noEmit` clean. No schema changes -- both
+touched fields (`rarity`, `mods`) already existed on every item type.
