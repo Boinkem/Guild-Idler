@@ -9842,3 +9842,73 @@ it ships, rather than re-deriving a budget from scratch per item.
 
 **Verified:** `npx tsc --noEmit` clean. No schema changes -- both
 touched fields (`rarity`, `mods`) already existed on every item type.
+
+### Specific raid-lock text, an idle-companion declutter toggle, and four new Guild Record stats -- built (patch 0147)
+
+```discord-update
+Dev Update | Patch 0147
+
+- Locked raid cards now say exactly what to complete -- the quest chain or the specific prior raid -- instead of a generic message
+- Added a "Hide companion info" setting to declutter the corner sprite down to just the sprite, pet, and controls
+- Added Raids completed, Sets completed, Upgrades completed, and Pet breeds collected to the Statistics tab
+```
+
+Three direct, unrelated requests bundled into one patch.
+
+**1. Specific raid-lock text.** `isRaidUnlocked` (raids.ts) already checks
+two independent gates -- `requiresChainId` (a quest chain) and
+`unlocksRaidId` (a specific prior raid) -- but the locked `RaidCard`
+never surfaced which one was actually blocking, just a flat "Complete
+the previous raid to reveal this one" regardless of cause. New
+`raidLockReason(raidId, completedRaids, completedChains)` mirrors
+`isRaidUnlocked`'s own two checks in the same order (so the two can
+never disagree about what's actually gating a raid) and returns the
+specific reason: `Complete "Chain Name" to unlock this raid.` or
+`Complete Raid Name to unlock this raid.` A raid gated by both reports
+the chain first, matching `isRaidUnlocked`'s own early-return precedence.
+Falls back to the old generic text only in the practically-unreachable
+case where `isRaidUnlocked` says locked but neither gate explains why (a
+defensive guard against bad DevTool data, not a real path today).
+
+**2. "Hide companion info" setting.** New `hideIdleInfo` boolean
+(`settings.ts`, defaults off, no migration needed -- an unset field on
+an existing save just falls back to the default the same way every
+other settings field already does). When on, hides the idle companion's
+gold/level/name plate, quest-status line, "+N more at the guild" hint,
+and all four notification banners (away/chain-complete/raid-result/
+hatch-ready) -- the sprite, the equipped pet, and the full action row
+(Open guild / lock / Hide) all stay exactly as they were. Deliberately
+kept the action row intact rather than reducing it to just the lock
+icon: removing "Open guild"/"Hide" felt like a real functional
+regression for a purely cosmetic declutter option, and clicking the
+sprite itself already opens the guild menu regardless of this setting.
+Added to Settings' existing "Knight" section, right under "Pet
+position."
+
+**3. Four new Statistics rows.** All four read from data the game
+already tracks -- no new state, no new save fields:
+- **Raids completed** -- `state.completedRaids.length`/`RAIDS.length`.
+- **Sets completed** -- every `ITEM_SETS` entry (raid, chain-reward,
+  material-tier, and craft-only sets alike, not just raid ones) where
+  every piece is in `state.discoveredItems`, same "every piece
+  discovered" definition LorePanel's Collection tab and RaidsPanel's
+  SetProgressLine (patch 0144) already use.
+- **Upgrades completed** -- every guild facility, general/vendor
+  upgrade, and raid upgrade at its own max level, combined into one
+  number across all three separate level-tracking slices
+  (`facilityLevel`/`upgradeLevel`/`raidUpgradeLevel`).
+- **Pet breeds collected** -- distinct `defId`s in `state.pets`, same
+  "a hatch is permanent, no release path, so state.pets already means
+  every species ever hatched" reasoning `AchievementManager`'s own
+  `ALL_PETS_COLLECTED` check already relies on -- no separate
+  discovered-pets ledger needed the way `discoveredItems` exists for
+  equipment.
+
+**Note:** originally assigned patch number 0146, reassigned to 0147
+after a separate equipment-audit patch was pushed and applied to the
+live repo concurrently, landing on 0146 first. No code changes needed
+beyond the number itself -- confirmed the six touched files applied
+against the new live state with zero drift.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (app + electron
+main + preload) both clean.

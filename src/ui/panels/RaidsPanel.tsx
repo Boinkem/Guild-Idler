@@ -6,7 +6,7 @@ import { HeroManager } from '../../game/managers/HeroManager';
 import { GuildManager } from '../../game/managers/GuildManager';
 import {
   RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON,
-  isRaidUnlocked, parseLootEntry, lootForDifficulty,
+  isRaidUnlocked, raidLockReason, parseLootEntry, lootForDifficulty,
 } from '../../game/data/raids';
 import { EQUIPMENT_BY_ID, SET_BY_ID } from '../../game/data/equipment';
 import { RaidDifficulty, RaidUpgradeDef, RaidDef, Hero, Role } from '../../game/types';
@@ -641,7 +641,9 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: 
         <div className="raid-card-thumb" />
         <div className="raid-card-body">
           <div className="raid-card-name">???</div>
-          <p className="tiny muted" style={{ margin: '2px 0 0' }}>Complete the previous raid to reveal this one.</p>
+          <p className="tiny muted" style={{ margin: '2px 0 0' }}>
+            {raidLockReason(raidId, state.completedRaids, state.completedChains) ?? 'Complete the previous raid to reveal this one.'}
+          </p>
         </div>
       </div>
     );

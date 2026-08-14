@@ -171,6 +171,10 @@ export function SettingsPanel() {
         </button>
       </Row>
 
+      <Row label="Hide companion info" hint="Hides the gold/level/name line, quest status, and away/raid/hatch banners under the corner sprite. The sprite, pet, and Open guild/lock/Hide buttons all stay -- click the sprite to open the guild the same as always.">
+        <Toggle value={settings.hideIdleInfo} onChange={set('hideIdleInfo')} />
+      </Row>
+
       <Row label="Animation speed" hint="Applies to the corner companion.">
         <Segmented
           value={settings.reduceMotion ? 0 : settings.animationSpeed}

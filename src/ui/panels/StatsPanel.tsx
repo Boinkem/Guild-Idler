@@ -1,22 +1,58 @@
 import { useState } from 'react';
 import { useEngine } from '../useEngine';
 import { AchievementManager } from '../../game/managers/AchievementManager';
+import { GuildManager } from '../../game/managers/GuildManager';
+import { GUILD_FACILITIES, UPGRADES } from '../../game/data/progression';
+import { RAID_UPGRADES } from '../../game/data/raidUpgrades';
+import { ITEM_SETS } from '../../game/data/equipment';
+import { RAIDS } from '../../game/data/raids';
+import { PETS } from '../../game/data/pets';
 import { formatGold, formatPlayTime } from '../../game/util';
 import { ConfirmModal } from '../ConfirmModal';
 
 export function StatsPanel() {
   const engine = useEngine();
-  const stats = engine.state.stats;
+  const state = engine.state;
+  const stats = state.stats;
   const successRate = stats.totalQuests > 0
     ? `${Math.round((stats.successes / stats.totalQuests) * 100)}%`
     : '—';
-  const achProgress = AchievementManager.progress(engine.state);
+  const achProgress = AchievementManager.progress(state);
   // Both previously native `window.alert()`/`window.confirm()` calls --
   // unstyled OS dialogs, out of place next to every other prompt in the
   // game already routed through ConfirmModal (Recall, sell confirmations).
   // See guild-idler-status.md's polish-pass entry for the full writeup.
   const [saveLocationMessage, setSaveLocationMessage] = useState<string | null>(null);
   const [pendingHardReset, setPendingHardReset] = useState(false);
+
+  // Sets completed -- every ITEM_SETS entry (raid, chain-reward, material-
+  // tier, and craft-only alike, not just raid sets), same "every piece
+  // discovered" definition LorePanel's own Collection tab and RaidsPanel's
+  // SetProgressLine already use (set.pieces.filter(p =>
+  // discoveredItems.includes(p))), just counting whole sets here instead
+  // of individual pieces.
+  const setsCompleted = ITEM_SETS.filter(
+    (s) => s.pieces.every((p) => state.discoveredItems.includes(p)),
+  ).length;
+
+  // Upgrades completed -- every facility, general/vendor upgrade, and raid
+  // upgrade at its own max level, combined into one number. Three
+  // separate level accessors (facilityLevel/upgradeLevel/raidUpgradeLevel)
+  // since each tree is tracked in its own state slice, but they're all
+  // "a permanent upgrade fully bought out" in the same sense, so they
+  // read as one combined stat here rather than three separate rows.
+  const upgradesMaxed = GUILD_FACILITIES.filter((d) => GuildManager.facilityLevel(state, d.id) >= d.maxLevel).length
+    + UPGRADES.filter((d) => GuildManager.upgradeLevel(state, d.id) >= d.maxLevel).length
+    + RAID_UPGRADES.filter((d) => GuildManager.raidUpgradeLevel(state, d.id) >= d.maxLevel).length;
+  const upgradesTotal = GUILD_FACILITIES.length + UPGRADES.length + RAID_UPGRADES.length;
+
+  // Pet breeds collected -- pets have no release/delete path anywhere in
+  // the game (a hatch is permanent), so state.pets is already safe to
+  // read as "every species ever hatched," not just currently owned, same
+  // reasoning AchievementManager's own ALL_PETS_COLLECTED check already
+  // relies on -- no separate discovered-pets ledger needed the way
+  // discoveredItems exists for equipment.
+  const petBreedsCollected = new Set(state.pets.map((p) => p.defId)).size;
 
   const rows: [string, string][] = [
     ['Total quests', stats.totalQuests.toLocaleString()],
@@ -31,6 +67,10 @@ export function StatsPanel() {
     ['Injuries suffered', stats.injuriesSuffered.toLocaleString()],
     ['Items broken', stats.itemsBroken.toLocaleString()],
     ['Quest chains completed', stats.chainsCompleted.toLocaleString()],
+    ['Raids completed', `${state.completedRaids.length}/${RAIDS.length}`],
+    ['Sets completed', `${setsCompleted}/${ITEM_SETS.length}`],
+    ['Upgrades completed', `${upgradesMaxed}/${upgradesTotal}`],
+    ['Pet breeds collected', `${petBreedsCollected}/${PETS.length}`],
     ['Total play time', formatPlayTime(stats.playTimeMs)],
     ['Total offline time', formatPlayTime(stats.offlineTimeMs)],
     ['Retirements', stats.prestigeCount.toLocaleString()],

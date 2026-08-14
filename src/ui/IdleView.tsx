@@ -343,36 +343,40 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
           </button>
         )}
 
-        <div className="idle-plate">
-          <span className="gold">◆ {formatGold(engine.state.gold)}</span>
-          <span className="lvl">Lv {hero.level}</span>
-          <span className="muted">{hero.name}</span>
-        </div>
-        <div className="idle-status">{status}</div>
-        {otherHint && <div className="idle-status muted">{otherHint}</div>}
-        {/* Each of these acknowledges the notification log too, not just
-            navigating to the menu -- offline catch-up can archive its own
-            entries (guidance topics resolved while away) into
-            state.notifications, and without this, opening the menu right
-            after reading one of these compact summaries could immediately
-            trigger the header's own NotificationBanner for something
-            covering the exact same offline stretch, reading as "the same
-            notification coming back" even though it's technically a
-            different (if related) piece of information. Acknowledging
-            here gives these summaries the "memory" they were missing --
-            once you've seen the headline, the detail-level log entry
-            underneath it doesn't also demand separate attention. */}
-        {awayBanner && (
-          <button className="idle-away-banner" onClick={() => { engine.markNotificationsSeen(); onOpenMenu(); }}>{awayBanner}</button>
-        )}
-        {chainBanner && (
-          <button className="idle-away-banner idle-chain-banner" onClick={() => { engine.markNotificationsSeen(); onOpenMenu(); }}>{chainBanner}</button>
-        )}
-        {raidBanner && (
-          <button className="idle-away-banner idle-chain-banner" onClick={() => { engine.markNotificationsSeen(); onOpenMenu(); }}>{raidBanner}</button>
-        )}
-        {hatchReadyBanner && (
-          <button className="idle-away-banner idle-chain-banner" onClick={() => { engine.markNotificationsSeen(); onOpenMenu(); }}>{hatchReadyBanner}</button>
+        {!settings.hideIdleInfo && (
+          <>
+            <div className="idle-plate">
+              <span className="gold">◆ {formatGold(engine.state.gold)}</span>
+              <span className="lvl">Lv {hero.level}</span>
+              <span className="muted">{hero.name}</span>
+            </div>
+            <div className="idle-status">{status}</div>
+            {otherHint && <div className="idle-status muted">{otherHint}</div>}
+            {/* Each of these acknowledges the notification log too, not just
+                navigating to the menu -- offline catch-up can archive its own
+                entries (guidance topics resolved while away) into
+                state.notifications, and without this, opening the menu right
+                after reading one of these compact summaries could immediately
+                trigger the header's own NotificationBanner for something
+                covering the exact same offline stretch, reading as "the same
+                notification coming back" even though it's technically a
+                different (if related) piece of information. Acknowledging
+                here gives these summaries the "memory" they were missing --
+                once you've seen the headline, the detail-level log entry
+                underneath it doesn't also demand separate attention. */}
+            {awayBanner && (
+              <button className="idle-away-banner" onClick={() => { engine.markNotificationsSeen(); onOpenMenu(); }}>{awayBanner}</button>
+            )}
+            {chainBanner && (
+              <button className="idle-away-banner idle-chain-banner" onClick={() => { engine.markNotificationsSeen(); onOpenMenu(); }}>{chainBanner}</button>
+            )}
+            {raidBanner && (
+              <button className="idle-away-banner idle-chain-banner" onClick={() => { engine.markNotificationsSeen(); onOpenMenu(); }}>{raidBanner}</button>
+            )}
+            {hatchReadyBanner && (
+              <button className="idle-away-banner idle-chain-banner" onClick={() => { engine.markNotificationsSeen(); onOpenMenu(); }}>{hatchReadyBanner}</button>
+            )}
+          </>
         )}
 
         <div className="idle-actions">

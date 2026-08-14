@@ -1,6 +1,7 @@
 import { RaidDef, RaidDifficulty, RaidDifficultyConfig, RaidEncounterDef, Rarity } from '../types';
 import { Tuning } from './tuning';
 import { RARITY_ORDER } from '../util';
+import { QUEST_CHAINS } from './quests';
 
 /**
  * Raids and their encounters live in json/*.json, same reasoning as
@@ -159,3 +160,37 @@ export function isRaidUnlocked(raidId: string, completedRaids: string[], complet
   if (!unlockedBy) return true; // not gated by another raid -- visible once its own chain gate (if any) clears
   return completedRaids.includes(unlockedBy.id);
 }
+
+/**
+ * What specifically is still blocking a locked raid, in player-facing
+ * terms -- direct request: the generic "Complete the previous raid to
+ * reveal this one" told the player nothing about WHICH raid, or that a
+ * raid can be gated by a quest chain instead of (or in addition to) a
+ * prior raid. Returns null if the raid is already unlocked (nothing to
+ * report) or genuinely unknown (defensive, shouldn't happen for any real
+ * raid id). Mirrors isRaidUnlocked's own two gate checks exactly, in the
+ * same order, so this can never disagree with what actually gates the
+ * raid -- a raid gated by both a chain AND a prior raid reports the
+ * chain first, same precedence isRaidUnlocked's own early-return gives
+ * the chain check.
+ */
+export function raidLockReason(raidId: string, completedRaids: string[], completedChains: string[]): string | null {
+  const raid = RAID_BY_ID[raidId];
+  if (!raid) return null;
+  if (isRaidUnlocked(raidId, completedRaids, completedChains)) return null;
+
+  if (raid.requiresChainId && !completedChains.includes(raid.requiresChainId)) {
+    const chain = QUEST_CHAINS.find((c) => c.id === raid.requiresChainId);
+    return `Complete "${chain?.name ?? raid.requiresChainId}" to unlock this raid.`;
+  }
+  const unlockedBy = RAIDS.find((r) => r.unlocksRaidId === raidId);
+  if (unlockedBy) {
+    return `Complete ${unlockedBy.name} to unlock this raid.`;
+  }
+  // Shouldn't be reachable -- isRaidUnlocked already returned false above,
+  // so one of the two gates it checks must be the reason. A generic
+  // fallback rather than throwing keeps a devtool data-entry mistake
+  // (e.g. a third raid somehow gated on neither) from crashing the UI.
+  return 'Complete the previous raid to reveal this one.';
+}
+

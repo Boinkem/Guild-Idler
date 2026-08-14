@@ -82,6 +82,18 @@ export interface Settings {
   fontId: FontId;
   /** Optional backing plate behind the idle companion, for readability over busy wallpaper. */
   companionBackdrop: CompanionBackdropId;
+  /**
+   * Hides the idle companion's informational text -- the gold/level/name
+   * plate, quest-status line, "+N more at the guild" hint, and the away/
+   * chain-complete/raid-result/hatch-ready banners -- while the sprite,
+   * the "Open guild"/lock/"Hide" action row, and the pet companion all
+   * stay exactly as they are. Direct request: a way to declutter the
+   * corner companion down to just the sprite and controls, without
+   * losing the ability to open the guild, relock/reposition it, or
+   * minimize it -- clicking the sprite itself still opens the guild menu
+   * either way, same as always.
+   */
+  hideIdleInfo: boolean;
 
   /** Animation speed multiplier; 0 disables idle bobbing entirely. */
   animationSpeed: number;     // 0, 0.5, 1, 1.5
@@ -140,6 +152,7 @@ export const DEFAULT_SETTINGS: Settings = {
   styleId: 'adventure',
   fontId: 'readable',
   companionBackdrop: 'off',
+  hideIdleInfo: false,
   animationSpeed: 1,
   offlineReportOnLaunch: true,
   questResultPopups: true,
