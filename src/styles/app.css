@@ -424,6 +424,24 @@
   border-left-color: var(--brass-dim);
 }
 
+/* Wax seal stamped on a fully-maxed facility/upgrade card. Lives on a
+   wrapper OUTSIDE .guild-facility-card, not as a child of it -- the
+   card's own corner-cut clip-path would otherwise clip the seal wherever
+   it overhangs the card's edge, and this is meant to sit proudly over
+   the edge like a real stamp, not be boxed in by it. */
+.guild-card-wrap { position: relative; }
+.guild-seal {
+  position: absolute;
+  top: -22px;
+  right: -22px;
+  width: 88px;
+  height: 88px;
+  transform: rotate(14deg);
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.6));
+  pointer-events: none;
+  z-index: 3;
+}
+
 * { box-sizing: border-box; }
 
 html, body, #root {

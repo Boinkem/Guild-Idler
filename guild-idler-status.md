@@ -10254,3 +10254,42 @@ Every migrated JSON file's content verified byte-identical to the
 original hardcoded TS values (extraction script's own output, not
 hand-checked). Every one of the 12 new tuning entries confirmed to
 resolve to its exact pre-migration literal. `npx tsc --noEmit` clean.
+
+### Guild Hall wax seal on maxed cards -- built (patch 0154)
+
+```discord-update
+Dev Update | Guild Hall Wax Seal
+
+- Added a wax seal stamp that marks any fully maxed Guild Hall facility or permanent upgrade card
+```
+
+Design handoff, applied as given (`GuildPanel.tsx`, `app.css`, plus a
+new `wax-seal-complete.png` asset), same process as the Guild Hall
+visual redesign (patch 0152) and Raids redesign (patch 0145) before it
+-- delivered ready to integrate rather than requested feature-by-feature.
+
+**What changed.** Every facility/upgrade card in `GuildPanel.tsx` (both
+the Facilities grid and the Permanent Upgrades grid) is now wrapped in a
+new `.guild-card-wrap` div -- previously the `.card guild-facility-card`
+div was the outermost element. When `maxed` is true, a
+`<img className="guild-seal" src={waxSealComplete} alt="" />` renders
+inside that wrapper, absolutely positioned (top -22px / right -22px),
+rotated 14deg, with a drop-shadow -- deliberately living outside
+`.guild-facility-card` itself so the card's own corner-cut `clip-path`
+(from patch 0152) doesn't clip the seal where it overhangs the card's
+edge, letting it sit proudly on top like a real stamp.
+
+New asset: `src/assets/wax-seal-complete.png`, imported directly in
+`GuildPanel.tsx` (`import waxSealComplete from
+'../../assets/wax-seal-complete.png'`) via Vite's built-in asset
+handling -- the first `src/assets` image import in the codebase; every
+other in-game image so far has lived under `public/` and been
+referenced by string path. No build config changes needed, Vite
+resolves `src`-relative image imports natively.
+
+**Verified:** diffed both files against a fresh `main` pull before
+integrating -- `app.css`'s 18 new lines (`.guild-card-wrap`,
+`.guild-seal`) are a pure insertion, zero existing lines changed;
+`GuildPanel.tsx`'s edits are the new wrapper div + conditional image
+only, no cost formulas, handlers, or conditions touched. `npx tsc
+--noEmit` clean.

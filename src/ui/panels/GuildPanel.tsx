@@ -5,6 +5,7 @@ import { AUTO_CHAIN_RANGES } from '../../game/data/progression';
 import { UpgradeDef } from '../../game/types';
 import { describeMods, formatGold } from '../../game/util';
 import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
+import waxSealComplete from '../../assets/wax-seal-complete.png';
 
 function chainRangeText(level: number): string {
   const range = AUTO_CHAIN_RANGES[level];
@@ -55,35 +56,38 @@ export function GuildPanel() {
     const pulsing = levelPulses[def.id];
     const pct = Math.min(100, (level / def.maxLevel) * 100);
     return (
-      <div key={def.id} className={`card guild-facility-card ${affordable ? 'affordable' : ''}`}>
-        <div className="guild-facility-icon" aria-hidden="true">{def.name.charAt(0)}</div>
-        <div className="guild-facility-body">
-          <div className="spread">
-            <span className="card-title">{def.name}</span>
-            <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
+      <div key={def.id} className="guild-card-wrap">
+        {maxed && <img className="guild-seal" src={waxSealComplete} alt="" />}
+        <div className={`card guild-facility-card ${affordable ? 'affordable' : ''}`}>
+          <div className="guild-facility-icon" aria-hidden="true">{def.name.charAt(0)}</div>
+          <div className="guild-facility-body">
+            <div className="spread">
+              <span className="card-title">{def.name}</span>
+              <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
+            </div>
+            <p className="card-flavour">{def.description}</p>
+            <div className={`guild-level-rail ${maxed ? 'maxed' : ''}`}><span style={{ width: `${pct}%` }} /></div>
+            <div className="stat-row" style={{ marginBottom: 8 }}>
+              {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
+              {def.unlocks === 'legendaryQuests' && <span className="gold-text">Unlocks Legendary quests</span>}
+              {def.unlocks === 'chains' && <span className="gold-text">Unlocks multi-day quest chains</span>}
+              {def.unlocks === 'blackMarket' && <span className="gold-text">Unlocks the Black Market</span>}
+              {def.unlocks === 'autoChain' && level > 0 && (
+                <span className="gold-text">Currently chains {chainRangeText(level)} quests per streak</span>
+              )}
+              {def.unlocks === 'autoChain' && !maxed && (
+                <span className="muted">Next tier: {chainRangeText(level + 1)} quests per streak</span>
+              )}
+            </div>
+            <button
+              className="btn-yellow"
+              disabled={maxed || cost === null || state.gold < cost}
+              onClick={() => engine.buyUpgrade(def.id)}
+            >
+              {maxed ? 'Fully upgraded' : `Buy · ${formatGold(cost ?? 0)}`}
+            </button>
+            {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
           </div>
-          <p className="card-flavour">{def.description}</p>
-          <div className={`guild-level-rail ${maxed ? 'maxed' : ''}`}><span style={{ width: `${pct}%` }} /></div>
-          <div className="stat-row" style={{ marginBottom: 8 }}>
-            {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
-            {def.unlocks === 'legendaryQuests' && <span className="gold-text">Unlocks Legendary quests</span>}
-            {def.unlocks === 'chains' && <span className="gold-text">Unlocks multi-day quest chains</span>}
-            {def.unlocks === 'blackMarket' && <span className="gold-text">Unlocks the Black Market</span>}
-            {def.unlocks === 'autoChain' && level > 0 && (
-              <span className="gold-text">Currently chains {chainRangeText(level)} quests per streak</span>
-            )}
-            {def.unlocks === 'autoChain' && !maxed && (
-              <span className="muted">Next tier: {chainRangeText(level + 1)} quests per streak</span>
-            )}
-          </div>
-          <button
-            className="btn-yellow"
-            disabled={maxed || cost === null || state.gold < cost}
-            onClick={() => engine.buyUpgrade(def.id)}
-          >
-            {maxed ? 'Fully upgraded' : `Buy · ${formatGold(cost ?? 0)}`}
-          </button>
-          {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
         </div>
       </div>
     );
@@ -111,29 +115,32 @@ export function GuildPanel() {
           const pulsing = levelPulses[def.id];
           const pct = Math.min(100, (level / def.maxLevel) * 100);
           return (
-            <div key={def.id} className={`card guild-facility-card ${affordable ? 'affordable' : ''}`}>
-              <div className="guild-facility-icon" aria-hidden="true">{def.name.charAt(0)}</div>
-              <div className="guild-facility-body">
-                <div className="spread">
-                  <span className="card-title">{def.name}</span>
-                  <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>Level {level}/{def.maxLevel}</span>
+            <div key={def.id} className="guild-card-wrap">
+              {maxed && <img className="guild-seal" src={waxSealComplete} alt="" />}
+              <div className={`card guild-facility-card ${affordable ? 'affordable' : ''}`}>
+                <div className="guild-facility-icon" aria-hidden="true">{def.name.charAt(0)}</div>
+                <div className="guild-facility-body">
+                  <div className="spread">
+                    <span className="card-title">{def.name}</span>
+                    <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>Level {level}/{def.maxLevel}</span>
+                  </div>
+                  <p className="card-flavour">{def.description}</p>
+                  <div className={`guild-level-rail ${maxed ? 'maxed' : ''}`}><span style={{ width: `${pct}%` }} /></div>
+                  <div className="stat-row" style={{ marginBottom: 8 }}>
+                    {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
+                    {def.storagePerLevel && <span>+{formatGold(def.storagePerLevel)} storage per level</span>}
+                    {def.heroSlotsPerLevel && <span className="gold-text">+1 hero slot per level</span>}
+                    {def.tracksPerLevel && <span className="gold-text">+1 song per level</span>}
+                  </div>
+                  <button
+                    className="btn-yellow"
+                    disabled={maxed || state.gold < cost}
+                    onClick={() => engine.upgradeFacility(def.id)}
+                  >
+                    {maxed ? 'Fully built' : `Build · ${formatGold(cost)}`}
+                  </button>
+                  {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
                 </div>
-                <p className="card-flavour">{def.description}</p>
-                <div className={`guild-level-rail ${maxed ? 'maxed' : ''}`}><span style={{ width: `${pct}%` }} /></div>
-                <div className="stat-row" style={{ marginBottom: 8 }}>
-                  {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
-                  {def.storagePerLevel && <span>+{formatGold(def.storagePerLevel)} storage per level</span>}
-                  {def.heroSlotsPerLevel && <span className="gold-text">+1 hero slot per level</span>}
-                  {def.tracksPerLevel && <span className="gold-text">+1 song per level</span>}
-                </div>
-                <button
-                  className="btn-yellow"
-                  disabled={maxed || state.gold < cost}
-                  onClick={() => engine.upgradeFacility(def.id)}
-                >
-                  {maxed ? 'Fully built' : `Build · ${formatGold(cost)}`}
-                </button>
-                {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
               </div>
             </div>
           );
