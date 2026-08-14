@@ -9569,3 +9569,109 @@ the next time any of those run rather than needing to raid again.
 
 **Verified:** `npx tsc --noEmit` and a full `vite build` (app + electron
 main + preload) both clean.
+
+### Raid UI polish pass -- 9 direct issues from tester screenshots -- fixed/built (patch 0144)
+
+```discord-update
+Dev Update | Raid UI Fixes
+
+- Fixed the active raid's banner art disappearing while it's underway
+- Fixed role requirement circles showing as met before you'd actually picked anyone
+- Widened the raid detail popup so most of it fits without scrolling
+- Added a "Roles Required" header, and a small icon next to each hero showing their role
+- Made each encounter collapsible instead of always showing everything at once
+- Added a raid-set-unlocked count so it's clear there's more to find
+- Difficulty tier names now show under their icons, not just on hover
+- Time-skip and instant-complete testing tools now work on raids, not just quests
+```
+
+Nine issues from one direct tester pass over the raid tab and its detail
+modal, screenshots included. Taken one at a time below.
+
+**1. Active raid banner missing.** `ActiveRaidCard` never called
+`RaidBanner` at all -- every other raid surface (the locked-list card,
+the detail modal) shows it, this one just didn't. Added, using
+`active.raidId`/`raid?.banner` the same way the detail modal already
+does.
+
+**2. Detail modal forced scrolling by default.** The base `.modal` class
+caps at 460px; this is the single densest modal in the game (banner,
+full encounter list, difficulty circles, role requirements, hero picker)
+and never had its own override. New `.modal.raid-detail-modal` rule at
+680px -- still just a max, shrinks fine on a narrow window like every
+other modal.
+
+**3. Role requirement circles ticking green with nobody selected --
+the real bug behind the screenshot.** Root cause: the circles' met/unmet
+state was computed from `previewHeroIds`, which deliberately falls back
+to a plausible default party (the first N idle heroes) *before* the
+player has picked anyone -- correct for the success%/duration preview
+just above it, wrong here. A requirement circle claiming "met" is a
+concrete fact about the party actually about to be sent, not a guess.
+Switched to reading `selectedHeroIds` (the real selection) directly, so
+an empty selection now correctly shows every circle as unmet.
+
+**7. Equipment-set discovery progress per raid** -- corrected mid-review.
+Originally read as a raid-roster unlock count; the actual ask was about
+the item set each raid drops, so that's been replaced entirely (see the
+correction note in the follow-up patch discussion). Every raid has
+exactly one themed equipment set assembled from its own drop pool
+(`ITEM_SETS` in equipment.ts -- `blackford`, `bonewrought`, `wyrmkeep`,
+`what_got_out`, `cinderfang`, `grimward`, `loom`, `requiem`, one per raid,
+confirmed against all 8 raid ids). New `RAID_SET_ID` map links a raid id
+to its set id -- a small explicit table rather than inferring it by
+scanning loot pools, since a raid's encounters can drop pieces from an
+unrelated chain-reward set too (dragon_slayer pieces drop in both
+Bonewrought Vault and Frozen Wyrmkeep without belonging to either raid's
+"own" set -- see ITEM_SETS' own comment) and inference would need to
+encode that same judgement call anyway. New `SetProgressLine` component
+reads `state.discoveredItems` the exact same way LorePanel's existing
+Collection tab already does (`set.pieces.filter(p =>
+discoveredItems.includes(p))`) -- no separate tracking, so a piece counts
+here the moment it counts there. Shown two ways: a compact "`{Set name}:
+X/Y found`" line on the collapsed `RaidCard` (visible while browsing the
+list, no need to open anything), and the full per-piece breakdown
+(discovered pieces highlighted, same legendary-gold treatment
+CollectionTab already uses) inside the detail modal, next to the raid's
+description.
+
+**4. New "Roles Required" section heading.** Matches the existing
+"Difficulty" heading exactly -- the role circles previously had no
+heading of their own at all.
+
+**6. Collapsible encounters.** Each encounter now renders as a native
+`<details>`/`<summary>` -- no new component state, the browser owns
+open/closed. Collapsed by default; the summary row alone still shows
+name, success%, and time, so nothing informative disappears, only the
+flavour text and loot preview hide until expanded. This and #2 together
+are what actually fix the default-scroll problem.
+
+**8. Difficulty names below the icons.** `DifficultyCircle` now renders
+inside a small flex-column wrapper (`raid-diff-circle-wrap`) with the
+tier name printed underneath in its own color -- previously that name
+only existed in the button's `title` tooltip.
+
+**9. Role icon in the hero-picker chips.** Each idle-hero chip in the
+party selector now leads with a 12px `RoleIcon` for that hero's
+`HeroManager.activeRole` -- same shared component patch 0141 already
+built, so "what is this hero" is visible at a glance before opening
+their card.
+
+**5. Testing tab: time-skip and instant-complete never touched raids.**
+Root cause, `testSkipTime`: it already shifted every active quest's
+`endsAt` back by the skip amount (an in-flight quest's deadline is an
+absolute timestamp, independent of `lastSeen`, so rewinding `lastSeen`
+alone reports elapsed time correctly while leaving the quest itself
+untouched -- see that method's own existing comment) but never did the
+same for `state.activeRaid.endsAt`, so a raid in progress just sat there
+through any skip. Fixed with the identical one-line treatment. Separately,
+there was no raid equivalent of "complete a quest now" at all -- new
+`GameEngine.testCompleteActiveRaid()` resolves the current `activeRaid`
+immediately via `RaidManager.resolve`, same "use the already-locked-in
+odds, not a guaranteed win" contract `testCompleteActiveQuest` already
+has. `TestingPanel.tsx` gained a matching "Complete the active raid now"
+section, same card-with-a-button shape the per-hero quest list already
+uses.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (app + electron
+main + preload) both clean.

@@ -1,0 +1,530 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index f20e1e9..1c158d0 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -9569,3 +9569,109 @@ the next time any of those run rather than needing to raid again.
+ 
+ **Verified:** `npx tsc --noEmit` and a full `vite build` (app + electron
+ main + preload) both clean.
++
++### Raid UI polish pass -- 9 direct issues from tester screenshots -- fixed/built (patch 0144)
++
++```discord-update
++Dev Update | Raid UI Fixes
++
++- Fixed the active raid's banner art disappearing while it's underway
++- Fixed role requirement circles showing as met before you'd actually picked anyone
++- Widened the raid detail popup so most of it fits without scrolling
++- Added a "Roles Required" header, and a small icon next to each hero showing their role
++- Made each encounter collapsible instead of always showing everything at once
++- Added a raid-set-unlocked count so it's clear there's more to find
++- Difficulty tier names now show under their icons, not just on hover
++- Time-skip and instant-complete testing tools now work on raids, not just quests
++```
++
++Nine issues from one direct tester pass over the raid tab and its detail
++modal, screenshots included. Taken one at a time below.
++
++**1. Active raid banner missing.** `ActiveRaidCard` never called
++`RaidBanner` at all -- every other raid surface (the locked-list card,
++the detail modal) shows it, this one just didn't. Added, using
++`active.raidId`/`raid?.banner` the same way the detail modal already
++does.
++
++**2. Detail modal forced scrolling by default.** The base `.modal` class
++caps at 460px; this is the single densest modal in the game (banner,
++full encounter list, difficulty circles, role requirements, hero picker)
++and never had its own override. New `.modal.raid-detail-modal` rule at
++680px -- still just a max, shrinks fine on a narrow window like every
++other modal.
++
++**3. Role requirement circles ticking green with nobody selected --
++the real bug behind the screenshot.** Root cause: the circles' met/unmet
++state was computed from `previewHeroIds`, which deliberately falls back
++to a plausible default party (the first N idle heroes) *before* the
++player has picked anyone -- correct for the success%/duration preview
++just above it, wrong here. A requirement circle claiming "met" is a
++concrete fact about the party actually about to be sent, not a guess.
++Switched to reading `selectedHeroIds` (the real selection) directly, so
++an empty selection now correctly shows every circle as unmet.
++
++**7. Equipment-set discovery progress per raid** -- corrected mid-review.
++Originally read as a raid-roster unlock count; the actual ask was about
++the item set each raid drops, so that's been replaced entirely (see the
++correction note in the follow-up patch discussion). Every raid has
++exactly one themed equipment set assembled from its own drop pool
++(`ITEM_SETS` in equipment.ts -- `blackford`, `bonewrought`, `wyrmkeep`,
++`what_got_out`, `cinderfang`, `grimward`, `loom`, `requiem`, one per raid,
++confirmed against all 8 raid ids). New `RAID_SET_ID` map links a raid id
++to its set id -- a small explicit table rather than inferring it by
++scanning loot pools, since a raid's encounters can drop pieces from an
++unrelated chain-reward set too (dragon_slayer pieces drop in both
++Bonewrought Vault and Frozen Wyrmkeep without belonging to either raid's
++"own" set -- see ITEM_SETS' own comment) and inference would need to
++encode that same judgement call anyway. New `SetProgressLine` component
++reads `state.discoveredItems` the exact same way LorePanel's existing
++Collection tab already does (`set.pieces.filter(p =>
++discoveredItems.includes(p))`) -- no separate tracking, so a piece counts
++here the moment it counts there. Shown two ways: a compact "`{Set name}:
++X/Y found`" line on the collapsed `RaidCard` (visible while browsing the
++list, no need to open anything), and the full per-piece breakdown
++(discovered pieces highlighted, same legendary-gold treatment
++CollectionTab already uses) inside the detail modal, next to the raid's
++description.
++
++**4. New "Roles Required" section heading.** Matches the existing
++"Difficulty" heading exactly -- the role circles previously had no
++heading of their own at all.
++
++**6. Collapsible encounters.** Each encounter now renders as a native
++`<details>`/`<summary>` -- no new component state, the browser owns
++open/closed. Collapsed by default; the summary row alone still shows
++name, success%, and time, so nothing informative disappears, only the
++flavour text and loot preview hide until expanded. This and #2 together
++are what actually fix the default-scroll problem.
++
++**8. Difficulty names below the icons.** `DifficultyCircle` now renders
++inside a small flex-column wrapper (`raid-diff-circle-wrap`) with the
++tier name printed underneath in its own color -- previously that name
++only existed in the button's `title` tooltip.
++
++**9. Role icon in the hero-picker chips.** Each idle-hero chip in the
++party selector now leads with a 12px `RoleIcon` for that hero's
++`HeroManager.activeRole` -- same shared component patch 0141 already
++built, so "what is this hero" is visible at a glance before opening
++their card.
++
++**5. Testing tab: time-skip and instant-complete never touched raids.**
++Root cause, `testSkipTime`: it already shifted every active quest's
++`endsAt` back by the skip amount (an in-flight quest's deadline is an
++absolute timestamp, independent of `lastSeen`, so rewinding `lastSeen`
++alone reports elapsed time correctly while leaving the quest itself
++untouched -- see that method's own existing comment) but never did the
++same for `state.activeRaid.endsAt`, so a raid in progress just sat there
++through any skip. Fixed with the identical one-line treatment. Separately,
++there was no raid equivalent of "complete a quest now" at all -- new
++`GameEngine.testCompleteActiveRaid()` resolves the current `activeRaid`
++immediately via `RaidManager.resolve`, same "use the already-locked-in
++odds, not a guaranteed win" contract `testCompleteActiveQuest` already
++has. `TestingPanel.tsx` gained a matching "Complete the active raid now"
++section, same card-with-a-button shape the per-hero quest list already
++uses.
++
++**Verified:** `npx tsc --noEmit` and a full `vite build` (app + electron
++main + preload) both clean.
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 609f6ce..66b1875 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -761,6 +761,15 @@ export class GameEngine {
+     for (const quest of this.state.activeQuests) {
+       quest.endsAt -= ms;
+     }
++    // Same reasoning as quests just above -- an active raid's endsAt is
++    // also an absolute real-world timestamp fixed at commit time,
++    // independent of lastSeen, so a skip that only rewound lastSeen would
++    // report elapsed time correctly while leaving an in-flight raid
++    // completely untouched. Reported directly: skip-time buttons "don't
++    // affect raids."
++    if (this.state.activeRaid) {
++      this.state.activeRaid.endsAt -= ms;
++    }
+     this.state.lastSeen = Math.max(0, this.state.lastSeen - ms);
+     this.catchUpOffline();
+     // catchUpOffline resolves due quests but never touches the board --
+@@ -925,6 +934,23 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /** Raid equivalent of testCompleteActiveQuest -- resolves the current
++   *  activeRaid immediately using its own already-locked-in partySuccessBonus,
++   *  not a guaranteed clear, just not waiting for the clock. No-op if
++   *  nothing's actually raiding. Reported directly alongside testSkipTime
++   *  above: neither the skip-time buttons nor "complete a quest now" had
++   *  any raid equivalent at all. */
++  testCompleteActiveRaid() {
++    if (!TESTING_TOOLS_ENABLED) return;
++    if (!this.state.activeRaid) return;
++    const raidResult = RaidManager.resolve(this.state, this.state.activeRaid, this.state.activeRaid.endsAt);
++    this.lastRaidResult = raidResult;
++    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
++    this.reportGuidance(GuidanceManager.checkAll(this.state));
++    this.notify();
++    void this.saveNow();
++  }
++
+   // --- end testing tools ---
+ 
+   /* -------------------------------- queries ---------------------------- */
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 752040d..49eea6e 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -199,6 +199,15 @@
+   padding: 0;
+ }
+ .raid-diff-circle:hover { filter: brightness(1.15); }
++/* Wraps DifficultyCircle's button + its name label underneath (patch
++ * 0144) -- the label used to only live in the button's own `title`
++ * tooltip; this makes it real, always-visible text instead. */
++.raid-diff-circle-wrap {
++  display: flex;
++  flex-direction: column;
++  align-items: center;
++  gap: 4px;
++}
+ .raid-card.locked { opacity: 0.6; }
+ .raid-card.active { border-left: 3px solid var(--brass); }
+ /* Covers any card that's itself the click target (role="button" directly
+@@ -1041,6 +1050,14 @@ button:focus-visible, [tabindex]:focus-visible {
+   animation: modal-pop-in 240ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+ }
+ 
++/* Raid detail is the single densest modal in the game -- banner, full
++ * encounter list, difficulty circles, role requirements, and the hero
++ * picker all in one place. The base 460px cap forced scrolling by
++ * default even before picking anything; widened so most of that fits
++ * without it on a normal-size menu window. Still just a max, so it
++ * shrinks fine on a narrow/mobile-ish window same as every other modal. */
++.modal.raid-detail-modal { max-width: 680px; }
++
+ @keyframes modal-pop-in {
+   0% { transform: scale(0.85); opacity: 0; }
+   60% { transform: scale(1.03); opacity: 1; }
+@@ -1754,6 +1771,13 @@ input[type='range'] {
+ .lore-stage-list li { margin-bottom: 4px; }
+ .lore-card details summary { cursor: pointer; }
+ .lore-card details[open] summary { margin-bottom: 4px; }
++/* Raid encounter list (patch 0144) -- same collapsed-by-default treatment
++ * as .lore-card's own details/summary just above, its own selector since
++ * .lore-stage-list is shared with LorePanel's non-collapsible lists and
++ * shouldn't pick this up everywhere it's used. */
++.raid-encounter-list details summary { cursor: pointer; }
++.raid-encounter-list details[open] summary { margin-bottom: 4px; }
++.raid-encounter-list li { margin-bottom: 8px; }
+ 
+ /* -------------------------------- dashboard -------------------------------- */
+ 
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index e4d7c6c..8d58ff3 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -2,12 +2,13 @@ import { useState } from 'react';
+ import { useEngine, useNow } from '../useEngine';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { RaidManager } from '../../game/managers/RaidManager';
++import { HeroManager } from '../../game/managers/HeroManager';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import {
+   RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON,
+   isRaidUnlocked, parseLootEntry, lootForDifficulty,
+ } from '../../game/data/raids';
+-import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
++import { EQUIPMENT_BY_ID, SET_BY_ID } from '../../game/data/equipment';
+ import { RaidDifficulty, RaidUpgradeDef, RaidDef, Hero, Role } from '../../game/types';
+ import { ROLE_BY_ID } from '../../game/data/progression';
+ import { RoleIcon } from '../RoleIcon';
+@@ -35,6 +36,29 @@ const DIFFICULTY_UNLOCK_LABEL: Record<RaidDifficulty, string> = {
+   normal: 'Raid Charter', heroic: 'Heroic Clearance', mythic: 'Mythic Clearance',
+ };
+ 
++/**
++ * Which ITEM_SETS entry (equipment.ts) is "this raid's set" -- every raid
++ * has exactly one, assembled entirely from that raid's own drop pool (see
++ * ITEM_SETS' own comment in equipment.ts for the full list and reasoning).
++ * There's no field linking a RaidDef to a set id directly in the data
++ * itself, so this is a small explicit map rather than trying to infer it
++ * by scanning loot pools -- a raid's encounters can drop pieces that
++ * belong to an unrelated chain-reward set too (dragon_slayer pieces drop
++ * in both Bonewrought Vault and Frozen Wyrmkeep, deliberately not
++ * counted as either raid's "own" set -- see that same comment), so
++ * inference would need this exact same judgement call encoded anyway.
++ */
++const RAID_SET_ID: Partial<Record<string, string>> = {
++  blackford_keep: 'blackford',
++  bonewrought_vault: 'bonewrought',
++  frozen_wyrmkeep: 'wyrmkeep',
++  what_got_out: 'what_got_out',
++  black_dragon_nest: 'cinderfang',
++  house_of_bones: 'grimward',
++  silence_the_loom: 'loom',
++  requiem_last_god: 'requiem',
++};
++
+ /**
+  * Banner strip for a raid card and its detail modal. Same "missing file
+  * just fails to paint, no broken-image icon" convention as quest chains'
+@@ -258,29 +282,37 @@ function DifficultyCircle({
+   const color = DIFFICULTY_COLOR[difficulty];
+   const [imgFailed, setImgFailed] = useState(false);
+   return (
+-    <button
+-      className={`raid-diff-circle ${active ? 'active' : ''} ${unlocked ? '' : 'locked'}`}
+-      style={{
+-        borderColor: color, color: active ? 'var(--night)' : color, background: active ? color : undefined,
+-        opacity: unlocked ? 1 : 0.4,
+-      }}
+-      onClick={onClick}
+-      disabled={!unlocked}
+-      title={unlocked
+-        ? `${difficulty[0].toUpperCase()}${difficulty.slice(1)} -- ${RAID_DIFFICULTIES[difficulty].partySize} heroes`
+-        : `Requires the ${DIFFICULTY_UNLOCK_LABEL[difficulty]} upgrade`}
+-    >
+-      {!imgFailed ? (
+-        <img
+-          src={RAID_DIFFICULTY_ICON[difficulty]}
+-          alt=""
+-          onError={() => setImgFailed(true)}
+-          style={{ width: '70%', height: '70%', objectFit: 'contain' }}
+-        />
+-      ) : (
+-        DIFFICULTY_LABEL[difficulty]
+-      )}
+-    </button>
++    <div className="raid-diff-circle-wrap">
++      <button
++        className={`raid-diff-circle ${active ? 'active' : ''} ${unlocked ? '' : 'locked'}`}
++        style={{
++          borderColor: color, color: active ? 'var(--night)' : color, background: active ? color : undefined,
++          opacity: unlocked ? 1 : 0.4,
++        }}
++        onClick={onClick}
++        disabled={!unlocked}
++        title={unlocked
++          ? `${difficulty[0].toUpperCase()}${difficulty.slice(1)} -- ${RAID_DIFFICULTIES[difficulty].partySize} heroes`
++          : `Requires the ${DIFFICULTY_UNLOCK_LABEL[difficulty]} upgrade`}
++      >
++        {!imgFailed ? (
++          <img
++            src={RAID_DIFFICULTY_ICON[difficulty]}
++            alt=""
++            onError={() => setImgFailed(true)}
++            style={{ width: '70%', height: '70%', objectFit: 'contain' }}
++          />
++        ) : (
++          DIFFICULTY_LABEL[difficulty]
++        )}
++      </button>
++      {/* Name printed below the circle rather than only living in its
++       *  title tooltip -- direct request: a player shouldn't have to
++       *  hover each circle to know which tier is which. */}
++      <span className="tiny" style={{ color: unlocked ? color : 'var(--muted)', fontWeight: 700 }}>
++        {difficulty[0].toUpperCase()}{difficulty.slice(1)}
++      </span>
++    </div>
+   );
+ }
+ 
+@@ -318,6 +350,53 @@ function RoleRequirementCircle({ role, needed, have }: { role: Role; needed: num
+   );
+ }
+ 
++/**
++ * The raid's own equipment set (see RAID_SET_ID) and how much of it the
++ * player has discovered so far -- "how many the player has unlocked so
++ * they can see the chase," direct request. `compact` (used on the
++ * collapsed RaidCard, a quick at-a-glance count) omits the per-piece
++ * name breakdown that the full detail modal shows; both read
++ * `state.discoveredItems` the exact same way LorePanel's own Collection
++ * tab already does (set.pieces.filter(p => discoveredItems.includes(p))),
++ * so a piece counts here the moment it's counted there -- no separate
++ * tracking, no chance of the two disagreeing.
++ */
++function SetProgressLine({ raidId, compact = false }: { raidId: string; compact?: boolean }) {
++  const state = useEngine().state;
++  const setId = RAID_SET_ID[raidId];
++  const set = setId ? SET_BY_ID[setId] : undefined;
++  if (!set) return null;
++  const found = set.pieces.filter((p) => state.discoveredItems.includes(p));
++
++  if (compact) {
++    return (
++      <p className="tiny muted" style={{ margin: '2px 0 0' }}>
++        {set.name}: {found.length}/{set.pieces.length} found
++      </p>
++    );
++  }
++
++  return (
++    <div style={{ marginTop: 10 }}>
++      <div className="spread">
++        <span className="card-title">{set.name}</span>
++        <span className="small muted">{found.length}/{set.pieces.length} found</span>
++      </div>
++      <div className="stat-row" style={{ marginTop: 4 }}>
++        {set.pieces.map((pieceId) => (
++          <span
++            key={pieceId}
++            className="tiny"
++            style={{ color: state.discoveredItems.includes(pieceId) ? RARITY_COLOR.legendary : undefined }}
++          >
++            {EQUIPMENT_BY_ID[pieceId]?.name ?? pieceId}
++          </span>
++        ))}
++      </div>
++    </div>
++  );
++}
++
+ /**
+  * The full raid detail -- everything that used to live inline inside the
+  * expanded card now lives here instead, completely unchanged in behaviour.
+@@ -388,10 +467,11 @@ function RaidDetailModal({
+             <span className="tiny gold-text">Lv {raid.reqLevel}</span>
+           </div>
+           <p className="card-flavour">{raid.description}</p>
++          <SetProgressLine raidId={raid.id} />
+ 
+           <div className="section-heading">Encounters</div>
+-          <ol className="lore-stage-list">
+-            {raid.encounterIds.map((id) => {
++          <ol className="lore-stage-list raid-encounter-list">
++            {raid.encounterIds.map((id, i) => {
+               const enc = RAID_ENCOUNTER_BY_ID[id];
+               if (!enc) return null;
+               const encSuccess = difficulty && previewHeroIds.length > 0
+@@ -399,17 +479,25 @@ function RaidDetailModal({
+                 : null;
+               return (
+                 <li key={id}>
+-                  <b>{enc.name}.</b> <span className="muted">{enc.flavour}</span>
+-                  {encSuccess !== null && (
+-                    <div className="tiny muted" style={{ marginTop: 2 }}>
+-                      Success <b className={encSuccess >= 60 ? 'good' : encSuccess >= 35 ? '' : 'bad'}>{Math.round(encSuccess)}%</b>
+-                      {/* Difficulty-scaled (harder tiers take longer per encounter too),
+-                          but not party-speed-adjusted -- that adjustment only shows in
+-                          the aggregate "Total time" below, same as before. */}
+-                      {' · '}Time <b>{formatDuration(enc.duration * (difficulty ? RAID_DIFFICULTIES[difficulty].durationMultiplier : 1))}</b>
+-                    </div>
+-                  )}
+-                  <LootPreview encounterId={id} difficulty={difficulty} onShowItem={onShowItem} />
++                  {/* Collapsed by default (native <details>, no extra state
++                   *  to manage) -- the encounter list was the single
++                   *  biggest contributor to this modal needing to scroll
++                   *  by default. Name + odds/time stay visible in the
++                   *  summary row either way; flavour text and loot only
++                   *  show once expanded. */}
++                  <details>
++                    <summary>
++                      <b>{i + 1}. {enc.name}</b>
++                      {encSuccess !== null && (
++                        <span className="tiny muted" style={{ marginLeft: 8 }}>
++                          Success <b className={encSuccess >= 60 ? 'good' : encSuccess >= 35 ? '' : 'bad'}>{Math.round(encSuccess)}%</b>
++                          {' · '}Time <b>{formatDuration(enc.duration * (difficulty ? RAID_DIFFICULTIES[difficulty].durationMultiplier : 1))}</b>
++                        </span>
++                      )}
++                    </summary>
++                    <p className="muted" style={{ marginTop: 4 }}>{enc.flavour}</p>
++                    <LootPreview encounterId={id} difficulty={difficulty} onShowItem={onShowItem} />
++                  </details>
+                 </li>
+               );
+             })}
+@@ -441,15 +529,33 @@ function RaidDetailModal({
+                 {' '}{cfg.successPenalty}% harder odds per encounter than Normal.
+               </p>
+               {raid.requiredRoles && Object.keys(raid.requiredRoles).length > 0 && (() => {
+-                const previewHeroes = previewHeroIds
++                // Deliberately reads the REAL selection (selectedHeroIds),
++                // not previewHeroIds -- previewHeroIds falls back to a
++                // plausible default party (the first N idle heroes) before
++                // anyone's actually picked, which is the right behavior
++                // for the success%/duration preview just above, but was
++                // wrong here: it made these circles show met/ticked
++                // against heroes the player hadn't actually selected yet,
++                // reported directly as "matched roles are ticked, meeting
++                // requirements, without actually selecting anyone." A
++                // requirement circle is a concrete met/unmet fact about
++                // the party you're actually about to send, not a guess.
++                const selectedHeroes = selectedHeroIds
+                   .map((id) => state.heroes.find((h) => h.id === id))
+                   .filter((h): h is Hero => !!h);
+-                const counts = RaidManager.partyRoleCounts(previewHeroes);
+-                const penalty = RaidManager.roleMismatchPenalty(previewHeroes, raid.requiredRoles);
+-                const mismatched = RaidManager.hasRoleMismatch(previewHeroes, raid.requiredRoles);
++                const counts = RaidManager.partyRoleCounts(selectedHeroes);
++                const penalty = RaidManager.roleMismatchPenalty(selectedHeroes, raid.requiredRoles);
++                const mismatched = RaidManager.hasRoleMismatch(selectedHeroes, raid.requiredRoles);
+                 const cap = cfg.roleMismatchCap;
++                const metCount = (Object.entries(raid.requiredRoles) as [Role, number][])
++                  .filter(([role, needed]) => counts[role] >= needed).length;
++                const totalRoles = Object.keys(raid.requiredRoles).length;
+                 return (
+                   <div style={{ marginTop: 6, marginBottom: 6 }}>
++                    <div className="section-heading" style={{ margin: '10px 0 6px' }}>Roles Required</div>
++                    <p className="tiny muted" style={{ margin: '0 0 6px' }}>
++                      {metCount}/{totalRoles} met
++                    </p>
+                     <div className="row" style={{ gap: 8 }}>
+                       {(Object.entries(raid.requiredRoles) as [Role, number][]).map(([role, needed]) => (
+                         <RoleRequirementCircle key={role} role={role} needed={needed} have={counts[role]} />
+@@ -483,7 +589,7 @@ function RaidDetailModal({
+                         onClick={() => toggleHero(h.id)}
+                         title={eligible ? undefined : `Requires level ${raid.reqLevel}`}
+                       >
+-                        {h.name} · Lv {h.level}
++                        <RoleIcon role={HeroManager.activeRole(h)} size={12} /> {h.name} · Lv {h.level}
+                       </button>
+                     );
+                   })}
+@@ -567,6 +673,7 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId:
+           <span className="card-title hero-card-name">{raid.name}</span>
+           <span className="tiny gold-text">Lv {raid.reqLevel}</span>
+         </div>
++        <SetProgressLine raidId={raid.id} compact />
+       </div>
+       {showModal && (
+         <RaidDetailModal raidId={raidId} onClose={() => setShowModal(false)} onShowItem={onShowItem} />
+@@ -592,6 +699,7 @@ function ActiveRaidCard() {
+ 
+   return (
+     <div className="card raid-card active" style={{ borderLeft: `3px solid ${color}` }}>
++      <RaidBanner raidId={active.raidId} banner={raid?.banner} />
+       <div className="card-title">{raid?.name ?? 'A raid'} — {active.difficulty}</div>
+       <p className="tiny muted" style={{ margin: '4px 0' }}>{party}</p>
+       <div className="bar" style={{ marginTop: 6 }}><span style={{ width: `${progress}%` }} /></div>
+diff --git a/src/ui/panels/TestingPanel.tsx b/src/ui/panels/TestingPanel.tsx
+index 358dc71..321669b 100644
+--- a/src/ui/panels/TestingPanel.tsx
++++ b/src/ui/panels/TestingPanel.tsx
+@@ -2,6 +2,7 @@ import { useState } from 'react';
+ import { useEngine } from '../useEngine';
+ import { formatGold, formatDuration, RARITY_ORDER } from '../../game/util';
+ import { PETS } from '../../game/data/pets';
++import { RAIDS } from '../../game/data/raids';
+ import { PeddlerManager } from '../../game/managers/PeddlerManager';
+ 
+ const HOUR = 3600000;
+@@ -25,7 +26,8 @@ export function TestingPanel() {
+       <p className="small muted" style={{ marginBottom: 8 }}>
+         Runs the real offline catch-up (including Auto-Chain) as if this much time had actually
+         passed — not a free-win button, just not waiting for the clock. Without Auto-Chain, a hero
+-        only resolves whatever they were already questing, exactly like real play.
++        only resolves whatever they were already questing, exactly like real play. Also advances
++        an active raid's own clock the same way, so a skip can resolve one too.
+       </p>
+       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+         <button onClick={() => engine.testSkipTime(HOUR)}>+1 hour</button>
+@@ -106,6 +108,22 @@ export function TestingPanel() {
+         );
+       })}
+ 
++      <div className="section-heading">Complete the active raid now</div>
++      {!state.activeRaid && <p className="small muted">No raid currently underway.</p>}
++      {state.activeRaid && (
++        <div className="spread card" style={{ marginBottom: 8 }}>
++          <div>
++            <div className="card-title">{RAIDS.find((r) => r.id === state.activeRaid!.raidId)?.name ?? 'A raid'}</div>
++            <div className="tiny muted">
++              {state.activeRaid.difficulty} — {formatDuration(state.activeRaid.endsAt - Date.now())} left
++            </div>
++          </div>
++          <button className="btn-primary" onClick={() => engine.testCompleteActiveRaid()}>
++            Complete now
++          </button>
++        </div>
++      )}
++
+       <div className="section-heading">Hatchery</div>
+       <p className="small muted" style={{ marginBottom: 8 }}>
+         {state.hatcheryUnlocked ? 'Hatchery already unlocked.' : 'Hatchery is locked -- any button below unlocks it automatically.'}

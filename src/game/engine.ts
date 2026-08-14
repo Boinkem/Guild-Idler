@@ -761,6 +761,15 @@ export class GameEngine {
     for (const quest of this.state.activeQuests) {
       quest.endsAt -= ms;
     }
+    // Same reasoning as quests just above -- an active raid's endsAt is
+    // also an absolute real-world timestamp fixed at commit time,
+    // independent of lastSeen, so a skip that only rewound lastSeen would
+    // report elapsed time correctly while leaving an in-flight raid
+    // completely untouched. Reported directly: skip-time buttons "don't
+    // affect raids."
+    if (this.state.activeRaid) {
+      this.state.activeRaid.endsAt -= ms;
+    }
     this.state.lastSeen = Math.max(0, this.state.lastSeen - ms);
     this.catchUpOffline();
     // catchUpOffline resolves due quests but never touches the board --
@@ -919,6 +928,23 @@ export class GameEngine {
       const result = QuestManager.resolve(this.state, quest, quest.endsAt);
       this.lastResult = result;
     }
+    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+    this.reportGuidance(GuidanceManager.checkAll(this.state));
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Raid equivalent of testCompleteActiveQuest -- resolves the current
+   *  activeRaid immediately using its own already-locked-in partySuccessBonus,
+   *  not a guaranteed clear, just not waiting for the clock. No-op if
+   *  nothing's actually raiding. Reported directly alongside testSkipTime
+   *  above: neither the skip-time buttons nor "complete a quest now" had
+   *  any raid equivalent at all. */
+  testCompleteActiveRaid() {
+    if (!TESTING_TOOLS_ENABLED) return;
+    if (!this.state.activeRaid) return;
+    const raidResult = RaidManager.resolve(this.state, this.state.activeRaid, this.state.activeRaid.endsAt);
+    this.lastRaidResult = raidResult;
     this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
     this.reportGuidance(GuidanceManager.checkAll(this.state));
     this.notify();

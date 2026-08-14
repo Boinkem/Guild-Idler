@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useEngine } from '../useEngine';
 import { formatGold, formatDuration, RARITY_ORDER } from '../../game/util';
 import { PETS } from '../../game/data/pets';
+import { RAIDS } from '../../game/data/raids';
 import { PeddlerManager } from '../../game/managers/PeddlerManager';
 
 const HOUR = 3600000;
@@ -25,7 +26,8 @@ export function TestingPanel() {
       <p className="small muted" style={{ marginBottom: 8 }}>
         Runs the real offline catch-up (including Auto-Chain) as if this much time had actually
         passed — not a free-win button, just not waiting for the clock. Without Auto-Chain, a hero
-        only resolves whatever they were already questing, exactly like real play.
+        only resolves whatever they were already questing, exactly like real play. Also advances
+        an active raid's own clock the same way, so a skip can resolve one too.
       </p>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <button onClick={() => engine.testSkipTime(HOUR)}>+1 hour</button>
@@ -105,6 +107,22 @@ export function TestingPanel() {
           </div>
         );
       })}
+
+      <div className="section-heading">Complete the active raid now</div>
+      {!state.activeRaid && <p className="small muted">No raid currently underway.</p>}
+      {state.activeRaid && (
+        <div className="spread card" style={{ marginBottom: 8 }}>
+          <div>
+            <div className="card-title">{RAIDS.find((r) => r.id === state.activeRaid!.raidId)?.name ?? 'A raid'}</div>
+            <div className="tiny muted">
+              {state.activeRaid.difficulty} — {formatDuration(state.activeRaid.endsAt - Date.now())} left
+            </div>
+          </div>
+          <button className="btn-primary" onClick={() => engine.testCompleteActiveRaid()}>
+            Complete now
+          </button>
+        </div>
+      )}
 
       <div className="section-heading">Hatchery</div>
       <p className="small muted" style={{ marginBottom: 8 }}>
