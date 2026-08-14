@@ -53,33 +53,38 @@ export function GuildPanel() {
     const affordable = !maxed && cost !== null && state.gold >= cost;
     const flash = flashes[def.id];
     const pulsing = levelPulses[def.id];
+    const pct = Math.min(100, (level / def.maxLevel) * 100);
     return (
-      <div key={def.id} className={`card ${affordable ? 'affordable' : ''}`} style={{ marginBottom: 0 }}>
-        <div className="spread">
-          <span className="card-title">{def.name}</span>
-          <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
+      <div key={def.id} className={`card guild-facility-card ${affordable ? 'affordable' : ''}`}>
+        <div className="guild-facility-icon" aria-hidden="true">{def.name.charAt(0)}</div>
+        <div className="guild-facility-body">
+          <div className="spread">
+            <span className="card-title">{def.name}</span>
+            <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
+          </div>
+          <p className="card-flavour">{def.description}</p>
+          <div className={`guild-level-rail ${maxed ? 'maxed' : ''}`}><span style={{ width: `${pct}%` }} /></div>
+          <div className="stat-row" style={{ marginBottom: 8 }}>
+            {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
+            {def.unlocks === 'legendaryQuests' && <span className="gold-text">Unlocks Legendary quests</span>}
+            {def.unlocks === 'chains' && <span className="gold-text">Unlocks multi-day quest chains</span>}
+            {def.unlocks === 'blackMarket' && <span className="gold-text">Unlocks the Black Market</span>}
+            {def.unlocks === 'autoChain' && level > 0 && (
+              <span className="gold-text">Currently chains {chainRangeText(level)} quests per streak</span>
+            )}
+            {def.unlocks === 'autoChain' && !maxed && (
+              <span className="muted">Next tier: {chainRangeText(level + 1)} quests per streak</span>
+            )}
+          </div>
+          <button
+            className="btn-yellow"
+            disabled={maxed || cost === null || state.gold < cost}
+            onClick={() => engine.buyUpgrade(def.id)}
+          >
+            {maxed ? 'Fully upgraded' : `Buy · ${formatGold(cost ?? 0)}`}
+          </button>
+          {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
         </div>
-        <p className="card-flavour">{def.description}</p>
-        <div className="stat-row" style={{ marginBottom: 8 }}>
-          {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
-          {def.unlocks === 'legendaryQuests' && <span className="gold-text">Unlocks Legendary quests</span>}
-          {def.unlocks === 'chains' && <span className="gold-text">Unlocks multi-day quest chains</span>}
-          {def.unlocks === 'blackMarket' && <span className="gold-text">Unlocks the Black Market</span>}
-          {def.unlocks === 'autoChain' && level > 0 && (
-            <span className="gold-text">Currently chains {chainRangeText(level)} quests per streak</span>
-          )}
-          {def.unlocks === 'autoChain' && !maxed && (
-            <span className="muted">Next tier: {chainRangeText(level + 1)} quests per streak</span>
-          )}
-        </div>
-        <button
-          className="btn-yellow"
-          disabled={maxed || cost === null || state.gold < cost}
-          onClick={() => engine.buyUpgrade(def.id)}
-        >
-          {maxed ? 'Fully upgraded' : `Buy · ${formatGold(cost ?? 0)}`}
-        </button>
-        {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
       </div>
     );
   }
@@ -89,10 +94,14 @@ export function GuildPanel() {
       <h2>Guild Hall</h2>
       <p className="subtitle">
         Facility levels apply to every hero, now and after every retirement.
-        Gold storage: {formatGold(ModifierManager.goldStorage(state))}.
       </p>
+      <div className="guild-storage-plaque">
+        <span className="guild-storage-label">Gold Storage</span>
+        <span className="guild-storage-amount">{formatGold(ModifierManager.goldStorage(state))}</span>
+      </div>
 
-      <div className="grid two">
+      <div className="section-heading guild-section-heading">Facilities</div>
+      <div className="grid two guild-facility-grid">
         {facilities.map((def) => {
           const level = GuildManager.facilityLevel(state, def.id);
           const cost = GuildManager.nextCost(state, def.id);
@@ -100,38 +109,43 @@ export function GuildPanel() {
           const affordable = !maxed && state.gold >= cost;
           const flash = flashes[def.id];
           const pulsing = levelPulses[def.id];
+          const pct = Math.min(100, (level / def.maxLevel) * 100);
           return (
-            <div key={def.id} className={`card ${affordable ? 'affordable' : ''}`} style={{ marginBottom: 0 }}>
-              <div className="spread">
-                <span className="card-title">{def.name}</span>
-                <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>Level {level}/{def.maxLevel}</span>
+            <div key={def.id} className={`card guild-facility-card ${affordable ? 'affordable' : ''}`}>
+              <div className="guild-facility-icon" aria-hidden="true">{def.name.charAt(0)}</div>
+              <div className="guild-facility-body">
+                <div className="spread">
+                  <span className="card-title">{def.name}</span>
+                  <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>Level {level}/{def.maxLevel}</span>
+                </div>
+                <p className="card-flavour">{def.description}</p>
+                <div className={`guild-level-rail ${maxed ? 'maxed' : ''}`}><span style={{ width: `${pct}%` }} /></div>
+                <div className="stat-row" style={{ marginBottom: 8 }}>
+                  {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
+                  {def.storagePerLevel && <span>+{formatGold(def.storagePerLevel)} storage per level</span>}
+                  {def.heroSlotsPerLevel && <span className="gold-text">+1 hero slot per level</span>}
+                  {def.tracksPerLevel && <span className="gold-text">+1 song per level</span>}
+                </div>
+                <button
+                  className="btn-yellow"
+                  disabled={maxed || state.gold < cost}
+                  onClick={() => engine.upgradeFacility(def.id)}
+                >
+                  {maxed ? 'Fully built' : `Build · ${formatGold(cost)}`}
+                </button>
+                {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
               </div>
-              <p className="card-flavour">{def.description}</p>
-              <div className="stat-row" style={{ marginBottom: 8 }}>
-                {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
-                {def.storagePerLevel && <span>+{formatGold(def.storagePerLevel)} storage per level</span>}
-                {def.heroSlotsPerLevel && <span className="gold-text">+1 hero slot per level</span>}
-                {def.tracksPerLevel && <span className="gold-text">+1 song per level</span>}
-              </div>
-              <button
-                className="btn-yellow"
-                disabled={maxed || state.gold < cost}
-                onClick={() => engine.upgradeFacility(def.id)}
-              >
-                {maxed ? 'Fully built' : `Build · ${formatGold(cost)}`}
-              </button>
-              {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
             </div>
           );
         })}
       </div>
 
-      <div className="section-heading">Permanent Upgrades</div>
+      <div className="section-heading guild-section-heading">Permanent Upgrades</div>
       <p className="tiny muted" style={{ marginBottom: 10 }}>
         Bought once, kept forever — retirement does not take these away. Vendor-specific upgrades
         (Blacksmith, Alchemist, Enchanter) live on each vendor's own page in Vendors instead.
       </p>
-      <div className="card" style={{ marginBottom: 12 }}>
+      <div className="card guild-bonus-plaque">
         <div className="card-title">Current guild bonuses</div>
         <div className="stat-row" style={{ marginTop: 6 }}>
           {describeMods(global).length === 0
@@ -139,7 +153,7 @@ export function GuildPanel() {
             : describeMods(global).map((line) => <span key={line}>{line}</span>)}
         </div>
       </div>
-      <div className="grid two">
+      <div className="grid two guild-facility-grid">
         {generalUpgrades.map(upgradeCard)}
       </div>
     </>

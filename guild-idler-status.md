@@ -10092,3 +10092,62 @@ left as originally drafted.
 
 **Verified:** `npx tsc --noEmit` clean -- no schema change, every edited
 value is still a plain string in the same `roleDescriptions` shape.
+
+### Guild Hall bespoke styling pass -- built (patch 0152)
+
+```discord-update
+Dev Update | Guild Hall Visual Redesign
+
+- Guild Hall finally has its own visual identity instead of borrowing Vendors/Stats' plain card look
+- Facility and upgrade cards get a stamped ledger shape, a lettered crest, and a tick-marked build-progress rail
+- Gold Storage pulled out of the subtitle sentence into its own small plaque
+```
+
+Design handoff, applied as given (`GuildPanel.tsx`, `app.css`), same
+process as the Raids visual redesign (patch 0145) before it -- delivered
+ready to integrate rather than requested feature-by-feature.
+
+**Scope discussion this closes out:** `GuildPanel.tsx` had no CSS of its
+own, built entirely from the same shared classes every other
+not-yet-redesigned panel reuses (`.card`, `.card-title`, `.card-flavour`,
+`.stat-row`, `.grid.two`, `.btn-yellow`, `.section-heading`) -- the
+source of the "clutter" it was reported as having next to Raids. Design
+brief scoped this as strictly additive: new `.guild-*` classes layered
+on top, none of the shared classes touched in place (Vendors, Stats,
+and every other panel still on the shared base would ripple otherwise).
+Confirmed directly on the diff before applying -- `app.css`'s 121 new
+lines are a pure insertion, zero existing lines changed; `GuildPanel.tsx`'s
+edits are entirely new class names (plus one new `pct` variable for the
+level rail) layered onto unchanged logic -- no cost formulas, handlers,
+or conditions touched.
+
+**Correction to an earlier claim:** the original ask referenced Training
+as a second panel that "already got its own bespoke treatment" like
+Raids -- checked directly before writing the design brief and that
+wasn't accurate. `TrainingPanel.tsx` has zero `.training-*` rules in
+`app.css`; it's on the same shared-class base Guild Hall was. Only
+Raids has an actual dedicated CSS layer. Design brief was corrected to
+cite Raids alone as precedent before being sent out.
+
+**What Design built, since there's no art to work from here (Guild Hall
+has no icons or banners the way Raids does):** a ledger/blueprint motif
+instead of an art-driven one -- corner-cut "stamped" card shape
+(`clip-path` polygon, echoed on the icon swatch and the level rail) for
+an official/administrative feel distinct from Raids' adventurous banner
+cards. A lettered crest (`def.name.charAt(0)`) stands in for a missing
+facility icon. `.guild-level-rail` replaces the plain "Level N/M" text
+with a tick-marked progress bar (ticks every 10%, brass fill, moss-green
+at max) -- deliberately its own look rather than reusing `.bar`, so a
+facility's build progress doesn't read as another XP/durability/health
+bar. Gold Storage, previously buried mid-sentence in the panel's
+subtitle paragraph despite being the number this whole panel builds
+toward, now gets its own small `.guild-storage-plaque`, echoing how
+Raids already pulls its own set-completion stat out above the list.
+Section headings ("Facilities," "Permanent Upgrades") get a small
+notched-flag treatment on top of the shared `.section-heading` so they
+read as record dividers rather than plain labels.
+
+**Verified:** diffed both files against a fresh `main` pull before
+integrating (confirmed Design worked from current `main`, patch 0150's
+`.craft-picker-row` fix was already present in their copy, so nothing
+from that patch was clobbered). `npx tsc --noEmit` clean.

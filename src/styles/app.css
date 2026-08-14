@@ -303,6 +303,127 @@
    this dense (title, verdict, reward burst, loot, injuries). */
 .raid-result-modal .section-heading { margin-top: 12px; }
 
+/*
+ * Guild Hall -- facility and permanent-upgrade cards get their own
+ * identity here. Raids built its identity around banner art; Guild Hall
+ * has none to build around (no icons, no banners exist for this panel),
+ * so the identity comes from a ledger/blueprint motif instead -- a
+ * corner-cut "stamped" card shape, a lettered crest standing in for a
+ * facility icon, and a tick-marked level rail replacing the plain
+ * "Level N/M" text every other leveled thing in the game uses. Guild
+ * Hall is the guild's administrative seat (build facilities, bank
+ * permanent upgrades), so this leans official/ledger rather than
+ * adventurous the way Raids' banner cards do. Scoped entirely to
+ * .guild-* classes (plus the .card/.card-title/etc it still layers onto,
+ * unmodified) -- Vendors, Stats, and every other shared-class panel are
+ * untouched.
+ */
+
+/* Gold storage was previously buried mid-sentence in the subtitle
+   paragraph -- it's the one number this whole panel is building toward,
+   so it gets pulled out into its own small plaque, echoing how Raids
+   pulls its own set-completion stat above the list into .raid-sets-summary. */
+.guild-storage-plaque {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--brass-dim) 45%, var(--edge));
+  clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%, 0 8px);
+  background: color-mix(in srgb, var(--panel-2) 80%, transparent);
+}
+.guild-storage-plaque .guild-storage-label {
+  font-size: 0.5625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.guild-storage-plaque .guild-storage-amount {
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--brass);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+/* Ledger-tab treatment layered on top of the shared .section-heading --
+   a small notched flag rather than plain underlined text, so "Facilities"
+   and "Permanent Upgrades" read as record dividers, not just labels. */
+.guild-section-heading {
+  width: max-content;
+  padding: 3px 10px 5px 0;
+}
+
+.guild-facility-grid { margin-bottom: 14px; }
+
+.guild-facility-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 0;
+  clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%, 0 12px);
+}
+
+.guild-facility-icon {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel-3);
+  border: 1px solid var(--brass-dim);
+  clip-path: polygon(6px 0, 100% 0, 100% 100%, 0 100%, 0 6px);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--brass);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.guild-facility-body { flex: 1; min-width: 0; }
+
+/* Replaces the plain "Level N/M" text everywhere else in the game uses
+   for a leveled thing with a small tick-marked rail -- distinct from the
+   shared .bar (used for XP/durability/health) so a facility's build
+   progress doesn't read as another one of those. Ticks every 10% give it
+   a ruler/blueprint feel; the corner cut matches the card and icon. */
+.guild-level-rail {
+  position: relative;
+  height: 7px;
+  margin: 7px 0 9px;
+  background: var(--edge);
+  border: 1px solid #000;
+  clip-path: polygon(4px 0, 100% 0, 100% 100%, 0 100%, 0 4px);
+  overflow: hidden;
+}
+.guild-level-rail > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0) 55%), var(--brass);
+  transition: width 500ms ease-out;
+}
+.guild-level-rail.maxed > span {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0) 55%), var(--moss);
+}
+.guild-level-rail::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgba(0, 0, 0, 0.35) calc(10% - 1px) 10%);
+  pointer-events: none;
+}
+
+/* "Current guild bonuses" -- a small brass plaque rather than a plain
+   .card, since it's a summary of permanent state, not a purchasable
+   thing like the cards around it. */
+.guild-bonus-plaque {
+  margin-bottom: 12px;
+  border-left-width: 3px;
+  border-left-color: var(--brass-dim);
+}
+
 * { box-sizing: border-box; }
 
 html, body, #root {
