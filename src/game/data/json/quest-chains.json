@@ -153,33 +153,39 @@
   },
   {
     "id": "demon_generals_ledger",
-    "requiresChainId": "harrowers_foot",
     "name": "A Demon General's Ledger",
     "description": "The foot soldiers answer to something bigger than hunger -- a column of demons on the move with real discipline, boots landing in step, led by something that gives orders instead of just following its next meal.",
     "reqLevel": 15,
     "rewardGold": 2100,
     "rewardItems": [
-      "seized_glaive"
+      "seized_glaive@5"
     ],
     "rewardRenown": 2,
     "title": "Tally-Breaker",
     "epilogue": "The general kept records -- meticulous ones, names and dates and places, tallied like a merchant's ledger rather than a monster's trophies. One word appears in the margins more than any other, in handwriting that clearly isn't the general's own: the Harrower. Nobody at IronRest has heard the name before. People have started asking around anyway, quietly, the way you ask about something you're hoping turns out to be nothing.",
+    "requiresChainId": "harrowers_foot",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "Raidcard3.png"
+    },
     "stages": [
       {
         "name": "The General's Column",
         "flavour": "It marches in formation, ranks holding even across broken ground, and demons do not march. Something taught it to -- drilled it, the same way you'd drill a soldier -- and that should worry you more than teeth ever could.",
         "tag": "combat",
         "difficulty": "hard",
-        "goldMultiplier": 2,
-        "durationMinutes": 540
+        "durationMinutes": 540,
+        "goldMultiplier": 2
       },
       {
         "name": "The Ledger",
         "flavour": "Names, dates, places -- every village it emptied, tallied like inventory in a hand too neat for a demon to have written it. It was already counting the space where your name would go before you ever arrived.",
         "tag": "stealth",
         "difficulty": "epic",
-        "goldMultiplier": 2.4,
-        "durationMinutes": 720
+        "durationMinutes": 720,
+        "goldMultiplier": 2.4
       }
     ]
   },
@@ -671,7 +677,7 @@
   {
     "id": "world_ender",
     "name": "The World-Ender's Vigil",
-    "description": "Every culture that has ever kept records tells some version of this story, though never with the same name twice \u2014 an ending that waits somewhere past the edge of the maps, not born but always waiting, patient in a way patience was never meant to be. Sailors used to mark the same blank stretch of open water on a dozen unrelated charts, a century apart, with the same warning scrawled beside it: past here, the world stops arguing. Scholars called it superstition for three hundred years and stopped calling it that the first time someone found the stretch on land instead \u2014 because it does not have one location. It has never needed one. Wherever it is finally ready to be found, the road, the hills, even the sky rearrange themselves around whoever gets close enough to matter, on foot, with nothing so practical as a ship or a marching column to bring along the way. The guild's patron for this expedition has personally funded five prior attempts. None of them came back, and he will not say what he sent them to find \u2014 only that this time he isn't sending strangers. Five stages. No easy ones. A capstone expedition, for guilds that have already retired a hero or two and have nothing left to lose by looking.",
+    "description": "Every culture that has ever kept records tells some version of this story, though never with the same name twice — an ending that waits somewhere past the edge of the maps, not born but always waiting, patient in a way patience was never meant to be. Sailors used to mark the same blank stretch of open water on a dozen unrelated charts, a century apart, with the same warning scrawled beside it: past here, the world stops arguing. Scholars called it superstition for three hundred years and stopped calling it that the first time someone found the stretch on land instead — because it does not have one location. It has never needed one. Wherever it is finally ready to be found, the road, the hills, even the sky rearrange themselves around whoever gets close enough to matter, on foot, with nothing so practical as a ship or a marching column to bring along the way. The guild's patron for this expedition has personally funded five prior attempts. None of them came back, and he will not say what he sent them to find — only that this time he isn't sending strangers. Five stages. No easy ones. A capstone expedition, for guilds that have already retired a hero or two and have nothing left to lose by looking.",
     "reqLevel": 34,
     "rewardGold": 22000,
     "rewardItems": [
@@ -686,7 +692,7 @@
     "stages": [
       {
         "name": "The Road That Should Not Exist",
-        "flavour": "Three nights ago, a caravan guard on the old coast road swore the ground opened under a full moon and closed again by dawn, leaving a road where there hadn't been one \u2014 cutting dead straight into hill country no surveyor has ever mapped. By morning, three cartographers in three different towns had drawn the same route onto their charts without comparing notes, each one certain they'd surveyed it before, decades ago, under a different name, before a war that hasn't happened yet. The guild's advance rider stands at its mouth now, torch raised, looking down a road paved in stone too old and too smooth for anyone currently alive to have laid it. It has always been on the ground. It just hadn't been found yet. It did not need a harbor to arrive by, or a column to march down it. It only needed the guild close enough to bother appearing for.",
+        "flavour": "Three nights ago, a caravan guard on the old coast road swore the ground opened under a full moon and closed again by dawn, leaving a road where there hadn't been one — cutting dead straight into hill country no surveyor has ever mapped. By morning, three cartographers in three different towns had drawn the same route onto their charts without comparing notes, each one certain they'd surveyed it before, decades ago, under a different name, before a war that hasn't happened yet. The guild's advance rider stands at its mouth now, torch raised, looking down a road paved in stone too old and too smooth for anyone currently alive to have laid it. It has always been on the ground. It just hadn't been found yet. It did not need a harbor to arrive by, or a column to march down it. It only needed the guild close enough to bother appearing for.",
         "tag": "explore",
         "difficulty": "epic",
         "goldMultiplier": 2.6,
@@ -694,7 +700,7 @@
       },
       {
         "name": "The Watchers in the Dark Between Stars",
-        "flavour": "The road climbs past the treeline and past the sky as anyone has ever charted it \u2014 stars in configurations that answer to no constellation, counted aloud in a language built for a mouth nobody here has. Six shapes stand at the road's end, tall as siege engines and thin as famine, unmoving, each one marking something on the empty air that leaves no mark anyone living can see. They do not turn to look as the guild approaches. They have been counting for longer than the road has existed, and whatever number they are working toward, it is close. It is very close. They are not the World-Ender's to command \u2014 if anything, the arrangement runs the other way \u2014 and this is not the only tally they keep. Whatever debt is being counted down here is one of several, on fronts this guild has never heard of, and, with luck, never will.",
+        "flavour": "The road climbs past the treeline and past the sky as anyone has ever charted it — stars in configurations that answer to no constellation, counted aloud in a language built for a mouth nobody here has. Six shapes stand at the road's end, tall as siege engines and thin as famine, unmoving, each one marking something on the empty air that leaves no mark anyone living can see. They do not turn to look as the guild approaches. They have been counting for longer than the road has existed, and whatever number they are working toward, it is close. It is very close. They are not the World-Ender's to command — if anything, the arrangement runs the other way — and this is not the only tally they keep. Whatever debt is being counted down here is one of several, on fronts this guild has never heard of, and, with luck, never will.",
         "tag": "arcane",
         "difficulty": "legendary",
         "goldMultiplier": 3.2,
@@ -702,7 +708,7 @@
       },
       {
         "name": "The Court of the Unmade King",
-        "flavour": "Past the Watchers the road stops being a road at all and becomes a hall that isn't holding a shape so much as remembering several \u2014 pillars flickering between marble and bone and nothing, a floor that is every battlefield it has ever hosted, layered on top of itself all at once. On a throne assembled from the wreckage of every crown it has ever replaced sits something that at least eight vanished empires once called the first mistake, and stopped teaching children about long before any of them fell. It watches the guild arrive with the patient boredom of a thing that has watched a very great many guilds arrive, and outlasted every one of them.",
+        "flavour": "Past the Watchers the road stops being a road at all and becomes a hall that isn't holding a shape so much as remembering several — pillars flickering between marble and bone and nothing, a floor that is every battlefield it has ever hosted, layered on top of itself all at once. On a throne assembled from the wreckage of every crown it has ever replaced sits something that at least eight vanished empires once called the first mistake, and stopped teaching children about long before any of them fell. It watches the guild arrive with the patient boredom of a thing that has watched a very great many guilds arrive, and outlasted every one of them.",
         "tag": "explore",
         "difficulty": "legendary",
         "goldMultiplier": 3.6,
@@ -710,7 +716,7 @@
       },
       {
         "name": "The Breaking of the Vigil",
-        "flavour": "Below the throne room, older than the throne room, a wall of pale and thinning light holds a line that has not moved since before \"moving\" had a word for it \u2014 tended by things too exhausted to have kept their faces. Whatever has stood this post does not so much ask for help as simply stop pretending it does not need it anymore. The guild braces the failing wall with whatever thirty-four hard-earned levels can buy, shoulder to shoulder with things that stopped being anything nameable a very long time ago. It is not enough on its own. It has to be enough anyway.",
+        "flavour": "Below the throne room, older than the throne room, a wall of pale and thinning light holds a line that has not moved since before \"moving\" had a word for it — tended by things too exhausted to have kept their faces. Whatever has stood this post does not so much ask for help as simply stop pretending it does not need it anymore. The guild braces the failing wall with whatever thirty-four hard-earned levels can buy, shoulder to shoulder with things that stopped being anything nameable a very long time ago. It is not enough on its own. It has to be enough anyway.",
         "tag": "defense",
         "difficulty": "legendary",
         "goldMultiplier": 4,
@@ -718,7 +724,7 @@
       },
       {
         "name": "The World-Ender",
-        "flavour": "Past the breaking vigil there is no more architecture, no more road, no more sky \u2014 only a shape the size of a held breath, waiting exactly where it has always waited, patient in precisely the way the old sailors' charts warned about and the scholars refused for three centuries to believe. It does not introduce itself. It has never needed to. Whatever happens next will be the last thing every one of the five expeditions before this one ever saw \u2014 or it will be the first thing one of them survived, and there will finally be someone left to write down the difference.",
+        "flavour": "Past the breaking vigil there is no more architecture, no more road, no more sky — only a shape the size of a held breath, waiting exactly where it has always waited, patient in precisely the way the old sailors' charts warned about and the scholars refused for three centuries to believe. It does not introduce itself. It has never needed to. Whatever happens next will be the last thing every one of the five expeditions before this one ever saw — or it will be the first thing one of them survived, and there will finally be someone left to write down the difference.",
         "tag": "combat",
         "difficulty": "legendary",
         "goldMultiplier": 5,

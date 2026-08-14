@@ -93,16 +93,22 @@
     "description": "A stretch of the eastern ridge has gone black with soot and quiet with fear -- something's nested up there, brought a whole clutch with it, and doesn't intend to be a passing problem the way most dragon sightings turn out to be.",
     "epilogue": "The nest is ash and empty shell now, the brood mother's watch finally over. Whatever drew her to that ridge in the first place is still a mystery nobody's especially eager to go looking for -- for now, the mountain's quiet again, and that's enough.",
     "reqLevel": 30,
-    "requiredRoles": {
-      "melee": 1,
-      "ranged": 1
-    },
     "encounterIds": [
       "blackdragon_the_keepers",
       "blackdragon_the_hatchlings",
       "blackdragon_the_brood_mother"
     ],
-    "title": "Nest-Breaker"
+    "successModifier": 0,
+    "banner": {
+      "path": "Raidcard2.png",
+      "focusX": 55,
+      "focusY": 69.8
+    },
+    "title": "Nest-Breaker",
+    "requiredRoles": {
+      "melee": 1,
+      "ranged": 1
+    }
   },
   {
     "id": "house_of_bones",
