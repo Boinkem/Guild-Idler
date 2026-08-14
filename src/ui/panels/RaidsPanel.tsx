@@ -59,31 +59,38 @@ const RAID_SET_ID: Partial<Record<string, string>> = {
   requiem_last_god: 'requiem',
 };
 
+function raidBannerSrc(raidId: string, banner?: RaidDef['banner']) {
+  return banner?.path ? `./lore/${banner.path}` : `./lore/raids/${raidId}.jpg`;
+}
+
 /**
  * Banner strip for a raid card and its detail modal. Same "missing file
  * just fails to paint, no broken-image icon" convention as quest chains'
  * own art (public/lore/chains/<id>.jpg) -- this rolls out gradually as art
  * lands in public/lore/raids/<id>.jpg rather than needing every raid's art
- * before any of it shows. A plain fixed-height strip rather than a full
- * background wash (unlike chainCardStyle) -- this is meant to read as an
- * actual header image, not a textured backdrop behind text.
+ * before any of it shows.
+ *
+ * `className` picks the surface this banner is rendered into
+ * (.raid-card-thumb for the collapsed list row, .raid-active-banner for
+ * the in-progress card, .raid-detail-banner for the modal) -- sizing,
+ * radius and margin all live in that class now instead of inline styles,
+ * so the same component works at three very different sizes.
  *
  * `banner` is the raid's optional DevTool-assigned override + focus point
  * (RaidDef.banner) -- unset falls all the way back to the original
  * id-convention path at dead-center focus, exactly as before this existed.
  */
-function RaidBanner({ raidId, banner }: { raidId: string; banner?: RaidDef['banner'] }) {
-  const src = banner?.path ? `./lore/${banner.path}` : `./lore/raids/${raidId}.jpg`;
+function RaidBanner({
+  raidId, banner, className,
+}: { raidId: string; banner?: RaidDef['banner']; className: string }) {
+  const src = raidBannerSrc(raidId, banner);
   return (
     <div
       aria-hidden="true"
+      className={className}
       style={{
         backgroundImage: `url(${src})`,
-        backgroundSize: 'cover',
         backgroundPosition: `${banner?.focusX ?? 50}% ${banner?.focusY ?? 50}%`,
-        height: 90,
-        marginBottom: 10,
-        borderRadius: 4,
       }}
     />
   );
@@ -138,14 +145,8 @@ function RaidUpgradeCard({ def }: { def: RaidUpgradeDef }) {
   const next = GuildManager.nextRaidUpgradeCost(state, def.id);
   const maxed = next === null;
   const afford = next ? (next.currency === 'gold' ? state.gold >= next.cost : state.renown >= next.cost) : false;
-  // Same purchase-pulse + MaxFlash treatment UpgradesPanel/GuildPanel already
-  // have for their own upgrade cards -- this was the one "buy an upgrade"
-  // surface in the game missing it entirely.
   const { flashes, dismiss } = useMaxFlash([{ id: def.id, name: def.name, level, maxLevel: def.maxLevel }]);
   const flash = flashes[def.id];
-  // Same "only pulse on a real change, not on every tab-switch remount"
-  // fix as every other level display -- see usePulsesOnChange's own doc
-  // comment in maxFlash.tsx.
   const levelPulses = usePulsesOnChange([{ id: def.id, value: level }]);
 
   return (
@@ -174,16 +175,13 @@ const RAID_SPEED_ID = 'raid_speed';
 const RAID_LOOT_ID = 'raid_loot';
 const RAID_RECOVERY_ID = 'raid_recovery';
 
-/**
- * Maps a raid upgrade's raw level onto one of the 3 room-sprite states.
- * raid_loot and raid_recovery were built with exactly 3 levels (0-2), so
- * they map onto their 3 images directly. raid_speed predates this visual
- * system and spans up to 10 levels on an existing, tuned curve that isn't
- * worth disturbing just to match 3 images -- it gets banded onto the same
- * 3 states instead, at the same milestone its own cost curve already
- * uses: still in the gold tier, or into/past the Renown tier.
- */
 function roomSpriteLevel(def: RaidUpgradeDef, level: number): number {
+  // raid_loot and raid_recovery were built with exactly 3 levels (0-2), so
+  // they map onto their 3 images directly. raid_speed predates this visual
+  // system and spans up to 10 levels on an existing, tuned curve that isn't
+  // worth disturbing just to match 3 images -- it gets banded onto the
+  // same 3 states instead, at the same milestone its own cost curve
+  // already uses: still in the gold tier, or into/past the Renown tier.
   if (def.id === RAID_SPEED_ID) {
     if (level <= 0) return 0;
     return level < def.goldTierMaxLevel ? 1 : 2;
@@ -191,21 +189,15 @@ function roomSpriteLevel(def: RaidUpgradeDef, level: number): number {
   return Math.max(0, Math.min(2, level));
 }
 
-/**
- * Embedded directly in the Raids tab rather than the general Upgrades
- * panel -- raids have been treated as their own separable system all
- * along (own tab, own background, own resolution engine), and this tree
- * only ever affects raids, so it lives where it matters rather than
- * getting buried among quest-side upgrades.
- *
- * Replaces the old collapsible "Raid Upgrades" strip with a real room:
- * a torch reflecting whether the Raid Charter has been bought, and a
- * weapon rack / skull / shelf that visibly fill in as their matching
- * upgrade is leveled, rather than a plain progress number doing all the
- * work. Visual state is purely derivative of existing GuildManager reads
- * -- nothing new to save.
- */
 function RaidQuartermasterDen() {
+  // Embedded directly in the Raids tab rather than the general Upgrades
+  // panel -- raids have been treated as their own separable system all
+  // along (own tab, own background, own resolution engine), and this
+  // tree only ever affects raids, so it lives where it matters rather
+  // than getting buried among quest-side upgrades. A torch reflects
+  // whether the Raid Charter has been bought, and a weapon rack / skull /
+  // shelf visibly fill in as their matching upgrade is leveled, rather
+  // than a plain progress number doing all the work.
   const engine = useEngine();
   const state = engine.state;
   const raidsUnlocked = ModifierManager.hasUnlock(state, 'raids');
@@ -337,7 +329,7 @@ function RoleRequirementCircle({ role, needed, have }: { role: Role; needed: num
       style={{ borderColor: met ? 'var(--moss)' : 'var(--brass)', color: 'var(--brass)', position: 'relative' }}
       title={`${def?.name ?? role} ×${needed} -- ${have}/${needed} in the current selection${met ? ' (met)' : ' (missing)'}`}
     >
-      <RoleIcon role={role} size={66} />
+      <RoleIcon role={role} size={40} />
       <span className="tiny" style={{ position: 'absolute', bottom: -2, right: -2 }}>×{needed}</span>
       {met && (
         <span
@@ -377,7 +369,7 @@ function SetProgressLine({ raidId, compact = false }: { raidId: string; compact?
   }
 
   return (
-    <div style={{ marginTop: 10 }}>
+    <div style={{ marginTop: 12 }}>
       <div className="spread">
         <span className="card-title">{set.name}</span>
         <span className="small muted">{found.length}/{set.pieces.length} found</span>
@@ -398,13 +390,8 @@ function SetProgressLine({ raidId, compact = false }: { raidId: string; compact?
 }
 
 /**
- * The full raid detail -- everything that used to live inline inside the
- * expanded card now lives here instead, completely unchanged in behaviour.
- * One real difference from the old inline-expand: this unmounts entirely
- * on close, so difficulty/party selection resets each time it's reopened,
- * matching how every other modal in this app already behaves (none of
- * them preserve transient selection state across a dismissal) rather than
- * the old expand/collapse's incidental persistence.
+ * The full raid detail -- unmounts entirely on close, so difficulty/party
+ * selection resets each time it's reopened.
  */
 function RaidDetailModal({
   raidId, onClose, onShowItem,
@@ -420,11 +407,6 @@ function RaidDetailModal({
   const idleHeroes = state.heroes.filter((h) => h.status !== 'questing');
   const cfg = difficulty ? RAID_DIFFICULTIES[difficulty] : null;
 
-  // Odds/duration need *some* party to preview against before any hero is
-  // actually picked -- falls back to the first N idle heroes (matching
-  // this tier's exact party size), same "preview against a plausible
-  // default, switch to the real selection once one exists" pattern the
-  // Quest Board already uses for its own success/duration preview.
   const previewHeroIds = selectedHeroIds.length > 0
     ? selectedHeroIds
     : idleHeroes.slice(0, cfg?.partySize ?? 0).map((h) => h.id);
@@ -461,150 +443,154 @@ function RaidDetailModal({
     <>
       <div className="overlay" onClick={onClose}>
         <div className="modal raid-detail-modal" onClick={(e) => e.stopPropagation()}>
-          <RaidBanner raidId={raid.id} banner={raid.banner} />
+          <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-detail-banner" />
           <div className="spread">
             <span className="card-title hero-card-name">{raid.name}</span>
             <span className="tiny gold-text">Lv {raid.reqLevel}</span>
           </div>
           <p className="card-flavour">{raid.description}</p>
-          <SetProgressLine raidId={raid.id} />
 
-          <div className="section-heading">Encounters</div>
-          <ol className="lore-stage-list raid-encounter-list">
-            {raid.encounterIds.map((id, i) => {
-              const enc = RAID_ENCOUNTER_BY_ID[id];
-              if (!enc) return null;
-              const encSuccess = difficulty && previewHeroIds.length > 0
-                ? RaidManager.previewEncounterSuccess(state, previewHeroIds, raid.id, difficulty, id, now)
-                : null;
-              return (
-                <li key={id}>
-                  {/* Collapsed by default (native <details>, no extra state
-                   *  to manage) -- the encounter list was the single
-                   *  biggest contributor to this modal needing to scroll
-                   *  by default. Name + odds/time stay visible in the
-                   *  summary row either way; flavour text and loot only
-                   *  show once expanded. */}
-                  <details>
-                    <summary>
-                      <b>{i + 1}. {enc.name}</b>
-                      {encSuccess !== null && (
-                        <span className="tiny muted" style={{ marginLeft: 8 }}>
-                          Success <b className={encSuccess >= 60 ? 'good' : encSuccess >= 35 ? '' : 'bad'}>{Math.round(encSuccess)}%</b>
-                          {' · '}Time <b>{formatDuration(enc.duration * (difficulty ? RAID_DIFFICULTIES[difficulty].durationMultiplier : 1))}</b>
-                        </span>
-                      )}
-                    </summary>
-                    <p className="muted" style={{ marginTop: 4 }}>{enc.flavour}</p>
-                    <LootPreview encounterId={id} difficulty={difficulty} onShowItem={onShowItem} />
-                  </details>
-                </li>
-              );
-            })}
-          </ol>
+          <div className="raid-detail-columns">
+            <div>
+              <div className="section-heading">Encounters</div>
+              <ol className="raid-encounter-list">
+                {raid.encounterIds.map((id, i) => {
+                  const enc = RAID_ENCOUNTER_BY_ID[id];
+                  if (!enc) return null;
+                  const encSuccess = difficulty && previewHeroIds.length > 0
+                    ? RaidManager.previewEncounterSuccess(state, previewHeroIds, raid.id, difficulty, id, now)
+                    : null;
+                  return (
+                    <li key={id} className="raid-encounter-item">
+                      {/* Collapsed by default (native <details>, no extra
+                       *  state to manage) -- the encounter list was the
+                       *  single biggest contributor to this modal needing
+                       *  to scroll by default. Name + odds/time stay
+                       *  visible in the summary row either way; flavour
+                       *  text and loot only show once expanded. */}
+                      <details>
+                        <summary>
+                          <b>{i + 1}. {enc.name}</b>
+                          {encSuccess !== null && (
+                            <span className="tiny muted" style={{ marginLeft: 8 }}>
+                              Success <b className={encSuccess >= 60 ? 'good' : encSuccess >= 35 ? '' : 'bad'}>{Math.round(encSuccess)}%</b>
+                              {' · '}Time <b>{formatDuration(enc.duration * (difficulty ? RAID_DIFFICULTIES[difficulty].durationMultiplier : 1))}</b>
+                            </span>
+                          )}
+                        </summary>
+                        <p className="muted" style={{ marginTop: 4 }}>{enc.flavour}</p>
+                        <LootPreview encounterId={id} difficulty={difficulty} onShowItem={onShowItem} />
+                      </details>
+                    </li>
+                  );
+                })}
+              </ol>
 
-          {previewDuration !== null && (
-            <p className="tiny muted" style={{ marginTop: 4 }}>
-              Total time (this party): <b>{formatDuration(previewDuration)}</b>
-            </p>
-          )}
+              {previewDuration !== null && (
+                <p className="tiny muted" style={{ marginTop: 8 }}>
+                  Total time (this party): <b>{formatDuration(previewDuration)}</b>
+                </p>
+              )}
 
-          <div className="section-heading">Difficulty</div>
-          <div className="row" style={{ gap: 10 }}>
-            {RAID_DIFFICULTY_ORDER.map((d) => (
-              <DifficultyCircle
-                key={d}
-                difficulty={d}
-                active={difficulty === d}
-                unlocked={ModifierManager.hasUnlock(state, DIFFICULTY_UNLOCK[d])}
-                onClick={() => pickDifficulty(d)}
-              />
-            ))}
-          </div>
+              {/* Moved here from directly under the description -- reads
+               *  as part of "what this run gets you" alongside encounters
+               *  and total time, rather than competing with the raid's
+               *  flavour text for the same spot at the top. */}
+              <SetProgressLine raidId={raid.id} />
+            </div>
 
-          {difficulty && cfg && (
-            <div style={{ marginTop: 10 }}>
-              <p className="tiny muted">
-                Requires exactly {cfg.partySize} heroes at level {raid.reqLevel}+. Rewards ×{cfg.rewardMultiplier},
-                {' '}{cfg.successPenalty}% harder odds per encounter than Normal.
-              </p>
-              {raid.requiredRoles && Object.keys(raid.requiredRoles).length > 0 && (() => {
-                // Deliberately reads the REAL selection (selectedHeroIds),
-                // not previewHeroIds -- previewHeroIds falls back to a
-                // plausible default party (the first N idle heroes) before
-                // anyone's actually picked, which is the right behavior
-                // for the success%/duration preview just above, but was
-                // wrong here: it made these circles show met/ticked
-                // against heroes the player hadn't actually selected yet,
-                // reported directly as "matched roles are ticked, meeting
-                // requirements, without actually selecting anyone." A
-                // requirement circle is a concrete met/unmet fact about
-                // the party you're actually about to send, not a guess.
-                const selectedHeroes = selectedHeroIds
-                  .map((id) => state.heroes.find((h) => h.id === id))
-                  .filter((h): h is Hero => !!h);
-                const counts = RaidManager.partyRoleCounts(selectedHeroes);
-                const penalty = RaidManager.roleMismatchPenalty(selectedHeroes, raid.requiredRoles);
-                const mismatched = RaidManager.hasRoleMismatch(selectedHeroes, raid.requiredRoles);
-                const cap = cfg.roleMismatchCap;
-                const metCount = (Object.entries(raid.requiredRoles) as [Role, number][])
-                  .filter(([role, needed]) => counts[role] >= needed).length;
-                const totalRoles = Object.keys(raid.requiredRoles).length;
-                return (
-                  <div style={{ marginTop: 6, marginBottom: 6 }}>
-                    <div className="section-heading" style={{ margin: '10px 0 6px' }}>Roles Required</div>
-                    <p className="tiny muted" style={{ margin: '0 0 6px' }}>
-                      {metCount}/{totalRoles} met
-                    </p>
-                    <div className="row" style={{ gap: 8 }}>
-                      {(Object.entries(raid.requiredRoles) as [Role, number][]).map(([role, needed]) => (
-                        <RoleRequirementCircle key={role} role={role} needed={needed} have={counts[role]} />
-                      ))}
-                    </div>
-                    {penalty > 0 && (
-                      <p className="tiny bad" style={{ marginTop: 4 }}>
-                        Role mix unmet -- {'-'}{penalty}% success this run until it's covered.
-                      </p>
-                    )}
-                    {mismatched && cap != null && (
-                      <p className="tiny bad" style={{ marginTop: 2 }}>
-                        Success can't rise above {cap}% at {difficulty[0].toUpperCase()}{difficulty.slice(1)} while unmet, no matter how strong the party is.
-                      </p>
-                    )}
-                  </div>
-                );
-              })()}
-              {idleHeroes.length === 0 ? (
-                <p className="small muted">Every hero is already out. Nobody's free to send.</p>
-              ) : (
-                <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
-                  {idleHeroes.map((h) => {
-                    const selected = selectedHeroIds.includes(h.id);
-                    const eligible = h.level >= raid.reqLevel;
+            <div>
+              <div className="section-heading">Difficulty</div>
+              <div className="row" style={{ gap: 10 }}>
+                {RAID_DIFFICULTY_ORDER.map((d) => (
+                  <DifficultyCircle
+                    key={d}
+                    difficulty={d}
+                    active={difficulty === d}
+                    unlocked={ModifierManager.hasUnlock(state, DIFFICULTY_UNLOCK[d])}
+                    onClick={() => pickDifficulty(d)}
+                  />
+                ))}
+              </div>
+
+              {difficulty && cfg && (
+                <div style={{ marginTop: 10 }}>
+                  <p className="tiny muted">
+                    Requires exactly {cfg.partySize} heroes at level {raid.reqLevel}+. Rewards ×{cfg.rewardMultiplier},
+                    {' '}{cfg.successPenalty}% harder odds per encounter than Normal.
+                  </p>
+                  {raid.requiredRoles && Object.keys(raid.requiredRoles).length > 0 && (() => {
+                    // Deliberately reads the REAL selection (selectedHeroIds),
+                    // not previewHeroIds -- see patch 0144 note: a
+                    // requirement circle is a concrete met/unmet fact about
+                    // the party actually about to be sent, not a guess.
+                    const selectedHeroes = selectedHeroIds
+                      .map((id) => state.heroes.find((h) => h.id === id))
+                      .filter((h): h is Hero => !!h);
+                    const counts = RaidManager.partyRoleCounts(selectedHeroes);
+                    const penalty = RaidManager.roleMismatchPenalty(selectedHeroes, raid.requiredRoles);
+                    const mismatched = RaidManager.hasRoleMismatch(selectedHeroes, raid.requiredRoles);
+                    const cap = cfg.roleMismatchCap;
+                    const metCount = (Object.entries(raid.requiredRoles) as [Role, number][])
+                      .filter(([role, needed]) => counts[role] >= needed).length;
+                    const totalRoles = Object.keys(raid.requiredRoles).length;
                     return (
-                      <button
-                        key={h.id}
-                        className={`chip ${selected ? 'on' : ''}`}
-                        disabled={!eligible}
-                        onClick={() => toggleHero(h.id)}
-                        title={eligible ? undefined : `Requires level ${raid.reqLevel}`}
-                      >
-                        <RoleIcon role={HeroManager.activeRole(h)} size={12} /> {h.name} · Lv {h.level}
-                      </button>
+                      <div style={{ marginTop: 6, marginBottom: 6 }}>
+                        <div className="section-heading" style={{ margin: '10px 0 6px' }}>Roles Required</div>
+                        <p className="tiny muted" style={{ margin: '0 0 6px' }}>
+                          {metCount}/{totalRoles} met
+                        </p>
+                        <div className="row" style={{ gap: 8 }}>
+                          {(Object.entries(raid.requiredRoles) as [Role, number][]).map(([role, needed]) => (
+                            <RoleRequirementCircle key={role} role={role} needed={needed} have={counts[role]} />
+                          ))}
+                        </div>
+                        {penalty > 0 && (
+                          <p className="tiny bad" style={{ marginTop: 4 }}>
+                            Role mix unmet -- {'-'}{penalty}% success this run until it's covered.
+                          </p>
+                        )}
+                        {mismatched && cap != null && (
+                          <p className="tiny bad" style={{ marginTop: 2 }}>
+                            Success can't rise above {cap}% at {difficulty[0].toUpperCase()}{difficulty.slice(1)} while unmet, no matter how strong the party is.
+                          </p>
+                        )}
+                      </div>
                     );
-                  })}
+                  })()}
+                  {idleHeroes.length === 0 ? (
+                    <p className="small muted">Every hero is already out. Nobody's free to send.</p>
+                  ) : (
+                    <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
+                      {idleHeroes.map((h) => {
+                        const selected = selectedHeroIds.includes(h.id);
+                        const eligible = h.level >= raid.reqLevel;
+                        return (
+                          <button
+                            key={h.id}
+                            className={`chip ${selected ? 'on' : ''}`}
+                            disabled={!eligible}
+                            onClick={() => toggleHero(h.id)}
+                            title={eligible ? undefined : `Requires level ${raid.reqLevel}`}
+                          >
+                            <RoleIcon role={HeroManager.activeRole(h)} size={12} /> {h.name} · Lv {h.level}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="row end" style={{ marginTop: 10, gap: 8 }}>
+                    <span className="tiny muted" style={{ marginRight: 'auto' }}>
+                      {selectedHeroIds.length}/{cfg.partySize} selected
+                    </span>
+                    <button className="btn-primary" disabled={selectedHeroIds.length !== cfg.partySize} onClick={askToCommit}>
+                      Send the guild
+                    </button>
+                  </div>
                 </div>
               )}
-              <div className="row end" style={{ marginTop: 10, gap: 8 }}>
-                <span className="tiny muted" style={{ marginRight: 'auto' }}>
-                  {selectedHeroIds.length}/{cfg.partySize} selected
-                </span>
-                <button className="btn-primary" disabled={selectedHeroIds.length !== cfg.partySize} onClick={askToCommit}>
-                  Send the guild
-                </button>
-              </div>
             </div>
-          )}
+          </div>
 
           <div className="row end" style={{ marginTop: 14 }}>
             <button className="btn-primary" onClick={onClose}>Close</button>
@@ -641,8 +627,7 @@ function RaidDetailModal({
 
 /**
  * Collapsed summary only -- clicking opens RaidDetailModal rather than
- * expanding inline. Locked raids stay a plain, non-interactive card (no
- * modal needed, there's nothing to configure).
+ * expanding inline. Locked raids stay a plain, non-interactive card.
  */
 function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: string) => void }) {
   const state = useEngine().state;
@@ -653,8 +638,11 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: 
   if (!unlocked) {
     return (
       <div className="card raid-card locked">
-        <div className="card-title">???</div>
-        <p className="tiny muted">Complete the previous raid to reveal this one.</p>
+        <div className="raid-card-thumb" />
+        <div className="raid-card-body">
+          <div className="raid-card-name">???</div>
+          <p className="tiny muted" style={{ margin: '2px 0 0' }}>Complete the previous raid to reveal this one.</p>
+        </div>
       </div>
     );
   }
@@ -668,12 +656,15 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: 
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
       >
-        <RaidBanner raidId={raid.id} banner={raid.banner} />
-        <div className="spread">
-          <span className="card-title hero-card-name">{raid.name}</span>
-          <span className="tiny gold-text">Lv {raid.reqLevel}</span>
+        <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-card-thumb" />
+        <div className="raid-card-body">
+          <div className="raid-card-name">{raid.name}</div>
+          <div className="raid-card-meta">
+            <span className="tiny gold-text">Lv {raid.reqLevel}</span>
+          </div>
+          <SetProgressLine raidId={raid.id} compact />
         </div>
-        <SetProgressLine raidId={raid.id} compact />
+        <span className="raid-card-chevron" aria-hidden="true">›</span>
       </div>
       {showModal && (
         <RaidDetailModal raidId={raidId} onClose={() => setShowModal(false)} onShowItem={onShowItem} />
@@ -698,16 +689,39 @@ function ActiveRaidCard() {
   const color = DIFFICULTY_COLOR[active.difficulty];
 
   return (
-    <div className="card raid-card active" style={{ borderLeft: `3px solid ${color}` }}>
-      <RaidBanner raidId={active.raidId} banner={raid?.banner} />
-      <div className="card-title">{raid?.name ?? 'A raid'} — {active.difficulty}</div>
-      <p className="tiny muted" style={{ margin: '4px 0' }}>{party}</p>
+    <div className="card raid-active-card" style={{ borderLeft: `3px solid ${color}` }}>
+      <RaidBanner raidId={active.raidId} banner={raid?.banner} className="raid-active-banner" />
+      <div className="raid-active-header">
+        <span className="card-title">{raid?.name ?? 'A raid'} — {active.difficulty}</span>
+      </div>
+      <p className="raid-active-party">{party}</p>
       <div className="bar" style={{ marginTop: 6 }}><span style={{ width: `${progress}%` }} /></div>
-      <p className="tiny muted" style={{ marginTop: 4 }}>
+      <p className="raid-active-eta">
         {formatDuration(Math.max(0, active.endsAt - now))} remaining -- committed, no early retreat.
       </p>
     </div>
   );
+}
+
+/** Aggregate across every raid's own set (see RAID_SET_ID/SetProgressLine)
+ *  -- a single "how much of the raid loot chase is done" line above the
+ *  list, distinct from each raid's own per-set line on its card/modal. */
+function useRaidSetTotals(state: ReturnType<typeof useEngine>['state']) {
+  let piecesFound = 0;
+  let piecesTotal = 0;
+  let setsComplete = 0;
+  let setsTotal = 0;
+  for (const raid of RAIDS) {
+    const setId = RAID_SET_ID[raid.id];
+    const set = setId ? SET_BY_ID[setId] : undefined;
+    if (!set) continue;
+    setsTotal += 1;
+    const found = set.pieces.filter((p) => state.discoveredItems.includes(p)).length;
+    piecesFound += found;
+    piecesTotal += set.pieces.length;
+    if (found === set.pieces.length) setsComplete += 1;
+  }
+  return { piecesFound, piecesTotal, setsComplete, setsTotal };
 }
 
 export function RaidsPanel() {
@@ -716,6 +730,7 @@ export function RaidsPanel() {
   const hasRaids = ModifierManager.hasUnlock(state, 'raids');
   const [itemDetail, setItemDetail] = useState<string | null>(null);
   const [subTab, setSubTab] = useState<'raids' | 'quartermaster'>('raids');
+  const setTotals = useRaidSetTotals(state);
 
   if (!hasRaids) {
     return (
@@ -747,10 +762,16 @@ export function RaidsPanel() {
 
       {subTab === 'raids' ? (
         <>
-          {state.activeRaid && <ActiveRaidCard />}
-          {RAIDS.filter((r) => r.id !== state.activeRaid?.raidId).map((r) => (
-            <RaidCard key={r.id} raidId={r.id} onShowItem={setItemDetail} />
-          ))}
+          <p className="raid-sets-summary">
+            Raid sets discovered: <b>{setTotals.setsComplete}/{setTotals.setsTotal}</b> complete
+            {' · '}<b>{setTotals.piecesFound}/{setTotals.piecesTotal}</b> pieces
+          </p>
+          <div className="raid-list">
+            {state.activeRaid && <ActiveRaidCard />}
+            {RAIDS.filter((r) => r.id !== state.activeRaid?.raidId).map((r) => (
+              <RaidCard key={r.id} raidId={r.id} onShowItem={setItemDetail} />
+            ))}
+          </div>
         </>
       ) : (
         <RaidQuartermasterDen />

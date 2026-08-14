@@ -9675,3 +9675,78 @@ uses.
 
 **Verified:** `npx tsc --noEmit` and a full `vite build` (app + electron
 main + preload) both clean.
+
+### Raids UI visual redesign -- built (patch 0145)
+
+```discord-update
+Dev Update | Raids Visual Redesign
+
+- Raid list rows are now compact (thumbnail + name/level) instead of tall banner cards
+- The raid detail popup is now two columns, so most raids fit without scrolling at all
+- Difficulty circles resized to actually fit as a row of three
+- Encounters now look like real cards instead of plain list text
+- Loot entries read as small chips instead of bare text
+- Added a "raid sets discovered" summary above the whole list
+```
+
+A full visual pass over `RaidsPanel.tsx`/`RaidResultModal.tsx`, delivered
+as a ready-to-integrate handoff (`RaidsPanel.tsx`, `RaidResultModal.tsx`,
+`app-raids.css`) rather than requested feature-by-feature -- applied as
+given, restoring a handful of load-bearing reasoning comments the
+handoff had trimmed for brevity (see below) rather than losing them from
+the codebase's own documentation.
+
+**Raid list rows, compact.** `RaidCard` was a full-height card with a
+90px banner every time; now a horizontal row (`.raid-card-thumb`, 56px)
++ name/level + a chevron, so the whole list scans in one glance instead
+of scrolling through tall cards. Locked raids get the same row shape
+with a blank thumb rather than a completely different layout.
+
+**Detail modal, two columns above 640px.** New `.raid-detail-columns`
+grid -- Encounters (+ total time + set progress) on the left, Difficulty
++ Roles Required + the hero picker on the right. Single column below
+640px. Combined with patch 0144's 680px width bump, this is what
+actually gets most raids to fit without scrolling by default.
+
+**Difficulty circles, 110px -> 64px.** The 0144 bump to 110px (originally
+meant to fix "hard to hit/read") turned out too large once three of them
+sit side by side in the narrower column layout -- brought down to a size
+that still reads clearly without dominating. `RoleRequirementCircle`
+(same `.raid-diff-circle` shape) resized its icon 66px -> 40px to match.
+
+**Encounters as real cards.** `raid-encounter-list`/`raid-encounter-item`
+fully decoupled from `.lore-stage-list` (dropped that shared class from
+the `<ol>` entirely) -- each encounter is now its own bordered card
+rather than a plain list entry borrowing LorePanel's styling. Same
+collapsed-by-default `<details>`/`<summary>` behavior from 0144,
+unchanged.
+
+**Loot chips.** `.loot-chip` restyled from a bare-button reset to a small
+filled pill (background, border, padding) -- same click behavior
+(discovered -> detail overlay, undiscovered -> toast), just more visibly
+a clickable object instead of reading as plain text.
+
+**New: `raid-sets-summary` aggregate line.** A single roll-up above the
+whole raid list -- "Raid sets discovered: X/Y complete · N/M pieces" --
+computed by a new `useRaidSetTotals` hook that sums every raid's own
+`SET_BY_ID`/`RAID_SET_ID` lookup (patch 0144) across the board. Distinct
+from each raid's own per-set `SetProgressLine` (still shown per-card and
+in the modal) -- this is the "how much of the whole chase is done"
+number, that's the "how much of *this* raid's chase is done" number.
+
+**RaidResultModal:** gained a dedicated `raid-result-modal` class (used
+by the new tighter `.section-heading` spacing rule for a card this
+dense) -- no behavior change, purely a hook for the CSS pass.
+
+**Comments restored, not part of the visual change itself:** the handoff
+trimmed several explanatory comments for brevity while restructuring
+around them -- `roomSpriteLevel`'s raid_speed-banding rationale,
+`RaidQuartermasterDen`'s "why embedded here" note, `RoleRequirementCircle`'s
+full reasoning, `SetProgressLine`'s "direct request" framing, and
+`RaidResultModal`'s several "same treatment as QuestResultModal, here's
+why" notes. All reinstated verbatim alongside the new structure -- none
+of them described anything the redesign actually changed, so there was
+no reason to lose them.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (app + electron
+main + preload) both clean.

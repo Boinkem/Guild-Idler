@@ -9,9 +9,9 @@ import { formatGold, RARITY_COLOR } from '../game/util';
 import { useCountUp } from './useCountUp';
 import { measureFlyOffset } from './flyTarget';
 
+const DISMISS_DELAY_MS = 640;
 /** Same dismiss timing as QuestResultModal, for the same reason -- gives the
  *  longest particle time to finish fading rather than getting cut off. */
-const DISMISS_DELAY_MS = 640;
 
 const COIN_PARTICLES = [
   { dx: -46, dy: -92, rot: -18, delay: 0 },
@@ -73,6 +73,10 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
   // treatment an ordinary quest's does, arguably more given the time
   // investment.
   const displayGold = useCountUp(result.gold, { from: 0, durationMs: 700 });
+  // Gold-only (no XP flight, unlike QuestResultModal's own version) --
+  // a raid's reward XP goes to the whole party (result.heroIds), not
+  // one specific hero, so there's no single obvious XP bar to aim at
+  // the way a solo quest result has.
   const displayXp = useCountUp(result.xp, { from: 0, durationMs: 700 });
 
   useEffect(() => () => {
@@ -83,10 +87,6 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
     if (dismissing) return;
     setDismissing(true);
     playSound(hasLegendary ? 'legendary_drop' : 'collect');
-    // Gold-only (no XP flight, unlike QuestResultModal's own version) --
-    // a raid's reward XP goes to the whole party (result.heroIds), not
-    // one specific hero, so there's no single obvious XP bar to aim at
-    // the way a solo quest result has.
     if (rewardBurstRef.current && result.gold > 0) {
       const originRect = rewardBurstRef.current.getBoundingClientRect();
       const offset = measureFlyOffset(rewardBurstRef.current, 'gold');
@@ -104,7 +104,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
   return (
     <div className="overlay" onClick={handleDismiss}>
       <div
-        className={`modal ${result.fullClear ? 'raid-full-clear' : ''} ${dismissing ? 'dismissing' : ''}`}
+        className={`modal raid-result-modal ${result.fullClear ? 'raid-full-clear' : ''} ${dismissing ? 'dismissing' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
         <h3>{result.raidName} — {result.difficulty[0].toUpperCase()}{result.difficulty.slice(1)}</h3>
@@ -155,10 +155,10 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
           <button className="btn-primary" onClick={viewLore} disabled={dismissing}>View in Lore</button>
         </div>
 
-        {/* Same particle burst as QuestResultModal, same reasoning -- only
-            shows the kinds of reward actually earned. */}
         {dismissing && (
           <div className="collect-burst" aria-hidden="true">
+            {/* Same particle burst as QuestResultModal, same reasoning --
+                only shows the kinds of reward actually earned. */}
             {result.gold > 0 && COIN_PARTICLES.map((p, i) => (
               <span
                 key={`coin-${i}`}
@@ -189,13 +189,14 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
           </div>
         )}
 
-        {/* Flies to the header's gold display, the real measured
-            distance -- same mechanism QuestResultModal's own gold flight
-            uses, see that component for the fuller explanation. Silently
-            renders nothing if the header wasn't mounted to measure
-            against (idle mode has no header). */}
         {dismissing && goldFlight && (
           <span
+            // Flies to the header's gold display, the real measured
+            // distance -- same mechanism QuestResultModal's own gold
+            // flight uses, see that component for the fuller
+            // explanation. Silently renders nothing if the header
+            // wasn't mounted to measure against (idle mode has no
+            // header).
             className="fly-particle"
             aria-hidden="true"
             style={{

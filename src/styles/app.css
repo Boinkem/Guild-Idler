@@ -176,40 +176,102 @@
 .idle-chain-banner { border-color: var(--violet); color: var(--violet); }
 
 /*
- * Raids -- difficulty circles (N/H/M) and the raid card treatment. Circles
- * reuse RARITY_COLOR (uncommon/rare/epic) rather than a new colour system,
- * same reasoning as everywhere else this session.
+ * Raids -- difficulty circles (N/H/M), raid list rows, and the detail /
+ * result modal layout. Circles reuse RARITY_COLOR (uncommon/rare/epic),
+ * same reasoning as everywhere else. Everything here is scoped to
+ * .raid-* classes (or .modal/.card modifier classes added alongside
+ * them), so nothing reaches into another panel's shared components.
  */
+
+.raid-list { display: flex; flex-direction: column; gap: 8px; }
+
+/* Collapsed raid row -- was a full-height banner card; now a compact
+   horizontal row (thumbnail + name/level + chevron) so the list scans
+   in one glance instead of a wall of tall banner cards. */
+.raid-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 0;
+}
+.raid-card-thumb {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--panel-3);
+  border: 1px solid var(--edge);
+}
+.raid-card-body { flex: 1; min-width: 0; }
+.raid-card-name { font-size: 0.8125rem; font-weight: 700; }
+.raid-card-meta { display: flex; gap: 10px; align-items: baseline; margin-top: 2px; }
+.raid-card-chevron { flex: none; color: var(--muted); font-size: 0.75rem; }
+.raid-card:hover .raid-card-chevron { color: var(--brass); }
+.raid-card.locked { opacity: 0.55; }
+
+/* Active raid -- own card (not .raid-card's row layout), banner shrunk
+ * to a slim strip rather than the full 90px used elsewhere -- this card
+ * already carries name, party, and a progress bar, so the banner is a
+ * mood strip here, not the primary identifier the way it is in the list. */
+.raid-active-banner { height: 48px; border-radius: 6px; margin-bottom: 8px; }
+.raid-active-header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.raid-active-party { color: var(--muted); font-size: 0.625rem; margin: 3px 0 6px; }
+.raid-active-eta { font-size: 0.5625rem; color: var(--muted); margin-top: 4px; text-align: right; }
+
+/* Aggregate line above the raid list -- total raid-set discovery across
+ * every raid, so there's a sense of "more to find" before opening any
+ * one raid's own SetProgressLine. */
+.raid-sets-summary { color: var(--muted); font-size: 0.6875rem; margin: 0 0 10px; }
+.raid-sets-summary b { color: var(--brass); }
+
+/* Difficulty circles -- brought down from the old 110px (hard to scan
+   as a full row of three at that size) to a size that reads clearly
+   without dominating the modal. */
 .raid-diff-circle {
-  /* Roughly tripled from the original 40px -- these were reported as very
-     hard to hit/read at the old size, and they're a one-per-raid choice
-     that deserves real presence, not a tiny button among many. */
-  width: 110px;
-  height: 110px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
-  border-width: 3px;
+  border-width: 2px;
   border-style: solid;
   background: var(--panel-2);
   font-weight: 700;
-  font-size: 28px;
+  font-size: 18px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
+  transition: transform 120ms ease, filter 120ms ease;
 }
-.raid-diff-circle:hover { filter: brightness(1.15); }
-/* Wraps DifficultyCircle's button + its name label underneath (patch
- * 0144) -- the label used to only live in the button's own `title`
- * tooltip; this makes it real, always-visible text instead. */
+.raid-diff-circle:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }
+/* Wraps DifficultyCircle's button + its name label underneath -- the
+ * label used to only live in the button's `title` tooltip; this makes
+ * it real, always-visible text instead. */
 .raid-diff-circle-wrap {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
 }
-.raid-card.locked { opacity: 0.6; }
-.raid-card.active { border-left: 3px solid var(--brass); }
+
+/* Raid encounter list -- no longer shares .lore-stage-list with
+   LorePanel at all (this used to be collapsed-by-default text sitting
+   inside that shared class); each entry is now its own bordered card,
+   with the same collapsed-by-default <details>/<summary> treatment
+   .lore-card's own details already established, just under its own
+   selector since the visual shape has fully diverged now. */
+.raid-encounter-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.raid-encounter-item {
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--panel-2) 70%, transparent);
+  border: 1px solid var(--panel-3);
+  border-radius: 6px;
+}
+.raid-encounter-list details summary { cursor: pointer; }
+.raid-encounter-list details[open] summary { margin-bottom: 4px; }
+
 /* Covers any card that's itself the click target (role="button" directly
    on .card, not via a nested summary row) -- raid cards, and now the
    Shop's item cards too. Cards using a nested clickable header instead
@@ -219,21 +281,27 @@
    to deserves a slightly bigger visual moment when it actually pays off. */
 .modal.raid-full-clear { border-color: var(--brass); border-width: 2px; }
 
-/* Loot entries in a raid encounter's preview -- plain button reset so they
-   read the same as the old static text, but are actually clickable now:
-   a discovered item opens its detail overlay, an undiscovered one gets a
-   toast telling you to go find it first. */
+/* Loot entries in a raid encounter's preview -- plain button reset so
+   they stay clickable (discovered -> detail overlay, undiscovered ->
+   toast) but now read as a small filled chip instead of bare text. */
 .loot-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: none;
-  border: none;
-  padding: 0;
+  background: color-mix(in srgb, var(--panel-2) 70%, transparent);
+  border: 1px solid var(--panel-3);
+  border-radius: 4px;
+  padding: 2px 6px;
   font: inherit;
   cursor: pointer;
 }
+.loot-chip:hover { border-color: var(--brass); }
 .loot-chip:hover .tiny { color: var(--brass); }
+
+/* Raid result modal -- reuses .modal/.reward-burst wholesale, just a
+   tighter section rhythm than the default modal padding gives a card
+   this dense (title, verdict, reward burst, loot, injuries). */
+.raid-result-modal .section-heading { margin-top: 12px; }
 
 * { box-sizing: border-box; }
 
@@ -1057,6 +1125,17 @@ button:focus-visible, [tabindex]:focus-visible {
  * without it on a normal-size menu window. Still just a max, so it
  * shrinks fine on a narrow/mobile-ish window same as every other modal. */
 .modal.raid-detail-modal { max-width: 680px; }
+/* Two-column split above 640px -- encounters (+ total time + set
+   progress) on the left, difficulty + roles + party picker on the
+   right, so the two stop competing for one long vertical scroll. */
+.raid-detail-columns { display: grid; grid-template-columns: 1fr; gap: 0 24px; }
+@media (min-width: 640px) {
+  .raid-detail-columns { grid-template-columns: 1.1fr 1fr; }
+}
+/* SetProgressLine's own spacing when it sits at the bottom of the
+   encounters column, under "Total time", rather than under the
+   description. */
+.raid-detail-columns .stat-row { margin-top: 4px; }
 
 @keyframes modal-pop-in {
   0% { transform: scale(0.85); opacity: 0; }
@@ -1771,13 +1850,6 @@ input[type='range'] {
 .lore-stage-list li { margin-bottom: 4px; }
 .lore-card details summary { cursor: pointer; }
 .lore-card details[open] summary { margin-bottom: 4px; }
-/* Raid encounter list (patch 0144) -- same collapsed-by-default treatment
- * as .lore-card's own details/summary just above, its own selector since
- * .lore-stage-list is shared with LorePanel's non-collapsible lists and
- * shouldn't pick this up everywhere it's used. */
-.raid-encounter-list details summary { cursor: pointer; }
-.raid-encounter-list details[open] summary { margin-bottom: 4px; }
-.raid-encounter-list li { margin-bottom: 8px; }
 
 /* -------------------------------- dashboard -------------------------------- */
 
