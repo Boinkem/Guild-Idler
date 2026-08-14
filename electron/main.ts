@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage } from 'electron';
+import type { Display } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -160,21 +161,37 @@ async function writeSettings(patch: Partial<Settings>) {
   await fs.writeFile(settingsPath(), JSON.stringify(next, null, 2), 'utf8');
 }
 
-function bottomRight(width: number, height: number) {
-  const { workArea } = screen.getPrimaryDisplay();
+/**
+ * Both bottomRight and clampToWorkArea default to the primary display so
+ * every existing call site keeps working unchanged, but nearly every call
+ * this file actually makes now passes an explicit `display` -- see the
+ * cross-monitor position sync fix below for why defaulting to primary
+ * everywhere was the root cause of the idle/menu mismatch.
+ */
+function bottomRight(width: number, height: number, display: Display = screen.getPrimaryDisplay()) {
+  const { workArea } = display;
   return {
     x: Math.round(workArea.x + workArea.width - width - 24),
     y: Math.round(workArea.y + workArea.height - height - 24),
   };
 }
 
-/** Clamps a top-left position so the given size stays fully on the primary display. */
-function clampToWorkArea(x: number, y: number, width: number, height: number) {
-  const { workArea } = screen.getPrimaryDisplay();
+/** Clamps a top-left position so the given size stays fully on `display`'s work area. */
+function clampToWorkArea(x: number, y: number, width: number, height: number, display: Display = screen.getPrimaryDisplay()) {
+  const { workArea } = display;
   return {
     x: Math.max(workArea.x, Math.min(x, workArea.x + workArea.width - width)),
     y: Math.max(workArea.y, Math.min(y, workArea.y + workArea.height - height)),
   };
+}
+
+/** True if point (x, y) falls within `display`'s full bounds (not just its work area). */
+function pointOnDisplay(x: number, y: number, display: Display) {
+  const { bounds } = display;
+  return (
+    x >= bounds.x && x < bounds.x + bounds.width &&
+    y >= bounds.y && y < bounds.y + bounds.height
+  );
 }
 
 async function createWindow() {
@@ -195,8 +212,19 @@ async function createWindow() {
   // the one path that didn't, which is exactly why opening then closing
   // Guild Hall "fixed" it: that path recomputes and clamps, this one
   // hadn't.
+  //
+  // Clamped against the display NEAREST the saved point, not always the
+  // primary display -- see the cross-monitor position sync fix below.
+  // Clamping a secondary-monitor position into the primary display's work
+  // area was itself a second, milder version of the same bug: not
+  // off-screen, just quietly relocated to the wrong monitor every single
+  // launch, which is exactly the "feels jank til you manually move it
+  // around on launch" symptom reported directly by testers.
   idleBounds = settings.x != null && settings.y != null
-    ? clampToWorkArea(settings.x, settings.y, IDLE_SIZE.width, IDLE_SIZE.height)
+    ? clampToWorkArea(
+        settings.x, settings.y, IDLE_SIZE.width, IDLE_SIZE.height,
+        screen.getDisplayNearestPoint({ x: settings.x, y: settings.y }),
+      )
     : bottomRight(IDLE_SIZE.width, IDLE_SIZE.height);
   currentMode = 'idle';
 
@@ -453,6 +481,20 @@ ipcMain.handle('window:setMode', (_e, mode: 'idle' | 'menu') => {
   if (!win) return;
   if (mode === currentMode) return;
 
+  // Which display the window is CURRENTLY sitting on, captured before
+  // either branch below touches its bounds. This is the fix for a real
+  // reported bug: both branches used to size/centre against
+  // screen.getPrimaryDisplay() unconditionally, so a companion the player
+  // had dragged onto a second monitor would still have its menu open
+  // centred on the primary display -- a visible cross-monitor jump -- and
+  // closing that menu could clamp the return position back into the
+  // primary display's work area too, landing it in the wrong corner of
+  // the wrong screen. "Check where the window currently is and open the
+  // other on it" is exactly what this now does: both idle and menu bounds
+  // are computed relative to wherever the window already is, not always
+  // the primary display.
+  const activeDisplay = screen.getDisplayMatching(win.getBounds());
+
   if (mode === 'menu') {
     // Capture the idle position before growing, so we have somewhere correct
     // to return to later regardless of where the menu window gets dragged.
@@ -467,7 +509,7 @@ ipcMain.handle('window:setMode', (_e, mode: 'idle' | 'menu') => {
     // exists, clamped the same defensive way idle position already is --
     // a size remembered from a bigger display (an ultrawide, say) could
     // otherwise ask for a window larger than the current one can show.
-    const { workArea } = screen.getPrimaryDisplay();
+    const { workArea } = activeDisplay;
     const requested = menuSize ?? MENU_SIZE;
     const size = {
       width: Math.max(MENU_MIN_SIZE.width, Math.min(requested.width, workArea.width)),
@@ -476,7 +518,8 @@ ipcMain.handle('window:setMode', (_e, mode: 'idle' | 'menu') => {
     // The guild menu opens centred on screen rather than anchored to the
     // companion's corner — confirmed as the preferred default: the hero stays
     // put bottom-right, but the menu is a separate, larger surface that reads
-    // better centred than sprouting from a corner.
+    // better centred than sprouting from a corner. Centred on activeDisplay
+    // (wherever the companion currently is), not always the primary display.
     const pos = {
       x: Math.round(workArea.x + (workArea.width - size.width) / 2),
       y: Math.round(workArea.y + (workArea.height - size.height) / 2),
@@ -492,10 +535,19 @@ ipcMain.handle('window:setMode', (_e, mode: 'idle' | 'menu') => {
     // if the player had toggled it off themselves. Guarded on isFullScreen()
     // so the ordinary (non-fullscreen) path here is completely unchanged.
     if (win.isFullScreen()) win.setFullScreen(false);
-    // Always return to the saved home position, never wherever the menu
-    // window currently happens to be sitting.
-    const home = idleBounds ?? bottomRight(IDLE_SIZE.width, IDLE_SIZE.height);
-    const pos = clampToWorkArea(home.x, home.y, IDLE_SIZE.width, IDLE_SIZE.height);
+    // Prefer the saved home position, but only when it's still actually on
+    // the display the menu is currently sitting on. If the player dragged
+    // the menu window to a different monitor than the companion's
+    // remembered home, clamping that stale coordinate into the new
+    // display's work area could shove it into an arbitrary edge (this is
+    // the "snaps to top-left" jank reported directly) -- falling back to a
+    // clean bottom-right-of-activeDisplay position reads as correct
+    // instead of janky in that case, and keeps idle/menu correlated to
+    // whichever screen the player is actually working on.
+    const home = idleBounds && pointOnDisplay(idleBounds.x, idleBounds.y, activeDisplay)
+      ? idleBounds
+      : bottomRight(IDLE_SIZE.width, IDLE_SIZE.height, activeDisplay);
+    const pos = clampToWorkArea(home.x, home.y, IDLE_SIZE.width, IDLE_SIZE.height, activeDisplay);
     win.setBounds({ ...pos, ...IDLE_SIZE }, false);
     win.setResizable(false);
     win.setMaximizable(false);

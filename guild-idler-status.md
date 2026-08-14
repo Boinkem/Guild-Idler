@@ -9187,3 +9187,74 @@ changes with no player-facing effect (sortable columns, banner-art
 picker, tuning-tab grouping) -- this post is for players, not
 contributors.
 
+### Idle/menu window not correlating position across monitors -- fixed (patch 0139)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed the companion and Guild Hall window jumping to the wrong monitor when switching between them
+- Fixed closing Guild Hall sometimes snapping the companion to the wrong corner of the screen
+```
+
+Direct tester feedback, multiple reports pointing at the same root cause:
+"the miniaturized and the maximized version need to correlate location
+when moving one or the other -- having it snap to top left of primary
+monitor for one and wherever you last had it for the other feels jank at
+first til you manually move it around on launch." Also requested
+directly: switching modes "should check where the window currently is
+and open the other on it."
+
+Root cause confirmed in `electron/main.ts`: the idle companion and the
+Guild Hall menu are the same underlying `BrowserWindow`, resized/
+repositioned in place rather than two separate windows (see
+`window:setMode`) -- but every position/size calculation in that handler,
+plus the cold-boot restore path in `createWindow`, computed against
+`screen.getPrimaryDisplay()` unconditionally. On a single-monitor setup
+this is invisible; on multi-monitor it meant opening Guild Hall always
+centred on the *primary* display regardless of which monitor the
+companion was actually sitting on, closing Guild Hall could clamp the
+return position into the primary display's work area even when the
+companion's real home was on a different monitor (landing it in an
+arbitrary corner rather than back where it was), and a position restored
+on launch was clamped to primary rather than to whichever display it was
+actually saved from.
+
+Fixed by making every one of those call sites display-aware instead of
+primary-only:
+- `bottomRight` and `clampToWorkArea` (both previously hardcoded to
+  `screen.getPrimaryDisplay()`) now take an optional target `Display`,
+  defaulting to primary only for the one genuine no-window-yet case
+  (a brand new install with no saved position at all).
+- `window:setMode` now captures `activeDisplay` via
+  `screen.getDisplayMatching(win.getBounds())` -- wherever the window
+  actually is at the moment the switch happens -- once at the top of the
+  handler, and both the menu-centring math and the idle-return math use
+  it instead of primary. This is the literal "check where the window
+  currently is and open the other on it" fix.
+- Returning to idle no longer blindly clamps the remembered home position
+  into whatever display happens to be active: a new `pointOnDisplay`
+  check confirms the saved home is still actually on `activeDisplay`
+  first. If the player dragged the menu to a different monitor than the
+  companion's remembered home, clamping that stale coordinate into the
+  new display's work area was exactly what produced the "snaps to
+  top-left" jank -- falling back to a clean bottom-right-of-activeDisplay
+  position instead reads as correct rather than janky.
+- Cold-boot restore (`createWindow`) now clamps the saved position
+  against `screen.getDisplayNearestPoint()` for that saved point, not
+  primary -- so a companion last used on a secondary monitor reopens on
+  that same monitor on the next launch instead of being quietly
+  relocated to primary every time, which was the milder, launch-time
+  version of the same underlying bug.
+
+The existing cross-monitor *resize* fix (`suppressNextResizeSave`, see
+"Menu window losing its remembered size on a cross-monitor move" above)
+is unrelated and untouched -- that one guards against Windows' own DPI
+rescale being misread as a manual resize; this fix is purely about where
+the window's bounds get computed, not what triggers a bounds change.
+
+Verified with `tsc --noEmit` and a full `vite build` (app + electron main
++ preload), all clean -- same real multi-monitor-session caveat as the
+resize fix above applies (can't drive an actual multi-display Electron
+session in this environment), so this is a code-path/logic-level
+verification, not a live on-screen one.
+
