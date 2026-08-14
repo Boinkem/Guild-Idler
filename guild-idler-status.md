@@ -9523,3 +9523,49 @@ an isolated scratch copy of `src/game/data/json/` (so the live files
 were never touched by the server's own re-serialization), including a
 deliberate negative-validation test on the `roles` schema's still-
 required `name` field.
+
+### Training tab unlock notification -- built (patch 0143)
+
+```discord-update
+Dev Update | Training Tab Notification
+
+- Added a notification when the Training tab first unlocks, right after Blackford Keep is cleared
+- The notification points straight at the Training tab, same as every other "you've unlocked something" nudge
+```
+
+Direct follow-up to the Training tab itself (patch 0142) -- nothing told
+the player it had appeared. Reuses the existing `GuidanceManager` topic
+system entirely rather than building anything new: one more entry in its
+`TOPICS`/`CHECKS` tables, `training_tab_unlocked`, checked the exact same
+way `raids_unlocked`/`raids_heroic_unlocked`/`raids_mythic_unlocked`
+already are -- and those three already fire from the exact call site
+this needed (`GameEngine.tick`'s raid-resolution block, right after
+`RaidManager.resolve`, both live and in `catchUpOffline`), so this
+required zero new plumbing, just a new table entry.
+
+**Condition:** `state.completedRaids.includes('blackford_keep')` --
+deliberately mirrors the Training tab's own nav-visibility gate
+(`MenuWindow.tsx`) exactly, rather than checking
+`ModifierManager.hasUnlock(state, 'training')` (the separate Fund
+Training *purchase*, which gates the tab's content once it's already
+visible, not whether the tab exists at all). This topic is about the
+tab's first appearance, so it fires the moment that's true regardless of
+whether the player has funded it yet.
+
+**Behavior, inherited entirely from the existing system, not special-
+cased:** fires as a toast + top banner + a permanent "Go to Training"
+entry in the Guide tab's Notifications log during live play, the instant
+Blackford Keep's raid result resolves (same moment the result modal
+appears) -- matching "on completion of the raid, after the results"
+directly. During offline catch-up, it archives to the Notifications log
+quietly (no toast/banner), same "don't dump a wall of toasts on reopen"
+treatment every other guidance topic already gets there. Fires exactly
+once ever (`state.seenGuidance`), and correctly reaches existing saves
+that already cleared Blackford Keep *before* patch 0142 shipped, too --
+`GuidanceManager.checkAll` is checked broadly after many different
+player actions (quest resolution, level-up, and others), not only raid
+resolution, so a save that already satisfies the condition picks this up
+the next time any of those run rather than needing to raid again.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (app + electron
+main + preload) both clean.

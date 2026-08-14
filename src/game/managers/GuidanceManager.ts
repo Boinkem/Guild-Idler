@@ -74,6 +74,11 @@ const TOPICS: GuidanceTopic[] = [
     targetTab: 'raids',
   },
   {
+    id: 'training_tab_unlocked',
+    messages: ["Blackford Keep is cleared, and the guild's first real siege makes the case for itself -- a Training tab has opened up. Fund it to start reassigning a hero's Melee/Ranged/Caster role from one dedicated spot."],
+    targetTab: 'training',
+  },
+  {
     id: 'auto_chain_unlocked',
     messages: ["A hero can now keep taking the next contract on their own for a while, instead of waiting for fresh orders each time -- toggle it from a hero's own Quest Tab entry."],
     targetTab: 'quests',
@@ -105,6 +110,16 @@ const CHECKS: Record<string, Check> = {
   legendary_quests_unlocked: (state) => ModifierManager.hasUnlock(state, 'legendaryQuests'),
   raids_heroic_unlocked: (state) => ModifierManager.hasUnlock(state, 'raidsHeroic'),
   raids_mythic_unlocked: (state) => ModifierManager.hasUnlock(state, 'raidsMythic'),
+  // The Training tab's own nav visibility gate (MenuWindow.tsx) reads
+  // completedRaids directly rather than a dedicated boolean -- this check
+  // mirrors that exact same condition rather than introducing a second
+  // source of truth for "has the tab appeared yet." Deliberately doesn't
+  // read ModifierManager.hasUnlock(state, 'training') -- that flag is the
+  // separate Fund Training *purchase*, gating the tab's content once
+  // it's already visible, not whether the tab exists at all. This topic
+  // is about the tab's first appearance, so it should fire the moment
+  // that's true regardless of whether the player has funded it yet.
+  training_tab_unlocked: (state) => state.completedRaids.includes('blackford_keep'),
   // autoChain isn't part of hasUnlock's own checked union (it's read
   // directly off the upgrade level elsewhere -- see QuestPanel.tsx/
   // GuildPanel.tsx), so this checks the same upgrade id GuildManager
