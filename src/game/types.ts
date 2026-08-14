@@ -1029,6 +1029,15 @@ export interface RoleDef {
   id: Role;
   name: string;
   icon?: string;
+  /**
+   * Short flavour text for what this role generally does in a raid party --
+   * shown as real, visible copy on the Hero Training tab's role cards
+   * (patch 0141), not a tooltip. Deliberately general/mechanic-agnostic
+   * rather than numeric, since Role itself carries no combat stats of its
+   * own -- it only ever affects raid party composition (RaidDef.
+   * requiredRoles) -- see Role's own comment above for that scope decision.
+   */
+  description?: string;
 }
 
 export interface UpgradeDef {
@@ -1039,7 +1048,7 @@ export interface UpgradeDef {
   costGrowth: number;
   maxLevel: number;
   modsPerLevel: Partial<Modifiers>;
-  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsMythic';
+  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training';
   /**
    * Which vendor offers this upgrade. Undefined means it's a general guild
    * upgrade with no vendor attached (unlocks like Guild Charter or Black

@@ -1903,6 +1903,33 @@
     "min": 0
   },
   {
+    "id": "upgrade.training_grounds.baseCost",
+    "label": "Training Grounds: base cost",
+    "category": "vendor_upgrades",
+    "value": 1500,
+    "default": 1500,
+    "description": "Gold cost of Training Grounds's first level (its only level -- a single unlock, same shape as Raid Charter).",
+    "min": 0
+  },
+  {
+    "id": "upgrade.training_grounds.costGrowth",
+    "label": "Training Grounds: cost growth",
+    "category": "vendor_upgrades",
+    "value": 1,
+    "default": 1,
+    "description": "Multiplier applied per level to Training Grounds's cost. Irrelevant at maxLevel 1, kept only for schema consistency with every other upgrade.",
+    "min": 1
+  },
+  {
+    "id": "upgrade.training_grounds.maxLevel",
+    "label": "Training Grounds: max level",
+    "category": "vendor_upgrades",
+    "value": 1,
+    "default": 1,
+    "description": "Level cap for Training Grounds -- a single one-time unlock, not a leveled bonus.",
+    "min": 0
+  },
+  {
     "id": "upgrade.raid_heroic_clearance.baseCost",
     "label": "Heroic Clearance: base cost",
     "category": "vendor_upgrades",

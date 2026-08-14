@@ -2,16 +2,19 @@
   {
     "id": "melee",
     "name": "Melee",
-    "icon": "roles/melee.png"
+    "icon": "roles/melee.png",
+    "description": "Fights up close, at the front of the line -- the first ones enemies reach and the last ones a formation can afford to lose."
   },
   {
     "id": "ranged",
     "name": "Ranged",
-    "icon": "roles/ranged.png"
+    "icon": "roles/ranged.png",
+    "description": "Strikes from a distance, hitting what melee can't close on in time -- flyers, casters hiding in the back, anything that punishes getting close."
   },
   {
     "id": "caster",
     "name": "Caster",
-    "icon": "roles/caster.png"
+    "icon": "roles/caster.png",
+    "description": "Channels arcane or divine power -- the answer to threats that shrug off plain steel, the undead chief among them."
   }
 ]

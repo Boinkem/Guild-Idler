@@ -149,20 +149,22 @@ const SCHEMAS = {
     file: 'roles.json',
     label: 'Roles',
     idField: 'id',
-    // Exactly 3 fixed entries (melee/ranged/caster) -- name + icon only,
-    // `id` locked to an enum dropdown (not free-slug like most schemas)
-    // since Role is a closed 3-value union in code; a free-text id here
-    // could produce an entry that doesn't match any real Role value.
-    // `icon` reuses the *existing* `picker: 'icon'` machinery equipment/
-    // consumables/crafting recipes already have (rooted at
-    // public/item-icons/, already supports subfolders) rather than
-    // inventing a new picker just for 3 icons -- icons just need to land
-    // in a new public/item-icons/roles/ subfolder. See types.ts's RoleDef
-    // and guild-idler-status.md's hero-roles backlog entry.
+    // Exactly 3 fixed entries (melee/ranged/caster) -- name + icon +
+    // description, `id` locked to an enum dropdown (not free-slug like
+    // most schemas) since Role is a closed 3-value union in code; a
+    // free-text id here could produce an entry that doesn't match any
+    // real Role value. `icon` reuses the *existing* `picker: 'icon'`
+    // machinery equipment/consumables/crafting recipes already have
+    // (rooted at public/item-icons/, already supports subfolders) rather
+    // than inventing a new picker just for 3 icons -- icons live in
+    // public/item-icons/roles/. `description` (patch 0141) is the copy
+    // shown on the Hero Training tab's role cards. See types.ts's
+    // RoleDef and guild-idler-status.md's hero-roles backlog entry.
     fields: {
       id: { type: 'enum', options: ['melee', 'ranged', 'caster'], required: true },
       name: { type: 'string', required: true },
       icon: { type: 'string', required: false, picker: 'icon' },
+      description: { type: 'string', required: false },
     },
   },
   'quest-templates': {

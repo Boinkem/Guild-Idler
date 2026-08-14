@@ -202,7 +202,7 @@ export const ModifierManager = {
     return (def?.freeRepairsPerLevel ?? 0) * level;
   },
 
-  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic'): boolean {
+  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training'): boolean {
     return Object.entries(state.upgrades).some(([id, level]) => {
       const def = UPGRADE_BY_ID[id];
       return !!def && def.unlocks === unlock && level > 0;

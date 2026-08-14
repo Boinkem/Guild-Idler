@@ -10,6 +10,7 @@ import { useCountUp } from './useCountUp';
 import { useFlyTargetRef, registerFlyTarget } from './flyTarget';
 import { QuestPanel } from './panels/QuestPanel';
 import { HeroesPanel } from './panels/HeroesPanel';
+import { TrainingPanel } from './panels/TrainingPanel';
 import { EquipmentPanel } from './panels/EquipmentPanel';
 import { VendorsPanel } from './panels/VendorsPanel';
 import { GuildPanel } from './panels/GuildPanel';
@@ -55,6 +56,7 @@ const GUILD_GROUP = {
   label: 'Guild',
   tabs: [
     { id: 'heroes', label: 'Heroes', Panel: HeroesPanel, tooltip: 'Recruit, level, and manage your roster of heroes.' },
+    { id: 'training', label: 'Training', Panel: TrainingPanel, tooltip: 'Reassign a hero\u2019s Melee/Ranged/Caster role for raid parties.' },
     { id: 'equipment', label: 'Inventory', Panel: EquipmentPanel, tooltip: 'Gear and consumables in your stash, and what each hero has equipped.' },
     { id: 'vendors', label: 'Vendors', Panel: VendorsPanel, tooltip: 'Buy from the Blacksmith, Alchemist, and Enchanter, or craft your own gear.' },
     { id: 'guild', label: 'Guild Hall', Panel: GuildPanel, tooltip: 'Facility and permanent upgrades that boost the whole guild.' },
@@ -252,17 +254,28 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
                 // Hatchery/Grimsby/Harvest are the nav entries that don't
                 // always exist -- all three hidden entirely until their
                 // own intro chain completes, rather than shown-but-locked
-                // the way e.g. Raids' own internal gating works. Every
-                // other tab id has no visibility condition at all, hence
-                // `?? true`. Harvest is the odd one out here (see
-                // GameState.harvestUnlocked's own comment) -- it's the
-                // only one of the three that could already be true for a
-                // save that predates this gate entirely, via the
-                // SaveManager migration's grandfather path rather than
-                // ever actually completing the_first_haul.
+                // the way e.g. Raids' own internal gating works. Training
+                // (patch 0142) is a fourth: hidden until Blackford Keep
+                // is cleared (the guild's first raid, "the Siege" --
+                // narratively the moment training stops being optional),
+                // derived directly from state.completedRaids rather than
+                // its own boolean flag -- completedRaids already exists
+                // and is reliable on every save, so there's no migration
+                // to write and no second source of truth to keep in sync.
+                // Once visible, it still shows a locked screen internally
+                // (a "Fund Training" purchase) same as Raids' own pattern
+                // -- see TrainingPanel.tsx. Every other tab id has no
+                // visibility condition at all, hence `?? true`. Harvest is
+                // the odd one out here (see GameState.harvestUnlocked's
+                // own comment) -- it's the only one of the three that
+                // could already be true for a save that predates this
+                // gate entirely, via the SaveManager migration's
+                // grandfather path rather than ever actually completing
+                // the_first_haul.
                 .filter((t) => (t.id === 'hatchery' ? engine.state.hatcheryUnlocked
                   : t.id === 'peddler' ? engine.state.peddlerUnlocked
-                  : t.id === 'harvest' ? engine.state.harvestUnlocked : true))
+                  : t.id === 'harvest' ? engine.state.harvestUnlocked
+                  : t.id === 'training' ? engine.state.completedRaids.includes('blackford_keep') : true))
                 .map((t) => (
                   <button
                     key={t.id}

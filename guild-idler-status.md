@@ -9444,3 +9444,82 @@ folder actually contains the three files (Vite's public-dir copy, not
 just a source-tree check); a real DevTool `/api/icons` call against an
 isolated scratch copy of `public/item-icons/` confirms the new `roles`
 folder and its three files are discovered with zero picker code changes.
+
+### Hero Training tab: role changes get a real home, gated behind Blackford Keep + a Fund Training purchase -- built (patch 0142)
+
+```discord-update
+Dev Update | Hero Training Tab
+
+- Added a new Training tab, unlocked after clearing Blackford Keep
+- Fund Training once to open it up, then reassign any hero's role from one dedicated spot
+- Each role now shows as a real card with its own art, name, and description -- no more hovering to find out what a trained role is called
+- Removed the old inline role buttons from the hero card -- role changes now live in Training
+```
+
+Follow-up to the role-icon work above, and to "Melee/Ranged/Caster Hero
+Roles -- built (patch 0135)," which left role *training* itself as a
+plain text `skin-chip` row buried in each hero's expanded card, cost and
+flavour name available only via a hover tooltip. Design worked through
+directly rather than assumed -- see this session's discussion.
+
+**Unlock, two stages, matching how the request was actually phrased.**
+1. *The tab itself* is hidden entirely from the nav until Blackford Keep
+   (`blackford_keep`, the guild's first raid) is in `completedRaids` --
+   same "hidden, not shown-but-locked" treatment Hatchery/Harvest/Grimsby
+   already get (`MenuWindow.tsx`'s nav filter), not a new boolean flag:
+   `completedRaids` already exists and is reliable on every save, so
+   there's nothing to migrate and no second source of truth. Narratively
+   framed as the guild deciding, after the siege, that a hero's role
+   shouldn't be fixed at recruitment.
+2. *Its content* is separately locked behind a new one-time purchase,
+   **Training Grounds** (`training_grounds` in `progression.ts`, 1500g,
+   maxLevel 1 -- same single-purchase shape as Raid Charter, unlocking a
+   new `'training'` flag added to `UpgradeDef.unlocks` and
+   `ModifierManager.hasUnlock`'s union). No `vendor` field, so it also
+   surfaces in Guild Hall's general-upgrades list for free the same way
+   Raid Charter does -- but the primary, intended purchase point is a
+   **"Fund Training" button built directly into the tab's own locked
+   screen** (`TrainingPanel.tsx`), calling the exact same
+   `engine.buyUpgrade('training_grounds')` action, so a player never has
+   to already know to go looking in Guild Hall for it.
+
+**The tab itself, once unlocked.** A compact roster grid (`.grid.three`,
+same tile-grid convention `HatcheryPanel`'s pet grid already uses) --
+portrait, name, and current role at a glance via the shared `RoleIcon`
+from patch 0141. Clicking a hero opens a modal with one card per Role
+(`RoleCard`, new): icon, the hero's class-specific flavour name printed
+as real, always-visible text (the actual ask -- "show the class names
+without relying on a hover-over"), the plain role name underneath, the
+new role `description` copy from `roles.json` (see below), and either an
+"Unlock"/"Swap" button at the same two-tier cost `HeroManager.roleCost`
+already computed, or a "Currently active" label if it's the hero's
+active role already. Every action here is still the exact same
+`engine.trainRole` mutation path patch 0135 built -- this is a new
+presentation layer over existing, unchanged game logic, not a new
+economy.
+
+**`roles.json` gained a `description` field** (all 3 entries, plus the
+matching DevTool schema field in `server.mjs`) -- short, mechanic-
+agnostic flavour text for what each role generally does in a raid party,
+since Role itself carries no combat stats of its own (see `Role`'s own
+comment in `types.ts` for that scope decision) and nothing previously
+described what "Ranged" or "Caster" actually meant beyond the bare word.
+
+**Old inline role row removed from `HeroesPanel.tsx`.** The `skin-chip`
+button row inside each hero's expanded card is gone -- role changes now
+live only in the Training tab, so there's exactly one place to do this
+rather than two that could drift (different cost display, different
+afford-state, etc.). Replaced with a single read-only line
+(`Role: <icon> <name> -- change it from the Training tab.`) so a player
+looking at a hero card still sees their current role and knows where to
+go, matching the collapsed-card `RoleIcon` badge patch 0141 already
+added just above it. The unused `ROLES` import that row needed is
+removed along with it.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (app + electron
+main + preload) both clean; `node --check` on both devtool files; real
+GET/POST round-trips for both `roles` and `tuning` content types against
+an isolated scratch copy of `src/game/data/json/` (so the live files
+were never touched by the server's own re-serialization), including a
+deliberate negative-validation test on the `roles` schema's still-
+required `name` field.

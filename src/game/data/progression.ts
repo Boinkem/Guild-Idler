@@ -136,6 +136,21 @@ export const UPGRADES: UpgradeDef[] = [
     modsPerLevel: {}, unlocks: 'raids',
   },
   {
+    id: 'training_grounds', name: 'Training Grounds',
+    description: "After Blackford Keep, the guild stopped treating a hero's battlefield role as fixed at recruitment. Funds a proper Training Grounds -- reassign any hero between Melee, Ranged, and Caster from one dedicated spot, instead of guessing from a class name.",
+    // No `vendor` field -- same treatment as raid_charter/guild_charter/
+    // black_market_contact just above and below: a one-time unlock, not
+    // vendor-gated stock, so it shows in GuildPanel's general upgrades
+    // list automatically. Also purchasable directly from the Training
+    // tab's own locked screen via the same buyUpgrade('training_grounds')
+    // call -- see TrainingPanel.tsx -- so a player never has to already
+    // know to look in Guild Hall for it.
+    baseCost: Tuning.get('upgrade.training_grounds.baseCost'),
+    costGrowth: Tuning.get('upgrade.training_grounds.costGrowth'),
+    maxLevel: Tuning.get('upgrade.training_grounds.maxLevel'),
+    modsPerLevel: {}, unlocks: 'training',
+  },
+  {
     id: 'raid_heroic_clearance', name: 'Heroic Clearance',
     description: 'Formal sign-off to run raids at Heroic difficulty -- harsher odds, longer expeditions, and loot worth the extra risk.',
     baseCost: Tuning.get('upgrade.raid_heroic_clearance.baseCost'),

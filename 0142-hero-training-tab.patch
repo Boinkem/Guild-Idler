@@ -1,0 +1,531 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 5c669ea..2a1de04 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -9444,3 +9444,82 @@ folder actually contains the three files (Vite's public-dir copy, not
+ just a source-tree check); a real DevTool `/api/icons` call against an
+ isolated scratch copy of `public/item-icons/` confirms the new `roles`
+ folder and its three files are discovered with zero picker code changes.
++
++### Hero Training tab: role changes get a real home, gated behind Blackford Keep + a Fund Training purchase -- built (patch 0142)
++
++```discord-update
++Dev Update | Hero Training Tab
++
++- Added a new Training tab, unlocked after clearing Blackford Keep
++- Fund Training once to open it up, then reassign any hero's role from one dedicated spot
++- Each role now shows as a real card with its own art, name, and description -- no more hovering to find out what a trained role is called
++- Removed the old inline role buttons from the hero card -- role changes now live in Training
++```
++
++Follow-up to the role-icon work above, and to "Melee/Ranged/Caster Hero
++Roles -- built (patch 0135)," which left role *training* itself as a
++plain text `skin-chip` row buried in each hero's expanded card, cost and
++flavour name available only via a hover tooltip. Design worked through
++directly rather than assumed -- see this session's discussion.
++
++**Unlock, two stages, matching how the request was actually phrased.**
++1. *The tab itself* is hidden entirely from the nav until Blackford Keep
++   (`blackford_keep`, the guild's first raid) is in `completedRaids` --
++   same "hidden, not shown-but-locked" treatment Hatchery/Harvest/Grimsby
++   already get (`MenuWindow.tsx`'s nav filter), not a new boolean flag:
++   `completedRaids` already exists and is reliable on every save, so
++   there's nothing to migrate and no second source of truth. Narratively
++   framed as the guild deciding, after the siege, that a hero's role
++   shouldn't be fixed at recruitment.
++2. *Its content* is separately locked behind a new one-time purchase,
++   **Training Grounds** (`training_grounds` in `progression.ts`, 1500g,
++   maxLevel 1 -- same single-purchase shape as Raid Charter, unlocking a
++   new `'training'` flag added to `UpgradeDef.unlocks` and
++   `ModifierManager.hasUnlock`'s union). No `vendor` field, so it also
++   surfaces in Guild Hall's general-upgrades list for free the same way
++   Raid Charter does -- but the primary, intended purchase point is a
++   **"Fund Training" button built directly into the tab's own locked
++   screen** (`TrainingPanel.tsx`), calling the exact same
++   `engine.buyUpgrade('training_grounds')` action, so a player never has
++   to already know to go looking in Guild Hall for it.
++
++**The tab itself, once unlocked.** A compact roster grid (`.grid.three`,
++same tile-grid convention `HatcheryPanel`'s pet grid already uses) --
++portrait, name, and current role at a glance via the shared `RoleIcon`
++from patch 0141. Clicking a hero opens a modal with one card per Role
++(`RoleCard`, new): icon, the hero's class-specific flavour name printed
++as real, always-visible text (the actual ask -- "show the class names
++without relying on a hover-over"), the plain role name underneath, the
++new role `description` copy from `roles.json` (see below), and either an
++"Unlock"/"Swap" button at the same two-tier cost `HeroManager.roleCost`
++already computed, or a "Currently active" label if it's the hero's
++active role already. Every action here is still the exact same
++`engine.trainRole` mutation path patch 0135 built -- this is a new
++presentation layer over existing, unchanged game logic, not a new
++economy.
++
++**`roles.json` gained a `description` field** (all 3 entries, plus the
++matching DevTool schema field in `server.mjs`) -- short, mechanic-
++agnostic flavour text for what each role generally does in a raid party,
++since Role itself carries no combat stats of its own (see `Role`'s own
++comment in `types.ts` for that scope decision) and nothing previously
++described what "Ranged" or "Caster" actually meant beyond the bare word.
++
++**Old inline role row removed from `HeroesPanel.tsx`.** The `skin-chip`
++button row inside each hero's expanded card is gone -- role changes now
++live only in the Training tab, so there's exactly one place to do this
++rather than two that could drift (different cost display, different
++afford-state, etc.). Replaced with a single read-only line
++(`Role: <icon> <name> -- change it from the Training tab.`) so a player
++looking at a hero card still sees their current role and knows where to
++go, matching the collapsed-card `RoleIcon` badge patch 0141 already
++added just above it. The unused `ROLES` import that row needed is
++removed along with it.
++
++**Verified:** `npx tsc --noEmit` and a full `vite build` (app + electron
++main + preload) both clean; `node --check` on both devtool files; real
++GET/POST round-trips for both `roles` and `tuning` content types against
++an isolated scratch copy of `src/game/data/json/` (so the live files
++were never touched by the server's own re-serialization), including a
++deliberate negative-validation test on the `roles` schema's still-
++required `name` field.
+diff --git a/src/game/data/json/roles.json b/src/game/data/json/roles.json
+index 5fc0fbb..de31e0a 100644
+--- a/src/game/data/json/roles.json
++++ b/src/game/data/json/roles.json
+@@ -2,16 +2,19 @@
+   {
+     "id": "melee",
+     "name": "Melee",
+-    "icon": "roles/melee.png"
++    "icon": "roles/melee.png",
++    "description": "Fights up close, at the front of the line -- the first ones enemies reach and the last ones a formation can afford to lose."
+   },
+   {
+     "id": "ranged",
+     "name": "Ranged",
+-    "icon": "roles/ranged.png"
++    "icon": "roles/ranged.png",
++    "description": "Strikes from a distance, hitting what melee can't close on in time -- flyers, casters hiding in the back, anything that punishes getting close."
+   },
+   {
+     "id": "caster",
+     "name": "Caster",
+-    "icon": "roles/caster.png"
++    "icon": "roles/caster.png",
++    "description": "Channels arcane or divine power -- the answer to threats that shrug off plain steel, the undead chief among them."
+   }
+ ]
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 21e6093..eab42d8 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -1902,6 +1902,33 @@
+     "description": "Level cap for Raid Charter.",
+     "min": 0
+   },
++  {
++    "id": "upgrade.training_grounds.baseCost",
++    "label": "Training Grounds: base cost",
++    "category": "vendor_upgrades",
++    "value": 1500,
++    "default": 1500,
++    "description": "Gold cost of Training Grounds's first level (its only level -- a single unlock, same shape as Raid Charter).",
++    "min": 0
++  },
++  {
++    "id": "upgrade.training_grounds.costGrowth",
++    "label": "Training Grounds: cost growth",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Multiplier applied per level to Training Grounds's cost. Irrelevant at maxLevel 1, kept only for schema consistency with every other upgrade.",
++    "min": 1
++  },
++  {
++    "id": "upgrade.training_grounds.maxLevel",
++    "label": "Training Grounds: max level",
++    "category": "vendor_upgrades",
++    "value": 1,
++    "default": 1,
++    "description": "Level cap for Training Grounds -- a single one-time unlock, not a leveled bonus.",
++    "min": 0
++  },
+   {
+     "id": "upgrade.raid_heroic_clearance.baseCost",
+     "label": "Heroic Clearance: base cost",
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 784d635..0f4dd75 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -135,6 +135,21 @@ export const UPGRADES: UpgradeDef[] = [
+     maxLevel: Tuning.get('upgrade.raid_charter.maxLevel'),
+     modsPerLevel: {}, unlocks: 'raids',
+   },
++  {
++    id: 'training_grounds', name: 'Training Grounds',
++    description: "After Blackford Keep, the guild stopped treating a hero's battlefield role as fixed at recruitment. Funds a proper Training Grounds -- reassign any hero between Melee, Ranged, and Caster from one dedicated spot, instead of guessing from a class name.",
++    // No `vendor` field -- same treatment as raid_charter/guild_charter/
++    // black_market_contact just above and below: a one-time unlock, not
++    // vendor-gated stock, so it shows in GuildPanel's general upgrades
++    // list automatically. Also purchasable directly from the Training
++    // tab's own locked screen via the same buyUpgrade('training_grounds')
++    // call -- see TrainingPanel.tsx -- so a player never has to already
++    // know to look in Guild Hall for it.
++    baseCost: Tuning.get('upgrade.training_grounds.baseCost'),
++    costGrowth: Tuning.get('upgrade.training_grounds.costGrowth'),
++    maxLevel: Tuning.get('upgrade.training_grounds.maxLevel'),
++    modsPerLevel: {}, unlocks: 'training',
++  },
+   {
+     id: 'raid_heroic_clearance', name: 'Heroic Clearance',
+     description: 'Formal sign-off to run raids at Heroic difficulty -- harsher odds, longer expeditions, and loot worth the extra risk.',
+diff --git a/src/game/managers/ModifierManager.ts b/src/game/managers/ModifierManager.ts
+index 6469be9..5311cf9 100644
+--- a/src/game/managers/ModifierManager.ts
++++ b/src/game/managers/ModifierManager.ts
+@@ -202,7 +202,7 @@ export const ModifierManager = {
+     return (def?.freeRepairsPerLevel ?? 0) * level;
+   },
+ 
+-  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic'): boolean {
++  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training'): boolean {
+     return Object.entries(state.upgrades).some(([id, level]) => {
+       const def = UPGRADE_BY_ID[id];
+       return !!def && def.unlocks === unlock && level > 0;
+diff --git a/src/game/types.ts b/src/game/types.ts
+index f33559f..8b6359c 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -1029,6 +1029,15 @@ export interface RoleDef {
+   id: Role;
+   name: string;
+   icon?: string;
++  /**
++   * Short flavour text for what this role generally does in a raid party --
++   * shown as real, visible copy on the Hero Training tab's role cards
++   * (patch 0141), not a tooltip. Deliberately general/mechanic-agnostic
++   * rather than numeric, since Role itself carries no combat stats of its
++   * own -- it only ever affects raid party composition (RaidDef.
++   * requiredRoles) -- see Role's own comment above for that scope decision.
++   */
++  description?: string;
+ }
+ 
+ export interface UpgradeDef {
+@@ -1039,7 +1048,7 @@ export interface UpgradeDef {
+   costGrowth: number;
+   maxLevel: number;
+   modsPerLevel: Partial<Modifiers>;
+-  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsMythic';
++  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training';
+   /**
+    * Which vendor offers this upgrade. Undefined means it's a general guild
+    * upgrade with no vendor attached (unlocks like Guild Charter or Black
+diff --git a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+index 5a642a9..12198bc 100644
+--- a/src/ui/MenuWindow.tsx
++++ b/src/ui/MenuWindow.tsx
+@@ -10,6 +10,7 @@ import { useCountUp } from './useCountUp';
+ import { useFlyTargetRef, registerFlyTarget } from './flyTarget';
+ import { QuestPanel } from './panels/QuestPanel';
+ import { HeroesPanel } from './panels/HeroesPanel';
++import { TrainingPanel } from './panels/TrainingPanel';
+ import { EquipmentPanel } from './panels/EquipmentPanel';
+ import { VendorsPanel } from './panels/VendorsPanel';
+ import { GuildPanel } from './panels/GuildPanel';
+@@ -55,6 +56,7 @@ const GUILD_GROUP = {
+   label: 'Guild',
+   tabs: [
+     { id: 'heroes', label: 'Heroes', Panel: HeroesPanel, tooltip: 'Recruit, level, and manage your roster of heroes.' },
++    { id: 'training', label: 'Training', Panel: TrainingPanel, tooltip: 'Reassign a hero\u2019s Melee/Ranged/Caster role for raid parties.' },
+     { id: 'equipment', label: 'Inventory', Panel: EquipmentPanel, tooltip: 'Gear and consumables in your stash, and what each hero has equipped.' },
+     { id: 'vendors', label: 'Vendors', Panel: VendorsPanel, tooltip: 'Buy from the Blacksmith, Alchemist, and Enchanter, or craft your own gear.' },
+     { id: 'guild', label: 'Guild Hall', Panel: GuildPanel, tooltip: 'Facility and permanent upgrades that boost the whole guild.' },
+@@ -252,17 +254,28 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+                 // Hatchery/Grimsby/Harvest are the nav entries that don't
+                 // always exist -- all three hidden entirely until their
+                 // own intro chain completes, rather than shown-but-locked
+-                // the way e.g. Raids' own internal gating works. Every
+-                // other tab id has no visibility condition at all, hence
+-                // `?? true`. Harvest is the odd one out here (see
+-                // GameState.harvestUnlocked's own comment) -- it's the
+-                // only one of the three that could already be true for a
+-                // save that predates this gate entirely, via the
+-                // SaveManager migration's grandfather path rather than
+-                // ever actually completing the_first_haul.
++                // the way e.g. Raids' own internal gating works. Training
++                // (patch 0142) is a fourth: hidden until Blackford Keep
++                // is cleared (the guild's first raid, "the Siege" --
++                // narratively the moment training stops being optional),
++                // derived directly from state.completedRaids rather than
++                // its own boolean flag -- completedRaids already exists
++                // and is reliable on every save, so there's no migration
++                // to write and no second source of truth to keep in sync.
++                // Once visible, it still shows a locked screen internally
++                // (a "Fund Training" purchase) same as Raids' own pattern
++                // -- see TrainingPanel.tsx. Every other tab id has no
++                // visibility condition at all, hence `?? true`. Harvest is
++                // the odd one out here (see GameState.harvestUnlocked's
++                // own comment) -- it's the only one of the three that
++                // could already be true for a save that predates this
++                // gate entirely, via the SaveManager migration's
++                // grandfather path rather than ever actually completing
++                // the_first_haul.
+                 .filter((t) => (t.id === 'hatchery' ? engine.state.hatcheryUnlocked
+                   : t.id === 'peddler' ? engine.state.peddlerUnlocked
+-                  : t.id === 'harvest' ? engine.state.harvestUnlocked : true))
++                  : t.id === 'harvest' ? engine.state.harvestUnlocked
++                  : t.id === 'training' ? engine.state.completedRaids.includes('blackford_keep') : true))
+                 .map((t) => (
+                   <button
+                     key={t.id}
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index fd24580..cf41781 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -7,7 +7,7 @@ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { PrestigeManager } from '../../game/managers/PrestigeManager';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { rerollsUsedToday } from '../../game/data/reroll';
+-import { HERO_CLASSES, RECRUIT_COST, SKINS, ROLES, infirmaryAutoReviveUnlocked, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
++import { HERO_CLASSES, RECRUIT_COST, SKINS, infirmaryAutoReviveUnlocked, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
+ import { Tuning } from '../../game/data/tuning';
+ import { HeroClass, Hero, Stats } from '../../game/types';
+ import { describeMods, formatDuration, formatGold, HOUR } from '../../game/util';
+@@ -419,26 +419,9 @@ export function HeroesPanel() {
+                   {' '}{hero.questsCompleted} quests completed ·
+                   {' '}{hero.status === 'fallen' ? 'Fallen' : (hero.status === 'questing' ? 'away on a quest' : 'at the guild')}
+                 </p>
+-
+-                <div className="row wrap" style={{ marginTop: 6, alignItems: 'center' }}>
+-                  <span className="tiny muted">Role (raid parties only):</span>
+-                  {ROLES.map((roleDef) => {
+-                    const unlocked = HeroManager.unlockedRoles(hero).includes(roleDef.id);
+-                    const active = HeroManager.activeRole(hero) === roleDef.id;
+-                    const cost = HeroManager.roleCost(hero, roleDef.id);
+-                    return (
+-                      <button
+-                        key={roleDef.id}
+-                        className={`skin-chip ${active ? 'on' : ''}`}
+-                        disabled={active || state.gold < cost}
+-                        title={active ? undefined : `Train as ${classDef.roleFlavors[roleDef.id]} -- ${unlocked ? 'swap' : 'unlock'} for ${formatGold(cost)}`}
+-                        onClick={() => engine.trainRole(hero.id, roleDef.id)}
+-                      >
+-                        {roleDef.name}{!active && ` · ${formatGold(cost)}`}
+-                      </button>
+-                    );
+-                  })}
+-                </div>
++                <p className="tiny muted" style={{ marginTop: 2 }}>
++                  Role: <RoleIcon role={HeroManager.activeRole(hero)} size={13} /> {HeroManager.roleDisplayName(hero)} -- change it from the Training tab.
++                </p>
+ 
+                 <div className="row wrap" style={{ marginTop: 6, alignItems: 'center' }}>
+                   <span className="tiny muted">Livery:</span>
+diff --git a/src/ui/panels/TrainingPanel.tsx b/src/ui/panels/TrainingPanel.tsx
+new file mode 100644
+index 0000000..bb89f30
+--- /dev/null
++++ b/src/ui/panels/TrainingPanel.tsx
+@@ -0,0 +1,167 @@
++import { useState } from 'react';
++import { useEngine } from '../useEngine';
++import { GuildManager } from '../../game/managers/GuildManager';
++import { HeroManager } from '../../game/managers/HeroManager';
++import { ModifierManager } from '../../game/managers/ModifierManager';
++import { HERO_CLASSES, ROLES } from '../../game/data/progression';
++import { Hero, Role } from '../../game/types';
++import { formatGold } from '../../game/util';
++import { HeroSprite } from '../sprites/HeroSprite';
++import { RoleIcon } from '../RoleIcon';
++
++/**
++ * One role card per Role inside the training modal -- the "richer, card
++ * per role with art/description" treatment requested directly, replacing
++ * the plain text `skin-chip` row this used to be (see HeroesPanel.tsx,
++ * patch 0135 through 0141). Unlike that old row, the class-specific
++ * flavour name (e.g. a Melee Wizard's "Arcane Swordster") is printed here
++ * as real visible copy, not stuffed into a `title` tooltip -- the whole
++ * point of moving this into its own dedicated spot.
++ */
++function RoleCard({ hero, role, active }: { hero: Hero; role: Role; active: boolean }) {
++  const engine = useEngine();
++  const state = engine.state;
++  const classDef = HERO_CLASSES[hero.heroClass];
++  const unlocked = HeroManager.unlockedRoles(hero).includes(role);
++  const cost = HeroManager.roleCost(hero, role);
++  const flavorName = classDef?.roleFlavors[role] ?? role;
++
++  return (
++    <div
++      className="card"
++      style={{
++        flex: '1 1 170px', minWidth: 170, marginBottom: 0, textAlign: 'center',
++        borderColor: active ? 'var(--moss)' : undefined,
++      }}
++    >
++      <RoleIcon role={role} size={56} />
++      <div className="card-title" style={{ marginTop: 6 }}>{flavorName}</div>
++      <p className="tiny muted" style={{ margin: '2px 0 0' }}>{ROLE_LABEL[role]}</p>
++      <p className="tiny" style={{ marginTop: 6, minHeight: '2.4em' }}>
++        {ROLE_DESCRIPTION[role]}
++      </p>
++      {active ? (
++        <p className="tiny good" style={{ marginTop: 10, fontWeight: 700 }}>Currently active</p>
++      ) : (
++        <button
++          className="btn-primary"
++          style={{ marginTop: 10, width: '100%' }}
++          disabled={state.gold < cost}
++          onClick={() => engine.trainRole(hero.id, role)}
++        >
++          {unlocked ? 'Swap' : 'Unlock'} · {formatGold(cost)}
++        </button>
++      )}
++    </div>
++  );
++}
++
++// Pulled from ROLES/roles.json rather than hardcoded, but indexed here
++// once per render pass so RoleCard doesn't re-derive ROLE_BY_ID lookups
++// three times over -- roles.json is exactly 3 fixed entries (see its own
++// DevTool schema comment), so a plain Record is fine, no need for the
++// heavier ROLE_BY_ID machinery RaidsPanel uses for arbitrary raid data.
++const ROLE_LABEL: Record<Role, string> = Object.fromEntries(ROLES.map((r) => [r.id, r.name])) as Record<Role, string>;
++const ROLE_DESCRIPTION: Record<Role, string> = Object.fromEntries(
++  ROLES.map((r) => [r.id, r.description ?? '']),
++) as Record<Role, string>;
++
++function TrainingModal({ hero, onClose }: { hero: Hero; onClose: () => void }) {
++  const classDef = HERO_CLASSES[hero.heroClass];
++  const activeRole = HeroManager.activeRole(hero);
++  return (
++    <div className="overlay" onClick={onClose}>
++      <div className="modal" style={{ maxWidth: 620 }} onClick={(e) => e.stopPropagation()}>
++        <h3>{hero.name}</h3>
++        <p className="tiny muted" style={{ marginTop: 2 }}>
++          {classDef?.name ?? hero.heroClass} · Level {hero.level} -- choose a battlefield role for raid parties.
++        </p>
++        <div className="row wrap" style={{ gap: 10, marginTop: 12 }}>
++          {ROLES.map((roleDef) => (
++            <RoleCard key={roleDef.id} hero={hero} role={roleDef.id} active={activeRole === roleDef.id} />
++          ))}
++        </div>
++        <div className="row end" style={{ marginTop: 14 }}>
++          <button className="btn-ghost" onClick={onClose}>Close</button>
++        </div>
++      </div>
++    </div>
++  );
++}
++
++/**
++ * A compact roster tile -- portrait, name, and current role at a glance,
++ * click to open TrainingModal. Deliberately just a picker into the modal
++ * above, not a second full roster view: HeroesPanel stays the one place
++ * to actually manage a hero (level, gear, skins, health) per the scope
++ * decision this tab was built under -- see guild-idler-status.md.
++ */
++function HeroTile({ hero, onClick }: { hero: Hero; onClick: () => void }) {
++  return (
++    <div className="card" role="button" tabIndex={0} style={{ marginBottom: 0, textAlign: 'center', cursor: 'pointer' }}
++      onClick={onClick}
++      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
++    >
++      <HeroSprite heroClass={hero.heroClass} skin={hero.skin} height={48} />
++      <div className="tiny" style={{ marginTop: 4, fontWeight: 700 }}>{hero.name}</div>
++      <div className="tiny muted">
++        <RoleIcon role={HeroManager.activeRole(hero)} size={12} /> {HeroManager.roleDisplayName(hero)}
++      </div>
++    </div>
++  );
++}
++
++export function TrainingPanel() {
++  const engine = useEngine();
++  const state = engine.state;
++  const hasTraining = ModifierManager.hasUnlock(state, 'training');
++  const [selectedHeroId, setSelectedHeroId] = useState<string | null>(null);
++  const selectedHero = state.heroes.find((h) => h.id === selectedHeroId) ?? null;
++
++  // Same "hidden entirely, not shown-but-locked" nav gate as Hatchery/
++  // Harvest/Grimsby (see MenuWindow.tsx's own filter comment) already
++  // keeps this tab off the nav bar before Blackford Keep is cleared, so
++  // reaching this component at all means that condition is already met
++  // -- what's left to gate here is purely the Training Grounds purchase.
++  if (!hasTraining) {
++    const cost = GuildManager.nextUpgradeCost(state, 'training_grounds');
++    return (
++      <>
++        <h2>Training</h2>
++        <p className="subtitle">Reassign a hero's battlefield role -- Melee, Ranged, or Caster.</p>
++        <div className="card" style={{ marginTop: 12 }}>
++          <p className="card-flavour" style={{ fontStyle: 'normal' }}>
++            After Blackford Keep, the guild stopped treating a hero's role as fixed at recruitment.
++            Fund a Training Grounds to open a dedicated spot for reassigning it -- no more guessing
++            from a class name.
++          </p>
++          <button
++            className="btn-primary"
++            style={{ marginTop: 10 }}
++            disabled={cost === null || state.gold < cost}
++            onClick={() => engine.buyUpgrade('training_grounds')}
++          >
++            Fund Training · {cost !== null ? formatGold(cost) : 'unavailable'}
++          </button>
++        </div>
++      </>
++    );
++  }
++
++  return (
++    <>
++      <h2>Training</h2>
++      <p className="subtitle">Click a hero to see their available roles.</p>
++      {state.heroes.length === 0 ? (
++        <p className="small muted" style={{ marginTop: 8 }}>No heroes recruited yet.</p>
++      ) : (
++        <div className="grid three" style={{ marginTop: 10 }}>
++          {state.heroes.map((hero) => (
++            <HeroTile key={hero.id} hero={hero} onClick={() => setSelectedHeroId(hero.id)} />
++          ))}
++        </div>
++      )}
++      {selectedHero && <TrainingModal hero={selectedHero} onClose={() => setSelectedHeroId(null)} />}
++    </>
++  );
++}
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 03f2af1..e595c22 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -149,20 +149,22 @@ const SCHEMAS = {
+     file: 'roles.json',
+     label: 'Roles',
+     idField: 'id',
+-    // Exactly 3 fixed entries (melee/ranged/caster) -- name + icon only,
+-    // `id` locked to an enum dropdown (not free-slug like most schemas)
+-    // since Role is a closed 3-value union in code; a free-text id here
+-    // could produce an entry that doesn't match any real Role value.
+-    // `icon` reuses the *existing* `picker: 'icon'` machinery equipment/
+-    // consumables/crafting recipes already have (rooted at
+-    // public/item-icons/, already supports subfolders) rather than
+-    // inventing a new picker just for 3 icons -- icons just need to land
+-    // in a new public/item-icons/roles/ subfolder. See types.ts's RoleDef
+-    // and guild-idler-status.md's hero-roles backlog entry.
++    // Exactly 3 fixed entries (melee/ranged/caster) -- name + icon +
++    // description, `id` locked to an enum dropdown (not free-slug like
++    // most schemas) since Role is a closed 3-value union in code; a
++    // free-text id here could produce an entry that doesn't match any
++    // real Role value. `icon` reuses the *existing* `picker: 'icon'`
++    // machinery equipment/consumables/crafting recipes already have
++    // (rooted at public/item-icons/, already supports subfolders) rather
++    // than inventing a new picker just for 3 icons -- icons live in
++    // public/item-icons/roles/. `description` (patch 0141) is the copy
++    // shown on the Hero Training tab's role cards. See types.ts's
++    // RoleDef and guild-idler-status.md's hero-roles backlog entry.
+     fields: {
+       id: { type: 'enum', options: ['melee', 'ranged', 'caster'], required: true },
+       name: { type: 'string', required: true },
+       icon: { type: 'string', required: false, picker: 'icon' },
++      description: { type: 'string', required: false },
+     },
+   },
+   'quest-templates': {
