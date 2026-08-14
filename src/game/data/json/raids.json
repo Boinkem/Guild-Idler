@@ -19,6 +19,9 @@
     "description": "Something has been raising the dead again -- not one or two this time, but by the vaultful, row after row of them. Whatever's sealed inside is worth enough that a company of risen guards is still defending it centuries later, without pay, without rest, without ever once questioning the order. This isn't a job for one hero. Bring the whole guild.",
     "epilogue": "The vault held, in the end, for whoever the guild actually turned out to be. What was raised here has gone quiet again -- for now. Whatever tore open a road between the dead and the living to make this happen in the first place is still out there somewhere, and none of this so much as slowed it down.",
     "reqLevel": 22,
+    "requiredRoles": {
+      "caster": 1
+    },
     "encounterIds": [
       "bonewrought_outer_wardens",
       "bonewrought_choir_of_bones",
@@ -32,6 +35,11 @@
     "description": "The road the archive spoke of has no fixed heading and never did -- it opens for whoever means to walk it in a dying pilgrim's place, and closes the moment they stop meaning it. It has opened for this guild. Every guild that has taken this same walk before them left something behind to prove it: banners, hulls, ritual circles abandoned mid-rite, scattered across a shore that shouldn't exist on any chart and doesn't need to. Whatever's waiting at the end of that walk hasn't been walked in a very long time, and it does not entirely remember why anyone stopped.",
     "epilogue": "There is a difference between winning and being the one left standing when it is over. What the guild did at the end of that road wasn't a fight in the way every other fight has been a fight -- it was the last mile, walked the hard way, for something too far gone to make it easy. The guild is still deciding what to call that.",
     "reqLevel": 55,
+    "requiredRoles": {
+      "melee": 2,
+      "ranged": 2,
+      "caster": 2
+    },
     "encounterIds": [
       "last_god_field_of_failed_guilds",
       "last_god_silence_where_prayer_used_to_work",
@@ -46,6 +54,9 @@
     "description": "Something has been nesting in the high passes for longer than anyone noticed -- long enough to stop being one dragon and start being a brood. What used to be watched for avalanches gets watched for wings now, and lately there have been considerably more wings than there used to be.",
     "epilogue": "The brood is gone, and the ice it nested in is already creeping back over what's left of it -- which is, if nothing else, a tidier ending than Emberfell got. Nothing sings about a mountain that quietly stops being a problem. It just stops.",
     "reqLevel": 18,
+    "requiredRoles": {
+      "ranged": 1
+    },
     "encounterIds": [
       "wyrmkeep_hatchling_brood",
       "wyrmkeep_wyrm_keepers",
@@ -60,6 +71,10 @@
     "description": "The demon lord is gone, but the fortress he held is still standing empty -- gate broken, wards down, nobody left to guard whatever else might want it. Word reached the guild slowly: something else moved in behind him, in the confusion, and it isn't interested in ruling anything. It's using the ruin exactly the way it's always wanted to -- as somewhere quiet enough to finish a working nobody's stopped it from starting.",
     "epilogue": "The breach didn't open -- not all the way, not this time. What was trying to open it scattered the moment the guild reached the chamber, which either means it was never as unified as it looked, or means whatever's on the other side isn't done trying. Either way, the fortress is finally, actually empty. The guild isn't taking bets on how long that lasts.",
     "reqLevel": 26,
+    "requiredRoles": {
+      "melee": 1,
+      "caster": 1
+    },
     "encounterIds": [
       "gotout_trail_gone_cold",
       "gotout_the_last_loyal",
@@ -74,6 +89,10 @@
     "description": "A stretch of the eastern ridge has gone black with soot and quiet with fear -- something's nested up there, brought a whole clutch with it, and doesn't intend to be a passing problem the way most dragon sightings turn out to be.",
     "epilogue": "The nest is ash and empty shell now, the brood mother's watch finally over. Whatever drew her to that ridge in the first place is still a mystery nobody's especially eager to go looking for -- for now, the mountain's quiet again, and that's enough.",
     "reqLevel": 30,
+    "requiredRoles": {
+      "melee": 1,
+      "ranged": 1
+    },
     "encounterIds": [
       "blackdragon_the_keepers",
       "blackdragon_the_hatchlings",
@@ -87,6 +106,9 @@
     "description": "The ossuary the guild traced the lich to isn't a hideout so much as a workshop -- generations of the dead, sorted, stored, and put to use, all in service of a ritual that was never about raising an army in the first place.",
     "epilogue": "The lich is gone, his phylactery in pieces, and whatever he was trying to reach on the other side of that ritual didn't get through -- not this time. The guild is treating this as a delay, not an ending; something was listening on the other end of that ritual, and it's very unlikely to have forgotten the attempt.",
     "reqLevel": 41,
+    "requiredRoles": {
+      "caster": 2
+    },
     "requiresChainId": "hunt_a_lich",
     "encounterIds": [
       "hob_the_marrow_eater",
@@ -101,6 +123,11 @@
     "description": "There is no approach, no outer ring of guards, no lesser threat to clear first -- just a long walk down into the dark and, at the end of it, the thing itself, already aware the guild is coming and entirely unbothered by the fact.",
     "epilogue": "The Loom doesn't scream when it finally comes apart -- it just goes quiet, one borrowed voice at a time, until there's nothing left speaking through Millbrook at all. The town will need a long time to remember how to answer a question honestly again. That's a problem for people who aren't the guild to solve now.",
     "reqLevel": 43,
+    "requiredRoles": {
+      "melee": 1,
+      "ranged": 1,
+      "caster": 1
+    },
     "requiresChainId": "the_loom_beneath",
     "encounterIds": [
       "loom_the_presiding_intelligence"

@@ -454,6 +454,8 @@ function RaidDetailModal({
                   .filter((h): h is Hero => !!h);
                 const counts = RaidManager.partyRoleCounts(previewHeroes);
                 const penalty = RaidManager.roleMismatchPenalty(previewHeroes, raid.requiredRoles);
+                const mismatched = RaidManager.hasRoleMismatch(previewHeroes, raid.requiredRoles);
+                const cap = cfg.roleMismatchCap;
                 return (
                   <div style={{ marginTop: 6, marginBottom: 6 }}>
                     <div className="row" style={{ gap: 8 }}>
@@ -464,6 +466,11 @@ function RaidDetailModal({
                     {penalty > 0 && (
                       <p className="tiny bad" style={{ marginTop: 4 }}>
                         Role mix unmet -- {'-'}{penalty}% success this run until it's covered.
+                      </p>
+                    )}
+                    {mismatched && cap != null && (
+                      <p className="tiny bad" style={{ marginTop: 2 }}>
+                        Success can't rise above {cap}% at {difficulty[0].toUpperCase()}{difficulty.slice(1)} while unmet, no matter how strong the party is.
                       </p>
                     )}
                   </div>

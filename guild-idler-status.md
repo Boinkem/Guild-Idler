@@ -9258,3 +9258,128 @@ resize fix above applies (can't drive an actual multi-display Electron
 session in this environment), so this is a code-path/logic-level
 verification, not a live on-screen one.
 
+### Raid role requirements: Heroic/Mythic success ceiling, per-raid data, and a Tuning tab data-integrity fix -- built (patch 0140)
+
+```discord-update
+Dev Update | Raid Role Requirements
+
+- Added role requirements to all 8 raids, matching each raid's theme
+- Bringing the wrong party still works, but odds drop further the more roles you're missing
+- On Heroic and Mythic, an unmet role requirement now caps how high your odds can go, no matter how strong the party is
+- Fixed the DevTool's Tuning tab, which couldn't save at all due to 28 pre-existing entries missing required data
+```
+
+Follow-up to "Melee/Ranged/Caster Hero Roles -- built (patch 0135)," which
+shipped the full role/training/mismatch-penalty infrastructure but
+deliberately left every raid's `requiredRoles` empty as a balance
+decision for later. This patch is that balance decision, plus a design
+change to how the mismatch behaves at higher difficulty, worked through
+directly with the requester rather than assumed.
+
+**The existing subtractive penalty is unchanged and still the base
+mechanism.** `RaidManager.roleMismatchPenalty` still sums `max(0, needed
+- have)` across every required role and multiplies by
+`Tuning.get('raid.roleMismatchPenaltyPerSlot')` (default 8) -- e.g. a
+raid wanting `{melee: 2, caster: 1}` against a party with 0 melee, 1
+caster is 2 unmet slots, a 16-point subtraction from whatever the
+party's gear/level would otherwise have computed. Confirmed this already
+scales correctly with however many slots are unmet and can only ever
+subtract, never add -- no change needed there.
+
+**New: a Heroic/Mythic-only success ceiling, layered on top of the
+existing penalty, not a replacement for it.** `RaidDifficultyConfig`
+gains an optional `roleMismatchCap` (`types.ts`) -- undefined on Normal,
+so a mismatched Normal party still only eats the ordinary subtraction and
+can climb back to `MAX_SUCCESS` (95) on gear/level alone, same as before
+this existed. Heroic and Mythic read theirs from two new tuning entries
+(`raid_difficulty.heroic.roleMismatchCap` = 65,
+`raid_difficulty.mythic.roleMismatchCap` = 45 -- Mythic deliberately
+lower, same relationship its `successPenalty` already has), wired into
+`RAID_DIFFICULTIES` in `raids.ts` the same way successPenalty/
+lootBonus/durationMultiplier already are. A new `RaidManager.
+hasRoleMismatch` boolean (kept deliberately separate from
+`roleMismatchPenalty`'s point value, so the cap still engages even if
+someone tunes the per-slot penalty down to 0) gates it: once a party is
+missing any required slot, Heroic/Mythic success can't rise above the
+cap no matter how far over gear/level would otherwise push it. Applied
+identically in `previewEncounterSuccess` (the UI's live odds) and in
+`resolve`'s actual per-encounter roll, so the number the player sees
+before committing is never better than what they'll actually get.
+
+**Confirmed and preserved: role mismatch is evaluated once per raid, not
+per encounter.** `active.partySuccessBonus` (which already has
+`roleMismatchPenalty` folded in) gets computed once at `start()` and
+reused for every encounter in `resolve()`'s loop -- the party can't
+change mid-raid, so there was never a reason to re-derive this per
+encounter. The new `hasRoleMismatch` cap check follows the same pattern:
+computed once before `resolve()`'s encounter loop, not inside it.
+
+**`requiredRoles` populated on all 8 raids** (`raids.json`) -- data-only,
+fully DevTool-editable going forward (the field type already existed as
+of patch 0135's schema work; no new DevTool code needed). Thematic,
+scaling with level, and deliberately kept small enough to be achievable
+at Normal's 3-hero party size for every raid except the capstone:
+
+- Blackford Keep (8): none -- first raid, teaches the raid system itself
+  before layering role complexity on top
+- Frozen Wyrmkeep (18): ranged 1 -- anti-air against a dragon brood
+- Bonewrought Vault (22): caster 1 -- an undead horde
+- What Got Out (26): melee 1, caster 1
+- Black Dragon Nest (30): melee 1, ranged 1
+- House of Bones (41): caster 2 -- a lich's ritual
+- Silence the Loom (43): melee 1, ranged 1, caster 1 -- one straight boss
+  fight, no lesser threats to clear first, wants a genuinely balanced
+  party
+- Requiem for the Last God (55, capstone): melee 2, ranged 2, caster 2 --
+  deliberately exceeds what a Normal 3-hero party can ever fully satisfy
+  (needs 6 of 6 slots specifically filled); the true capstone is meant to
+  demand an actual Heroic/Mythic-sized roster, not just a leveled-up trio.
+  These are starting points, not final balance -- easy to retune per-raid
+  in the DevTool's Raids tab now that the infrastructure and the data are
+  both in place.
+
+**UI:** `RaidsPanel`'s existing role-mismatch warning line (from 0135)
+now sits alongside a second line when the party is both mismatched and
+at Heroic/Mythic, naming the actual cap ("Success can't rise above 65%
+at Heroic while unmet, no matter how strong the party is") rather than
+leaving the ceiling invisible until the player notices their preview
+number won't move.
+
+**Found and fixed along the way, not part of the original ask: the
+DevTool's Tuning tab could not save at all.** A real POST round-trip
+against the running devtool server (same verification convention 0135
+established) failed with 28 validation errors, all `"description" is
+required` -- every field belonging to 7 vendor-upgrade tuning groups
+(Smith's Discount, Bulk Scrapper, Apothecary's Discount, Arcane Discount,
+and the three Trade Favor variants: Blacksmith/Alchemist/Enchanter) was
+missing its required `description` string. This meant any edit to
+*any* tuning value, anywhere in the file, would have failed validation
+on save -- a real, pre-existing, full-tab-blocking bug, not something
+this patch introduced. Filled in all 28 with descriptions matching the
+exact phrasing convention every sibling `upgrade.*` entry already uses
+("Gold cost of X's first level.", "Multiplier applied per level to X's
+cost.", "Level cap for X.", "X's [effect] per level."). Re-verified with
+a real POST round-trip (against an isolated scratch copy of the data
+directory, not the live file, specifically to avoid the JSON
+re-serialization side effect described next) -- 368/368 entries save
+clean, and a deliberate negative test (stripping one entry's description
+back out) is correctly rejected.
+
+**A rough edge caught during that same verification, not left in the
+final diff -- same class of issue patch 0135 flagged before it, worth
+repeating the caution:** running the actual repo's `tuning.json` through
+a real server POST round-trip silently normalizes bare-float values like
+`2.0` to `2` (plain JS `JSON.stringify` behavior, harmless numerically,
+but an unrelated diff nobody asked for). Caught by diffing before
+finalizing; the description fields were instead inserted via direct
+targeted text edits against the original file, and all round-trip
+*verification* was performed against an isolated scratch copy of the
+data directory so the real file was never touched by the server's own
+save path at all.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` both clean;
+`node --check` on both devtool files; real GET/POST round-trips for
+both `raids` and `tuning` content types against an isolated scratch
+copy of `src/game/data/json/` (so the live files were never touched by
+the server's own re-serialization); a deliberate negative-validation
+test on the fixed `tuning` schema.

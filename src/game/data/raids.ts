@@ -58,6 +58,14 @@ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
   // literal here. Heroic/Mythic's four fields each read from the tuning
   // registry instead -- editable live via the devtool's Tuning tab. See
   // tuning.ts and tuning.json.
+  // roleMismatchCap: Normal deliberately has none at all (undefined, not
+  // just a high number) -- a mismatched Normal party still only eats the
+  // ordinary per-slot roleMismatchPenalty subtraction and can climb back
+  // up to MAX_SUCCESS on gear/level alone, same as before this existed.
+  // Heroic/Mythic read theirs from the tuning registry like their other
+  // three fields -- Mythic's is deliberately the lower of the two, same
+  // "genuinely brutal, not just harder than Heroic" intent as its
+  // successPenalty above.
   normal: { difficulty: 'normal', partySize: 3, successPenalty: 0, rewardMultiplier: 1, lootBonus: 0, durationMultiplier: 1 },
   heroic: {
     difficulty: 'heroic', partySize: 6,
@@ -65,6 +73,7 @@ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
     rewardMultiplier: Tuning.get('raid_difficulty.heroic.rewardMultiplier'),
     lootBonus: Tuning.get('raid_difficulty.heroic.lootBonus'),
     durationMultiplier: Tuning.get('raid_difficulty.heroic.durationMultiplier'),
+    roleMismatchCap: Tuning.get('raid_difficulty.heroic.roleMismatchCap'),
   },
   mythic: {
     difficulty: 'mythic', partySize: 9,
@@ -72,6 +81,7 @@ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
     rewardMultiplier: Tuning.get('raid_difficulty.mythic.rewardMultiplier'),
     lootBonus: Tuning.get('raid_difficulty.mythic.lootBonus'),
     durationMultiplier: Tuning.get('raid_difficulty.mythic.durationMultiplier'),
+    roleMismatchCap: Tuning.get('raid_difficulty.mythic.roleMismatchCap'),
   },
 };
 

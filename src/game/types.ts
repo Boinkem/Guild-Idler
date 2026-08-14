@@ -914,6 +914,22 @@ export interface RaidDifficultyConfig {
    * Raid Upgrades), not inherit quest ones for free.
    */
   durationMultiplier: number;
+  /**
+   * A hard ceiling on final per-encounter success while the party doesn't
+   * meet a raid's `requiredRoles` minimums -- undefined (Normal) means no
+   * ceiling at all, so a mismatched-but-overleveled-and-geared party can
+   * still climb all the way to MAX_SUCCESS the same as today. Heroic and
+   * Mythic define one via the tuning registry instead: no matter how far
+   * gear/level push the raw computed success, an unmet role requirement
+   * caps it there. This is layered ON TOP of roleMismatchPenalty (the
+   * existing flat per-unmet-slot subtraction), not a replacement for it --
+   * the subtraction still applies and still scales with how many slots
+   * are unmet; the cap only ever pulls a result *down* to itself, never up,
+   * and only takes effect once the party is actually missing something.
+   * See RaidManager.hasRoleMismatch / the "Role mismatch success ceiling"
+   * writeup in guild-idler-status.md for the full reasoning.
+   */
+  roleMismatchCap?: number;
 }
 
 /**

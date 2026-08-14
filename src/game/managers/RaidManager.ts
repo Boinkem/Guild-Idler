@@ -106,6 +106,21 @@ export const RaidManager = {
   },
 
   /**
+   * True if the party is missing at least one requiredRoles slot -- kept
+   * as its own boolean rather than reusing `roleMismatchPenalty(...) > 0`,
+   * so the Heroic/Mythic success ceiling below still engages even if
+   * `raid.roleMismatchPenaltyPerSlot` itself were ever tuned down to 0.
+   * The two are meant to be independently tunable: one is "how much does
+   * each unmet slot cost you," the other is "how high can you climb back
+   * to regardless" -- see RaidDifficultyConfig.roleMismatchCap.
+   */
+  hasRoleMismatch(heroes: Hero[], requiredRoles?: Partial<Record<Role, number>>): boolean {
+    if (!requiredRoles) return false;
+    const counts = RaidManager.partyRoleCounts(heroes);
+    return (Object.entries(requiredRoles) as [Role, number][]).some(([role, needed]) => counts[role] < needed);
+  },
+
+  /**
    * Economy contributions (gold/xp/loot/speed) use a plain average across
    * the party instead -- these aren't a pass/fail gate the way success is,
    * just a shared payout, so there's no reason to punish a party for one
@@ -151,11 +166,19 @@ export const RaidManager = {
     if (!raid || !encounter) return 0;
     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)).filter((h): h is Hero => !!h);
     const bonus = RaidManager.partySuccessBonus(state, heroes, now, raid.reqLevel);
-    const penalty = RAID_DIFFICULTIES[difficulty].successPenalty;
+    const diffCfg = RAID_DIFFICULTIES[difficulty];
     const elemental = RaidManager.elementalBonus(heroes, encounter);
     const override = raid.successModifier ?? 0;
     const roleMismatch = RaidManager.roleMismatchPenalty(heroes, raid.requiredRoles);
-    return clamp(encounter.baseSuccess - penalty + bonus + elemental + override - roleMismatch, MIN_SUCCESS, MAX_SUCCESS);
+    const success = clamp(encounter.baseSuccess - diffCfg.successPenalty + bonus + elemental + override - roleMismatch, MIN_SUCCESS, MAX_SUCCESS);
+    // Heroic/Mythic's role-mismatch ceiling applies AFTER the ordinary
+    // clamp, only while the party is actually missing a required slot --
+    // see RaidDifficultyConfig.roleMismatchCap. Normal has no cap
+    // (undefined), so this is a no-op there regardless of party makeup.
+    if (diffCfg.roleMismatchCap != null && RaidManager.hasRoleMismatch(heroes, raid.requiredRoles)) {
+      return Math.min(success, diffCfg.roleMismatchCap);
+    }
+    return success;
   },
 
   /**
@@ -258,6 +281,13 @@ export const RaidManager = {
     const rng = createRng(`raid:${active.raidId}:${active.difficulty}:${active.startedAt}`);
     const heroes = active.heroIds.map((id) => state.heroes.find((h) => h.id === id)).filter((h): h is Hero => !!h);
     const economy = RaidManager.partyEconomyMods(state, heroes, resolvedAt);
+    // The party is locked in for the whole raid -- requiredRoles lives on
+    // RaidDef, not per-encounter, and nothing here lets heroes swap roles
+    // mid-raid. Computed once, same as active.partySuccessBonus itself
+    // (which already has roleMismatchPenalty folded in from start()) --
+    // every encounter in the loop below reuses this single result rather
+    // than re-deriving it per encounter.
+    const roleMismatched = RaidManager.hasRoleMismatch(heroes, raid?.requiredRoles);
 
     let encountersCleared = 0;
     let gold = 0;
@@ -271,7 +301,14 @@ export const RaidManager = {
       if (!encounter) continue; // devtool data drift safety -- an unknown id is skipped, not a crash
       const elemental = RaidManager.elementalBonus(heroes, encounter);
       const override = raid?.successModifier ?? 0;
-      const chance = clamp(encounter.baseSuccess - diffCfg.successPenalty + active.partySuccessBonus + elemental + override, MIN_SUCCESS, MAX_SUCCESS);
+      const rawChance = clamp(encounter.baseSuccess - diffCfg.successPenalty + active.partySuccessBonus + elemental + override, MIN_SUCCESS, MAX_SUCCESS);
+      // Same Heroic/Mythic role-mismatch ceiling as previewEncounterSuccess,
+      // applied identically here so the actual roll never has better odds
+      // than what the party saw in the preview -- see
+      // RaidDifficultyConfig.roleMismatchCap.
+      const chance = (diffCfg.roleMismatchCap != null && roleMismatched)
+        ? Math.min(rawChance, diffCfg.roleMismatchCap)
+        : rawChance;
       if (!rng.chance(chance)) break;
 
       encountersCleared += 1;
