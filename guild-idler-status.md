@@ -9912,3 +9912,30 @@ against the new live state with zero drift.
 
 **Verified:** `npx tsc --noEmit` and a full `vite build` (app + electron
 main + preload) both clean.
+
+### Idle-companion "+N more" hint: dropped the misleading questing sub-count -- fixed (patch 0148)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed the idle-companion hint that made it look like there were extra heroes beyond the ones shown
+```
+
+`IdleView.tsx`'s `otherHint` used to read `+3 more at the guild · 3 also
+questing` whenever every other hero happened to be out on a quest --
+reported directly: with a 3-hero roster and all 3 questing, this reads
+as "3 more, plus 3 separately questing" (implying 6 heroes) rather than
+"these same 3 are all questing." Root cause was appending a status
+sub-count (`othersQuesting`) onto a headcount (`others.length`) in the
+same line with no shared referent tying them together.
+
+Fixed by dropping the questing sub-count entirely rather than
+rewording it -- confirmed as the right call rather than a shortcut: the
+idle-companion window is a compact glanceable overlay, not where a
+hero-by-hero status breakdown belongs, and that detail is one click
+away in the guild hall regardless. `otherHint` is now just
+`+N more at the guild` (or nothing at `others.length === 0`, unchanged).
+`othersQuesting` removed as dead code along with it.
+
+**Verified:** `npx tsc --noEmit` clean. No schema/state changes --
+`hero.status` wasn't touched, just how one derived string used it.

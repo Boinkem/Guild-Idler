@@ -228,12 +228,16 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
         : 'Waiting for work';
 
   const others = engine.state.heroes.filter((h) => h.id !== hero.id);
-  const othersQuesting = others.filter((h) => h.status === 'questing').length;
+  // Used to also append "· N also questing" here, but that read as a
+  // second, separate group of heroes on top of the "+N more" count
+  // rather than a status of that same group (e.g. "+3 more · 3 also
+  // questing" looked like 6 heroes total instead of 3) -- reported
+  // directly. Dropped rather than reworded: this is a compact
+  // companion-window hint, not the place for a hero-by-hero status
+  // breakdown, and the full picture is one click away in the guild hall.
   const otherHint = others.length === 0
     ? null
-    : othersQuesting > 0
-      ? `+${others.length} more at the guild · ${othersQuesting} also questing`
-      : `+${others.length} more at the guild`;
+    : `+${others.length} more at the guild`;
 
   // Compact stand-in for the full "while you were away" report while still
   // in the tiny idle-companion window -- clicking it opens the menu, where
