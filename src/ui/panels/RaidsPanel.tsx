@@ -14,7 +14,7 @@ import { ROLE_BY_ID } from '../../game/data/progression';
 import { RoleIcon } from '../RoleIcon';
 import { RarityPill } from '../RarityPill';
 import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
-import { RaidRoomSprite, RaidTorchSprite } from '../sprites/RaidRoomSprite';
+import { RaidRoomSprite } from '../sprites/RaidRoomSprite';
 import { formatDuration, describeMods, formatGold, formatNumber, RARITY_COLOR } from '../../game/util';
 
 const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', mythic: 'M' };
@@ -194,13 +194,11 @@ function RaidQuartermasterDen() {
   // panel -- raids have been treated as their own separable system all
   // along (own tab, own background, own resolution engine), and this
   // tree only ever affects raids, so it lives where it matters rather
-  // than getting buried among quest-side upgrades. A torch reflects
-  // whether the Raid Charter has been bought, and a weapon rack / skull /
-  // shelf visibly fill in as their matching upgrade is leveled, rather
+  // than getting buried among quest-side upgrades. A weapon rack / skull
+  // / shelf visibly fill in as their matching upgrade is leveled, rather
   // than a plain progress number doing all the work.
   const engine = useEngine();
   const state = engine.state;
-  const raidsUnlocked = ModifierManager.hasUnlock(state, 'raids');
   const defs = GuildManager.raidUpgrades();
   const speedDef = defs.find((d) => d.id === RAID_SPEED_ID);
   const lootDef = defs.find((d) => d.id === RAID_LOOT_ID);
@@ -213,13 +211,6 @@ function RaidQuartermasterDen() {
         Raid-only bonuses -- these never affect regular quests, and quest upgrades never affect raids either.
         Early levels cost gold; deeper levels cost Renown.
       </p>
-      <div className="row" style={{ justifyContent: 'center', marginBottom: 10 }}>
-        <RaidTorchSprite
-          lit={raidsUnlocked}
-          height={64}
-          title={raidsUnlocked ? 'Raid Charter purchased' : 'Raid Charter not yet purchased'}
-        />
-      </div>
       <div className="grid two">
         {speedDef && (
           <div>

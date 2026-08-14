@@ -1,0 +1,290 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 52e3137..63312d3 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -9939,3 +9939,59 @@ away in the guild hall regardless. `otherHint` is now just
+ 
+ **Verified:** `npx tsc --noEmit` clean. No schema/state changes --
+ `hero.status` wasn't touched, just how one derived string used it.
++
++### Raid Quartermaster torch removed, per-class role descriptions -- built (patch 0149)
++
++```discord-update
++Dev Update | Patch 0149
++
++- Removed the torch image from the Raid Quartermaster's Den
++- Each role's description on the Training tab is now written per hero class, not one shared paragraph for all nine
++```
++
++Two direct, unrelated requests.
++
++**1. Torch removed.** `RaidQuartermasterDen` (RaidsPanel.tsx) no longer
++renders `RaidTorchSprite` -- direct request, "no longer want it there."
++The `raidsUnlocked` variable it was the only reader of is removed along
++with it, and the now-unused `RaidTorchSprite` import dropped. The
++weapon rack / skull / shelf sprites for the three actual raid upgrades
++are untouched. `RaidTorchSprite` itself (RaidRoomSprite.tsx) is left in
++place, just unused -- a narrow removal from where it was displayed, not
++a deletion of the sprite component in case it's wanted again later.
++
++**2. Per-class role descriptions.** The Hero Training tab's role cards
++(patch 0142) already show a class-specific *name* per role via
++`roleFlavors` (a Melee Wizard reads as "Arcane Swordster," not "Melee")
++but the *description* underneath was one generic paragraph per role,
++identical for all nine classes -- direct request to fix that mismatch.
++New `HeroClassDef.roleDescriptions: Record<Role, string>` (progression.ts),
++required and complete same as `roleFlavors` itself already is -- a full
++27-entry pass (9 classes × 3 roles) written to match each class's own
++`blurb`/`roleFlavors` voice (e.g. the Witch's caster entry echoes her own
++blurb almost verbatim; a Wizard trained Melee reads "A blade wrapped in
++decades of study it never expected to need," matching "Arcane Swordster"
++rather than a generic "fights up close" line). `TrainingPanel.tsx`'s
++`RoleCard` reads `classDef.roleDescriptions[role]` now, falling back to
++`roles.json`'s original generic per-role text only in the defensive
++case a class is somehow missing an entry (shouldn't happen -- the field
++is required -- same guard shape `roleDisplayName`'s own fallback already
++uses).
++
++**DevTool:** `roleDescriptions` reuses the exact same `roleFlavors` field
++*type* (not a new one) in the `hero-classes` schema -- the type string is
++a generic shape descriptor (required 3-key Role-keyed text map) already
++shared across differently-named fields elsewhere in this schema system,
++so no renderer or validator changes were needed, just the one new field
++declaration. Verified with a real GET/POST round-trip against an
++isolated scratch copy (all 9 classes save clean) plus a deliberate
++negative test (stripping one role's description correctly rejected).
++
++**Note:** originally assigned patch number 0148, reassigned to 0149
++after a separate idle-companion hint-text fix was pushed and applied to
++the live repo concurrently, landing on 0148 first. No code changes
++needed beyond the number itself -- confirmed all five touched files
++applied against the new live state with zero drift.
++
++**Verified:** `npx tsc --noEmit` and a full `vite build` (app + electron
++main + preload) both clean; DevTool round-trip as described above.
+diff --git a/src/game/data/json/hero-classes.json b/src/game/data/json/hero-classes.json
+index 8639c99..df87ab5 100644
+--- a/src/game/data/json/hero-classes.json
++++ b/src/game/data/json/hero-classes.json
+@@ -37,6 +37,11 @@
+       "melee": "Adventurer",
+       "ranged": "Trailblazing Scout",
+       "caster": "Hedge Mage"
++    },
++    "roleDescriptions": {
++      "melee": "No banner, no order -- just grit and a blade held steady up close.",
++      "ranged": "Scouts ahead and picks fights from a distance no one saw coming.",
++      "caster": "Self-taught magic, patched together from whatever actually worked."
+     }
+   },
+   {
+@@ -77,6 +82,11 @@
+       "melee": "Knight",
+       "ranged": "Crossbow Knight",
+       "caster": "Rune Knight"
++    },
++    "roleDescriptions": {
++      "melee": "Sworn, drilled, and first through the door every time.",
++      "ranged": "Trades the shield wall for a crossbow -- still drilled, still reliable.",
++      "caster": "Etches battle-runes into steel instead of casting from open air."
+     }
+   },
+   {
+@@ -118,6 +128,11 @@
+       "melee": "Dwarf Warrior",
+       "ranged": "Dwarven Axe-Thrower",
+       "caster": "Runesmith"
++    },
++    "roleDescriptions": {
++      "melee": "A wall with an axe, in absolutely no hurry to move.",
++      "ranged": "Throws what it can't be bothered to carry into melee.",
++      "caster": "Magic hammered into stone and metal, the old dwarven way."
+     }
+   },
+   {
+@@ -160,6 +175,11 @@
+       "melee": "Arena Duelist",
+       "ranged": "Gladiator",
+       "caster": "Enchanted Champion"
++    },
++    "roleDescriptions": {
++      "melee": "Sword and net, built for a fight that ends in one exchange.",
++      "ranged": "Bow in hand for the ones smart enough to run.",
++      "caster": "Arena tricks backed by whatever charm money could buy."
+     }
+   },
+   {
+@@ -200,6 +220,11 @@
+       "melee": "Samurai",
+       "ranged": "Yumi Marksman",
+       "caster": "Onmyoji Adept"
++    },
++    "roleDescriptions": {
++      "melee": "One clean strike -- prizes the perfect kill over the messy one.",
++      "ranged": "Trades the blade for a bow, patience unchanged.",
++      "caster": "Wards and rites learned alongside the sword, not instead of it."
+     }
+   },
+   {
+@@ -242,6 +267,11 @@
+       "melee": "Hexblade",
+       "ranged": "Hexbow Adept",
+       "caster": "Witch"
++    },
++    "roleDescriptions": {
++      "melee": "A blade wrapped in a curse, for when the hex alone isn't fast enough.",
++      "ranged": "Curses fired from a distance -- safer for something this fragile.",
++      "caster": "Hexes, bargains, and a nose for what a ruin is really worth."
+     }
+   },
+   {
+@@ -284,6 +314,11 @@
+       "melee": "Lizardman",
+       "ranged": "Scaled Hunter",
+       "caster": "Swampland Shaman"
++    },
++    "roleDescriptions": {
++      "melee": "Scales, claws, and a swamp-born refusal to die.",
++      "ranged": "Hunts from range the way its swamp taught it to.",
++      "caster": "Old swamp magic, older than the guild that hired it."
+     }
+   },
+   {
+@@ -325,6 +360,11 @@
+       "melee": "Ember Blade",
+       "ranged": "Cinder Marksman",
+       "caster": "Pyromancer"
++    },
++    "roleDescriptions": {
++      "melee": "A blade kept lit, for when fire alone won't close the distance.",
++      "ranged": "Throws fire instead of casting it -- same result, longer reach.",
++      "caster": "Answers every problem with fire. Devastating, and made of paper."
+     }
+   },
+   {
+@@ -368,6 +408,11 @@
+       "melee": "Arcane Swordster",
+       "ranged": "Spellshot",
+       "caster": "Wizard"
++    },
++    "roleDescriptions": {
++      "melee": "A blade wrapped in decades of study it never expected to need.",
++      "ranged": "Trades the staff for something that hits from further away.",
++      "caster": "Decades of study in a pointed hat, unmatched on anything arcane."
+     }
+   }
+ ]
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 0f4dd75..37d068f 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -737,6 +737,17 @@ export interface HeroClassDef {
+    * feature -- see guild-idler-status.md's hero-roles backlog entry.
+    */
+   roleFlavors: Record<Role, string>;
++  /**
++   * Per-role flavour text to match roleFlavors' per-role name -- direct
++   * request: since a hero's role name already changes per class (a Melee
++   * Wizard reads as "Arcane Swordster," not "Melee"), the description
++   * shown alongside it should too, rather than one generic paragraph per
++   * role shared across every class. Required, all three keys, same
++   * "full pass across every class" requirement roleFlavors itself
++   * already has -- see the Hero Training tab's RoleCard (TrainingPanel.tsx)
++   * for the one place this actually renders.
++   */
++  roleDescriptions: Record<Role, string>;
+   /**
+    * Unset for every base-game class (recruitable at HERO_CLASSES/
+    * RECRUIT_COST's own values, exactly as today). Set to a DLC pack id
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index 7f21a6c..d1daa3c 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -14,7 +14,7 @@ import { ROLE_BY_ID } from '../../game/data/progression';
+ import { RoleIcon } from '../RoleIcon';
+ import { RarityPill } from '../RarityPill';
+ import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
+-import { RaidRoomSprite, RaidTorchSprite } from '../sprites/RaidRoomSprite';
++import { RaidRoomSprite } from '../sprites/RaidRoomSprite';
+ import { formatDuration, describeMods, formatGold, formatNumber, RARITY_COLOR } from '../../game/util';
+ 
+ const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', mythic: 'M' };
+@@ -194,13 +194,11 @@ function RaidQuartermasterDen() {
+   // panel -- raids have been treated as their own separable system all
+   // along (own tab, own background, own resolution engine), and this
+   // tree only ever affects raids, so it lives where it matters rather
+-  // than getting buried among quest-side upgrades. A torch reflects
+-  // whether the Raid Charter has been bought, and a weapon rack / skull /
+-  // shelf visibly fill in as their matching upgrade is leveled, rather
++  // than getting buried among quest-side upgrades. A weapon rack / skull
++  // / shelf visibly fill in as their matching upgrade is leveled, rather
+   // than a plain progress number doing all the work.
+   const engine = useEngine();
+   const state = engine.state;
+-  const raidsUnlocked = ModifierManager.hasUnlock(state, 'raids');
+   const defs = GuildManager.raidUpgrades();
+   const speedDef = defs.find((d) => d.id === RAID_SPEED_ID);
+   const lootDef = defs.find((d) => d.id === RAID_LOOT_ID);
+@@ -213,13 +211,6 @@ function RaidQuartermasterDen() {
+         Raid-only bonuses -- these never affect regular quests, and quest upgrades never affect raids either.
+         Early levels cost gold; deeper levels cost Renown.
+       </p>
+-      <div className="row" style={{ justifyContent: 'center', marginBottom: 10 }}>
+-        <RaidTorchSprite
+-          lit={raidsUnlocked}
+-          height={64}
+-          title={raidsUnlocked ? 'Raid Charter purchased' : 'Raid Charter not yet purchased'}
+-        />
+-      </div>
+       <div className="grid two">
+         {speedDef && (
+           <div>
+diff --git a/src/ui/panels/TrainingPanel.tsx b/src/ui/panels/TrainingPanel.tsx
+index bb89f30..50ac44f 100644
+--- a/src/ui/panels/TrainingPanel.tsx
++++ b/src/ui/panels/TrainingPanel.tsx
+@@ -25,6 +25,15 @@ function RoleCard({ hero, role, active }: { hero: Hero; role: Role; active: bool
+   const unlocked = HeroManager.unlockedRoles(hero).includes(role);
+   const cost = HeroManager.roleCost(hero, role);
+   const flavorName = classDef?.roleFlavors[role] ?? role;
++  // Per-class description now, not a generic per-role paragraph shared
++  // across every class -- direct request: since the name already varies
++  // per class (a Melee Wizard reads as "Arcane Swordster," not "Melee"),
++  // the description should too. Falls back to roles.json's own generic
++  // per-role text only if a class is somehow missing this (shouldn't
++  // happen for any real class -- HeroClassDef.roleDescriptions is
++  // required -- but a malformed DLC class def is the same defensive
++  // case roleDisplayName's own fallback already guards against).
++  const description = classDef?.roleDescriptions[role] ?? ROLE_DESCRIPTION[role];
+ 
+   return (
+     <div
+@@ -38,7 +47,7 @@ function RoleCard({ hero, role, active }: { hero: Hero; role: Role; active: bool
+       <div className="card-title" style={{ marginTop: 6 }}>{flavorName}</div>
+       <p className="tiny muted" style={{ margin: '2px 0 0' }}>{ROLE_LABEL[role]}</p>
+       <p className="tiny" style={{ marginTop: 6, minHeight: '2.4em' }}>
+-        {ROLE_DESCRIPTION[role]}
++        {description}
+       </p>
+       {active ? (
+         <p className="tiny good" style={{ marginTop: 10, fontWeight: 700 }}>Currently active</p>
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index e595c22..ed874f5 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -125,6 +125,15 @@ const SCHEMAS = {
+       // `roleFlavors` case in validateEntry below.
+       role: { type: 'enum', options: ['melee', 'ranged', 'caster'], required: true },
+       roleFlavors: { type: 'roleFlavors', required: true },
++      // Same shape/type as roleFlavors just above (a required 3-key text
++      // map) -- reuses that exact 'roleFlavors' type string rather than
++      // inventing a new one, since the type name is just a generic shape
++      // descriptor (kv-grid, 3 Role keys, required text) and both the
++      // renderer and validator already key off the type, not the field
++      // name. Per-class, per-role flavour text to go with roleFlavors'
++      // per-role name -- see HeroClassDef.roleDescriptions' own comment
++      // in progression.ts.
++      roleDescriptions: { type: 'roleFlavors', required: true },
+       // Unset for every base-game class -- see HeroClassDef.requiresDlc's
+       // own comment in progression.ts. Editable here mainly so a future
+       // DLC pack's own manifest content could, in principle, be authored

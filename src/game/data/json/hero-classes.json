@@ -37,6 +37,11 @@
       "melee": "Adventurer",
       "ranged": "Trailblazing Scout",
       "caster": "Hedge Mage"
+    },
+    "roleDescriptions": {
+      "melee": "No banner, no order -- just grit and a blade held steady up close.",
+      "ranged": "Scouts ahead and picks fights from a distance no one saw coming.",
+      "caster": "Self-taught magic, patched together from whatever actually worked."
     }
   },
   {
@@ -77,6 +82,11 @@
       "melee": "Knight",
       "ranged": "Crossbow Knight",
       "caster": "Rune Knight"
+    },
+    "roleDescriptions": {
+      "melee": "Sworn, drilled, and first through the door every time.",
+      "ranged": "Trades the shield wall for a crossbow -- still drilled, still reliable.",
+      "caster": "Etches battle-runes into steel instead of casting from open air."
     }
   },
   {
@@ -118,6 +128,11 @@
       "melee": "Dwarf Warrior",
       "ranged": "Dwarven Axe-Thrower",
       "caster": "Runesmith"
+    },
+    "roleDescriptions": {
+      "melee": "A wall with an axe, in absolutely no hurry to move.",
+      "ranged": "Throws what it can't be bothered to carry into melee.",
+      "caster": "Magic hammered into stone and metal, the old dwarven way."
     }
   },
   {
@@ -160,6 +175,11 @@
       "melee": "Arena Duelist",
       "ranged": "Gladiator",
       "caster": "Enchanted Champion"
+    },
+    "roleDescriptions": {
+      "melee": "Sword and net, built for a fight that ends in one exchange.",
+      "ranged": "Bow in hand for the ones smart enough to run.",
+      "caster": "Arena tricks backed by whatever charm money could buy."
     }
   },
   {
@@ -200,6 +220,11 @@
       "melee": "Samurai",
       "ranged": "Yumi Marksman",
       "caster": "Onmyoji Adept"
+    },
+    "roleDescriptions": {
+      "melee": "One clean strike -- prizes the perfect kill over the messy one.",
+      "ranged": "Trades the blade for a bow, patience unchanged.",
+      "caster": "Wards and rites learned alongside the sword, not instead of it."
     }
   },
   {
@@ -242,6 +267,11 @@
       "melee": "Hexblade",
       "ranged": "Hexbow Adept",
       "caster": "Witch"
+    },
+    "roleDescriptions": {
+      "melee": "A blade wrapped in a curse, for when the hex alone isn't fast enough.",
+      "ranged": "Curses fired from a distance -- safer for something this fragile.",
+      "caster": "Hexes, bargains, and a nose for what a ruin is really worth."
     }
   },
   {
@@ -284,6 +314,11 @@
       "melee": "Lizardman",
       "ranged": "Scaled Hunter",
       "caster": "Swampland Shaman"
+    },
+    "roleDescriptions": {
+      "melee": "Scales, claws, and a swamp-born refusal to die.",
+      "ranged": "Hunts from range the way its swamp taught it to.",
+      "caster": "Old swamp magic, older than the guild that hired it."
     }
   },
   {
@@ -325,6 +360,11 @@
       "melee": "Ember Blade",
       "ranged": "Cinder Marksman",
       "caster": "Pyromancer"
+    },
+    "roleDescriptions": {
+      "melee": "A blade kept lit, for when fire alone won't close the distance.",
+      "ranged": "Throws fire instead of casting it -- same result, longer reach.",
+      "caster": "Answers every problem with fire. Devastating, and made of paper."
     }
   },
   {
@@ -368,6 +408,11 @@
       "melee": "Arcane Swordster",
       "ranged": "Spellshot",
       "caster": "Wizard"
+    },
+    "roleDescriptions": {
+      "melee": "A blade wrapped in decades of study it never expected to need.",
+      "ranged": "Trades the staff for something that hits from further away.",
+      "caster": "Decades of study in a pointed hat, unmatched on anything arcane."
     }
   }
 ]

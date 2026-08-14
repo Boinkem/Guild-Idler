@@ -9939,3 +9939,59 @@ away in the guild hall regardless. `otherHint` is now just
 
 **Verified:** `npx tsc --noEmit` clean. No schema/state changes --
 `hero.status` wasn't touched, just how one derived string used it.
+
+### Raid Quartermaster torch removed, per-class role descriptions -- built (patch 0149)
+
+```discord-update
+Dev Update | Patch 0149
+
+- Removed the torch image from the Raid Quartermaster's Den
+- Each role's description on the Training tab is now written per hero class, not one shared paragraph for all nine
+```
+
+Two direct, unrelated requests.
+
+**1. Torch removed.** `RaidQuartermasterDen` (RaidsPanel.tsx) no longer
+renders `RaidTorchSprite` -- direct request, "no longer want it there."
+The `raidsUnlocked` variable it was the only reader of is removed along
+with it, and the now-unused `RaidTorchSprite` import dropped. The
+weapon rack / skull / shelf sprites for the three actual raid upgrades
+are untouched. `RaidTorchSprite` itself (RaidRoomSprite.tsx) is left in
+place, just unused -- a narrow removal from where it was displayed, not
+a deletion of the sprite component in case it's wanted again later.
+
+**2. Per-class role descriptions.** The Hero Training tab's role cards
+(patch 0142) already show a class-specific *name* per role via
+`roleFlavors` (a Melee Wizard reads as "Arcane Swordster," not "Melee")
+but the *description* underneath was one generic paragraph per role,
+identical for all nine classes -- direct request to fix that mismatch.
+New `HeroClassDef.roleDescriptions: Record<Role, string>` (progression.ts),
+required and complete same as `roleFlavors` itself already is -- a full
+27-entry pass (9 classes × 3 roles) written to match each class's own
+`blurb`/`roleFlavors` voice (e.g. the Witch's caster entry echoes her own
+blurb almost verbatim; a Wizard trained Melee reads "A blade wrapped in
+decades of study it never expected to need," matching "Arcane Swordster"
+rather than a generic "fights up close" line). `TrainingPanel.tsx`'s
+`RoleCard` reads `classDef.roleDescriptions[role]` now, falling back to
+`roles.json`'s original generic per-role text only in the defensive
+case a class is somehow missing an entry (shouldn't happen -- the field
+is required -- same guard shape `roleDisplayName`'s own fallback already
+uses).
+
+**DevTool:** `roleDescriptions` reuses the exact same `roleFlavors` field
+*type* (not a new one) in the `hero-classes` schema -- the type string is
+a generic shape descriptor (required 3-key Role-keyed text map) already
+shared across differently-named fields elsewhere in this schema system,
+so no renderer or validator changes were needed, just the one new field
+declaration. Verified with a real GET/POST round-trip against an
+isolated scratch copy (all 9 classes save clean) plus a deliberate
+negative test (stripping one role's description correctly rejected).
+
+**Note:** originally assigned patch number 0148, reassigned to 0149
+after a separate idle-companion hint-text fix was pushed and applied to
+the live repo concurrently, landing on 0148 first. No code changes
+needed beyond the number itself -- confirmed all five touched files
+applied against the new live state with zero drift.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (app + electron
+main + preload) both clean; DevTool round-trip as described above.

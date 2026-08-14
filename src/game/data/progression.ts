@@ -738,6 +738,17 @@ export interface HeroClassDef {
    */
   roleFlavors: Record<Role, string>;
   /**
+   * Per-role flavour text to match roleFlavors' per-role name -- direct
+   * request: since a hero's role name already changes per class (a Melee
+   * Wizard reads as "Arcane Swordster," not "Melee"), the description
+   * shown alongside it should too, rather than one generic paragraph per
+   * role shared across every class. Required, all three keys, same
+   * "full pass across every class" requirement roleFlavors itself
+   * already has -- see the Hero Training tab's RoleCard (TrainingPanel.tsx)
+   * for the one place this actually renders.
+   */
+  roleDescriptions: Record<Role, string>;
+  /**
    * Unset for every base-game class (recruitable at HERO_CLASSES/
    * RECRUIT_COST's own values, exactly as today). Set to a DLC pack id
    * for a class that only exists once that pack is owned -- same shape

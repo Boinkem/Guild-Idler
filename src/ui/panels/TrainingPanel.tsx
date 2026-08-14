@@ -25,6 +25,15 @@ function RoleCard({ hero, role, active }: { hero: Hero; role: Role; active: bool
   const unlocked = HeroManager.unlockedRoles(hero).includes(role);
   const cost = HeroManager.roleCost(hero, role);
   const flavorName = classDef?.roleFlavors[role] ?? role;
+  // Per-class description now, not a generic per-role paragraph shared
+  // across every class -- direct request: since the name already varies
+  // per class (a Melee Wizard reads as "Arcane Swordster," not "Melee"),
+  // the description should too. Falls back to roles.json's own generic
+  // per-role text only if a class is somehow missing this (shouldn't
+  // happen for any real class -- HeroClassDef.roleDescriptions is
+  // required -- but a malformed DLC class def is the same defensive
+  // case roleDisplayName's own fallback already guards against).
+  const description = classDef?.roleDescriptions[role] ?? ROLE_DESCRIPTION[role];
 
   return (
     <div
@@ -38,7 +47,7 @@ function RoleCard({ hero, role, active }: { hero: Hero; role: Role; active: bool
       <div className="card-title" style={{ marginTop: 6 }}>{flavorName}</div>
       <p className="tiny muted" style={{ margin: '2px 0 0' }}>{ROLE_LABEL[role]}</p>
       <p className="tiny" style={{ marginTop: 6, minHeight: '2.4em' }}>
-        {ROLE_DESCRIPTION[role]}
+        {description}
       </p>
       {active ? (
         <p className="tiny good" style={{ marginTop: 10, fontWeight: 700 }}>Currently active</p>

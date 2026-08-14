@@ -125,6 +125,15 @@ const SCHEMAS = {
       // `roleFlavors` case in validateEntry below.
       role: { type: 'enum', options: ['melee', 'ranged', 'caster'], required: true },
       roleFlavors: { type: 'roleFlavors', required: true },
+      // Same shape/type as roleFlavors just above (a required 3-key text
+      // map) -- reuses that exact 'roleFlavors' type string rather than
+      // inventing a new one, since the type name is just a generic shape
+      // descriptor (kv-grid, 3 Role keys, required text) and both the
+      // renderer and validator already key off the type, not the field
+      // name. Per-class, per-role flavour text to go with roleFlavors'
+      // per-role name -- see HeroClassDef.roleDescriptions' own comment
+      // in progression.ts.
+      roleDescriptions: { type: 'roleFlavors', required: true },
       // Unset for every base-game class -- see HeroClassDef.requiresDlc's
       // own comment in progression.ts. Editable here mainly so a future
       // DLC pack's own manifest content could, in principle, be authored
