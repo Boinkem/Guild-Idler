@@ -64,7 +64,7 @@ const CHECKS: Record<string, Check> = {
   // already keys off of rather than extending hasUnlock's own type just
   // for one more caller.
   auto_chain_unlocked: (state) => GuildManager.upgradeLevel(state, 'auto_chain') > 0,
-  music_hall_unlocked: (state) => (state.guild.music_hall ?? 0) >= 1,
+  first_bard_track_unlocked: (state) => (state.unlockedBardTracks ?? []).length >= 1,
   first_injury_or_wear: (state) => state.heroes.some((h) => h.injuries.length > 0
     || Object.values(h.equipment).some((item) => item && item.durability < EquipmentManager.maxDurability(item))),
 };

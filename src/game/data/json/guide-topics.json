@@ -65,8 +65,8 @@
     "body": "Weapons can be infused with an element at the Enchanter; armor can resist one. Matching a quest or raid encounter's own element adds a success bonus on top of everything else."
   },
   {
-    "id": "music_hall",
-    "title": "Music Hall",
-    "body": "A Guild Hall facility that unlocks purchasable background tracks, one per level. Once you've bought at least one, pick a specific track or shuffle daily through everything unlocked from the Track option in Settings."
+    "id": "bard_tracks",
+    "title": "The Guild Bard",
+    "body": "Background tracks aren't bought -- the guild bard learns a new one every so often as a reward for something you did: finishing a quest chain, clearing a raid, unlocking an achievement, winning big at Grimsby's table. Once you've earned at least one, pick a specific track or shuffle daily through everything you've earned from the Track option in Settings."
   }
 ]

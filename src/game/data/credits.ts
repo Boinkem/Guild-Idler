@@ -1,7 +1,7 @@
 /**
  * Asset credits shown on the Settings tab -- see guild-idler-status.md's
  * Steam-launch checklist for the license-confirmation pass this draws on
- * ("Asset licensing -- confirmed in writing, resolved"). None of the four
+ * ("Asset licensing -- confirmed in writing, resolved"). None of the
  * packs currently in use require credit, but crediting anyway costs
  * nothing once there's an actual surface to put it on, and several of the
  * license terms explicitly say credit is appreciated.

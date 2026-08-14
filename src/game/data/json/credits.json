@@ -30,5 +30,13 @@
     "creator": "",
     "licenseSummary": "CC0 (Creative Commons Zero) -- no restrictions, no attribution required.",
     "creditRequired": false
+  },
+  {
+    "id": "bard_tracks",
+    "category": "Background Music",
+    "packName": "Pixel Fantasy 30 Tracks Music Pack",
+    "creator": "AlkaKrab",
+    "licenseSummary": "Royalty-free, one-time payment, commercial use allowed in a sold game. No reselling, sublicensing, or redistributing the tracks as-is, and no uploading them as-is to streaming platforms. Credit appreciated but not required.",
+    "creditRequired": false
   }
 ]

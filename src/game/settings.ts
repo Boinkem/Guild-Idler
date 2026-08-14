@@ -129,13 +129,14 @@ export interface Settings {
    * Which track actually plays -- 'default' (the always-free ambient
    * track, same one that's always played until now), 'shuffle' (a new
    * pick once per real day, see music.ts's resolveTrackSrc), or a
-   * specific BardTrack id unlocked via the Music Hall guild facility.
-   * Purely a playback preference (which of the player's already-unlocked
-   * tracks is currently selected), not save-relevant progress -- lives
-   * here alongside musicEnabled/musicVolume rather than in GameState,
-   * same reasoning that section's own subtitle already draws. Falls back
-   * to 'default' automatically if it ever points at a track the guild
-   * doesn't actually have unlocked (see resolveTrackSrc).
+   * specific BardTrack id earned as a quest/raid/achievement/Grimsby
+   * reward (state.unlockedBardTracks). Purely a playback preference
+   * (which of the player's already-earned tracks is currently selected),
+   * not save-relevant progress -- lives here alongside musicEnabled/
+   * musicVolume rather than in GameState, same reasoning that section's
+   * own subtitle already draws. Falls back to 'default' automatically if
+   * it ever points at a track the guild doesn't actually have unlocked
+   * (see resolveTrackSrc).
    */
   selectedBardTrack: string;
 }

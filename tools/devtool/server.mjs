@@ -837,12 +837,13 @@ const SCHEMAS = {
     file: 'bard-tracks.json',
     label: 'Bard Tracks',
     idField: 'id',
-    // Music Hall (guild facility, progression.ts) unlocks these in list
-    // order, one per level -- see BardTrack's own comment in bard.ts.
-    // `path` is relative to public/audio/ and follows the same
-    // "missing file just does nothing" convention background-music.mp3
-    // already established in music.ts -- an entry can exist and be
-    // selectable in Settings well before its mp3 actually lands on disk.
+    // Each track is unlocked by a specific achievement now, not bought --
+    // see the matching entry's `unlocksTrackId` in the 'achievements'
+    // schema just below. List order here is just display order. `path`
+    // is relative to public/audio/ and follows the same "missing file
+    // just does nothing" convention background-music.mp3 already
+    // established in music.ts -- an entry can exist and be selectable in
+    // Settings well before its mp3 actually lands on disk.
     fields: {
       id: { type: 'string', required: true, slug: true },
       name: { type: 'string', required: true },
@@ -854,17 +855,19 @@ const SCHEMAS = {
     file: 'achievements.json',
     label: 'Achievements',
     idField: 'id',
-    // Editable here: name, description, hidden. The unlock CONDITION for
-    // each achievement id is not data — it's a check function in
-    // AchievementManager.ts. Renaming an achievement or rewriting its
-    // flavour text here is fully safe and takes effect immediately; adding
-    // a brand new achievement id here does nothing on its own until a
+    // Editable here: name, description, hidden, unlocksTrackId. The
+    // unlock CONDITION for each achievement id is not data — it's a
+    // check function in AchievementManager.ts. Renaming an achievement,
+    // rewriting its flavour text, or rewiring which bard track (if any)
+    // it grants is fully safe and takes effect immediately; adding a
+    // brand new achievement id here does nothing on its own until a
     // matching check is added in code. See DEVTOOL.md.
     fields: {
       id: { type: 'string', required: true, steamId: true },
       name: { type: 'string', required: true },
       description: { type: 'string', required: true },
       hidden: { type: 'boolean', required: true },
+      unlocksTrackId: { type: 'string', required: false },
     },
   },
 };

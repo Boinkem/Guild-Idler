@@ -491,20 +491,15 @@ export const GUILD_FACILITIES: GuildDef[] = [
     modsPerLevel: {},
     freeRepairsPerLevel: Tuning.get('guild_facility.smiths_charity.freeRepairsPerLevel'),
   },
-  {
-    id: 'music_hall', name: 'Music Hall',
-    description: 'Hire a bard to keep the guild hall from sitting in silence. '
-      + 'Every level buys one more song for the repertoire.',
-    baseCost: Tuning.get('guild_facility.music_hall.baseCost'),
-    costGrowth: Tuning.get('guild_facility.music_hall.costGrowth'),
-    maxLevel: Tuning.get('guild_facility.music_hall.maxLevel'),
-    // Same reasoning as Infirmary/Kennel -- "unlocks a track" isn't a flat
-    // Modifiers bonus, so this is a pure gold sink with no combat/economy
-    // effect at all, deliberately: it exists for the player's ears, not
-    // their stats.
-    modsPerLevel: {},
-    tracksPerLevel: 1,
-  },
+  // Music Hall (buy a level, unlock a track) removed -- bard tracks are
+  // now earned as scattered rewards across quests/raids/achievements/
+  // Grimsby instead of bought outright. See music.ts and
+  // ACHIEVEMENT_BY_ID[id].unlocksTrackId. `state.guild.music_hall` is
+  // left as a harmless frozen field on GameState/GuildFacility purely so
+  // SaveManager's migration 40 can read a legacy level off it one last
+  // time to grandfather already-leveled players -- nothing writes to it
+  // anymore, and it no longer appears in this list, so it can never
+  // increase again.
 ];
 
 export const GUILD_BY_ID: Record<string, GuildDef> = Object.fromEntries(GUILD_FACILITIES.map((g) => [g.id, g]));

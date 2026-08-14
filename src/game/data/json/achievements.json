@@ -3,390 +3,455 @@
     "id": "FIRST_CONTRACT",
     "name": "First Contract",
     "description": "Complete your first quest.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "dawn_of_blades"
   },
   {
     "id": "AGAINST_THE_ODDS",
     "name": "Against the Odds",
     "description": "Win a quest with less than 30% success chance.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "riders_of_the_storm"
   },
   {
     "id": "FIRST_LEGENDARY",
     "name": "The Good Stuff",
     "description": "Find your first legendary item.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "echoes_of_the_keep"
   },
   {
     "id": "RETIREMENT_PARTY",
     "name": "Retirement Party",
     "description": "Retire a hero for the first time.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "the_old_tavern"
   },
   {
     "id": "LIVING_LEGEND",
     "name": "Living Legend",
     "description": "Retire the same hero identity ten times.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "legends_of_the_flame"
   },
   {
     "id": "CHAIN_BREAKER",
     "name": "Chain Breaker",
     "description": "Complete your first multi-stage quest chain.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "twilight_march"
   },
   {
     "id": "WORLDS_END",
     "name": "World's End",
     "description": "Complete the World-Ender's Vigil.",
-    "hidden": true
+    "hidden": true,
+    "unlocksTrackId": ""
   },
   {
     "id": "ON_A_ROLL",
     "name": "On a Roll",
     "description": "Reach a prestige streak of 5.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "march_of_iron"
   },
   {
     "id": "FULL_ROSTER",
     "name": "Full Roster",
     "description": "Recruit at least one hero of every class.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "banners_in_the_wind"
   },
   {
     "id": "BLACK_MARKET_REGULAR",
     "name": "No Questions Asked",
     "description": "Buy something from the black market.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "whispers_in_the_fog"
   },
   {
     "id": "COMPLETE_WARDROBE",
     "name": "Complete Wardrobe",
     "description": "Unlock every livery.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "RAID_NORMAL_CLEARED",
     "name": "The Guild Marches",
     "description": "Full-clear a raid on Normal difficulty.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "ballad_of_ashenwood"
   },
   {
     "id": "RAID_HEROIC_CLEARED",
     "name": "Heroic Effort",
     "description": "Full-clear a raid on Heroic difficulty.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "hymn_of_valor"
   },
   {
     "id": "RAID_MYTHIC_CLEARED",
     "name": "Mythic Reckoning",
     "description": "Full-clear a raid on Mythic difficulty.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "the_last_watch"
   },
   {
     "id": "RAID_ALL_DIFFICULTIES",
     "name": "Every Banner Flying",
     "description": "Full-clear a raid at every difficulty -- Normal, Heroic, and Mythic.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "the_broken_crown"
   },
   {
     "id": "LAST_GOD_DEFEATED",
     "name": "The Last Mile",
     "description": "Clear Requiem for the Last God.",
-    "hidden": true
+    "hidden": true,
+    "unlocksTrackId": ""
   },
   {
     "id": "CHAIN_MILLERS_PROBLEM",
     "name": "First Real Job",
     "description": "Complete \"The Miller's Problem,\" the guild's first real job.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "sacred_springs"
   },
   {
     "id": "CHAIN_THE_LAST_CLUTCH",
     "name": "Keeper of the Clutch",
     "description": "Complete \"The Last Clutch\" and open the Hatchery for good.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "moonlit_vale"
   },
   {
     "id": "CHAIN_CROWS_WARNING",
     "name": "Crow-Friend",
     "description": "Complete \"The Crow's Warning.\"",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "call_of_the_raven"
   },
   {
     "id": "CHAIN_HARROWERS_FOOT",
     "name": "Ash-Reader",
     "description": "Complete \"The Harrower's Foot.\"",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "CHAIN_DEMON_GENERALS_LEDGER",
     "name": "Tally-Breaker",
     "description": "Break a demon general's ledger.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "CHAIN_WHAT_THE_CULLED_BECOME",
     "name": "Grave-Watcher",
     "description": "Complete \"What the Culled Become.\"",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "CHAIN_PROVING_THE_BASTION",
     "name": "Lord of the Keep",
     "description": "Complete \"Proving the Bastion.\"",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "CHAIN_GRANITE_CROSSING",
     "name": "Garrick's End",
     "description": "Complete \"Granite Crossing.\"",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "CHAIN_FARM_AT_THE_EDGE",
     "name": "Farmwarden",
     "description": "Complete \"The Farm at the Edge.\"",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "CHAIN_THE_PALE_RIDER",
     "name": "Ashen-Sworn",
     "description": "Complete \"The Pale Rider.\"",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "CHAIN_DRAGON_HUNT",
     "name": "Dragonbane",
     "description": "Complete the Dragon Hunt.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "blood_and_honor"
   },
   {
     "id": "CHAIN_LOST_KINGDOM",
     "name": "Kingdom-Finder",
     "description": "Complete the Lost Kingdom Expedition.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "lament_of_kings"
   },
   {
     "id": "CHAIN_DEMON_FORTRESS",
     "name": "Hellgate Breaker",
     "description": "Break the demon fortress assault.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "the_dark_moor"
   },
   {
     "id": "CHAIN_ANCIENT_CROWN",
     "name": "Crownbearer",
     "description": "Recover the Ancient Crown.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "crown_of_thorns"
   },
   {
     "id": "CHAIN_GOBLIN_WARBAND",
     "name": "Warband-Breaker",
     "description": "Break the Goblin King's warband for good.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "chant_of_the_fallen"
   },
   {
     "id": "CHAIN_THIRD_CROWN",
     "name": "Ridge-Watcher",
     "description": "Complete \"The Third Crown.\"",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "CHAIN_HOLLOW_CHOIR",
     "name": "Choir-Silencer",
     "description": "Silence the Hollow Choir.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "silent_citadel"
   },
   {
     "id": "CHAIN_LAST_PILGRIMAGE",
     "name": "Pilgrim's Herald",
     "description": "Complete the Last Pilgrimage.",
-    "hidden": true
+    "hidden": true,
+    "unlocksTrackId": ""
   },
   {
     "id": "CHAIN_HOLLOW_KING",
     "name": "Kingslayer Twice Over",
     "description": "Face the Hollow King's return.",
-    "hidden": true
+    "hidden": true,
+    "unlocksTrackId": ""
   },
   {
     "id": "CHAIN_THE_MAN_WHO_SELLS_MAYBE",
     "name": "The One He Doesn't Cheat",
     "description": "Complete \"The Man Who Sells Maybe\" and meet Grimsby.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "CHAIN_BANDITS_ON_THE_OLD_ROAD",
     "name": "Roadwarden",
     "description": "Break up the self-styled king of the old trade road.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "frostbound_path"
   },
   {
     "id": "CHAIN_SOMETHING_BIG_IN_THE_FOOTHILLS",
     "name": "Ridgebreaker",
     "description": "Put down whatever's been nesting in the foothills.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "CHAIN_FULL_MOON_OVER_ASHVALE",
     "name": "Moonhunter",
     "description": "Hunt down what's really loose over Ashvale.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "CHAIN_BODY_SNATCHER_PROBLEM",
     "name": "Unmasker",
     "description": "Unmask what's been copying people from the inside out.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "CHAIN_HUNT_A_LICH",
     "name": "Grave-Marked",
     "description": "Track a lich back to his own front door.",
-    "hidden": true
+    "hidden": true,
+    "unlocksTrackId": ""
   },
   {
     "id": "CHAIN_QUIET_IN_MILLBROOK",
     "name": "Watcher of Millbrook",
     "description": "Investigate the quiet in Millbrook.",
-    "hidden": true
+    "hidden": true,
+    "unlocksTrackId": ""
   },
   {
     "id": "CHAIN_THE_LOOM_BENEATH",
     "name": "Thread-Walker",
     "description": "Find what's been directing Millbrook all along.",
-    "hidden": true
+    "hidden": true,
+    "unlocksTrackId": ""
   },
   {
     "id": "CHAIN_THE_FIRST_HAUL",
     "name": "Provisioner",
     "description": "Complete \"The First Haul\" and open the Harvest tab for good.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "RAID_BLACKFORD_KEEP_CLEARED",
     "name": "Siege's End",
     "description": "Clear The Siege of Blackford Keep.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "echoes_of_eternity"
   },
   {
     "id": "RAID_BONEWROUGHT_VAULT_CLEARED",
     "name": "Vault Broken",
     "description": "Clear The Bonewrought Vault.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "RAID_FROZEN_WYRMKEEP_CLEARED",
     "name": "Wyrmkeep Thawed",
     "description": "Clear The Frozen Wyrmkeep.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "RAID_WHAT_GOT_OUT_CLEARED",
     "name": "Put It Back",
     "description": "Clear What Got Out.",
-    "hidden": true
+    "hidden": true,
+    "unlocksTrackId": ""
   },
   {
     "id": "RAID_BLACK_DRAGON_NEST_CLEARED",
     "name": "Nest Cleared",
     "description": "Clear The Black Dragon Nest.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "RAID_HOUSE_OF_BONES_CLEARED",
     "name": "Marrow to Ash",
     "description": "Clear The House of Bones.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "RAID_SILENCE_THE_LOOM_CLEARED",
     "name": "Thread Cut",
     "description": "Clear Silence the Loom.",
-    "hidden": true
+    "hidden": true,
+    "unlocksTrackId": ""
   },
   {
     "id": "BLACKSMITH_MAXED",
     "name": "Master Smith",
     "description": "Fully upgrade every Blacksmith training line.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "ALCHEMIST_MAXED",
     "name": "Master Alchemist",
     "description": "Fully upgrade every Alchemist training line.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "ENCHANTER_MAXED",
     "name": "Master Enchanter",
     "description": "Fully upgrade every Enchanter training line.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "GUILD_HALL_MAXED",
     "name": "Halls Unshakeable",
     "description": "Fully upgrade every Guild facility.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "COMPLETIONIST",
     "name": "Nothing Left to Buy",
     "description": "Fully upgrade every Guild facility and every vendor training line.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "WAREHOUSE_MAXED",
     "name": "Overflowing Stores",
     "description": "Fully upgrade the Warehouse.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "ALL_TOOLS_MAXED",
     "name": "Master Gatherer",
     "description": "Fully upgrade every Harvest tool.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "FIRST_PET_HATCHED",
     "name": "New Friend",
     "description": "Hatch your first pet.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "the_hidden_glade"
   },
   {
     "id": "ALL_PETS_COLLECTED",
     "name": "Full Menagerie",
     "description": "Hatch every pet species at least once.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "VETERAN_RETIREE",
     "name": "Serial Retiree",
     "description": "Retire 5 heroes over the guild's history.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": ""
   },
   {
     "id": "PEDDLER_FIRST_FLIP",
     "name": "A Reasonable Bet",
     "description": "Flip a card at Grimsby's table.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "tales_of_the_hearth"
   },
   {
     "id": "PEDDLER_JACKPOT",
     "name": "Jackpot!",
     "description": "Flip a jackpot-tier card at Grimsby's table.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "arcane_whispers"
   },
   {
     "id": "HIGH_ROLLER_UNLOCKED",
     "name": "Bigger Bets",
     "description": "Unlock High Roller at Grimsby's table.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "the_forgotten_grove"
   },
   {
     "id": "PEDDLER_HIGH_ROLLER_JACKPOT",
     "name": "The House Loses",
     "description": "Flip a jackpot-tier card while playing High Roller.",
-    "hidden": false
+    "hidden": false,
+    "unlocksTrackId": "the_silent_lake"
   }
 ]

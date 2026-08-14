@@ -1,44 +1,176 @@
 [
   {
-    "id": "bard_track_1",
-    "name": "Track 1",
-    "path": "bard/bard_track_1.mp3",
-    "credit": ""
+    "id": "dawn_of_blades",
+    "name": "Dawn of Blades",
+    "path": "bard/dawn_of_blades.mp3",
+    "credit": "Music by AlkaKrab"
   },
   {
-    "id": "bard_track_2",
-    "name": "Track 2",
-    "path": "bard/bard_track_2.mp3",
-    "credit": ""
+    "id": "twilight_march",
+    "name": "Twilight March",
+    "path": "bard/twilight_march.mp3",
+    "credit": "Music by AlkaKrab"
   },
   {
-    "id": "bard_track_3",
-    "name": "Track 3",
-    "path": "bard/bard_track_3.mp3",
-    "credit": ""
+    "id": "echoes_of_the_keep",
+    "name": "Echoes of the Keep",
+    "path": "bard/echoes_of_the_keep.mp3",
+    "credit": "Music by AlkaKrab"
   },
   {
-    "id": "bard_track_4",
-    "name": "Track 4",
-    "path": "bard/bard_track_4.mp3",
-    "credit": ""
+    "id": "the_old_tavern",
+    "name": "The Old Tavern",
+    "path": "bard/the_old_tavern.mp3",
+    "credit": "Music by AlkaKrab"
   },
   {
-    "id": "bard_track_5",
-    "name": "Track 5",
-    "path": "bard/bard_track_5.mp3",
-    "credit": ""
+    "id": "riders_of_the_storm",
+    "name": "Riders of the Storm",
+    "path": "bard/riders_of_the_storm.mp3",
+    "credit": "Music by AlkaKrab"
   },
   {
-    "id": "bard_track_6",
-    "name": "Track 6",
-    "path": "bard/bard_track_6.mp3",
-    "credit": ""
+    "id": "banners_in_the_wind",
+    "name": "Banners in the Wind",
+    "path": "bard/banners_in_the_wind.mp3",
+    "credit": "Music by AlkaKrab"
   },
   {
-    "id": "bard_track_7",
-    "name": "Track 7",
-    "path": "bard/bard_track_7.mp3",
-    "credit": ""
+    "id": "whispers_in_the_fog",
+    "name": "Whispers in the Fog",
+    "path": "bard/whispers_in_the_fog.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "the_hidden_glade",
+    "name": "The Hidden Glade",
+    "path": "bard/the_hidden_glade.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "march_of_iron",
+    "name": "March of Iron",
+    "path": "bard/march_of_iron.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "legends_of_the_flame",
+    "name": "Legends of the Flame",
+    "path": "bard/legends_of_the_flame.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "sacred_springs",
+    "name": "Sacred Springs",
+    "path": "bard/sacred_springs.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "moonlit_vale",
+    "name": "Moonlit Vale",
+    "path": "bard/moonlit_vale.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "call_of_the_raven",
+    "name": "Call of the Raven",
+    "path": "bard/call_of_the_raven.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "frostbound_path",
+    "name": "Frostbound Path",
+    "path": "bard/frostbound_path.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "chant_of_the_fallen",
+    "name": "Chant of the Fallen",
+    "path": "bard/chant_of_the_fallen.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "blood_and_honor",
+    "name": "Blood and Honor",
+    "path": "bard/blood_and_honor.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "lament_of_kings",
+    "name": "Lament of Kings",
+    "path": "bard/lament_of_kings.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "the_dark_moor",
+    "name": "The Dark Moor",
+    "path": "bard/the_dark_moor.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "crown_of_thorns",
+    "name": "Crown of Thorns",
+    "path": "bard/crown_of_thorns.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "silent_citadel",
+    "name": "Silent Citadel",
+    "path": "bard/silent_citadel.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "ballad_of_ashenwood",
+    "name": "Ballad of Ashenwood",
+    "path": "bard/ballad_of_ashenwood.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "hymn_of_valor",
+    "name": "Hymn of Valor",
+    "path": "bard/hymn_of_valor.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "the_last_watch",
+    "name": "The Last Watch",
+    "path": "bard/the_last_watch.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "the_broken_crown",
+    "name": "The Broken Crown",
+    "path": "bard/the_broken_crown.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "echoes_of_eternity",
+    "name": "Echoes of Eternity",
+    "path": "bard/echoes_of_eternity.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "tales_of_the_hearth",
+    "name": "Tales of the Hearth",
+    "path": "bard/tales_of_the_hearth.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "arcane_whispers",
+    "name": "Arcane Whispers",
+    "path": "bard/arcane_whispers.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "the_forgotten_grove",
+    "name": "The Forgotten Grove",
+    "path": "bard/the_forgotten_grove.mp3",
+    "credit": "Music by AlkaKrab"
+  },
+  {
+    "id": "the_silent_lake",
+    "name": "The Silent Lake",
+    "path": "bard/the_silent_lake.mp3",
+    "credit": "Music by AlkaKrab"
   }
 ]

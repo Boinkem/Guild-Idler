@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { GameEngine } from './game/engine';
 import { MusicManager } from './game/music';
-import { GuildManager } from './game/managers/GuildManager';
 import { EngineContext } from './ui/useEngine';
 import { useSettings } from './ui/useSettings';
 import { IdleView } from './ui/IdleView';
@@ -61,22 +60,25 @@ export function App() {
   // changing, so dragging the volume slider, flipping the toggle, or
   // picking a different track in Settings takes effect immediately
   // rather than waiting for the next menu open/close -- see
-  // MusicManager.applySettingsChange. musicHallLevel (which tracks are
-  // actually unlocked) comes from engine.state directly rather than
-  // being tracked inside music.ts itself, same "this module knows
-  // nothing about game/app state on its own" boundary the mode-tracking
-  // already established.
+  // MusicManager.applySettingsChange. unlockedTrackIds (which tracks are
+  // actually earned) comes from engine.state directly rather than being
+  // tracked inside music.ts itself, same "this module knows nothing
+  // about game/app state on its own" boundary the mode-tracking already
+  // established.
   const { settings } = useSettings();
-  const musicHallLevel = engine ? GuildManager.facilityLevel(engine.state, 'music_hall') : 0;
+  const unlockedTrackIds = engine ? engine.state.unlockedBardTracks : [];
   useEffect(() => {
-    if (mode === 'menu') MusicManager.enterGuildMenu(musicHallLevel);
+    if (mode === 'menu') MusicManager.enterGuildMenu(unlockedTrackIds);
     else MusicManager.leaveGuildMenu();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
   useEffect(() => {
-    MusicManager.applySettingsChange(settings, mode === 'menu', musicHallLevel);
+    MusicManager.applySettingsChange(settings, mode === 'menu', unlockedTrackIds);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.musicEnabled, settings.musicVolume, settings.musicContinuesWhenMinimized, settings.selectedBardTrack, musicHallLevel]);
+  }, [
+    settings.musicEnabled, settings.musicVolume, settings.musicContinuesWhenMinimized,
+    settings.selectedBardTrack, unlockedTrackIds.join(','),
+  ]);
 
   // The naming modal needs real screen space to render in -- if it shows up
   // while the app is still in the tiny idle-companion window (the default

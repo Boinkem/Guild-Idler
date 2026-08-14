@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 40;
+export const SAVE_VERSION = 41;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -1121,15 +1121,6 @@ export interface GuildDef {
    */
   modsMaxLevel?: number;
   /**
-   * Music Hall's structural effect -- same "not a flat Modifiers bonus"
-   * reasoning as storagePerLevel/heroSlotsPerLevel/
-   * healTimeReductionMinutesPerLevel above. Each level unlocks exactly
-   * one more track from BARD_TRACKS (see music.ts) in list order; the
-   * always-free default ambient track isn't counted here at all, so
-   * level 0 already has one track playing before a single gold is spent.
-   */
-  tracksPerLevel?: number;
-  /**
    * Physician's Charity's structural effect -- same "not a flat Modifiers
    * bonus" reasoning as every other structural field above. How many
    * Treat-an-injury actions per calendar day are free, guild-wide,
@@ -1401,6 +1392,17 @@ export interface GameState {
   lastPrestigeAt: number | null;
   /** Achievement id -> epoch ms when it unlocked. */
   unlockedAchievements: Record<string, number>;
+  /**
+   * BardTrack ids the guild has actually earned -- each one unlocks
+   * alongside a specific achievement (see AchievementDef.unlocksTrackId),
+   * granted in engine.ts's reportAchievements the moment that achievement
+   * fires. Replaces the old buy-a-Music-Hall-level system entirely; see
+   * music.ts's own top comment. A save with an already-leveled Music Hall
+   * from before this system existed is grandfathered forward once, in
+   * SaveManager's migration 40, rather than losing tracks already paid
+   * for in gold.
+   */
+  unlockedBardTracks: string[];
   /** How far each vendor's relationship has been invested in — gates how many of their upgrades are visible. */
   vendorLevels: Record<VendorId, number>;
   /**

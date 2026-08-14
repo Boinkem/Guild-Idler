@@ -14,9 +14,12 @@ export interface BardTrack {
 /**
  * Bard tracks live in json/bard-tracks.json so they can be edited via
  * tools/devtool without touching TypeScript -- same pattern
- * materials.ts/consumables.ts already use for their own data. List order
- * is the unlock order: Music Hall facility level N unlocks
- * BARD_TRACKS[N - 1] (see GuildManager/MusicManager for the read side).
+ * materials.ts/consumables.ts already use for their own data. Each track
+ * is unlocked by a specific achievement (see achievements.json's own
+ * `unlocksTrackId` field) rather than bought -- list order here has no
+ * unlock meaning anymore, it's just display order. See music.ts for the
+ * read side (state.unlockedBardTracks) and engine.ts's reportAchievements
+ * for where an unlock is actually granted.
  */
 import bardTracksJson from './json/bard-tracks.json';
 export const BARD_TRACKS: BardTrack[] = bardTracksJson as BardTrack[];

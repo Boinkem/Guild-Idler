@@ -3,6 +3,8 @@ import { createRng } from '../rng';
 import { HeroManager } from './HeroManager';
 import { AchievementManager } from './AchievementManager';
 import { UPGRADES, vendorUpgrades } from '../data/progression';
+import { BARD_TRACKS } from '../data/bard';
+import { ACHIEVEMENT_BY_ID } from '../data/achievements';
 import { NODE_ORDER } from '../data/materials';
 import { Tuning } from '../data/tuning';
 import { PeddlerManager } from './PeddlerManager';
@@ -147,6 +149,7 @@ export function createInitialState(now = Date.now()): GameState {
     prestigeStreak: 0,
     lastPrestigeAt: null,
     unlockedAchievements: {},
+    unlockedBardTracks: [],
     vendorLevels: { blacksmith: 0, alchemist: 0, enchanter: 0 },
     guildName: '',
     notifiedSetBonuses: [],
@@ -768,6 +771,45 @@ const MIGRATIONS: Record<number, Migration> = {
     // seenOnboarding's own migration).
     buyback: (save.buyback as GameState['buyback'] | undefined) ?? [],
   }),
+  40: (save) => {
+    // Music Hall (buy a level, unlock a track) removed -- bard tracks are
+    // now earned as achievement rewards instead (see achievements.json's
+    // unlocksTrackId, engine.ts's reportAchievements). Two things need
+    // grandfathering forward here, both one-time, so nobody's existing
+    // progress silently loses a track:
+    //
+    // 1. A save that had already spent real gold leveling Music Hall up
+    //    gets the first N tracks in BARD_TRACKS' own list order, N being
+    //    whatever level it had reached -- the exact same tracks
+    //    resolveTrackSrc would have offered it under the old level-gated
+    //    system. `guild.music_hall` itself is left alone (still 0 on
+    //    every save going forward, since nothing can buy it anymore) --
+    //    this migration only ever reads it, once.
+    // 2. reportAchievements only ever grants a track at the moment an
+    //    achievement newly unlocks (AchievementManager.checkAll only
+    //    returns NEWLY-unlocked ids) -- a save that already has, say,
+    //    CHAIN_MILLERS_PROBLEM from long before this system existed
+    //    would otherwise never receive Sacred Springs, since that
+    //    achievement will never fire as "new" again. Same "retroactively
+    //    credit anything already true" reasoning achievements.ts's own
+    //    top comment already documents for the v8->v9 migration --
+    //    applied here to track grants instead of the achievements
+    //    themselves.
+    const musicHallLevel = ((save.guild as Record<string, number> | undefined)?.music_hall as number | undefined) ?? 0;
+    const grandfathered = BARD_TRACKS.slice(0, musicHallLevel).map((t) => t.id);
+    const alreadyUnlockedAchievements = Object.keys(
+      (save.unlockedAchievements as Record<string, number> | undefined) ?? {},
+    );
+    const retroactive = alreadyUnlockedAchievements
+      .map((id) => ACHIEVEMENT_BY_ID[id]?.unlocksTrackId)
+      .filter((trackId): trackId is string => !!trackId);
+    const existing = (save.unlockedBardTracks as string[] | undefined) ?? [];
+    return {
+      ...save,
+      version: 41,
+      unlockedBardTracks: Array.from(new Set([...existing, ...grandfathered, ...retroactive])),
+    };
+  },
 };
 
 export const SaveManager = {

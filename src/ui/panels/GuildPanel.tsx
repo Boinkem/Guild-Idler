@@ -130,7 +130,6 @@ export function GuildPanel() {
                     {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
                     {def.storagePerLevel && <span>+{formatGold(def.storagePerLevel)} storage per level</span>}
                     {def.heroSlotsPerLevel && <span className="gold-text">+1 hero slot per level</span>}
-                    {def.tracksPerLevel && <span className="gold-text">+1 song per level</span>}
                   </div>
                   <button
                     className="btn-yellow"

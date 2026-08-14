@@ -13,6 +13,8 @@ import { GuildManager } from './managers/GuildManager';
 import { PrestigeManager } from './managers/PrestigeManager';
 import { ModifierManager } from './managers/ModifierManager';
 import { AchievementManager } from './managers/AchievementManager';
+import { ACHIEVEMENT_BY_ID } from './data/achievements';
+import { BARD_TRACK_BY_ID } from './data/bard';
 import { GuidanceManager, GuidanceTopic } from './managers/GuidanceManager';
 import { HarvestManager } from './managers/HarvestManager';
 import { PetManager } from './managers/PetManager';
@@ -234,13 +236,29 @@ export class GameEngine {
    * Steam stub, for every achievement id that just unlocked. Archives
    * directly (not via say()) so this doesn't also produce a redundant
    * plain-text toast on top of the richer popup -- one moment, not two.
+   *
+   * Also the single chokepoint every AchievementManager.checkAll() call
+   * site in this file already funnels through, which makes it the
+   * correct (and only) place to grant a bard track tied to an
+   * achievement (AchievementDef.unlocksTrackId) -- every quest/raid/
+   * peddler/purchase action that can newly unlock an achievement
+   * therefore grants its track for free, with no separate hook needed
+   * at each of those call sites. Folded into the same archived line
+   * rather than a second toast, same "one moment, not two" reasoning as
+   * the achievement popup itself.
    */
   private reportAchievements(ids: string[]) {
     if (ids.length === 0) return;
     for (const id of ids) {
-      const def = AchievementManager.list().find((a) => a.id === id);
+      const def = ACHIEVEMENT_BY_ID[id];
       playSound('achievement');
-      this.archive(`Achievement unlocked: ${def?.name ?? id}`);
+      let message = `Achievement unlocked: ${def?.name ?? id}`;
+      if (def?.unlocksTrackId && !this.state.unlockedBardTracks.includes(def.unlocksTrackId)) {
+        this.state.unlockedBardTracks.push(def.unlocksTrackId);
+        const track = BARD_TRACK_BY_ID[def.unlocksTrackId];
+        if (track) message += `. New track for the guild bard: "${track.name}."`;
+      }
+      this.archive(message);
       this.achievementQueue.push(id);
       void window.littleKnight?.unlockAchievement(id);
     }
@@ -1836,11 +1854,10 @@ export class GameEngine {
     const error = GuildManager.upgradeFacility(this.state, id);
     if (error) return this.say(error);
     playSound('purchase');
-    // Same immediate-check reasoning as buyUpgrade above -- Music Hall's
-    // first level is the one facility purchase with its own guidance
-    // topic (music_hall_unlocked) today, but this covers any future
-    // facility-tied guidance the same way without needing its own
-    // special case.
+    // Same immediate-check reasoning as buyUpgrade above -- no facility
+    // purchase has its own guidance topic today, but this covers any
+    // future facility-tied guidance the same way without needing its
+    // own special case.
     this.reportGuidance(GuidanceManager.checkAll(this.state));
     // GUILD_HALL_MAXED/COMPLETIONIST gate on this -- same reasoning as buyUpgrade above.
     this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));

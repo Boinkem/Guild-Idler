@@ -16,6 +16,16 @@ export interface AchievementDef {
   description: string;
   /** Steam hides the name/description of a locked hidden achievement. */
   hidden: boolean;
+  /**
+   * BardTrack id this achievement also grants the moment it unlocks, or
+   * '' for the vast majority of achievements that grant nothing extra.
+   * The actual grant happens in engine.ts's reportAchievements, not here
+   * -- this file just carries the mapping so it stays devtool-editable
+   * (tools/devtool's `achievements` schema) same as name/description/
+   * hidden. See music.ts's own top comment for why bard tracks moved
+   * from a bought facility to scattered achievement rewards.
+   */
+  unlocksTrackId: string;
 }
 
 import achievementsJson from './json/achievements.json';

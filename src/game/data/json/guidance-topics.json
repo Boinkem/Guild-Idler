@@ -78,9 +78,9 @@
     "targetTab": "quests"
   },
   {
-    "id": "music_hall_unlocked",
+    "id": "first_bard_track_unlocked",
     "messages": [
-      "The guild bard has a song ready -- pick it (or shuffle through everything you've unlocked) from the Track option in Settings."
+      "The guild bard just learned a new song -- pick it (or shuffle through everything you've earned) from the Track option in Settings."
     ],
     "targetTab": "settings"
   },

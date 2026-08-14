@@ -6,7 +6,6 @@ import { PetSprite } from '../sprites/PetSprite';
 import { Settings, THEMES } from '../../game/settings';
 import { previewSound } from '../../game/sound';
 import { BARD_TRACKS } from '../../game/data/bard';
-import { GuildManager } from '../../game/managers/GuildManager';
 import { CREDITS } from '../../game/data/credits';
 
 /* ------------------------------ small controls ---------------------------- */
@@ -65,8 +64,8 @@ export function SettingsPanel() {
   const engine = useEngine();
   const { settings, update, reset } = useSettings();
   const set = <K extends keyof Settings>(key: K) => (value: Settings[K]) => update(key, value);
-  const musicHallLevel = GuildManager.facilityLevel(engine.state, 'music_hall');
-  const unlockedTracks = BARD_TRACKS.slice(0, musicHallLevel);
+  const unlockedTrackIds = engine.state.unlockedBardTracks;
+  const unlockedTracks = BARD_TRACKS.filter((t) => unlockedTrackIds.includes(t.id));
 
   return (
     <>
@@ -241,10 +240,11 @@ export function SettingsPanel() {
         />
       </Row>
 
-      {/* Only shown once the Music Hall guild facility (Guild Hall tab)
-          has unlocked at least one track -- before that, "Guild Theme" is
-          the only option there is, so a picker with nothing to pick
-          between would just be clutter. */}
+      {/* Only shown once at least one bard track has actually been earned
+          (a quest chain, a raid clear, an achievement, a win at Grimsby's
+          table -- see achievements.json's unlocksTrackId) -- before that,
+          "Guild Theme" is the only option there is, so a picker with
+          nothing to pick between would just be clutter. */}
       {unlockedTracks.length > 0 && (
         <Row
           label="Track"

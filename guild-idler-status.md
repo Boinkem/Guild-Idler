@@ -10293,3 +10293,157 @@ integrating -- `app.css`'s 18 new lines (`.guild-card-wrap`,
 `GuildPanel.tsx`'s edits are the new wrapper div + conditional image
 only, no cost formulas, handlers, or conditions touched. `npx tsc
 --noEmit` clean.
+
+### Bard tracks earned instead of bought -- built (patch 0155)
+
+```discord-update
+Dev Update | Bard Tracks Rework
+
+- Removed the Music Hall guild facility -- songs are no longer bought with gold
+- Added 29 real tracks, each one earned by finishing a specific quest chain, clearing a specific raid, unlocking a specific achievement, or winning big at Grimsby's table
+- Changed the guild hall's default theme to "Tales by Firelight"
+- Players who'd already leveled Music Hall, or already earned any of the newly-track-linked achievements, keep every track they'd have had either way
+```
+
+Direct feedback on the Music Hall system (patch 0150's own entry): buying
+songs with gold felt wrong for a "narrative driven" guild -- the ask was
+to drop the purchase entirely and scatter tracks across quests,
+achievements, Grimsby, and raids as rewards instead. 30 real tracks (the
+AlkaKrab "Pixel Fantasy 30 Tracks Music Pack," royalty-free/commercial-
+use-allowed, no resale/redistribution of the files themselves) replaced
+the 7 silent placeholders (`Track 1`-`Track 7`) BARD_TRACKS had shipped
+with since patch 0150 -- one track ("Tales by Firelight") became the new
+always-free guild-menu default, the other 29 became the earnable pool.
+
+**Design call: piggyback on the achievement system rather than build a
+new reward-hook layer.** `AchievementManager` already has 65 achievements
+covering exactly the categories asked for -- 28 auto-generated
+`CHAIN_<id>` entries (one per quest chain), 7 auto-generated
+`RAID_<id>_CLEARED` entries plus 4 difficulty-tier raid achievements, 4
+Grimsby/peddler-specific achievements, and ~20 general milestones -- and
+`AchievementManager.checkAll()` is already called from every single
+action in the game that could plausibly matter (quest resolution, raid
+resolution, peddler flips, every purchase path, retirement, prestige,
+20+ call sites total in engine.ts). Rather than adding a second,
+parallel "did something reward-worthy just happen" check at each of
+those call sites, a track is now just something an achievement can also
+grant. `AchievementDef` (achievements.ts) gained one new field,
+`unlocksTrackId: string` (devtool-editable, same as name/description/
+hidden), and `engine.ts`'s `reportAchievements` -- the single chokepoint
+every one of those 20+ checkAll() call sites already funnels through --
+grants the linked track the moment that achievement fires, folding the
+notice into the same archived line ("Achievement unlocked: X. New track
+for the guild bard: \"Y.\"") rather than stacking a second toast on top
+of the achievement popup for the same moment. Net result: zero new hook
+call sites anywhere in quest/raid/peddler code.
+
+**The 29 achievement -> track pairings** (chosen to spread across all
+four categories asked for, with a loose thematic match between each
+achievement's flavour and its track's title/mood where one existed):
+
+*Milestones (10):* FIRST_CONTRACT -> Dawn of Blades, CHAIN_BREAKER ->
+Twilight March, FIRST_LEGENDARY -> Echoes of the Keep, RETIREMENT_PARTY
+-> The Old Tavern, AGAINST_THE_ODDS -> Riders of the Storm, FULL_ROSTER
+-> Banners in the Wind, BLACK_MARKET_REGULAR -> Whispers in the Fog,
+FIRST_PET_HATCHED -> The Hidden Glade, ON_A_ROLL -> March of Iron,
+LIVING_LEGEND -> Legends of the Flame.
+
+*Quest chains (10):* CHAIN_MILLERS_PROBLEM -> Sacred Springs,
+CHAIN_THE_LAST_CLUTCH -> Moonlit Vale, CHAIN_CROWS_WARNING -> Call of
+the Raven, CHAIN_BANDITS_ON_THE_OLD_ROAD -> Frostbound Path,
+CHAIN_GOBLIN_WARBAND -> Chant of the Fallen, CHAIN_DRAGON_HUNT -> Blood
+and Honor, CHAIN_LOST_KINGDOM -> Lament of Kings, CHAIN_DEMON_FORTRESS
+-> The Dark Moor, CHAIN_ANCIENT_CROWN -> Crown of Thorns,
+CHAIN_HOLLOW_CHOIR -> Silent Citadel.
+
+*Raids (5):* RAID_NORMAL_CLEARED -> Ballad of Ashenwood,
+RAID_HEROIC_CLEARED -> Hymn of Valor, RAID_MYTHIC_CLEARED -> The Last
+Watch, RAID_ALL_DIFFICULTIES -> The Broken Crown,
+RAID_BLACKFORD_KEEP_CLEARED -> Echoes of Eternity.
+
+*Grimsby (4):* PEDDLER_FIRST_FLIP -> Tales of the Hearth, PEDDLER_JACKPOT
+-> Arcane Whispers, HIGH_ROLLER_UNLOCKED -> The Forgotten Grove,
+PEDDLER_HIGH_ROLLER_JACKPOT -> The Silent Lake.
+
+Every one of the 29 earnable tracks is used exactly once; confirmed
+programmatically (no track referenced twice, no achievement pointing at
+a track id that doesn't exist).
+
+**Removed: Music Hall.** Deleted the facility entirely from
+`GUILD_FACILITIES` (progression.ts) and its 3 tuning.json entries
+(baseCost/costGrowth/maxLevel) -- Guild Hall is back to 7 facilities.
+`GuildDef.tracksPerLevel` (the now-fully-dead structural field) and its
+one JSX read in `GuildPanel.tsx` ("+1 song per level") were removed too,
+same "no orphaned fields" discipline recent patches have kept. Left
+alone deliberately: `GuildFacility`'s type union still includes
+`'music_hall'`, and `SaveManager`'s `EMPTY_GUILD` default still zeroes
+it -- both stay as harmless frozen fields (nothing can ever increase
+`state.guild.music_hall` again, nothing reads it except the one-time
+migration below) rather than touching the wider `Record<GuildFacility,
+number>` surface for a field that's cheaper to just leave inert.
+
+**Grandfathering, SaveManager migration 40 (SAVE_VERSION 40 -> 41),
+two separate one-time backfills so nobody's existing progress is
+worse off after this patch:**
+1. A save that had already spent real gold leveling Music Hall up to N
+   gets the first N tracks in BARD_TRACKS' own list order -- the exact
+   same tracks `resolveTrackSrc` would have offered under the old
+   level-gated system, just granted as a flat list instead of an
+   ongoing level check.
+2. Because `reportAchievements` only grants a track at the moment an
+   achievement *newly* unlocks, a save that already has (say)
+   `CHAIN_MILLERS_PROBLEM` from long before this patch would otherwise
+   never receive Sacred Springs -- that achievement can never fire as
+   "new" again. Fixed by also scanning `unlockedAchievements` at
+   migration time and granting any linked track retroactively -- same
+   "retroactively credit anything already true" reasoning
+   achievements.ts's own top comment already documents for the
+   Achievements system's own v8->v9 migration, applied here to the
+   track grants riding on top of it.
+
+**Read side.** `music.ts`'s `resolveTrackSrc` now takes
+`unlockedTrackIds: string[]` instead of a Music Hall level and filters
+`BARD_TRACKS` by membership instead of slicing by count.
+`MusicManager.enterGuildMenu`/`applySettingsChange` follow the same
+signature change. `App.tsx`/`SettingsPanel.tsx` now read
+`state.unlockedBardTracks` directly instead of
+`GuildManager.facilityLevel(state, 'music_hall')` (both `GuildManager`
+imports dropped, now unused in those files). The Settings "Track" picker
+itself is unchanged otherwise -- still hidden entirely until at least
+one track is earned, still lists only what's unlocked, no new "browse
+locked tracks" UI added (kept in scope).
+
+**Guidance/Guide content.** `music_hall_unlocked` (GuidanceManager
+topic, fired on Music Hall's first level) replaced with
+`first_bard_track_unlocked` (fires the moment `unlockedBardTracks` first
+goes non-empty, same message pointing at Settings). The Guide tab's
+"Music Hall" reference entry rewritten to "The Guild Bard," describing
+the new earn-it mechanism instead of the old purchase.
+
+**Credits.** New `credits.json` entry ("Background Music," AlkaKrab,
+"Pixel Fantasy 30 Tracks Music Pack") alongside the existing four --
+license confirmed directly from AlkaKrab's own license PDF: royalty-
+free, one-time payment, commercial use allowed in a sold game, no
+reselling/redistributing the files as-is, no uploading as-is to
+streaming platforms, credit appreciated but not required. `credits.ts`'s
+own "None of the four packs" comment corrected to drop the stale count.
+
+**Audio files themselves are not part of this patch.** `public/audio/*`
+is gitignored (only `README.md` is tracked) -- same convention every
+licensed-audio file in this game already follows, so the 30 real mp3s
+never touch the repo. `public/audio/README.md` rewritten with the full
+drop-in checklist: `background-music.mp3` (Tales by Firelight) plus all
+29 `bard/<id>.mp3` filenames the new `bard-tracks.json` entries expect.
+
+**Verified:** `npx tsc --noEmit` and `vite build` (web config) both
+clean. Achievement/track mapping checked programmatically -- all 29
+earnable tracks referenced exactly once, no dangling ids either
+direction. Migration 40 exercised directly against three synthetic
+saves built off a real `createInitialState()`: a Music-Hall-level-4 save
+grandfathers exactly `BARD_TRACKS[0..3]`; a veteran save with 3
+pre-existing achievements (one with no linked track) retroactively
+backfills exactly the 2 linked tracks and nothing extra; a fresh save at
+the current version passes through with an empty list. `resolveTrackSrc`
+sampled directly: default/unlocked/locked-falls-back-to-default/shuffle
+(day 0 vs day 1, pool includes the earned track) all resolve exactly as
+designed.
