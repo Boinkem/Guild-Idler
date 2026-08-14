@@ -11,6 +11,10 @@
       "blackford_uncrowned"
     ],
     "unlocksRaidId": "frozen_wyrmkeep",
+    "successModifier": 0,
+    "banner": {
+      "path": "Raidcard1.png"
+    },
     "title": "Siegebreaker"
   },
   {
