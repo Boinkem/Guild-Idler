@@ -39,9 +39,9 @@
       "caster": "Hedge Mage"
     },
     "roleDescriptions": {
-      "melee": "No banner, no order -- just grit and a blade held steady up close.",
-      "ranged": "Scouts ahead and picks fights from a distance no one saw coming.",
-      "caster": "Self-taught magic, patched together from whatever actually worked."
+      "melee": "No banner, no order, just grit, a borrowed blade, and a willingness to stand where the steel meets.",
+      "ranged": "Reads the land like a second language, then picks fights from a distance no one saw coming.",
+      "caster": "Magic pieced together from half-remembered lessons and whatever actually worked, cast with more nerve than training."
     }
   },
   {
@@ -84,9 +84,9 @@
       "caster": "Rune Knight"
     },
     "roleDescriptions": {
-      "melee": "Sworn, drilled, and first through the door every time.",
-      "ranged": "Trades the shield wall for a crossbow. still drilled, still reliable.",
-      "caster": "Etches battle-runes into steel instead of casting from open air."
+      "melee": "Sworn to an order, drilled since childhood, and first through the door every time, shield raised before the fear catches up.",
+      "ranged": "Trades the shield wall for a crossbow, discipline unshaken, aim as steady as any oath.",
+      "caster": "Etches battle-runes into steel rather than trusting open air, magic bound to armor like a second vow."
     }
   },
   {
@@ -130,9 +130,9 @@
       "caster": "Runesmith"
     },
     "roleDescriptions": {
-      "melee": "A wall with an axe, in absolutely no hurry to move.",
-      "ranged": "Throws what it can't be bothered to carry into melee.",
-      "caster": "Magic hammered into stone and metal, the old dwarven way."
+      "melee": "A wall of scarred stone and stubbornness, axe in hand, in absolutely no hurry to move for anything living.",
+      "ranged": "Throws whatever's heavy enough to matter rather than carry it all the way into melee.",
+      "caster": "Magic hammered, not spoken, forge-song and rune-carved stone in the old dwarven way."
     }
   },
   {
@@ -177,9 +177,9 @@
       "caster": "Enchanted Champion"
     },
     "roleDescriptions": {
-      "melee": "Sword and net, built for a fight that ends in one exchange.",
-      "ranged": "Bow in hand for the ones smart enough to run.",
-      "caster": "Arena tricks backed by whatever charm money could buy."
+      "melee": "Sword and net, arena-bred, built for a fight the crowd remembers because it ended in one exchange.",
+      "ranged": "Bow in hand and a showman's grin for the ones smart enough to run.",
+      "caster": "Arena tricks dressed up with whatever charm coin could buy, half showmanship, half genuine spellcraft."
     }
   },
   {
@@ -222,9 +222,9 @@
       "caster": "Onmyoji Adept"
     },
     "roleDescriptions": {
-      "melee": "One clean strike -- prizes the perfect kill over the messy one.",
-      "ranged": "Trades the blade for a bow, patience unchanged.",
-      "caster": "Wards and rites learned alongside the sword, not instead of it."
+      "melee": "Trained for one clean strike, a single breath of stillness before the blade, prizing the perfect kill over the messy one.",
+      "ranged": "Trades the blade for a bow, the same unbroken patience behind the string.",
+      "caster": "Wards and rites learned alongside the sword, not instead of it, prayer and steel drawn in the same breath."
     }
   },
   {
@@ -269,9 +269,9 @@
       "caster": "Witch"
     },
     "roleDescriptions": {
-      "melee": "A blade wrapped in a curse, for when the hex alone isn't fast enough.",
-      "ranged": "Curses fired from a distance -- safer for something this fragile.",
-      "caster": "Hexes, bargains, and a nose for what a ruin is really worth."
+      "melee": "A blade wrapped in a whispered curse, kept close for when the hex alone isn't fast enough.",
+      "ranged": "Flings hexbolts from a safe distance, wary of a body this easily broken.",
+      "caster": "Hexes bent toward guarding as often as harming, binding wards and bargained protection struck in the dark."
     }
   },
   {
@@ -316,9 +316,9 @@
       "caster": "Swampland Shaman"
     },
     "roleDescriptions": {
-      "melee": "Scales, claws, and a swamp-born refusal to die.",
-      "ranged": "Hunts from range the way its swamp taught it to.",
-      "caster": "Old swamp magic, older than the guild that hired it."
+      "melee": "Scales, claws, and a swamp-born refusal to die, patient as the mud that raised it.",
+      "ranged": "Hunts from range the patient way its swamp taught it, still as reeds until the strike.",
+      "caster": "Old swamp magic, murky and older by far than the guild that hired it."
     }
   },
   {
@@ -362,9 +362,9 @@
       "caster": "Pyromancer"
     },
     "roleDescriptions": {
-      "melee": "A blade kept lit, for when fire alone won't close the distance.",
-      "ranged": "Throws fire instead of casting it -- same result, longer reach.",
-      "caster": "Answers every problem with fire. Devastating, and made of paper."
+      "melee": "A blade kept burning, for when fire alone won't close the distance fast enough.",
+      "ranged": "Flings raw firebolts at range, blunt and immediate, no finesse required.",
+      "caster": "Wreathes allies in guardian embers and blinding cinder-clouds as readily as it burns the enemy down."
     }
   },
   {
@@ -410,9 +410,9 @@
       "caster": "Wizard"
     },
     "roleDescriptions": {
-      "melee": "A blade wrapped in decades of study it never expected to need.",
-      "ranged": "Trades the staff for something that hits from further away.",
-      "caster": "Decades of study in a pointed hat, unmatched on anything arcane."
+      "melee": "A blade steadied by decades of study it never expected to need, arcane theory over a sword grip.",
+      "ranged": "Trades ritual for reflex, hurling raw arcane bolts wherever the staff used to point.",
+      "caster": "Decades of study spent as much on arcane barriers to shield allies as on unleashing the arcane itself."
     }
   }
 ]

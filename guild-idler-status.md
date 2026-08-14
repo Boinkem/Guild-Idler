@@ -10058,3 +10058,37 @@ round-tripped by hand (open a class, edit all 3 role blurbs in the new
 textareas, save, reopen -- values persisted correctly through the
 shared `roleFlavors`/`roleDescriptions` read/validate path).
 
+### Hero class role-description flavor pass -- fixed (patch 0151)
+
+```discord-update
+Dev Update | Hero Class Flavor Text
+
+- Rewrote every class's 3 role-description blurbs (27 total, all 9 classes) with more fantasy flavor
+- Made a caster's own description read as its distinct support/utility angle instead of sounding like a re-skinned Ranged
+```
+
+Content-only pass over `hero-classes.json`'s `roleDescriptions` (see
+patch 0150 for the DevTool textarea fix that made this practical to
+write in the first place). All 27 blurbs (9 classes x 3 roles) rewritten
+with more sensory, evocative phrasing while keeping each class's
+existing voice and length -- not a tone change, an intensity turn-up.
+
+**Knight kept non-gendered on request** -- the only gendered word in the
+whole first draft was "boyhood" in Knight's Melee line, swapped for
+"childhood."
+
+**Pyromancer, Wizard, and Witch's Ranged/Caster pair reworked a second
+time**, flagged directly as reading too similarly for all three --
+both roles were just "does the class's usual thing, but from further
+away." Resolved by giving the two roles clearly different jobs: Ranged
+is now each class's straightforward, generic attacker (firebolts,
+hexbolts, raw arcane bolts -- blunt damage from range), and Caster is
+now explicitly the support/utility angle for all three (guardian
+embers and blinding cinder-clouds for Pyromancer, arcane barriers to
+shield allies for Wizard, wards and bargained protection for Witch) --
+distinct from Ranged rather than a reskin of it. The other 6 classes'
+Ranged/Caster pairs weren't flagged as having this problem and were
+left as originally drafted.
+
+**Verified:** `npx tsc --noEmit` clean -- no schema change, every edited
+value is still a plain string in the same `roleDescriptions` shape.
