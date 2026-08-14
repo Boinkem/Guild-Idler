@@ -13,6 +13,7 @@ import { HeroClass, Hero, Stats } from '../../game/types';
 import { describeMods, formatDuration, formatGold, HOUR } from '../../game/util';
 import { HeroSprite } from '../sprites/HeroSprite';
 import { GearScoreBadge } from '../GearScoreBadge';
+import { RoleIcon } from '../RoleIcon';
 import { useLevelUpFlash, LevelUpFlash } from '../levelFlash';
 import { registerFlyTarget } from '../flyTarget';
 
@@ -249,7 +250,7 @@ export function HeroesPanel() {
                     {hero.name}
                   </span>
                   <span className="small muted">
-                    {HeroManager.roleDisplayName(hero)} · Level {hero.level}
+                    <RoleIcon role={HeroManager.activeRole(hero)} size={14} /> {HeroManager.roleDisplayName(hero)} · Level {hero.level}
                     {hero.ascension > 0 && (
                       <> · {PrestigeManager.rankFor(hero) ?? `ascended ×${hero.ascension}`}</>
                     )}

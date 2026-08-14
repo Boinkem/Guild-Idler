@@ -9383,3 +9383,64 @@ both `raids` and `tuning` content types against an isolated scratch
 copy of `src/game/data/json/` (so the live files were never touched by
 the server's own re-serialization); a deliberate negative-validation
 test on the fixed `tuning` schema.
+
+### Role icons: raid requirement circles + a small assigned-role badge on hero cards -- built (patch 0141)
+
+```discord-update
+Dev Update | Role Icons
+
+- Added real Melee/Ranged/Caster icons to the raid role-requirement display
+- Each requirement circle now clearly shows met vs. missing at a glance
+- Added a small role icon next to each hero showing their current assignment
+```
+
+Follow-up to "Melee/Ranged/Caster Hero Roles -- built (patch 0135)," which
+shipped `roles.json` already pointing at `roles/melee.png`,
+`roles/ranged.png`, `roles/caster.png` under `public/item-icons/` --
+infrastructure waiting on real art, falling back to a plain text-label
+glyph everywhere a role renders until then. Real art now provided
+(three 724×724 sourced badges, one per role) and dropped into the actual
+pipeline at exactly that path -- cropped to content bounds, padded to a
+square canvas so the resize doesn't distort the circular badge art, and
+downsampled to 128px (same "large source, auto-cropped, exported at a
+practical in-game size" treatment `HeroTombstone.png` got earlier).
+Confirmed picked up by the DevTool's own icon picker (`/api/icons`
+lists a new `roles` folder with all three files) with zero picker/
+backend changes needed -- same "just needs the files dropped in" note
+0135 already left for this.
+
+**New shared `RoleIcon` component** (`src/ui/RoleIcon.tsx`) -- pulled the
+img-with-text-fallback-on-error logic that used to live only inside
+RaidsPanel's `RoleRequirementCircle` out into its own small component,
+so the raid role-requirement circles and each hero's card badge (see
+below) read the exact same icon and fall back to the exact same
+first-letter treatment, rather than two independent onError
+implementations that could quietly drift apart later. `RoleRequirementCircle`
+itself now just renders `<RoleIcon role={role} size={66} />` -- same 60%-
+of-110px sizing as before, just delegated rather than duplicated. Its
+title tooltip now also states "(met)" / "(missing)" explicitly in text,
+not just the existing colour/checkmark treatment, for a plainer met-vs-
+unmet signal alongside the visual one.
+
+**Small assigned-role badge on hero cards** (`HeroesPanel.tsx`) -- the
+collapsed hero-card summary line (`{roleDisplayName} · Level {n}`, always
+visible without expanding the card) now leads with a 14px `RoleIcon` for
+that hero's `HeroManager.activeRole(hero)`, so a player can see who's
+Melee/Ranged/Caster across the whole roster at a glance without opening
+each card to read the training chip row.
+
+**Deliberately not touched this pass:** the role-training chip row
+inside each hero's expanded card (the buttons that actually change a
+hero's role) is untouched -- still the plain text `skin-chip` buttons
+from 0135. That's in scope for the still-to-be-designed dedicated Hero
+Training tab discussed alongside this patch (gated behind a purchase,
+a nicer visual for the role-swap flow itself, and showing full class
+names without relying on hover) -- see the open design discussion in
+this session; no code for that yet, this patch is icons only.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (app + electron
+main + preload) both clean; confirmed the built `dist/item-icons/roles/`
+folder actually contains the three files (Vite's public-dir copy, not
+just a source-tree check); a real DevTool `/api/icons` call against an
+isolated scratch copy of `public/item-icons/` confirms the new `roles`
+folder and its three files are discovered with zero picker code changes.

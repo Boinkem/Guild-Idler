@@ -10,6 +10,7 @@ import {
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
 import { RaidDifficulty, RaidUpgradeDef, RaidDef, Hero, Role } from '../../game/types';
 import { ROLE_BY_ID } from '../../game/data/progression';
+import { RoleIcon } from '../RoleIcon';
 import { RarityPill } from '../RarityPill';
 import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
 import { RaidRoomSprite, RaidTorchSprite } from '../sprites/RaidRoomSprite';
@@ -285,35 +286,26 @@ function DifficultyCircle({
 
 /**
  * One per role present in a raid's requiredRoles -- same bordered-icon-
- * button shape as DifficultyCircle above (img with a text-label fallback
- * if the icon file's missing, same onError pattern), plus a green check
- * overlay once the *currently selected* party meets that slot. Doesn't
- * block committing if unmet -- raids don't hard-gate on anything else
- * today either, this is a warning (paired with the mismatch-penalty
- * note next to it) not a lock, same reasoning as the rest of the "Raid
- * role requirements" section of guild-idler-status.md's hero-roles
- * backlog entry.
+ * button shape as DifficultyCircle above, plus a green check overlay once
+ * the *currently selected* party meets that slot. Icon rendering itself
+ * delegates to the shared RoleIcon component (patch 0141) rather than its
+ * own onError logic, so this and each hero's card badge always agree on
+ * what "the melee icon" actually is. Doesn't block committing if unmet --
+ * raids don't hard-gate on anything else today either, this is a warning
+ * (paired with the mismatch-penalty note next to it) not a lock, same
+ * reasoning as the rest of the "Raid role requirements" section of
+ * guild-idler-status.md's hero-roles backlog entry.
  */
 function RoleRequirementCircle({ role, needed, have }: { role: Role; needed: number; have: number }) {
   const def = ROLE_BY_ID[role];
-  const [imgFailed, setImgFailed] = useState(false);
   const met = have >= needed;
   return (
     <div
       className="raid-diff-circle"
       style={{ borderColor: met ? 'var(--moss)' : 'var(--brass)', color: 'var(--brass)', position: 'relative' }}
-      title={`${def?.name ?? role} ×${needed} -- ${have}/${needed} in the current selection`}
+      title={`${def?.name ?? role} ×${needed} -- ${have}/${needed} in the current selection${met ? ' (met)' : ' (missing)'}`}
     >
-      {def?.icon && !imgFailed ? (
-        <img
-          src={`./item-icons/${def.icon}`}
-          alt=""
-          onError={() => setImgFailed(true)}
-          style={{ width: '60%', height: '60%', objectFit: 'contain' }}
-        />
-      ) : (
-        <span className="tiny">{(def?.name ?? role).slice(0, 1)}</span>
-      )}
+      <RoleIcon role={role} size={66} />
       <span className="tiny" style={{ position: 'absolute', bottom: -2, right: -2 }}>×{needed}</span>
       {met && (
         <span
