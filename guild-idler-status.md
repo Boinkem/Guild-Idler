@@ -8869,6 +8869,14 @@ and clears the buyback entry.
 
 ### Melee/Ranged/Caster Hero Roles -- built (patch 0135)
 
+```discord-update
+Dev Update | Melee/Ranged/Caster Hero Roles
+
+- Added Melee, Ranged, and Caster roles for every hero
+- Added Training so any hero can learn or switch roles for a gold cost
+- Added role requirements on raids, shown right on the party screen
+```
+
 Full spec was pinned down in the backlog scoping pass referenced above;
 this is the actual implementation, built to that spec with a couple of
 things caught along the way. Rebased twice during the build -- once
@@ -8997,6 +9005,13 @@ three negative-validation tests described above.
 
 ### Discord Dev Updates in the Patches tab -- built (patch 0136)
 
+```discord-update
+Dev Update | Discord Dev Updates
+
+- Added a way to post dev updates straight to Discord from the Patches tab
+- Added a saved webhook URL so you only set it up once
+```
+
 New section at the bottom of the Patches tab (step 9, after the version-bump
 step): a way to post a dev update / patch-notes message to a Discord channel
 via an incoming webhook, without adding a bot, a token, or any dependency --
@@ -9045,3 +9060,75 @@ real-shaped one, masked preview matches, config file round-trips correctly
 on disk. The actual outbound POST to Discord itself wasn't exercised in this
 pass (no network path to discord.com from the environment this was built
 in) -- worth a real webhook test before relying on it.
+
+### Structured Discord Update blocks + patch-continuity check -- built (patch 0137)
+
+```discord-update
+Dev Update | Patch 0137
+
+- Added a real "Fill from selected patch" -- pulls an actual summary
+  instead of just the filename
+- Added a continuity check that flags a gap in the patch numbering
+```
+
+Follow-up to patch 0136. The "Fill from selected patch" button worked, but
+only ever reformatted the `.patch` filename into a title -- it had no way
+to know what the patch actually did, since the devtool is a static Node
+server with no LLM in the loop at runtime. It can read text, though, and
+every patch's status.md entry already carries a real writeup; the button
+just wasn't reading it.
+
+**The convention.** Every patch-log heading (`### <title> -- built (patch
+NNNN)`) can now be immediately followed by a fenced ` ```discord-update `
+block:
+
+```
+Dev Update | <context>
+
+- Added ...
+- Changed ...
+- Fixed ...
+```
+
+`<context>` is whatever best describes the patch -- a specific feature
+name for a feature release, or `Patch NNNN` for a mixed bag, or `Bug Fix`
+/ `Features` / `Changes` for a patch that's mostly one kind of thing.
+Bullets lead with a plain verb (Added/Changed/Fixed/Removed), matching the
+player-facing changelog style used elsewhere, not the technical prose
+underneath it aimed at a future patch author. Older entries without a
+block simply have nothing to find -- not an error case, just means this
+convention predates them. This entry and the two immediately before it
+(0135, 0136) got a block added retroactively so the fill button has real
+data starting now rather than starting from a cold, empty log.
+
+**Lookup.** `findPatchSummary` (`server.mjs`) takes a patch filename,
+pulls the leading digits, finds the matching `(patch NNNN)` heading in
+`guild-idler-status.md`, and returns the fenced block's contents verbatim
+-- or `found: false` if either the heading or the block isn't there, which
+the frontend uses as the signal to fall back to the old filename-based
+fill instead of showing an error. New `GET /api/discord/patch-summary`
+route; `STATUS_MD_PATH` is a plain read-only path join, no new dependency.
+
+**Continuity check.** Same lookup also collects every `(patch NNNN)`
+number in the file, finds the highest one *below* the patch being looked
+up, and reports whether the gap is exactly 1. Surfaced as a small note
+under the Fill button -- a green "Continuity OK" line normally, or a
+brass-coloured warning naming the actual gap if patch numbers were
+assigned out of sequence (exactly what caused the need to rebuild patch
+0136 from scratch against a stale local copy of the repo -- this doesn't
+prevent that class of mistake outright, but it surfaces it immediately in
+the one place a patch author is already looking, rather than silently).
+
+**Deliberately not done this pass:** no enforcement -- a numbering gap is
+shown, not blocked; a patch can still be applied over it. Making that a
+hard stop felt like the wrong tradeoff for a single-developer local tool
+where the real fix is upstream (always pulling the live repo before
+assigning a patch number), not downstream tooling friction.
+
+**Verified:** both files pass `node --check`; `findPatchSummary` tested
+directly against the live `guild-idler-status.md` for patches 0135, 0136,
+and 0137 (all three found their block correctly) and against a
+deliberately-wrong number (correctly returned `found: false` with no
+crash); continuity numbers cross-checked by hand against the file's own
+patch-heading list.
+

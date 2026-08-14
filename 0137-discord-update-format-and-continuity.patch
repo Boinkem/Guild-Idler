@@ -1,0 +1,267 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 60d601f..afa4362 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -8869,6 +8869,14 @@ and clears the buyback entry.
+ 
+ ### Melee/Ranged/Caster Hero Roles -- built (patch 0135)
+ 
++```discord-update
++Dev Update | Melee/Ranged/Caster Hero Roles
++
++- Added Melee, Ranged, and Caster roles for every hero
++- Added Training so any hero can learn or switch roles for a gold cost
++- Added role requirements on raids, shown right on the party screen
++```
++
+ Full spec was pinned down in the backlog scoping pass referenced above;
+ this is the actual implementation, built to that spec with a couple of
+ things caught along the way. Rebased twice during the build -- once
+@@ -8997,6 +9005,13 @@ three negative-validation tests described above.
+ 
+ ### Discord Dev Updates in the Patches tab -- built (patch 0136)
+ 
++```discord-update
++Dev Update | Discord Dev Updates
++
++- Added a way to post dev updates straight to Discord from the Patches tab
++- Added a saved webhook URL so you only set it up once
++```
++
+ New section at the bottom of the Patches tab (step 9, after the version-bump
+ step): a way to post a dev update / patch-notes message to a Discord channel
+ via an incoming webhook, without adding a bot, a token, or any dependency --
+@@ -9045,3 +9060,75 @@ real-shaped one, masked preview matches, config file round-trips correctly
+ on disk. The actual outbound POST to Discord itself wasn't exercised in this
+ pass (no network path to discord.com from the environment this was built
+ in) -- worth a real webhook test before relying on it.
++
++### Structured Discord Update blocks + patch-continuity check -- built (patch 0137)
++
++```discord-update
++Dev Update | Patch 0137
++
++- Added a real "Fill from selected patch" -- pulls an actual summary
++  instead of just the filename
++- Added a continuity check that flags a gap in the patch numbering
++```
++
++Follow-up to patch 0136. The "Fill from selected patch" button worked, but
++only ever reformatted the `.patch` filename into a title -- it had no way
++to know what the patch actually did, since the devtool is a static Node
++server with no LLM in the loop at runtime. It can read text, though, and
++every patch's status.md entry already carries a real writeup; the button
++just wasn't reading it.
++
++**The convention.** Every patch-log heading (`### <title> -- built (patch
++NNNN)`) can now be immediately followed by a fenced ` ```discord-update `
++block:
++
++```
++Dev Update | <context>
++
++- Added ...
++- Changed ...
++- Fixed ...
++```
++
++`<context>` is whatever best describes the patch -- a specific feature
++name for a feature release, or `Patch NNNN` for a mixed bag, or `Bug Fix`
++/ `Features` / `Changes` for a patch that's mostly one kind of thing.
++Bullets lead with a plain verb (Added/Changed/Fixed/Removed), matching the
++player-facing changelog style used elsewhere, not the technical prose
++underneath it aimed at a future patch author. Older entries without a
++block simply have nothing to find -- not an error case, just means this
++convention predates them. This entry and the two immediately before it
++(0135, 0136) got a block added retroactively so the fill button has real
++data starting now rather than starting from a cold, empty log.
++
++**Lookup.** `findPatchSummary` (`server.mjs`) takes a patch filename,
++pulls the leading digits, finds the matching `(patch NNNN)` heading in
++`guild-idler-status.md`, and returns the fenced block's contents verbatim
++-- or `found: false` if either the heading or the block isn't there, which
++the frontend uses as the signal to fall back to the old filename-based
++fill instead of showing an error. New `GET /api/discord/patch-summary`
++route; `STATUS_MD_PATH` is a plain read-only path join, no new dependency.
++
++**Continuity check.** Same lookup also collects every `(patch NNNN)`
++number in the file, finds the highest one *below* the patch being looked
++up, and reports whether the gap is exactly 1. Surfaced as a small note
++under the Fill button -- a green "Continuity OK" line normally, or a
++brass-coloured warning naming the actual gap if patch numbers were
++assigned out of sequence (exactly what caused the need to rebuild patch
++0136 from scratch against a stale local copy of the repo -- this doesn't
++prevent that class of mistake outright, but it surfaces it immediately in
++the one place a patch author is already looking, rather than silently).
++
++**Deliberately not done this pass:** no enforcement -- a numbering gap is
++shown, not blocked; a patch can still be applied over it. Making that a
++hard stop felt like the wrong tradeoff for a single-developer local tool
++where the real fix is upstream (always pulling the live repo before
++assigning a patch number), not downstream tooling friction.
++
++**Verified:** both files pass `node --check`; `findPatchSummary` tested
++directly against the live `guild-idler-status.md` for patches 0135, 0136,
++and 0137 (all three found their block correctly) and against a
++deliberately-wrong number (correctly returned `found: false` with no
++crash); continuity numbers cross-checked by hand against the file's own
++patch-heading list.
++
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index 7b77a35..9772462 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -1639,6 +1639,7 @@ function renderPatches() {
+       <button id="discordFillBtn" ${!sel ? 'disabled' : ''}>Fill from selected patch</button>
+       <button id="discordPostBtn" class="primary" ${!patchState.discordConfigured ? 'disabled' : ''}>Post to Discord</button>
+     </div>
++    <p id="discordContinuity" class="tiny muted" style="margin: 4px 0 0;"></p>
+     <div id="discordResult"></div>
+   `;
+ 
+@@ -1799,11 +1800,40 @@ function renderPatches() {
+   };
+ 
+   const discordFillBtn = document.getElementById('discordFillBtn');
+-  if (discordFillBtn) discordFillBtn.onclick = () => {
+-    const name = sel.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ');
++  if (discordFillBtn) discordFillBtn.onclick = async () => {
+     const messageInput = document.getElementById('discordMessageInput');
+-    messageInput.value = `**${name}**\n\nSee the full changelog in guild-idler-status.md.`;
+-    patchState.discordDraft = messageInput.value;
++    const continuityEl = document.getElementById('discordContinuity');
++    discordFillBtn.disabled = true;
++    discordFillBtn.textContent = 'Filling…';
++    try {
++      const summary = await api(`/api/discord/patch-summary?patch=${encodeURIComponent(sel)}`);
++      if (summary.found) {
++        messageInput.value = summary.text;
++      } else {
++        // No ```discord-update block on this entry (an older patch, or one
++        // written before this convention existed) -- fall back to a plain
++        // title derived from the filename, same as before this feature.
++        const name = sel.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ');
++        messageInput.value = `**${name}**\n\nSee the full changelog in guild-idler-status.md.`;
++      }
++      patchState.discordDraft = messageInput.value;
++      if (continuityEl) {
++        if (summary.latestPriorPatch === null) {
++          continuityEl.textContent = '';
++        } else if (summary.continuityOk) {
++          continuityEl.textContent = `✓ Continuity OK -- previous logged patch is ${summary.latestPriorPatch}.`;
++          continuityEl.className = 'tiny muted';
++        } else {
++          continuityEl.textContent = `⚠ Continuity check: previous logged patch is ${summary.latestPriorPatch}, expected patch ${String(parseInt(summary.latestPriorPatch, 10) + 1).padStart(4, '0')} -- check guild-idler-status.md for a numbering gap.`;
++          continuityEl.className = 'tiny';
++          continuityEl.style.color = 'var(--brass)';
++        }
++      }
++    } catch (err) {
++      alert(err.message || 'Could not look up a summary for this patch.');
++    }
++    discordFillBtn.disabled = false;
++    discordFillBtn.textContent = 'Fill from selected patch';
+   };
+ 
+   const discordPostBtn = document.getElementById('discordPostBtn');
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index aa5b0f0..03f2af1 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -49,6 +49,10 @@ const PORT = 5175;
+ // served as a static file (lives outside PUBLIC_DIR), only ever read/written
+ // by the /api/discord/* handlers below.
+ const DISCORD_CONFIG_PATH = path.join(__dirname, 'discord.config.json');
++// The running changelog/backlog doc at the repo root -- read (never written)
++// by the patch-summary lookup below, to pull a ready-made Discord blurb for
++// whichever patch is selected instead of guessing one from its filename.
++const STATUS_MD_PATH = path.join(ROOT, 'guild-idler-status.md');
+ 
+ /* --------------------------------------------------------------- schema --- */
+ // Required fields per content type. This is the real safety net: TypeScript's
+@@ -1350,6 +1354,73 @@ async function postDiscordUpdate(title, message) {
+   }
+ }
+ 
++/**
++ * Pulls a ready-made Discord blurb for a given patch out of
++ * guild-idler-status.md, instead of the "Fill from selected patch" button
++ * just reformatting the patch's filename.
++ *
++ * Convention this depends on: every patch-log entry's heading reads
++ * `### <title> -- built (patch NNNN)`, and is immediately followed (once
++ * the short prose intro, if any, is done) by a fenced ```discord-update
++ * block containing the actual blurb, e.g.:
++ *
++ *   ```discord-update
++ *   Dev Update | Feature Name
++ *
++ *   - Added the new thing
++ *   - Fixed the other thing
++ *   ```
++ *
++ * Older entries written before this convention existed simply won't have
++ * a block to find -- `found: false` lets the frontend fall back to its old
++ * filename-based fill instead of erroring.
++ *
++ * Also reports a lightweight continuity check: the highest patch number
++ * logged *before* this one, and whether this patch is exactly one more
++ * than that -- a numbering gap here almost always means a patch was
++ * built against a stale local copy of the repo (see patch 0136's own
++ * postmortem) rather than an intentional skip.
++ */
++async function findPatchSummary(patchFilename) {
++  const numMatch = /^(\d+)-/.exec(patchFilename || '');
++  if (!numMatch) return { found: false, patchNumber: null, text: null, latestPriorPatch: null, continuityOk: null };
++  const patchNumber = numMatch[1];
++  const patchNum = parseInt(patchNumber, 10);
++
++  let markdown;
++  try {
++    markdown = await fs.readFile(STATUS_MD_PATH, 'utf8');
++  } catch {
++    return { found: false, patchNumber, text: null, latestPriorPatch: null, continuityOk: null };
++  }
++
++  const headingRe = /^###.*\(patch (\d+)\)\s*$/gm;
++  const headings = [];
++  let m;
++  while ((m = headingRe.exec(markdown)) !== null) {
++    headings.push({ num: parseInt(m[1], 10), index: m.index });
++  }
++
++  const priorNums = headings.map((h) => h.num).filter((n) => n < patchNum);
++  const latestPriorPatch = priorNums.length ? String(Math.max(...priorNums)).padStart(4, '0') : null;
++  const continuityOk = latestPriorPatch === null ? true : patchNum - parseInt(latestPriorPatch, 10) === 1;
++
++  const match = headings.find((h) => h.num === patchNum);
++  if (!match) return { found: false, patchNumber, text: null, latestPriorPatch, continuityOk };
++
++  const nextIndex = headings.find((h) => h.index > match.index)?.index ?? markdown.length;
++  const section = markdown.slice(match.index, nextIndex);
++
++  const fenceStart = section.indexOf('```discord-update');
++  if (fenceStart === -1) return { found: false, patchNumber, text: null, latestPriorPatch, continuityOk };
++  const afterFenceStart = fenceStart + '```discord-update'.length;
++  const fenceEnd = section.indexOf('```', afterFenceStart);
++  if (fenceEnd === -1) return { found: false, patchNumber, text: null, latestPriorPatch, continuityOk };
++
++  const text = section.slice(afterFenceStart, fenceEnd).trim();
++  return { found: true, patchNumber, text, latestPriorPatch, continuityOk };
++}
++
+ /* ------------------------------------------------------------------ http --- */
+ 
+ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
+@@ -1501,6 +1572,11 @@ const server = http.createServer(async (req, res) => {
+     return json(res, result.ok ? 200 : 400, result);
+   }
+ 
++  if (url.pathname === '/api/discord/patch-summary' && req.method === 'GET') {
++    const patch = url.searchParams.get('patch') || '';
++    return json(res, 200, await findPatchSummary(patch));
++  }
++
+   if (url.pathname === '/api/icons' && req.method === 'GET') {
+     return json(res, 200, await listIcons());
+   }

@@ -1639,6 +1639,7 @@ function renderPatches() {
       <button id="discordFillBtn" ${!sel ? 'disabled' : ''}>Fill from selected patch</button>
       <button id="discordPostBtn" class="primary" ${!patchState.discordConfigured ? 'disabled' : ''}>Post to Discord</button>
     </div>
+    <p id="discordContinuity" class="tiny muted" style="margin: 4px 0 0;"></p>
     <div id="discordResult"></div>
   `;
 
@@ -1799,11 +1800,40 @@ function renderPatches() {
   };
 
   const discordFillBtn = document.getElementById('discordFillBtn');
-  if (discordFillBtn) discordFillBtn.onclick = () => {
-    const name = sel.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ');
+  if (discordFillBtn) discordFillBtn.onclick = async () => {
     const messageInput = document.getElementById('discordMessageInput');
-    messageInput.value = `**${name}**\n\nSee the full changelog in guild-idler-status.md.`;
-    patchState.discordDraft = messageInput.value;
+    const continuityEl = document.getElementById('discordContinuity');
+    discordFillBtn.disabled = true;
+    discordFillBtn.textContent = 'Filling…';
+    try {
+      const summary = await api(`/api/discord/patch-summary?patch=${encodeURIComponent(sel)}`);
+      if (summary.found) {
+        messageInput.value = summary.text;
+      } else {
+        // No ```discord-update block on this entry (an older patch, or one
+        // written before this convention existed) -- fall back to a plain
+        // title derived from the filename, same as before this feature.
+        const name = sel.replace(/\.patch$/, '').replace(/^\d+-/, '').replace(/-/g, ' ');
+        messageInput.value = `**${name}**\n\nSee the full changelog in guild-idler-status.md.`;
+      }
+      patchState.discordDraft = messageInput.value;
+      if (continuityEl) {
+        if (summary.latestPriorPatch === null) {
+          continuityEl.textContent = '';
+        } else if (summary.continuityOk) {
+          continuityEl.textContent = `✓ Continuity OK -- previous logged patch is ${summary.latestPriorPatch}.`;
+          continuityEl.className = 'tiny muted';
+        } else {
+          continuityEl.textContent = `⚠ Continuity check: previous logged patch is ${summary.latestPriorPatch}, expected patch ${String(parseInt(summary.latestPriorPatch, 10) + 1).padStart(4, '0')} -- check guild-idler-status.md for a numbering gap.`;
+          continuityEl.className = 'tiny';
+          continuityEl.style.color = 'var(--brass)';
+        }
+      }
+    } catch (err) {
+      alert(err.message || 'Could not look up a summary for this patch.');
+    }
+    discordFillBtn.disabled = false;
+    discordFillBtn.textContent = 'Fill from selected patch';
   };
 
   const discordPostBtn = document.getElementById('discordPostBtn');

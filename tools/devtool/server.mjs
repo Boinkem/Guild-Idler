@@ -49,6 +49,10 @@ const PORT = 5175;
 // served as a static file (lives outside PUBLIC_DIR), only ever read/written
 // by the /api/discord/* handlers below.
 const DISCORD_CONFIG_PATH = path.join(__dirname, 'discord.config.json');
+// The running changelog/backlog doc at the repo root -- read (never written)
+// by the patch-summary lookup below, to pull a ready-made Discord blurb for
+// whichever patch is selected instead of guessing one from its filename.
+const STATUS_MD_PATH = path.join(ROOT, 'guild-idler-status.md');
 
 /* --------------------------------------------------------------- schema --- */
 // Required fields per content type. This is the real safety net: TypeScript's
@@ -1350,6 +1354,73 @@ async function postDiscordUpdate(title, message) {
   }
 }
 
+/**
+ * Pulls a ready-made Discord blurb for a given patch out of
+ * guild-idler-status.md, instead of the "Fill from selected patch" button
+ * just reformatting the patch's filename.
+ *
+ * Convention this depends on: every patch-log entry's heading reads
+ * `### <title> -- built (patch NNNN)`, and is immediately followed (once
+ * the short prose intro, if any, is done) by a fenced ```discord-update
+ * block containing the actual blurb, e.g.:
+ *
+ *   ```discord-update
+ *   Dev Update | Feature Name
+ *
+ *   - Added the new thing
+ *   - Fixed the other thing
+ *   ```
+ *
+ * Older entries written before this convention existed simply won't have
+ * a block to find -- `found: false` lets the frontend fall back to its old
+ * filename-based fill instead of erroring.
+ *
+ * Also reports a lightweight continuity check: the highest patch number
+ * logged *before* this one, and whether this patch is exactly one more
+ * than that -- a numbering gap here almost always means a patch was
+ * built against a stale local copy of the repo (see patch 0136's own
+ * postmortem) rather than an intentional skip.
+ */
+async function findPatchSummary(patchFilename) {
+  const numMatch = /^(\d+)-/.exec(patchFilename || '');
+  if (!numMatch) return { found: false, patchNumber: null, text: null, latestPriorPatch: null, continuityOk: null };
+  const patchNumber = numMatch[1];
+  const patchNum = parseInt(patchNumber, 10);
+
+  let markdown;
+  try {
+    markdown = await fs.readFile(STATUS_MD_PATH, 'utf8');
+  } catch {
+    return { found: false, patchNumber, text: null, latestPriorPatch: null, continuityOk: null };
+  }
+
+  const headingRe = /^###.*\(patch (\d+)\)\s*$/gm;
+  const headings = [];
+  let m;
+  while ((m = headingRe.exec(markdown)) !== null) {
+    headings.push({ num: parseInt(m[1], 10), index: m.index });
+  }
+
+  const priorNums = headings.map((h) => h.num).filter((n) => n < patchNum);
+  const latestPriorPatch = priorNums.length ? String(Math.max(...priorNums)).padStart(4, '0') : null;
+  const continuityOk = latestPriorPatch === null ? true : patchNum - parseInt(latestPriorPatch, 10) === 1;
+
+  const match = headings.find((h) => h.num === patchNum);
+  if (!match) return { found: false, patchNumber, text: null, latestPriorPatch, continuityOk };
+
+  const nextIndex = headings.find((h) => h.index > match.index)?.index ?? markdown.length;
+  const section = markdown.slice(match.index, nextIndex);
+
+  const fenceStart = section.indexOf('```discord-update');
+  if (fenceStart === -1) return { found: false, patchNumber, text: null, latestPriorPatch, continuityOk };
+  const afterFenceStart = fenceStart + '```discord-update'.length;
+  const fenceEnd = section.indexOf('```', afterFenceStart);
+  if (fenceEnd === -1) return { found: false, patchNumber, text: null, latestPriorPatch, continuityOk };
+
+  const text = section.slice(afterFenceStart, fenceEnd).trim();
+  return { found: true, patchNumber, text, latestPriorPatch, continuityOk };
+}
+
 /* ------------------------------------------------------------------ http --- */
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
@@ -1499,6 +1570,11 @@ const server = http.createServer(async (req, res) => {
     const body = JSON.parse(await readBody(req));
     const result = await postDiscordUpdate(body.title, body.message);
     return json(res, result.ok ? 200 : 400, result);
+  }
+
+  if (url.pathname === '/api/discord/patch-summary' && req.method === 'GET') {
+    const patch = url.searchParams.get('patch') || '';
+    return json(res, 200, await findPatchSummary(patch));
   }
 
   if (url.pathname === '/api/icons' && req.method === 'GET') {
