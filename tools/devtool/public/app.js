@@ -491,7 +491,7 @@ function fieldControl(spec, key, value) {
     // carries the schema's `defaultFolder` hint through to the picker.
     return `<div class="banner-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-folder="${escapeHtml(spec.defaultFolder ?? '')}"></div>`;
   }
-  if (spec.type === 'string' && (key === 'description' || key === 'flavour' || key === 'blurb')) {
+  if (spec.type === 'string' && (key === 'description' || key === 'flavour' || key === 'blurb' || key === 'body' || key === 'licenseSummary')) {
     return `<textarea id="${id}">${escapeHtml(value ?? '')}</textarea>`;
   }
   if (spec.type === 'string') {

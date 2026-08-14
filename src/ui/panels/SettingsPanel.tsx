@@ -7,6 +7,7 @@ import { Settings, THEMES } from '../../game/settings';
 import { previewSound } from '../../game/sound';
 import { BARD_TRACKS } from '../../game/data/bard';
 import { GuildManager } from '../../game/managers/GuildManager';
+import { CREDITS } from '../../game/data/credits';
 
 /* ------------------------------ small controls ---------------------------- */
 
@@ -282,6 +283,25 @@ export function SettingsPanel() {
       <Row label="Confirm before selling gear">
         <Toggle value={settings.confirmSell} onChange={set('confirmSell')} />
       </Row>
+
+      <div className="section-heading">Credits</div>
+      <p className="small muted">
+        Guildbound uses licensed art from a few outside creators. None of the terms below require
+        credit, but it's given anyway.
+      </p>
+      <div className="credits-list">
+        {CREDITS.map((c) => (
+          <div key={c.id} className="card credits-entry">
+            <div className="card-title">{c.category}</div>
+            <div className="tiny muted">
+              {c.packName || c.creator
+                ? `${c.packName || 'Pack name pending'} \u2014 ${c.creator || 'creator pending'}`
+                : 'Pack and creator name pending confirmation.'}
+            </div>
+            <p className="tiny muted" style={{ margin: '6px 0 0' }}>{c.licenseSummary}</p>
+          </div>
+        ))}
+      </div>
 
       <div className="section-heading">Reset</div>
       <p className="small muted">Restores every setting above to its default. Your guild is untouched.</p>

@@ -831,10 +831,18 @@ export const RECRUIT_COST: Record<HeroClass, number> = Object.fromEntries(
  * this level with stat points already banked, rather than at level 1. Combined
  * with per-hero training gifts (bonusStats) this lets a late recruit stay
  * relevant instead of spending days catching up.
+ *
+ * Lives in json/recruit-start-level.json (devtool-editable, new
+ * `recruit-start-level` content type) rather than a hardcoded Record --
+ * same small-flat-list treatment recruit-costs.json already got. Each
+ * entry is `{id, tier, startLevel}`; `tier` is the actual lookup key
+ * (matches HeroClassDef.tier), `id` exists only because the generic
+ * id-keyed editor every other content type here uses requires one.
  */
-export const RECRUIT_START_LEVEL: Record<number, number> = {
-  0: 1, 1: 3, 2: 8, 3: 15,
-};
+import recruitStartLevelJson from './json/recruit-start-level.json';
+export const RECRUIT_START_LEVEL: Record<number, number> = Object.fromEntries(
+  (recruitStartLevelJson as { id: string; tier: number; startLevel: number }[]).map((r) => [r.tier, r.startLevel]),
+);
 
 /* --------------------------------- roles --------------------------------- */
 
@@ -893,15 +901,24 @@ export interface SkinDef {
   requiresDlc?: string;
 }
 
-export const SKIN_PRICE = 3500;
+/** Flat gold price for a purchasable (non-DLC) skin -- tuning registry
+ *  ('progression.skinPrice'), same devtool-editable convention every
+ *  other standalone numeric constant in this file is migrating to. */
+export const SKIN_PRICE = Tuning.get('progression.skinPrice');
 
-export const SKINS: SkinDef[] = [
-  { id: 'original', name: 'Original', description: 'The colours they arrived in. Always owned.', cost: 0, swatch: ['#8e8e8e', '#c0c0c0'] },
-  { id: 'necrotic', name: 'Necrotic', description: 'Graveyard greens and a violet pallor.', cost: SKIN_PRICE, swatch: ['#3aa55d', '#7a4fa0'] },
-  { id: 'holy', name: 'Holy', description: 'Bleached white and gilded edges.', cost: SKIN_PRICE, swatch: ['#fff6d9', '#e8c250'] },
-  { id: 'infernal', name: 'Infernal', description: 'Ember reds banked over black.', cost: SKIN_PRICE, swatch: ['#c0331e', '#e07a2a'] },
-  { id: 'frost', name: 'Frost', description: 'Glacier blues and pale teal.', cost: SKIN_PRICE, swatch: ['#5aa8d8', '#79c0c0'] },
-];
+/**
+ * Lives in json/skins.json (devtool-editable, new `skins` content type)
+ * rather than a hardcoded array -- same reasoning as tombstone-styles.json
+ * before it: a new skin, or a swatch/price tweak on an existing one,
+ * shouldn't need a code patch. Each entry's own `cost` is now a literal
+ * on disk rather than reading SKIN_PRICE directly (Original stays 0,
+ * every purchasable skin stays 3500 as authored) -- editing
+ * `progression.skinPrice` in Tuning changes future intent, not these
+ * already-authored entries; keeping them in sync is a manual edit here,
+ * same as any other content file's numbers not being formula-derived.
+ */
+import skinsJson from './json/skins.json';
+export const SKINS: SkinDef[] = skinsJson as SkinDef[];
 
 export const SKIN_BY_ID: Record<string, SkinDef> = Object.fromEntries(SKINS.map((s) => [s.id, s]));
 
@@ -953,7 +970,7 @@ export function xpForLevel(level: number): number {
   return Math.floor(15 * Math.pow(level, 1.15));
 }
 
-export const PRESTIGE_MIN_LEVEL = 30;
+export const PRESTIGE_MIN_LEVEL = Tuning.get('progression.prestigeMinLevel');
 
 /** Renown granted for retiring a hero at a given level. */
 export function renownForRetirement(level: number, totalQuests: number): number {
@@ -964,9 +981,9 @@ export function renownForRetirement(level: number, totalQuests: number): number 
 /* ------------------------------ prestige streak ---------------------------- */
 
 /** Retiring again within this window of the last retirement extends the streak. */
-export const PRESTIGE_STREAK_WINDOW_MS = 72 * 60 * 60 * 1000; // 3 days
-const PRESTIGE_STREAK_BONUS_PER_STEP = 5; // percent
-const PRESTIGE_STREAK_BONUS_CAP = 50; // percent, reached at streak 11
+export const PRESTIGE_STREAK_WINDOW_MS = Tuning.get('progression.prestigeStreakWindowMs');
+const PRESTIGE_STREAK_BONUS_PER_STEP = Tuning.get('progression.prestigeStreakBonusPerStep'); // percent
+const PRESTIGE_STREAK_BONUS_CAP = Tuning.get('progression.prestigeStreakBonusCap'); // percent, reached at streak 11 at the default 5%/step
 
 /** Percentage bonus applied to renown gained, based on the current streak. */
 export function prestigeStreakBonusPct(streak: number): number {
@@ -976,13 +993,21 @@ export function prestigeStreakBonusPct(streak: number): number {
 /* -------------------------------- ascension -------------------------------- */
 
 /** Flat permanent stat bonus per ascension level, applied to every stat. */
-export const ASCENSION_STAT_BONUS = 1;
+export const ASCENSION_STAT_BONUS = Tuning.get('progression.ascensionStatBonus');
 
-const ASCENSION_RANKS: { min: number; name: string }[] = [
-  { min: 10, name: 'Living Legend' },
-  { min: 6, name: 'Elder' },
-  { min: 3, name: 'Veteran' },
-];
+/**
+ * Lives in json/ascension-ranks.json (devtool-editable, new
+ * `ascension-ranks` content type) rather than a hardcoded array -- a
+ * rank name/threshold tweak no longer needs a code patch. Checked in
+ * `ascensionRank` below in descending `min` order, same as the original
+ * literal's own ordering (highest threshold first) -- the JSON preserves
+ * that order and `ascensionRank` still relies on it, not resorted at
+ * load time, so a future edit that reorders entries in the file would
+ * need to keep them descending by `min` for the "first match wins" logic
+ * to still pick the highest qualifying rank.
+ */
+import ascensionRanksJson from './json/ascension-ranks.json';
+const ASCENSION_RANKS: { id: string; min: number; name: string }[] = ascensionRanksJson;
 
 /** The rank label for a given ascension count, or null below the first threshold. */
 export function ascensionRank(ascension: number): string | null {

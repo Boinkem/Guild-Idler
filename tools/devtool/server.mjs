@@ -176,6 +176,110 @@ const SCHEMAS = {
       description: { type: 'string', required: false },
     },
   },
+  'skins': {
+    file: 'skins.json',
+    label: 'Hero Skins',
+    idField: 'id',
+    // Migrated off a hardcoded array in progression.ts (see that file's
+    // own comment) -- a new skin, or a swatch/price tweak on an existing
+    // one, no longer needs a code patch. `swatch` is a fixed 2-string
+    // tuple (two hex colours for the shop UI's small preview dots) --
+    // typed as a plain `string[]` here rather than a new 2-tuple field
+    // type, since the frontend's existing list-input already handles an
+    // arbitrary-length string list and nothing here enforces exactly 2
+    // beyond convention (same trust level `names` on hero-classes already
+    // gets for its own string list).
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      name: { type: 'string', required: true },
+      description: { type: 'string', required: true },
+      cost: { type: 'number', required: true, min: 0 },
+      swatch: { type: 'string[]', required: true },
+    },
+  },
+  'ascension-ranks': {
+    file: 'ascension-ranks.json',
+    label: 'Ascension Ranks',
+    idField: 'id',
+    // Migrated off a hardcoded array in progression.ts. Checked in
+    // descending `min` order at runtime (ascensionRank in progression.ts)
+    // -- entries here should stay ordered highest-min-first for that
+    // "first match wins" logic to keep picking the correct (highest
+    // qualifying) rank; not enforced by this schema, same trust level
+    // quest-chains' stage ordering already gets.
+    fields: {
+      min: { type: 'number', required: true, min: 0 },
+      name: { type: 'string', required: true },
+    },
+  },
+  'recruit-start-level': {
+    file: 'recruit-start-level.json',
+    label: 'Recruit Start Levels',
+    idField: 'id',
+    // Migrated off a hardcoded Record in progression.ts. `tier` is the
+    // actual lookup key at runtime (matches HeroClassDef.tier) -- `id` is
+    // a separate, purely cosmetic slug the generic id-keyed editor needs
+    // to exist, same "id exists only for the editor" shape recruit-costs
+    // already has for hero-classes' own tier field.
+    fields: {
+      tier: { type: 'number', required: true, min: 0 },
+      startLevel: { type: 'number', required: true, min: 1 },
+    },
+  },
+  'guide-topics': {
+    file: 'guide-topics.json',
+    label: 'Guide Topics',
+    idField: 'id',
+    // The Guide tab's own "How To" reference entries -- migrated off a
+    // hardcoded array in guideTopics.ts. `body` renders as a textarea
+    // (same convention description/flavour/blurb already get), since
+    // these run a sentence or two each.
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      title: { type: 'string', required: true },
+      body: { type: 'string', required: true },
+    },
+  },
+  'guidance-topics': {
+    file: 'guidance-topics.json',
+    label: 'Guidance Topics',
+    idField: 'id',
+    // The one-time onboarding-toast prose (GuidanceManager.ts) -- prose
+    // only, migrated off a hardcoded array there. The actual trigger
+    // CONDITION for each topic (whether it fires) stays real code in
+    // GuidanceManager.ts's own CHECKS map, not represented here at all --
+    // editing/adding an entry through this schema changes what a topic
+    // SAYS once it fires, not whether or when it fires. `messages` is a
+    // plain `string[]` (1-2 toast lines shown back to back);
+    // `targetTab` is the optional "Go to" button destination.
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      messages: { type: 'string[]', required: true },
+      targetTab: { type: 'string', required: false },
+    },
+  },
+  'credits': {
+    file: 'credits.json',
+    label: 'Credits',
+    idField: 'id',
+    // Shown on the Settings tab (new "Credits" section) -- see
+    // guild-idler-status.md's "Asset licensing -- confirmed in writing"
+    // entry for the license-confirmation pass `licenseSummary` draws on.
+    // `packName`/`creator` ship blank on the four base entries pending a
+    // specific-marketplace-listing confirmation pass -- see credits.ts's
+    // own comment. `creditRequired` is purely informational today (no UI
+    // currently branches on it), kept as a real field rather than baked
+    // into prose so a future pass could, e.g., sort required-credit
+    // entries first without re-parsing licenseSummary text.
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      category: { type: 'string', required: true },
+      packName: { type: 'string', required: false },
+      creator: { type: 'string', required: false },
+      licenseSummary: { type: 'string', required: true },
+      creditRequired: { type: 'boolean', required: false },
+    },
+  },
   'quest-templates': {
     file: 'quest-templates.json',
     label: 'Quest Templates',

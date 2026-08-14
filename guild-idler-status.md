@@ -10151,3 +10151,106 @@ read as record dividers rather than plain labels.
 integrating (confirmed Design worked from current `main`, patch 0150's
 `.craft-picker-row` fix was already present in their copy, so nothing
 from that patch was clobbered). `npx tsc --noEmit` clean.
+
+### Settings Credits section + remaining DevTool coverage gaps closed -- built (patch 0153)
+
+```discord-update
+Dev Update | Credits + DevTool Coverage
+
+- Added a Credits section to Settings, listing every licensed asset pack in use
+- Skins, ascension ranks, recruit start levels, Guide topics, and onboarding-toast text are all DevTool-editable now, no more code patch needed to tweak any of them
+- A dozen previously-hardcoded balance/progression numbers now live in the Tuning registry
+- Fixed a handful of DevTool CSS classes that were rendering completely unstyled
+```
+
+Two connected pieces of backlog closed together: the Credits screen
+requested for Settings, and the remaining "DevTool coverage gaps"
+flagged in the last backlog review (`SKINS`, `ASCENSION_RANKS`,
+`RECRUIT_START_LEVEL`, `GUIDE_TOPICS`, `GuidanceManager`'s onboarding
+text, and several `balance.ts`/`progression.ts` formula constants, plus
+a handful of classes the DevTool visual redesign's own selector audit
+found unstyled but left out of scope at the time).
+
+**Credits.** New `src/game/data/json/credits.json` (devtool-editable,
+new `credits` content type) + a `credits.ts` wrapper, rendered as a new
+"Credits" section on the Settings tab, right above Reset. Four entries,
+one per licensed pack already confirmed clear for a sold, compiled game
+in an earlier pass (see this doc's own "Asset licensing -- confirmed in
+writing" entry): Item Icons, Hero Sprites, Pet Sprites (Fox), and the
+CC0 Dog Sprite. **`packName`/`creator` ship blank on all four** -- the
+license *terms* were confirmed directly against the real text in that
+earlier pass, but the specific marketplace listing name and creator/
+storefront name per pack weren't re-verified as part of this one, and
+neither is recorded anywhere else in the repo or this doc to pull from.
+The Settings screen still renders each entry (license summary and all)
+rather than hiding an incomplete row -- fill in the two blank fields via
+the DevTool's new `credits` tab once confirmed, no code change needed
+either way.
+
+**DevTool coverage, five hardcoded lists migrated to JSON+schema:**
+- `SKINS` (`progression.ts`) -> `skins.json`. `SKIN_PRICE` now reads
+  from the tuning registry (`progression.skinPrice`) rather than a
+  literal, but each skin's own `cost` field stays a literal on disk as
+  authored (Original at 0, everything else at 3500) rather than
+  computed from `SKIN_PRICE` at load time -- editing the tuning value
+  changes future intent, not these already-authored entries, same
+  "content is a cache" convention `tombstone-styles.json` already set.
+- `ASCENSION_RANKS` (`progression.ts`) -> `ascension-ranks.json`. Order
+  matters here (`ascensionRank` checks descending by `min`, first match
+  wins) -- preserved exactly, not resorted at load time; noted directly
+  in both the JSON's own schema comment and `progression.ts`.
+- `RECRUIT_START_LEVEL` (`progression.ts`, a `Record<number, number>`)
+  -> `recruit-start-level.json`, converted to `{id, tier, startLevel}`
+  objects the same way `quest-prefixes.json` converted its own plain
+  string array earlier -- `tier` is the real lookup key, `id` exists
+  only because the generic id-keyed editor needs one.
+- `GUIDE_TOPICS` (`guideTopics.ts`, the Guide tab's "How To" reference)
+  -> `guide-topics.json`.
+- `GuidanceManager.ts`'s onboarding-toast `TOPICS` -> `guidance-
+  topics.json`, **prose only**. The actual trigger CONDITION for each
+  topic (the `CHECKS` map) deliberately stayed real code -- a
+  state-reading predicate isn't safely author-able as JSON data the way
+  plain prose is, same split `quest-chains.json`'s `rewardEgg` already
+  drew between authored content and code-side effects.
+
+All five extracted programmatically from the live TS source (a small
+Node script `eval`-ing each array literal directly out of the real
+file) rather than hand-transcribed, then the resulting JSON verified
+byte-identical against the original values before anything was
+deleted -- same discipline the `quest-chains`/`hero-classes` migrations
+already established for exactly this "did a field silently get
+dropped" risk.
+
+**12 standalone numeric constants routed through the tuning registry**
+(`balance.ts`: `goldFailureMultiplier`, `xpFailureMultiplier`,
+`baseXpMin`, `baseXpMax`, `minLevelForCap`, `burstCapFraction`;
+`progression.ts`: `skinPrice`, `prestigeMinLevel`,
+`prestigeStreakWindowMs`, `prestigeStreakBonusPerStep`,
+`prestigeStreakBonusCap`, `ascensionStatBonus`) -- each confirmed to
+resolve to its exact original literal value before landing (0.15, 0.3,
+18, 30, 5, 0.825, 3500, 30, 259200000, 5, 50, 1), same verification bar
+the earlier UPGRADES/RENOWN_PERKS tuning migration set.
+
+**Two new DevTool field-rendering fixes needed for the above, not just
+new schemas:** `credits.json`'s `licenseSummary` and `guide-
+topics.json`'s `body` both run a sentence or more -- added both to the
+existing textarea trigger list in `app.js` (previously only
+`description`/`flavour`/`blurb`), same class of "was about to render as
+a cramped single-line input" fix patch 0150 already made for
+`roleDescriptions`.
+
+**DevTool CSS: 6 real, in-use classes found completely unstyled**
+during the visual-redesign selector audit two patches back, flagged and
+deliberately scoped out of that pass at the time -- fixed now: `.clean`
+(the counterpart to the already-styled `.dirty` git-status state, now
+reusing `--good`), `.spread` (a flex space-between row, used across the
+Patches tab), `.section-heading` (the Patches tab's own numbered-step
+headers), `.tuning-value-wrap`, and the `.egg-reward`/`.result-gem`/
+`.loot-field` wrapper divs (all three already had their own inner
+`-fields`/content styled, just never the outer container).
+
+**Verified:** `node --check` clean on both `server.mjs` and `app.js`.
+Every migrated JSON file's content verified byte-identical to the
+original hardcoded TS values (extraction script's own output, not
+hand-checked). Every one of the 12 new tuning entries confirmed to
+resolve to its exact pre-migration literal. `npx tsc --noEmit` clean.

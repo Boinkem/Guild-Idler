@@ -20,14 +20,17 @@ import { Tuning } from './tuning';
  */
 
 /** Matches QuestManager.resolve's actual failure payout exactly -- a failed
- *  quest still pays a fraction of the roll, gold and xp at different rates. */
-const GOLD_FAILURE_MULTIPLIER = 0.15;
-const XP_FAILURE_MULTIPLIER = 0.3;
+ *  quest still pays a fraction of the roll, gold and xp at different rates.
+ *  Both read from the tuning registry ('balance' category) now rather
+ *  than being literals, same devtool-editable convention every other
+ *  standalone numeric constant in this file is migrating to. */
+const GOLD_FAILURE_MULTIPLIER = Tuning.get('balance.goldFailureMultiplier');
+const XP_FAILURE_MULTIPLIER = Tuning.get('balance.xpFailureMultiplier');
 
 /** Non-burst quests roll XP from this fixed base range before the tier's
  *  own xpMultiplier applies -- see QuestManager.generateOffer. */
-const BASE_XP_MIN = 18;
-const BASE_XP_MAX = 30;
+const BASE_XP_MIN = Tuning.get('balance.baseXpMin');
+const BASE_XP_MAX = Tuning.get('balance.baseXpMax');
 
 function expectedRatePerHour(cfg: DifficultyConfig, kind: 'gold' | 'xp'): number {
   const avgDurationHours = (cfg.minDuration + cfg.maxDuration) / 2 / HOUR;
@@ -55,10 +58,10 @@ export function bestUnlockedTier(topLevel: number, legendaryUnlocked: boolean): 
 
 /** Below this level, burst keeps its full, uncapped reward -- the
  *  deliberate onboarding hook, confirmed not to be the problem. */
-const MIN_LEVEL_FOR_CAP = 5;
+const MIN_LEVEL_FOR_CAP = Tuning.get('balance.minLevelForCap');
 /** Midpoint of the requested 80-85% range: clearly still worthwhile as a
  *  quick top-up, never the rational default strategy over the board. */
-const BURST_CAP_FRACTION = 0.825;
+const BURST_CAP_FRACTION = Tuning.get('balance.burstCapFraction');
 
 /**
  * Shared by both fast-completion modes (burst AND medium -- see

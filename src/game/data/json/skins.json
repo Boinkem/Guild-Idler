@@ -1,0 +1,52 @@
+[
+  {
+    "id": "original",
+    "name": "Original",
+    "description": "The colours they arrived in. Always owned.",
+    "cost": 0,
+    "swatch": [
+      "#8e8e8e",
+      "#c0c0c0"
+    ]
+  },
+  {
+    "id": "necrotic",
+    "name": "Necrotic",
+    "description": "Graveyard greens and a violet pallor.",
+    "cost": 3500,
+    "swatch": [
+      "#3aa55d",
+      "#7a4fa0"
+    ]
+  },
+  {
+    "id": "holy",
+    "name": "Holy",
+    "description": "Bleached white and gilded edges.",
+    "cost": 3500,
+    "swatch": [
+      "#fff6d9",
+      "#e8c250"
+    ]
+  },
+  {
+    "id": "infernal",
+    "name": "Infernal",
+    "description": "Ember reds banked over black.",
+    "cost": 3500,
+    "swatch": [
+      "#c0331e",
+      "#e07a2a"
+    ]
+  },
+  {
+    "id": "frost",
+    "name": "Frost",
+    "description": "Glacier blues and pale teal.",
+    "cost": 3500,
+    "swatch": [
+      "#5aa8d8",
+      "#79c0c0"
+    ]
+  }
+]

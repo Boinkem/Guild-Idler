@@ -1,0 +1,34 @@
+[
+  {
+    "id": "item_icons",
+    "category": "Item Icons",
+    "packName": "",
+    "creator": "",
+    "licenseSummary": "Licensed for use in commercial projects, including a sold game built with these icons. The raw icon files themselves may not be resold or redistributed as a standalone asset pack.",
+    "creditRequired": false
+  },
+  {
+    "id": "hero_sprites",
+    "category": "Hero Sprites",
+    "packName": "",
+    "creator": "",
+    "licenseSummary": "Licensed for use in any personal or commercial game project. May not be resold or redistributed as a standalone game asset -- using it as part of a shipped game is the permitted case.",
+    "creditRequired": false
+  },
+  {
+    "id": "pet_sprites_fox",
+    "category": "Pet Sprites (Fox)",
+    "packName": "",
+    "creator": "",
+    "licenseSummary": "Licensed for personal and commercial projects, including editing/modifying the assets. May not be resold or redistributed, even modified, as a standalone asset pack.",
+    "creditRequired": false
+  },
+  {
+    "id": "dog_sprite",
+    "category": "Pet Sprite (Dog)",
+    "packName": "",
+    "creator": "",
+    "licenseSummary": "CC0 (Creative Commons Zero) -- no restrictions, no attribution required.",
+    "creditRequired": false
+  }
+]

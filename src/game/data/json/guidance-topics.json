@@ -1,0 +1,95 @@
+[
+  {
+    "id": "first_level_up",
+    "messages": [
+      "Level up! Your hero grows a little stronger with every quest.",
+      "You've also earned a stat point to spend -- visit the Heroes tab to assign it."
+    ],
+    "targetTab": "heroes"
+  },
+  {
+    "id": "first_equipment_found",
+    "messages": [
+      "New gear! Anything you find sits in the stash until you equip it -- check the Inventory tab."
+    ],
+    "targetTab": "equipment"
+  },
+  {
+    "id": "first_chain_seen",
+    "messages": [
+      "Some contracts continue into a bigger story across several stages -- these show up right on the Quest Board like any other."
+    ],
+    "targetTab": "quests"
+  },
+  {
+    "id": "hero_slots_full",
+    "messages": [
+      "Every hero slot is full. Recruiting costs gold, but the slots themselves come from Guild Hall upgrades or a Renown perk."
+    ],
+    "targetTab": "guild"
+  },
+  {
+    "id": "raids_unlocked",
+    "messages": [
+      "Raids are open -- multi-hero expeditions with bigger rewards and longer odds. You'll need a full, exact-size party before sending one out."
+    ],
+    "targetTab": "raids"
+  },
+  {
+    "id": "black_market_unlocked",
+    "messages": [
+      "A Black Market has opened up in Vendors -- rarer stock than the regular shop, refreshed on its own rotation."
+    ],
+    "targetTab": "vendors"
+  },
+  {
+    "id": "legendary_quests_unlocked",
+    "messages": [
+      "Legendary-tier contracts can now appear on the board -- the best rewards in the game, alongside the worst odds."
+    ],
+    "targetTab": "quests"
+  },
+  {
+    "id": "raids_heroic_unlocked",
+    "messages": [
+      "Heroic-difficulty raids are cleared for takeoff -- harsher odds and longer expeditions, with loot to match."
+    ],
+    "targetTab": "raids"
+  },
+  {
+    "id": "raids_mythic_unlocked",
+    "messages": [
+      "Mythic raids are open -- the hardest content in the game, and the only tier where the very best loot drops."
+    ],
+    "targetTab": "raids"
+  },
+  {
+    "id": "training_tab_unlocked",
+    "messages": [
+      "Blackford Keep is cleared, and the guild's first real siege makes the case for itself -- a Training tab has opened up. Fund it to start reassigning a hero's Melee/Ranged/Caster role from one dedicated spot."
+    ],
+    "targetTab": "training"
+  },
+  {
+    "id": "auto_chain_unlocked",
+    "messages": [
+      "A hero can now keep taking the next contract on their own for a while, instead of waiting for fresh orders each time -- toggle it from a hero's own Quest Tab entry."
+    ],
+    "targetTab": "quests"
+  },
+  {
+    "id": "music_hall_unlocked",
+    "messages": [
+      "The guild bard has a song ready -- pick it (or shuffle through everything you've unlocked) from the Track option in Settings."
+    ],
+    "targetTab": "settings"
+  },
+  {
+    "id": "first_injury_or_wear",
+    "messages": [
+      "A hurt hero or worn-down gear both drag down the odds on every quest, not just the one that caused it -- don't just wait it out. Treat an injury or Repair a piece of gear right from a hero's card in the Heroes tab (or spend a Field Bandage there instead of gold).",
+      "Each hero's very first Treat and first Repair are free, on the guild -- everything after that costs gold. A Physician's Charity or Smith's Charity guild upgrade can make more of each free every day, for every hero."
+    ],
+    "targetTab": "heroes"
+  }
+]

@@ -1,0 +1,17 @@
+[
+  {
+    "id": "living_legend",
+    "min": 10,
+    "name": "Living Legend"
+  },
+  {
+    "id": "elder",
+    "min": 6,
+    "name": "Elder"
+  },
+  {
+    "id": "veteran",
+    "min": 3,
+    "name": "Veteran"
+  }
+]

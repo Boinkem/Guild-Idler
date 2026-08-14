@@ -1,0 +1,22 @@
+[
+  {
+    "id": "tier0",
+    "tier": 0,
+    "startLevel": 1
+  },
+  {
+    "id": "tier1",
+    "tier": 1,
+    "startLevel": 3
+  },
+  {
+    "id": "tier2",
+    "tier": 2,
+    "startLevel": 8
+  },
+  {
+    "id": "tier3",
+    "tier": 3,
+    "startLevel": 15
+  }
+]

@@ -1,0 +1,72 @@
+[
+  {
+    "id": "stats",
+    "title": "Stat Points",
+    "body": "Every level grants a stat point. Spend it in the Heroes tab -- Strength and Endurance push success chance, Luck pushes gold and loot, Wisdom pushes XP."
+  },
+  {
+    "id": "recruiting",
+    "title": "Recruiting",
+    "body": "New heroes cost gold and a free hero slot. Slots come from Tavern upgrades (Guild Hall) or the Extra Banner Renown perk."
+  },
+  {
+    "id": "equipment",
+    "title": "Equipment",
+    "body": "Gear drops from quests and sits in the stash until equipped. Durability wears down with use -- repair it from the Inventory tab before it breaks."
+  },
+  {
+    "id": "chains",
+    "title": "Quest Chains",
+    "body": "Some contracts are the first stage of a longer story. They show up on the board like any other quest -- finishing one reveals the next stage next time it appears."
+  },
+  {
+    "id": "raids",
+    "title": "Raids",
+    "body": "Raids need a full, exact-size party -- Normal needs 3 heroes, Heroic 6, Mythic 9. They pay out per encounter cleared, so a partial run still earns something."
+  },
+  {
+    "id": "prestige",
+    "title": "Prestige",
+    "body": "Retiring a high-level hero grants Renown -- permanent, account-wide bonuses that carry across every future hero. It's the long-term progression path once levelling alone starts to slow."
+  },
+  {
+    "id": "harvest",
+    "title": "Harvest & Gathering",
+    "body": "Unlocked by a quest chain. Four nodes spawn materials over time -- catch them from the Harvest tab, then spend them at Vendors’ Crafting stations to make your own gear and consumables."
+  },
+  {
+    "id": "crafting",
+    "title": "Crafting",
+    "body": "Each Vendor (Blacksmith, Alchemist, Enchanter) has its own Crafting station. Recipes cost materials plus gold, and some let you pick which bonus the finished item carries instead of leaving it to chance."
+  },
+  {
+    "id": "pets",
+    "title": "Pets & Hatchery",
+    "body": "Unlocked by a quest chain. Eggs found on quests incubate in a Nest and hatch into a companion with its own rolled bonus. Only an equipped pet earns XP -- keep one slotted to actually grow its bonus over time."
+  },
+  {
+    "id": "peddler",
+    "title": "Grimsby",
+    "body": "A travelling peddler who visits on his own unpredictable schedule (unlocked by a quest chain). His Pick Your Card flips cost gold for a chance at gear, materials, or a jackpot -- pure gamble, no guaranteed value."
+  },
+  {
+    "id": "black_market",
+    "title": "Black Market",
+    "body": "A permanent Guild Hall upgrade unlocks a second, rarer stock rotation in Vendors -- separate refresh timer from the regular shop, better odds at higher rarities."
+  },
+  {
+    "id": "item_sets",
+    "title": "Item Sets",
+    "body": "Some gear belongs to a set -- equip enough pieces on one hero and a bonus kicks in automatically. Check an equipped item's tooltip to see the set's progress and which bonus is currently active."
+  },
+  {
+    "id": "elemental",
+    "title": "Elemental Damage & Resist",
+    "body": "Weapons can be infused with an element at the Enchanter; armor can resist one. Matching a quest or raid encounter's own element adds a success bonus on top of everything else."
+  },
+  {
+    "id": "music_hall",
+    "title": "Music Hall",
+    "body": "A Guild Hall facility that unlocks purchasable background tracks, one per level. Once you've bought at least one, pick a specific track or shuffle daily through everything unlocked from the Track option in Settings."
+  }
+]

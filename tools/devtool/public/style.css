@@ -456,7 +456,34 @@ td.icon-cell { width: 1%; padding-right: 0; }
   background: var(--panel); padding: 10px 12px; font-size: 11px;
 }
 .patch-git-status.dirty { border-color: var(--brass-dim); background: var(--brass-wash); }
+/* .clean's counterpart to .dirty above -- found unstyled during the
+   DevTool visual redesign's selector audit (flagged as a real gap,
+   scoped out of that pass on purpose). Reuses --good, the same green
+   already used for affordable/success states elsewhere in this tool. */
+.patch-git-status.clean { border-color: var(--good); background: rgba(111, 174, 114, 0.1); }
 .patch-git-status pre { max-height: 140px; overflow-y: auto; font-size: 10px; color: var(--muted); }
+
+/* Found unstyled in the same selector audit as .clean above -- all real,
+   in-use classes with no matching rule in either the old or new
+   stylesheet. */
+.spread { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.section-heading {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--brass);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 18px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--panel3);
+}
+.tuning-value-wrap { display: inline-flex; }
+.egg-reward, .result-gem, .loot-field {
+  border: 1px solid var(--panel3);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 8px 10px;
+}
 
 .patch-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
 .patch-item {
