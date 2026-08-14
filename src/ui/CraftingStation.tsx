@@ -473,8 +473,18 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
           </p>
         )}
 
+        {/* Cost on the button label mirrors VendorsPanel's "Buy · <cost>" /
+            "Level up · <cost>" convention -- every other paid action in the
+            game already shows its price right on the button, this was the
+            one holdout relying on the ◆ have/need row above (which stays;
+            it answers a different question -- can I afford this right
+            now -- than the flat sticker price the button now shows). */}
         <button className="btn-purple" disabled={!canCraft} onClick={handleCraft}>
-          {afford && !afford.ok ? afford.reason : (category === 'enchant' ? 'Enchant' : 'Craft')}
+          {afford && !afford.ok
+            ? afford.reason
+            : recipe
+              ? `${category === 'enchant' ? 'Enchant' : 'Craft'} \u00b7 ${formatGold(CraftingManager.goldCost(state, recipe))}`
+              : (category === 'enchant' ? 'Enchant' : 'Craft')}
         </button>
       </div>
 

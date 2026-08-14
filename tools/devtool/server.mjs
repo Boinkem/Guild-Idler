@@ -125,15 +125,15 @@ const SCHEMAS = {
       // `roleFlavors` case in validateEntry below.
       role: { type: 'enum', options: ['melee', 'ranged', 'caster'], required: true },
       roleFlavors: { type: 'roleFlavors', required: true },
-      // Same shape/type as roleFlavors just above (a required 3-key text
-      // map) -- reuses that exact 'roleFlavors' type string rather than
-      // inventing a new one, since the type name is just a generic shape
-      // descriptor (kv-grid, 3 Role keys, required text) and both the
-      // renderer and validator already key off the type, not the field
-      // name. Per-class, per-role flavour text to go with roleFlavors'
-      // per-role name -- see HeroClassDef.roleDescriptions' own comment
-      // in progression.ts.
-      roleDescriptions: { type: 'roleFlavors', required: true },
+      // Same required-3-key-text-map shape as roleFlavors just above, but
+      // its own 'roleDescriptions' type rather than reusing roleFlavors'
+      // -- these hold full sentences (a role's flavour blurb), not a
+      // short display name, and sharing roleFlavors' type meant sharing
+      // its single-line kv-grid input too, which read/wrote as a cramped
+      // one-liner for sentence-length text. Own type -> own (textarea)
+      // render in app.js, validated identically to roleFlavors via a
+      // shared switch case in validateEntry below.
+      roleDescriptions: { type: 'roleDescriptions', required: true },
       // Unset for every base-game class -- see HeroClassDef.requiresDlc's
       // own comment in progression.ts. Editable here mainly so a future
       // DLC pack's own manifest content could, in principle, be authored
@@ -902,10 +902,13 @@ function validateEntry(schema, entry, index) {
         }
         break;
       case 'roleFlavors':
+      case 'roleDescriptions':
         // Every class needs a name for all 3 roles (the native role's own
         // entry equals its own `name`, the other two are the Training
         // flavour names) -- required and complete, unlike `mods`/`stats`
-        // which are legitimately partial.
+        // which are legitimately partial. Same rule for roleDescriptions'
+        // 3 flavour-text blurbs -- both types share this case since the
+        // shape (required, complete, 3 Role keys, text) is identical.
         if (typeof value !== 'object' || Array.isArray(value)) {
           errors.push(`entry ${index}: "${key}" must be an object`);
         } else {

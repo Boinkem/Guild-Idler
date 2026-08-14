@@ -93,14 +93,19 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
             {def.name}{item.plus > 0 ? ` +${item.plus}` : ''} &mdash;{' '}
             {maxed
               ? 'already at maximum refinement'
-              : `+${item.plus} \u2192 +${item.plus + 1} (durability cap ${maxDurability} \u2192 ${nextMaxDurability}), ${formatGold(cost)}`}
+              : `+${item.plus} \u2192 +${item.plus + 1} (durability cap ${maxDurability} \u2192 ${nextMaxDurability})`}
           </p>
         ) : (
           <p className="tiny muted" style={{ margin: '8px 0' }}>Choose an item to see its refinement level.</p>
         )}
 
+        {/* Cost now lives on the button itself, same "Buy · <cost>" /
+            "Level up · <cost>" convention VendorsPanel already uses for
+            every other paid action in the game -- it used to only appear
+            at the tail end of the muted preview sentence above, easy to
+            miss since nothing else in that sentence was a cost. */}
         <button className="btn-purple" disabled={!item || maxed || state.gold < cost} onClick={handleEnhance}>
-          Enhance
+          {!item ? 'Enhance' : maxed ? 'Max refinement' : `Enhance \u00b7 ${formatGold(cost)}`}
         </button>
       </div>
 

@@ -85,7 +85,7 @@
     },
     "roleDescriptions": {
       "melee": "Sworn, drilled, and first through the door every time.",
-      "ranged": "Trades the shield wall for a crossbow -- still drilled, still reliable.",
+      "ranged": "Trades the shield wall for a crossbow. still drilled, still reliable.",
       "caster": "Etches battle-runes into steel instead of casting from open air."
     }
   },

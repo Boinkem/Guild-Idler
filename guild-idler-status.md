@@ -9995,3 +9995,66 @@ applied against the new live state with zero drift.
 
 **Verified:** `npx tsc --noEmit` and a full `vite build` (app + electron
 main + preload) both clean; DevTool round-trip as described above.
+
+### Crafting picker icon overlap, Enhance/Craft cost visibility, DevTool role-description textareas -- fixed (patch 0150)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed recipe icons visually overlapping into the row above/below in Crafting's picker popup
+- Enhance and Craft now show their gold cost right on the button, matching every other vendor
+- DevTool's Hero Class role descriptions are proper multi-line boxes now, not a single cramped line
+```
+
+Three unrelated small fixes, reported together.
+
+**Crafting picker icon overlap.** `.craft-picker-row` is a 3-column grid
+(`40px 1fr auto`) whose actual row height was purely content-driven --
+a single line of label text plus 8px padding renders shorter than the
+40px icon column. The `.item-icon` box (fixed 40x40 via inline style)
+doesn't shrink to fit, so it overflowed the row's own box and, since
+`.craft-picker-list`'s row gap is only 4px, bled straight into the
+neighbouring row -- read as icons stacking/overlapping between rows in
+the screenshot reported. Fixed with `min-height: 56px` on
+`.craft-picker-row` (40px icon + 8px padding top and bottom), so the
+icon always has room regardless of how short the label text is.
+
+**Enhance and Craft cost visibility.** `VendorsPanel.tsx` already has an
+established, consistent pattern for this across every one of its own
+paid actions -- the cost lives right on the button label itself
+(`Buy · <cost>`, `Level up · <cost>`, `Reroll stock · <cost>`).
+`EnhanceStation.tsx` didn't follow it at all -- its button just read
+"Enhance," with the actual gold cost buried at the tail end of a small
+muted preview sentence above it, easy to miss since nothing else in
+that sentence was a price. `CraftingStation.tsx` was a partial case --
+it already showed cost via a colored `◆ have/need` row (matching the
+material-cost chips beside it), but that answers "can I afford this
+right now," not "what does this cost," and the button itself never
+said either. Both buttons now show cost the same way Vendors' do:
+`Enhance · <cost>` / `Craft · <cost>` / `Enchant · <cost>`, replacing
+the plain label when an item/recipe is actually selected. Crafting's
+`◆ have/need` row stays as-is alongside it -- different question,
+still useful, not a duplicate.
+
+**DevTool role-description textareas.** `roleDescriptions` (the
+per-role flavour sentence shown in HeroClassDef, alongside
+`roleFlavors`' per-role display name) was declared in the DevTool
+schema as reusing `roleFlavors`' own `'roleFlavors'` field type --
+correct for shape (both are required 3-key text maps) but wrong for
+input size, since it meant editing full sentences through the exact
+same single-line `<input>` a short name like "Rune Knight" uses.
+Reported directly as very hard to write or even read back in DevTool.
+Gave it its own `'roleDescriptions'` type: same validation as
+`roleFlavors` (shared `case` in `validateEntry`, still required,
+still all 3 roles), but its own render path in `app.js` -- `kvGrid`
+gained a `'textarea'` kind, and a new `.kv-grid-textarea` CSS class
+switches the grid from the default label-beside-a-90px-field layout to
+a stacked, full-width layout so each role's blurb gets a real
+resizable textarea instead of a cramped 90px-wide one-liner.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (app + electron
+main + preload) both clean. DevTool's `roleDescriptions` field
+round-tripped by hand (open a class, edit all 3 role blurbs in the new
+textareas, save, reopen -- values persisted correctly through the
+shared `roleFlavors`/`roleDescriptions` read/validate path).
+

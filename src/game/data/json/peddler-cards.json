@@ -19,7 +19,7 @@
     "id": "bust_joke_rock",
     "tier": "bust",
     "weight": 8,
-    "kind": "joke",
+    "kind": "curio",
     "flavorText": "\"That's a good rock,\" Grimsby says, entirely serious.",
     "jokeItemName": "A Rock",
     "goldAmount": 0,
@@ -28,7 +28,9 @@
     "materialAmount": 0,
     "scrapAmount": 0,
     "itemRarity": "common",
+    "itemId": "rock",
     "eggRarity": "common",
+    "curioId": "rock",
     "glyph": "🪨",
     "icon": "misc/Misc_42.png"
   },

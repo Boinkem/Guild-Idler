@@ -2544,6 +2544,13 @@ button.harvest-item:hover {
   align-items: center;
   gap: 10px;
   width: 100%;
+  /* min-height, not just padding: a single line of label text + 8px
+     padding renders shorter than the 40px icon column, so without this
+     the icon box (fixed 40x40 via inline style) overflows the row's own
+     content-driven height and bleeds across the 4px list gap into the
+     row above/below -- reported as icons looking "stacked"/overlapping
+     in the recipe picker. 56px = 40px icon + 8px padding top + bottom. */
+  min-height: 56px;
   padding: 8px;
   background: var(--panel-2);
   border: 1px solid var(--panel-3);

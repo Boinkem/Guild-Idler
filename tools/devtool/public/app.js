@@ -515,6 +515,12 @@ function fieldControl(spec, key, value) {
   if (spec.type === 'stats') return kvGrid(id, STAT_KEYS, value ?? {}, 'number', STAT_FIELD_INFO);
   if (spec.type === 'materials') return kvGrid(id, MATERIAL_KEYS, value ?? {}, 'number');
   if (spec.type === 'roleFlavors') return kvGrid(id, ROLE_KEYS, value ?? {}, 'text');
+  // roleDescriptions holds a full sentence per role, not a short display
+  // name like roleFlavors -- 'textarea' kind gets each row a proper
+  // multi-line box (see kvGrid below) instead of the cramped single-line
+  // input roleFlavors uses, which is what made these very hard to write
+  // or even just read back before -- reported directly.
+  if (spec.type === 'roleDescriptions') return kvGrid(id, ROLE_KEYS, value ?? {}, 'textarea');
   if (spec.type === 'roleRequirements') return kvGrid(id, ROLE_KEYS, value ?? {}, 'number');
   if (spec.type === 'effect') return kvGrid(id, EFFECT_KEYS, value ?? {}, 'mixed', EFFECT_FIELD_INFO);
   if (spec.type === 'eventEffects') return kvGrid(id, EVENT_EFFECT_KEYS, value ?? {}, 'mixed', EVENT_EFFECT_FIELD_INFO);
@@ -788,9 +794,17 @@ function kvGrid(id, keys, values, kind, fieldInfo) {
     if (kind === 'text') {
       return `${label}<input type="text" data-kv="${k}"${titleAttr} value="${escapeHtml(values[k] ?? '')}" placeholder="—" />`;
     }
+    if (kind === 'textarea') {
+      return `${label}<textarea data-kv="${k}"${titleAttr} placeholder="—">${escapeHtml(values[k] ?? '')}</textarea>`;
+    }
     return `${label}<input type="number" step="any" data-kv="${k}"${titleAttr} value="${values[k] ?? ''}" placeholder="—" />`;
   }).join('');
-  return `<div class="kv-grid" id="${id}">${rows}</div>`;
+  // 'textarea' kind gets its own modifier class -- the default .kv-grid
+  // layout (label + a 90px-wide field side by side, see style.css) fits a
+  // short name or number but not a full sentence, so this switches to a
+  // stacked, full-width layout instead (see .kv-grid-textarea in style.css).
+  const gridClass = kind === 'textarea' ? 'kv-grid kv-grid-textarea' : 'kv-grid';
+  return `<div class="${gridClass}" id="${id}">${rows}</div>`;
 }
 
 function escapeHtml(s) {
@@ -1291,10 +1305,12 @@ function readField(spec, key) {
     });
     return out;
   }
-  if (spec.type === 'roleFlavors') {
-    // Text values, not numbers -- kvGrid's 'text' kind (see kvGrid's own
-    // comment), so this reads plain trimmed strings rather than
-    // parseFloat like the numeric kv-grids above.
+  if (spec.type === 'roleFlavors' || spec.type === 'roleDescriptions') {
+    // Text values, not numbers -- kvGrid's 'text'/'textarea' kinds (see
+    // kvGrid's own comment), so this reads plain trimmed strings rather
+    // than parseFloat like the numeric kv-grids above. A <textarea>'s
+    // `.value` works identically to an <input>'s here, so roleDescriptions
+    // (now rendered as textareas) reads back through the same branch.
     const out = {};
     el.querySelectorAll('[data-kv]').forEach((input) => {
       const v = input.value.trim();

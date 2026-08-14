@@ -261,6 +261,14 @@ td.actions button.danger:hover { background: var(--bad-wash); border-color: var(
 .kv-grid { display: grid; grid-template-columns: 1fr 90px; gap: 6px 8px; align-items: center; }
 .kv-grid label { font-size: 11px; color: var(--muted); text-transform: none; letter-spacing: 0; margin: 0; }
 
+/* roleDescriptions (see app.js's kvGrid) -- the default 90px second
+   column suits a short name or number, not a full sentence, so this
+   stacks label above field, full width, one row per role, with a real
+   textarea instead of a single-line input. */
+.kv-grid-textarea { grid-template-columns: 1fr; }
+.kv-grid-textarea label { margin-top: 4px; }
+.kv-grid-textarea textarea { width: 100%; min-height: 60px; resize: vertical; line-height: 1.5; }
+
 .editor-actions {
   display: flex; gap: 8px; justify-content: flex-end;
   margin: 18px -20px -20px; padding: 14px 20px;
