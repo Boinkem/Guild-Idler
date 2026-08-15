@@ -10741,3 +10741,53 @@ pill { background: rgba(0,0,0,0.4) }` addition covers all three pill
 types, not just the ones it was written for). `npx tsc --noEmit` and
 `npx vite build --config vite.web.config.ts` both pass clean against a
 fresh clone with all five files/folders applied.
+
+### Rarity banner bug fix: giant unclipped banner instead of one per card -- fixed (patch 0160)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed rarity banner art (patch 0159) rendering as one giant, blurry image behind the whole Inventory panel instead of a small banner per card
+```
+
+Direct report, with a screenshot showing the actual break: every
+`.rarity-banner` in the Inventory grid was rendering as a single
+enormous, blown-up image spanning the whole panel width, not contained
+to its own card.
+
+**Root cause.** `.rarity-banner { position: absolute; inset: 0; }`
+positions itself relative to the nearest *positioned* ancestor -- but
+`.item-card` (the class `SlotCard`/`StashCard` actually use) was never
+`position: relative` to begin with, only `overflow: hidden`. The
+supplied patch's own README/comment claimed "`.item-card` and `.card`
+are both already `position: relative; overflow: hidden`" -- true for
+`.card` (Vendors' shop cards, unaffected by this bug), false for
+`.item-card`. With no positioned ancestor, the banner's containing block
+fell back to a much larger ancestor up the tree, so `inset: 0` sized it
+to that instead of the ~180px card, and `background-size: cover` on a
+~868x200 source stretched across a box roughly 10x wider -- one giant,
+heavily upscaled image, shared (and effectively overlapping) across
+every card in the grid rather than five separate small ones. The modal
+version was never affected -- `.modal` already had `position: relative`
+independently.
+
+**Why the pre-integration check didn't catch it.** Patch 0159's
+verification rendered the exact card markup in isolation and it looked
+correct -- but the standalone test page never reproduced a realistic
+wide, multi-card grid, so the missing containing block happened to fall
+back to a similarly-sized box by coincidence and the bug didn't surface.
+Re-verified this time against a reproduction of the actual
+`.item-card-grid` layout at real panel width, confirmed the bug
+reproduces exactly as reported, then confirmed the fix resolves it in
+the same reproduction before calling it fixed.
+
+**Fix:** one line, `position: relative` added to `.item-card`
+(`app.css`). Checked for side effects first -- `.item-card`'s only other
+`position: absolute` descendant is `DurabilityBar`'s auto-repair
+threshold tick, which already resolves against `.bar`'s own
+`position: relative` (closer ancestor wins), so nothing else changes.
+
+**Verified:** reproduced the bug and the fix side by side in a
+realistic-width `.item-card-grid` rendering (screenshots), plus `npx tsc
+--noEmit` and `npx vite build --config vite.web.config.ts` both pass
+clean against a fresh clone with the fix applied.

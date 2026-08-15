@@ -81,6 +81,7 @@
   margin-bottom: 14px;
 }
 .item-card {
+  position: relative;
   border: 1px solid var(--panel-3);
   border-radius: 6px;
   background: color-mix(in srgb, var(--panel-2) 88%, transparent);
