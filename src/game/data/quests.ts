@@ -193,6 +193,28 @@ export const QUEST_TEMPLATES: Template[] = questTemplatesJson as Template[];
 import questPrefixesJson from './json/quest-prefixes.json';
 export const QUEST_PREFIXES: string[] = (questPrefixesJson as { id: string; text: string }[]).map((p) => p.text);
 
+/**
+ * One entry per QuestTag -- a display name plus the same optional
+ * banner-art-override + focus point shape ChainDef.banner/RaidDef.banner
+ * already use (see quest-tags.json). Shown as a subtle full-card backdrop
+ * behind every quest offer (see QuestTagBanner in QuestPanel.tsx),
+ * separate from and much fainter than the bold banner strip a story-chain
+ * quest specifically gets. Lives in json/quest-tags.json so the art and
+ * focus point are editable via the DevTool the same way chain/raid
+ * banners already are, rather than hardcoded per tag in TypeScript.
+ */
+export interface QuestTagDef {
+  id: QuestTag;
+  name: string;
+  banner?: { path?: string; focusX?: number; focusY?: number };
+}
+
+import questTagsJson from './json/quest-tags.json';
+export const QUEST_TAGS: QuestTagDef[] = questTagsJson as QuestTagDef[];
+export const QUEST_TAG_BY_ID: Record<QuestTag, QuestTagDef> = Object.fromEntries(
+  QUEST_TAGS.map((t) => [t.id, t]),
+) as Record<QuestTag, QuestTagDef>;
+
 /* --------------------------- multi-day chains --------------------------- */
 
 export interface ChainStageDef {

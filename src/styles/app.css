@@ -3150,3 +3150,23 @@ button.harvest-item:hover {
 }
 .modal-banner-scrim .card-title { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
 .modal-banner-scrim .rarity-pill { background: rgba(0, 0, 0, 0.4); }
+
+/*
+ * Quest tag backgrounds -- QUEST_TAG_BY_ID[offer.tag].banner (see
+ * quests.ts) sits behind a quest card's whole face as a faint wash, much
+ * fainter than .rarity-banner above since a quest card is mostly dense
+ * text (success/time/gold/xp, buttons) that needs to stay easy to read at
+ * a glance, not a showcase like an item card. `.card` already provides
+ * position: relative + overflow: hidden; `.quest-card-content` wraps the
+ * real content so it paints back on top (same painting-order fix
+ * `.item-card-summary` needed above).
+ */
+.quest-tag-banner {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0.16;
+  pointer-events: none;
+}
+.quest-card-content { position: relative; z-index: 1; }

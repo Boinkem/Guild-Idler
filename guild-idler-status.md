@@ -10824,3 +10824,49 @@ the existing `RARITY_COLOR` per-rarity convention. No code change --
 **Verified:** re-sampled both files post-swap to confirm the color
 match, and visually diffed the swapped pair against the original
 banner art side by side.
+
+### Quest tag banner art -- built (patch 0162)
+
+```discord-update
+Dev Update | Quest Tag Banner Art
+
+- Quest cards now show a faint themed backdrop matching their tag -- Combat, Escort, Explore, Arcane, Stealth, or Defense
+```
+
+Design handoff (Claude Design), same treatment as the gear rarity
+banners (patch 0159), applied to quest offers instead. New
+`quest-tags.json` (`{ id, name, banner: { path, focusX, focusY } }` per
+`QuestTag`, same shape `ChainDef.banner`/`RaidDef.banner` already use)
+feeds a new `QuestTagBanner` in `QuestPanel.tsx`, rendered as a faint
+(16% opacity) full-card backdrop behind every `QuestCard` -- much
+fainter than the bold banner strip a story-chain quest specifically
+gets (`ChainQuestBanner`, untouched, still renders in-flow above the
+new faint wash on chain quests). New `quest-tags` DevTool schema gives
+the same drag-to-focus banner picker Quest Chains/Raids already have,
+so art and focus point stay editable without a code change. Six new
+banner PNGs, one per tag, in `public/lore/quest-tags/`.
+
+**Diffed against current `main` before integrating -- caught a stale
+base this time.** The supplied `app.css` was built off a `main` that
+predated patch 0160's `.item-card { position: relative }` fix -- a
+blind overwrite would have silently reintroduced that exact bug.
+Applied only the new `.quest-tag-banner`/`.quest-card-content` rules as
+an append instead of replacing the file; `quests.ts`, `QuestPanel.tsx`,
+and `server.mjs` were all clean, pure-additive diffs against live
+`main` and needed no reconciliation.
+
+**No positioning fix needed this time.** Unlike `.item-card`, the
+`.card` class `QuestCard` already builds on has had `position: relative`
++ `overflow: hidden` + a `max-width: 720px` cap from the start (the
+existing chain/raid banner strips already depend on it), so the new
+absolutely-positioned `.quest-tag-banner` had a correct containing box
+without any CSS changes beyond what the handoff added.
+
+**Verified:** rendered actual `QuestCard` markup against the real
+banner art and real `app.css` at both 900px and 1400px viewport widths
+(plain card and chain-quest card, the latter to confirm the existing
+bold banner strip still layers correctly above the new faint wash) --
+each card's tag art stays contained and legible under the card's own
+text, consistent at both widths because of the pre-existing max-width
+cap. `npx tsc --noEmit` and `npx vite build --config vite.web.config.ts`
+both pass clean against a fresh clone with all files applied.

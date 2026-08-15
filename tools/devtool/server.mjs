@@ -367,6 +367,23 @@ const SCHEMAS = {
       stages: { type: 'chainStages', required: true },
     },
   },
+  'quest-tags': {
+    file: 'quest-tags.json',
+    label: 'Quest Tags',
+    idField: 'id',
+    // One entry per QuestTag (combat/escort/explore/arcane/stealth/
+    // defense) -- a display name plus the same bannerImage shape quest-
+    // chains'/raids' own `banner` field already uses (art override + 0-100
+    // focus point), so the faint per-tag backdrop QuestTagBanner shows
+    // behind every quest card (see QuestPanel.tsx) gets the same drag-to-
+    // focus picker those two already have, rather than a hardcoded center
+    // crop. defaultFolder/naming convention: public/lore/quest-tags/<id>.
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      name: { type: 'string', required: true },
+      banner: { type: 'bannerImage', required: false, defaultFolder: 'quest-tags' },
+    },
+  },
   'difficulties': {
     file: 'difficulties.json',
     label: 'Quest Difficulties',

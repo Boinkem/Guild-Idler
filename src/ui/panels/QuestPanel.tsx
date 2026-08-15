@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
 import { GuildManager } from '../../game/managers/GuildManager';
-import { DIFFICULTIES, DIFFICULTY_ORDER, ChainDef } from '../../game/data/quests';
+import {
+  DIFFICULTIES, DIFFICULTY_ORDER, ChainDef, QUEST_TAG_BY_ID,
+} from '../../game/data/quests';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { QuestOffer, Hero } from '../../game/types';
 import { formatDuration, formatGold } from '../../game/util';
@@ -30,6 +32,31 @@ function ChainQuestBanner({ chainId, banner }: { chainId: string; banner?: Chain
         height: 70,
         marginBottom: 8,
         borderRadius: 4,
+      }}
+    />
+  );
+}
+
+/** Faint, full-card backdrop matching a quest's own tag (Combat, Escort,
+ *  Explore, Arcane, Stealth, Defense) -- same optional-art-override +
+ *  focus-point shape as ChainQuestBanner/ChainDef.banner just above, but
+ *  rendered as a subtle absolutely-positioned wash behind the whole card
+ *  (see .quest-tag-banner in app.css) rather than a bold reserved-height
+ *  strip. Every quest offer has a tag, so this always has something to
+ *  show once QUEST_TAG_BY_ID[tag].banner exists; a tag with no banner art
+ *  assigned yet just renders nothing, same "missing file fails to paint
+ *  quietly" convention as ChainQuestBanner. */
+function QuestTagBanner({ tag }: { tag: Offer['tag'] }) {
+  const def = QUEST_TAG_BY_ID[tag];
+  if (!def?.banner) return null;
+  const src = def.banner.path ? `./lore/${def.banner.path}` : `./lore/quest-tags/${tag}.jpg`;
+  return (
+    <div
+      aria-hidden="true"
+      className="quest-tag-banner"
+      style={{
+        backgroundImage: `url(${src})`,
+        backgroundPosition: `${def.banner.focusX ?? 50}% ${def.banner.focusY ?? 50}%`,
       }}
     />
   );
@@ -69,6 +96,8 @@ function QuestCard({
 
   return (
     <div className={`card quest-card ${offer.difficulty} ${offer.chain ? 'chain' : ''}`}>
+      <QuestTagBanner tag={offer.tag} />
+      <div className="quest-card-content">
       {offer.chain && <ChainQuestBanner chainId={offer.chain.chainId} banner={chain?.banner} />}
       <div
         className="card-head hero-card-summary"
@@ -196,6 +225,7 @@ function QuestCard({
             Send {hero.name}
           </button>
         )}
+      </div>
       </div>
     </div>
   );
