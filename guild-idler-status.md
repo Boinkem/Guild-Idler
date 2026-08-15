@@ -10791,3 +10791,36 @@ threshold tick, which already resolves against `.bar`'s own
 realistic-width `.item-card-grid` rendering (screenshots), plus `npx tsc
 --noEmit` and `npx vite build --config vite.web.config.ts` both pass
 clean against a fresh clone with the fix applied.
+
+### Rarity banner art: common/uncommon PNGs swapped -- fixed (patch 0161)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed common and uncommon gear now showing each other's banner art (common cards had the green uncommon banner, and vice versa)
+```
+
+Direct report with screenshots: common-rarity cards were rendering the
+green uncommon-style banner, and uncommon-rarity cards were rendering
+the tan/bronze common-style banner -- swapped.
+
+**Root cause.** The `RARITY_BANNER` mapping in `util.ts` was correct
+(`common` -> `common.png`, `uncommon` -> `uncommon.png`, unchanged since
+patch 0159) -- the two PNG files themselves had their art swapped when
+they were exported into `public/rarity-banners/` in the original design
+handoff. Confirmed by sampling average pixel color: `common.png` was
+avg `(20, 45, 6)` (green, matching `RARITY_COLOR.uncommon = #79a86b`)
+and `uncommon.png` was avg `(55, 45, 36)` (brown, matching
+`RARITY_COLOR.common = #b9ad93`) -- backwards in both cases. Rare,
+epic, and legendary banners checked the same way and are correctly
+matched to their rarities.
+
+**Fix:** swapped the two files' contents so `common.png` holds the
+tan/bronze art and `uncommon.png` holds the green art, consistent with
+the existing `RARITY_COLOR` per-rarity convention. No code change --
+`util.ts`'s mapping and every consumer (`EquipmentPanel.tsx`,
+`VendorsPanel.tsx`) were already correct.
+
+**Verified:** re-sampled both files post-swap to confirm the color
+match, and visually diffed the swapped pair against the original
+banner art side by side.
