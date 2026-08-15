@@ -5,8 +5,8 @@ import { GameEngine } from '../../game/engine';
 import { EquipmentManager } from '../../game/managers/EquipmentManager';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
-import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID } from '../../game/data/equipment';
-import { EquipSlot, EquipmentItem, Hero, Rarity, ConsumableDef, CurioDef } from '../../game/types';
+import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID, gearScoreForItem } from '../../game/data/equipment';
+import { EquipSlot, EquipmentDef, EquipmentItem, Hero, Rarity, ConsumableDef, CurioDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { CurioManager } from '../../game/managers/CurioManager';
 import { rerollsUsedToday } from '../../game/data/reroll';
@@ -31,6 +31,51 @@ function CraftedPill() {
   return (
     <span className="rarity-pill" style={{ color: 'var(--brass)', borderColor: 'var(--brass)' }}>
       crafted
+    </span>
+  );
+}
+
+/** Marks an item that belongs to a set -- orthogonal to rarity and crafted
+ *  status, same small-pill convention as CraftedPill. Shown whenever
+ *  def.setId is set, regardless of whether the set's bonus is currently
+ *  active for this hero -- SetInfoBlock/SetBonusCard already cover "is it
+ *  contributing right now"; this pill is "would this piece count toward a
+ *  set at all", visible on the card itself before opening anything. Teal
+ *  to match the existing set-active language (.item-card.set-active's own
+ *  border/glow, and SetInfoBlock's met-tier text already use this token). */
+function SetPill() {
+  return (
+    <span className="rarity-pill" style={{ color: 'var(--teal)', borderColor: 'var(--teal)' }}>
+      set
+    </span>
+  );
+}
+
+/**
+ * Same "is this actually an upgrade" check engine.equipBestGear and
+ * QuestManager's auto-equip-on-loot both already use -- reqLevel-gated,
+ * then compared via gearScoreForItem against whatever's currently worn in
+ * that slot (an empty slot scores -1, so anything eligible always beats
+ * it). Kept here rather than duplicated per-caller so this badge can never
+ * disagree with what clicking "Equip Best Gear" would actually do.
+ */
+function isGearUpgrade(hero: Hero, def: EquipmentDef): boolean {
+  if (hero.level < def.reqLevel) return false;
+  const equipped = hero.equipment[def.slot];
+  const equippedDef = equipped ? EQUIPMENT_BY_ID[equipped.defId] : undefined;
+  const currentScore = equippedDef ? gearScoreForItem(equippedDef) : -1;
+  return gearScoreForItem(def) > currentScore;
+}
+
+/** Green "would this beat what's worn" flag for a stash item -- arrow +
+ *  text so it reads at a glance in the dense stash grid, not just a color
+ *  shift that could be missed. Moss is the palette's existing positive/
+ *  opportunity token (`.good`, Easy-tier "opportunity" quest cards, burst
+ *  XP text all already use it), not a new color introduced for this. */
+function UpgradePill() {
+  return (
+    <span className="rarity-pill" style={{ color: 'var(--moss)', borderColor: 'var(--moss)' }}>
+      &#9650; upgrade
     </span>
   );
 }
@@ -545,6 +590,7 @@ function SlotCard({
           <div className="item-card-body">
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
             <RarityPill rarity={def.rarity} />
+            {def.setId && <SetPill />}
             {item.customMods && <CraftedPill />}
             <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
           </div>
@@ -565,6 +611,7 @@ function SlotCard({
             </div>
             <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
               <RarityPill rarity={def.rarity} />
+              {def.setId && <SetPill />}
               {item.customMods && <CraftedPill />}
             </div>
             <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
@@ -610,6 +657,7 @@ function StashCard({
   const def = EQUIPMENT_BY_ID[item.defId];
   if (!def) return null;
   const canEquip = EquipmentManager.canEquip(hero, item);
+  const isUpgrade = isGearUpgrade(hero, def);
   const doSell = () => { engine.sellItem(item.uid); setPendingSell(false); setOpen(false); };
 
   return (
@@ -626,7 +674,9 @@ function StashCard({
           <div className="item-card-body">
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
             <RarityPill rarity={def.rarity} />
+            {def.setId && <SetPill />}
             {item.customMods && <CraftedPill />}
+            {isUpgrade && <UpgradePill />}
             <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
           </div>
         </div>
@@ -646,7 +696,9 @@ function StashCard({
             </div>
             <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
               <RarityPill rarity={def.rarity} />
+              {def.setId && <SetPill />}
               {item.customMods && <CraftedPill />}
+              {isUpgrade && <UpgradePill />}
             </div>
             <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
             {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (

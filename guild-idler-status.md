@@ -10614,3 +10614,89 @@ own level) and the Legendary/Mythic-tier reward-flatness fix for raw
 gold/xp. Both remain open, separately scoped follow-ups -- this patch
 only fixes what an item is worth once you have it, not what you're
 likely to get offered in the first place.
+
+### Stash "upgrade" and "set" badges: at-a-glance Gear Score/set comparison -- built (patch 0158)
+
+```discord-update
+Dev Update | Stash Upgrade & Set Badges
+
+- Stash gear that beats what a hero already has equipped now shows a green "upgrade" badge, no need to open the item to check
+- Any item that belongs to a gear set now shows a "SET" badge right next to its rarity, equipped or not
+```
+
+Direct request, two small at-a-glance badges for `EquipmentPanel.tsx`'s
+gear cards -- both piggyback on data/logic that already existed rather
+than introducing anything new to compute.
+
+**Upgrade badge.** New `isGearUpgrade(hero, def)` -- reqLevel-gated, then
+compared via `gearScoreForItem` (patch 0157) against whatever the hero
+currently has worn in that slot (an empty slot scores -1, so anything
+eligible always beats it). This is deliberately the *exact* same check
+`engine.equipBestGear` and `QuestManager`'s auto-equip-on-loot already
+use, pulled out so the badge can never disagree with what clicking Equip
+Best Gear would actually do -- previously the three lived as three
+separate copies of the same comparison; this makes `isGearUpgrade` the
+one QuestManager/engine could also read from, though that consolidation
+itself is left for a future pass since it touches two other files for no
+visible change today. Shown on `StashCard` only (both the collapsed grid
+card and the detail modal) -- an equipped item can't be "an upgrade over
+itself," so `SlotCard` doesn't need it.
+
+**Set badge.** New `SetPill`, same small-badge convention `CraftedPill`
+already established, shown whenever `def.setId` is set -- regardless of
+whether that set's bonus is currently active for the hero (`SetInfoBlock`/
+`SetBonusCard` already cover "is it contributing right now"; this is
+"would this piece count toward a set at all," visible before opening
+anything). Wired into both `SlotCard` and `StashCard`, collapsed card and
+modal. Colored `var(--teal)`, matching the set-active language already
+established elsewhere (`.item-card.set-active`'s border/glow, and
+`SetInfoBlock`'s met-tier text).
+
+Neither badge needed new CSS -- both reuse the existing `.rarity-pill`
+class with an inline color override, same pattern `CraftedPill` already
+used, so they inherit the small-caps pill look everywhere for free.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh clone.
+
+### Backlog: stash cap, level 60, and the level 46-54 content gap -- idea logged, not scoped
+
+Five items raised together, logged as backlog rather than built this
+pass:
+
+- **Stash size limit, upgradeable.** Checked directly -- the stash is
+  genuinely unlimited today. Every push (`EquipmentManager.equip`'s
+  displaced-item path, `ShopManager`, `CraftingManager`,
+  `PrestigeManager`, `QuestManager`'s loot/auto-equip-on-loot paths) calls
+  `state.stash.push(item)` with no capacity check anywhere in the
+  codebase. Treasury already has an unrelated `storagePerLevel` (gold
+  storage cap, deliberately kept hardcoded/structural rather than a
+  balance knob per the tuning-registry writeup above) -- a stash cap
+  would need its own new facility-or-upgrade-gated capacity, not an
+  extension of that one. Not scoped: whether it's a new tier on an
+  existing facility (Treasury? Workshop?) or its own upgrade, and what a
+  sane starting cap even is given the game currently assumes unlimited
+  storage everywhere that pushes to it.
+- **Class-specific armour sets, for a level 60 cap.** Depends on the
+  level-60 extension below landing first -- no armour needs class-gating
+  today since nothing above reqLevel 55 exists yet.
+- **Level 60 cap (extension from the current 55).** The Requiem for the
+  Last God / `last_god` capstone is currently the actual level ceiling in
+  every sense -- `GEAR_SCORE_LEVEL_CAP` (patch 0157), the difficulty
+  tiers, the endgame chain. Raising it is a real, multi-file change, not
+  a single constant (xp curve headroom past 55, what drops between 55 and
+  60, whether Renown Perks' late-game tier2 curves still make sense with
+  5 more levels of grinding room above them).
+- **A new raid around level 48-49.** Ties directly to an existing, already-
+  documented gap: the level-gap content review (see the pantheon/status
+  history above) found chains covering most of 1-55 but flagged **46-54 as
+  still open, nothing earmarked** -- sitting right before the level-55
+  finale. A level-48/49 raid would sit inside that exact gap.
+- **A quest chain or two for the late 40s.** Same 46-54 gap as above, and
+  the design doc already has a natural candidate for it: the Harrower's
+  full confrontation arc is planned to land "alongside or beyond the
+  34/45/55 capstone band" (`world-lore-pantheon.md`) and would also close
+  its own five-chain-long open thread (`crows_warning` through
+  `the_pale_rider`) in the same move. Worth treating the raid and the
+  chain(s) above as one coordinated content pass rather than two
+  unrelated asks, since they'd fill the same hole for the same reason.
