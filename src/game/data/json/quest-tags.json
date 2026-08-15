@@ -4,8 +4,8 @@
     "name": "Combat",
     "banner": {
       "path": "quest-tags/combat.png",
-      "focusX": 49.8,
-      "focusY": 63.4
+      "focusX": 35,
+      "focusY": 64.1
     }
   },
   {
