@@ -10,7 +10,7 @@ import { EquipSlot, EquipmentDef, EquipmentItem, Hero, Rarity, ConsumableDef, Cu
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { CurioManager } from '../../game/managers/CurioManager';
 import { rerollsUsedToday } from '../../game/data/reroll';
-import { describeMods, describeStats, formatGold, RARITY_COLOR, RARITY_ORDER } from '../../game/util';
+import { describeMods, describeStats, formatGold, RARITY_BANNER, RARITY_COLOR, RARITY_ORDER } from '../../game/util';
 import { ItemIcon, ConsumableIcon, CurioIcon } from '../icons';
 import { GearScoreBadge } from '../GearScoreBadge';
 import { Row, Toggle } from './SettingsPanel';
@@ -585,6 +585,7 @@ function SlotCard({
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
       >
+        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="item-card-summary">
           <ItemIcon slot={def.slot} icon={def.icon} />
           <div className="item-card-body">
@@ -600,44 +601,47 @@ function SlotCard({
       {open && (
         <div className="overlay" onClick={() => setOpen(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
-              <ItemIcon slot={def.slot} icon={def.icon} size={48} />
-              <div>
-                <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>
-                  {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
-                </span>
-                <div className="tiny muted">{slot} · requires level {def.reqLevel}</div>
+            <div className="modal-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
+            <div className="modal-banner-scrim">
+              <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
+                <ItemIcon slot={def.slot} icon={def.icon} size={48} />
+                <div>
+                  <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>
+                    {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
+                  </span>
+                  <div className="tiny muted">{slot} · requires level {def.reqLevel}</div>
+                </div>
               </div>
-            </div>
-            <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
-              <RarityPill rarity={def.rarity} />
-              {def.setId && <SetPill />}
-              {item.customMods && <CraftedPill />}
-            </div>
-            <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
-            {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
-              <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
-            )}
-            {def.setId && (
-              <SetInfoBlock hero={hero} setId={def.setId} equipped={item.durability > 0} />
-            )}
-            <div className="tiny muted" style={{ marginTop: 4 }}>
-              {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
-            </div>
-            <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
-              <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
-              <button
-                className="btn-primary"
-                disabled={EquipmentManager.repairCost(item, workshop, repairDiscount) === 0}
-                onClick={() => { engine.repair(item.uid); setOpen(false); }}
-              >
-                {itemFreeRepairAvailable && EquipmentManager.repairCost(item, workshop, repairDiscount) > 0
-                  ? 'Repair · Free'
-                  : `Repair ${formatGold(EquipmentManager.repairCost(item, workshop, repairDiscount))}`}
-              </button>
-              <button onClick={() => { engine.unequip(hero.id, slot); setOpen(false); }}>
-                Remove
-              </button>
+              <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
+                <RarityPill rarity={def.rarity} />
+                {def.setId && <SetPill />}
+                {item.customMods && <CraftedPill />}
+              </div>
+              <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
+              {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
+                <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
+              )}
+              {def.setId && (
+                <SetInfoBlock hero={hero} setId={def.setId} equipped={item.durability > 0} />
+              )}
+              <div className="tiny muted" style={{ marginTop: 4 }}>
+                {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+              </div>
+              <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+                <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
+                <button
+                  className="btn-primary"
+                  disabled={EquipmentManager.repairCost(item, workshop, repairDiscount) === 0}
+                  onClick={() => { engine.repair(item.uid); setOpen(false); }}
+                >
+                  {itemFreeRepairAvailable && EquipmentManager.repairCost(item, workshop, repairDiscount) > 0
+                    ? 'Repair · Free'
+                    : `Repair ${formatGold(EquipmentManager.repairCost(item, workshop, repairDiscount))}`}
+                </button>
+                <button onClick={() => { engine.unequip(hero.id, slot); setOpen(false); }}>
+                  Remove
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -669,6 +673,7 @@ function StashCard({
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
       >
+        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
         <div className="item-card-summary">
           <ItemIcon slot={def.slot} icon={def.icon} />
           <div className="item-card-body">
@@ -685,48 +690,51 @@ function StashCard({
       {open && (
         <div className="overlay" onClick={() => setOpen(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
-              <ItemIcon slot={def.slot} icon={def.icon} size={48} />
-              <div>
-                <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>
-                  {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
-                </span>
-                <div className="tiny muted">{def.slot} · requires level {def.reqLevel}</div>
+            <div className="modal-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
+            <div className="modal-banner-scrim">
+              <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
+                <ItemIcon slot={def.slot} icon={def.icon} size={48} />
+                <div>
+                  <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>
+                    {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
+                  </span>
+                  <div className="tiny muted">{def.slot} · requires level {def.reqLevel}</div>
+                </div>
               </div>
-            </div>
-            <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
-              <RarityPill rarity={def.rarity} />
-              {def.setId && <SetPill />}
-              {item.customMods && <CraftedPill />}
-              {isUpgrade && <UpgradePill />}
-            </div>
-            <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
-            {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
-              <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
-            )}
-            {def.setId && (
-              <SetInfoBlock hero={hero} setId={def.setId} equipped={false} />
-            )}
-            <div className="tiny muted" style={{ marginTop: 4 }}>
-              {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
-            </div>
-            <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
-              <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
-              <button
-                className="btn-primary"
-                disabled={!canEquip.ok}
-                onClick={() => { engine.equip(hero.id, item.uid); setOpen(false); }}
-                title={canEquip.reason}
-              >
-                Equip on {hero.name}
-              </button>
-              <button
-                onClick={() => {
-                  if (!confirmSell) doSell(); else setPendingSell(true);
-                }}
-              >
-                Sell {formatGold(EquipmentManager.sellValue(item))}
-              </button>
+              <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
+                <RarityPill rarity={def.rarity} />
+                {def.setId && <SetPill />}
+                {item.customMods && <CraftedPill />}
+                {isUpgrade && <UpgradePill />}
+              </div>
+              <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
+              {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
+                <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
+              )}
+              {def.setId && (
+                <SetInfoBlock hero={hero} setId={def.setId} equipped={false} />
+              )}
+              <div className="tiny muted" style={{ marginTop: 4 }}>
+                {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+              </div>
+              <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+                <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
+                <button
+                  className="btn-primary"
+                  disabled={!canEquip.ok}
+                  onClick={() => { engine.equip(hero.id, item.uid); setOpen(false); }}
+                  title={canEquip.reason}
+                >
+                  Equip on {hero.name}
+                </button>
+                <button
+                  onClick={() => {
+                    if (!confirmSell) doSell(); else setPendingSell(true);
+                  }}
+                >
+                  Sell {formatGold(EquipmentManager.sellValue(item))}
+                </button>
+              </div>
             </div>
           </div>
         </div>

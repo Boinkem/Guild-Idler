@@ -3097,3 +3097,55 @@ button.harvest-item:hover {
   border-radius: var(--radius);
   padding: 10px 16px;
 }
+
+/*
+ * Rarity banner backgrounds -- RARITY_BANNER art (see util.ts) sits
+ * full-bleed behind an item-card and its detail modal, showing rarity as
+ * actual artwork instead of just a colored pill/border. The banner image
+ * itself is set per-item via inline style (backgroundImage) since it
+ * varies with def.rarity; these classes only carry the shared static
+ * treatment (position, sizing, opacity). `.item-card` and `.card` are
+ * both already `position: relative; overflow: hidden`, so `.rarity-banner`
+ * just needs to be inserted as the first child of either.
+ */
+.rarity-banner {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.42;
+  pointer-events: none;
+}
+/* Painting order quirk: an absolutely-positioned sibling paints ABOVE
+   ordinary in-flow content regardless of DOM order, so the real content
+   needs its own `position: relative` (or z-index) to land back on top of
+   the banner. `.item-card-summary` already gets this below; `.card`-based
+   usages (the Vendors shop card) wrap their content in this instead. */
+.rarity-banner-content { position: relative; z-index: 1; }
+.item-card-summary { position: relative; z-index: 1; }
+.item-card .rarity-pill { background: rgba(0, 0, 0, 0.4); }
+.item-card-name { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
+
+.modal-banner {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.4;
+  pointer-events: none;
+}
+/* Bleeds past .modal's own 16px padding (negative margin) so the banner
+   reaches the modal's edges, then re-applies that padding to its own
+   content -- same "full-bleed backdrop, inset content" shape as the
+   collapsed card. The gradient keeps the banner more visible near the
+   top (behind the item name) and settles to a solid --panel wash by the
+   time it reaches the description/buttons, so body text stays legible. */
+.modal-banner-scrim {
+  position: relative;
+  z-index: 1;
+  margin: -16px;
+  padding: 16px;
+  background: linear-gradient(180deg, rgba(20, 16, 13, 0.08) 0%, var(--panel) 65%);
+}
+.modal-banner-scrim .card-title { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
+.modal-banner-scrim .rarity-pill { background: rgba(0, 0, 0, 0.4); }

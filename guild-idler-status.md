@@ -10700,3 +10700,44 @@ pass:
   `the_pale_rider`) in the same move. Worth treating the raid and the
   chain(s) above as one coordinated content pass rather than two
   unrelated asks, since they'd fill the same hole for the same reason.
+
+### Rarity banner art behind gear cards -- built (patch 0159)
+
+```discord-update
+Dev Update | Rarity Banner Art
+
+- Equipment cards, their detail popups, and shop listings now show full rarity-themed banner art behind the item instead of a plain background
+```
+
+Design handoff (Claude Design), applied largely as given -- new
+`RARITY_BANNER` (`util.ts`, one path per rarity) and `.rarity-banner`/
+`.modal-banner`/`.modal-banner-scrim` (`app.css`) layer a full-bleed
+banner image behind `EquipmentPanel.tsx`'s `SlotCard`/`StashCard` (both
+the collapsed card and its detail modal) and `VendorsPanel.tsx`'s
+`EquipmentShopCard`, five new PNGs in `public/rarity-banners/` (one per
+rarity, ~275-285KB each).
+
+**Diffed against current `main` before integrating, not applied blind --
+this time it was a non-event.** The last two design handoffs (Guild Hall
+wax seal, patch 0154; Guild Hall visual polish, patch 0156) both needed a
+hunk dropped because the supplied file was built off a `main` pulled
+before an intervening patch landed. This one wasn't -- the supplied
+`EquipmentPanel.tsx` already contains patch 0158's `SetPill`/
+`UpgradePill`/`isGearUpgrade` exactly as shipped, so the diff against
+live `main` came back as pure banner-related additions with nothing to
+reconcile. Still diffed all four supplied files field-by-field rather
+than trusting that, per the same workflow rule that caught the previous
+two.
+
+**Verified beyond the usual compile check.** Rather than just noting "no
+dev environment available" the way earlier design-handoff entries in
+this doc had to, rendered the actual patched `app.css` against the real
+banner PNGs in a standalone page (mimicking `StashCard`'s exact JSX
+output -- rarity banner, `set-active` teal glow, all three pill badges)
+and screenshotted it. Confirmed: the Legendary set-active glow still
+renders correctly with a banner behind it, and the rarity/set/upgrade
+pills all stay legible over the art (the handoff's `.item-card .rarity-
+pill { background: rgba(0,0,0,0.4) }` addition covers all three pill
+types, not just the ones it was written for). `npx tsc --noEmit` and
+`npx vite build --config vite.web.config.ts` both pass clean against a
+fresh clone with all five files/folders applied.

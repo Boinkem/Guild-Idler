@@ -36,6 +36,17 @@ export const RARITY_COLOR: Record<Rarity, string> = {
   legendary: '#d9a441',
 };
 
+/** Full-bleed banner art for each rarity tier, shown behind item cards and
+ *  their detail modals (see .rarity-banner / .modal-banner in app.css).
+ *  Files live in public/rarity-banners/ -- ship all five alongside this. */
+export const RARITY_BANNER: Record<Rarity, string> = {
+  common: './rarity-banners/common.png',
+  uncommon: './rarity-banners/uncommon.png',
+  rare: './rarity-banners/rare.png',
+  epic: './rarity-banners/epic.png',
+  legendary: './rarity-banners/legendary.png',
+};
+
 /**
  * Generic large-number abbreviation -- formatGold's own logic was never
  * actually gold-specific. Extracted so Renown (which can genuinely reach

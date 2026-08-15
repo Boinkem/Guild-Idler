@@ -10,7 +10,7 @@ import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
 import { CONSUMABLE_BY_ID } from '../../game/data/items';
 import { VENDORS, vendorUpgrades } from '../../game/data/progression';
 import { EquipmentDef, ConsumableDef, VendorId, UpgradeDef, CraftingRecipeDef } from '../../game/types';
-import { describeMods, formatDuration, formatGold, RARITY_COLOR } from '../../game/util';
+import { describeMods, formatDuration, formatGold, RARITY_BANNER, RARITY_COLOR } from '../../game/util';
 import { ItemIcon, ConsumableIcon } from '../icons';
 import { VendorSprite } from '../sprites/VendorSprite';
 import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
@@ -402,7 +402,8 @@ function EquipmentShopCard({
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
       >
-        <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
+        <div className="rarity-banner-content row" style={{ gap: 10, alignItems: 'center' }}>
           <ItemIcon slot={def.slot} icon={def.icon} size={36} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 11 }}>{def.name}</div>
@@ -414,21 +415,24 @@ function EquipmentShopCard({
       {showModal && (
         <div className="overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
-              <ItemIcon slot={def.slot} icon={def.icon} size={48} />
-              <div>
-                <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</span>
-                <div className="tiny muted">{def.slot} · {def.rarity} · requires level {def.reqLevel}</div>
+            <div className="modal-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
+            <div className="modal-banner-scrim">
+              <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
+                <ItemIcon slot={def.slot} icon={def.icon} size={48} />
+                <div>
+                  <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</span>
+                  <div className="tiny muted">{def.slot} · {def.rarity} · requires level {def.reqLevel}</div>
+                </div>
               </div>
-            </div>
-            <div className="stat-row" style={{ margin: '6px 0 12px' }}>
-              {describeMods(def.mods).map((line) => <span key={line}>{line}</span>)}
-            </div>
-            <div className="row end" style={{ gap: 8 }}>
-              <button className="btn-primary" onClick={() => setShowModal(false)}>Close</button>
-              <button className="btn-primary" disabled={!canAfford} onClick={() => { onBuy(); setShowModal(false); }}>
-                Buy · {formatGold(price)}
-              </button>
+              <div className="stat-row" style={{ margin: '6px 0 12px' }}>
+                {describeMods(def.mods).map((line) => <span key={line}>{line}</span>)}
+              </div>
+              <div className="row end" style={{ gap: 8 }}>
+                <button className="btn-primary" onClick={() => setShowModal(false)}>Close</button>
+                <button className="btn-primary" disabled={!canAfford} onClick={() => { onBuy(); setShowModal(false); }}>
+                  Buy · {formatGold(price)}
+                </button>
+              </div>
             </div>
           </div>
         </div>
