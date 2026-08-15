@@ -1350,7 +1350,7 @@
     "name": "Gravewatcher's Band (Heroic)",
     "slot": "ring",
     "rarity": "epic",
-    "reqLevel": 19,
+    "reqLevel": 22,
     "maxDurability": 247,
     "value": 2535,
     "mods": {
@@ -1372,7 +1372,7 @@
     "name": "Gravewatcher's Band (Mythic)",
     "slot": "ring",
     "rarity": "epic",
-    "reqLevel": 19,
+    "reqLevel": 22,
     "maxDurability": 321,
     "value": 3296,
     "mods": {
@@ -1394,7 +1394,7 @@
     "name": "Ashwoven Charm (Heroic)",
     "slot": "amulet",
     "rarity": "epic",
-    "reqLevel": 11,
+    "reqLevel": 22,
     "maxDurability": 169,
     "value": 650,
     "mods": {
@@ -1413,7 +1413,7 @@
     "name": "Ashwoven Charm (Mythic)",
     "slot": "amulet",
     "rarity": "epic",
-    "reqLevel": 11,
+    "reqLevel": 22,
     "maxDurability": 220,
     "value": 845,
     "mods": {
@@ -1554,7 +1554,7 @@
     "name": "Copper Band (Heroic)",
     "slot": "ring",
     "rarity": "epic",
-    "reqLevel": 1,
+    "reqLevel": 8,
     "maxDurability": 78,
     "value": 39,
     "mods": {
@@ -1569,7 +1569,7 @@
     "name": "Copper Band (Mythic)",
     "slot": "ring",
     "rarity": "epic",
-    "reqLevel": 1,
+    "reqLevel": 8,
     "maxDurability": 101,
     "value": 51,
     "mods": {
@@ -1584,7 +1584,7 @@
     "name": "Work Gloves (Mythic)",
     "slot": "gloves",
     "rarity": "epic",
-    "reqLevel": 1,
+    "reqLevel": 8,
     "maxDurability": 51,
     "value": 34,
     "mods": {
@@ -1599,7 +1599,7 @@
     "name": "Work Gloves (Heroic)",
     "slot": "gloves",
     "rarity": "epic",
-    "reqLevel": 1,
+    "reqLevel": 8,
     "maxDurability": 31,
     "value": 34,
     "mods": {
@@ -1614,7 +1614,7 @@
     "name": "Knight's Blade (Heroic)",
     "slot": "weapon",
     "rarity": "epic",
-    "reqLevel": 5,
+    "reqLevel": 8,
     "maxDurability": 91,
     "value": 208,
     "mods": {
@@ -1634,7 +1634,7 @@
     "name": "Knight's Blade (Mythic)",
     "slot": "weapon",
     "rarity": "epic",
-    "reqLevel": 5,
+    "reqLevel": 8,
     "maxDurability": 118,
     "value": 270,
     "mods": {
@@ -1654,7 +1654,7 @@
     "name": "Iron Helm (Heroic)",
     "slot": "helmet",
     "rarity": "epic",
-    "reqLevel": 4,
+    "reqLevel": 8,
     "maxDurability": 78,
     "value": 182,
     "mods": {
@@ -1674,7 +1674,7 @@
     "name": "Iron Helm (Mythic)",
     "slot": "helmet",
     "rarity": "epic",
-    "reqLevel": 4,
+    "reqLevel": 8,
     "maxDurability": 101,
     "value": 237,
     "mods": {
@@ -1694,7 +1694,7 @@
     "name": "Chainmail Hauberk (Heroic)",
     "slot": "chest",
     "rarity": "epic",
-    "reqLevel": 6,
+    "reqLevel": 8,
     "maxDurability": 98,
     "value": 273,
     "mods": {
@@ -1715,7 +1715,7 @@
     "name": "Chainmail Hauberk (Mythic)",
     "slot": "chest",
     "rarity": "epic",
-    "reqLevel": 6,
+    "reqLevel": 8,
     "maxDurability": 127,
     "value": 355,
     "mods": {
@@ -1736,7 +1736,7 @@
     "name": "Ranger Boots (Heroic)",
     "slot": "boots",
     "rarity": "epic",
-    "reqLevel": 4,
+    "reqLevel": 8,
     "maxDurability": 75,
     "value": 176,
     "mods": {
@@ -1757,7 +1757,7 @@
     "name": "Ranger Boots (Mythic)",
     "slot": "boots",
     "rarity": "epic",
-    "reqLevel": 4,
+    "reqLevel": 8,
     "maxDurability": 98,
     "value": 228,
     "mods": {
@@ -1774,7 +1774,7 @@
     "name": "Tollkeeper's Signet (Heroic)",
     "slot": "ring",
     "rarity": "epic",
-    "reqLevel": 7,
+    "reqLevel": 8,
     "maxDurability": 98,
     "value": 195,
     "mods": {
@@ -1792,7 +1792,7 @@
     "name": "Tollkeeper's Signet (Mythic)",
     "slot": "ring",
     "rarity": "epic",
-    "reqLevel": 7,
+    "reqLevel": 8,
     "maxDurability": 127,
     "value": 254,
     "mods": {

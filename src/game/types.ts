@@ -1614,7 +1614,7 @@ export interface GameState {
   autoRepairThresholdPercent: number;
   /** When true, QuestManager.resolve auto-equips a loot drop straight onto
    *  the hero who earned it if it beats what they're already wearing in
-   *  that slot (same GEAR_SCORE_BY_RARITY comparison engine.equipBestGear
+   *  that slot (same gearScoreForItem comparison engine.equipBestGear
    *  already uses for its own manual bulk-equip) instead of the drop
    *  always landing in the stash. Only ever checked against the earning
    *  hero, never the whole roster -- a stash drop had no "which hero"

@@ -17,7 +17,7 @@ const ASCENSION_WEIGHT = 30;
 export interface GuildPowerBreakdown {
   /** Sum of every hero's strength+endurance+luck+wisdom (base + gear + bonus stats). */
   heroStats: number;
-  /** Sum of every hero's flat, rarity-tier Gear Score (see GEAR_SCORE_BY_RARITY). */
+  /** Sum of every hero's per-item Gear Score (see gearScoreForItem in data/equipment.ts). */
   gearScore: number;
   /** Ascension stacks from retired heroes. Deliberately uncapped -- see guildPowerCeiling(). */
   ascension: number;

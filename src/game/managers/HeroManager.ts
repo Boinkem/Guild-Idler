@@ -1,4 +1,4 @@
-import { EQUIPMENT_BY_ID, GEAR_SCORE_BY_RARITY, SET_BY_ID } from '../data/equipment';
+import { EQUIPMENT_BY_ID, gearScoreForItem, SET_BY_ID } from '../data/equipment';
 import { INJURIES } from '../data/items';
 import { HERO_CLASSES, RECRUIT_START_LEVEL, xpForLevel, infirmaryHealTimeMinutes, roleUnlockCost, roleSwapCost } from '../data/progression';
 import { DIFFICULTY_ORDER } from '../data/quests';
@@ -205,14 +205,15 @@ export const HeroManager = {
   },
 
   /**
-   * Sum of GEAR_SCORE_BY_RARITY across every equipped item, UNLESS an
-   * item sets its own gearScoreOverride (see EquipmentDef's own comment
-   * for why that field exists) -- otherwise flat per tier rather than
-   * reading the item's rolled stats. This is a badge of "how well is
-   * this hero geared", separate from and in addition to the combat-stat
-   * bonus gear already grants via equipmentStats(). Broken/zero-
-   * durability items still count: the badge represents what's equipped,
-   * not what's currently usable.
+   * Sum of gearScoreForItem() across every equipped item (see its own
+   * comment in data/equipment.ts -- GEAR_SCORE_BY_RARITY's flat rarity
+   * base plus a small reqLevel-scaled bonus, capped so it can never cross
+   * into the next rarity's own base, unless an item sets gearScoreOverride
+   * to skip the formula entirely). This is a badge of "how well is this
+   * hero geared", separate from and in addition to the combat-stat bonus
+   * gear already grants via equipmentStats(). Broken/zero-durability items
+   * still count: the badge represents what's equipped, not what's
+   * currently usable.
    */
   gearScore(hero: Hero): number {
     let total = 0;
@@ -220,7 +221,7 @@ export const HeroManager = {
       if (!item) continue;
       const def = EQUIPMENT_BY_ID[item.defId];
       if (!def) continue;
-      total += def.gearScoreOverride ?? GEAR_SCORE_BY_RARITY[def.rarity] ?? 0;
+      total += gearScoreForItem(def);
     }
     return total;
   },

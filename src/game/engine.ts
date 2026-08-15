@@ -21,7 +21,7 @@ import { PetManager } from './managers/PetManager';
 import { PeddlerManager } from './managers/PeddlerManager';
 import { CraftingManager } from './managers/CraftingManager';
 import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
-import { EQUIPMENT_BY_ID, SET_BY_ID, GEAR_SCORE_BY_RARITY, EQUIP_SLOTS } from './data/equipment';
+import { EQUIPMENT_BY_ID, SET_BY_ID, gearScoreForItem, EQUIP_SLOTS } from './data/equipment';
 import { RAID_BY_ID } from './data/raids';
 import { Tuning } from './data/tuning';
 import { rerollDay, rerollsUsedToday } from './data/reroll';
@@ -1569,15 +1569,15 @@ export class GameEngine {
    * For each of a hero's 9 equipment slots, equips the highest-Gear-Score
    * eligible item currently sitting in the stash if it beats what's
    * already equipped there -- the bulk counterpart to picking through the
-   * Stash one item at a time. Gear Score is the same flat, rarity-tier
-   * value HeroManager.gearScore already sums (see GEAR_SCORE_BY_RARITY);
-   * ties are left alone rather than swapped for swapping's sake. Skips
-   * anything the hero can't wear yet (reqLevel), same as a manual equip
-   * would refuse. Loops slot-by-slot via EquipmentManager.equip itself so
-   * a displaced item lands back in the stash exactly the way a manual
-   * equip already handles it, and a later slot can immediately see an
-   * item the earlier slot's displacement just freed up. Returns how many
-   * slots actually changed. */
+   * Stash one item at a time. Gear Score is the same per-item value
+   * HeroManager.gearScore already sums (see gearScoreForItem in
+   * data/equipment.ts); ties are left alone rather than swapped for
+   * swapping's sake. Skips anything the hero can't wear yet (reqLevel),
+   * same as a manual equip would refuse. Loops slot-by-slot via
+   * EquipmentManager.equip itself so a displaced item lands back in the
+   * stash exactly the way a manual equip already handles it, and a later
+   * slot can immediately see an item the earlier slot's displacement just
+   * freed up. Returns how many slots actually changed. */
   equipBestGear(heroId: string): number {
     const hero = this.hero(heroId);
     if (!hero) return 0;
@@ -1597,7 +1597,7 @@ export class GameEngine {
       const currentItem = hero.equipment[slot];
       if (currentItem) anyAlreadyEquipped = true;
       const currentDef = currentItem ? EQUIPMENT_BY_ID[currentItem.defId] : undefined;
-      const currentScore = currentDef ? GEAR_SCORE_BY_RARITY[currentDef.rarity] ?? 0 : -1;
+      const currentScore = currentDef ? gearScoreForItem(currentDef) : -1;
       let best: typeof currentItem = undefined;
       let bestScore = currentScore;
       for (const item of this.state.stash) {
@@ -1605,7 +1605,7 @@ export class GameEngine {
         if (!def || def.slot !== slot) continue;
         anyCandidateSeen = true;
         if (hero.level < def.reqLevel) { anyLevelGated = true; continue; }
-        const score = GEAR_SCORE_BY_RARITY[def.rarity] ?? 0;
+        const score = gearScoreForItem(def);
         if (score > bestScore) {
           bestScore = score;
           best = item;

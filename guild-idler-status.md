@@ -10500,3 +10500,117 @@ rather than guessing at the intended padding value.
 **Verified:** diffed both files against a fresh `main` pull before
 integrating. `npx tsc --noEmit` and `vite build` (web config) both
 clean.
+
+### Legendary/raid loot flatness fix: raid-loot reqLevel audit + reqLevel-scaled Gear Score -- built (patch 0157)
+
+```discord-update
+Dev Update | Gear Score & Raid-Loot Leveling
+
+- Fixed nine early raid-loot items that could be equipped below the raid's own level requirement
+- Gear Score now factors in how high-level a piece actually is, not just its rarity -- two Epics from different raids no longer read as identical
+- Equip Best Gear and auto-equip-on-loot both recognize these stronger same-rarity upgrades too, not just the Gear Score badge
+```
+
+Direct follow-up to a design review flagging that Legendary-tier rewards
+stay flat as a hero's own level and gear investment grow -- a level-55
+hero grinding Legendary quests earns the same gold/xp as a level-26 hero
+just unlocking the tier, and (found while investigating) the loot pool
+had the identical problem one layer deeper: `QuestManager.lootTableFor`
+picks its 3 candidates from the ordinary-legendary pool via a flat
+`rng.shuffle(pool).slice(0, 3)`, with no correlation to the hero's own
+level at all -- a level-26 hero and a level-55 hero have always had
+identical odds of rolling `frozen_maw_shield` (reqLevel 20) versus
+`requiem_blade` (reqLevel 55). This patch is step one of that fix: making
+Gear Score (and everything that reads it) reqLevel-aware, gated on first
+auditing whether the underlying reqLevel data could actually be trusted
+to build that on top of. Loot-roll weighting itself (biasing the 3
+candidates toward the hero's own level) and a Mythic-tier/Legendary+
+reward-scaling pass remain separately scoped, not part of this patch.
+
+**Raid-loot reqLevel audit, findings first.** Cross-referenced every
+raid's own `reqLevel` (`raids.json`) against its Heroic/Mythic loot
+(`raid-encounters.json`'s `lootHeroic`/`lootMythic`, resolved against
+`equipment.json`). Six of eight raids were already clean -- Frozen
+Wyrmkeep, What Got Out, Black Dragon Nest, House of Bones, Silence the
+Loom, and Requiem for the Last God all floor their raid-tier loot at or
+above the raid's own reqLevel already (several floor every single
+encounter's loot at exactly the raid's level, no internal stagger).
+**The Siege of Blackford Keep** (raidLevel 8) and **The Bonewrought
+Vault** (raidLevel 22) didn't -- almost certainly the two oldest raids,
+authored before that convention existed. Nine item families (18 defs
+counting Heroic+Mythic separately) had a `reqLevel` below their own
+raid's requirement, low enough in Blackford Keep's case that its
+Heroic/Mythic loot was equippable as early as level 1 despite the raid
+itself requiring level 8:
+
+```
+Blackford Keep (raidLevel 8):
+  copper_band_heroic/_mythic          1 -> 8
+  work_gloves_heroic/_mythic          1 -> 8
+  iron_helm_heroic/_mythic            4 -> 8
+  ranger_boots_heroic/_mythic         4 -> 8
+  knights_blade_heroic/_mythic        5 -> 8
+  chainmail_heroic/_mythic            6 -> 8
+  tollkeepers_signet_heroic/_mythic   7 -> 8
+
+Bonewrought Vault (raidLevel 22):
+  ashwoven_charm_heroic/_mythic       11 -> 22
+  gravewatchers_band_heroic/_mythic   19 -> 22
+```
+
+Floored each to its own raid's `reqLevel`, matching the flat-per-raid
+convention the other six raids already established rather than inventing
+a new staggering scheme. `dragon_helm`, `choir_mask`, and
+`silenced_bell` (also Bonewrought Vault loot) were already above the
+raid's own level (24-25) and left untouched.
+
+**Gear Score, reqLevel-aware.** `GEAR_SCORE_BY_RARITY` was previously the
+entire story -- a flat per-rarity value, deliberately not derived from an
+item's actual stats, on purpose (a clean, predictable "item level"
+badge). That's still true for the base table, but it was also the reason
+a raid's Epic loot always read identically regardless of which raid it
+came from. New `gearScoreForItem(def)` (`data/equipment.ts`) layers a
+small reqLevel-scaled bonus on top of that same flat base, capped per
+rarity (`GEAR_SCORE_LEVEL_BONUS_CAP`, roughly 80% of the gap up to the
+next rarity's own base) so the bonus can never let a lower rarity reach
+into the next tier -- the "legendary always outranks epic" guarantee the
+flat table gave for free still holds, it's just no longer the *only*
+thing differentiating two items of the same rarity. `gearScoreOverride`
+still wins outright when an item sets one, unchanged from before.
+`GEAR_SCORE_MAX` (used to band the Gear Score color tiers) now derives
+from the new formula's real ceiling instead of the old flat legendary
+value, so the color bands stay correctly scaled to the new true max
+rather than reading everyone as pinned near the top of the old range.
+
+**All three consumers migrated, not just the display badge.**
+`HeroManager.gearScore` was the obvious one, but `QuestManager`'s
+auto-equip-on-loot upgrade check and `engine.equipBestGear` (the manual
+bulk-equip button) both independently computed
+`GEAR_SCORE_BY_RARITY[def.rarity]` themselves, by design ("same
+GEAR_SCORE_BY_RARITY comparison ... so 'beats what's worn' means the
+same thing in both places" -- their own prior comments). Leaving those
+two on the old flat lookup would have meant the Gear Score *badge*
+showed a difference between two same-rarity items that Equip Best Gear
+and auto-equip still treated as a tie -- a real functional
+inconsistency, not just a stale comment. All three now read through the
+one `gearScoreForItem` function.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh clone. Also checked
+at the data level, not just compiled: computed `gearScoreForItem` across
+all 219 real equipment defs post-fix and confirmed the ordering
+guarantee holds everywhere the formula actually runs -- max(Common)=1 <
+min(Uncommon)=3, max(Uncommon)=3 < min(Rare)=8, max(Rare)=9 <
+min(Epic)=17, max(Epic)=24 < min(Legendary)=34. Found 8 pre-existing
+items with an explicit `gearScoreOverride: 0` (`wooden_sword`,
+`rusty_sword`, `ranger_boots_heroic`, and five other starter/junk-tier
+pieces) that fall outside that range by design -- confirmed these
+predate this patch and are unaffected by it, since `gearScoreOverride`
+already short-circuited the old flat formula the exact same way.
+
+**Not in this patch, intentionally:** the actual loot-roll weighting
+(which legendary/epic a hero is likely to *find*, biased toward their
+own level) and the Legendary/Mythic-tier reward-flatness fix for raw
+gold/xp. Both remain open, separately scoped follow-ups -- this patch
+only fixes what an item is worth once you have it, not what you're
+likely to get offered in the first place.

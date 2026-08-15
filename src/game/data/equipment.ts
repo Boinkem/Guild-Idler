@@ -24,20 +24,63 @@ export const RARITY_PRICE_MULT: Record<Rarity, number> = {
 };
 
 /**
- * Flat "Gear Score" awarded per equipped item, purely by rarity tier --
- * deliberately NOT derived from the item's actual rolled stats/mods (those
- * already feed hero power separately via equipmentStats). This is a clean,
- * predictable prestige number, the equivalent of an "item level" badge: a
- * legendary always contributes 30 regardless of which legendary it is or
- * how it rolled, so it reads consistently everywhere it's shown (hero
- * card, Guild Power breakdown, tier-colour breakpoints).
+ * Flat "Gear Score" base per equipped item, by rarity tier -- deliberately
+ * NOT derived from the item's actual rolled stats/mods (those already feed
+ * hero power separately via equipmentStats). This used to be the whole
+ * story: a legendary always contributed exactly 30 regardless of which
+ * legendary it was. See gearScoreForItem() below for the real per-item
+ * score now used everywhere -- this table is still that function's flat
+ * base, just no longer the final number on its own (patch 0157).
  */
 export const GEAR_SCORE_BY_RARITY: Record<Rarity, number> = {
   common: 1, uncommon: 3, rare: 7, epic: 15, legendary: 30,
 };
 
-/** Max possible Gear Score for one hero: 9 equipment slots, all legendary. */
-export const GEAR_SCORE_MAX = 9 * GEAR_SCORE_BY_RARITY.legendary;
+/**
+ * How far above GEAR_SCORE_BY_RARITY's flat base an item's own reqLevel
+ * can push its Gear Score, capped per rarity so a heavily-leveled item can
+ * never reach into the next rarity tier's own base -- preserves the
+ * "legendary always outranks epic" guarantee the flat table alone used to
+ * give, while letting two same-rarity items differentiate by how late/
+ * high-level their real source actually is. Concretely, this is what
+ * makes a raid's Epic loot from a level-43 raid outscore the same-rarity
+ * loot from a level-8 raid instead of tying with it. Each cap is roughly
+ * 80% of the gap up to the next tier's base (chosen to leave visible
+ * headroom rather than crowd the boundary); legendary has no tier above
+ * it, so it reuses epic's own gap for a same-sized bonus range. Added
+ * patch 0157, alongside the raid-loot reqLevel audit that made this data
+ * trustworthy enough to build on (see guild-idler-status.md).
+ */
+export const GEAR_SCORE_LEVEL_BONUS_CAP: Record<Rarity, number> = {
+  common: 2, uncommon: 3, rare: 6, epic: 12, legendary: 12,
+};
+
+/** Level the bonus above scales against -- the game's current level cap
+ *  (Requiem for the Last God, reqLevel 55). Revisit if that ever moves. */
+export const GEAR_SCORE_LEVEL_CAP = 55;
+
+/**
+ * An item's real Gear Score: GEAR_SCORE_BY_RARITY's flat base plus a small
+ * reqLevel-scaled bonus capped by GEAR_SCORE_LEVEL_BONUS_CAP (see its own
+ * comment). gearScoreOverride still wins outright when an item sets one,
+ * exactly as before this existed -- this only changes what happens when no
+ * override is present. The single source every consumer (HeroManager.
+ * gearScore, QuestManager's auto-equip-on-loot upgrade check, and
+ * engine.equipBestGear) reads through now, instead of each computing
+ * GEAR_SCORE_BY_RARITY[def.rarity] independently and drifting out of sync
+ * with each other the way they used to.
+ */
+export function gearScoreForItem(def: EquipmentDef): number {
+  if (def.gearScoreOverride != null) return def.gearScoreOverride;
+  const base = GEAR_SCORE_BY_RARITY[def.rarity] ?? 0;
+  const cap = GEAR_SCORE_LEVEL_BONUS_CAP[def.rarity] ?? 0;
+  const bonus = Math.round((def.reqLevel / GEAR_SCORE_LEVEL_CAP) * cap);
+  return base + bonus;
+}
+
+/** Max possible Gear Score for one hero: 9 equipment slots, all legendary,
+ *  each at the level-bonus cap. */
+export const GEAR_SCORE_MAX = 9 * (GEAR_SCORE_BY_RARITY.legendary + GEAR_SCORE_LEVEL_BONUS_CAP.legendary);
 
 /**
  * Every equipment slot a hero has, in the fixed display order
