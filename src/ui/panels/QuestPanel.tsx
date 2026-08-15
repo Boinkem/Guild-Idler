@@ -45,7 +45,13 @@ function ChainQuestBanner({ chainId, banner }: { chainId: string; banner?: Chain
  *  strip. Every quest offer has a tag, so this always has something to
  *  show once QUEST_TAG_BY_ID[tag].banner exists; a tag with no banner art
  *  assigned yet just renders nothing, same "missing file fails to paint
- *  quietly" convention as ChainQuestBanner. */
+ *  quietly" convention as ChainQuestBanner.
+ *
+ *  Chain-quest offers skip this entirely (see the caller below) -- a
+ *  chain already owns its own banner treatment (ChainQuestBanner), and
+ *  most chains don't have dedicated art yet, so layering the generic tag
+ *  wash behind them read as the tag art *replacing* the chain's own
+ *  banner rather than a subtle backdrop next to it. */
 function QuestTagBanner({ tag }: { tag: Offer['tag'] }) {
   const def = QUEST_TAG_BY_ID[tag];
   if (!def?.banner) return null;
@@ -96,7 +102,7 @@ function QuestCard({
 
   return (
     <div className={`card quest-card ${offer.difficulty} ${offer.chain ? 'chain' : ''}`}>
-      <QuestTagBanner tag={offer.tag} />
+      {!offer.chain && <QuestTagBanner tag={offer.tag} />}
       <div className="quest-card-content">
       {offer.chain && <ChainQuestBanner chainId={offer.chain.chainId} banner={chain?.banner} />}
       <div

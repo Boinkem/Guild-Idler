@@ -3,21 +3,21 @@
     "id": "first_level_up",
     "messages": [
       "Level up! Your hero grows a little stronger with every quest.",
-      "You've also earned a stat point to spend -- visit the Heroes tab to assign it."
+      "You've also earned a stat point to spend. visit the Heroes tab to assign it."
     ],
     "targetTab": "heroes"
   },
   {
     "id": "first_equipment_found",
     "messages": [
-      "New gear! Anything you find sits in the stash until you equip it -- check the Inventory tab."
+      "New gear! Anything you find sits in the stash until you equip it. check the Inventory tab."
     ],
     "targetTab": "equipment"
   },
   {
     "id": "first_chain_seen",
     "messages": [
-      "Some contracts continue into a bigger story across several stages -- these show up right on the Quest Board like any other."
+      "Some contracts continue into a bigger story across several stages. these show up right on the Quest Board like any other."
     ],
     "targetTab": "quests"
   },
@@ -31,14 +31,14 @@
   {
     "id": "raids_unlocked",
     "messages": [
-      "Raids are open -- multi-hero expeditions with bigger rewards and longer odds. You'll need a full, exact-size party before sending one out."
+      "Raids are open. multi-hero expeditions with bigger rewards and longer odds. You'll need a full, exact-size party before sending one out."
     ],
     "targetTab": "raids"
   },
   {
     "id": "black_market_unlocked",
     "messages": [
-      "A Black Market has opened up in Vendors -- rarer stock than the regular shop, refreshed on its own rotation."
+      "A Black Market has opened up in Vendors. rarer stock than the regular shop, refreshed on its own rotation."
     ],
     "targetTab": "vendors"
   },
@@ -52,14 +52,14 @@
   {
     "id": "raids_heroic_unlocked",
     "messages": [
-      "Heroic-difficulty raids are cleared for takeoff -- harsher odds and longer expeditions, with loot to match."
+      "Heroic-difficulty raids are cleared for takeoff. harsher odds and longer expeditions, with loot to match."
     ],
     "targetTab": "raids"
   },
   {
     "id": "raids_mythic_unlocked",
     "messages": [
-      "Mythic raids are open -- the hardest content in the game, and the only tier where the very best loot drops."
+      "Mythic raids are open. the hardest content in the game, and the only tier where the very best loot drops."
     ],
     "targetTab": "raids"
   },
@@ -80,7 +80,7 @@
   {
     "id": "first_bard_track_unlocked",
     "messages": [
-      "The guild bard just learned a new song -- pick it (or shuffle through everything you've earned) from the Track option in Settings."
+      "The guild bard just learned a new song. pick it (or shuffle through everything you've earned) from the Track option in Settings."
     ],
     "targetTab": "settings"
   },
@@ -88,7 +88,7 @@
     "id": "first_injury_or_wear",
     "messages": [
       "A hurt hero or worn-down gear both drag down the odds on every quest, not just the one that caused it -- don't just wait it out. Treat an injury or Repair a piece of gear right from a hero's card in the Heroes tab (or spend a Field Bandage there instead of gold).",
-      "Each hero's very first Treat and first Repair are free, on the guild -- everything after that costs gold. A Physician's Charity or Smith's Charity guild upgrade can make more of each free every day, for every hero."
+      "Each hero's very first Treat and first Repair are free, on the guild. everything after that costs gold. A Physician's Charity or Smith's Charity guild upgrade can make more of each free every day, for every hero."
     ],
     "targetTab": "heroes"
   }

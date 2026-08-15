@@ -1,8 +1,52 @@
 [
-  { "id": "combat", "name": "Combat", "banner": { "path": "quest-tags/combat.png", "focusX": 50, "focusY": 50 } },
-  { "id": "escort", "name": "Escort", "banner": { "path": "quest-tags/escort.png", "focusX": 50, "focusY": 50 } },
-  { "id": "explore", "name": "Explore", "banner": { "path": "quest-tags/explore.png", "focusX": 50, "focusY": 50 } },
-  { "id": "arcane", "name": "Arcane", "banner": { "path": "quest-tags/arcane.png", "focusX": 50, "focusY": 50 } },
-  { "id": "stealth", "name": "Stealth", "banner": { "path": "quest-tags/stealth.png", "focusX": 50, "focusY": 50 } },
-  { "id": "defense", "name": "Defense", "banner": { "path": "quest-tags/defense.png", "focusX": 50, "focusY": 50 } }
+  {
+    "id": "combat",
+    "name": "Combat",
+    "banner": {
+      "path": "quest-tags/combat.png",
+      "focusX": 49.8,
+      "focusY": 63.4
+    }
+  },
+  {
+    "id": "escort",
+    "name": "Escort",
+    "banner": {
+      "path": "quest-tags/escort.png"
+    }
+  },
+  {
+    "id": "explore",
+    "name": "Explore",
+    "banner": {
+      "path": "quest-tags/explore.png"
+    }
+  },
+  {
+    "id": "arcane",
+    "name": "Arcane",
+    "banner": {
+      "path": "quest-tags/arcane.png",
+      "focusX": 50,
+      "focusY": 50
+    }
+  },
+  {
+    "id": "stealth",
+    "name": "Stealth",
+    "banner": {
+      "path": "quest-tags/stealth.png",
+      "focusX": 50,
+      "focusY": 50
+    }
+  },
+  {
+    "id": "defense",
+    "name": "Defense",
+    "banner": {
+      "path": "quest-tags/defense.png",
+      "focusX": 50,
+      "focusY": 50
+    }
+  }
 ]

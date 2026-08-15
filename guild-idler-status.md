@@ -10870,3 +10870,46 @@ each card's tag art stays contained and legible under the card's own
 text, consistent at both widths because of the pre-existing max-width
 cap. `npx tsc --noEmit` and `npx vite build --config vite.web.config.ts`
 both pass clean against a fresh clone with all files applied.
+
+### Quest tag banner bled into chain quests -- fixed (patch 0163)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed the quest tag backdrop (patch 0162) showing up on chain quests, which already have their own dedicated banner treatment
+```
+
+Direct report with screenshots: on Discovered Quests, chain-quest cards
+were showing the generic tag backdrop at what read as much stronger
+prominence than the intended faint wash, described as "bled into the
+Quest Chains ... they have their own banner art."
+
+**Why it looked like a bleed, not just a design call.** Chain-quest
+banner art (`ChainQuestBanner`, `./lore/chains/<chainId>.jpg`) only
+exists for a handful of chains so far -- checked the four chains in the
+report and only one (`millers_problem`) has dedicated art on disk, the
+other three (`the_first_haul`, `the_last_clutch`,
+`the_man_who_sells_maybe`) don't. For those three, `ChainQuestBanner`
+was already rendering nothing (missing file, fails to paint quietly,
+same as always), so the new tag backdrop from patch 0162 was the only
+thing visible -- with nothing to share the card with, it read as
+replacing the chain's own art rather than sitting quietly behind it.
+Even on the one chain that does have dedicated art, layering the tag
+wash behind it was redundant at best.
+
+**Fix:** `QuestCard` now only renders `QuestTagBanner` when
+`!offer.chain` -- chain-quest cards keep exactly the banner treatment
+they had before patch 0162 (their own dedicated art via
+`ChainQuestBanner` if it exists, nothing if it doesn't); the generic
+per-tag backdrop is now exclusive to non-chain contract offers. No
+change to `QuestTagBanner` itself, `.quest-tag-banner`/
+`.quest-card-content` in `app.css`, or any of patch 0162's other files.
+
+**Verified:** re-rendered the three-card comparison (plain contract,
+chain quest with no dedicated art, chain quest with dedicated art)
+against the real CSS and art -- the plain contract still shows its
+faint tag wash, the art-less chain quest now shows nothing (matching
+its pre-0162 appearance), and the chain quest with real art shows only
+its own banner strip, no second layer underneath. `npx tsc --noEmit`
+and `npx vite build --config vite.web.config.ts` both pass clean
+against a fresh clone with the fix applied.
