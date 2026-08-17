@@ -4,23 +4,29 @@
     "name": "Combat",
     "banner": {
       "path": "quest-tags/combat.png",
-      "focusX": 71.9,
-      "focusY": 75.6,
-      "scale": 300
+      "focusX": 58.3,
+      "focusY": 84,
+      "scale": 253
     }
   },
   {
     "id": "escort",
     "name": "Escort",
     "banner": {
-      "path": "quest-tags/escort.png"
+      "path": "quest-tags/escort.png",
+      "focusX": 89.4,
+      "focusY": 67.1,
+      "scale": 250
     }
   },
   {
     "id": "explore",
     "name": "Explore",
     "banner": {
-      "path": "quest-tags/explore.png"
+      "path": "quest-tags/explore.png",
+      "focusX": 81,
+      "focusY": 70.2,
+      "scale": 259
     }
   },
   {
@@ -28,8 +34,9 @@
     "name": "Arcane",
     "banner": {
       "path": "quest-tags/arcane.png",
-      "focusX": 50,
-      "focusY": 50
+      "focusX": 63.1,
+      "focusY": 61.5,
+      "scale": 257
     }
   },
   {
@@ -37,8 +44,9 @@
     "name": "Stealth",
     "banner": {
       "path": "quest-tags/stealth.png",
-      "focusX": 50,
-      "focusY": 50
+      "focusX": 70.2,
+      "focusY": 65.9,
+      "scale": 241
     }
   },
   {
@@ -46,8 +54,9 @@
     "name": "Defense",
     "banner": {
       "path": "quest-tags/defense.png",
-      "focusX": 50,
-      "focusY": 50
+      "focusX": 53.8,
+      "focusY": 68.4,
+      "scale": 239
     }
   }
 ]
