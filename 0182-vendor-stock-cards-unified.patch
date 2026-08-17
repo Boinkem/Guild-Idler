@@ -1,0 +1,421 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index b8e1d18..66cded7 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -12530,3 +12530,74 @@ with Buy pinned to the bottom via `margin-top: auto`). No code change
+ made here -- flagging in case what's live doesn't match what was
+ reported as missing, worth a fresh look at an actual build rather than
+ re-implementing something that already exists.
++
++### Vendor stock cards unified across Blacksmith/Alchemist/Enchanter, Alchemist stock capped to 5 -- built (patch 0182)
++
++```discord-update
++Dev Update | Vendor Stock
++
++- Alchemist and Enchanter stock cards now match the Blacksmith's look -- rarity banner art, rarity-colored names, same sizing
++- Consumables now have rarity, same as gear -- shown right on the card
++- All three vendors' stock cards are 15% bigger
++- Alchemist stock is now capped to 5 items per restock instead of showing every consumable in the game at once
++```
++
++Two reports: inconsistent card sizing/styling across the three vendors
++("Blacksmith's Stock Items look the best... replicate that for the
++Alchemist and Enchanter"), and the Alchemist showing its entire
++consumable list instead of a capped rotating stock.
++
++**Investigation first.** The Enchanter's own "Stock" section turned out
++to already be the Black Market equipment list (`BlackMarketStock`),
++which already renders through the same `EquipmentShopCard` component the
++Blacksmith uses -- rarity banner art, rarity-colored name, the works.
++Nothing to fix there stylistically; the actual outlier was the
++Alchemist's `SuppliesStock`, which rendered through a completely
++different `ConsumableShopCard` -- plain card, no rarity banner, smaller
++icon, sitting in a tighter 3-column grid. Confirmed the "shows
++everything" report the same way: `ShopManager.rollConsumables` had no
++selection logic at all, just `CONSUMABLES.map(...)` over the full list,
++every refresh -- a real bug, not a design choice.
++
++**Consumables gained a `rarity` field (`types.ts`, `consumables.json`).**
++Needed before any rarity-banner treatment could apply to them at all.
++All 14 hand-authored consumables tiered by their existing `cost` (common:
++Healing Potion, Minor Lucky Potion, Pet Treat; uncommon: five mid-price
++potions/charms; rare: Protection Charm, Guardian's Retainer; epic:
++Supreme Healing Potion, Greater Restorative Draught, Beckoning Charm;
++legendary: Elixir of Fortune). A crafted `customConsumables` variant
++(`CraftingManager`) inherits its base item's rarity automatically via the
++existing `...baseDef` spread -- confirmed by reading that code path, no
++separate handling needed there.
++
++**Alchemist stock capped and rarity-weighted (`ShopManager.ts`).** New
++`CONSUMABLE_SHOP_SLOTS = 5`, matching the Blacksmith's own
++`SHOP_EQUIPMENT_SLOTS`. `rollConsumables` now picks 5 distinct items
++weighted by `RARITY_WEIGHT`, the exact same weighted-pick shape
++`rollEquipment` already uses for gear (common items far more likely to
++show up than legendary ones) -- previously there was no cap and no
++weighting at all. Checked the Enchanter/Black Market side of the same
++report too: `BLACK_MARKET_SLOTS` is already 3, tighter than 5 by design
++(deliberately rarer stock), so no change needed there.
++
++**`ConsumableShopCard` rebuilt to match `EquipmentShopCard`
++(`VendorsPanel.tsx`).** Same structure now: a `.rarity-banner` behind the
++card using `RARITY_BANNER[def.rarity]`, the item name in
++`RARITY_COLOR[def.rarity]`, same icon sizing, same treatment carried into
++the detail modal's own banner. The x5-buy button (Alchemist-specific,
++stock people actually buy in bulk) is untouched.
++
++**Uniform sizing, +15% (`app.css`, `VendorsPanel.tsx`).** New
++`.vendor-stock-grid` (265px minmax, up from `.grid.two`'s 230px) replaces
++the three different grids (`.grid.two` for Blacksmith/Enchanter,
++`.grid.three` for Alchemist) all three vendors' stock sections used to
++sit in -- scoped to its own class rather than widening `.grid.two`
++itself, since that's shared by 11 other panels not part of this request.
++New `.vendor-stock-card` bumps card padding to match (10px 12px -> 12px
++14px). Icon sizes went 36 -> 41 (collapsed card) and 48 -> 55 (modal),
++name font size 11 -> 13, applied identically to both card components so
++Blacksmith/Alchemist/Enchanter stay in lockstep going forward.
++
++**Verified:** `npx tsc --noEmit` and `vite build` both clean against the
++full project, confirmed against a fresh clone of current `main` (through
++patch 0181) with only this patch's diff applied.
+diff --git a/src/game/data/json/consumables.json b/src/game/data/json/consumables.json
+index 0ebef27..12bd23f 100644
+--- a/src/game/data/json/consumables.json
++++ b/src/game/data/json/consumables.json
+@@ -4,6 +4,7 @@
+     "name": "Healing Potion",
+     "description": "Steadies the hands before a fight. Increases quest success rate.",
+     "cost": 25,
++    "rarity": "common",
+     "glyph": "\u2764",
+     "icon": "potions/Potion_10.png",
+     "effect": {
+@@ -15,6 +16,7 @@
+     "name": "Supreme Healing Potion",
+     "description": "Steadies the hands before a fight. Increases quest success rate more than a standard healing potion.",
+     "cost": 150,
++    "rarity": "epic",
+     "glyph": "\u2764",
+     "icon": "potions/Potion_34.png",
+     "effect": {
+@@ -26,6 +28,7 @@
+     "name": "Greater Healing Potion",
+     "description": "Steadies the hands before a fight. Increases quest success rate more than a standard healing potion.",
+     "cost": 75,
++    "rarity": "uncommon",
+     "glyph": "\u2764",
+     "icon": "potions/Potion_42.png",
+     "effect": {
+@@ -37,6 +40,7 @@
+     "name": "Minor Lucky Potion",
+     "description": "Coins seem to find their way into pockets.",
+     "cost": 40,
++    "rarity": "common",
+     "glyph": "\u2726",
+     "icon": "potions/Potion_12.png",
+     "effect": {
+@@ -48,6 +52,7 @@
+     "name": "Standard Lucky Potion",
+     "description": "Coins seem to find their way into pockets.",
+     "cost": 75,
++    "rarity": "uncommon",
+     "glyph": "\u2726",
+     "icon": "potions/Potion_36.png",
+     "effect": {
+@@ -59,6 +64,7 @@
+     "name": "Strength Potion",
+     "description": "A hard swing and a fair price for it.\nIncreases success rate, and gold drops",
+     "cost": 75,
++    "rarity": "uncommon",
+     "glyph": "\u2694",
+     "icon": "potions/Potion_33.png",
+     "effect": {
+@@ -71,6 +77,7 @@
+     "name": "Protection Charm",
+     "description": "Your knight comes home unhurt, win or lose.",
+     "cost": 100,
++    "rarity": "rare",
+     "glyph": "\u26e8",
+     "icon": "misc/Misc_75.png",
+     "effect": {
+@@ -82,6 +89,7 @@
+     "name": "Elixir of Fortune",
+     "description": "Guarantees a favourable event on the road.",
+     "cost": 250,
++    "rarity": "legendary",
+     "glyph": "\u2618",
+     "icon": "potions/Potion_45.png",
+     "effect": {
+@@ -93,6 +101,7 @@
+     "name": "Field Bandage",
+     "description": "Clears one injury immediately.",
+     "cost": 60,
++    "rarity": "uncommon",
+     "glyph": "\u271a",
+     "icon": "crafting/Crafting_74.png",
+     "effect": {
+@@ -104,6 +113,7 @@
+     "name": "Restorative Draught",
+     "description": "Restores a portion of Health immediately. Doesn't revive a Fallen hero -- see the Infirmary or pay to revive directly.",
+     "cost": 80,
++    "rarity": "uncommon",
+     "glyph": "\u2665",
+     "icon": "potions/Potion_20.png",
+     "effect": {
+@@ -115,6 +125,7 @@
+     "name": "Greater Restorative Draught",
+     "description": "Restores a large portion of Health immediately. Doesn't revive a Fallen hero -- see the Infirmary or pay to revive directly.",
+     "cost": 180,
++    "rarity": "epic",
+     "glyph": "\u2665",
+     "icon": "potions/Potion_28.png",
+     "effect": {
+@@ -126,6 +137,7 @@
+     "name": "Guardian's Retainer",
+     "description": "Equip before sending a hero out. Softens whatever this quest is about to do to them, rather than patching it up afterward.",
+     "cost": 90,
++    "rarity": "rare",
+     "glyph": "\ud83d\udee1",
+     "icon": "misc/Misc_20.png",
+     "effect": {
+@@ -137,6 +149,7 @@
+     "name": "Pet Treat",
+     "description": "Crafted, not foraged -- a pet's own happiness bar goes up further per treat than raw scraps would give it. Fed directly from the Hatchery's Pets tab, not sent out on quests -- carries no quest effect.",
+     "cost": 45,
++    "rarity": "common",
+     "glyph": "\ud83c\udf56",
+     "effect": {}
+   },
+@@ -145,6 +158,7 @@
+     "name": "Beckoning Charm",
+     "description": "Smells like whatever Grimsby is currently burning to cover up whatever he's actually selling. Somehow, it works -- his cart tends to show up sooner after one of these gets used.",
+     "cost": 150,
++    "rarity": "epic",
+     "glyph": "\ud83d\udd14",
+     "effect": {
+       "peddlerCounterReduction": 3
+diff --git a/src/game/managers/ShopManager.ts b/src/game/managers/ShopManager.ts
+index dbc9c48..96bfac5 100644
+--- a/src/game/managers/ShopManager.ts
++++ b/src/game/managers/ShopManager.ts
+@@ -10,6 +10,11 @@ import { Tuning } from '../data/tuning';
+ 
+ export const SHOP_REFRESH_MS = 4 * HOUR;
+ const SHOP_EQUIPMENT_SLOTS = 5;
++/** Was uncapped -- rollConsumables used to hand back every single
++ *  CONSUMABLES entry, every refresh, with no selection at all. Matches
++ *  SHOP_EQUIPMENT_SLOTS so the Alchemist's stock reads the same size as
++ *  the Blacksmith's rather than dwarfing it. */
++const CONSUMABLE_SHOP_SLOTS = 5;
+ 
+ export const BLACK_MARKET_REFRESH_MS = 16 * HOUR;
+ const BLACK_MARKET_SLOTS = 3;
+@@ -53,10 +58,22 @@ export const ShopManager = {
+   },
+ 
+   /** Consumables half of refresh() below -- see rollEquipment's own
+-   *  comment, mirrored for the Alchemist-only reroll (rerollAlchemist). */
++   *  comment, mirrored for the Alchemist-only reroll (rerollAlchemist).
++   *  Previously returned every entry in CONSUMABLES unconditionally (a
++   *  real bug, not a design choice -- confirmed by grep, there was never
++   *  any slicing/selection here at all) -- now picks CONSUMABLE_SHOP_SLOTS
++   *  distinct items, weighted by RARITY_WEIGHT exactly the same way
++   *  rollEquipment already weights gear, now that every ConsumableDef
++   *  carries a rarity. */
+   rollConsumables(state: GameState, seed: number | string) {
+     const rng = createRng(`shop-consumables:${seed}:${state.createdAt}`);
+-    return CONSUMABLES.map((c) => ({ defId: c.id, stock: rng.int(2, 8) }));
++    const picks = new Set<string>();
++    let guard = 0;
++    while (picks.size < Math.min(CONSUMABLE_SHOP_SLOTS, CONSUMABLES.length) && guard++ < 200) {
++      const def = rng.weighted(CONSUMABLES.map((c) => ({ item: c, weight: RARITY_WEIGHT[c.rarity] })));
++      picks.add(def.id);
++    }
++    return [...picks].map((defId) => ({ defId, stock: rng.int(2, 8) }));
+   },
+ 
+   /** Stock is seeded per refresh window so it is stable across restarts.
+diff --git a/src/game/types.ts b/src/game/types.ts
+index b6a8967..79132c8 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -169,6 +169,17 @@ export interface ConsumableDef {
+   name: string;
+   description: string;
+   cost: number;
++  /** Drives the same rarity-banner card treatment EquipmentDef.rarity
++   *  already gives shop equipment (RARITY_BANNER/RARITY_COLOR in
++   *  util.ts) -- added so the Alchemist's stock cards can finally match
++   *  the Blacksmith's, and so ShopManager.rollConsumables can weight its
++   *  picks by RARITY_WEIGHT the same way rollEquipment already does
++   *  instead of offering every consumable in the game at once. Every
++   *  hand-authored entry in consumables.json has one; a crafted
++   *  customConsumables variant inherits its base item's rarity via the
++   *  `...baseDef` spread in CraftingManager, so nothing extra was needed
++   *  there. */
++  rarity: Rarity;
+   glyph: string;
+   /** Relative path under the item-icons folder, same convention as
+    *  EquipmentDef.icon -- falls back to `glyph` when unset, same
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 6624245..d60be0e 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -1197,6 +1197,15 @@ button:focus-visible, [tabindex]:focus-visible {
+    globally, since that class is shared by 11 other panels. */
+ .pet-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+ .grid.three { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
++/* Blacksmith/Alchemist/Enchanter "Stock" sections only -- previously each
++   used a different grid (.grid.two for Blacksmith/Enchanter, the smaller
++   .grid.three for Alchemist), which was most of why the three vendors'
++   cards read as inconsistently sized against each other. One shared class
++   now, and sized 15% larger than .grid.two's own 230px floor per direct
++   request ("increase the size of the cards by 15%") -- scoped to its own
++   class rather than widening .grid.two itself, since that class is shared
++   by 11 other panels that weren't part of this request. */
++.vendor-stock-grid { grid-template-columns: repeat(auto-fit, minmax(265px, 1fr)); }
+ 
+ .row { display: flex; gap: calc(8px * var(--density-scale)); align-items: center; }
+ .row.wrap { flex-wrap: wrap; }
+@@ -3253,6 +3262,12 @@ button.harvest-item:hover {
+    the banner. `.item-card-summary` already gets this below; `.card`-based
+    usages (the Vendors shop card) wrap their content in this instead. */
+ .rarity-banner-content { position: relative; z-index: 1; }
++/* Companion to .vendor-stock-grid above -- the grid widens the column,
++   this widens the card's own padding to match (10px 12px -> 12px 14px,
++   the same ~15% bump), so the extra room the wider column provides
++   actually gets used as breathing room around the icon/text rather than
++   just stretching blank card background. */
++.vendor-stock-card { padding: 12px 14px; }
+ .item-card-summary { position: relative; z-index: 1; }
+ .item-card .rarity-pill { background: rgba(0, 0, 0, 0.4); }
+ .item-card-name { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index a92f232..7ac0200 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -237,7 +237,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell:
+         <ShopRerollButton vendorId="blacksmith" />
+       </div>
+       {state.shop.equipment.length === 0 && <p className="small muted">Sold out. Come back after the next delivery.</p>}
+-      <div className="grid two">
++      <div className="grid vendor-stock-grid">
+         {state.shop.equipment.map((entry) => (
+           <EquipmentShopCard
+             key={entry.uid}
+@@ -322,7 +322,7 @@ function SuppliesStock() {
+       <div className="row end" style={{ marginBottom: 8 }}>
+         <ShopRerollButton vendorId="alchemist" />
+       </div>
+-      <div className="grid three">
++      <div className="grid vendor-stock-grid">
+         {state.shop.consumables.map((entry) => {
+           const def = CONSUMABLE_BY_ID[entry.defId];
+           const price = def ? InventoryManager.price(state, def) : 0;
+@@ -380,7 +380,7 @@ function BlackMarketStock({ now }: { now: number }) {
+       {state.blackMarket.equipment.length === 0 && (
+         <p className="small muted">The contact has nothing worth showing right now.</p>
+       )}
+-      <div className="grid two">
++      <div className="grid vendor-stock-grid">
+         {state.blackMarket.equipment.map((entry) => (
+           <EquipmentShopCard
+             key={entry.uid}
+@@ -408,7 +408,7 @@ function EquipmentShopCard({
+   return (
+     <>
+       <div
+-        className={`card ${blackMarket ? 'black-market-item' : ''}`}
++        className={`card vendor-stock-card ${blackMarket ? 'black-market-item' : ''}`}
+         style={{ marginBottom: 0 }}
+         onClick={() => setShowModal(true)}
+         role="button"
+@@ -417,9 +417,9 @@ function EquipmentShopCard({
+       >
+         <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
+         <div className="rarity-banner-content row" style={{ gap: 10, alignItems: 'center' }}>
+-          <ItemIcon slot={def.slot} icon={def.icon} size={36} />
++          <ItemIcon slot={def.slot} icon={def.icon} size={41} />
+           <div style={{ minWidth: 0, flex: 1 }}>
+-            <div style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 11 }}>{def.name}</div>
++            <div style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 13 }}>{def.name}</div>
+             <div className="tiny muted">Lv {def.reqLevel} · {formatGold(price)}</div>
+           </div>
+         </div>
+@@ -431,7 +431,7 @@ function EquipmentShopCard({
+             <div className="modal-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
+             <div className="modal-banner-scrim">
+               <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
+-                <ItemIcon slot={def.slot} icon={def.icon} size={48} />
++                <ItemIcon slot={def.slot} icon={def.icon} size={55} />
+                 <div>
+                   <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</span>
+                   <div className="tiny muted">{def.slot} · {def.rarity} · requires level {def.reqLevel}</div>
+@@ -465,17 +465,18 @@ function ConsumableShopCard({
+   return (
+     <>
+       <div
+-        className="card"
++        className="card vendor-stock-card"
+         style={{ marginBottom: 0 }}
+         onClick={() => setShowModal(true)}
+         role="button"
+         tabIndex={0}
+         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
+       >
+-        <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+-          <ConsumableIcon icon={def.icon} glyph={def.glyph} size={36} />
++        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
++        <div className="rarity-banner-content row" style={{ gap: 10, alignItems: 'center' }}>
++          <ConsumableIcon icon={def.icon} glyph={def.glyph} size={41} />
+           <div style={{ minWidth: 0, flex: 1 }}>
+-            <div className="card-title">{def.name}</div>
++            <div style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 13 }}>{def.name}</div>
+             <div className="tiny muted">{formatGold(price)}</div>
+           </div>
+         </div>
+@@ -484,24 +485,27 @@ function ConsumableShopCard({
+       {showModal && (
+         <div className="overlay" onClick={() => setShowModal(false)}>
+           <div className="modal" onClick={(e) => e.stopPropagation()}>
+-            <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
+-              <ConsumableIcon icon={def.icon} glyph={def.glyph} size={48} />
+-              <span className="card-title">{def.name}</span>
+-            </div>
+-            <p className="card-flavour">{def.description}</p>
+-            <div className="row end" style={{ gap: 8, marginTop: 8 }}>
+-              <button className="btn-primary" onClick={() => setShowModal(false)}>Close</button>
+-              <button className="btn-primary" disabled={!canAfford(1)} onClick={() => { onBuy(1); setShowModal(false); }}>
+-                Buy · {formatGold(price)}
+-              </button>
+-              {/* Alchemist stock (potions, charms) gets bought through
+-                  repeatedly far more than gear does -- a x5 button here
+-                  cuts five separate clicks (open modal, buy, close,
+-                  repeat) down to one, on the item people actually stock
+-                  up on. */}
+-              <button className="btn-primary" disabled={!canAfford(5)} onClick={() => { onBuy(5); setShowModal(false); }}>
+-                Buy ×5 · {formatGold(price * 5)}
+-              </button>
++            <div className="modal-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
++            <div className="modal-banner-scrim">
++              <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
++                <ConsumableIcon icon={def.icon} glyph={def.glyph} size={55} />
++                <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</span>
++              </div>
++              <p className="card-flavour">{def.description}</p>
++              <div className="row end" style={{ gap: 8, marginTop: 8 }}>
++                <button className="btn-primary" onClick={() => setShowModal(false)}>Close</button>
++                <button className="btn-primary" disabled={!canAfford(1)} onClick={() => { onBuy(1); setShowModal(false); }}>
++                  Buy · {formatGold(price)}
++                </button>
++                {/* Alchemist stock (potions, charms) gets bought through
++                    repeatedly far more than gear does -- a x5 button here
++                    cuts five separate clicks (open modal, buy, close,
++                    repeat) down to one, on the item people actually stock
++                    up on. */}
++                <button className="btn-primary" disabled={!canAfford(5)} onClick={() => { onBuy(5); setShowModal(false); }}>
++                  Buy ×5 · {formatGold(price * 5)}
++                </button>
++              </div>
+             </div>
+           </div>
+         </div>

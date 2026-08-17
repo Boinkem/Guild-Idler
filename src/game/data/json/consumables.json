@@ -4,6 +4,7 @@
     "name": "Healing Potion",
     "description": "Steadies the hands before a fight. Increases quest success rate.",
     "cost": 25,
+    "rarity": "common",
     "glyph": "\u2764",
     "icon": "potions/Potion_10.png",
     "effect": {
@@ -15,6 +16,7 @@
     "name": "Supreme Healing Potion",
     "description": "Steadies the hands before a fight. Increases quest success rate more than a standard healing potion.",
     "cost": 150,
+    "rarity": "epic",
     "glyph": "\u2764",
     "icon": "potions/Potion_34.png",
     "effect": {
@@ -26,6 +28,7 @@
     "name": "Greater Healing Potion",
     "description": "Steadies the hands before a fight. Increases quest success rate more than a standard healing potion.",
     "cost": 75,
+    "rarity": "uncommon",
     "glyph": "\u2764",
     "icon": "potions/Potion_42.png",
     "effect": {
@@ -37,6 +40,7 @@
     "name": "Minor Lucky Potion",
     "description": "Coins seem to find their way into pockets.",
     "cost": 40,
+    "rarity": "common",
     "glyph": "\u2726",
     "icon": "potions/Potion_12.png",
     "effect": {
@@ -48,6 +52,7 @@
     "name": "Standard Lucky Potion",
     "description": "Coins seem to find their way into pockets.",
     "cost": 75,
+    "rarity": "uncommon",
     "glyph": "\u2726",
     "icon": "potions/Potion_36.png",
     "effect": {
@@ -59,6 +64,7 @@
     "name": "Strength Potion",
     "description": "A hard swing and a fair price for it.\nIncreases success rate, and gold drops",
     "cost": 75,
+    "rarity": "uncommon",
     "glyph": "\u2694",
     "icon": "potions/Potion_33.png",
     "effect": {
@@ -71,6 +77,7 @@
     "name": "Protection Charm",
     "description": "Your knight comes home unhurt, win or lose.",
     "cost": 100,
+    "rarity": "rare",
     "glyph": "\u26e8",
     "icon": "misc/Misc_75.png",
     "effect": {
@@ -82,6 +89,7 @@
     "name": "Elixir of Fortune",
     "description": "Guarantees a favourable event on the road.",
     "cost": 250,
+    "rarity": "legendary",
     "glyph": "\u2618",
     "icon": "potions/Potion_45.png",
     "effect": {
@@ -93,6 +101,7 @@
     "name": "Field Bandage",
     "description": "Clears one injury immediately.",
     "cost": 60,
+    "rarity": "uncommon",
     "glyph": "\u271a",
     "icon": "crafting/Crafting_74.png",
     "effect": {
@@ -104,6 +113,7 @@
     "name": "Restorative Draught",
     "description": "Restores a portion of Health immediately. Doesn't revive a Fallen hero -- see the Infirmary or pay to revive directly.",
     "cost": 80,
+    "rarity": "uncommon",
     "glyph": "\u2665",
     "icon": "potions/Potion_20.png",
     "effect": {
@@ -115,6 +125,7 @@
     "name": "Greater Restorative Draught",
     "description": "Restores a large portion of Health immediately. Doesn't revive a Fallen hero -- see the Infirmary or pay to revive directly.",
     "cost": 180,
+    "rarity": "epic",
     "glyph": "\u2665",
     "icon": "potions/Potion_28.png",
     "effect": {
@@ -126,6 +137,7 @@
     "name": "Guardian's Retainer",
     "description": "Equip before sending a hero out. Softens whatever this quest is about to do to them, rather than patching it up afterward.",
     "cost": 90,
+    "rarity": "rare",
     "glyph": "\ud83d\udee1",
     "icon": "misc/Misc_20.png",
     "effect": {
@@ -137,6 +149,7 @@
     "name": "Pet Treat",
     "description": "Crafted, not foraged -- a pet's own happiness bar goes up further per treat than raw scraps would give it. Fed directly from the Hatchery's Pets tab, not sent out on quests -- carries no quest effect.",
     "cost": 45,
+    "rarity": "common",
     "glyph": "\ud83c\udf56",
     "effect": {}
   },
@@ -145,6 +158,7 @@
     "name": "Beckoning Charm",
     "description": "Smells like whatever Grimsby is currently burning to cover up whatever he's actually selling. Somehow, it works -- his cart tends to show up sooner after one of these gets used.",
     "cost": 150,
+    "rarity": "epic",
     "glyph": "\ud83d\udd14",
     "effect": {
       "peddlerCounterReduction": 3

@@ -1197,6 +1197,15 @@ button:focus-visible, [tabindex]:focus-visible {
    globally, since that class is shared by 11 other panels. */
 .pet-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .grid.three { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+/* Blacksmith/Alchemist/Enchanter "Stock" sections only -- previously each
+   used a different grid (.grid.two for Blacksmith/Enchanter, the smaller
+   .grid.three for Alchemist), which was most of why the three vendors'
+   cards read as inconsistently sized against each other. One shared class
+   now, and sized 15% larger than .grid.two's own 230px floor per direct
+   request ("increase the size of the cards by 15%") -- scoped to its own
+   class rather than widening .grid.two itself, since that class is shared
+   by 11 other panels that weren't part of this request. */
+.vendor-stock-grid { grid-template-columns: repeat(auto-fit, minmax(265px, 1fr)); }
 
 .row { display: flex; gap: calc(8px * var(--density-scale)); align-items: center; }
 .row.wrap { flex-wrap: wrap; }
@@ -3253,6 +3262,12 @@ button.harvest-item:hover {
    the banner. `.item-card-summary` already gets this below; `.card`-based
    usages (the Vendors shop card) wrap their content in this instead. */
 .rarity-banner-content { position: relative; z-index: 1; }
+/* Companion to .vendor-stock-grid above -- the grid widens the column,
+   this widens the card's own padding to match (10px 12px -> 12px 14px,
+   the same ~15% bump), so the extra room the wider column provides
+   actually gets used as breathing room around the icon/text rather than
+   just stretching blank card background. */
+.vendor-stock-card { padding: 12px 14px; }
 .item-card-summary { position: relative; z-index: 1; }
 .item-card .rarity-pill { background: rgba(0, 0, 0, 0.4); }
 .item-card-name { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }

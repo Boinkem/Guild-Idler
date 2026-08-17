@@ -12530,3 +12530,74 @@ with Buy pinned to the bottom via `margin-top: auto`). No code change
 made here -- flagging in case what's live doesn't match what was
 reported as missing, worth a fresh look at an actual build rather than
 re-implementing something that already exists.
+
+### Vendor stock cards unified across Blacksmith/Alchemist/Enchanter, Alchemist stock capped to 5 -- built (patch 0182)
+
+```discord-update
+Dev Update | Vendor Stock
+
+- Alchemist and Enchanter stock cards now match the Blacksmith's look -- rarity banner art, rarity-colored names, same sizing
+- Consumables now have rarity, same as gear -- shown right on the card
+- All three vendors' stock cards are 15% bigger
+- Alchemist stock is now capped to 5 items per restock instead of showing every consumable in the game at once
+```
+
+Two reports: inconsistent card sizing/styling across the three vendors
+("Blacksmith's Stock Items look the best... replicate that for the
+Alchemist and Enchanter"), and the Alchemist showing its entire
+consumable list instead of a capped rotating stock.
+
+**Investigation first.** The Enchanter's own "Stock" section turned out
+to already be the Black Market equipment list (`BlackMarketStock`),
+which already renders through the same `EquipmentShopCard` component the
+Blacksmith uses -- rarity banner art, rarity-colored name, the works.
+Nothing to fix there stylistically; the actual outlier was the
+Alchemist's `SuppliesStock`, which rendered through a completely
+different `ConsumableShopCard` -- plain card, no rarity banner, smaller
+icon, sitting in a tighter 3-column grid. Confirmed the "shows
+everything" report the same way: `ShopManager.rollConsumables` had no
+selection logic at all, just `CONSUMABLES.map(...)` over the full list,
+every refresh -- a real bug, not a design choice.
+
+**Consumables gained a `rarity` field (`types.ts`, `consumables.json`).**
+Needed before any rarity-banner treatment could apply to them at all.
+All 14 hand-authored consumables tiered by their existing `cost` (common:
+Healing Potion, Minor Lucky Potion, Pet Treat; uncommon: five mid-price
+potions/charms; rare: Protection Charm, Guardian's Retainer; epic:
+Supreme Healing Potion, Greater Restorative Draught, Beckoning Charm;
+legendary: Elixir of Fortune). A crafted `customConsumables` variant
+(`CraftingManager`) inherits its base item's rarity automatically via the
+existing `...baseDef` spread -- confirmed by reading that code path, no
+separate handling needed there.
+
+**Alchemist stock capped and rarity-weighted (`ShopManager.ts`).** New
+`CONSUMABLE_SHOP_SLOTS = 5`, matching the Blacksmith's own
+`SHOP_EQUIPMENT_SLOTS`. `rollConsumables` now picks 5 distinct items
+weighted by `RARITY_WEIGHT`, the exact same weighted-pick shape
+`rollEquipment` already uses for gear (common items far more likely to
+show up than legendary ones) -- previously there was no cap and no
+weighting at all. Checked the Enchanter/Black Market side of the same
+report too: `BLACK_MARKET_SLOTS` is already 3, tighter than 5 by design
+(deliberately rarer stock), so no change needed there.
+
+**`ConsumableShopCard` rebuilt to match `EquipmentShopCard`
+(`VendorsPanel.tsx`).** Same structure now: a `.rarity-banner` behind the
+card using `RARITY_BANNER[def.rarity]`, the item name in
+`RARITY_COLOR[def.rarity]`, same icon sizing, same treatment carried into
+the detail modal's own banner. The x5-buy button (Alchemist-specific,
+stock people actually buy in bulk) is untouched.
+
+**Uniform sizing, +15% (`app.css`, `VendorsPanel.tsx`).** New
+`.vendor-stock-grid` (265px minmax, up from `.grid.two`'s 230px) replaces
+the three different grids (`.grid.two` for Blacksmith/Enchanter,
+`.grid.three` for Alchemist) all three vendors' stock sections used to
+sit in -- scoped to its own class rather than widening `.grid.two`
+itself, since that's shared by 11 other panels not part of this request.
+New `.vendor-stock-card` bumps card padding to match (10px 12px -> 12px
+14px). Icon sizes went 36 -> 41 (collapsed card) and 48 -> 55 (modal),
+name font size 11 -> 13, applied identically to both card components so
+Blacksmith/Alchemist/Enchanter stay in lockstep going forward.
+
+**Verified:** `npx tsc --noEmit` and `vite build` both clean against the
+full project, confirmed against a fresh clone of current `main` (through
+patch 0181) with only this patch's diff applied.

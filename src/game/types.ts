@@ -169,6 +169,17 @@ export interface ConsumableDef {
   name: string;
   description: string;
   cost: number;
+  /** Drives the same rarity-banner card treatment EquipmentDef.rarity
+   *  already gives shop equipment (RARITY_BANNER/RARITY_COLOR in
+   *  util.ts) -- added so the Alchemist's stock cards can finally match
+   *  the Blacksmith's, and so ShopManager.rollConsumables can weight its
+   *  picks by RARITY_WEIGHT the same way rollEquipment already does
+   *  instead of offering every consumable in the game at once. Every
+   *  hand-authored entry in consumables.json has one; a crafted
+   *  customConsumables variant inherits its base item's rarity via the
+   *  `...baseDef` spread in CraftingManager, so nothing extra was needed
+   *  there. */
+  rarity: Rarity;
   glyph: string;
   /** Relative path under the item-icons folder, same convention as
    *  EquipmentDef.icon -- falls back to `glyph` when unset, same

@@ -10,6 +10,11 @@ import { Tuning } from '../data/tuning';
 
 export const SHOP_REFRESH_MS = 4 * HOUR;
 const SHOP_EQUIPMENT_SLOTS = 5;
+/** Was uncapped -- rollConsumables used to hand back every single
+ *  CONSUMABLES entry, every refresh, with no selection at all. Matches
+ *  SHOP_EQUIPMENT_SLOTS so the Alchemist's stock reads the same size as
+ *  the Blacksmith's rather than dwarfing it. */
+const CONSUMABLE_SHOP_SLOTS = 5;
 
 export const BLACK_MARKET_REFRESH_MS = 16 * HOUR;
 const BLACK_MARKET_SLOTS = 3;
@@ -53,10 +58,22 @@ export const ShopManager = {
   },
 
   /** Consumables half of refresh() below -- see rollEquipment's own
-   *  comment, mirrored for the Alchemist-only reroll (rerollAlchemist). */
+   *  comment, mirrored for the Alchemist-only reroll (rerollAlchemist).
+   *  Previously returned every entry in CONSUMABLES unconditionally (a
+   *  real bug, not a design choice -- confirmed by grep, there was never
+   *  any slicing/selection here at all) -- now picks CONSUMABLE_SHOP_SLOTS
+   *  distinct items, weighted by RARITY_WEIGHT exactly the same way
+   *  rollEquipment already weights gear, now that every ConsumableDef
+   *  carries a rarity. */
   rollConsumables(state: GameState, seed: number | string) {
     const rng = createRng(`shop-consumables:${seed}:${state.createdAt}`);
-    return CONSUMABLES.map((c) => ({ defId: c.id, stock: rng.int(2, 8) }));
+    const picks = new Set<string>();
+    let guard = 0;
+    while (picks.size < Math.min(CONSUMABLE_SHOP_SLOTS, CONSUMABLES.length) && guard++ < 200) {
+      const def = rng.weighted(CONSUMABLES.map((c) => ({ item: c, weight: RARITY_WEIGHT[c.rarity] })));
+      picks.add(def.id);
+    }
+    return [...picks].map((defId) => ({ defId, stock: rng.int(2, 8) }));
   },
 
   /** Stock is seeded per refresh window so it is stable across restarts.
