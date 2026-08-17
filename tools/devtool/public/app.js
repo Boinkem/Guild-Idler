@@ -1742,6 +1742,11 @@ function renderPatches() {
             </div>
           </label>
         `).join('')}</div>`}
+    ${patchState.files.length > 0 ? `
+      <div class="row" style="margin: 8px 0 0; align-items: center; gap: 8px;">
+        <button id="simulateShortcutBtn" ${!sel ? 'disabled' : ''}>Simulate in Sandbox</button>
+        <span class="tiny muted">Jumps to the Balance Sandbox tab to check this patch's impact before applying it. Doesn't read the patch's contents -- re-enter any tuning values by hand once there.</span>
+      </div>` : ''}
 
     <div class="section-heading">2. Check</div>
     <p class="tiny muted">Dry run — confirms the patch would apply cleanly without changing anything yet.</p>
@@ -1827,6 +1832,9 @@ function renderPatches() {
   `;
 
   document.getElementById('refreshStatusBtn').onclick = () => refreshGitStatus();
+
+  const simulateShortcutBtn = document.getElementById('simulateShortcutBtn');
+  if (simulateShortcutBtn) simulateShortcutBtn.onclick = () => selectSandboxTab();
 
   const devStartBtn = document.getElementById('devStartBtn');
   devStartBtn.onclick = async () => {

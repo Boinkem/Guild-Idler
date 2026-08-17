@@ -11719,3 +11719,40 @@ above for the original phasing plan): multi-preset side-by-side charting
 beyond the current table view, and a "Simulate this diff" shortcut from
 the Patches tab that pre-loads a pending patch's tuning changes as the
 draft overlay automatically instead of re-entering them by hand.
+
+### DevTool: Balance Sandbox Phase 2 -- "Simulate in Sandbox" shortcut from Patches -- built (patch 0172)
+
+```discord-update
+Dev Update | Balance Sandbox Phase 2
+
+- Added a "Simulate in Sandbox" shortcut to the Patches tab -- jumps straight to the Balance Sandbox from whichever patch is selected
+- Confirmed the Sandbox's multi-preset comparison (Active/Casual/AFK stacked side by side) was already working as-is, no changes needed
+```
+
+Direct follow-up to patch 0171's own "Deliberately deferred to Phase 2" list.
+Of the two items on that list, only one turned out to actually need code:
+
+**Multi-preset side-by-side -- already done, confirmed rather than
+rebuilt.** `renderSandbox()` already iterates every selected preset in
+`sandboxState.results` and stacks a full comparison table per preset
+(`sandboxComparisonTable`) -- exactly the "one table per preset, stacked"
+shape asked for here. Re-read the existing code and the Phase 1 test
+output to confirm before writing anything, rather than assuming the
+Phase 1 status.md write-up was complete -- it was.
+
+**"Simulate in Sandbox" shortcut, in `app.js` -- deliberately the
+simplest of three options, not the diff-parsing one.** No patch content
+is read; the button (shown once a patch is selected in step 1) just
+switches to the Sandbox tab so a proposed change's tuning-id/value pairs
+can be re-entered by hand there before applying. A parsing version (walk
+the patch's diff hunks for `tuning.json`/`balance.ts`/`progression.ts`
+edits and pre-fill the override list automatically) was the more
+"complete" option on the table, but was explicitly not what was asked
+for this round -- flagged here rather than silently upgraded scope, in
+case it's worth reconsidering as a real Phase 3 item once the manual
+shortcut has seen some actual use.
+
+**Verified:** `node --check` clean on `app.js`; booted the real DevTool
+server and confirmed `/api/patches/list` and the served `app.js` both
+still work correctly with the new button's markup and click handler in
+place.
