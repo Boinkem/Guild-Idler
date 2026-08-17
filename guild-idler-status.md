@@ -12515,7 +12515,7 @@ list's length rather than hardcoded to the raid's max party size.
 full project, confirmed against a fresh clone of current `main` (through
 patch 0180) with only this patch's diff applied.
 
-### Guild Hall Upgrades: flavor text, click-to-modal, uniform cards -- confirmed already built (patch 0178)
+### Guild Hall Upgrades: flavor text, click-to-modal, uniform cards -- confirmed already built (documented alongside patch 0181)
 
 Reported as a new request, but verification against the live `main`
 tree found this exact feature already shipped in patch 0178 above
@@ -12601,3 +12601,102 @@ Blacksmith/Alchemist/Enchanter stay in lockstep going forward.
 **Verified:** `npx tsc --noEmit` and `vite build` both clean against the
 full project, confirmed against a fresh clone of current `main` (through
 patch 0181) with only this patch's diff applied.
+
+### Locked raids greyed out (not blanked to "???"), hover unlock reasons, Hero/Pet desktop sprite toggles -- built (patch 0183)
+
+```discord-update
+Dev Update | Raid Visuals & Sprite Toggles
+
+- Locked raids now show their real name and art, dimmed, instead of "???" -- same treatment as other locked-but-known cards elsewhere in the game
+- Hovering a locked raid now shows exactly what unlocks it
+- New Settings toggles: turn the hero sprite and/or pet sprite off the corner desktop companion independently
+- Fixed a real bug found along the way: a duplicate "(patch 0178)" heading in this doc that could confuse the DevTool's patch-summary lookup
+```
+
+Three requests: raid cards should grey out rather than blank to "???"
+once unlocked-but-not-yet-reached, a hover tooltip should carry the
+unlock requirement, and two new Settings toggles to turn the desktop
+companion's hero/pet sprites off independently.
+
+**Locked raid cards (`RaidsPanel.tsx`).** `RaidCard`'s locked branch
+previously rendered a blank thumb and a literal `???` name -- the actual
+`.raid-card.locked { opacity: 0.55 }` dimming already existed in
+`app.css` and already does the "greyed out" job on its own; the "???"
+was fighting it by *also* hiding the name outright, rather than the two
+working together the way `DifficultyCircle` (same tab, same tier-lock
+concept) and `StatsPanel`'s non-hidden achievement cards already do --
+both show the real name/art dimmed, not blanked. `raidLockReason` always
+returns a specific, real reason once a raid is locked (never a generic
+"this is a secret"), so there was nothing to actually hide here -- the
+locked card now renders the real `RaidBanner` art and `raid.name`,
+inheriting the same dimming its parent already provides. Added a `title`
+attribute carrying the same lock-reason text for a hover tooltip, on top
+of the existing always-visible paragraph underneath (kept both rather
+than replacing one with the other -- hover doesn't help on a touchscreen,
+and the visible line was already doing its job for anyone not hovering).
+
+**Desktop sprite toggles (`settings.ts`, `SettingsPanel.tsx`,
+`IdleView.tsx`).** New `hideHeroSprite`/`hidePetSprite` booleans on
+`Settings`, both defaulting `false` so nobody's current companion look
+changes without opting in -- no version bump needed, `settings.ts`'s own
+forgiving merge (`{ ...DEFAULT_SETTINGS, ...parsed }`) already backfills
+new keys for an existing settings file. Two new toggles in the Knight
+section, placed directly under their matching size slider (which now
+also disables itself while its sprite is off, rather than staying live
+for a slider with nothing visible to preview). `IdleView.tsx`: the whole
+hero carousel (sprite, both carousel arrows, the floating XP/gold
+reward text, and the ground shadow) is skipped when `hideHeroSprite` is
+on, replaced by a plain "`<name>` — open guild" button so the stage
+doesn't read as broken/waiting-on-art with nothing clickable there
+instead -- the existing "Open guild" button in `idle-actions` already
+covers this too, so no functionality is actually lost either way. The
+equipped-pet companion button gets the same on/off treatment for
+`hidePetSprite`, independent of the hero's own toggle. `petSpriteScale`/
+`petOffsetX`/`petOffsetY` are left untouched while hidden, so the pet
+comes back at its previously configured size/position the moment the
+toggle flips back on.
+
+**Real bug found and fixed while confirming the DevTool's "fill from
+selected patch" button covers 0181/0182, per direct request.** Traced
+that feature (`findPatchSummary`, `tools/devtool/server.mjs`) end to
+end: it matches a patch's own `### ... (patch NNNN)` heading in this
+file by number, then pulls the fenced discord-update code block directly
+beneath it -- confirmed 0181 and 0182 both resolve correctly on their
+own. Along the way, found this doc had two different `### ...` headings
+both ending in `(patch 0178)` -- the real patch 0178 entry, and this
+patch's own earlier "Guild Hall Upgrades... confirmed already built"
+note, which reused that same trailing pattern purely to reference it,
+not to claim a real distinct patch of its own. Since `findPatchSummary`
+matches on that exact trailing text, two headings sharing a number is
+precisely the kind of gap its own continuity check exists to catch --
+left uncorrected, it would silently resolve to whichever heading
+appears first, an easy source of a wrong Discord blurb going out for
+patch 0178 specifically. Reworded that note's heading to
+`(documented alongside patch 0181)` instead, which doesn't match the
+lookup's trailing pattern at all, so it's excluded from consideration
+the way a non-patch note should be.
+
+**Also flagging, not fixing here:** two separate pre-existing issues
+turned up during this same investigation, both out of scope for this
+patch specifically:
+- Three on-disk patch files -- `0178levelcapguildhallcards.patch`,
+  `0179renownbaselineconsumablefixrequirementlinks.patch`,
+  `0180jumptorequirementsexpansion.patch` -- were committed without the
+  `NNNN-` dash-separated naming every other patch file uses.
+  `findPatchSummary`'s own filename regex (`/^(\d+)-/`) requires that
+  dash, so selecting any of these three in the DevTool's Patches tab
+  currently can't resolve a summary at all, regardless of what's in this
+  file. Not renamed here since these are already-applied, already-shipped
+  files -- worth a deliberate rename pass on its own rather than folding
+  into this patch's diff.
+- A second, older duplicate heading: both a "Harvest icon randomization"
+  entry (early in this file) and the real "Backlog audit" patch (the one
+  `0169-backlog-audit-and-steam-scoping.patch` actually corresponds to)
+  end in `(patch 0169)`. Predates this patch and this session -- not
+  touched here since resolving it means confirming which entry (if
+  either) was ever actually shipped as "patch 0169" without more context
+  than a grep can confirm on its own.
+
+**Verified:** `npx tsc --noEmit` and `vite build` both clean against the
+full project, confirmed against a fresh clone of current `main` (through
+patch 0182) with only this patch's diff applied.

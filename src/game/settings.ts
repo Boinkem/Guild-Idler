@@ -95,6 +95,19 @@ export interface Settings {
    */
   hideIdleInfo: boolean;
 
+  /** Hides the corner companion's hero sprite (and its click-to-open
+   *  button/carousel arrows) entirely -- the "Open guild" button in
+   *  idle-actions still opens the menu either way, so this doesn't
+   *  remove any functionality, just the character art. Independent of
+   *  hidePetSprite below -- a player might want the pet showing without
+   *  the hero, or vice versa. */
+  hideHeroSprite: boolean;
+  /** Same idea as hideHeroSprite, for the equipped pet's own companion
+   *  button. Doesn't affect petSpriteScale/petOffsetX/Y below -- those
+   *  stay as-is so the pet reappears at its last configured size/spot
+   *  the moment this is turned back off. */
+  hidePetSprite: boolean;
+
   /** Animation speed multiplier; 0 disables idle bobbing entirely. */
   animationSpeed: number;     // 0, 0.5, 1, 1.5
 
@@ -154,6 +167,8 @@ export const DEFAULT_SETTINGS: Settings = {
   fontId: 'readable',
   companionBackdrop: 'off',
   hideIdleInfo: false,
+  hideHeroSprite: false,
+  hidePetSprite: false,
   animationSpeed: 1,
   offlineReportOnLaunch: true,
   questResultPopups: true,

@@ -144,6 +144,7 @@ export function SettingsPanel() {
           <input
             type="range" min={0.75} max={1.75} step={0.05}
             value={settings.spriteScale}
+            disabled={settings.hideHeroSprite}
             onChange={(e) => update('spriteScale', Number(e.target.value))}
           />
           <div className="sprite-preview">
@@ -152,17 +153,26 @@ export function SettingsPanel() {
         </div>
       </Row>
 
+      <Row label="Hero sprite" hint="Turns off the hero character on the corner companion. 'Open guild' still works either way.">
+        <Toggle value={!settings.hideHeroSprite} onChange={(v) => set('hideHeroSprite')(!v)} />
+      </Row>
+
       <Row label="Pet size" hint={`${Math.round(settings.petSpriteScale * 100)}% -- affects the companion pet only, not the hero above`}>
         <div className="row" style={{ gap: 16, alignItems: 'center' }}>
           <input
             type="range" min={0.5} max={2} step={0.05}
             value={settings.petSpriteScale}
+            disabled={settings.hidePetSprite}
             onChange={(e) => update('petSpriteScale', Number(e.target.value))}
           />
           <div className="sprite-preview">
             <PetSprite species="ember_kit" animation="idle" height={Math.round(48 * settings.petSpriteScale)} fallback={<span>🦊</span>} />
           </div>
         </div>
+      </Row>
+
+      <Row label="Pet sprite" hint="Turns off the equipped pet's companion sprite on the corner companion.">
+        <Toggle value={!settings.hidePetSprite} onChange={(v) => set('hidePetSprite')(!v)} />
       </Row>
 
       <Row label="Pet position" hint="Unlock the companion and drag the pet to move it. Resets it to the default spot beside the hero.">

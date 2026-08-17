@@ -666,13 +666,15 @@ function RaidCard({ raidId, onShowItem }: { raidId: string; onShowItem: (defId: 
   const [showModal, setShowModal] = useState(false);
 
   if (!unlocked) {
+    const lockReason = raidLockReason(raidId, state.completedRaids, state.completedChains)
+      ?? 'Complete the previous raid to reveal this one.';
     return (
-      <div className="card raid-card locked">
-        <div className="raid-card-thumb" />
+      <div className="card raid-card locked" title={lockReason}>
+        <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-card-thumb" />
         <div className="raid-card-body">
-          <div className="raid-card-name">???</div>
+          <div className="raid-card-name">{raid.name}</div>
           <p className="tiny muted" style={{ margin: '2px 0 0' }}>
-            {raidLockReason(raidId, state.completedRaids, state.completedChains) ?? 'Complete the previous raid to reveal this one.'}
+            {lockReason}
           </p>
         </div>
       </div>

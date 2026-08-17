@@ -279,7 +279,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
         )}
 
         <div className="hero-carousel">
-          {others.length > 0 && (
+          {!settings.hideHeroSprite && others.length > 0 && (
             <button
               className="carousel-arrow"
               onClick={() => engine.cycleFocusedHero(-1)}
@@ -290,29 +290,31 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
             </button>
           )}
 
-          <button
-            className={`knight-button ${anim}`}
-            onClick={onOpenMenu}
-            title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''} — click to open the guild menu`}
-            aria-label={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}. Open the guild menu.`}
-          >
-            <HeroSprite
-              heroClass={hero.heroClass}
-              skin={hero.skin}
-              animation={spriteAnimation}
-              flip={facingReturn}
-              height={Math.round(120 * settings.spriteScale)}
-              title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}`}
-            />
-            {floatingText && (
-              <div className="floating-reward" key={floatingText.key}>
-                {floatingText.xp > 0 && <span className="floating-xp">+{floatingText.xp} XP</span>}
-                {floatingText.gold > 0 && <span className="floating-gold">+{floatingText.gold} gold</span>}
-              </div>
-            )}
-          </button>
+          {!settings.hideHeroSprite && (
+            <button
+              className={`knight-button ${anim}`}
+              onClick={onOpenMenu}
+              title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''} — click to open the guild menu`}
+              aria-label={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}. Open the guild menu.`}
+            >
+              <HeroSprite
+                heroClass={hero.heroClass}
+                skin={hero.skin}
+                animation={spriteAnimation}
+                flip={facingReturn}
+                height={Math.round(120 * settings.spriteScale)}
+                title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}`}
+              />
+              {floatingText && (
+                <div className="floating-reward" key={floatingText.key}>
+                  {floatingText.xp > 0 && <span className="floating-xp">+{floatingText.xp} XP</span>}
+                  {floatingText.gold > 0 && <span className="floating-gold">+{floatingText.gold} gold</span>}
+                </div>
+              )}
+            </button>
+          )}
 
-          {others.length > 0 && (
+          {!settings.hideHeroSprite && others.length > 0 && (
             <button
               className="carousel-arrow"
               onClick={() => engine.cycleFocusedHero(1)}
@@ -323,9 +325,21 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
             </button>
           )}
         </div>
-        <div className="knight-shadow" />
+        {!settings.hideHeroSprite && <div className="knight-shadow" />}
 
-        {equippedPet && petDef && (
+        {settings.hideHeroSprite && (
+          // The sprite button is gone, so something still needs to open the
+          // guild menu on a click over the stage itself -- idle-actions'
+          // own "Open guild" button already covers this, but a bare empty
+          // stage otherwise looks broken rather than intentionally minimal.
+          // Kept deliberately plain (no sprite-shaped chrome) so it doesn't
+          // read as a placeholder waiting for art.
+          <button className="btn-ghost" onClick={onOpenMenu} style={{ margin: '20px 0' }}>
+            {hero.name} — open guild
+          </button>
+        )}
+
+        {equippedPet && petDef && !settings.hidePetSprite && (
           <button
             type="button"
             className="pet-companion-button"
