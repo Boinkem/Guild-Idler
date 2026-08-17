@@ -118,12 +118,116 @@ const TAB_GROUPS: TabGroup[] = [DASHBOARD_GROUP, GUILD_GROUP, ADVENTURE_GROUP, P
  *  grouped structure above is what actually drives rendering and typing. */
 const ALL_TABS = TAB_GROUPS.flatMap((g) => g.tabs);
 
+/**
+ * The "?" breakdown for whichever tab is currently open -- a few bullet
+ * points on exactly what lives in and can be done from that tab, on
+ * demand rather than only during the first-run tour. Same relationship to
+ * the tab's own one-line `tooltip` above as OnboardingTour's
+ * STEP_DESCRIPTIONS has to a tour step's label: the tooltip is a glance,
+ * this is the actual explanation. Kept as its own map here (not folded
+ * into each tab's config object above) for the same reason
+ * STEP_DESCRIPTIONS lives in OnboardingTour.tsx rather than in TAB_GROUPS
+ * -- this is content for one specific piece of UI, not nav config.
+ * `Partial` + a missing-entry fallback (see the render site) means a
+ * future new tab never breaks this by needing an entry here first;
+ * 'testing' has none on purpose, same as it's excluded from the main
+ * tour's own steps.
+ */
+const PANEL_BREAKDOWNS: Partial<Record<TabId, string[]>> = {
+  dashboard: [
+    'Needs attention flags idle heroes, ready eggs, broken gear, and harvest nodes waiting on you.',
+    'Recent outcomes shows your last few quests and raids -- View all opens the full log in Statistics.',
+    "Tap the Guild Power number for a breakdown of exactly what it's made of.",
+  ],
+  heroes: [
+    'Your roster -- stats, gear, and skins for every hero recruited so far.',
+    'Recruit fills an empty slot; slots expand as the guild grows.',
+    "Skins are cosmetic only, separate from a hero's own gear.",
+  ],
+  training: [
+    "Reassign a hero's battlefield role -- Melee, Ranged, or Caster -- for a gold cost.",
+    "Role only matters for raid party composition; quests don't care which role a hero is set to.",
+    "Unlocks once the guild clears its first raid, Blackford Keep.",
+  ],
+  equipment: [
+    "Everything the guild owns: gear worn by each hero, the shared stash, and consumables.",
+    'Crafting materials and curios live here too, alongside anything not currently equipped.',
+    'Broken gear shows up here (and on the nav badge) until repaired or replaced.',
+  ],
+  vendors: [
+    'The Blacksmith, Alchemist, and Enchanter -- each has its own stock, upgrades, and crafting.',
+    'Buy from current stock, or spend materials crafting your own gear and consumables.',
+    'Sell from the stash for gold, with a limited-time buyback if you change your mind.',
+  ],
+  guild: [
+    'Guild Hall: permanent Facility and general Upgrades that apply to every hero, guild-wide.',
+    'Costs scale with level -- there’s always a next tier to save toward.',
+  ],
+  harvest: [
+    'Idle heroes gather materials automatically -- click a shiny node while it lasts for a bonus.',
+    'Warehouse holds the stock; Fields shows what’s currently growing and ready to collect.',
+    'Spend the stock crafting with a vendor, or sell it directly.',
+  ],
+  hatchery: [
+    'Eggs incubate here, hatching as your heroes earn XP -- no separate timer to manage.',
+    'A hatched pet can be equipped to lend the whole guild a small bonus.',
+    "Unlocks once the guild's first egg actually drops.",
+  ],
+  peddler: [
+    'Grimsby is a wandering chance merchant -- pay for a card, see what happens.',
+    'He shows up on his own schedule; the nav badge flags it when he’s around.',
+    "Unlocks after completing his own introductory questline.",
+  ],
+  quests: [
+    'The quest board -- each hero keeps their own pool of contracts, sized to their own level.',
+    'Send a hero out, or chain multiple quests in a row once Auto-Chain unlocks.',
+    "Discovered story chains show here too, once a hero's high enough level to attempt them.",
+  ],
+  raids: [
+    'Multi-hero expeditions -- bigger rewards, longer odds, and the whole party is committed until it resolves.',
+    'Pick a difficulty tier and see each encounter’s odds before sending the party in.',
+    "The Quartermaster's Den holds raid-only upgrades that never affect regular quests.",
+  ],
+  lore: [
+    "The story so far -- every quest chain your guild has uncovered, underway or completed.",
+    'Raids and the Collection (item sets found) each get their own sub-tab here too.',
+  ],
+  guide: [
+    "A running log of what's happened -- notifications archive here once read.",
+    'Also doubles as a quick reference for how the guild’s systems actually work.',
+  ],
+  prestige: [
+    'Retire a hero for Renown, spent on permanent guild-wide perks.',
+    'Renown and its perks persist even through a full guild reset.',
+  ],
+  stats: [
+    'Overview -- lifetime totals for the guild: quests run, gold earned, and more.',
+    'Achievements -- every milestone unlocked so far.',
+    'Recent results -- a browsable log of past quests and raids; click a card for the full breakdown.',
+  ],
+  settings: [
+    'Appearance, sound, and gameplay preferences -- all per-device, saved instantly.',
+    "Never touches your guild's actual progress or save file.",
+  ],
+};
+
 export function MenuWindow({ onClose }: { onClose: () => void }) {
   const engine = useEngine();
   const { settings, update } = useSettings();
   const [tab, setTab] = useState<TabId>(() => (engine.consumeRequestedTab() as TabId) ?? 'dashboard');
   const [onTop, setOnTop] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
+  // Forces the full first-run tour back open on demand, regardless of
+  // `state.seenOnboarding` -- set by the header's "?" button below. Local
+  // UI state, not persisted: replaying the tour is a one-off ask each
+  // time, not something that itself needs to survive a restart.
+  const [manualTourOpen, setManualTourOpen] = useState(false);
+  // Whether the current tab's PANEL_BREAKDOWNS popover is open -- also
+  // local/unpersisted, and explicitly closed on every tab switch below so
+  // switching tabs never leaves a stale breakdown floating over the new
+  // panel.
+  const [showPanelHelp, setShowPanelHelp] = useState(false);
+  useEffect(() => setShowPanelHelp(false), [tab]);
 
   // Nav-bar hover/focus tick (see sound.ts's `hover` cue). Sweeping the
   // pointer across the whole tab list -- or holding Tab to move focus
@@ -167,7 +271,26 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
     }
   }, [engine, engine.requestedTab]);
 
-  const Panel = ALL_TABS.find((t) => t.id === tab)!.Panel;
+  // Looked up once and reused below for both the rendered Panel and the
+  // "?" breakdown popover's title -- previously just `.Panel` was pulled
+  // off this same find(), so this is the same lookup, not an extra one.
+  const activeTabDef = ALL_TABS.find((t) => t.id === tab)!;
+  const Panel = activeTabDef.Panel;
+  const panelBreakdown = PANEL_BREAKDOWNS[tab];
+  // Shared by the nav filter below and the tour's own step list --
+  // previously the tour hardcoded its own separate exclusion list
+  // ('hatchery'/'peddler' always skipped, regardless of whether they'd
+  // actually unlocked), which only happened to match the nav because a
+  // brand-new save always has both locked at the exact moment the
+  // first-run tour fires. That coupling breaks for an on-demand replay
+  // later in the game, once either (or Harvest/Training) really has
+  // unlocked -- a replay should show every tab actually in the nav right
+  // now, not the fresh-save snapshot. One predicate, used both places, so
+  // they can't drift apart again the way that duplication already had.
+  const isTabVisible = (id: TabId) => (id === 'hatchery' ? engine.state.hatcheryUnlocked
+    : id === 'peddler' ? engine.state.peddlerUnlocked
+    : id === 'harvest' ? engine.state.harvestUnlocked
+    : id === 'training' ? engine.state.completedRaids.includes('blackford_keep') : true);
   const { idleHeroes, eggsReady, brokenGear, harvestReady } = attentionCounts(engine.state);
   // Nav gold/renown count up to a new value rather than snapping -- the
   // numeric equivalent of the .bar fill transition. No animation on first
@@ -258,6 +381,19 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         >
           {fullscreen ? '🗗 Windowed' : '⛶ Fullscreen'}
         </button>
+        {/* Brings the first-run tour back on demand -- previously it only
+            ever ran once (gated on !state.seenOnboarding, see below), with
+            no way to see it again short of a hard reset. Sets local
+            `manualTourOpen` rather than clearing state.seenOnboarding
+            itself, so replaying it doesn't also re-arm it to auto-fire
+            again on the next launch. */}
+        <button
+          className="btn-ghost"
+          onClick={() => setManualTourOpen(true)}
+          title="Replay the guild tour"
+        >
+          ❓ Tour
+        </button>
         <button className="btn-ghost" onClick={onClose}>Back to desktop</button>
       </header>
 
@@ -288,10 +424,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
                 // gate entirely, via the SaveManager migration's
                 // grandfather path rather than ever actually completing
                 // the_first_haul.
-                .filter((t) => (t.id === 'hatchery' ? engine.state.hatcheryUnlocked
-                  : t.id === 'peddler' ? engine.state.peddlerUnlocked
-                  : t.id === 'harvest' ? engine.state.harvestUnlocked
-                  : t.id === 'training' ? engine.state.completedRaids.includes('blackford_keep') : true))
+                .filter((t) => isTabVisible(t.id))
                 .map((t) => (
                   <button
                     key={t.id}
@@ -323,6 +456,40 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         <main className="panel">
           <Panel />
         </main>
+        {/* Per-tab "what can I do in here" breakdown -- lives in this
+            outer, non-scrolling `.menu-body` (already `position:
+            relative`) rather than inside `.panel` itself, so the button
+            stays pinned in the corner instead of scrolling away with a
+            long panel's own content. Only renders a button at all when
+            PANEL_BREAKDOWNS actually has an entry for the current tab, same
+            "quietly absent rather than a broken/empty popover" fallback
+            STEP_DESCRIPTIONS' own missing-id case already uses. */}
+        {panelBreakdown && (
+          <>
+            <button
+              className="btn-ghost panel-help-btn"
+              style={{ position: 'absolute', top: 10, right: 16, zIndex: 5 }}
+              onClick={() => setShowPanelHelp((v) => !v)}
+              title={`What can I do in ${activeTabDef.label}?`}
+              aria-expanded={showPanelHelp}
+            >
+              ?
+            </button>
+            {showPanelHelp && (
+              <div className="card panel-help-card" style={{ position: 'absolute', top: 42, right: 16, width: 260, zIndex: 6 }}>
+                <div className="spread">
+                  <span className="card-title">{activeTabDef.label}</span>
+                  <button className="btn-ghost" onClick={() => setShowPanelHelp(false)} aria-label="Close">×</button>
+                </div>
+                <ul style={{ margin: '6px 0 0', paddingLeft: 16 }}>
+                  {panelBreakdown.map((line, i) => (
+                    <li key={i} className="small" style={{ marginBottom: 4 }}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Both prompts below are gated on the guild already having a name.
@@ -334,18 +501,22 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
           normal modals (see the onboarding-tour comment in app.css), so it
           won a fight it should never have been in: naming has to resolve
           first, only then prompts. */}
-      {engine.state.guildName !== '' && !engine.state.seenOnboarding && (
+      {/* Fires automatically the first time (!seenOnboarding), or any time
+          after that via the header's "Tour" button (manualTourOpen) --
+          see isTabVisible above for why 'hatchery'/'peddler' no longer
+          need a hardcoded exclusion here: on a fresh save they're simply
+          not unlocked yet, so isTabVisible already drops them the exact
+          same way it does for the nav itself, and a later replay
+          correctly includes them once they are unlocked. They still get
+          their own one-off single-step spotlight the moment each first
+          unlocks (pendingHatcherySpotlight/pendingPeddlerSpotlight below)
+          -- that's a separate, timing-driven nudge, not a substitute for
+          seeing them in a full replay. */}
+      {engine.state.guildName !== '' && (!engine.state.seenOnboarding || manualTourOpen) && (
         <OnboardingTour
-          // 'hatchery' excluded here too -- a genuinely fresh save never has
-          // it unlocked yet (see the nav filter above), so measuring its
-          // (nonexistent) nav button would just return null and produce a
-          // broken step. It gets its own single-step spotlight instead, the
-          // moment it actually unlocks -- see pendingHatcherySpotlight below.
-          // 'peddler' excluded for the exact same reason -- its own
-          // spotlight is pendingPeddlerSpotlight, just below Hatchery's.
-          steps={ALL_TABS.filter((t) => t.id !== 'testing' && t.id !== 'hatchery' && t.id !== 'peddler').map((t) => ({ id: t.id, label: t.label }))}
+          steps={ALL_TABS.filter((t) => t.id !== 'testing' && isTabVisible(t.id)).map((t) => ({ id: t.id, label: t.label }))}
           onTabChange={(id) => setTab(id as TabId)}
-          onDone={() => engine.dismissOnboarding()}
+          onDone={() => { engine.dismissOnboarding(); setManualTourOpen(false); }}
         />
       )}
       {engine.state.guildName !== '' && engine.state.pendingChainDiscovery && (

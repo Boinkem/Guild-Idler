@@ -12087,3 +12087,82 @@ about the new tab's cards, not the home-tab card.
 **Verified:** `npx tsc --noEmit` clean against the full project,
 confirmed against a fresh clone with only this patch applied (not just
 the working copy patch 0175 was built and tested against).
+
+### On-demand tour replay + per-tab "?" breakdowns -- built (patch 0177)
+
+```discord-update
+Dev Update | Guild Tour & Tab Help
+
+- Added a Tour button to the header -- brings the first-run walkthrough back any time, not just once
+- Added a "?" to every tab -- click it for a quick rundown of exactly what that tab does
+- The tour and the nav now agree on which tabs are actually unlocked, so a later replay shows Hatchery/Grimsby/Harvest/Training once you've actually got them
+```
+
+Two direct requests: a way to bring the first-run tour back on demand
+(previously it only ever ran once, gated on `state.seenOnboarding`, with
+no way to see it again short of a hard reset), and a per-tab version of
+the same explanation -- "much the same" as the tour -- covering what's
+actually inside each tab, not just the tour's one-line-per-tab pass over
+the nav itself.
+
+**Tour replay (`MenuWindow.tsx`).** New header button ("❓ Tour", next to
+Fullscreen) sets local `manualTourOpen`; the tour's render condition
+became `!state.seenOnboarding || manualTourOpen` instead of just the
+former. Deliberately local UI state, not a state.seenOnboarding reset --
+replaying is a one-off per click, it shouldn't also re-arm the tour to
+auto-fire again on the next app launch. `onDone` clears `manualTourOpen`
+alongside its existing `engine.dismissOnboarding()` call either way
+(idempotent on an already-true seenOnboarding, confirmed by reading
+`dismissOnboarding` -- it only sets the flag and saves, no other state
+change to worry about firing twice).
+
+**Tour/nav visibility now share one predicate (`isTabVisible`).** Found
+while wiring the replay through: the tour previously hardcoded its own
+`t.id !== 'hatchery' && t.id !== 'peddler'` exclusion, which only ever
+matched the nav's own (separate, more complete) unlock filter by
+coincidence -- a brand-new save always has both locked at the exact
+moment the first-run tour fires, so the two happened to agree in that
+one case. They stop agreeing the moment a player replays later in the
+game: Hatchery/Grimsby (and Harvest/Training, never even excluded by the
+tour's old hardcoded list to begin with) may well be unlocked by then,
+and the old tour code would have silently skipped Hatchery/Grimsby from
+a replay regardless, while potentially still trying to measure a
+genuinely-not-yet-unlocked Harvest/Training nav button that doesn't
+exist. Both call sites now read the exact same `isTabVisible(id)`
+closure -- the nav's `.filter()` and the tour's own `steps` list -- so
+a replay always shows precisely the tabs actually in the nav right now,
+and this can't drift apart into two different answers again. The
+existing one-off `pendingHatcherySpotlight`/`pendingPeddlerSpotlight`
+single-step spotlights (fired the instant each unlocks) are unaffected
+and still fire independently of this.
+
+**Per-tab "?" breakdown (`PANEL_BREAKDOWNS`, `MenuWindow.tsx`).** A
+small "?" button pinned to the top-right corner of the panel area
+(rendered in `.menu-body`, outside `.panel`'s own scroll region, so it
+stays put while a long panel's content scrolls under it) opens a short
+bullet-point popover -- 2-3 lines on what's actually in that specific
+tab and what you can do there, sourced from a new map keyed by tab id.
+Deliberately its own separate map, not folded into each tab's existing
+`tooltip` field in `TAB_GROUPS` -- same relationship `STEP_DESCRIPTIONS`
+already has to a tour step's `label` (glance vs. explanation), and kept
+in the same file as the button that actually renders it rather than
+mixed into nav config. Only renders the button at all for a tab that
+actually has an entry (`testing` deliberately has none, same exclusion
+the main tour's own steps already apply); a future new tab without an
+entry yet just gets no button, not a broken popover. Closes automatically
+on every tab switch (`useEffect` keyed on `tab`) so it can never linger
+open over the wrong panel's content.
+
+**Content authored from what's actually in each panel**, not guessed --
+read every panel file's own section headings, sub-tab labels, and
+existing `subtitle` copy (`HeroesPanel`, `EquipmentPanel`, `VendorsPanel`,
+`GuildPanel`, `HarvestPanel`, `HatcheryPanel`, `PeddlerPanel`,
+`QuestPanel`, `RaidsPanel`, `LorePanel`, `GuidePanel`, `PrestigePanel`,
+`StatsPanel`, `SettingsPanel`) before writing its 2-3 bullet summary, so
+each breakdown actually matches what that tab currently does rather than
+a stale or invented description.
+
+**Verified:** `npx tsc --noEmit` clean, confirmed against a fresh clone
+of current `main` (through patch 0176) with only this patch's diff
+applied -- `MenuWindow.tsx` and this status doc entry are the only files
+this patch touches.
