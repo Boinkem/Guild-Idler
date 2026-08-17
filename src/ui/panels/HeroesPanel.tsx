@@ -261,8 +261,8 @@ export function HeroesPanel() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="spread">
                   <span className="card-title hero-card-name">
-                    {HeroManager.displayTitle(hero) && <span className="hero-title">{HeroManager.displayTitle(hero)}</span>}
                     {hero.name}
+                    {HeroManager.displayTitle(hero) && <span className="hero-title">, {HeroManager.displayTitle(hero)}</span>}
                   </span>
                   <span className="small muted">
                     <RoleIcon role={HeroManager.activeRole(hero)} size={14} /> {HeroManager.roleDisplayName(hero)} · Level {hero.level}

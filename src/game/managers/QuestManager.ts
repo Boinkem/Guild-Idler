@@ -1006,6 +1006,7 @@ export const QuestManager = {
 
     /* -------------------------------- chain -------------------------------- */
     let chainAdvanced: QuestResult['chainAdvanced'];
+    let titleGranted: string | undefined;
     if (quest.offer.chain) {
       const { chainId, stage, totalStages } = quest.offer.chain;
       let active = state.activeChains.find((c) => c.chainId === chainId);
@@ -1037,7 +1038,9 @@ export const QuestManager = {
           state.completedChains.push(chainId);
           state.activeChains = state.activeChains.filter((c) => c.chainId !== chainId);
           state.stats.chainsCompleted += 1;
-          if (chain.title && hero) HeroManager.grantTitle(hero, chain.title);
+          if (chain.title && hero && HeroManager.grantTitle(hero, chain.title)) {
+            titleGranted = chain.title;
+          }
           // The Hatchery's own intro -- see ChainDef.grantsHatchery. Just
           // the unlock+spotlight now; the_last_clutch's actual egg grant
           // goes through the generic rewardEgg path above like any other
@@ -1114,6 +1117,7 @@ export const QuestManager = {
       dailyBurstBonus: dailyBurstBonus || undefined,
       critBonus: critBonus || undefined,
       grimsbyArrived: grimsbyArrived || undefined,
+      titleGranted,
     };
     state.log.unshift(result);
     if (state.log.length > 60) state.log.length = 60;

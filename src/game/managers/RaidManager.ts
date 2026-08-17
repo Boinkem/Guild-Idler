@@ -363,8 +363,11 @@ export const RaidManager = {
     // against re-granting on a repeat clear (skips a title the hero
     // already holds), so no separate "first clear only" check is needed
     // here beyond the fullClear gate itself.
+    const titledHeroNames: string[] = [];
     if (fullClear && raid?.title) {
-      for (const hero of heroes) HeroManager.grantTitle(hero, raid.title);
+      for (const hero of heroes) {
+        if (HeroManager.grantTitle(hero, raid.title)) titledHeroNames.push(hero.name);
+      }
     }
 
     // Independent per-hero injury rolls regardless of how far the raid got --
@@ -420,6 +423,8 @@ export const RaidManager = {
       eggsFound,
       injuries,
       resolvedAt,
+      titleGranted: titledHeroNames.length > 0 ? raid?.title : undefined,
+      titledHeroNames: titledHeroNames.length > 0 ? titledHeroNames : undefined,
     };
 
     state.raidLog.unshift(result);

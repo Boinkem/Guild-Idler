@@ -293,8 +293,8 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
           <button
             className={`knight-button ${anim}`}
             onClick={onOpenMenu}
-            title={`${displayTitle ? displayTitle + ' ' : ''}${hero.name} — click to open the guild menu`}
-            aria-label={`${displayTitle ? displayTitle + ' ' : ''}${hero.name}, level ${hero.level}. Open the guild menu.`}
+            title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''} — click to open the guild menu`}
+            aria-label={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}. Open the guild menu.`}
           >
             <HeroSprite
               heroClass={hero.heroClass}
@@ -302,7 +302,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
               animation={spriteAnimation}
               flip={facingReturn}
               height={Math.round(120 * settings.spriteScale)}
-              title={`${displayTitle ? displayTitle + ' ' : ''}${hero.name}, level ${hero.level}`}
+              title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}`}
             />
             {floatingText && (
               <div className="floating-reward" key={floatingText.key}>

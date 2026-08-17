@@ -504,6 +504,16 @@ export class GameEngine {
       if (result.grimsbyArrived) {
         this.say('A cart rattles up outside the gate, one wheel squeaking like it\u2019s begging to be replaced.', 'peddler');
       }
+      // First title ever earned gets the prominent banner treatment
+      // (matches every other genuine "first time" milestone that goes
+      // through reportGuidance with banner:true); every title after that
+      // is a smaller, ordinary Toast -- same say()/banner split, just
+      // driven by hasEarnedFirstTitle instead of a GuidanceTopic.
+      if (result.titleGranted) {
+        const isFirst = !this.state.hasEarnedFirstTitle;
+        this.state.hasEarnedFirstTitle = true;
+        this.say(`${result.heroName} has earned the title "${result.titleGranted}"!`, 'heroes', isFirst);
+      }
       this.reportAchievements(AchievementManager.checkAll(this.state, now));
       this.reportGuidance(GuidanceManager.checkAll(this.state));
 
@@ -533,6 +543,22 @@ export class GameEngine {
       this.lastRaidResult = raidResult;
       changed = true;
       playSound(raidResult.fullClear ? 'chain_complete' : raidResult.encountersCleared > 0 ? 'quest_success' : 'quest_fail');
+      // Only the heroes who actually cleared the raid earn its title --
+      // titledHeroNames is already that exact subset (RaidManager.resolve
+      // excludes anyone who already held it from a prior clear), so the
+      // toast names them directly rather than crediting the guild at
+      // large. Same first-title-ever banner split as the quest-chain path
+      // above.
+      if (raidResult.titleGranted && raidResult.titledHeroNames?.length) {
+        const isFirst = !this.state.hasEarnedFirstTitle;
+        this.state.hasEarnedFirstTitle = true;
+        const names = raidResult.titledHeroNames;
+        const who = names.length === 1
+          ? names[0]
+          : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+        const verb = names.length === 1 ? 'has' : 'have';
+        this.say(`${who} ${verb} earned the title "${raidResult.titleGranted}"!`, 'heroes', isFirst);
+      }
       this.reportAchievements(AchievementManager.checkAll(this.state, now));
       this.reportGuidance(GuidanceManager.checkAll(this.state));
     }
@@ -685,6 +711,10 @@ export class GameEngine {
       const quest = due[0];
       const result = QuestManager.resolve(this.state, quest, quest.endsAt);
       results.push(result);
+      if (result.titleGranted) {
+        this.state.hasEarnedFirstTitle = true;
+        this.archive(`${result.heroName} has earned the title "${result.titleGranted}"!`, 'heroes');
+      }
       // Unlocks still register (and Steam still gets notified) for progress
       // made while the app was closed — just quietly, without the toast/sound
       // treatment live play gets, since a barrage of those on launch would be
@@ -739,6 +769,15 @@ export class GameEngine {
       const raidEndsAt = this.state.activeRaid.endsAt;
       const raidResult = RaidManager.resolve(this.state, this.state.activeRaid, raidEndsAt);
       raidResults.push(raidResult);
+      if (raidResult.titleGranted && raidResult.titledHeroNames?.length) {
+        this.state.hasEarnedFirstTitle = true;
+        const names = raidResult.titledHeroNames;
+        const who = names.length === 1
+          ? names[0]
+          : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+        const verb = names.length === 1 ? 'has' : 'have';
+        this.archive(`${who} ${verb} earned the title "${raidResult.titleGranted}"!`, 'heroes');
+      }
       for (const id of AchievementManager.checkAll(this.state, raidEndsAt)) {
         void window.littleKnight?.unlockAchievement(id);
       }

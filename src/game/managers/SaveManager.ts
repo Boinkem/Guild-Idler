@@ -179,6 +179,7 @@ export function createInitialState(now = Date.now()): GameState {
     resistGems: {},
     hatcheryUnlocked: false,
     pendingHatcherySpotlight: false,
+    hasEarnedFirstTitle: false,
     incubatingEggs: [],
     eggStorage: [],
     pets: [],
@@ -808,6 +809,19 @@ const MIGRATIONS: Record<number, Migration> = {
       ...save,
       version: 41,
       unlockedBardTracks: Array.from(new Set([...existing, ...grandfathered, ...retroactive])),
+    };
+  },
+  41: (save) => {
+    // New hasEarnedFirstTitle flag (see GameState's own comment) -- backfilled
+    // true for any save that already has a titled hero by this point, so
+    // nobody who's held a title since before this patch gets a retroactive
+    // "first title!" banner the next time any hero earns a new one.
+    const heroes = Array.isArray(save.heroes) ? save.heroes as Record<string, unknown>[] : [];
+    const alreadyHasTitle = heroes.some((h) => Array.isArray(h.titles) && (h.titles as unknown[]).length > 0);
+    return {
+      ...save,
+      version: 42,
+      hasEarnedFirstTitle: alreadyHasTitle,
     };
   },
 };

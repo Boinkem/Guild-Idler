@@ -72,7 +72,7 @@ function HeroRetireCard({
       )}
       <div>
         <div className="card-title">
-          {rank && <span className="hero-title">{rank}</span>}
+          {rank && <span className="hero-rank-badge">{rank}</span>}
           {hero.name}
           {hero.ascension > 0 && <span className="tiny muted" style={{ marginLeft: 6 }}>ascended ×{hero.ascension}</span>}
         </div>

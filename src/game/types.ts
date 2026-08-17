@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 41;
+export const SAVE_VERSION = 42;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -696,6 +696,13 @@ export interface QuestResult {
    *  informational for the result modal; the actual materials mutation
    *  already happened in QuestManager.resolve by the time this is read. */
   materialGained?: { materialId: MaterialId; amount: number };
+  /** Set to the chain's title text if this quest's chain just completed
+   *  and HeroManager.grantTitle actually granted it (i.e. the hero didn't
+   *  already hold it) -- purely informational, the grant itself already
+   *  happened in resolve() by the time this is read. Drives the toast in
+   *  engine.ts; not set on a repeat/no-op grant so re-clearing old
+   *  content never re-announces a title the hero already has. */
+  titleGranted?: string;
   /** An ordinary curio drop rolled this quest, if any -- same shape and
    *  same "flat % chance on success, scaled by difficulty" pattern as
    *  eggDropped above, just for QuestManager's own curio-drop roll
@@ -1012,6 +1019,15 @@ export interface RaidResult {
   eggsFound?: { rarity: Rarity; encounterId: string }[];
   injuries: { heroId: string; heroName: string; injury: Injury }[];
   resolvedAt: number;
+  /** Set if this was a full clear and the raid carries a title that at
+   *  least one hero in the clearing party didn't already hold --
+   *  `titledHeroNames` is the actual subset who newly earned it this run
+   *  (not the whole party -- a hero who already held the title from a
+   *  prior clear is left out, same guard HeroManager.grantTitle already
+   *  applies per-hero), so the toast in engine.ts credits exactly who
+   *  earned it, never the roster at large. */
+  titleGranted?: string;
+  titledHeroNames?: string[];
 }
 
 /* -------------------------- progression -------------------------- */
@@ -1564,6 +1580,14 @@ export interface GameState {
    *  moment, not a toast" treatment as pendingChainDiscovery -- shown as a
    *  single-step reuse of OnboardingTour spotlighting the new tab. */
   pendingHatcherySpotlight: boolean;
+  /** Flips true the moment any hero's very first title is granted
+   *  (chain or raid) -- engine.ts reads this to decide whether a title
+   *  grant gets the prominent banner treatment (first one only) or an
+   *  ordinary small Toast (every one after). Migrated true for any save
+   *  that already has a titled hero by the time this field was added, so
+   *  existing players don't get a retroactive "first title!" banner for
+   *  a title they've had for patches already. */
+  hasEarnedFirstTitle: boolean;
   /**
    * Eggs actively incubating -- the Hatchery's own "equipped" slots,
    * exactly the same relationship eggStorage has to this that state.stash

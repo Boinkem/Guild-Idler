@@ -12432,3 +12432,101 @@ updated to the new class name, same visual result as before.
 **Verified:** `npx tsc --noEmit` clean against the full project,
 confirmed against a fresh clone of current `main` (through patch 0179)
 with only this patch's diff applied.
+
+### Hero title display order fixed, title-grant toasts added, raid rank badge split out -- built (patch 0181)
+
+```discord-update
+Dev Update | Hero Titles
+
+- Titles now display after the hero's name ("Briar, Siegebreaker") instead of before it
+- Earning your very first title now gets a proper banner announcement
+- Every title after that gets a smaller toast instead
+- Raid titles now correctly credit only the heroes who actually cleared the raid, not the whole roster
+```
+
+Two direct reports: the title/name order should read "Briar, Siegebreaker"
+rather than "Siegebreaker, Briar" (in practice the display bug patch
+0165-era work left behind was "TITLE Name" glued with a trailing margin,
+not an actual comma either way), and there was no notification of any
+kind when a title was actually granted -- confirmed by grep, not
+assumed: `HeroManager.grantTitle` (called from `QuestManager.resolve` for
+chain titles, `RaidManager.resolve` for raid titles) mutated the hero
+silently, with no `engine.say()`/toast call anywhere in either path.
+
+**Display order (`HeroesPanel.tsx`, `IdleView.tsx`, `app.css`).** The
+title span now renders after `hero.name` with its own leading `", "`
+rather than before it with a trailing margin -- `HeroesPanel.tsx`'s
+roster card, and `IdleView.tsx`'s desktop-companion tooltip/aria-label
+strings for consistency, both updated the same way. `.hero-title` in
+`app.css` dropped `text-transform: uppercase` to match the requested
+casing (an all-caps epithet read fine leading the name; trailing it
+after a comma it just looked like shouting) and picked up `font-style:
+italic` instead, so it still reads as visually distinct from the hero's
+own name without the caps. The old `margin-right` is gone too -- the
+JSX now supplies the separating comma+space itself, so there's nothing
+left for a margin to do.
+
+**Split out `.hero-rank-badge` (`PrestigePanel.tsx`, `app.css`).**
+`PrestigePanel`'s ascension-rank badge (e.g. "Adept") was reusing
+`.hero-title` purely to get the same free styling -- a different
+feature (`PrestigeManager.rankFor`, not the earned-titles system) that
+happened to share a class. Retuning `.hero-title` above would have
+silently broken this (no more margin to separate "AdeptBriar", no more
+uppercase) since it was never asked to change. Gave it its own
+`.hero-rank-badge` class with the exact old properties instead, so the
+two features can be tuned independently going forward.
+
+**Title-grant toasts (`types.ts`, `QuestManager.ts`, `RaidManager.ts`,
+`engine.ts`).** New optional `QuestResult.titleGranted` /
+`RaidResult.titleGranted` fields, set only when `HeroManager.grantTitle`
+actually returns `true` for a genuine new grant (not a repeat clear/
+chain re-run against a title the hero already holds). `engine.ts`'s
+live-tick block (`tick()`, not offline catch-up -- same "only fires for
+quests you were actually watching" convention every other live-only
+notification here already follows) reads it and calls `this.say(...)`;
+offline catch-up archives the same message quietly via `this.archive()`
+instead, matching how achievements/guidance already behave there
+("progress made offline still registers, just without the toast/sound
+barrage on relaunch").
+
+New `GameState.hasEarnedFirstTitle` flag drives which treatment a grant
+gets: the very first title any hero ever earns fires `say(..., banner:
+true)` for the prominent top-banner treatment; every one after that is
+an ordinary small Toast (`banner: false`). `SAVE_VERSION` bumped 41->42
+with a migration that backfills the flag `true` for any save that
+already has a titled hero, so nobody who's held a title since before
+this patch gets a retroactive "first title!" banner the next time a
+different hero earns a new one.
+
+**Raid titles now name exactly who earned them, per direct
+correction.** The original raid-title toast draft credited "your
+guild" generically -- wrong, since only the heroes actually in the
+clearing party earn a raid's title (`RaidManager.resolve` already only
+loops `heroes`, the party, not the full roster), and a hero who already
+held the title from an earlier clear shouldn't be re-announced either.
+`RaidManager.resolve` now collects `titledHeroNames`: the subset of the
+clearing party that `grantTitle` returned `true` for on this specific
+run. The toast/archive text names them directly ("Briar and Finn have
+earned the title..." / "Briar has earned the title..." for a solo
+survivor), with grammar (`has`/`have`, Oxford "and") handled off that
+list's length rather than hardcoded to the raid's max party size.
+
+**Verified:** `npx tsc --noEmit` and `vite build` both clean against the
+full project, confirmed against a fresh clone of current `main` (through
+patch 0180) with only this patch's diff applied.
+
+### Guild Hall Upgrades: flavor text, click-to-modal, uniform cards -- confirmed already built (patch 0178)
+
+Reported as a new request, but verification against the live `main`
+tree found this exact feature already shipped in patch 0178 above
+("Hard level cap at 55, retirement pushed to match, Guild Hall cards
+collapsed behind a detail modal") -- `UpgradeCard` in `GuildPanel.tsx`
+already renders name/level/cost/effects only with the flavour-text
+paragraph dropped, clicking a card anywhere except Buy already opens
+`GuildUpgradeDetailModal` with the full flavour text and details
+restored, and `.guild-facility-card`/`.guild-facility-body` in `app.css`
+already enforce uniform card sizing (`height: 100%` plus a flex column
+with Buy pinned to the bottom via `margin-top: auto`). No code change
+made here -- flagging in case what's live doesn't match what was
+reported as missing, worth a fresh look at an actual build rather than
+re-implementing something that already exists.

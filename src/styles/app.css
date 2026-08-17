@@ -1955,19 +1955,40 @@ input[type='range'] {
 /* --------------------------------- titles ---------------------------------- */
 
 .hero-title {
-  font-size: 0.5625rem;
+  font-size: 0.8125rem;
   color: var(--brass);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
   font-weight: normal;
+  font-style: italic;
   /* Was `display: block`, which forced the title onto its own line above
      the hero's name inside the same flex row instead of reading as
      "TITLE Name" on one line -- the actual reason the whole title system
      looked broken/invisible in practice even though the underlying data
      (Hero.titles/activeTitle) was always being set correctly. Default
-     inline display plus this margin is the fix -- confirmed the JSX
-     (HeroesPanel.tsx) has no space of its own between the title span and
-     the name text, so the margin is doing that job, not just decoration. */
+     inline display was the fix.
+
+     Reordered to trail the name instead of leading it -- "Briar,
+     Siegebreaker" rather than "Siegebreaker Briar" -- so the JSX
+     (HeroesPanel.tsx/IdleView.tsx) now supplies the leading ", " itself
+     and this no longer needs a margin to separate it from what comes
+     before. Uppercase transform dropped too: an all-caps epithet read
+     fine leading the name, but trailing it after a comma it just looked
+     like shouting. Italic added instead so it still reads as visually
+     distinct from the hero's own name without shouting. */
+}
+
+/* PrestigePanel's ascension-rank badge (e.g. "Adept") was previously
+   reusing .hero-title purely to get the same free styling, back when
+   both read as "PREFIX Name". Split into its own class so retuning the
+   real title system above (trailing, not leading; no uppercase) doesn't
+   also silently change this unrelated feature's look -- kept the exact
+   properties .hero-title used to have. */
+.hero-rank-badge {
+  font-size: 0.5625rem;
+  color: var(--brass);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: normal;
   margin-right: 0.35em;
 }
 

@@ -1,0 +1,426 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 66d99e0..b8e1d18 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -12432,3 +12432,101 @@ updated to the new class name, same visual result as before.
+ **Verified:** `npx tsc --noEmit` clean against the full project,
+ confirmed against a fresh clone of current `main` (through patch 0179)
+ with only this patch's diff applied.
++
++### Hero title display order fixed, title-grant toasts added, raid rank badge split out -- built (patch 0181)
++
++```discord-update
++Dev Update | Hero Titles
++
++- Titles now display after the hero's name ("Briar, Siegebreaker") instead of before it
++- Earning your very first title now gets a proper banner announcement
++- Every title after that gets a smaller toast instead
++- Raid titles now correctly credit only the heroes who actually cleared the raid, not the whole roster
++```
++
++Two direct reports: the title/name order should read "Briar, Siegebreaker"
++rather than "Siegebreaker, Briar" (in practice the display bug patch
++0165-era work left behind was "TITLE Name" glued with a trailing margin,
++not an actual comma either way), and there was no notification of any
++kind when a title was actually granted -- confirmed by grep, not
++assumed: `HeroManager.grantTitle` (called from `QuestManager.resolve` for
++chain titles, `RaidManager.resolve` for raid titles) mutated the hero
++silently, with no `engine.say()`/toast call anywhere in either path.
++
++**Display order (`HeroesPanel.tsx`, `IdleView.tsx`, `app.css`).** The
++title span now renders after `hero.name` with its own leading `", "`
++rather than before it with a trailing margin -- `HeroesPanel.tsx`'s
++roster card, and `IdleView.tsx`'s desktop-companion tooltip/aria-label
++strings for consistency, both updated the same way. `.hero-title` in
++`app.css` dropped `text-transform: uppercase` to match the requested
++casing (an all-caps epithet read fine leading the name; trailing it
++after a comma it just looked like shouting) and picked up `font-style:
++italic` instead, so it still reads as visually distinct from the hero's
++own name without the caps. The old `margin-right` is gone too -- the
++JSX now supplies the separating comma+space itself, so there's nothing
++left for a margin to do.
++
++**Split out `.hero-rank-badge` (`PrestigePanel.tsx`, `app.css`).**
++`PrestigePanel`'s ascension-rank badge (e.g. "Adept") was reusing
++`.hero-title` purely to get the same free styling -- a different
++feature (`PrestigeManager.rankFor`, not the earned-titles system) that
++happened to share a class. Retuning `.hero-title` above would have
++silently broken this (no more margin to separate "AdeptBriar", no more
++uppercase) since it was never asked to change. Gave it its own
++`.hero-rank-badge` class with the exact old properties instead, so the
++two features can be tuned independently going forward.
++
++**Title-grant toasts (`types.ts`, `QuestManager.ts`, `RaidManager.ts`,
++`engine.ts`).** New optional `QuestResult.titleGranted` /
++`RaidResult.titleGranted` fields, set only when `HeroManager.grantTitle`
++actually returns `true` for a genuine new grant (not a repeat clear/
++chain re-run against a title the hero already holds). `engine.ts`'s
++live-tick block (`tick()`, not offline catch-up -- same "only fires for
++quests you were actually watching" convention every other live-only
++notification here already follows) reads it and calls `this.say(...)`;
++offline catch-up archives the same message quietly via `this.archive()`
++instead, matching how achievements/guidance already behave there
++("progress made offline still registers, just without the toast/sound
++barrage on relaunch").
++
++New `GameState.hasEarnedFirstTitle` flag drives which treatment a grant
++gets: the very first title any hero ever earns fires `say(..., banner:
++true)` for the prominent top-banner treatment; every one after that is
++an ordinary small Toast (`banner: false`). `SAVE_VERSION` bumped 41->42
++with a migration that backfills the flag `true` for any save that
++already has a titled hero, so nobody who's held a title since before
++this patch gets a retroactive "first title!" banner the next time a
++different hero earns a new one.
++
++**Raid titles now name exactly who earned them, per direct
++correction.** The original raid-title toast draft credited "your
++guild" generically -- wrong, since only the heroes actually in the
++clearing party earn a raid's title (`RaidManager.resolve` already only
++loops `heroes`, the party, not the full roster), and a hero who already
++held the title from an earlier clear shouldn't be re-announced either.
++`RaidManager.resolve` now collects `titledHeroNames`: the subset of the
++clearing party that `grantTitle` returned `true` for on this specific
++run. The toast/archive text names them directly ("Briar and Finn have
++earned the title..." / "Briar has earned the title..." for a solo
++survivor), with grammar (`has`/`have`, Oxford "and") handled off that
++list's length rather than hardcoded to the raid's max party size.
++
++**Verified:** `npx tsc --noEmit` and `vite build` both clean against the
++full project, confirmed against a fresh clone of current `main` (through
++patch 0180) with only this patch's diff applied.
++
++### Guild Hall Upgrades: flavor text, click-to-modal, uniform cards -- confirmed already built (patch 0178)
++
++Reported as a new request, but verification against the live `main`
++tree found this exact feature already shipped in patch 0178 above
++("Hard level cap at 55, retirement pushed to match, Guild Hall cards
++collapsed behind a detail modal") -- `UpgradeCard` in `GuildPanel.tsx`
++already renders name/level/cost/effects only with the flavour-text
++paragraph dropped, clicking a card anywhere except Buy already opens
++`GuildUpgradeDetailModal` with the full flavour text and details
++restored, and `.guild-facility-card`/`.guild-facility-body` in `app.css`
++already enforce uniform card sizing (`height: 100%` plus a flex column
++with Buy pinned to the bottom via `margin-top: auto`). No code change
++made here -- flagging in case what's live doesn't match what was
++reported as missing, worth a fresh look at an actual build rather than
++re-implementing something that already exists.
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 901e2d5..dcc80e9 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -504,6 +504,16 @@ export class GameEngine {
+       if (result.grimsbyArrived) {
+         this.say('A cart rattles up outside the gate, one wheel squeaking like it\u2019s begging to be replaced.', 'peddler');
+       }
++      // First title ever earned gets the prominent banner treatment
++      // (matches every other genuine "first time" milestone that goes
++      // through reportGuidance with banner:true); every title after that
++      // is a smaller, ordinary Toast -- same say()/banner split, just
++      // driven by hasEarnedFirstTitle instead of a GuidanceTopic.
++      if (result.titleGranted) {
++        const isFirst = !this.state.hasEarnedFirstTitle;
++        this.state.hasEarnedFirstTitle = true;
++        this.say(`${result.heroName} has earned the title "${result.titleGranted}"!`, 'heroes', isFirst);
++      }
+       this.reportAchievements(AchievementManager.checkAll(this.state, now));
+       this.reportGuidance(GuidanceManager.checkAll(this.state));
+ 
+@@ -533,6 +543,22 @@ export class GameEngine {
+       this.lastRaidResult = raidResult;
+       changed = true;
+       playSound(raidResult.fullClear ? 'chain_complete' : raidResult.encountersCleared > 0 ? 'quest_success' : 'quest_fail');
++      // Only the heroes who actually cleared the raid earn its title --
++      // titledHeroNames is already that exact subset (RaidManager.resolve
++      // excludes anyone who already held it from a prior clear), so the
++      // toast names them directly rather than crediting the guild at
++      // large. Same first-title-ever banner split as the quest-chain path
++      // above.
++      if (raidResult.titleGranted && raidResult.titledHeroNames?.length) {
++        const isFirst = !this.state.hasEarnedFirstTitle;
++        this.state.hasEarnedFirstTitle = true;
++        const names = raidResult.titledHeroNames;
++        const who = names.length === 1
++          ? names[0]
++          : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
++        const verb = names.length === 1 ? 'has' : 'have';
++        this.say(`${who} ${verb} earned the title "${raidResult.titleGranted}"!`, 'heroes', isFirst);
++      }
+       this.reportAchievements(AchievementManager.checkAll(this.state, now));
+       this.reportGuidance(GuidanceManager.checkAll(this.state));
+     }
+@@ -685,6 +711,10 @@ export class GameEngine {
+       const quest = due[0];
+       const result = QuestManager.resolve(this.state, quest, quest.endsAt);
+       results.push(result);
++      if (result.titleGranted) {
++        this.state.hasEarnedFirstTitle = true;
++        this.archive(`${result.heroName} has earned the title "${result.titleGranted}"!`, 'heroes');
++      }
+       // Unlocks still register (and Steam still gets notified) for progress
+       // made while the app was closed — just quietly, without the toast/sound
+       // treatment live play gets, since a barrage of those on launch would be
+@@ -739,6 +769,15 @@ export class GameEngine {
+       const raidEndsAt = this.state.activeRaid.endsAt;
+       const raidResult = RaidManager.resolve(this.state, this.state.activeRaid, raidEndsAt);
+       raidResults.push(raidResult);
++      if (raidResult.titleGranted && raidResult.titledHeroNames?.length) {
++        this.state.hasEarnedFirstTitle = true;
++        const names = raidResult.titledHeroNames;
++        const who = names.length === 1
++          ? names[0]
++          : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
++        const verb = names.length === 1 ? 'has' : 'have';
++        this.archive(`${who} ${verb} earned the title "${raidResult.titleGranted}"!`, 'heroes');
++      }
+       for (const id of AchievementManager.checkAll(this.state, raidEndsAt)) {
+         void window.littleKnight?.unlockAchievement(id);
+       }
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index d1faf3f..642b823 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -1006,6 +1006,7 @@ export const QuestManager = {
+ 
+     /* -------------------------------- chain -------------------------------- */
+     let chainAdvanced: QuestResult['chainAdvanced'];
++    let titleGranted: string | undefined;
+     if (quest.offer.chain) {
+       const { chainId, stage, totalStages } = quest.offer.chain;
+       let active = state.activeChains.find((c) => c.chainId === chainId);
+@@ -1037,7 +1038,9 @@ export const QuestManager = {
+           state.completedChains.push(chainId);
+           state.activeChains = state.activeChains.filter((c) => c.chainId !== chainId);
+           state.stats.chainsCompleted += 1;
+-          if (chain.title && hero) HeroManager.grantTitle(hero, chain.title);
++          if (chain.title && hero && HeroManager.grantTitle(hero, chain.title)) {
++            titleGranted = chain.title;
++          }
+           // The Hatchery's own intro -- see ChainDef.grantsHatchery. Just
+           // the unlock+spotlight now; the_last_clutch's actual egg grant
+           // goes through the generic rewardEgg path above like any other
+@@ -1114,6 +1117,7 @@ export const QuestManager = {
+       dailyBurstBonus: dailyBurstBonus || undefined,
+       critBonus: critBonus || undefined,
+       grimsbyArrived: grimsbyArrived || undefined,
++      titleGranted,
+     };
+     state.log.unshift(result);
+     if (state.log.length > 60) state.log.length = 60;
+diff --git a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
+index be1275f..a4b6cb6 100644
+--- a/src/game/managers/RaidManager.ts
++++ b/src/game/managers/RaidManager.ts
+@@ -363,8 +363,11 @@ export const RaidManager = {
+     // against re-granting on a repeat clear (skips a title the hero
+     // already holds), so no separate "first clear only" check is needed
+     // here beyond the fullClear gate itself.
++    const titledHeroNames: string[] = [];
+     if (fullClear && raid?.title) {
+-      for (const hero of heroes) HeroManager.grantTitle(hero, raid.title);
++      for (const hero of heroes) {
++        if (HeroManager.grantTitle(hero, raid.title)) titledHeroNames.push(hero.name);
++      }
+     }
+ 
+     // Independent per-hero injury rolls regardless of how far the raid got --
+@@ -420,6 +423,8 @@ export const RaidManager = {
+       eggsFound,
+       injuries,
+       resolvedAt,
++      titleGranted: titledHeroNames.length > 0 ? raid?.title : undefined,
++      titledHeroNames: titledHeroNames.length > 0 ? titledHeroNames : undefined,
+     };
+ 
+     state.raidLog.unshift(result);
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index a1dfa05..60895c8 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -179,6 +179,7 @@ export function createInitialState(now = Date.now()): GameState {
+     resistGems: {},
+     hatcheryUnlocked: false,
+     pendingHatcherySpotlight: false,
++    hasEarnedFirstTitle: false,
+     incubatingEggs: [],
+     eggStorage: [],
+     pets: [],
+@@ -810,6 +811,19 @@ const MIGRATIONS: Record<number, Migration> = {
+       unlockedBardTracks: Array.from(new Set([...existing, ...grandfathered, ...retroactive])),
+     };
+   },
++  41: (save) => {
++    // New hasEarnedFirstTitle flag (see GameState's own comment) -- backfilled
++    // true for any save that already has a titled hero by this point, so
++    // nobody who's held a title since before this patch gets a retroactive
++    // "first title!" banner the next time any hero earns a new one.
++    const heroes = Array.isArray(save.heroes) ? save.heroes as Record<string, unknown>[] : [];
++    const alreadyHasTitle = heroes.some((h) => Array.isArray(h.titles) && (h.titles as unknown[]).length > 0);
++    return {
++      ...save,
++      version: 42,
++      hasEarnedFirstTitle: alreadyHasTitle,
++    };
++  },
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 79c8348..b6a8967 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 41;
++export const SAVE_VERSION = 42;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -696,6 +696,13 @@ export interface QuestResult {
+    *  informational for the result modal; the actual materials mutation
+    *  already happened in QuestManager.resolve by the time this is read. */
+   materialGained?: { materialId: MaterialId; amount: number };
++  /** Set to the chain's title text if this quest's chain just completed
++   *  and HeroManager.grantTitle actually granted it (i.e. the hero didn't
++   *  already hold it) -- purely informational, the grant itself already
++   *  happened in resolve() by the time this is read. Drives the toast in
++   *  engine.ts; not set on a repeat/no-op grant so re-clearing old
++   *  content never re-announces a title the hero already has. */
++  titleGranted?: string;
+   /** An ordinary curio drop rolled this quest, if any -- same shape and
+    *  same "flat % chance on success, scaled by difficulty" pattern as
+    *  eggDropped above, just for QuestManager's own curio-drop roll
+@@ -1012,6 +1019,15 @@ export interface RaidResult {
+   eggsFound?: { rarity: Rarity; encounterId: string }[];
+   injuries: { heroId: string; heroName: string; injury: Injury }[];
+   resolvedAt: number;
++  /** Set if this was a full clear and the raid carries a title that at
++   *  least one hero in the clearing party didn't already hold --
++   *  `titledHeroNames` is the actual subset who newly earned it this run
++   *  (not the whole party -- a hero who already held the title from a
++   *  prior clear is left out, same guard HeroManager.grantTitle already
++   *  applies per-hero), so the toast in engine.ts credits exactly who
++   *  earned it, never the roster at large. */
++  titleGranted?: string;
++  titledHeroNames?: string[];
+ }
+ 
+ /* -------------------------- progression -------------------------- */
+@@ -1564,6 +1580,14 @@ export interface GameState {
+    *  moment, not a toast" treatment as pendingChainDiscovery -- shown as a
+    *  single-step reuse of OnboardingTour spotlighting the new tab. */
+   pendingHatcherySpotlight: boolean;
++  /** Flips true the moment any hero's very first title is granted
++   *  (chain or raid) -- engine.ts reads this to decide whether a title
++   *  grant gets the prominent banner treatment (first one only) or an
++   *  ordinary small Toast (every one after). Migrated true for any save
++   *  that already has a titled hero by the time this field was added, so
++   *  existing players don't get a retroactive "first title!" banner for
++   *  a title they've had for patches already. */
++  hasEarnedFirstTitle: boolean;
+   /**
+    * Eggs actively incubating -- the Hatchery's own "equipped" slots,
+    * exactly the same relationship eggStorage has to this that state.stash
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 0fd8d85..6624245 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -1955,19 +1955,40 @@ input[type='range'] {
+ /* --------------------------------- titles ---------------------------------- */
+ 
+ .hero-title {
+-  font-size: 0.5625rem;
++  font-size: 0.8125rem;
+   color: var(--brass);
+-  text-transform: uppercase;
+-  letter-spacing: 0.06em;
++  letter-spacing: 0.02em;
+   font-weight: normal;
++  font-style: italic;
+   /* Was `display: block`, which forced the title onto its own line above
+      the hero's name inside the same flex row instead of reading as
+      "TITLE Name" on one line -- the actual reason the whole title system
+      looked broken/invisible in practice even though the underlying data
+      (Hero.titles/activeTitle) was always being set correctly. Default
+-     inline display plus this margin is the fix -- confirmed the JSX
+-     (HeroesPanel.tsx) has no space of its own between the title span and
+-     the name text, so the margin is doing that job, not just decoration. */
++     inline display was the fix.
++
++     Reordered to trail the name instead of leading it -- "Briar,
++     Siegebreaker" rather than "Siegebreaker Briar" -- so the JSX
++     (HeroesPanel.tsx/IdleView.tsx) now supplies the leading ", " itself
++     and this no longer needs a margin to separate it from what comes
++     before. Uppercase transform dropped too: an all-caps epithet read
++     fine leading the name, but trailing it after a comma it just looked
++     like shouting. Italic added instead so it still reads as visually
++     distinct from the hero's own name without shouting. */
++}
++
++/* PrestigePanel's ascension-rank badge (e.g. "Adept") was previously
++   reusing .hero-title purely to get the same free styling, back when
++   both read as "PREFIX Name". Split into its own class so retuning the
++   real title system above (trailing, not leading; no uppercase) doesn't
++   also silently change this unrelated feature's look -- kept the exact
++   properties .hero-title used to have. */
++.hero-rank-badge {
++  font-size: 0.5625rem;
++  color: var(--brass);
++  text-transform: uppercase;
++  letter-spacing: 0.06em;
++  font-weight: normal;
+   margin-right: 0.35em;
+ }
+ 
+diff --git a/src/ui/IdleView.tsx b/src/ui/IdleView.tsx
+index 9610472..1b3b0b5 100644
+--- a/src/ui/IdleView.tsx
++++ b/src/ui/IdleView.tsx
+@@ -293,8 +293,8 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+           <button
+             className={`knight-button ${anim}`}
+             onClick={onOpenMenu}
+-            title={`${displayTitle ? displayTitle + ' ' : ''}${hero.name} — click to open the guild menu`}
+-            aria-label={`${displayTitle ? displayTitle + ' ' : ''}${hero.name}, level ${hero.level}. Open the guild menu.`}
++            title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''} — click to open the guild menu`}
++            aria-label={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}. Open the guild menu.`}
+           >
+             <HeroSprite
+               heroClass={hero.heroClass}
+@@ -302,7 +302,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+               animation={spriteAnimation}
+               flip={facingReturn}
+               height={Math.round(120 * settings.spriteScale)}
+-              title={`${displayTitle ? displayTitle + ' ' : ''}${hero.name}, level ${hero.level}`}
++              title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}`}
+             />
+             {floatingText && (
+               <div className="floating-reward" key={floatingText.key}>
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index 2018917..6713564 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -261,8 +261,8 @@ export function HeroesPanel() {
+               <div style={{ flex: 1, minWidth: 0 }}>
+                 <div className="spread">
+                   <span className="card-title hero-card-name">
+-                    {HeroManager.displayTitle(hero) && <span className="hero-title">{HeroManager.displayTitle(hero)}</span>}
+                     {hero.name}
++                    {HeroManager.displayTitle(hero) && <span className="hero-title">, {HeroManager.displayTitle(hero)}</span>}
+                   </span>
+                   <span className="small muted">
+                     <RoleIcon role={HeroManager.activeRole(hero)} size={14} /> {HeroManager.roleDisplayName(hero)} · Level {hero.level}
+diff --git a/src/ui/panels/PrestigePanel.tsx b/src/ui/panels/PrestigePanel.tsx
+index 1416251..7f6093e 100644
+--- a/src/ui/panels/PrestigePanel.tsx
++++ b/src/ui/panels/PrestigePanel.tsx
+@@ -72,7 +72,7 @@ function HeroRetireCard({
+       )}
+       <div>
+         <div className="card-title">
+-          {rank && <span className="hero-title">{rank}</span>}
++          {rank && <span className="hero-rank-badge">{rank}</span>}
+           {hero.name}
+           {hero.ascension > 0 && <span className="tiny muted" style={{ marginLeft: 6 }}>ascended ×{hero.ascension}</span>}
+         </div>
