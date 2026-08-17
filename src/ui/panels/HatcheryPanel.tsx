@@ -12,6 +12,7 @@ import { PetSprite } from '../sprites/PetSprite';
 import { PetEnlargedModal } from '../PetEnlargedModal';
 import { EggIcon } from '../EggIcon';
 import { EggSelectModal } from '../EggSelectModal';
+import { useReviveFlash, ReviveFlash } from '../reviveFlash';
 
 type SubTab = 'home' | 'pets';
 
@@ -156,6 +157,12 @@ function PetsTab() {
   const engine = useEngine();
   const state = engine.state;
   const petSlots = ModifierManager.petSlots(state);
+  // Batched the same way HeroesPanel's own useReviveFlash call is -- one
+  // hook call here at the list level, keyed lookup passed down to each
+  // PetCard, rather than a hook call inside the .map() below.
+  const { flashes: reviveFlashes, dismiss: dismissReviveFlash } = useReviveFlash(
+    state.pets.map((p) => ({ id: p.uid, fallen: PetManager.isFallen(p) })),
+  );
 
   return (
     <>
@@ -167,13 +174,24 @@ function PetsTab() {
         <div className="card"><p className="card-flavour">No pets hatched yet -- check the Nests tab.</p></div>
       )}
       <div className="grid two pet-grid">
-        {state.pets.map((pet) => <PetCard key={pet.uid} pet={pet} />)}
+        {state.pets.map((pet) => (
+          <PetCard
+            key={pet.uid}
+            pet={pet}
+            reviveFlash={reviveFlashes[pet.uid]}
+            dismissReviveFlash={() => dismissReviveFlash(pet.uid)}
+          />
+        ))}
       </div>
     </>
   );
 }
 
-function PetCard({ pet }: { pet: Pet }) {
+function PetCard({ pet, reviveFlash, dismissReviveFlash }: {
+  pet: Pet;
+  reviveFlash?: { key: number };
+  dismissReviveFlash: () => void;
+}) {
   const engine = useEngine();
   const state = engine.state;
   const now = useNow(5000);
@@ -206,6 +224,7 @@ function PetCard({ pet }: { pet: Pet }) {
       className="card pet-card-hover"
       style={{ marginBottom: 0, '--rarity-color': RARITY_COLOR[pet.rarity] } as CSSProperties}
     >
+      {reviveFlash && <ReviveFlash key={reviveFlash.key} onDone={dismissReviveFlash} />}
       <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
         <button
           type="button"

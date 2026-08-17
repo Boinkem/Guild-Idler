@@ -13,7 +13,8 @@ import { SettingsStore } from './settings';
 export type SoundCue =
   | 'quest_success' | 'quest_fail' | 'level_up' | 'legendary_drop'
   | 'chain_complete' | 'purchase' | 'error' | 'depart' | 'achievement' | 'collect'
-  | 'equip' | 'sell' | 'scrap' | 'craft' | 'enhance' | 'infuse' | 'enchant' | 'prestige_upgrade' | 'repair';
+  | 'equip' | 'sell' | 'scrap' | 'craft' | 'enhance' | 'infuse' | 'enchant' | 'prestige_upgrade' | 'repair'
+  | 'unequip' | 'recruit' | 'revive' | 'allocate' | 'hover';
 
 let ctx: AudioContext | null = null;
 
@@ -157,6 +158,51 @@ const CUES: Record<SoundCue, Tone[]> = {
     { freq: 350, start: 0, duration: 0.05, type: 'triangle', gain: 0.28 },
     { freq: 420, start: 0.06, duration: 0.06, type: 'triangle', gain: 0.3 },
     { freq: 550, start: 0.13, duration: 0.12, type: 'sine', gain: 0.32 },
+  ],
+  // A soft, low thud -- the deliberate mirror of `equip`'s metallic snap
+  // (660 -> 440, rising attack) rather than a reuse of it: taking gear or
+  // a consumable off is a duller, single-note action, not a second snap.
+  // Previously unequip()/unequipConsumable() played nothing at all.
+  unequip: [
+    { freq: 300, start: 0, duration: 0.06, type: 'sine', gain: 0.22 },
+  ],
+  // A small welcoming flourish -- three quick notes, warmer and shorter
+  // than level_up's four-note fanfare so a fresh recruit doesn't outshine
+  // an actual level gain, but distinct from the flat `purchase` blip.
+  // Previously recruit() had a toast and nothing else, while retire() (a
+  // hero leaving) already got a real cue -- gaining a hero read as a
+  // smaller moment than losing one.
+  recruit: [
+    { freq: 440, start: 0, duration: 0.07, type: 'triangle', gain: 0.32 },
+    { freq: 587.33, start: 0.06, duration: 0.08, type: 'triangle', gain: 0.36 },
+    { freq: 880.0, start: 0.15, duration: 0.22, type: 'sine', gain: 0.4 },
+  ],
+  // Hushed low note first, then a warm rise -- "relief" rather than
+  // "triumph", so a Fallen hero or pet coming back reads differently by
+  // ear than level_up/legendary_drop's brighter, bigger moments even
+  // though it's spending real gold the same way a purchase does.
+  // Previously reviveHero/reviveAllFallen/revivePet/reviveAllFallenPets
+  // played nothing at all -- see also the revive-flash visual, added
+  // alongside this cue.
+  revive: [
+    { freq: 220, start: 0, duration: 0.1, type: 'sine', gain: 0.28 },
+    { freq: 440, start: 0.09, duration: 0.12, type: 'triangle', gain: 0.34 },
+    { freq: 659.25, start: 0.19, duration: 0.26, type: 'sine', gain: 0.4 },
+  ],
+  // A tiny single tick for spending a stat point -- allocateStat() can be
+  // clicked rapidly in succession (a fresh level often grants several
+  // points at once), so this is deliberately shorter and quieter even
+  // than `hover` below, just enough to confirm the click landed.
+  allocate: [
+    { freq: 660, start: 0, duration: 0.025, type: 'square', gain: 0.16 },
+  ],
+  // The nav tab-bar hover/focus tick (MenuWindow.tsx) -- a single very
+  // short, very quiet click. Deliberately the quietest cue in the whole
+  // registry: it can fire many times a second while sweeping the pointer
+  // across the section list, and needs to read as a subtle texture, not
+  // a sound effect competing with real action feedback.
+  hover: [
+    { freq: 1400, start: 0, duration: 0.018, type: 'square', gain: 0.08 },
   ],
 };
 

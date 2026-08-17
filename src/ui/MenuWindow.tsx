@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
 import { OnboardingTour } from './OnboardingTour';
@@ -6,6 +6,7 @@ import { ChainDiscoveryModal } from './ChainDiscoveryModal';
 import { formatGold, formatNumber } from '../game/util';
 import { attentionCounts } from '../game/attention';
 import { PeddlerManager } from '../game/managers/PeddlerManager';
+import { playSound } from '../game/sound';
 import { useCountUp } from './useCountUp';
 import { useFlyTargetRef, registerFlyTarget } from './flyTarget';
 import { QuestPanel } from './panels/QuestPanel';
@@ -123,6 +124,21 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<TabId>(() => (engine.consumeRequestedTab() as TabId) ?? 'dashboard');
   const [onTop, setOnTop] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
+
+  // Nav-bar hover/focus tick (see sound.ts's `hover` cue). Sweeping the
+  // pointer across the whole tab list -- or holding Tab to move focus
+  // through it -- can fire this many times a second; the throttle keeps
+  // rapid re-triggers from overlapping into a buzz instead of a row of
+  // distinct ticks. A plain mutable ref rather than state, since the
+  // value only needs to gate a side effect and should never itself
+  // trigger a re-render.
+  const lastTabTick = useRef(0);
+  const tickTabHover = () => {
+    const now = Date.now();
+    if (now - lastTabTick.current < 50) return;
+    lastTabTick.current = now;
+    playSound('hover');
+  };
 
   useEffect(() => {
     void window.littleKnight?.getAlwaysOnTop().then(setOnTop);
@@ -282,6 +298,8 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
                     data-tab-id={t.id}
                     aria-current={t.id === tab}
                     onClick={() => setTab(t.id)}
+                    onMouseEnter={tickTabHover}
+                    onFocus={tickTabHover}
                     title={t.tooltip}
                     // The Equipment tab (labeled "Inventory") doubles as the
                     // shared 'inventory' fly-target -- anywhere a

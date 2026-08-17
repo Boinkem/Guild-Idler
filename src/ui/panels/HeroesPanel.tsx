@@ -15,6 +15,7 @@ import { HeroSprite } from '../sprites/HeroSprite';
 import { GearScoreBadge } from '../GearScoreBadge';
 import { RoleIcon } from '../RoleIcon';
 import { useLevelUpFlash, LevelUpFlash } from '../levelFlash';
+import { useReviveFlash, ReviveFlash } from '../reviveFlash';
 import { registerFlyTarget } from '../flyTarget';
 
 const STAT_KEYS: (keyof Stats)[] = ['strength', 'endurance', 'luck', 'wisdom'];
@@ -152,6 +153,9 @@ export function HeroesPanel() {
   const { flashes: levelFlashes, dismiss: dismissLevelFlash } = useLevelUpFlash(
     state.heroes.map((h) => ({ id: h.id, level: h.level })),
   );
+  const { flashes: reviveFlashes, dismiss: dismissReviveFlash } = useReviveFlash(
+    state.heroes.map((h) => ({ id: h.id, fallen: h.status === 'fallen' })),
+  );
 
   const infirmaryLevel = GuildManager.facilityLevel(state, 'infirmary');
   const revivalDiscount = ModifierManager.global(state).revivalDiscount ?? 0;
@@ -222,6 +226,12 @@ export function HeroesPanel() {
                 key={levelFlashes[hero.id].key}
                 levels={levelFlashes[hero.id].levels}
                 onDone={() => dismissLevelFlash(hero.id)}
+              />
+            )}
+            {reviveFlashes[hero.id] && (
+              <ReviveFlash
+                key={reviveFlashes[hero.id].key}
+                onDone={() => dismissReviveFlash(hero.id)}
               />
             )}
             <div

@@ -11166,3 +11166,117 @@ vite.web.config.ts` both pass clean. `node --check` clean on both
 Programmatic cross-check (not just eyeballing) confirmed zero dangling
 loot references in either direction across all 22 affected encounters
 and all 42 renamed items.
+
+### Feedback-gap audit: sound for ten previously-silent actions, a hero/pet revive visual, and a nav hover tick -- built (patch 0167)
+
+```discord-update
+Dev Update | Patch 0167
+
+- Added sound to unequipping gear/consumables, treating injuries, using a consumable, retiring early, spending a stat point, and applying a hero skin -- all previously silent
+- Added a distinct "welcome" sound when a new hero joins the guild, previously quieter than retiring one
+- Added a sound and a moss-green flash-and-sparkle moment when a Fallen hero or pet is revived, alone or in bulk
+- Added a subtle tick when hovering or keyboard-focusing a section tab in the main menu
+```
+
+Follow-up to a direct audit request: "identify gaps in player visual and
+audio feedback." Traced every `playSound()` call site in `engine.ts`
+against every player-facing action to find genuinely silent ones, rather
+than guessing from memory -- the initial example (Guild facility/
+Permanent Upgrade purchases) turned out to already play `purchase`, so
+the real gaps were elsewhere. Two sub-requests folded into the same
+patch: a revive-specific visual moment, and a nav-bar hover tick.
+
+**Ten previously-silent actions given sound (`sound.ts`), five new cues
+added to the `SoundCue` registry, five actions reusing an existing cue
+where the gesture already matches:**
+
+- `unequip()` (gear) and `unequipConsumable()` -- new `unequip` cue, a
+  single soft low thud. Deliberately not a reuse of `equip` (660 -> 440
+  metallic snap, rising attack) -- taking something off is a duller,
+  one-note action, not equip's sound played backwards. Previously
+  neither function played anything, or even logged a toast; `equip()`
+  itself has had a sound since patch that introduced it, so putting gear
+  on and taking it off were asymmetric.
+- `recruit()` -- new `recruit` cue, a three-note warm ascending
+  flourish, shorter than `level_up`'s four-note fanfare so a fresh hero
+  doesn't outshine an actual level gain, but distinct from the flat
+  `purchase` blip every other guild spend uses. Previously only a plain
+  toast ("A new hero joins the guild."), while `retire()` -- a hero
+  *leaving* -- already plays `chain_complete`/`level_up`. Gaining a hero
+  read as a smaller moment than losing one.
+- `reviveHero()`, `reviveAllFallen()`, `revivePet()`,
+  `reviveAllFallenPets()` -- new `revive` cue: a hushed low note first,
+  then a warm rise, read as "relief" rather than "triumph" so it doesn't
+  compete with `level_up`/`legendary_drop`'s brighter, bigger moments
+  even though real gold changes hands the same way a purchase does. All
+  four functions previously played nothing at all. See the revive-flash
+  visual below, added alongside this cue for the same reason.
+- `allocateStat()` -- new `allocate` cue, a single ~25ms tick, the
+  quietest "real action" cue in the registry on purpose: a level-up
+  often grants several points at once and this can be clicked in rapid
+  succession, so it needs to confirm the click landed without
+  stacking into noise.
+- `treatInjury()` -- reuses `repair`. Mending a hero and mending gear
+  read as the same gesture by ear; no new cue needed.
+- `useConsumable()` -- reuses `enhance`. A consumable's quick magical
+  uplift has the same character as an item refine landing.
+- `earlyRetire()` -- reuses `depart` (a hero leaving, the same cue
+  `startQuest`/`recallHero` already use for a hero leaving the guild
+  hall) rather than `retire()`'s triumphant cue, since Early Retirement
+  earns no renown, ascension, or streak -- deliberately a quieter,
+  non-celebratory sound for a genuinely different outcome.
+- `setHeroSkin()` -- reuses `equip`. Applying an owned livery is the
+  same gesture as putting gear on; `buySkin()` already plays `purchase`
+  when the livery is unlocked, but actually wearing it was silent.
+
+**Nav-bar hover/focus tick (`hover` cue, `MenuWindow.tsx`).** Deliberately
+scoped to just the `<nav className="tabs">` section-tab bar, not every
+hoverable element -- cards elsewhere already have their own hover
+*visual* treatment (`:has()` tint) and adding audio there too would mean
+a tick firing continuously while scanning a list. `hover` is the
+quietest cue in the whole registry (gain 0.08, ~18ms), since sweeping
+the pointer across the full 13-16 button tab list fires many triggers in
+under a second. A `lastTabTick` ref-based throttle (skip re-trigger
+under 50ms since the last tick) stops rapid sweeps or held-down Tab-key
+traversal from overlapping into a buzz instead of a row of distinct
+ticks. Wired to both `onMouseEnter` and `onFocus` on the same handler,
+so keyboard users tabbing through the nav get the identical cue pointer
+users do, no separate code path. Locked/future tabs (Hatchery, Peddler,
+Training) are hidden entirely rather than shown-disabled, so there's no
+"silent because disabled" edge case here.
+
+**Revive visual (`reviveFlash.tsx`, new file).** `useReviveFlash`/
+`ReviveFlash` mirror `levelFlash.tsx`'s exact shape (a batched
+`{id: value}`-in/`{id: flash}`-out hook plus a presentational overlay
+component using the shared `STAR_BURST` layout from `maxFlash.tsx`) but
+track a hero or pet's `fallen` boolean instead of a numeric level --
+fires the moment a tracked id flips from `fallen: true` to
+`fallen: false`, i.e. `HeroManager.revive`/`PetManager.revive` actually
+landing, never on mount. New `.revive-flash-layer`/`-text`/`-star` CSS
+(`app.css`) reuses the existing `max-flash-bg`/`max-flash-text`/
+`star-poof` keyframes wholesale, only the colour changes -- `--moss`
+instead of `--brass`/`--sky`, the same moss-green `.bar.health` already
+uses, so "revived" reads as the same "restored to health" colour
+language the Health system already established rather than a fourth
+unrelated accent. Wired into both `HeroesPanel.tsx` (per-hero, alongside
+the existing `LevelUpFlash` inside the same `.card`) and
+`HatcheryPanel.tsx`'s `PetsTab`/`PetCard` split -- the pet side needed
+the batch hook called once in `PetsTab` (the list-level component) with
+the per-pet flash/dismiss passed down as props to `PetCard`, matching
+the constraint `maxFlash.tsx`'s own doc comment already spells out
+(hooks can't be called inside a `.map()` closure that isn't a real
+component instance -- `HeroesPanel` avoids this by not using a per-hero
+component at all, `PetCard` *is* one, so props were the correct shape
+there instead of a second internal hook call).
+
+**Deliberately left alone:** the purchase-type actions audited in the
+original pass (Guild facility/Permanent Upgrade/Raid Upgrade/Vendor
+level purchases) already play `purchase` plus the existing
+`.purchase-pulse` number flash -- confirmed, not a gap. They stay on
+that lighter two-tier treatment (sound + pulse, no particle burst) on
+purpose, reserving `.collect-particle`/`STAR_BURST`-class moments for
+Quest/Raid results, Chain Complete, and level-up.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh clone with every
+file applied.

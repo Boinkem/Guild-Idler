@@ -1305,6 +1305,7 @@ export class GameEngine {
     const index = current.indexOf(defId);
     if (index === -1) return;
     hero.equippedConsumables = [...current.slice(0, index), ...current.slice(index + 1)];
+    playSound('unequip');
     void this.saveNow();
   }
 
@@ -1434,6 +1435,7 @@ export class GameEngine {
     if (!hero) return;
     const error = EquipmentManager.unequip(this.state, hero, slot);
     if (error) return this.say(error);
+    playSound('unequip');
     this.notify();
     void this.saveNow();
   }
@@ -1696,6 +1698,9 @@ export class GameEngine {
     if (!hero) return;
     const error = InventoryManager.useOnHero(this.state, hero, defId);
     if (error) return this.say(error);
+    // Reuses `enhance` -- a quick magical uplift, same character as an
+    // item refine landing. Previously silent.
+    playSound('enhance');
     this.say(`${hero.name} is patched up.`);
     void this.saveNow();
   }
@@ -1764,6 +1769,9 @@ export class GameEngine {
       this.state.stats.goldSpent += injury.treatmentCost;
     }
     hero.injuries = hero.injuries.filter((i) => i !== injury);
+    // Reuses `repair` -- mending a hero and mending gear are the same
+    // gesture by ear. Previously silent.
+    playSound('repair');
     this.say(free
       ? `${hero.name} is treated for ${injury.name.toLowerCase()}, on the house.`
       : `${hero.name} is treated for ${injury.name.toLowerCase()}.`);
@@ -1786,6 +1794,7 @@ export class GameEngine {
     this.state.gold -= cost;
     this.state.stats.goldSpent += cost;
     HeroManager.revive(hero);
+    playSound('revive');
     this.say(`${hero.name} is revived and returns to the roster.`, 'heroes');
     void this.saveNow();
   }
@@ -1807,6 +1816,7 @@ export class GameEngine {
     this.state.gold -= total;
     this.state.stats.goldSpent += total;
     for (const hero of fallen) HeroManager.revive(hero);
+    playSound('revive');
     this.say(`${fallen.length} Fallen heroes are revived and return to the roster.`, 'heroes');
     void this.saveNow();
   }
@@ -2011,6 +2021,7 @@ export class GameEngine {
     this.state.gold -= cost;
     this.state.stats.goldSpent += cost;
     PetManager.revive(this.state, pet);
+    playSound('revive');
     this.say(`${pet.name} is revived.`, 'heroes');
     void this.saveNow();
   }
@@ -2028,6 +2039,7 @@ export class GameEngine {
     this.state.gold -= total;
     this.state.stats.goldSpent += total;
     for (const pet of fallen) PetManager.revive(this.state, pet);
+    playSound('revive');
     this.say(`${fallen.length} Fallen companions are revived.`, 'heroes');
     void this.saveNow();
   }
@@ -2106,6 +2118,7 @@ export class GameEngine {
     }
     const error = GuildManager.recruit(this.state, heroClass, createRng(uid('recruit')));
     if (error) return this.say(error);
+    playSound('recruit');
     this.say('A new hero joins the guild.', 'heroes');
     this.reportAchievements(AchievementManager.checkAll(this.state));
     this.reportGuidance(GuidanceManager.checkAll(this.state));
@@ -2143,6 +2156,10 @@ export class GameEngine {
     if (!hero) return;
     const outcome = PrestigeManager.earlyRetire(this.state, hero);
     if (outcome && 'error' in outcome) return this.say(outcome.error);
+    // Reuses `depart` -- a hero leaving the guild, same shape as a hero
+    // leaving on a quest, deliberately not the triumphant cue retire()
+    // gets, since this earns no renown or streak.
+    playSound('depart');
     this.say(`${hero.name} leaves the guild. The slot is free.`);
     void this.saveNow();
   }
@@ -2152,6 +2169,7 @@ export class GameEngine {
     if (!hero || hero.statPoints <= 0) return;
     hero.statPoints -= 1;
     hero.stats[stat] += 1;
+    playSound('allocate');
     this.notify();
     void this.saveNow();
   }
@@ -2215,6 +2233,10 @@ export class GameEngine {
       return this.say('That livery is not unlocked yet.');
     }
     hero.skin = skinId as typeof hero.skin;
+    // Reuses `equip` -- putting a livery on is the same gesture as
+    // putting gear on. Previously silent (buySkin already plays
+    // `purchase` when the livery is unlocked, but wearing it did not).
+    playSound('equip');
     this.notify();
     void this.saveNow();
   }

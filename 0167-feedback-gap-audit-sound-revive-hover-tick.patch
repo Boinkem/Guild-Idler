@@ -1,0 +1,581 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 32b59e7..dd478ae 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -11166,3 +11166,117 @@ vite.web.config.ts` both pass clean. `node --check` clean on both
+ Programmatic cross-check (not just eyeballing) confirmed zero dangling
+ loot references in either direction across all 22 affected encounters
+ and all 42 renamed items.
++
++### Feedback-gap audit: sound for ten previously-silent actions, a hero/pet revive visual, and a nav hover tick -- built (patch 0167)
++
++```discord-update
++Dev Update | Patch 0167
++
++- Added sound to unequipping gear/consumables, treating injuries, using a consumable, retiring early, spending a stat point, and applying a hero skin -- all previously silent
++- Added a distinct "welcome" sound when a new hero joins the guild, previously quieter than retiring one
++- Added a sound and a moss-green flash-and-sparkle moment when a Fallen hero or pet is revived, alone or in bulk
++- Added a subtle tick when hovering or keyboard-focusing a section tab in the main menu
++```
++
++Follow-up to a direct audit request: "identify gaps in player visual and
++audio feedback." Traced every `playSound()` call site in `engine.ts`
++against every player-facing action to find genuinely silent ones, rather
++than guessing from memory -- the initial example (Guild facility/
++Permanent Upgrade purchases) turned out to already play `purchase`, so
++the real gaps were elsewhere. Two sub-requests folded into the same
++patch: a revive-specific visual moment, and a nav-bar hover tick.
++
++**Ten previously-silent actions given sound (`sound.ts`), five new cues
++added to the `SoundCue` registry, five actions reusing an existing cue
++where the gesture already matches:**
++
++- `unequip()` (gear) and `unequipConsumable()` -- new `unequip` cue, a
++  single soft low thud. Deliberately not a reuse of `equip` (660 -> 440
++  metallic snap, rising attack) -- taking something off is a duller,
++  one-note action, not equip's sound played backwards. Previously
++  neither function played anything, or even logged a toast; `equip()`
++  itself has had a sound since patch that introduced it, so putting gear
++  on and taking it off were asymmetric.
++- `recruit()` -- new `recruit` cue, a three-note warm ascending
++  flourish, shorter than `level_up`'s four-note fanfare so a fresh hero
++  doesn't outshine an actual level gain, but distinct from the flat
++  `purchase` blip every other guild spend uses. Previously only a plain
++  toast ("A new hero joins the guild."), while `retire()` -- a hero
++  *leaving* -- already plays `chain_complete`/`level_up`. Gaining a hero
++  read as a smaller moment than losing one.
++- `reviveHero()`, `reviveAllFallen()`, `revivePet()`,
++  `reviveAllFallenPets()` -- new `revive` cue: a hushed low note first,
++  then a warm rise, read as "relief" rather than "triumph" so it doesn't
++  compete with `level_up`/`legendary_drop`'s brighter, bigger moments
++  even though real gold changes hands the same way a purchase does. All
++  four functions previously played nothing at all. See the revive-flash
++  visual below, added alongside this cue for the same reason.
++- `allocateStat()` -- new `allocate` cue, a single ~25ms tick, the
++  quietest "real action" cue in the registry on purpose: a level-up
++  often grants several points at once and this can be clicked in rapid
++  succession, so it needs to confirm the click landed without
++  stacking into noise.
++- `treatInjury()` -- reuses `repair`. Mending a hero and mending gear
++  read as the same gesture by ear; no new cue needed.
++- `useConsumable()` -- reuses `enhance`. A consumable's quick magical
++  uplift has the same character as an item refine landing.
++- `earlyRetire()` -- reuses `depart` (a hero leaving, the same cue
++  `startQuest`/`recallHero` already use for a hero leaving the guild
++  hall) rather than `retire()`'s triumphant cue, since Early Retirement
++  earns no renown, ascension, or streak -- deliberately a quieter,
++  non-celebratory sound for a genuinely different outcome.
++- `setHeroSkin()` -- reuses `equip`. Applying an owned livery is the
++  same gesture as putting gear on; `buySkin()` already plays `purchase`
++  when the livery is unlocked, but actually wearing it was silent.
++
++**Nav-bar hover/focus tick (`hover` cue, `MenuWindow.tsx`).** Deliberately
++scoped to just the `<nav className="tabs">` section-tab bar, not every
++hoverable element -- cards elsewhere already have their own hover
++*visual* treatment (`:has()` tint) and adding audio there too would mean
++a tick firing continuously while scanning a list. `hover` is the
++quietest cue in the whole registry (gain 0.08, ~18ms), since sweeping
++the pointer across the full 13-16 button tab list fires many triggers in
++under a second. A `lastTabTick` ref-based throttle (skip re-trigger
++under 50ms since the last tick) stops rapid sweeps or held-down Tab-key
++traversal from overlapping into a buzz instead of a row of distinct
++ticks. Wired to both `onMouseEnter` and `onFocus` on the same handler,
++so keyboard users tabbing through the nav get the identical cue pointer
++users do, no separate code path. Locked/future tabs (Hatchery, Peddler,
++Training) are hidden entirely rather than shown-disabled, so there's no
++"silent because disabled" edge case here.
++
++**Revive visual (`reviveFlash.tsx`, new file).** `useReviveFlash`/
++`ReviveFlash` mirror `levelFlash.tsx`'s exact shape (a batched
++`{id: value}`-in/`{id: flash}`-out hook plus a presentational overlay
++component using the shared `STAR_BURST` layout from `maxFlash.tsx`) but
++track a hero or pet's `fallen` boolean instead of a numeric level --
++fires the moment a tracked id flips from `fallen: true` to
++`fallen: false`, i.e. `HeroManager.revive`/`PetManager.revive` actually
++landing, never on mount. New `.revive-flash-layer`/`-text`/`-star` CSS
++(`app.css`) reuses the existing `max-flash-bg`/`max-flash-text`/
++`star-poof` keyframes wholesale, only the colour changes -- `--moss`
++instead of `--brass`/`--sky`, the same moss-green `.bar.health` already
++uses, so "revived" reads as the same "restored to health" colour
++language the Health system already established rather than a fourth
++unrelated accent. Wired into both `HeroesPanel.tsx` (per-hero, alongside
++the existing `LevelUpFlash` inside the same `.card`) and
++`HatcheryPanel.tsx`'s `PetsTab`/`PetCard` split -- the pet side needed
++the batch hook called once in `PetsTab` (the list-level component) with
++the per-pet flash/dismiss passed down as props to `PetCard`, matching
++the constraint `maxFlash.tsx`'s own doc comment already spells out
++(hooks can't be called inside a `.map()` closure that isn't a real
++component instance -- `HeroesPanel` avoids this by not using a per-hero
++component at all, `PetCard` *is* one, so props were the correct shape
++there instead of a second internal hook call).
++
++**Deliberately left alone:** the purchase-type actions audited in the
++original pass (Guild facility/Permanent Upgrade/Raid Upgrade/Vendor
++level purchases) already play `purchase` plus the existing
++`.purchase-pulse` number flash -- confirmed, not a gap. They stay on
++that lighter two-tier treatment (sound + pulse, no particle burst) on
++purpose, reserving `.collect-particle`/`STAR_BURST`-class moments for
++Quest/Raid results, Chain Complete, and level-up.
++
++**Verified:** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean against a fresh clone with every
++file applied.
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 6dec3cc..db97f5a 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -1305,6 +1305,7 @@ export class GameEngine {
+     const index = current.indexOf(defId);
+     if (index === -1) return;
+     hero.equippedConsumables = [...current.slice(0, index), ...current.slice(index + 1)];
++    playSound('unequip');
+     void this.saveNow();
+   }
+ 
+@@ -1434,6 +1435,7 @@ export class GameEngine {
+     if (!hero) return;
+     const error = EquipmentManager.unequip(this.state, hero, slot);
+     if (error) return this.say(error);
++    playSound('unequip');
+     this.notify();
+     void this.saveNow();
+   }
+@@ -1696,6 +1698,9 @@ export class GameEngine {
+     if (!hero) return;
+     const error = InventoryManager.useOnHero(this.state, hero, defId);
+     if (error) return this.say(error);
++    // Reuses `enhance` -- a quick magical uplift, same character as an
++    // item refine landing. Previously silent.
++    playSound('enhance');
+     this.say(`${hero.name} is patched up.`);
+     void this.saveNow();
+   }
+@@ -1764,6 +1769,9 @@ export class GameEngine {
+       this.state.stats.goldSpent += injury.treatmentCost;
+     }
+     hero.injuries = hero.injuries.filter((i) => i !== injury);
++    // Reuses `repair` -- mending a hero and mending gear are the same
++    // gesture by ear. Previously silent.
++    playSound('repair');
+     this.say(free
+       ? `${hero.name} is treated for ${injury.name.toLowerCase()}, on the house.`
+       : `${hero.name} is treated for ${injury.name.toLowerCase()}.`);
+@@ -1786,6 +1794,7 @@ export class GameEngine {
+     this.state.gold -= cost;
+     this.state.stats.goldSpent += cost;
+     HeroManager.revive(hero);
++    playSound('revive');
+     this.say(`${hero.name} is revived and returns to the roster.`, 'heroes');
+     void this.saveNow();
+   }
+@@ -1807,6 +1816,7 @@ export class GameEngine {
+     this.state.gold -= total;
+     this.state.stats.goldSpent += total;
+     for (const hero of fallen) HeroManager.revive(hero);
++    playSound('revive');
+     this.say(`${fallen.length} Fallen heroes are revived and return to the roster.`, 'heroes');
+     void this.saveNow();
+   }
+@@ -2011,6 +2021,7 @@ export class GameEngine {
+     this.state.gold -= cost;
+     this.state.stats.goldSpent += cost;
+     PetManager.revive(this.state, pet);
++    playSound('revive');
+     this.say(`${pet.name} is revived.`, 'heroes');
+     void this.saveNow();
+   }
+@@ -2028,6 +2039,7 @@ export class GameEngine {
+     this.state.gold -= total;
+     this.state.stats.goldSpent += total;
+     for (const pet of fallen) PetManager.revive(this.state, pet);
++    playSound('revive');
+     this.say(`${fallen.length} Fallen companions are revived.`, 'heroes');
+     void this.saveNow();
+   }
+@@ -2106,6 +2118,7 @@ export class GameEngine {
+     }
+     const error = GuildManager.recruit(this.state, heroClass, createRng(uid('recruit')));
+     if (error) return this.say(error);
++    playSound('recruit');
+     this.say('A new hero joins the guild.', 'heroes');
+     this.reportAchievements(AchievementManager.checkAll(this.state));
+     this.reportGuidance(GuidanceManager.checkAll(this.state));
+@@ -2143,6 +2156,10 @@ export class GameEngine {
+     if (!hero) return;
+     const outcome = PrestigeManager.earlyRetire(this.state, hero);
+     if (outcome && 'error' in outcome) return this.say(outcome.error);
++    // Reuses `depart` -- a hero leaving the guild, same shape as a hero
++    // leaving on a quest, deliberately not the triumphant cue retire()
++    // gets, since this earns no renown or streak.
++    playSound('depart');
+     this.say(`${hero.name} leaves the guild. The slot is free.`);
+     void this.saveNow();
+   }
+@@ -2152,6 +2169,7 @@ export class GameEngine {
+     if (!hero || hero.statPoints <= 0) return;
+     hero.statPoints -= 1;
+     hero.stats[stat] += 1;
++    playSound('allocate');
+     this.notify();
+     void this.saveNow();
+   }
+@@ -2215,6 +2233,10 @@ export class GameEngine {
+       return this.say('That livery is not unlocked yet.');
+     }
+     hero.skin = skinId as typeof hero.skin;
++    // Reuses `equip` -- putting a livery on is the same gesture as
++    // putting gear on. Previously silent (buySkin already plays
++    // `purchase` when the livery is unlocked, but wearing it did not).
++    playSound('equip');
+     this.notify();
+     void this.saveNow();
+   }
+diff --git a/src/game/sound.ts b/src/game/sound.ts
+index f449e21..b54eea7 100644
+--- a/src/game/sound.ts
++++ b/src/game/sound.ts
+@@ -13,7 +13,8 @@ import { SettingsStore } from './settings';
+ export type SoundCue =
+   | 'quest_success' | 'quest_fail' | 'level_up' | 'legendary_drop'
+   | 'chain_complete' | 'purchase' | 'error' | 'depart' | 'achievement' | 'collect'
+-  | 'equip' | 'sell' | 'scrap' | 'craft' | 'enhance' | 'infuse' | 'enchant' | 'prestige_upgrade' | 'repair';
++  | 'equip' | 'sell' | 'scrap' | 'craft' | 'enhance' | 'infuse' | 'enchant' | 'prestige_upgrade' | 'repair'
++  | 'unequip' | 'recruit' | 'revive' | 'allocate' | 'hover';
+ 
+ let ctx: AudioContext | null = null;
+ 
+@@ -158,6 +159,51 @@ const CUES: Record<SoundCue, Tone[]> = {
+     { freq: 420, start: 0.06, duration: 0.06, type: 'triangle', gain: 0.3 },
+     { freq: 550, start: 0.13, duration: 0.12, type: 'sine', gain: 0.32 },
+   ],
++  // A soft, low thud -- the deliberate mirror of `equip`'s metallic snap
++  // (660 -> 440, rising attack) rather than a reuse of it: taking gear or
++  // a consumable off is a duller, single-note action, not a second snap.
++  // Previously unequip()/unequipConsumable() played nothing at all.
++  unequip: [
++    { freq: 300, start: 0, duration: 0.06, type: 'sine', gain: 0.22 },
++  ],
++  // A small welcoming flourish -- three quick notes, warmer and shorter
++  // than level_up's four-note fanfare so a fresh recruit doesn't outshine
++  // an actual level gain, but distinct from the flat `purchase` blip.
++  // Previously recruit() had a toast and nothing else, while retire() (a
++  // hero leaving) already got a real cue -- gaining a hero read as a
++  // smaller moment than losing one.
++  recruit: [
++    { freq: 440, start: 0, duration: 0.07, type: 'triangle', gain: 0.32 },
++    { freq: 587.33, start: 0.06, duration: 0.08, type: 'triangle', gain: 0.36 },
++    { freq: 880.0, start: 0.15, duration: 0.22, type: 'sine', gain: 0.4 },
++  ],
++  // Hushed low note first, then a warm rise -- "relief" rather than
++  // "triumph", so a Fallen hero or pet coming back reads differently by
++  // ear than level_up/legendary_drop's brighter, bigger moments even
++  // though it's spending real gold the same way a purchase does.
++  // Previously reviveHero/reviveAllFallen/revivePet/reviveAllFallenPets
++  // played nothing at all -- see also the revive-flash visual, added
++  // alongside this cue.
++  revive: [
++    { freq: 220, start: 0, duration: 0.1, type: 'sine', gain: 0.28 },
++    { freq: 440, start: 0.09, duration: 0.12, type: 'triangle', gain: 0.34 },
++    { freq: 659.25, start: 0.19, duration: 0.26, type: 'sine', gain: 0.4 },
++  ],
++  // A tiny single tick for spending a stat point -- allocateStat() can be
++  // clicked rapidly in succession (a fresh level often grants several
++  // points at once), so this is deliberately shorter and quieter even
++  // than `hover` below, just enough to confirm the click landed.
++  allocate: [
++    { freq: 660, start: 0, duration: 0.025, type: 'square', gain: 0.16 },
++  ],
++  // The nav tab-bar hover/focus tick (MenuWindow.tsx) -- a single very
++  // short, very quiet click. Deliberately the quietest cue in the whole
++  // registry: it can fire many times a second while sweeping the pointer
++  // across the section list, and needs to read as a subtle texture, not
++  // a sound effect competing with real action feedback.
++  hover: [
++    { freq: 1400, start: 0, duration: 0.018, type: 'square', gain: 0.08 },
++  ],
+ };
+ 
+ export function playSound(cue: SoundCue): void {
+diff --git a/src/styles/app.css b/src/styles/app.css
+index a24b47e..41efeb7 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -2311,6 +2311,45 @@ input[type='range'] {
+   animation: star-poof 1300ms ease-out forwards;
+ }
+ 
++/* Hero/pet revive flash -- same layered shape as .max-flash-* /
++   .level-flash-* above (background wash + centered text + star burst,
++   reusing the same max-flash-bg/max-flash-text/star-poof keyframes),
++   --moss instead of --brass/--sky so a revival reads as "restored to
++   health" via the same colour the Health bar itself already uses. See
++   reviveFlash.tsx's useReviveFlash/ReviveFlash. */
++.revive-flash-layer {
++  position: absolute;
++  inset: 0;
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  text-align: center;
++  pointer-events: none;
++  z-index: 3;
++  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--moss) 35%, transparent), transparent 70%);
++  animation: max-flash-bg 1400ms ease-out forwards;
++}
++.revive-flash-text {
++  font-family: var(--font-display);
++  font-size: 0.75rem;
++  padding: 0 10px;
++  color: var(--moss);
++  text-shadow: 0 0 10px color-mix(in srgb, var(--moss) 80%, transparent), 0 2px 3px rgba(0, 0, 0, 0.8);
++  letter-spacing: 0.06em;
++  text-transform: uppercase;
++  animation: max-flash-text 1400ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
++}
++.revive-flash-star {
++  position: absolute;
++  left: 50%;
++  top: 50%;
++  font-size: 0.875rem;
++  color: var(--moss);
++  text-shadow: 0 0 6px color-mix(in srgb, var(--moss) 80%, transparent);
++  opacity: 0;
++  animation: star-poof 1300ms ease-out forwards;
++}
++
+ /* --------------------------------- toast ------------------------------------ */
+ /* A quick golden pop whenever the toast text changes -- the visual half of
+    the existing purchase/action sound cue, not just a silent text swap. */
+diff --git a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+index 12198bc..7b5ec5c 100644
+--- a/src/ui/MenuWindow.tsx
++++ b/src/ui/MenuWindow.tsx
+@@ -1,4 +1,4 @@
+-import { useEffect, useState } from 'react';
++import { useEffect, useRef, useState } from 'react';
+ import { useEngine } from './useEngine';
+ import { useSettings } from './useSettings';
+ import { OnboardingTour } from './OnboardingTour';
+@@ -6,6 +6,7 @@ import { ChainDiscoveryModal } from './ChainDiscoveryModal';
+ import { formatGold, formatNumber } from '../game/util';
+ import { attentionCounts } from '../game/attention';
+ import { PeddlerManager } from '../game/managers/PeddlerManager';
++import { playSound } from '../game/sound';
+ import { useCountUp } from './useCountUp';
+ import { useFlyTargetRef, registerFlyTarget } from './flyTarget';
+ import { QuestPanel } from './panels/QuestPanel';
+@@ -124,6 +125,21 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+   const [onTop, setOnTop] = useState(true);
+   const [fullscreen, setFullscreen] = useState(false);
+ 
++  // Nav-bar hover/focus tick (see sound.ts's `hover` cue). Sweeping the
++  // pointer across the whole tab list -- or holding Tab to move focus
++  // through it -- can fire this many times a second; the throttle keeps
++  // rapid re-triggers from overlapping into a buzz instead of a row of
++  // distinct ticks. A plain mutable ref rather than state, since the
++  // value only needs to gate a side effect and should never itself
++  // trigger a re-render.
++  const lastTabTick = useRef(0);
++  const tickTabHover = () => {
++    const now = Date.now();
++    if (now - lastTabTick.current < 50) return;
++    lastTabTick.current = now;
++    playSound('hover');
++  };
++
+   useEffect(() => {
+     void window.littleKnight?.getAlwaysOnTop().then(setOnTop);
+   }, []);
+@@ -282,6 +298,8 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+                     data-tab-id={t.id}
+                     aria-current={t.id === tab}
+                     onClick={() => setTab(t.id)}
++                    onMouseEnter={tickTabHover}
++                    onFocus={tickTabHover}
+                     title={t.tooltip}
+                     // The Equipment tab (labeled "Inventory") doubles as the
+                     // shared 'inventory' fly-target -- anywhere a
+diff --git a/src/ui/panels/HatcheryPanel.tsx b/src/ui/panels/HatcheryPanel.tsx
+index bfb1cdc..d9db608 100644
+--- a/src/ui/panels/HatcheryPanel.tsx
++++ b/src/ui/panels/HatcheryPanel.tsx
+@@ -12,6 +12,7 @@ import { PetSprite } from '../sprites/PetSprite';
+ import { PetEnlargedModal } from '../PetEnlargedModal';
+ import { EggIcon } from '../EggIcon';
+ import { EggSelectModal } from '../EggSelectModal';
++import { useReviveFlash, ReviveFlash } from '../reviveFlash';
+ 
+ type SubTab = 'home' | 'pets';
+ 
+@@ -156,6 +157,12 @@ function PetsTab() {
+   const engine = useEngine();
+   const state = engine.state;
+   const petSlots = ModifierManager.petSlots(state);
++  // Batched the same way HeroesPanel's own useReviveFlash call is -- one
++  // hook call here at the list level, keyed lookup passed down to each
++  // PetCard, rather than a hook call inside the .map() below.
++  const { flashes: reviveFlashes, dismiss: dismissReviveFlash } = useReviveFlash(
++    state.pets.map((p) => ({ id: p.uid, fallen: PetManager.isFallen(p) })),
++  );
+ 
+   return (
+     <>
+@@ -167,13 +174,24 @@ function PetsTab() {
+         <div className="card"><p className="card-flavour">No pets hatched yet -- check the Nests tab.</p></div>
+       )}
+       <div className="grid two pet-grid">
+-        {state.pets.map((pet) => <PetCard key={pet.uid} pet={pet} />)}
++        {state.pets.map((pet) => (
++          <PetCard
++            key={pet.uid}
++            pet={pet}
++            reviveFlash={reviveFlashes[pet.uid]}
++            dismissReviveFlash={() => dismissReviveFlash(pet.uid)}
++          />
++        ))}
+       </div>
+     </>
+   );
+ }
+ 
+-function PetCard({ pet }: { pet: Pet }) {
++function PetCard({ pet, reviveFlash, dismissReviveFlash }: {
++  pet: Pet;
++  reviveFlash?: { key: number };
++  dismissReviveFlash: () => void;
++}) {
+   const engine = useEngine();
+   const state = engine.state;
+   const now = useNow(5000);
+@@ -206,6 +224,7 @@ function PetCard({ pet }: { pet: Pet }) {
+       className="card pet-card-hover"
+       style={{ marginBottom: 0, '--rarity-color': RARITY_COLOR[pet.rarity] } as CSSProperties}
+     >
++      {reviveFlash && <ReviveFlash key={reviveFlash.key} onDone={dismissReviveFlash} />}
+       <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
+         <button
+           type="button"
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index cf41781..fb8bc3e 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -15,6 +15,7 @@ import { HeroSprite } from '../sprites/HeroSprite';
+ import { GearScoreBadge } from '../GearScoreBadge';
+ import { RoleIcon } from '../RoleIcon';
+ import { useLevelUpFlash, LevelUpFlash } from '../levelFlash';
++import { useReviveFlash, ReviveFlash } from '../reviveFlash';
+ import { registerFlyTarget } from '../flyTarget';
+ 
+ const STAT_KEYS: (keyof Stats)[] = ['strength', 'endurance', 'luck', 'wisdom'];
+@@ -152,6 +153,9 @@ export function HeroesPanel() {
+   const { flashes: levelFlashes, dismiss: dismissLevelFlash } = useLevelUpFlash(
+     state.heroes.map((h) => ({ id: h.id, level: h.level })),
+   );
++  const { flashes: reviveFlashes, dismiss: dismissReviveFlash } = useReviveFlash(
++    state.heroes.map((h) => ({ id: h.id, fallen: h.status === 'fallen' })),
++  );
+ 
+   const infirmaryLevel = GuildManager.facilityLevel(state, 'infirmary');
+   const revivalDiscount = ModifierManager.global(state).revivalDiscount ?? 0;
+@@ -224,6 +228,12 @@ export function HeroesPanel() {
+                 onDone={() => dismissLevelFlash(hero.id)}
+               />
+             )}
++            {reviveFlashes[hero.id] && (
++              <ReviveFlash
++                key={reviveFlashes[hero.id].key}
++                onDone={() => dismissReviveFlash(hero.id)}
++              />
++            )}
+             <div
+               className="row hero-card-summary"
+               style={{ alignItems: 'center', gap: 12 }}
+diff --git a/src/ui/reviveFlash.tsx b/src/ui/reviveFlash.tsx
+new file mode 100644
+index 0000000..38e97b3
+--- /dev/null
++++ b/src/ui/reviveFlash.tsx
+@@ -0,0 +1,83 @@
++import { useEffect, useRef, useState } from 'react';
++import type { CSSProperties } from 'react';
++import { STAR_BURST } from './maxFlash';
++
++/**
++ * Same "detect a crossing, fire a one-off flash" shape as maxFlash.tsx's
++ * useMaxFlash and levelFlash.tsx's useLevelUpFlash, reusing the same
++ * STAR_BURST layout, but for a Fallen hero or pet coming back rather than
++ * a level or an upgrade cap. Distinct event, distinct meaning -- see
++ * guild-idler-status.md's Health stat + Fallen/death mechanic section --
++ * so this is its own hook/component rather than overloading either of
++ * the existing two.
++ *
++ * Tracks `fallen` (a plain boolean) rather than a numeric threshold: a
++ * flash fires the moment a tracked id goes from fallen=true to
++ * fallen=false, i.e. HeroManager.revive/PetManager.revive actually
++ * landing -- not on mount, so opening a panel on an already-healthy
++ * roster never replays a flash for a revival that happened while the
++ * panel was closed (same "only fires for what you're watching" scope
++ * engine.ts's own immediate sound cues already use for quest results).
++ */
++export function useReviveFlash(items: { id: string; fallen: boolean }[]) {
++  const prevRef = useRef<Record<string, boolean> | null>(null);
++  const [flashes, setFlashes] = useState<Record<string, { key: number }>>({});
++
++  const signature = items.map((i) => `${i.id}:${i.fallen}`).join('|');
++  useEffect(() => {
++    const prev = prevRef.current;
++    const next: Record<string, boolean> = {};
++    const revived: string[] = [];
++    for (const item of items) {
++      next[item.id] = item.fallen;
++      const before = prev?.[item.id];
++      if (prev && before === true && item.fallen === false) revived.push(item.id);
++    }
++    prevRef.current = next;
++    if (revived.length > 0) {
++      setFlashes((cur) => {
++        const merged = { ...cur };
++        for (const id of revived) merged[id] = { key: Date.now() + Math.random() };
++        return merged;
++      });
++    }
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [signature]);
++
++  const dismiss = (id: string) => setFlashes((cur) => {
++    if (!(id in cur)) return cur;
++    const rest = { ...cur };
++    delete rest[id];
++    return rest;
++  });
++
++  return { flashes, dismiss };
++}
++
++/**
++ * Moss-green rather than max-flash's brass or level-flash's sky -- matches
++ * the moss-green `.bar.health` fill (see HealthBar), so "revived" reads as
++ * the same "good/health" colour language the rest of the Health system
++ * already uses, not a third unrelated accent.
++ */
++export function ReviveFlash({ onDone }: { onDone: () => void }) {
++  useEffect(() => {
++    const id = window.setTimeout(onDone, 1400);
++    return () => window.clearTimeout(id);
++  }, [onDone]);
++
++  return (
++    <div className="revive-flash-layer" aria-hidden="true">
++      <span className="revive-flash-text">Revived!</span>
++      {STAR_BURST.map((s, i) => (
++        <span
++          key={i}
++          className="revive-flash-star"
++          style={{ '--dx': `${s.dx}px`, '--dy': `${s.dy}px`, '--rot': `${s.rot}deg`, animationDelay: `${i * 25}ms` } as CSSProperties}
++        >
++          ✚
++        </span>
++      ))}
++    </div>
++  );
++}
