@@ -14,7 +14,8 @@
     "preview": "vite preview",
     "start": "npm run build && electron .",
     "package": "npm run build && electron-builder",
-    "devtool": "node tools/devtool/server.mjs"
+    "devtool": "node tools/devtool/server.mjs",
+    "sim": "tsx tools/devtool/sim/runSim.ts"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -27,6 +28,7 @@
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
     "typescript": "^5.6.3",
+    "tsx": "^4.19.2",
     "vite": "^5.4.11",
     "vite-plugin-electron": "^0.29.0",
     "vite-plugin-electron-renderer": "^0.14.6"

@@ -32,7 +32,14 @@ const XP_FAILURE_MULTIPLIER = Tuning.get('balance.xpFailureMultiplier');
 const BASE_XP_MIN = Tuning.get('balance.baseXpMin');
 const BASE_XP_MAX = Tuning.get('balance.baseXpMax');
 
-function expectedRatePerHour(cfg: DifficultyConfig, kind: 'gold' | 'xp'): number {
+/**
+ * Exported (previously module-private) so the devtool's Sandbox sim
+ * (tools/devtool/sim/runSim.ts) can reuse this exact expected-value
+ * approximation instead of shipping a second copy of it -- see that file's
+ * own header comment. No behavior change for any existing caller; every
+ * in-file use below is unaffected by this becoming a named export.
+ */
+export function expectedRatePerHour(cfg: DifficultyConfig, kind: 'gold' | 'xp'): number {
   const avgDurationHours = (cfg.minDuration + cfg.maxDuration) / 2 / HOUR;
   const successRate = cfg.baseSuccess / 100;
   const avgReward = kind === 'gold'

@@ -1,0 +1,29 @@
+[
+  {
+    "id": "active",
+    "label": "Active",
+    "description": "Checks in often and always keeps every hero questing on the best-value offer available.",
+    "checkInMinutes": 15,
+    "heroCount": 1,
+    "tierPreference": "bestValue",
+    "spendPolicy": "immediate"
+  },
+  {
+    "id": "casual",
+    "label": "Casual",
+    "description": "Checks in a handful of times a day -- heroes sit idle between visits instead of being re-queued the moment a quest finishes.",
+    "checkInMinutes": 240,
+    "heroCount": 1,
+    "tierPreference": "bestValue",
+    "spendPolicy": "immediate"
+  },
+  {
+    "id": "afk",
+    "label": "AFK",
+    "description": "Checks in roughly once a day. Long real-world gaps between sends, favoring longer-duration quests so less time between check-ins goes to waste idle.",
+    "checkInMinutes": 1440,
+    "heroCount": 1,
+    "tierPreference": "longestDuration",
+    "spendPolicy": "immediate"
+  }
+]

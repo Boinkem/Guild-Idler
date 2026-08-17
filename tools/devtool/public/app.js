@@ -77,6 +77,12 @@ async function init() {
   patchBtn.onclick = () => selectPatchesTab();
   tabsEl.appendChild(patchBtn);
 
+  const sandboxBtn = document.createElement('button');
+  sandboxBtn.textContent = 'Sandbox';
+  sandboxBtn.dataset.group = '__sandbox__';
+  sandboxBtn.onclick = () => selectSandboxTab();
+  tabsEl.appendChild(sandboxBtn);
+
   groupOrder.forEach((group) => {
     const btn = document.createElement('button');
     btn.textContent = group;
@@ -1600,6 +1606,24 @@ const patchState = {
   discordConfigured: false, discordPreview: '', discordDraft: '',
 };
 
+/* -------------------------------- sandbox --------------------------------- */
+// Balance Sandbox -- pre/post sim comparisons for a proposed tuning change,
+// before it's ever applied to the real JSON files. See tools/devtool/sim/
+// runSim.ts for the engine itself; this is purely the UI + result rendering.
+
+const sandboxState = {
+  presets: [],
+  selectedPresets: new Set(['active']),
+  tuningRows: [],
+  overrides: [], // [{ id, value }]
+  maxDays: 1095,
+  heroCountOverride: null, // null = use each preset's own default
+  running: false,
+  results: null, // { [presetId]: { baseline: {...}, modified: {...} } }
+  runError: null,
+};
+
+
 function formatBytes(n) {
   if (n < 1024) return `${n} B`;
   return `${(n / 1024).toFixed(1)} KB`;
@@ -2009,5 +2033,255 @@ function renderPatches() {
     discordPostBtn.textContent = 'Post to Discord';
     const result = { ok: outcome.ok, stdout: outcome.ok ? 'Posted to Discord.' : '', stderr: outcome.error || '' };
     document.getElementById('discordResult').innerHTML = resultBlock(result, 'Discord post');
+  };
+}
+
+/* ---------------------------------------------------------------- sandbox --- */
+
+async function selectSandboxTab() {
+  state.kind = '__sandbox__';
+  state.group = null;
+  markActiveGroup('__sandbox__');
+  subtabsEl.style.display = 'none';
+  subtabsEl.innerHTML = '';
+  setStatus('Loading…');
+  try {
+    const [{ presets }, { data: tuningRows }] = await Promise.all([
+      api('/api/sim/presets'),
+      api('/api/data/tuning'),
+    ]);
+    sandboxState.presets = presets;
+    sandboxState.tuningRows = tuningRows;
+    setStatus('');
+    renderSandbox();
+  } catch (err) {
+    setStatus(err.message, 'err');
+  }
+}
+
+function tuningRowFor(id) {
+  return sandboxState.tuningRows.find((t) => t.id === id) || null;
+}
+
+/** Formats a metric that may be missing from a failed/incomplete run --
+ *  used throughout the comparison table so one variant erroring doesn't
+ *  crash the whole results render. */
+function metricCell(run, pick) {
+  if (!run || run.ok === false) return '<span class="muted">—</span>';
+  const v = pick(run.result);
+  return v === null || v === undefined ? '<span class="muted">—</span>' : escapeHtml(String(v));
+}
+
+function sandboxComparisonTable(preset, pair) {
+  const b = pair.baseline;
+  const m = pair.modified;
+  const rows = [
+    ['Outcome', metricCell(b, (r) => (r.hitSafetyCap ? `Hit safety cap (${r.days}d)` : `Completed (${r.days}d)`)),
+      metricCell(m, (r) => (r.hitSafetyCap ? `Hit safety cap (${r.days}d)` : `Completed (${r.days}d)`))],
+    ['Final level', metricCell(b, (r) => r.finalLevel), metricCell(m, (r) => r.finalLevel)],
+    ['Final gold (unspent)', metricCell(b, (r) => r.finalGold), metricCell(m, (r) => r.finalGold)],
+  ];
+
+  // Only rows where at least one variant actually completed something --
+  // most facilities/upgrades stay null in a bounded run and listing every
+  // one of them would bury the ones that actually moved.
+  const bResult = b?.ok ? b.result : null;
+  const mResult = m?.ok ? m.result : null;
+  const allItemIds = new Set([
+    ...Object.keys(bResult?.facilityCompletionDays || {}),
+    ...Object.keys(bResult?.upgradeCompletionDays || {}),
+    ...Object.keys(mResult?.facilityCompletionDays || {}),
+    ...Object.keys(mResult?.upgradeCompletionDays || {}),
+  ]);
+  const completionRows = [...allItemIds]
+    .map((id) => {
+      const bDay = bResult?.facilityCompletionDays?.[id] ?? bResult?.upgradeCompletionDays?.[id] ?? null;
+      const mDay = mResult?.facilityCompletionDays?.[id] ?? mResult?.upgradeCompletionDays?.[id] ?? null;
+      return { id, bDay, mDay };
+    })
+    .filter((r) => r.bDay !== null || r.mDay !== null);
+
+  // Burst/medium dominance regression check -- flag any level where the
+  // MODIFIED variant's fast-quest cap now exceeds the real tier rate but
+  // baseline's didn't. See balance.ts's own documented invariant and
+  // runSim.ts's burstCheck.
+  const dominanceRegressions = (mResult?.burstCheck || []).filter((mc, i) => {
+    const bc = bResult?.burstCheck?.[i];
+    return mc.dominant && bc && !bc.dominant;
+  });
+
+  return `
+    <div class="section-heading" style="margin-top:16px;">${escapeHtml(preset.label)}</div>
+    <table>
+      <thead><tr><th>Metric</th><th>Baseline (live)</th><th>Proposed</th></tr></thead>
+      <tbody>
+        ${rows.map(([label, bv, mv]) => `<tr><td>${escapeHtml(label)}</td><td>${bv}</td><td>${mv}</td></tr>`).join('')}
+      </tbody>
+    </table>
+    ${completionRows.length ? `
+      <p class="tiny muted" style="margin: 10px 0 4px;">Facility / upgrade completion (days elapsed, only items that finished in at least one variant):</p>
+      <table>
+        <thead><tr><th>Item</th><th>Baseline</th><th>Proposed</th></tr></thead>
+        <tbody>
+          ${completionRows.map((r) => `<tr><td>${escapeHtml(r.id)}</td><td>${r.bDay ?? '<span class="muted">—</span>'}</td><td>${r.mDay ?? '<span class="muted">—</span>'}</td></tr>`).join('')}
+        </tbody>
+      </table>` : ''}
+    ${dominanceRegressions.length ? `
+      <div class="patch-result bad" style="margin-top:10px;">
+        <div class="patch-result-label">⚠ Burst/medium dominance regression</div>
+        <div class="tiny">At level(s) ${dominanceRegressions.map((r) => r.level).join(', ')}, the proposed change lets a fast-completion quest out-earn its own real best-unlocked tier per hour -- the exact failure mode fastQuestCapsPerHour was built to prevent. Worth a second look before applying.</div>
+      </div>` : ''}
+    ${(b && b.ok === false) ? `<div class="patch-result bad" style="margin-top:10px;"><div class="patch-result-label">Baseline run failed</div><pre>${escapeHtml(b.error || '')}</pre></div>` : ''}
+    ${(m && m.ok === false) ? `<div class="patch-result bad" style="margin-top:10px;"><div class="patch-result-label">Proposed run failed</div><pre>${escapeHtml(m.error || '')}</pre></div>` : ''}
+  `;
+}
+
+function renderSandbox() {
+  appEl.innerHTML = `
+    <h2 style="font-family: inherit; font-size: 14px; margin: 0 0 4px;">Balance Sandbox</h2>
+    <p style="color: var(--muted); font-size: 11px; margin: 0 0 16px;">
+      Simulates a proposed tuning change against a play-style preset, side by side with the live
+      values already on disk -- nothing here touches the real JSON files. A quest-board-only,
+      expected-value approximation (same math balance.ts's own live burst cap already uses), not a
+      literal per-quest event simulation. See the sim engine's own header comment for the full list
+      of what Phase 1 does and doesn't model (no raids, gear, injuries, pets, or Renown/Prestige yet).
+    </p>
+
+    <div class="section-heading">1. Play-style presets</div>
+    <div class="patch-list">
+      ${sandboxState.presets.map((p) => `
+        <label class="patch-item ${sandboxState.selectedPresets.has(p.id) ? 'selected' : ''}">
+          <input type="checkbox" name="presetPick" value="${escapeHtml(p.id)}" ${sandboxState.selectedPresets.has(p.id) ? 'checked' : ''} />
+          <div>
+            <div class="patch-name">${escapeHtml(p.label)}</div>
+            <div class="tiny muted">${escapeHtml(p.description)}</div>
+          </div>
+        </label>
+      `).join('')}
+    </div>
+
+    <div class="section-heading">2. Proposed changes</div>
+    <p class="tiny muted">
+      Add any tuning registry value to override (xp/gold modifiers, facility costs, upgrade curves,
+      quest chances -- anything in the Tuning tab). The proposed run applies these on top of the live
+      values; the baseline run stays untouched for comparison.
+    </p>
+    <datalist id="tuningIdList">
+      ${sandboxState.tuningRows.map((t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.label)} (current: ${t.value})</option>`).join('')}
+    </datalist>
+    <div class="row" style="gap: 8px; margin-bottom: 8px;">
+      <input type="text" id="overrideIdInput" list="tuningIdList" placeholder="Tuning id (e.g. balance.goldFailureMultiplier)"
+        style="flex:2; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+      <input type="number" id="overrideValueInput" placeholder="New value" step="any"
+        style="flex:1; background: var(--panel2); border: 1px solid var(--panel3); color: var(--text); padding: 7px 8px;" />
+      <button id="addOverrideBtn">+ Add</button>
+    </div>
+    ${sandboxState.overrides.length === 0
+      ? '<p class="tiny muted">No overrides added yet -- the proposed run will be identical to baseline.</p>'
+      : `<div class="list-input">${sandboxState.overrides.map((o) => {
+          const row = tuningRowFor(o.id);
+          return `
+          <div class="row">
+            <span class="tiny" style="flex:1;">
+              <b>${escapeHtml(o.id)}</b>${row ? ` — ${escapeHtml(row.label)}` : ' <span class="muted">(unknown id)</span>'}:
+              ${row ? escapeHtml(String(row.value)) : '?'} → <b>${escapeHtml(String(o.value))}</b>
+            </span>
+            <button class="remove" data-remove-override="${escapeHtml(o.id)}">✕</button>
+          </div>`;
+        }).join('')}</div>`}
+
+    <div class="section-heading">3. Options</div>
+    <div class="field-row" style="margin-bottom: 10px;">
+      <div class="field">
+        <label>Max sim days (safety cap)</label>
+        <input type="number" id="maxDaysInput" min="1" value="${sandboxState.maxDays}" />
+        <div class="hint">The sim runs until every facility/upgrade is maxed and the hero hits level 55, or this cap -- whichever comes first. Raise it if a run keeps hitting the cap and you want to see further.</div>
+      </div>
+      <div class="field">
+        <label>Hero count override</label>
+        <input type="number" id="heroCountInput" min="1" placeholder="Use each preset's default" value="${sandboxState.heroCountOverride ?? ''}" />
+      </div>
+    </div>
+
+    <button id="runSimBtn" class="primary" ${sandboxState.selectedPresets.size === 0 ? 'disabled' : ''}>
+      ${sandboxState.running ? 'Running…' : 'Run Simulation'}
+    </button>
+    <div id="sandboxRunError"></div>
+
+    <div id="sandboxResults">
+      ${sandboxState.results
+        ? Object.entries(sandboxState.results).map(([presetId, pair]) => {
+            const preset = sandboxState.presets.find((p) => p.id === presetId);
+            return preset ? sandboxComparisonTable(preset, pair) : '';
+          }).join('')
+        : ''}
+    </div>
+  `;
+
+  appEl.querySelectorAll('input[name="presetPick"]').forEach((input) => {
+    input.onchange = () => {
+      if (input.checked) sandboxState.selectedPresets.add(input.value);
+      else sandboxState.selectedPresets.delete(input.value);
+      renderSandbox();
+    };
+  });
+
+  document.getElementById('addOverrideBtn').onclick = () => {
+    const idInput = document.getElementById('overrideIdInput');
+    const valueInput = document.getElementById('overrideValueInput');
+    const id = idInput.value.trim();
+    const value = parseFloat(valueInput.value);
+    if (!id || Number.isNaN(value)) {
+      alert('Enter a tuning id and a numeric value.');
+      return;
+    }
+    const existing = sandboxState.overrides.find((o) => o.id === id);
+    if (existing) existing.value = value;
+    else sandboxState.overrides.push({ id, value });
+    renderSandbox();
+  };
+
+  appEl.querySelectorAll('[data-remove-override]').forEach((btn) => {
+    btn.onclick = () => {
+      sandboxState.overrides = sandboxState.overrides.filter((o) => o.id !== btn.dataset.removeOverride);
+      renderSandbox();
+    };
+  });
+
+  document.getElementById('maxDaysInput').onchange = (e) => {
+    sandboxState.maxDays = Math.max(1, parseInt(e.target.value, 10) || 1095);
+  };
+  document.getElementById('heroCountInput').onchange = (e) => {
+    const v = parseInt(e.target.value, 10);
+    sandboxState.heroCountOverride = Number.isFinite(v) && v > 0 ? v : null;
+  };
+
+  const runSimBtn = document.getElementById('runSimBtn');
+  if (runSimBtn) runSimBtn.onclick = async () => {
+    sandboxState.running = true;
+    sandboxState.runError = null;
+    renderSandbox();
+    try {
+      const overridesObj = Object.fromEntries(sandboxState.overrides.map((o) => [o.id, o.value]));
+      const { results } = await api('/api/sim/run', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          presetIds: [...sandboxState.selectedPresets],
+          overrides: overridesObj,
+          maxDays: sandboxState.maxDays,
+          heroCountOverride: sandboxState.heroCountOverride ?? undefined,
+          sampleEveryDays: Math.max(1, Math.round(sandboxState.maxDays / 60)),
+        }),
+      });
+      sandboxState.results = results;
+    } catch (err) {
+      sandboxState.runError = err.message;
+    }
+    sandboxState.running = false;
+    renderSandbox();
+    if (sandboxState.runError) {
+      document.getElementById('sandboxRunError').innerHTML =
+        `<div class="patch-result bad"><div class="patch-result-label">Simulation failed</div><pre>${escapeHtml(sandboxState.runError)}</pre></div>`;
+    }
   };
 }

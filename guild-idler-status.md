@@ -11609,3 +11609,113 @@ question flagged in patch 0169 (whether standard Legendary quest gold/
 XP is meant to scale with hero level) remains unconfirmed -- this
 patch's Level 60/Mythic-raid/armour-sets bundle is a separate topic
 from that one, not an answer to it.
+
+### DevTool: Balance Sandbox -- pre/post tuning sims before committing, Phase 1 -- built (patch 0171)
+
+```discord-update
+Dev Update | Balance Sandbox
+
+- Added a Sandbox tab to the Dev Tool: propose a tuning change and see a pre/post comparison before it ever touches a real save
+- Compare against three play-style presets (Active/Casual/AFK), each its own editable preset rather than hardcoded
+- Runs until the guild's actually done (or a safety cap you control) instead of a fixed 90-day window
+- Flags it directly if a proposed change lets burst/medium quests out-earn their own real tier -- the exact bug this system was built to prevent
+```
+
+Direct follow-up to the DevTool scalability discussion earlier in this doc:
+a request to bring the project's own ad-hoc balance-sim methodology (see
+the 90-day sim references throughout this file) into the DevTool itself,
+so a proposed tuning change can be checked pre/post before it's applied
+to the real JSON files -- not a new simulation engine, a UI + process
+wrapper around the same pure formula functions the game already
+isolated.
+
+**New: `tools/devtool/sim/runSim.ts`.** A headless sim worker, run as its
+own `tsx` child process per variant (see the file's own header comment
+for why baseline and modified can't safely share a process -- balance.ts
+and progression.ts read tuning values into module-level `const`s at
+*import* time, not lazily per call, so a proposed-change overlay has to
+already be in place before those modules are ever evaluated; two
+separate process spawns, each starting from a clean module cache, is the
+actual correctness boundary here, not just a convenient split). Imports
+`DIFFICULTIES`/`bestUnlockedTier`/`fastQuestCapsPerHour`/
+`fastQuestFloorPerHour`/`easyFastModeChances` from `balance.ts`,
+`xpForLevel`/`guildCost`/`upgradeCost`/`GUILD_FACILITIES`/`UPGRADES` from
+`progression.ts`, and `TUNING_BY_ID` directly -- no formula is
+re-derived; everything reuses the real, shipped math. `balance.ts`'s
+previously module-private `expectedRatePerHour` is now exported
+specifically so this file could import it instead of shipping a second
+copy -- the exact class of drift risk flagged in this doc's own DevTool
+scalability discussion, avoided here on the first opportunity to.
+
+**Play-style presets are data, not code** (`tools/devtool/sim/
+presets.json`) -- Active/Casual/AFK ship built-in (check-in interval,
+tier preference), but a fourth preset is a JSON entry, not a branch in
+the sim loop. Uptime between check-ins is modeled as a simple expected-
+value idle factor (quest's own average duration vs. the preset's
+check-in interval), not literal per-quest event scheduling.
+
+**Spend policy: strict sequential priority**, not "buy anything
+affordable." An earlier greedy version (buy every affordable item across
+the whole priority list on every tick) was tried first and produced a
+visibly wrong result on inspection: cheap, low-priority upgrades kept
+intercepting every small income trickle before gold could ever bank up
+toward an expensive early-priority facility, so core facilities like
+Barracks never finished even across a multi-year run. Fixed by only ever
+spending toward the single highest-priority incomplete item, advancing
+to the next only once it's fully maxed -- rerun confirmed Barracks (and
+only Barracks, at 1 hero) makes real, steady progress across a 3-year
+solo run instead of stalling forever.
+
+**Phase 1 scope, explicitly not modeled** (flagged in the sim file's own
+header rather than silently approximated): Renown/Prestige/retirement
+(Renown Perk tier 2 curves are real gold sinks, but paid in Renown, which
+only exists via the retire loop -- excluded rather than faked); raids,
+equipment, injuries, pets, events, and quest chains (income is
+quest-board-only, expected-value math, the same simplification
+balance.ts's own live burst-cap math already makes); multiple heroes
+modeled as identical same-level earners, not a real staggered roster;
+Legendary tier treated as permanently locked (the real unlock path isn't
+in this sim's scope yet). Every one of these is a reasonable Phase 2/3
+extension, not a design dead end.
+
+**`server.mjs`:** two new endpoints, `GET /api/sim/presets` and
+`POST /api/sim/run`. The latter runs baseline (empty overrides) and the
+proposed overlay as two parallel `runSimVariant` calls per selected
+preset via a dedicated spawn-based helper (execFile, used by every other
+git/npm command this file already runs, has no way to pipe a JSON
+payload to a child's stdin -- argv has practical length limits and would
+mean shell-escaping an arbitrary overrides object; stdin avoids both).
+
+**`app.js`:** new top-level "Sandbox" tab, alongside Patches rather than
+nested in a content group. Preset checkboxes, an id+value override list
+backed by a `<datalist>` of every real Tuning entry (id, label, current
+value) for autocomplete, max-days and hero-count-override fields, and a
+per-preset baseline-vs-proposed comparison table (outcome, final level,
+unspent gold, any facility/upgrade that completed in either run, and a
+direct warning if the proposed change trips the burst/medium dominance
+invariant). Reuses existing table/`.patch-item`/`.list-input` CSS
+wholesale -- no style.css changes needed for this pass.
+
+**`package.json`:** added `tsx` as a devDependency (the sim worker is
+TypeScript, imports the real `.ts` formula modules directly, and none of
+the project's existing tooling -- `tsc`, Vite, Electron -- runs a `.ts`
+file standalone as a script) plus an `npm run sim` script for running the
+worker by hand outside the DevTool.
+
+**Verified directly, not assumed:** `npx tsc --noEmit` clean (confirms
+the `balance.ts` export change breaks nothing); `node --check` clean on
+both `server.mjs` and `app.js`; booted the real DevTool server and hit
+both new endpoints live via `curl` -- `/api/sim/presets` returns the 3
+built-in presets, and `/api/sim/run` with a real tuning override
+(`guild_facility.barracks.baseCost`) produced genuinely different
+baseline vs. modified results in the same response (Barracks completing
+day 829 vs. day 4 at 1 hero, unmodified vs. a deliberately cheapened
+cost) -- confirming the process-isolation approach actually works, not
+just compiles. `/api/schema` still returns all 30 schemas across 7
+groups unchanged, confirming nothing existing broke.
+
+**Deliberately deferred to Phase 2** (see this doc's Sandbox discussion
+above for the original phasing plan): multi-preset side-by-side charting
+beyond the current table view, and a "Simulate this diff" shortcut from
+the Patches tab that pre-loads a pending patch's tuning changes as the
+draft overlay automatically instead of re-entering them by hand.

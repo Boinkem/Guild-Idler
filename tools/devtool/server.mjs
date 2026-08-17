@@ -30,6 +30,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..');
 const DATA_DIR = path.join(ROOT, 'src', 'game', 'data', 'json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
+// Balance Sandbox sim -- see tools/devtool/sim/runSim.ts's own header comment
+// for why this runs as a separate tsx child process per variant rather than
+// in-process.
+const SIM_DIR = path.join(__dirname, 'sim');
+const SIM_SCRIPT = path.join(SIM_DIR, 'runSim.ts');
+const SIM_PRESETS_PATH = path.join(SIM_DIR, 'presets.json');
 // Pixel-art item icons, organised into subfolders by category (weapons,
 // armor, shields, etc.) -- lives in the main project's own public/ folder,
 // not the devtool's, so the game itself can serve these too later.
@@ -1318,6 +1324,65 @@ async function runNpm(args, timeout) {
   return run(NPM_BIN, args, timeout, { shell: process.platform === 'win32' });
 }
 
+/* --------------------------------------------------------------- sim --- */
+// Sandbox sim runner. execFile (used by run()/runNpm() above) has no way to
+// pipe data to a child's stdin, and the sim worker needs a JSON payload on
+// stdin (see runSim.ts) rather than argv -- argv has practical length limits
+// and would mean shell-escaping an arbitrary tuning-overrides object, stdin
+// avoids both. So this gets its own spawn-based helper instead of reusing
+// run().
+const SIM_TIMEOUT_MS = 5 * 60_000; // a multi-year sim can be a lot of ticks; give it real headroom
+const TSX_BIN = path.join(ROOT, 'node_modules', '.bin', process.platform === 'win32' ? 'tsx.cmd' : 'tsx');
+
+async function readSimPresets() {
+  const raw = await fs.readFile(SIM_PRESETS_PATH, 'utf8');
+  return JSON.parse(raw);
+}
+
+/** Runs exactly one variant (preset + a single overrides object) in its own
+ *  fresh tsx process. Never throws -- failures come back as {ok:false} data,
+ *  same convention run() above uses, so a bad override or a sim crash shows
+ *  up in the Sandbox tab's result panel rather than as a 500. */
+function runSimVariant(payload) {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(TSX_BIN, [SIM_SCRIPT], { cwd: ROOT, timeout: SIM_TIMEOUT_MS });
+    } catch (err) {
+      resolve({ ok: false, error: String(err.message ?? err) });
+      return;
+    }
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => { stdout += d; });
+    child.stderr.on('data', (d) => { stderr += d; });
+    child.on('error', (err) => {
+      // ENOENT here almost always means `npm install` hasn't picked up the
+      // new tsx devDependency yet -- worth saying plainly rather than
+      // surfacing a raw spawn error.
+      const hint = err.code === 'ENOENT' ? ' (tsx not found -- run `npm install`, it was added as a devDependency for this feature.)' : '';
+      resolve({ ok: false, error: String(err.message ?? err) + hint });
+    });
+    child.on('close', (code, signal) => {
+      if (code !== 0) {
+        resolve({
+          ok: false,
+          error: stderr.trim() || `sim process exited with code ${code}`,
+          timedOut: signal === 'SIGTERM',
+        });
+        return;
+      }
+      try {
+        resolve({ ok: true, result: JSON.parse(stdout) });
+      } catch (err) {
+        resolve({ ok: false, error: `Could not parse sim output: ${err.message}`, raw: stdout.slice(0, 2000) });
+      }
+    });
+    child.stdin.write(JSON.stringify(payload));
+    child.stdin.end();
+  });
+}
+
 async function listPatchFiles() {
   const found = [];
   const dirs = [ROOT, path.join(ROOT, 'patches')];
@@ -1759,6 +1824,51 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/patches/package' && req.method === 'POST') {
     const result = await runNpm(['run', 'package'], PACKAGE_TIMEOUT_MS);
     return json(res, 200, result);
+  }
+
+  if (url.pathname === '/api/sim/presets' && req.method === 'GET') {
+    try {
+      return json(res, 200, { presets: await readSimPresets() });
+    } catch (err) {
+      return json(res, 500, { error: `Could not read sim presets: ${err.message}` });
+    }
+  }
+
+  if (url.pathname === '/api/sim/run' && req.method === 'POST') {
+    let body;
+    try {
+      body = JSON.parse(await readBody(req));
+    } catch {
+      return json(res, 400, { error: 'Malformed JSON in request body.' });
+    }
+    let presets;
+    try {
+      presets = await readSimPresets();
+    } catch (err) {
+      return json(res, 500, { error: `Could not read sim presets: ${err.message}` });
+    }
+    const presetIds = Array.isArray(body.presetIds) ? body.presetIds : [];
+    const selected = presets.filter((p) => presetIds.includes(p.id));
+    if (selected.length === 0) return json(res, 400, { error: 'No valid presetIds given.' });
+
+    const overrides = body.overrides && typeof body.overrides === 'object' && !Array.isArray(body.overrides)
+      ? body.overrides : {};
+    const maxDays = Number.isFinite(body.maxDays) && body.maxDays > 0 ? body.maxDays : 1095;
+    const sampleEveryDays = Number.isFinite(body.sampleEveryDays) && body.sampleEveryDays > 0 ? body.sampleEveryDays : 14;
+    const heroCountOverride = Number.isFinite(body.heroCountOverride) ? body.heroCountOverride : undefined;
+
+    // Baseline (empty overrides) and modified (the proposed draft) are two
+    // fully separate process spawns per preset -- see runSim.ts's own header
+    // comment on why that isolation is required, not just convenient.
+    const results = {};
+    await Promise.all(selected.map(async (preset) => {
+      const [baseline, modified] = await Promise.all([
+        runSimVariant({ preset, heroCountOverride, overrides: {}, maxDays, sampleEveryDays }),
+        runSimVariant({ preset, heroCountOverride, overrides, maxDays, sampleEveryDays }),
+      ]);
+      results[preset.id] = { baseline, modified };
+    }));
+    return json(res, 200, { results });
   }
 
   if (url.pathname === '/api/version' && req.method === 'GET') {
