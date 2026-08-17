@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { PrestigeManager } from '../../game/managers/PrestigeManager';
@@ -125,6 +125,60 @@ function HeroRetireCard({
   );
 }
 
+/**
+ * One renown perk's card -- pulled out of PrestigePanel's own inline
+ * `.map()` so it can own a ref for the "jump to and highlight" treatment
+ * (`highlighted`/`onDismissHighlight`), same shape GuildPanel's
+ * UpgradeCard already established for the exact same feature (patch
+ * 0179/0180) -- scrolls itself into view and glows briefly when it's the
+ * answer to a locked-purchase link elsewhere (e.g. HeroesPanel's "No free
+ * slots" message pointing at Extra Banner). Every prop here is exactly
+ * what the old inline block already computed per-def; nothing about the
+ * markup itself changed.
+ */
+function RenownPerkCard({
+  def, level, cost, maxed, affordable, cap, inTier2, justUnlocked, pulsing, onBuy, highlighted, onDismissHighlight,
+}: {
+  def: ReturnType<typeof PrestigeManager.perks>[number];
+  level: number; cost: number | null; maxed: boolean; affordable: boolean; cap: number; inTier2: boolean; justUnlocked: boolean;
+  pulsing?: boolean; onBuy: () => void; highlighted?: boolean; onDismissHighlight?: () => void;
+}) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (highlighted) cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [highlighted]);
+  return (
+    <div
+      ref={cardRef}
+      className={`card ${inTier2 ? 'renown-tier2' : ''} ${highlighted ? 'requirement-highlight' : ''}`}
+      style={{ marginBottom: 0 }}
+      onClick={onDismissHighlight}
+    >
+      <div className="spread">
+        <span className="card-title">
+          {def.name}
+          {inTier2 && <span className="tag" style={{ color: 'var(--violet)', marginLeft: 6 }}>Tier II</span>}
+        </span>
+        <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{cap}</span>
+      </div>
+      <p className="card-flavour">
+        {justUnlocked && def.tier2 ? def.tier2.unlockFlavour : def.description}
+      </p>
+      <div className="stat-row" style={{ marginBottom: 8 }}>
+        {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
+        {def.heroSlotsPerLevel && <span className="gold-text">+1 hero slot per level</span>}
+      </div>
+      <button
+        className="btn-yellow"
+        disabled={maxed || !affordable}
+        onClick={(e) => { e.stopPropagation(); onBuy(); }}
+      >
+        {maxed ? 'Maxed' : `Buy · ✦ ${formatNumber(cost ?? 0)}`}
+      </button>
+    </div>
+  );
+}
+
 export function PrestigePanel() {
   const engine = useEngine();
   const { settings } = useSettings();
@@ -139,6 +193,19 @@ export function PrestigePanel() {
   // `preview.total` for that hero id would already be recomputed against
   // the now-reset hero and show the wrong (tiny) number.
   const [justRetired, setJustRetired] = useState<{ heroId: string; amount: number; key: number } | null>(null);
+
+  // "Jump to and highlight the requirement" landing -- same consume-once
+  // shape GuildPanel's own highlightId already uses (patch 0179), reused
+  // here so a locked-purchase link elsewhere in the game (e.g. HeroesPanel's
+  // "No free slots" message) can point straight at a specific renown perk.
+  const [highlightId, setHighlightId] = useState<string | null>(
+    () => engine.consumeRequestedHighlight(),
+  );
+  useEffect(() => {
+    if (!highlightId) return undefined;
+    const timer = window.setTimeout(() => setHighlightId(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [highlightId]);
 
   // Same "only pulse on a real change, not on every tab-switch remount"
   // fix Guild Hall/Vendors/Harvest already got -- see usePulsesOnChange's
@@ -215,33 +282,26 @@ export function PrestigePanel() {
           const level = PrestigeManager.perkLevel(state, def.id);
           const cost = PrestigeManager.nextPerkCost(state, def.id);
           const maxed = cost === null;
+          const affordable = !maxed && cost !== null && state.renown >= cost;
           const cap = renownEffectiveMaxLevel(def);
           const inTier2 = PrestigeManager.perkInTier2(state, def.id);
           const justUnlocked = PrestigeManager.perkTier2JustUnlocked(state, def.id);
           return (
-            <div key={def.id} className={`card ${inTier2 ? 'renown-tier2' : ''}`} style={{ marginBottom: 0 }}>
-              <div className="spread">
-                <span className="card-title">
-                  {def.name}
-                  {inTier2 && <span className="tag" style={{ color: 'var(--violet)', marginLeft: 6 }}>Tier II</span>}
-                </span>
-                <span className={`small muted ${perkLevelPulses[def.id] ? 'purchase-pulse' : ''}`}>{level}/{cap}</span>
-              </div>
-              <p className="card-flavour">
-                {justUnlocked && def.tier2 ? def.tier2.unlockFlavour : def.description}
-              </p>
-              <div className="stat-row" style={{ marginBottom: 8 }}>
-                {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
-                {def.heroSlotsPerLevel && <span className="gold-text">+1 hero slot per level</span>}
-              </div>
-              <button
-                className="btn-yellow"
-                disabled={maxed || state.renown < cost}
-                onClick={() => engine.buyPerk(def.id)}
-              >
-                {maxed ? 'Maxed' : `Buy · ✦ ${formatNumber(cost)}`}
-              </button>
-            </div>
+            <RenownPerkCard
+              key={def.id}
+              def={def}
+              level={level}
+              cost={cost}
+              maxed={maxed}
+              affordable={affordable}
+              cap={cap}
+              inTier2={inTier2}
+              justUnlocked={justUnlocked}
+              pulsing={perkLevelPulses[def.id]}
+              onBuy={() => engine.buyPerk(def.id)}
+              highlighted={def.id === highlightId}
+              onDismissHighlight={() => setHighlightId(null)}
+            />
           );
         })}
       </div>

@@ -12353,3 +12353,82 @@ so it can't drift out of sync with the real gate again.
 **Verified:** `npx tsc --noEmit` clean against the full project,
 confirmed against a fresh clone of current `main` (through patch 0178)
 with only this patch's diff applied.
+
+### Jump-to-requirement links extended to raids, the Black Market, and renown perks -- built (patch 0180)
+
+```discord-update
+Dev Update | Jump to Requirements
+
+- Added "Unlock →" links on locked raid difficulties and the locked Raids tab that jump to and highlight the Guild Hall upgrade you need
+- Added a "Go to Guild Hall →" link on the locked Black Market message
+- Added "Go to Tavern →" / "Go to Prestige →" links on the "No free hero slots" message
+- The Prestige tab's renown perks can now be jumped to and highlighted the same way Guild Hall cards already were
+```
+
+Direct follow-up: "let's build up on more of the Jump to Requirements,"
+extending patch 0179's `requestTab(id, highlightId)` / `UpgradeCard`
+highlight mechanism to every other locked-purchase site in the game that
+actually has somewhere to jump to.
+
+**Correction to patch 0179's own writeup.** That entry flagged RaidsPanel's
+"Requires the X upgrade" raid-difficulty gate as needing "a subtab-aware
+extension" before it could reuse this mechanism, on the assumption those
+upgrades lived in RaidsPanel's own Quartermaster subtab alongside
+`raid_speed`/`raid_loot`/`raid_recovery`. That assumption was wrong: the
+three difficulty-gating upgrades (`raid_charter`, `raid_heroic_clearance`,
+`raid_legendary_clearance`) are plain general upgrades (no `vendor`
+field) in `GuildManager.upgrades()` -- they already render as ordinary
+cards in `GuildPanel`'s own "Permanent Upgrades" grid, the exact same
+grid Tavern's own highlight already targets. No subtab extension needed;
+this patch just wires `requestTab('guild', <that upgrade's id>)` into
+every site that names one of these three.
+
+**RaidsPanel (`RaidsPanel.tsx`).** Two sites. `DifficultyCircle` itself
+is a disabled `<button>` while locked, so it can't carry an onClick of
+its own for this -- added a small "Unlock →" link underneath the
+circle's name label (only rendered while `!unlocked`) using a new
+`DIFFICULTY_UNLOCK_ID` map (difficulty -> the upgrade's actual `def.id`,
+kept separate from the existing `DIFFICULTY_UNLOCK` map, which holds the
+`unlocks` field's *value* ('raids'/'raidsHeroic'/'raidsLegendary'), not
+the upgrade's id -- two different strings for the same upgrade).
+Separately, the whole-tab locked state (before Raid Charter is bought at
+all, `!hasRaids`) gets a "Go to Guild Hall →" button under its existing
+explanation text, pointed at `raid_charter` specifically -- this is the
+highest-value of the two sites, since a player who hasn't unlocked Raid
+Charter yet sees nothing else on this tab at all.
+
+**VendorsPanel (`VendorsPanel.tsx`).** `BlackMarketStock`'s locked
+message ("Unlock via the Black Market Contact upgrade in Guild Hall")
+gets the same treatment -- a "Go to Guild Hall →" button pointed at
+`black_market_contact`.
+
+**Renown perks can now be a highlight target too (`PrestigePanel.tsx`).**
+Previously only `GuildPanel` consumed `engine.consumeRequestedHighlight()`
+-- extending the mechanism to a second panel required `PrestigePanel` to
+do the same. Pulled the inline `.map()` block that rendered each renown
+perk into its own `RenownPerkCard` component (mirroring `GuildPanel`'s
+`UpgradeCard` -- own ref, own `scrollIntoView` effect, same
+`highlighted`/`onDismissHighlight` props), with no change to the markup
+or behaviour itself beyond that extraction. `PrestigePanel` now consumes
+`requestedHighlightId` on mount the same way `GuildPanel` does, with the
+same 4-second auto-clear.
+
+**HeroesPanel's "No free slots" message (`HeroesPanel.tsx`).** The
+existing prose already named two separate paths to more hero slots
+(level the Tavern up to 5, or retire a hero and buy Extra Banner in
+Prestige) -- added one link per path: "Go to Tavern →"
+(`requestTab('guild', 'tavern')`) and "Go to Prestige →"
+(`requestTab('prestige', 'extra_banner')`), side by side under the
+existing text.
+
+**Generalized the highlight glow's CSS (`app.css`).** The pulsing glow
+was originally scoped to `.guild-facility-card.guild-card-highlight` --
+too narrow now that `RenownPerkCard` uses a plain `.card`, not a
+`.guild-facility-card`. Renamed to a generic `.card.requirement-highlight`
+selector (and the keyframe to `requirement-highlight-pulse`) so any card
+built on the shared `.card` class can use it; `GuildPanel`'s `UpgradeCard`
+updated to the new class name, same visual result as before.
+
+**Verified:** `npx tsc --noEmit` clean against the full project,
+confirmed against a fresh clone of current `main` (through patch 0179)
+with only this patch's diff applied.

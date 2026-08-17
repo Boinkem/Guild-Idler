@@ -468,11 +468,24 @@ export function HeroesPanel() {
 
       <div className="section-heading">Recruit</div>
       {state.heroes.length >= slots && (
-        <p className="small muted">
-          No free slots. The Tavern adds one per level up to 5; beyond that, retire a hero at
-          level {PRESTIGE_MIN_LEVEL}+ in the Prestige tab for Heroic Renown, then spend it on Extra Banner
-          (up to 4 more) — {slots} is not necessarily your ceiling.
-        </p>
+        <>
+          <p className="small muted">
+            No free slots. The Tavern adds one per level up to 5; beyond that, retire a hero at
+            level {PRESTIGE_MIN_LEVEL}+ in the Prestige tab for Heroic Renown, then spend it on Extra Banner
+            (up to 4 more) — {slots} is not necessarily your ceiling.
+          </p>
+          {/* Two possible paths named in the prose above, so two links --
+              same "jump to and highlight the requirement" treatment every
+              other locked-purchase message in the game now gets. */}
+          <div className="row" style={{ gap: 8, marginBottom: 10 }}>
+            <button className="btn-ghost" onClick={() => engine.requestTab('guild', 'tavern')}>
+              Go to Tavern →
+            </button>
+            <button className="btn-ghost" onClick={() => engine.requestTab('prestige', 'extra_banner')}>
+              Go to Prestige →
+            </button>
+          </div>
+        </>
       )}
       <div className="grid three">
         {(Object.keys(HERO_CLASSES) as HeroClass[]).map((id) => {

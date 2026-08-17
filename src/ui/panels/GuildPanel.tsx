@@ -97,7 +97,7 @@ function UpgradeCard({
       {maxed && <img className="guild-seal" src={waxSealComplete} alt="" />}
       <div
         ref={cardRef}
-        className={`card guild-facility-card ${affordable ? 'affordable' : ''} ${maxed ? 'guild-maxed' : ''} ${highlighted ? 'guild-card-highlight' : ''}`}
+        className={`card guild-facility-card ${affordable ? 'affordable' : ''} ${maxed ? 'guild-maxed' : ''} ${highlighted ? 'requirement-highlight' : ''}`}
         onClick={() => { setShowDetail(true); onDismissHighlight?.(); }}
         role="button"
         tabIndex={0}

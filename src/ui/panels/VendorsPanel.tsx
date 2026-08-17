@@ -348,10 +348,23 @@ function BlackMarketStock({ now }: { now: number }) {
 
   if (!blackMarketUnlocked) {
     return (
-      <p className="small muted">
-        Rumour is there's a contact who deals in rarer stock — for a price. Unlock via the Black Market
-        Contact upgrade in Guild Hall.
-      </p>
+      <>
+        <p className="small muted">
+          Rumour is there's a contact who deals in rarer stock — for a price. Unlock via the Black Market
+          Contact upgrade in Guild Hall.
+        </p>
+        {/* Same "jump to and highlight the requirement" treatment as
+         *  RaidsPanel's difficulty circles / whole-tab locked state and
+         *  HeroesPanel's locked recruit cards (patch 0179) -- rather than
+         *  leaving the player to go find Black Market Contact among every
+         *  other Guild Hall upgrade by hand. */}
+        <button
+          className="btn-ghost"
+          onClick={() => engine.requestTab('guild', 'black_market_contact')}
+        >
+          Go to Guild Hall →
+        </button>
+      </>
     );
   }
 

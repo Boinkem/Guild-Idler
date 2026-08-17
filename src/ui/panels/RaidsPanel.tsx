@@ -38,6 +38,19 @@ const DIFFICULTY_UNLOCK: Record<RaidDifficulty, 'raids' | 'raidsHeroic' | 'raids
 const DIFFICULTY_UNLOCK_LABEL: Record<RaidDifficulty, string> = {
   normal: 'Raid Charter', heroic: 'Heroic Clearance', legendary: 'Legendary Clearance',
 };
+/** The actual GuildPanel upgrade `def.id` behind each difficulty gate --
+ *  same three general upgrades DIFFICULTY_UNLOCK_LABEL above already
+ *  names (raid_charter/raid_heroic_clearance/raid_legendary_clearance,
+ *  see progression.ts's UPGRADES list), kept as its own map rather than
+ *  reused off DIFFICULTY_UNLOCK because that one holds the `unlocks`
+ *  field's value ('raids'/'raidsHeroic'/'raidsLegendary'), not the
+ *  upgrade's own id -- two different strings that happen to describe the
+ *  same upgrade. Used to drive engine.requestTab('guild', id) below, so
+ *  a locked difficulty can jump straight to (and highlight) the exact
+ *  Guild Hall card that unlocks it. */
+const DIFFICULTY_UNLOCK_ID: Record<RaidDifficulty, string> = {
+  normal: 'raid_charter', heroic: 'raid_heroic_clearance', legendary: 'raid_legendary_clearance',
+};
 
 /**
  * Which ITEM_SETS entry (equipment.ts) is "this raid's set" -- every raid
@@ -271,6 +284,7 @@ function ItemDetailOverlay({ defId, onClose }: { defId: string; onClose: () => v
 function DifficultyCircle({
   difficulty, active, unlocked, onClick,
 }: { difficulty: RaidDifficulty; active: boolean; unlocked: boolean; onClick: () => void }) {
+  const engine = useEngine();
   const color = DIFFICULTY_COLOR[difficulty];
   const [imgFailed, setImgFailed] = useState(false);
   return (
@@ -304,6 +318,22 @@ function DifficultyCircle({
       <span className="tiny" style={{ color: unlocked ? color : 'var(--muted)', fontWeight: 700 }}>
         {RAID_DIFFICULTY_LABEL[difficulty]}
       </span>
+      {/* The circle itself is disabled while locked, so a player can't
+       *  discover "which upgrade" beyond the title tooltip on hover --
+       *  this link jumps straight to the Guild Hall and spotlights the
+       *  exact upgrade card, same "jump to and highlight the requirement"
+       *  treatment HeroesPanel's locked recruit cards already got
+       *  (patch 0179). */}
+      {!unlocked && (
+        <button
+          className="btn-ghost"
+          style={{ fontSize: '0.5625rem', padding: '1px 4px', minHeight: 0 }}
+          onClick={() => engine.requestTab('guild', DIFFICULTY_UNLOCK_ID[difficulty])}
+          title={`Go to the Guild Hall -- ${DIFFICULTY_UNLOCK_LABEL[difficulty]}`}
+        >
+          Unlock →
+        </button>
+      )}
     </div>
   );
 }
@@ -742,6 +772,12 @@ export function RaidsPanel() {
         <p className="small muted">
           Requires the Raid Charter upgrade -- check the Guild Hall tab once the guild can field a real force.
         </p>
+        <button
+          className="btn-primary"
+          onClick={() => engine.requestTab('guild', DIFFICULTY_UNLOCK_ID.normal)}
+        >
+          Go to Guild Hall →
+        </button>
       </>
     );
   }
