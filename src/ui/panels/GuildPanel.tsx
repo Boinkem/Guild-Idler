@@ -110,7 +110,6 @@ function UpgradeCard({
             <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>Level {level}/{maxLevel}</span>
           </div>
           <div className={`guild-level-rail ${maxed ? 'maxed' : ''}`}><span style={{ width: `${pct}%` }} /></div>
-          <div className="stat-row" style={{ marginBottom: 8 }}>{statLines}</div>
           <button
             className="btn-yellow"
             disabled={buyDisabled}
@@ -118,6 +117,7 @@ function UpgradeCard({
           >
             {buyLabel}
           </button>
+          <div className="stat-row" style={{ marginTop: 8 }}>{statLines}</div>
           {flash && <MaxFlash key={flash.key} label={flash.name} onDone={onDismissFlash} />}
         </div>
       </div>
@@ -198,10 +198,23 @@ export function GuildPanel() {
       ...(def.unlocks === 'legendaryQuests' ? [<span key="unlock-lq" className="gold-text">Unlocks Legendary quests</span>] : []),
       ...(def.unlocks === 'chains' ? [<span key="unlock-chains" className="gold-text">Unlocks multi-day quest chains</span>] : []),
       ...(def.unlocks === 'blackMarket' ? [<span key="unlock-bm" className="gold-text">Unlocks the Black Market</span>] : []),
+      ...(def.unlocks === 'raids' ? [<span key="unlock-raids" className="gold-text">Unlocks Normal-difficulty raids</span>] : []),
+      ...(def.unlocks === 'raidsHeroic' ? [<span key="unlock-raids-h" className="gold-text">Unlocks Heroic raid difficulty</span>] : []),
+      ...(def.unlocks === 'raidsLegendary' ? [<span key="unlock-raids-l" className="gold-text">Unlocks Legendary raid difficulty</span>] : []),
+      ...(def.unlocks === 'training' ? [<span key="unlock-training" className="gold-text">Unlocks the Training tab -- reassign any hero's role</span>] : []),
       ...(def.unlocks === 'autoChain' && level > 0
         ? [<span key="ac-current" className="gold-text">Currently chains {chainRangeText(level)} quests per streak</span>] : []),
       ...(def.unlocks === 'autoChain' && !maxed
         ? [<span key="ac-next" className="muted">Next tier: {chainRangeText(level + 1)} quests per streak</span>] : []),
+      // consumableSlotsPerLevel/incubationSlotsPerLevel/petSlotsPerLevel
+      // (Potion Belt/Nest Expansion/Companion Bond) don't route through
+      // modsPerLevel or the unlocks field at all -- ModifierManager reads
+      // them directly (see consumableSlots/incubationSlots/petSlots) -- so
+      // without their own line here these three cards showed nothing but
+      // a Buy button, same blank-body gap the unlocks cases above had.
+      ...(def.consumableSlotsPerLevel ? [<span key="slots-consumable">+{def.consumableSlotsPerLevel} consumable slot per level</span>] : []),
+      ...(def.incubationSlotsPerLevel ? [<span key="slots-incubation">+{def.incubationSlotsPerLevel} incubation slot per level</span>] : []),
+      ...(def.petSlotsPerLevel ? [<span key="slots-pet">+{def.petSlotsPerLevel} pet slot per level</span>] : []),
     ];
     return (
       <UpgradeCard

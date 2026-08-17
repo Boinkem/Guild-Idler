@@ -417,19 +417,20 @@
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
-/* flex column so the Buy button can anchor to the bottom (margin-top:
-   auto on .guild-facility-body > button, just below) regardless of how
-   many stat lines a given card has above it -- keeps the button sitting
-   at the same visual baseline across a stretched row instead of
-   trailing right after a short stat-row with a gap of dead space below
-   it before the card's own bottom edge. */
+/* flex column layout -- was built so the Buy button (then the last
+   child) could anchor to the bottom via margin-top: auto regardless of
+   stat-line count. Direct request moved the button above the stat-row
+   instead (so it reads as "here's the action, here's what it does"
+   rather than requiring a scan past every stat line first) -- the
+   trailing stat-row is now what naturally settles at the bottom of a
+   stretched card, no margin trick needed for that since it's simply the
+   last element in normal flow. */
 .guild-facility-body {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
 }
-.guild-facility-body > button { margin-top: auto; }
 
 /* Replaces the plain "Level N/M" text everywhere else in the game uses
    for a leveled thing with a small tick-marked rail -- distinct from the

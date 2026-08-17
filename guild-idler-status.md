@@ -12700,3 +12700,54 @@ patch specifically:
 **Verified:** `npx tsc --noEmit` and `vite build` both clean against the
 full project, confirmed against a fresh clone of current `main` (through
 patch 0182) with only this patch's diff applied.
+
+### Guild Hall cards: missing unlock/effect text filled in, Buy button moved above the info text -- built (patch 0184)
+
+```discord-update
+Dev Update | Guild Hall Cards
+
+- Raid Charter, Heroic/Legendary Clearance, Training Grounds, Potion Belt, Nest Expansion, and Companion Bond now show what they actually do on the card, not a blank body
+- The Buy/Build button now sits above that info text instead of below it
+```
+
+Two reports off the same screenshot: several Permanent Upgrade cards
+showed nothing but a Buy button (no indication of what buying them
+actually does), and the Buy/Build button should sit above the info text
+rather than below it.
+
+**Missing unlock/effect text (`GuildPanel.tsx`).** Traced this to
+`generalUpgradeCard`'s `statLines` array, which only special-cased four
+of the eight real `UpgradeDef.unlocks` values (`legendaryQuests`,
+`chains`, `blackMarket`, `autoChain`) -- `raids`, `raidsHeroic`,
+`raidsLegendary`, and `training` fell through with no line at all,
+which is exactly why Raid Charter, Heroic Clearance, Legendary
+Clearance, and Training Grounds showed an empty card body in the
+screenshot. Added the missing four. Separately, Potion Belt, Nest
+Expansion, and Companion Bond don't use `unlocks` or `modsPerLevel` at
+all -- they're driven by their own dedicated
+`consumableSlotsPerLevel`/`incubationSlotsPerLevel`/`petSlotsPerLevel`
+fields, read directly by `ModifierManager` (confirmed by grep -- nothing
+in the UI layer referenced any of the three anywhere before this).
+Added a line for each, all currently "+1 ... slot per level" per their
+tuning values. `GuildUpgradeDetailModal` (the full-detail view behind a
+click) was never affected by any of this -- it already reads the same
+`statLines` prop, so every one of these was already blank there too and
+is now fixed for both views from the same single source.
+
+**Button above the info text (`GuildPanel.tsx`, `app.css`).** `UpgradeCard`
+rendered level rail → stat-row → Buy button; reordered to level rail →
+Buy button → stat-row, per direct request. The stat-row's old
+`marginBottom: 8` (spacing it from the button below) became `marginTop:
+8` on the same element instead (spacing it from the button now above
+it). This also meant retiring `.guild-facility-body > button {
+margin-top: auto }` in `app.css` -- that rule existed specifically to
+pin the button to the card's bottom edge regardless of stat-line count
+back when it was the last flex child; now that the stat-row trails it
+instead, the stat-row is what naturally settles at the bottom of a
+stretched card in normal flow, no margin trick needed. Uniform card
+sizing itself (`.guild-facility-card`'s `height: 100%` / `min-height`)
+is untouched and still holds regardless of which element ends up last.
+
+**Verified:** `npx tsc --noEmit` and `vite build` both clean against the
+full project, confirmed against a fresh clone of current `main` (through
+patch 0183) with only this patch's diff applied.
