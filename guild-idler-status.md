@@ -11873,3 +11873,82 @@ later:
   complete option on the table at the time, explicitly deferred rather
   than silently upgraded into scope. Worth reconsidering once the manual
   shortcut has seen some actual use.
+
+### XP curve: smoothed to 7 breakpoints, retuned for a ~2x-longer climb -- built (patch 0174)
+
+```discord-update
+Dev Update | XP Curve Tuning Pass
+
+- Reshaped the XP curve added in the last patch -- it's now a smoothly accelerating climb from level 20 to 55 instead of two separate jumps
+- Levels 1-19 now have a small, deliberate bump too (1.25x) -- everything from level 20 on ramps up from there
+- The climb to level 55 now takes roughly twice as long as it did last patch, aimed at "a couple months" of play before a hero is prestige-ready
+- Still rewards-neutral -- only how much XP a level costs changed, never how much a quest pays out
+```
+
+Direct follow-up to patch 0173, itself one design round later. Two things
+drove this pass: a direct sim comparison confirmed 0173 alone still hit
+level 55 in just 31 days with a realistic 5-hero setup (marginally better
+than the pre-0173 baseline's 17 days, but still far short of "a couple
+months"), and the resulting curve's own shape -- a single wide jump from
+level 30 to 50 -- turned out to have real structural limits once actually
+tested against a target: pushing only the level-55 breakpoint higher
+topped out around day 41 even at 3x its shipped value, because the last
+5 levels alone are too narrow a slice of the curve to carry a full
+doubling on their own. Reaching the target genuinely required reshaping
+more of the curve, not just cranking one number -- confirmed by testing,
+not assumed going in.
+
+**Breakpoint system generalized from parallel arrays to a sorted list of
+`{level, multiplier}` pairs** (`progression.ts`) -- exactly the "a 6th
+breakpoint is a real, deliberately small follow-up" already flagged in
+patch 0173's own version of this comment, now actually needed for the 2
+new breakpoints below. Sorting at construction time means a breakpoint's
+Tuning id doesn't need to stay in level order, and adding an 8th/9th
+point later is one more list entry plus two Tuning registrations, not a
+restructure.
+
+**Two new breakpoints, `xpBreakLevel6`/`xpBreakMultiplier6` (level 35)
+and `xpBreakLevel7`/`xpBreakMultiplier7` (level 45)** -- inserted between
+the existing 30/40 and 40/50 breakpoints specifically to turn one big
+straight-line jump into a continuously accelerating slope. Confirmed by
+hand: the per-segment slope now strictly increases at every step (0.05
+-> 0.108 -> 0.162 -> 0.244 -> 0.378 -> 1.008 multiplier-per-level across
+20->30->35->40->45->50->55), rather than the lumpy "steep, then flat,
+then steep again" shape a naive uniform rescale of the original 3
+far-apart points produced when first tried during design (that version
+was tested, found to reintroduce exactly the kind of visible wall this
+whole system was built to avoid, and rejected before being built).
+
+**Existing breakpoint values retuned, not just the two new ones added.**
+Level 20's multiplier raised 1.0x -> 1.25x (deliberately, not an
+oversight -- see below), and levels 40/50/55 raised from 1.75x/2.0x/4.0x
+to 2.85x/5.96x/11.0x. Level 30 (1.5x) is the only original breakpoint
+value left untouched.
+
+**Levels 1-19 are no longer fully unchanged from pre-0173, on purpose.**
+`xpCurveMultiplier` returns the lowest breakpoint's own multiplier flat
+for anything at or below its level -- raising breakpoint 1's value to
+1.25x necessarily means levels 1-19 get pulled up too, not just level 20
+itself. This was flagged directly during design as a real reversal of
+patch 0173's own stated guarantee ("Leveling 1-20 feels exactly the
+same") before being built, not discovered after -- confirmed as
+intentional: a marginal, deliberate bump to the very early game, not a
+side effect that slipped through.
+
+**Result, confirmed by direct Balance Sandbox sim, not computed by
+hand:** the same 5-hero Active-preset setup used to validate patch 0173
+now reaches level 55 on day 62 -- almost exactly double patch 0173's own
+day 31, and roughly 3.6x patch 0169-era's day 17. Quest reward values are
+completely untouched by any of this -- confirmed both by design (nothing
+in this patch touches `balance.ts` or any reward formula) and by the sim
+itself (gold accumulated by a fixed day was identical before and after
+in the earlier comparison pass).
+
+**Verified:** `npx tsc --noEmit` clean. `node --check` clean on both
+`server.mjs` and `app.js`. Booted the real DevTool server and confirmed
+`/api/schema` still returns all 30 schemas/7 groups unchanged, and
+`/api/data/tuning` returns all 14 `xpBreak*` entries (7 levels + 7
+multipliers) correctly. Directly executed `xpForLevel` against the real
+patched code at levels 1/5/10/15/19/20/25/30/35/40/45/50/52/55 and
+confirmed every value matches the agreed design exactly, not a hand
+estimate.

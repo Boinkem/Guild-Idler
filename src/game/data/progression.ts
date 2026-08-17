@@ -960,59 +960,61 @@ export const TOMBSTONE_STYLE_BY_ID: Record<string, TombstoneStyleDef> = Object.f
 // XP curve, fully tuning-driven since patch 0173 (previously two bare
 // literals). base * level^exponent is the same shape the curve has always
 // had; xpCurveMultiplier layers a piecewise-linear "how much more than
-// that shape alone" scalar on top, defined by 5 level/multiplier
-// breakpoint pairs. Below breakpoint 1's level the multiplier is a flat
-// 1.0x (early game reads identical to the pre-0173 curve); between
-// breakpoints it ramps linearly, so a designer can make levels
-// progressively cost more without any level suddenly costing a visibly
-// different amount than its neighbor; above breakpoint 5 it holds flat at
-// that breakpoint's multiplier rather than extrapolating past the last
-// defined point.
+// that shape alone" scalar on top, defined by breakpoint level/multiplier
+// pairs. Below the lowest breakpoint's level the multiplier holds flat at
+// that breakpoint's own value; between breakpoints it ramps linearly, so a
+// designer can make levels progressively cost more without any level
+// suddenly costing a visibly different amount than its neighbor; above the
+// highest breakpoint it holds flat at that breakpoint's multiplier rather
+// than extrapolating past the last defined point.
 //
-// The two agreed shapes this currently encodes: levels 20->30->40->50
-// (1.0x->1.5x->1.75x->2.0x) are a steadily building mid-game increase, and
-// 50->55 (2.0x->4.0x) is deliberately much steeper -- the endgame "slog"
-// leading into Requiem for the Last God's own level-55 requirement. See
-// guild-idler-status.md's own writeup for the full design discussion and
-// the level-gate audit (Prestige, Legendary tier, every raid) confirming
-// nothing else is blocked by slowing this stretch down.
+// Patch 0174 generalized this from a fixed 5-slot pair of parallel arrays
+// (indexed, order-dependent) to a sorted list of {level, multiplier}
+// pairs -- exactly the "6th breakpoint is a real, deliberately small
+// follow-up" noted in patch 0173's own version of this comment, now
+// actually needed. Sorting at construction time means new breakpoints can
+// be registered in any order (their Tuning ids don't need to stay in level
+// order) and a future 8th/9th point is just one more entry in this list
+// plus two more Tuning registrations, not a restructure.
 //
-// Fixed at exactly 5 breakpoints, not a variable-length list -- the Tuning
-// registry's whole convention is a flat, individually-editable id/value
-// entry per coefficient (see tuning.ts's own header comment), not a
-// structured array field. A 6th breakpoint is a real, deliberately small
-// follow-up (one more Tuning.get pair + one more segment below), not
-// something this was built to avoid needing.
+// Still a fixed-length list of named Tuning entries, not a variable-length
+// array field -- the Tuning registry's whole convention is a flat,
+// individually-editable id/value entry per coefficient (see tuning.ts's
+// own header comment), not a structured array type. Adding a breakpoint
+// is still a (small) code change, just a much smaller one than before.
+//
+// Current shape, agreed through several rounds of design discussion (see
+// guild-idler-status.md's full writeup, including the level-gate audit --
+// Prestige, Legendary tier, every raid -- confirming nothing is blocked by
+// slowing the 50-55 stretch down): a marginal 1.25x from level 1, ramping
+// through 30/35/40/45/50 with a steadily accelerating slope, then a real
+// slog into 55 -- landing on ~62 days to hit the level cap with 5 heroes
+// in the Balance Sandbox's Active preset, roughly double patch 0173's own
+// ~31 days under the same conditions, confirmed by direct sim rather than
+// computed by hand.
 const XP_CURVE_BASE = Tuning.get('progression.xpCurveBase');
 const XP_CURVE_EXPONENT = Tuning.get('progression.xpCurveExponent');
-const XP_BREAK_LEVELS = [
-  Tuning.get('progression.xpBreakLevel1'),
-  Tuning.get('progression.xpBreakLevel2'),
-  Tuning.get('progression.xpBreakLevel3'),
-  Tuning.get('progression.xpBreakLevel4'),
-  Tuning.get('progression.xpBreakLevel5'),
-];
-const XP_BREAK_MULTIPLIERS = [
-  Tuning.get('progression.xpBreakMultiplier1'),
-  Tuning.get('progression.xpBreakMultiplier2'),
-  Tuning.get('progression.xpBreakMultiplier3'),
-  Tuning.get('progression.xpBreakMultiplier4'),
-  Tuning.get('progression.xpBreakMultiplier5'),
-];
+const XP_BREAKPOINTS = [
+  { level: Tuning.get('progression.xpBreakLevel1'), multiplier: Tuning.get('progression.xpBreakMultiplier1') },
+  { level: Tuning.get('progression.xpBreakLevel2'), multiplier: Tuning.get('progression.xpBreakMultiplier2') },
+  { level: Tuning.get('progression.xpBreakLevel3'), multiplier: Tuning.get('progression.xpBreakMultiplier3') },
+  { level: Tuning.get('progression.xpBreakLevel4'), multiplier: Tuning.get('progression.xpBreakMultiplier4') },
+  { level: Tuning.get('progression.xpBreakLevel5'), multiplier: Tuning.get('progression.xpBreakMultiplier5') },
+  { level: Tuning.get('progression.xpBreakLevel6'), multiplier: Tuning.get('progression.xpBreakMultiplier6') },
+  { level: Tuning.get('progression.xpBreakLevel7'), multiplier: Tuning.get('progression.xpBreakMultiplier7') },
+].sort((a, b) => a.level - b.level);
 
 function xpCurveMultiplier(level: number): number {
-  if (level <= XP_BREAK_LEVELS[0]) return XP_BREAK_MULTIPLIERS[0];
-  for (let i = 1; i < XP_BREAK_LEVELS.length; i++) {
-    if (level <= XP_BREAK_LEVELS[i]) {
-      const loLevel = XP_BREAK_LEVELS[i - 1];
-      const hiLevel = XP_BREAK_LEVELS[i];
-      const loMult = XP_BREAK_MULTIPLIERS[i - 1];
-      const hiMult = XP_BREAK_MULTIPLIERS[i];
-      const t = (level - loLevel) / (hiLevel - loLevel);
-      return loMult + (hiMult - loMult) * t;
+  if (level <= XP_BREAKPOINTS[0].level) return XP_BREAKPOINTS[0].multiplier;
+  for (let i = 1; i < XP_BREAKPOINTS.length; i++) {
+    if (level <= XP_BREAKPOINTS[i].level) {
+      const lo = XP_BREAKPOINTS[i - 1];
+      const hi = XP_BREAKPOINTS[i];
+      const t = (level - lo.level) / (hi.level - lo.level);
+      return lo.multiplier + (hi.multiplier - lo.multiplier) * t;
     }
   }
-  return XP_BREAK_MULTIPLIERS[XP_BREAK_MULTIPLIERS.length - 1];
+  return XP_BREAKPOINTS[XP_BREAKPOINTS.length - 1].multiplier;
 }
 
 export function xpForLevel(level: number): number {
@@ -1026,9 +1028,14 @@ export function xpForLevel(level: number): number {
   // quest's worth of XP instead of a rounding error. Full playthrough time
   // simulates to ~3.8 months, still comfortably inside the target range.
   //
-  // That base shape is unchanged as of patch 0173 -- xpCurveMultiplier
-  // above only scales levels 20 and up, so this original reasoning still
-  // holds for the early game exactly as written.
+  // That base shape itself is still unchanged as of patch 0174 --
+  // xpCurveMultiplier above is a separate layer on top of it, not a
+  // replacement, so this original reasoning still describes the
+  // underlying curve exactly as written. As of patch 0174 the multiplier
+  // is no longer a flat 1.0x for very early levels though (see the
+  // breakpoint list's own comment) -- levels 1-19 get a deliberate,
+  // marginal 1.25x now, a explicit choice made during this patch's design
+  // discussion, not an oversight.
   return Math.floor(XP_CURVE_BASE * Math.pow(level, XP_CURVE_EXPONENT) * xpCurveMultiplier(level));
 }
 
