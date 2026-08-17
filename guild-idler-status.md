@@ -11952,3 +11952,74 @@ multipliers) correctly. Directly executed `xpForLevel` against the real
 patched code at levels 1/5/10/15/19/20/25/30/35/40/45/50/52/55 and
 confirmed every value matches the agreed design exactly, not a hand
 estimate.
+
+### Raid outcome log surfaced, Guild home "Recent outcomes" card, Witch facing fix -- built (patch 0175)
+
+```discord-update
+Dev Update | Patch 0175
+
+- Added a Recent raids section to the Statistics tab, right next to Recent quests -- loot, gold, XP and injuries from your last 30 raids are there to look back on now, not just flashed once and gone
+- Added a Recent outcomes card to the Guild home tab -- your last few quests and raids, win or lose, at a glance without digging into Statistics
+- Fixed the Witch running backward compared to her pet
+```
+
+Three reported items this pass: raids had no way to review what happened
+after the fact, the Guild home tab had no at-a-glance summary of recent
+activity, and the Witch's sprite was running the opposite direction to
+her pet (same symptom as the Dwarf/Wizard fix a few patches back).
+
+**Raid outcome screen -- investigated before building anything.** The
+report read as "raids have no outcome screen at all," but that wasn't
+quite right: `RaidResultModal` (live play), the idle-companion's compact
+raid banner, and `OfflineReportModal`'s raid cards already give raids the
+exact same transient-result treatment quests get, confirmed by reading
+`App.tsx`, `IdleView.tsx` and both modals directly -- all three paths
+already existed and already matched `QuestResultModal`'s own standard.
+The real gap was one level down: `RaidManager.resolve` has been writing
+every raid into `state.raidLog` (capped at 30, newest first) all along,
+the exact same way `QuestManager.resolve` writes `state.log` -- but
+`state.log` was already being read back by StatsPanel's "Recent quests"
+section, and nothing anywhere ever read `state.raidLog`. Once a raid's
+transient popup was dismissed (or missed entirely), there was truly no
+way to look back at what it dropped. Fixed by adding a "Recent raids"
+section to `StatsPanel.tsx` immediately after "Recent quests," mirroring
+it card-for-card: raid name, difficulty, full-clear/encounters-cleared
+status, gold, XP, loot, injuries, and timestamp, colored by difficulty
+the same way `OfflineReportModal`'s own raid cards already are (that
+`RAID_DIFFICULTY_COLOR` map is duplicated locally rather than shared,
+matching how `OfflineReportModal` already duplicates it from
+`RaidsPanel` rather than importing it).
+
+**Guild home "Recent outcomes" card (`DashboardPanel.tsx`).** New
+`RecentOutcomesCard` component, placed directly under the existing
+"Needs attention" digest so it's visible without scrolling. Reads
+`state.log` and `state.raidLog` -- both already-existing, already-capped
+histories, so this needed no new state and no save migration -- merges
+them into one newest-first feed by `resolvedAt`, and shows the most
+recent 6 as compact rows (name, hero or difficulty, success/failure or
+clear/retreat, gold, and a relative "Xm/Xh/Xd ago" timestamp via a local
+`timeAgo` helper, same shape as `GuidePanel.tsx`'s own). A "View all"
+button jumps straight to the Statistics tab (`engine.requestTab('stats')`)
+for the full log both sections above now carry. Shows a friendly empty
+state on a brand new save rather than rendering nothing, since an empty
+guild record is itself informative there.
+
+**Witch facing fix (`HeroSprite.tsx`).** Same root cause and same fix
+shape as the earlier Dwarf/Wizard correction: `HERO_REVERSED_FACING`
+assumes every class's source sheet was authored facing one default
+direction, and flips accordingly to match the pet running beside it.
+Dwarf and Wizard's packs were authored facing the opposite default, so
+they're inverted once, centrally, in that map. Witch was reported with
+the identical symptom -- same opposite-authored source pack -- so she's
+added to the same map (`witch: true`) rather than needing a new fix
+pattern. No other caller of `HeroSprite`'s `flip` prop changes.
+
+**Verified:** `npx tsc --noEmit` clean against the full project. Traced
+every raid-resolution call site (`GameEngine.tick`'s live path,
+`catchUpOffline`, and the `testCompleteActiveRaid` dev tool) to confirm
+all three already write into `state.raidLog` via `RaidManager.resolve`
+before this patch, so the new Statistics/Dashboard sections have real
+data to read from the moment this ships, including for raids that
+resolved before the update (the existing capped log is read as-is, nothing
+about it changed). No save migration needed -- `raidLog`/`log` are
+pre-existing `GameState` fields, not new ones.

@@ -5,10 +5,19 @@ import { GuildManager } from '../../game/managers/GuildManager';
 import { GUILD_FACILITIES, UPGRADES } from '../../game/data/progression';
 import { RAID_UPGRADES } from '../../game/data/raidUpgrades';
 import { ITEM_SETS } from '../../game/data/equipment';
-import { RAIDS } from '../../game/data/raids';
+import { RAIDS, RAID_DIFFICULTY_LABEL } from '../../game/data/raids';
 import { PETS } from '../../game/data/pets';
-import { formatGold, formatPlayTime } from '../../game/util';
+import { RaidDifficulty } from '../../game/types';
+import { formatGold, formatPlayTime, RARITY_COLOR } from '../../game/util';
 import { ConfirmModal } from '../ConfirmModal';
+
+/** Same rarity-parallel palette RaidsPanel/OfflineReportModal already use
+ *  for Normal/Heroic/Legendary -- kept local rather than shared, matching
+ *  how OfflineReportModal already duplicates this same small map rather
+ *  than importing it from RaidsPanel. */
+const RAID_DIFFICULTY_COLOR: Record<RaidDifficulty, string> = {
+  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, legendary: RARITY_COLOR.epic,
+};
 
 export function StatsPanel() {
   const engine = useEngine();
@@ -132,6 +141,43 @@ export function StatsPanel() {
             {result.loot.map((l) => <span key={l.defId}>◇ {l.name}</span>)}
             {result.injury && <span className="bad">{result.injury.name}</span>}
             <span className="muted">{new Date(result.resolvedAt).toLocaleString()}</span>
+          </div>
+        </div>
+      ))}
+
+      {/* Raids resolve into `state.raidLog` exactly the same way quests
+          resolve into `state.log` above (see RaidManager.resolve, capped
+          at 30 entries the same way `log` is capped at 60) -- that log
+          was already being written on every raid, live or offline, it
+          just had nowhere to be read back afterward. Reported directly:
+          raids had no way to look back at what happened once the
+          transient RaidResultModal/OfflineReportModal card was
+          dismissed, unlike quests which always had this section. Mirrors
+          "Recent quests" above card-for-card, just keyed on
+          raidId+resolvedAt (a raid has no single stable id the way a
+          quest's questId is unique per attempt) and colored by
+          difficulty the same way OfflineReportModal's own raid cards
+          already are. */}
+      <div className="section-heading">Recent raids</div>
+      {engine.state.raidLog.length === 0 && <p className="small muted">No raids yet. Send the guild once raids unlock.</p>}
+      {engine.state.raidLog.slice(0, 20).map((raid) => (
+        <div
+          key={`${raid.raidId}-${raid.resolvedAt}`}
+          className="card"
+          style={{ borderLeftColor: RAID_DIFFICULTY_COLOR[raid.difficulty] }}
+        >
+          <div className="spread">
+            <span className="card-title">{raid.raidName} — {RAID_DIFFICULTY_LABEL[raid.difficulty]}</span>
+            <span className={`small ${raid.fullClear ? 'good' : raid.encountersCleared > 0 ? '' : 'bad'}`}>
+              {raid.fullClear ? 'Full clear' : `${raid.encountersCleared}/${raid.totalEncounters}`}
+            </span>
+          </div>
+          <div className="stat-row" style={{ marginTop: 4 }}>
+            <span className="gold-text">+{formatGold(raid.gold)}</span>
+            <span>+{raid.xp} xp</span>
+            {raid.loot.map((l, i) => <span key={`${l.defId}-${i}`}>◇ {l.name}</span>)}
+            {raid.injuries.map((inj) => <span key={inj.heroId} className="bad">{inj.heroName}: {inj.injury.name}</span>)}
+            <span className="muted">{new Date(raid.resolvedAt).toLocaleString()}</span>
           </div>
         </div>
       ))}

@@ -7,7 +7,113 @@ import { AchievementManager } from '../../game/managers/AchievementManager';
 import { attentionCounts } from '../../game/attention';
 import { guildPowerBreakdown, levelTierColor, levelTierName } from '../../game/power';
 import { currentGuildRank, nextGuildRank, powerToNextRank } from '../../game/data/guildRank';
+import { RAID_DIFFICULTY_LABEL } from '../../game/data/raids';
 import { formatGold, formatNumber } from '../../game/util';
+
+// Same shape as GuidePanel's own timeAgo -- kept local rather than shared,
+// matching how small formatting helpers already get duplicated per-file
+// across this codebase (see RAID_DIFFICULTY_COLOR in OfflineReportModal/
+// StatsPanel for the same convention) rather than pulled into util.ts for
+// a single extra caller.
+function timeAgo(ts: number, now: number): string {
+  const diffMin = Math.floor((now - ts) / 60000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const hours = Math.floor(diffMin / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+type OutcomeEntry = {
+  key: string;
+  kind: 'quest' | 'raid';
+  name: string;
+  sub: string;
+  success: boolean;
+  gold: number;
+  xp: number;
+  resolvedAt: number;
+};
+
+/**
+ * Combined, newest-first feed of what the guild has actually been up to --
+ * reads the two capped history logs `state.log`/`state.raidLog` that
+ * QuestManager.resolve/RaidManager.resolve already write on every
+ * completion (live or offline), the same ones StatsPanel's "Recent
+ * quests"/"Recent raids" sections read. No new state or persistence: both
+ * logs already existed, this just surfaces the newest handful of either
+ * kind together on the Guild home tab, rather than a player needing to
+ * catch a transient result modal in time or go dig through the
+ * Statistics tab to see what just happened. Renders a friendly empty
+ * state rather than nothing at all, since (unlike AttentionDigest) an
+ * empty guild record is itself informative on a brand new save.
+ */
+function RecentOutcomesCard() {
+  const engine = useEngine();
+  const state = engine.state;
+  const now = Date.now();
+
+  const entries: OutcomeEntry[] = [
+    ...state.log.map((r): OutcomeEntry => ({
+      key: `quest-${r.questId}`,
+      kind: 'quest',
+      name: r.questName,
+      sub: r.heroName,
+      success: r.success,
+      gold: r.gold,
+      xp: r.xp,
+      resolvedAt: r.resolvedAt,
+    })),
+    ...state.raidLog.map((r): OutcomeEntry => ({
+      key: `raid-${r.raidId}-${r.resolvedAt}`,
+      kind: 'raid',
+      name: r.raidName,
+      sub: RAID_DIFFICULTY_LABEL[r.difficulty],
+      success: r.fullClear,
+      gold: r.gold,
+      xp: r.xp,
+      resolvedAt: r.resolvedAt,
+    })),
+  ]
+    .sort((a, b) => b.resolvedAt - a.resolvedAt)
+    .slice(0, 6);
+
+  return (
+    <div className="card">
+      <div className="spread">
+        <span className="card-title">Recent outcomes</span>
+        <button
+          className="btn-ghost"
+          style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+          onClick={() => engine.requestTab('stats')}
+        >
+          View all
+        </button>
+      </div>
+      {entries.length === 0 ? (
+        <p className="small muted" style={{ margin: '4px 0 0' }}>
+          Nothing finished yet -- send a hero out or start a raid.
+        </p>
+      ) : (
+        entries.map((e) => (
+          <div key={e.key} className="spread" style={{ alignItems: 'center', marginTop: 6 }}>
+            <span className="small">
+              {e.kind === 'raid' ? '⚔ ' : ''}{e.name}
+              <span className="tiny muted" style={{ marginLeft: 6 }}>{e.sub}</span>
+            </span>
+            <span className="tiny" style={{ textAlign: 'right', flexShrink: 0 }}>
+              <span className={e.success ? 'good' : 'bad'}>
+                {e.success ? (e.kind === 'raid' ? 'Cleared' : 'Success') : (e.kind === 'raid' ? 'Retreated' : 'Failed')}
+              </span>
+              {' · '}<span className="gold-text">+{formatGold(e.gold)}</span>
+              {' · '}<span className="muted">{timeAgo(e.resolvedAt, now)}</span>
+            </span>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
 
 /**
  * "Needs attention" digest -- one glanceable card for state that's sitting
@@ -122,6 +228,8 @@ export function DashboardPanel() {
       <p className="subtitle">Everything the guild has built, at a glance.</p>
 
       <AttentionDigest />
+
+      <RecentOutcomesCard />
 
       <div className="card">
         {editingName || !state.guildName ? (

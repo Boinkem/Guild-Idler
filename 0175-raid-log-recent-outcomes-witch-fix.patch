@@ -1,0 +1,299 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 39195e9..b701990 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -11952,3 +11952,74 @@ multipliers) correctly. Directly executed `xpForLevel` against the real
+ patched code at levels 1/5/10/15/19/20/25/30/35/40/45/50/52/55 and
+ confirmed every value matches the agreed design exactly, not a hand
+ estimate.
++
++### Raid outcome log surfaced, Guild home "Recent outcomes" card, Witch facing fix -- built (patch 0175)
++
++```discord-update
++Dev Update | Patch 0175
++
++- Added a Recent raids section to the Statistics tab, right next to Recent quests -- loot, gold, XP and injuries from your last 30 raids are there to look back on now, not just flashed once and gone
++- Added a Recent outcomes card to the Guild home tab -- your last few quests and raids, win or lose, at a glance without digging into Statistics
++- Fixed the Witch running backward compared to her pet
++```
++
++Three reported items this pass: raids had no way to review what happened
++after the fact, the Guild home tab had no at-a-glance summary of recent
++activity, and the Witch's sprite was running the opposite direction to
++her pet (same symptom as the Dwarf/Wizard fix a few patches back).
++
++**Raid outcome screen -- investigated before building anything.** The
++report read as "raids have no outcome screen at all," but that wasn't
++quite right: `RaidResultModal` (live play), the idle-companion's compact
++raid banner, and `OfflineReportModal`'s raid cards already give raids the
++exact same transient-result treatment quests get, confirmed by reading
++`App.tsx`, `IdleView.tsx` and both modals directly -- all three paths
++already existed and already matched `QuestResultModal`'s own standard.
++The real gap was one level down: `RaidManager.resolve` has been writing
++every raid into `state.raidLog` (capped at 30, newest first) all along,
++the exact same way `QuestManager.resolve` writes `state.log` -- but
++`state.log` was already being read back by StatsPanel's "Recent quests"
++section, and nothing anywhere ever read `state.raidLog`. Once a raid's
++transient popup was dismissed (or missed entirely), there was truly no
++way to look back at what it dropped. Fixed by adding a "Recent raids"
++section to `StatsPanel.tsx` immediately after "Recent quests," mirroring
++it card-for-card: raid name, difficulty, full-clear/encounters-cleared
++status, gold, XP, loot, injuries, and timestamp, colored by difficulty
++the same way `OfflineReportModal`'s own raid cards already are (that
++`RAID_DIFFICULTY_COLOR` map is duplicated locally rather than shared,
++matching how `OfflineReportModal` already duplicates it from
++`RaidsPanel` rather than importing it).
++
++**Guild home "Recent outcomes" card (`DashboardPanel.tsx`).** New
++`RecentOutcomesCard` component, placed directly under the existing
++"Needs attention" digest so it's visible without scrolling. Reads
++`state.log` and `state.raidLog` -- both already-existing, already-capped
++histories, so this needed no new state and no save migration -- merges
++them into one newest-first feed by `resolvedAt`, and shows the most
++recent 6 as compact rows (name, hero or difficulty, success/failure or
++clear/retreat, gold, and a relative "Xm/Xh/Xd ago" timestamp via a local
++`timeAgo` helper, same shape as `GuidePanel.tsx`'s own). A "View all"
++button jumps straight to the Statistics tab (`engine.requestTab('stats')`)
++for the full log both sections above now carry. Shows a friendly empty
++state on a brand new save rather than rendering nothing, since an empty
++guild record is itself informative there.
++
++**Witch facing fix (`HeroSprite.tsx`).** Same root cause and same fix
++shape as the earlier Dwarf/Wizard correction: `HERO_REVERSED_FACING`
++assumes every class's source sheet was authored facing one default
++direction, and flips accordingly to match the pet running beside it.
++Dwarf and Wizard's packs were authored facing the opposite default, so
++they're inverted once, centrally, in that map. Witch was reported with
++the identical symptom -- same opposite-authored source pack -- so she's
++added to the same map (`witch: true`) rather than needing a new fix
++pattern. No other caller of `HeroSprite`'s `flip` prop changes.
++
++**Verified:** `npx tsc --noEmit` clean against the full project. Traced
++every raid-resolution call site (`GameEngine.tick`'s live path,
++`catchUpOffline`, and the `testCompleteActiveRaid` dev tool) to confirm
++all three already write into `state.raidLog` via `RaidManager.resolve`
++before this patch, so the new Statistics/Dashboard sections have real
++data to read from the moment this ships, including for raids that
++resolved before the update (the existing capped log is read as-is, nothing
++about it changed). No save migration needed -- `raidLog`/`log` are
++pre-existing `GameState` fields, not new ones.
+diff --git a/src/ui/panels/DashboardPanel.tsx b/src/ui/panels/DashboardPanel.tsx
+index d1cbc22..af47b8d 100644
+--- a/src/ui/panels/DashboardPanel.tsx
++++ b/src/ui/panels/DashboardPanel.tsx
+@@ -7,8 +7,114 @@ import { AchievementManager } from '../../game/managers/AchievementManager';
+ import { attentionCounts } from '../../game/attention';
+ import { guildPowerBreakdown, levelTierColor, levelTierName } from '../../game/power';
+ import { currentGuildRank, nextGuildRank, powerToNextRank } from '../../game/data/guildRank';
++import { RAID_DIFFICULTY_LABEL } from '../../game/data/raids';
+ import { formatGold, formatNumber } from '../../game/util';
+ 
++// Same shape as GuidePanel's own timeAgo -- kept local rather than shared,
++// matching how small formatting helpers already get duplicated per-file
++// across this codebase (see RAID_DIFFICULTY_COLOR in OfflineReportModal/
++// StatsPanel for the same convention) rather than pulled into util.ts for
++// a single extra caller.
++function timeAgo(ts: number, now: number): string {
++  const diffMin = Math.floor((now - ts) / 60000);
++  if (diffMin < 1) return 'just now';
++  if (diffMin < 60) return `${diffMin}m ago`;
++  const hours = Math.floor(diffMin / 60);
++  if (hours < 24) return `${hours}h ago`;
++  return `${Math.floor(hours / 24)}d ago`;
++}
++
++type OutcomeEntry = {
++  key: string;
++  kind: 'quest' | 'raid';
++  name: string;
++  sub: string;
++  success: boolean;
++  gold: number;
++  xp: number;
++  resolvedAt: number;
++};
++
++/**
++ * Combined, newest-first feed of what the guild has actually been up to --
++ * reads the two capped history logs `state.log`/`state.raidLog` that
++ * QuestManager.resolve/RaidManager.resolve already write on every
++ * completion (live or offline), the same ones StatsPanel's "Recent
++ * quests"/"Recent raids" sections read. No new state or persistence: both
++ * logs already existed, this just surfaces the newest handful of either
++ * kind together on the Guild home tab, rather than a player needing to
++ * catch a transient result modal in time or go dig through the
++ * Statistics tab to see what just happened. Renders a friendly empty
++ * state rather than nothing at all, since (unlike AttentionDigest) an
++ * empty guild record is itself informative on a brand new save.
++ */
++function RecentOutcomesCard() {
++  const engine = useEngine();
++  const state = engine.state;
++  const now = Date.now();
++
++  const entries: OutcomeEntry[] = [
++    ...state.log.map((r): OutcomeEntry => ({
++      key: `quest-${r.questId}`,
++      kind: 'quest',
++      name: r.questName,
++      sub: r.heroName,
++      success: r.success,
++      gold: r.gold,
++      xp: r.xp,
++      resolvedAt: r.resolvedAt,
++    })),
++    ...state.raidLog.map((r): OutcomeEntry => ({
++      key: `raid-${r.raidId}-${r.resolvedAt}`,
++      kind: 'raid',
++      name: r.raidName,
++      sub: RAID_DIFFICULTY_LABEL[r.difficulty],
++      success: r.fullClear,
++      gold: r.gold,
++      xp: r.xp,
++      resolvedAt: r.resolvedAt,
++    })),
++  ]
++    .sort((a, b) => b.resolvedAt - a.resolvedAt)
++    .slice(0, 6);
++
++  return (
++    <div className="card">
++      <div className="spread">
++        <span className="card-title">Recent outcomes</span>
++        <button
++          className="btn-ghost"
++          style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
++          onClick={() => engine.requestTab('stats')}
++        >
++          View all
++        </button>
++      </div>
++      {entries.length === 0 ? (
++        <p className="small muted" style={{ margin: '4px 0 0' }}>
++          Nothing finished yet -- send a hero out or start a raid.
++        </p>
++      ) : (
++        entries.map((e) => (
++          <div key={e.key} className="spread" style={{ alignItems: 'center', marginTop: 6 }}>
++            <span className="small">
++              {e.kind === 'raid' ? '⚔ ' : ''}{e.name}
++              <span className="tiny muted" style={{ marginLeft: 6 }}>{e.sub}</span>
++            </span>
++            <span className="tiny" style={{ textAlign: 'right', flexShrink: 0 }}>
++              <span className={e.success ? 'good' : 'bad'}>
++                {e.success ? (e.kind === 'raid' ? 'Cleared' : 'Success') : (e.kind === 'raid' ? 'Retreated' : 'Failed')}
++              </span>
++              {' · '}<span className="gold-text">+{formatGold(e.gold)}</span>
++              {' · '}<span className="muted">{timeAgo(e.resolvedAt, now)}</span>
++            </span>
++          </div>
++        ))
++      )}
++    </div>
++  );
++}
++
+ /**
+  * "Needs attention" digest -- one glanceable card for state that's sitting
+  * around waiting on the player, instead of hunting across tabs for it.
+@@ -123,6 +229,8 @@ export function DashboardPanel() {
+ 
+       <AttentionDigest />
+ 
++      <RecentOutcomesCard />
++
+       <div className="card">
+         {editingName || !state.guildName ? (
+           <div className="row" style={{ gap: 8 }}>
+diff --git a/src/ui/panels/StatsPanel.tsx b/src/ui/panels/StatsPanel.tsx
+index cfd4eca..bb7a067 100644
+--- a/src/ui/panels/StatsPanel.tsx
++++ b/src/ui/panels/StatsPanel.tsx
+@@ -5,11 +5,20 @@ import { GuildManager } from '../../game/managers/GuildManager';
+ import { GUILD_FACILITIES, UPGRADES } from '../../game/data/progression';
+ import { RAID_UPGRADES } from '../../game/data/raidUpgrades';
+ import { ITEM_SETS } from '../../game/data/equipment';
+-import { RAIDS } from '../../game/data/raids';
++import { RAIDS, RAID_DIFFICULTY_LABEL } from '../../game/data/raids';
+ import { PETS } from '../../game/data/pets';
+-import { formatGold, formatPlayTime } from '../../game/util';
++import { RaidDifficulty } from '../../game/types';
++import { formatGold, formatPlayTime, RARITY_COLOR } from '../../game/util';
+ import { ConfirmModal } from '../ConfirmModal';
+ 
++/** Same rarity-parallel palette RaidsPanel/OfflineReportModal already use
++ *  for Normal/Heroic/Legendary -- kept local rather than shared, matching
++ *  how OfflineReportModal already duplicates this same small map rather
++ *  than importing it from RaidsPanel. */
++const RAID_DIFFICULTY_COLOR: Record<RaidDifficulty, string> = {
++  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, legendary: RARITY_COLOR.epic,
++};
++
+ export function StatsPanel() {
+   const engine = useEngine();
+   const state = engine.state;
+@@ -136,6 +145,43 @@ export function StatsPanel() {
+         </div>
+       ))}
+ 
++      {/* Raids resolve into `state.raidLog` exactly the same way quests
++          resolve into `state.log` above (see RaidManager.resolve, capped
++          at 30 entries the same way `log` is capped at 60) -- that log
++          was already being written on every raid, live or offline, it
++          just had nowhere to be read back afterward. Reported directly:
++          raids had no way to look back at what happened once the
++          transient RaidResultModal/OfflineReportModal card was
++          dismissed, unlike quests which always had this section. Mirrors
++          "Recent quests" above card-for-card, just keyed on
++          raidId+resolvedAt (a raid has no single stable id the way a
++          quest's questId is unique per attempt) and colored by
++          difficulty the same way OfflineReportModal's own raid cards
++          already are. */}
++      <div className="section-heading">Recent raids</div>
++      {engine.state.raidLog.length === 0 && <p className="small muted">No raids yet. Send the guild once raids unlock.</p>}
++      {engine.state.raidLog.slice(0, 20).map((raid) => (
++        <div
++          key={`${raid.raidId}-${raid.resolvedAt}`}
++          className="card"
++          style={{ borderLeftColor: RAID_DIFFICULTY_COLOR[raid.difficulty] }}
++        >
++          <div className="spread">
++            <span className="card-title">{raid.raidName} — {RAID_DIFFICULTY_LABEL[raid.difficulty]}</span>
++            <span className={`small ${raid.fullClear ? 'good' : raid.encountersCleared > 0 ? '' : 'bad'}`}>
++              {raid.fullClear ? 'Full clear' : `${raid.encountersCleared}/${raid.totalEncounters}`}
++            </span>
++          </div>
++          <div className="stat-row" style={{ marginTop: 4 }}>
++            <span className="gold-text">+{formatGold(raid.gold)}</span>
++            <span>+{raid.xp} xp</span>
++            {raid.loot.map((l, i) => <span key={`${l.defId}-${i}`}>◇ {l.name}</span>)}
++            {raid.injuries.map((inj) => <span key={inj.heroId} className="bad">{inj.heroName}: {inj.injury.name}</span>)}
++            <span className="muted">{new Date(raid.resolvedAt).toLocaleString()}</span>
++          </div>
++        </div>
++      ))}
++
+       <div className="section-heading">Save data</div>
+       <div className="row wrap">
+         <button onClick={() => void engine.saveNow()}>Save now</button>
+diff --git a/src/ui/sprites/HeroSprite.tsx b/src/ui/sprites/HeroSprite.tsx
+index d15edd8..70d5f5e 100644
+--- a/src/ui/sprites/HeroSprite.tsx
++++ b/src/ui/sprites/HeroSprite.tsx
+@@ -100,10 +100,16 @@ const HERO_DISPLAY_OFFSET: Partial<Record<HeroClass, { x: number; y: number }>>
+  * internally, the same "corrected in one place" shape
+  * HERO_DISPLAY_SCALE/HERO_DISPLAY_OFFSET above already use for their own
+  * per-class art quirks.
++ *
++ * Witch reported with the exact same symptom (running backward relative
++ * to the pet beside her) -- same root cause, her source pack was authored
++ * facing the same opposite default as Dwarf/Wizard's, so she's corrected
++ * here the same way rather than needing a different fix.
+  */
+ const HERO_REVERSED_FACING: Partial<Record<HeroClass, true>> = {
+   dwarf: true,
+   wizard: true,
++  witch: true,
+ };
+ 
+ let manifestCache: Manifest | null = null;

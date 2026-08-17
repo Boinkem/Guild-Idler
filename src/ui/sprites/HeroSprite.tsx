@@ -100,10 +100,16 @@ const HERO_DISPLAY_OFFSET: Partial<Record<HeroClass, { x: number; y: number }>> 
  * internally, the same "corrected in one place" shape
  * HERO_DISPLAY_SCALE/HERO_DISPLAY_OFFSET above already use for their own
  * per-class art quirks.
+ *
+ * Witch reported with the exact same symptom (running backward relative
+ * to the pet beside her) -- same root cause, her source pack was authored
+ * facing the same opposite default as Dwarf/Wizard's, so she's corrected
+ * here the same way rather than needing a different fix.
  */
 const HERO_REVERSED_FACING: Partial<Record<HeroClass, true>> = {
   dwarf: true,
   wizard: true,
+  witch: true,
 };
 
 let manifestCache: Manifest | null = null;
