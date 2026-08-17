@@ -89,6 +89,23 @@ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
 export const RAID_DIFFICULTY_ORDER: RaidDifficulty[] = ['normal', 'heroic', 'mythic'];
 
 /**
+ * Player-facing display label per raid difficulty (patch 0165) -- the
+ * internal id stays `'mythic'` everywhere (save data, item id suffixes
+ * like `_mythic`, tuning keys, the `raid_mythic_clearance` upgrade id) so
+ * this is a pure display-layer rename with no save migration needed.
+ * Every UI spot that used to derive a label by capitalizing the raw id
+ * (`difficulty[0].toUpperCase() + difficulty.slice(1)`) reads this map
+ * instead. "Mythic" -> "Legendary" for now; a genuinely new fourth tier is
+ * a separate, much bigger backlog item (see guild-idler-status.md) that
+ * would slot in above this one, not replace it.
+ */
+export const RAID_DIFFICULTY_LABEL: Record<RaidDifficulty, string> = {
+  normal: 'Normal',
+  heroic: 'Heroic',
+  mythic: 'Legendary',
+};
+
+/**
  * Badge icons for the N/H/M difficulty circles. Lives in its own
  * public/raid-icons/ folder, separate from public/item-icons/, since these
  * are fixed UI chrome (exactly three, never devtool-edited) rather than

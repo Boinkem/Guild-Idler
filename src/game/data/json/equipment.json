@@ -1369,7 +1369,7 @@
   },
   {
     "id": "gravewatchers_band_mythic",
-    "name": "Gravewatcher's Band (Mythic)",
+    "name": "Gravewatcher's Band (Legendary)",
     "slot": "ring",
     "rarity": "epic",
     "reqLevel": 22,
@@ -1410,7 +1410,7 @@
   },
   {
     "id": "ashwoven_charm_mythic",
-    "name": "Ashwoven Charm (Mythic)",
+    "name": "Ashwoven Charm (Legendary)",
     "slot": "amulet",
     "rarity": "epic",
     "reqLevel": 22,
@@ -1450,7 +1450,7 @@
   },
   {
     "id": "choir_mask_mythic",
-    "name": "Mask of the Hollow Choir (Mythic)",
+    "name": "Mask of the Hollow Choir (Legendary)",
     "slot": "helmet",
     "rarity": "epic",
     "reqLevel": 24,
@@ -1492,7 +1492,7 @@
   },
   {
     "id": "silenced_bell_mythic",
-    "name": "The Silenced Bell (Mythic)",
+    "name": "The Silenced Bell (Legendary)",
     "slot": "amulet",
     "rarity": "epic",
     "reqLevel": 24,
@@ -1532,7 +1532,7 @@
   },
   {
     "id": "dragon_helm_mythic",
-    "name": "Dragonscale Helm (Mythic)",
+    "name": "Dragonscale Helm (Legendary)",
     "slot": "helmet",
     "rarity": "legendary",
     "reqLevel": 25,
@@ -1566,7 +1566,7 @@
   },
   {
     "id": "copper_band_mythic",
-    "name": "Copper Band (Mythic)",
+    "name": "Copper Band (Legendary)",
     "slot": "ring",
     "rarity": "epic",
     "reqLevel": 8,
@@ -1581,7 +1581,7 @@
   },
   {
     "id": "work_gloves_mythic",
-    "name": "Work Gloves (Mythic)",
+    "name": "Work Gloves (Legendary)",
     "slot": "gloves",
     "rarity": "epic",
     "reqLevel": 8,
@@ -1631,7 +1631,7 @@
   },
   {
     "id": "knights_blade_mythic",
-    "name": "Knight's Blade (Mythic)",
+    "name": "Knight's Blade (Legendary)",
     "slot": "weapon",
     "rarity": "epic",
     "reqLevel": 8,
@@ -1671,7 +1671,7 @@
   },
   {
     "id": "iron_helm_mythic",
-    "name": "Iron Helm (Mythic)",
+    "name": "Iron Helm (Legendary)",
     "slot": "helmet",
     "rarity": "epic",
     "reqLevel": 8,
@@ -1712,7 +1712,7 @@
   },
   {
     "id": "chainmail_mythic",
-    "name": "Chainmail Hauberk (Mythic)",
+    "name": "Chainmail Hauberk (Legendary)",
     "slot": "chest",
     "rarity": "epic",
     "reqLevel": 8,
@@ -1754,7 +1754,7 @@
   },
   {
     "id": "ranger_boots_mythic",
-    "name": "Ranger Boots (Mythic)",
+    "name": "Ranger Boots (Legendary)",
     "slot": "boots",
     "rarity": "epic",
     "reqLevel": 8,
@@ -1789,7 +1789,7 @@
   },
   {
     "id": "tollkeepers_signet_mythic",
-    "name": "Tollkeeper's Signet (Mythic)",
+    "name": "Tollkeeper's Signet (Legendary)",
     "slot": "ring",
     "rarity": "epic",
     "reqLevel": 8,
@@ -1844,7 +1844,7 @@
   },
   {
     "id": "frostfang_claw_mythic",
-    "name": "Frostfang Claw (Mythic)",
+    "name": "Frostfang Claw (Legendary)",
     "slot": "weapon",
     "rarity": "epic",
     "reqLevel": 18,
@@ -1902,7 +1902,7 @@
   },
   {
     "id": "keepers_warded_charm_mythic",
-    "name": "Keeper's Warded Charm (Mythic)",
+    "name": "Keeper's Warded Charm (Legendary)",
     "slot": "amulet",
     "rarity": "epic",
     "reqLevel": 19,
@@ -1957,7 +1957,7 @@
   },
   {
     "id": "frostwalker_treads_mythic",
-    "name": "Frostwalker Treads (Mythic)",
+    "name": "Frostwalker Treads (Legendary)",
     "slot": "boots",
     "rarity": "epic",
     "reqLevel": 19,
@@ -2012,7 +2012,7 @@
   },
   {
     "id": "frozen_maw_shield_mythic",
-    "name": "Frozen Maw (Mythic)",
+    "name": "Frozen Maw (Legendary)",
     "slot": "shield",
     "rarity": "legendary",
     "reqLevel": 20,
@@ -2066,7 +2066,7 @@
   },
   {
     "id": "cinder_ash_grip_mythic",
-    "name": "Grip of Cinder Ash (Mythic)",
+    "name": "Grip of Cinder Ash (Legendary)",
     "slot": "gloves",
     "rarity": "epic",
     "reqLevel": 26,
@@ -2123,7 +2123,7 @@
   },
   {
     "id": "loyalists_brand_mythic",
-    "name": "The Loyalist's Brand (Mythic)",
+    "name": "The Loyalist's Brand (Legendary)",
     "slot": "ring",
     "rarity": "epic",
     "reqLevel": 26,
@@ -2182,7 +2182,7 @@
   },
   {
     "id": "cornered_fang_mythic",
-    "name": "Cornered Fang (Mythic)",
+    "name": "Cornered Fang (Legendary)",
     "slot": "weapon",
     "rarity": "legendary",
     "reqLevel": 27,
@@ -2241,7 +2241,7 @@
   },
   {
     "id": "desperate_ends_crown_mythic",
-    "name": "Crown of a Desperate End (Mythic)",
+    "name": "Crown of a Desperate End (Legendary)",
     "slot": "helmet",
     "rarity": "legendary",
     "reqLevel": 27,
@@ -2284,7 +2284,7 @@
   },
   {
     "id": "the_last_ember_mythic",
-    "name": "The Last Ember (Mythic)",
+    "name": "The Last Ember (Legendary)",
     "slot": "amulet",
     "rarity": "legendary",
     "reqLevel": 55,
@@ -2327,7 +2327,7 @@
   },
   {
     "id": "requiem_blade_mythic",
-    "name": "Requiem Edge (Mythic)",
+    "name": "Requiem Edge (Legendary)",
     "slot": "weapon",
     "rarity": "legendary",
     "reqLevel": 55,
@@ -2366,7 +2366,7 @@
   },
   {
     "id": "requiem_crown_mythic",
-    "name": "Requiem Circlet (Mythic)",
+    "name": "Requiem Circlet (Legendary)",
     "slot": "helmet",
     "rarity": "legendary",
     "reqLevel": 55,
@@ -2405,7 +2405,7 @@
   },
   {
     "id": "requiem_plate_mythic",
-    "name": "Requiem Vestments (Mythic)",
+    "name": "Requiem Vestments (Legendary)",
     "slot": "chest",
     "rarity": "legendary",
     "reqLevel": 55,
@@ -2443,7 +2443,7 @@
   },
   {
     "id": "requiem_signet_mythic",
-    "name": "Requiem Signet (Mythic)",
+    "name": "Requiem Signet (Legendary)",
     "slot": "ring",
     "rarity": "legendary",
     "reqLevel": 55,
@@ -2480,7 +2480,7 @@
   },
   {
     "id": "requiem_grips_mythic",
-    "name": "Requiem Grasp (Mythic)",
+    "name": "Requiem Grasp (Legendary)",
     "slot": "gloves",
     "rarity": "legendary",
     "reqLevel": 55,
@@ -2517,7 +2517,7 @@
   },
   {
     "id": "requiem_striders_mythic",
-    "name": "Requiem Stride (Mythic)",
+    "name": "Requiem Stride (Legendary)",
     "slot": "boots",
     "rarity": "legendary",
     "reqLevel": 55,
@@ -3042,7 +3042,7 @@
   },
   {
     "id": "cinderfang_gauntlets_mythic",
-    "name": "Cinderfang Gauntlets (Mythic)",
+    "name": "Cinderfang Gauntlets (Legendary)",
     "slot": "gloves",
     "rarity": "epic",
     "reqLevel": 30,
@@ -3100,7 +3100,7 @@
   },
   {
     "id": "wyrmwardens_cloak_mythic",
-    "name": "Wyrmwarden's Cloak (Mythic)",
+    "name": "Wyrmwarden's Cloak (Legendary)",
     "slot": "cloak",
     "rarity": "epic",
     "reqLevel": 30,
@@ -3158,7 +3158,7 @@
   },
   {
     "id": "scaleknit_boots_mythic",
-    "name": "Scaleknit Boots (Mythic)",
+    "name": "Scaleknit Boots (Legendary)",
     "slot": "boots",
     "rarity": "epic",
     "reqLevel": 30,
@@ -3218,7 +3218,7 @@
   },
   {
     "id": "brood_fang_dagger_mythic",
-    "name": "Brood Fang Dagger (Mythic)",
+    "name": "Brood Fang Dagger (Legendary)",
     "slot": "weapon",
     "rarity": "epic",
     "reqLevel": 30,
@@ -3277,7 +3277,7 @@
   },
   {
     "id": "blackscale_helm_mythic",
-    "name": "Blackscale Helm (Mythic)",
+    "name": "Blackscale Helm (Legendary)",
     "slot": "helmet",
     "rarity": "legendary",
     "reqLevel": 30,
@@ -3339,7 +3339,7 @@
   },
   {
     "id": "broodmothers_crown_mythic",
-    "name": "Brood Mother's Crown (Mythic)",
+    "name": "Brood Mother's Crown (Legendary)",
     "slot": "amulet",
     "rarity": "legendary",
     "reqLevel": 30,
@@ -3399,7 +3399,7 @@
   },
   {
     "id": "sewn_maw_greataxe_mythic",
-    "name": "Sewn Maw Greataxe (Mythic)",
+    "name": "Sewn Maw Greataxe (Legendary)",
     "slot": "weapon",
     "rarity": "epic",
     "reqLevel": 41,
@@ -3457,7 +3457,7 @@
   },
   {
     "id": "stitched_hide_vest_mythic",
-    "name": "Stitched Hide Vest (Mythic)",
+    "name": "Stitched Hide Vest (Legendary)",
     "slot": "chest",
     "rarity": "epic",
     "reqLevel": 41,
@@ -3517,7 +3517,7 @@
   },
   {
     "id": "phylactery_shard_ring_mythic",
-    "name": "Phylactery Shard Ring (Mythic)",
+    "name": "Phylactery Shard Ring (Legendary)",
     "slot": "ring",
     "rarity": "epic",
     "reqLevel": 41,
@@ -3578,7 +3578,7 @@
   },
   {
     "id": "unbinding_gauntlets_mythic",
-    "name": "Unbinding Gauntlets (Mythic)",
+    "name": "Unbinding Gauntlets (Legendary)",
     "slot": "gloves",
     "rarity": "epic",
     "reqLevel": 41,
@@ -3639,7 +3639,7 @@
   },
   {
     "id": "lichbound_diadem_mythic",
-    "name": "Lichbound Diadem (Mythic)",
+    "name": "Lichbound Diadem (Legendary)",
     "slot": "helmet",
     "rarity": "legendary",
     "reqLevel": 41,
@@ -3702,7 +3702,7 @@
   },
   {
     "id": "grimward_amulet_mythic",
-    "name": "Grimward Amulet (Mythic)",
+    "name": "Grimward Amulet (Legendary)",
     "slot": "amulet",
     "rarity": "legendary",
     "reqLevel": 41,
@@ -3764,7 +3764,7 @@
   },
   {
     "id": "woven_mind_circlet_mythic",
-    "name": "Woven Mind Circlet (Mythic)",
+    "name": "Woven Mind Circlet (Legendary)",
     "slot": "helmet",
     "rarity": "epic",
     "reqLevel": 43,
@@ -3825,7 +3825,7 @@
   },
   {
     "id": "unraveling_cloak_mythic",
-    "name": "Unraveling Cloak (Mythic)",
+    "name": "Unraveling Cloak (Legendary)",
     "slot": "cloak",
     "rarity": "epic",
     "reqLevel": 43,
@@ -3888,7 +3888,7 @@
   },
   {
     "id": "threadcutter_mythic",
-    "name": "Threadcutter (Mythic)",
+    "name": "Threadcutter (Legendary)",
     "slot": "weapon",
     "rarity": "legendary",
     "reqLevel": 43,

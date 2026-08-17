@@ -5,7 +5,7 @@ import { RaidManager } from '../../game/managers/RaidManager';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { GuildManager } from '../../game/managers/GuildManager';
 import {
-  RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON,
+  RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON, RAID_DIFFICULTY_LABEL,
   isRaidUnlocked, raidLockReason, parseLootEntry, lootForDifficulty,
 } from '../../game/data/raids';
 import { EQUIPMENT_BY_ID, SET_BY_ID } from '../../game/data/equipment';
@@ -17,7 +17,10 @@ import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
 import { RaidRoomSprite } from '../sprites/RaidRoomSprite';
 import { formatDuration, describeMods, formatGold, formatNumber, RARITY_COLOR } from '../../game/util';
 
-const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', mythic: 'M' };
+// Single-letter fallback badge (used only if the icon art at
+// public/raid-icons/<difficulty>.png is missing) -- 'L' for Legendary
+// (patch 0165 rename), matching RAID_DIFFICULTY_LABEL's full word.
+const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', mythic: 'L' };
 /** Reuses the existing rarity palette rather than inventing a new colour
  *  scheme -- Normal/Heroic/Mythic roughly parallel uncommon/rare/epic
  *  stakes, so the same visual language already trained elsewhere applies. */
@@ -33,7 +36,7 @@ const DIFFICULTY_UNLOCK: Record<RaidDifficulty, 'raids' | 'raidsHeroic' | 'raids
   normal: 'raids', heroic: 'raidsHeroic', mythic: 'raidsMythic',
 };
 const DIFFICULTY_UNLOCK_LABEL: Record<RaidDifficulty, string> = {
-  normal: 'Raid Charter', heroic: 'Heroic Clearance', mythic: 'Mythic Clearance',
+  normal: 'Raid Charter', heroic: 'Heroic Clearance', mythic: 'Legendary Clearance',
 };
 
 /**
@@ -281,7 +284,7 @@ function DifficultyCircle({
         onClick={onClick}
         disabled={!unlocked}
         title={unlocked
-          ? `${difficulty[0].toUpperCase()}${difficulty.slice(1)} -- ${RAID_DIFFICULTIES[difficulty].partySize} heroes`
+          ? `${RAID_DIFFICULTY_LABEL[difficulty]} -- ${RAID_DIFFICULTIES[difficulty].partySize} heroes`
           : `Requires the ${DIFFICULTY_UNLOCK_LABEL[difficulty]} upgrade`}
       >
         {!imgFailed ? (
@@ -299,7 +302,7 @@ function DifficultyCircle({
        *  title tooltip -- direct request: a player shouldn't have to
        *  hover each circle to know which tier is which. */}
       <span className="tiny" style={{ color: unlocked ? color : 'var(--muted)', fontWeight: 700 }}>
-        {difficulty[0].toUpperCase()}{difficulty.slice(1)}
+        {RAID_DIFFICULTY_LABEL[difficulty]}
       </span>
     </div>
   );
@@ -549,7 +552,7 @@ function RaidDetailModal({
                         )}
                         {mismatched && cap != null && (
                           <p className="tiny bad" style={{ marginTop: 2 }}>
-                            Success can't rise above {cap}% at {difficulty[0].toUpperCase()}{difficulty.slice(1)} while unmet, no matter how strong the party is.
+                            Success can't rise above {cap}% at {RAID_DIFFICULTY_LABEL[difficulty]} while unmet, no matter how strong the party is.
                           </p>
                         )}
                       </div>
@@ -600,7 +603,7 @@ function RaidDetailModal({
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h3>Send the guild?</h3>
             <p className="small muted" style={{ marginTop: 0 }}>
-              {raid.name} — {difficulty[0].toUpperCase()}{difficulty.slice(1)}
+              {raid.name} — {RAID_DIFFICULTY_LABEL[difficulty]}
             </p>
             <div className="row wrap" style={{ gap: 6, margin: '10px 0' }}>
               {selectedHeroIds.map((id) => {

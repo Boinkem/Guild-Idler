@@ -222,7 +222,7 @@ export const RaidManager = {
       return { ok: false, error: 'Heroic Clearance is required to raid at this difficulty.' };
     }
     if (difficulty === 'mythic' && !ModifierManager.hasUnlock(state, 'raidsMythic')) {
-      return { ok: false, error: 'Mythic Clearance is required to raid at this difficulty.' };
+      return { ok: false, error: 'Legendary Clearance is required to raid at this difficulty.' };
     }
 
     const cfg = RAID_DIFFICULTIES[difficulty];

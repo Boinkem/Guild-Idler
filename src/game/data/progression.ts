@@ -159,8 +159,11 @@ export const UPGRADES: UpgradeDef[] = [
     modsPerLevel: {}, unlocks: 'raidsHeroic',
   },
   {
-    id: 'raid_mythic_clearance', name: 'Mythic Clearance',
-    description: "The guild's word that it can handle Mythic difficulty -- the hardest raiding gets, and the only tier where the very best loot actually drops.",
+    // id kept as 'raid_mythic_clearance' (patch 0165 rename is display-only
+    // -- see RAID_DIFFICULTY_LABEL in raids.ts) so existing saves' upgrade
+    // levels, keyed by this id, need no migration.
+    id: 'raid_mythic_clearance', name: 'Legendary Clearance',
+    description: "The guild's word that it can handle Legendary difficulty -- the hardest raiding gets, and the only tier where the very best loot actually drops.",
     baseCost: Tuning.get('upgrade.raid_mythic_clearance.baseCost'),
     costGrowth: Tuning.get('upgrade.raid_mythic_clearance.costGrowth'),
     maxLevel: Tuning.get('upgrade.raid_mythic_clearance.maxLevel'),

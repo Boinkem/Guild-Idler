@@ -1,0 +1,763 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index a804bb9..7229730 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -10701,6 +10701,98 @@ pass:
+   chain(s) above as one coordinated content pass rather than two
+   unrelated asks, since they'd fill the same hole for the same reason.
+ 
++### Backlog addendum: a fourth raid difficulty tier, gated on the level-60 cap -- idea logged, not scoped
++
++Raised alongside the patch 0165 Mythic -> Legendary rename below, and ties
++directly into the level-60 backlog entry just above rather than
++replacing it. The naming discussion that led to the rename started from
++a real proposal -- a genuinely new fourth raid difficulty tier, Normal ->
++Heroic -> Legendary -> Mythic, sitting above today's top tier rather than
++between existing ones. Deliberately **not** built this pass (see the
++patch 0165 entry below for why -- renaming today's Mythic to Legendary
++first, keeping the actual fourth-tier idea for later, was the agreed
++scope split), but worth recording properly rather than losing the shape
++of the idea:
++
++- **Likely gated behind the level 60 cap raise** logged just above, not
++  available earlier -- a fourth tier needs somewhere new to be genuinely
++  harder than today's ceiling, and level 60 is that headroom.
++- **Every existing raid would need to scale up to level 60** for this
++  tier specifically, not just the newest ones -- Blackford Keep through
++  Requiem for the Last God all getting a real fourth-tier encounter/loot
++  pass, not only whatever ships after the cap raise. Ties directly into
++  this section's own "class-specific armour sets, for a level 60 cap"
++  item -- this tier is very plausibly where those sets would actually
++  drop.
++- **New endgame content generally** was raised in the same conversation
++  as the reason to want a fourth tier at all, rather than the tier being
++  the whole ask on its own -- something for a guild that's already
++  cleared everything current to work toward, in the same spirit as the
++  Requiem raid's own role today.
++- Naming, tuning curve (successPenalty/rewardMultiplier/lootBonus/
++  durationMultiplier/roleMismatchCap/partySize), and per-raid loot
++  authoring (every raid-exclusive item would need a genuine new top-tier
++  variant, not just another reskin) are all still open -- this is a
++  scoping conversation for whenever the level-60 raise itself gets
++  picked up, not a ready-to-build spec.
++
++### Mythic raid difficulty renamed to Legendary -- built (patch 0165)
++
++```discord-update
++Dev Update | Raid Difficulty Rename
++
++- Raid difficulty is now Normal / Heroic / Legendary (was Mythic)
++- Every raid-exclusive Legendary item, upgrade, and message updated to match
++```
++
++Came out of a conversation about adding a genuine fourth raid difficulty
++tier (Normal -> Heroic -> Legendary -> Mythic, mirroring the quest
++ladder's five tiers minus Easy). Decided against building a real new tier
++for now -- see the backlog addendum above for that idea, kept for later --
++and instead just renamed today's top tier from Mythic to Legendary,
++display-only.
++
++**Internal id deliberately unchanged.** `RaidDifficulty` is still
++`'normal' | 'heroic' | 'mythic'` everywhere it's actually data: save
++fields (`completedRaidDifficulties`, in-progress raid state), equipment
++ids (`iron_helm_mythic`, `dragon_helm_mythic`, etc. -- ~40 raid-exclusive
++items across every raid), the `raid_mythic_clearance` upgrade id, its
++`raidsMythic` unlock flag, and every `raid_difficulty.mythic.*` tuning
++key. Renaming any of those would need a save migration (existing saves
++already have `'mythic'` written into completed-raid history and owned
++item ids) for a purely cosmetic change -- not worth the risk. Every
++player-facing *label*, though, changes.
++
++**New `RAID_DIFFICULTY_LABEL` map** (`raids.ts`), alongside the existing
++`RAID_DIFFICULTY_ICON` -- `{ normal: 'Normal', heroic: 'Heroic', mythic:
++'Legendary' }`. Every UI spot that used to derive its label by
++capitalizing the raw id (`difficulty[0].toUpperCase() +
++difficulty.slice(1)`) now reads this map instead: the difficulty-circle
++badges and their tooltips, the role-mismatch success-cap warning, the
++raid confirmation modal, `RaidResultModal`, and `OfflineReportModal` --
++six call sites across four files. The single-letter fallback badge
++(shown only if `public/raid-icons/mythic.png` fails to load) changed
++`'M'` -> `'L'` to match.
++
++**Text renamed, ids kept.** The `raid_mythic_clearance` upgrade's display
++`name`/`description` ("Mythic Clearance" -> "Legendary Clearance") and
++`RaidManager`'s own gating error string, both in code/data, not the id.
++Every raid-exclusive equipment item's `name` field containing `(Mythic)`
++-- 42 occurrences across ~41 items (Gravewatcher's Band, Dragonscale
++Helm, the full Requiem set, Grimward set, Cinderfang set, and more) --
++mechanically replaced with `(Legendary)`; item `id`s, `mods`, and every
++other field untouched, so owned copies in existing saves resolve
++identically. Tuning registry labels/descriptions referencing "Mythic"
++(role-mismatch cap, success penalty, loot bonus, duration/reward
++multiplier, the Legendary Clearance upgrade's own three tuning entries)
++updated too -- DevTool-only text, not save-relevant, done for
++consistency while already in these files.
++
++**Verified:** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean against a fresh clone with every
++file applied. `equipment.json` and `tuning.json` both re-parsed as valid
++JSON post-edit.
++
+ ### Rarity banner art behind gear cards -- built (patch 0159)
+ 
+ ```discord-update
+diff --git a/src/game/data/json/equipment.json b/src/game/data/json/equipment.json
+index d37101b..e5a11e1 100644
+--- a/src/game/data/json/equipment.json
++++ b/src/game/data/json/equipment.json
+@@ -1369,7 +1369,7 @@
+   },
+   {
+     "id": "gravewatchers_band_mythic",
+-    "name": "Gravewatcher's Band (Mythic)",
++    "name": "Gravewatcher's Band (Legendary)",
+     "slot": "ring",
+     "rarity": "epic",
+     "reqLevel": 22,
+@@ -1410,7 +1410,7 @@
+   },
+   {
+     "id": "ashwoven_charm_mythic",
+-    "name": "Ashwoven Charm (Mythic)",
++    "name": "Ashwoven Charm (Legendary)",
+     "slot": "amulet",
+     "rarity": "epic",
+     "reqLevel": 22,
+@@ -1450,7 +1450,7 @@
+   },
+   {
+     "id": "choir_mask_mythic",
+-    "name": "Mask of the Hollow Choir (Mythic)",
++    "name": "Mask of the Hollow Choir (Legendary)",
+     "slot": "helmet",
+     "rarity": "epic",
+     "reqLevel": 24,
+@@ -1492,7 +1492,7 @@
+   },
+   {
+     "id": "silenced_bell_mythic",
+-    "name": "The Silenced Bell (Mythic)",
++    "name": "The Silenced Bell (Legendary)",
+     "slot": "amulet",
+     "rarity": "epic",
+     "reqLevel": 24,
+@@ -1532,7 +1532,7 @@
+   },
+   {
+     "id": "dragon_helm_mythic",
+-    "name": "Dragonscale Helm (Mythic)",
++    "name": "Dragonscale Helm (Legendary)",
+     "slot": "helmet",
+     "rarity": "legendary",
+     "reqLevel": 25,
+@@ -1566,7 +1566,7 @@
+   },
+   {
+     "id": "copper_band_mythic",
+-    "name": "Copper Band (Mythic)",
++    "name": "Copper Band (Legendary)",
+     "slot": "ring",
+     "rarity": "epic",
+     "reqLevel": 8,
+@@ -1581,7 +1581,7 @@
+   },
+   {
+     "id": "work_gloves_mythic",
+-    "name": "Work Gloves (Mythic)",
++    "name": "Work Gloves (Legendary)",
+     "slot": "gloves",
+     "rarity": "epic",
+     "reqLevel": 8,
+@@ -1631,7 +1631,7 @@
+   },
+   {
+     "id": "knights_blade_mythic",
+-    "name": "Knight's Blade (Mythic)",
++    "name": "Knight's Blade (Legendary)",
+     "slot": "weapon",
+     "rarity": "epic",
+     "reqLevel": 8,
+@@ -1671,7 +1671,7 @@
+   },
+   {
+     "id": "iron_helm_mythic",
+-    "name": "Iron Helm (Mythic)",
++    "name": "Iron Helm (Legendary)",
+     "slot": "helmet",
+     "rarity": "epic",
+     "reqLevel": 8,
+@@ -1712,7 +1712,7 @@
+   },
+   {
+     "id": "chainmail_mythic",
+-    "name": "Chainmail Hauberk (Mythic)",
++    "name": "Chainmail Hauberk (Legendary)",
+     "slot": "chest",
+     "rarity": "epic",
+     "reqLevel": 8,
+@@ -1754,7 +1754,7 @@
+   },
+   {
+     "id": "ranger_boots_mythic",
+-    "name": "Ranger Boots (Mythic)",
++    "name": "Ranger Boots (Legendary)",
+     "slot": "boots",
+     "rarity": "epic",
+     "reqLevel": 8,
+@@ -1789,7 +1789,7 @@
+   },
+   {
+     "id": "tollkeepers_signet_mythic",
+-    "name": "Tollkeeper's Signet (Mythic)",
++    "name": "Tollkeeper's Signet (Legendary)",
+     "slot": "ring",
+     "rarity": "epic",
+     "reqLevel": 8,
+@@ -1844,7 +1844,7 @@
+   },
+   {
+     "id": "frostfang_claw_mythic",
+-    "name": "Frostfang Claw (Mythic)",
++    "name": "Frostfang Claw (Legendary)",
+     "slot": "weapon",
+     "rarity": "epic",
+     "reqLevel": 18,
+@@ -1902,7 +1902,7 @@
+   },
+   {
+     "id": "keepers_warded_charm_mythic",
+-    "name": "Keeper's Warded Charm (Mythic)",
++    "name": "Keeper's Warded Charm (Legendary)",
+     "slot": "amulet",
+     "rarity": "epic",
+     "reqLevel": 19,
+@@ -1957,7 +1957,7 @@
+   },
+   {
+     "id": "frostwalker_treads_mythic",
+-    "name": "Frostwalker Treads (Mythic)",
++    "name": "Frostwalker Treads (Legendary)",
+     "slot": "boots",
+     "rarity": "epic",
+     "reqLevel": 19,
+@@ -2012,7 +2012,7 @@
+   },
+   {
+     "id": "frozen_maw_shield_mythic",
+-    "name": "Frozen Maw (Mythic)",
++    "name": "Frozen Maw (Legendary)",
+     "slot": "shield",
+     "rarity": "legendary",
+     "reqLevel": 20,
+@@ -2066,7 +2066,7 @@
+   },
+   {
+     "id": "cinder_ash_grip_mythic",
+-    "name": "Grip of Cinder Ash (Mythic)",
++    "name": "Grip of Cinder Ash (Legendary)",
+     "slot": "gloves",
+     "rarity": "epic",
+     "reqLevel": 26,
+@@ -2123,7 +2123,7 @@
+   },
+   {
+     "id": "loyalists_brand_mythic",
+-    "name": "The Loyalist's Brand (Mythic)",
++    "name": "The Loyalist's Brand (Legendary)",
+     "slot": "ring",
+     "rarity": "epic",
+     "reqLevel": 26,
+@@ -2182,7 +2182,7 @@
+   },
+   {
+     "id": "cornered_fang_mythic",
+-    "name": "Cornered Fang (Mythic)",
++    "name": "Cornered Fang (Legendary)",
+     "slot": "weapon",
+     "rarity": "legendary",
+     "reqLevel": 27,
+@@ -2241,7 +2241,7 @@
+   },
+   {
+     "id": "desperate_ends_crown_mythic",
+-    "name": "Crown of a Desperate End (Mythic)",
++    "name": "Crown of a Desperate End (Legendary)",
+     "slot": "helmet",
+     "rarity": "legendary",
+     "reqLevel": 27,
+@@ -2284,7 +2284,7 @@
+   },
+   {
+     "id": "the_last_ember_mythic",
+-    "name": "The Last Ember (Mythic)",
++    "name": "The Last Ember (Legendary)",
+     "slot": "amulet",
+     "rarity": "legendary",
+     "reqLevel": 55,
+@@ -2327,7 +2327,7 @@
+   },
+   {
+     "id": "requiem_blade_mythic",
+-    "name": "Requiem Edge (Mythic)",
++    "name": "Requiem Edge (Legendary)",
+     "slot": "weapon",
+     "rarity": "legendary",
+     "reqLevel": 55,
+@@ -2366,7 +2366,7 @@
+   },
+   {
+     "id": "requiem_crown_mythic",
+-    "name": "Requiem Circlet (Mythic)",
++    "name": "Requiem Circlet (Legendary)",
+     "slot": "helmet",
+     "rarity": "legendary",
+     "reqLevel": 55,
+@@ -2405,7 +2405,7 @@
+   },
+   {
+     "id": "requiem_plate_mythic",
+-    "name": "Requiem Vestments (Mythic)",
++    "name": "Requiem Vestments (Legendary)",
+     "slot": "chest",
+     "rarity": "legendary",
+     "reqLevel": 55,
+@@ -2443,7 +2443,7 @@
+   },
+   {
+     "id": "requiem_signet_mythic",
+-    "name": "Requiem Signet (Mythic)",
++    "name": "Requiem Signet (Legendary)",
+     "slot": "ring",
+     "rarity": "legendary",
+     "reqLevel": 55,
+@@ -2480,7 +2480,7 @@
+   },
+   {
+     "id": "requiem_grips_mythic",
+-    "name": "Requiem Grasp (Mythic)",
++    "name": "Requiem Grasp (Legendary)",
+     "slot": "gloves",
+     "rarity": "legendary",
+     "reqLevel": 55,
+@@ -2517,7 +2517,7 @@
+   },
+   {
+     "id": "requiem_striders_mythic",
+-    "name": "Requiem Stride (Mythic)",
++    "name": "Requiem Stride (Legendary)",
+     "slot": "boots",
+     "rarity": "legendary",
+     "reqLevel": 55,
+@@ -3042,7 +3042,7 @@
+   },
+   {
+     "id": "cinderfang_gauntlets_mythic",
+-    "name": "Cinderfang Gauntlets (Mythic)",
++    "name": "Cinderfang Gauntlets (Legendary)",
+     "slot": "gloves",
+     "rarity": "epic",
+     "reqLevel": 30,
+@@ -3100,7 +3100,7 @@
+   },
+   {
+     "id": "wyrmwardens_cloak_mythic",
+-    "name": "Wyrmwarden's Cloak (Mythic)",
++    "name": "Wyrmwarden's Cloak (Legendary)",
+     "slot": "cloak",
+     "rarity": "epic",
+     "reqLevel": 30,
+@@ -3158,7 +3158,7 @@
+   },
+   {
+     "id": "scaleknit_boots_mythic",
+-    "name": "Scaleknit Boots (Mythic)",
++    "name": "Scaleknit Boots (Legendary)",
+     "slot": "boots",
+     "rarity": "epic",
+     "reqLevel": 30,
+@@ -3218,7 +3218,7 @@
+   },
+   {
+     "id": "brood_fang_dagger_mythic",
+-    "name": "Brood Fang Dagger (Mythic)",
++    "name": "Brood Fang Dagger (Legendary)",
+     "slot": "weapon",
+     "rarity": "epic",
+     "reqLevel": 30,
+@@ -3277,7 +3277,7 @@
+   },
+   {
+     "id": "blackscale_helm_mythic",
+-    "name": "Blackscale Helm (Mythic)",
++    "name": "Blackscale Helm (Legendary)",
+     "slot": "helmet",
+     "rarity": "legendary",
+     "reqLevel": 30,
+@@ -3339,7 +3339,7 @@
+   },
+   {
+     "id": "broodmothers_crown_mythic",
+-    "name": "Brood Mother's Crown (Mythic)",
++    "name": "Brood Mother's Crown (Legendary)",
+     "slot": "amulet",
+     "rarity": "legendary",
+     "reqLevel": 30,
+@@ -3399,7 +3399,7 @@
+   },
+   {
+     "id": "sewn_maw_greataxe_mythic",
+-    "name": "Sewn Maw Greataxe (Mythic)",
++    "name": "Sewn Maw Greataxe (Legendary)",
+     "slot": "weapon",
+     "rarity": "epic",
+     "reqLevel": 41,
+@@ -3457,7 +3457,7 @@
+   },
+   {
+     "id": "stitched_hide_vest_mythic",
+-    "name": "Stitched Hide Vest (Mythic)",
++    "name": "Stitched Hide Vest (Legendary)",
+     "slot": "chest",
+     "rarity": "epic",
+     "reqLevel": 41,
+@@ -3517,7 +3517,7 @@
+   },
+   {
+     "id": "phylactery_shard_ring_mythic",
+-    "name": "Phylactery Shard Ring (Mythic)",
++    "name": "Phylactery Shard Ring (Legendary)",
+     "slot": "ring",
+     "rarity": "epic",
+     "reqLevel": 41,
+@@ -3578,7 +3578,7 @@
+   },
+   {
+     "id": "unbinding_gauntlets_mythic",
+-    "name": "Unbinding Gauntlets (Mythic)",
++    "name": "Unbinding Gauntlets (Legendary)",
+     "slot": "gloves",
+     "rarity": "epic",
+     "reqLevel": 41,
+@@ -3639,7 +3639,7 @@
+   },
+   {
+     "id": "lichbound_diadem_mythic",
+-    "name": "Lichbound Diadem (Mythic)",
++    "name": "Lichbound Diadem (Legendary)",
+     "slot": "helmet",
+     "rarity": "legendary",
+     "reqLevel": 41,
+@@ -3702,7 +3702,7 @@
+   },
+   {
+     "id": "grimward_amulet_mythic",
+-    "name": "Grimward Amulet (Mythic)",
++    "name": "Grimward Amulet (Legendary)",
+     "slot": "amulet",
+     "rarity": "legendary",
+     "reqLevel": 41,
+@@ -3764,7 +3764,7 @@
+   },
+   {
+     "id": "woven_mind_circlet_mythic",
+-    "name": "Woven Mind Circlet (Mythic)",
++    "name": "Woven Mind Circlet (Legendary)",
+     "slot": "helmet",
+     "rarity": "epic",
+     "reqLevel": 43,
+@@ -3825,7 +3825,7 @@
+   },
+   {
+     "id": "unraveling_cloak_mythic",
+-    "name": "Unraveling Cloak (Mythic)",
++    "name": "Unraveling Cloak (Legendary)",
+     "slot": "cloak",
+     "rarity": "epic",
+     "reqLevel": 43,
+@@ -3888,7 +3888,7 @@
+   },
+   {
+     "id": "threadcutter_mythic",
+-    "name": "Threadcutter (Mythic)",
++    "name": "Threadcutter (Legendary)",
+     "slot": "weapon",
+     "rarity": "legendary",
+     "reqLevel": 43,
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 563e984..e85d306 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -106,42 +106,42 @@
+   },
+   {
+     "id": "raid_difficulty.mythic.successPenalty",
+-    "label": "Mythic: success penalty",
++    "label": "Legendary: success penalty",
+     "category": "raid_difficulty",
+     "value": 50,
+     "default": 50,
+     "min": 0,
+     "max": 95,
+-    "description": "Flat percentage points subtracted from every Mythic encounter's success chance. Deliberately brutal -- see 0059's design note before softening."
++    "description": "Flat percentage points subtracted from every Legendary encounter's success chance. Deliberately brutal -- see 0059's design note before softening."
+   },
+   {
+     "id": "raid_difficulty.mythic.lootBonus",
+-    "label": "Mythic: loot bonus",
++    "label": "Legendary: loot bonus",
+     "category": "raid_difficulty",
+     "value": 15,
+     "default": 15,
+     "min": 0,
+-    "description": "Flat percentage points added to every Mythic loot roll."
++    "description": "Flat percentage points added to every Legendary loot roll."
+   },
+   {
+     "id": "raid_difficulty.mythic.durationMultiplier",
+-    "label": "Mythic: duration multiplier",
++    "label": "Legendary: duration multiplier",
+     "category": "raid_difficulty",
+     "value": 1.3,
+     "default": 1.3,
+     "min": 0.5,
+     "max": 3,
+-    "description": "Multiplies total raid duration at Mythic difficulty."
++    "description": "Multiplies total raid duration at Legendary difficulty."
+   },
+   {
+     "id": "raid_difficulty.mythic.rewardMultiplier",
+-    "label": "Mythic: reward multiplier",
++    "label": "Legendary: reward multiplier",
+     "category": "raid_difficulty",
+     "value": 4,
+     "default": 4,
+     "min": 0.5,
+     "max": 10,
+-    "description": "Multiplies gold/xp rewards at Mythic difficulty."
++    "description": "Multiplies gold/xp rewards at Legendary difficulty."
+   },
+   {
+     "id": "raid_difficulty.heroic.roleMismatchCap",
+@@ -155,13 +155,13 @@
+   },
+   {
+     "id": "raid_difficulty.mythic.roleMismatchCap",
+-    "label": "Mythic: role mismatch success cap",
++    "label": "Legendary: role mismatch success cap",
+     "category": "raid_difficulty",
+     "value": 45,
+     "default": 45,
+     "min": 5,
+     "max": 95,
+-    "description": "Same as Heroic's role mismatch success cap, deliberately lower -- Mythic is meant to punish an unmet role requirement harder than Heroic does, same relationship its successPenalty already has."
++    "description": "Same as Heroic's role mismatch success cap, deliberately lower -- Legendary is meant to punish an unmet role requirement harder than Heroic does, same relationship its successPenalty already has."
+   },
+   {
+     "id": "guild_facility.barracks.baseCost",
+@@ -1958,29 +1958,29 @@
+   },
+   {
+     "id": "upgrade.raid_mythic_clearance.baseCost",
+-    "label": "Mythic Clearance: base cost",
++    "label": "Legendary Clearance: base cost",
+     "category": "vendor_upgrades",
+     "value": 60000,
+     "default": 60000,
+-    "description": "Gold cost of Mythic Clearance's first level.",
++    "description": "Gold cost of Legendary Clearance's first level.",
+     "min": 0
+   },
+   {
+     "id": "upgrade.raid_mythic_clearance.costGrowth",
+-    "label": "Mythic Clearance: cost growth",
++    "label": "Legendary Clearance: cost growth",
+     "category": "vendor_upgrades",
+     "value": 1,
+     "default": 1,
+-    "description": "Multiplier applied per level to Mythic Clearance's cost.",
++    "description": "Multiplier applied per level to Legendary Clearance's cost.",
+     "min": 1
+   },
+   {
+     "id": "upgrade.raid_mythic_clearance.maxLevel",
+-    "label": "Mythic Clearance: max level",
++    "label": "Legendary Clearance: max level",
+     "category": "vendor_upgrades",
+     "value": 1,
+     "default": 1,
+-    "description": "Level cap for Mythic Clearance.",
++    "description": "Level cap for Legendary Clearance.",
+     "min": 0
+   },
+   {
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 8202220..766a7fc 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -159,8 +159,11 @@ export const UPGRADES: UpgradeDef[] = [
+     modsPerLevel: {}, unlocks: 'raidsHeroic',
+   },
+   {
+-    id: 'raid_mythic_clearance', name: 'Mythic Clearance',
+-    description: "The guild's word that it can handle Mythic difficulty -- the hardest raiding gets, and the only tier where the very best loot actually drops.",
++    // id kept as 'raid_mythic_clearance' (patch 0165 rename is display-only
++    // -- see RAID_DIFFICULTY_LABEL in raids.ts) so existing saves' upgrade
++    // levels, keyed by this id, need no migration.
++    id: 'raid_mythic_clearance', name: 'Legendary Clearance',
++    description: "The guild's word that it can handle Legendary difficulty -- the hardest raiding gets, and the only tier where the very best loot actually drops.",
+     baseCost: Tuning.get('upgrade.raid_mythic_clearance.baseCost'),
+     costGrowth: Tuning.get('upgrade.raid_mythic_clearance.costGrowth'),
+     maxLevel: Tuning.get('upgrade.raid_mythic_clearance.maxLevel'),
+diff --git a/src/game/data/raids.ts b/src/game/data/raids.ts
+index 39507c7..9f4bda3 100644
+--- a/src/game/data/raids.ts
++++ b/src/game/data/raids.ts
+@@ -88,6 +88,23 @@ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
+ 
+ export const RAID_DIFFICULTY_ORDER: RaidDifficulty[] = ['normal', 'heroic', 'mythic'];
+ 
++/**
++ * Player-facing display label per raid difficulty (patch 0165) -- the
++ * internal id stays `'mythic'` everywhere (save data, item id suffixes
++ * like `_mythic`, tuning keys, the `raid_mythic_clearance` upgrade id) so
++ * this is a pure display-layer rename with no save migration needed.
++ * Every UI spot that used to derive a label by capitalizing the raw id
++ * (`difficulty[0].toUpperCase() + difficulty.slice(1)`) reads this map
++ * instead. "Mythic" -> "Legendary" for now; a genuinely new fourth tier is
++ * a separate, much bigger backlog item (see guild-idler-status.md) that
++ * would slot in above this one, not replace it.
++ */
++export const RAID_DIFFICULTY_LABEL: Record<RaidDifficulty, string> = {
++  normal: 'Normal',
++  heroic: 'Heroic',
++  mythic: 'Legendary',
++};
++
+ /**
+  * Badge icons for the N/H/M difficulty circles. Lives in its own
+  * public/raid-icons/ folder, separate from public/item-icons/, since these
+diff --git a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
+index f9221f6..731c4c2 100644
+--- a/src/game/managers/RaidManager.ts
++++ b/src/game/managers/RaidManager.ts
+@@ -222,7 +222,7 @@ export const RaidManager = {
+       return { ok: false, error: 'Heroic Clearance is required to raid at this difficulty.' };
+     }
+     if (difficulty === 'mythic' && !ModifierManager.hasUnlock(state, 'raidsMythic')) {
+-      return { ok: false, error: 'Mythic Clearance is required to raid at this difficulty.' };
++      return { ok: false, error: 'Legendary Clearance is required to raid at this difficulty.' };
+     }
+ 
+     const cfg = RAID_DIFFICULTIES[difficulty];
+diff --git a/src/ui/OfflineReportModal.tsx b/src/ui/OfflineReportModal.tsx
+index c01b04c..f8c9f42 100644
+--- a/src/ui/OfflineReportModal.tsx
++++ b/src/ui/OfflineReportModal.tsx
+@@ -1,6 +1,7 @@
+ import { useEffect } from 'react';
+ import type { CSSProperties } from 'react';
+ import { RaidDifficulty } from '../game/types';
++import { RAID_DIFFICULTY_LABEL } from '../game/data/raids';
+ import { useEngine } from './useEngine';
+ import { useSettings } from './useSettings';
+ import { formatDuration, formatGold, RARITY_COLOR } from '../game/util';
+@@ -137,7 +138,7 @@ export function OfflineReportModal({ active }: { active: boolean }) {
+               >
+                 <div className="spread">
+                   <span className="card-title">
+-                    {raid.raidName} — {raid.difficulty[0].toUpperCase()}{raid.difficulty.slice(1)}
++                    {raid.raidName} — {RAID_DIFFICULTY_LABEL[raid.difficulty]}
+                   </span>
+                   <span className={`small ${raid.fullClear ? 'good' : raid.encountersCleared > 0 ? '' : 'bad'}`}>
+                     {raid.fullClear ? 'Full clear' : `${raid.encountersCleared}/${raid.totalEncounters}`}
+diff --git a/src/ui/RaidResultModal.tsx b/src/ui/RaidResultModal.tsx
+index 65620c8..e3836d9 100644
+--- a/src/ui/RaidResultModal.tsx
++++ b/src/ui/RaidResultModal.tsx
+@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
+ import type { CSSProperties } from 'react';
+ import { GameEngine } from '../game/engine';
+ import { RaidResult } from '../game/types';
++import { RAID_DIFFICULTY_LABEL } from '../game/data/raids';
+ import { useEngine } from './useEngine';
+ import { playSound } from '../game/sound';
+ import { RarityPill } from './RarityPill';
+@@ -107,7 +108,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
+         className={`modal raid-result-modal ${result.fullClear ? 'raid-full-clear' : ''} ${dismissing ? 'dismissing' : ''}`}
+         onClick={(e) => e.stopPropagation()}
+       >
+-        <h3>{result.raidName} — {result.difficulty[0].toUpperCase()}{result.difficulty.slice(1)}</h3>
++        <h3>{result.raidName} — {RAID_DIFFICULTY_LABEL[result.difficulty]}</h3>
+         <p className={`small ${result.fullClear ? 'good' : result.encountersCleared > 0 ? '' : 'bad'}`} style={{ marginTop: 0 }}>
+           {result.fullClear
+             ? 'Full clear.'
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index c94b5b2..4379db1 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -5,7 +5,7 @@ import { RaidManager } from '../../game/managers/RaidManager';
+ import { HeroManager } from '../../game/managers/HeroManager';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import {
+-  RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON,
++  RAIDS, RAID_ENCOUNTER_BY_ID, RAID_DIFFICULTIES, RAID_DIFFICULTY_ORDER, RAID_DIFFICULTY_ICON, RAID_DIFFICULTY_LABEL,
+   isRaidUnlocked, raidLockReason, parseLootEntry, lootForDifficulty,
+ } from '../../game/data/raids';
+ import { EQUIPMENT_BY_ID, SET_BY_ID } from '../../game/data/equipment';
+@@ -17,7 +17,10 @@ import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
+ import { RaidRoomSprite } from '../sprites/RaidRoomSprite';
+ import { formatDuration, describeMods, formatGold, formatNumber, RARITY_COLOR } from '../../game/util';
+ 
+-const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', mythic: 'M' };
++// Single-letter fallback badge (used only if the icon art at
++// public/raid-icons/<difficulty>.png is missing) -- 'L' for Legendary
++// (patch 0165 rename), matching RAID_DIFFICULTY_LABEL's full word.
++const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', mythic: 'L' };
+ /** Reuses the existing rarity palette rather than inventing a new colour
+  *  scheme -- Normal/Heroic/Mythic roughly parallel uncommon/rare/epic
+  *  stakes, so the same visual language already trained elsewhere applies. */
+@@ -33,7 +36,7 @@ const DIFFICULTY_UNLOCK: Record<RaidDifficulty, 'raids' | 'raidsHeroic' | 'raids
+   normal: 'raids', heroic: 'raidsHeroic', mythic: 'raidsMythic',
+ };
+ const DIFFICULTY_UNLOCK_LABEL: Record<RaidDifficulty, string> = {
+-  normal: 'Raid Charter', heroic: 'Heroic Clearance', mythic: 'Mythic Clearance',
++  normal: 'Raid Charter', heroic: 'Heroic Clearance', mythic: 'Legendary Clearance',
+ };
+ 
+ /**
+@@ -281,7 +284,7 @@ function DifficultyCircle({
+         onClick={onClick}
+         disabled={!unlocked}
+         title={unlocked
+-          ? `${difficulty[0].toUpperCase()}${difficulty.slice(1)} -- ${RAID_DIFFICULTIES[difficulty].partySize} heroes`
++          ? `${RAID_DIFFICULTY_LABEL[difficulty]} -- ${RAID_DIFFICULTIES[difficulty].partySize} heroes`
+           : `Requires the ${DIFFICULTY_UNLOCK_LABEL[difficulty]} upgrade`}
+       >
+         {!imgFailed ? (
+@@ -299,7 +302,7 @@ function DifficultyCircle({
+        *  title tooltip -- direct request: a player shouldn't have to
+        *  hover each circle to know which tier is which. */}
+       <span className="tiny" style={{ color: unlocked ? color : 'var(--muted)', fontWeight: 700 }}>
+-        {difficulty[0].toUpperCase()}{difficulty.slice(1)}
++        {RAID_DIFFICULTY_LABEL[difficulty]}
+       </span>
+     </div>
+   );
+@@ -549,7 +552,7 @@ function RaidDetailModal({
+                         )}
+                         {mismatched && cap != null && (
+                           <p className="tiny bad" style={{ marginTop: 2 }}>
+-                            Success can't rise above {cap}% at {difficulty[0].toUpperCase()}{difficulty.slice(1)} while unmet, no matter how strong the party is.
++                            Success can't rise above {cap}% at {RAID_DIFFICULTY_LABEL[difficulty]} while unmet, no matter how strong the party is.
+                           </p>
+                         )}
+                       </div>
+@@ -600,7 +603,7 @@ function RaidDetailModal({
+           <div className="modal" onClick={(e) => e.stopPropagation()}>
+             <h3>Send the guild?</h3>
+             <p className="small muted" style={{ marginTop: 0 }}>
+-              {raid.name} — {difficulty[0].toUpperCase()}{difficulty.slice(1)}
++              {raid.name} — {RAID_DIFFICULTY_LABEL[difficulty]}
+             </p>
+             <div className="row wrap" style={{ gap: 6, margin: '10px 0' }}>
+               {selectedHeroIds.map((id) => {

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { RaidDifficulty } from '../game/types';
+import { RAID_DIFFICULTY_LABEL } from '../game/data/raids';
 import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
 import { formatDuration, formatGold, RARITY_COLOR } from '../game/util';
@@ -137,7 +138,7 @@ export function OfflineReportModal({ active }: { active: boolean }) {
               >
                 <div className="spread">
                   <span className="card-title">
-                    {raid.raidName} — {raid.difficulty[0].toUpperCase()}{raid.difficulty.slice(1)}
+                    {raid.raidName} — {RAID_DIFFICULTY_LABEL[raid.difficulty]}
                   </span>
                   <span className={`small ${raid.fullClear ? 'good' : raid.encountersCleared > 0 ? '' : 'bad'}`}>
                     {raid.fullClear ? 'Full clear' : `${raid.encountersCleared}/${raid.totalEncounters}`}

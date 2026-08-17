@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { GameEngine } from '../game/engine';
 import { RaidResult } from '../game/types';
+import { RAID_DIFFICULTY_LABEL } from '../game/data/raids';
 import { useEngine } from './useEngine';
 import { playSound } from '../game/sound';
 import { RarityPill } from './RarityPill';
@@ -107,7 +108,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
         className={`modal raid-result-modal ${result.fullClear ? 'raid-full-clear' : ''} ${dismissing ? 'dismissing' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3>{result.raidName} — {result.difficulty[0].toUpperCase()}{result.difficulty.slice(1)}</h3>
+        <h3>{result.raidName} — {RAID_DIFFICULTY_LABEL[result.difficulty]}</h3>
         <p className={`small ${result.fullClear ? 'good' : result.encountersCleared > 0 ? '' : 'bad'}`} style={{ marginTop: 0 }}>
           {result.fullClear
             ? 'Full clear.'
