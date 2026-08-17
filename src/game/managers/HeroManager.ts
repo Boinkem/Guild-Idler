@@ -1,6 +1,6 @@
 import { EQUIPMENT_BY_ID, gearScoreForItem, SET_BY_ID } from '../data/equipment';
 import { INJURIES } from '../data/items';
-import { HERO_CLASSES, RECRUIT_START_LEVEL, xpForLevel, infirmaryHealTimeMinutes, roleUnlockCost, roleSwapCost } from '../data/progression';
+import { HERO_CLASSES, RECRUIT_START_LEVEL, MAX_HERO_LEVEL, xpForLevel, infirmaryHealTimeMinutes, roleUnlockCost, roleSwapCost } from '../data/progression';
 import { DIFFICULTY_ORDER } from '../data/quests';
 import { Tuning } from '../data/tuning';
 import { Difficulty, GameState, Hero, HeroClass, Injury, Modifiers, Role, Stats } from '../types';
@@ -165,11 +165,38 @@ export const HeroManager = {
     return hero.activeTitle ?? hero.titles[hero.titles.length - 1] ?? null;
   },
 
-  /** Adds xp and applies as many level-ups as it earns. Returns levels gained. */
+  /**
+   * True once a hero has hit the hard level cap (MAX_HERO_LEVEL,
+   * currently 55) -- the one place that check lives, so grantXp and every
+   * UI display of "how close to the next level" agree on the same
+   * definition rather than each re-deriving `hero.level >= 55` themselves.
+   */
+  isMaxLevel(hero: Hero): boolean {
+    return hero.level >= MAX_HERO_LEVEL;
+  },
+
+  /**
+   * Adds xp and applies as many level-ups as it earns, up to MAX_HERO_LEVEL.
+   * Returns levels gained.
+   *
+   * Previously uncapped -- a hero could level indefinitely past 55 given
+   * enough XP, even though the curve itself (xpCurveMultiplier, see
+   * progression.ts) already "holds flat above the highest breakpoint
+   * rather than extrapolating past it," and every design writeup already
+   * talked about 55 as *the* level cap. Requested directly: push
+   * retirement to require the level cap (PRESTIGE_MIN_LEVEL retuned to
+   * 55 in tuning.json) specifically so a retiring hero is always fully
+   * leveled, which only means something if 55 is an actual ceiling and
+   * not just where the curve happens to flatten out. A hero already at
+   * the cap short-circuits before touching `hero.xp` at all -- XP earned
+   * past the cap doesn't quietly pile up in the background waiting for a
+   * cap increase that isn't currently planned; it's simply not banked.
+   */
   grantXp(hero: Hero, amount: number): number {
+    if (HeroManager.isMaxLevel(hero)) return 0;
     hero.xp += Math.max(0, Math.floor(amount));
     let gained = 0;
-    while (hero.xp >= xpForLevel(hero.level)) {
+    while (hero.level < MAX_HERO_LEVEL && hero.xp >= xpForLevel(hero.level)) {
       hero.xp -= xpForLevel(hero.level);
       hero.level += 1;
       gained += 1;
@@ -182,6 +209,12 @@ export const HeroManager = {
       };
       hero.statPoints += 1;
     }
+    // Hit the cap exactly this call -- whatever xp remained after the last
+    // level-up (there's no level 56 to carry it toward) is dropped rather
+    // than left sitting there forever, so a maxed hero's XP bar reads as
+    // genuinely full/done rather than stalled at some arbitrary partial
+    // fill it can never move past.
+    if (hero.level >= MAX_HERO_LEVEL) hero.xp = 0;
     return gained;
   },
 

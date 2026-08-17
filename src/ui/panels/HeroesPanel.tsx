@@ -208,6 +208,11 @@ export function HeroesPanel() {
         const classDef = HERO_CLASSES[hero.heroClass];
         const total = HeroManager.totalStats(hero);
         const toNext = HeroManager.xpToNext(hero);
+        // Same reasoning as DashboardPanel's own Ring -- a maxed hero's
+        // xp is zeroed the instant it hits the cap (HeroManager.grantXp),
+        // so both bars below need this to read as "full/done" rather than
+        // a stalled-at-0 bar with no level left to actually fill it.
+        const maxed = HeroManager.isMaxLevel(hero);
         const mods = HeroManager.heroMods(state, hero, now);
         const sets = HeroManager.activeSetBonuses(hero);
         const isOpen = expanded.has(hero.id);
@@ -272,7 +277,7 @@ export function HeroesPanel() {
                   className="bar xp"
                   style={{ marginTop: 6 }}
                 >
-                  <span style={{ width: `${(hero.xp / toNext) * 100}%` }} />
+                  <span style={{ width: `${maxed ? 100 : (hero.xp / toNext) * 100}%` }} />
                 </div>
                 <HealthBar hero={hero} compact />
                 <AutoHealBar hero={hero} infirmaryLevel={infirmaryLevel} />
@@ -323,9 +328,9 @@ export function HeroesPanel() {
                 )}
 
                 <div className="small muted" style={{ marginBottom: 3 }}>
-                  Experience {hero.xp} / {toNext}
+                  {maxed ? 'Max level' : `Experience ${hero.xp} / ${toNext}`}
                 </div>
-                <div className="bar xp"><span style={{ width: `${(hero.xp / toNext) * 100}%` }} /></div>
+                <div className="bar xp"><span style={{ width: `${maxed ? 100 : (hero.xp / toNext) * 100}%` }} /></div>
 
                 <div className="small muted" style={{ marginTop: 8, marginBottom: 3 }}>
                   Health

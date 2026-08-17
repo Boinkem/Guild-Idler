@@ -1,0 +1,646 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 70b0115..22f76de 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -12166,3 +12166,98 @@ a stale or invented description.
+ of current `main` (through patch 0176) with only this patch's diff
+ applied -- `MenuWindow.tsx` and this status doc entry are the only files
+ this patch touches.
++
++### Hard level cap at 55, retirement pushed to match, Guild Hall cards collapsed behind a detail modal -- built (patch 0178)
++
++```discord-update
++Dev Update | Level Cap & Guild Hall Cards
++
++- Heroes now hard-cap at level 55 -- no more leveling past it, XP just stops banking once you're there
++- Retirement now requires level 55 instead of 30, so a hero always retires fully leveled
++- Guild Hall cards (Facilities and Permanent Upgrades) now show just name, level, cost, and effects -- click a card for the full flavor text and details
++- Every Guild Hall card is now the same size, regardless of how much (or little) it says
++```
++
++Three requests bundled into one patch: a real level cap at 55 (previously
++55 was where the design *talked* about the cap living, and the XP curve
++already flattened out there, but nothing actually stopped a hero
++levelling past it given enough XP); retirement pushed to require that
++same cap, "the most sensible I see from other mmo/rpg style games"; and
++Guild Hall's upgrade/facility cards trimmed to essentials with flavour
++text moved behind a click.
++
++**Hard level cap (`MAX_HERO_LEVEL`, `progression.ts`).** Derived from the
++XP curve's own breakpoints (`Math.max(...XP_BREAKPOINTS.map(b =>
++b.level))`, currently 55 -- breakpoint 5) rather than a new, separately-
++tuned number. The curve already documented itself as holding flat above
++the highest breakpoint "rather than extrapolating past it" -- this makes
++that description literally true instead of just true of the curve's own
++shape, and means the cap can't drift out of sync with wherever the top
++breakpoint actually sits if it's retuned later (the same two-sources-of-
++truth failure mode `isTabVisible` was written to avoid in patch 0177).
++`HeroManager.grantXp` now short-circuits entirely once a hero's at the
++cap (no xp banked, no stat growth), and stops its level-up loop at the
++cap otherwise, zeroing any leftover xp from the level-up that reached it
++-- a capped hero has no level 56 to show progress toward, so leaving a
++stray partial xp value around would just read as stalled progress
++instead of done. `HeroManager.isMaxLevel(hero)` is the one place that
++check lives now; `HeroesPanel.tsx` and `DashboardPanel.tsx`'s own XP
++bars/ring both read it to show a full bar + "Max level" instead of a
++misleadingly-empty one once `hero.xp` zeroes out.
++
++**Retirement pushed to the cap (`progression.prestigeMinLevel`,
++tuning.json).** Value and default both moved 30 -> 55 -- a pure data
++change, `PRESTIGE_MIN_LEVEL` already read this via `Tuning.get` and every
++UI string ("Needs level X," the Prestige tab's own subtitle, Early
++Retire's confirm copy) already interpolates it, so nothing else needed
++touching. Deliberately kept as its own independently-tuned value rather
++than hardcoded to `MAX_HERO_LEVEL` directly -- pushing retirement to the
++cap was a pacing decision, not a mechanical consequence of the cap's own
++existence (see `MAX_HERO_LEVEL`'s own comment in progression.ts), and
++this keeps it separately adjustable via the DevTool if that pacing ever
++needs revisiting on its own.
++
++**Flagging a real interaction, not fixing it here:** `renownForRetirement`
++(progression.ts) scales renown by `(level - PRESTIGE_MIN_LEVEL + 1) ^
++0.75` -- previously meaningful, since a hero could retire anywhere from
++level 30 up to whatever they'd actually reached. With retirement now
++gated at exactly the hard cap, every retiring hero's `level` is always
++55, so that term is always `(55 - 55 + 1) ^ 0.75 = 1` -- a constant. Base
++renown per retirement now only varies with `totalQuests / 150`; the
++level-scaling half of the formula is live code computing a dead result,
++not removed here since changing the renown curve itself is a balance
++call this patch wasn't asked to make. Worth a follow-up pass if the
++intent is for renown to still meaningfully vary retirement-to-retirement
++beyond quest count.
++
++**Guild Hall cards (`GuildPanel.tsx`).** Facilities and Permanent
++Upgrades previously each had their own near-duplicate ~40-line inline
++card block (icon, name, level, flavour text, level rail, stat lines,
++Buy). Both replaced with one shared `UpgradeCard` component fed
++pre-computed props, plus a new `GuildUpgradeDetailModal` -- same
++"generic presentational component, two call sites compute the props"
++shape `ResultDetailModal` (patch 0176) already established for merging
++quest/raid results. `UpgradeCard` drops the flavour-text paragraph
++entirely from the compact view (name/level/rail/stat-lines/Buy only);
++clicking anywhere on the card except the Buy button opens the modal with
++the flavour text restored alongside the same stat lines, level, and a
++Buy button of its own that doesn't auto-close the modal. Buy deliberately
++stayed on the compact card too (`stopPropagation` on its own click) --
++it's the single most-repeated action on this tab, and routing every
++purchase through an extra modal open would have been a real regression
++to the core loop, not just a visual change.
++
++**Uniform card sizing (`app.css`).** `.guild-facility-card` gets `height:
++100%` (so it fills its CSS Grid cell, which already stretches to match
++the tallest card in its row by default) plus a `min-height` floor for a
++short row too; `.guild-facility-body` became a flex column with the Buy
++button pinned to the bottom (`margin-top: auto`) so it lands at the same
++visual baseline regardless of how many stat lines sit above it. Removing
++the flavour text was most of the fix by itself -- it was the single
++biggest source of height variance (one line for some upgrades, three-
++plus for others) -- this handles the smaller remaining variance from
++stat-line count.
++
++**Verified:** `npx tsc --noEmit` clean against the full project,
++confirmed against a fresh clone of current `main` (through patch 0177)
++with only this patch's diff applied.
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 92583e3..3d4bb65 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -3472,11 +3472,11 @@
+     "id": "progression.prestigeMinLevel",
+     "label": "Progression: prestige min level",
+     "category": "progression",
+-    "value": 30,
+-    "default": 30,
++    "value": 55,
++    "default": 55,
+     "min": 1,
+     "max": 100,
+-    "description": "Minimum hero level required for retirement to grant any Renown at all."
++    "description": "Minimum hero level required for retirement to grant any Renown at all. Pushed to match the level cap (55) so a hero retires fully leveled, not partway -- see progression.ts's MAX_HERO_LEVEL comment."
+   },
+   {
+     "id": "progression.prestigeStreakWindowMs",
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 88947a4..9769a82 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -1004,6 +1004,28 @@ const XP_BREAKPOINTS = [
+   { level: Tuning.get('progression.xpBreakLevel7'), multiplier: Tuning.get('progression.xpBreakMultiplier7') },
+ ].sort((a, b) => a.level - b.level);
+ 
++/**
++ * The hard level cap -- derived from the breakpoints themselves (the
++ * highest `level` among them, currently breakpoint 5 at 55) rather than a
++ * second, separately-tuned number. The curve already "holds flat above
++ * the highest breakpoint rather than extrapolating past it" (see this
++ * file's own comment on XP_BREAKPOINTS above) -- a hero level 55+ was
++ * always meant to be the design's actual ceiling (see guild-idler-status
++ * .md's XP curve retune, "day 62 to hit the level cap"), it just wasn't
++ * literally enforced anywhere before now. Deriving it here instead of
++ * adding a parallel `progression.maxHeroLevel` Tuning entry means it can
++ * never drift out of sync with wherever the curve's own top breakpoint
++ * actually sits if that's retuned later -- the exact kind of two-sources-
++ * of-truth bug this codebase has hit before (see MenuWindow.tsx's
++ * isTabVisible writeup for a recent example of the same class of issue).
++ * Retirement's own minimum level (PRESTIGE_MIN_LEVEL, below) is
++ * deliberately a separate, independently-tuned number, not derived from
++ * this one -- pushing retirement back to require the level cap was a
++ * design choice about progression pacing, not a consequence of the cap's
++ * own existence.
++ */
++export const MAX_HERO_LEVEL = Math.max(...XP_BREAKPOINTS.map((b) => b.level));
++
+ function xpCurveMultiplier(level: number): number {
+   if (level <= XP_BREAKPOINTS[0].level) return XP_BREAKPOINTS[0].multiplier;
+   for (let i = 1; i < XP_BREAKPOINTS.length; i++) {
+diff --git a/src/game/managers/HeroManager.ts b/src/game/managers/HeroManager.ts
+index 9641416..4fe1a15 100644
+--- a/src/game/managers/HeroManager.ts
++++ b/src/game/managers/HeroManager.ts
+@@ -1,6 +1,6 @@
+ import { EQUIPMENT_BY_ID, gearScoreForItem, SET_BY_ID } from '../data/equipment';
+ import { INJURIES } from '../data/items';
+-import { HERO_CLASSES, RECRUIT_START_LEVEL, xpForLevel, infirmaryHealTimeMinutes, roleUnlockCost, roleSwapCost } from '../data/progression';
++import { HERO_CLASSES, RECRUIT_START_LEVEL, MAX_HERO_LEVEL, xpForLevel, infirmaryHealTimeMinutes, roleUnlockCost, roleSwapCost } from '../data/progression';
+ import { DIFFICULTY_ORDER } from '../data/quests';
+ import { Tuning } from '../data/tuning';
+ import { Difficulty, GameState, Hero, HeroClass, Injury, Modifiers, Role, Stats } from '../types';
+@@ -165,11 +165,38 @@ export const HeroManager = {
+     return hero.activeTitle ?? hero.titles[hero.titles.length - 1] ?? null;
+   },
+ 
+-  /** Adds xp and applies as many level-ups as it earns. Returns levels gained. */
++  /**
++   * True once a hero has hit the hard level cap (MAX_HERO_LEVEL,
++   * currently 55) -- the one place that check lives, so grantXp and every
++   * UI display of "how close to the next level" agree on the same
++   * definition rather than each re-deriving `hero.level >= 55` themselves.
++   */
++  isMaxLevel(hero: Hero): boolean {
++    return hero.level >= MAX_HERO_LEVEL;
++  },
++
++  /**
++   * Adds xp and applies as many level-ups as it earns, up to MAX_HERO_LEVEL.
++   * Returns levels gained.
++   *
++   * Previously uncapped -- a hero could level indefinitely past 55 given
++   * enough XP, even though the curve itself (xpCurveMultiplier, see
++   * progression.ts) already "holds flat above the highest breakpoint
++   * rather than extrapolating past it," and every design writeup already
++   * talked about 55 as *the* level cap. Requested directly: push
++   * retirement to require the level cap (PRESTIGE_MIN_LEVEL retuned to
++   * 55 in tuning.json) specifically so a retiring hero is always fully
++   * leveled, which only means something if 55 is an actual ceiling and
++   * not just where the curve happens to flatten out. A hero already at
++   * the cap short-circuits before touching `hero.xp` at all -- XP earned
++   * past the cap doesn't quietly pile up in the background waiting for a
++   * cap increase that isn't currently planned; it's simply not banked.
++   */
+   grantXp(hero: Hero, amount: number): number {
++    if (HeroManager.isMaxLevel(hero)) return 0;
+     hero.xp += Math.max(0, Math.floor(amount));
+     let gained = 0;
+-    while (hero.xp >= xpForLevel(hero.level)) {
++    while (hero.level < MAX_HERO_LEVEL && hero.xp >= xpForLevel(hero.level)) {
+       hero.xp -= xpForLevel(hero.level);
+       hero.level += 1;
+       gained += 1;
+@@ -182,6 +209,12 @@ export const HeroManager = {
+       };
+       hero.statPoints += 1;
+     }
++    // Hit the cap exactly this call -- whatever xp remained after the last
++    // level-up (there's no level 56 to carry it toward) is dropped rather
++    // than left sitting there forever, so a maxed hero's XP bar reads as
++    // genuinely full/done rather than stalled at some arbitrary partial
++    // fill it can never move past.
++    if (hero.level >= MAX_HERO_LEVEL) hero.xp = 0;
+     return gained;
+   },
+ 
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 41efeb7..5776b10 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -379,7 +379,26 @@
+   align-items: flex-start;
+   margin-bottom: 0;
+   clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%, 0 12px);
++  /* Uniform card sizing, requested directly: `.grid` is CSS Grid, which
++     already stretches every item in a row to match its tallest sibling
++     (the default `align-items: stretch`) -- `height: 100%` here is what
++     actually lets this card fill that stretched grid cell instead of
++     staying its own natural (shorter) content height inside a taller
++     box. `min-height` sets a baseline for a short row too (e.g. a lone
++     card with no extra stat lines), so the grid doesn't just look
++     uniform *within* a row but across the whole section. Removing the
++     flavour text from this view (see GuildPanel.tsx's UpgradeCard) was
++     the bigger uniformity win by itself -- variable-length prose was the
++     single biggest source of height variance -- this is what makes the
++     remaining, much smaller variance in stat-line count a non-issue too. */
++  height: 100%;
++  min-height: 168px;
++  cursor: pointer;
+ }
++/* Hover feedback comes free from the existing global
++   `.card[role="button"]:hover` rule -- this card already carries both
++   classes plus `role="button"` (see UpgradeCard in GuildPanel.tsx), same
++   as RaidCard's own clickable card already does. */
+ 
+ .guild-facility-icon {
+   flex: none;
+@@ -398,7 +417,19 @@
+   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+ }
+ 
+-.guild-facility-body { flex: 1; min-width: 0; }
++/* flex column so the Buy button can anchor to the bottom (margin-top:
++   auto on .guild-facility-body > button, just below) regardless of how
++   many stat lines a given card has above it -- keeps the button sitting
++   at the same visual baseline across a stretched row instead of
++   trailing right after a short stat-row with a gap of dead space below
++   it before the card's own bottom edge. */
++.guild-facility-body {
++  flex: 1;
++  min-width: 0;
++  display: flex;
++  flex-direction: column;
++}
++.guild-facility-body > button { margin-top: auto; }
+ 
+ /* Replaces the plain "Level N/M" text everywhere else in the game uses
+    for a leveled thing with a small tick-marked rail -- distinct from the
+diff --git a/src/ui/panels/DashboardPanel.tsx b/src/ui/panels/DashboardPanel.tsx
+index af47b8d..5e81175 100644
+--- a/src/ui/panels/DashboardPanel.tsx
++++ b/src/ui/panels/DashboardPanel.tsx
+@@ -2,6 +2,7 @@ import { useState } from 'react';
+ import type { ReactNode } from 'react';
+ import { useEngine } from '../useEngine';
+ import { GuildManager } from '../../game/managers/GuildManager';
++import { HeroManager } from '../../game/managers/HeroManager';
+ import { VENDORS, vendorUpgrades, xpForLevel } from '../../game/data/progression';
+ import { AchievementManager } from '../../game/managers/AchievementManager';
+ import { attentionCounts } from '../../game/attention';
+@@ -304,13 +305,19 @@ export function DashboardPanel() {
+         {state.heroes.map((hero) => {
+           const color = levelTierColor(hero.level);
+           const needed = xpForLevel(hero.level);
++          // A maxed hero's own xp is zeroed out the moment it hits the cap
++          // (see HeroManager.grantXp) precisely so it never has a real
++          // next level to show progress toward -- reads as a stalled-at-0
++          // ring without this, rather than the "done" a capped hero
++          // actually is. A full ring communicates that correctly instead.
++          const maxed = HeroManager.isMaxLevel(hero);
+           return (
+             <div key={hero.id} className="dashboard-item">
+               <Ring
+-                progress={needed > 0 ? hero.xp / needed : 0}
++                progress={maxed ? 1 : needed > 0 ? hero.xp / needed : 0}
+                 color={color}
+                 size={64}
+-                title={`${levelTierName(hero.level)} tier`}
++                title={maxed ? 'Max level' : `${levelTierName(hero.level)} tier`}
+               >
+                 <span style={{ color }}>{hero.level}</span>
+               </Ring>
+diff --git a/src/ui/panels/GuildPanel.tsx b/src/ui/panels/GuildPanel.tsx
+index 6caabd0..b7b8c39 100644
+--- a/src/ui/panels/GuildPanel.tsx
++++ b/src/ui/panels/GuildPanel.tsx
+@@ -1,8 +1,9 @@
++import { useState } from 'react';
++import type { ReactNode } from 'react';
+ import { useEngine } from '../useEngine';
+ import { GuildManager } from '../../game/managers/GuildManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { AUTO_CHAIN_RANGES } from '../../game/data/progression';
+-import { UpgradeDef } from '../../game/types';
+ import { describeMods, formatGold } from '../../game/util';
+ import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
+ import waxSealComplete from '../../assets/wax-seal-complete.png';
+@@ -12,6 +13,121 @@ function chainRangeText(level: number): string {
+   return range.min === range.max ? `${range.min}` : `${range.min}-${range.max}`;
+ }
+ 
++/**
++ * Full detail behind a click -- name, the flavour text hidden from the
++ * compact card below, level/max, every stat line, and the same Buy
++ * action the card itself offers (so opening this isn't a dead end if
++ * that's how a player happens to get here). Shared by both Facilities
++ * and Permanent Upgrades rather than two near-identical modals, the same
++ * "generic presentational component fed pre-computed props" shape
++ * ResultDetailModal (StatsPanel) already uses for its own two-shape
++ * (quest/raid) merge.
++ */
++function GuildUpgradeDetailModal({
++  name, description, level, maxLevel, statLines, buyLabel, buyDisabled, onBuy, onClose,
++}: {
++  name: string; description: string; level: number; maxLevel: number; statLines: ReactNode[];
++  buyLabel: string; buyDisabled: boolean; onBuy: () => void; onClose: () => void;
++}) {
++  return (
++    <div className="overlay" onClick={onClose}>
++      <div className="modal" onClick={(e) => e.stopPropagation()}>
++        <div className="spread">
++          <span className="card-title">{name}</span>
++          <span className="small muted">Level {level}/{maxLevel}</span>
++        </div>
++        <p className="card-flavour" style={{ marginTop: 6 }}>{description}</p>
++        {statLines.length > 0 && <div className="stat-row" style={{ marginBottom: 4 }}>{statLines}</div>}
++        <div className="row end" style={{ marginTop: 14, gap: 8 }}>
++          <button onClick={onClose}>Close</button>
++          {/* Deliberately doesn't close on buy -- a player who opened this
++              to read the flavour text first, then decides to buy (maybe
++              more than once in a row), shouldn't have the modal vanish
++              out from under them after the first click. */}
++          <button className="btn-yellow" disabled={buyDisabled} onClick={onBuy}>{buyLabel}</button>
++        </div>
++      </div>
++    </div>
++  );
++}
++
++/**
++ * The compact card itself -- icon, name, level, the level rail, stat
++ * lines, and Buy, with the flavour text that used to sit between the
++ * name and the rail removed entirely (moved into GuildUpgradeDetailModal
++ * instead). Direct request: the tab-menu grid should show "what's being
++ * upgraded, cost and values," not prose, and every card should read as
++ * the same size regardless of how much flavour text its def happens to
++ * have -- variable-length flavour text was the single biggest source of
++ * card-height variance before this (some descriptions are one line,
++ * others three-plus), so removing it from this view was most of the
++ * uniformity fix by itself; `.guild-facility-card`'s own `height: 100%`
++ * (app.css) handles the rest by stretching every card in a grid row to
++ * match its tallest sibling, same as CSS Grid already does by default.
++ *
++ * The whole card is clickable to open the detail modal (same "collapsed
++ * card, click for the rest" shape RaidCard/RaidDetailModal already
++ * established) -- except the Buy button itself, which stops propagation
++ * so a player can still buy directly off the compact card in one click
++ * without being forced through the modal first. Buying is the single
++ * most repeated action on this tab; gating it behind an extra click
++ * would have been a real regression to the core loop, not just a visual
++ * change, so it deliberately stayed on the card itself.
++ */
++function UpgradeCard({
++  name, description, level, maxLevel, maxed, affordable, statLines, buyLabel, buyDisabled, onBuy, flash, onDismissFlash, pulsing,
++}: {
++  name: string; description: string; level: number; maxLevel: number; maxed: boolean; affordable: boolean;
++  statLines: ReactNode[]; buyLabel: string; buyDisabled: boolean; onBuy: () => void;
++  flash?: { key: number; name: string }; onDismissFlash: () => void; pulsing?: boolean;
++}) {
++  const [showDetail, setShowDetail] = useState(false);
++  const pct = Math.min(100, (level / maxLevel) * 100);
++  return (
++    <div className="guild-card-wrap">
++      {maxed && <img className="guild-seal" src={waxSealComplete} alt="" />}
++      <div
++        className={`card guild-facility-card ${affordable ? 'affordable' : ''} ${maxed ? 'guild-maxed' : ''}`}
++        onClick={() => setShowDetail(true)}
++        role="button"
++        tabIndex={0}
++        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); } }}
++      >
++        <div className="guild-facility-icon" aria-hidden="true">{name.charAt(0)}</div>
++        <div className={`guild-facility-body ${maxed ? 'guild-maxed-body' : ''}`}>
++          <div className="spread">
++            <span className="card-title">{name}</span>
++            <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>Level {level}/{maxLevel}</span>
++          </div>
++          <div className={`guild-level-rail ${maxed ? 'maxed' : ''}`}><span style={{ width: `${pct}%` }} /></div>
++          <div className="stat-row" style={{ marginBottom: 8 }}>{statLines}</div>
++          <button
++            className="btn-yellow"
++            disabled={buyDisabled}
++            onClick={(e) => { e.stopPropagation(); onBuy(); }}
++          >
++            {buyLabel}
++          </button>
++          {flash && <MaxFlash key={flash.key} label={flash.name} onDone={onDismissFlash} />}
++        </div>
++      </div>
++      {showDetail && (
++        <GuildUpgradeDetailModal
++          name={name}
++          description={description}
++          level={level}
++          maxLevel={maxLevel}
++          statLines={statLines}
++          buyLabel={buyLabel}
++          buyDisabled={buyDisabled}
++          onBuy={onBuy}
++          onClose={() => setShowDetail(false)}
++        />
++      )}
++    </div>
++  );
++}
++
+ export function GuildPanel() {
+   const engine = useEngine();
+   const state = engine.state;
+@@ -44,7 +160,7 @@ export function GuildPanel() {
+     ...generalUpgrades.map((def) => ({ id: def.id, value: GuildManager.upgradeLevel(state, def.id) })),
+   ]);
+ 
+-  function upgradeCard(def: UpgradeDef) {
++  function generalUpgradeCard(def: (typeof generalUpgrades)[number]) {
+     const level = GuildManager.upgradeLevel(state, def.id);
+     const cost = GuildManager.nextUpgradeCost(state, def.id);
+     const maxed = cost === null && level >= def.maxLevel;
+@@ -52,44 +168,63 @@ export function GuildPanel() {
+     // the most expensive thing in the tab" -- affordable means the exact
+     // next-purchase cost is covered by current gold right now.
+     const affordable = !maxed && cost !== null && state.gold >= cost;
+-    const flash = flashes[def.id];
+-    const pulsing = levelPulses[def.id];
+-    const pct = Math.min(100, (level / def.maxLevel) * 100);
++    const statLines: ReactNode[] = [
++      ...describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>),
++      ...(def.unlocks === 'legendaryQuests' ? [<span key="unlock-lq" className="gold-text">Unlocks Legendary quests</span>] : []),
++      ...(def.unlocks === 'chains' ? [<span key="unlock-chains" className="gold-text">Unlocks multi-day quest chains</span>] : []),
++      ...(def.unlocks === 'blackMarket' ? [<span key="unlock-bm" className="gold-text">Unlocks the Black Market</span>] : []),
++      ...(def.unlocks === 'autoChain' && level > 0
++        ? [<span key="ac-current" className="gold-text">Currently chains {chainRangeText(level)} quests per streak</span>] : []),
++      ...(def.unlocks === 'autoChain' && !maxed
++        ? [<span key="ac-next" className="muted">Next tier: {chainRangeText(level + 1)} quests per streak</span>] : []),
++    ];
+     return (
+-      <div key={def.id} className="guild-card-wrap">
+-        {maxed && <img className="guild-seal" src={waxSealComplete} alt="" />}
+-        <div className={`card guild-facility-card ${affordable ? 'affordable' : ''} ${maxed ? 'guild-maxed' : ''}`}>
+-          <div className="guild-facility-icon" aria-hidden="true">{def.name.charAt(0)}</div>
+-          <div className={`guild-facility-body ${maxed ? 'guild-maxed-body' : ''}`}>
+-            <div className="spread">
+-              <span className="card-title">{def.name}</span>
+-              <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>{level}/{def.maxLevel}</span>
+-            </div>
+-            <p className="card-flavour">{def.description}</p>
+-            <div className={`guild-level-rail ${maxed ? 'maxed' : ''}`}><span style={{ width: `${pct}%` }} /></div>
+-            <div className="stat-row" style={{ marginBottom: 8 }}>
+-              {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
+-              {def.unlocks === 'legendaryQuests' && <span className="gold-text">Unlocks Legendary quests</span>}
+-              {def.unlocks === 'chains' && <span className="gold-text">Unlocks multi-day quest chains</span>}
+-              {def.unlocks === 'blackMarket' && <span className="gold-text">Unlocks the Black Market</span>}
+-              {def.unlocks === 'autoChain' && level > 0 && (
+-                <span className="gold-text">Currently chains {chainRangeText(level)} quests per streak</span>
+-              )}
+-              {def.unlocks === 'autoChain' && !maxed && (
+-                <span className="muted">Next tier: {chainRangeText(level + 1)} quests per streak</span>
+-              )}
+-            </div>
+-            <button
+-              className="btn-yellow"
+-              disabled={maxed || cost === null || state.gold < cost}
+-              onClick={() => engine.buyUpgrade(def.id)}
+-            >
+-              {maxed ? 'Fully upgraded' : `Buy · ${formatGold(cost ?? 0)}`}
+-            </button>
+-            {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
+-          </div>
+-        </div>
+-      </div>
++      <UpgradeCard
++        key={def.id}
++        name={def.name}
++        description={def.description}
++        level={level}
++        maxLevel={def.maxLevel}
++        maxed={maxed}
++        affordable={affordable}
++        statLines={statLines}
++        buyLabel={maxed ? 'Fully upgraded' : `Buy · ${formatGold(cost ?? 0)}`}
++        buyDisabled={maxed || cost === null || state.gold < cost}
++        onBuy={() => engine.buyUpgrade(def.id)}
++        flash={flashes[def.id]}
++        onDismissFlash={() => dismiss(def.id)}
++        pulsing={levelPulses[def.id]}
++      />
++    );
++  }
++
++  function facilityCard(def: (typeof facilities)[number]) {
++    const level = GuildManager.facilityLevel(state, def.id);
++    const cost = GuildManager.nextCost(state, def.id);
++    const maxed = cost === null;
++    const affordable = !maxed && state.gold >= cost;
++    const statLines: ReactNode[] = [
++      ...describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>),
++      ...(def.storagePerLevel ? [<span key="storage">+{formatGold(def.storagePerLevel)} storage per level</span>] : []),
++      ...(def.heroSlotsPerLevel ? [<span key="hero-slots" className="gold-text">+1 hero slot per level</span>] : []),
++    ];
++    return (
++      <UpgradeCard
++        key={def.id}
++        name={def.name}
++        description={def.description}
++        level={level}
++        maxLevel={def.maxLevel}
++        maxed={maxed}
++        affordable={affordable}
++        statLines={statLines}
++        buyLabel={maxed ? 'Fully built' : `Build · ${formatGold(cost ?? 0)}`}
++        buyDisabled={maxed || state.gold < (cost ?? 0)}
++        onBuy={() => engine.upgradeFacility(def.id)}
++        flash={flashes[def.id]}
++        onDismissFlash={() => dismiss(def.id)}
++        pulsing={levelPulses[def.id]}
++      />
+     );
+   }
+ 
+@@ -106,44 +241,7 @@ export function GuildPanel() {
+ 
+       <div className="section-heading guild-section-heading">Facilities</div>
+       <div className="grid two guild-facility-grid">
+-        {facilities.map((def) => {
+-          const level = GuildManager.facilityLevel(state, def.id);
+-          const cost = GuildManager.nextCost(state, def.id);
+-          const maxed = cost === null;
+-          const affordable = !maxed && state.gold >= cost;
+-          const flash = flashes[def.id];
+-          const pulsing = levelPulses[def.id];
+-          const pct = Math.min(100, (level / def.maxLevel) * 100);
+-          return (
+-            <div key={def.id} className="guild-card-wrap">
+-              {maxed && <img className="guild-seal" src={waxSealComplete} alt="" />}
+-              <div className={`card guild-facility-card ${affordable ? 'affordable' : ''} ${maxed ? 'guild-maxed' : ''}`}>
+-                <div className="guild-facility-icon" aria-hidden="true">{def.name.charAt(0)}</div>
+-                <div className={`guild-facility-body ${maxed ? 'guild-maxed-body' : ''}`}>
+-                  <div className="spread">
+-                    <span className="card-title">{def.name}</span>
+-                    <span className={`small muted ${pulsing ? 'purchase-pulse' : ''}`}>Level {level}/{def.maxLevel}</span>
+-                  </div>
+-                  <p className="card-flavour">{def.description}</p>
+-                  <div className={`guild-level-rail ${maxed ? 'maxed' : ''}`}><span style={{ width: `${pct}%` }} /></div>
+-                  <div className="stat-row" style={{ marginBottom: 8 }}>
+-                    {describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>)}
+-                    {def.storagePerLevel && <span>+{formatGold(def.storagePerLevel)} storage per level</span>}
+-                    {def.heroSlotsPerLevel && <span className="gold-text">+1 hero slot per level</span>}
+-                  </div>
+-                  <button
+-                    className="btn-yellow"
+-                    disabled={maxed || state.gold < cost}
+-                    onClick={() => engine.upgradeFacility(def.id)}
+-                  >
+-                    {maxed ? 'Fully built' : `Build · ${formatGold(cost)}`}
+-                  </button>
+-                  {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
+-                </div>
+-              </div>
+-            </div>
+-          );
+-        })}
++        {facilities.map(facilityCard)}
+       </div>
+ 
+       <div className="section-heading guild-section-heading">Permanent Upgrades</div>
+@@ -160,7 +258,7 @@ export function GuildPanel() {
+         </div>
+       </div>
+       <div className="grid two guild-facility-grid">
+-        {generalUpgrades.map(upgradeCard)}
++        {generalUpgrades.map(generalUpgradeCard)}
+       </div>
+     </>
+   );
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index fb8bc3e..ecc44f0 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -208,6 +208,11 @@ export function HeroesPanel() {
+         const classDef = HERO_CLASSES[hero.heroClass];
+         const total = HeroManager.totalStats(hero);
+         const toNext = HeroManager.xpToNext(hero);
++        // Same reasoning as DashboardPanel's own Ring -- a maxed hero's
++        // xp is zeroed the instant it hits the cap (HeroManager.grantXp),
++        // so both bars below need this to read as "full/done" rather than
++        // a stalled-at-0 bar with no level left to actually fill it.
++        const maxed = HeroManager.isMaxLevel(hero);
+         const mods = HeroManager.heroMods(state, hero, now);
+         const sets = HeroManager.activeSetBonuses(hero);
+         const isOpen = expanded.has(hero.id);
+@@ -272,7 +277,7 @@ export function HeroesPanel() {
+                   className="bar xp"
+                   style={{ marginTop: 6 }}
+                 >
+-                  <span style={{ width: `${(hero.xp / toNext) * 100}%` }} />
++                  <span style={{ width: `${maxed ? 100 : (hero.xp / toNext) * 100}%` }} />
+                 </div>
+                 <HealthBar hero={hero} compact />
+                 <AutoHealBar hero={hero} infirmaryLevel={infirmaryLevel} />
+@@ -323,9 +328,9 @@ export function HeroesPanel() {
+                 )}
+ 
+                 <div className="small muted" style={{ marginBottom: 3 }}>
+-                  Experience {hero.xp} / {toNext}
++                  {maxed ? 'Max level' : `Experience ${hero.xp} / ${toNext}`}
+                 </div>
+-                <div className="bar xp"><span style={{ width: `${(hero.xp / toNext) * 100}%` }} /></div>
++                <div className="bar xp"><span style={{ width: `${maxed ? 100 : (hero.xp / toNext) * 100}%` }} /></div>
+ 
+                 <div className="small muted" style={{ marginTop: 8, marginBottom: 3 }}>
+                   Health

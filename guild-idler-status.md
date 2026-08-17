@@ -12166,3 +12166,98 @@ a stale or invented description.
 of current `main` (through patch 0176) with only this patch's diff
 applied -- `MenuWindow.tsx` and this status doc entry are the only files
 this patch touches.
+
+### Hard level cap at 55, retirement pushed to match, Guild Hall cards collapsed behind a detail modal -- built (patch 0178)
+
+```discord-update
+Dev Update | Level Cap & Guild Hall Cards
+
+- Heroes now hard-cap at level 55 -- no more leveling past it, XP just stops banking once you're there
+- Retirement now requires level 55 instead of 30, so a hero always retires fully leveled
+- Guild Hall cards (Facilities and Permanent Upgrades) now show just name, level, cost, and effects -- click a card for the full flavor text and details
+- Every Guild Hall card is now the same size, regardless of how much (or little) it says
+```
+
+Three requests bundled into one patch: a real level cap at 55 (previously
+55 was where the design *talked* about the cap living, and the XP curve
+already flattened out there, but nothing actually stopped a hero
+levelling past it given enough XP); retirement pushed to require that
+same cap, "the most sensible I see from other mmo/rpg style games"; and
+Guild Hall's upgrade/facility cards trimmed to essentials with flavour
+text moved behind a click.
+
+**Hard level cap (`MAX_HERO_LEVEL`, `progression.ts`).** Derived from the
+XP curve's own breakpoints (`Math.max(...XP_BREAKPOINTS.map(b =>
+b.level))`, currently 55 -- breakpoint 5) rather than a new, separately-
+tuned number. The curve already documented itself as holding flat above
+the highest breakpoint "rather than extrapolating past it" -- this makes
+that description literally true instead of just true of the curve's own
+shape, and means the cap can't drift out of sync with wherever the top
+breakpoint actually sits if it's retuned later (the same two-sources-of-
+truth failure mode `isTabVisible` was written to avoid in patch 0177).
+`HeroManager.grantXp` now short-circuits entirely once a hero's at the
+cap (no xp banked, no stat growth), and stops its level-up loop at the
+cap otherwise, zeroing any leftover xp from the level-up that reached it
+-- a capped hero has no level 56 to show progress toward, so leaving a
+stray partial xp value around would just read as stalled progress
+instead of done. `HeroManager.isMaxLevel(hero)` is the one place that
+check lives now; `HeroesPanel.tsx` and `DashboardPanel.tsx`'s own XP
+bars/ring both read it to show a full bar + "Max level" instead of a
+misleadingly-empty one once `hero.xp` zeroes out.
+
+**Retirement pushed to the cap (`progression.prestigeMinLevel`,
+tuning.json).** Value and default both moved 30 -> 55 -- a pure data
+change, `PRESTIGE_MIN_LEVEL` already read this via `Tuning.get` and every
+UI string ("Needs level X," the Prestige tab's own subtitle, Early
+Retire's confirm copy) already interpolates it, so nothing else needed
+touching. Deliberately kept as its own independently-tuned value rather
+than hardcoded to `MAX_HERO_LEVEL` directly -- pushing retirement to the
+cap was a pacing decision, not a mechanical consequence of the cap's own
+existence (see `MAX_HERO_LEVEL`'s own comment in progression.ts), and
+this keeps it separately adjustable via the DevTool if that pacing ever
+needs revisiting on its own.
+
+**Flagging a real interaction, not fixing it here:** `renownForRetirement`
+(progression.ts) scales renown by `(level - PRESTIGE_MIN_LEVEL + 1) ^
+0.75` -- previously meaningful, since a hero could retire anywhere from
+level 30 up to whatever they'd actually reached. With retirement now
+gated at exactly the hard cap, every retiring hero's `level` is always
+55, so that term is always `(55 - 55 + 1) ^ 0.75 = 1` -- a constant. Base
+renown per retirement now only varies with `totalQuests / 150`; the
+level-scaling half of the formula is live code computing a dead result,
+not removed here since changing the renown curve itself is a balance
+call this patch wasn't asked to make. Worth a follow-up pass if the
+intent is for renown to still meaningfully vary retirement-to-retirement
+beyond quest count.
+
+**Guild Hall cards (`GuildPanel.tsx`).** Facilities and Permanent
+Upgrades previously each had their own near-duplicate ~40-line inline
+card block (icon, name, level, flavour text, level rail, stat lines,
+Buy). Both replaced with one shared `UpgradeCard` component fed
+pre-computed props, plus a new `GuildUpgradeDetailModal` -- same
+"generic presentational component, two call sites compute the props"
+shape `ResultDetailModal` (patch 0176) already established for merging
+quest/raid results. `UpgradeCard` drops the flavour-text paragraph
+entirely from the compact view (name/level/rail/stat-lines/Buy only);
+clicking anywhere on the card except the Buy button opens the modal with
+the flavour text restored alongside the same stat lines, level, and a
+Buy button of its own that doesn't auto-close the modal. Buy deliberately
+stayed on the compact card too (`stopPropagation` on its own click) --
+it's the single most-repeated action on this tab, and routing every
+purchase through an extra modal open would have been a real regression
+to the core loop, not just a visual change.
+
+**Uniform card sizing (`app.css`).** `.guild-facility-card` gets `height:
+100%` (so it fills its CSS Grid cell, which already stretches to match
+the tallest card in its row by default) plus a `min-height` floor for a
+short row too; `.guild-facility-body` became a flex column with the Buy
+button pinned to the bottom (`margin-top: auto`) so it lands at the same
+visual baseline regardless of how many stat lines sit above it. Removing
+the flavour text was most of the fix by itself -- it was the single
+biggest source of height variance (one line for some upgrades, three-
+plus for others) -- this handles the smaller remaining variance from
+stat-line count.
+
+**Verified:** `npx tsc --noEmit` clean against the full project,
+confirmed against a fresh clone of current `main` (through patch 0177)
+with only this patch's diff applied.

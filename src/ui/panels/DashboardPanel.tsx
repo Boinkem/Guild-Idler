@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { useEngine } from '../useEngine';
 import { GuildManager } from '../../game/managers/GuildManager';
+import { HeroManager } from '../../game/managers/HeroManager';
 import { VENDORS, vendorUpgrades, xpForLevel } from '../../game/data/progression';
 import { AchievementManager } from '../../game/managers/AchievementManager';
 import { attentionCounts } from '../../game/attention';
@@ -304,13 +305,19 @@ export function DashboardPanel() {
         {state.heroes.map((hero) => {
           const color = levelTierColor(hero.level);
           const needed = xpForLevel(hero.level);
+          // A maxed hero's own xp is zeroed out the moment it hits the cap
+          // (see HeroManager.grantXp) precisely so it never has a real
+          // next level to show progress toward -- reads as a stalled-at-0
+          // ring without this, rather than the "done" a capped hero
+          // actually is. A full ring communicates that correctly instead.
+          const maxed = HeroManager.isMaxLevel(hero);
           return (
             <div key={hero.id} className="dashboard-item">
               <Ring
-                progress={needed > 0 ? hero.xp / needed : 0}
+                progress={maxed ? 1 : needed > 0 ? hero.xp / needed : 0}
                 color={color}
                 size={64}
-                title={`${levelTierName(hero.level)} tier`}
+                title={maxed ? 'Max level' : `${levelTierName(hero.level)} tier`}
               >
                 <span style={{ color }}>{hero.level}</span>
               </Ring>

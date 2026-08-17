@@ -3472,11 +3472,11 @@
     "id": "progression.prestigeMinLevel",
     "label": "Progression: prestige min level",
     "category": "progression",
-    "value": 30,
-    "default": 30,
+    "value": 55,
+    "default": 55,
     "min": 1,
     "max": 100,
-    "description": "Minimum hero level required for retirement to grant any Renown at all."
+    "description": "Minimum hero level required for retirement to grant any Renown at all. Pushed to match the level cap (55) so a hero retires fully leveled, not partway -- see progression.ts's MAX_HERO_LEVEL comment."
   },
   {
     "id": "progression.prestigeStreakWindowMs",

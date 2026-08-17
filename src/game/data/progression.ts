@@ -1004,6 +1004,28 @@ const XP_BREAKPOINTS = [
   { level: Tuning.get('progression.xpBreakLevel7'), multiplier: Tuning.get('progression.xpBreakMultiplier7') },
 ].sort((a, b) => a.level - b.level);
 
+/**
+ * The hard level cap -- derived from the breakpoints themselves (the
+ * highest `level` among them, currently breakpoint 5 at 55) rather than a
+ * second, separately-tuned number. The curve already "holds flat above
+ * the highest breakpoint rather than extrapolating past it" (see this
+ * file's own comment on XP_BREAKPOINTS above) -- a hero level 55+ was
+ * always meant to be the design's actual ceiling (see guild-idler-status
+ * .md's XP curve retune, "day 62 to hit the level cap"), it just wasn't
+ * literally enforced anywhere before now. Deriving it here instead of
+ * adding a parallel `progression.maxHeroLevel` Tuning entry means it can
+ * never drift out of sync with wherever the curve's own top breakpoint
+ * actually sits if that's retuned later -- the exact kind of two-sources-
+ * of-truth bug this codebase has hit before (see MenuWindow.tsx's
+ * isTabVisible writeup for a recent example of the same class of issue).
+ * Retirement's own minimum level (PRESTIGE_MIN_LEVEL, below) is
+ * deliberately a separate, independently-tuned number, not derived from
+ * this one -- pushing retirement back to require the level cap was a
+ * design choice about progression pacing, not a consequence of the cap's
+ * own existence.
+ */
+export const MAX_HERO_LEVEL = Math.max(...XP_BREAKPOINTS.map((b) => b.level));
+
 function xpCurveMultiplier(level: number): number {
   if (level <= XP_BREAKPOINTS[0].level) return XP_BREAKPOINTS[0].multiplier;
   for (let i = 1; i < XP_BREAKPOINTS.length; i++) {
