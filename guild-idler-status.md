@@ -11756,3 +11756,120 @@ shortcut has seen some actual use.
 server and confirmed `/api/patches/list` and the served `app.js` both
 still work correctly with the new button's markup and click handler in
 place.
+
+### XP curve: tunable mid-game ramp + endgame slog (levels 20-55) -- built (patch 0173)
+
+```discord-update
+Dev Update | XP Curve Rework
+
+- Leveling 1-20 feels exactly the same as before -- this only touches level 20 and up
+- Levels 20-50 now take gradually more XP each level (up to 2x by level 50) instead of the flat curve
+- Levels 50-55 are a real endgame slog -- up to 4x the old XP cost right at the level cap, leading straight into Requiem for the Last God's own level-55 requirement
+- Rewards are unchanged -- this only touches how much XP a level costs, never how much a quest pays out
+```
+
+Direct response to a multi-hero realistic sim (chains + injuries + recruiting)
+landing at 44 days to fully complete the game -- faster than intended, and
+specifically faster than the single-hero realistic baseline (median 75
+days) despite doing strictly more. The sim's own explanation: recruiting
+is a strictly available lever that pays for itself, since more hands fund
+facilities faster, which compounds the lead hero's own climb the whole
+way through. This patch targets the specific complaint raised (the
+endgame felt too fast), not that underlying recruiting dynamic -- flagged
+directly during design discussion as a real caveat: if completion still
+feels too fast even with a slower 50-55, the next lever to look at is
+recruit-cost scaling, not this curve again.
+
+**`xpForLevel` (`progression.ts`) is now fully Tuning-registry-driven --
+previously two bare literals (`15`, `1.15`), matching the exact
+"previously hardcoded" pattern flagged earlier in this doc's own DevTool
+scalability discussion.** 12 new entries under a new `xp_curve` Tuning
+category: `progression.xpCurveBase`/`xpCurveExponent` (the original two
+constants, now editable), plus 5 level/multiplier breakpoint pairs
+(`xpBreakLevel1-5` / `xpBreakMultiplier1-5`). A new `xpCurveMultiplier(level)`
+does piecewise-linear interpolation between breakpoints -- flat 1.0x
+below breakpoint 1 (level 20), ramping continuously through every
+breakpoint after that, flat at breakpoint 5's multiplier (4.0x) above
+level 55. Deliberately fixed at exactly 5 breakpoints rather than a
+variable-length list -- the Tuning registry's own convention is a flat,
+individually-editable id/value entry per coefficient (see `tuning.ts`'s
+header comment), not a structured array field. A 6th breakpoint is a
+small, real follow-up (one more `Tuning.get` pair + one more segment),
+not something this was built to avoid needing.
+
+**Curve shape, agreed through several rounds of design discussion before
+any code was written:** unchanged (1.0x) through level 20; ramps
+continuously 20->30->40->50 (1.0x -> 1.5x -> 1.75x -> 2.0x) as a steadily
+building mid-game increase; then a deliberately much steeper 50->55 ramp
+(2.0x -> 4.0x) as the endgame slog. Breakpoint 4's level (50) was chosen
+specifically to land where the slope visibly steepens, not smoothed
+through -- unlike an arbitrary mid-level cliff (rejected during design:
+a flat jump at one unmotivated level reads as a bug), level 50 is where
+the real climb to the level cap begins, and pairs naturally with
+Requiem for the Last God's own reqLevel 55 gate.
+
+**Level-gate audit, done before finalizing numbers rather than assumed
+clean:** `progression.prestigeMinLevel` (30) sits well below the slog
+zone, no interaction. Legendary quest tier's `reqLevel` (25) is already
+unlocked in the mid-game ramp region, long before 50-55. Every raid's
+`reqLevel` was checked directly against `raids.json` -- nothing sits
+inside 46-54 (nearest neighbors are 41 and 43); the only thing gated at
+the top of the slog is `requiem_last_god` itself at exactly 55, the
+final raid. No hero class or skin unlock is hero-level-gated in this
+range either (`unlockTavernLevel` gates on Tavern *facility* level, an
+unrelated system). Clean sweep -- nothing else gets blocked or misgated
+by slowing this stretch down.
+
+**Early game (1-20) is provably unaffected**, not just claimed to be:
+`xpCurveMultiplier` returns a flat 1.0x for any level at or below
+breakpoint 1, so `xpForLevel`'s original ~3.8-month full-playthrough
+reasoning (see this function's own preserved comment) still holds
+exactly as written for that range.
+
+**Sandbox-testable with zero sim-engine changes**, confirmed directly:
+`tools/devtool/sim/runSim.ts` already imports `progression.xpForLevel`
+by reference rather than reimplementing it, so the new curve applies
+automatically the moment the Tuning values it reads exist -- reran the
+Active preset sim post-patch without touching `runSim.ts` at all and
+confirmed leveling is visibly slower than the pre-patch baseline.
+
+**Verified:** `npx tsc --noEmit` clean. Directly executed `xpForLevel`
+against the real patched code (not hand-calculated) at levels
+1/2/10/20/25/30/35/40/45/49/50/52/55 and confirmed the shape matches the
+agreed design exactly -- flat through 20, continuous ramp to 2.0x at 50,
+steep ramp to ~4.0x at 55.
+
+### Sim Backlog
+
+Carried over from the Balance Sandbox Phase 1/2 discussion -- deliberately
+not built yet, tracked here so they aren't lost rather than re-discovered
+later:
+
+- **Multi-hero roster fidelity.** Currently `heroCount` identical,
+  same-level earners rather than a real staggered roster with its own
+  recruiting/leveling schedule. Highest-value item on this list --
+  roster composition is a real lever players actually tune, and it's the
+  specific dynamic behind the 44-day multi-hero sim result this patch
+  responds to.
+- **Renown / Prestige / retirement loop.** Needs its own income model
+  (Renown only exists via retiring a hero) -- a genuinely separate
+  system from the gold economy the sim currently covers, not a small
+  add-on to it.
+- **Raids, gear, injuries, pets, events, quest chains.** Would turn the
+  sim from a quest-board-only expected-value approximation into
+  something closer to a real event simulation. Biggest lift of the
+  group.
+- **Legendary tier unlock.** Currently modeled as permanently locked
+  (`legendaryUnlocked` hardcoded `false` throughout `runSim.ts`).
+  Comparatively small once the real unlock path is confirmed.
+- **Level-over-days chart.** The sim already returns `levelCurve` in its
+  API response; nothing currently renders it as anything but raw table
+  endpoints. A visual curve was in the original Phase 1 design
+  discussion and never built.
+- **Diff-parsing "Simulate in Sandbox."** Patch 0172 shipped the simple
+  version (jump to Sandbox, re-enter values by hand). Walking a pending
+  patch's diff hunks for `tuning.json`/`balance.ts`/`progression.ts`
+  edits to pre-fill the override list automatically was the more
+  complete option on the table at the time, explicitly deferred rather
+  than silently upgraded into scope. Worth reconsidering once the manual
+  shortcut has seen some actual use.

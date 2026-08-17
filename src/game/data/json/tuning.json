@@ -3517,5 +3517,125 @@
     "min": 0,
     "max": 20,
     "description": "Flat permanent stat bonus granted per ascension level, applied to every stat."
+  },
+  {
+    "id": "progression.xpCurveBase",
+    "label": "Progression: XP curve base coefficient",
+    "category": "xp_curve",
+    "value": 15,
+    "default": 15,
+    "min": 1,
+    "max": 100,
+    "description": "Base multiplier in xpForLevel's level^exponent curve. Was a bare literal before patch 0173; now tunable like every other numeric constant in this file."
+  },
+  {
+    "id": "progression.xpCurveExponent",
+    "label": "Progression: XP curve exponent",
+    "category": "xp_curve",
+    "value": 1.15,
+    "default": 1.15,
+    "min": 1,
+    "max": 3,
+    "description": "Exponent in xpForLevel's level^exponent curve. Was a bare literal before patch 0173; now tunable like every other numeric constant in this file."
+  },
+  {
+    "id": "progression.xpBreakLevel1",
+    "label": "XP curve: breakpoint 1 level",
+    "category": "xp_curve",
+    "value": 20,
+    "default": 20,
+    "min": 1,
+    "max": 54,
+    "description": "Below this level, the XP multiplier is a flat 1.0x -- early game is unchanged from the pre-patch-0173 curve."
+  },
+  {
+    "id": "progression.xpBreakMultiplier1",
+    "label": "XP curve: breakpoint 1 multiplier",
+    "category": "xp_curve",
+    "value": 1.0,
+    "default": 1.0,
+    "min": 0.1,
+    "max": 10,
+    "description": "XP multiplier at and below breakpoint 1's level."
+  },
+  {
+    "id": "progression.xpBreakLevel2",
+    "label": "XP curve: breakpoint 2 level",
+    "category": "xp_curve",
+    "value": 30,
+    "default": 30,
+    "min": 1,
+    "max": 55,
+    "description": "Second XP curve breakpoint -- multiplier ramps linearly from breakpoint 1 to here."
+  },
+  {
+    "id": "progression.xpBreakMultiplier2",
+    "label": "XP curve: breakpoint 2 multiplier",
+    "category": "xp_curve",
+    "value": 1.5,
+    "default": 1.5,
+    "min": 0.1,
+    "max": 10,
+    "description": "XP multiplier at breakpoint 2's level."
+  },
+  {
+    "id": "progression.xpBreakLevel3",
+    "label": "XP curve: breakpoint 3 level",
+    "category": "xp_curve",
+    "value": 40,
+    "default": 40,
+    "min": 1,
+    "max": 55,
+    "description": "Third XP curve breakpoint -- multiplier ramps linearly from breakpoint 2 to here."
+  },
+  {
+    "id": "progression.xpBreakMultiplier3",
+    "label": "XP curve: breakpoint 3 multiplier",
+    "category": "xp_curve",
+    "value": 1.75,
+    "default": 1.75,
+    "min": 0.1,
+    "max": 10,
+    "description": "XP multiplier at breakpoint 3's level."
+  },
+  {
+    "id": "progression.xpBreakLevel4",
+    "label": "XP curve: breakpoint 4 level",
+    "category": "xp_curve",
+    "value": 50,
+    "default": 50,
+    "min": 1,
+    "max": 55,
+    "description": "Fourth XP curve breakpoint -- where the endgame slog begins. Deliberately lands at the same level Requiem for the Last God (the final raid) requires."
+  },
+  {
+    "id": "progression.xpBreakMultiplier4",
+    "label": "XP curve: breakpoint 4 multiplier",
+    "category": "xp_curve",
+    "value": 2.0,
+    "default": 2.0,
+    "min": 0.1,
+    "max": 10,
+    "description": "XP multiplier at breakpoint 4's level -- the slope noticeably steepens from here to breakpoint 5."
+  },
+  {
+    "id": "progression.xpBreakLevel5",
+    "label": "XP curve: breakpoint 5 level",
+    "category": "xp_curve",
+    "value": 55,
+    "default": 55,
+    "min": 1,
+    "max": 55,
+    "description": "Fifth and final XP curve breakpoint -- the level cap. Multiplier holds flat at this value for any level above it."
+  },
+  {
+    "id": "progression.xpBreakMultiplier5",
+    "label": "XP curve: breakpoint 5 multiplier",
+    "category": "xp_curve",
+    "value": 4.0,
+    "default": 4.0,
+    "min": 0.1,
+    "max": 15,
+    "description": "XP multiplier at the level cap -- the deliberate 'absolute slog' endgame target."
   }
 ]
