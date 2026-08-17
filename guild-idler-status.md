@@ -10739,10 +10739,14 @@ used, so they inherit the small-caps pill look everywhere for free.
 **Verified:** `npx tsc --noEmit` and `npx vite build --config
 vite.web.config.ts` both pass clean against a fresh clone.
 
-### Backlog: stash cap, level 60, and the level 46-54 content gap -- idea logged, not scoped
+### Backlog: stash cap and the level 46-54 content gap -- idea logged, not scoped
 
-Five items raised together, logged as backlog rather than built this
-pass:
+Raised alongside two other items (level 60 cap, class-specific armour
+sets) that have since been split out and bundled with the fourth-raid-
+difficulty idea into their own coordinated post-release patch -- see
+"Post-release update: Level 60 cap + Mythic raid difficulty tier +
+class-specific armour sets" below. The two items below are unrelated to
+that bundle and stay logged separately:
 
 - **Stash size limit, upgradeable.** Checked directly -- the stash is
   genuinely unlimited today. Every push (`EquipmentManager.equip`'s
@@ -10757,16 +10761,6 @@ pass:
   existing facility (Treasury? Workshop?) or its own upgrade, and what a
   sane starting cap even is given the game currently assumes unlimited
   storage everywhere that pushes to it.
-- **Class-specific armour sets, for a level 60 cap.** Depends on the
-  level-60 extension below landing first -- no armour needs class-gating
-  today since nothing above reqLevel 55 exists yet.
-- **Level 60 cap (extension from the current 55).** The Requiem for the
-  Last God / `last_god` capstone is currently the actual level ceiling in
-  every sense -- `GEAR_SCORE_LEVEL_CAP` (patch 0157), the difficulty
-  tiers, the endgame chain. Raising it is a real, multi-file change, not
-  a single constant (xp curve headroom past 55, what drops between 55 and
-  60, whether Renown Perks' late-game tier2 curves still make sense with
-  5 more levels of grinding room above them).
 - **A new raid around level 48-49.** Ties directly to an existing, already-
   documented gap: the level-gap content review (see the pantheon/status
   history above) found chains covering most of 1-55 but flagged **46-54 as
@@ -11071,40 +11065,62 @@ convention for the detail-modal one.
 vite.web.config.ts` both pass clean against a fresh clone with every
 file applied.
 
-### Backlog addendum: a fourth raid difficulty tier, gated on the level-60 cap -- idea logged, not scoped
+### Post-release update: Level 60 cap + Mythic raid difficulty tier + class-specific armour sets -- bundled as one patch, not yet scoped
 
-Raised alongside the patch 0165 Mythic -> Legendary rename below, and ties
-directly into the level-60 backlog entry just above rather than
-replacing it. The naming discussion that led to the rename started from
-a real proposal -- a genuinely new fourth raid difficulty tier, Normal ->
-Heroic -> Legendary -> Mythic, sitting above today's top tier rather than
-between existing ones. Deliberately **not** built this pass (see the
-patch 0165 entry below for why -- renaming today's Mythic to Legendary
-first, keeping the actual fourth-tier idea for later, was the agreed
-scope split), but worth recording properly rather than losing the shape
-of the idea:
+**Deliberately bundled, on direct instruction.** These three were
+previously logged as separate backlog ideas (Level 60 cap and
+class-specific armour sets under "Backlog: stash cap, level 60, and the
+level 46-54 content gap"; the fourth raid difficulty tier under its own
+"Backlog addendum" entry, both above/below in this doc's history) --
+merged here into one entry because they're a single coordinated
+post-release update, not three independent asks that happen to overlap.
+**Explicitly not started now** -- this entry exists to keep the shape of
+the idea and everything already known about it on record, not as a
+ready-to-build spec. Full scoping happens as its own pass whenever this
+update is actually picked up, before any implementation begins.
 
-- **Likely gated behind the level 60 cap raise** logged just above, not
-  available earlier -- a fourth tier needs somewhere new to be genuinely
-  harder than today's ceiling, and level 60 is that headroom.
-- **Every existing raid would need to scale up to level 60** for this
-  tier specifically, not just the newest ones -- Blackford Keep through
-  Requiem for the Last God all getting a real fourth-tier encounter/loot
-  pass, not only whatever ships after the cap raise. Ties directly into
-  this section's own "class-specific armour sets, for a level 60 cap"
-  item -- this tier is very plausibly where those sets would actually
-  drop.
-- **New endgame content generally** was raised in the same conversation
-  as the reason to want a fourth tier at all, rather than the tier being
-  the whole ask on its own -- something for a guild that's already
-  cleared everything current to work toward, in the same spirit as the
-  Requiem raid's own role today.
-- Naming, tuning curve (successPenalty/rewardMultiplier/lootBonus/
-  durationMultiplier/roleMismatchCap/partySize), and per-raid loot
-  authoring (every raid-exclusive item would need a genuine new top-tier
-  variant, not just another reskin) are all still open -- this is a
-  scoping conversation for whenever the level-60 raise itself gets
-  picked up, not a ready-to-build spec.
+**Why these three specifically belong together, not separately:**
+- The fourth raid difficulty tier needs level 60 as its headroom -- it
+  isn't meaningfully harder than today's Legendary ceiling without
+  somewhere new for a hero to actually be overleveled relative to.
+- Class-specific armour sets need level 60 for the same reason -- no
+  armour needs class-gating today since nothing above reqLevel 55
+  exists yet, and the new raid difficulty tier is the most plausible
+  place those sets would actually drop from.
+- Raising the cap alone, with neither of the other two, would add
+  levels with nothing new to spend them on.
+
+**What's already known, carried over from both source entries so it
+isn't re-derived from scratch when this gets picked up:**
+- **Level 60 cap (extension from the current 55).** The Requiem for the
+  Last God / `last_god` capstone is currently the actual level ceiling
+  in every sense -- `GEAR_SCORE_LEVEL_CAP` (patch 0157), the difficulty
+  tiers, the endgame chain. Raising it is a real, multi-file change, not
+  a single constant: XP curve headroom past 55, what drops between 55
+  and 60, and whether Renown Perks' late-game tier2 curves still make
+  sense with 5 more levels of grinding room above them.
+- **Mythic raid difficulty tier (Normal -> Heroic -> Legendary ->
+  Mythic), sitting above today's top tier.** "Mythic" as the name is
+  already the agreed plan, not still open -- the patch 0165/0166 rename
+  of the *old* top tier from Mythic to Legendary was specifically done
+  to free that name up for this genuinely new tier later, rather than
+  reusing it awkwardly between two different tiers. Known scope:
+  **every existing raid would need to scale up to level 60 for this
+  tier specifically**, not just whatever ships after the cap raise --
+  Blackford Keep through Requiem for the Last God all getting a real
+  fourth-tier encounter/loot pass. Naming (beyond "Mythic" itself),
+  tuning curve (`successPenalty`/`rewardMultiplier`/`lootBonus`/
+  `durationMultiplier`/`roleMismatchCap`/`partySize`), and per-raid loot
+  authoring (every raid-exclusive item needs a genuine new top-tier
+  variant, not just another reskin) are all still open.
+- **Class-specific armour sets.** Depends on the level 60 raise landing
+  first; very plausibly drops from the new Mythic raid tier rather than
+  needing its own separate source.
+- **New endgame content generally** was the underlying reason to want
+  any of this in the first place, not the tier/cap/armour being the
+  whole ask on its own -- something for a guild that's already cleared
+  everything current to work toward, in the same spirit as the Requiem
+  raid's own role today.
 
 ### Mythic raid difficulty renamed to Legendary -- built (patch 0165)
 
@@ -11546,3 +11562,50 @@ the backlog entry itself yet, since patch 0157 (a real, shipped fix,
 but for *raid loot* Gear Score scaling with `reqLevel` -- a different
 system) may be the one actually meant. Flagged rather than assumed
 either way; revisit once confirmed which is intended.
+
+### Backlog restructure: Level 60 + Mythic raid difficulty + armour sets bundled into one post-release patch -- built (patch 0170)
+
+```discord-update
+Dev Update | Patch 0170
+
+- Bundled three previously-separate backlog ideas -- the level 60 cap, a new Mythic raid difficulty tier, and class-specific armour sets -- into one coordinated post-release update
+- Split the level 46-54 content gap (a new raid + quest chain) and the stash cap idea back out into their own entry, since they're unrelated to the level-60 bundle
+- Confirmed "Mythic" is already the agreed name for the new top raid tier, freed up by the earlier Legendary rename specifically for this
+```
+
+Doc-only patch, no code -- direct instruction to bundle the level 60
+cap, the fourth (Mythic) raid difficulty tier, and class-specific
+armour sets into a single coordinated post-release patch, explicitly
+not started now and to be fully scoped as its own pass whenever it's
+actually picked up.
+
+**Two previously-separate entries merged into one, with everything each
+already established carried over rather than re-derived:** "Backlog:
+stash cap, level 60, and the level 46-54 content gap" and "Backlog
+addendum: a fourth raid difficulty tier" both get replaced. The new
+combined entry explains directly why the three belong together rather
+than being three asks that happen to overlap -- the raid tier needs
+level 60 as headroom to be meaningfully harder than today's Legendary
+ceiling, armour sets need level 60 for the same class-gating reason and
+most plausibly drop from the new raid tier itself, and raising the cap
+alone with neither of the other two would add levels with nothing new
+to spend them on.
+
+**Stash cap and the 46-54 content gap (new raid + quest chain) split
+back out into their own entry**, renamed to drop the now-merged items
+from its title -- confirmed unrelated to the level-60 bundle, no reason
+to bundle them together just because they were originally logged in the
+same conversation.
+
+**One clarification folded in while restructuring:** "Mythic" as the
+new tier's actual name is already decided, not still open -- the patch
+0165/0166 rename of the *old* top raid tier from Mythic to Legendary was
+specifically done to free that name up for this genuinely new tier
+later. Previous phrasing left this implicit; now stated directly so it
+doesn't get re-litigated when this update is eventually scoped.
+
+**Still open, unrelated to this restructure:** the reward-scaling
+question flagged in patch 0169 (whether standard Legendary quest gold/
+XP is meant to scale with hero level) remains unconfirmed -- this
+patch's Level 60/Mythic-raid/armour-sets bundle is a separate topic
+from that one, not an answer to it.
