@@ -47,7 +47,7 @@ const CHECKS: Record<string, Check> = {
   black_market_unlocked: (state) => ModifierManager.hasUnlock(state, 'blackMarket'),
   legendary_quests_unlocked: (state) => ModifierManager.hasUnlock(state, 'legendaryQuests'),
   raids_heroic_unlocked: (state) => ModifierManager.hasUnlock(state, 'raidsHeroic'),
-  raids_mythic_unlocked: (state) => ModifierManager.hasUnlock(state, 'raidsMythic'),
+  raids_legendary_unlocked: (state) => ModifierManager.hasUnlock(state, 'raidsLegendary'),
   // The Training tab's own nav visibility gate (MenuWindow.tsx) reads
   // completedRaids directly rather than a dedicated boolean -- this check
   // mirrors that exact same condition rather than introducing a second

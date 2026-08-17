@@ -159,15 +159,17 @@ export const UPGRADES: UpgradeDef[] = [
     modsPerLevel: {}, unlocks: 'raidsHeroic',
   },
   {
-    // id kept as 'raid_mythic_clearance' (patch 0165 rename is display-only
-    // -- see RAID_DIFFICULTY_LABEL in raids.ts) so existing saves' upgrade
-    // levels, keyed by this id, need no migration.
-    id: 'raid_mythic_clearance', name: 'Legendary Clearance',
+    // id fully renamed as of patch 0166 (was 'raid_mythic_clearance',
+    // display-only-renamed in patch 0165) -- confirmed with testers first
+    // that no save has this upgrade purchased yet, so no migration needed
+    // for the id change itself. See guild-idler-status.md's patch 0166
+    // entry for the full sweep this was part of.
+    id: 'raid_legendary_clearance', name: 'Legendary Clearance',
     description: "The guild's word that it can handle Legendary difficulty -- the hardest raiding gets, and the only tier where the very best loot actually drops.",
-    baseCost: Tuning.get('upgrade.raid_mythic_clearance.baseCost'),
-    costGrowth: Tuning.get('upgrade.raid_mythic_clearance.costGrowth'),
-    maxLevel: Tuning.get('upgrade.raid_mythic_clearance.maxLevel'),
-    modsPerLevel: {}, unlocks: 'raidsMythic',
+    baseCost: Tuning.get('upgrade.raid_legendary_clearance.baseCost'),
+    costGrowth: Tuning.get('upgrade.raid_legendary_clearance.costGrowth'),
+    maxLevel: Tuning.get('upgrade.raid_legendary_clearance.maxLevel'),
+    modsPerLevel: {}, unlocks: 'raidsLegendary',
   },
   {
     id: 'potion_belt', name: 'Potion Belt',

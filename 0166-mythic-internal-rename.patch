@@ -1,0 +1,1701 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 7229730..32b59e7 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -10701,98 +10701,6 @@ pass:
+   chain(s) above as one coordinated content pass rather than two
+   unrelated asks, since they'd fill the same hole for the same reason.
+ 
+-### Backlog addendum: a fourth raid difficulty tier, gated on the level-60 cap -- idea logged, not scoped
+-
+-Raised alongside the patch 0165 Mythic -> Legendary rename below, and ties
+-directly into the level-60 backlog entry just above rather than
+-replacing it. The naming discussion that led to the rename started from
+-a real proposal -- a genuinely new fourth raid difficulty tier, Normal ->
+-Heroic -> Legendary -> Mythic, sitting above today's top tier rather than
+-between existing ones. Deliberately **not** built this pass (see the
+-patch 0165 entry below for why -- renaming today's Mythic to Legendary
+-first, keeping the actual fourth-tier idea for later, was the agreed
+-scope split), but worth recording properly rather than losing the shape
+-of the idea:
+-
+-- **Likely gated behind the level 60 cap raise** logged just above, not
+-  available earlier -- a fourth tier needs somewhere new to be genuinely
+-  harder than today's ceiling, and level 60 is that headroom.
+-- **Every existing raid would need to scale up to level 60** for this
+-  tier specifically, not just the newest ones -- Blackford Keep through
+-  Requiem for the Last God all getting a real fourth-tier encounter/loot
+-  pass, not only whatever ships after the cap raise. Ties directly into
+-  this section's own "class-specific armour sets, for a level 60 cap"
+-  item -- this tier is very plausibly where those sets would actually
+-  drop.
+-- **New endgame content generally** was raised in the same conversation
+-  as the reason to want a fourth tier at all, rather than the tier being
+-  the whole ask on its own -- something for a guild that's already
+-  cleared everything current to work toward, in the same spirit as the
+-  Requiem raid's own role today.
+-- Naming, tuning curve (successPenalty/rewardMultiplier/lootBonus/
+-  durationMultiplier/roleMismatchCap/partySize), and per-raid loot
+-  authoring (every raid-exclusive item would need a genuine new top-tier
+-  variant, not just another reskin) are all still open -- this is a
+-  scoping conversation for whenever the level-60 raise itself gets
+-  picked up, not a ready-to-build spec.
+-
+-### Mythic raid difficulty renamed to Legendary -- built (patch 0165)
+-
+-```discord-update
+-Dev Update | Raid Difficulty Rename
+-
+-- Raid difficulty is now Normal / Heroic / Legendary (was Mythic)
+-- Every raid-exclusive Legendary item, upgrade, and message updated to match
+-```
+-
+-Came out of a conversation about adding a genuine fourth raid difficulty
+-tier (Normal -> Heroic -> Legendary -> Mythic, mirroring the quest
+-ladder's five tiers minus Easy). Decided against building a real new tier
+-for now -- see the backlog addendum above for that idea, kept for later --
+-and instead just renamed today's top tier from Mythic to Legendary,
+-display-only.
+-
+-**Internal id deliberately unchanged.** `RaidDifficulty` is still
+-`'normal' | 'heroic' | 'mythic'` everywhere it's actually data: save
+-fields (`completedRaidDifficulties`, in-progress raid state), equipment
+-ids (`iron_helm_mythic`, `dragon_helm_mythic`, etc. -- ~40 raid-exclusive
+-items across every raid), the `raid_mythic_clearance` upgrade id, its
+-`raidsMythic` unlock flag, and every `raid_difficulty.mythic.*` tuning
+-key. Renaming any of those would need a save migration (existing saves
+-already have `'mythic'` written into completed-raid history and owned
+-item ids) for a purely cosmetic change -- not worth the risk. Every
+-player-facing *label*, though, changes.
+-
+-**New `RAID_DIFFICULTY_LABEL` map** (`raids.ts`), alongside the existing
+-`RAID_DIFFICULTY_ICON` -- `{ normal: 'Normal', heroic: 'Heroic', mythic:
+-'Legendary' }`. Every UI spot that used to derive its label by
+-capitalizing the raw id (`difficulty[0].toUpperCase() +
+-difficulty.slice(1)`) now reads this map instead: the difficulty-circle
+-badges and their tooltips, the role-mismatch success-cap warning, the
+-raid confirmation modal, `RaidResultModal`, and `OfflineReportModal` --
+-six call sites across four files. The single-letter fallback badge
+-(shown only if `public/raid-icons/mythic.png` fails to load) changed
+-`'M'` -> `'L'` to match.
+-
+-**Text renamed, ids kept.** The `raid_mythic_clearance` upgrade's display
+-`name`/`description` ("Mythic Clearance" -> "Legendary Clearance") and
+-`RaidManager`'s own gating error string, both in code/data, not the id.
+-Every raid-exclusive equipment item's `name` field containing `(Mythic)`
+--- 42 occurrences across ~41 items (Gravewatcher's Band, Dragonscale
+-Helm, the full Requiem set, Grimward set, Cinderfang set, and more) --
+-mechanically replaced with `(Legendary)`; item `id`s, `mods`, and every
+-other field untouched, so owned copies in existing saves resolve
+-identically. Tuning registry labels/descriptions referencing "Mythic"
+-(role-mismatch cap, success penalty, loot bonus, duration/reward
+-multiplier, the Legendary Clearance upgrade's own three tuning entries)
+-updated too -- DevTool-only text, not save-relevant, done for
+-consistency while already in these files.
+-
+-**Verified:** `npx tsc --noEmit` and `npx vite build --config
+-vite.web.config.ts` both pass clean against a fresh clone with every
+-file applied. `equipment.json` and `tuning.json` both re-parsed as valid
+-JSON post-edit.
+-
+ ### Rarity banner art behind gear cards -- built (patch 0159)
+ 
+ ```discord-update
+@@ -11082,3 +10990,179 @@ convention for the detail-modal one.
+ `app.js`. `npx tsc --noEmit` and `npx vite build --config
+ vite.web.config.ts` both pass clean against a fresh clone with every
+ file applied.
++
++### Backlog addendum: a fourth raid difficulty tier, gated on the level-60 cap -- idea logged, not scoped
++
++Raised alongside the patch 0165 Mythic -> Legendary rename below, and ties
++directly into the level-60 backlog entry just above rather than
++replacing it. The naming discussion that led to the rename started from
++a real proposal -- a genuinely new fourth raid difficulty tier, Normal ->
++Heroic -> Legendary -> Mythic, sitting above today's top tier rather than
++between existing ones. Deliberately **not** built this pass (see the
++patch 0165 entry below for why -- renaming today's Mythic to Legendary
++first, keeping the actual fourth-tier idea for later, was the agreed
++scope split), but worth recording properly rather than losing the shape
++of the idea:
++
++- **Likely gated behind the level 60 cap raise** logged just above, not
++  available earlier -- a fourth tier needs somewhere new to be genuinely
++  harder than today's ceiling, and level 60 is that headroom.
++- **Every existing raid would need to scale up to level 60** for this
++  tier specifically, not just the newest ones -- Blackford Keep through
++  Requiem for the Last God all getting a real fourth-tier encounter/loot
++  pass, not only whatever ships after the cap raise. Ties directly into
++  this section's own "class-specific armour sets, for a level 60 cap"
++  item -- this tier is very plausibly where those sets would actually
++  drop.
++- **New endgame content generally** was raised in the same conversation
++  as the reason to want a fourth tier at all, rather than the tier being
++  the whole ask on its own -- something for a guild that's already
++  cleared everything current to work toward, in the same spirit as the
++  Requiem raid's own role today.
++- Naming, tuning curve (successPenalty/rewardMultiplier/lootBonus/
++  durationMultiplier/roleMismatchCap/partySize), and per-raid loot
++  authoring (every raid-exclusive item would need a genuine new top-tier
++  variant, not just another reskin) are all still open -- this is a
++  scoping conversation for whenever the level-60 raise itself gets
++  picked up, not a ready-to-build spec.
++
++### Mythic raid difficulty renamed to Legendary -- built (patch 0165)
++
++```discord-update
++Dev Update | Raid Difficulty Rename
++
++- Raid difficulty is now Normal / Heroic / Legendary (was Mythic)
++- Every raid-exclusive Legendary item, upgrade, and message updated to match
++```
++
++Came out of a conversation about adding a genuine fourth raid difficulty
++tier (Normal -> Heroic -> Legendary -> Mythic, mirroring the quest
++ladder's five tiers minus Easy). Decided against building a real new tier
++for now -- see the backlog addendum above for that idea, kept for later --
++and instead just renamed today's top tier from Mythic to Legendary,
++display-only.
++
++**Internal id deliberately unchanged.** `RaidDifficulty` is still
++`'normal' | 'heroic' | 'mythic'` everywhere it's actually data: save
++fields (`completedRaidDifficulties`, in-progress raid state), equipment
++ids (`iron_helm_mythic`, `dragon_helm_mythic`, etc. -- ~40 raid-exclusive
++items across every raid), the `raid_mythic_clearance` upgrade id, its
++`raidsMythic` unlock flag, and every `raid_difficulty.mythic.*` tuning
++key. Renaming any of those would need a save migration (existing saves
++already have `'mythic'` written into completed-raid history and owned
++item ids) for a purely cosmetic change -- not worth the risk. Every
++player-facing *label*, though, changes.
++
++**New `RAID_DIFFICULTY_LABEL` map** (`raids.ts`), alongside the existing
++`RAID_DIFFICULTY_ICON` -- `{ normal: 'Normal', heroic: 'Heroic', mythic:
++'Legendary' }`. Every UI spot that used to derive its label by
++capitalizing the raw id (`difficulty[0].toUpperCase() +
++difficulty.slice(1)`) now reads this map instead: the difficulty-circle
++badges and their tooltips, the role-mismatch success-cap warning, the
++raid confirmation modal, `RaidResultModal`, and `OfflineReportModal` --
++six call sites across four files. The single-letter fallback badge
++(shown only if `public/raid-icons/mythic.png` fails to load) changed
++`'M'` -> `'L'` to match.
++
++**Text renamed, ids kept.** The `raid_mythic_clearance` upgrade's display
++`name`/`description` ("Mythic Clearance" -> "Legendary Clearance") and
++`RaidManager`'s own gating error string, both in code/data, not the id.
++Every raid-exclusive equipment item's `name` field containing `(Mythic)`
++-- 42 occurrences across ~41 items (Gravewatcher's Band, Dragonscale
++Helm, the full Requiem set, Grimward set, Cinderfang set, and more) --
++mechanically replaced with `(Legendary)`; item `id`s, `mods`, and every
++other field untouched, so owned copies in existing saves resolve
++identically. Tuning registry labels/descriptions referencing "Mythic"
++(role-mismatch cap, success penalty, loot bonus, duration/reward
++multiplier, the Legendary Clearance upgrade's own three tuning entries)
++updated too -- DevTool-only text, not save-relevant, done for
++consistency while already in these files.
++
++**Verified:** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean against a fresh clone with every
++file applied. `equipment.json` and `tuning.json` both re-parsed as valid
++JSON post-edit.
++
++### Mythic raid difficulty: internal ids fully renamed to Legendary -- built (patch 0166)
++
++```discord-update
++Dev Update | Raid Difficulty Internal Rename
++
++- Finished the Mythic -> Legendary raid difficulty rename from patch 0165 -- ids, item names, upgrade, achievement, and loot tables all now say Legendary, not just the on-screen label
++```
++
++Follow-up to patch 0165's display-only rename. Confirmed with testers
++first that no save exists yet with the current top raid tier purchased,
++cleared, or in progress -- so unlike 0165 (which deliberately avoided
++touching any id, precisely because that risk existed), this patch does
++the full internal rename with no migration needed and no compatibility
++shim left behind.
++
++**Every internal `mythic` identifier renamed to `legendary`:**
++- `RaidDifficulty` type itself (`types.ts`) -- `'normal' | 'heroic' |
++  'legendary'`. `RAID_DIFFICULTY_LABEL` (raids.ts) is trivial now that id
++  matches label, but kept rather than removed -- it's still the correct
++  pattern for a genuinely new fourth tier later, and every UI call site
++  already reads through it instead of deriving a label from the raw id.
++- `RAID_DIFFICULTIES`/`RAID_DIFFICULTY_ORDER`/`RAID_DIFFICULTY_ICON` keys
++  (raids.ts), plus the icon path and the actual tracked asset --
++  `public/raid-icons/mythic.png` renamed to `legendary.png` via `git mv`,
++  not left for a manual follow-up.
++- `RaidEncounterDef.lootMythic` -> `lootLegendary` (types.ts, raids.ts's
++  `lootForDifficulty`, the DevTool's `raid-encounters` schema in
++  `server.mjs`), and the field itself renamed on all 22 encounters that
++  had one in `raid-encounters.json`.
++- The `raid_mythic_clearance` upgrade -> `raid_legendary_clearance`
++  (progression.ts), its `unlocks` flag `raidsMythic` -> `raidsLegendary`
++  (also updated in `ModifierManager.hasUnlock`'s type signature and every
++  call site: `RaidsPanel.tsx`'s `DIFFICULTY_UNLOCK` map, `RaidManager`'s
++  gating check, `GuidanceManager`'s `raids_legendary_unlocked` topic --
++  renamed to match, alongside its `guidance-topics.json` entry).
++- Both tuning-key families -- `raid_difficulty.mythic.*` (5 keys) and
++  `upgrade.raid_mythic_clearance.*` (3 keys) -- renamed in `tuning.json`
++  and every `Tuning.get(...)` call site referencing them.
++- The `RAID_MYTHIC_CLEARED` achievement -> `RAID_LEGENDARY_CLEARED`
++  (`AchievementManager.ts` condition key + `achievements.json` id,
++  matching the pattern `RAID_NORMAL_CLEARED`/`RAID_HEROIC_CLEARED`
++  already use), name/description updated to match, and
++  `RAID_ALL_DIFFICULTIES`'s own condition now checks `'legendary'`
++  instead of `'mythic'`.
++- Every raid-exclusive equipment item's `id` -- 42 items, `_mythic` ->
++  `_legendary` suffix (`equipment.json`), matching the `(Mythic)` ->
++  `(Legendary)` display-name rename patch 0165 already did to the same
++  items. Cross-checked programmatically both before and after: every one
++  of the 42 renamed ids is referenced from exactly the `lootLegendary`
++  pool it should be, and every `loot`/`lootHeroic`/`lootLegendary` entry
++  across all 22 encounters resolves to a real equipment id post-rename --
++  zero orphaned loot references either direction.
++- `RaidsPanel.tsx`'s `DIFFICULTY_LABEL` (single-letter fallback badge),
++  `DIFFICULTY_COLOR`, and `OfflineReportModal.tsx`'s own
++  `RAID_DIFFICULTY_COLOR` -- all three are plain `Record<RaidDifficulty,
++  ...>` object literals, so `tsc` itself caught every one that still had
++  a stale `mythic:` key once the type changed; nothing here relied on
++  manual grepping alone.
++- `guide-topics.json`'s How-To body text ("Heroic 6, Mythic 9" ->
++  "...Legendary 9") and a full comment sweep across `RaidManager.ts`,
++  `QuestManager.ts`, `PeddlerManager.ts`, `ShopManager.ts`,
++  `equipment.ts`, and `tuning.ts` -- none of these were functional
++  changes, just finishing the rename everywhere a future reader would
++  otherwise hit a stale "Mythic" reference mid-file.
++
++**One coincidental cleanup, not a behavior change:** `RaidManager`'s
++injury-roll code already mapped raid difficulty to an equivalent quest
++`Difficulty` tier for `HeroManager.rollInjury` (raid's toughest tier ->
++quest's own `'legendary'` tier) -- that mapping's *target* was always
++the string `'legendary'` (a completely separate quest-tier id, unrelated
++to this rename), only the *source* comparison (`active.difficulty ===
++'mythic'`) needed updating to `'legendary'`. Now that raid's toughest
++tier and quest's toughest tier are both spelled `'legendary'`, the line
++reads a little strangely (`difficulty === 'legendary' ? 'legendary' :
++...`) but is exactly as correct as before -- left a comment in place
++explaining the two are different types that happen to share a name now.
++
++**Verified:** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean. `node --check` clean on both
++`server.mjs` and `app.js`. Every touched JSON file re-parsed valid.
++Programmatic cross-check (not just eyeballing) confirmed zero dangling
++loot references in either direction across all 22 affected encounters
++and all 42 renamed items.
+diff --git a/public/raid-icons/mythic.png b/public/raid-icons/legendary.png
+similarity index 100%
+rename from public/raid-icons/mythic.png
+rename to public/raid-icons/legendary.png
+diff --git a/src/game/data/equipment.ts b/src/game/data/equipment.ts
+index 0ffce51..f8d925d 100644
+--- a/src/game/data/equipment.ts
++++ b/src/game/data/equipment.ts
+@@ -249,7 +249,7 @@ export const ITEM_SETS: ItemSet[] = [
+   // that had this treatment before now; Blackford Keep/Bonewrought
+   // Vault/Frozen Wyrmkeep/What Got Out all dropped real, already-themed
+   // loot with no setId grouping or set bonus attached to any of it.
+-  // `setId` is applied to a piece's Normal *and* Heroic *and* Mythic
++  // `setId` is applied to a piece's Normal *and* Heroic *and* Legendary
+   // variant alike (see the matching equipment.json entries) -- the actual
+   // bonus-counting logic in HeroManager.equipmentMods only cares about
+   // which slot is filled and what setId that item carries, never which
+diff --git a/src/game/data/json/achievements.json b/src/game/data/json/achievements.json
+index af662e3..82270c8 100644
+--- a/src/game/data/json/achievements.json
++++ b/src/game/data/json/achievements.json
+@@ -91,16 +91,16 @@
+     "unlocksTrackId": "hymn_of_valor"
+   },
+   {
+-    "id": "RAID_MYTHIC_CLEARED",
+-    "name": "Mythic Reckoning",
+-    "description": "Full-clear a raid on Mythic difficulty.",
++    "id": "RAID_LEGENDARY_CLEARED",
++    "name": "Legendary Reckoning",
++    "description": "Full-clear a raid on Legendary difficulty.",
+     "hidden": false,
+     "unlocksTrackId": "the_last_watch"
+   },
+   {
+     "id": "RAID_ALL_DIFFICULTIES",
+     "name": "Every Banner Flying",
+-    "description": "Full-clear a raid at every difficulty -- Normal, Heroic, and Mythic.",
++    "description": "Full-clear a raid at every difficulty -- Normal, Heroic, and Legendary.",
+     "hidden": false,
+     "unlocksTrackId": "the_broken_crown"
+   },
+diff --git a/src/game/data/json/equipment.json b/src/game/data/json/equipment.json
+index e5a11e1..b3408ff 100644
+--- a/src/game/data/json/equipment.json
++++ b/src/game/data/json/equipment.json
+@@ -1368,7 +1368,7 @@
+     "setId": "bonewrought"
+   },
+   {
+-    "id": "gravewatchers_band_mythic",
++    "id": "gravewatchers_band_legendary",
+     "name": "Gravewatcher's Band (Legendary)",
+     "slot": "ring",
+     "rarity": "epic",
+@@ -1409,7 +1409,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "ashwoven_charm_mythic",
++    "id": "ashwoven_charm_legendary",
+     "name": "Ashwoven Charm (Legendary)",
+     "slot": "amulet",
+     "rarity": "epic",
+@@ -1449,7 +1449,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "choir_mask_mythic",
++    "id": "choir_mask_legendary",
+     "name": "Mask of the Hollow Choir (Legendary)",
+     "slot": "helmet",
+     "rarity": "epic",
+@@ -1491,7 +1491,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "silenced_bell_mythic",
++    "id": "silenced_bell_legendary",
+     "name": "The Silenced Bell (Legendary)",
+     "slot": "amulet",
+     "rarity": "epic",
+@@ -1531,7 +1531,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "dragon_helm_mythic",
++    "id": "dragon_helm_legendary",
+     "name": "Dragonscale Helm (Legendary)",
+     "slot": "helmet",
+     "rarity": "legendary",
+@@ -1565,7 +1565,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "copper_band_mythic",
++    "id": "copper_band_legendary",
+     "name": "Copper Band (Legendary)",
+     "slot": "ring",
+     "rarity": "epic",
+@@ -1580,7 +1580,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "work_gloves_mythic",
++    "id": "work_gloves_legendary",
+     "name": "Work Gloves (Legendary)",
+     "slot": "gloves",
+     "rarity": "epic",
+@@ -1630,7 +1630,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "knights_blade_mythic",
++    "id": "knights_blade_legendary",
+     "name": "Knight's Blade (Legendary)",
+     "slot": "weapon",
+     "rarity": "epic",
+@@ -1670,7 +1670,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "iron_helm_mythic",
++    "id": "iron_helm_legendary",
+     "name": "Iron Helm (Legendary)",
+     "slot": "helmet",
+     "rarity": "epic",
+@@ -1711,7 +1711,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "chainmail_mythic",
++    "id": "chainmail_legendary",
+     "name": "Chainmail Hauberk (Legendary)",
+     "slot": "chest",
+     "rarity": "epic",
+@@ -1753,7 +1753,7 @@
+     "gearScoreOverride": 0
+   },
+   {
+-    "id": "ranger_boots_mythic",
++    "id": "ranger_boots_legendary",
+     "name": "Ranger Boots (Legendary)",
+     "slot": "boots",
+     "rarity": "epic",
+@@ -1788,7 +1788,7 @@
+     "setId": "blackford"
+   },
+   {
+-    "id": "tollkeepers_signet_mythic",
++    "id": "tollkeepers_signet_legendary",
+     "name": "Tollkeeper's Signet (Legendary)",
+     "slot": "ring",
+     "rarity": "epic",
+@@ -1843,7 +1843,7 @@
+     "setId": "wyrmkeep"
+   },
+   {
+-    "id": "frostfang_claw_mythic",
++    "id": "frostfang_claw_legendary",
+     "name": "Frostfang Claw (Legendary)",
+     "slot": "weapon",
+     "rarity": "epic",
+@@ -1901,7 +1901,7 @@
+     "setId": "wyrmkeep"
+   },
+   {
+-    "id": "keepers_warded_charm_mythic",
++    "id": "keepers_warded_charm_legendary",
+     "name": "Keeper's Warded Charm (Legendary)",
+     "slot": "amulet",
+     "rarity": "epic",
+@@ -1956,7 +1956,7 @@
+     "setId": "wyrmkeep"
+   },
+   {
+-    "id": "frostwalker_treads_mythic",
++    "id": "frostwalker_treads_legendary",
+     "name": "Frostwalker Treads (Legendary)",
+     "slot": "boots",
+     "rarity": "epic",
+@@ -2011,7 +2011,7 @@
+     "setId": "wyrmkeep"
+   },
+   {
+-    "id": "frozen_maw_shield_mythic",
++    "id": "frozen_maw_shield_legendary",
+     "name": "Frozen Maw (Legendary)",
+     "slot": "shield",
+     "rarity": "legendary",
+@@ -2065,7 +2065,7 @@
+     "setId": "what_got_out"
+   },
+   {
+-    "id": "cinder_ash_grip_mythic",
++    "id": "cinder_ash_grip_legendary",
+     "name": "Grip of Cinder Ash (Legendary)",
+     "slot": "gloves",
+     "rarity": "epic",
+@@ -2122,7 +2122,7 @@
+     "setId": "what_got_out"
+   },
+   {
+-    "id": "loyalists_brand_mythic",
++    "id": "loyalists_brand_legendary",
+     "name": "The Loyalist's Brand (Legendary)",
+     "slot": "ring",
+     "rarity": "epic",
+@@ -2181,7 +2181,7 @@
+     "setId": "what_got_out"
+   },
+   {
+-    "id": "cornered_fang_mythic",
++    "id": "cornered_fang_legendary",
+     "name": "Cornered Fang (Legendary)",
+     "slot": "weapon",
+     "rarity": "legendary",
+@@ -2240,7 +2240,7 @@
+     "setId": "what_got_out"
+   },
+   {
+-    "id": "desperate_ends_crown_mythic",
++    "id": "desperate_ends_crown_legendary",
+     "name": "Crown of a Desperate End (Legendary)",
+     "slot": "helmet",
+     "rarity": "legendary",
+@@ -2283,7 +2283,7 @@
+     "raidExclusive": true
+   },
+   {
+-    "id": "the_last_ember_mythic",
++    "id": "the_last_ember_legendary",
+     "name": "The Last Ember (Legendary)",
+     "slot": "amulet",
+     "rarity": "legendary",
+@@ -2326,7 +2326,7 @@
+     "raidExclusive": true
+   },
+   {
+-    "id": "requiem_blade_mythic",
++    "id": "requiem_blade_legendary",
+     "name": "Requiem Edge (Legendary)",
+     "slot": "weapon",
+     "rarity": "legendary",
+@@ -2365,7 +2365,7 @@
+     "raidExclusive": true
+   },
+   {
+-    "id": "requiem_crown_mythic",
++    "id": "requiem_crown_legendary",
+     "name": "Requiem Circlet (Legendary)",
+     "slot": "helmet",
+     "rarity": "legendary",
+@@ -2404,7 +2404,7 @@
+     "raidExclusive": true
+   },
+   {
+-    "id": "requiem_plate_mythic",
++    "id": "requiem_plate_legendary",
+     "name": "Requiem Vestments (Legendary)",
+     "slot": "chest",
+     "rarity": "legendary",
+@@ -2442,7 +2442,7 @@
+     "raidExclusive": true
+   },
+   {
+-    "id": "requiem_signet_mythic",
++    "id": "requiem_signet_legendary",
+     "name": "Requiem Signet (Legendary)",
+     "slot": "ring",
+     "rarity": "legendary",
+@@ -2479,7 +2479,7 @@
+     "raidExclusive": true
+   },
+   {
+-    "id": "requiem_grips_mythic",
++    "id": "requiem_grips_legendary",
+     "name": "Requiem Grasp (Legendary)",
+     "slot": "gloves",
+     "rarity": "legendary",
+@@ -2516,7 +2516,7 @@
+     "raidExclusive": true
+   },
+   {
+-    "id": "requiem_striders_mythic",
++    "id": "requiem_striders_legendary",
+     "name": "Requiem Stride (Legendary)",
+     "slot": "boots",
+     "rarity": "legendary",
+@@ -3041,7 +3041,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "cinderfang_gauntlets_mythic",
++    "id": "cinderfang_gauntlets_legendary",
+     "name": "Cinderfang Gauntlets (Legendary)",
+     "slot": "gloves",
+     "rarity": "epic",
+@@ -3099,7 +3099,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "wyrmwardens_cloak_mythic",
++    "id": "wyrmwardens_cloak_legendary",
+     "name": "Wyrmwarden's Cloak (Legendary)",
+     "slot": "cloak",
+     "rarity": "epic",
+@@ -3157,7 +3157,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "scaleknit_boots_mythic",
++    "id": "scaleknit_boots_legendary",
+     "name": "Scaleknit Boots (Legendary)",
+     "slot": "boots",
+     "rarity": "epic",
+@@ -3217,7 +3217,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "brood_fang_dagger_mythic",
++    "id": "brood_fang_dagger_legendary",
+     "name": "Brood Fang Dagger (Legendary)",
+     "slot": "weapon",
+     "rarity": "epic",
+@@ -3276,7 +3276,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "blackscale_helm_mythic",
++    "id": "blackscale_helm_legendary",
+     "name": "Blackscale Helm (Legendary)",
+     "slot": "helmet",
+     "rarity": "legendary",
+@@ -3338,7 +3338,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "broodmothers_crown_mythic",
++    "id": "broodmothers_crown_legendary",
+     "name": "Brood Mother's Crown (Legendary)",
+     "slot": "amulet",
+     "rarity": "legendary",
+@@ -3398,7 +3398,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "sewn_maw_greataxe_mythic",
++    "id": "sewn_maw_greataxe_legendary",
+     "name": "Sewn Maw Greataxe (Legendary)",
+     "slot": "weapon",
+     "rarity": "epic",
+@@ -3456,7 +3456,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "stitched_hide_vest_mythic",
++    "id": "stitched_hide_vest_legendary",
+     "name": "Stitched Hide Vest (Legendary)",
+     "slot": "chest",
+     "rarity": "epic",
+@@ -3516,7 +3516,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "phylactery_shard_ring_mythic",
++    "id": "phylactery_shard_ring_legendary",
+     "name": "Phylactery Shard Ring (Legendary)",
+     "slot": "ring",
+     "rarity": "epic",
+@@ -3577,7 +3577,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "unbinding_gauntlets_mythic",
++    "id": "unbinding_gauntlets_legendary",
+     "name": "Unbinding Gauntlets (Legendary)",
+     "slot": "gloves",
+     "rarity": "epic",
+@@ -3638,7 +3638,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "lichbound_diadem_mythic",
++    "id": "lichbound_diadem_legendary",
+     "name": "Lichbound Diadem (Legendary)",
+     "slot": "helmet",
+     "rarity": "legendary",
+@@ -3701,7 +3701,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "grimward_amulet_mythic",
++    "id": "grimward_amulet_legendary",
+     "name": "Grimward Amulet (Legendary)",
+     "slot": "amulet",
+     "rarity": "legendary",
+@@ -3763,7 +3763,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "woven_mind_circlet_mythic",
++    "id": "woven_mind_circlet_legendary",
+     "name": "Woven Mind Circlet (Legendary)",
+     "slot": "helmet",
+     "rarity": "epic",
+@@ -3824,7 +3824,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "unraveling_cloak_mythic",
++    "id": "unraveling_cloak_legendary",
+     "name": "Unraveling Cloak (Legendary)",
+     "slot": "cloak",
+     "rarity": "epic",
+@@ -3887,7 +3887,7 @@
+     "craftable": false
+   },
+   {
+-    "id": "threadcutter_mythic",
++    "id": "threadcutter_legendary",
+     "name": "Threadcutter (Legendary)",
+     "slot": "weapon",
+     "rarity": "legendary",
+@@ -4182,4 +4182,4 @@
+     "craftable": true,
+     "setId": "masterwork"
+   }
+-]
+\ No newline at end of file
++]
+diff --git a/src/game/data/json/guidance-topics.json b/src/game/data/json/guidance-topics.json
+index 9f9261b..60df63a 100644
+--- a/src/game/data/json/guidance-topics.json
++++ b/src/game/data/json/guidance-topics.json
+@@ -57,9 +57,9 @@
+     "targetTab": "raids"
+   },
+   {
+-    "id": "raids_mythic_unlocked",
++    "id": "raids_legendary_unlocked",
+     "messages": [
+-      "Mythic raids are open. the hardest content in the game, and the only tier where the very best loot drops."
++      "Legendary raids are open. the hardest content in the game, and the only tier where the very best loot drops."
+     ],
+     "targetTab": "raids"
+   },
+diff --git a/src/game/data/json/guide-topics.json b/src/game/data/json/guide-topics.json
+index 570db1a..a9acd9e 100644
+--- a/src/game/data/json/guide-topics.json
++++ b/src/game/data/json/guide-topics.json
+@@ -22,7 +22,7 @@
+   {
+     "id": "raids",
+     "title": "Raids",
+-    "body": "Raids need a full, exact-size party -- Normal needs 3 heroes, Heroic 6, Mythic 9. They pay out per encounter cleared, so a partial run still earns something."
++    "body": "Raids need a full, exact-size party -- Normal needs 3 heroes, Heroic 6, Legendary 9. They pay out per encounter cleared, so a partial run still earns something."
+   },
+   {
+     "id": "prestige",
+diff --git a/src/game/data/json/raid-encounters.json b/src/game/data/json/raid-encounters.json
+index a53e50a..a0c2ff7 100644
+--- a/src/game/data/json/raid-encounters.json
++++ b/src/game/data/json/raid-encounters.json
+@@ -15,9 +15,9 @@
+       "gravewatchers_band_heroic@10",
+       "ashwoven_charm_heroic@8"
+     ],
+-    "lootMythic": [
+-      "gravewatchers_band_mythic@10",
+-      "ashwoven_charm_mythic@8"
++    "lootLegendary": [
++      "gravewatchers_band_legendary@10",
++      "ashwoven_charm_legendary@8"
+     ]
+   },
+   {
+@@ -36,9 +36,9 @@
+       "choir_mask_heroic@6",
+       "silenced_bell_heroic@6"
+     ],
+-    "lootMythic": [
+-      "choir_mask_mythic@6",
+-      "silenced_bell_mythic@6"
++    "lootLegendary": [
++      "choir_mask_legendary@6",
++      "silenced_bell_legendary@6"
+     ]
+   },
+   {
+@@ -59,10 +59,10 @@
+       "gravewatchers_band_heroic@5",
+       "choir_mask_heroic@5"
+     ],
+-    "lootMythic": [
+-      "dragon_helm_mythic@4",
+-      "gravewatchers_band_mythic@5",
+-      "choir_mask_mythic@5"
++    "lootLegendary": [
++      "dragon_helm_legendary@4",
++      "gravewatchers_band_legendary@5",
++      "choir_mask_legendary@5"
+     ]
+   },
+   {
+@@ -81,9 +81,9 @@
+       "copper_band_heroic@12",
+       "work_gloves_heroic@10"
+     ],
+-    "lootMythic": [
+-      "copper_band_mythic@12",
+-      "work_gloves_mythic@10"
++    "lootLegendary": [
++      "copper_band_legendary@12",
++      "work_gloves_legendary@10"
+     ]
+   },
+   {
+@@ -102,9 +102,9 @@
+       "knights_blade_heroic@6",
+       "iron_helm_heroic@8"
+     ],
+-    "lootMythic": [
+-      "knights_blade_mythic@6",
+-      "iron_helm_mythic@8"
++    "lootLegendary": [
++      "knights_blade_legendary@6",
++      "iron_helm_legendary@8"
+     ]
+   },
+   {
+@@ -125,16 +125,16 @@
+       "ranger_boots_heroic@6",
+       "tollkeepers_signet_heroic@4"
+     ],
+-    "lootMythic": [
+-      "chainmail_mythic@6",
+-      "ranger_boots_mythic@6",
+-      "tollkeepers_signet_mythic@4"
+-    ],
+     "dealsElement": [
+       "poison"
+     ],
+     "vulnerableTo": [
+       "lightning"
++    ],
++    "lootLegendary": [
++      "chainmail_legendary@6",
++      "ranger_boots_legendary@6",
++      "tollkeepers_signet_legendary@4"
+     ]
+   },
+   {
+@@ -153,9 +153,9 @@
+       "requiem_signet_heroic@12",
+       "requiem_striders_heroic@10"
+     ],
+-    "lootMythic": [
+-      "requiem_signet_mythic@12",
+-      "requiem_striders_mythic@10"
++    "lootLegendary": [
++      "requiem_signet_legendary@12",
++      "requiem_striders_legendary@10"
+     ]
+   },
+   {
+@@ -176,10 +176,10 @@
+       "requiem_plate_heroic@6",
+       "the_last_ember_heroic@4"
+     ],
+-    "lootMythic": [
+-      "requiem_grips_mythic@8",
+-      "requiem_plate_mythic@6",
+-      "the_last_ember_mythic@4"
++    "lootLegendary": [
++      "requiem_grips_legendary@8",
++      "requiem_plate_legendary@6",
++      "the_last_ember_legendary@4"
+     ]
+   },
+   {
+@@ -198,9 +198,9 @@
+       "requiem_blade_heroic@5",
+       "requiem_crown_heroic@4"
+     ],
+-    "lootMythic": [
+-      "requiem_blade_mythic@5",
+-      "requiem_crown_mythic@4"
++    "lootLegendary": [
++      "requiem_blade_legendary@5",
++      "requiem_crown_legendary@4"
+     ]
+   },
+   {
+@@ -217,14 +217,14 @@
+     "lootHeroic": [
+       "frostfang_claw_heroic@10"
+     ],
+-    "lootMythic": [
+-      "frostfang_claw_mythic@10"
+-    ],
+     "dealsElement": [
+       "frost"
+     ],
+     "vulnerableTo": [
+       "fire"
++    ],
++    "lootLegendary": [
++      "frostfang_claw_legendary@10"
+     ]
+   },
+   {
+@@ -243,9 +243,9 @@
+       "keepers_warded_charm_heroic@9",
+       "frostwalker_treads_heroic@9"
+     ],
+-    "lootMythic": [
+-      "keepers_warded_charm_mythic@9",
+-      "frostwalker_treads_mythic@9"
++    "lootLegendary": [
++      "keepers_warded_charm_legendary@9",
++      "frostwalker_treads_legendary@9"
+     ]
+   },
+   {
+@@ -264,10 +264,6 @@
+       "dragon_helm_heroic@8",
+       "frozen_maw_shield_heroic@5"
+     ],
+-    "lootMythic": [
+-      "dragon_helm_mythic@8",
+-      "frozen_maw_shield_mythic@5"
+-    ],
+     "dealsElement": [
+       "frost"
+     ],
+@@ -276,6 +272,10 @@
+     ],
+     "vulnerableTo": [
+       "fire"
++    ],
++    "lootLegendary": [
++      "dragon_helm_legendary@8",
++      "frozen_maw_shield_legendary@5"
+     ]
+   },
+   {
+@@ -292,8 +292,8 @@
+     "lootHeroic": [
+       "cinder_ash_grip_heroic@10"
+     ],
+-    "lootMythic": [
+-      "cinder_ash_grip_mythic@10"
++    "lootLegendary": [
++      "cinder_ash_grip_legendary@10"
+     ]
+   },
+   {
+@@ -310,8 +310,8 @@
+     "lootHeroic": [
+       "loyalists_brand_heroic@9"
+     ],
+-    "lootMythic": [
+-      "loyalists_brand_mythic@9"
++    "lootLegendary": [
++      "loyalists_brand_legendary@9"
+     ]
+   },
+   {
+@@ -330,9 +330,9 @@
+       "cornered_fang_heroic@5",
+       "desperate_ends_crown_heroic@4"
+     ],
+-    "lootMythic": [
+-      "cornered_fang_mythic@5",
+-      "desperate_ends_crown_mythic@4"
++    "lootLegendary": [
++      "cornered_fang_legendary@5",
++      "desperate_ends_crown_legendary@4"
+     ]
+   },
+   {
+@@ -351,15 +351,15 @@
+       "cinderfang_gauntlets_heroic@10",
+       "wyrmwardens_cloak_heroic@9"
+     ],
+-    "lootMythic": [
+-      "cinderfang_gauntlets_mythic@10",
+-      "wyrmwardens_cloak_mythic@9"
+-    ],
+     "vulnerableTo": [
+       "frost"
+     ],
+     "dealsElement": [
+       "fire"
++    ],
++    "lootLegendary": [
++      "cinderfang_gauntlets_legendary@10",
++      "wyrmwardens_cloak_legendary@9"
+     ]
+   },
+   {
+@@ -378,15 +378,15 @@
+       "scaleknit_boots_heroic@9",
+       "brood_fang_dagger_heroic@7"
+     ],
+-    "lootMythic": [
+-      "scaleknit_boots_mythic@9",
+-      "brood_fang_dagger_mythic@7"
+-    ],
+     "vulnerableTo": [
+       "frost"
+     ],
+     "dealsElement": [
+       "fire"
++    ],
++    "lootLegendary": [
++      "scaleknit_boots_legendary@9",
++      "brood_fang_dagger_legendary@7"
+     ]
+   },
+   {
+@@ -405,10 +405,6 @@
+       "blackscale_helm_heroic@5",
+       "broodmothers_crown_heroic@4"
+     ],
+-    "lootMythic": [
+-      "blackscale_helm_mythic@5",
+-      "broodmothers_crown_mythic@4"
+-    ],
+     "eggLoot": [
+       "epic:black_dragonling@8"
+     ],
+@@ -420,6 +416,10 @@
+     ],
+     "immuneTo": [
+       "fire"
++    ],
++    "lootLegendary": [
++      "blackscale_helm_legendary@5",
++      "broodmothers_crown_legendary@4"
+     ]
+   },
+   {
+@@ -438,9 +438,9 @@
+       "sewn_maw_greataxe_heroic@8",
+       "stitched_hide_vest_heroic@8"
+     ],
+-    "lootMythic": [
+-      "sewn_maw_greataxe_mythic@8",
+-      "stitched_hide_vest_mythic@8"
++    "lootLegendary": [
++      "sewn_maw_greataxe_legendary@8",
++      "stitched_hide_vest_legendary@8"
+     ]
+   },
+   {
+@@ -459,9 +459,9 @@
+       "phylactery_shard_ring_heroic@7",
+       "unbinding_gauntlets_heroic@7"
+     ],
+-    "lootMythic": [
+-      "phylactery_shard_ring_mythic@7",
+-      "unbinding_gauntlets_mythic@7"
++    "lootLegendary": [
++      "phylactery_shard_ring_legendary@7",
++      "unbinding_gauntlets_legendary@7"
+     ]
+   },
+   {
+@@ -480,9 +480,9 @@
+       "lichbound_diadem_heroic@5",
+       "grimward_amulet_heroic@4"
+     ],
+-    "lootMythic": [
+-      "lichbound_diadem_mythic@5",
+-      "grimward_amulet_mythic@4"
++    "lootLegendary": [
++      "lichbound_diadem_legendary@5",
++      "grimward_amulet_legendary@4"
+     ]
+   },
+   {
+@@ -503,10 +503,10 @@
+       "unraveling_cloak_heroic@6",
+       "threadcutter_heroic@3"
+     ],
+-    "lootMythic": [
+-      "woven_mind_circlet_mythic@6",
+-      "unraveling_cloak_mythic@6",
+-      "threadcutter_mythic@3"
++    "lootLegendary": [
++      "woven_mind_circlet_legendary@6",
++      "unraveling_cloak_legendary@6",
++      "threadcutter_legendary@3"
+     ]
+   }
+ ]
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index e85d306..797eba0 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -105,7 +105,7 @@
+     "description": "Multiplies gold/xp rewards at Heroic difficulty."
+   },
+   {
+-    "id": "raid_difficulty.mythic.successPenalty",
++    "id": "raid_difficulty.legendary.successPenalty",
+     "label": "Legendary: success penalty",
+     "category": "raid_difficulty",
+     "value": 50,
+@@ -115,7 +115,7 @@
+     "description": "Flat percentage points subtracted from every Legendary encounter's success chance. Deliberately brutal -- see 0059's design note before softening."
+   },
+   {
+-    "id": "raid_difficulty.mythic.lootBonus",
++    "id": "raid_difficulty.legendary.lootBonus",
+     "label": "Legendary: loot bonus",
+     "category": "raid_difficulty",
+     "value": 15,
+@@ -124,7 +124,7 @@
+     "description": "Flat percentage points added to every Legendary loot roll."
+   },
+   {
+-    "id": "raid_difficulty.mythic.durationMultiplier",
++    "id": "raid_difficulty.legendary.durationMultiplier",
+     "label": "Legendary: duration multiplier",
+     "category": "raid_difficulty",
+     "value": 1.3,
+@@ -134,7 +134,7 @@
+     "description": "Multiplies total raid duration at Legendary difficulty."
+   },
+   {
+-    "id": "raid_difficulty.mythic.rewardMultiplier",
++    "id": "raid_difficulty.legendary.rewardMultiplier",
+     "label": "Legendary: reward multiplier",
+     "category": "raid_difficulty",
+     "value": 4,
+@@ -154,7 +154,7 @@
+     "description": "Hard ceiling on final per-encounter success at Heroic while the party doesn't meet the raid's requiredRoles minimums. Layered on top of raid.roleMismatchPenaltyPerSlot, not a replacement for it -- gear/level can't push success above this no matter how far over the ordinary formula would otherwise go."
+   },
+   {
+-    "id": "raid_difficulty.mythic.roleMismatchCap",
++    "id": "raid_difficulty.legendary.roleMismatchCap",
+     "label": "Legendary: role mismatch success cap",
+     "category": "raid_difficulty",
+     "value": 45,
+@@ -1957,7 +1957,7 @@
+     "min": 0
+   },
+   {
+-    "id": "upgrade.raid_mythic_clearance.baseCost",
++    "id": "upgrade.raid_legendary_clearance.baseCost",
+     "label": "Legendary Clearance: base cost",
+     "category": "vendor_upgrades",
+     "value": 60000,
+@@ -1966,7 +1966,7 @@
+     "min": 0
+   },
+   {
+-    "id": "upgrade.raid_mythic_clearance.costGrowth",
++    "id": "upgrade.raid_legendary_clearance.costGrowth",
+     "label": "Legendary Clearance: cost growth",
+     "category": "vendor_upgrades",
+     "value": 1,
+@@ -1975,7 +1975,7 @@
+     "min": 1
+   },
+   {
+-    "id": "upgrade.raid_mythic_clearance.maxLevel",
++    "id": "upgrade.raid_legendary_clearance.maxLevel",
+     "label": "Legendary Clearance: max level",
+     "category": "vendor_upgrades",
+     "value": 1,
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 766a7fc..7eb73f7 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -159,15 +159,17 @@ export const UPGRADES: UpgradeDef[] = [
+     modsPerLevel: {}, unlocks: 'raidsHeroic',
+   },
+   {
+-    // id kept as 'raid_mythic_clearance' (patch 0165 rename is display-only
+-    // -- see RAID_DIFFICULTY_LABEL in raids.ts) so existing saves' upgrade
+-    // levels, keyed by this id, need no migration.
+-    id: 'raid_mythic_clearance', name: 'Legendary Clearance',
++    // id fully renamed as of patch 0166 (was 'raid_mythic_clearance',
++    // display-only-renamed in patch 0165) -- confirmed with testers first
++    // that no save has this upgrade purchased yet, so no migration needed
++    // for the id change itself. See guild-idler-status.md's patch 0166
++    // entry for the full sweep this was part of.
++    id: 'raid_legendary_clearance', name: 'Legendary Clearance',
+     description: "The guild's word that it can handle Legendary difficulty -- the hardest raiding gets, and the only tier where the very best loot actually drops.",
+-    baseCost: Tuning.get('upgrade.raid_mythic_clearance.baseCost'),
+-    costGrowth: Tuning.get('upgrade.raid_mythic_clearance.costGrowth'),
+-    maxLevel: Tuning.get('upgrade.raid_mythic_clearance.maxLevel'),
+-    modsPerLevel: {}, unlocks: 'raidsMythic',
++    baseCost: Tuning.get('upgrade.raid_legendary_clearance.baseCost'),
++    costGrowth: Tuning.get('upgrade.raid_legendary_clearance.costGrowth'),
++    maxLevel: Tuning.get('upgrade.raid_legendary_clearance.maxLevel'),
++    modsPerLevel: {}, unlocks: 'raidsLegendary',
+   },
+   {
+     id: 'potion_belt', name: 'Potion Belt',
+diff --git a/src/game/data/raids.ts b/src/game/data/raids.ts
+index 9f4bda3..70144f7 100644
+--- a/src/game/data/raids.ts
++++ b/src/game/data/raids.ts
+@@ -46,25 +46,25 @@ export const RAID_BY_ID: Record<string, RaidDef> = Object.fromEntries(RAIDS.map(
+  */
+ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
+   // successPenalty raised (12->20, 24->50) and lootBonus introduced --
+-  // Mythic in particular is meant to be genuinely brutal, not just "harder
++  // Legendary in particular is meant to be genuinely brutal, not just "harder
+   // than Heroic": a 50-point penalty can push an encounter's baseline
+   // success below the floor before the party's own bonus even applies.
+   // The 9-hero party bonus is the intended counterweight, not a numbers
+   // mistake -- confirmed as the deliberate design, not something to soften.
+   // durationMultiplier: harder tiers take longer too -- normal 2h becomes
+-  // 2.3h at Heroic, 2.6h at Mythic (i.e. x1.15 / x1.3), matching the given
++  // 2.3h at Heroic, 2.6h at Legendary (i.e. x1.15 / x1.3), matching the given
+   // example exactly.
+   // Normal's own numbers are all baseline zero-points (no penalty, x1
+   // everything) rather than meaningfully "tunable" values, so they stay
+-  // literal here. Heroic/Mythic's four fields each read from the tuning
++  // literal here. Heroic/Legendary's four fields each read from the tuning
+   // registry instead -- editable live via the devtool's Tuning tab. See
+   // tuning.ts and tuning.json.
+   // roleMismatchCap: Normal deliberately has none at all (undefined, not
+   // just a high number) -- a mismatched Normal party still only eats the
+   // ordinary per-slot roleMismatchPenalty subtraction and can climb back
+   // up to MAX_SUCCESS on gear/level alone, same as before this existed.
+-  // Heroic/Mythic read theirs from the tuning registry like their other
+-  // three fields -- Mythic's is deliberately the lower of the two, same
++  // Heroic/Legendary read theirs from the tuning registry like their other
++  // three fields -- Legendary's is deliberately the lower of the two, same
+   // "genuinely brutal, not just harder than Heroic" intent as its
+   // successPenalty above.
+   normal: { difficulty: 'normal', partySize: 3, successPenalty: 0, rewardMultiplier: 1, lootBonus: 0, durationMultiplier: 1 },
+@@ -76,37 +76,36 @@ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
+     durationMultiplier: Tuning.get('raid_difficulty.heroic.durationMultiplier'),
+     roleMismatchCap: Tuning.get('raid_difficulty.heroic.roleMismatchCap'),
+   },
+-  mythic: {
+-    difficulty: 'mythic', partySize: 9,
+-    successPenalty: Tuning.get('raid_difficulty.mythic.successPenalty'),
+-    rewardMultiplier: Tuning.get('raid_difficulty.mythic.rewardMultiplier'),
+-    lootBonus: Tuning.get('raid_difficulty.mythic.lootBonus'),
+-    durationMultiplier: Tuning.get('raid_difficulty.mythic.durationMultiplier'),
+-    roleMismatchCap: Tuning.get('raid_difficulty.mythic.roleMismatchCap'),
++  legendary: {
++    difficulty: 'legendary', partySize: 9,
++    successPenalty: Tuning.get('raid_difficulty.legendary.successPenalty'),
++    rewardMultiplier: Tuning.get('raid_difficulty.legendary.rewardMultiplier'),
++    lootBonus: Tuning.get('raid_difficulty.legendary.lootBonus'),
++    durationMultiplier: Tuning.get('raid_difficulty.legendary.durationMultiplier'),
++    roleMismatchCap: Tuning.get('raid_difficulty.legendary.roleMismatchCap'),
+   },
+ };
+ 
+-export const RAID_DIFFICULTY_ORDER: RaidDifficulty[] = ['normal', 'heroic', 'mythic'];
++export const RAID_DIFFICULTY_ORDER: RaidDifficulty[] = ['normal', 'heroic', 'legendary'];
+ 
+ /**
+- * Player-facing display label per raid difficulty (patch 0165) -- the
+- * internal id stays `'mythic'` everywhere (save data, item id suffixes
+- * like `_mythic`, tuning keys, the `raid_mythic_clearance` upgrade id) so
+- * this is a pure display-layer rename with no save migration needed.
+- * Every UI spot that used to derive a label by capitalizing the raw id
+- * (`difficulty[0].toUpperCase() + difficulty.slice(1)`) reads this map
+- * instead. "Mythic" -> "Legendary" for now; a genuinely new fourth tier is
+- * a separate, much bigger backlog item (see guild-idler-status.md) that
+- * would slot in above this one, not replace it.
++ * Player-facing display label per raid difficulty. As of patch 0166 the
++ * internal id is 'legendary' too (full internal rename from the patch
++ * 0165 display-only version -- ids, item suffixes, tuning keys, and the
++ * upgrade id all now say `legendary`, not just this label), so this map
++ * is trivial today. Kept rather than removed: it's the correct pattern
++ * for whenever a genuinely new fourth tier lands above this one, and every
++ * UI call site already reads through it instead of deriving a label by
++ * capitalizing the raw id.
+  */
+ export const RAID_DIFFICULTY_LABEL: Record<RaidDifficulty, string> = {
+   normal: 'Normal',
+   heroic: 'Heroic',
+-  mythic: 'Legendary',
++  legendary: 'Legendary',
+ };
+ 
+ /**
+- * Badge icons for the N/H/M difficulty circles. Lives in its own
++ * Badge icons for the N/H/L difficulty circles. Lives in its own
+  * public/raid-icons/ folder, separate from public/item-icons/, since these
+  * are fixed UI chrome (exactly three, never devtool-edited) rather than
+  * per-item art assigned one at a time. Falls back to the plain letter
+@@ -116,7 +115,7 @@ export const RAID_DIFFICULTY_LABEL: Record<RaidDifficulty, string> = {
+ export const RAID_DIFFICULTY_ICON: Record<RaidDifficulty, string> = {
+   normal: './raid-icons/normal.png',
+   heroic: './raid-icons/heroic.png',
+-  mythic: './raid-icons/mythic.png',
++  legendary: './raid-icons/legendary.png',
+ };
+ 
+ /** Parses a "defId@chance" loot entry into its two parts. Malformed entries
+@@ -147,13 +146,13 @@ export function parseEggLootEntry(entry: string): { rarity: Rarity; dedicatedPet
+ }
+ 
+ /** The loot pool actually in play for a given difficulty -- lootHeroic/
+- *  lootMythic if the encounter defines one, otherwise the same base `loot`
+- *  every difficulty used before tiered pools existed. Used identically by
+- *  both the real roll (RaidManager.resolve) and the UI preview, so what's
+- *  shown always matches what can actually drop. */
++ *  lootLegendary if the encounter defines one, otherwise the same base
++ *  `loot` every difficulty used before tiered pools existed. Used
++ *  identically by both the real roll (RaidManager.resolve) and the UI
++ *  preview, so what's shown always matches what can actually drop. */
+ export function lootForDifficulty(encounter: RaidEncounterDef, difficulty: RaidDifficulty): string[] {
+   if (difficulty === 'heroic') return encounter.lootHeroic ?? encounter.loot;
+-  if (difficulty === 'mythic') return encounter.lootMythic ?? encounter.loot;
++  if (difficulty === 'legendary') return encounter.lootLegendary ?? encounter.loot;
+   return encounter.loot;
+ }
+ 
+diff --git a/src/game/data/tuning.ts b/src/game/data/tuning.ts
+index 38b7aab..eae6e7b 100644
+--- a/src/game/data/tuning.ts
++++ b/src/game/data/tuning.ts
+@@ -3,7 +3,7 @@ import tuningJson from './json/tuning.json';
+ /**
+  * A flat registry of individually-tunable numeric coefficients, editable
+  * live via the devtool without touching code -- e.g. Raid Speed's cost
+- * curve, or Mythic's durationMultiplier. Deliberately starting small and
++ * curve, or Legendary's durationMultiplier. Deliberately starting small and
+  * scoped to raid-related values as the proof case, not migrating every
+  * numeric constant in the game at once. More content types (quests,
+  * stats, etc.) can register entries here the same way later.
+diff --git a/src/game/managers/AchievementManager.ts b/src/game/managers/AchievementManager.ts
+index 32522be..bbef761 100644
+--- a/src/game/managers/AchievementManager.ts
++++ b/src/game/managers/AchievementManager.ts
+@@ -63,11 +63,11 @@ const CHECKS: Record<string, Check> = {
+ 
+   RAID_HEROIC_CLEARED: (state) => (state.completedRaidDifficulties ?? []).includes('heroic'),
+ 
+-  RAID_MYTHIC_CLEARED: (state) => (state.completedRaidDifficulties ?? []).includes('mythic'),
++  RAID_LEGENDARY_CLEARED: (state) => (state.completedRaidDifficulties ?? []).includes('legendary'),
+ 
+   RAID_ALL_DIFFICULTIES: (state) => {
+     const cleared = new Set(state.completedRaidDifficulties ?? []);
+-    return cleared.has('normal') && cleared.has('heroic') && cleared.has('mythic');
++    return cleared.has('normal') && cleared.has('heroic') && cleared.has('legendary');
+   },
+ 
+   /* ------------------------- vendor / guild completion ------------------------- */
+diff --git a/src/game/managers/GuidanceManager.ts b/src/game/managers/GuidanceManager.ts
+index e8933fe..15c1f73 100644
+--- a/src/game/managers/GuidanceManager.ts
++++ b/src/game/managers/GuidanceManager.ts
+@@ -47,7 +47,7 @@ const CHECKS: Record<string, Check> = {
+   black_market_unlocked: (state) => ModifierManager.hasUnlock(state, 'blackMarket'),
+   legendary_quests_unlocked: (state) => ModifierManager.hasUnlock(state, 'legendaryQuests'),
+   raids_heroic_unlocked: (state) => ModifierManager.hasUnlock(state, 'raidsHeroic'),
+-  raids_mythic_unlocked: (state) => ModifierManager.hasUnlock(state, 'raidsMythic'),
++  raids_legendary_unlocked: (state) => ModifierManager.hasUnlock(state, 'raidsLegendary'),
+   // The Training tab's own nav visibility gate (MenuWindow.tsx) reads
+   // completedRaids directly rather than a dedicated boolean -- this check
+   // mirrors that exact same condition rather than introducing a second
+diff --git a/src/game/managers/ModifierManager.ts b/src/game/managers/ModifierManager.ts
+index 5311cf9..7da891f 100644
+--- a/src/game/managers/ModifierManager.ts
++++ b/src/game/managers/ModifierManager.ts
+@@ -202,7 +202,7 @@ export const ModifierManager = {
+     return (def?.freeRepairsPerLevel ?? 0) * level;
+   },
+ 
+-  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training'): boolean {
++  hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsLegendary' | 'training'): boolean {
+     return Object.entries(state.upgrades).some(([id, level]) => {
+       const def = UPGRADE_BY_ID[id];
+       return !!def && def.unlocks === unlock && level > 0;
+diff --git a/src/game/managers/PeddlerManager.ts b/src/game/managers/PeddlerManager.ts
+index 07a1257..417a1ab 100644
+--- a/src/game/managers/PeddlerManager.ts
++++ b/src/game/managers/PeddlerManager.ts
+@@ -67,7 +67,7 @@ function rollOneOutcome(): PeddlerCardDef {
+ }
+ 
+ /** Every EquipmentDef at the given rarity that's fair game for Grimsby
+- *  to hand out at random -- excludes raidExclusive (Heroic/Mythic raid-
++ *  to hand out at random -- excludes raidExclusive (Heroic/Legendary raid-
+  *  only loot, per direct request: "raid only for sure"), craftable
+  *  (empty-mods crafting bases, not real drops), and chainExclusive (a
+  *  chain's own guaranteed reward -- previously tracked here via its own
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index a261339..d1faf3f 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -44,19 +44,19 @@ export const CHAIN_BY_ID: Record<string, ChainDef> = Object.fromEntries(QUEST_CH
+ 
+ function lootTableFor(difficulty: Difficulty, rng: Rng): { defId: string; chance: number }[] {
+   const rarities = LOOT_RARITY_BY_DIFFICULTY[difficulty] ?? ['common'];
+-  // raidExclusive (Heroic/Mythic tiered raid variants) filtered out here too
++  // raidExclusive (Heroic/Legendary tiered raid variants) filtered out here too
+   // -- this pool predates that flag and was never updated when it was added,
+   // the same gap the shop/black market had before 0075. Confirmed as the
+-  // actual cause of Mythic gear turning up in ordinary quest rewards: rarity
++  // actual cause of Legendary gear turning up in ordinary quest rewards: rarity
+   // alone doesn't distinguish a raid-tier variant from its base item, since
+   // they share the same rarity by design. craftable bases are excluded the
+   // same way -- a Guildmade Blade dropping as ordinary loot, with none of
+   // the customMods a real craft would give it, would just be a worse
+   // version of the same item for no reason.
+-  // raidExclusive (Heroic/Mythic tiered raid variants) filtered out here too
++  // raidExclusive (Heroic/Legendary tiered raid variants) filtered out here too
+   // -- this pool predates that flag and was never updated when it was added,
+   // the same gap the shop/black market had before 0075. Confirmed as the
+-  // actual cause of Mythic gear turning up in ordinary quest rewards: rarity
++  // actual cause of Legendary gear turning up in ordinary quest rewards: rarity
+   // alone doesn't distinguish a raid-tier variant from its base item, since
+   // they share the same rarity by design. craftable bases are excluded the
+   // same way -- a Guildmade Blade dropping as ordinary loot, with none of
+diff --git a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
+index 731c4c2..be1275f 100644
+--- a/src/game/managers/RaidManager.ts
++++ b/src/game/managers/RaidManager.ts
+@@ -53,7 +53,7 @@ export const RaidManager = {
+    * that kind of party actually gets on Normal -- over-leveling, gear,
+    * consumables, and guild-wide upgrades are what move the needle from
+    * there, since all of those raise a hero's *actual* mods above this
+-   * now-tier-accurate floor. Heroic/Mythic's own successPenalty values are
++   * now-tier-accurate floor. Heroic/Legendary's own successPenalty values are
+    * unchanged by this -- see the retune note in guild-idler-status.md for
+    * why those needed a fresh look regardless once this landed.
+    */
+@@ -108,7 +108,7 @@ export const RaidManager = {
+   /**
+    * True if the party is missing at least one requiredRoles slot -- kept
+    * as its own boolean rather than reusing `roleMismatchPenalty(...) > 0`,
+-   * so the Heroic/Mythic success ceiling below still engages even if
++   * so the Heroic/Legendary success ceiling below still engages even if
+    * `raid.roleMismatchPenaltyPerSlot` itself were ever tuned down to 0.
+    * The two are meant to be independently tunable: one is "how much does
+    * each unmet slot cost you," the other is "how high can you climb back
+@@ -171,7 +171,7 @@ export const RaidManager = {
+     const override = raid.successModifier ?? 0;
+     const roleMismatch = RaidManager.roleMismatchPenalty(heroes, raid.requiredRoles);
+     const success = clamp(encounter.baseSuccess - diffCfg.successPenalty + bonus + elemental + override - roleMismatch, MIN_SUCCESS, MAX_SUCCESS);
+-    // Heroic/Mythic's role-mismatch ceiling applies AFTER the ordinary
++    // Heroic/Legendary's role-mismatch ceiling applies AFTER the ordinary
+     // clamp, only while the party is actually missing a required slot --
+     // see RaidDifficultyConfig.roleMismatchCap. Normal has no cap
+     // (undefined), so this is a no-op there regardless of party makeup.
+@@ -205,13 +205,13 @@ export const RaidManager = {
+     if (!raid) return { ok: false, error: 'Unknown raid.' };
+     if (!isRaidUnlocked(raidId, state.completedRaids, state.completedChains)) return { ok: false, error: 'This raid has not been unlocked yet.' };
+ 
+-    // Raid Charter / Heroic Clearance / Mythic Clearance were previously
++    // Raid Charter / Heroic Clearance / Legendary Clearance were previously
+     // enforced only by RaidsPanel.tsx's difficulty circles (UI-only) --
+     // this manager, the actual single mutation path per the project's own
+     // "one mutable state, one mutation path" architecture, never checked
+     // them at all. That meant any other call into startRaid (a future UI
+     // surface, a bug in the modal's own gating, a bad save edit) could
+-    // commit a party to a raid -- or straight to Heroic/Mythic -- without
++    // commit a party to a raid -- or straight to Heroic/Legendary -- without
+     // ever owning the upgrade that's supposed to gate it. Mirrors
+     // RaidsPanel's own DIFFICULTY_UNLOCK map exactly, just enforced here
+     // where it can't be bypassed.
+@@ -221,7 +221,7 @@ export const RaidManager = {
+     if (difficulty === 'heroic' && !ModifierManager.hasUnlock(state, 'raidsHeroic')) {
+       return { ok: false, error: 'Heroic Clearance is required to raid at this difficulty.' };
+     }
+-    if (difficulty === 'mythic' && !ModifierManager.hasUnlock(state, 'raidsMythic')) {
++    if (difficulty === 'legendary' && !ModifierManager.hasUnlock(state, 'raidsLegendary')) {
+       return { ok: false, error: 'Legendary Clearance is required to raid at this difficulty.' };
+     }
+ 
+@@ -302,7 +302,7 @@ export const RaidManager = {
+       const elemental = RaidManager.elementalBonus(heroes, encounter);
+       const override = raid?.successModifier ?? 0;
+       const rawChance = clamp(encounter.baseSuccess - diffCfg.successPenalty + active.partySuccessBonus + elemental + override, MIN_SUCCESS, MAX_SUCCESS);
+-      // Same Heroic/Mythic role-mismatch ceiling as previewEncounterSuccess,
++      // Same Heroic/Legendary role-mismatch ceiling as previewEncounterSuccess,
+       // applied identically here so the actual roll never has better odds
+       // than what the party saw in the preview -- see
+       // RaidDifficultyConfig.roleMismatchCap.
+@@ -375,7 +375,12 @@ export const RaidManager = {
+       const resist = sumMods(HeroManager.heroMods(state, hero, resolvedAt), ModifierManager.global(state)).injuryResist ?? 0;
+       const risk = clamp(30 + diffCfg.successPenalty - resist + (fullClear ? -10 : 10), MIN_INJURY_RISK, 90);
+       if (rng.chance(risk)) {
+-        const questDifficulty = active.difficulty === 'mythic' ? 'legendary' : active.difficulty === 'heroic' ? 'epic' : 'hard';
++        // Raid difficulty mapped to its equivalent quest-tier Difficulty
++        // purely for HeroManager.rollInjury's own tier-scaled injury pool
++        // -- raid legendary (was 'mythic' pre-0166) maps to quest legendary,
++        // the toughest of both ladders, same relative mapping as before the
++        // rename, just written against the new id.
++        const questDifficulty = active.difficulty === 'legendary' ? 'legendary' : active.difficulty === 'heroic' ? 'epic' : 'hard';
+         const injury = HeroManager.rollInjury(rng, questDifficulty);
+         injury.healsAt = resolvedAt + (injury.healsAt - Date.now());
+         hero.injuries.push(injury);
+diff --git a/src/game/managers/ShopManager.ts b/src/game/managers/ShopManager.ts
+index 2ef35e1..dbc9c48 100644
+--- a/src/game/managers/ShopManager.ts
++++ b/src/game/managers/ShopManager.ts
+@@ -30,7 +30,7 @@ export const ShopManager = {
+   rollEquipment(state: GameState, seed: number | string) {
+     const topLevel = Math.max(1, ...state.heroes.map((h) => h.level));
+     const rng = createRng(`shop-equipment:${seed}:${state.createdAt}`);
+-    // raidExclusive items (Heroic/Mythic tiered raid loot variants) never
++    // raidExclusive items (Heroic/Legendary tiered raid loot variants) never
+     // belong in a purchasable pool -- see the comment on EquipmentDef itself
+     // for why. craftable bases get the same treatment, same reasoning in
+     // the opposite direction -- they only ever exist as a Crafting result,
+diff --git a/src/game/types.ts b/src/game/types.ts
+index df8b922..79c8348 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -276,10 +276,10 @@ export interface EquipmentDef {
+    */
+   icon?: string;
+   /**
+-   * True for the Heroic/Mythic tiered variants introduced alongside raid
++   * True for the Heroic/Legendary tiered variants introduced alongside raid
+    * loot pools -- these only ever exist to be raid loot table entries and
+    * were never meant to be independently purchasable or craftable. Shop
+-   * and Black Market stock generation both filter this out; a "Mythic"
++   * and Black Market stock generation both filter this out; a "Legendary"
+    * common-tier item showing up for sale never made sense in the first
+    * place, since the tier label only means something in the context of
+    * which raid difficulty dropped it.
+@@ -761,7 +761,7 @@ export interface ActiveChain {
+ 
+ /* -------------------------------- raids -------------------------------- */
+ 
+-export type RaidDifficulty = 'normal' | 'heroic' | 'mythic';
++export type RaidDifficulty = 'normal' | 'heroic' | 'legendary';
+ 
+ export interface RaidEncounterDef {
+   id: string;
+@@ -780,21 +780,21 @@ export interface RaidEncounterDef {
+    */
+   loot: string[];
+   /**
+-   * Difficulty-specific loot pools, WoW-style -- Heroic/Mythic rolls point
+-   * at genuinely different (usually stat-boosted) item variants rather than
+-   * just the same items at a better chance. Optional and independent, so
+-   * this can roll out encounter by encounter: a tier with no list here
+-   * falls back to `loot`, the same pool every difficulty used before this
+-   * existed. See lootForDifficulty in raids.ts.
++   * Difficulty-specific loot pools, WoW-style -- Heroic/Legendary rolls
++   * point at genuinely different (usually stat-boosted) item variants
++   * rather than just the same items at a better chance. Optional and
++   * independent, so this can roll out encounter by encounter: a tier with
++   * no list here falls back to `loot`, the same pool every difficulty used
++   * before this existed. See lootForDifficulty in raids.ts.
+    */
+   lootHeroic?: string[];
+-  lootMythic?: string[];
++  lootLegendary?: string[];
+   /**
+    * "<rarity>[:<dedicatedPetId>]@chance" strings -- same reused-string-list
+    * convention as `loot` above (see parseEggLootEntry), just a different
+    * token shape since an egg roll picks a Rarity (and optionally locks in
+    * a specific dedicated-pool pet) rather than an equipment defId. Rolled
+-   * independently of `loot`/lootHeroic/lootMythic, same
++   * independently of `loot`/lootHeroic/lootLegendary, same
+    * economy.loot/diffCfg.lootBonus scaling either way.
+    */
+   eggLoot?: string[];
+@@ -855,7 +855,7 @@ export interface RaidDef {
+   /**
+    * Flat percentage points added directly to every encounter's success
+    * chance in this raid, independent of RAID_DIFFICULTIES' Normal/Heroic/
+-   * Mythic tiers -- a raid-level knob for "this specific raid should read
++   * Legendary tiers -- a raid-level knob for "this specific raid should read
+    * as harder (or easier) than its baseSuccess numbers alone suggest,"
+    * without hand-editing every encounter's baseSuccess or distorting the
+    * shared N/H/M tier promise every other raid relies on (see raids.ts's
+@@ -922,7 +922,7 @@ export interface RaidDifficultyConfig {
+    * meet a raid's `requiredRoles` minimums -- undefined (Normal) means no
+    * ceiling at all, so a mismatched-but-overleveled-and-geared party can
+    * still climb all the way to MAX_SUCCESS the same as today. Heroic and
+-   * Mythic define one via the tuning registry instead: no matter how far
++   * Legendary define one via the tuning registry instead: no matter how far
+    * gear/level push the raw computed success, an unmet role requirement
+    * caps it there. This is layered ON TOP of roleMismatchPenalty (the
+    * existing flat per-unmet-slot subtraction), not a replacement for it --
+@@ -1051,7 +1051,7 @@ export interface UpgradeDef {
+   costGrowth: number;
+   maxLevel: number;
+   modsPerLevel: Partial<Modifiers>;
+-  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training';
++  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsLegendary' | 'training';
+   /**
+    * Which vendor offers this upgrade. Undefined means it's a general guild
+    * upgrade with no vendor attached (unlocks like Guild Charter or Black
+@@ -1353,10 +1353,10 @@ export interface GameState {
+   raidLog: RaidResult[];
+   /**
+    * Difficulties (any raid) that have ever been full-cleared -- separate
+-   * from completedRaids since achievements care about "cleared a Mythic",
+-   * not "cleared this specific raid at Mythic". Persisted rather than
+-   * derived from raidLog, since that's capped and could evict the
+-   * evidence; this never shrinks.
++   * from completedRaids since achievements care about "cleared a
++   * Legendary", not "cleared this specific raid at Legendary". Persisted
++   * rather than derived from raidLog, since that's capped and could evict
++   * the evidence; this never shrinks.
+    */
+   completedRaidDifficulties: RaidDifficulty[];
+ 
+@@ -1910,7 +1910,7 @@ export interface PeddlerCardDef {
+    * time, so the revealed card and the actually-granted item are
+    * guaranteed to be the same roll, not two independent ones):
+    * - `itemRarity` set -> rolls a random EquipmentDef at that rarity
+-   *   from the general pool, excluding raidExclusive (Heroic/Mythic
++   *   from the general pool, excluding raidExclusive (Heroic/Legendary
+    *   raid-only loot), craftable (empty-mods crafting bases, not real
+    *   drops), and anything appearing in any ChainDef.rewardItems (a
+    *   chain's own guaranteed reward shouldn't also be handed out as a
+diff --git a/src/ui/OfflineReportModal.tsx b/src/ui/OfflineReportModal.tsx
+index f8c9f42..33f3213 100644
+--- a/src/ui/OfflineReportModal.tsx
++++ b/src/ui/OfflineReportModal.tsx
+@@ -8,11 +8,11 @@ import { formatDuration, formatGold, RARITY_COLOR } from '../game/util';
+ import { useCountUp } from './useCountUp';
+ 
+ /** Same rarity-parallel palette RaidsPanel already uses for Normal/Heroic/
+- *  Mythic -- kept local rather than shared, matching how RaidResultModal
++ *  Legendary -- kept local rather than shared, matching how RaidResultModal
+  *  already duplicates its own small particle arrays rather than importing
+  *  them from QuestResultModal. */
+ const RAID_DIFFICULTY_COLOR: Record<RaidDifficulty, string> = {
+-  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, mythic: RARITY_COLOR.epic,
++  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, legendary: RARITY_COLOR.epic,
+ };
+ 
+ const COIN_PARTICLES = [
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index 4379db1..c636ef2 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -18,25 +18,25 @@ import { RaidRoomSprite } from '../sprites/RaidRoomSprite';
+ import { formatDuration, describeMods, formatGold, formatNumber, RARITY_COLOR } from '../../game/util';
+ 
+ // Single-letter fallback badge (used only if the icon art at
+-// public/raid-icons/<difficulty>.png is missing) -- 'L' for Legendary
+-// (patch 0165 rename), matching RAID_DIFFICULTY_LABEL's full word.
+-const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', mythic: 'L' };
++// public/raid-icons/<difficulty>.png is missing).
++const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', legendary: 'L' };
+ /** Reuses the existing rarity palette rather than inventing a new colour
+- *  scheme -- Normal/Heroic/Mythic roughly parallel uncommon/rare/epic
++ *  scheme -- Normal/Heroic/Legendary roughly parallel uncommon/rare/epic
+  *  stakes, so the same visual language already trained elsewhere applies. */
+ const DIFFICULTY_COLOR: Record<RaidDifficulty, string> = {
+-  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, mythic: RARITY_COLOR.epic,
++  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, legendary: RARITY_COLOR.epic,
+ };
+ 
+ /** Which upgrade unlocks each difficulty tier -- Normal comes from the base
+  *  Raid Charter (the same unlock that already gates raids existing at
+- *  all); Heroic and Mythic each need their own separate Clearance upgrade,
+- *  rather than the old single Charter purchase unlocking every tier at once. */
+-const DIFFICULTY_UNLOCK: Record<RaidDifficulty, 'raids' | 'raidsHeroic' | 'raidsMythic'> = {
+-  normal: 'raids', heroic: 'raidsHeroic', mythic: 'raidsMythic',
++ *  all); Heroic and Legendary each need their own separate Clearance
++ *  upgrade, rather than the old single Charter purchase unlocking every
++ *  tier at once. */
++const DIFFICULTY_UNLOCK: Record<RaidDifficulty, 'raids' | 'raidsHeroic' | 'raidsLegendary'> = {
++  normal: 'raids', heroic: 'raidsHeroic', legendary: 'raidsLegendary',
+ };
+ const DIFFICULTY_UNLOCK_LABEL: Record<RaidDifficulty, string> = {
+-  normal: 'Raid Charter', heroic: 'Heroic Clearance', mythic: 'Legendary Clearance',
++  normal: 'Raid Charter', heroic: 'Heroic Clearance', legendary: 'Legendary Clearance',
+ };
+ 
+ /**
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 2888f5a..f2de5b7 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -472,7 +472,7 @@ const SCHEMAS = {
+       // validates as a plain optional string (a relative path under
+       // ICONS_DIR, e.g. "weapons/sword_03.png"), same as setId above.
+       icon: { type: 'string', required: false, picker: 'icon' },
+-      // Both of these existed on disk (raidExclusive since Heroic/Mythic
++      // Both of these existed on disk (raidExclusive since Heroic/Legendary
+       // raid loot variants were added, craftable since Crafting) but
+       // weren't in this schema -- the editor rebuilds each entry from
+       // scratch out of exactly the fields listed here (see openEditor's
+@@ -663,7 +663,7 @@ const SCHEMAS = {
+       // every difficulty, same as before tiered pools existed. Same
+       // picker, so filling these in is exactly as easy as the base list.
+       lootHeroic: { type: 'string[]', required: false, picker: 'lootTable' },
+-      lootMythic: { type: 'string[]', required: false, picker: 'lootTable' },
++      lootLegendary: { type: 'string[]', required: false, picker: 'lootTable' },
+       // "<rarity>[:<dedicatedPetId>]@chance" strings, e.g. "rare@1" or
+       // "epic:hatchery_hound@0.5" -- same reused string-list shape as loot
+       // above, just no browsable picker (eggs aren't an EQUIPMENT id the
+@@ -769,7 +769,7 @@ const SCHEMAS = {
+       // separately.
+       requiresChainId: { type: 'string', required: false },
+       // Flat percentage points added to every encounter's success chance
+-      // in this raid, independent of the global Normal/Heroic/Mythic
++      // in this raid, independent of the global Normal/Heroic/Legendary
+       // tiers -- see RaidDef.successModifier's own comment in types.ts.
+       // Usually a small negative number for "slightly harder than its
+       // baseSuccess numbers alone suggest"; optional, defaults to no
+@@ -979,7 +979,7 @@ function validateEntry(schema, entry, index) {
+         break;
+       case 'string[]':
+         // An optional list field (e.g. rewardItems, or raid-encounters'
+-        // loot/lootHeroic/lootMythic/eggLoot) legitimately means "nothing
++        // loot/lootHeroic/lootLegendary/eggLoot) legitimately means "nothing
+         // to award/drop here" as an empty array -- the_last_clutch's
+         // rewardItems is exactly this: [] on purpose, since its guaranteed
+         // reward is an egg (rewardEgg), not an item. Only a genuinely

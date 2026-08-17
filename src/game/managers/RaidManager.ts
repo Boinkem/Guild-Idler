@@ -53,7 +53,7 @@ export const RaidManager = {
    * that kind of party actually gets on Normal -- over-leveling, gear,
    * consumables, and guild-wide upgrades are what move the needle from
    * there, since all of those raise a hero's *actual* mods above this
-   * now-tier-accurate floor. Heroic/Mythic's own successPenalty values are
+   * now-tier-accurate floor. Heroic/Legendary's own successPenalty values are
    * unchanged by this -- see the retune note in guild-idler-status.md for
    * why those needed a fresh look regardless once this landed.
    */
@@ -108,7 +108,7 @@ export const RaidManager = {
   /**
    * True if the party is missing at least one requiredRoles slot -- kept
    * as its own boolean rather than reusing `roleMismatchPenalty(...) > 0`,
-   * so the Heroic/Mythic success ceiling below still engages even if
+   * so the Heroic/Legendary success ceiling below still engages even if
    * `raid.roleMismatchPenaltyPerSlot` itself were ever tuned down to 0.
    * The two are meant to be independently tunable: one is "how much does
    * each unmet slot cost you," the other is "how high can you climb back
@@ -171,7 +171,7 @@ export const RaidManager = {
     const override = raid.successModifier ?? 0;
     const roleMismatch = RaidManager.roleMismatchPenalty(heroes, raid.requiredRoles);
     const success = clamp(encounter.baseSuccess - diffCfg.successPenalty + bonus + elemental + override - roleMismatch, MIN_SUCCESS, MAX_SUCCESS);
-    // Heroic/Mythic's role-mismatch ceiling applies AFTER the ordinary
+    // Heroic/Legendary's role-mismatch ceiling applies AFTER the ordinary
     // clamp, only while the party is actually missing a required slot --
     // see RaidDifficultyConfig.roleMismatchCap. Normal has no cap
     // (undefined), so this is a no-op there regardless of party makeup.
@@ -205,13 +205,13 @@ export const RaidManager = {
     if (!raid) return { ok: false, error: 'Unknown raid.' };
     if (!isRaidUnlocked(raidId, state.completedRaids, state.completedChains)) return { ok: false, error: 'This raid has not been unlocked yet.' };
 
-    // Raid Charter / Heroic Clearance / Mythic Clearance were previously
+    // Raid Charter / Heroic Clearance / Legendary Clearance were previously
     // enforced only by RaidsPanel.tsx's difficulty circles (UI-only) --
     // this manager, the actual single mutation path per the project's own
     // "one mutable state, one mutation path" architecture, never checked
     // them at all. That meant any other call into startRaid (a future UI
     // surface, a bug in the modal's own gating, a bad save edit) could
-    // commit a party to a raid -- or straight to Heroic/Mythic -- without
+    // commit a party to a raid -- or straight to Heroic/Legendary -- without
     // ever owning the upgrade that's supposed to gate it. Mirrors
     // RaidsPanel's own DIFFICULTY_UNLOCK map exactly, just enforced here
     // where it can't be bypassed.
@@ -221,7 +221,7 @@ export const RaidManager = {
     if (difficulty === 'heroic' && !ModifierManager.hasUnlock(state, 'raidsHeroic')) {
       return { ok: false, error: 'Heroic Clearance is required to raid at this difficulty.' };
     }
-    if (difficulty === 'mythic' && !ModifierManager.hasUnlock(state, 'raidsMythic')) {
+    if (difficulty === 'legendary' && !ModifierManager.hasUnlock(state, 'raidsLegendary')) {
       return { ok: false, error: 'Legendary Clearance is required to raid at this difficulty.' };
     }
 
@@ -302,7 +302,7 @@ export const RaidManager = {
       const elemental = RaidManager.elementalBonus(heroes, encounter);
       const override = raid?.successModifier ?? 0;
       const rawChance = clamp(encounter.baseSuccess - diffCfg.successPenalty + active.partySuccessBonus + elemental + override, MIN_SUCCESS, MAX_SUCCESS);
-      // Same Heroic/Mythic role-mismatch ceiling as previewEncounterSuccess,
+      // Same Heroic/Legendary role-mismatch ceiling as previewEncounterSuccess,
       // applied identically here so the actual roll never has better odds
       // than what the party saw in the preview -- see
       // RaidDifficultyConfig.roleMismatchCap.
@@ -375,7 +375,12 @@ export const RaidManager = {
       const resist = sumMods(HeroManager.heroMods(state, hero, resolvedAt), ModifierManager.global(state)).injuryResist ?? 0;
       const risk = clamp(30 + diffCfg.successPenalty - resist + (fullClear ? -10 : 10), MIN_INJURY_RISK, 90);
       if (rng.chance(risk)) {
-        const questDifficulty = active.difficulty === 'mythic' ? 'legendary' : active.difficulty === 'heroic' ? 'epic' : 'hard';
+        // Raid difficulty mapped to its equivalent quest-tier Difficulty
+        // purely for HeroManager.rollInjury's own tier-scaled injury pool
+        // -- raid legendary (was 'mythic' pre-0166) maps to quest legendary,
+        // the toughest of both ladders, same relative mapping as before the
+        // rename, just written against the new id.
+        const questDifficulty = active.difficulty === 'legendary' ? 'legendary' : active.difficulty === 'heroic' ? 'epic' : 'hard';
         const injury = HeroManager.rollInjury(rng, questDifficulty);
         injury.healsAt = resolvedAt + (injury.healsAt - Date.now());
         hero.injuries.push(injury);

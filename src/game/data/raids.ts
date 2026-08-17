@@ -46,25 +46,25 @@ export const RAID_BY_ID: Record<string, RaidDef> = Object.fromEntries(RAIDS.map(
  */
 export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
   // successPenalty raised (12->20, 24->50) and lootBonus introduced --
-  // Mythic in particular is meant to be genuinely brutal, not just "harder
+  // Legendary in particular is meant to be genuinely brutal, not just "harder
   // than Heroic": a 50-point penalty can push an encounter's baseline
   // success below the floor before the party's own bonus even applies.
   // The 9-hero party bonus is the intended counterweight, not a numbers
   // mistake -- confirmed as the deliberate design, not something to soften.
   // durationMultiplier: harder tiers take longer too -- normal 2h becomes
-  // 2.3h at Heroic, 2.6h at Mythic (i.e. x1.15 / x1.3), matching the given
+  // 2.3h at Heroic, 2.6h at Legendary (i.e. x1.15 / x1.3), matching the given
   // example exactly.
   // Normal's own numbers are all baseline zero-points (no penalty, x1
   // everything) rather than meaningfully "tunable" values, so they stay
-  // literal here. Heroic/Mythic's four fields each read from the tuning
+  // literal here. Heroic/Legendary's four fields each read from the tuning
   // registry instead -- editable live via the devtool's Tuning tab. See
   // tuning.ts and tuning.json.
   // roleMismatchCap: Normal deliberately has none at all (undefined, not
   // just a high number) -- a mismatched Normal party still only eats the
   // ordinary per-slot roleMismatchPenalty subtraction and can climb back
   // up to MAX_SUCCESS on gear/level alone, same as before this existed.
-  // Heroic/Mythic read theirs from the tuning registry like their other
-  // three fields -- Mythic's is deliberately the lower of the two, same
+  // Heroic/Legendary read theirs from the tuning registry like their other
+  // three fields -- Legendary's is deliberately the lower of the two, same
   // "genuinely brutal, not just harder than Heroic" intent as its
   // successPenalty above.
   normal: { difficulty: 'normal', partySize: 3, successPenalty: 0, rewardMultiplier: 1, lootBonus: 0, durationMultiplier: 1 },
@@ -76,37 +76,36 @@ export const RAID_DIFFICULTIES: Record<RaidDifficulty, RaidDifficultyConfig> = {
     durationMultiplier: Tuning.get('raid_difficulty.heroic.durationMultiplier'),
     roleMismatchCap: Tuning.get('raid_difficulty.heroic.roleMismatchCap'),
   },
-  mythic: {
-    difficulty: 'mythic', partySize: 9,
-    successPenalty: Tuning.get('raid_difficulty.mythic.successPenalty'),
-    rewardMultiplier: Tuning.get('raid_difficulty.mythic.rewardMultiplier'),
-    lootBonus: Tuning.get('raid_difficulty.mythic.lootBonus'),
-    durationMultiplier: Tuning.get('raid_difficulty.mythic.durationMultiplier'),
-    roleMismatchCap: Tuning.get('raid_difficulty.mythic.roleMismatchCap'),
+  legendary: {
+    difficulty: 'legendary', partySize: 9,
+    successPenalty: Tuning.get('raid_difficulty.legendary.successPenalty'),
+    rewardMultiplier: Tuning.get('raid_difficulty.legendary.rewardMultiplier'),
+    lootBonus: Tuning.get('raid_difficulty.legendary.lootBonus'),
+    durationMultiplier: Tuning.get('raid_difficulty.legendary.durationMultiplier'),
+    roleMismatchCap: Tuning.get('raid_difficulty.legendary.roleMismatchCap'),
   },
 };
 
-export const RAID_DIFFICULTY_ORDER: RaidDifficulty[] = ['normal', 'heroic', 'mythic'];
+export const RAID_DIFFICULTY_ORDER: RaidDifficulty[] = ['normal', 'heroic', 'legendary'];
 
 /**
- * Player-facing display label per raid difficulty (patch 0165) -- the
- * internal id stays `'mythic'` everywhere (save data, item id suffixes
- * like `_mythic`, tuning keys, the `raid_mythic_clearance` upgrade id) so
- * this is a pure display-layer rename with no save migration needed.
- * Every UI spot that used to derive a label by capitalizing the raw id
- * (`difficulty[0].toUpperCase() + difficulty.slice(1)`) reads this map
- * instead. "Mythic" -> "Legendary" for now; a genuinely new fourth tier is
- * a separate, much bigger backlog item (see guild-idler-status.md) that
- * would slot in above this one, not replace it.
+ * Player-facing display label per raid difficulty. As of patch 0166 the
+ * internal id is 'legendary' too (full internal rename from the patch
+ * 0165 display-only version -- ids, item suffixes, tuning keys, and the
+ * upgrade id all now say `legendary`, not just this label), so this map
+ * is trivial today. Kept rather than removed: it's the correct pattern
+ * for whenever a genuinely new fourth tier lands above this one, and every
+ * UI call site already reads through it instead of deriving a label by
+ * capitalizing the raw id.
  */
 export const RAID_DIFFICULTY_LABEL: Record<RaidDifficulty, string> = {
   normal: 'Normal',
   heroic: 'Heroic',
-  mythic: 'Legendary',
+  legendary: 'Legendary',
 };
 
 /**
- * Badge icons for the N/H/M difficulty circles. Lives in its own
+ * Badge icons for the N/H/L difficulty circles. Lives in its own
  * public/raid-icons/ folder, separate from public/item-icons/, since these
  * are fixed UI chrome (exactly three, never devtool-edited) rather than
  * per-item art assigned one at a time. Falls back to the plain letter
@@ -116,7 +115,7 @@ export const RAID_DIFFICULTY_LABEL: Record<RaidDifficulty, string> = {
 export const RAID_DIFFICULTY_ICON: Record<RaidDifficulty, string> = {
   normal: './raid-icons/normal.png',
   heroic: './raid-icons/heroic.png',
-  mythic: './raid-icons/mythic.png',
+  legendary: './raid-icons/legendary.png',
 };
 
 /** Parses a "defId@chance" loot entry into its two parts. Malformed entries
@@ -147,13 +146,13 @@ export function parseEggLootEntry(entry: string): { rarity: Rarity; dedicatedPet
 }
 
 /** The loot pool actually in play for a given difficulty -- lootHeroic/
- *  lootMythic if the encounter defines one, otherwise the same base `loot`
- *  every difficulty used before tiered pools existed. Used identically by
- *  both the real roll (RaidManager.resolve) and the UI preview, so what's
- *  shown always matches what can actually drop. */
+ *  lootLegendary if the encounter defines one, otherwise the same base
+ *  `loot` every difficulty used before tiered pools existed. Used
+ *  identically by both the real roll (RaidManager.resolve) and the UI
+ *  preview, so what's shown always matches what can actually drop. */
 export function lootForDifficulty(encounter: RaidEncounterDef, difficulty: RaidDifficulty): string[] {
   if (difficulty === 'heroic') return encounter.lootHeroic ?? encounter.loot;
-  if (difficulty === 'mythic') return encounter.lootMythic ?? encounter.loot;
+  if (difficulty === 'legendary') return encounter.lootLegendary ?? encounter.loot;
   return encounter.loot;
 }
 

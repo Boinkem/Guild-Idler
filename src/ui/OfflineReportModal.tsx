@@ -8,11 +8,11 @@ import { formatDuration, formatGold, RARITY_COLOR } from '../game/util';
 import { useCountUp } from './useCountUp';
 
 /** Same rarity-parallel palette RaidsPanel already uses for Normal/Heroic/
- *  Mythic -- kept local rather than shared, matching how RaidResultModal
+ *  Legendary -- kept local rather than shared, matching how RaidResultModal
  *  already duplicates its own small particle arrays rather than importing
  *  them from QuestResultModal. */
 const RAID_DIFFICULTY_COLOR: Record<RaidDifficulty, string> = {
-  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, mythic: RARITY_COLOR.epic,
+  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, legendary: RARITY_COLOR.epic,
 };
 
 const COIN_PARTICLES = [

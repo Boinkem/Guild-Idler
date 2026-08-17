@@ -276,10 +276,10 @@ export interface EquipmentDef {
    */
   icon?: string;
   /**
-   * True for the Heroic/Mythic tiered variants introduced alongside raid
+   * True for the Heroic/Legendary tiered variants introduced alongside raid
    * loot pools -- these only ever exist to be raid loot table entries and
    * were never meant to be independently purchasable or craftable. Shop
-   * and Black Market stock generation both filter this out; a "Mythic"
+   * and Black Market stock generation both filter this out; a "Legendary"
    * common-tier item showing up for sale never made sense in the first
    * place, since the tier label only means something in the context of
    * which raid difficulty dropped it.
@@ -761,7 +761,7 @@ export interface ActiveChain {
 
 /* -------------------------------- raids -------------------------------- */
 
-export type RaidDifficulty = 'normal' | 'heroic' | 'mythic';
+export type RaidDifficulty = 'normal' | 'heroic' | 'legendary';
 
 export interface RaidEncounterDef {
   id: string;
@@ -780,21 +780,21 @@ export interface RaidEncounterDef {
    */
   loot: string[];
   /**
-   * Difficulty-specific loot pools, WoW-style -- Heroic/Mythic rolls point
-   * at genuinely different (usually stat-boosted) item variants rather than
-   * just the same items at a better chance. Optional and independent, so
-   * this can roll out encounter by encounter: a tier with no list here
-   * falls back to `loot`, the same pool every difficulty used before this
-   * existed. See lootForDifficulty in raids.ts.
+   * Difficulty-specific loot pools, WoW-style -- Heroic/Legendary rolls
+   * point at genuinely different (usually stat-boosted) item variants
+   * rather than just the same items at a better chance. Optional and
+   * independent, so this can roll out encounter by encounter: a tier with
+   * no list here falls back to `loot`, the same pool every difficulty used
+   * before this existed. See lootForDifficulty in raids.ts.
    */
   lootHeroic?: string[];
-  lootMythic?: string[];
+  lootLegendary?: string[];
   /**
    * "<rarity>[:<dedicatedPetId>]@chance" strings -- same reused-string-list
    * convention as `loot` above (see parseEggLootEntry), just a different
    * token shape since an egg roll picks a Rarity (and optionally locks in
    * a specific dedicated-pool pet) rather than an equipment defId. Rolled
-   * independently of `loot`/lootHeroic/lootMythic, same
+   * independently of `loot`/lootHeroic/lootLegendary, same
    * economy.loot/diffCfg.lootBonus scaling either way.
    */
   eggLoot?: string[];
@@ -855,7 +855,7 @@ export interface RaidDef {
   /**
    * Flat percentage points added directly to every encounter's success
    * chance in this raid, independent of RAID_DIFFICULTIES' Normal/Heroic/
-   * Mythic tiers -- a raid-level knob for "this specific raid should read
+   * Legendary tiers -- a raid-level knob for "this specific raid should read
    * as harder (or easier) than its baseSuccess numbers alone suggest,"
    * without hand-editing every encounter's baseSuccess or distorting the
    * shared N/H/M tier promise every other raid relies on (see raids.ts's
@@ -922,7 +922,7 @@ export interface RaidDifficultyConfig {
    * meet a raid's `requiredRoles` minimums -- undefined (Normal) means no
    * ceiling at all, so a mismatched-but-overleveled-and-geared party can
    * still climb all the way to MAX_SUCCESS the same as today. Heroic and
-   * Mythic define one via the tuning registry instead: no matter how far
+   * Legendary define one via the tuning registry instead: no matter how far
    * gear/level push the raw computed success, an unmet role requirement
    * caps it there. This is layered ON TOP of roleMismatchPenalty (the
    * existing flat per-unmet-slot subtraction), not a replacement for it --
@@ -1051,7 +1051,7 @@ export interface UpgradeDef {
   costGrowth: number;
   maxLevel: number;
   modsPerLevel: Partial<Modifiers>;
-  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsMythic' | 'training';
+  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsLegendary' | 'training';
   /**
    * Which vendor offers this upgrade. Undefined means it's a general guild
    * upgrade with no vendor attached (unlocks like Guild Charter or Black
@@ -1353,10 +1353,10 @@ export interface GameState {
   raidLog: RaidResult[];
   /**
    * Difficulties (any raid) that have ever been full-cleared -- separate
-   * from completedRaids since achievements care about "cleared a Mythic",
-   * not "cleared this specific raid at Mythic". Persisted rather than
-   * derived from raidLog, since that's capped and could evict the
-   * evidence; this never shrinks.
+   * from completedRaids since achievements care about "cleared a
+   * Legendary", not "cleared this specific raid at Legendary". Persisted
+   * rather than derived from raidLog, since that's capped and could evict
+   * the evidence; this never shrinks.
    */
   completedRaidDifficulties: RaidDifficulty[];
 
@@ -1910,7 +1910,7 @@ export interface PeddlerCardDef {
    * time, so the revealed card and the actually-granted item are
    * guaranteed to be the same roll, not two independent ones):
    * - `itemRarity` set -> rolls a random EquipmentDef at that rarity
-   *   from the general pool, excluding raidExclusive (Heroic/Mythic
+   *   from the general pool, excluding raidExclusive (Heroic/Legendary
    *   raid-only loot), craftable (empty-mods crafting bases, not real
    *   drops), and anything appearing in any ChainDef.rewardItems (a
    *   chain's own guaranteed reward shouldn't also be handed out as a

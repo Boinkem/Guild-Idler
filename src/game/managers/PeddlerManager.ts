@@ -67,7 +67,7 @@ function rollOneOutcome(): PeddlerCardDef {
 }
 
 /** Every EquipmentDef at the given rarity that's fair game for Grimsby
- *  to hand out at random -- excludes raidExclusive (Heroic/Mythic raid-
+ *  to hand out at random -- excludes raidExclusive (Heroic/Legendary raid-
  *  only loot, per direct request: "raid only for sure"), craftable
  *  (empty-mods crafting bases, not real drops), and chainExclusive (a
  *  chain's own guaranteed reward -- previously tracked here via its own

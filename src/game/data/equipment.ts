@@ -249,7 +249,7 @@ export const ITEM_SETS: ItemSet[] = [
   // that had this treatment before now; Blackford Keep/Bonewrought
   // Vault/Frozen Wyrmkeep/What Got Out all dropped real, already-themed
   // loot with no setId grouping or set bonus attached to any of it.
-  // `setId` is applied to a piece's Normal *and* Heroic *and* Mythic
+  // `setId` is applied to a piece's Normal *and* Heroic *and* Legendary
   // variant alike (see the matching equipment.json entries) -- the actual
   // bonus-counting logic in HeroManager.equipmentMods only cares about
   // which slot is filled and what setId that item carries, never which

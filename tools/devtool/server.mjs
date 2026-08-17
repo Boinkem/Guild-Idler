@@ -472,7 +472,7 @@ const SCHEMAS = {
       // validates as a plain optional string (a relative path under
       // ICONS_DIR, e.g. "weapons/sword_03.png"), same as setId above.
       icon: { type: 'string', required: false, picker: 'icon' },
-      // Both of these existed on disk (raidExclusive since Heroic/Mythic
+      // Both of these existed on disk (raidExclusive since Heroic/Legendary
       // raid loot variants were added, craftable since Crafting) but
       // weren't in this schema -- the editor rebuilds each entry from
       // scratch out of exactly the fields listed here (see openEditor's
@@ -663,7 +663,7 @@ const SCHEMAS = {
       // every difficulty, same as before tiered pools existed. Same
       // picker, so filling these in is exactly as easy as the base list.
       lootHeroic: { type: 'string[]', required: false, picker: 'lootTable' },
-      lootMythic: { type: 'string[]', required: false, picker: 'lootTable' },
+      lootLegendary: { type: 'string[]', required: false, picker: 'lootTable' },
       // "<rarity>[:<dedicatedPetId>]@chance" strings, e.g. "rare@1" or
       // "epic:hatchery_hound@0.5" -- same reused string-list shape as loot
       // above, just no browsable picker (eggs aren't an EQUIPMENT id the
@@ -769,7 +769,7 @@ const SCHEMAS = {
       // separately.
       requiresChainId: { type: 'string', required: false },
       // Flat percentage points added to every encounter's success chance
-      // in this raid, independent of the global Normal/Heroic/Mythic
+      // in this raid, independent of the global Normal/Heroic/Legendary
       // tiers -- see RaidDef.successModifier's own comment in types.ts.
       // Usually a small negative number for "slightly harder than its
       // baseSuccess numbers alone suggest"; optional, defaults to no
@@ -979,7 +979,7 @@ function validateEntry(schema, entry, index) {
         break;
       case 'string[]':
         // An optional list field (e.g. rewardItems, or raid-encounters'
-        // loot/lootHeroic/lootMythic/eggLoot) legitimately means "nothing
+        // loot/lootHeroic/lootLegendary/eggLoot) legitimately means "nothing
         // to award/drop here" as an empty array -- the_last_clutch's
         // rewardItems is exactly this: [] on purpose, since its guaranteed
         // reward is an egg (rewardEgg), not an item. Only a genuinely

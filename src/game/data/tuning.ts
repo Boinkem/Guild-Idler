@@ -3,7 +3,7 @@ import tuningJson from './json/tuning.json';
 /**
  * A flat registry of individually-tunable numeric coefficients, editable
  * live via the devtool without touching code -- e.g. Raid Speed's cost
- * curve, or Mythic's durationMultiplier. Deliberately starting small and
+ * curve, or Legendary's durationMultiplier. Deliberately starting small and
  * scoped to raid-related values as the proof case, not migrating every
  * numeric constant in the game at once. More content types (quests,
  * stats, etc.) can register entries here the same way later.

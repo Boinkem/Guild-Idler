@@ -1368,7 +1368,7 @@
     "setId": "bonewrought"
   },
   {
-    "id": "gravewatchers_band_mythic",
+    "id": "gravewatchers_band_legendary",
     "name": "Gravewatcher's Band (Legendary)",
     "slot": "ring",
     "rarity": "epic",
@@ -1409,7 +1409,7 @@
     "craftable": false
   },
   {
-    "id": "ashwoven_charm_mythic",
+    "id": "ashwoven_charm_legendary",
     "name": "Ashwoven Charm (Legendary)",
     "slot": "amulet",
     "rarity": "epic",
@@ -1449,7 +1449,7 @@
     "craftable": false
   },
   {
-    "id": "choir_mask_mythic",
+    "id": "choir_mask_legendary",
     "name": "Mask of the Hollow Choir (Legendary)",
     "slot": "helmet",
     "rarity": "epic",
@@ -1491,7 +1491,7 @@
     "craftable": false
   },
   {
-    "id": "silenced_bell_mythic",
+    "id": "silenced_bell_legendary",
     "name": "The Silenced Bell (Legendary)",
     "slot": "amulet",
     "rarity": "epic",
@@ -1531,7 +1531,7 @@
     "craftable": false
   },
   {
-    "id": "dragon_helm_mythic",
+    "id": "dragon_helm_legendary",
     "name": "Dragonscale Helm (Legendary)",
     "slot": "helmet",
     "rarity": "legendary",
@@ -1565,7 +1565,7 @@
     "craftable": false
   },
   {
-    "id": "copper_band_mythic",
+    "id": "copper_band_legendary",
     "name": "Copper Band (Legendary)",
     "slot": "ring",
     "rarity": "epic",
@@ -1580,7 +1580,7 @@
     "craftable": false
   },
   {
-    "id": "work_gloves_mythic",
+    "id": "work_gloves_legendary",
     "name": "Work Gloves (Legendary)",
     "slot": "gloves",
     "rarity": "epic",
@@ -1630,7 +1630,7 @@
     "craftable": false
   },
   {
-    "id": "knights_blade_mythic",
+    "id": "knights_blade_legendary",
     "name": "Knight's Blade (Legendary)",
     "slot": "weapon",
     "rarity": "epic",
@@ -1670,7 +1670,7 @@
     "craftable": false
   },
   {
-    "id": "iron_helm_mythic",
+    "id": "iron_helm_legendary",
     "name": "Iron Helm (Legendary)",
     "slot": "helmet",
     "rarity": "epic",
@@ -1711,7 +1711,7 @@
     "craftable": false
   },
   {
-    "id": "chainmail_mythic",
+    "id": "chainmail_legendary",
     "name": "Chainmail Hauberk (Legendary)",
     "slot": "chest",
     "rarity": "epic",
@@ -1753,7 +1753,7 @@
     "gearScoreOverride": 0
   },
   {
-    "id": "ranger_boots_mythic",
+    "id": "ranger_boots_legendary",
     "name": "Ranger Boots (Legendary)",
     "slot": "boots",
     "rarity": "epic",
@@ -1788,7 +1788,7 @@
     "setId": "blackford"
   },
   {
-    "id": "tollkeepers_signet_mythic",
+    "id": "tollkeepers_signet_legendary",
     "name": "Tollkeeper's Signet (Legendary)",
     "slot": "ring",
     "rarity": "epic",
@@ -1843,7 +1843,7 @@
     "setId": "wyrmkeep"
   },
   {
-    "id": "frostfang_claw_mythic",
+    "id": "frostfang_claw_legendary",
     "name": "Frostfang Claw (Legendary)",
     "slot": "weapon",
     "rarity": "epic",
@@ -1901,7 +1901,7 @@
     "setId": "wyrmkeep"
   },
   {
-    "id": "keepers_warded_charm_mythic",
+    "id": "keepers_warded_charm_legendary",
     "name": "Keeper's Warded Charm (Legendary)",
     "slot": "amulet",
     "rarity": "epic",
@@ -1956,7 +1956,7 @@
     "setId": "wyrmkeep"
   },
   {
-    "id": "frostwalker_treads_mythic",
+    "id": "frostwalker_treads_legendary",
     "name": "Frostwalker Treads (Legendary)",
     "slot": "boots",
     "rarity": "epic",
@@ -2011,7 +2011,7 @@
     "setId": "wyrmkeep"
   },
   {
-    "id": "frozen_maw_shield_mythic",
+    "id": "frozen_maw_shield_legendary",
     "name": "Frozen Maw (Legendary)",
     "slot": "shield",
     "rarity": "legendary",
@@ -2065,7 +2065,7 @@
     "setId": "what_got_out"
   },
   {
-    "id": "cinder_ash_grip_mythic",
+    "id": "cinder_ash_grip_legendary",
     "name": "Grip of Cinder Ash (Legendary)",
     "slot": "gloves",
     "rarity": "epic",
@@ -2122,7 +2122,7 @@
     "setId": "what_got_out"
   },
   {
-    "id": "loyalists_brand_mythic",
+    "id": "loyalists_brand_legendary",
     "name": "The Loyalist's Brand (Legendary)",
     "slot": "ring",
     "rarity": "epic",
@@ -2181,7 +2181,7 @@
     "setId": "what_got_out"
   },
   {
-    "id": "cornered_fang_mythic",
+    "id": "cornered_fang_legendary",
     "name": "Cornered Fang (Legendary)",
     "slot": "weapon",
     "rarity": "legendary",
@@ -2240,7 +2240,7 @@
     "setId": "what_got_out"
   },
   {
-    "id": "desperate_ends_crown_mythic",
+    "id": "desperate_ends_crown_legendary",
     "name": "Crown of a Desperate End (Legendary)",
     "slot": "helmet",
     "rarity": "legendary",
@@ -2283,7 +2283,7 @@
     "raidExclusive": true
   },
   {
-    "id": "the_last_ember_mythic",
+    "id": "the_last_ember_legendary",
     "name": "The Last Ember (Legendary)",
     "slot": "amulet",
     "rarity": "legendary",
@@ -2326,7 +2326,7 @@
     "raidExclusive": true
   },
   {
-    "id": "requiem_blade_mythic",
+    "id": "requiem_blade_legendary",
     "name": "Requiem Edge (Legendary)",
     "slot": "weapon",
     "rarity": "legendary",
@@ -2365,7 +2365,7 @@
     "raidExclusive": true
   },
   {
-    "id": "requiem_crown_mythic",
+    "id": "requiem_crown_legendary",
     "name": "Requiem Circlet (Legendary)",
     "slot": "helmet",
     "rarity": "legendary",
@@ -2404,7 +2404,7 @@
     "raidExclusive": true
   },
   {
-    "id": "requiem_plate_mythic",
+    "id": "requiem_plate_legendary",
     "name": "Requiem Vestments (Legendary)",
     "slot": "chest",
     "rarity": "legendary",
@@ -2442,7 +2442,7 @@
     "raidExclusive": true
   },
   {
-    "id": "requiem_signet_mythic",
+    "id": "requiem_signet_legendary",
     "name": "Requiem Signet (Legendary)",
     "slot": "ring",
     "rarity": "legendary",
@@ -2479,7 +2479,7 @@
     "raidExclusive": true
   },
   {
-    "id": "requiem_grips_mythic",
+    "id": "requiem_grips_legendary",
     "name": "Requiem Grasp (Legendary)",
     "slot": "gloves",
     "rarity": "legendary",
@@ -2516,7 +2516,7 @@
     "raidExclusive": true
   },
   {
-    "id": "requiem_striders_mythic",
+    "id": "requiem_striders_legendary",
     "name": "Requiem Stride (Legendary)",
     "slot": "boots",
     "rarity": "legendary",
@@ -3041,7 +3041,7 @@
     "craftable": false
   },
   {
-    "id": "cinderfang_gauntlets_mythic",
+    "id": "cinderfang_gauntlets_legendary",
     "name": "Cinderfang Gauntlets (Legendary)",
     "slot": "gloves",
     "rarity": "epic",
@@ -3099,7 +3099,7 @@
     "craftable": false
   },
   {
-    "id": "wyrmwardens_cloak_mythic",
+    "id": "wyrmwardens_cloak_legendary",
     "name": "Wyrmwarden's Cloak (Legendary)",
     "slot": "cloak",
     "rarity": "epic",
@@ -3157,7 +3157,7 @@
     "craftable": false
   },
   {
-    "id": "scaleknit_boots_mythic",
+    "id": "scaleknit_boots_legendary",
     "name": "Scaleknit Boots (Legendary)",
     "slot": "boots",
     "rarity": "epic",
@@ -3217,7 +3217,7 @@
     "craftable": false
   },
   {
-    "id": "brood_fang_dagger_mythic",
+    "id": "brood_fang_dagger_legendary",
     "name": "Brood Fang Dagger (Legendary)",
     "slot": "weapon",
     "rarity": "epic",
@@ -3276,7 +3276,7 @@
     "craftable": false
   },
   {
-    "id": "blackscale_helm_mythic",
+    "id": "blackscale_helm_legendary",
     "name": "Blackscale Helm (Legendary)",
     "slot": "helmet",
     "rarity": "legendary",
@@ -3338,7 +3338,7 @@
     "craftable": false
   },
   {
-    "id": "broodmothers_crown_mythic",
+    "id": "broodmothers_crown_legendary",
     "name": "Brood Mother's Crown (Legendary)",
     "slot": "amulet",
     "rarity": "legendary",
@@ -3398,7 +3398,7 @@
     "craftable": false
   },
   {
-    "id": "sewn_maw_greataxe_mythic",
+    "id": "sewn_maw_greataxe_legendary",
     "name": "Sewn Maw Greataxe (Legendary)",
     "slot": "weapon",
     "rarity": "epic",
@@ -3456,7 +3456,7 @@
     "craftable": false
   },
   {
-    "id": "stitched_hide_vest_mythic",
+    "id": "stitched_hide_vest_legendary",
     "name": "Stitched Hide Vest (Legendary)",
     "slot": "chest",
     "rarity": "epic",
@@ -3516,7 +3516,7 @@
     "craftable": false
   },
   {
-    "id": "phylactery_shard_ring_mythic",
+    "id": "phylactery_shard_ring_legendary",
     "name": "Phylactery Shard Ring (Legendary)",
     "slot": "ring",
     "rarity": "epic",
@@ -3577,7 +3577,7 @@
     "craftable": false
   },
   {
-    "id": "unbinding_gauntlets_mythic",
+    "id": "unbinding_gauntlets_legendary",
     "name": "Unbinding Gauntlets (Legendary)",
     "slot": "gloves",
     "rarity": "epic",
@@ -3638,7 +3638,7 @@
     "craftable": false
   },
   {
-    "id": "lichbound_diadem_mythic",
+    "id": "lichbound_diadem_legendary",
     "name": "Lichbound Diadem (Legendary)",
     "slot": "helmet",
     "rarity": "legendary",
@@ -3701,7 +3701,7 @@
     "craftable": false
   },
   {
-    "id": "grimward_amulet_mythic",
+    "id": "grimward_amulet_legendary",
     "name": "Grimward Amulet (Legendary)",
     "slot": "amulet",
     "rarity": "legendary",
@@ -3763,7 +3763,7 @@
     "craftable": false
   },
   {
-    "id": "woven_mind_circlet_mythic",
+    "id": "woven_mind_circlet_legendary",
     "name": "Woven Mind Circlet (Legendary)",
     "slot": "helmet",
     "rarity": "epic",
@@ -3824,7 +3824,7 @@
     "craftable": false
   },
   {
-    "id": "unraveling_cloak_mythic",
+    "id": "unraveling_cloak_legendary",
     "name": "Unraveling Cloak (Legendary)",
     "slot": "cloak",
     "rarity": "epic",
@@ -3887,7 +3887,7 @@
     "craftable": false
   },
   {
-    "id": "threadcutter_mythic",
+    "id": "threadcutter_legendary",
     "name": "Threadcutter (Legendary)",
     "slot": "weapon",
     "rarity": "legendary",

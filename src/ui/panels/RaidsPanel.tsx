@@ -18,25 +18,25 @@ import { RaidRoomSprite } from '../sprites/RaidRoomSprite';
 import { formatDuration, describeMods, formatGold, formatNumber, RARITY_COLOR } from '../../game/util';
 
 // Single-letter fallback badge (used only if the icon art at
-// public/raid-icons/<difficulty>.png is missing) -- 'L' for Legendary
-// (patch 0165 rename), matching RAID_DIFFICULTY_LABEL's full word.
-const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', mythic: 'L' };
+// public/raid-icons/<difficulty>.png is missing).
+const DIFFICULTY_LABEL: Record<RaidDifficulty, string> = { normal: 'N', heroic: 'H', legendary: 'L' };
 /** Reuses the existing rarity palette rather than inventing a new colour
- *  scheme -- Normal/Heroic/Mythic roughly parallel uncommon/rare/epic
+ *  scheme -- Normal/Heroic/Legendary roughly parallel uncommon/rare/epic
  *  stakes, so the same visual language already trained elsewhere applies. */
 const DIFFICULTY_COLOR: Record<RaidDifficulty, string> = {
-  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, mythic: RARITY_COLOR.epic,
+  normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, legendary: RARITY_COLOR.epic,
 };
 
 /** Which upgrade unlocks each difficulty tier -- Normal comes from the base
  *  Raid Charter (the same unlock that already gates raids existing at
- *  all); Heroic and Mythic each need their own separate Clearance upgrade,
- *  rather than the old single Charter purchase unlocking every tier at once. */
-const DIFFICULTY_UNLOCK: Record<RaidDifficulty, 'raids' | 'raidsHeroic' | 'raidsMythic'> = {
-  normal: 'raids', heroic: 'raidsHeroic', mythic: 'raidsMythic',
+ *  all); Heroic and Legendary each need their own separate Clearance
+ *  upgrade, rather than the old single Charter purchase unlocking every
+ *  tier at once. */
+const DIFFICULTY_UNLOCK: Record<RaidDifficulty, 'raids' | 'raidsHeroic' | 'raidsLegendary'> = {
+  normal: 'raids', heroic: 'raidsHeroic', legendary: 'raidsLegendary',
 };
 const DIFFICULTY_UNLOCK_LABEL: Record<RaidDifficulty, string> = {
-  normal: 'Raid Charter', heroic: 'Heroic Clearance', mythic: 'Legendary Clearance',
+  normal: 'Raid Charter', heroic: 'Heroic Clearance', legendary: 'Legendary Clearance',
 };
 
 /**

@@ -30,7 +30,7 @@ export const ShopManager = {
   rollEquipment(state: GameState, seed: number | string) {
     const topLevel = Math.max(1, ...state.heroes.map((h) => h.level));
     const rng = createRng(`shop-equipment:${seed}:${state.createdAt}`);
-    // raidExclusive items (Heroic/Mythic tiered raid loot variants) never
+    // raidExclusive items (Heroic/Legendary tiered raid loot variants) never
     // belong in a purchasable pool -- see the comment on EquipmentDef itself
     // for why. craftable bases get the same treatment, same reasoning in
     // the opposite direction -- they only ever exist as a Crafting result,

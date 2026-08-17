@@ -10701,98 +10701,6 @@ pass:
   chain(s) above as one coordinated content pass rather than two
   unrelated asks, since they'd fill the same hole for the same reason.
 
-### Backlog addendum: a fourth raid difficulty tier, gated on the level-60 cap -- idea logged, not scoped
-
-Raised alongside the patch 0165 Mythic -> Legendary rename below, and ties
-directly into the level-60 backlog entry just above rather than
-replacing it. The naming discussion that led to the rename started from
-a real proposal -- a genuinely new fourth raid difficulty tier, Normal ->
-Heroic -> Legendary -> Mythic, sitting above today's top tier rather than
-between existing ones. Deliberately **not** built this pass (see the
-patch 0165 entry below for why -- renaming today's Mythic to Legendary
-first, keeping the actual fourth-tier idea for later, was the agreed
-scope split), but worth recording properly rather than losing the shape
-of the idea:
-
-- **Likely gated behind the level 60 cap raise** logged just above, not
-  available earlier -- a fourth tier needs somewhere new to be genuinely
-  harder than today's ceiling, and level 60 is that headroom.
-- **Every existing raid would need to scale up to level 60** for this
-  tier specifically, not just the newest ones -- Blackford Keep through
-  Requiem for the Last God all getting a real fourth-tier encounter/loot
-  pass, not only whatever ships after the cap raise. Ties directly into
-  this section's own "class-specific armour sets, for a level 60 cap"
-  item -- this tier is very plausibly where those sets would actually
-  drop.
-- **New endgame content generally** was raised in the same conversation
-  as the reason to want a fourth tier at all, rather than the tier being
-  the whole ask on its own -- something for a guild that's already
-  cleared everything current to work toward, in the same spirit as the
-  Requiem raid's own role today.
-- Naming, tuning curve (successPenalty/rewardMultiplier/lootBonus/
-  durationMultiplier/roleMismatchCap/partySize), and per-raid loot
-  authoring (every raid-exclusive item would need a genuine new top-tier
-  variant, not just another reskin) are all still open -- this is a
-  scoping conversation for whenever the level-60 raise itself gets
-  picked up, not a ready-to-build spec.
-
-### Mythic raid difficulty renamed to Legendary -- built (patch 0165)
-
-```discord-update
-Dev Update | Raid Difficulty Rename
-
-- Raid difficulty is now Normal / Heroic / Legendary (was Mythic)
-- Every raid-exclusive Legendary item, upgrade, and message updated to match
-```
-
-Came out of a conversation about adding a genuine fourth raid difficulty
-tier (Normal -> Heroic -> Legendary -> Mythic, mirroring the quest
-ladder's five tiers minus Easy). Decided against building a real new tier
-for now -- see the backlog addendum above for that idea, kept for later --
-and instead just renamed today's top tier from Mythic to Legendary,
-display-only.
-
-**Internal id deliberately unchanged.** `RaidDifficulty` is still
-`'normal' | 'heroic' | 'mythic'` everywhere it's actually data: save
-fields (`completedRaidDifficulties`, in-progress raid state), equipment
-ids (`iron_helm_mythic`, `dragon_helm_mythic`, etc. -- ~40 raid-exclusive
-items across every raid), the `raid_mythic_clearance` upgrade id, its
-`raidsMythic` unlock flag, and every `raid_difficulty.mythic.*` tuning
-key. Renaming any of those would need a save migration (existing saves
-already have `'mythic'` written into completed-raid history and owned
-item ids) for a purely cosmetic change -- not worth the risk. Every
-player-facing *label*, though, changes.
-
-**New `RAID_DIFFICULTY_LABEL` map** (`raids.ts`), alongside the existing
-`RAID_DIFFICULTY_ICON` -- `{ normal: 'Normal', heroic: 'Heroic', mythic:
-'Legendary' }`. Every UI spot that used to derive its label by
-capitalizing the raw id (`difficulty[0].toUpperCase() +
-difficulty.slice(1)`) now reads this map instead: the difficulty-circle
-badges and their tooltips, the role-mismatch success-cap warning, the
-raid confirmation modal, `RaidResultModal`, and `OfflineReportModal` --
-six call sites across four files. The single-letter fallback badge
-(shown only if `public/raid-icons/mythic.png` fails to load) changed
-`'M'` -> `'L'` to match.
-
-**Text renamed, ids kept.** The `raid_mythic_clearance` upgrade's display
-`name`/`description` ("Mythic Clearance" -> "Legendary Clearance") and
-`RaidManager`'s own gating error string, both in code/data, not the id.
-Every raid-exclusive equipment item's `name` field containing `(Mythic)`
--- 42 occurrences across ~41 items (Gravewatcher's Band, Dragonscale
-Helm, the full Requiem set, Grimward set, Cinderfang set, and more) --
-mechanically replaced with `(Legendary)`; item `id`s, `mods`, and every
-other field untouched, so owned copies in existing saves resolve
-identically. Tuning registry labels/descriptions referencing "Mythic"
-(role-mismatch cap, success penalty, loot bonus, duration/reward
-multiplier, the Legendary Clearance upgrade's own three tuning entries)
-updated too -- DevTool-only text, not save-relevant, done for
-consistency while already in these files.
-
-**Verified:** `npx tsc --noEmit` and `npx vite build --config
-vite.web.config.ts` both pass clean against a fresh clone with every
-file applied. `equipment.json` and `tuning.json` both re-parsed as valid
-JSON post-edit.
-
 ### Rarity banner art behind gear cards -- built (patch 0159)
 
 ```discord-update
@@ -11082,3 +10990,179 @@ convention for the detail-modal one.
 `app.js`. `npx tsc --noEmit` and `npx vite build --config
 vite.web.config.ts` both pass clean against a fresh clone with every
 file applied.
+
+### Backlog addendum: a fourth raid difficulty tier, gated on the level-60 cap -- idea logged, not scoped
+
+Raised alongside the patch 0165 Mythic -> Legendary rename below, and ties
+directly into the level-60 backlog entry just above rather than
+replacing it. The naming discussion that led to the rename started from
+a real proposal -- a genuinely new fourth raid difficulty tier, Normal ->
+Heroic -> Legendary -> Mythic, sitting above today's top tier rather than
+between existing ones. Deliberately **not** built this pass (see the
+patch 0165 entry below for why -- renaming today's Mythic to Legendary
+first, keeping the actual fourth-tier idea for later, was the agreed
+scope split), but worth recording properly rather than losing the shape
+of the idea:
+
+- **Likely gated behind the level 60 cap raise** logged just above, not
+  available earlier -- a fourth tier needs somewhere new to be genuinely
+  harder than today's ceiling, and level 60 is that headroom.
+- **Every existing raid would need to scale up to level 60** for this
+  tier specifically, not just the newest ones -- Blackford Keep through
+  Requiem for the Last God all getting a real fourth-tier encounter/loot
+  pass, not only whatever ships after the cap raise. Ties directly into
+  this section's own "class-specific armour sets, for a level 60 cap"
+  item -- this tier is very plausibly where those sets would actually
+  drop.
+- **New endgame content generally** was raised in the same conversation
+  as the reason to want a fourth tier at all, rather than the tier being
+  the whole ask on its own -- something for a guild that's already
+  cleared everything current to work toward, in the same spirit as the
+  Requiem raid's own role today.
+- Naming, tuning curve (successPenalty/rewardMultiplier/lootBonus/
+  durationMultiplier/roleMismatchCap/partySize), and per-raid loot
+  authoring (every raid-exclusive item would need a genuine new top-tier
+  variant, not just another reskin) are all still open -- this is a
+  scoping conversation for whenever the level-60 raise itself gets
+  picked up, not a ready-to-build spec.
+
+### Mythic raid difficulty renamed to Legendary -- built (patch 0165)
+
+```discord-update
+Dev Update | Raid Difficulty Rename
+
+- Raid difficulty is now Normal / Heroic / Legendary (was Mythic)
+- Every raid-exclusive Legendary item, upgrade, and message updated to match
+```
+
+Came out of a conversation about adding a genuine fourth raid difficulty
+tier (Normal -> Heroic -> Legendary -> Mythic, mirroring the quest
+ladder's five tiers minus Easy). Decided against building a real new tier
+for now -- see the backlog addendum above for that idea, kept for later --
+and instead just renamed today's top tier from Mythic to Legendary,
+display-only.
+
+**Internal id deliberately unchanged.** `RaidDifficulty` is still
+`'normal' | 'heroic' | 'mythic'` everywhere it's actually data: save
+fields (`completedRaidDifficulties`, in-progress raid state), equipment
+ids (`iron_helm_mythic`, `dragon_helm_mythic`, etc. -- ~40 raid-exclusive
+items across every raid), the `raid_mythic_clearance` upgrade id, its
+`raidsMythic` unlock flag, and every `raid_difficulty.mythic.*` tuning
+key. Renaming any of those would need a save migration (existing saves
+already have `'mythic'` written into completed-raid history and owned
+item ids) for a purely cosmetic change -- not worth the risk. Every
+player-facing *label*, though, changes.
+
+**New `RAID_DIFFICULTY_LABEL` map** (`raids.ts`), alongside the existing
+`RAID_DIFFICULTY_ICON` -- `{ normal: 'Normal', heroic: 'Heroic', mythic:
+'Legendary' }`. Every UI spot that used to derive its label by
+capitalizing the raw id (`difficulty[0].toUpperCase() +
+difficulty.slice(1)`) now reads this map instead: the difficulty-circle
+badges and their tooltips, the role-mismatch success-cap warning, the
+raid confirmation modal, `RaidResultModal`, and `OfflineReportModal` --
+six call sites across four files. The single-letter fallback badge
+(shown only if `public/raid-icons/mythic.png` fails to load) changed
+`'M'` -> `'L'` to match.
+
+**Text renamed, ids kept.** The `raid_mythic_clearance` upgrade's display
+`name`/`description` ("Mythic Clearance" -> "Legendary Clearance") and
+`RaidManager`'s own gating error string, both in code/data, not the id.
+Every raid-exclusive equipment item's `name` field containing `(Mythic)`
+-- 42 occurrences across ~41 items (Gravewatcher's Band, Dragonscale
+Helm, the full Requiem set, Grimward set, Cinderfang set, and more) --
+mechanically replaced with `(Legendary)`; item `id`s, `mods`, and every
+other field untouched, so owned copies in existing saves resolve
+identically. Tuning registry labels/descriptions referencing "Mythic"
+(role-mismatch cap, success penalty, loot bonus, duration/reward
+multiplier, the Legendary Clearance upgrade's own three tuning entries)
+updated too -- DevTool-only text, not save-relevant, done for
+consistency while already in these files.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh clone with every
+file applied. `equipment.json` and `tuning.json` both re-parsed as valid
+JSON post-edit.
+
+### Mythic raid difficulty: internal ids fully renamed to Legendary -- built (patch 0166)
+
+```discord-update
+Dev Update | Raid Difficulty Internal Rename
+
+- Finished the Mythic -> Legendary raid difficulty rename from patch 0165 -- ids, item names, upgrade, achievement, and loot tables all now say Legendary, not just the on-screen label
+```
+
+Follow-up to patch 0165's display-only rename. Confirmed with testers
+first that no save exists yet with the current top raid tier purchased,
+cleared, or in progress -- so unlike 0165 (which deliberately avoided
+touching any id, precisely because that risk existed), this patch does
+the full internal rename with no migration needed and no compatibility
+shim left behind.
+
+**Every internal `mythic` identifier renamed to `legendary`:**
+- `RaidDifficulty` type itself (`types.ts`) -- `'normal' | 'heroic' |
+  'legendary'`. `RAID_DIFFICULTY_LABEL` (raids.ts) is trivial now that id
+  matches label, but kept rather than removed -- it's still the correct
+  pattern for a genuinely new fourth tier later, and every UI call site
+  already reads through it instead of deriving a label from the raw id.
+- `RAID_DIFFICULTIES`/`RAID_DIFFICULTY_ORDER`/`RAID_DIFFICULTY_ICON` keys
+  (raids.ts), plus the icon path and the actual tracked asset --
+  `public/raid-icons/mythic.png` renamed to `legendary.png` via `git mv`,
+  not left for a manual follow-up.
+- `RaidEncounterDef.lootMythic` -> `lootLegendary` (types.ts, raids.ts's
+  `lootForDifficulty`, the DevTool's `raid-encounters` schema in
+  `server.mjs`), and the field itself renamed on all 22 encounters that
+  had one in `raid-encounters.json`.
+- The `raid_mythic_clearance` upgrade -> `raid_legendary_clearance`
+  (progression.ts), its `unlocks` flag `raidsMythic` -> `raidsLegendary`
+  (also updated in `ModifierManager.hasUnlock`'s type signature and every
+  call site: `RaidsPanel.tsx`'s `DIFFICULTY_UNLOCK` map, `RaidManager`'s
+  gating check, `GuidanceManager`'s `raids_legendary_unlocked` topic --
+  renamed to match, alongside its `guidance-topics.json` entry).
+- Both tuning-key families -- `raid_difficulty.mythic.*` (5 keys) and
+  `upgrade.raid_mythic_clearance.*` (3 keys) -- renamed in `tuning.json`
+  and every `Tuning.get(...)` call site referencing them.
+- The `RAID_MYTHIC_CLEARED` achievement -> `RAID_LEGENDARY_CLEARED`
+  (`AchievementManager.ts` condition key + `achievements.json` id,
+  matching the pattern `RAID_NORMAL_CLEARED`/`RAID_HEROIC_CLEARED`
+  already use), name/description updated to match, and
+  `RAID_ALL_DIFFICULTIES`'s own condition now checks `'legendary'`
+  instead of `'mythic'`.
+- Every raid-exclusive equipment item's `id` -- 42 items, `_mythic` ->
+  `_legendary` suffix (`equipment.json`), matching the `(Mythic)` ->
+  `(Legendary)` display-name rename patch 0165 already did to the same
+  items. Cross-checked programmatically both before and after: every one
+  of the 42 renamed ids is referenced from exactly the `lootLegendary`
+  pool it should be, and every `loot`/`lootHeroic`/`lootLegendary` entry
+  across all 22 encounters resolves to a real equipment id post-rename --
+  zero orphaned loot references either direction.
+- `RaidsPanel.tsx`'s `DIFFICULTY_LABEL` (single-letter fallback badge),
+  `DIFFICULTY_COLOR`, and `OfflineReportModal.tsx`'s own
+  `RAID_DIFFICULTY_COLOR` -- all three are plain `Record<RaidDifficulty,
+  ...>` object literals, so `tsc` itself caught every one that still had
+  a stale `mythic:` key once the type changed; nothing here relied on
+  manual grepping alone.
+- `guide-topics.json`'s How-To body text ("Heroic 6, Mythic 9" ->
+  "...Legendary 9") and a full comment sweep across `RaidManager.ts`,
+  `QuestManager.ts`, `PeddlerManager.ts`, `ShopManager.ts`,
+  `equipment.ts`, and `tuning.ts` -- none of these were functional
+  changes, just finishing the rename everywhere a future reader would
+  otherwise hit a stale "Mythic" reference mid-file.
+
+**One coincidental cleanup, not a behavior change:** `RaidManager`'s
+injury-roll code already mapped raid difficulty to an equivalent quest
+`Difficulty` tier for `HeroManager.rollInjury` (raid's toughest tier ->
+quest's own `'legendary'` tier) -- that mapping's *target* was always
+the string `'legendary'` (a completely separate quest-tier id, unrelated
+to this rename), only the *source* comparison (`active.difficulty ===
+'mythic'`) needed updating to `'legendary'`. Now that raid's toughest
+tier and quest's toughest tier are both spelled `'legendary'`, the line
+reads a little strangely (`difficulty === 'legendary' ? 'legendary' :
+...`) but is exactly as correct as before -- left a comment in place
+explaining the two are different types that happen to share a name now.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. `node --check` clean on both
+`server.mjs` and `app.js`. Every touched JSON file re-parsed valid.
+Programmatic cross-check (not just eyeballing) confirmed zero dangling
+loot references in either direction across all 22 affected encounters
+and all 42 renamed items.

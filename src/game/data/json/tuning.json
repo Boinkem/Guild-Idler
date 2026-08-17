@@ -105,7 +105,7 @@
     "description": "Multiplies gold/xp rewards at Heroic difficulty."
   },
   {
-    "id": "raid_difficulty.mythic.successPenalty",
+    "id": "raid_difficulty.legendary.successPenalty",
     "label": "Legendary: success penalty",
     "category": "raid_difficulty",
     "value": 50,
@@ -115,7 +115,7 @@
     "description": "Flat percentage points subtracted from every Legendary encounter's success chance. Deliberately brutal -- see 0059's design note before softening."
   },
   {
-    "id": "raid_difficulty.mythic.lootBonus",
+    "id": "raid_difficulty.legendary.lootBonus",
     "label": "Legendary: loot bonus",
     "category": "raid_difficulty",
     "value": 15,
@@ -124,7 +124,7 @@
     "description": "Flat percentage points added to every Legendary loot roll."
   },
   {
-    "id": "raid_difficulty.mythic.durationMultiplier",
+    "id": "raid_difficulty.legendary.durationMultiplier",
     "label": "Legendary: duration multiplier",
     "category": "raid_difficulty",
     "value": 1.3,
@@ -134,7 +134,7 @@
     "description": "Multiplies total raid duration at Legendary difficulty."
   },
   {
-    "id": "raid_difficulty.mythic.rewardMultiplier",
+    "id": "raid_difficulty.legendary.rewardMultiplier",
     "label": "Legendary: reward multiplier",
     "category": "raid_difficulty",
     "value": 4,
@@ -154,7 +154,7 @@
     "description": "Hard ceiling on final per-encounter success at Heroic while the party doesn't meet the raid's requiredRoles minimums. Layered on top of raid.roleMismatchPenaltyPerSlot, not a replacement for it -- gear/level can't push success above this no matter how far over the ordinary formula would otherwise go."
   },
   {
-    "id": "raid_difficulty.mythic.roleMismatchCap",
+    "id": "raid_difficulty.legendary.roleMismatchCap",
     "label": "Legendary: role mismatch success cap",
     "category": "raid_difficulty",
     "value": 45,
@@ -1957,7 +1957,7 @@
     "min": 0
   },
   {
-    "id": "upgrade.raid_mythic_clearance.baseCost",
+    "id": "upgrade.raid_legendary_clearance.baseCost",
     "label": "Legendary Clearance: base cost",
     "category": "vendor_upgrades",
     "value": 60000,
@@ -1966,7 +1966,7 @@
     "min": 0
   },
   {
-    "id": "upgrade.raid_mythic_clearance.costGrowth",
+    "id": "upgrade.raid_legendary_clearance.costGrowth",
     "label": "Legendary Clearance: cost growth",
     "category": "vendor_upgrades",
     "value": 1,
@@ -1975,7 +1975,7 @@
     "min": 1
   },
   {
-    "id": "upgrade.raid_mythic_clearance.maxLevel",
+    "id": "upgrade.raid_legendary_clearance.maxLevel",
     "label": "Legendary Clearance: max level",
     "category": "vendor_upgrades",
     "value": 1,

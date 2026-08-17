@@ -91,16 +91,16 @@
     "unlocksTrackId": "hymn_of_valor"
   },
   {
-    "id": "RAID_MYTHIC_CLEARED",
-    "name": "Mythic Reckoning",
-    "description": "Full-clear a raid on Mythic difficulty.",
+    "id": "RAID_LEGENDARY_CLEARED",
+    "name": "Legendary Reckoning",
+    "description": "Full-clear a raid on Legendary difficulty.",
     "hidden": false,
     "unlocksTrackId": "the_last_watch"
   },
   {
     "id": "RAID_ALL_DIFFICULTIES",
     "name": "Every Banner Flying",
-    "description": "Full-clear a raid at every difficulty -- Normal, Heroic, and Mythic.",
+    "description": "Full-clear a raid at every difficulty -- Normal, Heroic, and Legendary.",
     "hidden": false,
     "unlocksTrackId": "the_broken_crown"
   },

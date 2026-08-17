@@ -63,11 +63,11 @@ const CHECKS: Record<string, Check> = {
 
   RAID_HEROIC_CLEARED: (state) => (state.completedRaidDifficulties ?? []).includes('heroic'),
 
-  RAID_MYTHIC_CLEARED: (state) => (state.completedRaidDifficulties ?? []).includes('mythic'),
+  RAID_LEGENDARY_CLEARED: (state) => (state.completedRaidDifficulties ?? []).includes('legendary'),
 
   RAID_ALL_DIFFICULTIES: (state) => {
     const cleared = new Set(state.completedRaidDifficulties ?? []);
-    return cleared.has('normal') && cleared.has('heroic') && cleared.has('mythic');
+    return cleared.has('normal') && cleared.has('heroic') && cleared.has('legendary');
   },
 
   /* ------------------------- vendor / guild completion ------------------------- */
