@@ -12023,3 +12023,67 @@ data to read from the moment this ships, including for raids that
 resolved before the update (the existing capped log is read as-is, nothing
 about it changed). No save migration needed -- `raidLog`/`log` are
 pre-existing `GameState` fields, not new ones.
+
+### Statistics tab restructured into subtabs; Recent Results cards now click through to full detail -- built (patch 0176)
+
+```discord-update
+Dev Update | Statistics Overhaul
+
+- The Statistics tab is now three tabs -- Overview, Achievements, and Recent Results -- instead of one long scroll
+- Recent Results merges every recent quest and raid into one feed, newest first
+- Click any result card to see exactly what it paid out -- gold, XP, and every item found
+```
+
+Direct follow-up to patch 0175, requested immediately after: "make recent
+results new tab next to achievements" plus "clickable cards to view gold
+and items, xp gained from that event." 0175 had already surfaced raids
+into a "Recent raids" section, but it (and "Recent quests" next to it)
+were still just two more stacked sections on the same long Statistics
+page, with every card showing its full breakdown inline all the time.
+This pass restructures around both requests directly rather than
+patching the old layout further.
+
+**Three-tab split (`StatsPanel.tsx`).** Same `btn-subtab` switcher
+RaidsPanel's own Raids/Quartermaster split already established (reused
+directly, no new CSS) -- `Overview` (the stat-number grid), `Achievements`
+(unchanged grid, moved as-is, its unlock-count now lives on the tab
+button itself), and `Recent Results` (new, replaces "Recent quests" +
+"Recent raids"). Local `subTab` state, defaults to `Overview`. Save data
+stays un-tabbed at the bottom below all three -- it's account-level
+tooling (save/reset), not a stat, so it stays reachable regardless of
+which tab is open rather than getting hidden behind one.
+
+**Recent Results merge (`resultEntries`).** Same merge
+`DashboardPanel.tsx`'s own `RecentOutcomesCard` already does for the
+home-tab card -- tags each `state.log`/`state.raidLog` entry with its
+kind, sorts by `resolvedAt` descending -- just unsliced here rather than
+capped to 6, since this is a dedicated scrollable tab rather than an
+at-a-glance card, and both source logs are already capped at the data
+layer (60 quests, 30 raids -- 90 rows worst case).
+
+**Cards collapsed, detail moved behind a click.** Previously "Recent
+quests"/"Recent raids" cards showed hero/difficulty, gold, XP, every loot
+name, and injuries all inline, always. Per the direct request, a Recent
+Results card now shows only name, hero/difficulty, outcome, and
+timestamp -- clicking (or Enter/Space, same `role="button"`
+keyboard-activation pattern `RaidCard` already uses) opens
+`ResultDetailModal` with the rest: gold, XP, every loot item with its
+rarity pill, materials/eggs/curios found, and the damage report.
+Deliberately NOT a reuse of `QuestResultModal`/`RaidResultModal` --
+those are live-moment celebrations built around a count-up animation and
+a dismiss timer for the instant something resolves; this is a plain,
+static "what already happened" read of the same result data, closer in
+spirit to `OfflineReportModal`'s own already-resolved-so-just-show-it
+cards. Material/curio names resolved via `MATERIAL_BY_ID`/`CURIO_BY_ID`,
+matching how `QuestResultModal` itself already looks these up rather
+than showing raw ids.
+
+**Left alone:** `DashboardPanel.tsx`'s home-tab "Recent outcomes" card
+keeps showing gold/XP inline, uncollapsed -- that card is deliberately a
+glanceable summary (6 rows, no click-through), a different job from the
+Statistics tab's full browsable log, and the request was specifically
+about the new tab's cards, not the home-tab card.
+
+**Verified:** `npx tsc --noEmit` clean against the full project,
+confirmed against a fresh clone with only this patch applied (not just
+the working copy patch 0175 was built and tested against).

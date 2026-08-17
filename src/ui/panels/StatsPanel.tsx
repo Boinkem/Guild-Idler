@@ -7,9 +7,12 @@ import { RAID_UPGRADES } from '../../game/data/raidUpgrades';
 import { ITEM_SETS } from '../../game/data/equipment';
 import { RAIDS, RAID_DIFFICULTY_LABEL } from '../../game/data/raids';
 import { PETS } from '../../game/data/pets';
-import { RaidDifficulty } from '../../game/types';
+import { QuestResult, RaidResult, RaidDifficulty } from '../../game/types';
 import { formatGold, formatPlayTime, RARITY_COLOR } from '../../game/util';
 import { ConfirmModal } from '../ConfirmModal';
+import { RarityPill } from '../RarityPill';
+import { MATERIAL_BY_ID } from '../../game/data/materials';
+import { CURIO_BY_ID } from '../../game/data/curios';
 
 /** Same rarity-parallel palette RaidsPanel/OfflineReportModal already use
  *  for Normal/Heroic/Legendary -- kept local rather than shared, matching
@@ -18,6 +21,127 @@ import { ConfirmModal } from '../ConfirmModal';
 const RAID_DIFFICULTY_COLOR: Record<RaidDifficulty, string> = {
   normal: RARITY_COLOR.uncommon, heroic: RARITY_COLOR.rare, legendary: RARITY_COLOR.epic,
 };
+
+/** One row of the merged Recent Results feed -- a quest and a raid outcome
+ *  carry different shapes (QuestResult vs RaidResult), so this is a thin
+ *  discriminated wrapper just for sorting/rendering the two side by side,
+ *  same "tag + keep the real object" shape DashboardPanel's own
+ *  RecentOutcomesCard already uses for its home-tab version of this same
+ *  merge. `key`/`resolvedAt` are pulled out once here rather than
+ *  re-derived at every render site below. */
+type ResultEntry =
+  | { kind: 'quest'; key: string; resolvedAt: number; data: QuestResult }
+  | { kind: 'raid'; key: string; resolvedAt: number; data: RaidResult };
+
+/**
+ * Full breakdown for a single past quest or raid -- gold, XP, every item
+ * found, injuries/breakages, opened from clicking its compact card in the
+ * Recent Results tab. Deliberately NOT QuestResultModal/RaidResultModal
+ * reused wholesale: those are live-moment celebrations (count-up numbers,
+ * particle bursts, a dismiss timer) built for the instant something
+ * resolves, not for browsing something that already happened and finished
+ * animating minutes or days ago. This is the plain, static "what happened"
+ * read of the same result data instead, closer in spirit to
+ * OfflineReportModal's own already-resolved-so-just-show-it cards.
+ */
+function ResultDetailModal({ entry, onClose }: { entry: ResultEntry; onClose: () => void }) {
+  const isQuest = entry.kind === 'quest';
+  const quest = isQuest ? (entry.data as QuestResult) : null;
+  const raid = !isQuest ? (entry.data as RaidResult) : null;
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        {quest && (
+          <>
+            <h3>{quest.questName}</h3>
+            <p className="small muted" style={{ marginTop: 0 }}>{quest.heroName}</p>
+            <p className={quest.success ? 'good' : 'bad'} style={{ fontSize: 12 }}>
+              {quest.success ? 'The contract is fulfilled.' : 'The contract failed.'}
+            </p>
+          </>
+        )}
+        {raid && (
+          <>
+            <h3>{raid.raidName} — {RAID_DIFFICULTY_LABEL[raid.difficulty]}</h3>
+            <p className={`small ${raid.fullClear ? 'good' : raid.encountersCleared > 0 ? '' : 'bad'}`} style={{ marginTop: 0 }}>
+              {raid.fullClear
+                ? 'Full clear.'
+                : raid.encountersCleared > 0
+                  ? `Cleared ${raid.encountersCleared} of ${raid.totalEncounters} encounters before the party had to fall back.`
+                  : 'The party was turned back at the first encounter.'}
+            </p>
+          </>
+        )}
+
+        <div className="stat-row" style={{ marginBottom: 10 }}>
+          <span className="gold-text">+{formatGold(entry.data.gold)} gold</span>
+          <span>+{entry.data.xp} xp</span>
+          {quest && quest.levelsGained > 0 && <span className="good">+{quest.levelsGained} level{quest.levelsGained === 1 ? '' : 's'}</span>}
+        </div>
+
+        {((quest?.loot.length ?? 0) > 0 || (raid?.loot.length ?? 0) > 0) && (
+          <>
+            <div className="section-heading">Loot</div>
+            <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
+              {(quest?.loot ?? raid?.loot ?? []).map((item, i) => (
+                <span key={`${item.defId}-${i}`} className="row" style={{ gap: 4, alignItems: 'center' }}>
+                  <span className="tiny" style={{ color: RARITY_COLOR[item.rarity] }}>{item.name}</span>
+                  <RarityPill rarity={item.rarity} />
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+
+        {quest && (quest.materialGained || quest.eggDropped || quest.curioGained) && (
+          <>
+            <div className="section-heading">Also found</div>
+            {quest.materialGained && quest.materialGained.amount > 0 && (
+              <div className="small" style={{ marginBottom: 2 }}>
+                +{quest.materialGained.amount} {MATERIAL_BY_ID[quest.materialGained.materialId]?.name ?? quest.materialGained.materialId}
+              </div>
+            )}
+            {quest.eggDropped && (
+              <div className="small" style={{ marginBottom: 2, color: RARITY_COLOR[quest.eggDropped.rarity] }}>
+                A {quest.eggDropped.rarity} egg
+              </div>
+            )}
+            {quest.curioGained && (
+              <div className="small" style={{ marginBottom: 2 }}>
+                {CURIO_BY_ID[quest.curioGained.curioId]?.name ?? 'A curio'}
+                {quest.curioGained.amount > 1 ? ` ×${quest.curioGained.amount}` : ''}
+              </div>
+            )}
+          </>
+        )}
+
+        {quest && (quest.injury || quest.brokenItems.length > 0) && (
+          <>
+            <div className="section-heading">Damage report</div>
+            {quest.injury && <div className="small bad">{quest.injury.name} — {quest.injury.description}</div>}
+            {quest.brokenItems.length > 0 && <div className="small bad">Broken: {quest.brokenItems.join(', ')}</div>}
+          </>
+        )}
+
+        {raid && raid.injuries.length > 0 && (
+          <>
+            <div className="section-heading">Damage report</div>
+            {raid.injuries.map((i) => (
+              <div key={i.heroId} className="small bad">{i.heroName}: {i.injury.name}</div>
+            ))}
+          </>
+        )}
+
+        <p className="tiny muted" style={{ marginTop: 10 }}>{new Date(entry.resolvedAt).toLocaleString()}</p>
+
+        <div className="row end" style={{ marginTop: 12 }}>
+          <button className="btn-primary" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function StatsPanel() {
   const engine = useEngine();
@@ -33,6 +157,20 @@ export function StatsPanel() {
   // See guild-idler-status.md's polish-pass entry for the full writeup.
   const [saveLocationMessage, setSaveLocationMessage] = useState<string | null>(null);
   const [pendingHardReset, setPendingHardReset] = useState(false);
+
+  // Same `btn-subtab` switcher RaidsPanel's Raids/Quartermaster split
+  // already established -- Achievements and the stat-number grid used to
+  // just be two stacked sections on one long page, with "Recent quests"/
+  // "Recent raids" stacked below them; split into tabs directly per
+  // request ("recent results new tab next to achievements") rather than
+  // adding a 4th stacked section.
+  const [subTab, setSubTab] = useState<'overview' | 'achievements' | 'results'>('overview');
+  // Which past result's full detail (gold/items/xp) is currently open --
+  // set by clicking a compact card in the Results tab below, cleared on
+  // close. Holds the whole ResultEntry (not just an id) since a raid has
+  // no single stable id to look it back up by, the same reasoning
+  // "Recent raids" above already keys its rows on raidId+resolvedAt.
+  const [selectedEntry, setSelectedEntry] = useState<ResultEntry | null>(null);
 
   // Sets completed -- every ITEM_SETS entry (raid, chain-reward, material-
   // tier, and craft-only alike, not just raid sets), same "every piece
@@ -86,101 +224,121 @@ export function StatsPanel() {
     ['Guild founded', new Date(stats.firstPlayedAt).toLocaleDateString()],
   ];
 
+  // Merged, newest-first feed for the Recent Results tab -- same merge
+  // DashboardPanel's own RecentOutcomesCard does for its home-tab
+  // version, just unsliced here (both source logs are already capped --
+  // 60 quests, 30 raids -- so at most 90 rows, fine for a dedicated,
+  // scrollable tab rather than a glanceable home-tab card).
+  const resultEntries: ResultEntry[] = [
+    ...state.log.map((r): ResultEntry => ({ kind: 'quest', key: `quest-${r.questId}`, resolvedAt: r.resolvedAt, data: r })),
+    ...state.raidLog.map((r): ResultEntry => ({ kind: 'raid', key: `raid-${r.raidId}-${r.resolvedAt}`, resolvedAt: r.resolvedAt, data: r })),
+  ].sort((a, b) => b.resolvedAt - a.resolvedAt);
+
   return (
     <>
       <h2>Statistics</h2>
       <p className="subtitle">Everything the guild scribe has bothered to write down.</p>
 
-      <div className="section-heading">Achievements ({achProgress.unlocked}/{achProgress.total})</div>
-      <div className="grid three" style={{ marginBottom: 8 }}>
-        {AchievementManager.list().map((def) => {
-          const unlockedAt = engine.state.unlockedAchievements[def.id];
-          const unlocked = unlockedAt !== undefined;
-          const showHidden = def.hidden && !unlocked;
-          return (
-            <div key={def.id} className={`card achievement-card ${unlocked ? 'unlocked' : ''}`} style={{ marginBottom: 0 }}>
-              <div className="card-title" style={{ fontSize: 11 }}>
-                {unlocked ? '🏆' : '🔒'} {showHidden ? '???' : def.name}
-              </div>
-              <p className="tiny muted" style={{ margin: '4px 0 0' }}>
-                {showHidden ? 'Hidden until unlocked.' : def.description}
-              </p>
-              {unlocked && (
-                <p className="tiny" style={{ margin: '4px 0 0', color: 'var(--brass)' }}>
-                  {new Date(unlockedAt).toLocaleDateString()}
-                </p>
-              )}
+      <div className="row" style={{ gap: 8, marginBottom: 14 }}>
+        <button className={`btn-subtab ${subTab === 'overview' ? 'on' : ''}`} onClick={() => setSubTab('overview')}>
+          Overview
+        </button>
+        <button className={`btn-subtab ${subTab === 'achievements' ? 'on' : ''}`} onClick={() => setSubTab('achievements')}>
+          Achievements ({achProgress.unlocked}/{achProgress.total})
+        </button>
+        <button className={`btn-subtab ${subTab === 'results' ? 'on' : ''}`} onClick={() => setSubTab('results')}>
+          Recent results ({resultEntries.length})
+        </button>
+      </div>
+
+      {subTab === 'overview' && (
+        <div className="grid two">
+          {rows.map(([label, value]) => (
+            <div key={label} className="spread card" style={{ marginBottom: 0 }}>
+              <span className="small muted">{label}</span>
+              <b className="small">{value}</b>
             </div>
-          );
-        })}
-      </div>
-
-      <div className="grid two">
-        {rows.map(([label, value]) => (
-          <div key={label} className="spread card" style={{ marginBottom: 0 }}>
-            <span className="small muted">{label}</span>
-            <b className="small">{value}</b>
-          </div>
-        ))}
-      </div>
-
-      <div className="section-heading">Recent quests</div>
-      {engine.state.log.length === 0 && <p className="small muted">No quests yet. The board is waiting.</p>}
-      {engine.state.log.slice(0, 20).map((result) => (
-        <div key={result.questId} className={`card ${result.difficulty}`}>
-          <div className="spread">
-            <span className="card-title">{result.questName}</span>
-            <span className={`small ${result.success ? 'good' : 'bad'}`}>
-              {result.success ? 'Success' : 'Failed'}
-            </span>
-          </div>
-          <div className="stat-row" style={{ marginTop: 4 }}>
-            <span>{result.heroName}</span>
-            <span className="gold-text">+{formatGold(result.gold)}</span>
-            <span>+{result.xp} xp</span>
-            {result.loot.map((l) => <span key={l.defId}>◇ {l.name}</span>)}
-            {result.injury && <span className="bad">{result.injury.name}</span>}
-            <span className="muted">{new Date(result.resolvedAt).toLocaleString()}</span>
-          </div>
+          ))}
         </div>
-      ))}
+      )}
 
-      {/* Raids resolve into `state.raidLog` exactly the same way quests
-          resolve into `state.log` above (see RaidManager.resolve, capped
-          at 30 entries the same way `log` is capped at 60) -- that log
-          was already being written on every raid, live or offline, it
-          just had nowhere to be read back afterward. Reported directly:
-          raids had no way to look back at what happened once the
-          transient RaidResultModal/OfflineReportModal card was
-          dismissed, unlike quests which always had this section. Mirrors
-          "Recent quests" above card-for-card, just keyed on
-          raidId+resolvedAt (a raid has no single stable id the way a
-          quest's questId is unique per attempt) and colored by
-          difficulty the same way OfflineReportModal's own raid cards
-          already are. */}
-      <div className="section-heading">Recent raids</div>
-      {engine.state.raidLog.length === 0 && <p className="small muted">No raids yet. Send the guild once raids unlock.</p>}
-      {engine.state.raidLog.slice(0, 20).map((raid) => (
-        <div
-          key={`${raid.raidId}-${raid.resolvedAt}`}
-          className="card"
-          style={{ borderLeftColor: RAID_DIFFICULTY_COLOR[raid.difficulty] }}
-        >
-          <div className="spread">
-            <span className="card-title">{raid.raidName} — {RAID_DIFFICULTY_LABEL[raid.difficulty]}</span>
-            <span className={`small ${raid.fullClear ? 'good' : raid.encountersCleared > 0 ? '' : 'bad'}`}>
-              {raid.fullClear ? 'Full clear' : `${raid.encountersCleared}/${raid.totalEncounters}`}
-            </span>
-          </div>
-          <div className="stat-row" style={{ marginTop: 4 }}>
-            <span className="gold-text">+{formatGold(raid.gold)}</span>
-            <span>+{raid.xp} xp</span>
-            {raid.loot.map((l, i) => <span key={`${l.defId}-${i}`}>◇ {l.name}</span>)}
-            {raid.injuries.map((inj) => <span key={inj.heroId} className="bad">{inj.heroName}: {inj.injury.name}</span>)}
-            <span className="muted">{new Date(raid.resolvedAt).toLocaleString()}</span>
-          </div>
+      {subTab === 'achievements' && (
+        <div className="grid three" style={{ marginBottom: 8 }}>
+          {AchievementManager.list().map((def) => {
+            const unlockedAt = engine.state.unlockedAchievements[def.id];
+            const unlocked = unlockedAt !== undefined;
+            const showHidden = def.hidden && !unlocked;
+            return (
+              <div key={def.id} className={`card achievement-card ${unlocked ? 'unlocked' : ''}`} style={{ marginBottom: 0 }}>
+                <div className="card-title" style={{ fontSize: 11 }}>
+                  {unlocked ? '🏆' : '🔒'} {showHidden ? '???' : def.name}
+                </div>
+                <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+                  {showHidden ? 'Hidden until unlocked.' : def.description}
+                </p>
+                {unlocked && (
+                  <p className="tiny" style={{ margin: '4px 0 0', color: 'var(--brass)' }}>
+                    {new Date(unlockedAt).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
-      ))}
+      )}
+
+      {/* Recent Results -- merged state.log/state.raidLog (see
+          resultEntries above), newest first. Cards are deliberately
+          condensed -- name, hero/difficulty, outcome, timestamp only --
+          with gold/XP/loot/injuries moved behind a click into
+          ResultDetailModal, same "collapsed list, full detail behind a
+          click" shape RaidCard/RaidDetailModal already use elsewhere in
+          this game, rather than repeating the older inline-everything
+          card style "Recent quests"/"Recent raids" used before this tab
+          existed. */}
+      {subTab === 'results' && (
+        <>
+          {resultEntries.length === 0 && (
+            <p className="small muted">Nothing finished yet. Send a hero out or start a raid.</p>
+          )}
+          {resultEntries.map((entry) => {
+            const isQuest = entry.kind === 'quest';
+            const quest = isQuest ? entry.data as QuestResult : null;
+            const raid = !isQuest ? entry.data as RaidResult : null;
+            const success = quest ? quest.success : raid!.fullClear;
+            const outcomeLabel = quest
+              ? (quest.success ? 'Success' : 'Failed')
+              : (raid!.fullClear ? 'Full clear' : raid!.encountersCleared > 0 ? `${raid!.encountersCleared}/${raid!.totalEncounters}` : 'Retreated');
+            return (
+              <div
+                key={entry.key}
+                className="card result-card"
+                style={{
+                  cursor: 'pointer',
+                  borderLeftColor: raid ? RAID_DIFFICULTY_COLOR[raid.difficulty] : undefined,
+                }}
+                onClick={() => setSelectedEntry(entry)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedEntry(entry); } }}
+              >
+                <div className="spread">
+                  <span className="card-title">
+                    {raid ? '⚔ ' : ''}{quest ? quest.questName : raid!.raidName}
+                  </span>
+                  <span className={`small ${success ? 'good' : 'bad'}`}>{outcomeLabel}</span>
+                </div>
+                <div className="spread" style={{ marginTop: 2 }}>
+                  <span className="tiny muted">{quest ? quest.heroName : RAID_DIFFICULTY_LABEL[raid!.difficulty]}</span>
+                  <span className="tiny muted">{new Date(entry.resolvedAt).toLocaleString()}</span>
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+
+      {selectedEntry && <ResultDetailModal entry={selectedEntry} onClose={() => setSelectedEntry(null)} />}
 
       <div className="section-heading">Save data</div>
       <div className="row wrap">
