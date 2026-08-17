@@ -10913,3 +10913,80 @@ its pre-0162 appearance), and the chain quest with real art shows only
 its own banner strip, no second layer underneath. `npx tsc --noEmit`
 and `npx vite build --config vite.web.config.ts` both pass clean
 against a fresh clone with the fix applied.
+
+### DevTool: banner picker zoom + nudge controls, accurate preview ratio -- built (patch 0164)
+
+```discord-update
+Dev Update | Banner Picker Upgrade
+
+- Added a zoom slider to the banner picker, so quest/raid/chain art can be scaled in as well as repositioned
+- Added arrow buttons for pixel-precise focus adjustment alongside the existing click/drag
+- Fixed the DevTool preview to match the actual shape of the card it's editing, instead of one generic box for every banner
+- Fixed the raid detail screen's banner art, which had no size set and was invisible
+```
+
+Direct follow-up on the patch 0159/banner-picker feature: focus-point
+placement in the DevTool wasn't translating accurately to the real
+cards. Root cause found while investigating -- the preview box was a
+single generic 420x130 shape (≈3.2:1) used for every `bannerImage`
+field, but the real in-game strips are nothing like that: chain/quest
+banners render at a fixed 90px/70px height across a card up to 720px
+wide (≈8:1), and raid art spans three different shapes across its own
+three consumers (a 56x56 square thumbnail, a 48px strip, and the
+detail-modal strip). Aiming a focus point at a 3.2:1 box and having it
+land in an 8:1 crop was never going to line up.
+
+**Preview now matches the real shape.** New `previewAspect` hint on
+each `bannerImage` field in `server.mjs`'s schema (`8/1` for quest-
+chains, `5/1` for raids -- the detail-modal strip, its most prominent
+of the three consumers -- `3/1` for quest-tags, approximating the
+full-card wash `QuestTagBanner` renders as opposed to a fixed strip).
+`renderBannerField` (`app.js`) reads it via a new `data-preview-aspect`
+attribute and applies it as the preview box's CSS `aspect-ratio`
+instead of a fixed height, so what's framed in the editor is close to
+what actually gets cropped in-game.
+
+**Zoom, independent of focus point.** New optional `scale` field
+(100-300, `bannerImage` validation in `server.mjs`) alongside
+`focusX`/`focusY` -- a slider in the picker UI, live-updating the
+preview's `backgroundSize` as it's dragged. 100 (the default, and what
+an omitted `scale` means) renders as the exact same plain `'cover'`
+every banner used before this existed, so no already-placed art
+changes. Above 100, `backgroundSize` becomes a plain `${scale}%`,
+letting `focusX`/`focusY` reveal a tighter crop of the source art
+rather than always showing as much of it as `cover` allows. Same
+"only recorded when it actually differs from the default" rule
+`focusX`/`focusY` already used -- an untouched slider saves as fully
+omitted, not an explicit "100" entry.
+
+**Nudge buttons for precision.** Four arrow buttons (▲▼◀▶) pinned to
+the preview box's own corners/edges, each moving the focus point a
+fixed 2 percentage points per click (`BANNER_NUDGE_STEP`) -- addresses
+the actual ask directly: "move left/right/up/down," not just a mouse
+click on a small box. Sit inside the same box as the click/drag
+crosshair without triggering a drag when clicked (`pointerdown`
+handler ignores events originating from a `[data-nudge]` button).
+
+**Game-side.** `ChainDef.banner`/`RaidDef.banner`/`QuestTagDef.banner`
+all gained the same optional `scale?: number` (types.ts, quests.ts x2).
+`ChainBanner` (LorePanel.tsx), `ChainQuestBanner`/`QuestTagBanner`
+(QuestPanel.tsx), and `RaidBanner` (RaidsPanel.tsx) all read it the
+same way: `backgroundSize` stays exactly `'cover'` (or whatever the
+class already set) when `scale` is unset or 100, and becomes
+`${scale}%` only when actually configured -- fully backward
+compatible, nothing already-placed needed touching.
+
+**Found and fixed while already in here:** `.raid-detail-banner` --
+the raid detail modal's own banner strip, `RaidBanner`'s third
+consumer -- had no CSS rule at all. No `height`, no `background-size`,
+nothing; it was rendering at 0 height, genuinely invisible rather than
+just badly cropped. `.raid-active-banner` had the same gap (`height`
+was set, `background-size` was not, so its background-image was
+painting at intrinsic size instead of filling the strip). Both fixed
+directly in `app.css`, matching `ChainBanner`'s existing 90px-strip
+convention for the detail-modal one.
+
+**Verified:** `node --check` passes clean on both `server.mjs` and
+`app.js`. `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against a fresh clone with every
+file applied.

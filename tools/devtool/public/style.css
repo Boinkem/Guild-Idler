@@ -372,13 +372,17 @@ td.icon-cell { width: 1%; padding-right: 0; }
 
 .banner-field { display: flex; flex-direction: column; gap: 8px; }
 
-/* The click/drag focus-point surface -- deliberately wide and short (same
-   90:1 ratio-ish as the actual in-game strip) so setting a focus point here
-   previews close to how it'll actually crop in a real card. */
+/* The click/drag focus-point surface. `aspect-ratio` is set inline per
+   field from the schema's `previewAspect` hint (server.mjs) rather than a
+   single fixed height here -- chains/raids/quest-tags each crop to a
+   meaningfully different real shape in-game (see server.mjs's own comment
+   on each `banner` field), so one generic box can't preview all of them
+   accurately. `max-width` keeps very wide ratios (8/1) from ballooning
+   past the editor panel. */
 .banner-preview-box {
   position: relative;
-  width: 100%; max-width: 420px; height: 130px;
-  background-color: var(--panel2); background-size: cover;
+  width: 100%; max-width: 480px;
+  background-color: var(--panel2);
   border: 1px solid var(--panel3); border-radius: var(--radius);
   cursor: crosshair; touch-action: none; overflow: hidden;
   user-select: none;
@@ -399,9 +403,31 @@ td.icon-cell { width: 1%; padding-right: 0; }
 .banner-focus-marker::before { left: 50%; top: -4px; bottom: -4px; width: 1px; margin-left: -0.5px; }
 .banner-focus-marker::after { top: 50%; left: -4px; right: -4px; height: 1px; margin-top: -0.5px; }
 
+/* Four nudge buttons pinned to the preview box's own edges -- 1-click,
+   fixed-step focus adjustment (see BANNER_NUDGE_STEP in app.js) alongside
+   the free-form click/drag above, for precision a mouse gesture on a small
+   box can't always reliably hit. Sit above the crosshair layer (pointer-
+   events restored just on the buttons themselves) without blocking drag
+   elsewhere in the box. */
+.banner-nudge-pad { position: absolute; inset: 0; pointer-events: none; }
+.banner-nudge {
+  position: absolute; pointer-events: auto;
+  width: 26px; height: 22px; padding: 0;
+  background: rgba(0, 0, 0, 0.55); color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 4px;
+  font-size: 10px; line-height: 1; cursor: pointer;
+}
+.banner-nudge:hover { background: rgba(0, 0, 0, 0.75); border-color: var(--brass); }
+.banner-nudge-up { top: 4px; left: 50%; margin-left: -13px; }
+.banner-nudge-down { bottom: 4px; left: 50%; margin-left: -13px; }
+.banner-nudge-left { left: 4px; top: 50%; margin-top: -11px; }
+.banner-nudge-right { right: 4px; top: 50%; margin-top: -11px; }
+
 .banner-field-controls { display: flex; flex-direction: column; gap: 4px; }
 .banner-field-name { font-size: 11px; color: var(--muted); word-break: break-all; }
 .banner-field-focus { font-size: 11px; }
+.banner-zoom-row { display: flex; align-items: center; gap: 8px; }
+.banner-zoom-row input[type='range'] { flex: 1; max-width: 220px; }
 .banner-field-buttons { display: flex; gap: 6px; }
 .banner-field-buttons button { padding: 4px 8px; font-size: 11px; }
 

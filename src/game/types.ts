@@ -846,9 +846,12 @@ export interface RaidDef {
    * back to -- omitted entirely, nothing changes from before this existed.
    * focusX/focusY are 0-100 percentages fed straight into CSS
    * backgroundPosition (50/50 = center, the same default every banner used
-   * unconditionally before this).
+   * unconditionally before this). `scale` (patch 0164) is an optional
+   * 100-300 zoom, independent of focusX/focusY, fed into backgroundSize --
+   * omitted (or 100) means the exact same plain 'cover' every banner used
+   * before this existed.
    */
-  banner?: { path?: string; focusX?: number; focusY?: number };
+  banner?: { path?: string; focusX?: number; focusY?: number; scale?: number };
   /**
    * Flat percentage points added directly to every encounter's success
    * chance in this raid, independent of RAID_DIFFICULTIES' Normal/Heroic/

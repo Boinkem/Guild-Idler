@@ -27,7 +27,9 @@ function ChainQuestBanner({ chainId, banner }: { chainId: string; banner?: Chain
       aria-hidden="true"
       style={{
         backgroundImage: `url(${src})`,
-        backgroundSize: 'cover',
+        // See ChainBanner's own comment in LorePanel.tsx (patch 0164) --
+        // same optional zoom, same fallback to plain 'cover'.
+        backgroundSize: banner?.scale && banner.scale !== 100 ? `${banner.scale}%` : 'cover',
         backgroundPosition: `${banner?.focusX ?? 50}% ${banner?.focusY ?? 50}%`,
         height: 70,
         marginBottom: 8,
@@ -56,6 +58,7 @@ function QuestTagBanner({ tag }: { tag: Offer['tag'] }) {
   const def = QUEST_TAG_BY_ID[tag];
   if (!def?.banner) return null;
   const src = def.banner.path ? `./lore/${def.banner.path}` : `./lore/quest-tags/${tag}.jpg`;
+  const { scale } = def.banner;
   return (
     <div
       aria-hidden="true"
@@ -63,6 +66,10 @@ function QuestTagBanner({ tag }: { tag: Offer['tag'] }) {
       style={{
         backgroundImage: `url(${src})`,
         backgroundPosition: `${def.banner.focusX ?? 50}% ${def.banner.focusY ?? 50}%`,
+        // .quest-tag-banner's own `background-size: cover` (app.css)
+        // covers the omitted/100 case already -- only overridden inline
+        // when an actual zoom (patch 0164) has been set via the DevTool.
+        ...(scale && scale !== 100 ? { backgroundSize: `${scale}%` } : {}),
       }}
     />
   );

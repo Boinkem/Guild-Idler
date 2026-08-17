@@ -55,7 +55,11 @@ function ChainBanner({ chainId, banner }: { chainId: string; banner?: ChainDef['
       aria-hidden="true"
       style={{
         backgroundImage: `url(${src})`,
-        backgroundSize: 'cover',
+        // banner?.scale (patch 0164) is an optional 100-300 zoom set via
+        // the DevTool's banner picker, independent of the focus point --
+        // omitted (or 100) renders the exact same plain 'cover' as before
+        // this field existed.
+        backgroundSize: banner?.scale && banner.scale !== 100 ? `${banner.scale}%` : 'cover',
         backgroundPosition: `${banner?.focusX ?? 50}% ${banner?.focusY ?? 50}%`,
         height: 90,
         marginBottom: 10,

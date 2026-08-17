@@ -91,6 +91,12 @@ function RaidBanner({
       style={{
         backgroundImage: `url(${src})`,
         backgroundPosition: `${banner?.focusX ?? 50}% ${banner?.focusY ?? 50}%`,
+        // Every className this renders with (.raid-card-thumb,
+        // .raid-active-banner, and the plain-strip detail-modal usage)
+        // already sets `background-size: cover` in app.css -- only
+        // overridden inline when an actual zoom (patch 0164) has been set
+        // via the DevTool, same pattern as QuestTagBanner in QuestPanel.tsx.
+        ...(banner?.scale && banner.scale !== 100 ? { backgroundSize: `${banner.scale}%` } : {}),
       }}
     />
   );

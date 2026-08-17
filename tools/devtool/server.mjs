@@ -363,7 +363,12 @@ const SCHEMAS = {
       // to first, and which folder+id.jpg the preview falls back to
       // showing when no explicit path override is chosen yet. Server-side
       // this validates the same as raids.json's own `banner` field below.
-      banner: { type: 'bannerImage', required: false, defaultFolder: 'chains' },
+      // `previewAspect` (also frontend-only) is a `width/height` hint for
+      // the DevTool preview box -- see renderBannerField in app.js. Chains
+      // render as a fixed-height strip across a card up to 720px wide
+      // (ChainBanner: height 90 in LorePanel.tsx), so 8/1 is the real
+      // shape being cropped, not the old generic 420x130 box.
+      banner: { type: 'bannerImage', required: false, defaultFolder: 'chains', previewAspect: '8/1' },
       stages: { type: 'chainStages', required: true },
     },
   },
@@ -381,7 +386,13 @@ const SCHEMAS = {
     fields: {
       id: { type: 'string', required: true, slug: true },
       name: { type: 'string', required: true },
-      banner: { type: 'bannerImage', required: false, defaultFolder: 'quest-tags' },
+      // previewAspect -- see quest-chains' own `banner` comment above.
+      // Quest-tag art renders as a full-card faint wash (QuestTagBanner,
+      // `.quest-tag-banner` in app.css) rather than a fixed strip, so
+      // there's no single exact ratio the way chains/raids have; 3/1
+      // approximates the typical card shape closely enough to preview
+      // meaningfully, which is still far closer than the old generic box.
+      banner: { type: 'bannerImage', required: false, defaultFolder: 'quest-tags', previewAspect: '3/1' },
     },
   },
   'difficulties': {
@@ -767,7 +778,15 @@ const SCHEMAS = {
       // See quest-chains' own `banner` field comment above -- identical
       // shape, just defaulting to the raids/ subfolder and the
       // raids/<id>.jpg naming convention RaidBanner already used.
-      banner: { type: 'bannerImage', required: false, defaultFolder: 'raids' },
+      // previewAspect 5/1 approximates RaidBanner's most prominent use
+      // (the raid-detail-modal strip, capped by .raid-detail-modal's own
+      // 460px max-width) -- RaidBanner also renders as a 56x56 square
+      // thumbnail (.raid-card-thumb) and a 48px-tall strip
+      // (.raid-active-banner) elsewhere, so no single ratio is exact for
+      // all three; this is the closest single default and still a large
+      // accuracy improvement over the old generic 420x130 box for the
+      // context players see most (the detail modal).
+      banner: { type: 'bannerImage', required: false, defaultFolder: 'raids', previewAspect: '5/1' },
       // Mirrors quest-chains' own `title` field -- granted to every hero
       // in the clearing party on a full clear, rather than a single
       // hero, since a raid is a party effort. See RaidDef.title's own
@@ -1094,8 +1113,19 @@ function validateEntry(schema, entry, index) {
             errors.push(`entry ${index}: "${key}.${axis}" must be a number between 0 and 100`);
           }
         }
+        // Optional zoom, independent of focusX/focusY -- 100 means "no
+        // zoom" (backgroundSize stays the existing plain 'cover'), up to
+        // 300 for a fairly tight crop. Same "only recorded when it
+        // actually differs from the default" convention focusX/focusY
+        // use (see readField in app.js), so an untouched field keeps
+        // saving identically to before this existed.
+        if (value.scale !== undefined) {
+          if (typeof value.scale !== 'number' || value.scale < 100 || value.scale > 300) {
+            errors.push(`entry ${index}: "${key}.scale" must be a number between 100 and 300`);
+          }
+        }
         for (const k of Object.keys(value)) {
-          if (!['path', 'focusX', 'focusY'].includes(k)) errors.push(`entry ${index}: unknown key "${k}" in "${key}"`);
+          if (!['path', 'focusX', 'focusY', 'scale'].includes(k)) errors.push(`entry ${index}: unknown key "${k}" in "${key}"`);
         }
         break;
       case 'resultGem':

@@ -212,11 +212,26 @@
 .raid-card:hover .raid-card-chevron { color: var(--brass); }
 .raid-card.locked { opacity: 0.55; }
 
+/* Found while wiring the zoom control (patch 0164) into RaidBanner: this
+ * rule never actually existed, despite .raid-active-banner's own comment
+ * below referring to "the full 90px used elsewhere" -- RaidBanner's third
+ * consumer, the raid-detail-modal strip (RaidsPanel.tsx), had no
+ * background-size or height set anywhere, so it was rendering at 0 height
+ * (a plain background-image on a block element with no other sizing) --
+ * invisible, not just badly cropped. Same 90px strip ChainBanner uses. */
+.raid-detail-banner {
+  height: 90px;
+  background-size: cover;
+  background-position: center;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
 /* Active raid -- own card (not .raid-card's row layout), banner shrunk
  * to a slim strip rather than the full 90px used elsewhere -- this card
  * already carries name, party, and a progress bar, so the banner is a
  * mood strip here, not the primary identifier the way it is in the list. */
-.raid-active-banner { height: 48px; border-radius: 6px; margin-bottom: 8px; }
+.raid-active-banner { height: 48px; border-radius: 6px; margin-bottom: 8px; background-size: cover; background-position: center; }
 .raid-active-header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .raid-active-party { color: var(--muted); font-size: 0.625rem; margin: 3px 0 6px; }
 .raid-active-eta { font-size: 0.5625rem; color: var(--muted); margin-top: 4px; text-align: right; }

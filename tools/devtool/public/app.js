@@ -489,7 +489,13 @@ function fieldControl(spec, key, value) {
     // sibling id-field's current value to compute the fallback preview
     // path, and an async fetch of the available banner art). `data-folder`
     // carries the schema's `defaultFolder` hint through to the picker.
-    return `<div class="banner-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-folder="${escapeHtml(spec.defaultFolder ?? '')}"></div>`;
+    // `data-preview-aspect` carries the schema's `previewAspect` hint (a
+    // CSS aspect-ratio value like "8/1") through to the preview box, so it
+    // crops to roughly the same shape the real in-game strip does instead
+    // of one generic box for every content type -- falls back to the old
+    // 420x130-ish "8/2.5" shape if a schema hasn't set one. `data-scale`
+    // carries the optional zoom (100 = no zoom, matches plain `cover`).
+    return `<div class="banner-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-scale="${value?.scale ?? 100}" data-folder="${escapeHtml(spec.defaultFolder ?? '')}" data-preview-aspect="${escapeHtml(spec.previewAspect ?? '8/2.5')}"></div>`;
   }
   if (spec.type === 'string' && (key === 'description' || key === 'flavour' || key === 'blurb' || key === 'body' || key === 'licenseSummary')) {
     return `<textarea id="${id}">${escapeHtml(value ?? '')}</textarea>`;
@@ -884,54 +890,99 @@ function bannerDefaultPath(field) {
   return `${folder}/${entryId}.jpg`;
 }
 
-/** Fills in and wires a .banner-field container: a live preview strip that
- *  doubles as a focus-point picker (click or drag sets the crosshair, which
- *  is exactly what backgroundPosition uses in-game), plus buttons to choose
- *  an art override, revert to the default path, or reset focus to center.
- *  Full re-render on every value change, same "small enough not to bother
- *  patching in place" reasoning as renderIconField. */
+// How far a single nudge-button click moves focusX/focusY, in percentage
+// points. Small enough for real precision (the original ask was "more
+// accurately," not "faster"), while still visibly moving the crosshair in
+// one click on any reasonably-sized preview box.
+const BANNER_NUDGE_STEP = 2;
+
+/** backgroundSize for a given zoom value -- 100 (the default, and what an
+ *  omitted `scale` means) maps to the exact same plain 'cover' every banner
+ *  used before this feature existed, so existing entries render pixel-
+ *  identical. Above 100, a plain percentage still fills the box (the image
+ *  was already >=100% of it under 'cover') while letting focusX/focusY
+ *  reveal more or less of the surrounding art -- this is the "zoom"
+ *  control, deliberately independent of the focus point itself. */
+function bannerBackgroundSize(scale) {
+  return scale && scale !== 100 ? `${scale}%` : 'cover';
+}
+
+/** Fills in and wires a .banner-field container: a live preview strip --
+ *  sized to roughly the same aspect ratio the art actually renders at
+ *  in-game (data-preview-aspect, set per content type in server.mjs's
+ *  schema) rather than one generic box for every field -- that doubles as
+ *  a focus-point picker (click or drag sets the crosshair, which is
+ *  exactly what backgroundPosition uses in-game) and carries four nudge
+ *  buttons for 1-click precision alongside the drag. A separate zoom
+ *  slider controls backgroundSize independently of the focus point, since
+ *  "where" and "how much" are different questions a single crosshair can't
+ *  answer on its own. Plus buttons to choose an art override, revert to
+ *  the default path, or reset focus/zoom to their defaults. Full re-render
+ *  on every value change except live drag/slider input (see the in-place
+ *  updates below), same "small enough not to bother patching in place"
+ *  reasoning as renderIconField. */
 function renderBannerField(field) {
   const override = field.dataset.path || '';
   const focusX = parseFloat(field.dataset.focusX);
   const focusY = parseFloat(field.dataset.focusY);
   const fx = Number.isFinite(focusX) ? focusX : 50;
   const fy = Number.isFinite(focusY) ? focusY : 50;
+  const scaleVal = parseFloat(field.dataset.scale);
+  const scale = Number.isFinite(scaleVal) ? scaleVal : 100;
+  const aspect = field.dataset.previewAspect || '8/2.5';
   const defaultPath = bannerDefaultPath(field);
   const previewPath = override || defaultPath;
 
   field.innerHTML = `
     <div class="banner-preview-box" data-drag-target
-         style="${previewPath ? `background-image:url('/lore-art/${escapeHtml(previewPath)}');` : ''}background-position:${fx}% ${fy}%;">
+         style="aspect-ratio:${escapeHtml(aspect)};${previewPath ? `background-image:url('/lore-art/${escapeHtml(previewPath)}');` : ''}background-size:${bannerBackgroundSize(scale)};background-position:${fx}% ${fy}%;">
       ${previewPath ? '' : '<span class="banner-preview-empty">No banner art yet — click/drag still sets focus for when art is added</span>'}
       <div class="banner-focus-marker" style="left:${fx}%; top:${fy}%;"></div>
+      <div class="banner-nudge-pad" aria-hidden="true">
+        <button type="button" class="banner-nudge banner-nudge-up" data-nudge="0,-1" title="Move focus up">▲</button>
+        <button type="button" class="banner-nudge banner-nudge-left" data-nudge="-1,0" title="Move focus left">◀</button>
+        <button type="button" class="banner-nudge banner-nudge-right" data-nudge="1,0" title="Move focus right">▶</button>
+        <button type="button" class="banner-nudge banner-nudge-down" data-nudge="0,1" title="Move focus down">▼</button>
+      </div>
     </div>
     <div class="banner-field-controls">
       <span class="banner-field-name">${override ? escapeHtml(override) : (defaultPath ? `Using default: ${escapeHtml(defaultPath)}` : 'Set an id first to see the default path')}</span>
-      <span class="banner-field-focus tiny muted" data-focus-readout>Focus: ${Math.round(fx)}%, ${Math.round(fy)}%</span>
+      <span class="banner-field-focus tiny muted" data-focus-readout>Focus: ${Math.round(fx)}%, ${Math.round(fy)}% · Zoom: ${Math.round(scale)}%</span>
+      <label class="banner-zoom-row tiny muted">
+        Zoom
+        <input type="range" min="100" max="300" step="1" value="${scale}" data-zoom-slider />
+        <span data-zoom-readout>${Math.round(scale)}%</span>
+      </label>
       <div class="banner-field-buttons">
         <button type="button" data-choose-banner>${override ? 'Change' : 'Choose banner'}</button>
         ${override ? '<button type="button" class="remove" data-clear-banner-path>Use default</button>' : ''}
-        <button type="button" data-reset-focus>Center focus</button>
+        <button type="button" data-reset-focus>Center &amp; reset zoom</button>
       </div>
     </div>`;
 
   const box = field.querySelector('[data-drag-target]');
   const marker = field.querySelector('.banner-focus-marker');
   const readout = field.querySelector('[data-focus-readout]');
+  const zoomSlider = field.querySelector('[data-zoom-slider]');
+  const zoomReadout = field.querySelector('[data-zoom-readout]');
 
-  // In-place updates only (no renderBannerField call) while dragging --
-  // re-rendering mid-drag would tear down `box` itself and break pointer
-  // capture below.
-  const setFocusFromEvent = (e) => {
-    const rect = box.getBoundingClientRect();
-    const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
-    const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+  // In-place updates only (no renderBannerField call) while dragging or
+  // dragging the zoom slider -- re-rendering mid-interaction would tear
+  // down `box`/`zoomSlider` themselves and break pointer capture / the
+  // slider's own native drag below.
+  const applyFocus = (x, y) => {
     field.dataset.focusX = x.toFixed(1);
     field.dataset.focusY = y.toFixed(1);
     box.style.backgroundPosition = `${x}% ${y}%`;
     marker.style.left = `${x}%`;
     marker.style.top = `${y}%`;
-    readout.textContent = `Focus: ${Math.round(x)}%, ${Math.round(y)}%`;
+    readout.textContent = `Focus: ${Math.round(x)}%, ${Math.round(y)}% · Zoom: ${Math.round(parseFloat(field.dataset.scale) || 100)}%`;
+  };
+  const setFocusFromEvent = (e) => {
+    const rect = box.getBoundingClientRect();
+    const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+    applyFocus(x, y);
   };
 
   // Pointer capture keeps drag tracking even if the cursor leaves the box
@@ -941,12 +992,37 @@ function renderBannerField(field) {
   // cleanup or accumulating global listeners across repeated edits.
   let dragging = false;
   box.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('[data-nudge]')) return; // nudge buttons sit inside the box; don't start a drag from them
     dragging = true;
     box.setPointerCapture(e.pointerId);
     setFocusFromEvent(e);
   });
   box.addEventListener('pointermove', (e) => { if (dragging) setFocusFromEvent(e); });
   box.addEventListener('pointerup', () => { dragging = false; });
+
+  // Nudge buttons -- same 1-2 percentage-point-per-click precision either
+  // arrow keys or a mouse can reliably hit, which a single click/drag
+  // gesture on a small preview box can't always manage on its own.
+  field.querySelectorAll('[data-nudge]').forEach((btn) => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const [dx, dy] = btn.dataset.nudge.split(',').map(Number);
+      const x = Math.min(100, Math.max(0, (parseFloat(field.dataset.focusX) || 50) + dx * BANNER_NUDGE_STEP));
+      const y = Math.min(100, Math.max(0, (parseFloat(field.dataset.focusY) || 50) + dy * BANNER_NUDGE_STEP));
+      applyFocus(x, y);
+    };
+  });
+
+  // Zoom slider -- independent of focus point entirely. Live-updates the
+  // preview's backgroundSize as it's dragged, same in-place-no-rerender
+  // approach as the focus drag above.
+  zoomSlider.addEventListener('input', () => {
+    const s = parseFloat(zoomSlider.value) || 100;
+    field.dataset.scale = String(s);
+    box.style.backgroundSize = bannerBackgroundSize(s);
+    zoomReadout.textContent = `${Math.round(s)}%`;
+    readout.textContent = `Focus: ${Math.round(parseFloat(field.dataset.focusX) || 50)}%, ${Math.round(parseFloat(field.dataset.focusY) || 50)}% · Zoom: ${Math.round(s)}%`;
+  });
 
   field.querySelector('[data-choose-banner]').onclick = async () => {
     const folders = await ensureBanners();
@@ -960,6 +1036,7 @@ function renderBannerField(field) {
   field.querySelector('[data-reset-focus]').onclick = () => {
     field.dataset.focusX = '50';
     field.dataset.focusY = '50';
+    field.dataset.scale = '100';
     renderBannerField(field);
   };
 }
@@ -1279,6 +1356,11 @@ function readField(spec, key) {
     // before this feature existed, not as an explicit "centered" entry.
     if (Number.isFinite(fx) && Math.round(fx * 10) !== 500) out.focusX = Math.round(fx * 10) / 10;
     if (Number.isFinite(fy) && Math.round(fy * 10) !== 500) out.focusY = Math.round(fy * 10) / 10;
+    // Same "only recorded when it differs from the no-op default" rule --
+    // an untouched zoom slider (100, plain 'cover') saves as fully
+    // omitted, so nothing already-placed art needs migrating.
+    const fs = parseFloat(el.dataset.scale);
+    if (Number.isFinite(fs) && Math.round(fs) !== 100) out.scale = Math.round(fs);
     return out;
   }
   if (spec.type === 'string' || spec.type === 'enum') return el.value;
