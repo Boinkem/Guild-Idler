@@ -10,6 +10,12 @@
 
 const state = {
   schema: null, kind: null, rows: [], dirty: false, icons: null, banners: null, equipmentList: null,
+  // Two-level nav state (see server.mjs's GROUP_ORDER / SCHEMAS[kind].group):
+  // groupOrder is the fixed display order for the top-level groups, group
+  // is whichever one is currently open, and lastSubTab remembers which
+  // content type was last open *within* each group so switching groups
+  // and back doesn't always dump you back on that group's first tab.
+  groupOrder: [], group: null, lastSubTab: {},
   // Tuning's own grouped-view state -- kept here (not local to
   // renderTuningView) so it survives the full re-renders every edit/save
   // triggers: which categories are expanded, the current search text, and
@@ -26,6 +32,7 @@ const state = {
 };
 
 const tabsEl = document.getElementById('tabs');
+const subtabsEl = document.getElementById('subtabs');
 const appEl = document.getElementById('app');
 const statusEl = document.getElementById('status');
 
@@ -41,37 +48,87 @@ function setStatus(text, kind) {
   statusEl.className = 'topbar-status' + (kind ? ' ' + kind : '');
 }
 
+/** Measures the topbar's real rendered height and pins #subtabs directly
+ *  beneath it -- see the fallback comment on #subtabs in style.css for why
+ *  this isn't just a fixed CSS value. Re-run on resize since the button
+ *  row can wrap to a second line on a narrow window, changing the
+ *  topbar's height. */
+function syncSubtabsOffset() {
+  subtabsEl.style.top = document.querySelector('.topbar').offsetHeight + 'px';
+}
+window.addEventListener('resize', syncSubtabsOffset);
+
+/** Which content-type keys belong to a group, in the same order they're
+ *  declared in SCHEMAS server-side (object key order) -- grouping changed,
+ *  within-group order didn't. */
+function kindsInGroup(group) {
+  return Object.keys(state.schema).filter((k) => state.schema[k].group === group);
+}
+
 async function init() {
-  state.schema = await api('/api/schema');
-  const kinds = Object.keys(state.schema);
+  const { schemas, groupOrder } = await api('/api/schema');
+  state.schema = schemas;
+  state.groupOrder = groupOrder;
   tabsEl.innerHTML = '';
 
   const patchBtn = document.createElement('button');
   patchBtn.textContent = 'Patches';
-  patchBtn.dataset.kind = '__patches__';
+  patchBtn.dataset.group = '__patches__';
   patchBtn.onclick = () => selectPatchesTab();
   tabsEl.appendChild(patchBtn);
 
-  kinds.forEach((kind) => {
+  groupOrder.forEach((group) => {
     const btn = document.createElement('button');
-    btn.textContent = state.schema[kind].label;
-    btn.onclick = () => selectTab(kind);
-    btn.dataset.kind = kind;
+    btn.textContent = group;
+    btn.dataset.group = group;
+    btn.onclick = () => selectGroup(group);
     tabsEl.appendChild(btn);
   });
 
+  syncSubtabsOffset();
   selectPatchesTab();
 }
 
-function markActiveTab(kind) {
-  [...tabsEl.children].forEach((b) => b.classList.toggle('active', b.dataset.kind === kind));
+function markActiveGroup(group) {
+  [...tabsEl.children].forEach((b) => b.classList.toggle('active', b.dataset.group === group));
+}
+
+function markActiveSubTab(kind) {
+  [...subtabsEl.children].forEach((b) => b.classList.toggle('active', b.dataset.kind === kind));
+}
+
+/** Opens a top-level group: renders its sub-tab strip, then opens
+ *  whichever content type was last open in that group (state.lastSubTab),
+ *  falling back to the group's first content type the first time it's
+ *  ever opened this session. */
+function selectGroup(group) {
+  state.group = group;
+  markActiveGroup(group);
+
+  subtabsEl.style.display = 'flex';
+  subtabsEl.innerHTML = '';
+  const kinds = kindsInGroup(group);
+  kinds.forEach((kind) => {
+    const btn = document.createElement('button');
+    btn.textContent = state.schema[kind].label;
+    btn.dataset.kind = kind;
+    btn.onclick = () => selectTab(kind);
+    subtabsEl.appendChild(btn);
+  });
+  syncSubtabsOffset();
+
+  const target = state.lastSubTab[group] && kinds.includes(state.lastSubTab[group])
+    ? state.lastSubTab[group]
+    : kinds[0];
+  selectTab(target);
 }
 
 async function selectTab(kind) {
   state.kind = kind;
   state.sortColumn = null;
   state.sortDir = 'asc';
-  markActiveTab(kind);
+  if (state.group) state.lastSubTab[state.group] = kind;
+  markActiveSubTab(kind);
   setStatus('Loading…');
   try {
     const { data } = await api(`/api/data/${kind}`);
@@ -1559,7 +1616,11 @@ function formatWhen(mtime) {
 
 async function selectPatchesTab() {
   state.kind = '__patches__';
-  markActiveTab('__patches__');
+  state.group = null;
+  markActiveGroup('__patches__');
+  // Patches isn't a content group -- no sub-tab strip to show.
+  subtabsEl.style.display = 'none';
+  subtabsEl.innerHTML = '';
   setStatus('Loading…');
   try {
     const [{ files, status }, versionInfo, devStatus, discordConfig] = await Promise.all([

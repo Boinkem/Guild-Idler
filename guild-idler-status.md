@@ -11280,3 +11280,92 @@ Quest/Raid results, Chain Complete, and level-up.
 **Verified:** `npx tsc --noEmit` and `npx vite build --config
 vite.web.config.ts` both pass clean against a fresh clone with every
 file applied.
+
+### Dev Tool: two-level nav, 30 flat tabs grouped into 7 categories -- built (patch 0168)
+
+```discord-update
+Dev Update | Dev Tool Reorganization
+
+- Grouped the Dev Tool's 30 content-type tabs into 7 categories -- Heroes & Progression, Quests, Items & Crafting, World Content, Raids, Systems & Balance, Reference & Text
+- Top nav is now 8 buttons (7 groups + Patches) instead of 31; picking a group shows a second-level sub-tab strip for just that group's content types
+- Reopening a group remembers whichever content type you last had open in it
+```
+
+Direct request: "too many tabs that are unsorted." The Dev Tool
+(`tools/devtool/`) is a standalone local server, not part of the main
+React app -- its 30 content-type tabs plus Patches were a single flat
+row rendered straight from `Object.keys(SCHEMAS)`, in whatever order
+each entry happened to be declared in `server.mjs` over the tool's
+history. No grouping existed at all.
+
+**Grouping lives in `server.mjs` (`SCHEMAS[kind].group`), not `app.js`.**
+Considered a separate frontend-only grouping map instead, but the Dev
+Tool's own stated design principle (see its file-header comment) is that
+the schema is the single generic source of truth the frontend renders
+from -- a second, hand-maintained grouping list in `app.js` would drift
+the moment a new content type gets added to `SCHEMAS` without a matching
+update there. One `group: '...'` field per entry keeps it in the one
+place that already has to be touched to add a content type at all.
+
+**The seven groups**, plus which content types landed in each (Patches
+stays separate and ungrouped -- it's a workflow tool, not content data):
+
+- **Heroes & Progression** -- Tombstone Styles, Hero Classes, Recruit
+  Costs, Roles, Hero Skins, Ascension Ranks, Recruit Start Levels
+- **Quests** -- Quest Templates, Quest Prefixes, Quest Chains, Quest
+  Tags, Quest Difficulties
+- **Items & Crafting** -- Equipment, Consumables, Curios, Materials,
+  Crafting Recipes
+- **World Content** -- Pets, Events, Injuries, Peddler Cards
+- **Raids** -- Raid Encounters, Raids
+- **Systems & Balance** -- Guild Rank Tiers, Tuning, Bard Tracks,
+  Achievements
+- **Reference & Text** -- Guide Topics, Guidance Topics, Credits
+
+**New `GROUP_ORDER` constant** (`server.mjs`, right after `SCHEMAS`)
+fixes the display order of the seven groups -- within-group tab order is
+still whichever order the content type is declared in `SCHEMAS`
+(unchanged; only the *grouping* is new, not each group's own internal
+order). A startup-time consistency check (an IIFE immediately after
+`GROUP_ORDER`) throws if any `SCHEMAS[kind].group` value isn't listed in
+`GROUP_ORDER`, or if `GROUP_ORDER` lists a group nothing actually uses --
+catches a typo'd or forgotten group at server start instead of a tab
+silently not rendering.
+
+**`/api/schema` response shape changed**: `{ schemas, groupOrder }`
+instead of the bare schema map -- both travel together in the one
+request the frontend already made on load, rather than adding a second
+endpoint. `app.js`'s `init()` updated to match; every other reference to
+`state.schema` elsewhere in the file is unaffected, since it's still
+keyed exactly the way it always was, just populated from
+`body.schemas` now instead of the whole response body.
+
+**Two-level nav (`app.js`, `index.html`, `style.css`).** `#tabs` (the
+existing topbar nav) now renders Patches plus the 7 groups -- 8 buttons
+total. A new `#subtabs` strip, sticky directly beneath the topbar,
+renders the content types inside whichever group is active; clicking a
+group (`selectGroup`) populates it and opens either the group's first
+content type or -- `state.lastSubTab`, a per-group memory -- whichever
+one was last open in that group this session, so bouncing between
+groups doesn't always dump you back on each group's first tab.
+`selectTab` (unchanged in what it does, just in how it's reached) now
+also records into `lastSubTab` and marks the sub-tab strip's active
+button instead of the old flat top-level one. Patches hides the
+sub-tab strip entirely (`display: none`) since it isn't a content group.
+
+`#subtabs`'s sticky offset is measured at runtime
+(`syncSubtabsOffset()`, reading the topbar's real `offsetHeight`) rather
+than a hardcoded pixel value in CSS -- the topbar's button row can wrap
+to two lines on a narrow window, which would silently drift a fixed
+value out of sync and either gap or overlap the content beneath. Re-run
+on `resize` for the same reason.
+
+**Verified:** `node --check` clean on `server.mjs`. Booted the server
+directly and confirmed via `curl`: `/api/schema` returns the new
+`{schemas, groupOrder}` shape with all 30 entries correctly grouped
+into the 7 categories in the intended order, the startup consistency
+check passes without throwing, and `/api/data/<kind>` still returns 200
+with real rows for one sampled content type per group (including
+`raid-encounters`, confirming the patch 0166 Mythic->Legendary rename
+already on `lootLegendary` in this same file was preserved, not
+reverted).

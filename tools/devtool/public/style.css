@@ -111,6 +111,47 @@ a:hover { color: var(--text-bright); border-bottom-color: currentColor; }
 .topbar-status.err { color: var(--bad); }
 .topbar-status.ok { color: var(--good); }
 
+/* ------------------------------- subtabs --------------------------------- */
+/* Second-level nav -- the content types inside whichever group is active
+   in #tabs above. Same button look as #tabs (deliberately reused, not a
+   fresh style) but on the panel-2 wash rather than the topbar's own
+   gradient, and slightly smaller, so the two levels read as "inside" one
+   another rather than as two competing equal-weight tab rows. Empty
+   (display: none, set in app.js) while the Patches tab is active, since
+   Patches isn't a content group and has no sub-tabs to show. */
+#subtabs {
+  display: flex; gap: 3px; flex-wrap: wrap;
+  padding: 7px 14px;
+  background: var(--panel2);
+  border-bottom: 1px solid var(--edge);
+  position: sticky; z-index: 4;
+  /* Actual value is set inline by app.js's syncSubtabsOffset(), measured
+     against the real rendered topbar height rather than guessed here --
+     the topbar's height isn't a fixed constant (button row can wrap to
+     two lines on a narrow window) so a hardcoded px figure would drift
+     out of sync and either gap or overlap. This is just a sane fallback
+     for the brief moment before that first measurement runs. */
+  top: 40px;
+}
+#subtabs button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--muted);
+  padding: 3px 8px;
+  font: inherit; font-size: 11px; line-height: 1.5;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 90ms, background 90ms, border-color 90ms;
+}
+#subtabs button:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+#subtabs button.active {
+  background: var(--brass-wash);
+  border-color: var(--brass-dim);
+  color: var(--brass);
+  font-weight: 700;
+}
+
 main { padding: 20px 22px 60px; max-width: 1440px; margin: 0 auto; }
 
 main > h2, main > h3 { color: var(--text-bright); font-size: 14px; margin: 22px 0 4px; letter-spacing: 0.01em; }

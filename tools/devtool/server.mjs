@@ -65,6 +65,7 @@ const SCHEMAS = {
   'tombstone-styles': {
     file: 'tombstone-styles.json',
     label: 'Tombstone Styles',
+    group: 'Heroes & Progression',
     idField: 'id',
     // Cosmetic gold-sink list for a Fallen hero's marker (see
     // guild-idler-status.md's Health-related gold sinks entry) -- moved
@@ -87,6 +88,7 @@ const SCHEMAS = {
   'hero-classes': {
     file: 'hero-classes.json',
     label: 'Hero Classes',
+    group: 'Heroes & Progression',
     idField: 'id',
     // The playable hero roster -- previously a hardcoded TS Record, the
     // single largest remaining DevTool coverage gap (see quests.ts's own
@@ -144,6 +146,7 @@ const SCHEMAS = {
   'recruit-costs': {
     file: 'recruit-costs.json',
     label: 'Recruit Costs',
+    group: 'Heroes & Progression',
     idField: 'id',
     // Kept separate from `hero-classes` above on purpose -- see that
     // schema's own comment, and progression.ts's RECRUIT_COST comment,
@@ -157,6 +160,7 @@ const SCHEMAS = {
   'roles': {
     file: 'roles.json',
     label: 'Roles',
+    group: 'Heroes & Progression',
     idField: 'id',
     // Exactly 3 fixed entries (melee/ranged/caster) -- name + icon +
     // description, `id` locked to an enum dropdown (not free-slug like
@@ -179,6 +183,7 @@ const SCHEMAS = {
   'skins': {
     file: 'skins.json',
     label: 'Hero Skins',
+    group: 'Heroes & Progression',
     idField: 'id',
     // Migrated off a hardcoded array in progression.ts (see that file's
     // own comment) -- a new skin, or a swatch/price tweak on an existing
@@ -200,6 +205,7 @@ const SCHEMAS = {
   'ascension-ranks': {
     file: 'ascension-ranks.json',
     label: 'Ascension Ranks',
+    group: 'Heroes & Progression',
     idField: 'id',
     // Migrated off a hardcoded array in progression.ts. Checked in
     // descending `min` order at runtime (ascensionRank in progression.ts)
@@ -215,6 +221,7 @@ const SCHEMAS = {
   'recruit-start-level': {
     file: 'recruit-start-level.json',
     label: 'Recruit Start Levels',
+    group: 'Heroes & Progression',
     idField: 'id',
     // Migrated off a hardcoded Record in progression.ts. `tier` is the
     // actual lookup key at runtime (matches HeroClassDef.tier) -- `id` is
@@ -229,6 +236,7 @@ const SCHEMAS = {
   'guide-topics': {
     file: 'guide-topics.json',
     label: 'Guide Topics',
+    group: 'Reference & Text',
     idField: 'id',
     // The Guide tab's own "How To" reference entries -- migrated off a
     // hardcoded array in guideTopics.ts. `body` renders as a textarea
@@ -243,6 +251,7 @@ const SCHEMAS = {
   'guidance-topics': {
     file: 'guidance-topics.json',
     label: 'Guidance Topics',
+    group: 'Reference & Text',
     idField: 'id',
     // The one-time onboarding-toast prose (GuidanceManager.ts) -- prose
     // only, migrated off a hardcoded array there. The actual trigger
@@ -261,6 +270,7 @@ const SCHEMAS = {
   'credits': {
     file: 'credits.json',
     label: 'Credits',
+    group: 'Reference & Text',
     idField: 'id',
     // Shown on the Settings tab (new "Credits" section) -- see
     // guild-idler-status.md's "Asset licensing -- confirmed in writing"
@@ -283,6 +293,7 @@ const SCHEMAS = {
   'quest-templates': {
     file: 'quest-templates.json',
     label: 'Quest Templates',
+    group: 'Quests',
     idField: null,
     fields: {
       verb: { type: 'string', required: true },
@@ -298,6 +309,7 @@ const SCHEMAS = {
   'quest-prefixes': {
     file: 'quest-prefixes.json',
     label: 'Quest Prefixes',
+    group: 'Quests',
     idField: 'id',
     // Small flavor list (5 entries) prepended to a quest name at a small
     // random chance -- was a plain JSON array of strings until this schema
@@ -314,6 +326,7 @@ const SCHEMAS = {
   'quest-chains': {
     file: 'quest-chains.json',
     label: 'Quest Chains',
+    group: 'Quests',
     idField: 'id',
     // The big one -- migrated from ~450 lines of literal TS specifically
     // so this could exist (see quests.ts's own comment on the migration).
@@ -375,6 +388,7 @@ const SCHEMAS = {
   'quest-tags': {
     file: 'quest-tags.json',
     label: 'Quest Tags',
+    group: 'Quests',
     idField: 'id',
     // One entry per QuestTag (combat/escort/explore/arcane/stealth/
     // defense) -- a display name plus the same bannerImage shape quest-
@@ -398,6 +412,7 @@ const SCHEMAS = {
   'difficulties': {
     file: 'difficulties.json',
     label: 'Quest Difficulties',
+    group: 'Quests',
     idField: 'id',
     // The big one -- ~100 tunable values across 5 tiers, migrated out of a
     // hardcoded TS Record specifically so this could exist (see
@@ -456,6 +471,7 @@ const SCHEMAS = {
   'equipment': {
     file: 'equipment.json',
     label: 'Equipment',
+    group: 'Items & Crafting',
     idField: 'id',
     fields: {
       id: { type: 'string', required: true, slug: true },
@@ -502,6 +518,7 @@ const SCHEMAS = {
   'consumables': {
     file: 'consumables.json',
     label: 'Consumables',
+    group: 'Items & Crafting',
     idField: 'id',
     fields: {
       id: { type: 'string', required: true, slug: true },
@@ -518,6 +535,7 @@ const SCHEMAS = {
   'curios': {
     file: 'curios.json',
     label: 'Curios',
+    group: 'Items & Crafting',
     idField: 'id',
     // Sellable odds-and-ends -- see CurioDef's own doc comment in
     // types.ts. Open-ended list, same shape as 'consumables' just above
@@ -535,6 +553,7 @@ const SCHEMAS = {
   'materials': {
     file: 'materials.json',
     label: 'Materials',
+    group: 'Items & Crafting',
     idField: 'id',
     // Only 4 entries (one per Harvest/Gathering node) -- migrated from a
     // hardcoded TS array specifically so `icon` below could be set without
@@ -565,6 +584,7 @@ const SCHEMAS = {
   'guild-rank-tiers': {
     file: 'guild-rank-tiers.json',
     label: 'Guild Rank Tiers',
+    group: 'Systems & Balance',
     idField: 'id',
     // 6 fixed tiers, shared by two different threshold scales (a single
     // chain's own reqLevel, and the guild's total Guild Power -- see
@@ -582,6 +602,7 @@ const SCHEMAS = {
   'pets': {
     file: 'pets.json',
     label: 'Pets',
+    group: 'World Content',
     idField: 'id',
     // Rarity, bonus type, and bonus magnitude are NOT here on purpose --
     // those are rolled per-instance at hatch (see PetManager.hatch), not
@@ -608,6 +629,7 @@ const SCHEMAS = {
   'events': {
     file: 'events.json',
     label: 'Events',
+    group: 'World Content',
     idField: 'id',
     fields: {
       id: { type: 'string', required: true, slug: true },
@@ -622,6 +644,7 @@ const SCHEMAS = {
   'injuries': {
     file: 'injuries.json',
     label: 'Injuries',
+    group: 'World Content',
     idField: 'id',
     fields: {
       id: { type: 'string', required: true, slug: true },
@@ -637,6 +660,7 @@ const SCHEMAS = {
   'raid-encounters': {
     file: 'raid-encounters.json',
     label: 'Raid Encounters',
+    group: 'Raids',
     idField: 'id',
     fields: {
       id: { type: 'string', required: true, slug: true },
@@ -676,6 +700,7 @@ const SCHEMAS = {
   'peddler-cards': {
     file: 'peddler-cards.json',
     label: 'Peddler Cards',
+    group: 'World Content',
     idField: 'id',
     // Grimsby's card outcome pool -- a genuinely separate content type
     // from equipment/loot, not a reuse of the 'lootTable' picker (that
@@ -748,6 +773,7 @@ const SCHEMAS = {
   'raids': {
     file: 'raids.json',
     label: 'Raids',
+    group: 'Raids',
     idField: 'id',
     fields: {
       id: { type: 'string', required: true, slug: true },
@@ -805,6 +831,7 @@ const SCHEMAS = {
   'crafting-recipes': {
     file: 'crafting-recipes.json',
     label: 'Crafting Recipes',
+    group: 'Items & Crafting',
     idField: 'id',
     // Three shapes in one schema, same "category picks which other fields
     // matter" pattern the game's own CraftingRecipeDef type uses (see
@@ -851,6 +878,7 @@ const SCHEMAS = {
   'tuning': {
     file: 'tuning.json',
     label: 'Tuning',
+    group: 'Systems & Balance',
     idField: 'id',
     // Flat scalar registry (see src/game/tuning.ts) -- fully generic, gets
     // a working editor for free from the same system every other content
@@ -872,6 +900,7 @@ const SCHEMAS = {
   'bard-tracks': {
     file: 'bard-tracks.json',
     label: 'Bard Tracks',
+    group: 'Systems & Balance',
     idField: 'id',
     // Each track is unlocked by a specific achievement now, not bought --
     // see the matching entry's `unlocksTrackId` in the 'achievements'
@@ -890,6 +919,7 @@ const SCHEMAS = {
   'achievements': {
     file: 'achievements.json',
     label: 'Achievements',
+    group: 'Systems & Balance',
     idField: 'id',
     // Editable here: name, description, hidden, unlocksTrackId. The
     // unlock CONDITION for each achievement id is not data — it's a
@@ -907,6 +937,44 @@ const SCHEMAS = {
     },
   },
 };
+
+/**
+ * Display order for the Dev Tool's top-level nav groups (server.mjs's
+ * SCHEMAS[kind].group above), sent to the frontend alongside SCHEMAS so
+ * group order lives here once rather than being re-decided in app.js.
+ * Every `group` value used above must appear exactly once here -- checked
+ * at startup just below, not left to silently mis-render if a future
+ * content type's group typos or a new group is added to SCHEMAS without
+ * updating this list.
+ *
+ * Ungrouped by design: within-group tab order is still whatever order
+ * the content type appears in SCHEMAS (object key order), same as the
+ * old flat tab bar used -- only the *grouping* changed, not each group's
+ * internal ordering.
+ */
+const GROUP_ORDER = [
+  'Heroes & Progression',
+  'Quests',
+  'Items & Crafting',
+  'World Content',
+  'Raids',
+  'Systems & Balance',
+  'Reference & Text',
+];
+
+{
+  const declared = new Set(Object.values(SCHEMAS).map((s) => s.group));
+  const listed = new Set(GROUP_ORDER);
+  const missingFromOrder = [...declared].filter((g) => !listed.has(g));
+  const unusedInOrder = [...listed].filter((g) => !declared.has(g));
+  if (missingFromOrder.length > 0) {
+    throw new Error(`GROUP_ORDER is missing group(s) used in SCHEMAS: ${missingFromOrder.join(', ')}`);
+  }
+  if (unusedInOrder.length > 0) {
+    throw new Error(`GROUP_ORDER lists group(s) no SCHEMAS entry uses: ${unusedInOrder.join(', ')}`);
+  }
+}
+
 
 // Kept in sync with the real `Modifiers` interface in types.ts by hand --
 // confirmed against it directly (Aug 2026 DevTool clarity pass) after
@@ -1626,7 +1694,10 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
 
   if (url.pathname === '/api/schema') {
-    return json(res, 200, SCHEMAS);
+    // groupOrder rides alongside the schema map itself (rather than a
+    // second endpoint) since the frontend always needs both together to
+    // render the nav -- one round trip on load instead of two.
+    return json(res, 200, { schemas: SCHEMAS, groupOrder: GROUP_ORDER });
   }
 
   if (url.pathname === '/api/patches/list' && req.method === 'GET') {
