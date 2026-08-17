@@ -1063,10 +1063,41 @@ export function xpForLevel(level: number): number {
 
 export const PRESTIGE_MIN_LEVEL = Tuning.get('progression.prestigeMinLevel');
 
+/**
+ * Historical retirement gate this file's own patch-0178 comment flagged --
+ * NOT the current gate (PRESTIGE_MIN_LEVEL, now 55, same as MAX_HERO_LEVEL).
+ * Before 0178, a hero could retire the moment they hit level 30; the old
+ * formula's level-scaling term was Math.pow(level - 30 + 1, 0.75), so
+ * cashing out the instant you became eligible earned exactly 1 renown from
+ * that term (Math.pow(1, 0.75)), while holding off all the way to the level
+ * cap (55) earned Math.pow(26, 0.75) ≈ 11.51 -- roughly 10.51 renown of
+ * "extra" purely for waiting. Kept as its own constant (not derived from
+ * PRESTIGE_MIN_LEVEL) because it describes a fact about the OLD system; it
+ * must NOT silently track PRESTIGE_MIN_LEVEL if that's retuned again later.
+ */
+const PRE_LEVEL_CAP_RETIRE_MIN_LEVEL = 30;
+
+/**
+ * Once 0178 pinned every retirement to the level cap (PRESTIGE_MIN_LEVEL
+ * === MAX_HERO_LEVEL), the old level-scaling term above degenerated into a
+ * flat constant (Math.pow(1, 0.75) = 1 every single time) -- flagged in
+ * that patch's own status.md entry as "a real interaction, not fixed here."
+ * Direct follow-up instruction: since retiring below the cap is no longer
+ * possible, replace that dead term with a new flat baseline equal to 3/4 of
+ * the "extra" a hero would have earned under the OLD formula for holding
+ * off and retiring at 55 instead of cashing out the moment they hit the
+ * OLD minimum (see PRE_LEVEL_CAP_RETIRE_MIN_LEVEL above) -- i.e. 3/4 of
+ * (Math.pow(26, 0.75) - 1) ≈ 3/4 of 10.51 ≈ 7.89. The totalQuests/150 term
+ * is untouched; only the level-scaling half of the old formula is being
+ * replaced here.
+ */
+const RETIREMENT_LEVEL_BONUS = 0.75
+  * (Math.pow(MAX_HERO_LEVEL - PRE_LEVEL_CAP_RETIRE_MIN_LEVEL + 1, 0.75) - 1);
+
 /** Renown granted for retiring a hero at a given level. */
 export function renownForRetirement(level: number, totalQuests: number): number {
   if (level < PRESTIGE_MIN_LEVEL) return 0;
-  return Math.max(1, Math.floor(Math.pow(level - PRESTIGE_MIN_LEVEL + 1, 0.75) + totalQuests / 150));
+  return Math.max(1, Math.floor(RETIREMENT_LEVEL_BONUS + totalQuests / 150));
 }
 
 /* ------------------------------ prestige streak ---------------------------- */

@@ -12261,3 +12261,95 @@ stat-line count.
 **Verified:** `npx tsc --noEmit` clean against the full project,
 confirmed against a fresh clone of current `main` (through patch 0177)
 with only this patch's diff applied.
+
+### Renown baseline for level-55 retirement, deployed-hero consumable equip fix, jump-to-requirement links -- built (patch 0179)
+
+```discord-update
+Dev Update | Patch 0179
+
+- Changed retirement renown to a flat baseline that fairly reflects the level 55 requirement
+- Fixed consumables that could still be equipped or unequipped on a hero away on a quest, matching gear's existing restriction
+- Added a "Go to Tavern →" link on locked recruit cards that jumps to the Guild Hall and highlights the Tavern
+```
+
+Three items, direct follow-up to patch 0178's own flagged side-effect plus a bug report and a UX request, bundled into one patch.
+
+**Renown baseline after the level cap (`progression.ts`).** Patch 0178
+flagged this explicitly rather than fixing it in scope: once retirement
+was pinned to the hard level cap, `renownForRetirement`'s level-scaling
+term (`Math.pow(level - PRESTIGE_MIN_LEVEL + 1, 0.75)`) always evaluates
+to `Math.pow(1, 0.75) = 1`, a dead constant, since every retiring hero's
+`level` is now always 55. Direct follow-up instruction: replace that dead
+term with a new flat baseline equal to 3/4 of "however much extra you'd
+have gotten for holding off and retiring at 55" -- computed under the OLD
+formula and OLD minimum retirement level (30, before 0178 pushed it to
+55), since that's the actual historical amount "holding off" used to be
+worth. Retiring the instant you hit the old minimum (30) earned exactly 1
+renown from that term (`Math.pow(1, 0.75)`); holding off all the way to
+55 earned `Math.pow(26, 0.75) ≈ 11.51` -- roughly 10.51 renown of "extra"
+purely for waiting. 3/4 of that is the new flat `RETIREMENT_LEVEL_BONUS`,
+≈7.89, added to the untouched `totalQuests / 150` term same as before.
+Kept the old minimum (30) as its own named constant
+(`PRE_LEVEL_CAP_RETIRE_MIN_LEVEL`) rather than reading `PRESTIGE_MIN_LEVEL`
+for it -- this number describes a fact about the OLD system and must not
+silently follow if the retirement gate is ever retuned again later.
+
+**Equip-while-deployed gap for consumables (`engine.ts`,
+`EquipmentPanel.tsx`).** Bug report: gear already can't be equipped or
+unequipped on a hero away on a quest (`EquipmentManager.canEquip`/
+`unequip` both check `hero.status === 'questing'`), but the consumable
+side had no equivalent check -- `engine.equipConsumable`,
+`unequipConsumable`, and the bulk `equipBestConsumables` all let a
+deployed hero's loadout be changed mid-quest. Added the identical guard
+to all three. `fillEmptyConsumableSlots` (the private helper
+`startQuest`/`sendAllIdle` call for the "auto-fill on send" preference)
+deliberately stayed unguarded -- it always runs *before* the hero flips
+to `'questing'`, so the hero is still idle at that exact call. Mirrored
+the same restriction in the UI so a deployed hero's Equip/Unequip
+controls read as disabled (with a "away on a quest" tooltip, same wording
+gear's own disabled Equip button already uses) rather than silently
+no-opping into a toast: `ConsumableInfoCard`'s "Equip on X" button,
+`ConsumableSlotCard`'s "Unequip" button and its empty-slot picker, and
+the Consumable Slots section's bulk "Equip best" button all now check
+`hero.status === 'questing'`.
+
+**Jump-to-requirement links (`engine.ts`, `GuildPanel.tsx`,
+`HeroesPanel.tsx`, `app.css`).** Feedback: a purchase blocked on an unmet
+requirement (the example given: a hero recruit locked behind a Tavern
+level) should link straight to where that requirement gets fixed, not
+just name it. `engine.requestTab(id, highlightId?)` now takes an optional
+second argument -- companion to the existing transient
+`requestedTab`/`consumeRequestedTab` one-shot request pair, same
+"unsaved, consume-once" shape, just carrying a second piece of intent
+(which card to spotlight once the player lands on that tab).
+`GuildPanel` consumes it once on mount (`consumeRequestedHighlight`) and
+passes `highlighted` down to whichever `UpgradeCard` matches the id;
+that card scrolls into view if needed and pulses a brass glow
+(`.guild-card-highlight`, three 1100ms pulses) for ~3.3s or until the
+card itself is clicked, whichever's first. Deliberately a much lighter
+treatment than the onboarding tour's full-screen dim-and-spotlight --
+this can fire routinely during ordinary play (every time a locked
+purchase link is clicked), not just once at first run, so dimming the
+whole menu around it every time would be far more disruptive than a glow
+around the one card that matters. Wired into the one concrete example
+given: a locked recruit card (`HeroesPanel.tsx`) now shows a "Go to
+Tavern →" link under the disabled Recruit button, calling
+`engine.requestTab('guild', 'tavern')`. The mechanism itself is generic
+(any `GuildPanel` facility/upgrade id works, from any calling tab) --
+`RaidsPanel`'s own "Requires the X upgrade" gate (Raid Charter/Heroic
+Clearance/Legendary Clearance, in its Quartermaster subtab) is a good
+follow-up candidate for the same treatment, but wasn't wired this patch:
+those upgrades live in a different panel's own subtab, not directly in
+`GuildPanel` the way Tavern does, so reusing this exact mechanism for it
+would need a subtab-aware extension first, not just another
+`requestTab` call.
+
+**Also fixed in passing:** `HeroesPanel.tsx`'s "No free slots" copy
+under the Recruit grid still read "retire a hero at level 30+" after
+patch 0178 pushed the actual retirement gate to 55 -- a stale hardcoded
+number left behind by that patch. Now reads `PRESTIGE_MIN_LEVEL` instead,
+so it can't drift out of sync with the real gate again.
+
+**Verified:** `npx tsc --noEmit` clean against the full project,
+confirmed against a fresh clone of current `main` (through patch 0178)
+with only this patch's diff applied.

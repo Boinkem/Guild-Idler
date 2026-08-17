@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useEngine } from '../useEngine';
 import { GuildManager } from '../../game/managers/GuildManager';
@@ -76,22 +76,32 @@ function GuildUpgradeDetailModal({
  */
 function UpgradeCard({
   name, description, level, maxLevel, maxed, affordable, statLines, buyLabel, buyDisabled, onBuy, flash, onDismissFlash, pulsing,
+  highlighted, onDismissHighlight,
 }: {
   name: string; description: string; level: number; maxLevel: number; maxed: boolean; affordable: boolean;
   statLines: ReactNode[]; buyLabel: string; buyDisabled: boolean; onBuy: () => void;
   flash?: { key: number; name: string }; onDismissFlash: () => void; pulsing?: boolean;
+  highlighted?: boolean; onDismissHighlight?: () => void;
 }) {
   const [showDetail, setShowDetail] = useState(false);
   const pct = Math.min(100, (level / maxLevel) * 100);
+  const cardRef = useRef<HTMLDivElement>(null);
+  // Landed here via a "jump to the requirement" link (e.g. HeroesPanel's
+  // recruit cards) -- scroll the exact card into view rather than relying
+  // on the player to spot the glow somewhere off-screen in a long grid.
+  useEffect(() => {
+    if (highlighted) cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [highlighted]);
   return (
     <div className="guild-card-wrap">
       {maxed && <img className="guild-seal" src={waxSealComplete} alt="" />}
       <div
-        className={`card guild-facility-card ${affordable ? 'affordable' : ''} ${maxed ? 'guild-maxed' : ''}`}
-        onClick={() => setShowDetail(true)}
+        ref={cardRef}
+        className={`card guild-facility-card ${affordable ? 'affordable' : ''} ${maxed ? 'guild-maxed' : ''} ${highlighted ? 'guild-card-highlight' : ''}`}
+        onClick={() => { setShowDetail(true); onDismissHighlight?.(); }}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); } }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); onDismissHighlight?.(); } }}
       >
         <div className="guild-facility-icon" aria-hidden="true">{name.charAt(0)}</div>
         <div className={`guild-facility-body ${maxed ? 'guild-maxed-body' : ''}`}>
@@ -132,6 +142,21 @@ export function GuildPanel() {
   const engine = useEngine();
   const state = engine.state;
   const global = ModifierManager.global(state);
+
+  // "Jump to and highlight the requirement" landing -- consumed once on
+  // mount (this panel remounts fresh each time the nav switches to it, so
+  // this only ever fires right after a requestTab(..., highlightId) call
+  // actually brought the player here, not on every re-render). Cleared
+  // automatically a few seconds later, or the instant the highlighted card
+  // itself is opened -- see UpgradeCard's onDismissHighlight.
+  const [highlightId, setHighlightId] = useState<string | null>(
+    () => engine.consumeRequestedHighlight(),
+  );
+  useEffect(() => {
+    if (!highlightId) return undefined;
+    const timer = window.setTimeout(() => setHighlightId(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [highlightId]);
 
   const facilities = GuildManager.facilities();
   // General upgrades (no vendor field) used to live alone in the old
@@ -194,6 +219,8 @@ export function GuildPanel() {
         flash={flashes[def.id]}
         onDismissFlash={() => dismiss(def.id)}
         pulsing={levelPulses[def.id]}
+        highlighted={def.id === highlightId}
+        onDismissHighlight={() => setHighlightId(null)}
       />
     );
   }
@@ -224,6 +251,8 @@ export function GuildPanel() {
         flash={flashes[def.id]}
         onDismissFlash={() => dismiss(def.id)}
         pulsing={levelPulses[def.id]}
+        highlighted={def.id === highlightId}
+        onDismissHighlight={() => setHighlightId(null)}
       />
     );
   }

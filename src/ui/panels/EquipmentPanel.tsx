@@ -354,6 +354,11 @@ function ConsumableInfoCard({
   const instantUse = isInstantUseOnHero(def);
   const loadout = isLoadoutEffect(def);
   const peddlerCharm = (def.effect.peddlerCounterReduction ?? 0) > 0;
+  // Same "can't touch a deployed hero's loadout" rule the gear Equip button
+  // (canEquip.ok, below in SlotCard) already enforces -- engine.equipConsumable
+  // now blocks this server-side too, but disabling it here matches gear's own
+  // UX instead of letting a click silently no-op into a toast.
+  const deployed = hero.status === 'questing';
   return (
     <>
       <div
@@ -395,8 +400,9 @@ function ConsumableInfoCard({
               {loadout && (
                 <button
                   className="btn-primary"
+                  disabled={deployed}
                   onClick={() => { engine.equipConsumable(hero.id, def.id); setOpen(false); }}
-                  title={`Equip into ${hero.name}'s next open Consumable Slot`}
+                  title={deployed ? `${hero.name} is away on a quest.` : `Equip into ${hero.name}'s next open Consumable Slot`}
                 >
                   Equip on {hero.name}
                 </button>
@@ -442,6 +448,8 @@ function ConsumableSlotCard({
 }) {
   const [open, setOpen] = useState(false);
   const def = equippedDefId ? InventoryManager.resolveDef(engine.state, equippedDefId) : undefined;
+  // Same deployed-hero guard as ConsumableInfoCard above.
+  const deployed = hero.status === 'questing';
 
   if (def) {
     return (
@@ -477,6 +485,8 @@ function ConsumableSlotCard({
                 <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
                 <button
                   className="btn-primary"
+                  disabled={deployed}
+                  title={deployed ? `${hero.name} is away on a quest.` : undefined}
                   onClick={() => { engine.unequipConsumable(hero.id, def.id); setOpen(false); }}
                 >
                   Unequip
@@ -511,7 +521,9 @@ function ConsumableSlotCard({
         <div className="overlay" onClick={() => setOpen(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="card-title" style={{ marginBottom: 8 }}>Equip a consumable on {hero.name}</div>
-            {available.length === 0 ? (
+            {deployed ? (
+              <p className="tiny muted">{hero.name} is away on a quest.</p>
+            ) : available.length === 0 ? (
               <p className="tiny muted">Nothing spare to equip. Buy potions in the Shop.</p>
             ) : (
               <div className="row wrap" style={{ gap: 4 }}>
@@ -916,8 +928,9 @@ export function EquipmentPanel() {
           <button
             className="btn-green"
             style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+            disabled={hero.status === 'questing'}
             onClick={() => engine.equipBestConsumables(hero.id)}
-            title="Fill this hero's empty consumable slots with the best available potions"
+            title={hero.status === 'questing' ? `${hero.name} is away on a quest.` : 'Fill this hero\'s empty consumable slots with the best available potions'}
           >
             Equip best
           </button>

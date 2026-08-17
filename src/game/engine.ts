@@ -128,6 +128,18 @@ export class GameEngine {
    * mount, same pattern as lastResult/toast being read-then-cleared.
    */
   requestedTab: string | null = null;
+  /**
+   * Companion to requestedTab above -- an optional id for whatever this tab
+   * request should draw attention to once the player lands there (e.g. a
+   * specific GuildPanel facility/upgrade card, matched against its own
+   * `def.id`). Same transient/unsaved, consume-once shape. Introduced for
+   * "requires a higher Tavern level" style locked-purchase buttons (see
+   * HeroesPanel's recruit cards) so a player blocked on a requirement can
+   * jump straight to it instead of hunting for the right tab and card by
+   * hand. Left null for every requestTab call that doesn't pass one, so
+   * every existing call site keeps working unchanged.
+   */
+  requestedHighlightId: string | null = null;
 
   private listeners = new Set<Listener>();
   private timer: number | null = null;
@@ -1076,9 +1088,16 @@ export class GameEngine {
     void this.saveNow();
   }
 
-  /** Requests that the menu open (or switch) to a specific tab id. */
-  requestTab(id: string) {
+  /**
+   * Requests that the menu open (or switch) to a specific tab id. The
+   * optional `highlightId` is picked up by that tab's own panel (currently
+   * just GuildPanel, via consumeRequestedHighlight below) to spotlight one
+   * specific card -- e.g. "jump to the Guild Hall and highlight the
+   * Tavern" for a recruit blocked on Tavern level.
+   */
+  requestTab(id: string, highlightId?: string) {
     this.requestedTab = id;
+    this.requestedHighlightId = highlightId ?? null;
     // Needed so MenuWindow can react to a request made while it's already
     // mounted (e.g. a Guide notification's "Go to" button), not just pick
     // it up on the next fresh mount -- see MenuWindow's own effect for the
@@ -1090,6 +1109,15 @@ export class GameEngine {
   consumeRequestedTab(): string | null {
     const id = this.requestedTab;
     this.requestedTab = null;
+    return id;
+  }
+
+  /** Reads and clears the pending highlight request -- same consume-once
+   *  shape as consumeRequestedTab, called once by the destination panel
+   *  itself (not MenuWindow, since only that panel knows its own card ids). */
+  consumeRequestedHighlight(): string | null {
+    const id = this.requestedHighlightId;
+    this.requestedHighlightId = null;
     return id;
   }
 
@@ -1285,10 +1313,18 @@ export class GameEngine {
   /** Adds a consumable to a hero's equipped slots -- persists until removed
    *  or consumed by a quest, capped at ModifierManager.consumableSlots. Does
    *  not touch state.inventory; that deduction still happens at quest-start
-   *  time inside QuestManager.start, same as it always did. */
+   *  time inside QuestManager.start, same as it always did.
+   *
+   *  Blocked while the hero is away questing, same "can't touch a hero's
+   *  loadout mid-quest" rule EquipmentManager.canEquip already enforces for
+   *  gear -- this was a real gap (bug report): a deployed hero couldn't be
+   *  re-geared, but could still be handed a fresh consumable loadout, which
+   *  makes no more sense for a potion slotted for THIS run than it does for
+   *  a sword. */
   equipConsumable(heroId: string, defId: string) {
     const hero = this.hero(heroId);
     if (!hero) return;
+    if (hero.status === 'questing') return this.say(`${hero.name} is away on a quest.`);
     const current = hero.equippedConsumables ?? [];
     const maxSlots = ModifierManager.consumableSlots(this.state);
     if (current.length >= maxSlots) return this.say('No free consumable slots.');
@@ -1297,10 +1333,14 @@ export class GameEngine {
     void this.saveNow();
   }
 
-  /** Removes one instance of a consumable from a hero's equipped slots. */
+  /** Removes one instance of a consumable from a hero's equipped slots.
+   *  Same deployed-hero guard as equipConsumable above -- matches
+   *  EquipmentManager.unequip's own "can't touch gear on a questing hero"
+   *  rule for the gear side. */
   unequipConsumable(heroId: string, defId: string) {
     const hero = this.hero(heroId);
     if (!hero) return;
+    if (hero.status === 'questing') return this.say(`${hero.name} is away on a quest.`);
     const current = hero.equippedConsumables ?? [];
     const index = current.indexOf(defId);
     if (index === -1) return;
@@ -1328,6 +1368,15 @@ export class GameEngine {
   equipBestConsumables(heroId: string): number {
     const hero = this.hero(heroId);
     if (!hero) return 0;
+    // Same deployed-hero guard as equipConsumable/unequipConsumable above --
+    // this is the bulk "Equip best" button, so it needs the check too, not
+    // just the single-slot picker. fillEmptyConsumableSlots itself stays
+    // unguarded since startQuest/sendAllIdle call it BEFORE flipping the
+    // hero to 'questing', for the autoEquipConsumablesOnSend path.
+    if (hero.status === 'questing') {
+      this.say(`${hero.name} is away on a quest.`);
+      return 0;
+    }
     const filled = this.fillEmptyConsumableSlots(heroId);
     if (filled > 0) {
       playSound('equip');

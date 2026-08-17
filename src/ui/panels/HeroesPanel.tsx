@@ -7,7 +7,7 @@ import { ModifierManager } from '../../game/managers/ModifierManager';
 import { PrestigeManager } from '../../game/managers/PrestigeManager';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { rerollsUsedToday } from '../../game/data/reroll';
-import { HERO_CLASSES, RECRUIT_COST, SKINS, infirmaryAutoReviveUnlocked, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
+import { HERO_CLASSES, PRESTIGE_MIN_LEVEL, RECRUIT_COST, SKINS, infirmaryAutoReviveUnlocked, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
 import { Tuning } from '../../game/data/tuning';
 import { HeroClass, Hero, Stats } from '../../game/types';
 import { describeMods, formatDuration, formatGold, HOUR } from '../../game/util';
@@ -470,7 +470,7 @@ export function HeroesPanel() {
       {state.heroes.length >= slots && (
         <p className="small muted">
           No free slots. The Tavern adds one per level up to 5; beyond that, retire a hero at
-          level 30+ in the Prestige tab for Heroic Renown, then spend it on Extra Banner
+          level {PRESTIGE_MIN_LEVEL}+ in the Prestige tab for Heroic Renown, then spend it on Extra Banner
           (up to 4 more) — {slots} is not necessarily your ceiling.
         </p>
       )}
@@ -496,6 +496,21 @@ export function HeroesPanel() {
                   ? `Tavern level ${def.unlockTavernLevel}`
                   : slotsFull ? 'No free slots' : `Recruit · ${formatGold(cost)}`}
               </button>
+              {/* Direct feedback: a locked purchase should link straight to
+                  where the blocking requirement actually gets fixed, not
+                  just name it. Jumps to the Guild Hall and glows the
+                  Tavern card itself (see GuildPanel's highlightId/
+                  UpgradeCard) rather than leaving the player to hunt for
+                  it among every facility card by hand. */}
+              {!unlocked && (
+                <button
+                  className="btn-ghost"
+                  style={{ width: '100%', marginTop: 4, fontSize: '0.6875rem' }}
+                  onClick={() => engine.requestTab('guild', 'tavern')}
+                >
+                  Go to Tavern →
+                </button>
+              )}
             </div>
           );
         })}

@@ -498,6 +498,22 @@
   filter: brightness(0.6) saturate(0.85);
 }
 
+/* Landing spot for a "jump to the requirement" link elsewhere in the game
+   (e.g. HeroesPanel's recruit cards, blocked on Tavern level) -- a pulsing
+   brass glow around the exact card that's the answer, rather than the
+   onboarding tour's full-screen dim-and-spotlight treatment, which would
+   be far too heavy for something that can fire routinely during normal
+   play rather than once at first run. Cleared automatically a few seconds
+   after landing (GuildPanel's own highlightId timeout) or the moment the
+   player opens the card's own detail modal, whichever comes first. */
+.guild-facility-card.guild-card-highlight {
+  animation: guild-card-highlight-pulse 1100ms ease-in-out 3;
+}
+@keyframes guild-card-highlight-pulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
+  50% { box-shadow: 0 0 0 3px var(--brass), 0 0 18px 4px var(--brass); }
+}
+
 * { box-sizing: border-box; }
 
 html, body, #root {

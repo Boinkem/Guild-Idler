@@ -1,0 +1,481 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 22f76de..2402172 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -12261,3 +12261,95 @@ stat-line count.
+ **Verified:** `npx tsc --noEmit` clean against the full project,
+ confirmed against a fresh clone of current `main` (through patch 0177)
+ with only this patch's diff applied.
++
++### Renown baseline for level-55 retirement, deployed-hero consumable equip fix, jump-to-requirement links -- built (patch 0179)
++
++```discord-update
++Dev Update | Patch 0179
++
++- Changed retirement renown to a flat baseline that fairly reflects the level 55 requirement
++- Fixed consumables that could still be equipped or unequipped on a hero away on a quest, matching gear's existing restriction
++- Added a "Go to Tavern →" link on locked recruit cards that jumps to the Guild Hall and highlights the Tavern
++```
++
++Three items, direct follow-up to patch 0178's own flagged side-effect plus a bug report and a UX request, bundled into one patch.
++
++**Renown baseline after the level cap (`progression.ts`).** Patch 0178
++flagged this explicitly rather than fixing it in scope: once retirement
++was pinned to the hard level cap, `renownForRetirement`'s level-scaling
++term (`Math.pow(level - PRESTIGE_MIN_LEVEL + 1, 0.75)`) always evaluates
++to `Math.pow(1, 0.75) = 1`, a dead constant, since every retiring hero's
++`level` is now always 55. Direct follow-up instruction: replace that dead
++term with a new flat baseline equal to 3/4 of "however much extra you'd
++have gotten for holding off and retiring at 55" -- computed under the OLD
++formula and OLD minimum retirement level (30, before 0178 pushed it to
++55), since that's the actual historical amount "holding off" used to be
++worth. Retiring the instant you hit the old minimum (30) earned exactly 1
++renown from that term (`Math.pow(1, 0.75)`); holding off all the way to
++55 earned `Math.pow(26, 0.75) ≈ 11.51` -- roughly 10.51 renown of "extra"
++purely for waiting. 3/4 of that is the new flat `RETIREMENT_LEVEL_BONUS`,
++≈7.89, added to the untouched `totalQuests / 150` term same as before.
++Kept the old minimum (30) as its own named constant
++(`PRE_LEVEL_CAP_RETIRE_MIN_LEVEL`) rather than reading `PRESTIGE_MIN_LEVEL`
++for it -- this number describes a fact about the OLD system and must not
++silently follow if the retirement gate is ever retuned again later.
++
++**Equip-while-deployed gap for consumables (`engine.ts`,
++`EquipmentPanel.tsx`).** Bug report: gear already can't be equipped or
++unequipped on a hero away on a quest (`EquipmentManager.canEquip`/
++`unequip` both check `hero.status === 'questing'`), but the consumable
++side had no equivalent check -- `engine.equipConsumable`,
++`unequipConsumable`, and the bulk `equipBestConsumables` all let a
++deployed hero's loadout be changed mid-quest. Added the identical guard
++to all three. `fillEmptyConsumableSlots` (the private helper
++`startQuest`/`sendAllIdle` call for the "auto-fill on send" preference)
++deliberately stayed unguarded -- it always runs *before* the hero flips
++to `'questing'`, so the hero is still idle at that exact call. Mirrored
++the same restriction in the UI so a deployed hero's Equip/Unequip
++controls read as disabled (with a "away on a quest" tooltip, same wording
++gear's own disabled Equip button already uses) rather than silently
++no-opping into a toast: `ConsumableInfoCard`'s "Equip on X" button,
++`ConsumableSlotCard`'s "Unequip" button and its empty-slot picker, and
++the Consumable Slots section's bulk "Equip best" button all now check
++`hero.status === 'questing'`.
++
++**Jump-to-requirement links (`engine.ts`, `GuildPanel.tsx`,
++`HeroesPanel.tsx`, `app.css`).** Feedback: a purchase blocked on an unmet
++requirement (the example given: a hero recruit locked behind a Tavern
++level) should link straight to where that requirement gets fixed, not
++just name it. `engine.requestTab(id, highlightId?)` now takes an optional
++second argument -- companion to the existing transient
++`requestedTab`/`consumeRequestedTab` one-shot request pair, same
++"unsaved, consume-once" shape, just carrying a second piece of intent
++(which card to spotlight once the player lands on that tab).
++`GuildPanel` consumes it once on mount (`consumeRequestedHighlight`) and
++passes `highlighted` down to whichever `UpgradeCard` matches the id;
++that card scrolls into view if needed and pulses a brass glow
++(`.guild-card-highlight`, three 1100ms pulses) for ~3.3s or until the
++card itself is clicked, whichever's first. Deliberately a much lighter
++treatment than the onboarding tour's full-screen dim-and-spotlight --
++this can fire routinely during ordinary play (every time a locked
++purchase link is clicked), not just once at first run, so dimming the
++whole menu around it every time would be far more disruptive than a glow
++around the one card that matters. Wired into the one concrete example
++given: a locked recruit card (`HeroesPanel.tsx`) now shows a "Go to
++Tavern →" link under the disabled Recruit button, calling
++`engine.requestTab('guild', 'tavern')`. The mechanism itself is generic
++(any `GuildPanel` facility/upgrade id works, from any calling tab) --
++`RaidsPanel`'s own "Requires the X upgrade" gate (Raid Charter/Heroic
++Clearance/Legendary Clearance, in its Quartermaster subtab) is a good
++follow-up candidate for the same treatment, but wasn't wired this patch:
++those upgrades live in a different panel's own subtab, not directly in
++`GuildPanel` the way Tavern does, so reusing this exact mechanism for it
++would need a subtab-aware extension first, not just another
++`requestTab` call.
++
++**Also fixed in passing:** `HeroesPanel.tsx`'s "No free slots" copy
++under the Recruit grid still read "retire a hero at level 30+" after
++patch 0178 pushed the actual retirement gate to 55 -- a stale hardcoded
++number left behind by that patch. Now reads `PRESTIGE_MIN_LEVEL` instead,
++so it can't drift out of sync with the real gate again.
++
++**Verified:** `npx tsc --noEmit` clean against the full project,
++confirmed against a fresh clone of current `main` (through patch 0178)
++with only this patch's diff applied.
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 9769a82..89ac39d 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -1063,10 +1063,41 @@ export function xpForLevel(level: number): number {
+ 
+ export const PRESTIGE_MIN_LEVEL = Tuning.get('progression.prestigeMinLevel');
+ 
++/**
++ * Historical retirement gate this file's own patch-0178 comment flagged --
++ * NOT the current gate (PRESTIGE_MIN_LEVEL, now 55, same as MAX_HERO_LEVEL).
++ * Before 0178, a hero could retire the moment they hit level 30; the old
++ * formula's level-scaling term was Math.pow(level - 30 + 1, 0.75), so
++ * cashing out the instant you became eligible earned exactly 1 renown from
++ * that term (Math.pow(1, 0.75)), while holding off all the way to the level
++ * cap (55) earned Math.pow(26, 0.75) ≈ 11.51 -- roughly 10.51 renown of
++ * "extra" purely for waiting. Kept as its own constant (not derived from
++ * PRESTIGE_MIN_LEVEL) because it describes a fact about the OLD system; it
++ * must NOT silently track PRESTIGE_MIN_LEVEL if that's retuned again later.
++ */
++const PRE_LEVEL_CAP_RETIRE_MIN_LEVEL = 30;
++
++/**
++ * Once 0178 pinned every retirement to the level cap (PRESTIGE_MIN_LEVEL
++ * === MAX_HERO_LEVEL), the old level-scaling term above degenerated into a
++ * flat constant (Math.pow(1, 0.75) = 1 every single time) -- flagged in
++ * that patch's own status.md entry as "a real interaction, not fixed here."
++ * Direct follow-up instruction: since retiring below the cap is no longer
++ * possible, replace that dead term with a new flat baseline equal to 3/4 of
++ * the "extra" a hero would have earned under the OLD formula for holding
++ * off and retiring at 55 instead of cashing out the moment they hit the
++ * OLD minimum (see PRE_LEVEL_CAP_RETIRE_MIN_LEVEL above) -- i.e. 3/4 of
++ * (Math.pow(26, 0.75) - 1) ≈ 3/4 of 10.51 ≈ 7.89. The totalQuests/150 term
++ * is untouched; only the level-scaling half of the old formula is being
++ * replaced here.
++ */
++const RETIREMENT_LEVEL_BONUS = 0.75
++  * (Math.pow(MAX_HERO_LEVEL - PRE_LEVEL_CAP_RETIRE_MIN_LEVEL + 1, 0.75) - 1);
++
+ /** Renown granted for retiring a hero at a given level. */
+ export function renownForRetirement(level: number, totalQuests: number): number {
+   if (level < PRESTIGE_MIN_LEVEL) return 0;
+-  return Math.max(1, Math.floor(Math.pow(level - PRESTIGE_MIN_LEVEL + 1, 0.75) + totalQuests / 150));
++  return Math.max(1, Math.floor(RETIREMENT_LEVEL_BONUS + totalQuests / 150));
+ }
+ 
+ /* ------------------------------ prestige streak ---------------------------- */
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index db97f5a..901e2d5 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -128,6 +128,18 @@ export class GameEngine {
+    * mount, same pattern as lastResult/toast being read-then-cleared.
+    */
+   requestedTab: string | null = null;
++  /**
++   * Companion to requestedTab above -- an optional id for whatever this tab
++   * request should draw attention to once the player lands there (e.g. a
++   * specific GuildPanel facility/upgrade card, matched against its own
++   * `def.id`). Same transient/unsaved, consume-once shape. Introduced for
++   * "requires a higher Tavern level" style locked-purchase buttons (see
++   * HeroesPanel's recruit cards) so a player blocked on a requirement can
++   * jump straight to it instead of hunting for the right tab and card by
++   * hand. Left null for every requestTab call that doesn't pass one, so
++   * every existing call site keeps working unchanged.
++   */
++  requestedHighlightId: string | null = null;
+ 
+   private listeners = new Set<Listener>();
+   private timer: number | null = null;
+@@ -1076,9 +1088,16 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
+-  /** Requests that the menu open (or switch) to a specific tab id. */
+-  requestTab(id: string) {
++  /**
++   * Requests that the menu open (or switch) to a specific tab id. The
++   * optional `highlightId` is picked up by that tab's own panel (currently
++   * just GuildPanel, via consumeRequestedHighlight below) to spotlight one
++   * specific card -- e.g. "jump to the Guild Hall and highlight the
++   * Tavern" for a recruit blocked on Tavern level.
++   */
++  requestTab(id: string, highlightId?: string) {
+     this.requestedTab = id;
++    this.requestedHighlightId = highlightId ?? null;
+     // Needed so MenuWindow can react to a request made while it's already
+     // mounted (e.g. a Guide notification's "Go to" button), not just pick
+     // it up on the next fresh mount -- see MenuWindow's own effect for the
+@@ -1093,6 +1112,15 @@ export class GameEngine {
+     return id;
+   }
+ 
++  /** Reads and clears the pending highlight request -- same consume-once
++   *  shape as consumeRequestedTab, called once by the destination panel
++   *  itself (not MenuWindow, since only that panel knows its own card ids). */
++  consumeRequestedHighlight(): string | null {
++    const id = this.requestedHighlightId;
++    this.requestedHighlightId = null;
++    return id;
++  }
++
+   /**
+    * Same "transient, consume-once" shape as requestedTab/consumeRequestedTab
+    * just above, one level deeper -- requestTab only knows about MenuWindow's
+@@ -1285,10 +1313,18 @@ export class GameEngine {
+   /** Adds a consumable to a hero's equipped slots -- persists until removed
+    *  or consumed by a quest, capped at ModifierManager.consumableSlots. Does
+    *  not touch state.inventory; that deduction still happens at quest-start
+-   *  time inside QuestManager.start, same as it always did. */
++   *  time inside QuestManager.start, same as it always did.
++   *
++   *  Blocked while the hero is away questing, same "can't touch a hero's
++   *  loadout mid-quest" rule EquipmentManager.canEquip already enforces for
++   *  gear -- this was a real gap (bug report): a deployed hero couldn't be
++   *  re-geared, but could still be handed a fresh consumable loadout, which
++   *  makes no more sense for a potion slotted for THIS run than it does for
++   *  a sword. */
+   equipConsumable(heroId: string, defId: string) {
+     const hero = this.hero(heroId);
+     if (!hero) return;
++    if (hero.status === 'questing') return this.say(`${hero.name} is away on a quest.`);
+     const current = hero.equippedConsumables ?? [];
+     const maxSlots = ModifierManager.consumableSlots(this.state);
+     if (current.length >= maxSlots) return this.say('No free consumable slots.');
+@@ -1297,10 +1333,14 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
+-  /** Removes one instance of a consumable from a hero's equipped slots. */
++  /** Removes one instance of a consumable from a hero's equipped slots.
++   *  Same deployed-hero guard as equipConsumable above -- matches
++   *  EquipmentManager.unequip's own "can't touch gear on a questing hero"
++   *  rule for the gear side. */
+   unequipConsumable(heroId: string, defId: string) {
+     const hero = this.hero(heroId);
+     if (!hero) return;
++    if (hero.status === 'questing') return this.say(`${hero.name} is away on a quest.`);
+     const current = hero.equippedConsumables ?? [];
+     const index = current.indexOf(defId);
+     if (index === -1) return;
+@@ -1328,6 +1368,15 @@ export class GameEngine {
+   equipBestConsumables(heroId: string): number {
+     const hero = this.hero(heroId);
+     if (!hero) return 0;
++    // Same deployed-hero guard as equipConsumable/unequipConsumable above --
++    // this is the bulk "Equip best" button, so it needs the check too, not
++    // just the single-slot picker. fillEmptyConsumableSlots itself stays
++    // unguarded since startQuest/sendAllIdle call it BEFORE flipping the
++    // hero to 'questing', for the autoEquipConsumablesOnSend path.
++    if (hero.status === 'questing') {
++      this.say(`${hero.name} is away on a quest.`);
++      return 0;
++    }
+     const filled = this.fillEmptyConsumableSlots(heroId);
+     if (filled > 0) {
+       playSound('equip');
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 5776b10..b1fcd01 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -498,6 +498,22 @@
+   filter: brightness(0.6) saturate(0.85);
+ }
+ 
++/* Landing spot for a "jump to the requirement" link elsewhere in the game
++   (e.g. HeroesPanel's recruit cards, blocked on Tavern level) -- a pulsing
++   brass glow around the exact card that's the answer, rather than the
++   onboarding tour's full-screen dim-and-spotlight treatment, which would
++   be far too heavy for something that can fire routinely during normal
++   play rather than once at first run. Cleared automatically a few seconds
++   after landing (GuildPanel's own highlightId timeout) or the moment the
++   player opens the card's own detail modal, whichever comes first. */
++.guild-facility-card.guild-card-highlight {
++  animation: guild-card-highlight-pulse 1100ms ease-in-out 3;
++}
++@keyframes guild-card-highlight-pulse {
++  0%, 100% { box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
++  50% { box-shadow: 0 0 0 3px var(--brass), 0 0 18px 4px var(--brass); }
++}
++
+ * { box-sizing: border-box; }
+ 
+ html, body, #root {
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 577acd2..a8b9fb7 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -354,6 +354,11 @@ function ConsumableInfoCard({
+   const instantUse = isInstantUseOnHero(def);
+   const loadout = isLoadoutEffect(def);
+   const peddlerCharm = (def.effect.peddlerCounterReduction ?? 0) > 0;
++  // Same "can't touch a deployed hero's loadout" rule the gear Equip button
++  // (canEquip.ok, below in SlotCard) already enforces -- engine.equipConsumable
++  // now blocks this server-side too, but disabling it here matches gear's own
++  // UX instead of letting a click silently no-op into a toast.
++  const deployed = hero.status === 'questing';
+   return (
+     <>
+       <div
+@@ -395,8 +400,9 @@ function ConsumableInfoCard({
+               {loadout && (
+                 <button
+                   className="btn-primary"
++                  disabled={deployed}
+                   onClick={() => { engine.equipConsumable(hero.id, def.id); setOpen(false); }}
+-                  title={`Equip into ${hero.name}'s next open Consumable Slot`}
++                  title={deployed ? `${hero.name} is away on a quest.` : `Equip into ${hero.name}'s next open Consumable Slot`}
+                 >
+                   Equip on {hero.name}
+                 </button>
+@@ -442,6 +448,8 @@ function ConsumableSlotCard({
+ }) {
+   const [open, setOpen] = useState(false);
+   const def = equippedDefId ? InventoryManager.resolveDef(engine.state, equippedDefId) : undefined;
++  // Same deployed-hero guard as ConsumableInfoCard above.
++  const deployed = hero.status === 'questing';
+ 
+   if (def) {
+     return (
+@@ -477,6 +485,8 @@ function ConsumableSlotCard({
+                 <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
+                 <button
+                   className="btn-primary"
++                  disabled={deployed}
++                  title={deployed ? `${hero.name} is away on a quest.` : undefined}
+                   onClick={() => { engine.unequipConsumable(hero.id, def.id); setOpen(false); }}
+                 >
+                   Unequip
+@@ -511,7 +521,9 @@ function ConsumableSlotCard({
+         <div className="overlay" onClick={() => setOpen(false)}>
+           <div className="modal" onClick={(e) => e.stopPropagation()}>
+             <div className="card-title" style={{ marginBottom: 8 }}>Equip a consumable on {hero.name}</div>
+-            {available.length === 0 ? (
++            {deployed ? (
++              <p className="tiny muted">{hero.name} is away on a quest.</p>
++            ) : available.length === 0 ? (
+               <p className="tiny muted">Nothing spare to equip. Buy potions in the Shop.</p>
+             ) : (
+               <div className="row wrap" style={{ gap: 4 }}>
+@@ -916,8 +928,9 @@ export function EquipmentPanel() {
+           <button
+             className="btn-green"
+             style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
++            disabled={hero.status === 'questing'}
+             onClick={() => engine.equipBestConsumables(hero.id)}
+-            title="Fill this hero's empty consumable slots with the best available potions"
++            title={hero.status === 'questing' ? `${hero.name} is away on a quest.` : 'Fill this hero\'s empty consumable slots with the best available potions'}
+           >
+             Equip best
+           </button>
+diff --git a/src/ui/panels/GuildPanel.tsx b/src/ui/panels/GuildPanel.tsx
+index b7b8c39..f5f080f 100644
+--- a/src/ui/panels/GuildPanel.tsx
++++ b/src/ui/panels/GuildPanel.tsx
+@@ -1,4 +1,4 @@
+-import { useState } from 'react';
++import { useEffect, useRef, useState } from 'react';
+ import type { ReactNode } from 'react';
+ import { useEngine } from '../useEngine';
+ import { GuildManager } from '../../game/managers/GuildManager';
+@@ -76,22 +76,32 @@ function GuildUpgradeDetailModal({
+  */
+ function UpgradeCard({
+   name, description, level, maxLevel, maxed, affordable, statLines, buyLabel, buyDisabled, onBuy, flash, onDismissFlash, pulsing,
++  highlighted, onDismissHighlight,
+ }: {
+   name: string; description: string; level: number; maxLevel: number; maxed: boolean; affordable: boolean;
+   statLines: ReactNode[]; buyLabel: string; buyDisabled: boolean; onBuy: () => void;
+   flash?: { key: number; name: string }; onDismissFlash: () => void; pulsing?: boolean;
++  highlighted?: boolean; onDismissHighlight?: () => void;
+ }) {
+   const [showDetail, setShowDetail] = useState(false);
+   const pct = Math.min(100, (level / maxLevel) * 100);
++  const cardRef = useRef<HTMLDivElement>(null);
++  // Landed here via a "jump to the requirement" link (e.g. HeroesPanel's
++  // recruit cards) -- scroll the exact card into view rather than relying
++  // on the player to spot the glow somewhere off-screen in a long grid.
++  useEffect(() => {
++    if (highlighted) cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
++  }, [highlighted]);
+   return (
+     <div className="guild-card-wrap">
+       {maxed && <img className="guild-seal" src={waxSealComplete} alt="" />}
+       <div
+-        className={`card guild-facility-card ${affordable ? 'affordable' : ''} ${maxed ? 'guild-maxed' : ''}`}
+-        onClick={() => setShowDetail(true)}
++        ref={cardRef}
++        className={`card guild-facility-card ${affordable ? 'affordable' : ''} ${maxed ? 'guild-maxed' : ''} ${highlighted ? 'guild-card-highlight' : ''}`}
++        onClick={() => { setShowDetail(true); onDismissHighlight?.(); }}
+         role="button"
+         tabIndex={0}
+-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); } }}
++        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetail(true); onDismissHighlight?.(); } }}
+       >
+         <div className="guild-facility-icon" aria-hidden="true">{name.charAt(0)}</div>
+         <div className={`guild-facility-body ${maxed ? 'guild-maxed-body' : ''}`}>
+@@ -133,6 +143,21 @@ export function GuildPanel() {
+   const state = engine.state;
+   const global = ModifierManager.global(state);
+ 
++  // "Jump to and highlight the requirement" landing -- consumed once on
++  // mount (this panel remounts fresh each time the nav switches to it, so
++  // this only ever fires right after a requestTab(..., highlightId) call
++  // actually brought the player here, not on every re-render). Cleared
++  // automatically a few seconds later, or the instant the highlighted card
++  // itself is opened -- see UpgradeCard's onDismissHighlight.
++  const [highlightId, setHighlightId] = useState<string | null>(
++    () => engine.consumeRequestedHighlight(),
++  );
++  useEffect(() => {
++    if (!highlightId) return undefined;
++    const timer = window.setTimeout(() => setHighlightId(null), 4000);
++    return () => window.clearTimeout(timer);
++  }, [highlightId]);
++
+   const facilities = GuildManager.facilities();
+   // General upgrades (no vendor field) used to live alone in the old
+   // Upgrades tab -- moved here so upgrades don't need two different
+@@ -194,6 +219,8 @@ export function GuildPanel() {
+         flash={flashes[def.id]}
+         onDismissFlash={() => dismiss(def.id)}
+         pulsing={levelPulses[def.id]}
++        highlighted={def.id === highlightId}
++        onDismissHighlight={() => setHighlightId(null)}
+       />
+     );
+   }
+@@ -224,6 +251,8 @@ export function GuildPanel() {
+         flash={flashes[def.id]}
+         onDismissFlash={() => dismiss(def.id)}
+         pulsing={levelPulses[def.id]}
++        highlighted={def.id === highlightId}
++        onDismissHighlight={() => setHighlightId(null)}
+       />
+     );
+   }
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index ecc44f0..f7c425d 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -7,7 +7,7 @@ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { PrestigeManager } from '../../game/managers/PrestigeManager';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { rerollsUsedToday } from '../../game/data/reroll';
+-import { HERO_CLASSES, RECRUIT_COST, SKINS, infirmaryAutoReviveUnlocked, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
++import { HERO_CLASSES, PRESTIGE_MIN_LEVEL, RECRUIT_COST, SKINS, infirmaryAutoReviveUnlocked, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
+ import { Tuning } from '../../game/data/tuning';
+ import { HeroClass, Hero, Stats } from '../../game/types';
+ import { describeMods, formatDuration, formatGold, HOUR } from '../../game/util';
+@@ -470,7 +470,7 @@ export function HeroesPanel() {
+       {state.heroes.length >= slots && (
+         <p className="small muted">
+           No free slots. The Tavern adds one per level up to 5; beyond that, retire a hero at
+-          level 30+ in the Prestige tab for Heroic Renown, then spend it on Extra Banner
++          level {PRESTIGE_MIN_LEVEL}+ in the Prestige tab for Heroic Renown, then spend it on Extra Banner
+           (up to 4 more) — {slots} is not necessarily your ceiling.
+         </p>
+       )}
+@@ -496,6 +496,21 @@ export function HeroesPanel() {
+                   ? `Tavern level ${def.unlockTavernLevel}`
+                   : slotsFull ? 'No free slots' : `Recruit · ${formatGold(cost)}`}
+               </button>
++              {/* Direct feedback: a locked purchase should link straight to
++                  where the blocking requirement actually gets fixed, not
++                  just name it. Jumps to the Guild Hall and glows the
++                  Tavern card itself (see GuildPanel's highlightId/
++                  UpgradeCard) rather than leaving the player to hunt for
++                  it among every facility card by hand. */}
++              {!unlocked && (
++                <button
++                  className="btn-ghost"
++                  style={{ width: '100%', marginTop: 4, fontSize: '0.6875rem' }}
++                  onClick={() => engine.requestTab('guild', 'tavern')}
++                >
++                  Go to Tavern →
++                </button>
++              )}
+             </div>
+           );
+         })}
