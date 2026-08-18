@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useEngine } from '../useEngine';
+import { isTabUnread } from '../../game/attention';
 import { AchievementManager } from '../../game/managers/AchievementManager';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { GUILD_FACILITIES, UPGRADES } from '../../game/data/progression';
@@ -165,6 +166,22 @@ export function StatsPanel() {
   // request ("recent results new tab next to achievements") rather than
   // adding a 4th stacked section.
   const [subTab, setSubTab] = useState<'overview' | 'achievements' | 'results'>('overview');
+
+  // Deep-link support for a notification's "Go to" button targeting a
+  // specific Statistics sub-tab -- same consume-once shape every other
+  // sub-tabbed panel uses.
+  useEffect(() => {
+    const requested = engine.consumeRequestedSubTab();
+    if (requested === 'overview' || requested === 'achievements' || requested === 'results') setSubTab(requested);
+  }, [engine, engine.requestedSubTab]);
+
+  // Acknowledges whichever sub-tab is currently open -- on mount (the
+  // default Overview) and again on every switch -- clearing the nav
+  // shimmer for a banner-worthy notification targeting this specific
+  // sub-tab (patch 0191).
+  useEffect(() => {
+    engine.acknowledgeTab('stats', subTab);
+  }, [engine, subTab]);
   // Which past result's full detail (gold/items/xp) is currently open --
   // set by clicking a compact card in the Results tab below, cleared on
   // close. Holds the whole ResultEntry (not just an id) since a raid has
@@ -240,13 +257,22 @@ export function StatsPanel() {
       <p className="subtitle">Everything the guild scribe has bothered to write down.</p>
 
       <div className="row" style={{ gap: 8, marginBottom: 14 }}>
-        <button className={`btn-subtab ${subTab === 'overview' ? 'on' : ''}`} onClick={() => setSubTab('overview')}>
+        <button
+          className={`btn-subtab ${subTab === 'overview' ? 'on' : ''} ${isTabUnread(state, 'stats', 'overview') ? 'subtab-unread' : ''}`}
+          onClick={() => setSubTab('overview')}
+        >
           Overview
         </button>
-        <button className={`btn-subtab ${subTab === 'achievements' ? 'on' : ''}`} onClick={() => setSubTab('achievements')}>
+        <button
+          className={`btn-subtab ${subTab === 'achievements' ? 'on' : ''} ${isTabUnread(state, 'stats', 'achievements') ? 'subtab-unread' : ''}`}
+          onClick={() => setSubTab('achievements')}
+        >
           Achievements ({achProgress.unlocked}/{achProgress.total})
         </button>
-        <button className={`btn-subtab ${subTab === 'results' ? 'on' : ''}`} onClick={() => setSubTab('results')}>
+        <button
+          className={`btn-subtab ${subTab === 'results' ? 'on' : ''} ${isTabUnread(state, 'stats', 'results') ? 'subtab-unread' : ''}`}
+          onClick={() => setSubTab('results')}
+        >
           Recent results ({resultEntries.length})
         </button>
       </div>

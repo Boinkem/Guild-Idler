@@ -88,7 +88,7 @@ export function NotificationBanner() {
   };
 
   const handleClick = () => {
-    if (shown.targetTab) engine.requestTab(shown.targetTab);
+    if (shown.targetTab) engine.requestTab(shown.targetTab, undefined, shown.targetSubTab);
     acknowledge();
   };
 

@@ -159,6 +159,8 @@ export function createInitialState(now = Date.now()): GameState {
     completedRaidDifficulties: [],
     notifications: [],
     notificationsSeenId: null,
+    tabAcknowledged: {},
+    chainsSeenOnBoard: [],
     lastBannerShownId: null,
     seenGuidance: [],
     raidUpgrades: {},
@@ -822,6 +824,65 @@ const MIGRATIONS: Record<number, Migration> = {
       ...save,
       version: 42,
       hasEarnedFirstTitle: alreadyHasTitle,
+    };
+  },
+  42: (save) => {
+    // New nav shimmer/unread system (patch 0191) -- see tabAcknowledged's
+    // own comment in GameState for the shape.
+    //
+    // tabAcknowledged: same "pin it to the current newest notification"
+    // defensive backfill notificationsSeenId's own migration (see 20
+    // above) already established, and for the identical reason -- an
+    // existing save can have a long notification log, and treating every
+    // entry in it as newly "unread" against every tab/sub-tab at once
+    // would slap a shimmer on half the nav bar the moment this update
+    // lands. Backfilling every known tab/sub-tab key to the log's current
+    // newest id means only notifications that arrive AFTER this update
+    // can ever register as unread, which is what "unread" should mean
+    // here. The tab/sub-tab id list below must stay in sync with
+    // TAB_SUBTABS in attention.ts -- not imported directly since
+    // SaveManager deliberately has no dependency on ui/game-derived
+    // modules, only on raw save shape.
+    const newestId = (save.notifications as { id: string }[] | undefined)?.[0]?.id;
+    const tabsWithSubTabs: Record<string, string[]> = {
+      vendors: ['blacksmith', 'alchemist', 'enchanter'],
+      harvest: ['warehouse', 'fields'],
+      lore: ['quests', 'raids', 'collection'],
+      raids: ['raids', 'quartermaster'],
+      stats: ['overview', 'achievements', 'results'],
+    };
+    const tabAcknowledged: Record<string, string> = {};
+    if (newestId) {
+      for (const [tab, subTabs] of Object.entries(tabsWithSubTabs)) {
+        tabAcknowledged[tab] = newestId;
+        for (const sub of subTabs) tabAcknowledged[`${tab}:${sub}`] = newestId;
+      }
+    }
+
+    // chainsSeenOnBoard: backfilled from every chain already completed,
+    // in progress, or currently sitting offered on the board -- all
+    // three are cases the player has clearly already had a chance to see,
+    // so none of them should fire a retroactive "new story surfaced"
+    // notification the moment this patch lands. A chain that hasn't
+    // reached any of those three states yet (genuinely never offered)
+    // correctly stays absent, so it still notifies the first time it
+    // actually appears post-migration.
+    const completedChains = Array.isArray(save.completedChains) ? save.completedChains as string[] : [];
+    const activeChains = Array.isArray(save.activeChains)
+      ? (save.activeChains as { chainId: string }[]).map((ac) => ac.chainId)
+      : [];
+    const boardChainIds = Array.isArray(save.chainBoard)
+      ? (save.chainBoard as { chain?: { chainId: string } }[])
+        .map((o) => o.chain?.chainId)
+        .filter((id): id is string => !!id)
+      : [];
+    const chainsSeenOnBoard = [...new Set([...completedChains, ...activeChains, ...boardChainIds])];
+
+    return {
+      ...save,
+      version: 43,
+      tabAcknowledged,
+      chainsSeenOnBoard,
     };
   },
 };

@@ -17,7 +17,7 @@ export function HatchRevealModal() {
   const def = PET_BY_ID[pet.defId];
 
   const goToPets = () => {
-    engine.requestHatcherySubTab('pets');
+    engine.requestTab('hatchery', undefined, 'pets');
     engine.dismissHatchedPet();
   };
 

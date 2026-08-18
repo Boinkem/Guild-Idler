@@ -185,15 +185,15 @@ export class GameEngine {
    *  top of the ordinary Toast every archived message already gets --
    *  see NotificationEntry.banner's own comment for why this exists and
    *  defaults false. */
-  private archive(message: string, targetTab?: string, banner = false) {
+  private archive(message: string, targetTab?: string, banner = false, targetSubTab?: string) {
     this.state.notifications.unshift({
-      id: uid('note'), message, timestamp: Date.now(), targetTab, banner,
+      id: uid('note'), message, timestamp: Date.now(), targetTab, banner, targetSubTab,
     });
     if (this.state.notifications.length > 100) this.state.notifications.length = 100;
   }
 
-  private say(message: string, targetTab?: string, banner = false) {
-    this.archive(message, targetTab, banner);
+  private say(message: string, targetTab?: string, banner = false, targetSubTab?: string) {
+    this.archive(message, targetTab, banner, targetSubTab);
     this.toastQueue.push({ message, seq: this.nextToastSeq++ });
     this.notify();
   }
@@ -440,7 +440,7 @@ export class GameEngine {
       if (hero.status === 'fallen' && HeroManager.autoReviveDue(hero, now)) {
         HeroManager.revive(hero);
         changed = true;
-        this.say(`${hero.name} has recovered and returns to the roster.`, 'heroes');
+        this.say(`${hero.name} has recovered and returns to the roster.`, 'heroes', true);
       }
     }
 
@@ -454,7 +454,7 @@ export class GameEngine {
       if (PetManager.isFallen(pet) && PetManager.autoReviveDue(pet, now)) {
         PetManager.revive(this.state, pet);
         changed = true;
-        this.say(`${pet.name} has recovered.`, 'heroes');
+        this.say(`${pet.name} has recovered.`, 'heroes', true);
       }
     }
 
@@ -495,7 +495,7 @@ export class GameEngine {
       // miss for something the player has to act on (open the Hatchery,
       // click the ready egg) rather than just read.
       if (result.eggDropped) {
-        this.say(`Found a ${result.eggDropped.rarity} egg! Equip it in the Hatchery to start it incubating.`, 'hatchery');
+        this.say(`Found a ${result.eggDropped.rarity} egg! Equip it in the Hatchery to start it incubating.`, 'hatchery', true);
       }
       // Grimsby's arrival -- same "live play only, offline catch-up never
       // reaches here" treatment as everything else in this block. A
@@ -618,6 +618,36 @@ export class GameEngine {
     if (windowRolledOver) {
       this.state.chainBoard = QuestManager.generateChainBoard(this.state, now).filter((o) => !active.has(o.id));
       changed = true;
+
+      // New quest-chain discovery notification (patch 0191) -- fires once
+      // per chain id, the very first time any of its stages appears on
+      // chainBoard, using chainsSeenOnBoard as the "have we shown this one
+      // before" ledger (see that field's own comment in GameState for why
+      // it's a broader signal than completedChains/activeChains -- a
+      // chain sitting offered-but-unclaimed still needs to count). The
+      // guild's very first chain ever is deliberately excluded from this
+      // notification (see wasFirstEver below): that exact moment is the
+      // one guidance topic promoted to the standalone ChainDiscoveryModal
+      // instead, in the reportGuidance call right after this block --
+      // stacking a banner notification on top of that modal would be the
+      // same "two big moments competing" issue that call's own comment
+      // already avoids. Still recorded into chainsSeenOnBoard regardless,
+      // so the first chain is never retroactively (re-)notified once the
+      // modal's been seen and dismissed.
+      const wasFirstEver = this.state.chainsSeenOnBoard.length === 0;
+      const newlyDiscovered = [...new Set(
+        this.state.chainBoard
+          .map((o) => o.chain?.chainId)
+          .filter((id): id is string => !!id && !this.state.chainsSeenOnBoard.includes(id)),
+      )];
+      for (const chainId of newlyDiscovered) this.state.chainsSeenOnBoard.push(chainId);
+      if (!wasFirstEver) {
+        for (const chainId of newlyDiscovered) {
+          const chain = CHAIN_BY_ID[chainId];
+          this.say(`A new story has surfaced: "${chain?.name ?? chainId}."`, 'chains', true);
+        }
+      }
+
       // Checked immediately, right here, rather than left to whichever
       // unrelated action (buying an upgrade, resolving an unrelated
       // quest...) happens to next call GuidanceManager.checkAll elsewhere
@@ -749,7 +779,7 @@ export class GameEngine {
         HeroManager.regenHealth(hero, elapsed, infirmaryLevel, hero.status === 'questing');
         if (hero.status === 'fallen' && HeroManager.autoReviveDue(hero, now)) {
           HeroManager.revive(hero);
-          this.archive(`${hero.name} has recovered and returns to the roster.`, 'heroes');
+          this.archive(`${hero.name} has recovered and returns to the roster.`, 'heroes', true);
         }
       }
       const kennelLevel = this.state.guild.kennel ?? 0;
@@ -757,7 +787,7 @@ export class GameEngine {
         PetManager.regenHealth(this.state, pet, elapsed, kennelLevel);
         if (PetManager.isFallen(pet) && PetManager.autoReviveDue(pet, now)) {
           PetManager.revive(this.state, pet);
-          this.archive(`${pet.name} has recovered.`, 'heroes');
+          this.archive(`${pet.name} has recovered.`, 'heroes', true);
         }
       }
     }
@@ -1128,15 +1158,54 @@ export class GameEngine {
   }
 
   /**
+   * Marks a tab (or a specific sub-tab within one) as having just been
+   * visited -- clears the nav shimmer for any banner-worthy notification
+   * targeting it (patch 0191). Same "pin to the current newest
+   * notification id" shape acknowledgeTab's sibling markNotificationsSeen
+   * uses above, for the same reason: it's a simple, always-correct
+   * boundary marker regardless of how many matching/non-matching
+   * notifications have piled up since. Called from MenuWindow (bare tab,
+   * on every tab switch) and from each sub-tabbed panel's own effect
+   * (its currently-active sub-tab, on mount and every switch) -- see
+   * isTabUnread in attention.ts for the read side.
+   *
+   * Deliberately no explicit saveNow() here, unlike most other state
+   * mutations in this file -- this can fire on every single tab click,
+   * and forcing a disk write that often would be needless churn for a
+   * marker that only matters again after a restart. Relies on the
+   * existing periodic autosave to eventually persist it, same tradeoff
+   * already accepted for plenty of other low-stakes UI state.
+   */
+  acknowledgeTab(tab: string, subTab?: string) {
+    if (this.state.notifications.length === 0) return;
+    const key = subTab ? `${tab}:${subTab}` : tab;
+    const newestId = this.state.notifications[0].id;
+    if (this.state.tabAcknowledged[key] !== newestId) {
+      this.state.tabAcknowledged[key] = newestId;
+      this.notify();
+    }
+  }
+
+  /**
    * Requests that the menu open (or switch) to a specific tab id. The
    * optional `highlightId` is picked up by that tab's own panel (currently
    * just GuildPanel, via consumeRequestedHighlight below) to spotlight one
    * specific card -- e.g. "jump to the Guild Hall and highlight the
-   * Tavern" for a recruit blocked on Tavern level.
+   * Tavern" for a recruit blocked on Tavern level. The optional `subTab`
+   * is picked up by whichever of the 6 sub-tabbed panels this targets
+   * (Vendors, Harvest, Lore, Raids, Statistics, Hatchery) -- e.g. "jump to
+   * Vendors and open Enchanter specifically" for a notification's own
+   * "Go to" button (see NotificationBanner.tsx/GuidePanel.tsx). Generic
+   * replacement for what used to be a Hatchery-only
+   * requestedHatcherySubTab/requestHatcherySubTab pair -- that comment
+   * explicitly deferred generalizing until a second panel needed one;
+   * patch 0191's per-vendor/per-sub-tab notification targeting is that
+   * second (and third through sixth) panel.
    */
-  requestTab(id: string, highlightId?: string) {
+  requestTab(id: string, highlightId?: string, subTab?: string) {
     this.requestedTab = id;
     this.requestedHighlightId = highlightId ?? null;
+    this.requestedSubTab = subTab ?? null;
     // Needed so MenuWindow can react to a request made while it's already
     // mounted (e.g. a Guide notification's "Go to" button), not just pick
     // it up on the next fresh mount -- see MenuWindow's own effect for the
@@ -1161,24 +1230,30 @@ export class GameEngine {
   }
 
   /**
-   * Same "transient, consume-once" shape as requestedTab/consumeRequestedTab
-   * just above, one level deeper -- requestTab only knows about MenuWindow's
-   * own top-level tabs, not a panel's internal sub-tab state (HatcheryPanel
-   * manages 'home'/'pets' itself via useState). Only Hatchery needs this
-   * today (HatchRevealModal's "Go to Pets"); kept specific rather than a
-   * generic sub-tab system until a second panel actually needs one.
+   * Transient, consume-once request for which sub-tab a destination panel
+   * should open on, alongside requestedTab/requestedHighlightId above.
+   * `requestedSubTab` itself declared near those two fields further up
+   * this class; consumed once by whichever sub-tabbed panel actually
+   * mounts to match (an id that doesn't match any of that panel's own
+   * sub-tab ids is simply ignored by the panel, same "safe to be generic"
+   * shape targetTab/highlightId already have elsewhere).
    */
-  requestedHatcherySubTab: 'home' | 'pets' | null = null;
-  requestHatcherySubTab(subTab: 'home' | 'pets') {
-    this.requestedTab = 'hatchery';
-    this.requestedHatcherySubTab = subTab;
-    this.notify();
-  }
-  consumeRequestedHatcherySubTab(): 'home' | 'pets' | null {
-    const sub = this.requestedHatcherySubTab;
-    this.requestedHatcherySubTab = null;
+  consumeRequestedSubTab(): string | null {
+    const sub = this.requestedSubTab;
+    this.requestedSubTab = null;
     return sub;
   }
+
+  /**
+   * Same "transient, consume-once" shape as requestedTab/consumeRequestedTab
+   * above, one level deeper -- requestTab only knows about MenuWindow's own
+   * top-level tabs; this is what a request actually meant for one of a
+   * panel's own internal sub-tabs (Vendors, Harvest, Lore, Raids,
+   * Statistics, Hatchery) resolves to once that panel mounts and consumes
+   * it. See requestTab/consumeRequestedSubTab further up this class for
+   * the write/read pair.
+   */
+  requestedSubTab: string | null = null;
 
   /** What the corner sprite should be doing right now. */
   get companionStatus(): 'idle' | 'questing' | 'injured' | 'ready' {
@@ -1513,7 +1588,7 @@ export class GameEngine {
         if (this.state.notifiedSetBonuses.includes(key)) continue;
         this.state.notifiedSetBonuses.push(key);
         playSound('legendary_drop');
-        this.say(`${set.name} — ${bonus.label} unlocked!`, 'equipment');
+        this.say(`${set.name} — ${bonus.label} unlocked!`, 'equipment', true);
       }
     }
   }
@@ -1943,7 +2018,7 @@ export class GameEngine {
     if (error) return this.say(error);
     playSound('purchase');
     const def = GuildManager.vendors().find((v) => v.id === vendorId);
-    this.say(`${def?.name ?? 'The vendor'} has more to offer now.`, 'vendors');
+    this.say(`${def?.name ?? 'The vendor'} has more to offer now.`, 'vendors', true, vendorId);
     this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
     void this.saveNow();
   }
@@ -1986,7 +2061,7 @@ export class GameEngine {
     const error = HarvestManager.unlockTradeRoute(this.state);
     if (error) return this.say(error);
     playSound('purchase');
-    this.say('The Trade Route is open -- materials can be sold for gold from here on.', 'harvest');
+    this.say('The Trade Route is open -- materials can be sold for gold from here on.', 'harvest', true, 'warehouse');
     void this.saveNow();
   }
 

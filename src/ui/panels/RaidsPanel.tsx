@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
+import { isTabUnread } from '../../game/attention';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { RaidManager } from '../../game/managers/RaidManager';
 import { HeroManager } from '../../game/managers/HeroManager';
@@ -766,6 +767,23 @@ export function RaidsPanel() {
   const [subTab, setSubTab] = useState<'raids' | 'quartermaster'>('raids');
   const setTotals = useRaidSetTotals(state);
 
+  // Deep-link support for a notification's "Go to" button targeting a
+  // specific Raids sub-tab -- same consume-once shape every other
+  // sub-tabbed panel uses. Placed before the hasRaids early return since
+  // hooks can't follow a conditional return.
+  useEffect(() => {
+    const requested = engine.consumeRequestedSubTab();
+    if (requested === 'raids' || requested === 'quartermaster') setSubTab(requested);
+  }, [engine, engine.requestedSubTab]);
+
+  // Acknowledges whichever sub-tab is currently open -- on mount (the
+  // default Raids list) and again on every switch -- clearing the nav
+  // shimmer for a banner-worthy notification targeting this specific
+  // sub-tab (patch 0191).
+  useEffect(() => {
+    engine.acknowledgeTab('raids', subTab);
+  }, [engine, subTab]);
+
   if (!hasRaids) {
     return (
       <>
@@ -792,10 +810,16 @@ export function RaidsPanel() {
       </p>
 
       <div className="row" style={{ gap: 8, marginBottom: 14 }}>
-        <button className={`btn-subtab ${subTab === 'raids' ? 'on' : ''}`} onClick={() => setSubTab('raids')}>
+        <button
+          className={`btn-subtab ${subTab === 'raids' ? 'on' : ''} ${isTabUnread(state, 'raids', 'raids') ? 'subtab-unread' : ''}`}
+          onClick={() => setSubTab('raids')}
+        >
           Raids
         </button>
-        <button className={`btn-subtab ${subTab === 'quartermaster' ? 'on' : ''}`} onClick={() => setSubTab('quartermaster')}>
+        <button
+          className={`btn-subtab ${subTab === 'quartermaster' ? 'on' : ''} ${isTabUnread(state, 'raids', 'quartermaster') ? 'subtab-unread' : ''}`}
+          onClick={() => setSubTab('quartermaster')}
+        >
           Quartermaster
         </button>
       </div>

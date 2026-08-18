@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { MouseEvent, CSSProperties } from 'react';
 import { QUEST_CHAINS, ChainDef } from '../../game/data/quests';
 import { GUILD_RANK_TIERS, currentGuildRank, nextGuildRank, powerToNextRank, rankTierForLevel } from '../../game/data/guildRank';
@@ -6,6 +6,7 @@ import { outgoingConnections, incomingConnections } from '../../game/data/chainC
 import { RAIDS, RAID_ENCOUNTER_BY_ID, isRaidUnlocked } from '../../game/data/raids';
 import { EQUIPMENT_BY_ID, ITEM_SETS } from '../../game/data/equipment';
 import { describeMods, RARITY_COLOR } from '../../game/util';
+import { isTabUnread } from '../../game/attention';
 import { useEngine } from '../useEngine';
 
 /** Shared summary/expand toggle button, matching the Heroes tab pattern. */
@@ -390,6 +391,22 @@ export function LorePanel() {
   const state = engine.state;
   const [subTab, setSubTab] = useState<'quests' | 'raids' | 'collection'>('quests');
 
+  // Deep-link support for a notification's "Go to" button targeting a
+  // specific Lore sub-tab -- same consume-once shape every other
+  // sub-tabbed panel uses.
+  useEffect(() => {
+    const requested = engine.consumeRequestedSubTab();
+    if (requested === 'quests' || requested === 'raids' || requested === 'collection') setSubTab(requested);
+  }, [engine, engine.requestedSubTab]);
+
+  // Acknowledges whichever sub-tab is currently open -- on mount (the
+  // default Story Quests) and again on every switch -- clearing the nav
+  // shimmer for a banner-worthy notification targeting this specific
+  // sub-tab (patch 0191).
+  useEffect(() => {
+    engine.acknowledgeTab('lore', subTab);
+  }, [engine, subTab]);
+
   const rank = currentGuildRank(state);
   const next = nextGuildRank(state);
   const powerNeeded = powerToNextRank(state);
@@ -417,13 +434,22 @@ export function LorePanel() {
       </div>
 
       <div className="row" style={{ gap: 8, marginBottom: 14 }}>
-        <button className={`btn-subtab ${subTab === 'quests' ? 'on' : ''}`} onClick={() => setSubTab('quests')}>
+        <button
+          className={`btn-subtab ${subTab === 'quests' ? 'on' : ''} ${isTabUnread(state, 'lore', 'quests') ? 'subtab-unread' : ''}`}
+          onClick={() => setSubTab('quests')}
+        >
           Story Quests
         </button>
-        <button className={`btn-subtab ${subTab === 'raids' ? 'on' : ''}`} onClick={() => setSubTab('raids')}>
+        <button
+          className={`btn-subtab ${subTab === 'raids' ? 'on' : ''} ${isTabUnread(state, 'lore', 'raids') ? 'subtab-unread' : ''}`}
+          onClick={() => setSubTab('raids')}
+        >
           Story Raids
         </button>
-        <button className={`btn-subtab ${subTab === 'collection' ? 'on' : ''}`} onClick={() => setSubTab('collection')}>
+        <button
+          className={`btn-subtab ${subTab === 'collection' ? 'on' : ''} ${isTabUnread(state, 'lore', 'collection') ? 'subtab-unread' : ''}`}
+          onClick={() => setSubTab('collection')}
+        >
           Collection
         </button>
       </div>

@@ -10,6 +10,7 @@ import {
 import { HarvestManager } from '../../game/managers/HarvestManager';
 import { MaterialId } from '../../game/types';
 import { formatGold, formatMaterial } from '../../game/util';
+import { isTabUnread } from '../../game/attention';
 import { Ring } from './DashboardPanel';
 import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
 import { useFlyTargetRef, measureFlyOffset } from '../flyTarget';
@@ -74,6 +75,22 @@ export function HarvestPanel() {
   const state = engine.state;
   const [subTab, setSubTab] = useState<SubTab>('warehouse');
 
+  // Deep-link support for a notification's "Go to Warehouse" button (see
+  // the Trade Route unlock's targetSubTab in engine.ts) -- same
+  // consume-once shape every other sub-tabbed panel uses.
+  useEffect(() => {
+    const requested = engine.consumeRequestedSubTab();
+    if (requested === 'warehouse' || requested === 'fields') setSubTab(requested);
+  }, [engine, engine.requestedSubTab]);
+
+  // Acknowledges whichever sub-tab is currently open -- on mount (the
+  // default Warehouse) and again on every switch -- clearing the nav
+  // shimmer for a banner-worthy notification targeting this specific
+  // sub-tab (patch 0191).
+  useEffect(() => {
+    engine.acknowledgeTab('harvest', subTab);
+  }, [engine, subTab]);
+
   return (
     <>
       <h2>Harvest</h2>
@@ -83,10 +100,16 @@ export function HarvestPanel() {
       </p>
 
       <div className="row wrap" style={{ gap: 8, marginBottom: 14 }}>
-        <button className={`btn-subtab ${subTab === 'warehouse' ? 'on' : ''}`} onClick={() => setSubTab('warehouse')}>
+        <button
+          className={`btn-subtab ${subTab === 'warehouse' ? 'on' : ''} ${isTabUnread(state, 'harvest', 'warehouse') ? 'subtab-unread' : ''}`}
+          onClick={() => setSubTab('warehouse')}
+        >
           Warehouse
         </button>
-        <button className={`btn-subtab ${subTab === 'fields' ? 'on' : ''}`} onClick={() => setSubTab('fields')}>
+        <button
+          className={`btn-subtab ${subTab === 'fields' ? 'on' : ''} ${isTabUnread(state, 'harvest', 'fields') ? 'subtab-unread' : ''}`}
+          onClick={() => setSubTab('fields')}
+        >
           Fields
         </button>
       </div>

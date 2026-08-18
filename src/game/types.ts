@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 42;
+export const SAVE_VERSION = 43;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -755,6 +755,18 @@ export interface NotificationEntry {
    *  messages with no obvious single destination (most of them). */
   targetTab?: string;
   /**
+   * Companion to targetTab -- names a specific sub-tab within that tab
+   * (e.g. 'enchanter' within the 'vendors' tab's own Blacksmith/
+   * Alchemist/Enchanter switcher) for panels that have one. Omitted for
+   * a notification about a tab's main content, or for any tab with no
+   * sub-tabs at all. Only meaningful paired with targetTab -- a
+   * targetSubTab with no targetTab is never produced. See
+   * tabAcknowledged's own comment in GameState for how this drives the
+   * nav shimmer/unread system, and TAB_SUBTABS in attention.ts for which
+   * tabs actually have sub-tabs to target.
+   */
+  targetSubTab?: string;
+  /**
    * Whether this entry is prominent enough to earn the top banner
    * (NotificationBanner.tsx), on top of the ordinary bottom Toast every
    * archived message already gets. Defaults to false/omitted -- routine
@@ -1479,6 +1491,46 @@ export interface GameState {
    * of "if missed, it counts as unread."
    */
   notificationsSeenId: string | null;
+  /**
+   * Per-(tab, optional sub-tab) "last acknowledged" marker driving the nav
+   * shimmer/unread indicator (patch 0191) -- same id-based-not-timestamp
+   * shape as notificationsSeenId just above, and for the identical reason:
+   * comparing by array position sidesteps the same-millisecond collision
+   * class of bug already found and fixed once for this codebase (see
+   * notificationsSeenId's own doc comment, and Toast.tsx's auto-dismiss
+   * fix before that). Keyed by tab id alone ("vendors") for a tab-level
+   * acknowledgement, or "tab:subTab" ("vendors:enchanter") for a specific
+   * sub-tab -- see TAB_SUBTABS/isTabUnread in attention.ts for the read
+   * side of this. A missing key means "never acknowledged," equivalent to
+   * notificationsSeenId's `null` for the whole log. Visiting a tab
+   * acknowledges only that tab's own bare key; visiting a specific
+   * sub-tab additionally acknowledges that sub-tab's own key -- the two
+   * are independent, so a notification aimed at 'vendors:enchanter'
+   * specifically doesn't clear just because the player opened Vendors and
+   * stayed on Blacksmith (see MenuWindow's per-tab effect and each
+   * sub-tabbed panel's own per-sub-tab effect).
+   */
+  tabAcknowledged: Record<string, string>;
+  /**
+   * Chain ids whose offer has ever appeared on state.chainBoard, tracked
+   * specifically to detect a chain's FIRST appearance there -- see
+   * GameEngine's chainBoard-regeneration block for where this drives the
+   * "a new story has surfaced" notification (patch 0191). Deliberately
+   * separate from completedChains/activeChains: a chain sitting unclaimed
+   * on the board (offered, but no hero sent yet) is exactly the case this
+   * needs to catch, and neither of those two fields reflects that -- both
+   * only update once a hero actually gets sent on the chain's first
+   * stage. Also deliberately NOT the same signal LorePanel's own
+   * "Discovered Quests" bucket uses (completedChains ∪ activeChains) --
+   * that's a stricter "actually engaged with" definition; this is the
+   * looser "has ever been offered" one the new Discovered Quests tab and
+   * its notification actually need. The very first chain the guild ever
+   * sees is deliberately excluded from firing this notification (see the
+   * engine's own comment there) since that moment already gets the
+   * standalone ChainDiscoveryModal treatment via pendingChainDiscovery --
+   * still recorded here so it's never re-notified, just not banner'd.
+   */
+  chainsSeenOnBoard: string[];
   /**
    * Id of the newest notification the top banner has ever actually been
    * displayed for -- separate from notificationsSeenId (acknowledgment)

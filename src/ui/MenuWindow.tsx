@@ -4,7 +4,7 @@ import { useSettings } from './useSettings';
 import { OnboardingTour } from './OnboardingTour';
 import { ChainDiscoveryModal } from './ChainDiscoveryModal';
 import { formatGold, formatNumber } from '../game/util';
-import { attentionCounts } from '../game/attention';
+import { attentionCounts, isNavTabUnread } from '../game/attention';
 import { PeddlerManager } from '../game/managers/PeddlerManager';
 import { playSound } from '../game/sound';
 import { useCountUp } from './useCountUp';
@@ -293,7 +293,17 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
     : id === 'peddler' ? engine.state.peddlerUnlocked
     : id === 'harvest' ? engine.state.harvestUnlocked
     : id === 'training' ? engine.state.completedRaids.includes('blackford_keep') : true);
-  const { idleHeroes, eggsReady, brokenGear, harvestReady, chainQuestAvailable } = attentionCounts(engine.state);
+  const { idleHeroes, eggsReady, brokenGear, harvestReady } = attentionCounts(engine.state);
+  // Acknowledges the bare (no-sub-tab) key for whichever top-level tab is
+  // currently active, every time it changes -- clears the nav shimmer for
+  // any banner-worthy notification targeting this tab's main content
+  // (patch 0191). Sub-tab-specific acknowledgement is handled one level
+  // deeper, inside each of the 6 sub-tabbed panels themselves (see
+  // isNavTabUnread's own comment in attention.ts for why the two are
+  // independent) -- this only covers the tab overall.
+  useEffect(() => {
+    engine.acknowledgeTab(tab);
+  }, [engine, tab]);
   // Nav gold/renown count up to a new value rather than snapping -- the
   // numeric equivalent of the .bar fill transition. No animation on first
   // mount/app launch (see useCountUp's own doc comment); only on values
@@ -444,15 +454,19 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
                     // header target just below in this same nav.
                     ref={t.id === 'equipment' ? (el) => registerFlyTarget('inventory', el) : undefined}
                     // Rotating border-light rather than a numeric badge --
-                    // see chainQuestAvailable's own comment in attention.ts
-                    // for why a boolean fits this signal better than a
-                    // count. className stays plain (no ternary-into-empty-
-                    // string) since every other tab button already omits
-                    // a className entirely; conditionally adding one here
-                    // only for 'chains' keeps that same "absent unless
-                    // needed" shape rather than every button carrying a
-                    // now-always-present empty className.
-                    className={t.id === 'chains' && chainQuestAvailable ? 'chain-available' : undefined}
+                    // see isNavTabUnread's own comment in attention.ts for
+                    // why this is a boolean per tab rather than a count
+                    // (unread notification presence, not "how many").
+                    // Originally built just for the Discovered Quests tab
+                    // (patch 0190); generalized to every nav tab once the
+                    // underlying signal became the notification system
+                    // itself rather than a bespoke chain-only check (patch
+                    // 0191). className stays plain (no ternary-into-empty-
+                    // string) since most tab buttons carry no className at
+                    // all most of the time -- same "absent unless needed"
+                    // shape as before, just evaluated per-tab now instead
+                    // of hardcoded to one id.
+                    className={isNavTabUnread(engine.state, t.id) ? 'nav-tab-unread' : undefined}
                   >
                     {t.label}
                     {t.id === 'quests' && idleHeroes > 0 ? <span className="tab-badge">{idleHeroes}</span> : null}

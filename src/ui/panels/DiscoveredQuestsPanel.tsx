@@ -9,9 +9,12 @@ import { HeroTab, QuestCard, Offer } from './QuestPanel';
  * board and requiring a scroll past every regular contract to even notice
  * a chain was waiting. Sits next to Quests in the Adventure group now,
  * same tier as Contracts rather than a subsection of it, with its own nav
- * shimmer (see MenuWindow's `chainQuestAvailable` and .chain-available in
- * app.css) so a newly-discovered chain is visible from the tab bar itself,
- * not just after opening the tab.
+ * shimmer (originally chain-specific in patch 0190, generalized into the
+ * notification-driven isNavTabUnread system in patch 0191 -- see
+ * attention.ts and .nav-tab-unread in app.css) so a newly-discovered
+ * chain is visible from the tab bar itself, not just after opening the
+ * tab. The discovery notification itself fires from GameEngine's
+ * chainBoard-regeneration block, targeting this tab ('chains').
  *
  * Reuses QuestCard/HeroTab directly from QuestPanel rather than
  * duplicating them -- identical card behaviour either way (chain cards

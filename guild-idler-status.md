@@ -13051,3 +13051,115 @@ No changes to quest chain data, discovery logic, or `QuestManager` itself
 
 **Verified:** `npx tsc --noEmit` and `npx vite build --config
 vite.web.config.ts` both pass clean against the full project.
+
+### Nav shimmer generalized into a notification-driven unread system, plus quest chain discovery (patch 0191)
+
+```discord-update
+Dev Update | Feature
+
+- Any tab (and any sub-tab -- Vendors, Harvest, Lore, Raids, Statistics, Hatchery) with something new can now shimmer, and it clears the moment you actually visit it
+- New notification: a quest chain surfacing on the board now tells you about it, instead of you needing to stumble onto the Discovered Quests tab yourself
+- Vendor level-ups, the Trade Route unlocking, set bonuses activating, hero/pet recovery, and finding an egg all now trigger this too
+```
+
+Direct follow-up to patch 0190's Discovered Quests shimmer: generalize the
+one-off chain-only rotating border-light into a real extension of the
+notification system, covering every tab and every sub-tab, driven by
+actual unread notifications rather than a bespoke boolean, and clearing
+specifically on visit rather than needing a separate dismiss action.
+
+**Data model.** `NotificationEntry` gains `targetSubTab?: string`,
+paired with the existing `targetTab`. `GameState` gains two new persisted
+fields: `tabAcknowledged: Record<string, string>` (per `"tab"` or
+`"tab:subTab"` key, storing the id of the newest notification acknowledged
+for that destination -- deliberately id-based rather than timestamp-based,
+matching `notificationsSeenId`'s own established shape and for the
+identical reason, sidestepping the same same-millisecond collision bug
+class already found and fixed once for this codebase) and
+`chainsSeenOnBoard: string[]` (every chain id that's ever appeared on
+`chainBoard`, used to detect a chain's first appearance specifically --
+deliberately broader than `completedChains`/`activeChains`, since a chain
+sitting offered-but-unclaimed needs to count too). `SAVE_VERSION` 42→43,
+migration 42 backfills both defensively: `tabAcknowledged` pinned to the
+log's current newest notification id (same "don't retroactively flag an
+existing save's whole history as unread" reasoning migration 20 already
+established for `notificationsSeenId`), `chainsSeenOnBoard` backfilled from
+every chain already completed, in progress, or currently offered.
+
+**Read/write core (`engine.ts` / `attention.ts`).** `archive()`/`say()`
+both take the new `targetSubTab`. New `GameEngine.acknowledgeTab(tab,
+subTab?)`, called on visit (see UI wiring below) -- same "pin to current
+newest id" shape as `markNotificationsSeen`, no explicit `saveNow()` since
+this can fire on every single tab click and the periodic autosave already
+covers it. New `attention.ts` exports: `TAB_SUBTABS` (the 6 sub-tabbed
+panels and their sub-tab ids -- Vendors, Harvest, Lore, Raids, Statistics,
+and Hatchery, the last one previously undocumented as sub-tabbed since it
+used its own `btn-primary` styling instead of `.btn-subtab`), `isTabUnread`
+(the id-position comparison itself), and `isNavTabUnread` (a tab's own
+signal OR any of its sub-tabs', for the top-level nav button). The old
+`chainQuestAvailable` boolean from patch 0190 is removed entirely --
+`isNavTabUnread` replaces it for the `chains` tab exactly like every other
+tab now.
+
+**Quest chain discovery notification.** New logic at the `chainBoard`
+regeneration point in `refreshWorld`: diffs the freshly-generated board's
+chain ids against `chainsSeenOnBoard`, fires `"A new story has surfaced:
+'X.'"` (`banner: true`, `targetTab: 'chains'`) for each newly-seen one, and
+records it either way. The guild's very first chain ever is deliberately
+excluded from this notification -- that exact moment already gets the
+standalone `ChainDiscoveryModal` via `pendingChainDiscovery`, and stacking
+a banner on top would be the same "two big moments competing" issue
+`reportGuidance`'s own comment already avoids elsewhere. Still recorded
+into `chainsSeenOnBoard` regardless, so it's never retroactively notified
+once the modal's dismissed.
+
+**Deep-linking (`requestTab` generalized).** `GameEngine.requestedHatcherySubTab`
+/ `requestHatcherySubTab` / `consumeRequestedHatcherySubTab` -- previously
+a Hatchery-only mechanism whose own comment explicitly deferred
+generalizing "until a second panel actually needs one" -- replaced with a
+generic `requestedSubTab` / `requestTab(id, highlightId?, subTab?)` /
+`consumeRequestedSubTab()` trio. `HatchRevealModal`'s "Go to Pets" updated
+to the new call shape. `NotificationBanner`/`GuidePanel`'s existing "Go
+to" buttons now thread a notification's own `targetSubTab` through, so
+"Go to Enchanter" actually opens Enchanter, not just Vendors on whichever
+vendor was last active.
+
+**Promoted to `banner: true` (the audited list from last discussion).**
+Vendor level-up (now carries `targetSubTab: vendorId`), Trade Route unlock
+(`targetSubTab: 'warehouse'`), set bonus activation, hero recovery, pet
+recovery, finding an egg from a quest. Deliberately left alone: every
+routine craft/repair/sell/equip confirmation (result of a deliberate
+click, player's already there), recruiting/buying a skin/retiring (same),
+title-earned messages (already conditionally `banner` via the existing
+`isFirst` flag, untouched), achievement unlocks (separate dedicated popup
+system, out of scope), Peddler arrival (already has its own bespoke `!`
+tab-badge, a second indicator would be redundant).
+
+**UI wiring, all 6 sub-tabbed panels (Vendors, Harvest, Lore, Raids,
+Statistics, Hatchery).** Each gained the same three pieces: a
+`consumeRequestedSubTab` effect on mount (deep-link support, validated
+against that panel's own known sub-tab ids before applying), an
+`acknowledgeTab(tab, subTab)` effect on every sub-tab switch, and an
+`isTabUnread`-driven `subtab-unread` class on each sub-tab button.
+`MenuWindow.tsx` gained the parallel bare-tab version (`acknowledgeTab(tab)`
+on every top-level switch) and the nav button className switched from the
+old chains-only ternary to `isNavTabUnread(state, t.id)` for every tab.
+
+**CSS.** The rotating-ring shimmer renamed `.chain-available` →
+`.nav-tab-unread` (same visual, same `@property`-animated conic-gradient
+mask-ring technique, just no longer chain-specific) and generalized to any
+nav tab. New `.subtab-unread`: a small pulsing dot rather than a full ring
+-- a sub-tab strip can hold 2-3 buttons at once, and a full rotating ring
+on each simultaneously would compete with itself rather than reading as
+one clear signal the way a single nav-bar ring does.
+
+No changes to quest chain data, board generation logic, or `QuestManager`
+itself -- this patch is entirely the notification/acknowledgement plumbing
+and its UI wiring.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against the full project. Confirmed no
+remaining references to the removed `chainQuestAvailable` boolean or the
+old Hatchery-only `requestedHatcherySubTab`/`requestHatcherySubTab`/
+`consumeRequestedHatcherySubTab` trio anywhere in `src/`. `SAVE_VERSION`
+chain confirmed contiguous (40→41→42→43).

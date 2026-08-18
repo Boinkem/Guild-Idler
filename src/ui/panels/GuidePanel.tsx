@@ -40,7 +40,7 @@ function NotificationsTab() {
               <button
                 className="btn-ghost"
                 style={{ minHeight: 20, padding: '2px 8px', fontSize: '0.625rem' }}
-                onClick={() => engine.requestTab(n.targetTab!)}
+                onClick={() => engine.requestTab(n.targetTab!, undefined, n.targetSubTab)}
               >
                 Go to {TAB_LABELS[n.targetTab] ?? n.targetTab}
               </button>

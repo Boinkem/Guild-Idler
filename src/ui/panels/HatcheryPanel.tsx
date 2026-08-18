@@ -8,6 +8,7 @@ import { FEEDABLE_MATERIALS } from '../../game/data/materials';
 import { EggInstance, MaterialId, Pet } from '../../game/types';
 import { RarityPill } from '../RarityPill';
 import { formatGold, formatMaterial, RARITY_COLOR } from '../../game/util';
+import { isTabUnread } from '../../game/attention';
 import { PetSprite } from '../sprites/PetSprite';
 import { PetEnlargedModal } from '../PetEnlargedModal';
 import { EggIcon } from '../EggIcon';
@@ -30,9 +31,18 @@ export function HatcheryPanel() {
   // MenuWindow already consumes engine.requestedTab -- this is the
   // one-level-deeper version for a panel's own internal tab state.
   useEffect(() => {
-    const requested = engine.consumeRequestedHatcherySubTab();
-    if (requested) setSubTab(requested);
-  }, [engine, engine.requestedHatcherySubTab]);
+    const requested = engine.consumeRequestedSubTab();
+    if (requested === 'home' || requested === 'pets') setSubTab(requested);
+  }, [engine, engine.requestedSubTab]);
+
+  // Acknowledges whichever sub-tab is currently active -- on mount (the
+  // default 'home') and again every time the player switches sub-tabs --
+  // clearing the nav shimmer for any banner-worthy notification targeting
+  // this specific sub-tab (patch 0191). See acknowledgeTab's own comment
+  // in engine.ts and isTabUnread in attention.ts.
+  useEffect(() => {
+    engine.acknowledgeTab('hatchery', subTab);
+  }, [engine, subTab]);
 
   return (
     <>
@@ -43,10 +53,16 @@ export function HatcheryPanel() {
       </p>
 
       <div className="row wrap" style={{ gap: 8, marginBottom: 14 }}>
-        <button className={subTab === 'home' ? 'btn-primary' : ''} onClick={() => setSubTab('home')}>
+        <button
+          className={`${subTab === 'home' ? 'btn-primary' : ''} ${isTabUnread(state, 'hatchery', 'home') ? 'subtab-unread' : ''}`}
+          onClick={() => setSubTab('home')}
+        >
           Nests
         </button>
-        <button className={subTab === 'pets' ? 'btn-primary' : ''} onClick={() => setSubTab('pets')}>
+        <button
+          className={`${subTab === 'pets' ? 'btn-primary' : ''} ${isTabUnread(state, 'hatchery', 'pets') ? 'subtab-unread' : ''}`}
+          onClick={() => setSubTab('pets')}
+        >
           Pets {state.pets.length > 0 ? `(${state.pets.length})` : ''}
         </button>
       </div>

@@ -1067,31 +1067,35 @@ button:focus-visible, [tabindex]:focus-visible {
    language stays consistent with what's already on-screen elsewhere. */
 .tabs .tab-badge.broken { color: var(--blood); }
 
-/* Discovered Quests nav tab: a rotating light chasing the button's border
-   while chainQuestAvailable is true (see its own comment in attention.ts
-   for why this is a boolean shimmer rather than a numeric .tab-badge like
-   every other nav-tab signal). Registered custom property lets the conic
-   gradient's angle animate smoothly frame-to-frame -- animating the
-   gradient's own `from <angle>` value directly, rather than wrapping the
-   pseudo-element in `transform: rotate()`, keeps the ring's border-width
-   even at every point around the button regardless of its (non-square)
-   aspect ratio. */
-@property --chain-shimmer-angle {
+/* Nav tab shimmer: a rotating light chasing the button's border while
+   isNavTabUnread(state, tab) is true (see its own comment in attention.ts
+   for why this is a boolean per tab rather than a numeric .tab-badge like
+   every other nav-tab signal). Originally built just for the Discovered
+   Quests tab (patch 0190, class name was .chain-available then);
+   generalized to any nav tab once the underlying signal became the
+   notification system itself (patch 0191) -- renamed to .nav-tab-unread
+   to match, same visual, no behaviour change for the tab it was built
+   for. Registered custom property lets the conic gradient's angle
+   animate smoothly frame-to-frame -- animating the gradient's own
+   `from <angle>` value directly, rather than wrapping the pseudo-element
+   in `transform: rotate()`, keeps the ring's border-width even at every
+   point around the button regardless of its (non-square) aspect ratio. */
+@property --nav-tab-shimmer-angle {
   syntax: '<angle>';
   inherits: false;
   initial-value: 0deg;
 }
-.tabs button.chain-available {
+.tabs button.nav-tab-unread {
   position: relative;
 }
-.tabs button.chain-available::after {
+.tabs button.nav-tab-unread::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: 4px;
   padding: 1.5px;
   background: conic-gradient(
-    from var(--chain-shimmer-angle),
+    from var(--nav-tab-shimmer-angle),
     transparent 0%,
     var(--brass) 10%,
     #fff8 16%,
@@ -1107,11 +1111,43 @@ button:focus-visible, [tabindex]:focus-visible {
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  animation: chain-shimmer-rotate 2.6s linear infinite;
+  animation: nav-tab-shimmer-rotate 2.6s linear infinite;
   pointer-events: none;
 }
-@keyframes chain-shimmer-rotate {
-  to { --chain-shimmer-angle: 360deg; }
+@keyframes nav-tab-shimmer-rotate {
+  to { --nav-tab-shimmer-angle: 360deg; }
+}
+
+/* Sub-tab unread dot (patch 0191): a small pulsing dot in a sub-tab
+   button's corner, matching isTabUnread(state, tab, subTab) -- e.g.
+   Vendors' Enchanter button, once a notification's targetSubTab points
+   there specifically. Deliberately a plain dot rather than reusing the
+   nav tab's rotating ring: a sub-tab strip can hold several buttons at
+   once (Vendors has three, Lore/Statistics have three each), and a full
+   conic-gradient ring on every one simultaneously would compete with
+   itself for attention rather than reading as a single clear signal the
+   way one ring on the nav bar does. Pulses instead of rotating so it
+   stays noticeable at a much smaller size without needing the ring's
+   border-width precision. */
+.btn-subtab.subtab-unread {
+  position: relative;
+}
+.btn-subtab.subtab-unread::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brass);
+  box-shadow: 0 0 4px var(--brass);
+  animation: subtab-dot-pulse 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes subtab-dot-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
 }
 
 .panel {

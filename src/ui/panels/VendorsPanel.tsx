@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { ShopManager } from '../../game/managers/ShopManager';
@@ -11,6 +11,7 @@ import { CONSUMABLE_BY_ID } from '../../game/data/items';
 import { VENDORS, vendorUpgrades } from '../../game/data/progression';
 import { EquipmentDef, ConsumableDef, VendorId, UpgradeDef, CraftingRecipeDef } from '../../game/types';
 import { describeMods, formatDuration, formatGold, RARITY_BANNER, RARITY_COLOR } from '../../game/util';
+import { isTabUnread } from '../../game/attention';
 import { ItemIcon, ConsumableIcon } from '../icons';
 import { VendorSprite } from '../sprites/VendorSprite';
 import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
@@ -28,7 +29,27 @@ const VENDOR_CRAFT_CATEGORY: Record<VendorId, CraftingRecipeDef['category']> = {
 };
 
 export function VendorsPanel() {
+  const engine = useEngine();
   const [tab, setTab] = useState<VendorId>('blacksmith');
+
+  // Deep-link support for a notification's "Go to Enchanter" button (see
+  // levelUpVendor's targetSubTab in engine.ts) -- same consume-once shape
+  // HatcheryPanel already uses for its own sub-tabs. VENDORS.some(...)
+  // guards against a stale/foreign id rather than trusting the request
+  // blindly, same defensive shape every other consumer of a generic
+  // requested-id field already uses.
+  useEffect(() => {
+    const requested = engine.consumeRequestedSubTab();
+    if (requested && VENDORS.some((v) => v.id === requested)) setTab(requested as VendorId);
+  }, [engine, engine.requestedSubTab]);
+
+  // Acknowledges whichever vendor page is currently open -- on mount (the
+  // default Blacksmith) and again on every switch -- clearing the nav
+  // shimmer for a banner-worthy notification targeting this specific
+  // vendor (patch 0191). See acknowledgeTab's own comment in engine.ts.
+  useEffect(() => {
+    engine.acknowledgeTab('vendors', tab);
+  }, [engine, tab]);
 
   return (
     <>
@@ -37,7 +58,11 @@ export function VendorsPanel() {
 
       <div className="row wrap" style={{ gap: 8, marginBottom: 14 }}>
         {VENDORS.map((v) => (
-          <button key={v.id} className={`btn-subtab ${tab === v.id ? 'on' : ''}`} onClick={() => setTab(v.id)}>
+          <button
+            key={v.id}
+            className={`btn-subtab ${tab === v.id ? 'on' : ''} ${isTabUnread(engine.state, 'vendors', v.id) ? 'subtab-unread' : ''}`}
+            onClick={() => setTab(v.id)}
+          >
             {v.name}
           </button>
         ))}
