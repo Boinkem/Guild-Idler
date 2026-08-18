@@ -123,6 +123,14 @@ export const UPGRADES: UpgradeDef[] = [
     modsPerLevel: {}, unlocks: 'autoChain',
   },
   {
+    id: 'chain_tactics', name: 'Chain Tactics',
+    description: 'Stop leaving Auto-Chain to its own judgment. Set a minimum success rate, tell it what to prioritize, or cap how long a streak is allowed to run.',
+    baseCost: Tuning.get('upgrade.chain_tactics.baseCost'),
+    costGrowth: Tuning.get('upgrade.chain_tactics.costGrowth'),
+    maxLevel: Tuning.get('upgrade.chain_tactics.maxLevel'),
+    modsPerLevel: {}, unlocks: 'autoChainTactics',
+  },
+  {
     id: 'raid_charter', name: 'Raid Charter',
     description: 'A standing agreement to send the guild in force, not just a hero at a time. Unlocks Normal-difficulty raids -- longer, harder, and paid out per encounter cleared rather than all at once.',
     // Cut from 15000 -- this was gating the entire raid system behind a

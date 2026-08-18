@@ -885,6 +885,17 @@ const MIGRATIONS: Record<number, Migration> = {
       chainsSeenOnBoard,
     };
   },
+  43: (save) => {
+    // New Auto-Chain time-budget field (patch 0194, Chain Tactics) -- see
+    // Hero.autoChainMinutesRemaining's own comment. Every existing hero
+    // simply hasn't got a time-budget streak running yet, same "not
+    // applicable" null every autoChainTarget-less hero already has.
+    const heroes = Array.isArray(save.heroes) ? save.heroes as Record<string, unknown>[] : [];
+    for (const h of heroes) {
+      h.autoChainMinutesRemaining = h.autoChainMinutesRemaining ?? null;
+    }
+    return { ...save, version: 44, heroes };
+  },
 };
 
 export const SaveManager = {

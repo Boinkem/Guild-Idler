@@ -1876,6 +1876,33 @@
     "min": 0
   },
   {
+    "id": "upgrade.chain_tactics.baseCost",
+    "label": "Chain Tactics: base cost",
+    "category": "vendor_upgrades",
+    "value": 100000,
+    "default": 100000,
+    "description": "Gold cost of Chain Tactics' single level -- priced above Auto-Chain's own full 4-level cost (~72.6k), since this unlock is meant to come after Auto-Chain is already maxed, not as an early alternative to it.",
+    "min": 0
+  },
+  {
+    "id": "upgrade.chain_tactics.costGrowth",
+    "label": "Chain Tactics: cost growth",
+    "category": "vendor_upgrades",
+    "value": 1,
+    "default": 1,
+    "description": "Multiplier applied per level to Chain Tactics' cost. Irrelevant at maxLevel 1, kept only for schema consistency with every other UpgradeDef.",
+    "min": 1
+  },
+  {
+    "id": "upgrade.chain_tactics.maxLevel",
+    "label": "Chain Tactics: max level",
+    "category": "vendor_upgrades",
+    "value": 1,
+    "default": 1,
+    "description": "Level cap for Chain Tactics -- single-level unlock, not a scaling tree; every parameter it grants is available in full the moment it's bought.",
+    "min": 0
+  },
+  {
     "id": "upgrade.raid_charter.baseCost",
     "label": "Raid Charter: base cost",
     "category": "vendor_upgrades",

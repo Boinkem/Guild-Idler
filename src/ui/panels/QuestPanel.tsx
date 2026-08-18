@@ -6,7 +6,7 @@ import {
   DIFFICULTIES, DIFFICULTY_ORDER, ChainDef, QUEST_TAG_BY_ID,
 } from '../../game/data/quests';
 import { InventoryManager } from '../../game/managers/InventoryManager';
-import { QuestOffer, Hero } from '../../game/types';
+import { QuestOffer, Hero, AutoChainWeightBy } from '../../game/types';
 import { formatDuration, formatGold } from '../../game/util';
 import { RarityPill } from '../RarityPill';
 import { EggIcon } from '../EggIcon';
@@ -368,6 +368,9 @@ export function QuestPanel() {
   // shortcut.
   const autoChainDef = GuildManager.upgrades().find((u) => u.unlocks === 'autoChain');
   const autoChainOwned = !!autoChainDef && GuildManager.upgradeLevel(state, autoChainDef.id) > 0;
+  const chainTacticsDef = GuildManager.upgrades().find((u) => u.unlocks === 'autoChainTactics');
+  const chainTacticsOwned = !!chainTacticsDef && GuildManager.upgradeLevel(state, chainTacticsDef.id) > 0;
+  const tactics = state.autoChainTactics ?? { successFloor: 50, weightBy: 'gold' as const, maxMinutes: null };
   const quickAssign = () => {
     const offer = QuestManager.pickBestQuest(state, selectedHero, now);
     if (offer) send(offer);
@@ -451,6 +454,77 @@ export function QuestPanel() {
           </button>
         )}
       </div>
+
+      {/* Chain Tactics -- guild-wide overrides for what the Auto-Chain
+          bounty streak's own picker (pickBestQuest) considers "best".
+          Only rendered once the upgrade is owned; a change here only
+          affects streaks rolled after this point, not one already
+          running (see engine.setAutoChainTactics's own comment). */}
+      {chainTacticsOwned && (
+        <div className="card" style={{ marginBottom: 10 }}>
+          <div className="card-title" style={{ marginBottom: 6 }}>Chain Tactics</div>
+          <p className="tiny muted" style={{ margin: '0 0 8px' }}>
+            Overrides what Auto-Chain picks for a streaking hero. Applies to streaks started after you change these.
+          </p>
+          <div className="row wrap" style={{ gap: 12, alignItems: 'center' }}>
+            <label className="row" style={{ gap: 6, alignItems: 'center' }}>
+              <span className="tiny muted">Minimum success</span>
+              <select
+                value={tactics.successFloor}
+                onChange={(e) => engine.setAutoChainTactics({ successFloor: Number(e.target.value) })}
+                style={{
+                  background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+                  color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.625rem',
+                }}
+              >
+                <option value={50}>Default (50%)</option>
+                <option value={70}>70%</option>
+                <option value={80}>80%</option>
+                <option value={90}>90%</option>
+              </select>
+            </label>
+            <label className="row" style={{ gap: 6, alignItems: 'center' }}>
+              <span className="tiny muted">Prioritize</span>
+              <select
+                value={tactics.weightBy}
+                onChange={(e) => engine.setAutoChainTactics({ weightBy: e.target.value as AutoChainWeightBy })}
+                style={{
+                  background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+                  color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.625rem',
+                }}
+              >
+                <option value="gold">Gold</option>
+                <option value="xp">XP</option>
+                <option value="loot">Loot</option>
+                <option value="balanced">Balanced</option>
+              </select>
+            </label>
+            <label className="row" style={{ gap: 6, alignItems: 'center' }}>
+              <span className="tiny muted">Max streak time</span>
+              <select
+                value={tactics.maxMinutes ?? 'off'}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  engine.setAutoChainTactics({ maxMinutes: v === 'off' ? null : Number(v) });
+                }}
+                style={{
+                  background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+                  color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.625rem',
+                }}
+                title="When set, overrides the Auto-Chain upgrade's own streak-length roll -- keeps queueing contracts until the next one would push past this budget"
+              >
+                <option value="off">Off (use upgrade tier)</option>
+                <option value={60}>1 hour</option>
+                <option value={180}>3 hours</option>
+                <option value={360}>6 hours</option>
+                <option value={720}>12 hours</option>
+                <option value={1440}>24 hours</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      )}
+
       <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
         {state.heroes.map((h) => (
           <HeroTab key={h.id} hero={h} selected={h.id === selectedHero.id} onSelect={() => setSelectedHeroId(h.id)} />

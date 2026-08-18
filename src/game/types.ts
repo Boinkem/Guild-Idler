@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 43;
+export const SAVE_VERSION = 44;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -511,6 +511,20 @@ export interface Hero {
    */
   autoChainTarget: number | null;
   /**
+   * Time-budget override for the Auto-Chain bounty streak, set only when
+   * the Chain Tactics upgrade is owned AND its maxMinutes setting is
+   * non-null (see AutoChainTactics/GameState.autoChainTactics). When
+   * active, `autoChainTarget` is rolled to Number.MAX_SAFE_INTEGER
+   * instead of a tier-rolled count -- this field governs stopping
+   * instead, decremented by each quest's own duration as the streak
+   * continues, checked in tryContinueAutoChain both before picking a
+   * next quest (already out of budget) and after (the picked quest's own
+   * duration would overrun what's left). Null whenever the streak is
+   * running on the ordinary tier-rolled count instead, same "null means
+   * not applicable" convention autoChainTarget itself already uses.
+   */
+  autoChainMinutesRemaining: number | null;
+  /**
    * Consumable defIds currently slotted on this hero -- persistent, not a
    * per-send pick. A quest automatically uses whatever's equipped here
    * rather than needing a loadout chosen at send time (see the Quest Board
@@ -603,6 +617,35 @@ export interface Hero {
 export interface LootRoll {
   defId: string;
   chance: number;
+}
+
+/**
+ * What QuestManager.pickBestQuest sorts viable (above-floor) offers by,
+ * once the Chain Tactics upgrade unlocks the choice -- 'gold' matches
+ * the picker's original hardcoded behavior exactly. 'loot' uses an
+ * offer's own loot.length as a stand-in for "prefers items" (offers
+ * don't carry a single scalar loot value the way gold/xp do), 'balanced'
+ * blends all three into one score rather than picking just one axis.
+ */
+export type AutoChainWeightBy = 'gold' | 'xp' | 'loot' | 'balanced';
+
+/** See GameState.autoChainTactics' own comment. */
+export interface AutoChainTactics {
+  /**
+   * Minimum previewSuccess() a board offer must clear to be considered
+   * "viable" by pickBestQuest -- 50 matches the picker's original
+   * hardcoded floor exactly, so this is a strict tightening only (70/80/
+   * 90), never a loosening below the original default.
+   */
+  successFloor: number;
+  weightBy: AutoChainWeightBy;
+  /**
+   * When set (non-null), overrides the tier-rolled streak-length count
+   * entirely -- see Hero.autoChainMinutesRemaining's own comment for how
+   * the override actually plays out turn to turn. Null means "use the
+   * ordinary AUTO_CHAIN_RANGES tier roll," the pre-existing behavior.
+   */
+  maxMinutes: number | null;
 }
 
 export interface QuestOffer {
@@ -1104,7 +1147,7 @@ export interface UpgradeDef {
   costGrowth: number;
   maxLevel: number;
   modsPerLevel: Partial<Modifiers>;
-  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsLegendary' | 'training';
+  unlocks?: 'legendaryQuests' | 'chains' | 'blackMarket' | 'autoChain' | 'raids' | 'raidsHeroic' | 'raidsLegendary' | 'training' | 'autoChainTactics';
   /**
    * Which vendor offers this upgrade. Undefined means it's a general guild
    * upgrade with no vendor attached (unlocks like Guild Charter or Black
@@ -1734,6 +1777,21 @@ export interface GameState {
    *  under-equipped until the player notices and revisits the Equipment
    *  tab by hand. */
   autoEquipConsumablesOnSend: boolean;
+  /**
+   * Guild-wide overrides for the Auto-Chain bounty streak's own picker
+   * (QuestManager.pickBestQuest), unlocked by the Chain Tactics upgrade
+   * (`unlocks: 'autoChainTactics'`). Optional/undefined the same
+   * defensive way autoRepairEnabled's siblings above are NOT (those are
+   * required with a real default at save-creation time) -- this one is
+   * optional instead because it only ever matters once the gating
+   * upgrade is owned, so every read goes through
+   * ModifierManager.hasUnlock(state, 'autoChainTactics') first and falls
+   * back to pickBestQuest's original hardcoded behavior (50% floor,
+   * gold-weighted) when it isn't. No SAVE_VERSION bump needed for the
+   * field itself; see Hero.autoChainMinutesRemaining's own migration for
+   * the one field this system did need to backfill.
+   */
+  autoChainTactics?: AutoChainTactics;
 
   /* ------------------------- Grimsby / the peddler ------------------------- */
   /** True once the intro chain that grants Grimsby has been completed --

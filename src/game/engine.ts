@@ -1,4 +1,4 @@
-import { ActiveQuest, ElementType, GameState, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
+import { ActiveQuest, AutoChainTactics, ElementType, GameState, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -26,6 +26,7 @@ import { RAID_BY_ID } from './data/raids';
 import { Tuning } from './data/tuning';
 import { rerollDay, rerollsUsedToday } from './data/reroll';
 import { playSound } from './sound';
+import { MINUTE } from './util';
 import { TESTING_TOOLS_ENABLED } from './testingTools';
 
 const TICK_MS = 1000;
@@ -315,6 +316,7 @@ export class GameEngine {
         hero.autoAdvanceChainId = null;
         hero.autoChainTarget = null;
         hero.autoChainCount = 0;
+        hero.autoChainMinutesRemaining = null;
         return { continued: false, completedCount: 0, target: 0, via: 'chain', stoppedByFailure: true };
       }
       const chain = CHAIN_BY_ID[chainId];
@@ -340,11 +342,16 @@ export class GameEngine {
       const completedCount = hero.autoChainCount;
       hero.autoChainTarget = null;
       hero.autoChainCount = 0;
+      hero.autoChainMinutesRemaining = null;
       return { continued: false, completedCount, target, via: 'streak', stoppedByFailure };
     };
 
     if (!prevSuccess) return giveUp(true);
     if (hero.autoChainCount >= target) return giveUp();
+    // Time-budget override (Chain Tactics) -- see rollAutoChainStreak's own
+    // comment for how a streak ends up in this mode. Out of budget stops
+    // the streak the same as hitting the ordinary tier-rolled count would.
+    if (hero.autoChainMinutesRemaining !== null && hero.autoChainMinutesRemaining <= 0) return giveUp();
     const level = this.state.upgrades['auto_chain'] ?? 0;
     if (level <= 0) return giveUp();
 
@@ -360,9 +367,20 @@ export class GameEngine {
     const offer = QuestManager.pickBestQuest(this.state, hero, now);
     if (!offer) return giveUp();
 
+    // Still under the time-budget override -- if this specific offer's own
+    // duration would push the streak past what's left, stop here rather
+    // than starting a quest that's guaranteed to overrun the budget.
+    if (hero.autoChainMinutesRemaining !== null) {
+      const offerMinutes = offer.duration / MINUTE;
+      if (offerMinutes > hero.autoChainMinutesRemaining) return giveUp();
+    }
+
     const { error } = QuestManager.start(this.state, hero, offer, [], now);
     if (error) return giveUp();
 
+    if (hero.autoChainMinutesRemaining !== null) {
+      hero.autoChainMinutesRemaining -= offer.duration / MINUTE;
+    }
     hero.autoChainCount += 1;
     return { continued: true, completedCount: hero.autoChainCount, target, via: 'streak' };
   }
@@ -1294,15 +1312,7 @@ export class GameEngine {
     // A manual send always (re)starts a fresh Auto-Chain streak if the
     // upgrade is owned — choosing to send by hand again implicitly abandons
     // whatever streak state was there before.
-    const level = this.state.upgrades['auto_chain'] ?? 0;
-    if (level > 0) {
-      const range = AUTO_CHAIN_RANGES[level];
-      hero.autoChainTarget = range.min + Math.floor(Math.random() * (range.max - range.min + 1));
-      hero.autoChainCount = 1;
-    } else {
-      hero.autoChainTarget = null;
-      hero.autoChainCount = 0;
-    }
+    this.rollAutoChainStreak(hero);
     // Same "manual send always resets prior streak state" reasoning applies
     // here -- any hero being sent by hand either opts into chain-stepping
     // right now (via the offer just picked) or isn't chain-stepping at all,
@@ -1329,9 +1339,51 @@ export class GameEngine {
    * -- same "don't spam the toast queue for a bulk action" shape as
    * repairAll(). Returns how many heroes were actually sent.
    */
+  /**
+   * Shared by startQuest and sendAllIdle -- rolls (or clears) a fresh
+   * Auto-Chain bounty streak for a hero who was just sent, in whichever
+   * of two shapes applies:
+   *
+   * - **Ordinary tier roll** (the pre-existing behavior): a random count
+   *   within AUTO_CHAIN_RANGES[level], autoChainMinutesRemaining stays
+   *   null.
+   * - **Chain Tactics time-budget override** (unlocks: 'autoChainTactics',
+   *   only when autoChainTactics.maxMinutes is actually set): the count
+   *   cap effectively disables itself (Number.MAX_SAFE_INTEGER, so
+   *   tryContinueAutoChain's own count check never fires first) and
+   *   autoChainMinutesRemaining is seeded with the budget instead --
+   *   tryContinueAutoChain decrements it turn to turn and stops the
+   *   streak once what's left can't cover the next offer, which is what
+   *   actually enforces the cap. Matches the original ask directly:
+   *   "manually override the amount of chains the chain upgrade system
+   *   gives you."
+   *
+   * Level 0 (upgrade not owned at all) clears both fields, same as
+   * before this system existed.
+   */
+  private rollAutoChainStreak(hero: Hero) {
+    const level = this.state.upgrades['auto_chain'] ?? 0;
+    if (level <= 0) {
+      hero.autoChainTarget = null;
+      hero.autoChainCount = 0;
+      hero.autoChainMinutesRemaining = null;
+      return;
+    }
+    const tactics = ModifierManager.hasUnlock(this.state, 'autoChainTactics') ? this.state.autoChainTactics : undefined;
+    if (tactics?.maxMinutes != null) {
+      hero.autoChainTarget = Number.MAX_SAFE_INTEGER;
+      hero.autoChainCount = 1;
+      hero.autoChainMinutesRemaining = tactics.maxMinutes;
+      return;
+    }
+    const range = AUTO_CHAIN_RANGES[level];
+    hero.autoChainTarget = range.min + Math.floor(Math.random() * (range.max - range.min + 1));
+    hero.autoChainCount = 1;
+    hero.autoChainMinutesRemaining = null;
+  }
+
   sendAllIdle(): number {
     const now = Date.now();
-    const level = this.state.upgrades['auto_chain'] ?? 0;
     let sent = 0;
     for (const hero of this.state.heroes) {
       if (hero.status === 'questing') continue;
@@ -1340,14 +1392,7 @@ export class GameEngine {
       if (!offer) continue;
       const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], now);
       if (error) continue;
-      if (level > 0) {
-        const range = AUTO_CHAIN_RANGES[level];
-        hero.autoChainTarget = range.min + Math.floor(Math.random() * (range.max - range.min + 1));
-        hero.autoChainCount = 1;
-      } else {
-        hero.autoChainTarget = null;
-        hero.autoChainCount = 0;
-      }
+      this.rollAutoChainStreak(hero);
       hero.autoAdvanceChainId = null;
       sent++;
     }
@@ -1380,6 +1425,7 @@ export class GameEngine {
     hero.activeQuestId = null;
     hero.autoChainTarget = null;
     hero.autoChainCount = 0;
+    hero.autoChainMinutesRemaining = null;
     hero.autoAdvanceChainId = null;
     playSound('depart');
     this.say(`${hero.name} is recalled and heads back to the guild.`, 'quests');
@@ -1699,6 +1745,26 @@ export class GameEngine {
   toggleItemLock(itemUid: string) {
     const error = EquipmentManager.toggleLock(this.state, itemUid);
     if (error) return this.say(error);
+    void this.saveNow();
+  }
+
+  /**
+   * Updates the guild-wide Auto-Chain override settings (Chain Tactics
+   * upgrade). Merges rather than replaces, so a caller changing just one
+   * field (e.g. the floor dropdown) doesn't need to know or resend the
+   * other two. Only ever meaningful once the upgrade is owned -- the
+   * settings object can still be written before then (harmless, just
+   * inert), matching how autoRepairEnabled/autoEquipOnLoot etc. are
+   * always-present preferences rather than gated fields. No toast, same
+   * quiet-settings-change treatment toggleItemLock above already uses.
+   * A change here only affects streaks rolled AFTER this call -- an
+   * already-running streak keeps whatever floor/weight/budget it started
+   * with, same as every other "preference read once at roll time, not
+   * re-checked mid-streak" convention this system already established.
+   */
+  setAutoChainTactics(partial: Partial<AutoChainTactics>) {
+    const current = this.state.autoChainTactics ?? { successFloor: 50, weightBy: 'gold', maxMinutes: null };
+    this.state.autoChainTactics = { ...current, ...partial };
     void this.saveNow();
   }
 

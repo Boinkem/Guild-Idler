@@ -13290,3 +13290,108 @@ otherwise include it), and Scrap (both the picker's disabled state and
 `ShopManager.scrapItem`'s own direct refusal); unlocking restores all
 three immediately; Enhance/Infuse/Enchant pickers still list a locked
 item normally throughout.
+
+### Chain Tactics: configurable Auto-Chain floor, weighting, and time budget -- built (patch 0194)
+
+```discord-update
+Dev Update | Chain Tactics
+
+- New upgrade: Chain Tactics gives Auto-Chain a settings panel instead of leaving it to its own judgment
+- Set a minimum success rate (70/80/90%), tell it whether to prioritize Gold, XP, Loot, or a Balanced mix, and optionally cap a streak by total time instead of the upgrade tier's fixed count
+- Settings live in a new card on the Quest Board, right above your hero tabs, once you've bought the upgrade
+```
+
+Direct player feedback: Auto-Chain already picks well, but a bit of
+manual control -- a success-rate floor at minimum, ideally also what it
+prioritizes and how long a streak is allowed to run -- was asked for.
+Agreed in discussion to build all three behind one new upgrade rather
+than gating them individually across Auto-Chain's own existing tiers.
+
+**What `pickBestQuest` already had, reused rather than reinvented.**
+Turned out the "best quest" picker already had exactly two of the three
+asks baked in as hardcoded constants: a 50% success floor and a
+gold-value sort as its tiebreaker. Chain Tactics doesn't replace this
+logic, it makes those two constants configurable and adds the third
+(time budget) as a genuinely new mechanism -- a guild without the
+upgrade sees `pickBestQuest` behave identically to before, since the new
+read path (`ModifierManager.hasUnlock(state, 'autoChainTactics')`) falls
+straight back to the same 50/gold defaults when the upgrade isn't owned.
+
+**New upgrade: `chain_tactics`** (`progression.ts`), single level,
+priced at 100k gold -- deliberately above Auto-Chain's own full 4-level
+cost (~72.6k), since this is meant to come after Auto-Chain is already
+maxed rather than as an early alternative to it. New `unlocks:
+'autoChainTactics'` value threaded through `UpgradeDef` and
+`ModifierManager.hasUnlock`.
+
+**New types (`types.ts`):** `AutoChainWeightBy` ('gold' | 'xp' | 'loot' |
+'balanced') and `AutoChainTactics` (`successFloor`, `weightBy`,
+`maxMinutes: number | null`). `GameState.autoChainTactics?:
+AutoChainTactics` -- optional/guild-wide, read through `hasUnlock` at
+every call site rather than gated at the field level, same "harmless
+when inert" shape `autoRepairEnabled`'s siblings avoid needing (those
+are required-with-default instead, since they're not upgrade-gated).
+
+**`QuestManager.pickBestQuest`** now reads `successFloor`/`weightBy` off
+`state.autoChainTactics` (falling back to 50/'gold') and sorts viable
+offers by a new `QuestManager.autoChainWeight(offer, weightBy)` helper
+instead of a hardcoded `.rewardGold` comparison -- 'gold' reproduces the
+original sort exactly, 'xp' compares `rewardXp` directly, 'loot' uses
+`loot.length` as a stand-in (offers don't carry a single scalar loot
+value the way gold/xp already are flat numbers), 'balanced' blends all
+three into one score (first-pass weights, not derived from an existing
+conversion rate elsewhere in the game).
+
+**Time-budget override -- the genuinely new mechanism, not just an
+existing constant exposed.** Per the original ask ("manually override
+the amount of chains the chain upgrade system gives you"): new
+`Hero.autoChainMinutesRemaining: number | null` field, and a new shared
+`GameEngine.rollAutoChainStreak(hero)` helper (replacing the
+duplicated roll logic `startQuest`/`sendAllIdle` each used to carry
+separately). When Chain Tactics' `maxMinutes` is set, a fresh streak
+rolls `autoChainTarget = Number.MAX_SAFE_INTEGER` (so the ordinary
+count check never fires first) and seeds `autoChainMinutesRemaining`
+with the budget instead. `tryContinueAutoChain` decrements it by each
+started offer's own duration and stops the streak (same `giveUp()` path
+a failure or hitting the tier count already uses) once what's left
+can't cover the next offer -- checked both before generating a fresh
+board (already out of budget) and after picking a specific offer (that
+offer alone would overrun what's left), so a streak never starts a
+quest it can't finish within budget. A manual send always still departs
+regardless of budget -- the check only gates *continuations*, matching
+"it tries to get under that" rather than refusing a player's own
+explicit choice.
+
+**Save migration (43 → 44).** `Hero.autoChainMinutesRemaining` backfilled
+to `null` for every existing hero -- same "not applicable yet" default
+every autoChainTarget-less hero already effectively has.
+`GameState.autoChainTactics` itself needed no migration (optional,
+read-defensively, same convention as `equippedConsumables`).
+
+**UI (`QuestPanel.tsx`).** New "Chain Tactics" card above the hero-tab
+row, rendered only once the upgrade is owned -- three inline dropdowns
+(Minimum success: Default/70/80/90%; Prioritize: Gold/XP/Loot/Balanced;
+Max streak time: Off/1h/3h/6h/12h/24h), each writing straight through
+the new `engine.setAutoChainTactics(partial)` (merges rather than
+replaces, so changing one dropdown doesn't need to resend the other
+two). No toast on change -- same quiet-settings treatment
+`toggleItemLock` (Vault, patch 0193) already established for
+consequence-free preference changes.
+
+**Deliberately not built this pass:** per-hero tactics (kept guild-wide,
+matching how the Auto-Chain upgrade itself is guild-wide, not a
+per-hero setting); tiering the three controls behind Chain Tactics'
+own upgrade levels (shipped as one single-level unlock granting all
+three at once, per the discussion's "build all three now" scope
+decision) -- gradual per-level unlocking of floor -> weighting -> time
+budget remains a straightforward follow-up if ever wanted, since
+`chain_tactics.maxLevel` is already a real tuning entry, just set to 1.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Runtime-traced via a standalone
+script: `setAutoChainTactics` merges correctly; a manual send with
+`maxMinutes` set rolls `autoChainTarget` to the sentinel and seeds
+`autoChainMinutesRemaining` with the budget exactly; a 90%-floor board
+with no offer clearing it still returns the best available rather than
+null (the existing "no offer above floor" fallback, confirmed still
+intact under the new configurable floor).

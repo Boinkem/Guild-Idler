@@ -10,7 +10,7 @@ import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
 import { NODE_ORDER, MATERIAL_BY_ID } from '../data/materials';
 import { warehouseCapacity } from '../data/harvestUpgrades';
 import {
-  ActiveQuest, Difficulty, GameState, Hero, MaterialId, QuestOffer, QuestResult, Rarity,
+  ActiveQuest, AutoChainWeightBy, Difficulty, GameState, Hero, MaterialId, QuestOffer, QuestResult, Rarity,
 } from '../types';
 import { createRng, Rng, uid } from '../rng';
 import { clamp, HOUR, MINUTE, sumMods } from '../util';
@@ -507,9 +507,37 @@ export const QuestManager = {
     const eligible = (state.questBoards[hero.id] ?? []).filter((o) => hero.level >= o.reqLevel && !o.chain);
     if (eligible.length === 0) return null;
     const scored = eligible.map((o) => ({ o, p: QuestManager.previewSuccess(state, hero, o, hero.equippedConsumables ?? [], now) }));
-    const viable = scored.filter((e) => e.p >= 50).sort((a, b) => b.o.rewardGold - a.o.rewardGold);
+    // Chain Tactics (unlocks: 'autoChainTactics') lets the player override
+    // both the floor and the tiebreaker below -- unowned, this reduces to
+    // exactly the original hardcoded behavior (50% floor, sort by gold),
+    // so a guild without the upgrade sees no change at all.
+    const tactics = ModifierManager.hasUnlock(state, 'autoChainTactics') ? state.autoChainTactics : undefined;
+    const floor = tactics?.successFloor ?? 50;
+    const weightBy = tactics?.weightBy ?? 'gold';
+    const viable = scored.filter((e) => e.p >= floor).sort((a, b) => QuestManager.autoChainWeight(b.o, weightBy) - QuestManager.autoChainWeight(a.o, weightBy));
     if (viable.length > 0) return viable[0].o;
     return scored.sort((a, b) => b.p - a.p)[0].o;
+  },
+
+  /**
+   * The score pickBestQuest's viable-offer tiebreaker sorts by, once
+   * Chain Tactics unlocks a choice of which axis to prefer. 'gold'
+   * reproduces the picker's original single-axis sort exactly. Offers
+   * don't carry a single scalar "loot value" the way gold/xp are already
+   * flat numbers, so 'loot' uses loot.length (how many rolls this offer
+   * grants) as the stand-in, and 'balanced' folds all three into one
+   * blended score rather than optimizing only one axis -- weights are a
+   * first-pass judgment call (100 gold ~ 1 xp ~ 1 loot roll), not derived
+   * from any existing conversion rate elsewhere in the game.
+   */
+  autoChainWeight(o: QuestOffer, weightBy: AutoChainWeightBy): number {
+    switch (weightBy) {
+      case 'xp': return o.rewardXp;
+      case 'loot': return o.loot.length;
+      case 'balanced': return o.rewardGold / 100 + o.rewardXp + o.loot.length * 50;
+      case 'gold':
+      default: return o.rewardGold;
+    }
   },
 
   /**
