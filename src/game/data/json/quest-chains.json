@@ -6,35 +6,42 @@
     "reqLevel": 2,
     "rewardGold": 150,
     "rewardItems": [
-      "cellar_dwellers_tooth"
+      "cellar_dwellers_tooth@5"
     ],
     "rewardRenown": 1,
     "title": "First Real Job",
     "epilogue": "Whatever lived beneath the mill was old, territorial, and unlike anything the guild has been able to identify since. It was driven out and will not be coming back. The miller still refuses to go near the cellar, but the smell and the noises have stopped. The guild's first real job ended in a clean, if unsettling, victory.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "focusX": 36,
+      "focusY": 81.4
+    },
     "stages": [
       {
         "name": "The Miller's Cellar",
         "flavour": "The miller insists it's just rats, unusually large and loud ones. He hasn't gone down the cellar stairs in three days and has no plans to start today.",
         "tag": "explore",
         "difficulty": "easy",
-        "goldMultiplier": 1.2,
-        "durationMinutes": 45
+        "durationMinutes": 45,
+        "goldMultiplier": 1.2
       },
       {
         "name": "Whatever the Rats Were Fleeing",
         "flavour": "The rats are fleeing upward, into the mill and anywhere but down. Rats only run toward danger when what they left behind is worse.",
         "tag": "explore",
         "difficulty": "easy",
-        "goldMultiplier": 1.3,
-        "durationMinutes": 90
+        "durationMinutes": 90,
+        "goldMultiplier": 1.3
       },
       {
         "name": "The Thing Under the Mill",
         "flavour": "The creature has lived beneath this mill longer than the mill has stood. Twice it turns toward an empty corner of the cellar, as if something is there that cannot be seen.",
         "tag": "combat",
         "difficulty": "normal",
-        "goldMultiplier": 1.6,
-        "durationMinutes": 150
+        "durationMinutes": 150,
+        "goldMultiplier": 1.6
       }
     ]
   },
@@ -44,31 +51,36 @@
     "description": "The old hatchery at the edge of town has been failing for years. Its last keeper, too frail now to climb the coop ladder, has kept one final clutch of eggs alive through sheer stubbornness. The roof is failing and the fence is broken, and the clutch will not survive another storm without help.",
     "reqLevel": 5,
     "rewardGold": 400,
-    "rewardItems": [],
     "rewardRenown": 1,
     "title": "Keeper of the Clutch",
+    "epilogue": "The hatchery stands again, its old beams replaced with new timber. The keeper still visits most mornings to check the work, and so far has found nothing to complain about. The eggs are safe now, and whatever hatches from them belongs to the guild to raise.",
     "grantsHatchery": true,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
     "rewardEgg": {
       "rarity": "common",
       "dedicatedPetId": "hatchery_hound"
     },
-    "epilogue": "The hatchery stands again, its old beams replaced with new timber. The keeper still visits most mornings to check the work, and so far has found nothing to complain about. The eggs are safe now, and whatever hatches from them belongs to the guild to raise.",
+    "banner": {
+      "path": "chains/Last Clutch.png",
+      "scale": 139
+    },
     "stages": [
       {
         "name": "The Failing Coop",
         "flavour": "Half the roof has already collapsed. The keeper refuses to leave the one nest she still trusts, even to eat. She does not want gold. She wants help carrying water and lumber faster than the weather can undo it.",
         "tag": "escort",
         "difficulty": "easy",
-        "goldMultiplier": 1.2,
-        "durationMinutes": 60
+        "durationMinutes": 60,
+        "goldMultiplier": 1.2
       },
       {
         "name": "What the Coop Was Guarding Against",
         "flavour": "Something circles the hatchery at night, testing the same weak point in the fence each time. Ordinary vermin do not show this kind of patience. Whatever it wants, it has not given up.",
         "tag": "defense",
         "difficulty": "normal",
-        "goldMultiplier": 1.4,
-        "durationMinutes": 120
+        "durationMinutes": 120,
+        "goldMultiplier": 1.4
       }
     ]
   },
@@ -79,75 +91,91 @@
     "reqLevel": 8,
     "rewardGold": 900,
     "rewardItems": [
-      "crow_feather_charm"
+      "crow_feather_charm@5"
     ],
     "rewardRenown": 1,
     "title": "Crow-Friend",
     "epilogue": "The cure held. Those bitten by the demons stayed human instead of finishing their turn into ghouls, and the tavern is full again. The crow never explained itself and never truly left either. It is still around most days, watching from somewhere just out of reach.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/Crows Warning.png",
+      "focusX": 58.6,
+      "focusY": 17,
+      "scale": 138
+    },
     "stages": [
       {
         "name": "Smoke Over Thornhollow",
         "flavour": "The demons did not raze this town. They went through it door by door, overturning drawers and tearing up floorboards, searching for something specific and leaving everything else untouched. Raiding makes sense. This does not.",
         "tag": "explore",
         "difficulty": "normal",
-        "goldMultiplier": 1.4,
-        "durationMinutes": 240
+        "durationMinutes": 240,
+        "goldMultiplier": 1.4
       },
       {
         "name": "The Trail North",
         "flavour": "A crow lands on the ruined gate and does not fly off. It leads the guild north through two towns and a river crossing, toward Greywick, the nearest town with an alchemist skilled enough to have any chance at a cure.",
         "tag": "explore",
         "difficulty": "normal",
-        "goldMultiplier": 1.5,
-        "durationMinutes": 300
+        "durationMinutes": 300,
+        "goldMultiplier": 1.5
       },
       {
         "name": "Greywick's Alchemist",
         "flavour": "The alchemist is already grinding spider venom before the explanation finishes, her hands moving faster than her questions. Speed is the only thing that matters. The bitten are still people right now, and every hour that passes shortens how long that stays true.",
         "tag": "arcane",
         "difficulty": "hard",
-        "goldMultiplier": 1.7,
-        "durationMinutes": 360
+        "durationMinutes": 360,
+        "goldMultiplier": 1.7
       },
       {
         "name": "The Road Back to Thornhollow",
         "flavour": "Four vials of cure, wrapped carefully and carried like something fragile and alive, are on the road back to Thornhollow. Every mile still ahead is an hour the bitten don't have to spare.",
         "tag": "defense",
         "difficulty": "hard",
-        "goldMultiplier": 1.8,
-        "durationMinutes": 360
+        "durationMinutes": 360,
+        "goldMultiplier": 1.8
       }
     ]
   },
   {
     "id": "harrowers_foot",
-    "requiresChainId": "crows_warning",
     "name": "The Harrower's Foot",
     "description": "A second village has been culled the same way as the last one. It was not burned or looted, only searched, drawer by drawer and room by room. Whatever is directing these raids is hunting for something specific, and every emptied village brings it closer to finding it.",
     "reqLevel": 11,
     "rewardGold": 1300,
     "rewardItems": [
-      "ashwoven_charm"
+      "ashwoven_charm@5"
     ],
     "rewardRenown": 1,
     "title": "Ash-Reader",
     "epilogue": "The pattern held until the demons themselves could no longer explain it. Something, somewhere, gave every one of those orders. Nobody who fought today learned who.",
+    "requiresChainId": "crows_warning",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/Harrowers Foot.png",
+      "scale": 133
+    },
     "stages": [
       {
         "name": "The Pattern in the Ash",
         "flavour": "Every burned house in this village was searched before it burned. Floorboards were pried up and cellars emptied, nothing left to chance. This is not how raiding works. This is how searching works, and it means whatever they wanted still has not been found.",
         "tag": "explore",
         "difficulty": "normal",
-        "goldMultiplier": 1.5,
-        "durationMinutes": 300
+        "durationMinutes": 300,
+        "goldMultiplier": 1.5
       },
       {
         "name": "What the Foot Soldiers Take",
         "flavour": "These demons do not fight like starving animals. They fight like soldiers who know they will be questioned afterward about exactly what they found and where. Whoever gives these orders expects a full report.",
         "tag": "combat",
         "difficulty": "hard",
-        "goldMultiplier": 1.8,
-        "durationMinutes": 420
+        "durationMinutes": 420,
+        "goldMultiplier": 1.8
       }
     ]
   },
@@ -492,35 +520,44 @@
     "reqLevel": 14,
     "rewardGold": 2600,
     "rewardItems": [
-      "crown_of_the_lost"
+      "crown_of_the_lost@5"
     ],
     "rewardRenown": 1,
     "title": "Kingdom-Finder",
     "epilogue": "The living stone guardian went still the moment the vault finally opened, as if its only purpose had been fulfilled. The kingdom that built it remains exactly as lost as it was before anyone found this place. Some things were never meant to be found twice, and this one is going straight back to being a rumor.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/stacked cards.png",
+      "focusX": 40.1,
+      "focusY": 22.4,
+      "scale": 121
+    },
     "stages": [
       {
         "name": "Chart the Grey Marches",
         "flavour": "Six straight days of featureless grey terrain end without warning at a stone road that has no business existing this far from any charted place.",
         "tag": "explore",
         "difficulty": "normal",
-        "goldMultiplier": 1.6,
-        "durationMinutes": 600
+        "durationMinutes": 600,
+        "goldMultiplier": 1.6
       },
       {
         "name": "Cross the Silent Bridge",
         "flavour": "The bridge holds without so much as a creak, which is the most unsettling part of a structure that should not still be standing at all.",
         "tag": "explore",
         "difficulty": "hard",
-        "goldMultiplier": 1.8,
-        "durationMinutes": 720
+        "durationMinutes": 720,
+        "goldMultiplier": 1.8
       },
       {
         "name": "Open the Sunken Vault",
         "flavour": "Whatever this lost kingdom locked away down here, it locked away thoroughly. Layers of stone, then steel, then something that is neither, all sealed around a living stone guardian that has never once stopped watching the center of the vault.",
         "tag": "arcane",
         "difficulty": "epic",
-        "goldMultiplier": 2.4,
-        "durationMinutes": 960
+        "durationMinutes": 960,
+        "goldMultiplier": 2.4
       }
     ]
   },
@@ -586,35 +623,44 @@
     "reqLevel": 10,
     "rewardGold": 1800,
     "rewardItems": [
-      "lucky_ring"
+      "lucky_ring@5"
     ],
     "rewardRenown": 1,
     "title": "Crownbearer",
     "epilogue": "Three fragments from three very different hiding places fit together exactly as they should. Nobody involved has explained why the crown was worth hiding in three separate corners of the world, and at this point, nobody is still asking.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/Ancient Crown.png",
+      "focusX": 62.4,
+      "focusY": 22.7,
+      "scale": 112
+    },
     "stages": [
       {
         "name": "The Fragment in the Fen",
         "flavour": "Cold water to the knees, colder mud underneath, and a suit of ancient armor, empty inside, still standing guard over this fragment since long before the fen had a name.",
         "tag": "explore",
         "difficulty": "normal",
-        "goldMultiplier": 1.5,
-        "durationMinutes": 480
+        "durationMinutes": 480,
+        "goldMultiplier": 1.5
       },
       {
         "name": "The Fragment in the Vault",
         "flavour": "The banker insists, with a completely straight face, that it is just a paperweight. That is exactly the kind of thing someone says about an object they know is worth killing over.",
         "tag": "stealth",
         "difficulty": "hard",
-        "goldMultiplier": 1.8,
-        "durationMinutes": 600
+        "durationMinutes": 600,
+        "goldMultiplier": 1.8
       },
       {
         "name": "The Fragment in the Fire",
         "flavour": "The fragment was last seen inside an active forge, sitting in coals hot enough to melt steel.",
         "tag": "explore",
         "difficulty": "epic",
-        "goldMultiplier": 2.2,
-        "durationMinutes": 720
+        "durationMinutes": 720,
+        "goldMultiplier": 2.2
       }
     ]
   },
@@ -625,67 +671,85 @@
     "reqLevel": 6,
     "rewardGold": 550,
     "rewardItems": [
-      "warband_cleaver"
+      "warband_cleaver@5"
     ],
     "rewardRenown": 1,
     "title": "Warband-Breaker",
     "epilogue": "Three warbands, no chieftain, and a confused horde left leaderless in the hills. But the third crown pulled from the wreckage never belonged to any warlord. Whoever it actually came from has a far older claim to settle, and has not started collecting yet.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/Goblin Warband.png",
+      "focusX": 49.2,
+      "focusY": 84.9,
+      "scale": 120
+    },
     "stages": [
       {
         "name": "Scatter the Outriders",
         "flavour": "The outriders always give themselves away, mismatched armor clattering and torches lit hours before dark, laughing about a raid that has not happened yet. Cut them down before they reach camp, and the warband rides in blind.",
         "tag": "combat",
         "difficulty": "normal",
-        "goldMultiplier": 1.3,
-        "durationMinutes": 180
+        "durationMinutes": 180,
+        "goldMultiplier": 1.3
       },
       {
         "name": "The Chieftain's Camp",
         "flavour": "The chieftain holds court under three crowns stacked crooked on a head too small for any of them. They are trophies, not treasures, each looted from someone who mattered more than he ever will. He believes wearing them makes him a king. He is about to learn how wrong that is, right before the horde scatters without him.",
         "tag": "combat",
         "difficulty": "hard",
-        "goldMultiplier": 1.6,
-        "durationMinutes": 300
+        "durationMinutes": 300,
+        "goldMultiplier": 1.6
       }
     ]
   },
   {
     "id": "third_crown",
-    "requiresChainId": "goblin_warband",
     "name": "The Third Crown",
     "description": "One of the goblin king's three crowns was not looted from a rival warband or plundered from a manor. It was collected as a toll on the Blackford road, taken from a lord passing through. He was reported dead that same season. He was not. Whoever he is now, he has had a long time to plan what comes next.",
     "reqLevel": 7,
     "rewardGold": 600,
     "rewardItems": [
-      "tollkeepers_signet"
+      "tollkeepers_signet@5"
     ],
     "rewardRenown": 1,
     "title": "Ridge-Watcher",
     "epilogue": "The crown's true owner is not dead, not landless, and far from finished. Whatever he is quietly building at Blackford Ridge is bigger than one toll gate. Scouting it further is not the guild's job yet, but that may not last.",
+    "requiresChainId": "goblin_warband",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/stacked cards.png",
+      "focusX": 51.3,
+      "focusY": 2.7,
+      "scale": 119
+    },
     "stages": [
       {
         "name": "The Toll That Should Not Exist",
         "flavour": "A toll gate has gone up on the Blackford road again, manned by men who were farming their own fields a season ago and now answer to someone who was never a farmer.",
         "tag": "combat",
         "difficulty": "normal",
-        "goldMultiplier": 1.3,
-        "durationMinutes": 180
+        "durationMinutes": 180,
+        "goldMultiplier": 1.3
       },
       {
         "name": "What the Crown Left Behind",
         "flavour": "The old toll house still keeps records. One name belongs to a lord who lost everything the same season the goblin king acquired his third crown. He was reported dead. He was not, and whoever keeps these records knows it too.",
         "tag": "explore",
         "difficulty": "normal",
-        "goldMultiplier": 1.5,
-        "durationMinutes": 240
+        "durationMinutes": 240,
+        "goldMultiplier": 1.5
       },
       {
         "name": "The Company He Kept",
         "flavour": "Eighty men stand in real ranks, a granary stocked with grain it never grew itself, and a chain of command running two officers deep. A dispossessed lord does not build an operation like this alone, and clearly does not plan to stay dispossessed much longer.",
         "tag": "combat",
         "difficulty": "hard",
-        "goldMultiplier": 1.8,
-        "durationMinutes": 300
+        "durationMinutes": 300,
+        "goldMultiplier": 1.8
       }
     ]
   },
@@ -909,35 +973,41 @@
     "description": "A cart has been working the roads outside town for a week, selling something described only as a chance. Three separate people have already asked the guild to look into it, each for a different reason, and none of them flattering.",
     "reqLevel": 5,
     "rewardGold": 300,
-    "rewardItems": [],
     "rewardRenown": 1,
     "title": "The One He Doesn't Cheat",
-    "grantsPeddler": true,
     "epilogue": "Grimsby never gave a straight answer about where the cart came from or where the coin under the floorboard was headed. What he did give, once he stopped talking his way out of it, was his word, worth exactly as much as anyone's word is worth once it has been checked. He still turns up unannounced and still charges for the privilege, but the deck is real now, and everyone involved knows it. That may be the most honest thing Grimsby has ever agreed to.",
+    "grantsHatchery": false,
+    "grantsPeddler": true,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/stacked cards.png",
+      "focusY": 42,
+      "scale": 106
+    },
     "stages": [
       {
         "name": "A Cart That Wasn't There Yesterday",
         "flavour": "The wheel ruts run in a perfect circle and go nowhere. Whoever owns this cart never actually left. A hand-lettered sign promises a fair chance for a fair price, the kind of phrase that usually means the opposite of both halves. Three townsfolk are already lined up, each certain they are about to win big.",
         "tag": "explore",
         "difficulty": "easy",
-        "goldMultiplier": 1.2,
-        "durationMinutes": 60
+        "durationMinutes": 60,
+        "goldMultiplier": 1.2
       },
       {
         "name": "The Deck Has an Opinion",
         "flavour": "A little patience is all it takes. The same three cards come up jackpot for the man running the table, and only for him, four times running. He is good enough that nobody else has caught it, but not good enough to fool someone actually watching for it. He notices the exact moment he is made, and does not look surprised.",
         "tag": "stealth",
         "difficulty": "normal",
-        "goldMultiplier": 1.4,
-        "durationMinutes": 90
+        "durationMinutes": 90,
+        "goldMultiplier": 1.4
       },
       {
         "name": "What Grimsby Actually Owes",
         "flavour": "Caught cold, Grimsby neither runs nor grovels. He negotiates, as if getting caught was always step two of the plan. The real trouble is not the rigged table. It is the two far less patient men he still owes for the cart itself, and they have just watched the same show everyone else did. A fair chance was never the actual pitch. Buying enough goodwill to still be standing tomorrow is.",
         "tag": "defense",
         "difficulty": "normal",
-        "goldMultiplier": 1.6,
-        "durationMinutes": 120
+        "durationMinutes": 120,
+        "goldMultiplier": 1.6
       }
     ]
   },
@@ -948,35 +1018,44 @@
     "reqLevel": 4,
     "rewardGold": 450,
     "rewardItems": [
-      "tollbreakers_gloves"
+      "tollbreakers_gloves@5"
     ],
     "rewardRenown": 1,
     "title": "Roadwarden",
     "epilogue": "The self-styled king of the old road answered for every toll he ever collected, all at once. The road is clear again, for now. Someone always notices an unguarded stretch of road eventually, but that is a problem for whoever is watching next season.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/stacked cards.png",
+      "focusX": 64.9,
+      "focusY": 60.4,
+      "scale": 121
+    },
     "stages": [
       {
         "name": "The Toll Nobody Asked For",
         "flavour": "A merchant's convoy limps into town short two wagons and a good deal of coin, describing the same crew that has hit half a dozen others this month. They were organized, patient, and unsettlingly polite about the robbing.",
         "tag": "combat",
         "difficulty": "easy",
-        "goldMultiplier": 1.2,
-        "durationMinutes": 60
+        "durationMinutes": 60,
+        "goldMultiplier": 1.2
       },
       {
         "name": "Whose Colors Are These",
         "flavour": "A torn banner left at the ambush site does not match any crew the guild has dealt with before. Asking around turns up three other independent bandit gangs flying the same colors, as if someone has been recruiting rather than competing.",
         "tag": "explore",
         "difficulty": "easy",
-        "goldMultiplier": 1.3,
-        "durationMinutes": 90
+        "durationMinutes": 90,
+        "goldMultiplier": 1.3
       },
       {
         "name": "The Self-Crowned King of the Old Road",
         "flavour": "He has built himself a proper little court out of a collapsed watchtower, complete with a title nobody gave him and a small army of bandits who apparently had no better offer. Someone should tell him how this usually ends.",
         "tag": "combat",
         "difficulty": "normal",
-        "goldMultiplier": 1.6,
-        "durationMinutes": 150
+        "durationMinutes": 150,
+        "goldMultiplier": 1.6
       }
     ]
   },
@@ -987,35 +1066,44 @@
     "reqLevel": 12,
     "rewardGold": 2100,
     "rewardItems": [
-      "ridgebreakers_pauldron"
+      "ridgebreakers_pauldron@5"
     ],
     "rewardRenown": 1,
     "title": "Ridgebreaker",
     "epilogue": "The warband has broken up and scattered back up the ridge, minus its biggest member. The foothills will probably see another band of hill giants eventually, since they rarely get wiped out so much as get bored and move on. That is a problem for a different season.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/stacked cards.png",
+      "focusX": 50.6,
+      "focusY": 82.7,
+      "scale": 118
+    },
     "stages": [
       {
         "name": "Torn Fences, Missing Herds",
         "flavour": "The fence was not broken so much as removed, posts and all. The drag marks leading up into the hills are wide enough for two grown men to walk side by side without touching the edges.",
         "tag": "explore",
         "difficulty": "normal",
-        "goldMultiplier": 1.5,
-        "durationMinutes": 480
+        "durationMinutes": 480,
+        "goldMultiplier": 1.5
       },
       {
         "name": "The Ridge Warband",
         "flavour": "This is not one hungry animal passing through. It is a hill giant warband, half a dozen strong, with a crude but functional camp built from stolen timber and whatever livestock they have not already eaten.",
         "tag": "combat",
         "difficulty": "hard",
-        "goldMultiplier": 1.8,
-        "durationMinutes": 600
+        "durationMinutes": 600,
+        "goldMultiplier": 1.8
       },
       {
         "name": "The Ridgebreaker",
         "flavour": "The warband's biggest hill giant earned that name honestly. There is a boulder near the camp with a deliberate, deep dent in it, apparently left just to make a point to the rest of the group.",
         "tag": "combat",
         "difficulty": "epic",
-        "goldMultiplier": 2.2,
-        "durationMinutes": 780
+        "durationMinutes": 780,
+        "goldMultiplier": 2.2
       }
     ]
   },
@@ -1026,35 +1114,44 @@
     "reqLevel": 17,
     "rewardGold": 3400,
     "rewardItems": [
-      "moonsilver_fang"
+      "moonsilver_fang@5"
     ],
     "rewardRenown": 2,
     "title": "Moonhunter",
     "epilogue": "The werewolf pack has gone quiet, its alpha put down before the moon finished rising. Ashvale is grateful, if rattled. One of the people the guild was sent to protect did not make it through the last stage of this the way anyone would have wanted. Nobody is saying that part out loud yet.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/stacked cards.png",
+      "focusX": 53.1,
+      "focusY": 94.9,
+      "scale": 120
+    },
     "stages": [
       {
         "name": "Not Wolves",
         "flavour": "The bite radius is wrong for a wolf, and the kills are too organized for a pack of animals. Every attack so far has landed within a day of the moon's phase, which is either an enormous coincidence or exactly what it looks like.",
         "tag": "explore",
         "difficulty": "normal",
-        "goldMultiplier": 1.5,
-        "durationMinutes": 420
+        "durationMinutes": 420,
+        "goldMultiplier": 1.5
       },
       {
         "name": "The Turned Neighbor",
         "flavour": "One of the survivors the guild was sent to protect stopped answering to their own name three nights ago. By the time anyone noticed, it was already too late to do anything gentle about it.",
         "tag": "combat",
         "difficulty": "hard",
-        "goldMultiplier": 1.8,
-        "durationMinutes": 600
+        "durationMinutes": 600,
+        "goldMultiplier": 1.8
       },
       {
         "name": "Under a Full Moon",
         "flavour": "The pack has run wild under a full sky before, and it will happen again unless the guild reaches the alpha before moonrise finishes. After that, there is no version of this fight anyone walks away from clean.",
         "tag": "combat",
         "difficulty": "epic",
-        "goldMultiplier": 2.3,
-        "durationMinutes": 900
+        "durationMinutes": 900,
+        "goldMultiplier": 2.3
       }
     ]
   },
