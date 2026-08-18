@@ -1187,7 +1187,20 @@ function validateEntry(schema, entry, index) {
           break;
         }
         if (value.path !== undefined) {
-          if (typeof value.path !== 'string' || !/^[\w-]+(\/[\w.-]+)*\.(png|jpg|jpeg|webp|gif)$/i.test(value.path)) {
+          // Real files in public/lore/ (and its subfolders) routinely have
+          // spaces in their names -- "Ancient Crown.png", "Goblin
+          // Warband.png", etc, all currently sitting in public/lore/chains/
+          // -- but the old pattern only allowed `[\w.-]` per segment, so
+          // picking any of those from the banner picker (which reads real
+          // on-disk filenames verbatim, see listBanners/bannerRelPath)
+          // produced a path this regex then rejected as invalid, even
+          // though the file is exactly where the error message says it
+          // should be. Each segment now allows spaces alongside word
+          // characters, dots, and hyphens, and must still *start* with a
+          // word character -- so a segment can never be `.` or `..` or open
+          // with a stray space, which keeps this from also becoming a path-
+          // traversal hole while it's being loosened.
+          if (typeof value.path !== 'string' || !/^[\w][\w .-]*(\/[\w][\w .-]*)*\.(png|jpg|jpeg|webp|gif)$/i.test(value.path)) {
             errors.push(`entry ${index}: "${key}.path" must be a relative image path under public/lore/ (e.g. "chains/foo.jpg")`);
           }
         }

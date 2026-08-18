@@ -1,0 +1,110 @@
+From 1826defd556ae09d1df752ebb87b52854e3d7dc6 Mon Sep 17 00:00:00 2001
+From: Guild-Idler Patch Tool <patch@guild-idler.local>
+Date: Tue, 18 Aug 2026 02:35:53 +0000
+Subject: [PATCH] 0189: DevTool banner-picker save validator rejecting real
+ on-disk filenames, fixed
+
+Renumbered from 0188 to 0189 and rebased against current main: this
+patch was authored in a parallel thread against the same 0187
+baseline as the quest chain consistency pass, which landed as 0188
+first. Content is otherwise unchanged from the original patch.
+
+Root cause: the bannerImage path validator's regex only allowed
+[\w.-] per path segment, rejecting real on-disk filenames with spaces
+(6 of 49 files under public/lore/, all in chains/). Widened the
+pattern to allow spaces while keeping a word-character start-anchor
+per segment, so path traversal (../, leading dot/space) is still
+rejected.
+
+Verified: node --check clean on server.mjs. Before/after regex sweep
+across all 49 real files under public/lore/: old pattern 6 failures,
+new pattern 0.
+---
+ guild-idler-status.md    | 47 ++++++++++++++++++++++++++++++++++++++++
+ tools/devtool/server.mjs | 15 ++++++++++++-
+ 2 files changed, 61 insertions(+), 1 deletion(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index a0350b4..767fb5b 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -12950,3 +12950,50 @@ all unchanged everywhere else.
+ **Verified:** JSON parses cleanly, all touched chain ids still map 1:1 to
+ pre-patch entries, stage counts unchanged, no stray `--`/em-dash sequences
+ introduced.
++
++### DevTool: banner-picker save validator rejecting real on-disk filenames -- fixed (patch 0189)
++
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed quest-chain/raid banner saves failing with a false "must be a relative image path" error when the chosen art file's name had a space in it
++```
++
++Direct report with a screenshot: saving a banner picked for a quest chain
++(entry 20, `the_man_who_sells_maybe`) failed validation with `entry 20:
++"banner.path" must be a relative image path under public/lore/ (e.g.
++"chains/foo.jpg")`, even though the file was, as reported, exactly where
++it was supposed to be.
++
++**Root cause.** The `bannerImage` field's path validator in `server.mjs`
++used `/^[\w-]+(\/[\w.-]+)*\.(png|jpg|jpeg|webp|gif)$/i`, which only
++allows word characters, dots, and hyphens per path segment. The banner
++picker (`openBannerPicker`/`bannerRelPath` in `app.js`) reads real
++on-disk filenames verbatim from `listBanners()`, and `public/lore/chains/`
++currently has six files with spaces in their names -- `Ancient Crown.png`,
++`Crows Warning.png`, `Goblin Warband.png`, `Harrowers Foot.png`, `Last
++Clutch.png`, `Lost Kingdom.png` -- any of which produced a path the
++regex then rejected. Confirmed by walking every file actually under
++`public/lore/` and running each resulting relative path through the old
++pattern: 6 of 49 failed, all six of them the space-containing chain
++banners above; every other file (all subfolders, plus the loose
++`(general)`-bucket root files) already passed.
++
++**Fix.** Widened the pattern to
++`/^[\w][\w .-]*(\/[\w][\w .-]*)*\.(png|jpg|jpeg|webp|gif)$/i` -- each
++segment now allows spaces alongside word characters, dots, and hyphens,
++but must still *start* with a word character. That start-anchor is
++deliberate, not just inherited: it means a segment can never be `.` or
++`..` or open with a stray leading space, so loosening the character set
++doesn't also open a path-traversal hole. Re-ran the same full-directory
++check against the new pattern: all 49 real files now pass, including all
++six previously-rejected ones.
++
++**Verified:** `node --check` passes clean on `tools/devtool/server.mjs`.
++Wrote a standalone script walking every file under `public/lore/` (49
++files across `chains/`, `raids/`, `quest-tags/`, `harvest/`, `crafting/`,
++and the loose root) through both the old and new regex for a direct
++before/after comparison -- old pattern: 6 failures, all the space-named
++chain banners the report was about; new pattern: 0 failures. Also spot-
++checked that the tightened traversal-safe start-anchor still correctly
++rejects `../../etc/passwd.png`-style and leading-dot/leading-space paths.
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index a5c7b8e..70330fd 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -1187,7 +1187,20 @@ function validateEntry(schema, entry, index) {
+           break;
+         }
+         if (value.path !== undefined) {
+-          if (typeof value.path !== 'string' || !/^[\w-]+(\/[\w.-]+)*\.(png|jpg|jpeg|webp|gif)$/i.test(value.path)) {
++          // Real files in public/lore/ (and its subfolders) routinely have
++          // spaces in their names -- "Ancient Crown.png", "Goblin
++          // Warband.png", etc, all currently sitting in public/lore/chains/
++          // -- but the old pattern only allowed `[\w.-]` per segment, so
++          // picking any of those from the banner picker (which reads real
++          // on-disk filenames verbatim, see listBanners/bannerRelPath)
++          // produced a path this regex then rejected as invalid, even
++          // though the file is exactly where the error message says it
++          // should be. Each segment now allows spaces alongside word
++          // characters, dots, and hyphens, and must still *start* with a
++          // word character -- so a segment can never be `.` or `..` or open
++          // with a stray space, which keeps this from also becoming a path-
++          // traversal hole while it's being loosened.
++          if (typeof value.path !== 'string' || !/^[\w][\w .-]*(\/[\w][\w .-]*)*\.(png|jpg|jpeg|webp|gif)$/i.test(value.path)) {
+             errors.push(`entry ${index}: "${key}.path" must be a relative image path under public/lore/ (e.g. "chains/foo.jpg")`);
+           }
+         }
+-- 
+2.43.0
+
