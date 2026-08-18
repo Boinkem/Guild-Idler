@@ -13206,3 +13206,87 @@ equipped item is no longer possible from the Scrap picker; stash items
 scrap exactly as before, same payout math, no change to
 `ShopManager.scrapItem`, `EquipmentManager.scrapValue`, or the
 fly-to-counter animation.
+
+### Vault: lock stash items to protect them from Sell / Sell Junk / Scrap -- built (patch 0193)
+
+```discord-update
+Dev Update | Vault
+
+- Added a Lock/Unlock toggle on any stash item -- locked items are protected from Sell, Sell Junk, and Scrap
+- Locked items show a small padlock badge and stay greyed-out/unselectable in those pickers rather than disappearing, so you can still see what's protected
+- "Sell from the stash" (Blacksmith) and the Inventory tab's Stash grid both get the same Lock/Unlock control
+```
+
+Direct player feedback, two-part: (1) the Blacksmith Scrap list should
+grey out items you don't want to accidentally scrap, and (2) more
+broadly, some kind of protected-storage concept so gear you're keeping
+around can't get swept up by Scrap/Sell/Sell Junk by mistake.
+
+**Scope decided in discussion, not the bigger "second storage pool"
+version.** Went with a lock flag on existing stash items rather than a
+new sub-tab/second pool -- gets the actual goal (nothing you've marked
+as a keeper can be destroyed by mistake) without a new tab or a
+transfer-in/transfer-out flow. "Stash" keeps its existing name; the new
+protected concept is called **Vault** throughout (a separate physical
+Bank tab remains a possible v2 on top of the same flag if it's ever
+wanted).
+
+**`EquipmentItem.locked?: boolean`** (new, `types.ts`) -- stash-only in
+practice; equipped items never set it, since they're already outside
+every destructive action's reach by not being in `state.stash`.
+Defensive-optional, same convention as `equippedConsumables`/
+`autoAdvanceChainId` -- no `SAVE_VERSION` bump or migration needed, a
+pre-patch save just has every item unlocked by default.
+
+**Guarded at the mutation layer, not just the picker UI** -- matches the
+project's own "one mutation path" convention (same reasoning as the Raid
+unlock-gating fix): `ShopManager.sell`, `ShopManager.scrapItem`, and
+`ShopManager.sellBelowRarity` all now refuse a locked item outright
+(`sell`/`scrapItem` return `"That item is locked in the Vault."`;
+`sellBelowRarity`'s filter skips locked items the same way it already
+skips crafted/enchanted ones), so a picker that forgets to grey one out
+can't accidentally destroy it anyway.
+
+**New `EquipmentManager.toggleLock`** flips the flag on one stash uid,
+wrapped by a new `engine.toggleItemLock(itemUid)` -- no toast on
+success, same quiet treatment a settings toggle gets rather than an
+action with a consequence worth announcing.
+
+**UI, three surfaces:**
+- **Inventory tab's Stash grid (`StashCard`).** New Lock/Unlock button
+  in the item's detail modal, alongside Equip/Sell. Sell disabled
+  (title explains why) while locked. New `LockedPill` (padlock glyph,
+  `--sky`, same `.rarity-pill` shape every other badge here already
+  uses) shown on both the collapsed card and the modal whenever
+  `item.locked`.
+- **Blacksmith's "Sell from the stash" list (`VendorsPanel.tsx`).** Same
+  Lock/Unlock button added next to Sell, Sell disabled while locked, a
+  small padlock glyph appended to the item's name in the row.
+- **Sell Junk preview (`EquipmentPanel.tsx`).** The button's own preview
+  filter now skips locked items, mirroring `sellBelowRarity`'s real
+  filter exactly (same "the button shows precisely what pressing it
+  will do" principle Sell Junk was already built around) -- tooltip
+  copy updated to mention Vault-locked items alongside the existing
+  crafted/enchanted exclusion.
+
+**Scrap picker (`ScrapStation.tsx`).** Per the original ask, locked items
+stay visible in the picker rather than disappearing -- shown disabled
+with a "🔒 Locked in Vault" sublabel in place of the usual Scrap-value
+sublabel, same greyed-and-unselectable treatment `PickerModal` already
+gives any disabled row. `ShopManager.scrapItem` itself already refuses
+the uid regardless, so this is UI-layer polish on top of a real guard,
+not the guard itself.
+
+**Deliberately not touched:** Enhance, Infuse, and Enchant all keep
+reaching locked items exactly like unlocked ones -- confirmed in the
+same discussion, since none of those three are destructive and a locked
+item shouldn't become un-refinable/un-enchantable just because it's
+protected from being sold or broken down.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Manually traced: locking an item
+blocks single Sell, Sell Junk (even at a rarity threshold that would
+otherwise include it), and Scrap (both the picker's disabled state and
+`ShopManager.scrapItem`'s own direct refusal); unlocking restores all
+three immediately; Enhance/Infuse/Enchant pickers still list a locked
+item normally throughout.

@@ -73,6 +73,13 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
   const scrapBonus = ModifierManager.global(state).scrapBonus ?? 0;
   const value = item ? EquipmentManager.scrapValue(item, scrapBonus) : 0;
 
+  // Locked (Vaulted) items stay in the list rather than being hidden --
+  // per the Vault design, a destructive picker should show what's
+  // protected, not quietly omit it -- but render disabled, matching the
+  // greyed-out treatment every other unselectable picker row already
+  // uses (see PickerModal). ShopManager.scrapItem itself already refuses
+  // a locked uid regardless, so this is UI-layer only, not the actual
+  // guard.
   const options: PickerOption[] = state.stash
     .map((i): PickerOption | null => {
       const d = EquipmentManager.def(i);
@@ -80,8 +87,9 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
       return {
         key: i.uid,
         label: d.name,
-        sublabel: `${EquipmentManager.scrapValue(i, scrapBonus)} Scrap`,
+        sublabel: i.locked ? '\uD83D\uDD12 Locked in Vault' : `${EquipmentManager.scrapValue(i, scrapBonus)} Scrap`,
         icon: <ItemIcon slot={d.slot} icon={d.icon} size={40} />,
+        disabled: i.locked,
       };
     })
     .filter((o): o is PickerOption => o !== null);

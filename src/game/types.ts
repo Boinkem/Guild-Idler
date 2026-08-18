@@ -384,6 +384,20 @@ export interface EquipmentItem {
    * attacks, mechanically just another additive success contribution.
    */
   elementalResist?: Partial<Record<ElementType, number>>;
+  /**
+   * Set via the Vault toggle on a stash item's card. Purely a stash-side
+   * flag -- equipped items never set this, since they're already outside
+   * every destructive picker's reach by virtue of not being in
+   * `state.stash`. Checked by the same three stash-only destructive
+   * actions that already refuse an equipped uid (ShopManager.sell,
+   * ShopManager.scrapItem, ShopManager.sellBelowRarity) so the guard
+   * lives at the mutation layer, not just in picker UI filtering --
+   * matches the project's own "one mutation path, not just a UI opinion"
+   * convention (see the Raid unlock-gating fix's own reasoning). Never
+   * touched by Enhance/Infuse/Enchant, which aren't destructive and
+   * still need to reach a locked item the same as any other.
+   */
+  locked?: boolean;
 }
 
 /** One reversible sale -- see GameState.buyback's own comment. */

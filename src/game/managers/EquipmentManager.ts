@@ -28,6 +28,22 @@ export const EquipmentManager = {
   },
 
   /**
+   * Flips the Vault lock on one stash item. Stash-only, same "equipped or
+   * missing" refusal every other stash-scoped action already returns --
+   * an equipped item has no lock state to toggle in the first place (see
+   * EquipmentItem.locked's own comment for why the flag never applies to
+   * worn gear). Toggling, not two separate lock/unlock calls, since the
+   * UI only ever needs "flip whatever it currently is" from a single
+   * button/icon per item.
+   */
+  toggleLock(state: GameState, itemUid: string): string | null {
+    const item = state.stash.find((i) => i.uid === itemUid);
+    if (!item) return 'That item is equipped or missing.';
+    item.locked = !item.locked;
+    return null;
+  },
+
+  /**
    * Gold to fully repair. Scales with rarity and missing durability.
    *
    * perPoint dropped from 1.2 to 0.6, and the workshop discount now starts

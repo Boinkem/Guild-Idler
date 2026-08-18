@@ -51,6 +51,17 @@ function SetPill() {
   );
 }
 
+/** Marks a Vault-locked stash item -- excluded from Sell/Sell Junk/Scrap
+ *  (see EquipmentItem.locked's own comment), still visible and usable
+ *  everywhere else. --sky, distinct from every other pill's color here. */
+function LockedPill() {
+  return (
+    <span className="rarity-pill" style={{ color: 'var(--sky)', borderColor: 'var(--sky)' }}>
+      {'\uD83D\uDD12'} vaulted
+    </span>
+  );
+}
+
 /**
  * Same "is this actually an upgrade" check engine.equipBestGear and
  * QuestManager's auto-equip-on-loot both already use -- reqLevel-gated,
@@ -694,6 +705,7 @@ function StashCard({
             {def.setId && <SetPill />}
             {item.customMods && <CraftedPill />}
             {isUpgrade && <UpgradePill />}
+            {item.locked && <LockedPill />}
             <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
           </div>
         </div>
@@ -718,6 +730,7 @@ function StashCard({
                 {def.setId && <SetPill />}
                 {item.customMods && <CraftedPill />}
                 {isUpgrade && <UpgradePill />}
+                {item.locked && <LockedPill />}
               </div>
               <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
               {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
@@ -740,6 +753,16 @@ function StashCard({
                   Equip on {hero.name}
                 </button>
                 <button
+                  onClick={() => engine.toggleItemLock(item.uid)}
+                  title={item.locked
+                    ? 'Unlock -- Sell, Sell Junk, and Scrap can reach this item again'
+                    : 'Lock in the Vault -- protects this item from Sell, Sell Junk, and Scrap'}
+                >
+                  {item.locked ? `${'\uD83D\uDD13'} Unlock` : `${'\uD83D\uDD12'} Lock in Vault`}
+                </button>
+                <button
+                  disabled={item.locked}
+                  title={item.locked ? 'Locked in the Vault -- unlock it first to sell' : undefined}
                   onClick={() => {
                     if (!confirmSell) doSell(); else setPendingSell(true);
                   }}
@@ -788,6 +811,7 @@ export function EquipmentPanel() {
   const [junkRarity, setJunkRarity] = useState<Rarity>('common');
   const junkMaxIndex = RARITY_ORDER.indexOf(junkRarity);
   const junkPreview = state.stash.filter((item) => {
+    if (item.locked) return false;
     if (item.customMods || (item.enchantStats && Object.keys(item.enchantStats).length > 0)) return false;
     const def = EQUIPMENT_BY_ID[item.defId];
     if (!def) return false;
@@ -988,7 +1012,7 @@ export function EquipmentPanel() {
               style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
               onClick={sellJunk}
               disabled={junkPreview.length === 0}
-              title="Crafted and enchanted items are never swept up by this, regardless of rarity"
+              title="Crafted, enchanted, and Vault-locked items are never swept up by this, regardless of rarity"
             >
               Sell Junk ({junkPreview.length}) · {formatGold(junkGold)}
             </button>

@@ -285,6 +285,7 @@ export const ShopManager = {
   sell(state: GameState, itemUid: string, now = Date.now()): string | null {
     const item = state.stash.find((i) => i.uid === itemUid);
     if (!item) return 'That item is equipped or missing.';
+    if (item.locked) return 'That item is locked in the Vault.';
     const value = EquipmentManager.sellValue(item);
     state.stash = state.stash.filter((i) => i.uid !== itemUid);
     state.gold += value;
@@ -339,6 +340,7 @@ export const ShopManager = {
   sellBelowRarity(state: GameState, maxRarity: Rarity): { count: number; gold: number } {
     const maxIndex = RARITY_ORDER.indexOf(maxRarity);
     const toSell = state.stash.filter((item) => {
+      if (item.locked) return false;
       if (item.customMods || (item.enchantStats && Object.keys(item.enchantStats).length > 0)) return false;
       const def = EQUIPMENT_BY_ID[item.defId];
       if (!def) return false;
@@ -361,6 +363,7 @@ export const ShopManager = {
   scrapItem(state: GameState, itemUid: string): string | null {
     const item = state.stash.find((i) => i.uid === itemUid);
     if (!item) return 'That item is equipped or missing.';
+    if (item.locked) return 'That item is locked in the Vault.';
     const bonus = ModifierManager.global(state).scrapBonus ?? 0;
     const value = EquipmentManager.scrapValue(item, bonus);
     state.stash = state.stash.filter((i) => i.uid !== itemUid);

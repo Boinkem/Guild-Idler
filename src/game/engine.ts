@@ -1687,6 +1687,21 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  /** Flips a stash item's Vault lock -- see EquipmentManager.toggleLock's
+   *  own comment. Locked items stay fully visible everywhere (Enhance/
+   *  Infuse/Enchant, equip, the plain stash grid) -- only the three
+   *  destructive stash actions (Sell, Sell Junk, Scrap) refuse to touch
+   *  one while it's locked, enforced at ShopManager's own mutation layer
+   *  so a picker UI forgetting to filter one out can't bypass it. No
+   *  toast on success -- same "quiet, no confirmation needed" treatment
+   *  a settings toggle gets, not an action with a consequence worth
+   *  announcing. */
+  toggleItemLock(itemUid: string) {
+    const error = EquipmentManager.toggleLock(this.state, itemUid);
+    if (error) return this.say(error);
+    void this.saveNow();
+  }
+
   /** Reverses a sale from the Blacksmith's own buyback list -- see
    *  ShopManager.buyBack's own comment. */
   buyBackItem(itemUid: string) {

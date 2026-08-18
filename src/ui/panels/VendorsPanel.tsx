@@ -289,11 +289,26 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
                 <ItemIcon slot={def.slot} icon={def.icon} size={28} />
                 <span style={{ color: RARITY_COLOR[def.rarity], fontSize: 11 }}>
                   {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
+                  {item.locked && ' \uD83D\uDD12'}
                 </span>
               </div>
-              <button onClick={() => { if (!settings.confirmSell || confirm('Sell this item?')) engine.sellItem(item.uid); }}>
-                Sell · {formatGold(EquipmentManager.sellValue(item))}
-              </button>
+              <div className="row" style={{ gap: 6 }}>
+                <button
+                  className="btn-ghost"
+                  style={{ minHeight: 22, padding: '2px 8px', fontSize: '0.625rem' }}
+                  onClick={() => engine.toggleItemLock(item.uid)}
+                  title={item.locked ? 'Unlock this item' : 'Lock in the Vault -- protects it from Sell, Sell Junk, and Scrap'}
+                >
+                  {item.locked ? 'Unlock' : 'Lock'}
+                </button>
+                <button
+                  disabled={item.locked}
+                  title={item.locked ? 'Locked in the Vault -- unlock it first to sell' : undefined}
+                  onClick={() => { if (!settings.confirmSell || confirm('Sell this item?')) engine.sellItem(item.uid); }}
+                >
+                  Sell · {formatGold(EquipmentManager.sellValue(item))}
+                </button>
+              </div>
             </div>
           );
         })}
