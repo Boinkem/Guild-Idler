@@ -12,7 +12,7 @@ import { RarityPill } from '../RarityPill';
 import { EggIcon } from '../EggIcon';
 import { ConfirmModal } from '../ConfirmModal';
 
-type Offer = QuestOffer;
+export type Offer = QuestOffer;
 
 /** Banner strip for a chain's quest-board entry, matching ChainBanner in
  *  LorePanel and RaidBanner in RaidsPanel exactly -- same asset, same
@@ -20,7 +20,7 @@ type Offer = QuestOffer;
  *  up here automatically once it exists, no separate art needed. `banner`
  *  is the same optional DevTool-assigned override + focus point ChainBanner
  *  reads (ChainDef.banner) -- see its own comment in LorePanel.tsx. */
-function ChainQuestBanner({ chainId, banner }: { chainId: string; banner?: ChainDef['banner'] }) {
+export function ChainQuestBanner({ chainId, banner }: { chainId: string; banner?: ChainDef['banner'] }) {
   const src = banner?.path ? `./lore/${banner.path}` : `./lore/chains/${chainId}.jpg`;
   return (
     <div
@@ -75,7 +75,7 @@ function QuestTagBanner({ tag }: { tag: Offer['tag'] }) {
   );
 }
 
-interface QuestCardProps {
+export interface QuestCardProps {
   offer: Offer;
   isOpen: boolean;
   hero: Hero;
@@ -95,7 +95,7 @@ interface QuestCardProps {
  *  whichever hero's tab is currently open (see QuestPanel) -- there's no
  *  separate hero picker inside the card anymore, since picking the hero is
  *  now the very first thing the player does on this tab. */
-function QuestCard({
+export function QuestCard({
   offer, isOpen, hero, now, onToggleExpanded, onSend,
   isFrozen, canFreeze, onToggleFreeze,
 }: QuestCardProps) {
@@ -249,7 +249,7 @@ function QuestCard({
  *  used inside a card; injury/questing status reuse the same glyphs too,
  *  so switching to a hero-first flow doesn't also invent a new visual
  *  language for something players already recognise. */
-function HeroTab({ hero, selected, onSelect }: { hero: Hero; selected: boolean; onSelect: () => void }) {
+export function HeroTab({ hero, selected, onSelect }: { hero: Hero; selected: boolean; onSelect: () => void }) {
   return (
     <button
       className={`hero-tab-chip ${selected ? 'on' : ''} ${hero.injuries.length > 0 ? 'risky' : ''}`}
@@ -331,29 +331,6 @@ export function QuestPanel() {
     }
     return offers.sort((a, b) => DIFFICULTY_ORDER.indexOf(a.difficulty) - DIFFICULTY_ORDER.indexOf(b.difficulty));
   }, [state.questBoards[selectedHero.id], selectedHero, sortMode, now]);
-
-  // Chain-stage offers are still guild-wide -- a chain's progress is
-  // tracked once, not per hero, so every hero who's eligible for it sees
-  // the same current stage rather than each getting their own copy of the
-  // story. "Guild-wide" only covers *discovery* though (generateChainBoard
-  // gates that on the guild's single highest-level hero, per the story
-  // being a guild-level milestone) -- it was never meant to mean "every
-  // hero's own board shows every discovered chain regardless of whether
-  // that specific hero could ever take it." Before this filter, a fresh
-  // level 3 recruit's Discovered Quests list showed the exact same chain
-  // offers as the guild's level 30 hero, including stages dozens of
-  // levels above anything the level 3 hero could act on. Filtered here to
-  // match Available Contracts' own per-hero scoping (which never showed
-  // this problem, since generateContractsForHero already builds each
-  // hero's contract pool from their own level) -- a hero who outlevels a
-  // chain later just sees it appear on their own tab once they cross its
-  // reqLevel, the same as any other hero already can.
-  const chainOffers = useMemo(
-    () => [...state.chainBoard]
-      .filter((offer) => selectedHero.level >= offer.reqLevel)
-      .sort((a, b) => a.duration - b.duration),
-    [state.chainBoard, selectedHero.level],
-  );
 
   // Consumables no longer live on this tab -- quests automatically use
   // whatever's equipped on the sent hero's own consumable slots instead of
@@ -542,24 +519,6 @@ export function QuestPanel() {
               onToggleFreeze={toggleFreeze}
             />
           ))}
-
-          {/* --------------------------- discovered quests --------------------------- */}
-          {chainOffers.length > 0 && (
-            <>
-              <div className="section-heading">Discovered Quests</div>
-              {chainOffers.map((offer) => (
-                <QuestCard
-                  key={offer.id}
-                  offer={offer}
-                  isOpen={expanded.has(offer.id)}
-                  hero={selectedHero}
-                  now={now}
-                  onToggleExpanded={toggleExpanded}
-                  onSend={send}
-                />
-              ))}
-            </>
-          )}
         </>
       )}
 

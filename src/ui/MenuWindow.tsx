@@ -10,6 +10,7 @@ import { playSound } from '../game/sound';
 import { useCountUp } from './useCountUp';
 import { useFlyTargetRef, registerFlyTarget } from './flyTarget';
 import { QuestPanel } from './panels/QuestPanel';
+import { DiscoveredQuestsPanel } from './panels/DiscoveredQuestsPanel';
 import { HeroesPanel } from './panels/HeroesPanel';
 import { TrainingPanel } from './panels/TrainingPanel';
 import { EquipmentPanel } from './panels/EquipmentPanel';
@@ -69,7 +70,8 @@ const GUILD_GROUP = {
 const ADVENTURE_GROUP = {
   label: 'Adventure',
   tabs: [
-    { id: 'quests', label: 'Quests', Panel: QuestPanel, tooltip: 'The quest board and any quest chains your heroes have discovered.' },
+    { id: 'quests', label: 'Quests', Panel: QuestPanel, tooltip: 'The quest board -- each hero\'s own contracts, scaled to their level.' },
+    { id: 'chains', label: 'Discovered Quests', Panel: DiscoveredQuestsPanel, tooltip: 'Story quest chains your heroes have uncovered on the board.' },
     { id: 'raids', label: 'Raids', Panel: RaidsPanel, tooltip: 'Multi-encounter raids for a full party, with their own difficulty tiers.' },
     { id: 'lore', label: 'Lore', Panel: LorePanel, tooltip: 'The story so far -- every quest chain you\u2019ve uncovered.' },
     { id: 'guide', label: 'Guide', Panel: GuidePanel, tooltip: 'Notification log and how-to reference for the guild\u2019s systems.' },
@@ -291,7 +293,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
     : id === 'peddler' ? engine.state.peddlerUnlocked
     : id === 'harvest' ? engine.state.harvestUnlocked
     : id === 'training' ? engine.state.completedRaids.includes('blackford_keep') : true);
-  const { idleHeroes, eggsReady, brokenGear, harvestReady } = attentionCounts(engine.state);
+  const { idleHeroes, eggsReady, brokenGear, harvestReady, chainQuestAvailable } = attentionCounts(engine.state);
   // Nav gold/renown count up to a new value rather than snapping -- the
   // numeric equivalent of the .bar fill transition. No animation on first
   // mount/app launch (see useCountUp's own doc comment); only on values
@@ -441,6 +443,16 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
                     // here, same registry gold already uses for its own
                     // header target just below in this same nav.
                     ref={t.id === 'equipment' ? (el) => registerFlyTarget('inventory', el) : undefined}
+                    // Rotating border-light rather than a numeric badge --
+                    // see chainQuestAvailable's own comment in attention.ts
+                    // for why a boolean fits this signal better than a
+                    // count. className stays plain (no ternary-into-empty-
+                    // string) since every other tab button already omits
+                    // a className entirely; conditionally adding one here
+                    // only for 'chains' keeps that same "absent unless
+                    // needed" shape rather than every button carrying a
+                    // now-always-present empty className.
+                    className={t.id === 'chains' && chainQuestAvailable ? 'chain-available' : undefined}
                   >
                     {t.label}
                     {t.id === 'quests' && idleHeroes > 0 ? <span className="tab-badge">{idleHeroes}</span> : null}

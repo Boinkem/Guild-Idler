@@ -27,6 +27,15 @@ export interface AttentionCounts {
    *  it back to null the moment it expires, so a non-null reading here is
    *  always genuinely still catchable, not stale. */
   harvestReady: number;
+  /** Whether at least one discovered quest chain is currently open to at
+   *  least one hero (same per-hero level gate DiscoveredQuestsPanel's own
+   *  chainOffers filter uses). A boolean rather than a count -- unlike
+   *  idle heroes or ready eggs, "how many chains" doesn't mean much on
+   *  its own (one available chain is exactly as worth opening the tab
+   *  for as three), so this drives a rotating border-light on the
+   *  Discovered Quests nav tab (see .chain-available in app.css) instead
+   *  of a numeric badge. */
+  chainQuestAvailable: boolean;
 }
 
 export function attentionCounts(state: GameState): AttentionCounts {
@@ -40,5 +49,8 @@ export function attentionCounts(state: GameState): AttentionCounts {
       0,
     ),
     harvestReady: NODE_ORDER.filter((id) => state.harvestNodes[id]?.pending !== null).length,
+    chainQuestAvailable: state.chainBoard.some(
+      (offer) => state.heroes.some((h) => h.level >= offer.reqLevel),
+    ),
   };
 }

@@ -1067,6 +1067,53 @@ button:focus-visible, [tabindex]:focus-visible {
    language stays consistent with what's already on-screen elsewhere. */
 .tabs .tab-badge.broken { color: var(--blood); }
 
+/* Discovered Quests nav tab: a rotating light chasing the button's border
+   while chainQuestAvailable is true (see its own comment in attention.ts
+   for why this is a boolean shimmer rather than a numeric .tab-badge like
+   every other nav-tab signal). Registered custom property lets the conic
+   gradient's angle animate smoothly frame-to-frame -- animating the
+   gradient's own `from <angle>` value directly, rather than wrapping the
+   pseudo-element in `transform: rotate()`, keeps the ring's border-width
+   even at every point around the button regardless of its (non-square)
+   aspect ratio. */
+@property --chain-shimmer-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+.tabs button.chain-available {
+  position: relative;
+}
+.tabs button.chain-available::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--chain-shimmer-angle),
+    transparent 0%,
+    var(--brass) 10%,
+    #fff8 16%,
+    var(--brass) 22%,
+    transparent 32%
+  );
+  /* Punches the gradient down to a border-only ring -- content-box masks
+     out everything but the padding gutter, then xor/exclude removes the
+     content-box layer from the padding-box layer, leaving just the
+     `padding: 1.5px` band defined above. Standard border-image alone
+     can't do this (no way to animate a rotating angle through it),
+     hence the mask trick instead of a simpler `border` property. */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: chain-shimmer-rotate 2.6s linear infinite;
+  pointer-events: none;
+}
+@keyframes chain-shimmer-rotate {
+  to { --chain-shimmer-angle: 360deg; }
+}
+
 .panel {
   flex: 1;
   min-width: 0;

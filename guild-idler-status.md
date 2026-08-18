@@ -12997,3 +12997,57 @@ before/after comparison -- old pattern: 6 failures, all the space-named
 chain banners the report was about; new pattern: 0 failures. Also spot-
 checked that the tightened traversal-safe start-anchor still correctly
 rejects `../../etc/passwd.png`-style and leading-dot/leading-space paths.
+
+### Discovered Quests split into its own tab, with nav shimmer (patch 0190)
+
+```discord-update
+Dev Update | Feature
+
+- Quest chains ("Discovered Quests") now live in their own tab, right next to Quests, instead of buried at the bottom of a hero's contract list
+- That new tab's button gets a rotating border-light whenever a chain is available to at least one hero, so you'll notice without opening the tab
+```
+
+Direct request: pull Discovered Quests (quest chains) out of the Quest
+Board tab into its own destination next to Quests/Raids in the Adventure
+group, since it was previously a section at the bottom of a hero's own
+Contracts list, easy to miss under a long board. Also asked for a shimmer
+or rotating border-light on the new tab's button when a chain is available.
+
+**Extraction (`QuestPanel.tsx` / new `DiscoveredQuestsPanel.tsx`).**
+`ChainQuestBanner`, `QuestCard`, `QuestCardProps`, `Offer`, and `HeroTab`
+all exported from `QuestPanel.tsx` rather than duplicated -- chain cards
+never used the freeze controls to begin with (`QuestCard`'s
+isFrozen/canFreeze/onToggleFreeze are already optional), so there was
+nothing chain-specific to diverge on. `DiscoveredQuestsPanel` keeps its
+own hero-tab selection state, independent from the Quests tab's, same
+"pick the hero first" pattern QuestPanel already uses -- a player
+comparing two heroes' options might reasonably want each tab parked on a
+different one. The old `chainOffers` computation and its render block are
+removed from `QuestPanel.tsx` entirely, not left dead; Quests' own
+tooltip updated since it no longer mentions chains living there.
+
+**New tab (`MenuWindow.tsx`).** `chains` registered in `ADVENTURE_GROUP`
+immediately after `quests`, so it sits exactly where the ask was --
+next to Quests, same tier as Raids and Lore, not nested under anything.
+
+**Availability shimmer (`attention.ts` / `app.css`).** New
+`chainQuestAvailable: boolean` in the shared `AttentionCounts` (same file
+every other nav-tab signal already reads from) -- true when at least one
+chain in `state.chainBoard` has a hero who meets its `reqLevel`, mirroring
+`DiscoveredQuestsPanel`'s own per-hero filter exactly. Deliberately a
+boolean, not a count: unlike idle heroes or ready eggs, "how many chains"
+doesn't mean much on its own (one available chain is exactly as worth
+opening the tab for as three), so this drives a `.chain-available` CSS
+class instead of a numeric `.tab-badge`. The class renders a rotating
+light chasing the button's border via a `conic-gradient` animated through
+a registered `@property` (`--chain-shimmer-angle`, so the angle itself
+animates smoothly rather than needing `transform: rotate()` on the whole
+gradient, which would have distorted the ring's border-width on a
+non-square button), masked down to a border-only ring with
+`mask-composite: exclude` rather than a full glow behind the label.
+
+No changes to quest chain data, discovery logic, or `QuestManager` itself
+-- purely a UI relocation plus one new derived boolean and its CSS.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against the full project.
