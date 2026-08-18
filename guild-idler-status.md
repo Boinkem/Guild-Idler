@@ -12833,3 +12833,42 @@ chain cards, since some flavour text got noticeably shorter and some (mainly
 **Verified:** JSON parses cleanly and all 29 chain ids map 1:1 to entries
 present before the patch, stage counts unchanged per chain, no stray
 `--`/em-dash sequences introduced by the rewrite pass.
+
+### Raid narrative rewrite, clarity-first pass (patch 0187)
+
+```discord-update
+Dev Update | Raid Narrative Rewrite
+
+- Rewrote every raid's description and epilogue across all 8 raids
+- Rewrote every encounter's flavour text across all 22 encounters
+- Same clarity-first style as the quest chain rewrite: what happened, what the threat is, what to expect
+- Fixed a stray first-person aside left in the Outer Wardens encounter text from an earlier draft pass
+```
+
+Follow-up to patch 0186's quest chain rewrite, applying the same clarity-first
+house style to `src/game/data/json/raids.json` (`description`, `epilogue`,
+all 8 raids) and `src/game/data/json/raid-encounters.json` (`flavour`, all 22
+encounters across those raids). Same rules as before: no double dashes,
+commas and full stops instead; one idea per sentence; roughly 50-120 words
+for raid descriptions and 40-100 for epilogues, encounter `flavour` trimmed
+to a tight single-purpose blurb. `requiem_last_god` and its three encounters
+(the Last God capstone raid) run toward the upper end of that range rather
+than the lower, consistent with how `world_ender` and `last_pilgrimage` were
+treated in the quest chain pass, since these are the game's other major
+capstone content.
+
+One incidental fix along the way: `bonewrought_outer_wardens`'s flavour text
+had a stray first-person aside ("I don't even think they know that they're
+dead") left over from an earlier draft, breaking the third-person voice every
+other encounter uses. Rewritten into third person along with everything
+else in that entry.
+
+No mechanical fields touched: raid ids, `reqLevel`, `encounterIds`,
+`requiredRoles`, `requiresChainId`, `unlocksRaidId`, `successModifier`,
+banner data, and every encounter's `baseSuccess`, `durationHours`,
+`rewardGold`, `rewardXp`, and loot tables are all unchanged. Pure content
+patch.
+
+**Verified:** both JSON files parse cleanly, all 8 raid ids and all 22
+encounter ids map 1:1 to entries present before the patch, no stray
+`--`/em-dash sequences introduced by the rewrite pass.

@@ -1,0 +1,365 @@
+From 397bbb504ae36f6f7c12034be887dedf6234c4f7 Mon Sep 17 00:00:00 2001
+From: Guild-Idler Patch Tool <patch@guild-idler.local>
+Date: Tue, 18 Aug 2026 01:20:36 +0000
+Subject: [PATCH] 0187: Raid narrative rewrite, clarity-first pass
+
+Rewrite every raid's description and epilogue (8 raids) and every
+encounter's flavour text (22 encounters) under the same clarity-first
+house style introduced in patch 0186's quest chain rewrite. Also fixes
+a stray first-person aside left in bonewrought_outer_wardens' flavour
+text from an earlier draft.
+
+No mechanical fields touched: raid ids, reqLevel, encounterIds,
+requiredRoles, requiresChainId, unlocksRaidId, successModifier, banner
+data, and every encounter's baseSuccess/durationHours/rewardGold/
+rewardXp/loot tables are all unchanged. Pure content patch.
+---
+ guild-idler-status.md                   | 39 ++++++++++++++++++++++
+ src/game/data/json/raid-encounters.json | 44 ++++++++++++-------------
+ src/game/data/json/raids.json           | 32 +++++++++---------
+ 3 files changed, 77 insertions(+), 38 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index d91f159..635472b 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -12833,3 +12833,42 @@ chain cards, since some flavour text got noticeably shorter and some (mainly
+ **Verified:** JSON parses cleanly and all 29 chain ids map 1:1 to entries
+ present before the patch, stage counts unchanged per chain, no stray
+ `--`/em-dash sequences introduced by the rewrite pass.
++
++### Raid narrative rewrite, clarity-first pass (patch 0187)
++
++```discord-update
++Dev Update | Raid Narrative Rewrite
++
++- Rewrote every raid's description and epilogue across all 8 raids
++- Rewrote every encounter's flavour text across all 22 encounters
++- Same clarity-first style as the quest chain rewrite: what happened, what the threat is, what to expect
++- Fixed a stray first-person aside left in the Outer Wardens encounter text from an earlier draft pass
++```
++
++Follow-up to patch 0186's quest chain rewrite, applying the same clarity-first
++house style to `src/game/data/json/raids.json` (`description`, `epilogue`,
++all 8 raids) and `src/game/data/json/raid-encounters.json` (`flavour`, all 22
++encounters across those raids). Same rules as before: no double dashes,
++commas and full stops instead; one idea per sentence; roughly 50-120 words
++for raid descriptions and 40-100 for epilogues, encounter `flavour` trimmed
++to a tight single-purpose blurb. `requiem_last_god` and its three encounters
++(the Last God capstone raid) run toward the upper end of that range rather
++than the lower, consistent with how `world_ender` and `last_pilgrimage` were
++treated in the quest chain pass, since these are the game's other major
++capstone content.
++
++One incidental fix along the way: `bonewrought_outer_wardens`'s flavour text
++had a stray first-person aside ("I don't even think they know that they're
++dead") left over from an earlier draft, breaking the third-person voice every
++other encounter uses. Rewritten into third person along with everything
++else in that entry.
++
++No mechanical fields touched: raid ids, `reqLevel`, `encounterIds`,
++`requiredRoles`, `requiresChainId`, `unlocksRaidId`, `successModifier`,
++banner data, and every encounter's `baseSuccess`, `durationHours`,
++`rewardGold`, `rewardXp`, and loot tables are all unchanged. Pure content
++patch.
++
++**Verified:** both JSON files parse cleanly, all 8 raid ids and all 22
++encounter ids map 1:1 to entries present before the patch, no stray
++`--`/em-dash sequences introduced by the rewrite pass.
+diff --git a/src/game/data/json/raid-encounters.json b/src/game/data/json/raid-encounters.json
+index a0c2ff7..8d3b92e 100644
+--- a/src/game/data/json/raid-encounters.json
++++ b/src/game/data/json/raid-encounters.json
+@@ -2,7 +2,7 @@
+   {
+     "id": "bonewrought_outer_wardens",
+     "name": "The Outer Wardens",
+-    "flavour": "They were guards once, and they never really stopped being guards -- They are tied to the vault.. I don't even think they know that they're dead",
++    "flavour": "They were guards once, and they never stopped being guards. They are bound to the vault, and do not seem to know they are dead.",
+     "baseSuccess": 70,
+     "durationHours": 2,
+     "rewardGold": 800,
+@@ -23,7 +23,7 @@
+   {
+     "id": "bonewrought_choir_of_bones",
+     "name": "The Choir of Bones",
+-    "flavour": "Dozens of throats, one single note, held far longer than any living lungs could manage -- because none of these throats are breathing at all.",
++    "flavour": "Dozens of throats hold one single note far longer than any living lungs could manage, because none of these throats are breathing at all.",
+     "baseSuccess": 60,
+     "durationHours": 3,
+     "rewardGold": 1400,
+@@ -44,7 +44,7 @@
+   {
+     "id": "bonewrought_vault_keeper",
+     "name": "The Vault-Keeper",
+-    "flavour": "Still at its post after all this time, still counting every soul that comes through that door. The count has been wrong for a very, very long time, and it doesn't seem to notice.",
++    "flavour": "Still at its post after all this time, it keeps counting every soul that comes through the door. The count has been wrong for a very long time, and it does not seem to notice.",
+     "baseSuccess": 50,
+     "durationHours": 4,
+     "rewardGold": 2600,
+@@ -68,7 +68,7 @@
+   {
+     "id": "blackford_outer_palisade",
+     "name": "The Outer Palisade",
+-    "flavour": "Sharpened stakes, a single rope bridge, and men who know exactly which gaps in that wall to defend. Someone with real training taught them this.",
++    "flavour": "Sharpened stakes, a single rope bridge, and men who know exactly which gaps in the wall to defend. Someone with real training taught them this.",
+     "baseSuccess": 70,
+     "durationHours": 2,
+     "rewardGold": 400,
+@@ -89,7 +89,7 @@
+   {
+     "id": "blackford_right_hand",
+     "name": "The Uncrowned's Right Hand",
+-    "flavour": "Not the one giving the big speeches out front -- the one those speeches are actually about. Calm, precise, and very clearly used to being obeyed without question.",
++    "flavour": "Not the one giving the big speeches out front, but the one those speeches are actually about. Calm, precise, and clearly used to being obeyed without question.",
+     "baseSuccess": 60,
+     "durationHours": 3,
+     "rewardGold": 650,
+@@ -110,7 +110,7 @@
+   {
+     "id": "blackford_uncrowned",
+     "name": "The Uncrowned",
+-    "flavour": "He was just a smallholder eighteen months ago, before he lost absolutely everything to a goblin with a taste for other people's crowns. Whatever's left of him now has no intention of losing a second time.",
++    "flavour": "He was just a smallholder eighteen months ago, before he lost everything to a goblin with a taste for other people's crowns. Whatever is left of him now has no intention of losing a second time.",
+     "baseSuccess": 50,
+     "durationHours": 4,
+     "rewardGold": 1000,
+@@ -140,7 +140,7 @@
+   {
+     "id": "last_god_field_of_failed_guilds",
+     "name": "The Field of Failed Guilds",
+-    "flavour": "None of these wrecks share a single route, and that's the closest thing to comfort this shore offers: everyone who's tried has tried differently, and everyone still ended up here anyway. Waterlogged banners driven into sand beside hulls that were never built to survive the crossing that got them here -- centuries of failed pilgrimages, and not one banner in the whole field belongs to a guild that walked away afterward.",
++    "flavour": "None of these wrecks share a single route, and that is the closest thing to comfort this shore offers. Everyone who tried, tried differently, and everyone still ended up here. Waterlogged banners stand driven into the sand beside hulls that were never built to survive the crossing that brought them here. Centuries of failed pilgrimages litter this field, and not one banner belongs to a guild that walked away afterward.",
+     "baseSuccess": 70,
+     "durationHours": 4,
+     "rewardGold": 6000,
+@@ -161,7 +161,7 @@
+   {
+     "id": "last_god_silence_where_prayer_used_to_work",
+     "name": "The Silence Where Prayer Used to Work",
+-    "flavour": "An altar older than any faith currently practiced stands at the center of a ring of kneeling dead -- pilgrims, every one, who came here on purpose in their final days exactly as the old rites instructed. Something did answer, in the end, faint and slow and barely enough of itself left to recognize -- and what's left of that answer doesn't know the difference anymore between finishing the rite and simply not letting anyone leave.",
++    "flavour": "An altar older than any faith currently practiced stands at the center of a ring of kneeling dead. Every one is a pilgrim who came here on purpose in their final days, following the old rites exactly. Something did answer, in the end, faint and slow and barely enough of itself left to recognize. What remains of that answer no longer knows the difference between finishing the rite and simply not letting anyone leave.",
+     "baseSuccess": 60,
+     "durationHours": 5,
+     "rewardGold": 9500,
+@@ -185,7 +185,7 @@
+   {
+     "id": "last_god_what_is_left_of_it",
+     "name": "What Is Left of It",
+-    "flavour": "What's left of the Last God does not rise to meet the guild, and does not entirely need to -- it is enormous, and it has been dying since long before anything currently alive was born, slowly starving on belief nobody living remembers how to give it. It reaches for the guild anyway, the way the shrine reached for strangers, the way the ring of pilgrims still kneels waiting: not out of malice, just out of not being able to tell anymore who it's for. There is no one left to walk it anywhere. So the guild does -- the only way anyone still can, once it finally, mercifully, stops fighting that.",
++    "flavour": "What remains of the Last God does not rise to meet the guild, and does not entirely need to. It is enormous, and has been dying since long before anything currently alive was born, slowly starving on belief nobody living remembers how to give it. It reaches for the guild anyway, the same way the shrine reached for strangers and the ring of pilgrims still kneels waiting, not out of malice but from no longer being able to tell who it is reaching for. There is no one left to walk it home. So the guild does, the only way anyone still can, once it finally, mercifully, stops fighting that.",
+     "baseSuccess": 50,
+     "durationHours": 6,
+     "rewardGold": 15000,
+@@ -206,7 +206,7 @@
+   {
+     "id": "wyrmkeep_hatchling_brood",
+     "name": "The Hatchling Brood",
+-    "flavour": "They're young, and young dragons make mistakes -- flying too close, breathing too early, giving away a position a fully grown one never would. That's the only reason this fight is survivable at all. There are a lot of them, and not one of them fights like it's afraid.",
++    "flavour": "They are young, and young dragons make mistakes: flying too close, breathing fire too early, giving away a position a fully grown dragon never would. That is the only reason this fight is survivable at all. There are a lot of them, and not one fights like it is afraid.",
+     "baseSuccess": 70,
+     "durationHours": 2,
+     "rewardGold": 550,
+@@ -230,7 +230,7 @@
+   {
+     "id": "wyrmkeep_wyrm_keepers",
+     "name": "The Wyrm Keepers",
+-    "flavour": "Not cultists, not worshippers -- keepers, in the plainest sense: people who found a brood too dangerous to kill and decided tending it was safer than the alternative. They've kept this brood fed and hidden for years. They are not going to stop now, and they know exactly where every hatchling is.",
++    "flavour": "Not cultists and not worshippers, but keepers in the plainest sense: people who found a brood too dangerous to kill and decided tending it was safer than the alternative. They have kept this brood fed and hidden for years, and have no intention of stopping now. They know exactly where every hatchling is.",
+     "baseSuccess": 60,
+     "durationHours": 3,
+     "rewardGold": 950,
+@@ -251,7 +251,7 @@
+   {
+     "id": "wyrmkeep_frozen_wyrm",
+     "name": "The Frozen Wyrm",
+-    "flavour": "Old enough to remember when this mountain didn't have a brood in it at all -- old enough, in fact, to have started the whole thing. Ice doesn't slow it down. It's had centuries to stop noticing the cold.",
++    "flavour": "Old enough to remember when this mountain had no brood at all, old enough, in fact, to have started the whole thing. Ice does not slow it down. It has had centuries to stop noticing the cold.",
+     "baseSuccess": 50,
+     "durationHours": 4,
+     "rewardGold": 1800,
+@@ -281,7 +281,7 @@
+   {
+     "id": "gotout_trail_gone_cold",
+     "name": "What Still Guards It",
+-    "flavour": "Nobody left in this fortress answers to a demon lord anymore, but somebody's still guarding the halls anyway -- paid, threatened, or promised something on the other side of a door none of them will ever get to open themselves.",
++    "flavour": "Nobody left in this fortress answers to a demon lord anymore, but somebody still guards the halls anyway, paid, threatened, or promised something on the other side of a door none of them will ever open themselves.",
+     "baseSuccess": 70,
+     "durationHours": 3,
+     "rewardGold": 1100,
+@@ -299,7 +299,7 @@
+   {
+     "id": "gotout_the_last_loyal",
+     "name": "The Council",
+-    "flavour": "They don't agree on much -- not the timing, not the cost, not even, it seems, on what exactly is supposed to come through once the breach opens. What they agree on is that an empty fortress with broken wards is the best chance any of them are going to get, and none of them are willing to wait for a better one.",
++    "flavour": "They do not agree on much: not the timing, not the cost, and not even what exactly is supposed to come through once the breach opens. What they do agree on is that an empty fortress with broken wards is the best chance any of them will get, and none of them are willing to wait for a better one.",
+     "baseSuccess": 60,
+     "durationHours": 4,
+     "rewardGold": 1900,
+@@ -317,7 +317,7 @@
+   {
+     "id": "gotout_cornered",
+     "name": "The Breach",
+-    "flavour": "Whatever's coordinating this from the far side of the working hasn't fully arrived -- not yet, not entirely -- but it's close enough to reach through, and reaching is apparently all it needs. The breach doesn't have to finish opening to be a problem. It just has to open enough.",
++    "flavour": "Whatever is coordinating this from the far side of the working has not fully arrived, not yet and not entirely, but it is close enough to reach through, and reaching is apparently all it needs. The breach does not have to finish opening to be a problem. It only has to open enough.",
+     "baseSuccess": 50,
+     "durationHours": 5,
+     "rewardGold": 3400,
+@@ -338,7 +338,7 @@
+   {
+     "id": "blackdragon_the_keepers",
+     "name": "The Keepers",
+-    "flavour": "They don't guard the nest so much as tend it -- clearing debris, warming the eggs, keeping predators (and the occasional guild) at a respectful distance with fire that's meant to warn first and kill second.",
++    "flavour": "They do not guard the nest so much as tend it: clearing debris, warming the eggs, and keeping predators, and the occasional guild, at a respectful distance with fire meant to warn first and kill second.",
+     "baseSuccess": 70,
+     "durationHours": 3,
+     "rewardGold": 1600,
+@@ -365,7 +365,7 @@
+   {
+     "id": "blackdragon_the_hatchlings",
+     "name": "The Hatchlings",
+-    "flavour": "A whole clutch, already out of the shell and already breathing fire they haven't learned to aim yet -- which somehow makes wading through a dozen of them worse, not better.",
++    "flavour": "A whole clutch, already out of the shell and already breathing fire they have not learned to aim yet, which somehow makes wading through a dozen of them worse, not better.",
+     "baseSuccess": 60,
+     "durationHours": 4,
+     "rewardGold": 2600,
+@@ -392,7 +392,7 @@
+   {
+     "id": "blackdragon_the_brood_mother",
+     "name": "The Brood Mother",
+-    "flavour": "She's old enough to remember when this ridge had a different name, and considerably less patient about visitors than her keepers were trained to be. Every hatchling the guild has already cleared, she remembers by weight.",
++    "flavour": "She is old enough to remember when this ridge had a different name, and far less patient about visitors than her keepers were trained to be. She remembers every hatchling the guild has already cleared, by weight.",
+     "baseSuccess": 50,
+     "durationHours": 5,
+     "rewardGold": 4400,
+@@ -425,7 +425,7 @@
+   {
+     "id": "hob_the_marrow_eater",
+     "name": "The Marrow Eater",
+-    "flavour": "It was never one body -- it's dozens, sewn and stitched into something with too many arms and not nearly enough of them matching, built by someone with a great deal of practice and no aesthetic sense whatsoever.",
++    "flavour": "It was never one body. It is dozens, sewn and stitched into something with too many arms and not nearly enough of them matching, built by someone with a great deal of practice and no aesthetic sense whatsoever.",
+     "baseSuccess": 70,
+     "durationHours": 3,
+     "rewardGold": 2700,
+@@ -446,7 +446,7 @@
+   {
+     "id": "hob_the_phylactery",
+     "name": "The Phylactery",
+-    "flavour": "It's hidden well, but not well enough -- a small, unassuming box tucked into a hollow behind an ossuary wall, humming faintly with a heartbeat that isn't its own. Finding it is the hard part. Destroying it is the easy part.",
++    "flavour": "It is hidden well, but not well enough. A small, unassuming box sits tucked into a hollow behind an ossuary wall, humming faintly with a heartbeat that is not its own. Finding it is the hard part. Destroying it is the easy part.",
+     "baseSuccess": 55,
+     "durationHours": 4,
+     "rewardGold": 4300,
+@@ -467,7 +467,7 @@
+   {
+     "id": "hob_the_lich",
+     "name": "The Lich",
+-    "flavour": "With his phylactery gone he's mortal again in every way that matters, but he doesn't fight like it -- he fights like someone who was midway through a ritual to speak with something far older than himself, and very much resents the interruption.",
++    "flavour": "With his phylactery gone, he is mortal again in every way that matters, but he does not fight like it. He fights like someone who was midway through a ritual to speak with something far older than himself, and very much resents the interruption.",
+     "baseSuccess": 45,
+     "durationHours": 5,
+     "rewardGold": 7400,
+@@ -488,7 +488,7 @@
+   {
+     "id": "loom_the_presiding_intelligence",
+     "name": "The Presiding Intelligence",
+-    "flavour": "It has no true mouth of its own, so it borrows every one nearby at once, arguing with itself in a dozen stolen voices right up until the moment it stops arguing entirely and simply reaches for the guild the same way it reached for Millbrook.",
++    "flavour": "It has no true mouth of its own, so it borrows every one nearby at once, arguing with itself in a dozen stolen voices right up until it stops arguing entirely and simply reaches for the guild the same way it reached for Millbrook.",
+     "baseSuccess": 65,
+     "durationHours": 6,
+     "rewardGold": 13000,
+diff --git a/src/game/data/json/raids.json b/src/game/data/json/raids.json
+index 7afdae0..ae39743 100644
+--- a/src/game/data/json/raids.json
++++ b/src/game/data/json/raids.json
+@@ -2,8 +2,8 @@
+   {
+     "id": "blackford_keep",
+     "name": "The Siege of Blackford Keep",
+-    "description": "The lord who lost a crown at Blackford Ridge has spent an entire season turning a simple toll gate into a real holding, brick by brick. He has no crown to show for any of it and no plans to stay uncrowned much longer -- and unlike the goblin king, who's already answered for one theft, this one still has no idea who's been quietly deciding his fate the whole time.",
+-    "epilogue": "The Uncrowned's second army fared no better than his first did. He still doesn't have his crown back. He still has no idea the guild is the reason why.",
++    "description": "The lord who lost a crown at Blackford Ridge has spent an entire season turning a simple toll gate into a real holding, brick by brick. He still has no crown to show for it, and has no plans to stay uncrowned much longer. Unlike the goblin king, who already answered for one theft, this lord has no idea who has been quietly deciding his fate the whole time.",
++    "epilogue": "The Uncrowned's second army fared no better than his first. He still does not have his crown back, and still has no idea the guild is the reason why.",
+     "reqLevel": 8,
+     "encounterIds": [
+       "blackford_outer_palisade",
+@@ -20,8 +20,8 @@
+   {
+     "id": "bonewrought_vault",
+     "name": "The Bonewrought Vault",
+-    "description": "Something has been raising the dead again -- not one or two this time, but by the vaultful, row after row of them. Whatever's sealed inside is worth enough that a company of risen guards is still defending it centuries later, without pay, without rest, without ever once questioning the order. This isn't a job for one hero. Bring the whole guild.",
+-    "epilogue": "The vault held, in the end, for whoever the guild actually turned out to be. What was raised here has gone quiet again -- for now. Whatever tore open a road between the dead and the living to make this happen in the first place is still out there somewhere, and none of this so much as slowed it down.",
++    "description": "Something has been raising the dead again, not one or two this time but by the vaultful, row after row of them. Whatever is sealed inside is worth enough that a company of risen guards still defends it centuries later, without pay, without rest, and without ever questioning the order. This is not a job for one hero. Bring the whole guild.",
++    "epilogue": "The vault held, in the end, for whoever the guild turned out to be. What was raised here has gone quiet again, for now. Whatever tore open a road between the dead and the living to make this happen is still out there somewhere, and none of this slowed it down.",
+     "reqLevel": 22,
+     "requiredRoles": {
+       "caster": 1
+@@ -36,8 +36,8 @@
+   {
+     "id": "requiem_last_god",
+     "name": "Requiem for the Last God",
+-    "description": "The road the archive spoke of has no fixed heading and never did -- it opens for whoever means to walk it in a dying pilgrim's place, and closes the moment they stop meaning it. It has opened for this guild. Every guild that has taken this same walk before them left something behind to prove it: banners, hulls, ritual circles abandoned mid-rite, scattered across a shore that shouldn't exist on any chart and doesn't need to. Whatever's waiting at the end of that walk hasn't been walked in a very long time, and it does not entirely remember why anyone stopped.",
+-    "epilogue": "There is a difference between winning and being the one left standing when it is over. What the guild did at the end of that road wasn't a fight in the way every other fight has been a fight -- it was the last mile, walked the hard way, for something too far gone to make it easy. The guild is still deciding what to call that.",
++    "description": "The road the archive described has no fixed heading and never did. It opens for whoever means to walk it in a dying pilgrim's place, and closes the moment they stop meaning it. It has opened for this guild. Every guild that made this same walk before left something behind to prove it: banners, hulls, and ritual circles abandoned mid-rite, scattered across a shore that should not exist on any chart. Whatever waits at the end of that walk has not been walked to in a very long time, and does not entirely remember why anyone stopped.",
++    "epilogue": "There is a difference between winning and being the one left standing when it is over. What the guild did at the end of that road was not a fight in the way every other fight has been. It was the last mile, walked the hard way, for something too far gone to make it easy. The guild is still deciding what to call that.",
+     "reqLevel": 55,
+     "encounterIds": [
+       "last_god_field_of_failed_guilds",
+@@ -60,8 +60,8 @@
+   {
+     "id": "frozen_wyrmkeep",
+     "name": "The Frozen Wyrmkeep",
+-    "description": "Something has been nesting in the high passes for longer than anyone noticed -- long enough to stop being one dragon and start being a brood. What used to be watched for avalanches gets watched for wings now, and lately there have been considerably more wings than there used to be.",
+-    "epilogue": "The brood is gone, and the ice it nested in is already creeping back over what's left of it -- which is, if nothing else, a tidier ending than Emberfell got. Nothing sings about a mountain that quietly stops being a problem. It just stops.",
++    "description": "Something has been nesting in the high passes for longer than anyone noticed, long enough to stop being one dragon and start being a brood. The watch that used to look for avalanches now looks for wings, and lately there have been considerably more wings than before.",
++    "epilogue": "The brood is gone, and the ice it nested in is already creeping back over what remains, a tidier ending than Emberfell got. Nothing sings about a mountain that quietly stops being a problem. It just stops.",
+     "reqLevel": 18,
+     "requiredRoles": {
+       "ranged": 1
+@@ -77,8 +77,8 @@
+   {
+     "id": "what_got_out",
+     "name": "What Got Out",
+-    "description": "The demon lord is gone, but the fortress he held is still standing empty -- gate broken, wards down, nobody left to guard whatever else might want it. Word reached the guild slowly: something else moved in behind him, in the confusion, and it isn't interested in ruling anything. It's using the ruin exactly the way it's always wanted to -- as somewhere quiet enough to finish a working nobody's stopped it from starting.",
+-    "epilogue": "The breach didn't open -- not all the way, not this time. What was trying to open it scattered the moment the guild reached the chamber, which either means it was never as unified as it looked, or means whatever's on the other side isn't done trying. Either way, the fortress is finally, actually empty. The guild isn't taking bets on how long that lasts.",
++    "description": "The demon lord is gone, but the fortress he held still stands empty, its gate broken and its wards down with nobody left to guard whatever else might want it. Word reached the guild slowly that something else moved in behind him during the confusion. It is not interested in ruling anything. It is using the ruin exactly as it always wanted, as somewhere quiet enough to finish a working nobody has stopped it from starting.",
++    "epilogue": "The breach did not open, not all the way, not this time. What was trying to open it scattered the moment the guild reached the chamber. Either it was never as unified as it looked, or whatever is on the other side is not done trying. Either way, the fortress is finally, actually empty. The guild is not taking bets on how long that lasts.",
+     "reqLevel": 26,
+     "requiredRoles": {
+       "melee": 1,
+@@ -95,8 +95,8 @@
+   {
+     "id": "black_dragon_nest",
+     "name": "The Black Dragon Nest",
+-    "description": "A stretch of the eastern ridge has gone black with soot and quiet with fear -- something's nested up there, brought a whole clutch with it, and doesn't intend to be a passing problem the way most dragon sightings turn out to be.",
+-    "epilogue": "The nest is ash and empty shell now, the brood mother's watch finally over. Whatever drew her to that ridge in the first place is still a mystery nobody's especially eager to go looking for -- for now, the mountain's quiet again, and that's enough.",
++    "description": "A stretch of the eastern ridge has gone black with soot and quiet with fear. Something has nested up there and brought a whole clutch with it, and it does not intend to be a passing problem the way most dragon sightings turn out to be.",
++    "epilogue": "The nest is ash and empty shell now, the brood mother's watch finally over. Whatever drew her to that ridge is still a mystery nobody is eager to solve. For now, the mountain is quiet again, and that is enough.",
+     "reqLevel": 30,
+     "encounterIds": [
+       "blackdragon_the_keepers",
+@@ -118,8 +118,8 @@
+   {
+     "id": "house_of_bones",
+     "name": "The House of Bones",
+-    "description": "The ossuary the guild traced the lich to isn't a hideout so much as a workshop -- generations of the dead, sorted, stored, and put to use, all in service of a ritual that was never about raising an army in the first place.",
+-    "epilogue": "The lich is gone, his phylactery in pieces, and whatever he was trying to reach on the other side of that ritual didn't get through -- not this time. The guild is treating this as a delay, not an ending; something was listening on the other end of that ritual, and it's very unlikely to have forgotten the attempt.",
++    "description": "The ossuary the guild traced the lich to is not a hideout so much as a workshop. Generations of the dead lie sorted, stored, and put to use, all in service of a ritual that was never about raising an army in the first place.",
++    "epilogue": "The lich is gone, his phylactery in pieces, and whatever he was trying to reach on the other side of that ritual did not get through, not this time. The guild is treating this as a delay, not an ending. Something was listening on the other end of that ritual, and it is unlikely to have forgotten the attempt.",
+     "reqLevel": 41,
+     "requiredRoles": {
+       "caster": 2
+@@ -135,8 +135,8 @@
+   {
+     "id": "silence_the_loom",
+     "name": "Silence the Loom",
+-    "description": "There is no approach, no outer ring of guards, no lesser threat to clear first -- just a long walk down into the dark and, at the end of it, the thing itself, already aware the guild is coming and entirely unbothered by the fact.",
+-    "epilogue": "The Loom doesn't scream when it finally comes apart -- it just goes quiet, one borrowed voice at a time, until there's nothing left speaking through Millbrook at all. The town will need a long time to remember how to answer a question honestly again. That's a problem for people who aren't the guild to solve now.",
++    "description": "There is no approach, no outer ring of guards, and no lesser threat to clear first. There is only a long walk down into the dark, and at the end of it, the thing itself, already aware the guild is coming and entirely unbothered by the fact.",
++    "epilogue": "The Loom does not scream when it finally comes apart. It just goes quiet, one borrowed voice at a time, until nothing is left speaking through Millbrook. The town will need a long time to remember how to answer a question honestly again. That is a problem for people who are not the guild to solve now.",
+     "reqLevel": 43,
+     "requiredRoles": {
+       "melee": 1,
+-- 
+2.43.0
+
