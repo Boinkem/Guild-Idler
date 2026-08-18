@@ -59,6 +59,16 @@ const DISCORD_CONFIG_PATH = path.join(__dirname, 'discord.config.json');
 // by the patch-summary lookup below, to pull a ready-made Discord blurb for
 // whichever patch is selected instead of guessing one from its filename.
 const STATUS_MD_PATH = path.join(ROOT, 'guild-idler-status.md');
+// Where `npm run package` (electron-builder) actually drops its output --
+// see package.json's own build.directories.output. Read by copyLatestBuild
+// below to find the newest installer to copy.
+const RELEASE_DIR = path.join(ROOT, 'release');
+// Local Windows folder targeted by Google Drive's desktop sync -- anything
+// copied here becomes shareable automatically, no separate upload step.
+// Hardcoded rather than configurable since this is a single-developer local
+// tool (same "runs on your machine, not deployed" reasoning DEVTOOL.md's own
+// setup instructions already assume for the C:\Little-Knight path itself).
+const BUILD_COPY_TARGET = 'C:\\Custom Apps\\GuildBound Executables';
 
 /* --------------------------------------------------------------- schema --- */
 // Required fields per content type. This is the real safety net: TypeScript's
@@ -1324,6 +1334,59 @@ async function runNpm(args, timeout) {
   return run(NPM_BIN, args, timeout, { shell: process.platform === 'win32' });
 }
 
+/**
+ * Copies the most-recently-modified installer out of release/ (produced by
+ * `npm run package`, see the /api/patches/package handler) into
+ * BUILD_COPY_TARGET -- see that constant's own comment for why that
+ * particular folder. Deliberately manual, not chained onto the Package step
+ * automatically: a dev might run Package several times while iterating
+ * before the result is actually the one worth sharing, and a copy step that
+ * fires on every single build would silently overwrite whatever's already
+ * sitting in the Drive folder each time, even a half-broken interim build.
+ * Windows-only, matching the target path itself -- reported back as data
+ * (not thrown) on any other platform, same "expected outcome, not a tool
+ * malfunction" reasoning run() uses for a failed git/npm command.
+ */
+async function copyLatestBuild() {
+  if (process.platform !== 'win32') {
+    return {
+      ok: false,
+      stdout: '',
+      stderr: `${BUILD_COPY_TARGET} is a Windows path -- this button only works when the DevTool itself is running on Windows. Copy the file from ${RELEASE_DIR} by hand on this platform.`,
+    };
+  }
+  let entries;
+  try {
+    entries = await fs.readdir(RELEASE_DIR, { withFileTypes: true });
+  } catch {
+    return { ok: false, stdout: '', stderr: `No ${RELEASE_DIR} folder yet -- run Package (step 7) first.` };
+  }
+  const candidates = [];
+  for (const entry of entries) {
+    // NSIS (the configured Windows target) drops the real installer as a
+    // loose .exe directly in release/, alongside a win-unpacked/ folder and
+    // some non-installer housekeeping files (.blockmap, latest.yml) that
+    // aren't what anyone actually wants copied to a share folder.
+    if (!entry.isFile() || path.extname(entry.name).toLowerCase() !== '.exe') continue;
+    const full = path.join(RELEASE_DIR, entry.name);
+    const stat = await fs.stat(full);
+    candidates.push({ full, name: entry.name, mtimeMs: stat.mtimeMs });
+  }
+  if (candidates.length === 0) {
+    return { ok: false, stdout: '', stderr: `No .exe installer found in ${RELEASE_DIR} -- run Package (step 7) first.` };
+  }
+  candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const latest = candidates[0];
+  try {
+    await fs.mkdir(BUILD_COPY_TARGET, { recursive: true });
+    const destPath = path.join(BUILD_COPY_TARGET, latest.name);
+    await fs.copyFile(latest.full, destPath);
+    return { ok: true, stdout: `Copied ${latest.name} -> ${destPath}`, stderr: '' };
+  } catch (err) {
+    return { ok: false, stdout: '', stderr: err.message ?? String(err) };
+  }
+}
+
 /* --------------------------------------------------------------- sim --- */
 // Sandbox sim runner. execFile (used by run()/runNpm() above) has no way to
 // pipe data to a child's stdin, and the sim worker needs a JSON payload on
@@ -1824,6 +1887,10 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/patches/package' && req.method === 'POST') {
     const result = await runNpm(['run', 'package'], PACKAGE_TIMEOUT_MS);
     return json(res, 200, result);
+  }
+
+  if (url.pathname === '/api/patches/copy-build' && req.method === 'POST') {
+    return json(res, 200, await copyLatestBuild());
   }
 
   if (url.pathname === '/api/sim/presets' && req.method === 'GET') {

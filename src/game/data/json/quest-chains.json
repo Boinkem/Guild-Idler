@@ -168,7 +168,10 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "Raidcard3.png"
+      "path": "chains/quest3.png",
+      "focusX": 46.4,
+      "focusY": 82.7,
+      "scale": 126
     },
     "stages": [
       {
@@ -191,121 +194,142 @@
   },
   {
     "id": "what_the_culled_become",
-    "requiresChainId": "demon_generals_ledger",
     "name": "What the Culled Become",
     "description": "The Harrower's name still means nothing to anyone at IronRest, but the ledger's tally means everything -- every single village it culled has reported graves opening from the inside in the weeks since. The people it took didn't stay taken. They came back. They came back different.",
     "reqLevel": 19,
     "rewardGold": 2800,
     "rewardItems": [
-      "gravewatchers_band"
+      "gravewatchers_band@5"
     ],
     "rewardRenown": 2,
     "title": "Grave-Watcher",
     "epilogue": "Whatever the Harrower takes, it doesn't keep -- it gives them back, changed, obedient, still somehow counted in that ledger. Somewhere east of the culled villages, in that old barrow-ground, something buried a very long time ago has started, very quietly, to stir. Nobody has connected the two yet. Somebody should, and soon.",
+    "requiresChainId": "demon_generals_ledger",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/Culled.png",
+      "scale": 130
+    },
     "stages": [
       {
         "name": "The Empty Graves",
         "flavour": "Every grave here has been dug from beneath, dirt scattered outward in a ring, no tool marks and no footprints leading away -- only footprints leading toward the old barrow-ground east of town, dozens of them, walking in step like they'd all been given the same destination.",
         "tag": "explore",
         "difficulty": "hard",
-        "goldMultiplier": 2.1,
-        "durationMinutes": 600
+        "durationMinutes": 600,
+        "goldMultiplier": 2.1
       },
       {
         "name": "The Harvest",
         "flavour": "They remember their own names. They answer to them, even, when you say them out loud -- which is somehow so much worse than if they'd forgotten everything, because it means whatever they are now, they know exactly what they used to be.",
         "tag": "combat",
         "difficulty": "epic",
-        "goldMultiplier": 2.5,
-        "durationMinutes": 780
+        "durationMinutes": 780,
+        "goldMultiplier": 2.5
       },
       {
         "name": "Something Older Stirs",
         "flavour": "The old barrow-ground has sat quiet for three hundred years, moss grown thick over every stone marker. It is not quiet tonight -- something underneath is moving for the first time in three centuries, and it is not moving slowly.",
         "tag": "combat",
         "difficulty": "epic",
-        "goldMultiplier": 2.7,
-        "durationMinutes": 900
+        "durationMinutes": 900,
+        "goldMultiplier": 2.7
       }
     ]
   },
   {
     "id": "proving_the_bastion",
-    "requiresChainId": "demon_generals_ledger",
     "name": "Proving the Bastion",
     "description": "The Thornhollow cure reached IronRest Bastion exactly on schedule, carried the last leg by the very guild that ran those vials there in the first place. Captain Maeryn Thorne doesn't forget a debt like that, and she has no shortage of work that needs hands she can actually trust. Prove useful enough, and she has bigger plans in mind.",
     "reqLevel": 16,
     "rewardGold": 3800,
     "rewardItems": [
-      "wardens_signet"
+      "wardens_signet@5"
     ],
     "rewardRenown": 3,
     "title": "Lord of the Keep",
     "epilogue": "Captain Thorne kept her word, which surprised exactly no one who'd ever dealt with her directly. The Keep changed hands quietly, the way most important things do, and the guild has had a real home -- walls, a gate, and a garrison that answers to them -- ever since.",
+    "requiresChainId": "demon_generals_ledger",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/Quest.png",
+      "scale": 119
+    },
     "stages": [
       {
         "name": "Officers of IronRest",
         "flavour": "Captain Thorne doesn't say please, doesn't soften an order, and doesn't repeat herself. She's run this Bastion through worse than one guild's growing pains, and she expects you to keep up without being told twice.",
         "tag": "defense",
         "difficulty": "normal",
-        "goldMultiplier": 1.6,
-        "durationMinutes": 360
+        "durationMinutes": 360,
+        "goldMultiplier": 1.6
       },
       {
         "name": "Beasts on the Border",
         "flavour": "Something is thinning the border patrols one soldier at a time, and it isn't raiders -- raiders don't drag their kills forty feet into the treeline and leave the boots behind, still laced.",
         "tag": "combat",
         "difficulty": "hard",
-        "goldMultiplier": 1.9,
-        "durationMinutes": 480
+        "durationMinutes": 480,
+        "goldMultiplier": 1.9
       },
       {
         "name": "The Fort in the North-West",
         "flavour": "Thorne's terms are simple: take the fort back from whatever's squatting in it, and the Keep is yours to call home -- so long as IronRest can always call on it when the debt comes due.",
         "tag": "combat",
         "difficulty": "epic",
-        "goldMultiplier": 2.4,
-        "durationMinutes": 840
+        "durationMinutes": 840,
+        "goldMultiplier": 2.4
       },
       {
         "name": "The Demon Lord's Throne",
         "flavour": "Whatever ruled this fort didn't build a throne room to be comfortable. It built one to be seen from every angle at once, by anyone unlucky enough to be standing in it.",
         "tag": "combat",
         "difficulty": "legendary",
-        "goldMultiplier": 3.2,
-        "durationMinutes": 1200
+        "durationMinutes": 1200,
+        "goldMultiplier": 3.2
       }
     ]
   },
   {
     "id": "granite_crossing",
-    "requiresChainId": "proving_the_bastion",
     "name": "Granite Crossing",
     "description": "The Keep is finally the guild's own, and the war table already has a name pinned to it in Thorne's own hand: Granite Crossing, home of the west coast's Stone Masons Guild. IronRest hasn't heard a word from it in weeks, and silence from a place that busy is never good news.",
     "reqLevel": 20,
     "rewardGold": 2400,
     "rewardItems": [
-      "bulwark_cuirass"
+      "bulwark_cuirass@5"
     ],
     "rewardRenown": 2,
     "title": "Garrick's End",
     "epilogue": "Garrick's raiders scattered the moment he stopped giving orders -- which told its own story about exactly what kind of leader he'd actually been. The Stone Masons Guild hasn't forgotten who reopened their gate, and they've made sure everyone downriver knows it too.",
+    "requiresChainId": "proving_the_bastion",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/Granite.png",
+      "scale": 127
+    },
     "stages": [
       {
         "name": "The Silent Quarry",
         "flavour": "Garrick and his raiders have taken the town gate and dug in like they mean to stay a season. The stonemasons hold everything behind it -- for now, and the longer this drags on, the less certain that for now sounds.",
         "tag": "combat",
         "difficulty": "hard",
-        "goldMultiplier": 2,
-        "durationMinutes": 480
+        "durationMinutes": 480,
+        "goldMultiplier": 2
       },
       {
         "name": "Garrick's Reckoning",
         "flavour": "He pitched his camp inside the quarry itself, right in the working pit, like he wanted the masons to watch him do it. Stonemasons remember who does that to their livelihood, and they remember for a very long time.",
         "tag": "combat",
         "difficulty": "epic",
-        "goldMultiplier": 2.4,
-        "durationMinutes": 720
+        "durationMinutes": 720,
+        "goldMultiplier": 2.4
       }
     ]
   },
@@ -316,27 +340,34 @@
     "reqLevel": 24,
     "rewardGold": 3200,
     "rewardItems": [
-      "gravekeepers_gloves"
+      "gravekeepers_gloves@5"
     ],
     "rewardRenown": 2,
     "title": "Farmwarden",
     "epilogue": "Whatever Vayne was turning into, it never got to finish. The farmland recovered faster than the stories about what was actually found in that farmhouse basement, and most people who hear both versions decide they'd rather not ask which one is true.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/FarmattheEdge.png",
+      "scale": 132
+    },
     "stages": [
       {
         "name": "No Word From the Farm",
         "flavour": "The fields stand untouched, crops still ripening in neat rows -- but the farmhouse is anything but untouched. Raiders have dug in around it like they intend to winter there, not pass through.",
         "tag": "combat",
         "difficulty": "hard",
-        "goldMultiplier": 2.1,
-        "durationMinutes": 540
+        "durationMinutes": 540,
+        "goldMultiplier": 2.1
       },
       {
         "name": "What Vayne Was Becoming",
         "flavour": "Captain Vayne is mid-ritual when you find her, something dark being poured into her a measure at a time, paid for with more of herself than she has left to spend. Whatever this was supposed to make her into, it isn't finished yet -- which might be the only reason there's still time to stop it.",
         "tag": "arcane",
         "difficulty": "epic",
-        "goldMultiplier": 2.5,
-        "durationMinutes": 780
+        "durationMinutes": 780,
+        "goldMultiplier": 2.5
       }
     ]
   },
@@ -347,44 +378,53 @@
     "reqLevel": 32,
     "rewardGold": 12000,
     "rewardItems": [
-      "sword_of_the_ashen_hand",
-      "bulwark_of_the_war_saint"
+      "sword_of_the_ashen_hand@5",
+      "bulwark_of_the_war_saint@5"
     ],
     "rewardRenown": 5,
     "title": "Ashen-Sworn",
     "epilogue": "He dismounted, in the end. The Paladins of the Ashen Hand won't talk about what that actually looked like, and nobody who was there has tried to make them.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/PaleRider.png",
+      "focusX": 43.1,
+      "focusY": 51.9,
+      "scale": 120
+    },
     "stages": [
       {
         "name": "The Ashen Hand's Plea",
         "flavour": "These paladins don't ask for help easily -- years of training see to that. That they're asking at all, standing here in armor that's seen real use, should worry you more than it visibly worries them.",
         "tag": "defense",
         "difficulty": "epic",
-        "goldMultiplier": 2.6,
-        "durationMinutes": 840
+        "durationMinutes": 840,
+        "goldMultiplier": 2.6
       },
       {
         "name": "The Road to Saint Aurlias Rest",
         "flavour": "An old war-cleric built a church out here once, long before anyone needed protecting from whatever sleeps beneath it now. Hoofprints mark this road and only this road for eleven straight miles, evenly spaced, never breaking stride.",
         "tag": "explore",
         "difficulty": "epic",
-        "goldMultiplier": 2.9,
-        "durationMinutes": 960
+        "durationMinutes": 960,
+        "goldMultiplier": 2.9
       },
       {
         "name": "The Dead of Saint Aurlias",
         "flavour": "These graves emptied from the inside same as every other place the Harrower has passed through -- except here, the dead are walking toward the church, not away from it, drawn like something behind that door is calling them home by name.",
         "tag": "combat",
         "difficulty": "epic",
-        "goldMultiplier": 3.1,
-        "durationMinutes": 1080
+        "durationMinutes": 1080,
+        "goldMultiplier": 3.1
       },
       {
         "name": "The Rider in the Nave",
         "flavour": "He was waiting behind the doors the dead were so eager to reach, seated and unmoving, and he does not dismount. He hasn't needed to in longer than anyone currently breathing has been alive.",
         "tag": "combat",
         "difficulty": "legendary",
-        "goldMultiplier": 4,
-        "durationMinutes": 1440
+        "durationMinutes": 1440,
+        "goldMultiplier": 4
       }
     ]
   },
@@ -395,44 +435,53 @@
     "reqLevel": 18,
     "rewardGold": 4000,
     "rewardItems": [
-      "dragon_helm",
-      "dragon_blade"
+      "dragon_helm@5",
+      "dragon_blade@5"
     ],
     "rewardRenown": 2,
     "title": "Dragonbane",
     "epilogue": "Emberfell doesn't burn anymore. The dragon's hoard more than covered the cost of rebuilding every farmstead it ever touched, which several holdfast elders have pointed out, only half-joking, is a strange kind of silver lining to a burned town.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/quest2.png",
+      "focusX": 49.3,
+      "focusY": 13.6,
+      "scale": 145
+    },
     "stages": [
       {
         "name": "Follow the Ash Trail",
         "flavour": "The ash here is cold, but the scorched ground underneath is still warm to the touch. Whatever did this passed through recently -- recently enough that it might still be close.",
         "tag": "explore",
         "difficulty": "hard",
-        "goldMultiplier": 1.5,
-        "durationMinutes": 480
+        "durationMinutes": 480,
+        "goldMultiplier": 1.5
       },
       {
         "name": "Question the Survivors",
         "flavour": "Every survivor tells the same story with the same wide-eyed disbelief: wings spanning the whole width of the valley, blotting out the sky before the fire even started falling.",
         "tag": "explore",
         "difficulty": "normal",
-        "goldMultiplier": 1.5,
-        "durationMinutes": 360
+        "durationMinutes": 360,
+        "goldMultiplier": 1.5
       },
       {
         "name": "Scale the Cinder Pass",
         "flavour": "The only way up this mountain is the same route the dragon uses to come down -- a narrow, ash-choked pass with no cover and no second path if something goes wrong halfway.",
         "tag": "explore",
         "difficulty": "epic",
-        "goldMultiplier": 2,
-        "durationMinutes": 840
+        "durationMinutes": 840,
+        "goldMultiplier": 2
       },
       {
         "name": "The Dragon of Emberfell",
         "flavour": "There is no retreat from this ledge, no fallback position, nowhere left to regroup. Bring everything the guild has, because everything is exactly what this is going to take.",
         "tag": "combat",
         "difficulty": "legendary",
-        "goldMultiplier": 3,
-        "durationMinutes": 1200
+        "durationMinutes": 1200,
+        "goldMultiplier": 3
       }
     ]
   },
@@ -482,44 +531,51 @@
     "reqLevel": 22,
     "rewardGold": 6500,
     "rewardItems": [
-      "dragon_armor",
-      "amulet_of_fortune"
+      "dragon_armor@5",
+      "amulet_of_fortune@5"
     ],
     "rewardRenown": 3,
     "title": "Hellgate Breaker",
     "epilogue": "The demon lord who held that throne won't be sitting on it again. The gate stands open, the wards lie broken, and whatever was singing behind them isn't where the guild left it -- it got out in the confusion. It won't get far. But it isn't here anymore, either, and that's its own kind of unfinished business.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/DemonFort.png",
+      "scale": 121
+    },
     "stages": [
       {
         "name": "Break the Outer Siege",
         "flavour": "Ladders against the wall, fire in the ditch, and a night that refuses to end fast enough. This is the easy part, and it still costs plenty.",
         "tag": "combat",
         "difficulty": "hard",
-        "goldMultiplier": 2,
-        "durationMinutes": 600
+        "durationMinutes": 600,
+        "goldMultiplier": 2
       },
       {
         "name": "Break the Warding Choir",
         "flavour": "Nine years unbroken and thick enough to hold a whole fortress shut from the inside -- you're not here to silence it for good, just to make it stop mattering long enough to get past the gate it's guarding.",
         "tag": "arcane",
         "difficulty": "epic",
-        "goldMultiplier": 2.4,
-        "durationMinutes": 840
+        "durationMinutes": 840,
+        "goldMultiplier": 2.4
       },
       {
         "name": "The Iron Gate",
         "flavour": "Whatever holds this gate remembers the last siege in detail, and it's had years to plan for the next one.",
         "tag": "combat",
         "difficulty": "epic",
-        "goldMultiplier": 2.6,
-        "durationMinutes": 1080
+        "durationMinutes": 1080,
+        "goldMultiplier": 2.6
       },
       {
         "name": "Descend to the Throne",
         "flavour": "One door left between the guild and whatever's been ruling behind it. It's already standing open, which is somehow worse than finding it locked.",
         "tag": "combat",
         "difficulty": "legendary",
-        "goldMultiplier": 3.5,
-        "durationMinutes": 1440
+        "durationMinutes": 1440,
+        "goldMultiplier": 3.5
       }
     ]
   },
@@ -635,42 +691,49 @@
   },
   {
     "id": "hollow_choir",
-    "requiresChainId": "demon_fortress",
     "name": "The Hollow Choir",
     "description": "The guild broke a choir just like this one once before, at the demon fortress -- cracked its wards, cut down the demon lord keeping it caged, and left the voices behind because voices were never the actual job. It didn't stay put for long. Something has settled into the old cathedral now, singing like it fully intends to make a home of it. It never once pauses to breathe.",
     "reqLevel": 26,
     "rewardGold": 5200,
     "rewardItems": [
-      "choir_mask",
-      "silenced_bell"
+      "choir_mask@5",
+      "silenced_bell@5"
     ],
     "rewardRenown": 2,
     "title": "Choir-Silencer",
     "epilogue": "The singing has actually stopped this time -- or at least, it's been quiet long enough that most people have stopped flinching every time a cathedral bell rings out unexpectedly. Most people.",
+    "requiresChainId": "demon_fortress",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/HallowChoir.png",
+      "scale": 128
+    },
     "stages": [
       {
         "name": "Follow the Hymn",
         "flavour": "It carries for miles and never repeats a single verse, and you've heard the shape of this before -- not the melody, but the wards woven underneath it. Whatever escaped that fortress has found itself a new home in these cathedral walls. Not for much longer.",
         "tag": "explore",
         "difficulty": "hard",
-        "goldMultiplier": 1.8,
-        "durationMinutes": 600
+        "durationMinutes": 600,
+        "goldMultiplier": 1.8
       },
       {
         "name": "The Choir Loft",
         "flavour": "No singers up in the loft -- just one thing, fused into the rafters in wet coils of flesh, dozens of mouths opening and closing in careful sequence so the note never once has to stop. It sings beautifully. That's somehow the most disturbing part of all of it.",
         "tag": "combat",
         "difficulty": "epic",
-        "goldMultiplier": 2.2,
-        "durationMinutes": 840
+        "durationMinutes": 840,
+        "goldMultiplier": 2.2
       },
       {
         "name": "Silence the Chord",
         "flavour": "Whatever this thing has been building toward this whole time, it's nearly finished -- and finished is very much not what the guild came here to let it be.",
         "tag": "arcane",
         "difficulty": "epic",
-        "goldMultiplier": 2.6,
-        "durationMinutes": 1080
+        "durationMinutes": 1080,
+        "goldMultiplier": 2.6
       }
     ]
   },
@@ -681,54 +744,61 @@
     "reqLevel": 34,
     "rewardGold": 22000,
     "rewardItems": [
-      "voidforged_blade",
-      "voidforged_crown",
-      "voidforged_plate",
-      "voidforged_signet"
+      "voidforged_blade@5",
+      "voidforged_crown@5",
+      "voidforged_plate@5",
+      "voidforged_signet@5"
     ],
     "rewardRenown": 6,
     "title": "World's End",
     "epilogue": "It did not have a name when this started, and it does not have one now. What it had, it does not have anymore. That will have to be enough of an ending.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/WorldEnder.png",
+      "scale": 128
+    },
     "stages": [
       {
         "name": "The Road That Should Not Exist",
         "flavour": "Three nights ago, a caravan guard on the old coast road swore the ground opened under a full moon and closed again by dawn, leaving a road where there hadn't been one — cutting dead straight into hill country no surveyor has ever mapped. By morning, three cartographers in three different towns had drawn the same route onto their charts without comparing notes, each one certain they'd surveyed it before, decades ago, under a different name, before a war that hasn't happened yet. The guild's advance rider stands at its mouth now, torch raised, looking down a road paved in stone too old and too smooth for anyone currently alive to have laid it. It has always been on the ground. It just hadn't been found yet. It did not need a harbor to arrive by, or a column to march down it. It only needed the guild close enough to bother appearing for.",
         "tag": "explore",
         "difficulty": "epic",
-        "goldMultiplier": 2.6,
-        "durationMinutes": 960
+        "durationMinutes": 960,
+        "goldMultiplier": 2.6
       },
       {
         "name": "The Watchers in the Dark Between Stars",
         "flavour": "The road climbs past the treeline and past the sky as anyone has ever charted it — stars in configurations that answer to no constellation, counted aloud in a language built for a mouth nobody here has. Six shapes stand at the road's end, tall as siege engines and thin as famine, unmoving, each one marking something on the empty air that leaves no mark anyone living can see. They do not turn to look as the guild approaches. They have been counting for longer than the road has existed, and whatever number they are working toward, it is close. It is very close. They are not the World-Ender's to command — if anything, the arrangement runs the other way — and this is not the only tally they keep. Whatever debt is being counted down here is one of several, on fronts this guild has never heard of, and, with luck, never will.",
         "tag": "arcane",
         "difficulty": "legendary",
-        "goldMultiplier": 3.2,
-        "durationMinutes": 1200
+        "durationMinutes": 1200,
+        "goldMultiplier": 3.2
       },
       {
         "name": "The Court of the Unmade King",
         "flavour": "Past the Watchers the road stops being a road at all and becomes a hall that isn't holding a shape so much as remembering several — pillars flickering between marble and bone and nothing, a floor that is every battlefield it has ever hosted, layered on top of itself all at once. On a throne assembled from the wreckage of every crown it has ever replaced sits something that at least eight vanished empires once called the first mistake, and stopped teaching children about long before any of them fell. It watches the guild arrive with the patient boredom of a thing that has watched a very great many guilds arrive, and outlasted every one of them.",
         "tag": "explore",
         "difficulty": "legendary",
-        "goldMultiplier": 3.6,
-        "durationMinutes": 1440
+        "durationMinutes": 1440,
+        "goldMultiplier": 3.6
       },
       {
         "name": "The Breaking of the Vigil",
         "flavour": "Below the throne room, older than the throne room, a wall of pale and thinning light holds a line that has not moved since before \"moving\" had a word for it — tended by things too exhausted to have kept their faces. Whatever has stood this post does not so much ask for help as simply stop pretending it does not need it anymore. The guild braces the failing wall with whatever thirty-four hard-earned levels can buy, shoulder to shoulder with things that stopped being anything nameable a very long time ago. It is not enough on its own. It has to be enough anyway.",
         "tag": "defense",
         "difficulty": "legendary",
-        "goldMultiplier": 4,
-        "durationMinutes": 1680
+        "durationMinutes": 1680,
+        "goldMultiplier": 4
       },
       {
         "name": "The World-Ender",
         "flavour": "Past the breaking vigil there is no more architecture, no more road, no more sky — only a shape the size of a held breath, waiting exactly where it has always waited, patient in precisely the way the old sailors' charts warned about and the scholars refused for three centuries to believe. It does not introduce itself. It has never needed to. Whatever happens next will be the last thing every one of the five expeditions before this one ever saw — or it will be the first thing one of them survived, and there will finally be someone left to write down the difference.",
         "tag": "combat",
         "difficulty": "legendary",
-        "goldMultiplier": 5,
-        "durationMinutes": 1920
+        "durationMinutes": 1920,
+        "goldMultiplier": 5
       }
     ]
   },
@@ -784,45 +854,52 @@
     "reqLevel": 45,
     "rewardGold": 42000,
     "rewardItems": [
-      "empyrean_blade",
-      "empyrean_halo",
-      "empyrean_aegis"
+      "empyrean_blade@5",
+      "empyrean_halo@5",
+      "empyrean_aegis@5"
     ],
     "rewardRenown": 10,
     "title": "Kingslayer Twice Over",
     "epilogue": "He's buried again, properly this time, under considerably more stone than the last attempt managed. The court that followed him hasn't been seen since -- which is either genuinely good news, or exactly the kind of quiet that comes right before worse news arrives.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/HollowKing.png",
+      "scale": 134
+    },
     "stages": [
       {
         "name": "The Grave Reopens",
         "flavour": "The seal held for three hundred years, stone unmoved, wards unbroken. It held for exactly one night less than it needed to.",
         "tag": "combat",
         "difficulty": "epic",
-        "goldMultiplier": 2.8,
-        "durationMinutes": 1080
+        "durationMinutes": 1080,
+        "goldMultiplier": 2.8
       },
       {
         "name": "The Procession of the Dead Court",
         "flavour": "Every advisor he ever had executed is walking behind him now in perfect procession, and not one of them looks angry about it anymore. That is the part that should worry you.",
         "tag": "combat",
         "difficulty": "legendary",
-        "goldMultiplier": 3.4,
-        "durationMinutes": 1320
+        "durationMinutes": 1320,
+        "goldMultiplier": 3.4
       },
       {
         "name": "The Bridge of Forgotten Oaths",
         "flavour": "This bridge only bears the weight of those who never once broke a promise in their lives. Cross very, very carefully.",
         "tag": "arcane",
         "difficulty": "legendary",
-        "goldMultiplier": 3.8,
-        "durationMinutes": 1560
+        "durationMinutes": 1560,
+        "goldMultiplier": 3.8
       },
       {
         "name": "The Second Coronation",
         "flavour": "He's nearly home. The crown still remembers the shape of his head, even if the kingdom underneath it has long since forgotten his name.",
         "tag": "combat",
         "difficulty": "legendary",
-        "goldMultiplier": 4.4,
-        "durationMinutes": 1800
+        "durationMinutes": 1800,
+        "goldMultiplier": 4.4
       }
     ]
   },

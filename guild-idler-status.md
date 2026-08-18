@@ -12751,3 +12751,50 @@ is untouched and still holds regardless of which element ends up last.
 **Verified:** `npx tsc --noEmit` and `vite build` both clean against the
 full project, confirmed against a fresh clone of current `main` (through
 patch 0183) with only this patch's diff applied.
+
+### DevTool: version-bump buttons reordered to major/minor/patch, new copy-latest-build-to-Drive button -- built (patch 0185)
+
+```discord-update
+Dev Update | DevTool Release Steps
+
+- Version-bump buttons now read major, minor, patch (left to right) instead of patch, minor, major
+- New "Copy latest build to Google Drive folder" button -- grabs the newest installer from release/ and drops it in the Drive-synced folder, ready to share
+```
+
+Two direct requests: reorder the version-tag buttons to match how a
+version number itself reads (major.minor.patch), and add a one-click way
+to get the newest packaged build into the folder Google Drive already
+watches.
+
+**Button reorder (`app.js`).** Was `bumpPatchBtn`/`bumpMinorBtn`/
+`bumpMajorBtn` in both the visible button markup and the wiring loop
+(`['bumpPatchBtn', ...].forEach((id, i) => { const level = ['patch',
+...][i]; ... })`) -- both reordered together to major/minor/patch, kept
+paired by index so each button still calls `/api/version/bump` with the
+correct `level` regardless of which order they're listed in. The backend
+endpoint itself (`server.mjs`) was already level-agnostic (`npm version
+<level>` under the hood) -- no change needed there.
+
+**Copy latest build (`server.mjs`, `app.js`, `DEVTOOL.md`).** New
+`copyLatestBuild()`: reads `release/` (electron-builder's own output dir,
+per `package.json`'s `build.directories.output`), picks the
+most-recently-modified `.exe` (NSIS, the configured Windows target, drops
+the real installer as a loose file there alongside a `win-unpacked/`
+folder and some non-installer housekeeping files that aren't what anyone
+wants copied to a share folder), and copies it into `C:\Custom Apps\
+GuildBound Executables` -- the folder confirmed to already be watched by
+Google Drive's desktop sync, so anything landing there becomes shareable
+automatically with no separate upload step. New button sits directly
+under "Run package" (same step 7, not a renumbered new step) with a
+confirm dialog first, since it overwrites whatever's already in that
+folder. Windows-only, matching the target path itself -- reports a plain
+message instead of copying anything on another platform, same
+"expected outcome, not a tool malfunction" shape `run()` already uses
+for a failed git/npm command, rather than throwing.
+
+**Verified:** `node --check` clean on both `tools/devtool/server.mjs` and
+`tools/devtool/public/app.js` -- this tool lives entirely outside
+`tsconfig.json`'s `include` (`src`, `electron`, `vite.config.ts` only)
+and isn't part of the Vite build, so `npx tsc --noEmit`/`vite build`
+don't touch it either way; confirmed neither picked up any change here,
+same as before this patch.

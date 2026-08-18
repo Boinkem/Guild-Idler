@@ -1,0 +1,230 @@
+diff --git a/DEVTOOL.md b/DEVTOOL.md
+index 61f0275..750696a 100644
+--- a/DEVTOOL.md
++++ b/DEVTOOL.md
+@@ -111,9 +111,18 @@ just right after applying something.
+ - **Package** (step 7) — `npm run package`. Runs electron-builder and produces
+   installers/unpacked builds in `release/` — this is what you'd hand to
+   playtesters or upload to Steam. Can take several minutes the first time.
+-- **Tag a release version** (step 8) — runs `npm version patch/minor/major`,
+-  which bumps `package.json`, commits, and creates a git tag (`v0.1.10`) in one
+-  step. **This is deliberately separate from the `000N-name.patch` filenames.**
++- **Copy latest build to Google Drive folder** (also step 7) — copies the
++  newest `.exe` in `release/` to `C:\Custom Apps\GuildBound Executables`, a
++  folder watched by Google Drive's desktop sync — anything copied there
++  becomes shareable automatically, no separate upload step. Manual and
++  separate from Package on purpose: confirm the build is actually the one
++  worth sharing first, since this overwrites whatever's already in that
++  folder. Windows-only (the target path itself only makes sense there); on
++  another platform it reports that instead of copying anything.
++- **Tag a release version** (step 8) — runs `npm version major/minor/patch`
++  (buttons read left to right, major → minor → patch), which bumps
++  `package.json`, commits, and creates a git tag (`v0.1.10`) in one step.
++  **This is deliberately separate from the `000N-name.patch` filenames.**
+   A patch filename just identifies one batch of changes between us in this
+   conversation; a version tag is the real release number that matters to
+   players and to Steam. Do this once you're happy with everything above —
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 0adc131..cc258c3 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -12751,3 +12751,50 @@ is untouched and still holds regardless of which element ends up last.
+ **Verified:** `npx tsc --noEmit` and `vite build` both clean against the
+ full project, confirmed against a fresh clone of current `main` (through
+ patch 0183) with only this patch's diff applied.
++
++### DevTool: version-bump buttons reordered to major/minor/patch, new copy-latest-build-to-Drive button -- built (patch 0185)
++
++```discord-update
++Dev Update | DevTool Release Steps
++
++- Version-bump buttons now read major, minor, patch (left to right) instead of patch, minor, major
++- New "Copy latest build to Google Drive folder" button -- grabs the newest installer from release/ and drops it in the Drive-synced folder, ready to share
++```
++
++Two direct requests: reorder the version-tag buttons to match how a
++version number itself reads (major.minor.patch), and add a one-click way
++to get the newest packaged build into the folder Google Drive already
++watches.
++
++**Button reorder (`app.js`).** Was `bumpPatchBtn`/`bumpMinorBtn`/
++`bumpMajorBtn` in both the visible button markup and the wiring loop
++(`['bumpPatchBtn', ...].forEach((id, i) => { const level = ['patch',
++...][i]; ... })`) -- both reordered together to major/minor/patch, kept
++paired by index so each button still calls `/api/version/bump` with the
++correct `level` regardless of which order they're listed in. The backend
++endpoint itself (`server.mjs`) was already level-agnostic (`npm version
++<level>` under the hood) -- no change needed there.
++
++**Copy latest build (`server.mjs`, `app.js`, `DEVTOOL.md`).** New
++`copyLatestBuild()`: reads `release/` (electron-builder's own output dir,
++per `package.json`'s `build.directories.output`), picks the
++most-recently-modified `.exe` (NSIS, the configured Windows target, drops
++the real installer as a loose file there alongside a `win-unpacked/`
++folder and some non-installer housekeeping files that aren't what anyone
++wants copied to a share folder), and copies it into `C:\Custom Apps\
++GuildBound Executables` -- the folder confirmed to already be watched by
++Google Drive's desktop sync, so anything landing there becomes shareable
++automatically with no separate upload step. New button sits directly
++under "Run package" (same step 7, not a renumbered new step) with a
++confirm dialog first, since it overwrites whatever's already in that
++folder. Windows-only, matching the target path itself -- reports a plain
++message instead of copying anything on another platform, same
++"expected outcome, not a tool malfunction" shape `run()` already uses
++for a failed git/npm command, rather than throwing.
++
++**Verified:** `node --check` clean on both `tools/devtool/server.mjs` and
++`tools/devtool/public/app.js` -- this tool lives entirely outside
++`tsconfig.json`'s `include` (`src`, `electron`, `vite.config.ts` only)
++and isn't part of the Vite build, so `npx tsc --noEmit`/`vite build`
++don't touch it either way; confirmed neither picked up any change here,
++same as before this patch.
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index 02bc5da..9b6a04a 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -1790,6 +1790,16 @@ function renderPatches() {
+     <button id="packageBtn">Run package</button>
+     <div id="packageResult"></div>
+ 
++    <p class="tiny muted" style="margin-top:10px;">
++      Copies the newest <code>.exe</code> in <code>release/</code> to
++      <code>C:\Custom Apps\GuildBound Executables</code> — that folder is watched by Google Drive, so
++      anything landing there becomes shareable automatically, no separate upload step. Manual on
++      purpose: run Package above first and confirm it's the build you actually want shared, since this
++      will overwrite whatever's already sitting in that folder.
++    </p>
++    <button id="copyBuildBtn">Copy latest build to Google Drive folder</button>
++    <div id="copyBuildResult"></div>
++
+     <div class="section-heading">8. Tag a release version</div>
+     <p class="tiny muted">
+       Current version: <b>${escapeHtml(patchState.version || '?')}</b>.
+@@ -1800,9 +1810,9 @@ function renderPatches() {
+       Do this once you're happy with everything above, not per-patch.
+     </p>
+     <div class="row" style="gap:6px;">
+-      <button id="bumpPatchBtn">Bump patch (bug fixes)</button>
+-      <button id="bumpMinorBtn">Bump minor (new features)</button>
+       <button id="bumpMajorBtn">Bump major (breaking/big)</button>
++      <button id="bumpMinorBtn">Bump minor (new features)</button>
++      <button id="bumpPatchBtn">Bump patch (bug fixes)</button>
+     </div>
+     <div id="versionResult"></div>
+ 
+@@ -1945,8 +1955,21 @@ function renderPatches() {
+     document.getElementById('packageResult').innerHTML = resultBlock(result, 'Package');
+   };
+ 
+-  ['bumpPatchBtn', 'bumpMinorBtn', 'bumpMajorBtn'].forEach((id, i) => {
+-    const level = ['patch', 'minor', 'major'][i];
++  const copyBuildBtn = document.getElementById('copyBuildBtn');
++  if (copyBuildBtn) copyBuildBtn.onclick = async () => {
++    if (!confirm('Copy the newest release/ installer to C:\\Custom Apps\\GuildBound Executables? This overwrites whatever is already there.')) return;
++    copyBuildBtn.disabled = true;
++    copyBuildBtn.textContent = 'Copying…';
++    const result = await api('/api/patches/copy-build', {
++      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
++    });
++    copyBuildBtn.disabled = false;
++    copyBuildBtn.textContent = 'Copy latest build to Google Drive folder';
++    document.getElementById('copyBuildResult').innerHTML = resultBlock(result, 'Copy build');
++  };
++
++  ['bumpMajorBtn', 'bumpMinorBtn', 'bumpPatchBtn'].forEach((id, i) => {
++    const level = ['major', 'minor', 'patch'][i];
+     const btn = document.getElementById(id);
+     if (!btn) return;
+     btn.onclick = async () => {
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index a67913b..a5c7b8e 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -59,6 +59,16 @@ const DISCORD_CONFIG_PATH = path.join(__dirname, 'discord.config.json');
+ // by the patch-summary lookup below, to pull a ready-made Discord blurb for
+ // whichever patch is selected instead of guessing one from its filename.
+ const STATUS_MD_PATH = path.join(ROOT, 'guild-idler-status.md');
++// Where `npm run package` (electron-builder) actually drops its output --
++// see package.json's own build.directories.output. Read by copyLatestBuild
++// below to find the newest installer to copy.
++const RELEASE_DIR = path.join(ROOT, 'release');
++// Local Windows folder targeted by Google Drive's desktop sync -- anything
++// copied here becomes shareable automatically, no separate upload step.
++// Hardcoded rather than configurable since this is a single-developer local
++// tool (same "runs on your machine, not deployed" reasoning DEVTOOL.md's own
++// setup instructions already assume for the C:\Little-Knight path itself).
++const BUILD_COPY_TARGET = 'C:\\Custom Apps\\GuildBound Executables';
+ 
+ /* --------------------------------------------------------------- schema --- */
+ // Required fields per content type. This is the real safety net: TypeScript's
+@@ -1324,6 +1334,59 @@ async function runNpm(args, timeout) {
+   return run(NPM_BIN, args, timeout, { shell: process.platform === 'win32' });
+ }
+ 
++/**
++ * Copies the most-recently-modified installer out of release/ (produced by
++ * `npm run package`, see the /api/patches/package handler) into
++ * BUILD_COPY_TARGET -- see that constant's own comment for why that
++ * particular folder. Deliberately manual, not chained onto the Package step
++ * automatically: a dev might run Package several times while iterating
++ * before the result is actually the one worth sharing, and a copy step that
++ * fires on every single build would silently overwrite whatever's already
++ * sitting in the Drive folder each time, even a half-broken interim build.
++ * Windows-only, matching the target path itself -- reported back as data
++ * (not thrown) on any other platform, same "expected outcome, not a tool
++ * malfunction" reasoning run() uses for a failed git/npm command.
++ */
++async function copyLatestBuild() {
++  if (process.platform !== 'win32') {
++    return {
++      ok: false,
++      stdout: '',
++      stderr: `${BUILD_COPY_TARGET} is a Windows path -- this button only works when the DevTool itself is running on Windows. Copy the file from ${RELEASE_DIR} by hand on this platform.`,
++    };
++  }
++  let entries;
++  try {
++    entries = await fs.readdir(RELEASE_DIR, { withFileTypes: true });
++  } catch {
++    return { ok: false, stdout: '', stderr: `No ${RELEASE_DIR} folder yet -- run Package (step 7) first.` };
++  }
++  const candidates = [];
++  for (const entry of entries) {
++    // NSIS (the configured Windows target) drops the real installer as a
++    // loose .exe directly in release/, alongside a win-unpacked/ folder and
++    // some non-installer housekeeping files (.blockmap, latest.yml) that
++    // aren't what anyone actually wants copied to a share folder.
++    if (!entry.isFile() || path.extname(entry.name).toLowerCase() !== '.exe') continue;
++    const full = path.join(RELEASE_DIR, entry.name);
++    const stat = await fs.stat(full);
++    candidates.push({ full, name: entry.name, mtimeMs: stat.mtimeMs });
++  }
++  if (candidates.length === 0) {
++    return { ok: false, stdout: '', stderr: `No .exe installer found in ${RELEASE_DIR} -- run Package (step 7) first.` };
++  }
++  candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
++  const latest = candidates[0];
++  try {
++    await fs.mkdir(BUILD_COPY_TARGET, { recursive: true });
++    const destPath = path.join(BUILD_COPY_TARGET, latest.name);
++    await fs.copyFile(latest.full, destPath);
++    return { ok: true, stdout: `Copied ${latest.name} -> ${destPath}`, stderr: '' };
++  } catch (err) {
++    return { ok: false, stdout: '', stderr: err.message ?? String(err) };
++  }
++}
++
+ /* --------------------------------------------------------------- sim --- */
+ // Sandbox sim runner. execFile (used by run()/runNpm() above) has no way to
+ // pipe data to a child's stdin, and the sim worker needs a JSON payload on
+@@ -1826,6 +1889,10 @@ const server = http.createServer(async (req, res) => {
+     return json(res, 200, result);
+   }
+ 
++  if (url.pathname === '/api/patches/copy-build' && req.method === 'POST') {
++    return json(res, 200, await copyLatestBuild());
++  }
++
+   if (url.pathname === '/api/sim/presets' && req.method === 'GET') {
+     try {
+       return json(res, 200, { presets: await readSimPresets() });

@@ -1790,6 +1790,16 @@ function renderPatches() {
     <button id="packageBtn">Run package</button>
     <div id="packageResult"></div>
 
+    <p class="tiny muted" style="margin-top:10px;">
+      Copies the newest <code>.exe</code> in <code>release/</code> to
+      <code>C:\Custom Apps\GuildBound Executables</code> — that folder is watched by Google Drive, so
+      anything landing there becomes shareable automatically, no separate upload step. Manual on
+      purpose: run Package above first and confirm it's the build you actually want shared, since this
+      will overwrite whatever's already sitting in that folder.
+    </p>
+    <button id="copyBuildBtn">Copy latest build to Google Drive folder</button>
+    <div id="copyBuildResult"></div>
+
     <div class="section-heading">8. Tag a release version</div>
     <p class="tiny muted">
       Current version: <b>${escapeHtml(patchState.version || '?')}</b>.
@@ -1800,9 +1810,9 @@ function renderPatches() {
       Do this once you're happy with everything above, not per-patch.
     </p>
     <div class="row" style="gap:6px;">
-      <button id="bumpPatchBtn">Bump patch (bug fixes)</button>
-      <button id="bumpMinorBtn">Bump minor (new features)</button>
       <button id="bumpMajorBtn">Bump major (breaking/big)</button>
+      <button id="bumpMinorBtn">Bump minor (new features)</button>
+      <button id="bumpPatchBtn">Bump patch (bug fixes)</button>
     </div>
     <div id="versionResult"></div>
 
@@ -1945,8 +1955,21 @@ function renderPatches() {
     document.getElementById('packageResult').innerHTML = resultBlock(result, 'Package');
   };
 
-  ['bumpPatchBtn', 'bumpMinorBtn', 'bumpMajorBtn'].forEach((id, i) => {
-    const level = ['patch', 'minor', 'major'][i];
+  const copyBuildBtn = document.getElementById('copyBuildBtn');
+  if (copyBuildBtn) copyBuildBtn.onclick = async () => {
+    if (!confirm('Copy the newest release/ installer to C:\\Custom Apps\\GuildBound Executables? This overwrites whatever is already there.')) return;
+    copyBuildBtn.disabled = true;
+    copyBuildBtn.textContent = 'Copying…';
+    const result = await api('/api/patches/copy-build', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+    copyBuildBtn.disabled = false;
+    copyBuildBtn.textContent = 'Copy latest build to Google Drive folder';
+    document.getElementById('copyBuildResult').innerHTML = resultBlock(result, 'Copy build');
+  };
+
+  ['bumpMajorBtn', 'bumpMinorBtn', 'bumpPatchBtn'].forEach((id, i) => {
+    const level = ['major', 'minor', 'patch'][i];
     const btn = document.getElementById(id);
     if (!btn) return;
     btn.onclick = async () => {

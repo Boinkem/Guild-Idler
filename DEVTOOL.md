@@ -111,9 +111,18 @@ just right after applying something.
 - **Package** (step 7) — `npm run package`. Runs electron-builder and produces
   installers/unpacked builds in `release/` — this is what you'd hand to
   playtesters or upload to Steam. Can take several minutes the first time.
-- **Tag a release version** (step 8) — runs `npm version patch/minor/major`,
-  which bumps `package.json`, commits, and creates a git tag (`v0.1.10`) in one
-  step. **This is deliberately separate from the `000N-name.patch` filenames.**
+- **Copy latest build to Google Drive folder** (also step 7) — copies the
+  newest `.exe` in `release/` to `C:\Custom Apps\GuildBound Executables`, a
+  folder watched by Google Drive's desktop sync — anything copied there
+  becomes shareable automatically, no separate upload step. Manual and
+  separate from Package on purpose: confirm the build is actually the one
+  worth sharing first, since this overwrites whatever's already in that
+  folder. Windows-only (the target path itself only makes sense there); on
+  another platform it reports that instead of copying anything.
+- **Tag a release version** (step 8) — runs `npm version major/minor/patch`
+  (buttons read left to right, major → minor → patch), which bumps
+  `package.json`, commits, and creates a git tag (`v0.1.10`) in one step.
+  **This is deliberately separate from the `000N-name.patch` filenames.**
   A patch filename just identifies one batch of changes between us in this
   conversation; a version tag is the real release number that matters to
   players and to Steam. Do this once you're happy with everything above —
