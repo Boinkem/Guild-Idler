@@ -13163,3 +13163,46 @@ remaining references to the removed `chainQuestAvailable` boolean or the
 old Hatchery-only `requestedHatcherySubTab`/`requestHatcherySubTab`/
 `consumeRequestedHatcherySubTab` trio anywhere in `src/`. `SAVE_VERSION`
 chain confirmed contiguous (40→41→42→43).
+
+### Blacksmith Scrap picker restricted to stash-only -- fixed (patch 0192)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed the Blacksmith Scrap item picker letting you select gear a hero currently has equipped, which then silently failed to scrap
+```
+
+Direct player report: the Scrap station's item picker showed every owned
+item, including gear equipped on a hero, but selecting an equipped item
+and hitting Scrap did nothing.
+
+**Root cause.** `ShopManager.scrapItem` was already correctly stash-only
+-- it looks up the target uid in `state.stash` specifically and returns
+`"That item is equipped or missing."` for anything else -- but
+`ScrapStation.tsx`'s own item picker (both the `options` list and the
+`targetUid` lookup) sourced from `EquipmentManager.allItems(state)`,
+which also surfaces every hero's equipped gear. The backend was already
+protecting the action; the picker UI just never matched that scope, so
+an equipped item was selectable and clicking Scrap on it silently no-op'd
+rather than being unavailable to pick in the first place.
+
+**Fix.** Both `ScrapStation.tsx` lookups switched from
+`EquipmentManager.allItems(state)` to `state.stash` directly. Also drops
+the now-unneeded owner label (`heroId`/hero-name lookup) from each
+picker row's sublabel, since every stash entry is unowned by definition
+-- rows now just show `<value> Scrap` instead of `<owner> -- <value>
+Scrap`.
+
+**Deliberately not touched:** Enhance (`EnhanceStation.tsx`) and Enchant/
+Infuse (`CraftingStation.tsx`'s `enchant` category, `ArmourInfusionStation.tsx`)
+keep their existing stash-or-equipped scope -- confirmed intentional
+(refining/enchanting/infusing an item a hero is actively wearing is a
+real, wanted case for those actions), unlike Scrap which is destructive
+and was never meant to reach equipped gear at all.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Manually traced: selecting any
+equipped item is no longer possible from the Scrap picker; stash items
+scrap exactly as before, same payout math, no change to
+`ShopManager.scrapItem`, `EquipmentManager.scrapValue`, or the
+fly-to-counter animation.

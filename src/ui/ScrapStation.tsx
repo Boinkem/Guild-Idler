@@ -61,21 +61,26 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
   const originRef = useRef<HTMLDivElement>(null);
   const counterRef = useRef<HTMLSpanElement>(null);
 
-  const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
-  const item = found?.item;
+  // Stash-only lookup -- matches ShopManager.scrapItem's own scope exactly
+  // (it already refuses an equipped uid with "That item is equipped or
+  // missing."). Previously sourced from EquipmentManager.allItems(state),
+  // which also surfaces every hero's *equipped* gear -- so the picker let
+  // you select something Scrap could never actually act on, and hitting
+  // the button on it silently failed. No allItems/heroId lookup needed
+  // anymore, since every stash entry is unowned by definition.
+  const item = targetUid ? state.stash.find((i) => i.uid === targetUid) : undefined;
   const def = item ? EquipmentManager.def(item) : undefined;
   const scrapBonus = ModifierManager.global(state).scrapBonus ?? 0;
   const value = item ? EquipmentManager.scrapValue(item, scrapBonus) : 0;
 
-  const options: PickerOption[] = EquipmentManager.allItems(state)
-    .map(({ item: i, heroId }): PickerOption | null => {
+  const options: PickerOption[] = state.stash
+    .map((i): PickerOption | null => {
       const d = EquipmentManager.def(i);
       if (!d) return null;
-      const owner = heroId ? state.heroes.find((h) => h.id === heroId)?.name ?? 'Stash' : 'Stash';
       return {
         key: i.uid,
         label: d.name,
-        sublabel: `${owner} -- ${EquipmentManager.scrapValue(i, scrapBonus)} Scrap`,
+        sublabel: `${EquipmentManager.scrapValue(i, scrapBonus)} Scrap`,
         icon: <ItemIcon slot={d.slot} icon={d.icon} size={40} />,
       };
     })
