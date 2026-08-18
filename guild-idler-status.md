@@ -12798,3 +12798,38 @@ for a failed git/npm command, rather than throwing.
 and isn't part of the Vite build, so `npx tsc --noEmit`/`vite build`
 don't touch it either way; confirmed neither picked up any change here,
 same as before this patch.
+
+### Quest chain narrative rewrite, clarity-first pass (patch 0186)
+
+```discord-update
+Dev Update | Quest Narrative Rewrite
+
+- Rewrote every quest chain's description, epilogue, and per-stage text across all 29 chains
+- New style leads with what happened, what the threat is, and what the guild needs to do, instead of atmosphere first
+- Applies to every chain, including the two that previously "matched the vivid style natively" (world_ender, last_pilgrimage)
+```
+
+All narrative text in `src/game/data/json/quest-chains.json` (`description`,
+`epilogue`, and every stage's `flavour` field) has been rewritten under a new
+house style: clarity first, atmosphere second. Every entry now states what
+happened, what the threat is, why it matters, and what the guild is meant to
+do, before leaning on mood or metaphor. Style notes: no double dashes, using
+commas and full stops instead; one idea per sentence; target length roughly
+50-120 words for descriptions and 40-100 words for epilogues, with stage
+`flavour` text trimmed to a similarly tight single-purpose blurb. This
+replaces the prior "vivid/scene-painting" pass in full, including the two
+entries (`world_ender`, `last_pilgrimage`) previously noted as already
+matching that older style natively; they've been rewritten to the new
+clarity-first standard as well, condensed substantially in `world_ender`'s
+case (its per-stage flavour text ran 150+ words in the old style).
+
+No mechanical changes: quest ids, tags, difficulty, `durationMinutes`,
+`goldMultiplier`, rewards, `requiresChainId`, banner data, and every other
+non-text field are untouched. This is a pure content patch, still expected to
+be spot-checked in-game for wrapping/overflow on the Quest tab and Lore tab's
+chain cards, since some flavour text got noticeably shorter and some (mainly
+`world_ender`'s) got noticeably more condensed than before.
+
+**Verified:** JSON parses cleanly and all 29 chain ids map 1:1 to entries
+present before the patch, stage counts unchanged per chain, no stray
+`--`/em-dash sequences introduced by the rewrite pass.
