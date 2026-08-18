@@ -26,7 +26,6 @@ import { RAID_BY_ID } from './data/raids';
 import { Tuning } from './data/tuning';
 import { rerollDay, rerollsUsedToday } from './data/reroll';
 import { playSound } from './sound';
-import { MINUTE } from './util';
 import { TESTING_TOOLS_ENABLED } from './testingTools';
 
 const TICK_MS = 1000;
@@ -348,10 +347,6 @@ export class GameEngine {
 
     if (!prevSuccess) return giveUp(true);
     if (hero.autoChainCount >= target) return giveUp();
-    // Time-budget override (Chain Tactics) -- see rollAutoChainStreak's own
-    // comment for how a streak ends up in this mode. Out of budget stops
-    // the streak the same as hitting the ordinary tier-rolled count would.
-    if (hero.autoChainMinutesRemaining !== null && hero.autoChainMinutesRemaining <= 0) return giveUp();
     const level = this.state.upgrades['auto_chain'] ?? 0;
     if (level <= 0) return giveUp();
 
@@ -367,20 +362,9 @@ export class GameEngine {
     const offer = QuestManager.pickBestQuest(this.state, hero, now);
     if (!offer) return giveUp();
 
-    // Still under the time-budget override -- if this specific offer's own
-    // duration would push the streak past what's left, stop here rather
-    // than starting a quest that's guaranteed to overrun the budget.
-    if (hero.autoChainMinutesRemaining !== null) {
-      const offerMinutes = offer.duration / MINUTE;
-      if (offerMinutes > hero.autoChainMinutesRemaining) return giveUp();
-    }
-
     const { error } = QuestManager.start(this.state, hero, offer, [], now);
     if (error) return giveUp();
 
-    if (hero.autoChainMinutesRemaining !== null) {
-      hero.autoChainMinutesRemaining -= offer.duration / MINUTE;
-    }
     hero.autoChainCount += 1;
     return { continued: true, completedCount: hero.autoChainCount, target, via: 'streak' };
   }
@@ -1341,25 +1325,15 @@ export class GameEngine {
    */
   /**
    * Shared by startQuest and sendAllIdle -- rolls (or clears) a fresh
-   * Auto-Chain bounty streak for a hero who was just sent, in whichever
-   * of two shapes applies:
-   *
-   * - **Ordinary tier roll** (the pre-existing behavior): a random count
-   *   within AUTO_CHAIN_RANGES[level], autoChainMinutesRemaining stays
-   *   null.
-   * - **Chain Tactics time-budget override** (unlocks: 'autoChainTactics',
-   *   only when autoChainTactics.maxMinutes is actually set): the count
-   *   cap effectively disables itself (Number.MAX_SAFE_INTEGER, so
-   *   tryContinueAutoChain's own count check never fires first) and
-   *   autoChainMinutesRemaining is seeded with the budget instead --
-   *   tryContinueAutoChain decrements it turn to turn and stops the
-   *   streak once what's left can't cover the next offer, which is what
-   *   actually enforces the cap. Matches the original ask directly:
-   *   "manually override the amount of chains the chain upgrade system
-   *   gives you."
-   *
-   * Level 0 (upgrade not owned at all) clears both fields, same as
-   * before this system existed.
+   * Auto-Chain bounty streak for a hero who was just sent: a random count
+   * within AUTO_CHAIN_RANGES[level] (2-3 at level 1, up through a fixed
+   * 10 at maxed level 4). Level 0 (upgrade not owned) clears the streak
+   * fields entirely. Pulled out into its own helper (previously
+   * duplicated inline in both call sites) as part of patch 0194's Chain
+   * Tactics work -- that patch also added a time-budget override here,
+   * removed again in patch 0195 (see autoChainMinutesRemaining's own
+   * comment for why) once it became clear it fought the maxed tier's own
+   * deliberately fixed 10-quest cap rather than complementing it.
    */
   private rollAutoChainStreak(hero: Hero) {
     const level = this.state.upgrades['auto_chain'] ?? 0;
@@ -1367,13 +1341,6 @@ export class GameEngine {
       hero.autoChainTarget = null;
       hero.autoChainCount = 0;
       hero.autoChainMinutesRemaining = null;
-      return;
-    }
-    const tactics = ModifierManager.hasUnlock(this.state, 'autoChainTactics') ? this.state.autoChainTactics : undefined;
-    if (tactics?.maxMinutes != null) {
-      hero.autoChainTarget = Number.MAX_SAFE_INTEGER;
-      hero.autoChainCount = 1;
-      hero.autoChainMinutesRemaining = tactics.maxMinutes;
       return;
     }
     const range = AUTO_CHAIN_RANGES[level];
@@ -1752,18 +1719,18 @@ export class GameEngine {
    * Updates the guild-wide Auto-Chain override settings (Chain Tactics
    * upgrade). Merges rather than replaces, so a caller changing just one
    * field (e.g. the floor dropdown) doesn't need to know or resend the
-   * other two. Only ever meaningful once the upgrade is owned -- the
-   * settings object can still be written before then (harmless, just
-   * inert), matching how autoRepairEnabled/autoEquipOnLoot etc. are
+   * other. Only ever meaningful once the upgrade is owned -- the settings
+   * object can still be written before then (harmless, just inert),
+   * matching how autoRepairEnabled/autoEquipOnLoot etc. are
    * always-present preferences rather than gated fields. No toast, same
    * quiet-settings-change treatment toggleItemLock above already uses.
    * A change here only affects streaks rolled AFTER this call -- an
-   * already-running streak keeps whatever floor/weight/budget it started
-   * with, same as every other "preference read once at roll time, not
+   * already-running streak keeps whatever floor/weight it started with,
+   * same as every other "preference read once at roll time, not
    * re-checked mid-streak" convention this system already established.
    */
   setAutoChainTactics(partial: Partial<AutoChainTactics>) {
-    const current = this.state.autoChainTactics ?? { successFloor: 50, weightBy: 'gold', maxMinutes: null };
+    const current = this.state.autoChainTactics ?? { successFloor: 50, weightBy: 'gold' };
     this.state.autoChainTactics = { ...current, ...partial };
     void this.saveNow();
   }

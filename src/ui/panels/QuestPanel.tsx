@@ -370,7 +370,7 @@ export function QuestPanel() {
   const autoChainOwned = !!autoChainDef && GuildManager.upgradeLevel(state, autoChainDef.id) > 0;
   const chainTacticsDef = GuildManager.upgrades().find((u) => u.unlocks === 'autoChainTactics');
   const chainTacticsOwned = !!chainTacticsDef && GuildManager.upgradeLevel(state, chainTacticsDef.id) > 0;
-  const tactics = state.autoChainTactics ?? { successFloor: 50, weightBy: 'gold' as const, maxMinutes: null };
+  const tactics = state.autoChainTactics ?? { successFloor: 50, weightBy: 'gold' as const };
   const quickAssign = () => {
     const offer = QuestManager.pickBestQuest(state, selectedHero, now);
     if (offer) send(offer);
@@ -497,28 +497,6 @@ export function QuestPanel() {
                 <option value="xp">XP</option>
                 <option value="loot">Loot</option>
                 <option value="balanced">Balanced</option>
-              </select>
-            </label>
-            <label className="row" style={{ gap: 6, alignItems: 'center' }}>
-              <span className="tiny muted">Max streak time</span>
-              <select
-                value={tactics.maxMinutes ?? 'off'}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  engine.setAutoChainTactics({ maxMinutes: v === 'off' ? null : Number(v) });
-                }}
-                style={{
-                  background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
-                  color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.625rem',
-                }}
-                title="When set, overrides the Auto-Chain upgrade's own streak-length roll -- keeps queueing contracts until the next one would push past this budget"
-              >
-                <option value="off">Off (use upgrade tier)</option>
-                <option value={60}>1 hour</option>
-                <option value={180}>3 hours</option>
-                <option value={360}>6 hours</option>
-                <option value={720}>12 hours</option>
-                <option value={1440}>24 hours</option>
               </select>
             </label>
           </div>

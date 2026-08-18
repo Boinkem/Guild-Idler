@@ -13395,3 +13395,64 @@ script: `setAutoChainTactics` merges correctly; a manual send with
 with no offer clearing it still returns the best available rather than
 null (the existing "no offer above floor" fallback, confirmed still
 intact under the new configurable floor).
+
+### Chain Tactics: price cut, time-budget override retired (patch 0195)
+
+```discord-update
+Dev Update | Balance
+
+- Chain Tactics now costs 4,000 gold instead of 100,000 -- close to Auto-Chain's own base cost, since it's meant as an early follow-on, not a late-game purchase
+- Removed the "max streak time" setting -- it let a streak run past the Auto-Chain upgrade's own fixed caps (up to exactly 10 at max level), which worked against the tier system instead of complementing it
+- Success-rate floor and Gold/XP/Loot/Balanced weighting are unchanged
+```
+
+Direct follow-up on patch 0194, two separate asks after actually looking
+at the numbers:
+
+**1. Price.** Chain Tactics shipped priced at 100k gold, explicitly above
+Auto-Chain's own full 4-level cost -- reasoned at the time as "come after
+Auto-Chain is maxed, not an early alternative to it." Feedback was that
+it should sit close to Auto-Chain's own first purchase instead.
+`upgrade.chain_tactics.baseCost` (`tuning.json`) cut 100000 -> 4000 --
+close to Auto-Chain's own 3500 base, so the two now read as roughly
+companion purchases rather than one gating a distant follow-up to the
+other. Still a single level (`maxLevel: 1`), so this is the only price
+Chain Tactics has.
+
+**2. Time-budget override -- removed, not just retuned.** Checked what
+the maxed Auto-Chain tier's own streak length actually is:
+`AUTO_CHAIN_RANGES[4]` is `{ min: 10, max: 10 }` -- a fixed, deliberately
+capped 10 quests, not a range. The time-budget override introduced in
+0194 didn't respect that ceiling; because it regenerates a hero's board
+fresh on every continuation (same as the ordinary streak always has),
+setting a long budget (e.g. 24h) would keep chaining new quests for as
+long as the clock allowed, easily blowing well past 10 -- actively
+working against the tier system's own intentional cap rather than
+sitting alongside it. Rather than retune the budget steps, cut the
+mechanism entirely: the floor and weighting settings stand on their own
+without it, and don't have this conflict (both only ever *filter/sort*
+within whatever the tier system already generates, never override how
+many quests get chained).
+
+**What actually changed, `AutoChainTactics` (`types.ts`):** `maxMinutes`
+field removed from the interface. `GameEngine.rollAutoChainStreak`
+dropped its time-budget branch, back to a single ordinary tier-roll
+path. `tryContinueAutoChain` dropped both budget checks (before
+generating a fresh board, and after picking a specific offer) -- back to
+its pre-0194 shape apart from the shared-helper extraction 0194 already
+did. `QuestPanel.tsx`'s Chain Tactics card lost its third dropdown
+("Max streak time"); Minimum success and Prioritize are untouched.
+
+**`Hero.autoChainMinutesRemaining` kept, not deleted.** `SAVE_VERSION`
+44 already shipped with this field present on every hero -- removing a
+field from an already-live save shape is a real migration hazard
+(existing saves on Steam Cloud, etc.) for a field that costs nothing to
+leave sitting at `null` forever. Doc comment updated to say plainly
+it's vestigial and why, so a future patch author doesn't go looking for
+what sets it. No `SAVE_VERSION` bump needed for this patch -- nothing
+about the save *shape* changed, only which code paths write to one
+already-existing field.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Grepped the full `src/` tree for
+any remaining `maxMinutes` reference post-removal -- none found.

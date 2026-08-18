@@ -511,17 +511,16 @@ export interface Hero {
    */
   autoChainTarget: number | null;
   /**
-   * Time-budget override for the Auto-Chain bounty streak, set only when
-   * the Chain Tactics upgrade is owned AND its maxMinutes setting is
-   * non-null (see AutoChainTactics/GameState.autoChainTactics). When
-   * active, `autoChainTarget` is rolled to Number.MAX_SAFE_INTEGER
-   * instead of a tier-rolled count -- this field governs stopping
-   * instead, decremented by each quest's own duration as the streak
-   * continues, checked in tryContinueAutoChain both before picking a
-   * next quest (already out of budget) and after (the picked quest's own
-   * duration would overrun what's left). Null whenever the streak is
-   * running on the ordinary tier-rolled count instead, same "null means
-   * not applicable" convention autoChainTarget itself already uses.
+   * Vestigial as of patch 0195 -- previously drove a Chain Tactics
+   * time-budget override that let a streak run past the upgrade tier's
+   * own fixed count (e.g. tier 4's exactly-10 cap) for as long as a
+   * player-set time budget allowed. Removed: it directly fought the
+   * tier system's own "exactly 10, deliberately capped" ceiling rather
+   * than complementing it. Field kept (not deleted) purely for save-shape
+   * continuity -- SAVE_VERSION 44 already shipped with it present on
+   * every hero, and yanking a field out from under an existing save
+   * struct is a real migration hazard for no benefit here. Always null
+   * going forward; nothing sets it to anything else anymore.
    */
   autoChainMinutesRemaining: number | null;
   /**
@@ -639,13 +638,6 @@ export interface AutoChainTactics {
    */
   successFloor: number;
   weightBy: AutoChainWeightBy;
-  /**
-   * When set (non-null), overrides the tier-rolled streak-length count
-   * entirely -- see Hero.autoChainMinutesRemaining's own comment for how
-   * the override actually plays out turn to turn. Null means "use the
-   * ordinary AUTO_CHAIN_RANGES tier roll," the pre-existing behavior.
-   */
-  maxMinutes: number | null;
 }
 
 export interface QuestOffer {

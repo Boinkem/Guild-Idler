@@ -1879,9 +1879,9 @@
     "id": "upgrade.chain_tactics.baseCost",
     "label": "Chain Tactics: base cost",
     "category": "vendor_upgrades",
-    "value": 100000,
-    "default": 100000,
-    "description": "Gold cost of Chain Tactics' single level -- priced above Auto-Chain's own full 4-level cost (~72.6k), since this unlock is meant to come after Auto-Chain is already maxed, not as an early alternative to it.",
+    "value": 4000,
+    "default": 4000,
+    "description": "Gold cost of Chain Tactics' single level -- deliberately close to Auto-Chain's own base cost (3500), since this is meant to sit right alongside Auto-Chain as an early follow-on, not a late-game gold sink.",
     "min": 0
   },
   {

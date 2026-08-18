@@ -124,7 +124,7 @@ export const UPGRADES: UpgradeDef[] = [
   },
   {
     id: 'chain_tactics', name: 'Chain Tactics',
-    description: 'Stop leaving Auto-Chain to its own judgment. Set a minimum success rate, tell it what to prioritize, or cap how long a streak is allowed to run.',
+    description: 'Stop leaving Auto-Chain to its own judgment. Set a minimum success rate, and tell it what to prioritize.',
     baseCost: Tuning.get('upgrade.chain_tactics.baseCost'),
     costGrowth: Tuning.get('upgrade.chain_tactics.costGrowth'),
     maxLevel: Tuning.get('upgrade.chain_tactics.maxLevel'),
