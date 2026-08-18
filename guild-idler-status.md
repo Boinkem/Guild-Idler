@@ -12872,3 +12872,81 @@ patch.
 **Verified:** both JSON files parse cleanly, all 8 raid ids and all 22
 encounter ids map 1:1 to entries present before the patch, no stray
 `--`/em-dash sequences introduced by the rewrite pass.
+
+### Quest chain narrative consistency pass (patch 0188)
+
+```discord-update
+Dev Update | Quest Narrative Fixes
+
+- Fixed Third Crown's description contradicting itself ("not a noble house... taken from a lord")
+- Fixed Crow's Warning sending the finished cure to IronRest, a place the chain never connects to the story
+- Named the threat in every chain's description or epilogue where it was previously left as "something" or "whatever": Miller's Problem (kept deliberately unidentifiable, but now explicitly so), Crow's Warning (ghouls), What the Culled Become (revenants), Hollow Choir (demonic choir-construct), Full Moon Over Ashvale (werewolf), The Body Snatcher Problem (body-thief), Hunt-a-Lich (lich)
+- Something Big in the Foothills now names hill giants throughout instead of leaving the threat unidentified until a stray epilogue aside
+- Search for the Ancient Crown and Lost Kingdom Expedition previously had unnamed guarding presences with no combat tag; gave them concrete guardians (an empty suit of ancient armor, and a living stone construct) rather than leaving them as unresolved vagueness
+```
+
+Follow-up consistency pass on the patch 0186 quest chain rewrite, prompted by
+a direct review flagging that Crow's Warning didn't hold together end to end
+and that Third Crown's description contradicted itself. Broadened into a
+full re-check of all 29 chains against two failure modes specifically
+introduced by the clarity-first rewrite's compression: (1) collapsed clauses
+that create a false contradiction, and (2) a threat that's never actually
+named anywhere in its own chain's description or epilogue, only referred to
+as "something," "whatever," or "the creature," which undercuts the "player
+should immediately understand what threat exists" goal the rewrite was
+supposed to serve.
+
+**Third Crown.** Old description read "did not come from a warband or a
+noble house... taken from a lord," which contradicts itself since a lord is
+part of a noble house. Corrected the actual distinction, not looted as
+battle spoils or manor plunder, but extorted as a toll from a lord passing
+through, to match what the epilogue already established.
+
+**Crow's Warning.** Stage 4 previously sent the finished cure "to IronRest,"
+a location never established anywhere else in this chain. Fixed the crow's
+destination (stage 2) to explicitly lead toward Greywick, home of the
+alchemist introduced in stage 3, and retitled/rewrote stage 4 ("The Road
+Back to Thornhollow") to send the cure back to the village that actually
+needs it. Also named what the bitten villagers were turning into (ghouls),
+previously left unstated.
+
+**Threat naming, seven chains.** Miller's Problem, What the Culled Become,
+Hollow Choir, Full Moon Over Ashvale, The Body Snatcher Problem, and
+Hunt-a-Lich all had their antagonist referred to only by placeholder
+("creature," "whatever," "pack") somewhere it should have had a name.
+Miller's Problem is a deliberate exception: kept intentionally unidentified
+per direction, but reworded so the ambiguity reads as a stated fact ("unlike
+anything the guild has been able to identify since") rather than as an
+unaddressed gap.
+
+**Foothills, naming the antagonist properly.** Previously never named the
+attacker anywhere except a stray "ogres" aside in the epilogue that didn't
+match the "warband" language used everywhere else. Now names hill giants
+consistently in the description and both combat-tagged stages.
+
+**Ancient Crown and Lost Kingdom, invented guardians.** Both chains had a
+guarding presence described only as "something patient" or "whatever waits,"
+but neither stage carries a `combat` tag, so this was flagged rather than
+assumed to need a name. Decision: give both a concrete, non-humanoid
+guardian rather than leaving the vagueness unresolved. Ancient Crown's fen
+fragment is now guarded by an animated suit of ancient armor with no one
+inside; Lost Kingdom's vault is guarded by a living stone construct, both
+named in their chain's description and, for Lost Kingdom, closed out in the
+epilogue as well.
+
+**Explicitly left alone.** The Last Clutch (threat is never actually fought,
+so naming it adds nothing). The Last Pilgrimage and Quiet in Millbrook
+(both continue directly into a later raid/chain, so withholding the name is
+intentional per the "unless the chain continues" rule). Full Moon Over
+Ashvale and The Body Snatcher Problem's *reveal pacing* across their stages
+is unchanged, only the epilogue now states the species/type outright.
+
+No mechanical fields touched outside two intentional stage-name changes
+(Crow's Warning's fourth stage, renamed to match its corrected destination).
+`reqLevel`, `rewardGold`, `rewardItems`, `rewardRenown`, tags, difficulty,
+`durationMinutes`, `goldMultiplier`, `requiresChainId`, and banner data are
+all unchanged everywhere else.
+
+**Verified:** JSON parses cleanly, all touched chain ids still map 1:1 to
+pre-patch entries, stage counts unchanged, no stray `--`/em-dash sequences
+introduced.

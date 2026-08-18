@@ -1,0 +1,330 @@
+From dab0eac7d725abbd75f4a8ea659538d7a69a5136 Mon Sep 17 00:00:00 2001
+From: Guild-Idler Patch Tool <patch@guild-idler.local>
+Date: Tue, 18 Aug 2026 02:15:24 +0000
+Subject: [PATCH] 0188: Quest chain narrative consistency pass
+
+Direct review flagged Crow's Warning not holding together end to end
+(cure sent to an unconnected location) and Third Crown's description
+contradicting itself (a lord who did not come from a noble house).
+Broadened into a full re-check of all 29 chains for the same two
+failure modes: collapsed clauses creating false contradictions, and
+threats never actually named in their own chain's description or
+epilogue.
+
+Fixes:
+- third_crown: corrected the toll/manor distinction
+- crows_warning: fixed cure's destination (Greywick then Thornhollow,
+  not IronRest), named the transformation (ghouls)
+- millers_problem, what_the_culled_become, hollow_choir,
+  full_moon_over_ashvale, body_snatcher_problem, hunt_a_lich: named
+  the antagonist where it was previously only 'something'/'whatever'
+- something_big_in_the_foothills: named hill giants consistently
+  (previously only a stray 'ogres' aside in the epilogue)
+- ancient_crown, lost_kingdom: invented concrete guardians (empty
+  armor, living stone construct) for previously-unnamed non-combat
+  guarding presences
+
+Explicitly left alone: the_last_clutch (threat never fought),
+last_pilgrimage and quiet_in_millbrook (intentional, both continue
+into later content).
+
+One stage rename: crows_warning's 4th stage, to match its corrected
+destination. No other mechanical fields touched.
+---
+ guild-idler-status.md                | 78 ++++++++++++++++++++++++++++
+ src/game/data/json/quest-chains.json | 46 ++++++++--------
+ 2 files changed, 101 insertions(+), 23 deletions(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 635472b..a0350b4 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -12872,3 +12872,81 @@ patch.
+ **Verified:** both JSON files parse cleanly, all 8 raid ids and all 22
+ encounter ids map 1:1 to entries present before the patch, no stray
+ `--`/em-dash sequences introduced by the rewrite pass.
++
++### Quest chain narrative consistency pass (patch 0188)
++
++```discord-update
++Dev Update | Quest Narrative Fixes
++
++- Fixed Third Crown's description contradicting itself ("not a noble house... taken from a lord")
++- Fixed Crow's Warning sending the finished cure to IronRest, a place the chain never connects to the story
++- Named the threat in every chain's description or epilogue where it was previously left as "something" or "whatever": Miller's Problem (kept deliberately unidentifiable, but now explicitly so), Crow's Warning (ghouls), What the Culled Become (revenants), Hollow Choir (demonic choir-construct), Full Moon Over Ashvale (werewolf), The Body Snatcher Problem (body-thief), Hunt-a-Lich (lich)
++- Something Big in the Foothills now names hill giants throughout instead of leaving the threat unidentified until a stray epilogue aside
++- Search for the Ancient Crown and Lost Kingdom Expedition previously had unnamed guarding presences with no combat tag; gave them concrete guardians (an empty suit of ancient armor, and a living stone construct) rather than leaving them as unresolved vagueness
++```
++
++Follow-up consistency pass on the patch 0186 quest chain rewrite, prompted by
++a direct review flagging that Crow's Warning didn't hold together end to end
++and that Third Crown's description contradicted itself. Broadened into a
++full re-check of all 29 chains against two failure modes specifically
++introduced by the clarity-first rewrite's compression: (1) collapsed clauses
++that create a false contradiction, and (2) a threat that's never actually
++named anywhere in its own chain's description or epilogue, only referred to
++as "something," "whatever," or "the creature," which undercuts the "player
++should immediately understand what threat exists" goal the rewrite was
++supposed to serve.
++
++**Third Crown.** Old description read "did not come from a warband or a
++noble house... taken from a lord," which contradicts itself since a lord is
++part of a noble house. Corrected the actual distinction, not looted as
++battle spoils or manor plunder, but extorted as a toll from a lord passing
++through, to match what the epilogue already established.
++
++**Crow's Warning.** Stage 4 previously sent the finished cure "to IronRest,"
++a location never established anywhere else in this chain. Fixed the crow's
++destination (stage 2) to explicitly lead toward Greywick, home of the
++alchemist introduced in stage 3, and retitled/rewrote stage 4 ("The Road
++Back to Thornhollow") to send the cure back to the village that actually
++needs it. Also named what the bitten villagers were turning into (ghouls),
++previously left unstated.
++
++**Threat naming, seven chains.** Miller's Problem, What the Culled Become,
++Hollow Choir, Full Moon Over Ashvale, The Body Snatcher Problem, and
++Hunt-a-Lich all had their antagonist referred to only by placeholder
++("creature," "whatever," "pack") somewhere it should have had a name.
++Miller's Problem is a deliberate exception: kept intentionally unidentified
++per direction, but reworded so the ambiguity reads as a stated fact ("unlike
++anything the guild has been able to identify since") rather than as an
++unaddressed gap.
++
++**Foothills, naming the antagonist properly.** Previously never named the
++attacker anywhere except a stray "ogres" aside in the epilogue that didn't
++match the "warband" language used everywhere else. Now names hill giants
++consistently in the description and both combat-tagged stages.
++
++**Ancient Crown and Lost Kingdom, invented guardians.** Both chains had a
++guarding presence described only as "something patient" or "whatever waits,"
++but neither stage carries a `combat` tag, so this was flagged rather than
++assumed to need a name. Decision: give both a concrete, non-humanoid
++guardian rather than leaving the vagueness unresolved. Ancient Crown's fen
++fragment is now guarded by an animated suit of ancient armor with no one
++inside; Lost Kingdom's vault is guarded by a living stone construct, both
++named in their chain's description and, for Lost Kingdom, closed out in the
++epilogue as well.
++
++**Explicitly left alone.** The Last Clutch (threat is never actually fought,
++so naming it adds nothing). The Last Pilgrimage and Quiet in Millbrook
++(both continue directly into a later raid/chain, so withholding the name is
++intentional per the "unless the chain continues" rule). Full Moon Over
++Ashvale and The Body Snatcher Problem's *reveal pacing* across their stages
++is unchanged, only the epilogue now states the species/type outright.
++
++No mechanical fields touched outside two intentional stage-name changes
++(Crow's Warning's fourth stage, renamed to match its corrected destination).
++`reqLevel`, `rewardGold`, `rewardItems`, `rewardRenown`, tags, difficulty,
++`durationMinutes`, `goldMultiplier`, `requiresChainId`, and banner data are
++all unchanged everywhere else.
++
++**Verified:** JSON parses cleanly, all touched chain ids still map 1:1 to
++pre-patch entries, stage counts unchanged, no stray `--`/em-dash sequences
++introduced.
+diff --git a/src/game/data/json/quest-chains.json b/src/game/data/json/quest-chains.json
+index ad0e151..d32228b 100644
+--- a/src/game/data/json/quest-chains.json
++++ b/src/game/data/json/quest-chains.json
+@@ -2,7 +2,7 @@
+   {
+     "id": "millers_problem",
+     "name": "The Miller's Problem",
+-    "description": "The guild's very first real job looks simple enough from the doorway: a miller, a locked cellar door, and a smell that has been getting worse for a week. It will not stay simple past the first step down.",
++    "description": "A miller reports strange noises and a foul smell coming from his locked cellar. He believes it's rats, but hasn't gone down in three days. The rats have started fleeing upward instead of hiding, a sign something worse is below. Something old and unidentifiable has lived under the mill for years, undisturbed until now. The guild must investigate the cellar, track the smell to its source, and confront whatever is waiting beneath the mill.",
+     "reqLevel": 2,
+     "rewardGold": 150,
+     "rewardItems": [
+@@ -10,7 +10,7 @@
+     ],
+     "rewardRenown": 1,
+     "title": "First Real Job",
+-    "epilogue": "The creature beneath the mill was an old, territorial beast that had lived there undisturbed for years. The party defeated it and dragged its body into the open. The miller refuses to return to the cellar, but the smell and the noises have stopped. The guild's first real job ended in a clean, if unsettling, victory.",
++    "epilogue": "Whatever lived beneath the mill was old, territorial, and unlike anything the guild has been able to identify since. It was driven out and will not be coming back. The miller still refuses to go near the cellar, but the smell and the noises have stopped. The guild's first real job ended in a clean, if unsettling, victory.",
+     "stages": [
+       {
+         "name": "The Miller's Cellar",
+@@ -75,7 +75,7 @@
+   {
+     "id": "crows_warning",
+     "name": "The Crow's Warning",
+-    "description": "Thornhollow was not burned. It was searched, room by room and drawer by drawer, as if something specific was being hunted and never found. Those bitten during the attack will not stay human much longer, and no cure exists anywhere in the ruins. A crow has attached itself to the guild and refuses to leave. It may be the only reason a cure reaches Thornhollow in time.",
++    "description": "Thornhollow was not burned. It was searched, room by room and drawer by drawer, as if something specific was being hunted and never found. Those bitten during the attack are slowly turning into ghouls, and no cure exists anywhere in the ruins. A crow has attached itself to the guild and refuses to leave. It may be the only reason a cure reaches Thornhollow in time.",
+     "reqLevel": 8,
+     "rewardGold": 900,
+     "rewardItems": [
+@@ -83,7 +83,7 @@
+     ],
+     "rewardRenown": 1,
+     "title": "Crow-Friend",
+-    "epilogue": "The cure held. Whatever bit the people of Thornhollow left only a wound, not a transformation. They are still themselves, and the tavern is full again. The crow never explained itself and never truly left either. It is still around most days, watching from somewhere just out of reach.",
++    "epilogue": "The cure held. Those bitten by the demons stayed human instead of finishing their turn into ghouls, and the tavern is full again. The crow never explained itself and never truly left either. It is still around most days, watching from somewhere just out of reach.",
+     "stages": [
+       {
+         "name": "Smoke Over Thornhollow",
+@@ -95,7 +95,7 @@
+       },
+       {
+         "name": "The Trail North",
+-        "flavour": "A crow lands on the ruined gate and does not fly off. It has stayed on the guild's shoulder through two towns and a river crossing, as if it knows exactly where this journey ends and refuses to risk missing it.",
++        "flavour": "A crow lands on the ruined gate and does not fly off. It leads the guild north through two towns and a river crossing, toward Greywick, the nearest town with an alchemist skilled enough to have any chance at a cure.",
+         "tag": "explore",
+         "difficulty": "normal",
+         "goldMultiplier": 1.5,
+@@ -110,8 +110,8 @@
+         "durationMinutes": 360
+       },
+       {
+-        "name": "The Road to IronRest",
+-        "flavour": "Four vials of cure, wrapped carefully and carried like something fragile and alive, are on the road to IronRest. Every mile closer is a mile further from the people still waiting to learn if it works.",
++        "name": "The Road Back to Thornhollow",
++        "flavour": "Four vials of cure, wrapped carefully and carried like something fragile and alive, are on the road back to Thornhollow. Every mile still ahead is an hour the bitten don't have to spare.",
+         "tag": "defense",
+         "difficulty": "hard",
+         "goldMultiplier": 1.8,
+@@ -203,7 +203,7 @@
+     ],
+     "rewardRenown": 2,
+     "title": "Grave-Watcher",
+-    "epilogue": "Whatever the Harrower takes, it does not keep. It returns them changed and obedient, still somehow counted in that ledger. East of the culled villages, in an old barrow-ground, something buried long ago has quietly begun to stir. Nobody has connected the two events yet. Somebody should, soon.",
++    "epilogue": "Whatever the Harrower takes, it does not keep. It returns them as revenants, changed and obedient, still somehow counted in that ledger. East of the culled villages, in an old barrow-ground, something buried long ago has quietly begun to stir. Nobody has connected the two events yet. Somebody should, soon.",
+     "requiresChainId": "demon_generals_ledger",
+     "grantsHatchery": false,
+     "grantsPeddler": false,
+@@ -488,7 +488,7 @@
+   {
+     "id": "lost_kingdom",
+     "name": "Lost Kingdom Expedition",
+-    "description": "A kingdom that every map somehow forgot to mention has surfaced in old records. The road there is long, the ruins are older than anyone can date, and the patron funding the expedition is paying well enough that nobody asks too many questions about why.",
++    "description": "A kingdom that every map somehow forgot to mention has surfaced in old records. The road there is long, the ruins are older than anyone can date, and at the center of it all waits a living stone guardian nobody has gotten past yet. The patron funding the expedition is paying well enough that nobody asks too many questions about why.",
+     "reqLevel": 14,
+     "rewardGold": 2600,
+     "rewardItems": [
+@@ -496,7 +496,7 @@
+     ],
+     "rewardRenown": 1,
+     "title": "Kingdom-Finder",
+-    "epilogue": "The vault finally gave up whatever it was built to protect. The kingdom that built it remains exactly as lost as it was before anyone found this place. Some things were never meant to be found twice, and this one is going straight back to being a rumor.",
++    "epilogue": "The living stone guardian went still the moment the vault finally opened, as if its only purpose had been fulfilled. The kingdom that built it remains exactly as lost as it was before anyone found this place. Some things were never meant to be found twice, and this one is going straight back to being a rumor.",
+     "stages": [
+       {
+         "name": "Chart the Grey Marches",
+@@ -516,7 +516,7 @@
+       },
+       {
+         "name": "Open the Sunken Vault",
+-        "flavour": "Whatever this lost kingdom locked away down here, it locked away thoroughly. Layers of stone, then steel, then something that is neither, all sealed around whatever waits at the center.",
++        "flavour": "Whatever this lost kingdom locked away down here, it locked away thoroughly. Layers of stone, then steel, then something that is neither, all sealed around a living stone guardian that has never once stopped watching the center of the vault.",
+         "tag": "arcane",
+         "difficulty": "epic",
+         "goldMultiplier": 2.4,
+@@ -582,7 +582,7 @@
+   {
+     "id": "ancient_crown",
+     "name": "Search for the Ancient Crown",
+-    "description": "Three crown fragments are scattered across three regions, tied together by a rumor persistent enough that half the taverns on the coast now tell their own version of it.",
++    "description": "Three crown fragments are scattered across three regions, tied together by a rumor persistent enough that half the taverns on the coast now tell their own version of it. One fragment, hidden in a fen, is said to still be guarded by a suit of ancient armor with no one inside.",
+     "reqLevel": 10,
+     "rewardGold": 1800,
+     "rewardItems": [
+@@ -594,7 +594,7 @@
+     "stages": [
+       {
+         "name": "The Fragment in the Fen",
+-        "flavour": "Cold water to the knees, colder mud underneath, and something patient enough to have guarded this fragment since long before the fen had a name.",
++        "flavour": "Cold water to the knees, colder mud underneath, and a suit of ancient armor, empty inside, still standing guard over this fragment since long before the fen had a name.",
+         "tag": "explore",
+         "difficulty": "normal",
+         "goldMultiplier": 1.5,
+@@ -653,7 +653,7 @@
+     "id": "third_crown",
+     "requiresChainId": "goblin_warband",
+     "name": "The Third Crown",
+-    "description": "One of the goblin king's three crowns did not come from a warband or a noble house. It came off a toll gate on the Blackford road, taken from a lord nobody remembers losing his crown in the first place. He was reported dead that same season. He was not. Whoever he is now, he has had a long time to plan what comes next.",
++    "description": "One of the goblin king's three crowns was not looted from a rival warband or plundered from a manor. It was collected as a toll on the Blackford road, taken from a lord passing through. He was reported dead that same season. He was not. Whoever he is now, he has had a long time to plan what comes next.",
+     "reqLevel": 7,
+     "rewardGold": 600,
+     "rewardItems": [
+@@ -701,7 +701,7 @@
+     ],
+     "rewardRenown": 2,
+     "title": "Choir-Silencer",
+-    "epilogue": "The singing has actually stopped this time, or at least it has been quiet long enough that most people have stopped flinching at an unexpected cathedral bell. Most people.",
++    "epilogue": "The demonic choir-construct is silent this time, torn from the rafters and left in pieces on the cathedral floor. Most people have stopped flinching at an unexpected cathedral bell. Most people.",
+     "requiresChainId": "demon_fortress",
+     "grantsHatchery": false,
+     "grantsPeddler": false,
+@@ -721,7 +721,7 @@
+       },
+       {
+         "name": "The Choir Loft",
+-        "flavour": "There are no singers in the loft, only one creature fused into the rafters in wet coils of flesh. Dozens of mouths open and close in careful sequence so the note never has to stop. It sings beautifully, which is the most disturbing part of all.",
++        "flavour": "There are no singers in the loft, only a demonic choir-construct fused into the rafters in wet coils of flesh. Dozens of mouths open and close in careful sequence so the note never has to stop. It sings beautifully, which is the most disturbing part of all.",
+         "tag": "combat",
+         "difficulty": "epic",
+         "durationMinutes": 840,
+@@ -983,7 +983,7 @@
+   {
+     "id": "something_big_in_the_foothills",
+     "name": "Something Big in the Foothills",
+-    "description": "Herders in the foothills keep losing whole flocks overnight. What is left behind is not the tidy work of wolves or the opportunistic mess of bears. Fence posts are uprooted rather than chewed through, and the tracks left in the mud are too large and too strange to explain away easily.",
++    "description": "Herders in the foothills keep losing whole flocks overnight to hill giants. What is left behind is not the tidy work of wolves or the opportunistic mess of bears. Fence posts are uprooted rather than chewed through, and the tracks in the mud are the wrong size and shape for any known predator.",
+     "reqLevel": 12,
+     "rewardGold": 2100,
+     "rewardItems": [
+@@ -991,7 +991,7 @@
+     ],
+     "rewardRenown": 1,
+     "title": "Ridgebreaker",
+-    "epilogue": "The warband has broken up and scattered back up the ridge, minus its biggest member. The foothills will probably see another one eventually, since ogres rarely get wiped out so much as get bored and move on. That is a problem for a different season.",
++    "epilogue": "The warband has broken up and scattered back up the ridge, minus its biggest member. The foothills will probably see another band of hill giants eventually, since they rarely get wiped out so much as get bored and move on. That is a problem for a different season.",
+     "stages": [
+       {
+         "name": "Torn Fences, Missing Herds",
+@@ -1003,7 +1003,7 @@
+       },
+       {
+         "name": "The Ridge Warband",
+-        "flavour": "This is not one hungry animal passing through. It is a proper warband, half a dozen strong, with a crude but functional camp built from stolen timber and whatever livestock they have not already eaten.",
++        "flavour": "This is not one hungry animal passing through. It is a hill giant warband, half a dozen strong, with a crude but functional camp built from stolen timber and whatever livestock they have not already eaten.",
+         "tag": "combat",
+         "difficulty": "hard",
+         "goldMultiplier": 1.8,
+@@ -1011,7 +1011,7 @@
+       },
+       {
+         "name": "The Ridgebreaker",
+-        "flavour": "The warband's biggest member earned that name honestly. There is a boulder near the camp with a deliberate, deep dent in it, apparently left just to make a point to the rest of the group.",
++        "flavour": "The warband's biggest hill giant earned that name honestly. There is a boulder near the camp with a deliberate, deep dent in it, apparently left just to make a point to the rest of the group.",
+         "tag": "combat",
+         "difficulty": "epic",
+         "goldMultiplier": 2.2,
+@@ -1030,7 +1030,7 @@
+     ],
+     "rewardRenown": 2,
+     "title": "Moonhunter",
+-    "epilogue": "The pack has gone quiet, its alpha put down before the moon finished rising. Ashvale is grateful, if rattled. One of the people the guild was sent to protect did not make it through the last stage of this the way anyone would have wanted. Nobody is saying that part out loud yet.",
++    "epilogue": "The werewolf pack has gone quiet, its alpha put down before the moon finished rising. Ashvale is grateful, if rattled. One of the people the guild was sent to protect did not make it through the last stage of this the way anyone would have wanted. Nobody is saying that part out loud yet.",
+     "stages": [
+       {
+         "name": "Not Wolves",
+@@ -1069,7 +1069,7 @@
+     ],
+     "rewardRenown": 3,
+     "title": "Unmasker",
+-    "epilogue": "Whatever was wearing that household is gone now, and so is whatever it was actually made of underneath. The real question, how long it had been doing this and to how many other households nobody has checked, goes conveniently unasked by everyone who would rather not know the answer.",
++    "epilogue": "The body-thief that had been wearing that household is gone now, and so is whatever it was actually made of underneath. The real question, how long it had been doing this and to how many other households nobody has checked, goes conveniently unasked by everyone who would rather not know the answer.",
+     "stages": [
+       {
+         "name": "Wrong Rhythm",
+@@ -1108,7 +1108,7 @@
+     ],
+     "rewardRenown": 5,
+     "title": "Grave-Marked",
+-    "epilogue": "The guild found where he is holed up, an old ossuary nobody has bothered mapping in decades, but not what he is actually planning underneath it. He is confident enough in it to have stopped hiding, and that confidence should worry everyone more than it currently does.",
++    "epilogue": "The guild found where the lich is holed up, an old ossuary nobody has bothered mapping in decades, but not what he is actually planning underneath it. He is confident enough in it to have stopped hiding, and that confidence should worry everyone more than it currently does.",
+     "stages": [
+       {
+         "name": "The Dead Don't Usually Plan",
+-- 
+2.43.0
+
