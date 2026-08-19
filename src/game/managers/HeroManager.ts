@@ -157,13 +157,22 @@ export const HeroManager = {
     return true;
   },
 
-  /** The title actually shown next to this hero's name -- activeTitle if
-   *  set, otherwise the most recently earned title, otherwise null. A
-   *  hero with titles but no activeTitle only happens via an old save's
-   *  migration (see SaveManager migration 35->36); every other path that
-   *  adds a title also sets activeTitle in the same step. */
+  /** The title actually shown next to this hero's name -- just
+   *  activeTitle, directly. Used to fall back to the most recently earned
+   *  title whenever activeTitle was null, on the theory that a hero with
+   *  titles but no activeTitle only happens via an old save's migration
+   *  (see SaveManager migration 35->36) -- but that migration only ever
+   *  leaves activeTitle null when titles is ALSO empty (an old save with
+   *  no title at all), never "has titles, no active one." Every real path
+   *  that adds a title (grantTitle) already sets activeTitle in the same
+   *  step, so the only way activeTitle is null while titles is non-empty
+   *  is the player deliberately picking "None" from the title dropdown
+   *  (see engine.setActiveTitle) -- and the old fallback was silently
+   *  overriding exactly that choice, showing the last-earned title again
+   *  regardless of what was picked. Bug: "changing a hero's title to None
+   *  doesn't remove it." */
   displayTitle(hero: Hero): string | null {
-    return hero.activeTitle ?? hero.titles[hero.titles.length - 1] ?? null;
+    return hero.activeTitle;
   },
 
   /**

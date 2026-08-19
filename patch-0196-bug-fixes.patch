@@ -1,0 +1,414 @@
+diff --git a/electron/main.ts b/electron/main.ts
+index 696427e..7c2bdc4 100644
+--- a/electron/main.ts
++++ b/electron/main.ts
+@@ -289,6 +289,17 @@ async function createWindow() {
+   // fullscreen ones included.
+   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+ 
++  // Authoritative fullscreen-state push -- these fire for ANY transition,
++  // not just ones window:setFullscreen itself requested, including the
++  // OS/Chromium's own default Esc-to-exit-fullscreen behavior, which
++  // bypasses that IPC handler entirely. Without this, MenuWindow.tsx's own
++  // `fullscreen` React state only ever updated in response to its own
++  // button click, so pressing Esc would silently desync it from the
++  // window's real state -- part of the same "toggle button stops
++  // reflecting reality" bug window:setFullscreen's own comment covers.
++  win.on('enter-full-screen', () => win?.webContents.send('window:fullscreen-changed', true));
++  win.on('leave-full-screen', () => win?.webContents.send('window:fullscreen-changed', false));
++
+   if (process.env.VITE_DEV_SERVER_URL) {
+     await win.loadURL(process.env.VITE_DEV_SERVER_URL);
+   } else {
+@@ -565,7 +576,23 @@ ipcMain.handle('window:setFullscreen', (_e, value: boolean) => {
+   // normally be able to trigger from there.
+   if (currentMode !== 'menu') return false;
+   win.setFullScreen(value);
+-  return win.isFullScreen();
++  // Returns the VALUE JUST REQUESTED, not a fresh win.isFullScreen() read --
++  // confirmed as the actual cause of "toggles to fullscreen, but clicking
++  // again doesn't bring back windowed mode": setFullScreen()'s underlying
++  // native transition isn't guaranteed to have completed by the time this
++  // handler returns, so re-querying isFullScreen() immediately afterward
++  // can still report the PREVIOUS state. MenuWindow.tsx's button trusted
++  // that (possibly stale) return value to update its own `fullscreen`
++  // React state, so the very first click could silently desync the button
++  // from reality -- it would take an extra click to catch back up, reading
++  // as "the second click does nothing." The window itself always enters
++  // whatever mode was requested regardless (setFullScreen isn't skipped
++  // here, only the stale re-read after it); authoritative state, including
++  // changes from outside this handler entirely (the OS/Chromium's own
++  // Esc-to-exit-fullscreen), is pushed to the renderer separately via the
++  // enter-full-screen/leave-full-screen listeners registered in
++  // createWindow above.
++  return value;
+ });
+ 
+ ipcMain.handle('window:getFullscreen', () => win?.isFullScreen() ?? false);
+diff --git a/electron/preload.ts b/electron/preload.ts
+index a14d903..1e0f2e4 100644
+--- a/electron/preload.ts
++++ b/electron/preload.ts
+@@ -55,6 +55,19 @@ const api = {
+     ipcRenderer.on('save:flush-request', listener);
+     return () => ipcRenderer.removeListener('save:flush-request', listener);
+   },
++  /**
++   * Main-to-renderer only, fired whenever the window's REAL fullscreen
++   * state changes for any reason -- not just in response to setFullscreen
++   * itself, but also the OS/Chromium's own Esc-to-exit-fullscreen, which
++   * never goes through IPC at all. See main.ts's own enter-full-screen/
++   * leave-full-screen listeners and window:setFullscreen's own comment for
++   * the full "toggle button stops reflecting reality" bug this fixes.
++   */
++  onFullscreenChanged: (callback: (value: boolean) => void): (() => void) => {
++    const listener = (_e: unknown, value: boolean) => callback(value);
++    ipcRenderer.on('window:fullscreen-changed', listener);
++    return () => ipcRenderer.removeListener('window:fullscreen-changed', listener);
++  },
+ };
+ 
+ contextBridge.exposeInMainWorld('littleKnight', api);
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 302ba96..d4165aa 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -13456,3 +13456,99 @@ already-existing field.
+ **Verified:** `npx tsc --noEmit` and `npx vite build --config
+ vite.web.config.ts` both pass clean. Grepped the full `src/` tree for
+ any remaining `maxMinutes` reference post-removal -- none found.
++
++### Bug fixes: hero title, raiding-hero desktop state, fullscreen toggle, carousel arrows (patch 0196)
++
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed: setting a hero's title to "None" wasn't actually clearing it -- it silently kept showing their last-earned title instead
++- Fixed: heroes out on a raid showed up on the desktop companion as idle and available (running-around animation, "!" available icon) instead of looking busy
++- Changed: the desktop companion's "+N more at the guild" line now says how many of your other heroes are idle vs. questing (and injured, if any are)
++- Fixed: the fullscreen button in Guild Hall could get stuck -- toggling to fullscreen and clicking again sometimes wouldn't bring back windowed mode
++- Fixed: the desktop companion's left/right hero-cycling arrows could sit at a different height per hero and occasionally miss clicks entirely
++```
++
++Five separate, unrelated bug reports, grouped into one patch since none of
++them touch the same system and each is small on its own.
++
++**1. Hero title stuck on "None" -- `HeroManager.displayTitle` (`HeroManager.ts`).**
++The picker's "None" option correctly set `hero.activeTitle = null`
++(`engine.setActiveTitle`, `HeroesPanel.tsx`), but `displayTitle` read it
++back as `hero.activeTitle ?? hero.titles[hero.titles.length - 1] ?? null`
++-- and `null ?? X` evaluates to `X`, so a deliberately-cleared title fell
++straight through to "show the most recent one anyway." The fallback's own
++doc comment claimed it only ever applied to an old save's migration
++(pre-title-history saves, migration 35->36) -- checked that migration
++directly (`SaveManager.ts`, step 36): it only ever sets `activeTitle:
++null` when `titles` is ALSO empty, never "has titles, no active one," and
++`grantTitle` always sets both together going forward. So the fallback was
++dead code for its stated purpose and live code for exactly the case it
++was breaking. `displayTitle` now just returns `hero.activeTitle` directly
++-- "None" means none.
++
++**2. Raiding heroes read as idle and available on the desktop companion --
++`IdleView.tsx`.** The companion only ever checked `engine.activeQuestFor
++(hero.id)` to decide "is this hero busy" -- raids are tracked separately
++(the single guild-wide `state.activeRaid.heroIds`, not per-hero quest
++state), so a hero away on a raid fell through every `quest ? ... : ...`
++branch as if nothing was going on: idle bob animation, the "!"
++quest-available icon still showing over their head, status text ignoring
++the raid entirely. New `raiding` check (`state.activeRaid?.heroIds
++.includes(hero.id)`) folded together with `quest` into a single `busy`
++flag, used everywhere the companion only cares "is this hero off doing
++something" -- the departing/walking/returning transition, the quest-mark
++icon, and now a `status` line ("On a raid -- Xm left") for the raid case
++specifically. `quest` itself is kept for the places that need the actual
++quest object (name, chain progress).
++
++**3. "+N more at the guild" -> idle/questing/injured breakdown --
++`IdleView.tsx`.** Same compact line, more useful: `otherHint` now buckets
++every other hero into idle (not questing, not raiding, not injured),
++questing (quest OR raid), and injured, joining with commas and only
++mentioning injured when it's actually nonzero ("3 idle, 2 questing" is the
++common case; "3 idle, 1 questing, 1 injured" once someone's hurt).
++
++**4. Fullscreen toggle getting stuck -- `electron/main.ts`,
++`preload.ts`, `MenuWindow.tsx`.** `window:setFullscreen`'s handler called
++`win.setFullScreen(value)` and immediately returned `win.isFullScreen()`
++-- but that underlying native transition isn't guaranteed to have
++finished by the time the synchronous JS call returns, so the immediate
++re-read could still report the PREVIOUS state on some platforms. The
++button (`MenuWindow.tsx`) trusted that return value to update its own
++`fullscreen` React state, so the first click could desync the button from
++reality, needing an extra click to catch up -- reading exactly as
++"clicking again doesn't bring back windowed mode." Fixed two ways: the
++IPC handler now returns the `value` it was just asked to set instead of
++re-querying it, and `win` now fires `enter-full-screen`/
++`leave-full-screen` listeners that push the REAL state to the renderer
++any time it changes for any reason (`window:fullscreen-changed`,
++new `onFullscreenChanged` in `preload.ts`) -- including the OS/Chromium's
++own default Esc-to-exit-fullscreen, which never went through the IPC
++handler at all and could desync the button just as easily.
++`MenuWindow.tsx` now subscribes to that for as long as it's mounted, not
++just reading `getFullscreen()` once on mount.
++
++**5. Desktop-companion carousel arrows drifting/missing clicks --
++`IdleView.tsx`.** `.hero-carousel`'s height was unset (sizes to its
++tallest child), and the arrows are positioned `top: 50%` of that box
++(`app.css`). `HeroSprite` renders SMALLER than its nominal `height` prop
++for several classes (`HERO_DISPLAY_SCALE` in `HeroSprite.tsx` --
++gladiator/adventurer/wizard/dwarf all get scaled down to correct for
++source-pack fill differences), so the carousel's auto-height -- and with
++it, the arrows' 50% anchor -- shifted every time `cycleFocusedHero`
++swapped in a different class. Confirmed as the direct cause of the
++"sometimes just doesn't respond" complaint too: since the height changed
++mid-interaction, a second click could land where the arrow used to be
++rather than where it now was, after the first click's swap. `.hero-
++carousel` now gets an explicit inline height (`knightHeight`, the exact
++same value already passed to `HeroSprite`'s own `height` prop) so the
++arrows sit at one universal position regardless of whose sprite is
++centered inside it.
++
++**Verified:** `npx tsc --noEmit` passes clean across `src` and
++`electron` both (single shared `tsconfig.json`). Traced `displayTitle`'s
++only other call sites (`HeroesPanel.tsx`, `IdleView.tsx`) -- both already
++treat a `null` return as "no title," no changes needed there. Confirmed
++`ActiveRaid.heroIds` (`types.ts`) is the only per-raid roster the engine
++tracks, and that raids never populate `activeQuestFor`.
+diff --git a/src/game/managers/HeroManager.ts b/src/game/managers/HeroManager.ts
+index 6dab0a5..bd33765 100644
+--- a/src/game/managers/HeroManager.ts
++++ b/src/game/managers/HeroManager.ts
+@@ -157,13 +157,22 @@ export const HeroManager = {
+     return true;
+   },
+ 
+-  /** The title actually shown next to this hero's name -- activeTitle if
+-   *  set, otherwise the most recently earned title, otherwise null. A
+-   *  hero with titles but no activeTitle only happens via an old save's
+-   *  migration (see SaveManager migration 35->36); every other path that
+-   *  adds a title also sets activeTitle in the same step. */
++  /** The title actually shown next to this hero's name -- just
++   *  activeTitle, directly. Used to fall back to the most recently earned
++   *  title whenever activeTitle was null, on the theory that a hero with
++   *  titles but no activeTitle only happens via an old save's migration
++   *  (see SaveManager migration 35->36) -- but that migration only ever
++   *  leaves activeTitle null when titles is ALSO empty (an old save with
++   *  no title at all), never "has titles, no active one." Every real path
++   *  that adds a title (grantTitle) already sets activeTitle in the same
++   *  step, so the only way activeTitle is null while titles is non-empty
++   *  is the player deliberately picking "None" from the title dropdown
++   *  (see engine.setActiveTitle) -- and the old fallback was silently
++   *  overriding exactly that choice, showing the last-earned title again
++   *  regardless of what was picked. Bug: "changing a hero's title to None
++   *  doesn't remove it." */
+   displayTitle(hero: Hero): string | null {
+-    return hero.activeTitle ?? hero.titles[hero.titles.length - 1] ?? null;
++    return hero.activeTitle;
+   },
+ 
+   /**
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 5aa9a66..e7bb672 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -39,6 +39,11 @@ declare global {
+       /** Main-to-renderer only -- main is about to close/quit and needs a
+        *  final save flushed first. See preload.ts's own comment for why. */
+       onRequestFlushSave(callback: () => void | Promise<void>): () => void;
++      /** Main-to-renderer only -- the window's real fullscreen state
++       *  changed, for any reason (including the OS's own Esc-to-exit). See
++       *  preload.ts's own comment for why this exists alongside
++       *  setFullscreen/getFullscreen above. */
++      onFullscreenChanged(callback: (value: boolean) => void): () => void;
+     };
+   }
+ }
+diff --git a/src/ui/IdleView.tsx b/src/ui/IdleView.tsx
+index 47cec67..36ad096 100644
+--- a/src/ui/IdleView.tsx
++++ b/src/ui/IdleView.tsx
+@@ -22,7 +22,22 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+   const hero = engine.displayedHero;
+   const displayTitle = HeroManager.displayTitle(hero);
+   const quest = engine.activeQuestFor(hero.id);
+-  const [anim, setAnim] = useState<Anim>(quest ? 'walking' : 'idle');
++  // A hero sent on a raid is exactly as unavailable as one on a quest, but
++  // raids never populate activeQuestFor (they're tracked separately, via
++  // the single guild-wide state.activeRaid.heroIds) -- so a raiding hero
++  // fell through every "quest ? ... : ..." branch below as if they were
++  // just standing around idle, complete with the "!" quest-available icon
++  // still showing over their head. `busy` folds both together for anywhere
++  // this companion only cares about "is this hero off doing something,"
++  // while `quest` itself is kept around for the few spots that need the
++  // actual quest details (status text, chain progress).
++  const raiding = engine.state.activeRaid?.heroIds.includes(hero.id) ?? false;
++  const busy = !!quest || raiding;
++  const [anim, setAnim] = useState<Anim>(busy ? 'walking' : 'idle');
++  // Shared by HeroSprite's own `height` prop and .hero-carousel's fixed
++  // wrapper height below -- see that element's own comment for why both
++  // need to agree on the exact same number.
++  const knightHeight = Math.round(120 * settings.spriteScale);
+   const [locked, setLocked] = useState(true);
+   const [flashAttack, setFlashAttack] = useState<HeroAnimation | null>(null);
+   const [floatingText, setFloatingText] = useState<{ gold: number; xp: number; key: number } | null>(null);
+@@ -37,25 +52,29 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+     setLocked(confirmed ?? next);
+   };
+ 
+-  // Tracks the previously shown hero/quest pair so that cycling to a
++  // Tracks the previously shown hero/busy-key pair so that cycling to a
+   // different hero snaps straight to their real state, while an actual
+-  // departure or return (same hero, quest status changes) still gets the
+-  // one-off transition animation.
+-  const prev = useRef<{ heroId: string; questId: string | null }>({ heroId: hero.id, questId: quest?.id ?? null });
++  // departure or return (same hero, quest/raid status changes) still gets
++  // the one-off transition animation. Keyed off `busy` (quest OR raid, see
++  // above) rather than just the quest id, so heading out on a raid gets
++  // the same "departing" flourish a quest send-off already had, and coming
++  // back from one gets "returning" instead of snapping straight to idle.
++  const busyKey = quest?.id ?? (raiding ? 'raid' : null);
++  const prev = useRef<{ heroId: string; busyKey: string | null }>({ heroId: hero.id, busyKey });
+ 
+   useEffect(() => {
+     const sameHero = prev.current.heroId === hero.id;
+-    const questChanged = prev.current.questId !== (quest?.id ?? null);
+-    prev.current = { heroId: hero.id, questId: quest?.id ?? null };
++    const busyChanged = prev.current.busyKey !== busyKey;
++    prev.current = { heroId: hero.id, busyKey };
+ 
+-    if (!sameHero || !questChanged) {
++    if (!sameHero || !busyChanged) {
+       // Switched to a different hero (or nothing actually changed): show
+       // their current state directly, no transition animation.
+-      setAnim(quest ? 'walking' : 'idle');
++      setAnim(busy ? 'walking' : 'idle');
+       return;
+     }
+ 
+-    if (quest) {
++    if (busy) {
+       setAnim('departing');
+       const id = window.setTimeout(() => setAnim('walking'), 900);
+       return () => window.clearTimeout(id);
+@@ -63,7 +82,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+     setAnim('returning');
+     const id = window.setTimeout(() => setAnim('idle'), 900);
+     return () => window.clearTimeout(id);
+-  }, [hero.id, quest?.id]);
++  }, [hero.id, busyKey, busy]);
+ 
+   // A brief attack animation partway through a long enough quest — pure
+   // flavour, timed once per quest at a random point so it doesn't feel
+@@ -221,23 +240,38 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+     : '';
+   const status = quest
+     ? `${quest.offer.name} — ${formatDuration(quest.endsAt - now)} left${chainProgress}`
+-    : injured
+-      ? `${hero.injuries[0].name}. Heals in ${formatDuration(hero.injuries[0].healsAt - now)}.`
+-      : questsReady > 0
+-        ? `${questsReady} contracts on the board`
+-        : 'Waiting for work';
++    : raiding
++      ? `On a raid — ${formatDuration((engine.state.activeRaid?.endsAt ?? now) - now)} left`
++      : injured
++        ? `${hero.injuries[0].name}. Heals in ${formatDuration(hero.injuries[0].healsAt - now)}.`
++        : questsReady > 0
++          ? `${questsReady} contracts on the board`
++          : 'Waiting for work';
+ 
+   const others = engine.state.heroes.filter((h) => h.id !== hero.id);
+-  // Used to also append "· N also questing" here, but that read as a
+-  // second, separate group of heroes on top of the "+N more" count
+-  // rather than a status of that same group (e.g. "+3 more · 3 also
+-  // questing" looked like 6 heroes total instead of 3) -- reported
+-  // directly. Dropped rather than reworded: this is a compact
+-  // companion-window hint, not the place for a hero-by-hero status
+-  // breakdown, and the full picture is one click away in the guild hall.
++  // Used to just report "+N more at the guild" -- accurate as a headcount,
++  // but gave no sense of whether those heroes were doing anything, so a
++  // full roster sitting idle read identically to one that was fully out
++  // on quests/raids. Split into idle/busy/injured counts instead (direct
++  // request: "should say how many heroes are idle"). Injured heroes are
++  // neither idle (they can't be sent out) nor "questing," so they get
++  // their own clause rather than being folded into either -- only shown
++  // when non-zero, so the common case still reads as the simple
++  // "N idle, N questing" the request asked for.
++  const otherIdle = others.filter((h) => (
++    h.injuries.length === 0
++    && !engine.activeQuestFor(h.id)
++    && !(engine.state.activeRaid?.heroIds.includes(h.id))
++  )).length;
++  const otherInjured = others.filter((h) => h.injuries.length > 0).length;
++  const otherQuesting = others.length - otherIdle - otherInjured;
+   const otherHint = others.length === 0
+     ? null
+-    : `+${others.length} more at the guild`;
++    : [
++      `${otherIdle} idle`,
++      `${otherQuesting} questing`,
++      ...(otherInjured > 0 ? [`${otherInjured} injured`] : []),
++    ].join(', ');
+ 
+   // Compact stand-in for the full "while you were away" report while still
+   // in the tiny idle-companion window -- clicking it opens the menu, where
+@@ -274,11 +308,28 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+   return (
+     <div className={`idle-root ${locked ? '' : 'unlocked'}`}>
+       <div className="idle-stage">
+-        {!quest && questsReady > 0 && (
++        {!busy && questsReady > 0 && (
+           <PixelSprite frame={QUEST_MARK} scale={2.5} className="quest-mark" title="Quests available" />
+         )}
+ 
+-        <div className="hero-carousel">
++        {/*
++          Fixed height, tied to the exact same value passed to HeroSprite's
++          own `height` prop below -- HeroSprite scales its rendered box down
++          per-class (HERO_DISPLAY_SCALE, see that component's own comment:
++          gladiator/adventurer/wizard/dwarf all render SMALLER than the
++          nominal height), so .hero-carousel's previous auto-height (sized
++          to whatever the current hero's sprite box happened to be) shrank
++          and grew every time cycleFocusedHero swapped in a different class.
++          The arrows are `top: 50%` of THIS element (app.css), so that
++          drifting height is exactly why they'd sit lower/higher depending
++          on which hero was showing -- and since the height changed mid-
++          interaction, a click could land after the arrow had already
++          hopped a few pixels out from under the cursor, reading as
++          "sometimes just doesn't respond." Pinning this to a class-
++          independent height keeps the arrows in one universal spot
++          regardless of whose sprite is centered inside it.
++        */}
++        <div className="hero-carousel" style={{ height: knightHeight }}>
+           {!settings.hideHeroSprite && others.length > 0 && (
+             <button
+               className="carousel-arrow"
+@@ -302,7 +353,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+                 skin={hero.skin}
+                 animation={spriteAnimation}
+                 flip={facingReturn}
+-                height={Math.round(120 * settings.spriteScale)}
++                height={knightHeight}
+                 title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}`}
+               />
+               {floatingText && (
+diff --git a/src/ui/MenuWindow.tsx b/src/ui/MenuWindow.tsx
+index d3e1b41..83f9bc2 100644
+--- a/src/ui/MenuWindow.tsx
++++ b/src/ui/MenuWindow.tsx
+@@ -254,6 +254,17 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
+     void window.littleKnight?.getFullscreen().then(setFullscreen);
+   }, []);
+ 
++  // Keeps `fullscreen` authoritative for the whole time this window is
++  // mounted, not just right after mount -- covers the window entering/
++  // leaving fullscreen for any reason, including the OS/Chromium's own
++  // default Esc-to-exit-fullscreen, which never touches the button below
++  // at all. Without this, exiting via Esc left `fullscreen` stuck at
++  // `true` until the next click happened to correct it, part of the same
++  // "fullscreen toggle stops reflecting reality" bug the button's own
++  // onClick handler below and main.ts's window:setFullscreen now both
++  // account for.
++  useEffect(() => window.littleKnight?.onFullscreenChanged(setFullscreen), []);
++
+   useEffect(() => {
+     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+     window.addEventListener('keydown', onKey);

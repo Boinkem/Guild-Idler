@@ -22,7 +22,22 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
   const hero = engine.displayedHero;
   const displayTitle = HeroManager.displayTitle(hero);
   const quest = engine.activeQuestFor(hero.id);
-  const [anim, setAnim] = useState<Anim>(quest ? 'walking' : 'idle');
+  // A hero sent on a raid is exactly as unavailable as one on a quest, but
+  // raids never populate activeQuestFor (they're tracked separately, via
+  // the single guild-wide state.activeRaid.heroIds) -- so a raiding hero
+  // fell through every "quest ? ... : ..." branch below as if they were
+  // just standing around idle, complete with the "!" quest-available icon
+  // still showing over their head. `busy` folds both together for anywhere
+  // this companion only cares about "is this hero off doing something,"
+  // while `quest` itself is kept around for the few spots that need the
+  // actual quest details (status text, chain progress).
+  const raiding = engine.state.activeRaid?.heroIds.includes(hero.id) ?? false;
+  const busy = !!quest || raiding;
+  const [anim, setAnim] = useState<Anim>(busy ? 'walking' : 'idle');
+  // Shared by HeroSprite's own `height` prop and .hero-carousel's fixed
+  // wrapper height below -- see that element's own comment for why both
+  // need to agree on the exact same number.
+  const knightHeight = Math.round(120 * settings.spriteScale);
   const [locked, setLocked] = useState(true);
   const [flashAttack, setFlashAttack] = useState<HeroAnimation | null>(null);
   const [floatingText, setFloatingText] = useState<{ gold: number; xp: number; key: number } | null>(null);
@@ -37,25 +52,29 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
     setLocked(confirmed ?? next);
   };
 
-  // Tracks the previously shown hero/quest pair so that cycling to a
+  // Tracks the previously shown hero/busy-key pair so that cycling to a
   // different hero snaps straight to their real state, while an actual
-  // departure or return (same hero, quest status changes) still gets the
-  // one-off transition animation.
-  const prev = useRef<{ heroId: string; questId: string | null }>({ heroId: hero.id, questId: quest?.id ?? null });
+  // departure or return (same hero, quest/raid status changes) still gets
+  // the one-off transition animation. Keyed off `busy` (quest OR raid, see
+  // above) rather than just the quest id, so heading out on a raid gets
+  // the same "departing" flourish a quest send-off already had, and coming
+  // back from one gets "returning" instead of snapping straight to idle.
+  const busyKey = quest?.id ?? (raiding ? 'raid' : null);
+  const prev = useRef<{ heroId: string; busyKey: string | null }>({ heroId: hero.id, busyKey });
 
   useEffect(() => {
     const sameHero = prev.current.heroId === hero.id;
-    const questChanged = prev.current.questId !== (quest?.id ?? null);
-    prev.current = { heroId: hero.id, questId: quest?.id ?? null };
+    const busyChanged = prev.current.busyKey !== busyKey;
+    prev.current = { heroId: hero.id, busyKey };
 
-    if (!sameHero || !questChanged) {
+    if (!sameHero || !busyChanged) {
       // Switched to a different hero (or nothing actually changed): show
       // their current state directly, no transition animation.
-      setAnim(quest ? 'walking' : 'idle');
+      setAnim(busy ? 'walking' : 'idle');
       return;
     }
 
-    if (quest) {
+    if (busy) {
       setAnim('departing');
       const id = window.setTimeout(() => setAnim('walking'), 900);
       return () => window.clearTimeout(id);
@@ -63,7 +82,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
     setAnim('returning');
     const id = window.setTimeout(() => setAnim('idle'), 900);
     return () => window.clearTimeout(id);
-  }, [hero.id, quest?.id]);
+  }, [hero.id, busyKey, busy]);
 
   // A brief attack animation partway through a long enough quest — pure
   // flavour, timed once per quest at a random point so it doesn't feel
@@ -221,23 +240,38 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
     : '';
   const status = quest
     ? `${quest.offer.name} — ${formatDuration(quest.endsAt - now)} left${chainProgress}`
-    : injured
-      ? `${hero.injuries[0].name}. Heals in ${formatDuration(hero.injuries[0].healsAt - now)}.`
-      : questsReady > 0
-        ? `${questsReady} contracts on the board`
-        : 'Waiting for work';
+    : raiding
+      ? `On a raid — ${formatDuration((engine.state.activeRaid?.endsAt ?? now) - now)} left`
+      : injured
+        ? `${hero.injuries[0].name}. Heals in ${formatDuration(hero.injuries[0].healsAt - now)}.`
+        : questsReady > 0
+          ? `${questsReady} contracts on the board`
+          : 'Waiting for work';
 
   const others = engine.state.heroes.filter((h) => h.id !== hero.id);
-  // Used to also append "· N also questing" here, but that read as a
-  // second, separate group of heroes on top of the "+N more" count
-  // rather than a status of that same group (e.g. "+3 more · 3 also
-  // questing" looked like 6 heroes total instead of 3) -- reported
-  // directly. Dropped rather than reworded: this is a compact
-  // companion-window hint, not the place for a hero-by-hero status
-  // breakdown, and the full picture is one click away in the guild hall.
+  // Used to just report "+N more at the guild" -- accurate as a headcount,
+  // but gave no sense of whether those heroes were doing anything, so a
+  // full roster sitting idle read identically to one that was fully out
+  // on quests/raids. Split into idle/busy/injured counts instead (direct
+  // request: "should say how many heroes are idle"). Injured heroes are
+  // neither idle (they can't be sent out) nor "questing," so they get
+  // their own clause rather than being folded into either -- only shown
+  // when non-zero, so the common case still reads as the simple
+  // "N idle, N questing" the request asked for.
+  const otherIdle = others.filter((h) => (
+    h.injuries.length === 0
+    && !engine.activeQuestFor(h.id)
+    && !(engine.state.activeRaid?.heroIds.includes(h.id))
+  )).length;
+  const otherInjured = others.filter((h) => h.injuries.length > 0).length;
+  const otherQuesting = others.length - otherIdle - otherInjured;
   const otherHint = others.length === 0
     ? null
-    : `+${others.length} more at the guild`;
+    : [
+      `${otherIdle} idle`,
+      `${otherQuesting} questing`,
+      ...(otherInjured > 0 ? [`${otherInjured} injured`] : []),
+    ].join(', ');
 
   // Compact stand-in for the full "while you were away" report while still
   // in the tiny idle-companion window -- clicking it opens the menu, where
@@ -274,11 +308,28 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
   return (
     <div className={`idle-root ${locked ? '' : 'unlocked'}`}>
       <div className="idle-stage">
-        {!quest && questsReady > 0 && (
+        {!busy && questsReady > 0 && (
           <PixelSprite frame={QUEST_MARK} scale={2.5} className="quest-mark" title="Quests available" />
         )}
 
-        <div className="hero-carousel">
+        {/*
+          Fixed height, tied to the exact same value passed to HeroSprite's
+          own `height` prop below -- HeroSprite scales its rendered box down
+          per-class (HERO_DISPLAY_SCALE, see that component's own comment:
+          gladiator/adventurer/wizard/dwarf all render SMALLER than the
+          nominal height), so .hero-carousel's previous auto-height (sized
+          to whatever the current hero's sprite box happened to be) shrank
+          and grew every time cycleFocusedHero swapped in a different class.
+          The arrows are `top: 50%` of THIS element (app.css), so that
+          drifting height is exactly why they'd sit lower/higher depending
+          on which hero was showing -- and since the height changed mid-
+          interaction, a click could land after the arrow had already
+          hopped a few pixels out from under the cursor, reading as
+          "sometimes just doesn't respond." Pinning this to a class-
+          independent height keeps the arrows in one universal spot
+          regardless of whose sprite is centered inside it.
+        */}
+        <div className="hero-carousel" style={{ height: knightHeight }}>
           {!settings.hideHeroSprite && others.length > 0 && (
             <button
               className="carousel-arrow"
@@ -302,7 +353,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
                 skin={hero.skin}
                 animation={spriteAnimation}
                 flip={facingReturn}
-                height={Math.round(120 * settings.spriteScale)}
+                height={knightHeight}
                 title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}`}
               />
               {floatingText && (

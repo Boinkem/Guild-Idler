@@ -254,6 +254,17 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
     void window.littleKnight?.getFullscreen().then(setFullscreen);
   }, []);
 
+  // Keeps `fullscreen` authoritative for the whole time this window is
+  // mounted, not just right after mount -- covers the window entering/
+  // leaving fullscreen for any reason, including the OS/Chromium's own
+  // default Esc-to-exit-fullscreen, which never touches the button below
+  // at all. Without this, exiting via Esc left `fullscreen` stuck at
+  // `true` until the next click happened to correct it, part of the same
+  // "fullscreen toggle stops reflecting reality" bug the button's own
+  // onClick handler below and main.ts's window:setFullscreen now both
+  // account for.
+  useEffect(() => window.littleKnight?.onFullscreenChanged(setFullscreen), []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);

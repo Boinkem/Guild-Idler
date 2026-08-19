@@ -39,6 +39,11 @@ declare global {
       /** Main-to-renderer only -- main is about to close/quit and needs a
        *  final save flushed first. See preload.ts's own comment for why. */
       onRequestFlushSave(callback: () => void | Promise<void>): () => void;
+      /** Main-to-renderer only -- the window's real fullscreen state
+       *  changed, for any reason (including the OS's own Esc-to-exit). See
+       *  preload.ts's own comment for why this exists alongside
+       *  setFullscreen/getFullscreen above. */
+      onFullscreenChanged(callback: (value: boolean) => void): () => void;
     };
   }
 }

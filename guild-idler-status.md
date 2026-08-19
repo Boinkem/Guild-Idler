@@ -13456,3 +13456,99 @@ already-existing field.
 **Verified:** `npx tsc --noEmit` and `npx vite build --config
 vite.web.config.ts` both pass clean. Grepped the full `src/` tree for
 any remaining `maxMinutes` reference post-removal -- none found.
+
+### Bug fixes: hero title, raiding-hero desktop state, fullscreen toggle, carousel arrows (patch 0196)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed: setting a hero's title to "None" wasn't actually clearing it -- it silently kept showing their last-earned title instead
+- Fixed: heroes out on a raid showed up on the desktop companion as idle and available (running-around animation, "!" available icon) instead of looking busy
+- Changed: the desktop companion's "+N more at the guild" line now says how many of your other heroes are idle vs. questing (and injured, if any are)
+- Fixed: the fullscreen button in Guild Hall could get stuck -- toggling to fullscreen and clicking again sometimes wouldn't bring back windowed mode
+- Fixed: the desktop companion's left/right hero-cycling arrows could sit at a different height per hero and occasionally miss clicks entirely
+```
+
+Five separate, unrelated bug reports, grouped into one patch since none of
+them touch the same system and each is small on its own.
+
+**1. Hero title stuck on "None" -- `HeroManager.displayTitle` (`HeroManager.ts`).**
+The picker's "None" option correctly set `hero.activeTitle = null`
+(`engine.setActiveTitle`, `HeroesPanel.tsx`), but `displayTitle` read it
+back as `hero.activeTitle ?? hero.titles[hero.titles.length - 1] ?? null`
+-- and `null ?? X` evaluates to `X`, so a deliberately-cleared title fell
+straight through to "show the most recent one anyway." The fallback's own
+doc comment claimed it only ever applied to an old save's migration
+(pre-title-history saves, migration 35->36) -- checked that migration
+directly (`SaveManager.ts`, step 36): it only ever sets `activeTitle:
+null` when `titles` is ALSO empty, never "has titles, no active one," and
+`grantTitle` always sets both together going forward. So the fallback was
+dead code for its stated purpose and live code for exactly the case it
+was breaking. `displayTitle` now just returns `hero.activeTitle` directly
+-- "None" means none.
+
+**2. Raiding heroes read as idle and available on the desktop companion --
+`IdleView.tsx`.** The companion only ever checked `engine.activeQuestFor
+(hero.id)` to decide "is this hero busy" -- raids are tracked separately
+(the single guild-wide `state.activeRaid.heroIds`, not per-hero quest
+state), so a hero away on a raid fell through every `quest ? ... : ...`
+branch as if nothing was going on: idle bob animation, the "!"
+quest-available icon still showing over their head, status text ignoring
+the raid entirely. New `raiding` check (`state.activeRaid?.heroIds
+.includes(hero.id)`) folded together with `quest` into a single `busy`
+flag, used everywhere the companion only cares "is this hero off doing
+something" -- the departing/walking/returning transition, the quest-mark
+icon, and now a `status` line ("On a raid -- Xm left") for the raid case
+specifically. `quest` itself is kept for the places that need the actual
+quest object (name, chain progress).
+
+**3. "+N more at the guild" -> idle/questing/injured breakdown --
+`IdleView.tsx`.** Same compact line, more useful: `otherHint` now buckets
+every other hero into idle (not questing, not raiding, not injured),
+questing (quest OR raid), and injured, joining with commas and only
+mentioning injured when it's actually nonzero ("3 idle, 2 questing" is the
+common case; "3 idle, 1 questing, 1 injured" once someone's hurt).
+
+**4. Fullscreen toggle getting stuck -- `electron/main.ts`,
+`preload.ts`, `MenuWindow.tsx`.** `window:setFullscreen`'s handler called
+`win.setFullScreen(value)` and immediately returned `win.isFullScreen()`
+-- but that underlying native transition isn't guaranteed to have
+finished by the time the synchronous JS call returns, so the immediate
+re-read could still report the PREVIOUS state on some platforms. The
+button (`MenuWindow.tsx`) trusted that return value to update its own
+`fullscreen` React state, so the first click could desync the button from
+reality, needing an extra click to catch up -- reading exactly as
+"clicking again doesn't bring back windowed mode." Fixed two ways: the
+IPC handler now returns the `value` it was just asked to set instead of
+re-querying it, and `win` now fires `enter-full-screen`/
+`leave-full-screen` listeners that push the REAL state to the renderer
+any time it changes for any reason (`window:fullscreen-changed`,
+new `onFullscreenChanged` in `preload.ts`) -- including the OS/Chromium's
+own default Esc-to-exit-fullscreen, which never went through the IPC
+handler at all and could desync the button just as easily.
+`MenuWindow.tsx` now subscribes to that for as long as it's mounted, not
+just reading `getFullscreen()` once on mount.
+
+**5. Desktop-companion carousel arrows drifting/missing clicks --
+`IdleView.tsx`.** `.hero-carousel`'s height was unset (sizes to its
+tallest child), and the arrows are positioned `top: 50%` of that box
+(`app.css`). `HeroSprite` renders SMALLER than its nominal `height` prop
+for several classes (`HERO_DISPLAY_SCALE` in `HeroSprite.tsx` --
+gladiator/adventurer/wizard/dwarf all get scaled down to correct for
+source-pack fill differences), so the carousel's auto-height -- and with
+it, the arrows' 50% anchor -- shifted every time `cycleFocusedHero`
+swapped in a different class. Confirmed as the direct cause of the
+"sometimes just doesn't respond" complaint too: since the height changed
+mid-interaction, a second click could land where the arrow used to be
+rather than where it now was, after the first click's swap. `.hero-
+carousel` now gets an explicit inline height (`knightHeight`, the exact
+same value already passed to `HeroSprite`'s own `height` prop) so the
+arrows sit at one universal position regardless of whose sprite is
+centered inside it.
+
+**Verified:** `npx tsc --noEmit` passes clean across `src` and
+`electron` both (single shared `tsconfig.json`). Traced `displayTitle`'s
+only other call sites (`HeroesPanel.tsx`, `IdleView.tsx`) -- both already
+treat a `null` return as "no title," no changes needed there. Confirmed
+`ActiveRaid.heroIds` (`types.ts`) is the only per-raid roster the engine
+tracks, and that raids never populate `activeQuestFor`.

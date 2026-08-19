@@ -289,6 +289,17 @@ async function createWindow() {
   // fullscreen ones included.
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
+  // Authoritative fullscreen-state push -- these fire for ANY transition,
+  // not just ones window:setFullscreen itself requested, including the
+  // OS/Chromium's own default Esc-to-exit-fullscreen behavior, which
+  // bypasses that IPC handler entirely. Without this, MenuWindow.tsx's own
+  // `fullscreen` React state only ever updated in response to its own
+  // button click, so pressing Esc would silently desync it from the
+  // window's real state -- part of the same "toggle button stops
+  // reflecting reality" bug window:setFullscreen's own comment covers.
+  win.on('enter-full-screen', () => win?.webContents.send('window:fullscreen-changed', true));
+  win.on('leave-full-screen', () => win?.webContents.send('window:fullscreen-changed', false));
+
   if (process.env.VITE_DEV_SERVER_URL) {
     await win.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
@@ -565,7 +576,23 @@ ipcMain.handle('window:setFullscreen', (_e, value: boolean) => {
   // normally be able to trigger from there.
   if (currentMode !== 'menu') return false;
   win.setFullScreen(value);
-  return win.isFullScreen();
+  // Returns the VALUE JUST REQUESTED, not a fresh win.isFullScreen() read --
+  // confirmed as the actual cause of "toggles to fullscreen, but clicking
+  // again doesn't bring back windowed mode": setFullScreen()'s underlying
+  // native transition isn't guaranteed to have completed by the time this
+  // handler returns, so re-querying isFullScreen() immediately afterward
+  // can still report the PREVIOUS state. MenuWindow.tsx's button trusted
+  // that (possibly stale) return value to update its own `fullscreen`
+  // React state, so the very first click could silently desync the button
+  // from reality -- it would take an extra click to catch back up, reading
+  // as "the second click does nothing." The window itself always enters
+  // whatever mode was requested regardless (setFullScreen isn't skipped
+  // here, only the stale re-read after it); authoritative state, including
+  // changes from outside this handler entirely (the OS/Chromium's own
+  // Esc-to-exit-fullscreen), is pushed to the renderer separately via the
+  // enter-full-screen/leave-full-screen listeners registered in
+  // createWindow above.
+  return value;
 });
 
 ipcMain.handle('window:getFullscreen', () => win?.isFullScreen() ?? false);

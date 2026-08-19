@@ -55,6 +55,19 @@ const api = {
     ipcRenderer.on('save:flush-request', listener);
     return () => ipcRenderer.removeListener('save:flush-request', listener);
   },
+  /**
+   * Main-to-renderer only, fired whenever the window's REAL fullscreen
+   * state changes for any reason -- not just in response to setFullscreen
+   * itself, but also the OS/Chromium's own Esc-to-exit-fullscreen, which
+   * never goes through IPC at all. See main.ts's own enter-full-screen/
+   * leave-full-screen listeners and window:setFullscreen's own comment for
+   * the full "toggle button stops reflecting reality" bug this fixes.
+   */
+  onFullscreenChanged: (callback: (value: boolean) => void): (() => void) => {
+    const listener = (_e: unknown, value: boolean) => callback(value);
+    ipcRenderer.on('window:fullscreen-changed', listener);
+    return () => ipcRenderer.removeListener('window:fullscreen-changed', listener);
+  },
 };
 
 contextBridge.exposeInMainWorld('littleKnight', api);
