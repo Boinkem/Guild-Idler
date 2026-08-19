@@ -487,6 +487,87 @@ td.icon-cell { width: 1%; padding-right: 0; }
 }
 .banner-picker-name { text-align: left; word-break: break-all; }
 
+/* ----------------------------- decoration field --------------------------- */
+/* See app.js's renderDecorationField for why this is a genuinely
+   different rendering approach from .banner-field just above, not a
+   reskin: a checkerboard backdrop instead of a solid panel colour, since
+   this field's whole point is that art never crops to fill the box, and
+   transparency needs to read clearly against something other than a
+   flat colour to make that obvious. */
+.decor-field { display: flex; flex-direction: column; gap: 8px; }
+
+.decor-preview-box {
+  position: relative;
+  width: 100%; max-width: 320px;
+  background-image:
+    linear-gradient(45deg, var(--panel2) 25%, transparent 25%), linear-gradient(-45deg, var(--panel2) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--panel2) 75%), linear-gradient(-45deg, transparent 75%, var(--panel2) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+  background-color: var(--panel3);
+  border: 1px solid var(--panel3); border-radius: var(--radius);
+  cursor: crosshair; touch-action: none; overflow: hidden;
+  user-select: none;
+}
+.decor-preview-empty {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  padding: 12px; text-align: center; font-size: 11px; color: var(--dim);
+}
+/* Positioned via `left`/`top` (set inline from focusX/focusY, percentages
+   of THIS box) plus a translate(-50%,-50%)-and-scale transform (app.js) --
+   deliberately not background-position/background-size the way
+   .banner-preview-box's own art is rendered, so the sprite is never
+   cropped by the box edges regardless of scale. */
+.decor-preview-img {
+  position: absolute;
+  /* Explicit width/height (not max-width/max-height + auto) so
+     object-fit: contain does real "contain" work -- scaling a
+     smaller-than-the-box source crop UP to fill it, not just capping a
+     larger one down. A max-width-only approach would leave a small
+     source image rendering at native pixel size by default, which is
+     the opposite of what "scale: 100 = natural contain-fit size" (see
+     GuildHallDecorationDef.image's doc comment in types.ts) is supposed
+     to mean. */
+  width: 80%; height: 80%; object-fit: contain;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+.decor-focus-marker {
+  position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px;
+  border: 2px solid var(--brass); border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+.decor-focus-marker::before, .decor-focus-marker::after {
+  content: ''; position: absolute; background: var(--brass);
+}
+.decor-focus-marker::before { left: 50%; top: -4px; bottom: -4px; width: 1px; margin-left: -0.5px; }
+.decor-focus-marker::after { top: 50%; left: -4px; right: -4px; height: 1px; margin-top: -0.5px; }
+
+.decor-nudge-pad { position: absolute; inset: 0; pointer-events: none; }
+.decor-nudge {
+  position: absolute; pointer-events: auto;
+  width: 26px; height: 22px; padding: 0;
+  background: rgba(0, 0, 0, 0.55); color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 4px;
+  font-size: 10px; line-height: 1; cursor: pointer;
+}
+.decor-nudge:hover { background: rgba(0, 0, 0, 0.75); border-color: var(--brass); }
+.decor-nudge-up { top: 4px; left: 50%; margin-left: -13px; }
+.decor-nudge-down { bottom: 4px; left: 50%; margin-left: -13px; }
+.decor-nudge-left { left: 4px; top: 50%; margin-top: -11px; }
+.decor-nudge-right { right: 4px; top: 50%; margin-top: -11px; }
+
+/* Contain-fit thumbnails (not cover, same reasoning as the field itself)
+   for the picker grid and the content-list table column -- reuses
+   .banner-picker-item/.banner-picker-grid/.table-banner's layout/sizing
+   wholesale (see openDecorArtPicker/decorCell in app.js), only the
+   background-size differs. */
+.decor-picker-thumb, .decor-table-thumb {
+  background-size: contain !important; background-repeat: no-repeat;
+  background-color: var(--panel3);
+}
+
 /* ----------------------------- loot table field -------------------------- */
 
 .loot-rows { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }

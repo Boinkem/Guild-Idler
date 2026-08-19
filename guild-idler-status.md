@@ -7071,20 +7071,25 @@ pass (same caveat as the two entries above).
     enters an edit mode that fully hides the facility/upgrade cards and
     takes the background art full-bleed, with each slot clickable to
     open an item picker; a "Done" button returns to the normal tab.
-  - **Two DevTool authoring features needed**, both prototyped and
-    functionally verified during the design pass (interactive HTML
-    mockups, not in-repo code yet):
-    - **Per-item placement/scale field.** The existing chain/raid
-      `bannerImage` field (`{path, focusX, focusY, scale}`,
-      `renderBannerField` in `tools/devtool/public/app.js`) already has
+  - **Two DevTool authoring features needed.** The first is now built
+    (patch 0202); the second is still only a prototype:
+    - **Per-item placement/scale field -- built, see "Guild Hall
+      Decorations: DevTool content type + placement/scale field
+      foundation (patch 0202)" in the patch log below.** The existing
+      chain/raid `bannerImage` field (`{path, focusX, focusY, scale}`,
+      `renderBannerField` in `tools/devtool/public/app.js`) already had
       the right interaction -- drag-to-set crosshair, nudge buttons, a
-      zoom slider -- but renders with CSS `background-size: cover`,
+      zoom slider -- but rendered with CSS `background-size: cover`,
       which crops to fill the box. Wrong for a discrete pixel-art item
-      that must never be cropped. Decorations need a sibling field using
-      the same interaction, positioning an `<img>` with `object-fit:
-      contain` plus a translate/scale transform instead of a CSS
-      background, so the whole sprite always stays visible.
-    - **Slot layout editor.** A second, separate DevTool surface for
+      that must never be cropped. Decorations got a sibling
+      `decorationImage` field using the same interaction, positioning an
+      `<img>` with `object-fit: contain` plus a translate/scale
+      transform instead of a CSS background, so the whole sprite always
+      stays visible. This patch is DevTool/content-authoring only --
+      there's no in-game Guild Hall UI yet and nothing in the engine
+      consumes this content type yet; see the patch log entry for what's
+      still deferred.
+    - **Slot layout editor -- still only a prototype, not built.** A second, separate DevTool surface for
       repositioning/resizing the 30 slot boxes themselves (not an
       item's placement within a fixed box) -- built and tested as a
       standalone interactive prototype: every slot draggable by its
@@ -14098,3 +14103,78 @@ colors and badges, a tap opens the detail modal with the full stat row/
 flavour/loot/buttons, and "Send on Quest" actually sends the hero and
 closes the modal, landing correctly on the Quest Board's own "On the
 road" list afterward.
+
+### Guild Hall Decorations: DevTool content type + placement/scale field foundation (patch 0202)
+
+```discord-update
+Dev Update | Guild Hall Decorations (DevTool)
+
+- Added a new "Guild Hall Decorations" content type to the DevTool, so decoration items can start being authored
+- Added a new placement/scale tool for decoration art that never crops the sprite, unlike the existing banner tool
+- Nothing in-game yet -- this is authoring tooling only, laying groundwork for the customizable Guild Hall feature
+```
+
+First real implementation step for the "Customizable Guild Hall
+background" feature locked in during the earlier design/mockup pass (see
+its full spec, the 30-slot layout, and the two DevTool features it
+needs under Brainstorming above). Scoped deliberately narrow per a
+DevTool-foundation-only decision: build the new content type and its
+placement field so real decoration items can start being created, with
+no slot-layout editor, no in-game UI, and no engine consumption of this
+data yet. All three of those are still separate, later patches.
+
+**New content type.** `guild-hall-decorations.json` (starts empty) is a
+new top-level content file, same "own JSON, own schema, own `_BY_ID`
+loader" pattern every other content type already uses --
+`guildHallDecor.ts` exports `GUILD_HALL_DECORATIONS`/
+`GUILD_HALL_DECORATION_BY_ID`, imported by nothing yet outside its own
+loader (deliberately -- says so in its own header comment). `types.ts`
+gained `GuildHallSlotType` (the 9 slot pools from the locked design:
+`banner`, `wallCenterpiece`, `trophyCase`, `centerpiece`, `middleShelf`,
+`lowerShelf`, `wallTrinket`, `corner`, `floorCenterpiece` -- pools an
+item can be assigned to, not one of the 30 physical slot instances,
+which are still locked design data only, not code), a
+`GuildHallDecorAcquisition` union (`gold`/`achievement`/`grimsby`,
+matching the "mixed per item" acquisition design), and
+`GuildHallDecorationDef` itself. The DevTool schema mirrors
+`GuildHallDecorAcquisition` as flat optional fields
+(`acquisitionKind`/`goldCost`/`achievementId`) rather than a nested
+object, following the same "category picks which other fields matter"
+pattern the crafting-recipes schema already uses -- no dynamic show/hide
+UI, just fields left blank when they don't apply to the chosen kind.
+
+**New `decorationImage` field type.** Same drag-to-set crosshair/nudge-
+button/zoom-slider interaction as the existing `bannerImage` field
+(`renderBannerField`), but renders via an absolutely-positioned `<img
+object-fit: contain>` over a checkerboard backdrop instead of a CSS
+`background-size: cover` div -- so a discrete pixel-art sprite is never
+cropped, unlike banner art which is meant to fill and crop. Scale range
+is 25-300 (vs. banner's 100-300), since decoration art more often needs
+shrinking to fit a small slot than zooming in. Backing art lives in a
+new `public/decor/` tree (its own root, mirroring how banners and icons
+each get their own), served via a new `/decor-art/` static route with
+the same path-traversal guard the existing art routes use, and listed
+through a new `/api/decor-art` endpoint + `listDecorArt()` (identical
+loose-files-plus-subfolders logic to `listBanners()`). Server-side
+validation (`case 'decorationImage':` in `validateEntry`) checks the
+image extension, 0-100 focus range, and the 25-300 scale range, and
+rejects unknown keys, same rigor as every other field type. An untouched
+field saves as fully omitted (no `image` key at all) rather than a
+default-filled object, via the DevTool's existing save-time empty-value
+filtering -- no special-casing needed.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Ran the actual DevTool server and
+drove it end-to-end: the new "Guild Hall Decorations" tab appears under
+World Content, the empty-list and empty-editor states render correctly,
+filled in a full test entry, opened the art picker (confirmed folder
+grouping and clean uncropped thumbnails), selected art (confirmed the
+field updates with a correct offset/scale readout), and posted the
+completed entry straight to the live `/api/data/guild-hall-decorations`
+endpoint -- confirmed it writes with focus/scale correctly omitted when
+left at their defaults, correctly included when changed, and confirmed
+the server actually rejects an out-of-range scale value rather than
+silently clamping or accepting it. Test entry and its test art file were
+both removed afterward -- ships with an empty
+`guild-hall-decorations.json`, same as every other patch's out-of-the-box
+state.

@@ -184,7 +184,12 @@ function renderGenericTable() {
   // else the folder/id.jpg convention), not just "has one been assigned."
   const bannerKey = Object.entries(schema.fields).find(([, spec]) => spec.type === 'bannerImage')?.[0];
   const bannerSpec = bannerKey ? schema.fields[bannerKey] : null;
-  const extraCols = (iconKey ? 1 : 0) + (bannerKey ? 1 : 0);
+  // Same idea again for a decorationImage field (guild-hall-decorations) --
+  // no folder/id.jpg fallback to fall back to (see the field's own
+  // comment), so unlike bannerCell below this is simply blank until an
+  // entry actually has art assigned.
+  const decorKey = Object.entries(schema.fields).find(([, spec]) => spec.type === 'decorationImage')?.[0];
+  const extraCols = (iconKey ? 1 : 0) + (bannerKey ? 1 : 0) + (decorKey ? 1 : 0);
 
   const toolbar = document.createElement('div');
   toolbar.className = 'toolbar';
@@ -205,7 +210,7 @@ function renderGenericTable() {
   const table = document.createElement('table');
   const thead = document.createElement('thead');
   const sortArrow = (c) => state.sortColumn === c ? (state.sortDir === 'asc' ? ' ▲' : ' ▼') : '';
-  thead.innerHTML = `<tr>${iconKey ? '<th></th>' : ''}${bannerKey ? '<th></th>' : ''}${cols.map((c) =>
+  thead.innerHTML = `<tr>${iconKey ? '<th></th>' : ''}${bannerKey ? '<th></th>' : ''}${decorKey ? '<th></th>' : ''}${cols.map((c) =>
     `<th class="sortable" data-sort="${c}">${c}${sortArrow(c)}</th>`).join('')}<th></th></tr>`;
   const tbody = document.createElement('tbody');
 
@@ -251,13 +256,23 @@ function renderGenericTable() {
             : '<span class="table-icon-empty">—</span>'}</td>`;
         })()
       : '';
+    // No default-path fallback the way bannerCell has one -- a decoration
+    // with no art assigned is just empty, same as iconCell above.
+    const decorCell = decorKey
+      ? (() => {
+          const rel = row[decorKey]?.path;
+          return `<td class="icon-cell">${rel
+            ? `<span class="table-banner decor-table-thumb" style="background-image:url('/decor-art/${escapeHtml(rel)}');"></span>`
+            : '<span class="table-icon-empty">—</span>'}</td>`;
+        })()
+      : '';
     const cells = cols.map((c) => {
       let val = row[c];
       if (Array.isArray(val)) val = val.slice(0, 2).join(', ') + (val.length > 2 ? '…' : '');
       const cls = c === 'rarity' ? `rarity-${val}` : c === 'kind' ? `kind-${val}` : '';
       return `<td class="${cls}">${val ?? ''}</td>`;
     }).join('');
-    tr.innerHTML = `${iconCell}${bannerCell}${cells}<td class="actions">
+    tr.innerHTML = `${iconCell}${bannerCell}${decorCell}${cells}<td class="actions">
       <button data-edit="${index}">Edit</button>
       <button data-dup="${index}">Duplicate</button>
       <button class="danger" data-del="${index}">Delete</button>
@@ -559,6 +574,16 @@ function fieldControl(spec, key, value) {
     // 420x130-ish "8/2.5" shape if a schema hasn't set one. `data-scale`
     // carries the optional zoom (100 = no zoom, matches plain `cover`).
     return `<div class="banner-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-scale="${value?.scale ?? 100}" data-folder="${escapeHtml(spec.defaultFolder ?? '')}" data-preview-aspect="${escapeHtml(spec.previewAspect ?? '8/2.5')}"></div>`;
+  }
+  if (spec.type === 'decorationImage') {
+    // Same deferred-render approach as bannerImage just above -- a bare
+    // container, filled in by renderDecorationField once attached to the
+    // DOM. No `data-folder` default-path fallback the way bannerImage
+    // carries one (decorations have no folder/id.jpg convention), and
+    // `data-scale` defaults to 100 = the sprite's natural contain-fit
+    // size, same "omitted means no-op" meaning bannerImage's scale has,
+    // just a different no-op (contain-fit vs plain cover).
+    return `<div class="decor-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-scale="${value?.scale ?? 100}" data-preview-aspect="${escapeHtml(spec.previewAspect ?? '1/1')}"></div>`;
   }
   if (spec.type === 'string' && (key === 'description' || key === 'flavour' || key === 'blurb' || key === 'body' || key === 'licenseSummary')) {
     return `<textarea id="${id}">${escapeHtml(value ?? '')}</textarea>`;
@@ -1176,6 +1201,199 @@ function openBannerPicker(folders, currentValue, preferredFolder, onPick) {
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 }
 
+/* ----------------------------------------------------- decoration field --- */
+// Same session-cache reasoning as ensureBanners -- public/decor/ only
+// changes when someone drops new art in, which means a tool restart
+// anyway.
+async function ensureDecorArt() {
+  if (state.decorArt) return state.decorArt;
+  state.decorArt = await api('/api/decor-art');
+  return state.decorArt;
+}
+
+// Matches server.mjs's GENERAL_DECOR_FOLDER.
+const DECOR_GENERAL_LABEL = '(general)';
+
+function decorRelPath(folderName, file) {
+  return folderName === DECOR_GENERAL_LABEL ? file : `${folderName}/${file}`;
+}
+
+// Same per-click precision reasoning as BANNER_NUDGE_STEP.
+const DECOR_NUDGE_STEP = 2;
+
+/**
+ * Fills in and wires a .decor-field container -- deliberately the SAME
+ * drag-a-crosshair + nudge-buttons + zoom-slider interaction
+ * renderBannerField already established (same readout copy shape too),
+ * but the rendering underneath is different on purpose: an <img> sized by
+ * max-width/max-height (i.e. `object-fit: contain` behaviour) and moved
+ * with a CSS transform, over a checkerboard backdrop, instead of a CSS
+ * background-position/background-size on a solid box. bannerImage's
+ * `cover` approach crops to fill -- exactly wrong for a discrete pixel-art
+ * sprite that must stay whole; the checkerboard makes it obvious at a
+ * glance that this field never crops. No folder/id.jpg default-path
+ * fallback the way bannerDefaultPath gives banners -- a decoration has no
+ * such naming convention, an unset field is just empty.
+ */
+function renderDecorationField(field) {
+  const override = field.dataset.path || '';
+  const focusX = parseFloat(field.dataset.focusX);
+  const focusY = parseFloat(field.dataset.focusY);
+  const fx = Number.isFinite(focusX) ? focusX : 50;
+  const fy = Number.isFinite(focusY) ? focusY : 50;
+  const scaleVal = parseFloat(field.dataset.scale);
+  const scale = Number.isFinite(scaleVal) ? scaleVal : 100;
+  const aspect = field.dataset.previewAspect || '1/1';
+
+  field.innerHTML = `
+    <div class="decor-preview-box" data-drag-target style="aspect-ratio:${escapeHtml(aspect)};">
+      ${override ? `<img class="decor-preview-img" data-decor-img src="/decor-art/${escapeHtml(override)}" alt=""
+             style="left:${fx}%; top:${fy}%; transform: translate(-50%, -50%) scale(${scale / 100});" />`
+        : '<span class="decor-preview-empty">No art assigned yet — click/drag still sets placement for when art is added</span>'}
+      <div class="decor-focus-marker" style="left:${fx}%; top:${fy}%;"></div>
+      <div class="decor-nudge-pad" aria-hidden="true">
+        <button type="button" class="decor-nudge decor-nudge-up" data-nudge="0,-1" title="Move up">▲</button>
+        <button type="button" class="decor-nudge decor-nudge-left" data-nudge="-1,0" title="Move left">◀</button>
+        <button type="button" class="decor-nudge decor-nudge-right" data-nudge="1,0" title="Move right">▶</button>
+        <button type="button" class="decor-nudge decor-nudge-down" data-nudge="0,1" title="Move down">▼</button>
+      </div>
+    </div>
+    <div class="banner-field-controls">
+      <span class="banner-field-name">${override ? escapeHtml(override) : 'No art assigned'}</span>
+      <span class="banner-field-focus tiny muted" data-focus-readout>Offset: ${Math.round(fx)}%, ${Math.round(fy)}% · Scale: ${Math.round(scale)}%</span>
+      <label class="banner-zoom-row tiny muted">
+        Scale
+        <input type="range" min="25" max="300" step="1" value="${scale}" data-zoom-slider />
+        <span data-zoom-readout>${Math.round(scale)}%</span>
+      </label>
+      <div class="banner-field-buttons">
+        <button type="button" data-choose-decor>${override ? 'Change' : 'Choose art'}</button>
+        ${override ? '<button type="button" class="remove" data-clear-decor-path>Clear</button>' : ''}
+        <button type="button" data-reset-decor-focus>Center &amp; reset scale</button>
+      </div>
+    </div>`;
+
+  const box = field.querySelector('[data-drag-target]');
+  const img = field.querySelector('[data-decor-img]');
+  const marker = field.querySelector('.decor-focus-marker');
+  const readout = field.querySelector('[data-focus-readout]');
+  const zoomSlider = field.querySelector('[data-zoom-slider]');
+  const zoomReadout = field.querySelector('[data-zoom-readout]');
+
+  // In-place updates only while dragging or moving the slider -- same
+  // "don't tear down what the drag/slider needs to keep working mid-
+  // gesture" reasoning as renderBannerField's own applyFocus.
+  const applyFocus = (x, y) => {
+    field.dataset.focusX = x.toFixed(1);
+    field.dataset.focusY = y.toFixed(1);
+    if (img) { img.style.left = `${x}%`; img.style.top = `${y}%`; }
+    marker.style.left = `${x}%`;
+    marker.style.top = `${y}%`;
+    readout.textContent = `Offset: ${Math.round(x)}%, ${Math.round(y)}% · Scale: ${Math.round(parseFloat(field.dataset.scale) || 100)}%`;
+  };
+  const setFocusFromEvent = (e) => {
+    const rect = box.getBoundingClientRect();
+    const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+    applyFocus(x, y);
+  };
+
+  let dragging = false;
+  box.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('[data-nudge]')) return;
+    dragging = true;
+    box.setPointerCapture(e.pointerId);
+    setFocusFromEvent(e);
+  });
+  box.addEventListener('pointermove', (e) => { if (dragging) setFocusFromEvent(e); });
+  box.addEventListener('pointerup', () => { dragging = false; });
+
+  field.querySelectorAll('[data-nudge]').forEach((btn) => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const [dx, dy] = btn.dataset.nudge.split(',').map(Number);
+      const x = Math.min(100, Math.max(0, (parseFloat(field.dataset.focusX) || 50) + dx * DECOR_NUDGE_STEP));
+      const y = Math.min(100, Math.max(0, (parseFloat(field.dataset.focusY) || 50) + dy * DECOR_NUDGE_STEP));
+      applyFocus(x, y);
+    };
+  });
+
+  zoomSlider.addEventListener('input', () => {
+    const s = parseFloat(zoomSlider.value) || 100;
+    field.dataset.scale = String(s);
+    if (img) img.style.transform = `translate(-50%, -50%) scale(${s / 100})`;
+    zoomReadout.textContent = `${Math.round(s)}%`;
+    readout.textContent = `Offset: ${Math.round(parseFloat(field.dataset.focusX) || 50)}%, ${Math.round(parseFloat(field.dataset.focusY) || 50)}% · Scale: ${Math.round(s)}%`;
+  });
+
+  field.querySelector('[data-choose-decor]').onclick = async () => {
+    const folders = await ensureDecorArt();
+    openDecorArtPicker(folders, field.dataset.path, (chosen) => {
+      field.dataset.path = chosen;
+      renderDecorationField(field);
+    });
+  };
+  const clearBtn = field.querySelector('[data-clear-decor-path]');
+  if (clearBtn) clearBtn.onclick = () => { field.dataset.path = ''; renderDecorationField(field); };
+  field.querySelector('[data-reset-decor-focus]').onclick = () => {
+    field.dataset.focusX = '50';
+    field.dataset.focusY = '50';
+    field.dataset.scale = '100';
+    renderDecorationField(field);
+  };
+}
+
+function wireDecorationFields(container) {
+  container.querySelectorAll('.decor-field').forEach((field) => renderDecorationField(field));
+}
+
+/** Same overlay-on-overlay pattern as openBannerPicker, thumbnails using
+ *  background-size: contain instead of cover -- a decoration thumbnail
+ *  that crops the sprite in the PICKER would misrepresent the one thing
+ *  this whole field type exists to guarantee never happens. */
+function openDecorArtPicker(folders, currentValue, onPick) {
+  const overlay = document.createElement('div');
+  overlay.className = 'editor-overlay icon-picker-overlay';
+  const panel = document.createElement('div');
+  panel.className = 'editor icon-picker banner-picker';
+
+  const sectionsHtml = folders.length === 0
+    ? '<p class="tiny muted">No decoration art found in public/decor/. Drop .png/.jpg files into it (loose, or inside subfolders) and reopen this picker.</p>'
+    : folders.map((f) => `
+        <div class="icon-picker-section">
+          <div class="icon-picker-folder">${escapeHtml(f.name)} (${f.files.length})</div>
+          <div class="banner-picker-grid">
+            ${f.files.map((file) => {
+              const rel = decorRelPath(f.name, file);
+              const selected = rel === currentValue;
+              return `<button type="button" class="banner-picker-item ${selected ? 'selected' : ''}" data-decor="${escapeHtml(rel)}" title="${escapeHtml(rel)}">
+                <span class="banner-picker-thumb decor-picker-thumb" style="background-image:url('/decor-art/${escapeHtml(rel)}');"></span>
+                <span class="banner-picker-name tiny muted">${escapeHtml(file)}</span>
+              </button>`;
+            }).join('')}
+          </div>
+        </div>`).join('');
+
+  panel.innerHTML = `
+    <h2>Choose decoration art</h2>
+    <div class="icon-picker-body">${sectionsHtml}</div>
+    <div class="editor-actions">
+      <button id="decorPickerCancel">Cancel</button>
+    </div>`;
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  panel.querySelectorAll('[data-decor]').forEach((btn) => {
+    btn.onclick = () => {
+      onPick(btn.dataset.decor);
+      overlay.remove();
+    };
+  });
+  panel.querySelector('#decorPickerCancel').onclick = () => overlay.remove();
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+}
+
 /* ---------------------------------------------------------- loot field --- */
 // Fetched once and cached for the session, same reasoning as ensureIcons --
 // the equipment list only changes via this same devtool, which means a
@@ -1426,6 +1644,23 @@ function readField(spec, key) {
     if (Number.isFinite(fs) && Math.round(fs) !== 100) out.scale = Math.round(fs);
     return out;
   }
+  if (spec.type === 'decorationImage') {
+    // Identical shape to bannerImage's own case just above -- same
+    // only-recorded-when-off-default rule for focusX/focusY/scale, so an
+    // untouched field saves as `{}`, which the caller (the save handler
+    // below) already drops entirely for non-required fields exactly the
+    // same way an untouched bannerImage field does.
+    const path = el.dataset.path || '';
+    const fx = parseFloat(el.dataset.focusX);
+    const fy = parseFloat(el.dataset.focusY);
+    const out = {};
+    if (path) out.path = path;
+    if (Number.isFinite(fx) && Math.round(fx * 10) !== 500) out.focusX = Math.round(fx * 10) / 10;
+    if (Number.isFinite(fy) && Math.round(fy * 10) !== 500) out.focusY = Math.round(fy * 10) / 10;
+    const fs2 = parseFloat(el.dataset.scale);
+    if (Number.isFinite(fs2) && Math.round(fs2) !== 100) out.scale = Math.round(fs2);
+    return out;
+  }
   if (spec.type === 'string' || spec.type === 'enum') return el.value;
   if (spec.type === 'number') return parseFloat(el.value) || 0;
   if (spec.type === 'boolean') return el.checked;
@@ -1528,6 +1763,7 @@ function openEditor(index) {
   wireListInput(editor);
   wireIconFields(editor);
   wireBannerFields(editor);
+  wireDecorationFields(editor);
   wireLootFields(editor);
   wireStagesInput(editor);
   wireEggRewardInput(editor);

@@ -2171,6 +2171,76 @@ export interface CurioDef {
 }
 
 /**
+ * Which of the Guild Hall's fixed decoration slots a
+ * GuildHallDecorationDef can be placed into. These are POOLS an item is
+ * assigned to, not one of the 30 individual physical slot instances --
+ * e.g. a single 'wallCenterpiece' item is equally valid in either of the
+ * two Wall 1/Wall 2 slots, and a single 'wallTrinket' item is valid in
+ * any of the 16 bookshelf compartment slots (8 per bookshelf). The 30
+ * physical slot instances themselves (id, position, size, which pool
+ * they draw from) are locked design data -- see guild-idler-status.md's
+ * "Customizable Guild Hall background" backlog entry for the full
+ * layout and coordinates -- and land in code as their own registry once
+ * the in-game Customize UI is built; this type only covers the content
+ * (the decorations themselves), not yet the slots that hold them.
+ */
+export type GuildHallSlotType =
+  | 'banner'
+  | 'wallCenterpiece'
+  | 'trophyCase'
+  | 'centerpiece'
+  | 'middleShelf'
+  | 'lowerShelf'
+  | 'wallTrinket'
+  | 'corner'
+  | 'floorCenterpiece';
+
+/**
+ * How a GuildHallDecorationDef is obtained -- deliberately mixed per
+ * item rather than one flat currency, so a fully-decorated Guild Hall
+ * reads as "bought," "earned," and "got lucky," not a single grind.
+ * `gold`/`achievement` carry the data the acquisition actually needs;
+ * `grimsby` doesn't (a Grimsby-only decoration is just a rare pull with
+ * no separate id to track here -- PeddlerCardDef.kind gets extended to
+ * reference a decoration the same way it already can for curios/eggs
+ * when that wiring is built).
+ */
+export type GuildHallDecorAcquisition =
+  | { kind: 'gold'; cost: number }
+  | { kind: 'achievement'; achievementId: string }
+  | { kind: 'grimsby' };
+
+/**
+ * A single Guild Hall decoration: purely cosmetic, no stat effect.
+ * Open-ended/DevTool-editable, same "own JSON file, own schema" pattern
+ * as CurioDef just above -- see server.mjs's 'guild-hall-decorations'
+ * schema entry and its new 'decorationImage' field type.
+ */
+export interface GuildHallDecorationDef {
+  id: string;
+  name: string;
+  description: string;
+  slotType: GuildHallSlotType;
+  acquisition: GuildHallDecorAcquisition;
+  /**
+   * Placement art + fit, editable via the DevTool's decoration picker
+   * (server.mjs's `decorationImage` field type). Deliberately NOT the
+   * same shape as RaidDef.banner/ChainDef.banner above -- those render
+   * with CSS `background-size: cover` (fills the box, cropping edges),
+   * right for wide banner art but wrong for a discrete pixel-art item
+   * that must never be cropped. `path` is relative to `public/decor/`.
+   * `focusX`/`focusY` (0-100, default 50/50 = centered) position the
+   * sprite's own center point within its slot via a CSS transform, not
+   * backgroundPosition. `scale` (default 100 = the sprite's natural
+   * `object-fit: contain` size within the slot) can go below 100 to
+   * shrink an oversized source crop as easily as above 100 to enlarge a
+   * small one -- unlike banner `scale` (100-300, zoom-only), decoration
+   * art routinely needs shrinking to fit a small slot, not just zooming.
+   */
+  image?: { path?: string; focusX?: number; focusY?: number; scale?: number };
+}
+
+/**
  * NOTE: an earlier version of this file had a PeddlerConfigDef type here
  * -- a single DevTool-configurable "resultCardBackground" image. That
  * approach is gone now, superseded by three fixed result-card art files

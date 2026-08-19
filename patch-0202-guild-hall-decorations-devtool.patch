@@ -1,0 +1,835 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 46357b4..6836214 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -7071,20 +7071,25 @@ pass (same caveat as the two entries above).
+     enters an edit mode that fully hides the facility/upgrade cards and
+     takes the background art full-bleed, with each slot clickable to
+     open an item picker; a "Done" button returns to the normal tab.
+-  - **Two DevTool authoring features needed**, both prototyped and
+-    functionally verified during the design pass (interactive HTML
+-    mockups, not in-repo code yet):
+-    - **Per-item placement/scale field.** The existing chain/raid
+-      `bannerImage` field (`{path, focusX, focusY, scale}`,
+-      `renderBannerField` in `tools/devtool/public/app.js`) already has
++  - **Two DevTool authoring features needed.** The first is now built
++    (patch 0202); the second is still only a prototype:
++    - **Per-item placement/scale field -- built, see "Guild Hall
++      Decorations: DevTool content type + placement/scale field
++      foundation (patch 0202)" in the patch log below.** The existing
++      chain/raid `bannerImage` field (`{path, focusX, focusY, scale}`,
++      `renderBannerField` in `tools/devtool/public/app.js`) already had
+       the right interaction -- drag-to-set crosshair, nudge buttons, a
+-      zoom slider -- but renders with CSS `background-size: cover`,
++      zoom slider -- but rendered with CSS `background-size: cover`,
+       which crops to fill the box. Wrong for a discrete pixel-art item
+-      that must never be cropped. Decorations need a sibling field using
+-      the same interaction, positioning an `<img>` with `object-fit:
+-      contain` plus a translate/scale transform instead of a CSS
+-      background, so the whole sprite always stays visible.
+-    - **Slot layout editor.** A second, separate DevTool surface for
++      that must never be cropped. Decorations got a sibling
++      `decorationImage` field using the same interaction, positioning an
++      `<img>` with `object-fit: contain` plus a translate/scale
++      transform instead of a CSS background, so the whole sprite always
++      stays visible. This patch is DevTool/content-authoring only --
++      there's no in-game Guild Hall UI yet and nothing in the engine
++      consumes this content type yet; see the patch log entry for what's
++      still deferred.
++    - **Slot layout editor -- still only a prototype, not built.** A second, separate DevTool surface for
+       repositioning/resizing the 30 slot boxes themselves (not an
+       item's placement within a fixed box) -- built and tested as a
+       standalone interactive prototype: every slot draggable by its
+@@ -14098,3 +14103,78 @@ colors and badges, a tap opens the detail modal with the full stat row/
+ flavour/loot/buttons, and "Send on Quest" actually sends the hero and
+ closes the modal, landing correctly on the Quest Board's own "On the
+ road" list afterward.
++
++### Guild Hall Decorations: DevTool content type + placement/scale field foundation (patch 0202)
++
++```discord-update
++Dev Update | Guild Hall Decorations (DevTool)
++
++- Added a new "Guild Hall Decorations" content type to the DevTool, so decoration items can start being authored
++- Added a new placement/scale tool for decoration art that never crops the sprite, unlike the existing banner tool
++- Nothing in-game yet -- this is authoring tooling only, laying groundwork for the customizable Guild Hall feature
++```
++
++First real implementation step for the "Customizable Guild Hall
++background" feature locked in during the earlier design/mockup pass (see
++its full spec, the 30-slot layout, and the two DevTool features it
++needs under Brainstorming above). Scoped deliberately narrow per a
++DevTool-foundation-only decision: build the new content type and its
++placement field so real decoration items can start being created, with
++no slot-layout editor, no in-game UI, and no engine consumption of this
++data yet. All three of those are still separate, later patches.
++
++**New content type.** `guild-hall-decorations.json` (starts empty) is a
++new top-level content file, same "own JSON, own schema, own `_BY_ID`
++loader" pattern every other content type already uses --
++`guildHallDecor.ts` exports `GUILD_HALL_DECORATIONS`/
++`GUILD_HALL_DECORATION_BY_ID`, imported by nothing yet outside its own
++loader (deliberately -- says so in its own header comment). `types.ts`
++gained `GuildHallSlotType` (the 9 slot pools from the locked design:
++`banner`, `wallCenterpiece`, `trophyCase`, `centerpiece`, `middleShelf`,
++`lowerShelf`, `wallTrinket`, `corner`, `floorCenterpiece` -- pools an
++item can be assigned to, not one of the 30 physical slot instances,
++which are still locked design data only, not code), a
++`GuildHallDecorAcquisition` union (`gold`/`achievement`/`grimsby`,
++matching the "mixed per item" acquisition design), and
++`GuildHallDecorationDef` itself. The DevTool schema mirrors
++`GuildHallDecorAcquisition` as flat optional fields
++(`acquisitionKind`/`goldCost`/`achievementId`) rather than a nested
++object, following the same "category picks which other fields matter"
++pattern the crafting-recipes schema already uses -- no dynamic show/hide
++UI, just fields left blank when they don't apply to the chosen kind.
++
++**New `decorationImage` field type.** Same drag-to-set crosshair/nudge-
++button/zoom-slider interaction as the existing `bannerImage` field
++(`renderBannerField`), but renders via an absolutely-positioned `<img
++object-fit: contain>` over a checkerboard backdrop instead of a CSS
++`background-size: cover` div -- so a discrete pixel-art sprite is never
++cropped, unlike banner art which is meant to fill and crop. Scale range
++is 25-300 (vs. banner's 100-300), since decoration art more often needs
++shrinking to fit a small slot than zooming in. Backing art lives in a
++new `public/decor/` tree (its own root, mirroring how banners and icons
++each get their own), served via a new `/decor-art/` static route with
++the same path-traversal guard the existing art routes use, and listed
++through a new `/api/decor-art` endpoint + `listDecorArt()` (identical
++loose-files-plus-subfolders logic to `listBanners()`). Server-side
++validation (`case 'decorationImage':` in `validateEntry`) checks the
++image extension, 0-100 focus range, and the 25-300 scale range, and
++rejects unknown keys, same rigor as every other field type. An untouched
++field saves as fully omitted (no `image` key at all) rather than a
++default-filled object, via the DevTool's existing save-time empty-value
++filtering -- no special-casing needed.
++
++**Verified:** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean. Ran the actual DevTool server and
++drove it end-to-end: the new "Guild Hall Decorations" tab appears under
++World Content, the empty-list and empty-editor states render correctly,
++filled in a full test entry, opened the art picker (confirmed folder
++grouping and clean uncropped thumbnails), selected art (confirmed the
++field updates with a correct offset/scale readout), and posted the
++completed entry straight to the live `/api/data/guild-hall-decorations`
++endpoint -- confirmed it writes with focus/scale correctly omitted when
++left at their defaults, correctly included when changed, and confirmed
++the server actually rejects an out-of-range scale value rather than
++silently clamping or accepting it. Test entry and its test art file were
++both removed afterward -- ships with an empty
++`guild-hall-decorations.json`, same as every other patch's out-of-the-box
++state.
+diff --git a/src/game/data/guildHallDecor.ts b/src/game/data/guildHallDecor.ts
+new file mode 100644
+index 0000000..30e5ce7
+--- /dev/null
++++ b/src/game/data/guildHallDecor.ts
+@@ -0,0 +1,23 @@
++import { GuildHallDecorationDef } from '../types';
++
++/**
++ * Guild Hall decoration content -- lives in json/guild-hall-decorations.json
++ * so an item (and its DevTool-tuned placement art) can be added or edited
++ * without a code patch, same "own JSON file, own schema" pattern
++ * equipment.ts/curios.ts already use for their own data. See GuildHall-
++ * DecorationDef's own doc comment in types.ts for the field shapes, and
++ * server.mjs's 'guild-hall-decorations' schema entry for the DevTool side.
++ *
++ * This is deliberately foundation-only for now (patch 0202): the content
++ * type, its DevTool authoring tools, and this loader exist so real items
++ * can be authored immediately, but nothing in the engine/UI consumes this
++ * list yet -- the 30 physical slot instances (position/size/pool) and the
++ * in-game Customize mode are a separate, later patch. Starts empty; the
++ * DevTool is the intended way to populate it, not hand-editing the JSON.
++ */
++import guildHallDecorationsJson from './json/guild-hall-decorations.json';
++export const GUILD_HALL_DECORATIONS: GuildHallDecorationDef[] = guildHallDecorationsJson as GuildHallDecorationDef[];
++
++export const GUILD_HALL_DECORATION_BY_ID: Record<string, GuildHallDecorationDef> = Object.fromEntries(
++  GUILD_HALL_DECORATIONS.map((d) => [d.id, d]),
++);
+diff --git a/src/game/data/json/guild-hall-decorations.json b/src/game/data/json/guild-hall-decorations.json
+new file mode 100644
+index 0000000..fe51488
+--- /dev/null
++++ b/src/game/data/json/guild-hall-decorations.json
+@@ -0,0 +1 @@
++[]
+diff --git a/src/game/types.ts b/src/game/types.ts
+index dc9eaec..bff64d6 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -2170,6 +2170,76 @@ export interface CurioDef {
+   icon?: string;
+ }
+ 
++/**
++ * Which of the Guild Hall's fixed decoration slots a
++ * GuildHallDecorationDef can be placed into. These are POOLS an item is
++ * assigned to, not one of the 30 individual physical slot instances --
++ * e.g. a single 'wallCenterpiece' item is equally valid in either of the
++ * two Wall 1/Wall 2 slots, and a single 'wallTrinket' item is valid in
++ * any of the 16 bookshelf compartment slots (8 per bookshelf). The 30
++ * physical slot instances themselves (id, position, size, which pool
++ * they draw from) are locked design data -- see guild-idler-status.md's
++ * "Customizable Guild Hall background" backlog entry for the full
++ * layout and coordinates -- and land in code as their own registry once
++ * the in-game Customize UI is built; this type only covers the content
++ * (the decorations themselves), not yet the slots that hold them.
++ */
++export type GuildHallSlotType =
++  | 'banner'
++  | 'wallCenterpiece'
++  | 'trophyCase'
++  | 'centerpiece'
++  | 'middleShelf'
++  | 'lowerShelf'
++  | 'wallTrinket'
++  | 'corner'
++  | 'floorCenterpiece';
++
++/**
++ * How a GuildHallDecorationDef is obtained -- deliberately mixed per
++ * item rather than one flat currency, so a fully-decorated Guild Hall
++ * reads as "bought," "earned," and "got lucky," not a single grind.
++ * `gold`/`achievement` carry the data the acquisition actually needs;
++ * `grimsby` doesn't (a Grimsby-only decoration is just a rare pull with
++ * no separate id to track here -- PeddlerCardDef.kind gets extended to
++ * reference a decoration the same way it already can for curios/eggs
++ * when that wiring is built).
++ */
++export type GuildHallDecorAcquisition =
++  | { kind: 'gold'; cost: number }
++  | { kind: 'achievement'; achievementId: string }
++  | { kind: 'grimsby' };
++
++/**
++ * A single Guild Hall decoration: purely cosmetic, no stat effect.
++ * Open-ended/DevTool-editable, same "own JSON file, own schema" pattern
++ * as CurioDef just above -- see server.mjs's 'guild-hall-decorations'
++ * schema entry and its new 'decorationImage' field type.
++ */
++export interface GuildHallDecorationDef {
++  id: string;
++  name: string;
++  description: string;
++  slotType: GuildHallSlotType;
++  acquisition: GuildHallDecorAcquisition;
++  /**
++   * Placement art + fit, editable via the DevTool's decoration picker
++   * (server.mjs's `decorationImage` field type). Deliberately NOT the
++   * same shape as RaidDef.banner/ChainDef.banner above -- those render
++   * with CSS `background-size: cover` (fills the box, cropping edges),
++   * right for wide banner art but wrong for a discrete pixel-art item
++   * that must never be cropped. `path` is relative to `public/decor/`.
++   * `focusX`/`focusY` (0-100, default 50/50 = centered) position the
++   * sprite's own center point within its slot via a CSS transform, not
++   * backgroundPosition. `scale` (default 100 = the sprite's natural
++   * `object-fit: contain` size within the slot) can go below 100 to
++   * shrink an oversized source crop as easily as above 100 to enlarge a
++   * small one -- unlike banner `scale` (100-300, zoom-only), decoration
++   * art routinely needs shrinking to fit a small slot, not just zooming.
++   */
++  image?: { path?: string; focusX?: number; focusY?: number; scale?: number };
++}
++
+ /**
+  * NOTE: an earlier version of this file had a PeddlerConfigDef type here
+  * -- a single DevTool-configurable "resultCardBackground" image. That
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index 9b6a04a..e4f2035 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -184,7 +184,12 @@ function renderGenericTable() {
+   // else the folder/id.jpg convention), not just "has one been assigned."
+   const bannerKey = Object.entries(schema.fields).find(([, spec]) => spec.type === 'bannerImage')?.[0];
+   const bannerSpec = bannerKey ? schema.fields[bannerKey] : null;
+-  const extraCols = (iconKey ? 1 : 0) + (bannerKey ? 1 : 0);
++  // Same idea again for a decorationImage field (guild-hall-decorations) --
++  // no folder/id.jpg fallback to fall back to (see the field's own
++  // comment), so unlike bannerCell below this is simply blank until an
++  // entry actually has art assigned.
++  const decorKey = Object.entries(schema.fields).find(([, spec]) => spec.type === 'decorationImage')?.[0];
++  const extraCols = (iconKey ? 1 : 0) + (bannerKey ? 1 : 0) + (decorKey ? 1 : 0);
+ 
+   const toolbar = document.createElement('div');
+   toolbar.className = 'toolbar';
+@@ -205,7 +210,7 @@ function renderGenericTable() {
+   const table = document.createElement('table');
+   const thead = document.createElement('thead');
+   const sortArrow = (c) => state.sortColumn === c ? (state.sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+-  thead.innerHTML = `<tr>${iconKey ? '<th></th>' : ''}${bannerKey ? '<th></th>' : ''}${cols.map((c) =>
++  thead.innerHTML = `<tr>${iconKey ? '<th></th>' : ''}${bannerKey ? '<th></th>' : ''}${decorKey ? '<th></th>' : ''}${cols.map((c) =>
+     `<th class="sortable" data-sort="${c}">${c}${sortArrow(c)}</th>`).join('')}<th></th></tr>`;
+   const tbody = document.createElement('tbody');
+ 
+@@ -251,13 +256,23 @@ function renderGenericTable() {
+             : '<span class="table-icon-empty">—</span>'}</td>`;
+         })()
+       : '';
++    // No default-path fallback the way bannerCell has one -- a decoration
++    // with no art assigned is just empty, same as iconCell above.
++    const decorCell = decorKey
++      ? (() => {
++          const rel = row[decorKey]?.path;
++          return `<td class="icon-cell">${rel
++            ? `<span class="table-banner decor-table-thumb" style="background-image:url('/decor-art/${escapeHtml(rel)}');"></span>`
++            : '<span class="table-icon-empty">—</span>'}</td>`;
++        })()
++      : '';
+     const cells = cols.map((c) => {
+       let val = row[c];
+       if (Array.isArray(val)) val = val.slice(0, 2).join(', ') + (val.length > 2 ? '…' : '');
+       const cls = c === 'rarity' ? `rarity-${val}` : c === 'kind' ? `kind-${val}` : '';
+       return `<td class="${cls}">${val ?? ''}</td>`;
+     }).join('');
+-    tr.innerHTML = `${iconCell}${bannerCell}${cells}<td class="actions">
++    tr.innerHTML = `${iconCell}${bannerCell}${decorCell}${cells}<td class="actions">
+       <button data-edit="${index}">Edit</button>
+       <button data-dup="${index}">Duplicate</button>
+       <button class="danger" data-del="${index}">Delete</button>
+@@ -560,6 +575,16 @@ function fieldControl(spec, key, value) {
+     // carries the optional zoom (100 = no zoom, matches plain `cover`).
+     return `<div class="banner-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-scale="${value?.scale ?? 100}" data-folder="${escapeHtml(spec.defaultFolder ?? '')}" data-preview-aspect="${escapeHtml(spec.previewAspect ?? '8/2.5')}"></div>`;
+   }
++  if (spec.type === 'decorationImage') {
++    // Same deferred-render approach as bannerImage just above -- a bare
++    // container, filled in by renderDecorationField once attached to the
++    // DOM. No `data-folder` default-path fallback the way bannerImage
++    // carries one (decorations have no folder/id.jpg convention), and
++    // `data-scale` defaults to 100 = the sprite's natural contain-fit
++    // size, same "omitted means no-op" meaning bannerImage's scale has,
++    // just a different no-op (contain-fit vs plain cover).
++    return `<div class="decor-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-scale="${value?.scale ?? 100}" data-preview-aspect="${escapeHtml(spec.previewAspect ?? '1/1')}"></div>`;
++  }
+   if (spec.type === 'string' && (key === 'description' || key === 'flavour' || key === 'blurb' || key === 'body' || key === 'licenseSummary')) {
+     return `<textarea id="${id}">${escapeHtml(value ?? '')}</textarea>`;
+   }
+@@ -1176,6 +1201,199 @@ function openBannerPicker(folders, currentValue, preferredFolder, onPick) {
+   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+ }
+ 
++/* ----------------------------------------------------- decoration field --- */
++// Same session-cache reasoning as ensureBanners -- public/decor/ only
++// changes when someone drops new art in, which means a tool restart
++// anyway.
++async function ensureDecorArt() {
++  if (state.decorArt) return state.decorArt;
++  state.decorArt = await api('/api/decor-art');
++  return state.decorArt;
++}
++
++// Matches server.mjs's GENERAL_DECOR_FOLDER.
++const DECOR_GENERAL_LABEL = '(general)';
++
++function decorRelPath(folderName, file) {
++  return folderName === DECOR_GENERAL_LABEL ? file : `${folderName}/${file}`;
++}
++
++// Same per-click precision reasoning as BANNER_NUDGE_STEP.
++const DECOR_NUDGE_STEP = 2;
++
++/**
++ * Fills in and wires a .decor-field container -- deliberately the SAME
++ * drag-a-crosshair + nudge-buttons + zoom-slider interaction
++ * renderBannerField already established (same readout copy shape too),
++ * but the rendering underneath is different on purpose: an <img> sized by
++ * max-width/max-height (i.e. `object-fit: contain` behaviour) and moved
++ * with a CSS transform, over a checkerboard backdrop, instead of a CSS
++ * background-position/background-size on a solid box. bannerImage's
++ * `cover` approach crops to fill -- exactly wrong for a discrete pixel-art
++ * sprite that must stay whole; the checkerboard makes it obvious at a
++ * glance that this field never crops. No folder/id.jpg default-path
++ * fallback the way bannerDefaultPath gives banners -- a decoration has no
++ * such naming convention, an unset field is just empty.
++ */
++function renderDecorationField(field) {
++  const override = field.dataset.path || '';
++  const focusX = parseFloat(field.dataset.focusX);
++  const focusY = parseFloat(field.dataset.focusY);
++  const fx = Number.isFinite(focusX) ? focusX : 50;
++  const fy = Number.isFinite(focusY) ? focusY : 50;
++  const scaleVal = parseFloat(field.dataset.scale);
++  const scale = Number.isFinite(scaleVal) ? scaleVal : 100;
++  const aspect = field.dataset.previewAspect || '1/1';
++
++  field.innerHTML = `
++    <div class="decor-preview-box" data-drag-target style="aspect-ratio:${escapeHtml(aspect)};">
++      ${override ? `<img class="decor-preview-img" data-decor-img src="/decor-art/${escapeHtml(override)}" alt=""
++             style="left:${fx}%; top:${fy}%; transform: translate(-50%, -50%) scale(${scale / 100});" />`
++        : '<span class="decor-preview-empty">No art assigned yet — click/drag still sets placement for when art is added</span>'}
++      <div class="decor-focus-marker" style="left:${fx}%; top:${fy}%;"></div>
++      <div class="decor-nudge-pad" aria-hidden="true">
++        <button type="button" class="decor-nudge decor-nudge-up" data-nudge="0,-1" title="Move up">▲</button>
++        <button type="button" class="decor-nudge decor-nudge-left" data-nudge="-1,0" title="Move left">◀</button>
++        <button type="button" class="decor-nudge decor-nudge-right" data-nudge="1,0" title="Move right">▶</button>
++        <button type="button" class="decor-nudge decor-nudge-down" data-nudge="0,1" title="Move down">▼</button>
++      </div>
++    </div>
++    <div class="banner-field-controls">
++      <span class="banner-field-name">${override ? escapeHtml(override) : 'No art assigned'}</span>
++      <span class="banner-field-focus tiny muted" data-focus-readout>Offset: ${Math.round(fx)}%, ${Math.round(fy)}% · Scale: ${Math.round(scale)}%</span>
++      <label class="banner-zoom-row tiny muted">
++        Scale
++        <input type="range" min="25" max="300" step="1" value="${scale}" data-zoom-slider />
++        <span data-zoom-readout>${Math.round(scale)}%</span>
++      </label>
++      <div class="banner-field-buttons">
++        <button type="button" data-choose-decor>${override ? 'Change' : 'Choose art'}</button>
++        ${override ? '<button type="button" class="remove" data-clear-decor-path>Clear</button>' : ''}
++        <button type="button" data-reset-decor-focus>Center &amp; reset scale</button>
++      </div>
++    </div>`;
++
++  const box = field.querySelector('[data-drag-target]');
++  const img = field.querySelector('[data-decor-img]');
++  const marker = field.querySelector('.decor-focus-marker');
++  const readout = field.querySelector('[data-focus-readout]');
++  const zoomSlider = field.querySelector('[data-zoom-slider]');
++  const zoomReadout = field.querySelector('[data-zoom-readout]');
++
++  // In-place updates only while dragging or moving the slider -- same
++  // "don't tear down what the drag/slider needs to keep working mid-
++  // gesture" reasoning as renderBannerField's own applyFocus.
++  const applyFocus = (x, y) => {
++    field.dataset.focusX = x.toFixed(1);
++    field.dataset.focusY = y.toFixed(1);
++    if (img) { img.style.left = `${x}%`; img.style.top = `${y}%`; }
++    marker.style.left = `${x}%`;
++    marker.style.top = `${y}%`;
++    readout.textContent = `Offset: ${Math.round(x)}%, ${Math.round(y)}% · Scale: ${Math.round(parseFloat(field.dataset.scale) || 100)}%`;
++  };
++  const setFocusFromEvent = (e) => {
++    const rect = box.getBoundingClientRect();
++    const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
++    const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
++    applyFocus(x, y);
++  };
++
++  let dragging = false;
++  box.addEventListener('pointerdown', (e) => {
++    if (e.target.closest('[data-nudge]')) return;
++    dragging = true;
++    box.setPointerCapture(e.pointerId);
++    setFocusFromEvent(e);
++  });
++  box.addEventListener('pointermove', (e) => { if (dragging) setFocusFromEvent(e); });
++  box.addEventListener('pointerup', () => { dragging = false; });
++
++  field.querySelectorAll('[data-nudge]').forEach((btn) => {
++    btn.onclick = (e) => {
++      e.stopPropagation();
++      const [dx, dy] = btn.dataset.nudge.split(',').map(Number);
++      const x = Math.min(100, Math.max(0, (parseFloat(field.dataset.focusX) || 50) + dx * DECOR_NUDGE_STEP));
++      const y = Math.min(100, Math.max(0, (parseFloat(field.dataset.focusY) || 50) + dy * DECOR_NUDGE_STEP));
++      applyFocus(x, y);
++    };
++  });
++
++  zoomSlider.addEventListener('input', () => {
++    const s = parseFloat(zoomSlider.value) || 100;
++    field.dataset.scale = String(s);
++    if (img) img.style.transform = `translate(-50%, -50%) scale(${s / 100})`;
++    zoomReadout.textContent = `${Math.round(s)}%`;
++    readout.textContent = `Offset: ${Math.round(parseFloat(field.dataset.focusX) || 50)}%, ${Math.round(parseFloat(field.dataset.focusY) || 50)}% · Scale: ${Math.round(s)}%`;
++  });
++
++  field.querySelector('[data-choose-decor]').onclick = async () => {
++    const folders = await ensureDecorArt();
++    openDecorArtPicker(folders, field.dataset.path, (chosen) => {
++      field.dataset.path = chosen;
++      renderDecorationField(field);
++    });
++  };
++  const clearBtn = field.querySelector('[data-clear-decor-path]');
++  if (clearBtn) clearBtn.onclick = () => { field.dataset.path = ''; renderDecorationField(field); };
++  field.querySelector('[data-reset-decor-focus]').onclick = () => {
++    field.dataset.focusX = '50';
++    field.dataset.focusY = '50';
++    field.dataset.scale = '100';
++    renderDecorationField(field);
++  };
++}
++
++function wireDecorationFields(container) {
++  container.querySelectorAll('.decor-field').forEach((field) => renderDecorationField(field));
++}
++
++/** Same overlay-on-overlay pattern as openBannerPicker, thumbnails using
++ *  background-size: contain instead of cover -- a decoration thumbnail
++ *  that crops the sprite in the PICKER would misrepresent the one thing
++ *  this whole field type exists to guarantee never happens. */
++function openDecorArtPicker(folders, currentValue, onPick) {
++  const overlay = document.createElement('div');
++  overlay.className = 'editor-overlay icon-picker-overlay';
++  const panel = document.createElement('div');
++  panel.className = 'editor icon-picker banner-picker';
++
++  const sectionsHtml = folders.length === 0
++    ? '<p class="tiny muted">No decoration art found in public/decor/. Drop .png/.jpg files into it (loose, or inside subfolders) and reopen this picker.</p>'
++    : folders.map((f) => `
++        <div class="icon-picker-section">
++          <div class="icon-picker-folder">${escapeHtml(f.name)} (${f.files.length})</div>
++          <div class="banner-picker-grid">
++            ${f.files.map((file) => {
++              const rel = decorRelPath(f.name, file);
++              const selected = rel === currentValue;
++              return `<button type="button" class="banner-picker-item ${selected ? 'selected' : ''}" data-decor="${escapeHtml(rel)}" title="${escapeHtml(rel)}">
++                <span class="banner-picker-thumb decor-picker-thumb" style="background-image:url('/decor-art/${escapeHtml(rel)}');"></span>
++                <span class="banner-picker-name tiny muted">${escapeHtml(file)}</span>
++              </button>`;
++            }).join('')}
++          </div>
++        </div>`).join('');
++
++  panel.innerHTML = `
++    <h2>Choose decoration art</h2>
++    <div class="icon-picker-body">${sectionsHtml}</div>
++    <div class="editor-actions">
++      <button id="decorPickerCancel">Cancel</button>
++    </div>`;
++
++  overlay.appendChild(panel);
++  document.body.appendChild(overlay);
++
++  panel.querySelectorAll('[data-decor]').forEach((btn) => {
++    btn.onclick = () => {
++      onPick(btn.dataset.decor);
++      overlay.remove();
++    };
++  });
++  panel.querySelector('#decorPickerCancel').onclick = () => overlay.remove();
++  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
++}
++
+ /* ---------------------------------------------------------- loot field --- */
+ // Fetched once and cached for the session, same reasoning as ensureIcons --
+ // the equipment list only changes via this same devtool, which means a
+@@ -1426,6 +1644,23 @@ function readField(spec, key) {
+     if (Number.isFinite(fs) && Math.round(fs) !== 100) out.scale = Math.round(fs);
+     return out;
+   }
++  if (spec.type === 'decorationImage') {
++    // Identical shape to bannerImage's own case just above -- same
++    // only-recorded-when-off-default rule for focusX/focusY/scale, so an
++    // untouched field saves as `{}`, which the caller (the save handler
++    // below) already drops entirely for non-required fields exactly the
++    // same way an untouched bannerImage field does.
++    const path = el.dataset.path || '';
++    const fx = parseFloat(el.dataset.focusX);
++    const fy = parseFloat(el.dataset.focusY);
++    const out = {};
++    if (path) out.path = path;
++    if (Number.isFinite(fx) && Math.round(fx * 10) !== 500) out.focusX = Math.round(fx * 10) / 10;
++    if (Number.isFinite(fy) && Math.round(fy * 10) !== 500) out.focusY = Math.round(fy * 10) / 10;
++    const fs2 = parseFloat(el.dataset.scale);
++    if (Number.isFinite(fs2) && Math.round(fs2) !== 100) out.scale = Math.round(fs2);
++    return out;
++  }
+   if (spec.type === 'string' || spec.type === 'enum') return el.value;
+   if (spec.type === 'number') return parseFloat(el.value) || 0;
+   if (spec.type === 'boolean') return el.checked;
+@@ -1528,6 +1763,7 @@ function openEditor(index) {
+   wireListInput(editor);
+   wireIconFields(editor);
+   wireBannerFields(editor);
++  wireDecorationFields(editor);
+   wireLootFields(editor);
+   wireStagesInput(editor);
+   wireEggRewardInput(editor);
+diff --git a/tools/devtool/public/style.css b/tools/devtool/public/style.css
+index 0d09903..c1686c6 100644
+--- a/tools/devtool/public/style.css
++++ b/tools/devtool/public/style.css
+@@ -487,6 +487,87 @@ td.icon-cell { width: 1%; padding-right: 0; }
+ }
+ .banner-picker-name { text-align: left; word-break: break-all; }
+ 
++/* ----------------------------- decoration field --------------------------- */
++/* See app.js's renderDecorationField for why this is a genuinely
++   different rendering approach from .banner-field just above, not a
++   reskin: a checkerboard backdrop instead of a solid panel colour, since
++   this field's whole point is that art never crops to fill the box, and
++   transparency needs to read clearly against something other than a
++   flat colour to make that obvious. */
++.decor-field { display: flex; flex-direction: column; gap: 8px; }
++
++.decor-preview-box {
++  position: relative;
++  width: 100%; max-width: 320px;
++  background-image:
++    linear-gradient(45deg, var(--panel2) 25%, transparent 25%), linear-gradient(-45deg, var(--panel2) 25%, transparent 25%),
++    linear-gradient(45deg, transparent 75%, var(--panel2) 75%), linear-gradient(-45deg, transparent 75%, var(--panel2) 75%);
++  background-size: 16px 16px;
++  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
++  background-color: var(--panel3);
++  border: 1px solid var(--panel3); border-radius: var(--radius);
++  cursor: crosshair; touch-action: none; overflow: hidden;
++  user-select: none;
++}
++.decor-preview-empty {
++  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
++  padding: 12px; text-align: center; font-size: 11px; color: var(--dim);
++}
++/* Positioned via `left`/`top` (set inline from focusX/focusY, percentages
++   of THIS box) plus a translate(-50%,-50%)-and-scale transform (app.js) --
++   deliberately not background-position/background-size the way
++   .banner-preview-box's own art is rendered, so the sprite is never
++   cropped by the box edges regardless of scale. */
++.decor-preview-img {
++  position: absolute;
++  /* Explicit width/height (not max-width/max-height + auto) so
++     object-fit: contain does real "contain" work -- scaling a
++     smaller-than-the-box source crop UP to fill it, not just capping a
++     larger one down. A max-width-only approach would leave a small
++     source image rendering at native pixel size by default, which is
++     the opposite of what "scale: 100 = natural contain-fit size" (see
++     GuildHallDecorationDef.image's doc comment in types.ts) is supposed
++     to mean. */
++  width: 80%; height: 80%; object-fit: contain;
++  image-rendering: pixelated;
++  pointer-events: none;
++}
++.decor-focus-marker {
++  position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px;
++  border: 2px solid var(--brass); border-radius: 50%;
++  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
++  pointer-events: none;
++}
++.decor-focus-marker::before, .decor-focus-marker::after {
++  content: ''; position: absolute; background: var(--brass);
++}
++.decor-focus-marker::before { left: 50%; top: -4px; bottom: -4px; width: 1px; margin-left: -0.5px; }
++.decor-focus-marker::after { top: 50%; left: -4px; right: -4px; height: 1px; margin-top: -0.5px; }
++
++.decor-nudge-pad { position: absolute; inset: 0; pointer-events: none; }
++.decor-nudge {
++  position: absolute; pointer-events: auto;
++  width: 26px; height: 22px; padding: 0;
++  background: rgba(0, 0, 0, 0.55); color: var(--text);
++  border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 4px;
++  font-size: 10px; line-height: 1; cursor: pointer;
++}
++.decor-nudge:hover { background: rgba(0, 0, 0, 0.75); border-color: var(--brass); }
++.decor-nudge-up { top: 4px; left: 50%; margin-left: -13px; }
++.decor-nudge-down { bottom: 4px; left: 50%; margin-left: -13px; }
++.decor-nudge-left { left: 4px; top: 50%; margin-top: -11px; }
++.decor-nudge-right { right: 4px; top: 50%; margin-top: -11px; }
++
++/* Contain-fit thumbnails (not cover, same reasoning as the field itself)
++   for the picker grid and the content-list table column -- reuses
++   .banner-picker-item/.banner-picker-grid/.table-banner's layout/sizing
++   wholesale (see openDecorArtPicker/decorCell in app.js), only the
++   background-size differs. */
++.decor-picker-thumb, .decor-table-thumb {
++  background-size: contain !important; background-repeat: no-repeat;
++  background-color: var(--panel3);
++}
++
+ /* ----------------------------- loot table field -------------------------- */
+ 
+ .loot-rows { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 70330fd..db7c19a 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -48,6 +48,17 @@ const ICONS_DIR = path.join(ROOT, 'public', 'item-icons');
+ // public/lore/ (unlike item-icons/) also has real loose files sitting
+ // directly in the root instead of only inside subfolders.
+ const BANNERS_DIR = path.join(ROOT, 'public', 'lore');
++// Guild Hall decoration art -- its own tree (public/decor/) rather than
++// reusing ICONS_DIR or BANNERS_DIR, same "different root, kept separate"
++// reasoning as BANNERS_DIR's own comment just above. Doesn't reuse
++// item-icons/ specifically because decoration art needs the DevTool's
++// contain-fit placement/scale field (see the 'decorationImage' field type
++// below), not the plain no-placement 'icon' picker item-icons/ uses
++// everywhere else -- mixing the two conventions in one folder would make
++// it unclear at a glance which pieces of art in there support placement
++// tuning and which don't. Grouped and served the same loose-root-files-
++// plus-subfolders way listBanners/'/lore-art/' already are.
++const DECOR_DIR = path.join(ROOT, 'public', 'decor');
+ const PORT = 5175;
+ 
+ // Local-only, gitignored (see .gitignore) — holds the Discord webhook URL for
+@@ -786,6 +797,50 @@ const SCHEMAS = {
+   // face-down cards' own back_0/1/2.png already work -- see
+   // PeddlerCardModal.tsx's own comment on `resultBackIndex`. Those don't
+   // have a DevTool entry either, for the same reason.
++  'guild-hall-decorations': {
++    file: 'guild-hall-decorations.json',
++    label: 'Guild Hall Decorations',
++    group: 'World Content',
++    idField: 'id',
++    // Foundation-only for now (patch 0202) -- see GuildHallDecorationDef's
++    // own doc comment in types.ts and guildHallDecor.ts's file-level
++    // comment for the full picture: this schema and the new
++    // 'decorationImage' field type exist so real decoration items can be
++    // authored immediately, but nothing in the engine/UI consumes this
++    // list yet. The 30 physical slot instances (position/size/which pool
++    // they draw from) are locked design data logged in guild-idler-
++    // status.md's "Customizable Guild Hall background" backlog entry, not
++    // DevTool content -- `slotType` here is the POOL an item belongs to
++    // (any of the 16 wallTrinket slots, either of the 2 wallCenterpiece
++    // slots, etc), not a specific one of the 30 instances.
++    fields: {
++      id: { type: 'string', required: true, slug: true },
++      name: { type: 'string', required: true },
++      description: { type: 'string', required: true },
++      slotType: {
++        type: 'enum', required: true,
++        options: ['banner', 'wallCenterpiece', 'trophyCase', 'centerpiece', 'middleShelf', 'lowerShelf', 'wallTrinket', 'corner', 'floorCenterpiece'],
++      },
++      // Mirrors GuildHallDecorAcquisition's own discriminated-union shape
++      // (types.ts) as flat fields rather than a nested object -- same
++      // "category picks which other fields matter" pattern crafting-
++      // recipes' own `category` field uses above (see that schema's top
++      // comment): a `gold` entry leaves achievementId empty and vice
++      // versa, nothing here enforces the pairing.
++      acquisitionKind: { type: 'enum', required: true, options: ['gold', 'achievement', 'grimsby'] },
++      goldCost: { type: 'number', required: false, min: 0 }, // acquisitionKind: gold
++      achievementId: { type: 'string', required: false }, // acquisitionKind: achievement -- an achievements.json id, free text
++      // Placement art -- see GuildHallDecorationDef.image's own doc
++      // comment in types.ts for why this is a distinct field type from
++      // raids/chains' `bannerImage` (contain vs cover). `previewAspect`
++      // is left square (1/1) rather than per-slot-type, since a single
++      // decoration entry has no one slot instance to size the preview
++      // against (its slotType is a whole pool of differently-shaped
++      // slots) -- close enough for judging fit, real per-slot sizing
++      // happens in-game once the Customize UI exists.
++      image: { type: 'decorationImage', required: false, defaultFolder: '', previewAspect: '1/1' },
++    },
++  },
+   'raids': {
+     file: 'raids.json',
+     label: 'Raids',
+@@ -1225,6 +1280,45 @@ function validateEntry(schema, entry, index) {
+           if (!['path', 'focusX', 'focusY', 'scale'].includes(k)) errors.push(`entry ${index}: unknown key "${k}" in "${key}"`);
+         }
+         break;
++      case 'decorationImage':
++        // Same overall shape as bannerImage just above (optional object,
++        // path/focusX/focusY/scale), but two real differences: there's no
++        // folder/id.jpg fallback convention to omit-and-inherit (a
++        // decoration has no "default" art the way a chain/raid does), and
++        // `path` is relative to public/decor/ instead of public/lore/. See
++        // GuildHallDecorationDef.image's own doc comment in types.ts for
++        // why the render semantics (contain, not cover) differ too --
++        // that only matters client-side, this validation shape is
++        // otherwise identical.
++        if (value === undefined) break;
++        if (typeof value !== 'object' || Array.isArray(value) || value === null) {
++          errors.push(`entry ${index}: "${key}" must be an object`);
++          break;
++        }
++        if (value.path !== undefined) {
++          if (typeof value.path !== 'string' || !/^[\w][\w .-]*(\/[\w][\w .-]*)*\.(png|jpg|jpeg|webp|gif)$/i.test(value.path)) {
++            errors.push(`entry ${index}: "${key}.path" must be a relative image path under public/decor/ (e.g. "wallTrinket/foo.png")`);
++          }
++        }
++        for (const axis of ['focusX', 'focusY']) {
++          if (value[axis] === undefined) continue;
++          if (typeof value[axis] !== 'number' || value[axis] < 0 || value[axis] > 100) {
++            errors.push(`entry ${index}: "${key}.${axis}" must be a number between 0 and 100`);
++          }
++        }
++        // Unlike bannerImage's 100-300 zoom-only range, decoration art
++        // routinely needs shrinking (a raw item-sheet crop is often much
++        // bigger than the slot it's going into) as often as enlarging --
++        // see the field's own doc comment in types.ts.
++        if (value.scale !== undefined) {
++          if (typeof value.scale !== 'number' || value.scale < 25 || value.scale > 300) {
++            errors.push(`entry ${index}: "${key}.scale" must be a number between 25 and 300`);
++          }
++        }
++        for (const k of Object.keys(value)) {
++          if (!['path', 'focusX', 'focusY', 'scale'].includes(k)) errors.push(`entry ${index}: unknown key "${k}" in "${key}"`);
++        }
++        break;
+       case 'resultGem':
+         // Only meaningful (and only required) on a `gem`-category recipe --
+         // an entry of any other category just leaves this undefined, same
+@@ -1600,6 +1694,46 @@ async function listBanners() {
+   return folders;
+ }
+ 
++// Same loose-root-files-plus-subfolders shape as listBanners, rooted at
++// DECOR_DIR instead -- decoration art has no fixed category set yet (the
++// content type is brand new, patch 0202), so this supports organizing by
++// slot type (public/decor/wallTrinket/, public/decor/banner/, etc) once
++// there's enough art to want that, without forcing subfolders from day
++// one the way ICONS_DIR's listIcons does.
++const GENERAL_DECOR_FOLDER = '(general)';
++
++async function listDecorArt() {
++  let topEntries;
++  try {
++    topEntries = await fs.readdir(DECOR_DIR, { withFileTypes: true });
++  } catch {
++    return [];
++  }
++  const folders = [];
++  const rootFiles = topEntries
++    .filter((e) => e.isFile() && ICON_EXTENSIONS.test(e.name))
++    .map((e) => e.name)
++    .sort();
++  if (rootFiles.length > 0) folders.push({ name: GENERAL_DECOR_FOLDER, files: rootFiles });
++  for (const entry of topEntries) {
++    if (!entry.isDirectory()) continue;
++    const folderPath = path.join(DECOR_DIR, entry.name);
++    let files;
++    try {
++      files = (await fs.readdir(folderPath)).filter((f) => ICON_EXTENSIONS.test(f));
++    } catch {
++      continue;
++    }
++    if (files.length > 0) folders.push({ name: entry.name, files: files.sort() });
++  }
++  folders.sort((a, b) => {
++    if (a.name === GENERAL_DECOR_FOLDER) return -1;
++    if (b.name === GENERAL_DECOR_FOLDER) return 1;
++    return a.name.localeCompare(b.name);
++  });
++  return folders;
++}
++
+ /* ------------------------------- dev server -------------------------------- */
+ // `npm run dev` doesn't exit — it starts Vite and Electron and runs until
+ // stopped. That's a different shape from check/apply/commit/build (which run
+@@ -2014,6 +2148,10 @@ const server = http.createServer(async (req, res) => {
+     return json(res, 200, await listBanners());
+   }
+ 
++  if (url.pathname === '/api/decor-art' && req.method === 'GET') {
++    return json(res, 200, await listDecorArt());
++  }
++
+   // Serves the actual icon image bytes for <img> previews in the picker and
+   // table thumbnails. Same path-traversal guard as serveStatic below, just
+   // rooted at ICONS_DIR instead of PUBLIC_DIR since these live outside the
+@@ -2058,6 +2196,26 @@ const server = http.createServer(async (req, res) => {
+     return;
+   }
+ 
++  // Same idea again, rooted at DECOR_DIR (public/decor/) for the
++  // decoration picker's thumbnails and the live placement/scale preview.
++  if (url.pathname.startsWith('/decor-art/')) {
++    const rel = decodeURIComponent(url.pathname.slice('/decor-art/'.length)).split('?')[0];
++    const filePath = path.join(DECOR_DIR, rel);
++    if (!filePath.startsWith(DECOR_DIR)) { res.writeHead(403); res.end(); return; }
++    try {
++      const body = await fs.readFile(filePath);
++      const ext = path.extname(filePath).toLowerCase();
++      const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' }[ext]
++        ?? 'application/octet-stream';
++      res.writeHead(200, { 'Content-Type': mime });
++      res.end(body);
++    } catch {
++      res.writeHead(404);
++      res.end('Not found');
++    }
++    return;
++  }
++
+   const match = url.pathname.match(/^\/api\/data\/([\w-]+)$/);
+   if (match) {
+     const kind = match[1];

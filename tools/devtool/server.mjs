@@ -48,6 +48,17 @@ const ICONS_DIR = path.join(ROOT, 'public', 'item-icons');
 // public/lore/ (unlike item-icons/) also has real loose files sitting
 // directly in the root instead of only inside subfolders.
 const BANNERS_DIR = path.join(ROOT, 'public', 'lore');
+// Guild Hall decoration art -- its own tree (public/decor/) rather than
+// reusing ICONS_DIR or BANNERS_DIR, same "different root, kept separate"
+// reasoning as BANNERS_DIR's own comment just above. Doesn't reuse
+// item-icons/ specifically because decoration art needs the DevTool's
+// contain-fit placement/scale field (see the 'decorationImage' field type
+// below), not the plain no-placement 'icon' picker item-icons/ uses
+// everywhere else -- mixing the two conventions in one folder would make
+// it unclear at a glance which pieces of art in there support placement
+// tuning and which don't. Grouped and served the same loose-root-files-
+// plus-subfolders way listBanners/'/lore-art/' already are.
+const DECOR_DIR = path.join(ROOT, 'public', 'decor');
 const PORT = 5175;
 
 // Local-only, gitignored (see .gitignore) — holds the Discord webhook URL for
@@ -786,6 +797,50 @@ const SCHEMAS = {
   // face-down cards' own back_0/1/2.png already work -- see
   // PeddlerCardModal.tsx's own comment on `resultBackIndex`. Those don't
   // have a DevTool entry either, for the same reason.
+  'guild-hall-decorations': {
+    file: 'guild-hall-decorations.json',
+    label: 'Guild Hall Decorations',
+    group: 'World Content',
+    idField: 'id',
+    // Foundation-only for now (patch 0202) -- see GuildHallDecorationDef's
+    // own doc comment in types.ts and guildHallDecor.ts's file-level
+    // comment for the full picture: this schema and the new
+    // 'decorationImage' field type exist so real decoration items can be
+    // authored immediately, but nothing in the engine/UI consumes this
+    // list yet. The 30 physical slot instances (position/size/which pool
+    // they draw from) are locked design data logged in guild-idler-
+    // status.md's "Customizable Guild Hall background" backlog entry, not
+    // DevTool content -- `slotType` here is the POOL an item belongs to
+    // (any of the 16 wallTrinket slots, either of the 2 wallCenterpiece
+    // slots, etc), not a specific one of the 30 instances.
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      name: { type: 'string', required: true },
+      description: { type: 'string', required: true },
+      slotType: {
+        type: 'enum', required: true,
+        options: ['banner', 'wallCenterpiece', 'trophyCase', 'centerpiece', 'middleShelf', 'lowerShelf', 'wallTrinket', 'corner', 'floorCenterpiece'],
+      },
+      // Mirrors GuildHallDecorAcquisition's own discriminated-union shape
+      // (types.ts) as flat fields rather than a nested object -- same
+      // "category picks which other fields matter" pattern crafting-
+      // recipes' own `category` field uses above (see that schema's top
+      // comment): a `gold` entry leaves achievementId empty and vice
+      // versa, nothing here enforces the pairing.
+      acquisitionKind: { type: 'enum', required: true, options: ['gold', 'achievement', 'grimsby'] },
+      goldCost: { type: 'number', required: false, min: 0 }, // acquisitionKind: gold
+      achievementId: { type: 'string', required: false }, // acquisitionKind: achievement -- an achievements.json id, free text
+      // Placement art -- see GuildHallDecorationDef.image's own doc
+      // comment in types.ts for why this is a distinct field type from
+      // raids/chains' `bannerImage` (contain vs cover). `previewAspect`
+      // is left square (1/1) rather than per-slot-type, since a single
+      // decoration entry has no one slot instance to size the preview
+      // against (its slotType is a whole pool of differently-shaped
+      // slots) -- close enough for judging fit, real per-slot sizing
+      // happens in-game once the Customize UI exists.
+      image: { type: 'decorationImage', required: false, defaultFolder: '', previewAspect: '1/1' },
+    },
+  },
   'raids': {
     file: 'raids.json',
     label: 'Raids',
@@ -1225,6 +1280,45 @@ function validateEntry(schema, entry, index) {
           if (!['path', 'focusX', 'focusY', 'scale'].includes(k)) errors.push(`entry ${index}: unknown key "${k}" in "${key}"`);
         }
         break;
+      case 'decorationImage':
+        // Same overall shape as bannerImage just above (optional object,
+        // path/focusX/focusY/scale), but two real differences: there's no
+        // folder/id.jpg fallback convention to omit-and-inherit (a
+        // decoration has no "default" art the way a chain/raid does), and
+        // `path` is relative to public/decor/ instead of public/lore/. See
+        // GuildHallDecorationDef.image's own doc comment in types.ts for
+        // why the render semantics (contain, not cover) differ too --
+        // that only matters client-side, this validation shape is
+        // otherwise identical.
+        if (value === undefined) break;
+        if (typeof value !== 'object' || Array.isArray(value) || value === null) {
+          errors.push(`entry ${index}: "${key}" must be an object`);
+          break;
+        }
+        if (value.path !== undefined) {
+          if (typeof value.path !== 'string' || !/^[\w][\w .-]*(\/[\w][\w .-]*)*\.(png|jpg|jpeg|webp|gif)$/i.test(value.path)) {
+            errors.push(`entry ${index}: "${key}.path" must be a relative image path under public/decor/ (e.g. "wallTrinket/foo.png")`);
+          }
+        }
+        for (const axis of ['focusX', 'focusY']) {
+          if (value[axis] === undefined) continue;
+          if (typeof value[axis] !== 'number' || value[axis] < 0 || value[axis] > 100) {
+            errors.push(`entry ${index}: "${key}.${axis}" must be a number between 0 and 100`);
+          }
+        }
+        // Unlike bannerImage's 100-300 zoom-only range, decoration art
+        // routinely needs shrinking (a raw item-sheet crop is often much
+        // bigger than the slot it's going into) as often as enlarging --
+        // see the field's own doc comment in types.ts.
+        if (value.scale !== undefined) {
+          if (typeof value.scale !== 'number' || value.scale < 25 || value.scale > 300) {
+            errors.push(`entry ${index}: "${key}.scale" must be a number between 25 and 300`);
+          }
+        }
+        for (const k of Object.keys(value)) {
+          if (!['path', 'focusX', 'focusY', 'scale'].includes(k)) errors.push(`entry ${index}: unknown key "${k}" in "${key}"`);
+        }
+        break;
       case 'resultGem':
         // Only meaningful (and only required) on a `gem`-category recipe --
         // an entry of any other category just leaves this undefined, same
@@ -1595,6 +1689,46 @@ async function listBanners() {
   folders.sort((a, b) => {
     if (a.name === GENERAL_BANNER_FOLDER) return -1;
     if (b.name === GENERAL_BANNER_FOLDER) return 1;
+    return a.name.localeCompare(b.name);
+  });
+  return folders;
+}
+
+// Same loose-root-files-plus-subfolders shape as listBanners, rooted at
+// DECOR_DIR instead -- decoration art has no fixed category set yet (the
+// content type is brand new, patch 0202), so this supports organizing by
+// slot type (public/decor/wallTrinket/, public/decor/banner/, etc) once
+// there's enough art to want that, without forcing subfolders from day
+// one the way ICONS_DIR's listIcons does.
+const GENERAL_DECOR_FOLDER = '(general)';
+
+async function listDecorArt() {
+  let topEntries;
+  try {
+    topEntries = await fs.readdir(DECOR_DIR, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const folders = [];
+  const rootFiles = topEntries
+    .filter((e) => e.isFile() && ICON_EXTENSIONS.test(e.name))
+    .map((e) => e.name)
+    .sort();
+  if (rootFiles.length > 0) folders.push({ name: GENERAL_DECOR_FOLDER, files: rootFiles });
+  for (const entry of topEntries) {
+    if (!entry.isDirectory()) continue;
+    const folderPath = path.join(DECOR_DIR, entry.name);
+    let files;
+    try {
+      files = (await fs.readdir(folderPath)).filter((f) => ICON_EXTENSIONS.test(f));
+    } catch {
+      continue;
+    }
+    if (files.length > 0) folders.push({ name: entry.name, files: files.sort() });
+  }
+  folders.sort((a, b) => {
+    if (a.name === GENERAL_DECOR_FOLDER) return -1;
+    if (b.name === GENERAL_DECOR_FOLDER) return 1;
     return a.name.localeCompare(b.name);
   });
   return folders;
@@ -2014,6 +2148,10 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, await listBanners());
   }
 
+  if (url.pathname === '/api/decor-art' && req.method === 'GET') {
+    return json(res, 200, await listDecorArt());
+  }
+
   // Serves the actual icon image bytes for <img> previews in the picker and
   // table thumbnails. Same path-traversal guard as serveStatic below, just
   // rooted at ICONS_DIR instead of PUBLIC_DIR since these live outside the
@@ -2044,6 +2182,26 @@ const server = http.createServer(async (req, res) => {
     const rel = decodeURIComponent(url.pathname.slice('/lore-art/'.length)).split('?')[0];
     const filePath = path.join(BANNERS_DIR, rel);
     if (!filePath.startsWith(BANNERS_DIR)) { res.writeHead(403); res.end(); return; }
+    try {
+      const body = await fs.readFile(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' }[ext]
+        ?? 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': mime });
+      res.end(body);
+    } catch {
+      res.writeHead(404);
+      res.end('Not found');
+    }
+    return;
+  }
+
+  // Same idea again, rooted at DECOR_DIR (public/decor/) for the
+  // decoration picker's thumbnails and the live placement/scale preview.
+  if (url.pathname.startsWith('/decor-art/')) {
+    const rel = decodeURIComponent(url.pathname.slice('/decor-art/'.length)).split('?')[0];
+    const filePath = path.join(DECOR_DIR, rel);
+    if (!filePath.startsWith(DECOR_DIR)) { res.writeHead(403); res.end(); return; }
     try {
       const body = await fs.readFile(filePath);
       const ext = path.extname(filePath).toLowerCase();
