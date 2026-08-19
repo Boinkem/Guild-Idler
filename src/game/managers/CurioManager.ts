@@ -1,5 +1,6 @@
 import { CURIO_BY_ID } from '../data/curios';
 import { CurioDef, GameState } from '../types';
+import { ModifierManager } from './ModifierManager';
 
 /**
  * Curios have exactly one thing you can do with them (sell), so this is
@@ -42,7 +43,7 @@ export const CurioManager = {
     if (!def || have <= 0) return 0;
     const gold = def.sellValue * have;
     delete state.curios[curioId];
-    state.gold += gold;
+    state.gold = Math.min(ModifierManager.goldStorage(state), state.gold + gold);
     state.stats.goldEarned += gold;
     return gold;
   },
@@ -60,7 +61,7 @@ export const CurioManager = {
       gold += def.sellValue * count;
       delete state.curios[def.id];
     }
-    state.gold += gold;
+    state.gold = Math.min(ModifierManager.goldStorage(state), state.gold + gold);
     state.stats.goldEarned += gold;
     return { count: owned.length, gold };
   },

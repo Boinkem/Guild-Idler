@@ -206,15 +206,29 @@ export function GuildPanel() {
         ? [<span key="ac-current" className="gold-text">Currently chains {chainRangeText(level)} quests per streak</span>] : []),
       ...(def.unlocks === 'autoChain' && !maxed
         ? [<span key="ac-next" className="muted">Next tier: {chainRangeText(level + 1)} quests per streak</span>] : []),
+      // Chain Tactics (unlocks: 'autoChainTactics') had no case here at
+      // all -- direct report: its card showed nothing but a Buy button,
+      // same "blank body" bug the slot-upgrade fix just below already
+      // covers for a different cause. Nothing per-level to report (it's a
+      // single-purchase unlock, maxLevel 1), so this is a flat line
+      // rather than a level-scaling one like autoChain's own pair above.
+      ...(def.unlocks === 'autoChainTactics'
+        ? [<span key="unlock-tactics" className="gold-text">Unlocks Chain Tactics -- a success-rate floor and priority weighting for Auto-Chain</span>] : []),
       // consumableSlotsPerLevel/incubationSlotsPerLevel/petSlotsPerLevel
       // (Potion Belt/Nest Expansion/Companion Bond) don't route through
       // modsPerLevel or the unlocks field at all -- ModifierManager reads
       // them directly (see consumableSlots/incubationSlots/petSlots) -- so
       // without their own line here these three cards showed nothing but
       // a Buy button, same blank-body gap the unlocks cases above had.
+      // questFreeRerollsPerLevel/freezeChangesPerLevel (Board Runner/Board
+      // Warden) are the same story -- confirmed neither one was rendered
+      // ANYWHERE in the UI, not just here, before this fix.
       ...(def.consumableSlotsPerLevel ? [<span key="slots-consumable">+{def.consumableSlotsPerLevel} consumable slot per level</span>] : []),
       ...(def.incubationSlotsPerLevel ? [<span key="slots-incubation">+{def.incubationSlotsPerLevel} incubation slot per level</span>] : []),
       ...(def.petSlotsPerLevel ? [<span key="slots-pet">+{def.petSlotsPerLevel} pet slot per level</span>] : []),
+      ...(def.questFreeRerollsPerLevel ? [<span key="slots-reroll">+{def.questFreeRerollsPerLevel} free quest board reroll per level</span>] : []),
+      ...(def.freezeChangesPerLevel ? [<span key="slots-freeze">+{def.freezeChangesPerLevel} contract freeze per level</span>] : []),
+      ...(def.stashCapacityPerLevel ? [<span key="slots-stash">+{def.stashCapacityPerLevel} stash space per level</span>] : []),
     ];
     return (
       <UpgradeCard

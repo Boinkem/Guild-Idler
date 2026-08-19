@@ -13686,3 +13686,101 @@ the path `DiceSprite` requests it from. Worked through the full 1-6 x
 1-6 adjacency table by hand to confirm every face has exactly two
 distance-1 neighbors under the wheel formula, with no double-counted or
 missing pairs at the 1/6 boundary.
+
+### Stash limit, gold-cap enforcement, missing upgrade descriptions, and a batch of small UI fixes (patch 0199)
+
+```discord-update
+Dev Update | Changes
+
+- Added a Stash limit -- starts at 10 slots, buyable up in the Guild Hall with the new Stash Expansion upgrade (+5 per level, up to 8 levels). Voluntary purchases and buybacks are blocked with a "stash is full" notice once you're at cap -- quest, raid, and Grimsby loot always still comes in
+- Added a gear-type filter to the Stash so you can sort it down to just Weapons, Helmets, and so on
+- Fixed Gold Storage's cap not actually being enforced on every way gold comes in -- selling gear, curios, and materials could push you past your storage limit before
+- Costs on the Enhance, Craft/Enchant, and vendor buttons now show a gold icon next to the number
+- Fixed three Guild Hall upgrade cards (Chain Tactics, Board Runner, Board Warden) that were missing their descriptions
+- Added a minimise button to the Guild Hall window, and renamed "Back to desktop" to "Close"
+```
+
+Batch of the smaller Guild Hall / Vendors / Inventory items from the
+same feedback pass, grouped into one patch since none of them touch the
+same systems as each other.
+
+**Stash limit.** New `stash_expansion` Guild Hall upgrade
+(`progression.ts`), same shape as Board Runner/Board Warden --
+`baseCost` 1,500, `costGrowth` 1.9, up to 8 levels, `+5` stash slots per
+level via the new `UpgradeDef.stashCapacityPerLevel` field. Base floor
+is `BASE_STASH_CAPACITY = 10` (`progression.ts`), a plain constant next
+to `BASE_GOLD_STORAGE` rather than a Tuning entry -- matches that
+constant's own precedent exactly, since neither is meant to move
+without a code change. `ModifierManager.stashCapacity(state)` sums it
+the same way `questFreeRerolls`/`freezeChangesPerDay` already do.
+
+Enforcement is purchase-only, per the explicit design call: gate
+`ShopManager.buyEquipment`, `buyBlackMarketEquipment`, `buyBack`, and
+`CraftingManager.craftGear` (all four voluntary "something new lands in
+the stash" actions) with a `state.stash.length >=
+ModifierManager.stashCapacity(state)` check, returning `'The stash is
+full.'` -- which flows through the exact same `this.say(error)` toast
+path every other "Not enough gold." message already uses, so it shows
+up as a proper in-game notification, not a silent no-op. Quest
+rewards, raid loot, and Grimsby's card/dice payouts don't touch gear at
+all (Grimsby only ever pays gold), so none of them needed a change --
+they were never blockable to begin with. `EquipmentPanel.tsx`'s Stash
+heading now reads "Stash (N/Cap)" instead of just "Stash (N)" so the
+limit is visible before you hit it.
+
+**Gold Storage cap -- actually enforced everywhere now.** Audited every
+place gold gets added and found the cap (`ModifierManager.goldStorage`)
+was only respected by a handful of sites -- `ShopManager.sell` and
+`sellBelowRarity`, `CurioManager.sellAll`/`sellEverything`, and
+`HarvestManager.sell` were all doing a bare `state.gold += x`, letting a
+big enough sale push straight past the Treasury-scaled cap. All five
+now clamp through `Math.min(ModifierManager.goldStorage(state),
+state.gold + x)`, same pattern Grimsby's own payouts already used.
+`CurioManager.ts` and `HarvestManager.ts` didn't import `ModifierManager`
+before -- both do now. `GameEngine.testAddGold` (the dev-tools-only
+cheat, gated behind `TESTING_TOOLS_ENABLED`) is deliberately left
+uncapped -- it's a debug tool, not a normal gold source.
+
+**Gear-type filter.** `EquipmentPanel.tsx`'s Stash section gets a second
+dropdown next to the existing rarity selector -- "All slots" or one of
+`EQUIP_SLOTS` (weapon/helmet/chest/shield/gloves/boots/ring/amulet/
+cloak). Purely a display filter on the grid (`filteredStash`); doesn't
+touch Sell Junk's own rarity-based selection, which still always
+targets the whole stash regardless of what's currently shown.
+
+**Gold icon on vendor costs.** `EnhanceStation.tsx`'s Enhance button,
+`CraftingStation.tsx`'s Craft/Enchant button, and `VendorsPanel.tsx`'s
+Buy / Level up / Reroll stock buttons all get a `◆` glyph in front of
+their `formatGold` cost, matching the same `◆` the top-bar gold readout
+already uses (`IdleView.tsx`) -- previously these buttons showed just a
+bare number after the `·` separator, easy to misread as a level or a
+count rather than a price.
+
+**Missing upgrade descriptions -- three cards, one root cause.** Chain
+Tactics, Board Runner, and Board Warden all showed a blank stat-lines
+area on their Guild Hall cards. `generalUpgradeCard`'s `statLines` array
+(`GuildPanel.tsx`) only ever rendered a fixed handful of `UpgradeDef`
+fields (`modsPerLevel`, a couple of named `unlocks` cases); grepping the
+full `src/` tree confirmed `def.unlocks === 'autoChainTactics'`,
+`questFreeRerollsPerLevel`, and `freezeChangesPerLevel` were never read
+anywhere in the UI at all -- not a display bug, the description text
+simply didn't exist. Added the three missing cases (plus
+`stashCapacityPerLevel`, pre-empting this patch's own new Stash
+Expansion card from shipping with the same gap).
+
+**Guild Hall header.** Added a "🗕 Minimise" button next to Fullscreen/
+Tour, calling `window.littleKnight?.minimize()` -- the same action
+`IdleView.tsx`'s desktop companion already exposes as "Hide" -- so
+Guild Hall can drop to the taskbar directly instead of needing a trip
+back to the desktop view first. "Back to desktop" renamed to "Close",
+since minimising is now the separate, more literal "get it off my
+screen without closing the session" action.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Confirmed the four stash-cap
+enforcement sites all route their error string through
+`this.say(error)` in `engine.ts` (already the case for every one of
+them, so `'The stash is full.'` surfaces as a toast with zero
+`engine.ts` changes needed). Confirmed `CurioManager.ts` and
+`HarvestManager.ts` compile cleanly with their new `ModifierManager`
+import.

@@ -130,7 +130,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
           disabled={upMaxed || upCost === null || state.gold < upCost}
           onClick={() => engine.buyUpgrade(def.id)}
         >
-          {upMaxed ? 'Fully upgraded' : `Buy · ${formatGold(upCost ?? 0)}`}
+          {upMaxed ? 'Fully upgraded' : `Buy · ◆ ${formatGold(upCost ?? 0)}`}
         </button>
         {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss(def.id)} />}
       </div>
@@ -163,7 +163,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
                 disabled={maxed || cost === null || state.gold < cost}
                 onClick={() => engine.levelUpVendor(vendorId)}
               >
-                {maxed ? 'Nothing more to teach' : `Level up · ${formatGold(cost ?? 0)}`}
+                {maxed ? 'Nothing more to teach' : `Level up · ◆ ${formatGold(cost ?? 0)}`}
               </button>
               <button className="btn-purple" onClick={() => setShowCrafting(true)}>Crafting</button>
               {/* Durability repair -- moved here from a per-item button
@@ -244,7 +244,7 @@ function ShopRerollButton({ vendorId }: { vendorId: VendorId }) {
       disabled={cost > state.gold}
       title={cost > 0 ? `Restock early for ${cost} gold` : 'Restock early -- free today'}
     >
-      {cost > 0 ? `Reroll stock · ${formatGold(cost)}` : 'Reroll stock · Free'}
+      {cost > 0 ? `Reroll stock · ◆ ${formatGold(cost)}` : 'Reroll stock · Free'}
     </button>
   );
 }

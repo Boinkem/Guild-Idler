@@ -1,5 +1,6 @@
 import { GameState, MaterialId } from '../types';
 import { NODE_ORDER } from '../data/materials';
+import { ModifierManager } from './ModifierManager';
 import {
   HARVEST_TOOL_BY_NODE, TRADE_ROUTE_COST, WAREHOUSE_UPGRADE,
   harvestToolCost, warehouseCapacity, warehouseUpgradeCost,
@@ -98,7 +99,8 @@ export const HarvestManager = {
     if (amount <= 0) return null;
     if (state.materials[materialId] < amount) return 'Not enough in stock.';
     state.materials[materialId] -= amount;
-    state.gold += amount * Tuning.get('harvest.sellPricePerUnit');
+    const value = amount * Tuning.get('harvest.sellPricePerUnit');
+    state.gold = Math.min(ModifierManager.goldStorage(state), state.gold + value);
     return null;
   },
 

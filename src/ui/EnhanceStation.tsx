@@ -105,7 +105,7 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
             at the tail end of the muted preview sentence above, easy to
             miss since nothing else in that sentence was a cost. */}
         <button className="btn-purple" disabled={!item || maxed || state.gold < cost} onClick={handleEnhance}>
-          {!item ? 'Enhance' : maxed ? 'Max refinement' : `Enhance \u00b7 ${formatGold(cost)}`}
+          {!item ? 'Enhance' : maxed ? 'Max refinement' : `Enhance \u00b7 \u25c6 ${formatGold(cost)}`}
         </button>
       </div>
 

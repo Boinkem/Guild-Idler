@@ -1,4 +1,4 @@
-import { GUILD_BY_ID, RENOWN_BY_ID, UPGRADE_BY_ID, BASE_GOLD_STORAGE } from '../data/progression';
+import { GUILD_BY_ID, RENOWN_BY_ID, UPGRADE_BY_ID, BASE_GOLD_STORAGE, BASE_STASH_CAPACITY } from '../data/progression';
 import { RAID_UPGRADE_BY_ID } from '../data/raidUpgrades';
 import { BASE_INCUBATION_SLOTS } from '../data/pets';
 import { GameState, Hero, Modifiers, VendorId } from '../types';
@@ -200,6 +200,19 @@ export const ModifierManager = {
     const def = GUILD_BY_ID.smiths_charity;
     const level = state.guild.smiths_charity ?? 0;
     return (def?.freeRepairsPerLevel ?? 0) * level;
+  },
+
+  /** 10 base, +5 per Stash Expansion level (max 8 levels -> 50 total).
+   *  Same shape as goldStorage above -- gates voluntary stash additions
+   *  only (see ShopManager.buyEquipment/buyBlackMarketEquipment/buyBack
+   *  and CraftingManager.craftGear); quest/raid/Grimsby loot always
+   *  flows in uncapped. */
+  stashCapacity(state: GameState): number {
+    const bonus = Object.entries(state.upgrades).reduce((sum, [id, level]) => {
+      const def = UPGRADE_BY_ID[id];
+      return sum + (def?.stashCapacityPerLevel ?? 0) * level;
+    }, 0);
+    return BASE_STASH_CAPACITY + bonus;
   },
 
   hasUnlock(state: GameState, unlock: 'legendaryQuests' | 'chains' | 'blackMarket' | 'raids' | 'raidsHeroic' | 'raidsLegendary' | 'training' | 'autoChainTactics'): boolean {

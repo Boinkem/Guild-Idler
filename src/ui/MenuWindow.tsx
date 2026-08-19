@@ -417,7 +417,18 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         >
           ❓ Tour
         </button>
-        <button className="btn-ghost" onClick={onClose}>Back to desktop</button>
+        {/* Same "Hide" action IdleView's desktop companion already exposes
+            (window.littleKnight.minimize) -- Guild Hall had no way to drop
+            to the taskbar without fully closing back to the desktop view
+            first. */}
+        <button
+          className="btn-ghost"
+          onClick={() => window.littleKnight?.minimize()}
+          title="Minimise to taskbar"
+        >
+          🗕 Minimise
+        </button>
+        <button className="btn-ghost" onClick={onClose}>Close</button>
       </header>
 
       <div className="menu-body" style={{ position: 'relative' }}>

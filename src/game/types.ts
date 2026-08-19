@@ -1174,6 +1174,13 @@ export interface UpgradeDef {
    *  is always free (see QuestManager.unfreezeOffer). Only Board Warden
    *  uses this. */
   freezeChangesPerLevel?: number;
+  /** Grants this many extra stash slots per level, on top of the 10-slot
+   *  base floor -- same special-purpose-field shape as the slot-count
+   *  fields above. See ModifierManager.stashCapacity for the base + this
+   *  math, and ShopManager.buyEquipment/buyBlackMarketEquipment/buyBack
+   *  and CraftingManager.craftGear for where the resulting cap is
+   *  actually enforced. Only Stash Expansion uses this. */
+  stashCapacityPerLevel?: number;
 }
 
 export type GuildFacility = 'barracks' | 'treasury' | 'workshop' | 'library' | 'tavern' | 'infirmary' | 'kennel' | 'music_hall' | 'physicians_charity' | 'smiths_charity';

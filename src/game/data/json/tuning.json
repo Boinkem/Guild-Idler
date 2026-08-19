@@ -2191,6 +2191,42 @@
     "min": 0
   },
   {
+    "id": "upgrade.stash_expansion.baseCost",
+    "label": "Stash Expansion: base cost",
+    "category": "vendor_upgrades",
+    "value": 1500,
+    "default": 1500,
+    "description": "Gold cost of Stash Expansion's first level.",
+    "min": 0
+  },
+  {
+    "id": "upgrade.stash_expansion.costGrowth",
+    "label": "Stash Expansion: cost growth",
+    "category": "vendor_upgrades",
+    "value": 1.9,
+    "default": 1.9,
+    "description": "Multiplier applied per level to Stash Expansion's cost.",
+    "min": 1
+  },
+  {
+    "id": "upgrade.stash_expansion.maxLevel",
+    "label": "Stash Expansion: max level",
+    "category": "vendor_upgrades",
+    "value": 8,
+    "default": 8,
+    "description": "Level cap for Stash Expansion.",
+    "min": 0
+  },
+  {
+    "id": "upgrade.stash_expansion.stashCapacityPerLevel",
+    "label": "Stash Expansion: extra stash slots granted per level",
+    "category": "vendor_upgrades",
+    "value": 5,
+    "default": 5,
+    "description": "Stash Expansion's extra stash slots granted per level, on top of the 10-slot base floor.",
+    "min": 0
+  },
+  {
     "id": "auto_chain_range.1.min",
     "label": "Auto-Chain lvl1: min streak",
     "category": "progression",

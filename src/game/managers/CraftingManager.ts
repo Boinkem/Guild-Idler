@@ -120,6 +120,7 @@ export const CraftingManager = {
     if (chosenMods.some((m) => !modOptions.includes(m))) return 'One of those bonuses isn\u2019t available on this recipe.';
     const afford = CraftingManager.affordability(state, recipe);
     if (!afford.ok) return afford.reason ?? 'Cannot afford this.';
+    if (state.stash.length >= ModifierManager.stashCapacity(state)) return 'The stash is full.';
 
     const item = EquipmentManager.instantiate(recipe.resultDefId);
     if (!item) return 'That item no longer exists.';

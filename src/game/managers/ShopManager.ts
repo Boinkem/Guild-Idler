@@ -257,6 +257,7 @@ export const ShopManager = {
     const entry = state.blackMarket.equipment.find((e) => e.uid === shopUid);
     if (!entry) return 'That item has already been sold.';
     if (state.gold < entry.price) return 'Not enough gold.';
+    if (state.stash.length >= ModifierManager.stashCapacity(state)) return 'The stash is full.';
     const item: EquipmentItem | null = EquipmentManager.instantiate(entry.defId);
     if (!item) return 'Unknown item.';
     state.gold -= entry.price;
@@ -272,6 +273,7 @@ export const ShopManager = {
     const entry = state.shop.equipment.find((e) => e.uid === shopUid);
     if (!entry) return 'That item has already been sold.';
     if (state.gold < entry.price) return 'Not enough gold.';
+    if (state.stash.length >= ModifierManager.stashCapacity(state)) return 'The stash is full.';
     const item: EquipmentItem | null = EquipmentManager.instantiate(entry.defId);
     if (!item) return 'Unknown item.';
     state.gold -= entry.price;
@@ -288,7 +290,7 @@ export const ShopManager = {
     if (item.locked) return 'That item is locked in the Vault.';
     const value = EquipmentManager.sellValue(item);
     state.stash = state.stash.filter((i) => i.uid !== itemUid);
-    state.gold += value;
+    state.gold = Math.min(ModifierManager.goldStorage(state), state.gold + value);
     state.stats.goldEarned += value;
     // Recorded for the buyback list -- the exact item (uid, durability,
     // plus, customMods, enchantStats, everything), not just its defId, so
@@ -317,6 +319,7 @@ export const ShopManager = {
     if (!entry) return 'That item is no longer available to buy back.';
     const price = ShopManager.buybackPrice(entry);
     if (state.gold < price) return 'Not enough gold.';
+    if (state.stash.length >= ModifierManager.stashCapacity(state)) return 'The stash is full.';
     state.gold -= price;
     state.stats.goldSpent += price;
     state.buyback = state.buyback.filter((e) => e.item.uid !== itemUid);
@@ -350,7 +353,7 @@ export const ShopManager = {
     const sellUids = new Set(toSell.map((i) => i.uid));
     const gold = toSell.reduce((sum, item) => sum + EquipmentManager.sellValue(item), 0);
     state.stash = state.stash.filter((i) => !sellUids.has(i.uid));
-    state.gold += gold;
+    state.gold = Math.min(ModifierManager.goldStorage(state), state.gold + gold);
     state.stats.goldEarned += gold;
     return { count: toSell.length, gold };
   },

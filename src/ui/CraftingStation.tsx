@@ -483,7 +483,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
           {afford && !afford.ok
             ? afford.reason
             : recipe
-              ? `${category === 'enchant' ? 'Enchant' : 'Craft'} \u00b7 ${formatGold(CraftingManager.goldCost(state, recipe))}`
+              ? `${category === 'enchant' ? 'Enchant' : 'Craft'} \u00b7 \u25c6 ${formatGold(CraftingManager.goldCost(state, recipe))}`
               : (category === 'enchant' ? 'Enchant' : 'Craft')}
         </button>
       </div>

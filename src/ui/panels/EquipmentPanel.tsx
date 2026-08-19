@@ -826,6 +826,18 @@ export function EquipmentPanel() {
   };
   const curiosOwned = CurioManager.owned(state);
 
+  // Gear-type filter -- sorts the Stash grid down to one slot at a time
+  // (Weapon/Helmet/etc.), same shape as junkRarity above but purely a
+  // display filter, doesn't touch Sell Junk's own selection at all.
+  // 'all' is the default so nothing changes for anyone who never touches it.
+  const [stashSlotFilter, setStashSlotFilter] = useState<EquipSlot | 'all'>('all');
+  const stashCapacity = ModifierManager.stashCapacity(state);
+  const filteredStash = state.stash.filter((item) => {
+    if (stashSlotFilter === 'all') return true;
+    const def = EQUIPMENT_BY_ID[item.defId];
+    return def?.slot === stashSlotFilter;
+  });
+
   return (
     <>
       <h2>Inventory</h2>
@@ -992,9 +1004,24 @@ export function EquipmentPanel() {
       )}
 
       <div className="spread" style={{ alignItems: 'center' }}>
-        <div className="section-heading" style={{ marginBottom: 0 }}>Stash ({state.stash.length})</div>
+        <div className="section-heading" style={{ marginBottom: 0 }}>
+          Stash ({state.stash.length}/{stashCapacity})
+        </div>
         {state.stash.length > 0 && (
           <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+            <select
+              value={stashSlotFilter}
+              onChange={(e) => setStashSlotFilter(e.target.value as EquipSlot | 'all')}
+              style={{
+                background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+                color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.625rem',
+              }}
+            >
+              <option value="all">All slots</option>
+              {SLOTS.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
             <select
               value={junkRarity}
               onChange={(e) => setJunkRarity(e.target.value as Rarity)}
@@ -1020,8 +1047,11 @@ export function EquipmentPanel() {
         )}
       </div>
       {state.stash.length === 0 && <p className="small muted">Nothing spare. Loot drops from successful quests.</p>}
+      {state.stash.length > 0 && filteredStash.length === 0 && (
+        <p className="small muted">Nothing in the stash matches that filter.</p>
+      )}
       <div className="item-card-grid">
-        {state.stash.map((item) => (
+        {filteredStash.map((item) => (
           <StashCard key={item.uid} item={item} hero={hero} confirmSell={settings.confirmSell} engine={engine} />
         ))}
       </div>
