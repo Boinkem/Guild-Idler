@@ -17,8 +17,14 @@ import { formatGold } from '../game/util';
  * see that same reasoning recorded against `.decor-preview-img` in
  * tools/devtool/public/style.css. Renders nothing for a decoration with no
  * art assigned yet, same as the DevTool's own empty state.
+ *
+ * Exported as of patch 0209 -- `GuildHallMenuBackdrop.tsx` reuses this
+ * exact same rendering for the general menu backdrop's own decoration
+ * layer, so a placed item looks identical there and in this dedicated
+ * Customize scene, same "one art-rendering primitive, every consumer
+ * matches" reasoning already behind reusing this from the DevTool.
  */
-function DecorationArt({ decoration }: { decoration: GuildHallDecorationDef }) {
+export function DecorationArt({ decoration }: { decoration: GuildHallDecorationDef }) {
   const path = decoration.image?.path;
   if (!path) return null;
   const focusX = decoration.image?.focusX ?? 50;

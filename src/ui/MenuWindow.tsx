@@ -8,6 +8,7 @@ import { attentionCounts, isNavTabUnread } from '../game/attention';
 import { PeddlerManager } from '../game/managers/PeddlerManager';
 import { GuildHallDecorManager } from '../game/managers/GuildHallDecorManager';
 import { GUILD_HALL_THEME_BY_ID } from '../game/data/guildHallSlots';
+import { GuildHallMenuBackdrop } from './GuildHallMenuBackdrop';
 import { playSound } from '../game/sound';
 import { useCountUp } from './useCountUp';
 import { useFlyTargetRef, registerFlyTarget } from './flyTarget';
@@ -326,7 +327,7 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   const displayRenown = useCountUp(engine.state.renown);
   const unreadCount = engine.unreadNotificationCount;
 
-  // The default (non-Raids/Hatchery/Peddler) menu backdrop is now the same
+  // The default (non-Raids/Hatchery/Peddler) menu backdrop is the same
   // Guild Hall art the Customize scene renders, resolved through the same
   // active-theme lookup GuildHallCustomizeScene.tsx uses (patch 0207's
   // GuildHallDecorManager.activeThemeId, never the raw state field) -- the
@@ -334,21 +335,19 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
   // brainstorm was that this backdrop IS the room the player is filling
   // with trophies, not a separate fixed illustration (see
   // guild-idler-status.md's "Customizable Guild Hall background" entry).
-  // Patch 0208 turns that on for the empty room; actually reflecting a
-  // player's own placed decorations here too (not just in the dedicated
-  // Customize scene) is real follow-up work, not done in this patch --
-  // see that same status doc entry for what's still open. The old
-  // `./lore/guild-hall-bg.jpg` (the fully-decorated "Quest Board" scene
-  // art from before this system existed) is left on disk, unreferenced,
-  // rather than deleted, in case a later patch wants it back for
-  // something else; `activeGuildHallTheme` falling back to it below only
-  // matters in the should-never-happen case of content shipping with zero
-  // themes at all, same defensive shape `DEFAULT_GUILD_HALL_THEME_ID`
-  // itself already uses.
+  // Patch 0208 turned that on for the empty room; patch 0209 renders the
+  // player's own placed decorations on top of it too, via
+  // `GuildHallMenuBackdrop` (see that file's own comment for why this
+  // needs real cover-fit math rather than plain percent positioning). The
+  // old `./lore/guild-hall-bg.jpg` (the fully-decorated "Quest Board"
+  // scene art from before this system existed) is left on disk,
+  // unreferenced, rather than deleted, in case a later patch wants it
+  // back for something else; `activeGuildHallTheme` falling back to it
+  // below only matters in the should-never-happen case of content
+  // shipping with zero themes at all, same defensive shape
+  // `DEFAULT_GUILD_HALL_THEME_ID` itself already uses.
   const activeGuildHallTheme = GUILD_HALL_THEME_BY_ID[GuildHallDecorManager.activeThemeId(engine.state)];
-  const guildHallBackdropUrl = activeGuildHallTheme
-    ? `./guildhall-customize/${activeGuildHallTheme.background}`
-    : './lore/guild-hall-bg.jpg';
+  const equippedGuildHallDecorations = GuildHallDecorManager.allEquipped(engine.state);
 
   return (
     <div className="menu-root" style={{ position: 'relative' }}>
@@ -359,17 +358,29 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         so this is safe to ship before art lands -- same pattern as the Lore
         tab's per-chain card backgrounds.
       */}
-      <div
-        aria-hidden="true"
-        style={{
-          position: 'absolute', inset: 0,
-          backgroundImage: `url(${tab === 'raids' ? './lore/raids-bg.jpg' : tab === 'hatchery' ? './lore/hatchery-bg.jpg' : tab === 'peddler' ? './lore/peddler-bg.png' : guildHallBackdropUrl})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          opacity: 0.35,
-          pointerEvents: 'none',
-        }}
-      />
+      <div aria-hidden="true" style={{ position: 'absolute', inset: 0, opacity: 0.35, pointerEvents: 'none', overflow: 'hidden' }}>
+        {tab === 'raids' || tab === 'hatchery' || tab === 'peddler' ? (
+          <div
+            style={{
+              position: 'absolute', inset: 0,
+              backgroundImage: `url(${tab === 'raids' ? './lore/raids-bg.jpg' : tab === 'hatchery' ? './lore/hatchery-bg.jpg' : './lore/peddler-bg.png'})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+          />
+        ) : activeGuildHallTheme ? (
+          <GuildHallMenuBackdrop theme={activeGuildHallTheme} equipped={equippedGuildHallDecorations} />
+        ) : (
+          <div
+            style={{
+              position: 'absolute', inset: 0,
+              backgroundImage: 'url(./lore/guild-hall-bg.jpg)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+          />
+        )}
+      </div>
       <header className="titlebar" style={{ position: 'relative' }}>
         <h1>{engine.state.guildName || 'Guildbound'}</h1>
         <div className="resources">

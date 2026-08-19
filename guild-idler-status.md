@@ -7098,13 +7098,43 @@ pass (same caveat as the two entries above).
   automatically, no separate wiring needed. Turned on for the empty room
   as-is; the old `./lore/guild-hall-bg.jpg` (the fully-decorated "Quest
   Board" scene that shipped before any of this system existed) is now
-  unreferenced and left on disk rather than deleted. **Still not done:**
-  the backdrop only shows the room itself, not a player's own placed
-  decorations layered into it -- reflecting real equipped trinkets on
-  this general backdrop (not just inside the dedicated Customize scene)
-  is the fuller version of "every time you upgrade something, you see it
-  in the background," and is real follow-up work, not scoped or started
-  here. **Still not built:** any in-game way to actually pick a theme --
+  unreferenced and left on disk rather than deleted.
+
+  **Patch 0209 closed the gap patch 0208 explicitly left open** -- a
+  player's own placed decorations now render on this general backdrop
+  too, not just inside the dedicated Customize scene, the actual "every
+  time you upgrade something, you see it in the background" behaviour
+  from the original brainstorm. New `GuildHallMenuBackdrop.tsx` renders
+  the active theme's art plus `GuildHallDecorManager.allEquipped(state)`
+  layered on top, reusing `DecorationArt` (now exported from
+  `GuildHallCustomizeScene.tsx`) so a placed item looks identical in both
+  places. The real complication: a slot's percent rect is only valid
+  against a box locked to the background art's own aspect ratio (which
+  the Customize scene's container deliberately is, and `menu-root` is
+  not -- it's whatever shape the app window happens to be, displayed via
+  `background-size: cover`). Rather than change this backdrop to a
+  letterboxed layout (a real visual change from what 0208 shipped, and
+  inconsistent with Raids/Hatchery/Peddler's own cover-fit backdrops),
+  `GuildHallMenuBackdrop` reproduces the browser's own cover-fit math by
+  hand -- the image's actual pixel dimensions (read from the loaded
+  image itself, not hardcoded, so this stays correct even if a future
+  theme's art isn't the same size as this one) and the container's
+  current rendered size (tracked live via `ResizeObserver`) -- and maps
+  each slot's percent rect through that same scale/crop, so a decoration
+  lands in exactly the same spot on the room regardless of window shape.
+  Verified two ways: visually via Playwright screenshots at three very
+  different window shapes (wide, tall/narrow, ultrawide) with two
+  temporary test decorations equipped, confirmed positioned consistently
+  with the same slots' own rendering in the real Customize scene; and
+  numerically, by reading the actual rendered pixel rects of the
+  decoration overlay elements out of the DOM and independently
+  recomputing the expected rects from the same cover-fit formula --
+  matched to sub-pixel precision. Temporary test decorations and their
+  placeholder art were both removed afterward, same "verify with
+  throwaway content, ship the real empty file" approach this system's
+  other patches already use. `npx tsc --noEmit` and `npx vite build
+  --config vite.web.config.ts` both pass clean on the full changeset.
+  **Still not built:** any in-game way to actually pick a theme --
   `GuildHallDecorManager.setActiveTheme` exists and is tested, but has no
   caller yet, so every save is effectively pinned to the one shipped
   `guild_hall` theme until a picker UI lands. That's real follow-up
@@ -14870,3 +14900,74 @@ Guild Hall tab and confirmed the same; switched to Raids and confirmed
 its own dedicated `raids-bg.jpg` still renders, completely untouched by
 this change. `npx tsc --noEmit` and `npx vite build --config
 vite.web.config.ts` both pass clean on the full changeset.
+
+### Guild Hall: placed decorations now show up on the general menu backdrop too (patch 0209)
+
+```discord-update
+Dev Update | Guild Hall
+
+- Trophies, banners, and shelf trinkets you've placed in the Guild Hall now show up in the background across the whole menu, not just inside Customize mode
+- Stays correctly lined up with the room no matter what size or shape you have the window
+- Purely visual -- no gameplay change
+```
+
+Direct follow-up the moment after patch 0208 shipped: "that is 100% in
+scope, lets build that," closing the gap that patch explicitly called
+out as future work. The general Guild menu backdrop already showed the
+right room (patch 0208); this patch makes it show what's actually IN
+that room.
+
+**New `GuildHallMenuBackdrop.tsx`.** Renders the active theme's
+background art plus every entry from `GuildHallDecorManager.
+allEquipped(state)` layered on top, reusing `DecorationArt` (newly
+`export`ed from `GuildHallCustomizeScene.tsx` for exactly this) so a
+placed item renders identically here and in the dedicated Customize
+scene -- same art, same focus/scale math, no separate rendering path to
+keep in sync.
+
+**Why this needed more than just placing percent-positioned boxes.** A
+slot's `top`/`left`/`width`/`height` are percentages of the background
+art's own native bounding box -- only valid when whatever's displaying
+that art is locked to the same aspect ratio, which the Customize scene's
+own container deliberately is (`aspect-ratio: 1774/887` in CSS) and
+`menu-root` is not (it's whatever shape the app window happens to be,
+filled via `background-size: cover`, matching Raids/Hatchery/Peddler's
+own backdrops). Naively reusing the same percentages against a
+cover-cropped, arbitrary-shaped box would misplace every decoration by
+whatever the crop happened to be at that particular window size.
+Switching this backdrop to a letterboxed (`contain`) layout instead
+would have solved that trivially, but would have been a real visible
+change from what patch 0208 just shipped, and inconsistent with the
+other three tabs' own edge-to-edge cover-fit backdrops -- not something
+to change as a side effect of this ask. Instead, `GuildHallMenuBackdrop`
+reproduces the browser's own `background-size: cover` math by hand:
+reads the loaded image's actual pixel dimensions (not hardcoded to
+today's one theme's 1774x887, unlike the Customize scene's own CSS --
+this stays correct even if a future theme's art is a different size),
+tracks the container's live rendered size via `ResizeObserver`, and maps
+each equipped slot's percent rect through that same scale-then-crop
+formula every render. The plain background-art `<img>` itself uses
+`object-fit: cover` (visually identical to the CSS `background-image`
+approach it replaces for this one case) specifically so its `onLoad`
+handler can read `naturalWidth`/`naturalHeight` -- Raids/Hatchery/
+Peddler keep the plain CSS `background-image` treatment untouched, since
+they have no decorations to position against it.
+
+**Verified two ways, not just code review.** Visually, via Playwright
+screenshots with two temporary test decorations (banner + a wall
+centerpiece) equipped, at three very different window shapes -- wide,
+tall/narrow, and ultrawide -- confirming they stayed positioned on the
+correct pieces of furniture at every shape, matching the same slots'
+own rendering in the real Customize scene shown side by side.
+Numerically, by reading the actual rendered pixel rects of the
+decoration overlay elements straight out of the DOM and independently
+recomputing the expected rects from the same cover-fit formula in a
+separate script -- matched to sub-pixel precision (sub-0.01px
+difference, pure floating-point rounding). The temporary test
+decorations and their placeholder art were both removed afterward, same
+"verify with throwaway content, ship the real empty file" approach this
+system's other patches already use -- ships with the same empty
+`guild-hall-decorations.json` and no `public/decor/` directory, same as
+every prior patch touching this feature. `npx tsc --noEmit` and `npx
+vite build --config vite.web.config.ts` both pass clean on the full
+changeset.
