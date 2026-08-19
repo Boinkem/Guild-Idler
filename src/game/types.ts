@@ -2256,16 +2256,32 @@ export type GuildHallSlotType =
  * How a GuildHallDecorationDef is obtained -- deliberately mixed per
  * item rather than one flat currency, so a fully-decorated Guild Hall
  * reads as "bought," "earned," and "got lucky," not a single grind.
- * `gold`/`achievement` carry the data the acquisition actually needs;
- * `grimsby` doesn't (a Grimsby-only decoration is just a rare pull with
- * no separate id to track here -- PeddlerCardDef.kind gets extended to
- * reference a decoration the same way it already can for curios/eggs
- * when that wiring is built).
+ * `acquisitionKind` picks which of `goldCost`/`achievementId` actually
+ * matters; the other is left unused for that row, same "category picks
+ * which other fields matter" pairing the DevTool's own schema comment
+ * describes (server.mjs's 'guild-hall-decorations' entry).
+ *
+ * Patch 0211: this used to be a nested discriminated union
+ * (`acquisition: { kind: 'gold'; cost: number } | ...`), but the DevTool
+ * schema was always flat fields (`acquisitionKind`/`goldCost`/
+ * `achievementId` -- see server.mjs) with nothing converting between the
+ * two shapes on save/load. Every decoration authored through the DevTool
+ * therefore landed on disk with no `acquisition` object at all, so
+ * `def.acquisition.kind` threw the instant a picker rendered a not-yet-
+ * owned decoration (buildOptions in GuildHallCustomizeScene.tsx, and
+ * GuildHallDecorManager.purchase) -- an uncaught render-time exception
+ * with no ErrorBoundary anywhere in the tree unmounts the whole React
+ * root, and since the entire app is one transparent frameless
+ * BrowserWindow (electron/main.ts), that reads as the guild menu (and
+ * the idle companion sprite, same window/root) simply vanishing while
+ * the Electron process itself stays up -- exactly the crash reported
+ * ("assigned a books image, clicked a middle shelf, the whole game
+ * closed but the exe was still running"). Flattening this type to match
+ * what the DevTool actually writes is the fix, rather than adding a
+ * transform layer to server.mjs -- fewer moving parts, and the DevTool's
+ * own schema comment already called flat fields the intended shape.
  */
-export type GuildHallDecorAcquisition =
-  | { kind: 'gold'; cost: number }
-  | { kind: 'achievement'; achievementId: string }
-  | { kind: 'grimsby' };
+export type GuildHallDecorAcquisitionKind = 'gold' | 'achievement' | 'grimsby';
 
 /**
  * A single Guild Hall decoration: purely cosmetic, no stat effect.
@@ -2278,7 +2294,12 @@ export interface GuildHallDecorationDef {
   name: string;
   description: string;
   slotType: GuildHallSlotType;
-  acquisition: GuildHallDecorAcquisition;
+  acquisitionKind: GuildHallDecorAcquisitionKind;
+  /** Only meaningful when `acquisitionKind === 'gold'`. */
+  goldCost?: number;
+  /** Only meaningful when `acquisitionKind === 'achievement'` -- an
+   *  achievements.json id, free text (matches the DevTool field). */
+  achievementId?: string;
   /**
    * Placement art + fit, editable via the DevTool's decoration picker
    * (server.mjs's `decorationImage` field type). Deliberately NOT the

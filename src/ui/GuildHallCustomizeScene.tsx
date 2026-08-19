@@ -96,17 +96,26 @@ function buildOptions(slot: GuildHallSlotDef, state: GameState): PickerOption[] 
     let disabled = false;
     if (owned) {
       sublabel = def.description;
-    } else if (def.acquisition.kind === 'gold') {
-      const affordable = state.gold >= def.acquisition.cost;
+    } else if (def.acquisitionKind === 'gold') {
+      const cost = def.goldCost ?? 0;
+      const affordable = state.gold >= cost;
       sublabel = affordable
-        ? `${formatGold(def.acquisition.cost)} to unlock`
-        : `${formatGold(def.acquisition.cost)} -- not enough gold`;
+        ? `${formatGold(cost)} to unlock`
+        : `${formatGold(cost)} -- not enough gold`;
       disabled = !affordable;
-    } else if (def.acquisition.kind === 'achievement') {
+    } else if (def.acquisitionKind === 'achievement') {
       sublabel = 'Locked -- earned via achievement';
       disabled = true;
-    } else {
+    } else if (def.acquisitionKind === 'grimsby') {
       sublabel = 'Locked -- a rare Grimsby find';
+      disabled = true;
+    } else {
+      // Malformed/unrecognized acquisition data (e.g. hand-edited JSON,
+      // or content saved before patch 0211's flat-field fix) -- never
+      // crash the whole Customize scene over one bad content row. See
+      // GuildHallDecorAcquisitionKind's own doc comment in types.ts for
+      // the crash this used to cause.
+      sublabel = 'Locked';
       disabled = true;
     }
     options.push({ key: def.id, label: def.name, sublabel, icon: <DecorationThumb decoration={def} />, disabled });

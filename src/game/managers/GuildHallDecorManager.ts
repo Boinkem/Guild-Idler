@@ -17,7 +17,7 @@ import { GameState, GuildHallDecorationDef, GuildHallSlotDef, GuildHallSlotId } 
  * achievement firing, a Grimsby card resolving) will call, but only the
  * gold path (`purchase`) is wired to a caller in this patch, same
  * "acquisition is deliberately mixed per item" design already recorded
- * against GuildHallDecorAcquisition's own comment -- the achievement/
+ * against GuildHallDecorAcquisitionKind's own comment -- the achievement/
  * Grimsby wiring is real follow-up work, not done here.
  *
  * As of patch 0207, this manager is theme-aware: which slots exist and
@@ -120,9 +120,9 @@ export const GuildHallDecorManager = {
   purchase(state: GameState, decorationId: string): string | null {
     const def = GUILD_HALL_DECORATION_BY_ID[decorationId];
     if (!def) return 'Unknown decoration.';
-    if (def.acquisition.kind !== 'gold') return `${def.name} isn't purchased with gold.`;
+    if (def.acquisitionKind !== 'gold') return `${def.name} isn't purchased with gold.`;
     if (GuildHallDecorManager.owns(state, decorationId)) return `${def.name} is already owned.`;
-    const cost = def.acquisition.cost;
+    const cost = def.goldCost ?? 0;
     if (state.gold < cost) return 'Not enough gold.';
     state.gold -= cost;
     state.stats.goldSpent += cost;

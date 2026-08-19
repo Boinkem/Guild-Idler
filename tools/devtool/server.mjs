@@ -886,12 +886,18 @@ const SCHEMAS = {
         type: 'enum', required: true,
         options: ['banner', 'wallCenterpiece', 'trophyCase', 'centerpiece', 'middleShelf', 'lowerShelf', 'wallTrinket', 'corner', 'floorCenterpiece'],
       },
-      // Mirrors GuildHallDecorAcquisition's own discriminated-union shape
-      // (types.ts) as flat fields rather than a nested object -- same
-      // "category picks which other fields matter" pattern crafting-
-      // recipes' own `category` field uses above (see that schema's top
-      // comment): a `gold` entry leaves achievementId empty and vice
-      // versa, nothing here enforces the pairing.
+      // Flat fields, matching GuildHallDecorationDef's own flat
+      // acquisitionKind/goldCost/achievementId shape (types.ts) exactly
+      // as of patch 0211 -- same "category picks which other fields
+      // matter" pattern crafting-recipes' own `category` field uses above
+      // (see that schema's top comment): a `gold` entry leaves
+      // achievementId empty and vice versa, nothing here enforces the
+      // pairing. (Before patch 0211 this type was a nested discriminated
+      // union the DevTool never actually wrote -- every decoration
+      // authored here landed with no real acquisition data at all, which
+      // crashed the in-game picker the instant an unowned one rendered.
+      // Flattening the type to match this form, rather than adding a
+      // nested-object transform on top of it, closed that gap.)
       acquisitionKind: { type: 'enum', required: true, options: ['gold', 'achievement', 'grimsby'] },
       goldCost: { type: 'number', required: false, min: 0 }, // acquisitionKind: gold
       achievementId: { type: 'string', required: false }, // acquisitionKind: achievement -- an achievements.json id, free text

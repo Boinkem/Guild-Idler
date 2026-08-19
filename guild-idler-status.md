@@ -15102,3 +15102,90 @@ contribute, but doesn't stop the same two categories creeping back up
 over a full playthrough once gear rarity, set bonuses, guild facilities,
 and renown perks all stack their own additive bonuses back on top -- see
 "Uncapped gold/xp multipliers" under Backlog below.
+
+### Guild Hall Decorations: fixed a whole-app crash on opening a picker with an unowned item (patch 0211)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed a crash where placing a decoration in the Guild Hall and then opening a different shelf/frame could close the whole game
+- No visual changes -- Guild Hall decorations work exactly the same, this only fixes what could break them
+```
+
+Direct report: "I assigned a simple books image to lowershelf, clicking
+around in the editor (in npm run dev), clicking on one of the middle
+shelves crashed the whole game -- it closed the guild menu and the
+sprite wasn't on the desktop, exe was still running." Root-caused from
+source, then reproduced and confirmed fixed via Playwright against the
+real running web build, not just code review.
+
+**Root cause: `GuildHallDecorationDef.acquisition` and the DevTool's
+'guild-hall-decorations' schema have never actually matched.** Patch
+0202's own log entry (above) already documents the mismatch it
+introduced: `types.ts` got a nested discriminated union
+(`acquisition: { kind: 'gold'; cost: number } | { kind: 'achievement';
+achievementId: string } | { kind: 'grimsby' }`), while the DevTool
+schema was deliberately built with flat fields instead
+(`acquisitionKind`/`goldCost`/`achievementId`, server.mjs) -- a
+conscious form-authoring choice, but nothing was ever added to convert
+between the two shapes on save or load. Every decoration saved through
+the real DevTool therefore landed on disk with no `acquisition` object
+at all -- `def.acquisition` was always `undefined`. `buildOptions` in
+`GuildHallCustomizeScene.tsx` and `GuildHallDecorManager.purchase` both
+read `def.acquisition.kind` unconditionally for any decoration the
+player doesn't already own, so opening a slot's picker with even one
+not-yet-owned decoration in its pool threw `TypeError: Cannot read
+properties of undefined (reading 'kind')` -- during render, since
+`buildOptions` runs inline in `GuildHallCustomizeScene`'s JSX. There is
+no `ErrorBoundary` anywhere in this app (`main.tsx` renders `<App/>`
+straight into `#root`), so React's default behaviour for an uncaught
+render error -- unmount the whole root -- took out the entire UI. The
+whole app is one transparent, frameless `BrowserWindow` (`electron/
+main.ts`) whose only content is that React root, so unmounting it reads
+exactly like the report: the guild menu and the idle companion sprite
+(same window, same tree) both go blank/gone together, while Electron's
+main process, untouched by a renderer-side JS exception, keeps running.
+
+This slipped through every prior patch's own verification because each
+one tested against hand-authored JSON fixtures written directly against
+the (wrong) nested type, never against a decoration actually saved
+through the DevTool's real form -- patch 0204's own "six temporary
+fixture decorations" verification note (above) is exactly that gap.
+"books" was the first decoration anyone actually authored through the
+live DevTool, and it took hitting the *unowned* branch (a second,
+different decoration whose pool included a shelf the player hadn't
+bought yet) to actually throw, which is why placing books itself worked
+fine and the crash only showed up on a later click.
+
+**Fix: flattened the type to match what the DevTool actually writes,**
+rather than adding a nested-object transform layer on top of the
+DevTool's save path -- fewer moving parts, and the DevTool schema's own
+comment already called flat fields the intended shape. `types.ts`:
+`GuildHallDecorAcquisition` (the nested union) is gone, replaced by
+`GuildHallDecorAcquisitionKind = 'gold' | 'achievement' | 'grimsby'`;
+`GuildHallDecorationDef` now carries `acquisitionKind`/`goldCost?`/
+`achievementId?` directly, matching the DevTool schema and the existing
+on-disk JSON exactly (no data migration needed -- the live
+`guild-hall-decorations.json` already had the flat shape, it was only
+ever the *type* that was wrong). Updated the two real call sites
+(`buildOptions`, `GuildHallDecorManager.purchase`) to read the flat
+fields. `buildOptions` also gained an explicit `else` for an
+unrecognized/missing `acquisitionKind` -- renders as a plain "Locked"
+row instead of throwing, so a future content-shape drift degrades
+gracefully instead of crashing the app again.
+
+**Verified two ways.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Reproduced the actual crash first,
+via Playwright against the real running web build: seeded a save owning
+"books" (equipped in a lowerShelf slot) plus a second, deliberately
+unowned test decoration in a `middleShelf` slot's pool, opened Customize
+mode, clicked the middle-shelf slot, and confirmed -- against the
+pre-fix code -- the exact reported failure (`Cannot read properties of
+undefined (reading 'kind')` thrown inside `GuildHallCustomizeScene`,
+React's own "add an error boundary" warning in the console, `#root`
+left empty). Re-ran the identical script against the fix: the picker
+opens normally, shows the unowned item with its correct "250 to unlock"
+cost line, no thrown errors, `#root` fully intact. Temporary fixture
+decoration and the verification scripts were both removed afterward --
+ships with the same single real "books" entry in
+`guild-hall-decorations.json` as before this patch.
