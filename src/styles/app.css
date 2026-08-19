@@ -2902,39 +2902,60 @@ button.harvest-item:hover {
 
 /* The small picker popped open by clicking a slot -- same overlay/modal
    shell as everywhere else in the game, just narrower and listing rows
-   instead of one item's own detail (see PickerModal in CraftingStation.tsx). */
+   instead of one item's own detail (see PickerModal in CraftingStation.tsx).
+   Was a flex column of independent card-rows; rebuilt as an actual table
+   (own doc comment on PickerModal explains why) -- `.craft-picker-list` is
+   now just the scroll container the `<table>` itself scrolls inside of. */
 .craft-picker-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
   max-height: 320px;
   overflow-y: auto;
-}
-.craft-picker-row {
-  display: grid;
-  grid-template-columns: 40px 1fr auto;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  /* min-height, not just padding: a single line of label text + 8px
-     padding renders shorter than the 40px icon column, so without this
-     the icon box (fixed 40x40 via inline style) overflows the row's own
-     content-driven height and bleeds across the 4px list gap into the
-     row above/below -- reported as icons looking "stacked"/overlapping
-     in the recipe picker. 56px = 40px icon + 8px padding top + bottom. */
-  min-height: 56px;
-  padding: 8px;
-  background: var(--panel-2);
   border: 1px solid var(--panel-3);
   border-radius: var(--radius);
-  color: var(--parchment);
-  text-align: left;
-  cursor: pointer;
-  font-size: 0.6875rem;
 }
-.craft-picker-row:hover:not(:disabled) { border-color: var(--brass-dim); }
-.craft-picker-row:disabled { opacity: 0.4; cursor: default; }
-.craft-picker-row.selected { border-color: var(--brass); background: var(--panel-3); }
+.craft-picker-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.6875rem;
+  color: var(--parchment);
+}
+.craft-picker-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--panel-2);
+  color: var(--brass-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--panel-3);
+  z-index: 1;
+}
+.craft-picker-th-icon, .craft-picker-td-icon { width: 48px; }
+.craft-picker-th-check, .craft-picker-td-check { width: 24px; }
+.craft-picker-row {
+  cursor: pointer;
+  border-bottom: 1px solid var(--panel-3);
+}
+.craft-picker-row:last-child { border-bottom: none; }
+.craft-picker-row:hover:not(.disabled) { background: var(--panel-2); }
+.craft-picker-row:focus-visible { outline: 2px solid var(--brass-dim); outline-offset: -2px; }
+.craft-picker-row.disabled { opacity: 0.4; cursor: default; }
+.craft-picker-row.selected { background: var(--panel-3); }
+.craft-picker-row td { padding: 6px 8px; vertical-align: middle; }
+.craft-picker-td-name {
+  max-width: 0; /* forces the ellipsis below to respect the table's own column width instead of growing it */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.craft-picker-td-detail {
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .craft-picker-check { color: var(--brass); font-weight: 700; }
 
 /* ------------------------------ gear score badge ---------------------------- */

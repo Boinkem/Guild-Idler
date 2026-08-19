@@ -257,10 +257,19 @@ export function GuildPanel() {
     const cost = GuildManager.nextCost(state, def.id);
     const maxed = cost === null;
     const affordable = !maxed && state.gold >= cost;
+    // healTimeReductionMinutesPerLevel/freeHealsPerLevel/freeRepairsPerLevel
+    // (Infirmary, Kennel, Physician's Charity, Smith's Charity) don't route
+    // through modsPerLevel/storagePerLevel/heroSlotsPerLevel at all -- same
+    // "blank body" gap generalUpgradeCard's own statLines had before its
+    // 0199 fix, just on this card function instead. Confirmed via grep none
+    // of these three fields were rendered anywhere else either.
     const statLines: ReactNode[] = [
       ...describeMods(def.modsPerLevel).map((line) => <span key={line}>{line} per level</span>),
       ...(def.storagePerLevel ? [<span key="storage">+{formatGold(def.storagePerLevel)} storage per level</span>] : []),
       ...(def.heroSlotsPerLevel ? [<span key="hero-slots" className="gold-text">+1 hero slot per level</span>] : []),
+      ...(def.healTimeReductionMinutesPerLevel ? [<span key="heal-time">-{def.healTimeReductionMinutesPerLevel} min heal time per level</span>] : []),
+      ...(def.freeHealsPerLevel ? [<span key="free-heals">+{def.freeHealsPerLevel} free Treat per day, per level</span>] : []),
+      ...(def.freeRepairsPerLevel ? [<span key="free-repairs">+{def.freeRepairsPerLevel} free Repair per day, per level</span>] : []),
     ];
     return (
       <UpgradeCard

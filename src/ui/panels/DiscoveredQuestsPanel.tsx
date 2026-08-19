@@ -63,7 +63,7 @@ export function DiscoveredQuestsPanel() {
   if (!selectedHero) {
     return (
       <>
-        <h2>Discovered Quests</h2>
+        <h2>Story Quests</h2>
         <p className="subtitle">Recruit a hero first -- quest chains open up once you have someone to send.</p>
       </>
     );
@@ -71,7 +71,7 @@ export function DiscoveredQuestsPanel() {
 
   return (
     <>
-      <h2>Discovered Quests</h2>
+      <h2>Story Quests</h2>
       <p className="subtitle">
         Story quest chains your heroes have uncovered on the board. Pick a hero below to see which
         chains are open to them right now.

@@ -5,9 +5,14 @@ import { CraftingManager } from '../game/managers/CraftingManager';
 import { EquipmentManager } from '../game/managers/EquipmentManager';
 import { CRAFTING_RECIPES } from '../game/data/craftingRecipes';
 import { MATERIAL_BY_ID } from '../game/data/materials';
-import { CraftingRecipeDef, MaterialId, Modifiers, Stats } from '../game/types';
-import { formatGold, MOD_LABEL, STAT_LABEL } from '../game/util';
+import {
+  CraftingRecipeDef, EquipmentDef, EquipmentItem, MaterialId, Modifiers, Stats,
+} from '../game/types';
+import {
+  describeMods, describeStats, formatGold, MOD_LABEL, RARITY_COLOR, STAT_LABEL,
+} from '../game/util';
 import { RecipeIcon, ItemIcon, MaterialIcon } from './icons';
+import { RarityPill } from './RarityPill';
 
 type Category = CraftingRecipeDef['category'];
 
@@ -113,15 +118,34 @@ export function SlotBox({
  *  drives the checked/highlighted look either way, but only matters
  *  visually once closeOnPick is false -- a single-pick popup closes
  *  before the person would ever see it. */
+/**
+ * Was a scrolling stack of card-rows (still is, past `.craft-picker-list`'s
+ * own max-height -- a picker with a genuinely long option list, e.g. every
+ * item in the stash, still scrolls) -- rebuilt as an actual `<table>` on
+ * direct feedback that a flat vertical list of cards was hard to scan.
+ * Icon/Name/Details/pick columns line up now instead of each row being its
+ * own independent little block, so comparing several options (e.g. which
+ * stash item is which owner/refinement level) doesn't require re-reading
+ * each row's own two-line layout from scratch. `<tr>` keeps the same
+ * click-to-pick behaviour the old `<button>` row had, plus explicit
+ * `role="button"`/`tabIndex`/`onKeyDown` so keyboard activation (Enter or
+ * Space) still works the way a native button's did for free.
+ */
 export function PickerModal({
   title, options, onPick, onClose, closeOnPick = true, selectedKeys,
 }: {
   title: string; options: PickerOption[]; onPick: (key: string) => void; onClose: () => void;
   closeOnPick?: boolean; selectedKeys?: string[];
 }) {
+  const hasSublabels = options.some((o) => o.sublabel);
+  const pick = (opt: PickerOption) => {
+    if (opt.disabled) return;
+    onPick(opt.key);
+    if (closeOnPick) onClose();
+  };
   return (
     <div className="overlay" style={{ zIndex: 60 }} onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 360 }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
         <div className="spread" style={{ marginBottom: 8 }}>
           <span className="card-title">{title}</span>
           <button className={closeOnPick ? '' : 'btn-primary'} onClick={onClose}>
@@ -129,42 +153,93 @@ export function PickerModal({
           </button>
         </div>
         {options.length === 0 && <p className="small muted">Nothing available yet.</p>}
-        <div className="craft-picker-list">
-          {options.map((opt) => {
-            const selected = selectedKeys?.includes(opt.key) ?? false;
-            return (
-              <button
-                key={opt.key}
-                type="button"
-                className={`craft-picker-row ${selected ? 'selected' : ''}`}
-                disabled={opt.disabled}
-                onClick={() => { if (!opt.disabled) { onPick(opt.key); if (closeOnPick) onClose(); } }}
-              >
-                {/*
-                 * .craft-picker-row is a 3-column CSS grid (40px icon /
-                 * 1fr text / auto checkmark) -- when opt.icon is omitted,
-                 * React renders nothing at all for that slot, so CSS
-                 * Grid auto-places the remaining children starting from
-                 * column 1, shoving the text span into the 40px icon
-                 * column instead of the 1fr text column. The result was
-                 * severe truncation on any picker whose options don't
-                 * carry an icon (confirmed directly: Armour Infusion's
-                 * gem picker, which only had glyphs embedded in the
-                 * label string, showed "Fire" as "F…" and "Lightning"
-                 * as "L…", while every icon-bearing picker on the same
-                 * screen rendered fine). A stable empty placeholder here
-                 * keeps exactly 3 grid children at all times regardless
-                 * of what an individual caller passes.
-                 */}
-                {opt.icon ?? <span aria-hidden="true" />}
-                <span style={{ textAlign: 'left', minWidth: 0 }}>
-                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{opt.label}</div>
-                  {opt.sublabel && <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{opt.sublabel}</div>}
-                </span>
-                {selected && <span aria-hidden="true" className="craft-picker-check">✓</span>}
-              </button>
-            );
-          })}
+        {options.length > 0 && (
+          <div className="craft-picker-list">
+            <table className="craft-picker-table">
+              <thead>
+                <tr>
+                  <th aria-hidden="true" className="craft-picker-th-icon" />
+                  <th>Name</th>
+                  {hasSublabels && <th>Details</th>}
+                  <th aria-hidden="true" className="craft-picker-th-check" />
+                </tr>
+              </thead>
+              <tbody>
+                {options.map((opt) => {
+                  const selected = selectedKeys?.includes(opt.key) ?? false;
+                  return (
+                    <tr
+                      key={opt.key}
+                      className={`craft-picker-row ${selected ? 'selected' : ''} ${opt.disabled ? 'disabled' : ''}`}
+                      role="button"
+                      tabIndex={opt.disabled ? -1 : 0}
+                      aria-disabled={opt.disabled}
+                      onClick={() => pick(opt)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(opt); } }}
+                    >
+                      <td className="craft-picker-td-icon">{opt.icon ?? null}</td>
+                      <td className="craft-picker-td-name">{opt.label}</td>
+                      {hasSublabels && <td className="tiny muted craft-picker-td-detail">{opt.sublabel}</td>}
+                      <td className="craft-picker-td-check">{selected && <span aria-hidden="true" className="craft-picker-check">✓</span>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Interposed between PickerModal's item pick and a station actually being
+ * ready to fire (EnhanceStation's single slot, CraftingStation's Enchant
+ * top slot) -- direct feedback that picking an item used to drop straight
+ * back to the scene with nothing but a compact one-line summary, making it
+ * easy to commit gold against the wrong piece of gear without really
+ * looking at it first. Reuses the same stat block StashCard's own expanded
+ * modal already shows (EquipmentPanel.tsx) -- name/rarity/mods/enchant/
+ * durability -- rather than inventing a second item-detail layout. `extra`
+ * is where each station injects its own station-specific projection (e.g.
+ * Enhance's "+N -> +N+1" refinement line) below the shared block.
+ * "Choose a different item" reopens the picker instead of just closing,
+ * since the whole point of this step is to let a wrong pick be corrected
+ * before it reaches the paid action button, not to add a second click
+ * for a right one.
+ */
+export function ItemPreviewModal({
+  item, def, onBack, onContinue, extra,
+}: {
+  item: EquipmentItem; def: EquipmentDef; onBack: () => void; onContinue: () => void; extra?: ReactNode;
+}) {
+  return (
+    <div className="overlay" style={{ zIndex: 60 }} onClick={onBack}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="row" style={{ gap: 12, alignItems: 'center', marginBottom: 8 }}>
+          <ItemIcon slot={def.slot} icon={def.icon} size={48} />
+          <div>
+            <span className="card-title" style={{ color: RARITY_COLOR[def.rarity] }}>
+              {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
+            </span>
+            <div className="tiny muted">{def.slot} · requires level {def.reqLevel}</div>
+          </div>
+        </div>
+        <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
+          <RarityPill rarity={def.rarity} />
+        </div>
+        <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
+        {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
+          <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
+        )}
+        <div className="tiny muted" style={{ marginTop: 4 }}>
+          {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+        </div>
+        {extra}
+        <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+          <button className="btn-ghost" onClick={onBack}>Choose a different item</button>
+          <button className="btn-primary" onClick={onContinue}>Continue</button>
         </div>
       </div>
     </div>
@@ -217,6 +292,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
     setChosenStats([]);
     setConfirmedMaterials(new Set());
     setChosenConsumableMods([]);
+    setPreviewUid(null);
   }
 
   const afford = recipe ? CraftingManager.affordability(state, recipe) : null;
@@ -265,8 +341,19 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
       icon: <RecipeIcon icon={r.icon} category={category} size={40} />,
     }));
 
+  // Enchant's top slot picks an existing item (unlike every other
+  // category's top slot, which picks a recipe) -- routed through a preview
+  // step before it actually lands in targetUid, same reasoning as
+  // EnhanceStation's own previewUid. A recipe pick has no such step: its
+  // own label/sublabel in the picker row already is the description, there
+  // isn't a separate "item" to look over first.
+  const [previewUid, setPreviewUid] = useState<string | null>(null);
+  const previewFound = previewUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === previewUid) : undefined;
+  const previewItem = previewFound?.item;
+  const previewDef = previewItem ? EquipmentManager.def(previewItem) : undefined;
+
   function handleTopPick(key: string) {
-    if (category === 'enchant') setTargetUid(key);
+    if (category === 'enchant') setPreviewUid(key);
     else pickRecipe(key);
   }
 
@@ -483,7 +570,11 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
           {afford && !afford.ok
             ? afford.reason
             : recipe
-              ? `${category === 'enchant' ? 'Enchant' : 'Craft'} \u00b7 \u25c6 ${formatGold(CraftingManager.goldCost(state, recipe))}`
+              ? (
+                <>
+                  {category === 'enchant' ? 'Enchant' : 'Craft'} {'\u00b7'} <span className="gold-text">{'\u25c6'} {formatGold(CraftingManager.goldCost(state, recipe))}</span>
+                </>
+              )
               : (category === 'enchant' ? 'Enchant' : 'Craft')}
         </button>
       </div>
@@ -494,6 +585,15 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
           options={topOptions}
           onPick={handleTopPick}
           onClose={() => setOpenSlot(null)}
+        />
+      )}
+
+      {category === 'enchant' && previewItem && previewDef && (
+        <ItemPreviewModal
+          item={previewItem}
+          def={previewDef}
+          onBack={() => { setPreviewUid(null); setOpenSlot('top'); }}
+          onContinue={() => { setTargetUid(previewItem.uid); setPreviewUid(null); setOpenSlot(null); }}
         />
       )}
 

@@ -105,16 +105,6 @@ export function PeddlerPanel() {
                       High Roller -- {formatGold(highRollerFee)} gold
                     </button>
                   )}
-                  {/* Dice -- a separate, gold-only wager game, no stake
-                      selector of its own (the wager amount already IS
-                      the stake, entered freely inside the modal). */}
-                  <button
-                    className="btn-green"
-                    onClick={() => setOpenModal('dice')}
-                    title="A gold-only wager against the dice."
-                  >
-                    Roll the Dice
-                  </button>
                 </div>
               </>
             ) : (
@@ -129,6 +119,44 @@ export function PeddlerPanel() {
                   </button>
                 )}
               </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Grimsby's Dice -- moved into its own card (previously a third
+          button crammed onto the card-game card above, sharing that
+          card's own sprite pose and flavour text despite being a wholly
+          separate wager mechanic with no stake selector of its own -- the
+          wager amount already IS the stake, entered freely inside the
+          modal). Same "own card, own flavour" shape the High Roller card
+          below already uses for a second offering under the same vendor.
+          Uses the 'idle2' pose (falls back to 'idle' automatically if that
+          animation isn't in the manifest -- see GrimsbySprite's own
+          comment) purely so the two cards don't look like the exact same
+          screenshot next to each other. */}
+      <div className="card vendor-card" style={{ marginBottom: 12 }}>
+        <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
+          <GrimsbySprite animation="idle2" height={144} />
+          <div style={{ flex: 1 }}>
+            <div className="card-title">Grimsby's Dice</div>
+            {present ? (
+              <>
+                <p className="card-flavour">
+                  "Dice don't care who you are. Call your number, back it with gold, see where it lands."
+                </p>
+                <button
+                  className="btn-green"
+                  onClick={() => setOpenModal('dice')}
+                  title="A gold-only wager against the dice."
+                >
+                  Roll the Dice
+                </button>
+              </>
+            ) : (
+              <p className="card-flavour muted">
+                No cart, no dice -- he brings both or neither.
+              </p>
             )}
           </div>
         </div>

@@ -13784,3 +13784,130 @@ them, so `'The stash is full.'` surfaces as a toast with zero
 `engine.ts` changes needed). Confirmed `CurioManager.ts` and
 `HarvestManager.ts` compile cleanly with their new `ModifierManager`
 import.
+
+### Auto-Chain toggle for standard contracts, item-picker table, preview-before-commit, Dice's own card, and more Guild Hall description gaps (patch 0200)
+
+```discord-update
+Dev Update | Changes
+
+- Added a Send Once / Send & Chain choice to standard contracts -- previously sending a hero always silently started an Auto-Chain streak with no way to opt out short of not owning the upgrade
+- Changed item pickers (choosing what to Enhance, Enchant, Craft, etc.) from a scrolling list to a proper table
+- Added a preview step when picking an item to Enhance or Enchant -- see its full stats and confirm before the action button becomes live
+- Fixed the Enhance/Craft/Enchant gold icon showing as literal text ("·"/"◆") instead of the actual symbols, and recoloured it gold instead of the button's own white text
+- Fixed four more Guild Hall cards (Infirmary, Kennel, Physician's Charity, Smith's Charity) that were missing their per-level descriptions
+- Moved Grimsby's Dice into its own card with its own flavour text, instead of a third button crammed onto the card game's card
+- Renamed the "Discovered Quests" tab to "Story Quests", and "Quests" to "Quests & Contracts"
+```
+
+Direct follow-up on the last round of feedback, all from the same pass
+over Guild Hall/Vendors/Quests/Grimsby.
+
+**Auto-Chain toggle for standard contracts.** Previously only a chain
+offer's own card (`offer.chain` set) gave an explicit choice between a
+single send ("Send on Quest") and continuing automatically ("Chain
+Quest Steps") -- an ordinary board contract had just one "Send
+{hero}" button, and `GameEngine.startQuest` always silently rolled a
+fresh Auto-Chain bounty streak underneath it if the upgrade was owned
+(`rollAutoChainStreak`, unconditional on every manual send). There was
+no way to send a hero on just one contract, once Auto-Chain was owned,
+short of not having bought it. `startQuest` gets a new `startStreak`
+parameter (default `true`, so every existing call site is unaffected)
+-- `false` clears streak state instead of rolling one, same shape the
+upgrade-not-owned branch already used. `QuestCard` (`QuestPanel.tsx`)
+grows a matching pair of buttons for a standard offer once Auto-Chain
+is owned: "Send Once" (`btn-ghost`, `startStreak=false`) and "Send &
+Chain" (`btn-primary`, `startStreak=true`) -- same visual weighting
+the chain-stage pair already uses (the "keep going" option is the
+primary/bold one either way). `QuestCardProps.onSend` grew the same
+optional third parameter; `DiscoveredQuestsPanel`'s own local `send`
+didn't need updating -- every offer it renders has `offer.chain` set,
+so the new branch never applies there and TypeScript's own structural
+typing accepts a callback with fewer parameters against a wider
+callback type without complaint.
+
+**Item pickers -- table instead of a scrolling card list.**
+`PickerModal` (`CraftingStation.tsx`, shared by every station: Enhance,
+Craft, Enchant, and the mod/material/stat sub-pickers each of those
+opens) was a flex column of independent card-rows, each a full-width
+button with its own two-line icon/label/sublabel layout. Direct
+feedback: hard to scan, nothing lined up between rows. Rebuilt as an
+actual `<table>` -- Name and Details (when any option in the list
+actually has a sublabel) now sit in their own aligned columns, with a
+sticky header row. Each row is still individually clickable and
+keyboard-operable (`role="button"`, `tabIndex`, Enter/Space via
+`onKeyDown`) -- the same behaviour the old `<button>` row had for free,
+now spelled out explicitly since `<tr>` doesn't get it automatically.
+New `.craft-picker-table`/`.craft-picker-row`/`.craft-picker-td-*`
+rules in `app.css` replace the old flex/grid ones; `.craft-picker-list`
+is now just the scroll container the table itself scrolls inside of,
+same 320px max-height as before.
+
+**Preview before commit.** Picking an item to Enhance, or picking an
+item to Enchant (Enchanter's own top slot -- the only two pickers in
+the game that choose an *existing item* rather than a recipe/mod/
+material), used to drop straight back to the scene with nothing but a
+compact one-line summary underneath -- easy to commit gold against the
+wrong piece of gear without really looking at it first. New shared
+`ItemPreviewModal` (`CraftingStation.tsx`) shows the same stat block
+StashCard's own expanded item modal already does (icon, name, rarity,
+mods, enchant bonuses if any, durability) plus a station-specific
+`extra` line (Enhance's own "+N -> +N+1" refinement projection),
+with "Choose a different item" (reopens the picker) and "Continue"
+(commits the pick into `targetUid`, only now enabling the actual
+Enhance/Enchant button) -- picking in the table no longer writes
+straight to `targetUid` in either station, it goes through this
+preview first. Every other picker (recipes, mods, materials, stats)
+is unaffected -- a recipe's own label/sublabel in the picker row
+already is its description, there's no separate item to look over.
+
+**Gold icon -- actually showing the icon now.** Patch 0199 added a `◆`
+in front of the Enhance/Craft/Enchant/vendor button costs, but the
+Enhance and Craft/Enchant buttons (the two that needed a JSX fragment
+rather than a plain template string, to color only the cost portion)
+ended up with the literal six-character text "·"/"◆" printed
+on the button instead of the middot/diamond characters those escapes
+were meant to produce -- a JS unicode escape only resolves inside an
+actual string literal, and typing it directly into JSX text content
+(outside any `{...}` expression) is just plain text, not an escape
+sequence. Wrapped both in `{'·'}`/`{'◆'}` expressions instead
+(matches the codebase's own existing escape-in-source-for-non-ASCII
+convention, just now inside a valid JS string context), and wrapped
+the cost portion in a `<span className="gold-text">` so it actually
+reads gold instead of inheriting `.btn-purple`'s own off-white text
+color. VendorsPanel's Buy/Level up/Reroll buttons were never affected
+-- those stayed as plain template strings the whole time, which is a
+valid JS string context and rendered correctly from the start.
+
+**Four more Guild Hall description gaps.** Same root cause patch
+0199's Chain Tactics/Board Runner/Board Warden fix already covered, on
+`facilityCard`'s own `statLines` array instead of
+`generalUpgradeCard`'s (`GuildPanel.tsx`) -- `healTimeReductionMinutesPerLevel`
+(Infirmary, Kennel), `freeHealsPerLevel` (Physician's Charity), and
+`freeRepairsPerLevel` (Smith's Charity) were never rendered anywhere,
+same "blank body, flavour text only" gap. Added the three missing
+cases.
+
+**Grimsby's Dice -- its own card.** Was a third button on the card
+game's own vendor-card, sharing that card's sprite pose and card-game-
+specific flavour text despite being a separate wager mechanic with no
+stake selector of its own. `PeddlerPanel.tsx` now renders a second
+`vendor-card` block for it, own flavour line, `idle2` sprite pose
+(falls back to `idle` automatically if that animation isn't in the
+manifest) purely so the two cards don't look identical side by side.
+Gated on `PeddlerManager.isPresent` same as the card game -- no cart,
+no dice, he brings both or neither.
+
+**Tab renames.** "Discovered Quests" -> "Story Quests"
+(`MenuWindow.tsx`'s tab label, `DiscoveredQuestsPanel.tsx`'s own `<h2>`
+x2). "Quests" -> "Quests & Contracts" (`MenuWindow.tsx`,
+`DashboardPanel.tsx`'s "Go to Quests" link). `tabLabels.ts` picked up
+both -- and a `chains` entry that was missing from it entirely before,
+which meant the "A new story has surfaced" notification's own "Go to
+<tab>" link was rendering the raw id "chains" instead of a real label
+(`TAB_LABELS[n.targetTab] ?? n.targetTab`'s fallback silently papering
+over the gap). Now reads "Go to Story Quests" correctly.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Grepped the full `src/` tree for
+any remaining literal `u00b7`/`u25c6` escape-as-text after the fix --
+none found outside a proper string/template-literal context.

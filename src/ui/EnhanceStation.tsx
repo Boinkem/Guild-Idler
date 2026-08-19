@@ -3,7 +3,7 @@ import { useEngine } from './useEngine';
 import { EquipmentManager, MAX_PLUS } from '../game/managers/EquipmentManager';
 import { formatGold } from '../game/util';
 import { ItemIcon } from './icons';
-import { PickerModal, SlotBox } from './CraftingStation';
+import { ItemPreviewModal, PickerModal, SlotBox } from './CraftingStation';
 import type { PickerOption, Rect } from './CraftingStation';
 
 /**
@@ -40,6 +40,11 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
 
   const [targetUid, setTargetUid] = useState('');
   const [openPicker, setOpenPicker] = useState(false);
+  // Shown once, right after a pick -- direct feedback that going straight
+  // from "picked an item" to "the Enhance button is now live" made it easy
+  // to commit gold against the wrong piece of gear without really looking
+  // at it. See ItemPreviewModal's own doc comment (CraftingStation.tsx).
+  const [previewUid, setPreviewUid] = useState<string | null>(null);
 
   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
   const item = found?.item;
@@ -50,6 +55,14 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
   // Same formula EquipmentManager.maxDurability itself uses, evaluated one
   // plus level ahead -- just for the "here's what you'd get" preview line.
   const nextMaxDurability = def ? Math.floor(def.maxDurability * (1 + ((item?.plus ?? 0) + 1) * 0.1)) : 0;
+
+  const previewFound = previewUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === previewUid) : undefined;
+  const previewItem = previewFound?.item;
+  const previewDef = previewItem ? EquipmentManager.def(previewItem) : undefined;
+  const previewMaxed = previewItem ? previewItem.plus >= MAX_PLUS : false;
+  const previewMaxDurability = previewItem ? EquipmentManager.maxDurability(previewItem) : 0;
+  const previewNextMaxDurability = previewDef
+    ? Math.floor(previewDef.maxDurability * (1 + ((previewItem?.plus ?? 0) + 1) * 0.1)) : 0;
 
   const options: PickerOption[] = EquipmentManager.allItems(state)
     .map(({ item: i, heroId }): PickerOption | null => {
@@ -105,7 +118,9 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
             at the tail end of the muted preview sentence above, easy to
             miss since nothing else in that sentence was a cost. */}
         <button className="btn-purple" disabled={!item || maxed || state.gold < cost} onClick={handleEnhance}>
-          {!item ? 'Enhance' : maxed ? 'Max refinement' : `Enhance \u00b7 \u25c6 ${formatGold(cost)}`}
+          {!item ? 'Enhance' : maxed ? 'Max refinement' : (
+            <>Enhance {'\u00b7'} <span className="gold-text">{'\u25c6'} {formatGold(cost)}</span></>
+          )}
         </button>
       </div>
 
@@ -113,8 +128,24 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
         <PickerModal
           title="Choose an item"
           options={options}
-          onPick={(key) => setTargetUid(key)}
+          onPick={(key) => setPreviewUid(key)}
           onClose={() => setOpenPicker(false)}
+        />
+      )}
+
+      {previewItem && previewDef && (
+        <ItemPreviewModal
+          item={previewItem}
+          def={previewDef}
+          onBack={() => { setPreviewUid(null); setOpenPicker(true); }}
+          onContinue={() => { setTargetUid(previewItem.uid); setPreviewUid(null); }}
+          extra={(
+            <p className="tiny muted" style={{ margin: '8px 0 0' }}>
+              {previewMaxed
+                ? 'Already at maximum refinement.'
+                : `Refine: +${previewItem.plus} → +${previewItem.plus + 1} (durability cap ${previewMaxDurability} → ${previewNextMaxDurability})`}
+            </p>
+          )}
         />
       )}
     </div>

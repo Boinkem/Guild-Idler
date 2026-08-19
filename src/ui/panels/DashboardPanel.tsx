@@ -174,7 +174,7 @@ function AttentionDigest() {
             style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
             onClick={() => engine.requestTab(item.tab)}
           >
-            Go to {item.tab === 'quests' ? 'Quests' : item.tab === 'hatchery' ? 'Hatchery' : item.tab === 'harvest' ? 'Harvest' : 'Inventory'}
+            Go to {item.tab === 'quests' ? 'Quests & Contracts' : item.tab === 'hatchery' ? 'Hatchery' : item.tab === 'harvest' ? 'Harvest' : 'Inventory'}
           </button>
         </div>
       ))}

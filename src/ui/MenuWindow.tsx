@@ -70,8 +70,8 @@ const GUILD_GROUP = {
 const ADVENTURE_GROUP = {
   label: 'Adventure',
   tabs: [
-    { id: 'quests', label: 'Quests', Panel: QuestPanel, tooltip: 'The quest board -- each hero\'s own contracts, scaled to their level.' },
-    { id: 'chains', label: 'Discovered Quests', Panel: DiscoveredQuestsPanel, tooltip: 'Story quest chains your heroes have uncovered on the board.' },
+    { id: 'quests', label: 'Quests & Contracts', Panel: QuestPanel, tooltip: 'The quest board -- each hero\'s own contracts, scaled to their level.' },
+    { id: 'chains', label: 'Story Quests', Panel: DiscoveredQuestsPanel, tooltip: 'Story quest chains your heroes have uncovered on the board.' },
     { id: 'raids', label: 'Raids', Panel: RaidsPanel, tooltip: 'Multi-encounter raids for a full party, with their own difficulty tiers.' },
     { id: 'lore', label: 'Lore', Panel: LorePanel, tooltip: 'The story so far -- every quest chain you\u2019ve uncovered.' },
     { id: 'guide', label: 'Guide', Panel: GuidePanel, tooltip: 'Notification log and how-to reference for the guild\u2019s systems.' },

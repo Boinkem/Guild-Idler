@@ -11,7 +11,14 @@
  */
 export const TAB_LABELS: Record<string, string> = {
   dashboard: 'the Guild', heroes: 'Heroes', equipment: 'Inventory', vendors: 'Vendors',
-  guild: 'Guild Hall', harvest: 'Harvest', hatchery: 'Hatchery', peddler: 'Grimsby', quests: 'Quests',
+  guild: 'Guild Hall', harvest: 'Harvest', hatchery: 'Hatchery', peddler: 'Grimsby', quests: 'Quests & Contracts',
+  // 'chains' was missing here entirely before -- the lookup at each call
+  // site already has a `?? n.targetTab` fallback, so any "Go to <tab>"
+  // notification pointing at it (see GameEngine.refreshWorld's own
+  // `this.say(..., 'chains', true)` for a newly-discovered story) was
+  // rendering the raw id "chains" instead of a real label. Added
+  // alongside the Discovered Quests -> Story Quests rename.
+  chains: 'Story Quests',
   raids: 'Raids', lore: 'Lore', guide: 'Guide', prestige: 'Prestige',
   stats: 'Statistics', settings: 'Settings',
 };

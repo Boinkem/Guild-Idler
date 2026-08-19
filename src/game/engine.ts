@@ -1288,8 +1288,17 @@ export class GameEngine {
    * `autoAdvanceChainId` so tryContinueAutoChain auto-continues this exact
    * chain's remaining stages once this stage resolves, independent of
    * whatever the Auto-Chain (bounty streak) upgrade is doing.
+   *
+   * `startStreak` is that same choice's ordinary-contract counterpart --
+   * "Send Once" vs "Send & Chain" on a standard (non-chain) offer's own
+   * card, once Auto-Chain is owned. Previously a manual send always
+   * silently rolled a fresh streak with no way to opt out short of not
+   * owning the upgrade at all; defaults to `true` so existing behaviour
+   * (and every other call site that doesn't pass it) is unchanged.
+   * `false` clears any streak state instead of rolling one, same shape
+   * rollAutoChainStreak's own level-0 branch already uses.
    */
-  startQuest(heroId: string, offer: QuestOffer, _consumables?: string[], chainSteps = false) {
+  startQuest(heroId: string, offer: QuestOffer, _consumables?: string[], chainSteps = false, startStreak = true) {
     const hero = this.hero(heroId);
     if (!hero) return;
     if (this.state.autoEquipConsumablesOnSend) this.fillEmptyConsumableSlots(heroId);
@@ -1299,8 +1308,16 @@ export class GameEngine {
 
     // A manual send always (re)starts a fresh Auto-Chain streak if the
     // upgrade is owned — choosing to send by hand again implicitly abandons
-    // whatever streak state was there before.
-    this.rollAutoChainStreak(hero);
+    // whatever streak state was there before. Unless the player explicitly
+    // asked for a one-off send (startStreak === false), in which case the
+    // streak is cleared instead, same as the upgrade not being owned.
+    if (startStreak) {
+      this.rollAutoChainStreak(hero);
+    } else {
+      hero.autoChainTarget = null;
+      hero.autoChainCount = 0;
+      hero.autoChainMinutesRemaining = null;
+    }
     // Same "manual send always resets prior streak state" reasoning applies
     // here -- any hero being sent by hand either opts into chain-stepping
     // right now (via the offer just picked) or isn't chain-stepping at all,

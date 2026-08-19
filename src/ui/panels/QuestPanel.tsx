@@ -81,12 +81,17 @@ export interface QuestCardProps {
   hero: Hero;
   now: number;
   onToggleExpanded: (offerId: string) => void;
-  onSend: (offer: Offer, chainSteps?: boolean) => void;
+  onSend: (offer: Offer, chainSteps?: boolean, startStreak?: boolean) => void;
   /** Freeze is only meaningful for a hero's own board contracts -- chain
    *  stages are guild-wide and always omit these. */
   isFrozen?: boolean;
   canFreeze?: boolean;
   onToggleFreeze?: (offer: Offer) => void;
+  /** Only meaningful for a standard (non-chain) offer -- gates the
+   *  "Send Once"/"Send & Chain" choice below. Omitted by
+   *  DiscoveredQuestsPanel entirely since every offer it renders has
+   *  `offer.chain` set, so that branch never applies there regardless. */
+  autoChainOwned?: boolean;
 }
 
 /** Shared card body for both a hero's own Contracts and their Discovered
@@ -97,7 +102,7 @@ export interface QuestCardProps {
  *  now the very first thing the player does on this tab. */
 export function QuestCard({
   offer, isOpen, hero, now, onToggleExpanded, onSend,
-  isFrozen, canFreeze, onToggleFreeze,
+  isFrozen, canFreeze, onToggleFreeze, autoChainOwned,
 }: QuestCardProps) {
   const engine = useEngine();
   const state = engine.state;
@@ -233,6 +238,28 @@ export function QuestCard({
               Chain Quest Steps
             </button>
           </>
+        ) : !offer.chain && autoChainOwned ? (
+          // Standard-contract counterpart to the chain-stage pair above --
+          // previously a plain "Send" here always silently rolled an
+          // Auto-Chain bounty streak with no way to opt out short of not
+          // owning the upgrade at all. See GameEngine.startQuest's own
+          // `startStreak` doc comment.
+          <>
+            <button
+              className="btn-ghost"
+              title="Send just this one -- no Auto-Chain streak"
+              onClick={() => onSend(offer, false, false)}
+            >
+              Send Once
+            </button>
+            <button
+              className="btn-primary"
+              title="Send, then automatically keep this hero chaining into further contracts"
+              onClick={() => onSend(offer, false, true)}
+            >
+              Send &amp; Chain
+            </button>
+          </>
         ) : (
           <button className="btn-primary" onClick={() => onSend(offer)}>
             Send {hero.name}
@@ -335,8 +362,8 @@ export function QuestPanel() {
   // Consumables no longer live on this tab -- quests automatically use
   // whatever's equipped on the sent hero's own consumable slots instead of
   // a loadout picked at send time.
-  const send = (offer: Offer, chainSteps = false) => {
-    engine.startQuest(selectedHero.id, offer, [], chainSteps);
+  const send = (offer: Offer, chainSteps = false, startStreak = true) => {
+    engine.startQuest(selectedHero.id, offer, [], chainSteps, startStreak);
   };
 
   // Confirmed before cancelling anything -- pulling a hero back mid-quest
@@ -569,6 +596,7 @@ export function QuestPanel() {
               isFrozen={frozenOfferId === offer.id}
               canFreeze={freezeChangesLeft > 0}
               onToggleFreeze={toggleFreeze}
+              autoChainOwned={autoChainOwned}
             />
           ))}
         </>
