@@ -59,13 +59,19 @@ const BANNERS_DIR = path.join(ROOT, 'public', 'lore');
 // tuning and which don't. Grouped and served the same loose-root-files-
 // plus-subfolders way listBanners/'/lore-art/' already are.
 const DECOR_DIR = path.join(ROOT, 'public', 'decor');
-// The committed Guild Hall Customize background art (currently just
-// bg.jpg -- one fixed scene, not an open-ended content folder), used by
-// the 'Guild Hall Slot Layout' tool below to render the real background
-// behind the drag/resize boxes. No listing endpoint needed the way
-// listBanners/listDecorArt have -- there's nothing to pick between yet,
-// just a static file serve (see the '/guildhall-art/' route further
-// down), same as how the game itself reaches this file directly.
+// The committed Guild Hall background art -- as of patch 0206, an
+// open-ended, one-subfolder-per-theme tree (public/guildhall-customize/
+// <themeId>/bg.jpg) rather than the single fixed bg.jpg patch 0205 shipped,
+// since "Customizable Guild Hall background" now literally means more than
+// one background to choose between. Used two ways: the 'Guild Hall Slot
+// Layout' tool renders whichever theme is currently selected there as the
+// backdrop behind its drag/resize boxes, and the 'guildhall-themes'
+// content type's own `background` field lets a theme's own background be
+// picked from whatever's in here (see listGuildhallArt/'/api/guildhall-art'
+// further down -- same loose-root-files-plus-subfolders shape
+// listBanners/listDecorArt already use). Static-served the same guarded
+// way as every other art tree here (see the '/guildhall-art/' route
+// further down).
 const GUILDHALL_ART_DIR = path.join(ROOT, 'public', 'guildhall-customize');
 const PORT = 5175;
 
@@ -98,10 +104,14 @@ const BUILD_COPY_TARGET = 'C:\\Custom Apps\\GuildBound Executables';
 // to the DevTool frontend as display-only metadata (labels, so the Slot
 // Layout tool can show "L2a" instead of a bare id -- see
 // '/api/guildhall-slot-meta' below), and its id list is the allowlist
-// `validateArray`'s 'guildhall-slot-layout' special case enforces
-// (below) -- a saved layout must have geometry for exactly these 30 ids,
-// no more, no fewer, since adding/removing a slot is a `GuildHallSlotId`
-// (types.ts) code change, not something this tool can do.
+// `validateArray`'s 'guildhall-slot-layout' special case enforces (below)
+// -- every saved layout row's `id` must be one of these 30, since adding
+// or removing a slot is a `GuildHallSlotId` (types.ts) code change, not
+// something this tool can do. As of patch 0206 that's the only thing
+// enforced here (plus no duplicate id *within the same theme*) -- a
+// theme is no longer required to use all 30 (a room's furniture may not
+// have a Trophy Case at all, say), so "missing" isn't an error the way
+// it used to be when there was only one theme.
 const GUILDHALL_SLOT_META = [
   { id: 'banner', label: 'Banner', slotType: 'banner' },
   { id: 'wall1', label: 'Wall 1', slotType: 'wallCenterpiece' },
@@ -896,6 +906,27 @@ const SCHEMAS = {
       image: { type: 'decorationImage', required: false, defaultFolder: '', previewAspect: '1/1' },
     },
   },
+  // Which background themes exist for the Guild Hall (patch 0206) -- id/
+  // display name plus a `background` art reference (picker: 'guildhallBg',
+  // browsing GUILDHALL_ART_DIR the same way an icon field browses
+  // ICONS_DIR). Deliberately just these three fields -- a theme is purely
+  // a background-art choice, not its own bundle of slot geometry (that
+  // lives in 'guildhall-slot-layout' below, cross-referenced by this
+  // schema's own `id`). Rendered as the ordinary generic table (unlike
+  // 'guildhall-slot-layout' just below), since add/edit/delete here is
+  // exactly the right shape -- there's no fixed count or closed id set to
+  // protect the way there is for slots themselves.
+  'guildhall-themes': {
+    file: 'guildhall-themes.json',
+    label: 'Guild Hall Themes',
+    group: 'World Content',
+    idField: 'id',
+    fields: {
+      id: { type: 'string', required: true, slug: true },
+      name: { type: 'string', required: true },
+      background: { type: 'string', required: true, picker: 'guildhallBg' },
+    },
+  },
   // Geometry only (top/left/width/height, % of the background art's own
   // bounding box) -- id/label/slotType (which 30 slots exist at all) is
   // code-owned, see guildHallSlots.ts's own top comment for the full
@@ -907,16 +938,28 @@ const SCHEMAS = {
   // content type uses -- it is NOT rendered as a generic add/edit/delete
   // table (see the frontend dispatch), since adding or removing a row
   // here would silently desync from the fixed 30-id set `GuildHallSlotId`
-  // (types.ts) closes over. `validateArray`'s own special case for this
-  // kind (see GUILDHALL_SLOT_IDS below) is what actually enforces that --
-  // this schema's per-field validation alone can't express "exactly
-  // these 30 ids, no more, no fewer."
+  // (types.ts) closes over.
+  //
+  // As of patch 0206, each row also carries a `themeId` (a
+  // 'guildhall-themes' id) -- geometry is per theme now, since different
+  // background art puts its furniture in different places, and a theme
+  // isn't required to place all 30 (some rooms just won't have every
+  // piece of furniture -- see the DevTool's own per-theme show/hide
+  // checklist). No `idField` is set on this schema on purpose: the
+  // generic table/dupe-check machinery every other schema relies on
+  // assumes one flat, globally-unique id, which `id` alone no longer is
+  // now that the same slot id legitimately repeats once per theme --
+  // `validateArray`'s own special case for this kind (see
+  // GUILDHALL_SLOT_IDS below) does its own theme-scoped duplicate/
+  // unknown-id checking instead, and the bespoke frontend view never
+  // calls the generic add/edit/delete helpers that would have needed
+  // `idField` anyway.
   'guildhall-slot-layout': {
     file: 'guildhall-slot-layout.json',
     label: 'Guild Hall Slot Layout',
     group: 'World Content',
-    idField: 'id',
     fields: {
+      themeId: { type: 'string', required: true },
       id: { type: 'string', required: true },
       top: { type: 'number', required: true, min: 0, max: 100 },
       left: { type: 'number', required: true, min: 0, max: 100 },
@@ -1478,19 +1521,30 @@ function validateArray(kind, data) {
   }
   // 'guildhall-slot-layout' is geometry for a fixed, code-owned set of 30
   // slot ids (see guildHallSlots.ts / GUILDHALL_SLOT_META's own comments)
-  // -- the per-field checks above already confirm every entry HAS an id/
-  // top/left/width/height, but say nothing about which ids are actually
-  // allowed. A saved layout that's missing one of the 30 or invents an
-  // unknown one would silently desync from `GuildHallSlotId` (a closed
-  // TS union, not something this JSON file can add to), so that's
-  // enforced here instead, whole-array, the same place the generic
-  // duplicate-id check just above already runs.
+  // -- the per-field checks above already confirm every entry HAS a
+  // themeId/id/top/left/width/height, but say nothing about which ids are
+  // actually allowed, or about uniqueness (this schema deliberately has
+  // no `idField`, see its own comment, since the same slot id legitimately
+  // repeats once per theme). Checked per theme, not as one flat list, so
+  // two different themes both placing a slot called "banner" is correct,
+  // not a collision. As of patch 0206 a theme is no longer required to
+  // use all 30 (see the DevTool's own per-theme show/hide checklist) --
+  // only "no unknown ids" and "no id repeated within the same theme" are
+  // actually enforced; a theme with fewer than 30 rows is just a theme
+  // that hides some furniture, not an error.
   if (kind === 'guildhall-slot-layout') {
-    const ids = data.map((e) => e.id).filter(Boolean);
-    const missing = GUILDHALL_SLOT_IDS.filter((id) => !ids.includes(id));
-    const unknown = ids.filter((id) => !GUILDHALL_SLOT_IDS.includes(id));
-    if (missing.length) errors.push(`missing required slot(s): ${missing.join(', ')}`);
-    if (unknown.length) errors.push(`unknown slot id(s), not one of the fixed 30: ${unknown.join(', ')}`);
+    const byTheme = new Map();
+    for (const e of data) {
+      if (!e.themeId || !e.id) continue;
+      if (!byTheme.has(e.themeId)) byTheme.set(e.themeId, []);
+      byTheme.get(e.themeId).push(e.id);
+    }
+    for (const [themeId, ids] of byTheme) {
+      const dupes = ids.filter((id, i) => ids.indexOf(id) !== i);
+      if (dupes.length) errors.push(`theme "${themeId}": duplicate slot id(s): ${[...new Set(dupes)].join(', ')}`);
+      const unknown = ids.filter((id) => !GUILDHALL_SLOT_IDS.includes(id));
+      if (unknown.length) errors.push(`theme "${themeId}": unknown slot id(s), not one of the fixed 30: ${[...new Set(unknown)].join(', ')}`);
+    }
   }
   return errors;
 }
@@ -1828,6 +1882,48 @@ async function listDecorArt() {
   folders.sort((a, b) => {
     if (a.name === GENERAL_DECOR_FOLDER) return -1;
     if (b.name === GENERAL_DECOR_FOLDER) return 1;
+    return a.name.localeCompare(b.name);
+  });
+  return folders;
+}
+
+// Same loose-root-files-plus-subfolders shape again, rooted at
+// GUILDHALL_ART_DIR -- patch 0206's 'guildhall-themes' content type uses
+// this to let a theme's `background` field pick from whatever's actually
+// in public/guildhall-customize/, same as decor/banner art. The
+// established convention (each theme gets its own subfolder, e.g.
+// guild_hall/bg.jpg) means most real usage will show up under real
+// per-theme folder names rather than the "(general)" bucket, but loose
+// root files are still supported for anything not yet organized that way.
+const GENERAL_GUILDHALL_FOLDER = '(general)';
+
+async function listGuildhallArt() {
+  let topEntries;
+  try {
+    topEntries = await fs.readdir(GUILDHALL_ART_DIR, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const folders = [];
+  const rootFiles = topEntries
+    .filter((e) => e.isFile() && ICON_EXTENSIONS.test(e.name))
+    .map((e) => e.name)
+    .sort();
+  if (rootFiles.length > 0) folders.push({ name: GENERAL_GUILDHALL_FOLDER, files: rootFiles });
+  for (const entry of topEntries) {
+    if (!entry.isDirectory()) continue;
+    const folderPath = path.join(GUILDHALL_ART_DIR, entry.name);
+    let files;
+    try {
+      files = (await fs.readdir(folderPath)).filter((f) => ICON_EXTENSIONS.test(f));
+    } catch {
+      continue;
+    }
+    if (files.length > 0) folders.push({ name: entry.name, files: files.sort() });
+  }
+  folders.sort((a, b) => {
+    if (a.name === GENERAL_GUILDHALL_FOLDER) return -1;
+    if (b.name === GENERAL_GUILDHALL_FOLDER) return 1;
     return a.name.localeCompare(b.name);
   });
   return folders;
@@ -2258,6 +2354,13 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, GUILDHALL_SLOT_META);
   }
 
+  // Folder listing for the 'guildhall-themes' content type's `background`
+  // field picker -- same shape/job as '/api/decor-art' just above, rooted
+  // at GUILDHALL_ART_DIR instead. See listGuildhallArt's own comment.
+  if (url.pathname === '/api/guildhall-art' && req.method === 'GET') {
+    return json(res, 200, await listGuildhallArt());
+  }
+
   // Serves the actual icon image bytes for <img> previews in the picker and
   // table thumbnails. Same path-traversal guard as serveStatic below, just
   // rooted at ICONS_DIR instead of PUBLIC_DIR since these live outside the
@@ -2323,8 +2426,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Same idea a third time, rooted at GUILDHALL_ART_DIR (public/
-  // guildhall-customize/) -- just the one committed background image for
-  // now, served the same guarded way as every other art tree here.
+  // guildhall-customize/) -- as of patch 0206 a real folder tree (one
+  // subfolder per theme) rather than a single fixed file, served the same
+  // guarded way as every other art tree here; `rel` already carries
+  // whatever subfolder path the caller asked for (e.g. "guild_hall/
+  // bg.jpg"), so no change was needed here to support that.
   if (url.pathname.startsWith('/guildhall-art/')) {
     const rel = decodeURIComponent(url.pathname.slice('/guildhall-art/'.length)).split('?')[0];
     const filePath = path.join(GUILDHALL_ART_DIR, rel);

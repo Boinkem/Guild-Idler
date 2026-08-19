@@ -719,9 +719,13 @@ td.icon-cell { width: 1%; padding-right: 0; }
 
 /* ------------------------------------------- guild hall slot layout view -- */
 /* Same shape as the game's own .guildhall-customize-scene (src/styles/
-   app.css) -- locked to guildhall-customize/bg.jpg's real 1774x887 canvas
-   so every slot's percent-rect lines up with the actual art, not a
-   DevTool-only approximation of it. */
+   app.css) -- locked to the Guild Hall background art's real 1774x887
+   canvas so every slot's percent-rect lines up with the actual art, not a
+   DevTool-only approximation of it. Every theme's background is expected
+   to share that same canvas size (background-size: 100% 100% below
+   stretches to fit either way, but a differently-proportioned image would
+   look stretched) -- not enforced by the DevTool, just a content
+   convention worth keeping when adding new theme art. */
 .guildhall-slot-layout-scene {
   position: relative;
   width: 100%;
@@ -775,3 +779,58 @@ td.icon-cell { width: 1%; padding-right: 0; }
   pointer-events: none; z-index: 2; opacity: 0;
 }
 .gh-layout-slot.dragging .gh-layout-readout, .gh-layout-slot.resizing .gh-layout-readout { opacity: 1; }
+
+/* Theme selector, in the same toolbar row as the Save Layout button
+   (patch 0206) -- a plain <label>-wrapped <select>, same minimal-chrome
+   shape the tuning search box's own toolbar label uses. */
+.gh-layout-theme-label {
+  display: flex; align-items: center; gap: 6px;
+  flex: none; white-space: nowrap;
+}
+.gh-layout-theme-label select {
+  background: var(--bg); border: 1px solid var(--panel3); border-radius: var(--radius);
+  color: var(--text-bright); padding: 4px 8px; font: inherit; font-size: 12px;
+}
+.gh-layout-theme-label select:focus { outline: none; border-color: var(--brass-dim); box-shadow: var(--focus); }
+
+/* Show/hide checklist below the scene -- a theme doesn't have to use all
+   30 slots (patch 0206), so this is how a slot gets turned on or off for
+   whichever theme is currently selected above. Plain checkboxes in a
+   responsive grid, not a fancier widget -- 30 items is small enough that
+   a grid of labeled checkboxes stays scannable at a glance. */
+.gh-layout-checklist {
+  margin-top: 14px; padding: 10px 12px;
+  background: var(--panel); border: 1px solid var(--panel3); border-radius: var(--radius);
+}
+.gh-layout-checklist-heading { font-weight: 700; color: var(--text-bright); margin-bottom: 2px; }
+.gh-layout-checklist-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 4px 10px;
+}
+.gh-layout-checklist-item {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--muted); cursor: pointer;
+}
+.gh-layout-checklist-item input { width: 14px; height: 14px; flex: none; }
+
+/* ---------------------------------------------- guildhall bg field ------ */
+/* Same layout shape as .icon-field/.icon-preview (flex row, boxed
+   thumbnail + name/buttons stack) -- just a wider box (roughly hinting at
+   the real background art's own 1774:887 shape) with a cover-fit image
+   instead of icons' small square contain-fit one, since a background is a
+   full scene, not a discrete sprite. */
+.guildhall-bg-field { display: flex; align-items: center; gap: 10px; }
+.guildhall-bg-preview {
+  width: 72px; height: 36px; flex: none; border-radius: var(--radius);
+  background: var(--bg); border: 1px solid var(--panel3);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.guildhall-bg-preview img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Modifier on the shared .icon-picker-grid/.icon-picker-item (openIconPicker's
+   own classes, reused by openGuildhallBgPicker) -- wider cover-fit tiles
+   instead of icons' small square contain-ish default, so a background
+   scene reads as a scene rather than a squished square. */
+.guildhall-bg-picker-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+.guildhall-bg-picker-item { width: 100%; height: auto; aspect-ratio: 1774 / 887; padding: 2px; }
+.guildhall-bg-picker-item img { width: 100%; height: 100%; object-fit: cover; image-rendering: auto; }

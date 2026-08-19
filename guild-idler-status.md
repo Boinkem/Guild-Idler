@@ -7026,26 +7026,41 @@ pass (same caveat as the two entries above).
   of patch 0204 actually playable end to end for gold-kind decorations.
   Purely cosmetic, no stat effect. Core mechanic: a fixed set of
   decoration slots layered over the Guild Hall's existing background
-  art, each independently empty or filled -- not a single theme swap.
-  Slots are visible and unlocked from the start; there's nothing to
-  unlock, only items to earn. **Built so far:** the DevTool content type
-  + placement/scale field (patch 0202); the 30-slot registry plus
-  owned/equipped decoration state and engine plumbing (patch 0203); and
-  the in-game "Customize" mode itself -- click a slot, buy-and-place a
-  gold-kind decoration in one click, remove one, all against the real
-  committed background art (patch 0204, see the patch log below for all
-  three). **Not built yet:** wiring achievement completion or a Grimsby
-  pull to actually grant an achievement-/Grimsby-kind decoration --
-  `GuildHallDecorManager.grant` (the shared primitive both paths would
-  call) exists and is tested, but nothing calls it for those two kinds
-  yet, so any decoration authored with `acquisition.kind` other than
-  `'gold'` is currently unobtainable in real play (correctly shown
-  locked in the picker, just with no way to actually unlock it). The
-  DevTool slot layout editor -- previously just a standalone prototype --
-  is now the real thing, built in patch 0205 (see its own note below and
-  the patch log entry for what changed under the hood to make that
-  possible without giving up the closed slot-id union). Key decisions
-  locked in from that discussion:
+  art, each independently empty or filled. Slots are visible and
+  unlocked from the start; there's nothing to unlock, only items to
+  earn. **Built so far:** the DevTool content type + placement/scale
+  field (patch 0202); the 30-slot registry plus owned/equipped
+  decoration state and engine plumbing (patch 0203); the in-game
+  "Customize" mode itself -- click a slot, buy-and-place a gold-kind
+  decoration in one click, remove one, all against the real committed
+  background art (patch 0204); and a real DevTool slot layout editor,
+  replacing the standalone prototype that originally sold the feature
+  (patch 0205). **Not built yet:** wiring achievement completion or a
+  Grimsby pull to actually grant an achievement-/Grimsby-kind decoration
+  -- `GuildHallDecorManager.grant` (the shared primitive both paths
+  would call) exists and is tested, but nothing calls it for those two
+  kinds yet, so any decoration authored with `acquisition.kind` other
+  than `'gold'` is currently unobtainable in real play (correctly shown
+  locked in the picker, just with no way to actually unlock it).
+  **Revised direction, patch 0206 onward:** originally scoped as one
+  fixed background, not a theme swap -- reopened after a follow-up ask
+  for multiple selectable background themes (different rooms/halls,
+  same 30 logical slots repositioned/hidden per theme, one active theme
+  at a time, switching themes never loses a look since each theme
+  silently remembers its own arrangement). Patch 0206 built the DevTool
+  half of that (see its own patch log entry and the "Two DevTool
+  authoring features" note below) -- a real "Guild Hall Themes" content
+  type, and the slot layout editor now edits geometry per theme with a
+  per-theme show/hide checklist, instead of one flat 30-slot layout.
+  **Still not built:** any of it reaching the player -- `guildHallSlots.ts`
+  still always resolves against the one shipped theme regardless of what
+  the DevTool now supports authoring, `GuildHallDecorManager`'s
+  equip/unequip state has no notion of "which theme" yet, and there's no
+  in-game control to actually pick a theme. That's real follow-up work,
+  not done here -- patch 0206 deliberately only touched authoring, the
+  same "DevTool foundation first, no consumer yet" shape patch 0202 used
+  for the original feature. Key decisions locked in from the original
+  discussion (still true, extended rather than replaced by the above):
   - **30 individual slots across 10 slot types**, positioned against the
     actual "empty guild hall" background art (two bookshelves, a glass
     display case, an open shelf/table unit, the floor, and the
@@ -7132,7 +7147,14 @@ pass (same caveat as the two entries above).
       positions below were actually tuned in the first place -- dragged
       into place in-browser, exported, and pasted back -- and now every
       future layout tweak can happen the same way with no code patch at
-      all.
+      all. **Extended in patch 0206** to be theme-aware -- see the
+      "Revised direction, patch 0206 onward" note above and that patch's
+      own log entry -- adding a theme selector to this same page (each
+      theme gets its own geometry, not one shared layout) and a
+      show/hide checklist so a theme can use fewer than all 30 slots.
+      Slot *identity* still hasn't changed at all through any of this --
+      still the exact same hardcoded 30 in `guildHallSlots.ts`, still the
+      same closed union -- only geometry gained a theme dimension.
   - **Final locked slot coordinates** (id, top/left/width/height, all %
     of the background art's own bounding box):
     ```json
@@ -14521,3 +14543,116 @@ slot coordinates" block above) before this patch, so the actual 30 slot
 positions in real play are completely unchanged; only the authoring tool
 around them is new. `npx tsc --noEmit` and `npx vite build --config
 vite.web.config.ts` both pass clean on the full changeset.
+
+### Guild Hall Themes: DevTool foundation for multiple backgrounds (patch 0206)
+
+```discord-update
+Dev Update | Guild Hall Themes
+
+- Added a "Guild Hall Themes" tool to the DevTool -- background art options can now be authored, each with its own name and image
+- The Slot Layout tool now edits one theme at a time, and any slot can be shown or hidden per theme
+- Content-authoring only for now -- no new player-facing options yet, this just lays the groundwork
+```
+
+Follow-up to a question about whether the same decoration can sit in
+multiple slots at once (yes -- ownership isn't consumed by equipping,
+see `GuildHallDecorManager.equip`'s own comment), which turned into a
+bigger ask: multiple selectable background themes for the Guild Hall
+(different rooms/halls, not just the one committed scene), with
+switching between them never losing a decorated look. Scoped as three
+steps mirroring exactly how the original Guild Hall Decorations feature
+was built (DevTool foundation, then engine state, then in-game UI) --
+this patch is step one, DevTool-only, same "no consumer yet" shape
+patch 0202 used. Two design decisions locked in first: slot *identity*
+stays global across every theme (the same 30 logical slots, same
+`GuildHallSlotId` closed union, no change to that model at all) while
+slot *geometry* becomes per-theme (repositioned per room, and a theme
+can hide slots it doesn't have furniture for); and switching themes
+in-game should auto-remember each theme's own arrangement rather than
+requiring a manual save/load step -- that part is patch 0207's job, not
+this one.
+
+**New "Guild Hall Themes" content type** (`tools/devtool/server.mjs`,
+`group: 'World Content'`) -- `id`/`name`/`background`, rendered as the
+ordinary generic add/edit/delete table (unlike `guildhall-slot-layout`,
+there's no fixed count or closed id set to protect here; adding a theme
+is exactly as unrestricted as adding a raid or a quest chain).
+`background` is a new `picker: 'guildhallBg'` field type -- deliberately
+the plain icon-field shape (a flat path string, preview + choose/clear
+button), not `bannerImage`/`decorationImage`'s placement/scale
+machinery, since a background isn't positioned *within* anything, it
+fills the whole scene at `background-size: 100% 100%` the way it always
+has. Backed by a new `listGuildhallArt()` / `GET /api/guildhall-art`
+(same loose-root-files-plus-subfolders shape `listDecorArt` already
+uses) rooted at `GUILDHALL_ART_DIR`, which stopped being "one fixed
+committed file" and became a real folder tree -- the shipped background
+moved from `public/guildhall-customize/bg.jpg` to
+`public/guildhall-customize/guild_hall/bg.jpg`, one subfolder per theme,
+with the existing `/guildhall-art/<path>` static route needing no
+changes at all to serve the new subpath (it already joined an arbitrary
+`rel` onto the dir).
+
+**`guildhall-slot-layout.json` restructured.** Every row gained a
+`themeId` field alongside its existing `id`/`top`/`left`/`width`/
+`height` -- the shipped content is the exact same 30 rows as patch 0205
+left them, byte-identical on every field except the new `themeId:
+"guild_hall"` now stamped on each. This schema deliberately dropped its
+`idField` -- the generic table/dupe-check machinery assumes one flat,
+globally-unique id, which `id` alone no longer is now that the same slot
+id legitimately repeats once per theme. `validateArray`'s own special
+case for this kind was rewritten to check per theme instead of as one
+flat list: no unknown ids (still checked against the fixed 30, exactly
+as before), no id repeated *within* the same theme, but no longer
+"exactly all 30 required" -- a theme is allowed to use fewer, which is
+the actual mechanism behind hiding a slot.
+
+**`renderGuildHallSlotLayoutView` (`tools/devtool/public/app.js`)
+became theme-aware.** A new theme `<select>` in the toolbar filters which
+of `state.rows` (now every theme's rows at once, one POST for all of
+them together, same as before) render as draggable boxes, and swaps the
+scene's background to whichever theme is selected. Below the scene, a
+new show/hide checklist lists all 30 known slots with a checkbox each --
+checking one adds a row for the current theme (seeded from whatever that
+same slot looks like in the first other theme that already has it, so
+there's a plausible starting point to nudge rather than a box dropped
+dead-centre), unchecking removes it. Both the theme switch and the
+checklist are pure in-memory edits, same "mutate now, Save persists"
+model drag/resize already used -- nothing is written to disk until "Save
+Layout" is clicked, same button as before.
+
+**`guildHallSlots.ts`.** Deliberately NOT made theme-aware yet -- there's
+no real "which theme is active" state to read (patch 0207's job), so it
+still always resolves geometry against a hardcoded `DEFAULT_THEME_ID =
+'guild_hall'`, reproducing patch 0205's single-theme behaviour exactly.
+This patch's actual job was proving the new per-theme JSON shape and
+DevTool round-trip cleanly without changing anything a player sees --
+confirmed by the verification below.
+
+**Verified against a genuinely running DevTool.** Server boot confirmed
+clean with the restructured schema; curled `/api/schema`,
+`/api/data/guildhall-themes`, `/api/guildhall-art`, and the moved
+`/guildhall-art/guild_hall/bg.jpg` directly. Posted three deliberately
+bad payloads to confirm the rewritten `validateArray` guard: an unknown
+slot id (rejected, names the theme and the bad id), a slot id repeated
+twice within the same theme (rejected), and the same slot id appearing
+once each in two *different* themes plus a theme with fewer than 30 rows
+(both accepted -- exactly the point of the change). Then drove the real
+page through Playwright end to end: added a new "Cave" theme via the
+ordinary table + background picker; switched to it on the Slot Layout
+tab and confirmed it started with zero boxes; checked "Banner" and
+confirmed a box appeared seeded from the original theme's own banner
+geometry; saved and confirmed the count; switched back to the original
+theme and confirmed its own 30 boxes were completely untouched;
+unchecked Banner on the Cave theme and confirmed it disappeared; saved
+again. The Cave theme and its one test row were removed afterward --
+ships with the same single `guild_hall` theme and the same 30
+byte-identical rows patch 0205 already shipped, confirmed via a direct
+diff against those values in this doc's own "Final locked slot
+coordinates" block. `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean on the full changeset. A prior
+mistake caught during this same verification pass, not shipped: the
+seed theme was initially named `guild-hall` (a hyphen), which failed
+this schema's own `slug: true` validation on save (`lowercase_with_
+underscores`, matching every other slug id in this codebase, e.g.
+`the_last_clutch`) -- renamed to `guild_hall` throughout (id, folder,
+`DEFAULT_THEME_ID`) before finalizing.

@@ -13,6 +13,14 @@ const state = {
   // Slot identity/label metadata for the guildhall-slot-layout view -- see
   // ensureGuildHallSlotMeta's own comment.
   guildHallSlotMeta: null,
+  // Art folder listing for the guildhall-themes 'background' field's
+  // picker -- see ensureGuildhallArt's own comment.
+  guildhallArt: null,
+  // Which theme's rows renderGuildHallSlotLayoutView currently shows --
+  // null until that view's first render picks a default (its own first
+  // available theme). Kept here, not local to that function, for the
+  // same "survives a full re-render" reason tuningViewMode does below.
+  slotLayoutActiveTheme: null,
   // Two-level nav state (see server.mjs's GROUP_ORDER / SCHEMAS[kind].group):
   // groupOrder is the fixed display order for the top-level groups, group
   // is whichever one is currently open, and lastSubTab remembers which
@@ -564,6 +572,11 @@ function fieldControl(spec, key, value) {
     // called alongside wireListInput in openEditor).
     return `<div class="icon-field" id="${id}" data-value="${escapeHtml(value ?? '')}"></div>`;
   }
+  if (spec.picker === 'guildhallBg') {
+    // Same deferred-render container shape as the icon field just above,
+    // filled in by renderGuildhallBgField once attached to the DOM.
+    return `<div class="guildhall-bg-field" id="${id}" data-value="${escapeHtml(value ?? '')}"></div>`;
+  }
   if (spec.picker === 'lootTable') {
     // Same deferred-render approach as the icon field -- a bare container,
     // filled in by renderLootField once it's attached to the DOM (needs an
@@ -956,6 +969,98 @@ function wireIconFields(container) {
   container.querySelectorAll('.icon-field').forEach((field) => renderIconField(field));
 }
 
+/* ------------------------------------------------- guildhall bg field --- */
+// A theme's `background` field (patch 0206) -- deliberately the plain
+// icon-field shape (a flat path string, preview + choose/clear button),
+// not the placement/scale machinery bannerImage/decorationImage fields
+// have. Those exist because an item needs positioning *within* a fixed
+// box; a theme's background isn't placed within anything, it fills the
+// whole scene at background-size: 100% 100% (see
+// .guildhall-slot-layout-scene / .guildhall-customize-scene in the
+// stylesheets), so there's nothing for focus/scale controls to do here.
+
+// Deliberately not session-cached the way ensureIcons/ensureBanners are --
+// see renderGuildHallSlotLayoutView's own fetch of 'guildhall-themes' for
+// why: adding new background art and picking it for a theme in the same
+// sitting is a normal flow this tool should support without a restart.
+async function ensureGuildhallArt() {
+  return api('/api/guildhall-art');
+}
+
+function renderGuildhallBgField(field) {
+  const value = field.dataset.value || '';
+  field.innerHTML = `
+    <div class="icon-preview guildhall-bg-preview">
+      ${value ? `<img src="/guildhall-art/${escapeHtml(value)}" alt="" />` : '<span class="icon-preview-empty">?</span>'}
+    </div>
+    <div class="icon-field-controls">
+      <span class="icon-field-name">${value ? escapeHtml(value) : 'No background assigned'}</span>
+      <button type="button" data-choose-guildhall-bg>${value ? 'Change' : 'Choose background'}</button>
+      ${value ? '<button type="button" class="remove" data-clear-guildhall-bg>Clear</button>' : ''}
+    </div>`;
+
+  field.querySelector('[data-choose-guildhall-bg]').onclick = async () => {
+    const folders = await ensureGuildhallArt();
+    openGuildhallBgPicker(folders, field.dataset.value, (chosen) => {
+      field.dataset.value = chosen;
+      renderGuildhallBgField(field);
+    });
+  };
+  const clearBtn = field.querySelector('[data-clear-guildhall-bg]');
+  if (clearBtn) clearBtn.onclick = () => { field.dataset.value = ''; renderGuildhallBgField(field); };
+}
+
+function wireGuildhallBgFields(container) {
+  container.querySelectorAll('.guildhall-bg-field').forEach((field) => renderGuildhallBgField(field));
+}
+
+/** Same shape as openIconPicker, rooted at '/guildhall-art/' with a
+ *  loose-root-files-plus-subfolders layout (see listGuildhallArt's own
+ *  comment) rather than icons' always-subfoldered one, so a background
+ *  dropped straight into public/guildhall-customize/ (not yet organized
+ *  into its own theme folder) is still pickable. */
+function openGuildhallBgPicker(folders, currentValue, onPick) {
+  const overlay = document.createElement('div');
+  overlay.className = 'editor-overlay icon-picker-overlay';
+  const panel = document.createElement('div');
+  panel.className = 'editor icon-picker';
+
+  const sectionsHtml = folders.length === 0
+    ? '<p class="tiny muted">No background art found in public/guildhall-customize/. Drop image files into a per-theme subfolder (or straight into the root) and reopen this picker.</p>'
+    : folders.map((f) => `
+        <div class="icon-picker-section">
+          <div class="icon-picker-folder">${escapeHtml(f.name)} (${f.files.length})</div>
+          <div class="icon-picker-grid guildhall-bg-picker-grid">
+            ${f.files.map((file) => {
+              const rel = f.name === '(general)' ? file : `${f.name}/${file}`;
+              const selected = rel === currentValue;
+              return `<button type="button" class="icon-picker-item guildhall-bg-picker-item ${selected ? 'selected' : ''}" data-guildhall-bg="${escapeHtml(rel)}" title="${escapeHtml(rel)}">
+                <img src="/guildhall-art/${escapeHtml(rel)}" alt="" loading="lazy" />
+              </button>`;
+            }).join('')}
+          </div>
+        </div>`).join('');
+
+  panel.innerHTML = `
+    <h2>Choose a background</h2>
+    <div class="icon-picker-body">${sectionsHtml}</div>
+    <div class="editor-actions">
+      <button id="guildhallBgPickerCancel">Cancel</button>
+    </div>`;
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  panel.querySelectorAll('[data-guildhall-bg]').forEach((btn) => {
+    btn.onclick = () => {
+      onPick(btn.dataset.guildhallBg);
+      overlay.remove();
+    };
+  });
+  panel.querySelector('#guildhallBgPickerCancel').onclick = () => overlay.remove();
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+}
+
 /* --------------------------------------------------------- banner field --- */
 // Same session-cache reasoning as ensureIcons -- public/lore/ only changes
 // when someone drops new art in, which means a tool restart anyway.
@@ -1219,7 +1324,7 @@ function openBannerPicker(folders, currentValue, preferredFolder, onPick) {
 // (guildHallSlots.ts merges this JSON with a separate, code-owned identity
 // list, see that file's own top comment for why), so the generic add/edit/
 // delete table would be actively worse here -- there's nothing to add or
-// delete (the fixed 30 ids are enforced server-side, see validateArray's
+// delete (the 30 possible ids are enforced server-side, see validateArray's
 // 'guildhall-slot-layout' special case), and typing four numbers into a
 // modal per slot is a much worse way to eyeball placement against the real
 // background art than dragging a box directly on top of it. Ported
@@ -1229,6 +1334,17 @@ function openBannerPicker(folders, currentValue, preferredFolder, onPick) {
 // container math, same clamped-to-bounds behaviour, just POSTing to the
 // real backend via the existing generic saveToServer() instead of that
 // mockup's copy-paste export textarea.
+//
+// As of patch 0206 this view is theme-aware: a theme selector filters
+// which of state.rows (now spanning every theme at once, one POST for
+// the lot) are shown as boxes, and a show/hide checklist lets a theme use
+// fewer than all 30 slots -- see the "Guild Hall Themes" content type
+// (schema just above 'guildhall-slot-layout' in server.mjs) for where
+// theme rows themselves (id/name/background) are authored. Which theme is
+// currently selected lives on `state.slotLayoutActiveTheme` (see state's
+// own init at the top of this file), same "kept on state so it survives a
+// full re-render" reasoning tuningViewMode/tuningExpanded/tuningFilter
+// already use for the tuning view's own equivalent local state.
 
 // Fetched once and cached for the session, same reasoning as ensureIcons --
 // slot identity (which 30 slots exist, their labels) is code-owned and only
@@ -1308,17 +1424,57 @@ function wireSlotLayoutResize(scene, el, handle, row, readout) {
   handle.addEventListener('pointerup', (e) => { e.stopPropagation(); resizing = false; el.classList.remove('resizing'); });
 }
 
+/** Finds a sensible starting rect for a slot that's being turned on for a
+ *  theme that doesn't have it yet -- reuses whatever the same slot id
+ *  looks like in the first *other* theme that already has it (almost
+ *  always the original "guild_hall" theme, still a reasonable rough
+ *  starting point for most rooms), so there's usually something plausible
+ *  to nudge into place rather than a generic box dropped dead-centre.
+ *  Falls back to a generic centred box only if truly no theme has this
+ *  slot at all. */
+function seedGeometryFor(slotId) {
+  const existing = state.rows.find((r) => r.id === slotId);
+  if (existing) return { top: existing.top, left: existing.left, width: existing.width, height: existing.height };
+  return { top: 40, left: 40, width: 15, height: 15 };
+}
+
 async function renderGuildHallSlotLayoutView() {
-  const meta = await ensureGuildHallSlotMeta();
+  const [meta, themes] = await Promise.all([
+    ensureGuildHallSlotMeta(),
+    // Deliberately not session-cached the way ensureGuildHallSlotMeta is --
+    // adding a theme on the sibling "Guild Hall Themes" tab and then
+    // switching straight to this one is a completely normal, expected
+    // flow, unlike the icon/banner/decor art folders (which only change
+    // via a file drop, i.e. a tool restart anyway).
+    api('/api/data/guildhall-themes').then((r) => r.data),
+  ]);
   const metaById = Object.fromEntries(meta.map((m) => [m.id, m]));
 
   // A save can arrive mid-fetch (tab switched away and back quickly) --
   // bail out rather than render a now-stale view over a different tab.
   if (state.kind !== 'guildhall-slot-layout') return;
 
+  if (themes.length === 0) {
+    appEl.innerHTML = '<div class="empty">No Guild Hall Themes exist yet -- add one on the "Guild Hall Themes" tab first, then come back here to lay out its slots.</div>';
+    return;
+  }
+
+  // Fall back to the first theme if nothing's selected yet, or if the
+  // previously-selected theme was since deleted on the sibling tab.
+  if (!state.slotLayoutActiveTheme || !themes.some((t) => t.id === state.slotLayoutActiveTheme)) {
+    state.slotLayoutActiveTheme = themes[0].id;
+  }
+  const activeTheme = themes.find((t) => t.id === state.slotLayoutActiveTheme);
+
   const toolbar = document.createElement('div');
   toolbar.className = 'toolbar';
   toolbar.innerHTML = `
+    <label class="tiny muted gh-layout-theme-label">
+      Theme
+      <select id="slotLayoutThemeSelect">
+        ${themes.map((t) => `<option value="${escapeHtml(t.id)}" ${t.id === activeTheme.id ? 'selected' : ''}>${escapeHtml(t.name)}</option>`).join('')}
+      </select>
+    </label>
     <span class="tiny muted">Drag a box to reposition it, drag its brass handle to resize -- both stay clamped to the art's own edges.</span>
     <span class="spacer"></span>
     <button class="primary" id="slotLayoutSaveBtn">Save Layout</button>
@@ -1326,14 +1482,17 @@ async function renderGuildHallSlotLayoutView() {
 
   const scene = document.createElement('div');
   scene.className = 'guildhall-slot-layout-scene';
-  scene.style.backgroundImage = "url('/guildhall-art/bg.jpg')";
+  scene.style.backgroundImage = activeTheme.background ? `url('/guildhall-art/${activeTheme.background}')` : 'none';
 
-  state.rows.forEach((row, index) => {
+  // Only this theme's own rows -- a slot with no row here is simply
+  // hidden for this theme (see the checklist below), not an error.
+  const themeRows = state.rows.filter((r) => r.themeId === activeTheme.id);
+
+  themeRows.forEach((row) => {
     const label = metaById[row.id]?.label ?? row.id;
 
     const el = document.createElement('div');
     el.className = 'gh-layout-slot';
-    el.dataset.index = String(index);
     el.style.top = row.top + '%';
     el.style.left = row.left + '%';
     el.style.width = row.width + '%';
@@ -1359,9 +1518,49 @@ async function renderGuildHallSlotLayoutView() {
     scene.appendChild(el);
   });
 
+  // Show/hide checklist -- every one of the 30 known slots, checked if
+  // this theme currently has a row for it. Toggling mutates state.rows
+  // directly and re-renders, same "in-memory now, Save persists" model
+  // drag/resize already use -- checking/unchecking doesn't save on its
+  // own any more than dragging a box does.
+  const visibleIds = new Set(themeRows.map((r) => r.id));
+  const checklist = document.createElement('div');
+  checklist.className = 'gh-layout-checklist';
+  checklist.innerHTML = `
+    <div class="gh-layout-checklist-heading">Slots in "${escapeHtml(activeTheme.name)}"</div>
+    <p class="tiny muted" style="margin: 2px 0 8px;">Unchecking a slot hides it in this theme only -- it stays exactly as placed in any other theme that still has it checked.</p>
+    <div class="gh-layout-checklist-grid">
+      ${meta.map((m) => `
+        <label class="gh-layout-checklist-item">
+          <input type="checkbox" data-slot-toggle="${escapeHtml(m.id)}" ${visibleIds.has(m.id) ? 'checked' : ''} />
+          ${escapeHtml(m.label)}
+        </label>
+      `).join('')}
+    </div>
+  `;
+
   appEl.innerHTML = '';
   appEl.appendChild(toolbar);
   appEl.appendChild(scene);
+  appEl.appendChild(checklist);
+
+  document.getElementById('slotLayoutThemeSelect').onchange = (e) => {
+    state.slotLayoutActiveTheme = e.target.value;
+    renderGuildHallSlotLayoutView();
+  };
+
+  checklist.querySelectorAll('[data-slot-toggle]').forEach((input) => {
+    input.onchange = () => {
+      const slotId = input.dataset.slotToggle;
+      if (input.checked) {
+        state.rows.push({ themeId: activeTheme.id, id: slotId, ...seedGeometryFor(slotId) });
+      } else {
+        const idx = state.rows.findIndex((r) => r.themeId === activeTheme.id && r.id === slotId);
+        if (idx !== -1) state.rows.splice(idx, 1);
+      }
+      renderGuildHallSlotLayoutView();
+    };
+  });
 
   document.getElementById('slotLayoutSaveBtn').onclick = () => saveToServer('Layout');
 }
@@ -1790,6 +1989,7 @@ function wireResultGemInput(container) {
 function readField(spec, key) {
   const el = document.getElementById(`f_${key}`);
   if (spec.picker === 'icon') return el.dataset.value || '';
+  if (spec.picker === 'guildhallBg') return el.dataset.value || '';
   if (spec.picker === 'lootTable') return el.__getLootValue ? el.__getLootValue() : [];
   if (spec.type === 'bannerImage') {
     const path = el.dataset.path || '';
@@ -1927,6 +2127,7 @@ function openEditor(index) {
   document.body.appendChild(overlay);
   wireListInput(editor);
   wireIconFields(editor);
+  wireGuildhallBgFields(editor);
   wireBannerFields(editor);
   wireDecorationFields(editor);
   wireLootFields(editor);

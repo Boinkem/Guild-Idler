@@ -19,31 +19,55 @@ import guildhallSlotLayoutJson from './json/guildhall-slot-layout.json';
  *   kind of routine, no-code-patch-needed tweak the DevTool exists for,
  *   unlike adding or removing a slot entirely.
  *
+ * As of patch 0206, geometry is stored per *theme* (`guildhall-themes.json`
+ * -- one row per background art option, currently just the one shipped
+ * "The Guild Hall" theme), because different background art puts its
+ * furniture in different places. Every geometry row now carries a
+ * `themeId` alongside its slot `id`, and the DevTool's own slot layout
+ * editor lets a theme show only a subset of the 30 slots (some furniture
+ * just won't exist in every room) rather than requiring all 30 the way
+ * the original single-theme version of this file did.
+ *
+ * This file itself is deliberately NOT theme-aware yet -- there's no real
+ * "which theme is the player using" state to read (that's patch 0207's
+ * job, alongside the in-game theme picker), so `GUILD_HALL_SLOTS` below
+ * still always resolves against `DEFAULT_THEME_ID` only, exactly
+ * reproducing patch 0205's single-theme behaviour. This patch's actual
+ * job is just proving the new per-theme JSON shape round-trips cleanly
+ * through the DevTool without changing anything the player sees.
+ *
  * The DevTool's own save-time validation (server.mjs's
  * `guildhall-slot-layout` special case in `validateArray`) rejects a
- * layout file that doesn't have geometry for exactly these 30 ids -- it
- * can edit numbers, not add or remove slots -- so in the DevTool-authored
- * common case every identity id below always has a matching geometry
- * entry. The lookups below still degrade gracefully (a console.warn and
- * a small fallback rect) rather than throwing if that invariant is ever
- * violated some other way (a hand-edited JSON file, a merge conflict) --
- * same "content may drift out from under old assumptions, don't crash
- * the game over it" convention CurioManager.owned/GuildHallDecorManager's
- * own resolve-and-skip methods already follow, just applied to slots
- * instead of decorations.
+ * layout row whose `id` isn't one of these 30, and rejects duplicate ids
+ * *within* the same theme -- but no longer requires every theme to have
+ * all 30 (see the "hide this slot" checklist in that DevTool page). The
+ * lookups below still degrade gracefully (a console.warn and a small
+ * fallback rect) rather than throwing if a slot that's supposed to be
+ * visible somehow has no matching geometry row at all -- same "content
+ * may drift out from under old assumptions, don't crash the game over
+ * it" convention CurioManager.owned/GuildHallDecorManager's own
+ * resolve-and-skip methods already follow, just applied to slots instead
+ * of decorations.
  */
 
-interface SlotGeometry { id: string; top: number; left: number; width: number; height: number; }
+/** The only theme that exists so far, and the one this file resolves
+ *  against until patch 0207 adds real active-theme state. Matches
+ *  `guildhall-themes.json`'s one entry. */
+const DEFAULT_THEME_ID = 'guild_hall';
+
+interface SlotGeometry { themeId: string; id: string; top: number; left: number; width: number; height: number; }
 
 const SLOT_GEOMETRY = guildhallSlotLayoutJson as SlotGeometry[];
 const SLOT_GEOMETRY_BY_ID: Record<string, SlotGeometry> = Object.fromEntries(
-  SLOT_GEOMETRY.map((g) => [g.id, g]),
+  SLOT_GEOMETRY
+    .filter((g) => g.themeId === DEFAULT_THEME_ID)
+    .map((g) => [g.id, g]),
 );
 
 /** A small, visibly-wrong-on-purpose rect (top-left corner, tiny) so a
  *  missing geometry entry is obvious in the DevTool/in-game rather than
  *  silently overlapping some other slot at a plausible-looking 0,0. */
-const FALLBACK_GEOMETRY: Omit<SlotGeometry, 'id'> = { top: 0, left: 0, width: 4, height: 4 };
+const FALLBACK_GEOMETRY: Omit<SlotGeometry, 'id' | 'themeId'> = { top: 0, left: 0, width: 4, height: 4 };
 
 /**
  * Which 30 slots exist and which content pool each draws from -- see
