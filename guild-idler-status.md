@@ -7081,15 +7081,37 @@ pass (same caveat as the two entries above).
   broken background since patch 0206 shipped, missed because that
   patch's own verification only exercised the DevTool. Now resolved
   through `activeTheme.background`, so it moves with whichever theme
-  becomes active once picking one is real. **Still not built:** any
-  in-game way to actually pick a theme -- `GuildHallDecorManager.
-  setActiveTheme` exists and is tested, but has no caller yet, so every
-  save is effectively pinned to the one shipped `guild_hall` theme until
-  a picker UI lands. That's real follow-up work, not scoped or started
-  here -- not currently an active priority, since only one theme's
-  worth of art exists to switch to yet. Key decisions locked in from the
-  original discussion (still true, extended rather than replaced by the
-  above):
+  becomes active once picking one is real.
+
+  **Patch 0208: the general Guild Menu backdrop is now this same art,
+  not a separate fixed illustration.** Direct clarification of the
+  original vision after 0207 shipped: the point of an "upgradable Guild
+  Hall" was always that the background players see across the whole
+  menu (not just inside the dedicated Customize scene) is the room
+  itself, evolving as it fills with trophies -- not a permanently
+  fully-decorated painting. `MenuWindow.tsx`'s default backdrop (every
+  tab except Raids/Hatchery/Peddler, which keep their own dedicated art
+  untouched) now resolves through the exact same
+  `GuildHallDecorManager.activeThemeId` lookup the Customize scene uses,
+  so it already tracks whichever theme is active with zero extra plumbing
+  -- once a real theme picker exists, this backdrop switches with it
+  automatically, no separate wiring needed. Turned on for the empty room
+  as-is; the old `./lore/guild-hall-bg.jpg` (the fully-decorated "Quest
+  Board" scene that shipped before any of this system existed) is now
+  unreferenced and left on disk rather than deleted. **Still not done:**
+  the backdrop only shows the room itself, not a player's own placed
+  decorations layered into it -- reflecting real equipped trinkets on
+  this general backdrop (not just inside the dedicated Customize scene)
+  is the fuller version of "every time you upgrade something, you see it
+  in the background," and is real follow-up work, not scoped or started
+  here. **Still not built:** any in-game way to actually pick a theme --
+  `GuildHallDecorManager.setActiveTheme` exists and is tested, but has no
+  caller yet, so every save is effectively pinned to the one shipped
+  `guild_hall` theme until a picker UI lands. That's real follow-up
+  work, not scoped or started here -- not currently an active priority,
+  since only one theme's worth of art exists to switch to yet. Key
+  decisions locked in from the original discussion (still true, extended
+  rather than replaced by the above):
   - **30 individual slots across 10 slot types**, positioned against the
     actual "empty guild hall" background art (two bookshelves, a glass
     display case, an open shelf/table unit, the floor, and the
@@ -14788,3 +14810,63 @@ out of `guild-hall-decorations.json` before finalizing this patch, same
 patch 0206 used for its own test theme. `npx tsc --noEmit` and `npx vite
 build --config vite.web.config.ts` both pass clean on the full
 changeset.
+
+### Guild Hall: the general menu backdrop is now the same Guild Hall art (patch 0208)
+
+```discord-update
+Dev Update | Guild Hall
+
+- The Guild menu's background is now the actual Guild Hall you're decorating, not a separate fixed painting
+- Every tab that isn't Raids, the Hatchery, or Grimsby's own screen shares this same backdrop
+- Reflecting your own placed trophies on this backdrop is still to come -- for now it's the empty room
+```
+
+Direct clarification after patch 0207 shipped: the "upgradable Guild
+Hall" idea was always meant to mean the background behind the whole
+Guild menu, not a separate one-off painting kept around from before the
+Customize feature existed -- confirmed to still be the old static
+`guild-hall-bg.jpg` (a fully-decorated "Quest Board" scene, unrelated
+art) in every tab except Raids/Hatchery/Peddler, which already override
+it with their own dedicated art. This patch turns that on.
+
+**`MenuWindow.tsx`'s default backdrop case now resolves through
+`GuildHallDecorManager.activeThemeId`**, the exact same lookup
+`GuildHallCustomizeScene.tsx` already uses (built in patch 0207) --
+`GUILD_HALL_THEME_BY_ID[activeThemeId(state)].background`, rendered at
+`./guildhall-customize/<path>`, same URL shape the Customize scene
+itself already uses. Deliberately reused rather than hardcoded to the
+one shipped theme's path directly: this backdrop now has zero extra
+work to do whenever an in-game theme picker eventually lands (patch
+0207's own still-open item) -- it already tracks whatever the active
+theme resolves to, the same way the Customize scene does. Raids/
+Hatchery/Peddler keep their own dedicated backdrop art untouched, exactly
+as before -- only the fallback (every other tab) case changed. The old
+`./lore/guild-hall-bg.jpg` file is left on disk, now unreferenced
+anywhere in the codebase, rather than deleted, in case a later patch
+wants it for something else; `activeGuildHallTheme` falling back to that
+same path only matters in the should-never-happen case of content
+shipping with zero themes at all, same defensive shape
+`DEFAULT_GUILD_HALL_THEME_ID` itself already uses.
+
+**Scope note, since this could easily be read as bigger than it is:**
+this patch only swaps which *static* image renders as the backdrop. It
+does not render a player's own equipped decorations onto this general
+backdrop -- that only happens inside the dedicated Customize scene
+today. Making trinkets show up here too, live, as they're placed, is
+the fuller version of "every time you upgrade something, you see it in
+the background," and is real follow-up work, not started here -- see
+the "Customizable Guild Hall background" entry above for exactly what's
+still open on that front.
+
+**Also swept up:** the `Guild-Idler-patch-0207.patch` file that ended up
+committed into the repo root by mistake when patch 0207 was applied
+locally is removed as part of this patch's changeset -- a stray patch
+file, not part of the actual codebase.
+
+**Verified against the actual running web build via Playwright** (not
+just code review): loaded the Dashboard tab and confirmed its backdrop
+now resolves to `guildhall-customize/guild_hall/bg.jpg`; switched to the
+Guild Hall tab and confirmed the same; switched to Raids and confirmed
+its own dedicated `raids-bg.jpg` still renders, completely untouched by
+this change. `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean on the full changeset.
