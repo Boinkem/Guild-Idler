@@ -10,6 +10,9 @@
 
 const state = {
   schema: null, kind: null, rows: [], dirty: false, icons: null, banners: null, equipmentList: null,
+  // Slot identity/label metadata for the guildhall-slot-layout view -- see
+  // ensureGuildHallSlotMeta's own comment.
+  guildHallSlotMeta: null,
   // Two-level nav state (see server.mjs's GROUP_ORDER / SCHEMAS[kind].group):
   // groupOrder is the fixed display order for the top-level groups, group
   // is whichever one is currently open, and lastSubTab remembers which
@@ -166,6 +169,13 @@ function displayColumns(schema) {
 function renderTable() {
   if (state.kind === 'tuning' && state.tuningViewMode !== 'table') {
     renderTuningView();
+    return;
+  }
+  // Not awaited -- renderTable is called synchronously all over this file
+  // (see its own call sites), same "kick off async work, let it paint when
+  // ready" shape click handlers elsewhere in this tool already use.
+  if (state.kind === 'guildhall-slot-layout') {
+    renderGuildHallSlotLayoutView();
     return;
   }
   renderGenericTable();
@@ -1199,6 +1209,161 @@ function openBannerPicker(folders, currentValue, preferredFolder, onPick) {
   });
   panel.querySelector('#bannerPickerCancel').onclick = () => overlay.remove();
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+}
+
+/* -------------------------------------------------- guild hall slot layout - */
+// Bespoke view for the `guildhall-slot-layout` content type (patch 0205),
+// same dispatch shape as renderTuningView -- see renderTable's own kind
+// check. Geometry-only: this schema's fields (top/left/width/height, all
+// 0-100) are exactly what real GUILD_HALL_SLOTS entries need
+// (guildHallSlots.ts merges this JSON with a separate, code-owned identity
+// list, see that file's own top comment for why), so the generic add/edit/
+// delete table would be actively worse here -- there's nothing to add or
+// delete (the fixed 30 ids are enforced server-side, see validateArray's
+// 'guildhall-slot-layout' special case), and typing four numbers into a
+// modal per slot is a much worse way to eyeball placement against the real
+// background art than dragging a box directly on top of it. Ported
+// wholesale from the standalone interactive mockup that sold this feature
+// in the first place (wireDrag/wireResize/updateReadout in
+// guildhall-customize-mockup-v6-interactive.html) -- same percent-of-
+// container math, same clamped-to-bounds behaviour, just POSTing to the
+// real backend via the existing generic saveToServer() instead of that
+// mockup's copy-paste export textarea.
+
+// Fetched once and cached for the session, same reasoning as ensureIcons --
+// slot identity (which 30 slots exist, their labels) is code-owned and only
+// changes with a real patch, so there's no reason to refetch it every time
+// this tab is opened.
+async function ensureGuildHallSlotMeta() {
+  if (state.guildHallSlotMeta) return state.guildHallSlotMeta;
+  state.guildHallSlotMeta = await api('/api/guildhall-slot-meta');
+  return state.guildHallSlotMeta;
+}
+
+/** Live bottom-left readout on whichever box is actively being dragged or
+ *  resized -- same copy shape as the mockup's own updateReadout. */
+function updateSlotLayoutReadout(readout, row) {
+  readout.textContent = `${row.left.toFixed(1)}%, ${row.top.toFixed(1)}% · ${row.width.toFixed(1)}×${row.height.toFixed(1)}%`;
+}
+
+/** Pointer-driven drag on a slot box's own body (not its resize handle) --
+ *  delta is measured against the scene container's own bounding box so it
+ *  stays correct regardless of how large the scene is actually rendered at,
+ *  then clamped so a box can never be dragged fully or partly off the art.
+ *  Mutates `row` (a real entry in state.rows, not a copy) directly as it
+ *  drags, same "the in-memory row IS the editable state, Save just POSTs
+ *  the whole array" model every other field in this tool already uses. */
+function wireSlotLayoutDrag(scene, el, row, readout) {
+  let startX, startY, startTop, startLeft, dragging = false;
+  el.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('[data-resize-handle]')) return;
+    dragging = true;
+    el.classList.add('dragging');
+    el.setPointerCapture(e.pointerId);
+    startX = e.clientX; startY = e.clientY;
+    startTop = row.top; startLeft = row.left;
+    updateSlotLayoutReadout(readout, row);
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const rect = scene.getBoundingClientRect();
+    const dxPct = ((e.clientX - startX) / rect.width) * 100;
+    const dyPct = ((e.clientY - startY) / rect.height) * 100;
+    row.left = Math.max(0, Math.min(100 - row.width, startLeft + dxPct));
+    row.top = Math.max(0, Math.min(100 - row.height, startTop + dyPct));
+    el.style.left = row.left + '%';
+    el.style.top = row.top + '%';
+    updateSlotLayoutReadout(readout, row);
+  });
+  el.addEventListener('pointerup', () => { dragging = false; el.classList.remove('dragging'); });
+}
+
+/** Same shape as wireSlotLayoutDrag, resizing from the bottom-right handle
+ *  instead of moving the whole box -- floored at a 2% minimum in each
+ *  dimension (a box can shrink to a sliver but never disappear) and capped
+ *  so it can't grow past the art's own right/bottom edge. */
+function wireSlotLayoutResize(scene, el, handle, row, readout) {
+  let startX, startY, startW, startH, resizing = false;
+  handle.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    resizing = true;
+    el.classList.add('resizing');
+    handle.setPointerCapture(e.pointerId);
+    startX = e.clientX; startY = e.clientY;
+    startW = row.width; startH = row.height;
+    updateSlotLayoutReadout(readout, row);
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (!resizing) return;
+    e.stopPropagation();
+    const rect = scene.getBoundingClientRect();
+    const dxPct = ((e.clientX - startX) / rect.width) * 100;
+    const dyPct = ((e.clientY - startY) / rect.height) * 100;
+    row.width = Math.max(2, Math.min(100 - row.left, startW + dxPct));
+    row.height = Math.max(2, Math.min(100 - row.top, startH + dyPct));
+    el.style.width = row.width + '%';
+    el.style.height = row.height + '%';
+    updateSlotLayoutReadout(readout, row);
+  });
+  handle.addEventListener('pointerup', (e) => { e.stopPropagation(); resizing = false; el.classList.remove('resizing'); });
+}
+
+async function renderGuildHallSlotLayoutView() {
+  const meta = await ensureGuildHallSlotMeta();
+  const metaById = Object.fromEntries(meta.map((m) => [m.id, m]));
+
+  // A save can arrive mid-fetch (tab switched away and back quickly) --
+  // bail out rather than render a now-stale view over a different tab.
+  if (state.kind !== 'guildhall-slot-layout') return;
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'toolbar';
+  toolbar.innerHTML = `
+    <span class="tiny muted">Drag a box to reposition it, drag its brass handle to resize -- both stay clamped to the art's own edges.</span>
+    <span class="spacer"></span>
+    <button class="primary" id="slotLayoutSaveBtn">Save Layout</button>
+  `;
+
+  const scene = document.createElement('div');
+  scene.className = 'guildhall-slot-layout-scene';
+  scene.style.backgroundImage = "url('/guildhall-art/bg.jpg')";
+
+  state.rows.forEach((row, index) => {
+    const label = metaById[row.id]?.label ?? row.id;
+
+    const el = document.createElement('div');
+    el.className = 'gh-layout-slot';
+    el.dataset.index = String(index);
+    el.style.top = row.top + '%';
+    el.style.left = row.left + '%';
+    el.style.width = row.width + '%';
+    el.style.height = row.height + '%';
+
+    const tag = document.createElement('span');
+    tag.className = 'gh-layout-slot-tag';
+    tag.textContent = label;
+    el.appendChild(tag);
+
+    const readout = document.createElement('span');
+    readout.className = 'gh-layout-readout';
+    el.appendChild(readout);
+
+    const handle = document.createElement('div');
+    handle.className = 'gh-layout-resize-handle';
+    handle.dataset.resizeHandle = 'true';
+    el.appendChild(handle);
+
+    wireSlotLayoutDrag(scene, el, row, readout);
+    wireSlotLayoutResize(scene, el, handle, row, readout);
+
+    scene.appendChild(el);
+  });
+
+  appEl.innerHTML = '';
+  appEl.appendChild(toolbar);
+  appEl.appendChild(scene);
+
+  document.getElementById('slotLayoutSaveBtn').onclick = () => saveToServer('Layout');
 }
 
 /* ----------------------------------------------------- decoration field --- */

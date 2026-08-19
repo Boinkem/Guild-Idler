@@ -7041,10 +7041,11 @@ pass (same caveat as the two entries above).
   yet, so any decoration authored with `acquisition.kind` other than
   `'gold'` is currently unobtainable in real play (correctly shown
   locked in the picker, just with no way to actually unlock it). The
-  DevTool slot layout editor prototype also remains unbuilt, per its own
-  note below -- not a blocker, the 30 slot positions are locked and
-  committed as code either way. Key decisions locked
-  in from that discussion:
+  DevTool slot layout editor -- previously just a standalone prototype --
+  is now the real thing, built in patch 0205 (see its own note below and
+  the patch log entry for what changed under the hood to make that
+  possible without giving up the closed slot-id union). Key decisions
+  locked in from that discussion:
   - **30 individual slots across 10 slot types**, positioned against the
     actual "empty guild hall" background art (two bookshelves, a glass
     display case, an open shelf/table unit, the floor, and the
@@ -7087,8 +7088,7 @@ pass (same caveat as the two entries above).
     enters an edit mode that fully hides the facility/upgrade cards and
     takes the background art full-bleed, with each slot clickable to
     open an item picker; a "Done" button returns to the normal tab.
-  - **Two DevTool authoring features needed.** The first is built
-    (patch 0202); the second is still only a prototype:
+  - **Two DevTool authoring features needed. Both are now built:**
     - **Per-item placement/scale field -- built, see "Guild Hall
       Decorations: DevTool content type + placement/scale field
       foundation (patch 0202)" in the patch log below.** The existing
@@ -7105,17 +7105,33 @@ pass (same caveat as the two entries above).
       there's no in-game Guild Hall UI yet and nothing in the engine
       consumes this content type yet; see the patch log entry for what's
       still deferred.
-    - **Slot layout editor -- still only a prototype, not built.** A second, separate DevTool surface for
-      repositioning/resizing the 30 slot boxes themselves (not an
-      item's placement within a fixed box) -- built and tested as a
-      standalone interactive prototype: every slot draggable by its
-      body, resizable by a corner handle, with a live %-readout and an
-      "Export Layout" button that serializes every slot's
-      `{id, top, left, width, height}` (all in % of the scene) to JSON.
-      This is exactly how the 30 slot positions below were actually
-      tuned -- dragged into place in-browser, exported, and pasted back
-      -- rather than hand-guessed from screenshots, and the same tool
-      would let future layout changes happen without a code patch at
+    - **Slot layout editor -- built for real, patch 0205.** A second,
+      separate DevTool surface for repositioning/resizing the 30 slot
+      boxes themselves (not an item's placement within a fixed box),
+      under World Content -> "Guild Hall Slot Layout." Same drag-the-body
+      / resize-the-corner-handle / live %-readout interaction the
+      standalone prototype sold (`wireDrag`/`wireResize` in that mockup's
+      own `guildhall-customize-mockup-v6-interactive.html`), but wired to
+      the real backend this time -- a "Save Layout" button POSTs straight
+      to `/api/data/guildhall-slot-layout`, no more copy-pasting an
+      exported JSON blob back by hand. Getting there needed a real data
+      split, not just a new page: slot *identity* (which 30 slots exist,
+      which content pool each draws from) stays hardcoded in
+      `guildHallSlots.ts` as before -- still meant to change rarely, as a
+      deliberate code review, matching the closed `GuildHallSlotId` union
+      it backs -- while slot *geometry* (just top/left/width/height) moved
+      out into `src/game/data/json/guildhall-slot-layout.json`, which this
+      new DevTool page owns outright. The two are merged back together at
+      import time; a geometry entry that's ever missing for a real slot id
+      degrades to a small, deliberately-wrong-looking placeholder rect
+      with a console warning rather than crashing the game. The DevTool's
+      own save-time validation rejects any save whose id set isn't exactly
+      those 30 -- it can move and resize slots, not invent or delete them
+      -- so the closed union stays genuinely closed even though geometry
+      is now just routine content tuning. This is exactly how the 30 slot
+      positions below were actually tuned in the first place -- dragged
+      into place in-browser, exported, and pasted back -- and now every
+      future layout tweak can happen the same way with no code patch at
       all.
   - **Final locked slot coordinates** (id, top/left/width/height, all %
     of the background art's own bounding box):
@@ -14394,3 +14410,114 @@ place. Fixture decorations, their temporary `public/decor/` art, and the
 Playwright scripts were all removed afterward -- ships with the same
 empty `guild-hall-decorations.json` and no `public/decor/` directory at
 all, same as every prior patch touching this feature.
+
+### Guild Hall Decorations: DevTool slot layout editor, for real this time (patch 0205)
+
+```discord-update
+Dev Update | Guild Hall Decorations
+
+- Added a real "Guild Hall Slot Layout" tool to the DevTool (World Content tab) -- drag any of the 30 decoration slots to reposition it, drag its corner to resize
+- Changes save straight to the game's real slot data, no code patch needed for future layout tweaks
+- No player-facing change -- this is purely a content-authoring upgrade
+```
+
+Fourth step of the "Customizable Guild Hall background" feature, and
+explicitly requested as futureproofing rather than a new player-facing
+ask: "lets make sure the DevTool supports as much of this as possible
+for futureproofing," after patch 0204 shipped the in-game Customize
+mode. The status doc's own Brainstorming entry had one explicitly
+flagged gap left -- the slot layout editor was still just the standalone
+interactive HTML mockup that originally sold the whole feature, never
+folded into the real DevTool -- so that's the one this patch closes.
+
+**The identity/geometry split.** Slot *identity* -- which 30 slots
+exist, their label, and which content pool (`slotType`) each draws from
+-- is load-bearing for `GuildHallSlotId`, a closed TS union, not a plain
+string. Letting the DevTool freely add/remove/rename entries here would
+silently desync from that union and break everything downstream that
+switches on it. Slot *geometry* -- just `top`/`left`/`width`/`height`,
+purely cosmetic positioning -- has no such constraint; repositioning a
+shelf trinket is exactly the kind of routine tweak the DevTool exists to
+make patch-free. `guildHallSlots.ts` now splits accordingly: identity
+stays a hardcoded `SLOT_IDENTITY` array (same "code owns fixed content"
+convention `UPGRADES`/`GuildFacility` already use), while geometry moved
+out into a new `src/game/data/json/guildhall-slot-layout.json` (id +
+the four numbers only, nothing else) and gets merged back onto its
+matching identity entry at import time to produce `GUILD_HALL_SLOTS`
+exactly as before -- no change to anything that consumes it
+(`GuildHallCustomizeScene.tsx` needed zero edits). If a geometry entry
+is ever missing for a real identity id (a bad hand-edit, a merge
+conflict), the lookup degrades to a small, deliberately-wrong-looking
+placeholder rect at the top-left corner plus a `console.warn`, rather
+than throwing and taking the whole game down over a cosmetic slot --
+same resolve-and-skip philosophy `CurioManager.owned` and
+`GuildHallDecorManager`'s own methods already follow.
+
+**`tools/devtool/server.mjs`.** Added a `guildhall-slot-layout` schema
+entry (`group: 'World Content'`, five numeric/string fields, all
+0-100 for the geometry ones) so the existing generic `/api/data/:kind`
+GET/POST plumbing loads and saves the new JSON file with no bespoke
+server code beyond validation. Added a `GUILDHALL_SLOT_META` /
+`GUILDHALL_SLOT_IDS` constant pair -- a server-side duplicate of
+`guildHallSlots.ts`'s own `SLOT_IDENTITY` list (same "SCHEMAS mirrors a
+TS union" duplication this file already does elsewhere for enum-shaped
+fields; there's no shared import pipeline between the plain Node server
+and the TS game code) -- served over a new `GET /api/guildhall-slot-meta`
+endpoint purely for the frontend's display labels. Added a
+`/guildhall-art/<file>` static route for the committed Customize
+background (mirrors the existing `/decor-art/`/`/lore-art/` pattern; no
+listing endpoint needed, there's only the one background image to
+serve). The important part is a new special case inside `validateArray`:
+a save to `guildhall-slot-layout` is rejected outright if its posted
+array's id set isn't *exactly* the fixed 30 -- missing an id or
+inventing an unknown one both fail with a specific error naming which.
+Per-field checks alone can't express "exactly these ids, no more, no
+fewer"; this is what actually keeps the DevTool from ever silently
+drifting out of sync with the closed `GuildHallSlotId` union, even
+though geometry itself is now freely editable.
+
+**`tools/devtool/public/app.js`/`style.css`.** New bespoke view
+(`renderGuildHallSlotLayoutView`), dispatched from `renderTable()` the
+same way `tuning`'s own grouped view already is -- a hardcoded kind
+check, not a schema flag, matching that existing precedent rather than
+inventing a second mechanism. Not the generic add/edit/delete table:
+there's nothing to add or delete here (the fixed 30 are enforced
+server-side), and typing four numbers into a modal per slot is a far
+worse way to eyeball placement against the real background art than
+dragging a box directly on top of it. Renders the real committed
+`/guildhall-art/bg.jpg` at its own 1774:887 ratio (new
+`.guildhall-slot-layout-scene` CSS, same shape as the game's own
+`.guildhall-customize-scene`) with all 30 geometry rows overlaid as
+labeled, draggable, corner-resizable boxes -- drag/resize math
+(pointer capture, delta-against-the-scene-container-in-percent, clamped
+to stay on the art) ported directly from the original standalone mockup
+that first proved this interaction out. A box shows its live
+`left%, top% · width×height%` readout only while actively being dragged
+or resized, same as the mockup. "Save Layout" reuses the existing
+generic `saveToServer()` as-is -- no new save path, this content type's
+rows are POSTed the exact same way every other schema's are.
+
+**Verified against a genuinely running DevTool, not just code review.**
+`node --check` and a real server boot confirmed clean with the new
+schema entry (exercises the server's own startup self-check, which
+cross-validates `GROUP_ORDER` against every schema's `group`); curled
+`/api/schema`, `/api/guildhall-slot-meta`, `/guildhall-art/bg.jpg`, and
+`/api/data/guildhall-slot-layout` directly to confirm each serves
+correctly; posted a payload missing an id and a payload with a bogus
+extra id, both to confirm `validateArray`'s new guard actually rejects
+them (it does, naming the specific bad id in each case) rather than
+silently accepting a drifted slot set. Then drove the real page through
+Playwright: navigated to World Content -> Guild Hall Slot Layout,
+confirmed all 30 boxes render at their locked starting positions with
+correct labels, dragged a box and confirmed its position updated
+on-screen and the live readout tracked it, resized it via its corner
+handle and confirmed the same, then clicked Save Layout and confirmed
+the server accepted it ("Layout Saved (30 entries)"). The live
+drag/resize/save test necessarily wrote real (moved) coordinates to
+`guildhall-slot-layout.json` on disk -- regenerated the file back to the
+exact locked coordinates afterward (byte-identical to what patch 0203/
+0204 already shipped, confirmed against this doc's own "Final locked
+slot coordinates" block above) before this patch, so the actual 30 slot
+positions in real play are completely unchanged; only the authoring tool
+around them is new. `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean on the full changeset.

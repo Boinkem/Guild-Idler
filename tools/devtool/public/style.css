@@ -716,3 +716,62 @@ td.icon-cell { width: 1%; padding-right: 0; }
 .tuning-row-changed .tuning-value-input { border-color: var(--brass-dim); background: var(--brass-wash); }
 .tuning-range, .tuning-default { white-space: nowrap; color: var(--dim); }
 .tuning-reset, .tuning-full-edit { padding: 4px 8px; font-size: 11px; }
+
+/* ------------------------------------------- guild hall slot layout view -- */
+/* Same shape as the game's own .guildhall-customize-scene (src/styles/
+   app.css) -- locked to guildhall-customize/bg.jpg's real 1774x887 canvas
+   so every slot's percent-rect lines up with the actual art, not a
+   DevTool-only approximation of it. */
+.guildhall-slot-layout-scene {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1774 / 887;
+  background-size: 100% 100%;
+  background-position: center;
+  background-color: var(--bg);
+  border: 1px solid var(--panel3);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+/* Unlike the in-game .craft-slot (invisible until filled -- the artwork IS
+   the UI there), these boxes need a visible outline at all times: this view
+   has no "filled" state to hide behind, just 30 always-present geometry
+   rects someone is actively eyeballing against the art underneath. */
+.gh-layout-slot {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px dashed var(--brass-dim);
+  border-radius: 4px;
+  cursor: grab;
+  touch-action: none;
+  background: rgba(224, 169, 74, 0.05);
+}
+.gh-layout-slot:hover { border-color: var(--brass); }
+.gh-layout-slot.dragging { cursor: grabbing; border-color: var(--brass); background: rgba(224, 169, 74, 0.18); z-index: 20; }
+.gh-layout-slot.resizing { border-color: var(--brass); z-index: 20; }
+
+.gh-layout-slot-tag {
+  position: absolute; top: -9px; left: 4px;
+  background: var(--panel); border: 1px solid var(--edge); color: var(--brass);
+  font-size: 8.5px; padding: 1px 5px; border-radius: 6px;
+  white-space: nowrap; pointer-events: none; z-index: 2;
+}
+
+.gh-layout-resize-handle {
+  position: absolute; right: -5px; bottom: -5px; width: 12px; height: 12px;
+  background: var(--brass); border: 1px solid var(--bg); border-radius: 3px;
+  cursor: nwse-resize; z-index: 5;
+}
+
+/* Hidden until the box is actively being manipulated (same idea as the
+   mockup's own .readout) -- a live coordinate readout would just be visual
+   noise on 30 boxes at rest. */
+.gh-layout-readout {
+  position: absolute; left: 2px; bottom: 1px;
+  font-size: 8px; color: var(--text-bright);
+  background: rgba(0, 0, 0, 0.7); padding: 0 3px;
+  pointer-events: none; z-index: 2; opacity: 0;
+}
+.gh-layout-slot.dragging .gh-layout-readout, .gh-layout-slot.resizing .gh-layout-readout { opacity: 1; }

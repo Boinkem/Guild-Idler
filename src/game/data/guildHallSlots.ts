@@ -1,62 +1,98 @@
-import { GuildHallSlotDef, GuildHallSlotId } from '../types';
+import { GuildHallSlotDef, GuildHallSlotId, GuildHallSlotType } from '../types';
+import guildhallSlotLayoutJson from './json/guildhall-slot-layout.json';
 
 /**
- * The 30 physical Guild Hall decoration slots -- locked design data, not
- * DevTool-editable (see the still-not-built "DevTool slot layout editor"
- * prototype noted in guild-idler-status.md's backlog entry for that). A
- * plain hardcoded array, same "code owns fixed, code-defined content"
- * convention data/progression.ts's UPGRADES or data/raidUpgrades.ts
- * already use, not the "own JSON file, DevTool schema" pattern the
- * decorations themselves (guildHallDecor.ts) use -- these 30 positions
- * came out of an interactive mockup pass and are meant to change rarely,
- * as a deliberate code review, not routine content authoring.
+ * The 30 physical Guild Hall decoration slots. Split across two sources,
+ * merged here at import time:
  *
- * Every id/top/left/width/height below is transcribed verbatim from
- * guild-idler-status.md's "Final locked slot coordinates" JSON block --
- * do not hand-tune these without updating that block to match, it's the
- * source of truth for what these numbers mean and where they came from.
- * `top`/`left`/`width`/`height` are all % of the Guild Hall background
- * art's own bounding box, matching how they were authored and exported
- * from the interactive layout tool.
+ * - `SLOT_IDENTITY` below (id/label/slotType) is a plain hardcoded array,
+ *   same "code owns fixed, code-defined content" convention
+ *   data/progression.ts's UPGRADES or data/raidUpgrades.ts already use --
+ *   which 30 slots exist and which content pool each draws from is
+ *   load-bearing for `GuildHallSlotId` (a closed union, not a plain
+ *   string -- see that type's own doc comment) and is meant to change
+ *   rarely, as a deliberate code review, not routine content authoring.
+ * - `json/guildhall-slot-layout.json` (geometry only -- top/left/width/
+ *   height, % of the background art's own bounding box) IS DevTool-
+ *   editable (patch 0205's "Guild Hall Slot Layout" tool in the DevTool,
+ *   under World Content) -- repositioning/resizing a slot is exactly the
+ *   kind of routine, no-code-patch-needed tweak the DevTool exists for,
+ *   unlike adding or removing a slot entirely.
  *
- * `slotType` assigns each physical slot to one of GuildHallSlotType's 9
- * content pools, per the locked design's 10 slot-type categories (Wall
- * 1/Wall 2 share the `wallCenterpiece` pool, the left/right bookshelf
- * trinket slots share one `wallTrinket` pool, and Corner L/Corner R
- * share one `corner` pool -- symmetric placement, same content pool).
+ * The DevTool's own save-time validation (server.mjs's
+ * `guildhall-slot-layout` special case in `validateArray`) rejects a
+ * layout file that doesn't have geometry for exactly these 30 ids -- it
+ * can edit numbers, not add or remove slots -- so in the DevTool-authored
+ * common case every identity id below always has a matching geometry
+ * entry. The lookups below still degrade gracefully (a console.warn and
+ * a small fallback rect) rather than throwing if that invariant is ever
+ * violated some other way (a hand-edited JSON file, a merge conflict) --
+ * same "content may drift out from under old assumptions, don't crash
+ * the game over it" convention CurioManager.owned/GuildHallDecorManager's
+ * own resolve-and-skip methods already follow, just applied to slots
+ * instead of decorations.
  */
-export const GUILD_HALL_SLOTS: GuildHallSlotDef[] = [
-  { id: 'banner', label: 'Banner', slotType: 'banner', top: 9.01, left: 28.28, width: 13.48, height: 25.53 },
-  { id: 'wall1', label: 'Wall 1', slotType: 'wallCenterpiece', top: 20, left: 4, width: 11.34, height: 26.18 },
-  { id: 'wall2', label: 'Wall 2', slotType: 'wallCenterpiece', top: 20, left: 85.5, width: 9.75, height: 26 },
-  { id: 'trophycase', label: 'Trophy Case', slotType: 'trophyCase', top: 36.6, left: 29.6, width: 10.7, height: 18.9 },
-  { id: 'centerpiece', label: 'Centerpiece', slotType: 'centerpiece', top: 15.71, left: 49.84, width: 12.4, height: 25 },
-  { id: 'floor', label: 'Floor Centerpiece', slotType: 'floorCenterpiece', top: 69.22, left: 21.74, width: 54, height: 24 },
-  { id: 'cornerL', label: 'Corner L', slotType: 'corner', top: 48.92, left: 0.63, width: 14.9, height: 26.06 },
-  { id: 'cornerR', label: 'Corner R', slotType: 'corner', top: 53.03, left: 85.36, width: 14.55, height: 24.63 },
-  { id: 'left-0-0', label: 'L1', slotType: 'wallTrinket', top: 29.5, left: 16.2, width: 5.6, height: 5.4 },
-  { id: 'left-0-1', label: 'L1', slotType: 'wallTrinket', top: 29.5, left: 22.4, width: 5.6, height: 5.4 },
-  { id: 'left-1-0', label: 'L2a', slotType: 'wallTrinket', top: 34.9, left: 16.2, width: 5.6, height: 6.8 },
-  { id: 'left-1-1', label: 'L2a', slotType: 'wallTrinket', top: 34.9, left: 22.4, width: 5.6, height: 6.8 },
-  { id: 'left-2-0', label: 'L2b', slotType: 'wallTrinket', top: 41.7, left: 16.2, width: 5.6, height: 6.8 },
-  { id: 'left-2-1', label: 'L2b', slotType: 'wallTrinket', top: 41.7, left: 22.4, width: 5.6, height: 6.8 },
-  { id: 'left-3-0', label: 'L3', slotType: 'wallTrinket', top: 48.5, left: 16.2, width: 5.6, height: 8.4 },
-  { id: 'left-3-1', label: 'L3', slotType: 'wallTrinket', top: 48.5, left: 22.4, width: 5.6, height: 8.4 },
-  { id: 'right-0-0', label: 'R1', slotType: 'wallTrinket', top: 29.5, left: 73.6, width: 4.2, height: 5.4 },
-  { id: 'right-0-1', label: 'R1', slotType: 'wallTrinket', top: 29.5, left: 78.4, width: 4.2, height: 5.4 },
-  { id: 'right-1-0', label: 'R2a', slotType: 'wallTrinket', top: 34.9, left: 73.6, width: 4.2, height: 6.8 },
-  { id: 'right-1-1', label: 'R2a', slotType: 'wallTrinket', top: 34.9, left: 78.4, width: 4.2, height: 6.8 },
-  { id: 'right-2-0', label: 'R2b', slotType: 'wallTrinket', top: 41.7, left: 73.6, width: 4.2, height: 6.8 },
-  { id: 'right-2-1', label: 'R2b', slotType: 'wallTrinket', top: 41.7, left: 78.4, width: 4.2, height: 6.8 },
-  { id: 'right-3-0', label: 'R3', slotType: 'wallTrinket', top: 48.5, left: 73.6, width: 4.2, height: 8.4 },
-  { id: 'right-3-1', label: 'R3', slotType: 'wallTrinket', top: 48.5, left: 78.4, width: 4.2, height: 8.4 },
-  { id: 'center-0-0', label: 'Middle', slotType: 'middleShelf', top: 47.3, left: 49.3, width: 5.9, height: 4.6 },
-  { id: 'center-0-1', label: 'Middle', slotType: 'middleShelf', top: 47.3, left: 55.8, width: 5.9, height: 4.6 },
-  { id: 'center-1-0', label: 'LowerA', slotType: 'lowerShelf', top: 51.9, left: 49.3, width: 5.9, height: 6.75 },
-  { id: 'center-1-1', label: 'LowerA', slotType: 'lowerShelf', top: 51.9, left: 55.8, width: 5.9, height: 6.75 },
-  { id: 'center-2-0', label: 'LowerB', slotType: 'lowerShelf', top: 58.65, left: 49.3, width: 5.9, height: 6.75 },
-  { id: 'center-2-1', label: 'LowerB', slotType: 'lowerShelf', top: 58.65, left: 55.8, width: 5.9, height: 6.75 },
+
+interface SlotGeometry { id: string; top: number; left: number; width: number; height: number; }
+
+const SLOT_GEOMETRY = guildhallSlotLayoutJson as SlotGeometry[];
+const SLOT_GEOMETRY_BY_ID: Record<string, SlotGeometry> = Object.fromEntries(
+  SLOT_GEOMETRY.map((g) => [g.id, g]),
+);
+
+/** A small, visibly-wrong-on-purpose rect (top-left corner, tiny) so a
+ *  missing geometry entry is obvious in the DevTool/in-game rather than
+ *  silently overlapping some other slot at a plausible-looking 0,0. */
+const FALLBACK_GEOMETRY: Omit<SlotGeometry, 'id'> = { top: 0, left: 0, width: 4, height: 4 };
+
+/**
+ * Which 30 slots exist and which content pool each draws from -- see
+ * this file's own top comment for why this half is code-owned while
+ * geometry is DevTool-owned. `label` is the short mockup-era name (e.g.
+ * "L2a"), useful for DevTool/debugging display, not shown to the player.
+ */
+const SLOT_IDENTITY: { id: GuildHallSlotId; label: string; slotType: GuildHallSlotType }[] = [
+  { id: 'banner', label: 'Banner', slotType: 'banner' },
+  { id: 'wall1', label: 'Wall 1', slotType: 'wallCenterpiece' },
+  { id: 'wall2', label: 'Wall 2', slotType: 'wallCenterpiece' },
+  { id: 'trophycase', label: 'Trophy Case', slotType: 'trophyCase' },
+  { id: 'centerpiece', label: 'Centerpiece', slotType: 'centerpiece' },
+  { id: 'floor', label: 'Floor Centerpiece', slotType: 'floorCenterpiece' },
+  { id: 'cornerL', label: 'Corner L', slotType: 'corner' },
+  { id: 'cornerR', label: 'Corner R', slotType: 'corner' },
+  { id: 'left-0-0', label: 'L1', slotType: 'wallTrinket' },
+  { id: 'left-0-1', label: 'L1', slotType: 'wallTrinket' },
+  { id: 'left-1-0', label: 'L2a', slotType: 'wallTrinket' },
+  { id: 'left-1-1', label: 'L2a', slotType: 'wallTrinket' },
+  { id: 'left-2-0', label: 'L2b', slotType: 'wallTrinket' },
+  { id: 'left-2-1', label: 'L2b', slotType: 'wallTrinket' },
+  { id: 'left-3-0', label: 'L3', slotType: 'wallTrinket' },
+  { id: 'left-3-1', label: 'L3', slotType: 'wallTrinket' },
+  { id: 'right-0-0', label: 'R1', slotType: 'wallTrinket' },
+  { id: 'right-0-1', label: 'R1', slotType: 'wallTrinket' },
+  { id: 'right-1-0', label: 'R2a', slotType: 'wallTrinket' },
+  { id: 'right-1-1', label: 'R2a', slotType: 'wallTrinket' },
+  { id: 'right-2-0', label: 'R2b', slotType: 'wallTrinket' },
+  { id: 'right-2-1', label: 'R2b', slotType: 'wallTrinket' },
+  { id: 'right-3-0', label: 'R3', slotType: 'wallTrinket' },
+  { id: 'right-3-1', label: 'R3', slotType: 'wallTrinket' },
+  { id: 'center-0-0', label: 'Middle', slotType: 'middleShelf' },
+  { id: 'center-0-1', label: 'Middle', slotType: 'middleShelf' },
+  { id: 'center-1-0', label: 'LowerA', slotType: 'lowerShelf' },
+  { id: 'center-1-1', label: 'LowerA', slotType: 'lowerShelf' },
+  { id: 'center-2-0', label: 'LowerB', slotType: 'lowerShelf' },
+  { id: 'center-2-1', label: 'LowerB', slotType: 'lowerShelf' },
 ];
+
+export const GUILD_HALL_SLOTS: GuildHallSlotDef[] = SLOT_IDENTITY.map((identity) => {
+  const geometry = SLOT_GEOMETRY_BY_ID[identity.id];
+  if (!geometry) {
+    // eslint-disable-next-line no-console
+    console.warn(`guildHallSlots: no layout geometry for slot "${identity.id}" -- falling back to a tiny top-left placeholder rect. Re-save the Guild Hall Slot Layout tool in the DevTool to fix.`);
+  }
+  const { top, left, width, height } = geometry ?? FALLBACK_GEOMETRY;
+  return { ...identity, top, left, width, height };
+});
 
 export const GUILD_HALL_SLOT_BY_ID: Record<GuildHallSlotId, GuildHallSlotDef> = Object.fromEntries(
   GUILD_HALL_SLOTS.map((s) => [s.id, s]),

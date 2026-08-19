@@ -59,6 +59,14 @@ const BANNERS_DIR = path.join(ROOT, 'public', 'lore');
 // tuning and which don't. Grouped and served the same loose-root-files-
 // plus-subfolders way listBanners/'/lore-art/' already are.
 const DECOR_DIR = path.join(ROOT, 'public', 'decor');
+// The committed Guild Hall Customize background art (currently just
+// bg.jpg -- one fixed scene, not an open-ended content folder), used by
+// the 'Guild Hall Slot Layout' tool below to render the real background
+// behind the drag/resize boxes. No listing endpoint needed the way
+// listBanners/listDecorArt have -- there's nothing to pick between yet,
+// just a static file serve (see the '/guildhall-art/' route further
+// down), same as how the game itself reaches this file directly.
+const GUILDHALL_ART_DIR = path.join(ROOT, 'public', 'guildhall-customize');
 const PORT = 5175;
 
 // Local-only, gitignored (see .gitignore) — holds the Discord webhook URL for
@@ -80,6 +88,53 @@ const RELEASE_DIR = path.join(ROOT, 'release');
 // tool (same "runs on your machine, not deployed" reasoning DEVTOOL.md's own
 // setup instructions already assume for the C:\Little-Knight path itself).
 const BUILD_COPY_TARGET = 'C:\\Custom Apps\\GuildBound Executables';
+
+// The 30 physical Guild Hall slots' fixed identity (id/label/slotType) --
+// mirrors guildHallSlots.ts's own SLOT_IDENTITY verbatim. Duplicated here
+// on purpose, same "SCHEMAS enum options mirror a TS union" tradeoff the
+// 'guild-hall-decorations' schema's own `slotType` enum options already
+// accept just above -- this plain Node server has no TS import pipeline,
+// so it can't read the real source of truth directly. Two jobs: served
+// to the DevTool frontend as display-only metadata (labels, so the Slot
+// Layout tool can show "L2a" instead of a bare id -- see
+// '/api/guildhall-slot-meta' below), and its id list is the allowlist
+// `validateArray`'s 'guildhall-slot-layout' special case enforces
+// (below) -- a saved layout must have geometry for exactly these 30 ids,
+// no more, no fewer, since adding/removing a slot is a `GuildHallSlotId`
+// (types.ts) code change, not something this tool can do.
+const GUILDHALL_SLOT_META = [
+  { id: 'banner', label: 'Banner', slotType: 'banner' },
+  { id: 'wall1', label: 'Wall 1', slotType: 'wallCenterpiece' },
+  { id: 'wall2', label: 'Wall 2', slotType: 'wallCenterpiece' },
+  { id: 'trophycase', label: 'Trophy Case', slotType: 'trophyCase' },
+  { id: 'centerpiece', label: 'Centerpiece', slotType: 'centerpiece' },
+  { id: 'floor', label: 'Floor Centerpiece', slotType: 'floorCenterpiece' },
+  { id: 'cornerL', label: 'Corner L', slotType: 'corner' },
+  { id: 'cornerR', label: 'Corner R', slotType: 'corner' },
+  { id: 'left-0-0', label: 'L1', slotType: 'wallTrinket' },
+  { id: 'left-0-1', label: 'L1', slotType: 'wallTrinket' },
+  { id: 'left-1-0', label: 'L2a', slotType: 'wallTrinket' },
+  { id: 'left-1-1', label: 'L2a', slotType: 'wallTrinket' },
+  { id: 'left-2-0', label: 'L2b', slotType: 'wallTrinket' },
+  { id: 'left-2-1', label: 'L2b', slotType: 'wallTrinket' },
+  { id: 'left-3-0', label: 'L3', slotType: 'wallTrinket' },
+  { id: 'left-3-1', label: 'L3', slotType: 'wallTrinket' },
+  { id: 'right-0-0', label: 'R1', slotType: 'wallTrinket' },
+  { id: 'right-0-1', label: 'R1', slotType: 'wallTrinket' },
+  { id: 'right-1-0', label: 'R2a', slotType: 'wallTrinket' },
+  { id: 'right-1-1', label: 'R2a', slotType: 'wallTrinket' },
+  { id: 'right-2-0', label: 'R2b', slotType: 'wallTrinket' },
+  { id: 'right-2-1', label: 'R2b', slotType: 'wallTrinket' },
+  { id: 'right-3-0', label: 'R3', slotType: 'wallTrinket' },
+  { id: 'right-3-1', label: 'R3', slotType: 'wallTrinket' },
+  { id: 'center-0-0', label: 'Middle', slotType: 'middleShelf' },
+  { id: 'center-0-1', label: 'Middle', slotType: 'middleShelf' },
+  { id: 'center-1-0', label: 'LowerA', slotType: 'lowerShelf' },
+  { id: 'center-1-1', label: 'LowerA', slotType: 'lowerShelf' },
+  { id: 'center-2-0', label: 'LowerB', slotType: 'lowerShelf' },
+  { id: 'center-2-1', label: 'LowerB', slotType: 'lowerShelf' },
+];
+const GUILDHALL_SLOT_IDS = GUILDHALL_SLOT_META.map((s) => s.id);
 
 /* --------------------------------------------------------------- schema --- */
 // Required fields per content type. This is the real safety net: TypeScript's
@@ -802,17 +857,17 @@ const SCHEMAS = {
     label: 'Guild Hall Decorations',
     group: 'World Content',
     idField: 'id',
-    // Foundation-only for now (patch 0202) -- see GuildHallDecorationDef's
-    // own doc comment in types.ts and guildHallDecor.ts's file-level
-    // comment for the full picture: this schema and the new
-    // 'decorationImage' field type exist so real decoration items can be
-    // authored immediately, but nothing in the engine/UI consumes this
-    // list yet. The 30 physical slot instances (position/size/which pool
-    // they draw from) are locked design data logged in guild-idler-
-    // status.md's "Customizable Guild Hall background" backlog entry, not
-    // DevTool content -- `slotType` here is the POOL an item belongs to
-    // (any of the 16 wallTrinket slots, either of the 2 wallCenterpiece
-    // slots, etc), not a specific one of the 30 instances.
+    // Authoring for the content half of the Guild Hall decorations
+    // feature -- see GuildHallDecorationDef's own doc comment in types.ts
+    // and guildHallDecor.ts's file-level comment for the full picture.
+    // The 30 physical slot instances (which pool each one draws from,
+    // plus their position/size) are a separate concern -- identity
+    // (which 30 slots exist, which pool each is) is code-owned
+    // (guildHallSlots.ts), geometry is DevTool-owned (the
+    // 'guildhall-slot-layout' schema just below) -- `slotType` here is
+    // the POOL an item belongs to (any of the 16 wallTrinket slots,
+    // either of the 2 wallCenterpiece slots, etc), not a specific one of
+    // the 30 instances.
     fields: {
       id: { type: 'string', required: true, slug: true },
       name: { type: 'string', required: true },
@@ -836,9 +891,37 @@ const SCHEMAS = {
       // is left square (1/1) rather than per-slot-type, since a single
       // decoration entry has no one slot instance to size the preview
       // against (its slotType is a whole pool of differently-shaped
-      // slots) -- close enough for judging fit, real per-slot sizing
-      // happens in-game once the Customize UI exists.
+      // slots) -- close enough for judging fit; real per-slot sizing is
+      // visible in-game in the Guild Hall's own "Customize" mode.
       image: { type: 'decorationImage', required: false, defaultFolder: '', previewAspect: '1/1' },
+    },
+  },
+  // Geometry only (top/left/width/height, % of the background art's own
+  // bounding box) -- id/label/slotType (which 30 slots exist at all) is
+  // code-owned, see guildHallSlots.ts's own top comment for the full
+  // "identity vs geometry" split and why. This schema exists purely so
+  // the DevTool's own visual drag/resize tool (renderGuildHallSlotLayout-
+  // View in app.js, dispatched on kind exactly like 'tuning' gets its own
+  // grouped view) has somewhere real to load from and save back to,
+  // reusing the exact same GET/POST /api/data/:kind plumbing every other
+  // content type uses -- it is NOT rendered as a generic add/edit/delete
+  // table (see the frontend dispatch), since adding or removing a row
+  // here would silently desync from the fixed 30-id set `GuildHallSlotId`
+  // (types.ts) closes over. `validateArray`'s own special case for this
+  // kind (see GUILDHALL_SLOT_IDS below) is what actually enforces that --
+  // this schema's per-field validation alone can't express "exactly
+  // these 30 ids, no more, no fewer."
+  'guildhall-slot-layout': {
+    file: 'guildhall-slot-layout.json',
+    label: 'Guild Hall Slot Layout',
+    group: 'World Content',
+    idField: 'id',
+    fields: {
+      id: { type: 'string', required: true },
+      top: { type: 'number', required: true, min: 0, max: 100 },
+      left: { type: 'number', required: true, min: 0, max: 100 },
+      width: { type: 'number', required: true, min: 0, max: 100 },
+      height: { type: 'number', required: true, min: 0, max: 100 },
     },
   },
   'raids': {
@@ -1392,6 +1475,22 @@ function validateArray(kind, data) {
     const ids = data.map((e) => e[schema.idField]).filter(Boolean);
     const dupes = ids.filter((id, i) => ids.indexOf(id) !== i);
     if (dupes.length) errors.push(`duplicate id(s): ${[...new Set(dupes)].join(', ')}`);
+  }
+  // 'guildhall-slot-layout' is geometry for a fixed, code-owned set of 30
+  // slot ids (see guildHallSlots.ts / GUILDHALL_SLOT_META's own comments)
+  // -- the per-field checks above already confirm every entry HAS an id/
+  // top/left/width/height, but say nothing about which ids are actually
+  // allowed. A saved layout that's missing one of the 30 or invents an
+  // unknown one would silently desync from `GuildHallSlotId` (a closed
+  // TS union, not something this JSON file can add to), so that's
+  // enforced here instead, whole-array, the same place the generic
+  // duplicate-id check just above already runs.
+  if (kind === 'guildhall-slot-layout') {
+    const ids = data.map((e) => e.id).filter(Boolean);
+    const missing = GUILDHALL_SLOT_IDS.filter((id) => !ids.includes(id));
+    const unknown = ids.filter((id) => !GUILDHALL_SLOT_IDS.includes(id));
+    if (missing.length) errors.push(`missing required slot(s): ${missing.join(', ')}`);
+    if (unknown.length) errors.push(`unknown slot id(s), not one of the fixed 30: ${unknown.join(', ')}`);
   }
   return errors;
 }
@@ -2152,6 +2251,13 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, await listDecorArt());
   }
 
+  // Display-only metadata for the Guild Hall Slot Layout tool -- labels
+  // and pools for the 30 fixed slot ids, so it can show "L2a" on a box
+  // instead of a bare id. See GUILDHALL_SLOT_META's own comment.
+  if (url.pathname === '/api/guildhall-slot-meta' && req.method === 'GET') {
+    return json(res, 200, GUILDHALL_SLOT_META);
+  }
+
   // Serves the actual icon image bytes for <img> previews in the picker and
   // table thumbnails. Same path-traversal guard as serveStatic below, just
   // rooted at ICONS_DIR instead of PUBLIC_DIR since these live outside the
@@ -2202,6 +2308,27 @@ const server = http.createServer(async (req, res) => {
     const rel = decodeURIComponent(url.pathname.slice('/decor-art/'.length)).split('?')[0];
     const filePath = path.join(DECOR_DIR, rel);
     if (!filePath.startsWith(DECOR_DIR)) { res.writeHead(403); res.end(); return; }
+    try {
+      const body = await fs.readFile(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' }[ext]
+        ?? 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': mime });
+      res.end(body);
+    } catch {
+      res.writeHead(404);
+      res.end('Not found');
+    }
+    return;
+  }
+
+  // Same idea a third time, rooted at GUILDHALL_ART_DIR (public/
+  // guildhall-customize/) -- just the one committed background image for
+  // now, served the same guarded way as every other art tree here.
+  if (url.pathname.startsWith('/guildhall-art/')) {
+    const rel = decodeURIComponent(url.pathname.slice('/guildhall-art/'.length)).split('?')[0];
+    const filePath = path.join(GUILDHALL_ART_DIR, rel);
+    if (!filePath.startsWith(GUILDHALL_ART_DIR)) { res.writeHead(403); res.end(); return; }
     try {
       const body = await fs.readFile(filePath);
       const ext = path.extname(filePath).toLowerCase();

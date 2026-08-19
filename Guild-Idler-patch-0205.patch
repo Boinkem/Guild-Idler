@@ -1,0 +1,1031 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 3de125d..0fa55c2 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -7041,10 +7041,11 @@ pass (same caveat as the two entries above).
+   yet, so any decoration authored with `acquisition.kind` other than
+   `'gold'` is currently unobtainable in real play (correctly shown
+   locked in the picker, just with no way to actually unlock it). The
+-  DevTool slot layout editor prototype also remains unbuilt, per its own
+-  note below -- not a blocker, the 30 slot positions are locked and
+-  committed as code either way. Key decisions locked
+-  in from that discussion:
++  DevTool slot layout editor -- previously just a standalone prototype --
++  is now the real thing, built in patch 0205 (see its own note below and
++  the patch log entry for what changed under the hood to make that
++  possible without giving up the closed slot-id union). Key decisions
++  locked in from that discussion:
+   - **30 individual slots across 10 slot types**, positioned against the
+     actual "empty guild hall" background art (two bookshelves, a glass
+     display case, an open shelf/table unit, the floor, and the
+@@ -7087,8 +7088,7 @@ pass (same caveat as the two entries above).
+     enters an edit mode that fully hides the facility/upgrade cards and
+     takes the background art full-bleed, with each slot clickable to
+     open an item picker; a "Done" button returns to the normal tab.
+-  - **Two DevTool authoring features needed.** The first is built
+-    (patch 0202); the second is still only a prototype:
++  - **Two DevTool authoring features needed. Both are now built:**
+     - **Per-item placement/scale field -- built, see "Guild Hall
+       Decorations: DevTool content type + placement/scale field
+       foundation (patch 0202)" in the patch log below.** The existing
+@@ -7105,17 +7105,33 @@ pass (same caveat as the two entries above).
+       there's no in-game Guild Hall UI yet and nothing in the engine
+       consumes this content type yet; see the patch log entry for what's
+       still deferred.
+-    - **Slot layout editor -- still only a prototype, not built.** A second, separate DevTool surface for
+-      repositioning/resizing the 30 slot boxes themselves (not an
+-      item's placement within a fixed box) -- built and tested as a
+-      standalone interactive prototype: every slot draggable by its
+-      body, resizable by a corner handle, with a live %-readout and an
+-      "Export Layout" button that serializes every slot's
+-      `{id, top, left, width, height}` (all in % of the scene) to JSON.
+-      This is exactly how the 30 slot positions below were actually
+-      tuned -- dragged into place in-browser, exported, and pasted back
+-      -- rather than hand-guessed from screenshots, and the same tool
+-      would let future layout changes happen without a code patch at
++    - **Slot layout editor -- built for real, patch 0205.** A second,
++      separate DevTool surface for repositioning/resizing the 30 slot
++      boxes themselves (not an item's placement within a fixed box),
++      under World Content -> "Guild Hall Slot Layout." Same drag-the-body
++      / resize-the-corner-handle / live %-readout interaction the
++      standalone prototype sold (`wireDrag`/`wireResize` in that mockup's
++      own `guildhall-customize-mockup-v6-interactive.html`), but wired to
++      the real backend this time -- a "Save Layout" button POSTs straight
++      to `/api/data/guildhall-slot-layout`, no more copy-pasting an
++      exported JSON blob back by hand. Getting there needed a real data
++      split, not just a new page: slot *identity* (which 30 slots exist,
++      which content pool each draws from) stays hardcoded in
++      `guildHallSlots.ts` as before -- still meant to change rarely, as a
++      deliberate code review, matching the closed `GuildHallSlotId` union
++      it backs -- while slot *geometry* (just top/left/width/height) moved
++      out into `src/game/data/json/guildhall-slot-layout.json`, which this
++      new DevTool page owns outright. The two are merged back together at
++      import time; a geometry entry that's ever missing for a real slot id
++      degrades to a small, deliberately-wrong-looking placeholder rect
++      with a console warning rather than crashing the game. The DevTool's
++      own save-time validation rejects any save whose id set isn't exactly
++      those 30 -- it can move and resize slots, not invent or delete them
++      -- so the closed union stays genuinely closed even though geometry
++      is now just routine content tuning. This is exactly how the 30 slot
++      positions below were actually tuned in the first place -- dragged
++      into place in-browser, exported, and pasted back -- and now every
++      future layout tweak can happen the same way with no code patch at
+       all.
+   - **Final locked slot coordinates** (id, top/left/width/height, all %
+     of the background art's own bounding box):
+@@ -14394,3 +14410,114 @@ place. Fixture decorations, their temporary `public/decor/` art, and the
+ Playwright scripts were all removed afterward -- ships with the same
+ empty `guild-hall-decorations.json` and no `public/decor/` directory at
+ all, same as every prior patch touching this feature.
++
++### Guild Hall Decorations: DevTool slot layout editor, for real this time (patch 0205)
++
++```discord-update
++Dev Update | Guild Hall Decorations
++
++- Added a real "Guild Hall Slot Layout" tool to the DevTool (World Content tab) -- drag any of the 30 decoration slots to reposition it, drag its corner to resize
++- Changes save straight to the game's real slot data, no code patch needed for future layout tweaks
++- No player-facing change -- this is purely a content-authoring upgrade
++```
++
++Fourth step of the "Customizable Guild Hall background" feature, and
++explicitly requested as futureproofing rather than a new player-facing
++ask: "lets make sure the DevTool supports as much of this as possible
++for futureproofing," after patch 0204 shipped the in-game Customize
++mode. The status doc's own Brainstorming entry had one explicitly
++flagged gap left -- the slot layout editor was still just the standalone
++interactive HTML mockup that originally sold the whole feature, never
++folded into the real DevTool -- so that's the one this patch closes.
++
++**The identity/geometry split.** Slot *identity* -- which 30 slots
++exist, their label, and which content pool (`slotType`) each draws from
++-- is load-bearing for `GuildHallSlotId`, a closed TS union, not a plain
++string. Letting the DevTool freely add/remove/rename entries here would
++silently desync from that union and break everything downstream that
++switches on it. Slot *geometry* -- just `top`/`left`/`width`/`height`,
++purely cosmetic positioning -- has no such constraint; repositioning a
++shelf trinket is exactly the kind of routine tweak the DevTool exists to
++make patch-free. `guildHallSlots.ts` now splits accordingly: identity
++stays a hardcoded `SLOT_IDENTITY` array (same "code owns fixed content"
++convention `UPGRADES`/`GuildFacility` already use), while geometry moved
++out into a new `src/game/data/json/guildhall-slot-layout.json` (id +
++the four numbers only, nothing else) and gets merged back onto its
++matching identity entry at import time to produce `GUILD_HALL_SLOTS`
++exactly as before -- no change to anything that consumes it
++(`GuildHallCustomizeScene.tsx` needed zero edits). If a geometry entry
++is ever missing for a real identity id (a bad hand-edit, a merge
++conflict), the lookup degrades to a small, deliberately-wrong-looking
++placeholder rect at the top-left corner plus a `console.warn`, rather
++than throwing and taking the whole game down over a cosmetic slot --
++same resolve-and-skip philosophy `CurioManager.owned` and
++`GuildHallDecorManager`'s own methods already follow.
++
++**`tools/devtool/server.mjs`.** Added a `guildhall-slot-layout` schema
++entry (`group: 'World Content'`, five numeric/string fields, all
++0-100 for the geometry ones) so the existing generic `/api/data/:kind`
++GET/POST plumbing loads and saves the new JSON file with no bespoke
++server code beyond validation. Added a `GUILDHALL_SLOT_META` /
++`GUILDHALL_SLOT_IDS` constant pair -- a server-side duplicate of
++`guildHallSlots.ts`'s own `SLOT_IDENTITY` list (same "SCHEMAS mirrors a
++TS union" duplication this file already does elsewhere for enum-shaped
++fields; there's no shared import pipeline between the plain Node server
++and the TS game code) -- served over a new `GET /api/guildhall-slot-meta`
++endpoint purely for the frontend's display labels. Added a
++`/guildhall-art/<file>` static route for the committed Customize
++background (mirrors the existing `/decor-art/`/`/lore-art/` pattern; no
++listing endpoint needed, there's only the one background image to
++serve). The important part is a new special case inside `validateArray`:
++a save to `guildhall-slot-layout` is rejected outright if its posted
++array's id set isn't *exactly* the fixed 30 -- missing an id or
++inventing an unknown one both fail with a specific error naming which.
++Per-field checks alone can't express "exactly these ids, no more, no
++fewer"; this is what actually keeps the DevTool from ever silently
++drifting out of sync with the closed `GuildHallSlotId` union, even
++though geometry itself is now freely editable.
++
++**`tools/devtool/public/app.js`/`style.css`.** New bespoke view
++(`renderGuildHallSlotLayoutView`), dispatched from `renderTable()` the
++same way `tuning`'s own grouped view already is -- a hardcoded kind
++check, not a schema flag, matching that existing precedent rather than
++inventing a second mechanism. Not the generic add/edit/delete table:
++there's nothing to add or delete here (the fixed 30 are enforced
++server-side), and typing four numbers into a modal per slot is a far
++worse way to eyeball placement against the real background art than
++dragging a box directly on top of it. Renders the real committed
++`/guildhall-art/bg.jpg` at its own 1774:887 ratio (new
++`.guildhall-slot-layout-scene` CSS, same shape as the game's own
++`.guildhall-customize-scene`) with all 30 geometry rows overlaid as
++labeled, draggable, corner-resizable boxes -- drag/resize math
++(pointer capture, delta-against-the-scene-container-in-percent, clamped
++to stay on the art) ported directly from the original standalone mockup
++that first proved this interaction out. A box shows its live
++`left%, top% · width×height%` readout only while actively being dragged
++or resized, same as the mockup. "Save Layout" reuses the existing
++generic `saveToServer()` as-is -- no new save path, this content type's
++rows are POSTed the exact same way every other schema's are.
++
++**Verified against a genuinely running DevTool, not just code review.**
++`node --check` and a real server boot confirmed clean with the new
++schema entry (exercises the server's own startup self-check, which
++cross-validates `GROUP_ORDER` against every schema's `group`); curled
++`/api/schema`, `/api/guildhall-slot-meta`, `/guildhall-art/bg.jpg`, and
++`/api/data/guildhall-slot-layout` directly to confirm each serves
++correctly; posted a payload missing an id and a payload with a bogus
++extra id, both to confirm `validateArray`'s new guard actually rejects
++them (it does, naming the specific bad id in each case) rather than
++silently accepting a drifted slot set. Then drove the real page through
++Playwright: navigated to World Content -> Guild Hall Slot Layout,
++confirmed all 30 boxes render at their locked starting positions with
++correct labels, dragged a box and confirmed its position updated
++on-screen and the live readout tracked it, resized it via its corner
++handle and confirmed the same, then clicked Save Layout and confirmed
++the server accepted it ("Layout Saved (30 entries)"). The live
++drag/resize/save test necessarily wrote real (moved) coordinates to
++`guildhall-slot-layout.json` on disk -- regenerated the file back to the
++exact locked coordinates afterward (byte-identical to what patch 0203/
++0204 already shipped, confirmed against this doc's own "Final locked
++slot coordinates" block above) before this patch, so the actual 30 slot
++positions in real play are completely unchanged; only the authoring tool
++around them is new. `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean on the full changeset.
+diff --git a/src/game/data/guildHallSlots.ts b/src/game/data/guildHallSlots.ts
+index 0887f62..147bf53 100644
+--- a/src/game/data/guildHallSlots.ts
++++ b/src/game/data/guildHallSlots.ts
+@@ -1,63 +1,99 @@
+-import { GuildHallSlotDef, GuildHallSlotId } from '../types';
++import { GuildHallSlotDef, GuildHallSlotId, GuildHallSlotType } from '../types';
++import guildhallSlotLayoutJson from './json/guildhall-slot-layout.json';
+ 
+ /**
+- * The 30 physical Guild Hall decoration slots -- locked design data, not
+- * DevTool-editable (see the still-not-built "DevTool slot layout editor"
+- * prototype noted in guild-idler-status.md's backlog entry for that). A
+- * plain hardcoded array, same "code owns fixed, code-defined content"
+- * convention data/progression.ts's UPGRADES or data/raidUpgrades.ts
+- * already use, not the "own JSON file, DevTool schema" pattern the
+- * decorations themselves (guildHallDecor.ts) use -- these 30 positions
+- * came out of an interactive mockup pass and are meant to change rarely,
+- * as a deliberate code review, not routine content authoring.
++ * The 30 physical Guild Hall decoration slots. Split across two sources,
++ * merged here at import time:
+  *
+- * Every id/top/left/width/height below is transcribed verbatim from
+- * guild-idler-status.md's "Final locked slot coordinates" JSON block --
+- * do not hand-tune these without updating that block to match, it's the
+- * source of truth for what these numbers mean and where they came from.
+- * `top`/`left`/`width`/`height` are all % of the Guild Hall background
+- * art's own bounding box, matching how they were authored and exported
+- * from the interactive layout tool.
++ * - `SLOT_IDENTITY` below (id/label/slotType) is a plain hardcoded array,
++ *   same "code owns fixed, code-defined content" convention
++ *   data/progression.ts's UPGRADES or data/raidUpgrades.ts already use --
++ *   which 30 slots exist and which content pool each draws from is
++ *   load-bearing for `GuildHallSlotId` (a closed union, not a plain
++ *   string -- see that type's own doc comment) and is meant to change
++ *   rarely, as a deliberate code review, not routine content authoring.
++ * - `json/guildhall-slot-layout.json` (geometry only -- top/left/width/
++ *   height, % of the background art's own bounding box) IS DevTool-
++ *   editable (patch 0205's "Guild Hall Slot Layout" tool in the DevTool,
++ *   under World Content) -- repositioning/resizing a slot is exactly the
++ *   kind of routine, no-code-patch-needed tweak the DevTool exists for,
++ *   unlike adding or removing a slot entirely.
+  *
+- * `slotType` assigns each physical slot to one of GuildHallSlotType's 9
+- * content pools, per the locked design's 10 slot-type categories (Wall
+- * 1/Wall 2 share the `wallCenterpiece` pool, the left/right bookshelf
+- * trinket slots share one `wallTrinket` pool, and Corner L/Corner R
+- * share one `corner` pool -- symmetric placement, same content pool).
++ * The DevTool's own save-time validation (server.mjs's
++ * `guildhall-slot-layout` special case in `validateArray`) rejects a
++ * layout file that doesn't have geometry for exactly these 30 ids -- it
++ * can edit numbers, not add or remove slots -- so in the DevTool-authored
++ * common case every identity id below always has a matching geometry
++ * entry. The lookups below still degrade gracefully (a console.warn and
++ * a small fallback rect) rather than throwing if that invariant is ever
++ * violated some other way (a hand-edited JSON file, a merge conflict) --
++ * same "content may drift out from under old assumptions, don't crash
++ * the game over it" convention CurioManager.owned/GuildHallDecorManager's
++ * own resolve-and-skip methods already follow, just applied to slots
++ * instead of decorations.
+  */
+-export const GUILD_HALL_SLOTS: GuildHallSlotDef[] = [
+-  { id: 'banner', label: 'Banner', slotType: 'banner', top: 9.01, left: 28.28, width: 13.48, height: 25.53 },
+-  { id: 'wall1', label: 'Wall 1', slotType: 'wallCenterpiece', top: 20, left: 4, width: 11.34, height: 26.18 },
+-  { id: 'wall2', label: 'Wall 2', slotType: 'wallCenterpiece', top: 20, left: 85.5, width: 9.75, height: 26 },
+-  { id: 'trophycase', label: 'Trophy Case', slotType: 'trophyCase', top: 36.6, left: 29.6, width: 10.7, height: 18.9 },
+-  { id: 'centerpiece', label: 'Centerpiece', slotType: 'centerpiece', top: 15.71, left: 49.84, width: 12.4, height: 25 },
+-  { id: 'floor', label: 'Floor Centerpiece', slotType: 'floorCenterpiece', top: 69.22, left: 21.74, width: 54, height: 24 },
+-  { id: 'cornerL', label: 'Corner L', slotType: 'corner', top: 48.92, left: 0.63, width: 14.9, height: 26.06 },
+-  { id: 'cornerR', label: 'Corner R', slotType: 'corner', top: 53.03, left: 85.36, width: 14.55, height: 24.63 },
+-  { id: 'left-0-0', label: 'L1', slotType: 'wallTrinket', top: 29.5, left: 16.2, width: 5.6, height: 5.4 },
+-  { id: 'left-0-1', label: 'L1', slotType: 'wallTrinket', top: 29.5, left: 22.4, width: 5.6, height: 5.4 },
+-  { id: 'left-1-0', label: 'L2a', slotType: 'wallTrinket', top: 34.9, left: 16.2, width: 5.6, height: 6.8 },
+-  { id: 'left-1-1', label: 'L2a', slotType: 'wallTrinket', top: 34.9, left: 22.4, width: 5.6, height: 6.8 },
+-  { id: 'left-2-0', label: 'L2b', slotType: 'wallTrinket', top: 41.7, left: 16.2, width: 5.6, height: 6.8 },
+-  { id: 'left-2-1', label: 'L2b', slotType: 'wallTrinket', top: 41.7, left: 22.4, width: 5.6, height: 6.8 },
+-  { id: 'left-3-0', label: 'L3', slotType: 'wallTrinket', top: 48.5, left: 16.2, width: 5.6, height: 8.4 },
+-  { id: 'left-3-1', label: 'L3', slotType: 'wallTrinket', top: 48.5, left: 22.4, width: 5.6, height: 8.4 },
+-  { id: 'right-0-0', label: 'R1', slotType: 'wallTrinket', top: 29.5, left: 73.6, width: 4.2, height: 5.4 },
+-  { id: 'right-0-1', label: 'R1', slotType: 'wallTrinket', top: 29.5, left: 78.4, width: 4.2, height: 5.4 },
+-  { id: 'right-1-0', label: 'R2a', slotType: 'wallTrinket', top: 34.9, left: 73.6, width: 4.2, height: 6.8 },
+-  { id: 'right-1-1', label: 'R2a', slotType: 'wallTrinket', top: 34.9, left: 78.4, width: 4.2, height: 6.8 },
+-  { id: 'right-2-0', label: 'R2b', slotType: 'wallTrinket', top: 41.7, left: 73.6, width: 4.2, height: 6.8 },
+-  { id: 'right-2-1', label: 'R2b', slotType: 'wallTrinket', top: 41.7, left: 78.4, width: 4.2, height: 6.8 },
+-  { id: 'right-3-0', label: 'R3', slotType: 'wallTrinket', top: 48.5, left: 73.6, width: 4.2, height: 8.4 },
+-  { id: 'right-3-1', label: 'R3', slotType: 'wallTrinket', top: 48.5, left: 78.4, width: 4.2, height: 8.4 },
+-  { id: 'center-0-0', label: 'Middle', slotType: 'middleShelf', top: 47.3, left: 49.3, width: 5.9, height: 4.6 },
+-  { id: 'center-0-1', label: 'Middle', slotType: 'middleShelf', top: 47.3, left: 55.8, width: 5.9, height: 4.6 },
+-  { id: 'center-1-0', label: 'LowerA', slotType: 'lowerShelf', top: 51.9, left: 49.3, width: 5.9, height: 6.75 },
+-  { id: 'center-1-1', label: 'LowerA', slotType: 'lowerShelf', top: 51.9, left: 55.8, width: 5.9, height: 6.75 },
+-  { id: 'center-2-0', label: 'LowerB', slotType: 'lowerShelf', top: 58.65, left: 49.3, width: 5.9, height: 6.75 },
+-  { id: 'center-2-1', label: 'LowerB', slotType: 'lowerShelf', top: 58.65, left: 55.8, width: 5.9, height: 6.75 },
++
++interface SlotGeometry { id: string; top: number; left: number; width: number; height: number; }
++
++const SLOT_GEOMETRY = guildhallSlotLayoutJson as SlotGeometry[];
++const SLOT_GEOMETRY_BY_ID: Record<string, SlotGeometry> = Object.fromEntries(
++  SLOT_GEOMETRY.map((g) => [g.id, g]),
++);
++
++/** A small, visibly-wrong-on-purpose rect (top-left corner, tiny) so a
++ *  missing geometry entry is obvious in the DevTool/in-game rather than
++ *  silently overlapping some other slot at a plausible-looking 0,0. */
++const FALLBACK_GEOMETRY: Omit<SlotGeometry, 'id'> = { top: 0, left: 0, width: 4, height: 4 };
++
++/**
++ * Which 30 slots exist and which content pool each draws from -- see
++ * this file's own top comment for why this half is code-owned while
++ * geometry is DevTool-owned. `label` is the short mockup-era name (e.g.
++ * "L2a"), useful for DevTool/debugging display, not shown to the player.
++ */
++const SLOT_IDENTITY: { id: GuildHallSlotId; label: string; slotType: GuildHallSlotType }[] = [
++  { id: 'banner', label: 'Banner', slotType: 'banner' },
++  { id: 'wall1', label: 'Wall 1', slotType: 'wallCenterpiece' },
++  { id: 'wall2', label: 'Wall 2', slotType: 'wallCenterpiece' },
++  { id: 'trophycase', label: 'Trophy Case', slotType: 'trophyCase' },
++  { id: 'centerpiece', label: 'Centerpiece', slotType: 'centerpiece' },
++  { id: 'floor', label: 'Floor Centerpiece', slotType: 'floorCenterpiece' },
++  { id: 'cornerL', label: 'Corner L', slotType: 'corner' },
++  { id: 'cornerR', label: 'Corner R', slotType: 'corner' },
++  { id: 'left-0-0', label: 'L1', slotType: 'wallTrinket' },
++  { id: 'left-0-1', label: 'L1', slotType: 'wallTrinket' },
++  { id: 'left-1-0', label: 'L2a', slotType: 'wallTrinket' },
++  { id: 'left-1-1', label: 'L2a', slotType: 'wallTrinket' },
++  { id: 'left-2-0', label: 'L2b', slotType: 'wallTrinket' },
++  { id: 'left-2-1', label: 'L2b', slotType: 'wallTrinket' },
++  { id: 'left-3-0', label: 'L3', slotType: 'wallTrinket' },
++  { id: 'left-3-1', label: 'L3', slotType: 'wallTrinket' },
++  { id: 'right-0-0', label: 'R1', slotType: 'wallTrinket' },
++  { id: 'right-0-1', label: 'R1', slotType: 'wallTrinket' },
++  { id: 'right-1-0', label: 'R2a', slotType: 'wallTrinket' },
++  { id: 'right-1-1', label: 'R2a', slotType: 'wallTrinket' },
++  { id: 'right-2-0', label: 'R2b', slotType: 'wallTrinket' },
++  { id: 'right-2-1', label: 'R2b', slotType: 'wallTrinket' },
++  { id: 'right-3-0', label: 'R3', slotType: 'wallTrinket' },
++  { id: 'right-3-1', label: 'R3', slotType: 'wallTrinket' },
++  { id: 'center-0-0', label: 'Middle', slotType: 'middleShelf' },
++  { id: 'center-0-1', label: 'Middle', slotType: 'middleShelf' },
++  { id: 'center-1-0', label: 'LowerA', slotType: 'lowerShelf' },
++  { id: 'center-1-1', label: 'LowerA', slotType: 'lowerShelf' },
++  { id: 'center-2-0', label: 'LowerB', slotType: 'lowerShelf' },
++  { id: 'center-2-1', label: 'LowerB', slotType: 'lowerShelf' },
+ ];
+ 
++export const GUILD_HALL_SLOTS: GuildHallSlotDef[] = SLOT_IDENTITY.map((identity) => {
++  const geometry = SLOT_GEOMETRY_BY_ID[identity.id];
++  if (!geometry) {
++    // eslint-disable-next-line no-console
++    console.warn(`guildHallSlots: no layout geometry for slot "${identity.id}" -- falling back to a tiny top-left placeholder rect. Re-save the Guild Hall Slot Layout tool in the DevTool to fix.`);
++  }
++  const { top, left, width, height } = geometry ?? FALLBACK_GEOMETRY;
++  return { ...identity, top, left, width, height };
++});
++
+ export const GUILD_HALL_SLOT_BY_ID: Record<GuildHallSlotId, GuildHallSlotDef> = Object.fromEntries(
+   GUILD_HALL_SLOTS.map((s) => [s.id, s]),
+ ) as Record<GuildHallSlotId, GuildHallSlotDef>;
+diff --git a/src/game/data/json/guildhall-slot-layout.json b/src/game/data/json/guildhall-slot-layout.json
+new file mode 100644
+index 0000000..a713287
+--- /dev/null
++++ b/src/game/data/json/guildhall-slot-layout.json
+@@ -0,0 +1,212 @@
++[
++  {
++    "id": "banner",
++    "top": 9.01,
++    "left": 28.28,
++    "width": 13.48,
++    "height": 25.53
++  },
++  {
++    "id": "wall1",
++    "top": 20,
++    "left": 4,
++    "width": 11.34,
++    "height": 26.18
++  },
++  {
++    "id": "wall2",
++    "top": 20,
++    "left": 85.5,
++    "width": 9.75,
++    "height": 26
++  },
++  {
++    "id": "trophycase",
++    "top": 36.6,
++    "left": 29.6,
++    "width": 10.7,
++    "height": 18.9
++  },
++  {
++    "id": "centerpiece",
++    "top": 15.71,
++    "left": 49.84,
++    "width": 12.4,
++    "height": 25
++  },
++  {
++    "id": "floor",
++    "top": 69.22,
++    "left": 21.74,
++    "width": 54,
++    "height": 24
++  },
++  {
++    "id": "cornerL",
++    "top": 48.92,
++    "left": 0.63,
++    "width": 14.9,
++    "height": 26.06
++  },
++  {
++    "id": "cornerR",
++    "top": 53.03,
++    "left": 85.36,
++    "width": 14.55,
++    "height": 24.63
++  },
++  {
++    "id": "left-0-0",
++    "top": 29.5,
++    "left": 16.2,
++    "width": 5.6,
++    "height": 5.4
++  },
++  {
++    "id": "left-0-1",
++    "top": 29.5,
++    "left": 22.4,
++    "width": 5.6,
++    "height": 5.4
++  },
++  {
++    "id": "left-1-0",
++    "top": 34.9,
++    "left": 16.2,
++    "width": 5.6,
++    "height": 6.8
++  },
++  {
++    "id": "left-1-1",
++    "top": 34.9,
++    "left": 22.4,
++    "width": 5.6,
++    "height": 6.8
++  },
++  {
++    "id": "left-2-0",
++    "top": 41.7,
++    "left": 16.2,
++    "width": 5.6,
++    "height": 6.8
++  },
++  {
++    "id": "left-2-1",
++    "top": 41.7,
++    "left": 22.4,
++    "width": 5.6,
++    "height": 6.8
++  },
++  {
++    "id": "left-3-0",
++    "top": 48.5,
++    "left": 16.2,
++    "width": 5.6,
++    "height": 8.4
++  },
++  {
++    "id": "left-3-1",
++    "top": 48.5,
++    "left": 22.4,
++    "width": 5.6,
++    "height": 8.4
++  },
++  {
++    "id": "right-0-0",
++    "top": 29.5,
++    "left": 73.6,
++    "width": 4.2,
++    "height": 5.4
++  },
++  {
++    "id": "right-0-1",
++    "top": 29.5,
++    "left": 78.4,
++    "width": 4.2,
++    "height": 5.4
++  },
++  {
++    "id": "right-1-0",
++    "top": 34.9,
++    "left": 73.6,
++    "width": 4.2,
++    "height": 6.8
++  },
++  {
++    "id": "right-1-1",
++    "top": 34.9,
++    "left": 78.4,
++    "width": 4.2,
++    "height": 6.8
++  },
++  {
++    "id": "right-2-0",
++    "top": 41.7,
++    "left": 73.6,
++    "width": 4.2,
++    "height": 6.8
++  },
++  {
++    "id": "right-2-1",
++    "top": 41.7,
++    "left": 78.4,
++    "width": 4.2,
++    "height": 6.8
++  },
++  {
++    "id": "right-3-0",
++    "top": 48.5,
++    "left": 73.6,
++    "width": 4.2,
++    "height": 8.4
++  },
++  {
++    "id": "right-3-1",
++    "top": 48.5,
++    "left": 78.4,
++    "width": 4.2,
++    "height": 8.4
++  },
++  {
++    "id": "center-0-0",
++    "top": 47.3,
++    "left": 49.3,
++    "width": 5.9,
++    "height": 4.6
++  },
++  {
++    "id": "center-0-1",
++    "top": 47.3,
++    "left": 55.8,
++    "width": 5.9,
++    "height": 4.6
++  },
++  {
++    "id": "center-1-0",
++    "top": 51.9,
++    "left": 49.3,
++    "width": 5.9,
++    "height": 6.75
++  },
++  {
++    "id": "center-1-1",
++    "top": 51.9,
++    "left": 55.8,
++    "width": 5.9,
++    "height": 6.75
++  },
++  {
++    "id": "center-2-0",
++    "top": 58.65,
++    "left": 49.3,
++    "width": 5.9,
++    "height": 6.75
++  },
++  {
++    "id": "center-2-1",
++    "top": 58.65,
++    "left": 55.8,
++    "width": 5.9,
++    "height": 6.75
++  }
++]
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index e4f2035..6590b3f 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -10,6 +10,9 @@
+ 
+ const state = {
+   schema: null, kind: null, rows: [], dirty: false, icons: null, banners: null, equipmentList: null,
++  // Slot identity/label metadata for the guildhall-slot-layout view -- see
++  // ensureGuildHallSlotMeta's own comment.
++  guildHallSlotMeta: null,
+   // Two-level nav state (see server.mjs's GROUP_ORDER / SCHEMAS[kind].group):
+   // groupOrder is the fixed display order for the top-level groups, group
+   // is whichever one is currently open, and lastSubTab remembers which
+@@ -168,6 +171,13 @@ function renderTable() {
+     renderTuningView();
+     return;
+   }
++  // Not awaited -- renderTable is called synchronously all over this file
++  // (see its own call sites), same "kick off async work, let it paint when
++  // ready" shape click handlers elsewhere in this tool already use.
++  if (state.kind === 'guildhall-slot-layout') {
++    renderGuildHallSlotLayoutView();
++    return;
++  }
+   renderGenericTable();
+ }
+ 
+@@ -1201,6 +1211,161 @@ function openBannerPicker(folders, currentValue, preferredFolder, onPick) {
+   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+ }
+ 
++/* -------------------------------------------------- guild hall slot layout - */
++// Bespoke view for the `guildhall-slot-layout` content type (patch 0205),
++// same dispatch shape as renderTuningView -- see renderTable's own kind
++// check. Geometry-only: this schema's fields (top/left/width/height, all
++// 0-100) are exactly what real GUILD_HALL_SLOTS entries need
++// (guildHallSlots.ts merges this JSON with a separate, code-owned identity
++// list, see that file's own top comment for why), so the generic add/edit/
++// delete table would be actively worse here -- there's nothing to add or
++// delete (the fixed 30 ids are enforced server-side, see validateArray's
++// 'guildhall-slot-layout' special case), and typing four numbers into a
++// modal per slot is a much worse way to eyeball placement against the real
++// background art than dragging a box directly on top of it. Ported
++// wholesale from the standalone interactive mockup that sold this feature
++// in the first place (wireDrag/wireResize/updateReadout in
++// guildhall-customize-mockup-v6-interactive.html) -- same percent-of-
++// container math, same clamped-to-bounds behaviour, just POSTing to the
++// real backend via the existing generic saveToServer() instead of that
++// mockup's copy-paste export textarea.
++
++// Fetched once and cached for the session, same reasoning as ensureIcons --
++// slot identity (which 30 slots exist, their labels) is code-owned and only
++// changes with a real patch, so there's no reason to refetch it every time
++// this tab is opened.
++async function ensureGuildHallSlotMeta() {
++  if (state.guildHallSlotMeta) return state.guildHallSlotMeta;
++  state.guildHallSlotMeta = await api('/api/guildhall-slot-meta');
++  return state.guildHallSlotMeta;
++}
++
++/** Live bottom-left readout on whichever box is actively being dragged or
++ *  resized -- same copy shape as the mockup's own updateReadout. */
++function updateSlotLayoutReadout(readout, row) {
++  readout.textContent = `${row.left.toFixed(1)}%, ${row.top.toFixed(1)}% · ${row.width.toFixed(1)}×${row.height.toFixed(1)}%`;
++}
++
++/** Pointer-driven drag on a slot box's own body (not its resize handle) --
++ *  delta is measured against the scene container's own bounding box so it
++ *  stays correct regardless of how large the scene is actually rendered at,
++ *  then clamped so a box can never be dragged fully or partly off the art.
++ *  Mutates `row` (a real entry in state.rows, not a copy) directly as it
++ *  drags, same "the in-memory row IS the editable state, Save just POSTs
++ *  the whole array" model every other field in this tool already uses. */
++function wireSlotLayoutDrag(scene, el, row, readout) {
++  let startX, startY, startTop, startLeft, dragging = false;
++  el.addEventListener('pointerdown', (e) => {
++    if (e.target.closest('[data-resize-handle]')) return;
++    dragging = true;
++    el.classList.add('dragging');
++    el.setPointerCapture(e.pointerId);
++    startX = e.clientX; startY = e.clientY;
++    startTop = row.top; startLeft = row.left;
++    updateSlotLayoutReadout(readout, row);
++  });
++  el.addEventListener('pointermove', (e) => {
++    if (!dragging) return;
++    const rect = scene.getBoundingClientRect();
++    const dxPct = ((e.clientX - startX) / rect.width) * 100;
++    const dyPct = ((e.clientY - startY) / rect.height) * 100;
++    row.left = Math.max(0, Math.min(100 - row.width, startLeft + dxPct));
++    row.top = Math.max(0, Math.min(100 - row.height, startTop + dyPct));
++    el.style.left = row.left + '%';
++    el.style.top = row.top + '%';
++    updateSlotLayoutReadout(readout, row);
++  });
++  el.addEventListener('pointerup', () => { dragging = false; el.classList.remove('dragging'); });
++}
++
++/** Same shape as wireSlotLayoutDrag, resizing from the bottom-right handle
++ *  instead of moving the whole box -- floored at a 2% minimum in each
++ *  dimension (a box can shrink to a sliver but never disappear) and capped
++ *  so it can't grow past the art's own right/bottom edge. */
++function wireSlotLayoutResize(scene, el, handle, row, readout) {
++  let startX, startY, startW, startH, resizing = false;
++  handle.addEventListener('pointerdown', (e) => {
++    e.stopPropagation();
++    resizing = true;
++    el.classList.add('resizing');
++    handle.setPointerCapture(e.pointerId);
++    startX = e.clientX; startY = e.clientY;
++    startW = row.width; startH = row.height;
++    updateSlotLayoutReadout(readout, row);
++  });
++  handle.addEventListener('pointermove', (e) => {
++    if (!resizing) return;
++    e.stopPropagation();
++    const rect = scene.getBoundingClientRect();
++    const dxPct = ((e.clientX - startX) / rect.width) * 100;
++    const dyPct = ((e.clientY - startY) / rect.height) * 100;
++    row.width = Math.max(2, Math.min(100 - row.left, startW + dxPct));
++    row.height = Math.max(2, Math.min(100 - row.top, startH + dyPct));
++    el.style.width = row.width + '%';
++    el.style.height = row.height + '%';
++    updateSlotLayoutReadout(readout, row);
++  });
++  handle.addEventListener('pointerup', (e) => { e.stopPropagation(); resizing = false; el.classList.remove('resizing'); });
++}
++
++async function renderGuildHallSlotLayoutView() {
++  const meta = await ensureGuildHallSlotMeta();
++  const metaById = Object.fromEntries(meta.map((m) => [m.id, m]));
++
++  // A save can arrive mid-fetch (tab switched away and back quickly) --
++  // bail out rather than render a now-stale view over a different tab.
++  if (state.kind !== 'guildhall-slot-layout') return;
++
++  const toolbar = document.createElement('div');
++  toolbar.className = 'toolbar';
++  toolbar.innerHTML = `
++    <span class="tiny muted">Drag a box to reposition it, drag its brass handle to resize -- both stay clamped to the art's own edges.</span>
++    <span class="spacer"></span>
++    <button class="primary" id="slotLayoutSaveBtn">Save Layout</button>
++  `;
++
++  const scene = document.createElement('div');
++  scene.className = 'guildhall-slot-layout-scene';
++  scene.style.backgroundImage = "url('/guildhall-art/bg.jpg')";
++
++  state.rows.forEach((row, index) => {
++    const label = metaById[row.id]?.label ?? row.id;
++
++    const el = document.createElement('div');
++    el.className = 'gh-layout-slot';
++    el.dataset.index = String(index);
++    el.style.top = row.top + '%';
++    el.style.left = row.left + '%';
++    el.style.width = row.width + '%';
++    el.style.height = row.height + '%';
++
++    const tag = document.createElement('span');
++    tag.className = 'gh-layout-slot-tag';
++    tag.textContent = label;
++    el.appendChild(tag);
++
++    const readout = document.createElement('span');
++    readout.className = 'gh-layout-readout';
++    el.appendChild(readout);
++
++    const handle = document.createElement('div');
++    handle.className = 'gh-layout-resize-handle';
++    handle.dataset.resizeHandle = 'true';
++    el.appendChild(handle);
++
++    wireSlotLayoutDrag(scene, el, row, readout);
++    wireSlotLayoutResize(scene, el, handle, row, readout);
++
++    scene.appendChild(el);
++  });
++
++  appEl.innerHTML = '';
++  appEl.appendChild(toolbar);
++  appEl.appendChild(scene);
++
++  document.getElementById('slotLayoutSaveBtn').onclick = () => saveToServer('Layout');
++}
++
+ /* ----------------------------------------------------- decoration field --- */
+ // Same session-cache reasoning as ensureBanners -- public/decor/ only
+ // changes when someone drops new art in, which means a tool restart
+diff --git a/tools/devtool/public/style.css b/tools/devtool/public/style.css
+index c1686c6..14083cb 100644
+--- a/tools/devtool/public/style.css
++++ b/tools/devtool/public/style.css
+@@ -716,3 +716,62 @@ td.icon-cell { width: 1%; padding-right: 0; }
+ .tuning-row-changed .tuning-value-input { border-color: var(--brass-dim); background: var(--brass-wash); }
+ .tuning-range, .tuning-default { white-space: nowrap; color: var(--dim); }
+ .tuning-reset, .tuning-full-edit { padding: 4px 8px; font-size: 11px; }
++
++/* ------------------------------------------- guild hall slot layout view -- */
++/* Same shape as the game's own .guildhall-customize-scene (src/styles/
++   app.css) -- locked to guildhall-customize/bg.jpg's real 1774x887 canvas
++   so every slot's percent-rect lines up with the actual art, not a
++   DevTool-only approximation of it. */
++.guildhall-slot-layout-scene {
++  position: relative;
++  width: 100%;
++  aspect-ratio: 1774 / 887;
++  background-size: 100% 100%;
++  background-position: center;
++  background-color: var(--bg);
++  border: 1px solid var(--panel3);
++  border-radius: var(--radius);
++  overflow: hidden;
++  margin-top: 10px;
++}
++
++/* Unlike the in-game .craft-slot (invisible until filled -- the artwork IS
++   the UI there), these boxes need a visible outline at all times: this view
++   has no "filled" state to hide behind, just 30 always-present geometry
++   rects someone is actively eyeballing against the art underneath. */
++.gh-layout-slot {
++  position: absolute;
++  box-sizing: border-box;
++  border: 2px dashed var(--brass-dim);
++  border-radius: 4px;
++  cursor: grab;
++  touch-action: none;
++  background: rgba(224, 169, 74, 0.05);
++}
++.gh-layout-slot:hover { border-color: var(--brass); }
++.gh-layout-slot.dragging { cursor: grabbing; border-color: var(--brass); background: rgba(224, 169, 74, 0.18); z-index: 20; }
++.gh-layout-slot.resizing { border-color: var(--brass); z-index: 20; }
++
++.gh-layout-slot-tag {
++  position: absolute; top: -9px; left: 4px;
++  background: var(--panel); border: 1px solid var(--edge); color: var(--brass);
++  font-size: 8.5px; padding: 1px 5px; border-radius: 6px;
++  white-space: nowrap; pointer-events: none; z-index: 2;
++}
++
++.gh-layout-resize-handle {
++  position: absolute; right: -5px; bottom: -5px; width: 12px; height: 12px;
++  background: var(--brass); border: 1px solid var(--bg); border-radius: 3px;
++  cursor: nwse-resize; z-index: 5;
++}
++
++/* Hidden until the box is actively being manipulated (same idea as the
++   mockup's own .readout) -- a live coordinate readout would just be visual
++   noise on 30 boxes at rest. */
++.gh-layout-readout {
++  position: absolute; left: 2px; bottom: 1px;
++  font-size: 8px; color: var(--text-bright);
++  background: rgba(0, 0, 0, 0.7); padding: 0 3px;
++  pointer-events: none; z-index: 2; opacity: 0;
++}
++.gh-layout-slot.dragging .gh-layout-readout, .gh-layout-slot.resizing .gh-layout-readout { opacity: 1; }
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index db7c19a..0f2679b 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -59,6 +59,14 @@ const BANNERS_DIR = path.join(ROOT, 'public', 'lore');
+ // tuning and which don't. Grouped and served the same loose-root-files-
+ // plus-subfolders way listBanners/'/lore-art/' already are.
+ const DECOR_DIR = path.join(ROOT, 'public', 'decor');
++// The committed Guild Hall Customize background art (currently just
++// bg.jpg -- one fixed scene, not an open-ended content folder), used by
++// the 'Guild Hall Slot Layout' tool below to render the real background
++// behind the drag/resize boxes. No listing endpoint needed the way
++// listBanners/listDecorArt have -- there's nothing to pick between yet,
++// just a static file serve (see the '/guildhall-art/' route further
++// down), same as how the game itself reaches this file directly.
++const GUILDHALL_ART_DIR = path.join(ROOT, 'public', 'guildhall-customize');
+ const PORT = 5175;
+ 
+ // Local-only, gitignored (see .gitignore) — holds the Discord webhook URL for
+@@ -81,6 +89,53 @@ const RELEASE_DIR = path.join(ROOT, 'release');
+ // setup instructions already assume for the C:\Little-Knight path itself).
+ const BUILD_COPY_TARGET = 'C:\\Custom Apps\\GuildBound Executables';
+ 
++// The 30 physical Guild Hall slots' fixed identity (id/label/slotType) --
++// mirrors guildHallSlots.ts's own SLOT_IDENTITY verbatim. Duplicated here
++// on purpose, same "SCHEMAS enum options mirror a TS union" tradeoff the
++// 'guild-hall-decorations' schema's own `slotType` enum options already
++// accept just above -- this plain Node server has no TS import pipeline,
++// so it can't read the real source of truth directly. Two jobs: served
++// to the DevTool frontend as display-only metadata (labels, so the Slot
++// Layout tool can show "L2a" instead of a bare id -- see
++// '/api/guildhall-slot-meta' below), and its id list is the allowlist
++// `validateArray`'s 'guildhall-slot-layout' special case enforces
++// (below) -- a saved layout must have geometry for exactly these 30 ids,
++// no more, no fewer, since adding/removing a slot is a `GuildHallSlotId`
++// (types.ts) code change, not something this tool can do.
++const GUILDHALL_SLOT_META = [
++  { id: 'banner', label: 'Banner', slotType: 'banner' },
++  { id: 'wall1', label: 'Wall 1', slotType: 'wallCenterpiece' },
++  { id: 'wall2', label: 'Wall 2', slotType: 'wallCenterpiece' },
++  { id: 'trophycase', label: 'Trophy Case', slotType: 'trophyCase' },
++  { id: 'centerpiece', label: 'Centerpiece', slotType: 'centerpiece' },
++  { id: 'floor', label: 'Floor Centerpiece', slotType: 'floorCenterpiece' },
++  { id: 'cornerL', label: 'Corner L', slotType: 'corner' },
++  { id: 'cornerR', label: 'Corner R', slotType: 'corner' },
++  { id: 'left-0-0', label: 'L1', slotType: 'wallTrinket' },
++  { id: 'left-0-1', label: 'L1', slotType: 'wallTrinket' },
++  { id: 'left-1-0', label: 'L2a', slotType: 'wallTrinket' },
++  { id: 'left-1-1', label: 'L2a', slotType: 'wallTrinket' },
++  { id: 'left-2-0', label: 'L2b', slotType: 'wallTrinket' },
++  { id: 'left-2-1', label: 'L2b', slotType: 'wallTrinket' },
++  { id: 'left-3-0', label: 'L3', slotType: 'wallTrinket' },
++  { id: 'left-3-1', label: 'L3', slotType: 'wallTrinket' },
++  { id: 'right-0-0', label: 'R1', slotType: 'wallTrinket' },
++  { id: 'right-0-1', label: 'R1', slotType: 'wallTrinket' },
++  { id: 'right-1-0', label: 'R2a', slotType: 'wallTrinket' },
++  { id: 'right-1-1', label: 'R2a', slotType: 'wallTrinket' },
++  { id: 'right-2-0', label: 'R2b', slotType: 'wallTrinket' },
++  { id: 'right-2-1', label: 'R2b', slotType: 'wallTrinket' },
++  { id: 'right-3-0', label: 'R3', slotType: 'wallTrinket' },
++  { id: 'right-3-1', label: 'R3', slotType: 'wallTrinket' },
++  { id: 'center-0-0', label: 'Middle', slotType: 'middleShelf' },
++  { id: 'center-0-1', label: 'Middle', slotType: 'middleShelf' },
++  { id: 'center-1-0', label: 'LowerA', slotType: 'lowerShelf' },
++  { id: 'center-1-1', label: 'LowerA', slotType: 'lowerShelf' },
++  { id: 'center-2-0', label: 'LowerB', slotType: 'lowerShelf' },
++  { id: 'center-2-1', label: 'LowerB', slotType: 'lowerShelf' },
++];
++const GUILDHALL_SLOT_IDS = GUILDHALL_SLOT_META.map((s) => s.id);
++
+ /* --------------------------------------------------------------- schema --- */
+ // Required fields per content type. This is the real safety net: TypeScript's
+ // `as Foo[]` cast on the JSON import does NOT validate structure at compile
+@@ -802,17 +857,17 @@ const SCHEMAS = {
+     label: 'Guild Hall Decorations',
+     group: 'World Content',
+     idField: 'id',
+-    // Foundation-only for now (patch 0202) -- see GuildHallDecorationDef's
+-    // own doc comment in types.ts and guildHallDecor.ts's file-level
+-    // comment for the full picture: this schema and the new
+-    // 'decorationImage' field type exist so real decoration items can be
+-    // authored immediately, but nothing in the engine/UI consumes this
+-    // list yet. The 30 physical slot instances (position/size/which pool
+-    // they draw from) are locked design data logged in guild-idler-
+-    // status.md's "Customizable Guild Hall background" backlog entry, not
+-    // DevTool content -- `slotType` here is the POOL an item belongs to
+-    // (any of the 16 wallTrinket slots, either of the 2 wallCenterpiece
+-    // slots, etc), not a specific one of the 30 instances.
++    // Authoring for the content half of the Guild Hall decorations
++    // feature -- see GuildHallDecorationDef's own doc comment in types.ts
++    // and guildHallDecor.ts's file-level comment for the full picture.
++    // The 30 physical slot instances (which pool each one draws from,
++    // plus their position/size) are a separate concern -- identity
++    // (which 30 slots exist, which pool each is) is code-owned
++    // (guildHallSlots.ts), geometry is DevTool-owned (the
++    // 'guildhall-slot-layout' schema just below) -- `slotType` here is
++    // the POOL an item belongs to (any of the 16 wallTrinket slots,
++    // either of the 2 wallCenterpiece slots, etc), not a specific one of
++    // the 30 instances.
+     fields: {
+       id: { type: 'string', required: true, slug: true },
+       name: { type: 'string', required: true },
+@@ -836,11 +891,39 @@ const SCHEMAS = {
+       // is left square (1/1) rather than per-slot-type, since a single
+       // decoration entry has no one slot instance to size the preview
+       // against (its slotType is a whole pool of differently-shaped
+-      // slots) -- close enough for judging fit, real per-slot sizing
+-      // happens in-game once the Customize UI exists.
++      // slots) -- close enough for judging fit; real per-slot sizing is
++      // visible in-game in the Guild Hall's own "Customize" mode.
+       image: { type: 'decorationImage', required: false, defaultFolder: '', previewAspect: '1/1' },
+     },
+   },
++  // Geometry only (top/left/width/height, % of the background art's own
++  // bounding box) -- id/label/slotType (which 30 slots exist at all) is
++  // code-owned, see guildHallSlots.ts's own top comment for the full
++  // "identity vs geometry" split and why. This schema exists purely so
++  // the DevTool's own visual drag/resize tool (renderGuildHallSlotLayout-
++  // View in app.js, dispatched on kind exactly like 'tuning' gets its own
++  // grouped view) has somewhere real to load from and save back to,
++  // reusing the exact same GET/POST /api/data/:kind plumbing every other
++  // content type uses -- it is NOT rendered as a generic add/edit/delete
++  // table (see the frontend dispatch), since adding or removing a row
++  // here would silently desync from the fixed 30-id set `GuildHallSlotId`
++  // (types.ts) closes over. `validateArray`'s own special case for this
++  // kind (see GUILDHALL_SLOT_IDS below) is what actually enforces that --
++  // this schema's per-field validation alone can't express "exactly
++  // these 30 ids, no more, no fewer."
++  'guildhall-slot-layout': {
++    file: 'guildhall-slot-layout.json',
++    label: 'Guild Hall Slot Layout',
++    group: 'World Content',
++    idField: 'id',
++    fields: {
++      id: { type: 'string', required: true },
++      top: { type: 'number', required: true, min: 0, max: 100 },
++      left: { type: 'number', required: true, min: 0, max: 100 },
++      width: { type: 'number', required: true, min: 0, max: 100 },
++      height: { type: 'number', required: true, min: 0, max: 100 },
++    },
++  },
+   'raids': {
+     file: 'raids.json',
+     label: 'Raids',
+@@ -1393,6 +1476,22 @@ function validateArray(kind, data) {
+     const dupes = ids.filter((id, i) => ids.indexOf(id) !== i);
+     if (dupes.length) errors.push(`duplicate id(s): ${[...new Set(dupes)].join(', ')}`);
+   }
++  // 'guildhall-slot-layout' is geometry for a fixed, code-owned set of 30
++  // slot ids (see guildHallSlots.ts / GUILDHALL_SLOT_META's own comments)
++  // -- the per-field checks above already confirm every entry HAS an id/
++  // top/left/width/height, but say nothing about which ids are actually
++  // allowed. A saved layout that's missing one of the 30 or invents an
++  // unknown one would silently desync from `GuildHallSlotId` (a closed
++  // TS union, not something this JSON file can add to), so that's
++  // enforced here instead, whole-array, the same place the generic
++  // duplicate-id check just above already runs.
++  if (kind === 'guildhall-slot-layout') {
++    const ids = data.map((e) => e.id).filter(Boolean);
++    const missing = GUILDHALL_SLOT_IDS.filter((id) => !ids.includes(id));
++    const unknown = ids.filter((id) => !GUILDHALL_SLOT_IDS.includes(id));
++    if (missing.length) errors.push(`missing required slot(s): ${missing.join(', ')}`);
++    if (unknown.length) errors.push(`unknown slot id(s), not one of the fixed 30: ${unknown.join(', ')}`);
++  }
+   return errors;
+ }
+ 
+@@ -2152,6 +2251,13 @@ const server = http.createServer(async (req, res) => {
+     return json(res, 200, await listDecorArt());
+   }
+ 
++  // Display-only metadata for the Guild Hall Slot Layout tool -- labels
++  // and pools for the 30 fixed slot ids, so it can show "L2a" on a box
++  // instead of a bare id. See GUILDHALL_SLOT_META's own comment.
++  if (url.pathname === '/api/guildhall-slot-meta' && req.method === 'GET') {
++    return json(res, 200, GUILDHALL_SLOT_META);
++  }
++
+   // Serves the actual icon image bytes for <img> previews in the picker and
+   // table thumbnails. Same path-traversal guard as serveStatic below, just
+   // rooted at ICONS_DIR instead of PUBLIC_DIR since these live outside the
+@@ -2216,6 +2322,27 @@ const server = http.createServer(async (req, res) => {
+     return;
+   }
+ 
++  // Same idea a third time, rooted at GUILDHALL_ART_DIR (public/
++  // guildhall-customize/) -- just the one committed background image for
++  // now, served the same guarded way as every other art tree here.
++  if (url.pathname.startsWith('/guildhall-art/')) {
++    const rel = decodeURIComponent(url.pathname.slice('/guildhall-art/'.length)).split('?')[0];
++    const filePath = path.join(GUILDHALL_ART_DIR, rel);
++    if (!filePath.startsWith(GUILDHALL_ART_DIR)) { res.writeHead(403); res.end(); return; }
++    try {
++      const body = await fs.readFile(filePath);
++      const ext = path.extname(filePath).toLowerCase();
++      const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' }[ext]
++        ?? 'application/octet-stream';
++      res.writeHead(200, { 'Content-Type': mime });
++      res.end(body);
++    } catch {
++      res.writeHead(404);
++      res.end('Not found');
++    }
++    return;
++  }
++
+   const match = url.pathname.match(/^\/api\/data\/([\w-]+)$/);
+   if (match) {
+     const kind = match[1];
