@@ -1320,9 +1320,9 @@ function openBannerPicker(folders, currentValue, preferredFolder, onPick) {
 // Bespoke view for the `guildhall-slot-layout` content type (patch 0205),
 // same dispatch shape as renderTuningView -- see renderTable's own kind
 // check. Geometry-only: this schema's fields (top/left/width/height, all
-// 0-100) are exactly what real GUILD_HALL_SLOTS entries need
-// (guildHallSlots.ts merges this JSON with a separate, code-owned identity
-// list, see that file's own top comment for why), so the generic add/edit/
+// 0-100) are exactly what `slotsForTheme` (guildHallSlots.ts) needs per
+// theme+slot pair (that file merges this JSON with a separate, code-owned
+// identity list, see its own top comment for why), so the generic add/edit/
 // delete table would be actively worse here -- there's nothing to add or
 // delete (the 30 possible ids are enforced server-side, see validateArray's
 // 'guildhall-slot-layout' special case), and typing four numbers into a

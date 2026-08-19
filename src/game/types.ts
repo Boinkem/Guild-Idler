@@ -1511,19 +1511,49 @@ export interface GameState {
    */
   ownedGuildHallDecorations?: string[];
   /**
-   * Which decoration currently sits in which of the 30 physical slots
-   * (GuildHallSlotId -> GuildHallDecorationDef.id). `Partial`, not a full
-   * `Record`, because most slots start (and may stay) empty -- same
-   * "sparse, absence means empty" shape `Hero.equipment` already uses for
-   * its own gear slots. Optional/undefined for any save from before this
-   * system existed -- default to `{}` wherever read, no migration needed
-   * (see GuildHallDecorManager.equipped). A decoration id here is not
-   * necessarily still present in `ownedGuildHallDecorations` or even
-   * still a real content id -- GuildHallDecorManager resolves and
-   * degrades gracefully, same "content may drift out from under an old
-   * save" convention CurioManager.owned already follows.
+   * Which decoration currently sits in which of the 30 physical slots,
+   * per background theme -- guildhall-themes.json id ->
+   * (GuildHallSlotId -> GuildHallDecorationDef.id). Nested rather than one
+   * flat slot map, as of patch 0207: a theme switch should never clear a
+   * look, so each theme silently keeps its own arrangement rather than
+   * there being one arrangement shared across every theme (or worse, one
+   * arrangement that gets wiped on switch) -- see
+   * GuildHallDecorManager.activeThemeId's own comment for how "which
+   * theme" is resolved. `Partial` at both levels, not a full `Record`,
+   * because most slots (and, so far, every theme except the one shipped
+   * one) start -- and may stay -- empty; same "sparse, absence means
+   * empty" shape `Hero.equipment` already uses for its own gear slots.
+   * Optional/undefined for any save from before this system existed --
+   * default to `{}` wherever read, no migration needed (see
+   * GuildHallDecorManager.equippedId). Before patch 0207 this was a flat
+   * `Partial<Record<GuildHallSlotId, string>>` with no theme level at
+   * all; no migration was written for that shape either, on purpose --
+   * there was no real decoration content to equip anything from until
+   * well after this field existed, so a save that somehow still has the
+   * old flat shape just reads as "nothing equipped in the active theme"
+   * once this patch is live, the same safe degrade as any other content
+   * drift. A decoration id here is not necessarily still present in
+   * `ownedGuildHallDecorations` or even still a real content id --
+   * GuildHallDecorManager resolves and degrades gracefully, same "content
+   * may drift out from under an old save" convention CurioManager.owned
+   * already follows.
    */
-  equippedGuildHallDecorations?: Partial<Record<GuildHallSlotId, string>>;
+  equippedGuildHallDecorations?: Partial<Record<string, Partial<Record<GuildHallSlotId, string>>>>;
+  /**
+   * Which Guild Hall background theme (guildhall-themes.json id) is
+   * currently active -- undefined defaults to
+   * `DEFAULT_GUILD_HALL_THEME_ID` (guildHallSlots.ts), same "optional
+   * field, no migration needed" shape every other Guild Hall Decorations
+   * field on this type already uses. Always resolve this through
+   * `GuildHallDecorManager.activeThemeId(state)`, not by reading the raw
+   * field -- that method also degrades safely if the stored id doesn't
+   * match a real theme (a theme deleted in the DevTool after a save
+   * picked it), which reading this field directly would not. There is no
+   * in-game control to actually change this yet (patch 0207 is engine
+   * state only) -- every save is effectively pinned to the default theme
+   * until one exists.
+   */
+  activeGuildHallTheme?: string;
   /**
    * Which hero the desktop companion shows. Updates automatically whenever a
    * hero is sent on a quest (so departures are always visible), and can be
@@ -2204,10 +2234,12 @@ export interface CurioDef {
  * they draw from) are locked design data -- see guild-idler-status.md's
  * "Customizable Guild Hall background" backlog entry for the full
  * layout and coordinates -- and now exist in code as their own registry,
- * `GuildHallSlotDef`/`GUILD_HALL_SLOTS` below/in guildHallSlots.ts (patch
- * 0203). This type only covers the content (the decorations themselves);
- * the in-game Customize UI that actually lets a player place one into a
- * slot is still a separate, later patch.
+ * `GuildHallSlotDef`/`slotsForTheme` in guildHallSlots.ts (patch 0203,
+ * made per-theme in patch 0207). This type only covers the content (the
+ * decorations themselves); which physical slot a player has actually put
+ * one into is `GameState.equippedGuildHallDecorations`, and the in-game
+ * Customize UI that lets them do that lives in
+ * GuildHallCustomizeScene.tsx (patch 0204).
  */
 export type GuildHallSlotType =
   | 'banner'
@@ -2267,13 +2299,16 @@ export interface GuildHallDecorationDef {
 
 /**
  * One of the 30 physical decoration slots baked into the Guild Hall's
- * background art -- a closed union, not a plain string, because these are
- * fixed hardcoded positions (see guildHallSlots.ts), the same "code
- * defines the fixed set" convention `GuildFacility` already uses, not the
- * "DevTool defines an open-ended set" convention `HeroSkin`/decoration
- * ids use. Repositioning one is a code change (or, once built, a run of
- * the still-not-built DevTool slot layout editor prototype -- see the
- * backlog entry) rather than a DevTool content edit.
+ * background art -- a closed union, not a plain string, because *which
+ * slots exist* is fixed, hardcoded identity (see guildHallSlots.ts's
+ * `SLOT_IDENTITY`), the same "code defines the fixed set" convention
+ * `GuildFacility` already uses, not the "DevTool defines an open-ended
+ * set" convention `HeroSkin`/decoration ids use. Adding, removing, or
+ * renaming a slot is a code change, not a DevTool content edit. A slot's
+ * *position*, on the other hand, is real DevTool content -- the "Guild
+ * Hall Slot Layout" tool (patches 0205/0206) edits it per background
+ * theme, no code change needed -- see `GuildHallSlotDef`/`slotsForTheme`
+ * in guildHallSlots.ts for how identity and per-theme geometry combine.
  */
 export type GuildHallSlotId =
   | 'banner' | 'wall1' | 'wall2' | 'trophycase' | 'centerpiece' | 'floor' | 'cornerL' | 'cornerR'

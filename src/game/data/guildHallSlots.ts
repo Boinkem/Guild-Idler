@@ -1,9 +1,10 @@
 import { GuildHallSlotDef, GuildHallSlotId, GuildHallSlotType } from '../types';
+import guildhallThemesJson from './json/guildhall-themes.json';
 import guildhallSlotLayoutJson from './json/guildhall-slot-layout.json';
 
 /**
- * The 30 physical Guild Hall decoration slots. Split across two sources,
- * merged here at import time:
+ * The 30 physical Guild Hall decoration slots, and the background themes
+ * they can be arranged against. Three sources, merged here at import time:
  *
  * - `SLOT_IDENTITY` below (id/label/slotType) is a plain hardcoded array,
  *   same "code owns fixed, code-defined content" convention
@@ -12,67 +13,38 @@ import guildhallSlotLayoutJson from './json/guildhall-slot-layout.json';
  *   load-bearing for `GuildHallSlotId` (a closed union, not a plain
  *   string -- see that type's own doc comment) and is meant to change
  *   rarely, as a deliberate code review, not routine content authoring.
+ * - `json/guildhall-themes.json` (id/name/background) is which background
+ *   art options exist -- DevTool-editable, unrestricted (add/edit/delete
+ *   like any other content type, see server.mjs's 'guildhall-themes'
+ *   schema), since adding a new theme doesn't touch `GuildHallSlotId` at
+ *   all.
  * - `json/guildhall-slot-layout.json` (geometry only -- top/left/width/
- *   height, % of the background art's own bounding box) IS DevTool-
- *   editable (patch 0205's "Guild Hall Slot Layout" tool in the DevTool,
- *   under World Content) -- repositioning/resizing a slot is exactly the
- *   kind of routine, no-code-patch-needed tweak the DevTool exists for,
- *   unlike adding or removing a slot entirely.
+ *   height, % of the background art's own bounding box, one row per
+ *   theme+slot pair) IS DevTool-editable per theme (the "Guild Hall Slot
+ *   Layout" tool in the DevTool, under World Content) -- repositioning or
+ *   hiding a slot for a given theme is exactly the kind of routine,
+ *   no-code-patch-needed tweak the DevTool exists for, unlike adding or
+ *   removing a slot's identity entirely.
  *
- * As of patch 0206, geometry is stored per *theme* (`guildhall-themes.json`
- * -- one row per background art option, currently just the one shipped
- * "The Guild Hall" theme), because different background art puts its
- * furniture in different places. Every geometry row now carries a
- * `themeId` alongside its slot `id`, and the DevTool's own slot layout
- * editor lets a theme show only a subset of the 30 slots (some furniture
- * just won't exist in every room) rather than requiring all 30 the way
- * the original single-theme version of this file did.
- *
- * This file itself is deliberately NOT theme-aware yet -- there's no real
- * "which theme is the player using" state to read (that's patch 0207's
- * job, alongside the in-game theme picker), so `GUILD_HALL_SLOTS` below
- * still always resolves against `DEFAULT_THEME_ID` only, exactly
- * reproducing patch 0205's single-theme behaviour. This patch's actual
- * job is just proving the new per-theme JSON shape round-trips cleanly
- * through the DevTool without changing anything the player sees.
- *
- * The DevTool's own save-time validation (server.mjs's
- * `guildhall-slot-layout` special case in `validateArray`) rejects a
- * layout row whose `id` isn't one of these 30, and rejects duplicate ids
- * *within* the same theme -- but no longer requires every theme to have
- * all 30 (see the "hide this slot" checklist in that DevTool page). The
- * lookups below still degrade gracefully (a console.warn and a small
- * fallback rect) rather than throwing if a slot that's supposed to be
- * visible somehow has no matching geometry row at all -- same "content
- * may drift out from under old assumptions, don't crash the game over
- * it" convention CurioManager.owned/GuildHallDecorManager's own
- * resolve-and-skip methods already follow, just applied to slots instead
- * of decorations.
+ * As of patch 0207, which theme is actually active for a given save is
+ * real state (`GameState.activeGuildHallTheme`, resolved through
+ * `GuildHallDecorManager.activeThemeId` -- see that method's own comment
+ * for how an invalid/deleted theme id degrades safely) -- this file just
+ * provides the lookup (`slotsForTheme`/`slotForTheme`) the manager and,
+ * eventually, the in-game UI resolve that active theme against. There is
+ * still no in-game control to actually change it (that's the next real
+ * step) -- everything defaults to `DEFAULT_GUILD_HALL_THEME_ID` until
+ * there is.
  */
-
-/** The only theme that exists so far, and the one this file resolves
- *  against until patch 0207 adds real active-theme state. Matches
- *  `guildhall-themes.json`'s one entry. */
-const DEFAULT_THEME_ID = 'guild_hall';
 
 interface SlotGeometry { themeId: string; id: string; top: number; left: number; width: number; height: number; }
 
 const SLOT_GEOMETRY = guildhallSlotLayoutJson as SlotGeometry[];
-const SLOT_GEOMETRY_BY_ID: Record<string, SlotGeometry> = Object.fromEntries(
-  SLOT_GEOMETRY
-    .filter((g) => g.themeId === DEFAULT_THEME_ID)
-    .map((g) => [g.id, g]),
-);
-
-/** A small, visibly-wrong-on-purpose rect (top-left corner, tiny) so a
- *  missing geometry entry is obvious in the DevTool/in-game rather than
- *  silently overlapping some other slot at a plausible-looking 0,0. */
-const FALLBACK_GEOMETRY: Omit<SlotGeometry, 'id' | 'themeId'> = { top: 0, left: 0, width: 4, height: 4 };
 
 /**
- * Which 30 slots exist and which content pool each draws from -- see
- * this file's own top comment for why this half is code-owned while
- * geometry is DevTool-owned. `label` is the short mockup-era name (e.g.
+ * Which 30 slots exist and which content pool each draws from -- see this
+ * file's own top comment for why this half is code-owned while geometry
+ * (per theme) is DevTool-owned. `label` is the short mockup-era name (e.g.
  * "L2a"), useful for DevTool/debugging display, not shown to the player.
  */
 const SLOT_IDENTITY: { id: GuildHallSlotId; label: string; slotType: GuildHallSlotType }[] = [
@@ -108,16 +80,65 @@ const SLOT_IDENTITY: { id: GuildHallSlotId; label: string; slotType: GuildHallSl
   { id: 'center-2-1', label: 'LowerB', slotType: 'lowerShelf' },
 ];
 
-export const GUILD_HALL_SLOTS: GuildHallSlotDef[] = SLOT_IDENTITY.map((identity) => {
-  const geometry = SLOT_GEOMETRY_BY_ID[identity.id];
-  if (!geometry) {
-    // eslint-disable-next-line no-console
-    console.warn(`guildHallSlots: no layout geometry for slot "${identity.id}" -- falling back to a tiny top-left placeholder rect. Re-save the Guild Hall Slot Layout tool in the DevTool to fix.`);
-  }
-  const { top, left, width, height } = geometry ?? FALLBACK_GEOMETRY;
-  return { ...identity, top, left, width, height };
-});
+/** One background theme option -- matches server.mjs's 'guildhall-themes'
+ *  schema exactly (id/name/background). `background` is a path relative to
+ *  GUILDHALL_ART_DIR (public/guildhall-customize/), e.g.
+ *  "guild_hall/bg.jpg". */
+export interface GuildHallThemeDef {
+  id: string;
+  name: string;
+  background: string;
+}
 
-export const GUILD_HALL_SLOT_BY_ID: Record<GuildHallSlotId, GuildHallSlotDef> = Object.fromEntries(
-  GUILD_HALL_SLOTS.map((s) => [s.id, s]),
-) as Record<GuildHallSlotId, GuildHallSlotDef>;
+export const GUILD_HALL_THEMES: GuildHallThemeDef[] = guildhallThemesJson as GuildHallThemeDef[];
+
+export const GUILD_HALL_THEME_BY_ID: Record<string, GuildHallThemeDef> = Object.fromEntries(
+  GUILD_HALL_THEMES.map((t) => [t.id, t]),
+);
+
+/** The theme every save defaults to, and the one `GuildHallDecorManager.
+ *  activeThemeId` falls back to if a save's stored theme id doesn't
+ *  resolve to anything real. The `?? 'guild_hall'` tail is a last-resort
+ *  fallback for the (should-never-happen) case of content shipping with
+ *  zero themes at all -- ships with exactly one today. */
+export const DEFAULT_GUILD_HALL_THEME_ID = GUILD_HALL_THEMES[0]?.id ?? 'guild_hall';
+
+/**
+ * A theme's own visible slots -- `SLOT_IDENTITY` merged with whichever
+ * `SLOT_GEOMETRY` rows exist for `themeId`. An identity id with no
+ * geometry row for this theme is simply omitted from the result, not an
+ * error -- that's the DevTool's own per-theme show/hide checklist
+ * (renderGuildHallSlotLayoutView in app.js) actually working: a room that
+ * doesn't have a Trophy Case just doesn't get a Trophy Case slot.
+ *
+ * Assumes `themeId` is a real theme (see `GUILD_HALL_THEME_BY_ID`) --
+ * callers wanting "whichever theme the player currently has active"
+ * should resolve it through `GuildHallDecorManager.activeThemeId` first,
+ * which already degrades safely (falls back to
+ * `DEFAULT_GUILD_HALL_THEME_ID`, with a console warning) if the stored id
+ * doesn't resolve to anything real. Passing an unknown id straight to this
+ * function instead just yields an empty list, no slots at all -- correct
+ * in the narrow sense (a theme that doesn't exist has no slots), but not
+ * what a caller actually wants, which is why that resolution step exists
+ * one level up rather than being duplicated here.
+ */
+export function slotsForTheme(themeId: string): GuildHallSlotDef[] {
+  const geometryById: Record<string, SlotGeometry> = Object.fromEntries(
+    SLOT_GEOMETRY.filter((g) => g.themeId === themeId).map((g) => [g.id, g]),
+  );
+  return SLOT_IDENTITY
+    .filter((identity) => geometryById[identity.id])
+    .map((identity) => {
+      const g = geometryById[identity.id];
+      return { ...identity, top: g.top, left: g.left, width: g.width, height: g.height };
+    });
+}
+
+/** Single-slot convenience wrapper around `slotsForTheme` -- undefined if
+ *  this theme doesn't have (or doesn't show) that slot. Rebuilds the
+ *  theme's slot list on every call rather than caching a
+ *  per-theme-per-slot index; fine at this scale (a handful of themes, 30
+ *  slots each, called from UI event handlers, not a hot loop). */
+export function slotForTheme(themeId: string, slotId: GuildHallSlotId): GuildHallSlotDef | undefined {
+  return slotsForTheme(themeId).find((s) => s.id === slotId);
+}

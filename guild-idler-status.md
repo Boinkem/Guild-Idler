@@ -7052,15 +7052,44 @@ pass (same caveat as the two entries above).
   authoring features" note below) -- a real "Guild Hall Themes" content
   type, and the slot layout editor now edits geometry per theme with a
   per-theme show/hide checklist, instead of one flat 30-slot layout.
-  **Still not built:** any of it reaching the player -- `guildHallSlots.ts`
-  still always resolves against the one shipped theme regardless of what
-  the DevTool now supports authoring, `GuildHallDecorManager`'s
-  equip/unequip state has no notion of "which theme" yet, and there's no
-  in-game control to actually pick a theme. That's real follow-up work,
-  not done here -- patch 0206 deliberately only touched authoring, the
-  same "DevTool foundation first, no consumer yet" shape patch 0202 used
-  for the original feature. Key decisions locked in from the original
-  discussion (still true, extended rather than replaced by the above):
+  **Patch 0207 built the engine/state half.** `guildHallSlots.ts` now
+  exposes `slotsForTheme`/`slotForTheme` instead of one flat hardcoded
+  set, `GameState` gained `activeGuildHallTheme` (which theme this save
+  has active, always resolved through the safely-degrading
+  `GuildHallDecorManager.activeThemeId`, never read raw), and
+  `equippedGuildHallDecorations` is now nested by theme id first --
+  switching themes auto-remembers each theme's own arrangement rather
+  than clearing anything, exactly the "Auto-remember per theme" behaviour
+  picked when this was scoped. No formal save migration was needed for
+  the state shape change -- no decoration content has ever shipped (see
+  `GUILD_HALL_DECORATIONS`/`guild-hall-decorations.json`, still `[]`), so
+  no real save could have had anything meaningful equipped under the old
+  flat shape; an old save simply reads as "nothing equipped," same safe
+  degrade every other optional field on this system already uses.
+  Verified against the actual running in-game Customize scene (not just
+  the DevTool) via Playwright: equipped a decoration, confirmed it wrote
+  into the correct per-theme bucket, reloaded the page and confirmed it
+  was still equipped, then unequipped it and confirmed the bucket emptied
+  -- plus a standalone logic pass exercising `activeThemeId`'s fallback
+  for both an unset and a since-deleted theme id, and `equip`'s
+  slotType-mismatch/unowned/unknown-decoration rejections. **Also fixed a
+  live bug found during this same pass:** `GuildHallCustomizeScene.tsx`'s
+  background was still hardcoded to the pre-0206 path
+  (`./guildhall-customize/bg.jpg`), which patch 0206 had moved to
+  `./guildhall-customize/guild_hall/bg.jpg` without updating this
+  component -- meaning the in-game Customize mode had been rendering a
+  broken background since patch 0206 shipped, missed because that
+  patch's own verification only exercised the DevTool. Now resolved
+  through `activeTheme.background`, so it moves with whichever theme
+  becomes active once picking one is real. **Still not built:** any
+  in-game way to actually pick a theme -- `GuildHallDecorManager.
+  setActiveTheme` exists and is tested, but has no caller yet, so every
+  save is effectively pinned to the one shipped `guild_hall` theme until
+  a picker UI lands. That's real follow-up work, not scoped or started
+  here -- not currently an active priority, since only one theme's
+  worth of art exists to switch to yet. Key decisions locked in from the
+  original discussion (still true, extended rather than replaced by the
+  above):
   - **30 individual slots across 10 slot types**, positioned against the
     actual "empty guild hall" background art (two bookshelves, a glass
     display case, an open shelf/table unit, the floor, and the
@@ -14656,3 +14685,106 @@ this schema's own `slug: true` validation on save (`lowercase_with_
 underscores`, matching every other slug id in this codebase, e.g.
 `the_last_clutch`) -- renamed to `guild_hall` throughout (id, folder,
 `DEFAULT_THEME_ID`) before finalizing.
+
+### Guild Hall Themes: engine/state plumbing, plus a live background bug fix (patch 0207)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed the Guild Hall's Customize background showing broken/missing art -- a leftover from last patch's file move
+- Added the save-side plumbing for multiple Guild Hall themes to remember their own decorated look independently
+- Still just one background to choose from for now -- picking a theme in-game is next
+```
+
+Step two of the "Customizable Guild Hall background" theme rework (see
+the "Revised direction, patch 0206 onward" note above, and patch 0206's
+own log entry for step one) -- the engine/state half, following the
+same DevTool-foundation-then-state-then-UI order the original
+decorations feature was built in. Scoped after confirming patch 0206 is
+live: the player isn't asking for multiple themes to switch between
+today, but wants the plumbing in place ahead of authoring a second one.
+
+**`guildHallSlots.ts` is now theme-aware.** The old flat `GUILD_HALL_SLOTS`/
+`GUILD_HALL_SLOT_BY_ID` exports (always resolved against a single
+hardcoded `DEFAULT_THEME_ID`) are gone, replaced by `slotsForTheme(themeId)`/
+`slotForTheme(themeId, slotId)`, which merge the still code-owned `SLOT_IDENTITY`
+list against whichever `guildhall-slot-layout.json` rows exist for that
+theme. A slot with no geometry row for a given theme is simply omitted
+from that theme's list now, not an error -- that's the DevTool's own
+per-theme show/hide checklist (patch 0206) actually taking effect,
+rather than falling back to a placeholder rect with a console warning
+the way a missing row used to be treated back when there was only ever
+one theme to miss a row for. This file also now exports `GUILD_HALL_THEMES`/
+`GUILD_HALL_THEME_BY_ID`/`DEFAULT_GUILD_HALL_THEME_ID`, reading
+`guildhall-themes.json` (patch 0206's new content type) the same way
+every other data module in this codebase wraps its own JSON.
+
+**`GameState` gained `activeGuildHallTheme?: string`**, and
+`equippedGuildHallDecorations` changed shape from a flat
+`Partial<Record<GuildHallSlotId, string>>` to a nested
+`Partial<Record<string, Partial<Record<GuildHallSlotId, string>>>>` keyed
+first by theme id -- the "Auto-remember per theme" behaviour picked when
+this was scoped: switching themes never clears anything, because each
+theme's arrangement lives in its own bucket untouched by whatever
+happens in any other theme's. No formal save migration was written for
+this shape change -- `GUILD_HALL_DECORATIONS`/`guild-hall-decorations.json`
+has shipped empty every patch so far (confirmed via TestingPanel's own
+"No decorations exist in content yet" message), so no real save could
+have anything meaningful equipped under the old flat shape to begin
+with; an old save just reads as "nothing equipped" under the new shape,
+the same safe-degrade every other optional field this system already
+uses for a save from before it existed.
+
+**`GuildHallDecorManager` is now the single place that resolves "which
+theme."** New `activeThemeId(state)` returns `state.activeGuildHallTheme`
+if it's set and still matches a real theme, else falls back to
+`DEFAULT_GUILD_HALL_THEME_ID` -- covering a theme that was deleted in the
+DevTool after a save picked it, same "content may drift out from under
+an old save, don't crash over it" convention this manager's other
+methods already follow. Every other method (`slot`, `slots`, `equippedId`,
+`equippedDecoration`, `allEquipped`, `equip`, `unequip`) now resolves the
+active theme through this method rather than reading the raw field, and
+`equip`/`unequip` only ever touch the active theme's own bucket -- every
+other theme's arrangement is left completely alone. New `setActiveTheme
+(state, themeId)` validates the id against `GUILD_HALL_THEME_BY_ID` and
+sets the field if it's real; it has no caller yet -- the in-game picker
+that will actually call it is the next step, not built here.
+
+**`GuildHallCustomizeScene.tsx` updated to match** -- resolves slots and
+the equipped state through the now theme-aware manager methods instead
+of the old flat exports, and derives its background from the active
+theme's own `background` field. **That last change is also a bug fix,
+not just a refactor:** this component's background was still hardcoded
+to the pre-0206 path (`./guildhall-customize/bg.jpg`), which patch 0206
+moved to `./guildhall-customize/guild_hall/bg.jpg` without updating this
+reference -- meaning the live, already-pushed game has been showing a
+broken Customize-mode background since patch 0206 shipped. Missed at the
+time because that patch's own verification only exercised the DevTool,
+never the actual in-game scene. Caught while reviewing this file for
+patch 0207's own changes, and fixed here rather than deferred, since
+it's a direct consequence of the exact per-theme data model this patch
+is already touching.
+
+**Verified two ways.** A standalone logic pass exercised
+`GuildHallDecorManager` directly against a mock save: `activeThemeId`'s
+fallback for both an unset theme and a since-deleted one, `slots()`
+returning the full 30 for the shipped theme, `equip`/`unequip` writing
+into and clearing the correct nested bucket without touching any other
+theme's, and `equip`'s slotType-mismatch/unknown-decoration/unowned-
+decoration rejections. Then, against the actual running in-game web
+build (not just the DevTool) via Playwright: opened the real Customize
+scene and confirmed its background now resolves to
+`guildhall-customize/guild_hall/bg.jpg` and loads with no error (the bug
+fix, actually verified rather than assumed); equipped a temporary test
+decoration into the Banner slot and confirmed it wrote
+`{"guild_hall":{"banner":"..."}}` into the save; reloaded the page and
+confirmed the slot was still shown equipped and the save still held that
+state, proving persistence works correctly through the new nested shape;
+reopened the slot and removed the decoration, confirming the bucket
+emptied back to `{"guild_hall":{}}`. The temporary test decoration used
+for this (content doesn't exist yet for real, see above) was reverted
+out of `guild-hall-decorations.json` before finalizing this patch, same
+"verify with throwaway content, ship the real empty file" approach
+patch 0206 used for its own test theme. `npx tsc --noEmit` and `npx vite
+build --config vite.web.config.ts` both pass clean on the full
+changeset.

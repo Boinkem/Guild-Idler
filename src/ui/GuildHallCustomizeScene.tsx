@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useEngine } from './useEngine';
 import { SlotBox, PickerModal, PickerOption, Rect } from './CraftingStation';
 import { GuildHallDecorManager } from '../game/managers/GuildHallDecorManager';
-import { GUILD_HALL_SLOTS, GUILD_HALL_SLOT_BY_ID } from '../game/data/guildHallSlots';
+import { GUILD_HALL_THEME_BY_ID } from '../game/data/guildHallSlots';
 import { GUILD_HALL_DECORATIONS } from '../game/data/guildHallDecor';
 import { GameState, GuildHallDecorationDef, GuildHallSlotDef, GuildHallSlotId } from '../game/types';
 import { formatGold } from '../game/util';
@@ -113,17 +113,24 @@ function buildOptions(slot: GuildHallSlotDef, state: GameState): PickerOption[] 
  * which swaps this in for its own normal facility/upgrade content rather
  * than opening a separate window -- the "Inline edit mode on Guild Hall
  * tab" option picked during the original design brainstorm). Full-bleed
- * background art with all 30 locked slots (guildHallSlots.ts) overlaid as
- * clickable frames, same `SlotBox`/`PickerModal`/`Rect` machinery
- * CraftingStation.tsx already built and EggSelectModal.tsx already reuses
- * for its own single-slot picker, just scaled up to 30 slots instead of
- * 1-3.
+ * background art (per the active theme, patch 0207 -- see
+ * `GuildHallDecorManager.activeThemeId`) with that theme's own visible
+ * slots (up to 30, possibly fewer -- see `slotsForTheme` in
+ * guildHallSlots.ts) overlaid as clickable frames, same
+ * `SlotBox`/`PickerModal`/`Rect` machinery CraftingStation.tsx already
+ * built and EggSelectModal.tsx already reuses for its own single-slot
+ * picker, just scaled up to many slots instead of 1-3.
  */
 export function GuildHallCustomizeScene({ onDone }: { onDone: () => void }) {
   const engine = useEngine();
   const state = engine.state;
   const [openSlotId, setOpenSlotId] = useState<GuildHallSlotId | null>(null);
-  const openSlot = openSlotId ? GUILD_HALL_SLOT_BY_ID[openSlotId] : null;
+  // Both resolved against the active theme (patch 0207) -- see
+  // GuildHallDecorManager.activeThemeId's own comment for how a deleted/
+  // unknown theme id degrades safely rather than breaking this scene.
+  const activeTheme = GUILD_HALL_THEME_BY_ID[GuildHallDecorManager.activeThemeId(state)];
+  const slots = GuildHallDecorManager.slots(state);
+  const openSlot = openSlotId ? GuildHallDecorManager.slot(state, openSlotId) : null;
 
   function handlePick(slot: GuildHallSlotDef, key: string) {
     if (key === UNEQUIP_KEY) {
@@ -149,8 +156,11 @@ export function GuildHallCustomizeScene({ onDone }: { onDone: () => void }) {
         <button className="btn-primary" onClick={onDone}>Done</button>
       </div>
 
-      <div className="guildhall-customize-scene" style={{ backgroundImage: 'url(./guildhall-customize/bg.jpg)' }}>
-        {GUILD_HALL_SLOTS.map((slot) => {
+      <div
+        className="guildhall-customize-scene"
+        style={activeTheme ? { backgroundImage: `url(./guildhall-customize/${activeTheme.background})` } : undefined}
+      >
+        {slots.map((slot) => {
           const decoration = GuildHallDecorManager.equippedDecoration(state, slot.id);
           return (
             <SlotBox
