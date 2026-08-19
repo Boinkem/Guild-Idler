@@ -1,5 +1,5 @@
 import {
-  GameState, PeddlerCardDef, PeddlerCardTier, PeddlerFlipCard, PeddlerFlipResult, Rarity,
+  DiceFace, DiceRollResult, GameState, PeddlerCardDef, PeddlerCardTier, PeddlerFlipCard, PeddlerFlipResult, Rarity,
 } from '../types';
 import { PEDDLER_CARDS_BY_TIER } from '../data/peddler';
 import { EQUIPMENT, EQUIPMENT_BY_ID } from '../data/equipment';
@@ -413,5 +413,58 @@ export const PeddlerManager = {
       default:
         break;
     }
+  },
+
+  /**
+   * Resolves one Dice game roll -- Grimsby's second, gold-only wager game
+   * alongside Pick Your Card, with no card-tier content pool: the wager
+   * itself is a free-form gold amount rather than a fixed fee, and the
+   * payout is decided purely by CIRCULAR distance between the chosen face
+   * and wherever the die lands. See DiceRollResult's own doc comment
+   * (types.ts) for the full payout table and why the adjacency wraps
+   * (1 and 6 are neighbors, same as any other consecutive pair).
+   *
+   * Same "he has to actually be here" gate resolveFlip already uses --
+   * Dice lives on his cart, not as a standalone always-available game.
+   * `wager` is floored to a whole gold amount and rejected outright (null
+   * return, nothing charged) if it isn't a positive, affordable number --
+   * callers (GameEngine) are expected to have already validated the
+   * wager input before calling this, same defensive-guard convention
+   * resolveFlip's own doc comment already establishes.
+   */
+  rollDice(state: GameState, wager: number, chosen: DiceFace): DiceRollResult | null {
+    if (state.grimsbyArrivedAt === null) return null;
+    const stake = Math.floor(wager);
+    if (!Number.isFinite(stake) || stake <= 0) return null;
+    if (state.gold < stake) return null;
+
+    state.gold -= stake;
+    state.stats.goldSpent += stake;
+    state.stats.peddlerGoldSpent += stake;
+
+    const landed = (1 + Math.floor(Math.random() * 6)) as DiceFace;
+    const rawDistance = Math.abs(landed - chosen);
+    // Wheel distance, not plain numeric distance -- 1 and 6 sit next to
+    // each other once the faces wrap around, same as any other
+    // consecutive pair (see DiceRollResult's own comment for the worked
+    // example this was confirmed against).
+    const distance = Math.min(rawDistance, 6 - rawDistance);
+    const outcome: DiceRollResult['outcome'] = distance === 0 ? 'jackpot' : distance === 1 ? 'partial' : 'bust';
+    const payout = outcome === 'jackpot' ? stake * 3 : outcome === 'partial' ? Math.floor(stake / 2) : 0;
+
+    if (payout > 0) {
+      const storage = ModifierManager.goldStorage(state);
+      state.gold = Math.min(storage, state.gold + payout);
+    }
+
+    // Grimsby-wide counters, not Dice-specific ones -- see peddlerJackpots/
+    // peddlerBusts' own comments (types.ts) for why these are shared with
+    // the card game rather than tracked separately per game. Deliberately
+    // NOT incrementing peddlerFlips here -- that counter's own doc comment
+    // scopes it to card flips specifically ("Total Grimsby card flips").
+    if (outcome === 'jackpot') state.stats.peddlerJackpots += 1;
+    else if (outcome === 'bust') state.stats.peddlerBusts += 1;
+
+    return { chosen, landed, wager: stake, outcome, payout };
   },
 };

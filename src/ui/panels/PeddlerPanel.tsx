@@ -4,6 +4,7 @@ import { PeddlerManager } from '../../game/managers/PeddlerManager';
 import { formatGold, formatDuration } from '../../game/util';
 import { GrimsbySprite } from '../sprites/GrimsbySprite';
 import { PeddlerCardModal } from '../PeddlerCardModal';
+import { PeddlerDiceModal } from '../PeddlerDiceModal';
 
 /**
  * Same "vendor-card" presentation the Blacksmith/Alchemist/Enchanter
@@ -20,7 +21,7 @@ export function PeddlerPanel() {
   const engine = useEngine();
   const state = engine.state;
   const now = useNow(1000);
-  const [openModal, setOpenModal] = useState<'none' | 'regular' | 'highRoller'>('none');
+  const [openModal, setOpenModal] = useState<'none' | 'regular' | 'highRoller' | 'dice'>('none');
   // Stake multiplier -- a player-chosen multiplier on top of whichever
   // fee this already is (regular or High Roller), for a proportionally
   // bigger reward. One shared control for both, per direct request
@@ -104,6 +105,16 @@ export function PeddlerPanel() {
                       High Roller -- {formatGold(highRollerFee)} gold
                     </button>
                   )}
+                  {/* Dice -- a separate, gold-only wager game, no stake
+                      selector of its own (the wager amount already IS
+                      the stake, entered freely inside the modal). */}
+                  <button
+                    className="btn-green"
+                    onClick={() => setOpenModal('dice')}
+                    title="A gold-only wager against the dice."
+                  >
+                    Roll the Dice
+                  </button>
                 </div>
               </>
             ) : (
@@ -146,8 +157,11 @@ export function PeddlerPanel() {
         </div>
       )}
 
-      {openModal !== 'none' && (
+      {(openModal === 'regular' || openModal === 'highRoller') && (
         <PeddlerCardModal highRoller={openModal === 'highRoller'} stake={stake} onClose={() => setOpenModal('none')} />
+      )}
+      {openModal === 'dice' && (
+        <PeddlerDiceModal onClose={() => setOpenModal('none')} />
       )}
     </>
   );

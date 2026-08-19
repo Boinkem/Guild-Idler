@@ -13617,3 +13617,72 @@ trailing params defaulted (`stake = 1`), and that `feeWithStake(state,
 highRoller, 1)` matches the pre-patch `feeCost`/`highRollerFeeCost`
 output exactly, so a fresh save at the default stake sees no price
 change from this patch.
+
+### Grimsby's Dice -- a second, gold-only wager game (patch 0198)
+
+```discord-update
+Dev Update | Grimsby's Dice
+
+- Added a new game to Grimsby's cart: Dice -- pick a number, wager your gold, and roll
+- Land it exactly: triple your gold back. Land a face either side of it: half back. Anything else: bust
+- Uses the same tabletop backdrop as Pick Your Card
+```
+
+**The game.** `PeddlerDiceModal.tsx`, opened via a new "Roll the Dice"
+button alongside Pick Your Card/High Roller (only while Grimsby's
+actually present, same gate as the card game). Pick a face 1-6, enter a
+wager in gold (or hit Max), then click the die itself to roll -- no
+separate "Roll" button, the die IS the button. It tumbles through a
+6-frame animation for about a second, then settles on whatever it
+actually landed on. Payout: exact match triples the wager back
+('jackpot'), a face either side of the chosen one returns half
+('partial'), anything else is a bust (wager lost outright, nothing
+returned).
+
+**Adjacency is circular, not linear -- confirmed from the original
+worked example.** "1 or 5 for a 6" only makes sense if 1 and 6 are
+neighbors, which they aren't on a straight 1-6 number line (that's a gap
+of 5) but ARE once the faces wrap around like a wheel (1-2-3-4-5-6-1).
+`PeddlerManager.rollDice` computes `Math.min(rawDistance, 6 -
+rawDistance)` rather than plain `Math.abs` -- every face ends up with
+exactly two neighbors this way, no special-cased edges (1 and 6 both
+still get two, same as 3 or 4 would). Distance 0 -> jackpot (3x), 1 ->
+partial (half, rounded down), 2 or 3 -> bust.
+
+**The die itself, `DiceSprite.tsx` + `public/peddler/dice/dice-sheet.png`.**
+A single 96x240 sheet, 16x16px cells, 6 columns x 15 rows: rows 0-11 are
+the same six pip faces recolored twelve times over (only row 0, white,
+is actually used here -- reads cleanly against both the tabletop
+backdrop and Grimsby's own purple/brass palette without competing with
+either), rows 12-13 are an unused color-swatch legend, and row 14 is a
+6-frame tumble animation in one neutral tone. `DiceSprite` is its own
+small component rather than reusing GrimsbySprite/HeroSprite's fetched-
+manifest pattern -- this sheet's geometry is fixed and small enough
+(a single asset authored for exactly this minigame, not a swappable
+licensed pack) that a manifest fetch would be pure overhead. Shows the
+tumble loop while rolling, the actual landed face once a result exists,
+or the currently-picked number as a live preview beforehand, so a player
+always sees exactly what they're about to bet on.
+
+**Engine wiring.** New `DiceFace`/`DiceRollResult` types (`types.ts`).
+`PeddlerManager.rollDice(state, wager, chosen)` validates presence and
+affordability, charges the wager, resolves the outcome, and applies the
+payout through the same `ModifierManager.goldStorage` clamp every other
+Grimsby payout already respects. `GameEngine.rollGrimsbyDice`/
+`dismissGrimsbyDiceResult` are the transient-result pair (unsaved,
+read-then-cleared) matching `pickPeddlerCard`/`dismissGrimsbyResult`'s
+existing shape exactly, stored in a new `lastGrimsbyDiceResult` engine
+field. A jackpot/bust roll feeds the same Grimsby-wide
+`peddlerJackpots`/`peddlerBusts` counters patch 0197 added (see those
+fields' own updated comments in `types.ts`) rather than tracking Dice
+separately -- "Grimsby jackpots"/"Grimsby busts" on the Stats tab now
+cover both games. `peddlerFlips` is deliberately NOT incremented by Dice
+-- that counter's own doc comment scopes it to card flips specifically.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Confirmed `dice-sheet.png` lands at
+`dist/peddler/dice/dice-sheet.png` after a production build, matching
+the path `DiceSprite` requests it from. Worked through the full 1-6 x
+1-6 adjacency table by hand to confirm every face has exactly two
+distance-1 neighbors under the wheel formula, with no double-counted or
+missing pairs at the 1/6 boundary.

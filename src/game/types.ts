@@ -1301,7 +1301,9 @@ export interface Statistics {
   peddlerFlips: number;
   /** Flips that landed on the 'jackpot' tier specifically, regardless of
    *  whether it was a regular or High Roller flip -- see
-   *  peddlerHighRollerJackpots below for the rarer subset. */
+   *  peddlerHighRollerJackpots below for the rarer subset. Also
+   *  incremented by an exact-match Dice roll (PeddlerManager.rollDice) --
+   *  Grimsby-wide, not per-game, same reasoning peddlerBusts below shares. */
   peddlerJackpots: number;
   /** Jackpot-tier flips that ALSO happened to be a High Roller flip (3x
    *  fee, 3x reward) -- a strict subset of peddlerJackpots above, kept as
@@ -1312,19 +1314,23 @@ export interface Statistics {
   /**
    * Every gold spent at Grimsby's own stall specifically -- card-flip
    * fees (regular and High Roller both, at whatever stake multiplier was
-   * used) and the one-time High Roller unlock. Deliberately its OWN
-   * counter rather than reading the general `goldSpent` above, which
-   * mixes in every other gold sink in the game (shop, repairs,
-   * upgrades...) -- "how much have I fed into Grimsby" isn't answerable
-   * from that combined total. StatsPanel's own "Gold spent" row stays
-   * reading `goldSpent`; a new "Gold spent at Grimsby" row reads this
-   * instead.
+   * used), the one-time High Roller unlock, and Dice game wagers.
+   * Deliberately its OWN counter rather than reading the general
+   * `goldSpent` above, which mixes in every other gold sink in the game
+   * (shop, repairs, upgrades...) -- "how much have I fed into Grimsby"
+   * isn't answerable from that combined total. StatsPanel's own "Gold
+   * spent" row stays reading `goldSpent`; a new "Gold spent at Grimsby"
+   * row reads this instead.
    */
   peddlerGoldSpent: number;
   /**
    * Bust-tier outcomes at Grimsby specifically -- card flips that landed
-   * on the 'bust' tier. Same "Grimsby-wide, not per-game" idea
-   * peddlerJackpots above already covers: paid in, got nothing back.
+   * on the 'bust' tier, and Dice rolls that landed neither on the chosen
+   * face nor either of its wheel-neighbors (see DiceRollResult's own
+   * comment). Grouped under one Grimsby-wide counter rather than a
+   * separate one per game, same treatment peddlerJackpots above already
+   * gets extended to for Dice's own jackpot (exact-match) rolls -- both
+   * represent the same player-facing idea: paid in, got nothing back.
    */
   peddlerBusts: number;
 }
@@ -2199,5 +2205,40 @@ export interface PeddlerFlipResult {
    *  PeddlerPanel doesn't need to re-look-up EQUIPMENT_BY_ID/MATERIAL_BY_ID
    *  itself. */
   rewardSummary: string;
+}
+
+/** A face on Grimsby's dice -- 1 through 6, same as any six-sided die. */
+export type DiceFace = 1 | 2 | 3 | 4 | 5 | 6;
+
+/**
+ * One resolved Dice game roll -- a second, gold-only wager game at
+ * Grimsby's cart alongside Pick Your Card, with no card-tier content
+ * pool of its own (see PeddlerManager.rollDice). The wager is a free-
+ * form gold amount rather than a fixed fee, so there's no separate
+ * "stake" concept here the way card flips have -- the wager itself
+ * already is the stake.
+ *
+ * Payout is decided by CIRCULAR distance around the six faces (1-2-3-4-
+ * 5-6-1, wrapping past 6 back to 1) between `chosen` and `landed`, not
+ * plain numeric distance -- confirmed directly from the original ask's
+ * own worked example ("1 or 5 for a 6"): 1 is numerically far from 6,
+ * but is its wheel-neighbor once the ends wrap around, same as 2 and 6
+ * both flank 1. Every face has exactly two neighbors this way, with no
+ * special-cased edge faces.
+ * - distance 0 (exact match): 'jackpot' -- payout is 3x the wager.
+ * - distance 1 (either neighbor): 'partial' -- payout is half the wager
+ *   (rounded down).
+ * - distance 2 or 3 (anything else): 'bust' -- payout is 0, the wager is
+ *   simply lost.
+ */
+export interface DiceRollResult {
+  chosen: DiceFace;
+  landed: DiceFace;
+  wager: number;
+  outcome: 'jackpot' | 'partial' | 'bust';
+  /** Gold actually credited back -- 0 for a bust. Already applied to
+   *  GameState.gold (and clamped to gold storage) by the time this is
+   *  returned; purely a display value from here on. */
+  payout: number;
 }
 

@@ -1,4 +1,4 @@
-import { ActiveQuest, AutoChainTactics, ElementType, GameState, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
+import { ActiveQuest, AutoChainTactics, DiceFace, DiceRollResult, ElementType, GameState, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -76,6 +76,10 @@ export class GameEngine {
    *  transient (unsaved), read-then-cleared shape as lastResult/
    *  lastHatchedPet. Feeds PeddlerPanel's three-card reveal. */
   lastGrimsbyResult: PeddlerFlipResult | null = null;
+  /** Same shape as lastGrimsbyResult just above, for the Dice game
+   *  instead of Pick Your Card -- set by rollGrimsbyDice, cleared by
+   *  dismissGrimsbyDiceResult. Feeds PeddlerDiceModal's own reveal. */
+  lastGrimsbyDiceResult: DiceRollResult | null = null;
   /**
    * Queued rather than a single overwritable value -- simultaneous events
    * (a quest finishing right as it unlocks something) now show one after
@@ -2536,6 +2540,34 @@ export class GameEngine {
 
   dismissGrimsbyResult() {
     this.lastGrimsbyResult = null;
+    this.notify();
+  }
+
+  /**
+   * The Dice game's own "place your wager" action -- same shape as
+   * pickPeddlerCard just above (validate, resolve, stash the transient
+   * result, play a sound, check achievements, notify, save), just against
+   * PeddlerManager.rollDice instead of resolveFlip. `wager` is validated
+   * here (not just left to rollDice's own defensive floor/positivity
+   * check) so a bad input gets its own clear message rather than a silent
+   * no-op.
+   */
+  rollGrimsbyDice(wager: number, chosen: DiceFace) {
+    if (!PeddlerManager.isPresent(this.state)) return this.say('There’s no one there right now.');
+    const stake = Math.floor(wager);
+    if (!Number.isFinite(stake) || stake <= 0) return this.say('Wager something first.');
+    if (this.state.gold < stake) return this.say('Not enough gold.');
+    const result = PeddlerManager.rollDice(this.state, stake, chosen);
+    if (!result) return this.say('Something about that didn’t work.');
+    this.lastGrimsbyDiceResult = result;
+    playSound(result.outcome === 'jackpot' ? 'legendary_drop' : result.outcome === 'partial' ? 'purchase' : 'quest_fail');
+    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+    this.notify();
+    void this.saveNow();
+  }
+
+  dismissGrimsbyDiceResult() {
+    this.lastGrimsbyDiceResult = null;
     this.notify();
   }
 
