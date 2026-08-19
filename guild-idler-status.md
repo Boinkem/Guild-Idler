@@ -7022,13 +7022,18 @@ pass (same caveat as the two entries above).
   now built, ahead of any actual pack -- see "DLC groundwork -- built"
   in the main patch log above.
 - **Customizable Guild Hall background (trophies, banners, shelf
-  trinkets)** -- layout design locked through a visual mockup pass, not
-  built yet. Purely cosmetic, no stat effect. Core mechanic: a fixed set
-  of decoration slots layered over the Guild Hall's existing background
+  trinkets)** -- layout design locked through a visual mockup pass.
+  Purely cosmetic, no stat effect. Core mechanic: a fixed set of
+  decoration slots layered over the Guild Hall's existing background
   art, each independently empty or filled -- not a single theme swap.
   Slots are visible and unlocked from the start; there's nothing to
-  unlock, only items to earn. Key decisions locked in from that
-  discussion:
+  unlock, only items to earn. **Built so far:** the DevTool content type
+  + placement/scale field (patch 0202), and the 30-slot registry plus
+  owned/equipped decoration state and engine plumbing (patch 0203, see
+  the patch log below for both). **Not built yet:** the in-game
+  Customize UI, and wiring gold/achievement/Grimsby acquisition to
+  actually call the now-built purchase/grant path. Key decisions locked
+  in from that discussion:
   - **30 individual slots across 10 slot types**, positioned against the
     actual "empty guild hall" background art (two bookshelves, a glass
     display case, an open shelf/table unit, the floor, and the
@@ -7071,7 +7076,7 @@ pass (same caveat as the two entries above).
     enters an edit mode that fully hides the facility/upgrade cards and
     takes the background art full-bleed, with each slot clickable to
     open an item picker; a "Done" button returns to the normal tab.
-  - **Two DevTool authoring features needed.** The first is now built
+  - **Two DevTool authoring features needed.** The first is built
     (patch 0202); the second is still only a prototype:
     - **Per-item placement/scale field -- built, see "Guild Hall
       Decorations: DevTool content type + placement/scale field
@@ -14178,3 +14183,93 @@ silently clamping or accepting it. Test entry and its test art file were
 both removed afterward -- ships with an empty
 `guild-hall-decorations.json`, same as every other patch's out-of-the-box
 state.
+
+### Guild Hall Decorations: 30-slot registry + owned/equipped state (patch 0203)
+
+```discord-update
+Dev Update | Guild Hall Decorations (state)
+
+- Added the 30 physical Guild Hall decoration slots as real game data, using the coordinates locked in earlier
+- Added save-file support for which decorations the guild owns and which slot each one sits in
+- Still no in-game screen for any of this -- next step is the actual Customize UI on the Guild Hall tab
+```
+
+Second implementation step for the "Customizable Guild Hall background"
+feature (see the design spec and patch 0202's DevTool foundation under
+Brainstorming above). Scoped to "slots + state, no UI" on purpose: this
+patch is pure data/engine plumbing so the next one can be UI-only,
+wiring already-tested methods up to actual buttons instead of designing
+the engine API and the UI at the same time.
+
+**Slot registry.** `guildHallSlots.ts` hardcodes the 30 physical slots
+(`GUILD_HALL_SLOTS`/`GUILD_HALL_SLOT_BY_ID`) transcribed verbatim from
+this file's own "Final locked slot coordinates" JSON block above --
+`id`, `label`, `slotType` (which of the 9 content pools it draws from),
+and `top`/`left`/`width`/`height` in % of the background art's bounding
+box. This is a plain hardcoded array, not a DevTool-editable JSON file
+like the decorations themselves -- these 30 positions came out of an
+interactive mockup pass and are meant to change rarely, as a deliberate
+code change, not routine content authoring (the DevTool slot layout
+editor prototype noted in the backlog above would be the tool for that,
+if it's ever built). `types.ts` gained the matching `GuildHallSlotId`
+closed union (30 literal ids -- a fixed, code-defined set, same
+convention `GuildFacility` already uses, not the open-ended-string
+convention decoration ids themselves use) and `GuildHallSlotDef`.
+
+**Save state.** `GameState` gained two new optional fields, both
+following the exact "optional, no migration, default at every read
+site" convention `unlockedTombstoneStyles` already established:
+`ownedGuildHallDecorations?: string[]` (a flat unlocked-ids list, same
+shape as `unlockedSkins`) and `equippedGuildHallDecorations?:
+Partial<Record<GuildHallSlotId, string>>` (slot id -> decoration id,
+same sparse-`Partial` shape `Hero.equipment` already uses for gear
+slots). Genuinely untouched in `SaveManager`'s new-game factory or its
+migration chain, on purpose -- there's nothing to backfill, an absent
+field just reads as empty everywhere.
+
+**`GuildHallDecorManager`.** New manager, same size/scope as
+`CurioManager`: `owns`/`owned` (resolves against content, silently
+skips an id that no longer matches a real decoration -- same
+degrade-gracefully convention `CurioManager.owned` already follows),
+`grant` (the shared "you now own this" primitive any future acquisition
+path calls), `purchase` (the gold-kind path -- validates ownership/
+funds, spends gold, calls `grant`; same `string | null` error shape
+`GuildManager.upgradeFacility` already uses), and `equip`/`unequip`/
+`equippedId`/`equippedDecoration`/`allEquipped` for placing an owned
+decoration into a slot -- validates the slot exists, the decoration is
+owned, and its `slotType` actually matches the slot's own pool (a
+`wallTrinket` item can't go in the `trophyCase` slot), then silently
+displaces whatever was equipped there before (still owned, just no
+longer placed) rather than failing, same "equip displaces" shape
+`EquipmentManager`'s gear slots already use. Deliberately does NOT wire
+achievement completion or a Grimsby pull to call `grant` yet -- only the
+gold path has a real caller in this patch; per `GuildHallDecorAcquisition`'s
+own comment, that wiring is separate follow-up work.
+
+**Engine surface.** `engine.ts` gained three thin wrapper methods --
+`purchaseGuildHallDecoration`, `equipGuildHallDecoration`,
+`unequipGuildHallDecoration` -- same shape every other manager's UI-
+facing wrapper already has (call the manager, `say()` the error if any,
+play a sound, `notify()`, `saveNow()`). Nothing in the UI calls these
+yet; they exist so the Customize UI patch can wire buttons straight to
+a tested API instead of inventing one alongside the UI itself.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Since this patch has no UI to click
+through, wrote a standalone script (`tsx`, not checked into the repo)
+that exercised `GuildHallDecorManager` directly against three temporary
+fixture decorations (a `wallCenterpiece` item, a `corner` item, and a
+gold-vs-achievement acquisition-kind pair) covering: insufficient gold,
+successful purchase (gold deducted, `stats.goldSpent` tracked, ownership
+granted), rejecting a duplicate purchase, rejecting a non-gold purchase
+attempt, rejecting purchase/equip of an unknown id, rejecting equip of a
+not-yet-owned decoration, rejecting equip into a slot whose pool doesn't
+match the decoration's `slotType`, rejecting an unknown slot id,
+successful equip + `equippedId`/`equippedDecoration`/`allEquipped`
+resolving correctly, displacement-free multi-slot equipping, unequip
+correctly emptying a slot without un-owning the decoration, `owned()`
+degrading gracefully against an unresolvable id, and a completely fresh
+game state (no fields touched) correctly reading as empty everywhere
+with no crash -- 28 checks, all passing. Fixture decorations and the
+script were both removed afterward; `guild-hall-decorations.json` ships
+unchanged (still empty), same as every other patch.

@@ -1502,6 +1502,29 @@ export interface GameState {
   unlockedTombstoneStyles?: string[];
   selectedTombstoneStyle?: string;
   /**
+   * Guild Hall decoration ids the guild actually owns -- same "global,
+   * unlocked-ids list, no per-hero anything" shape as unlockedSkins/
+   * unlockedTombstoneStyles just above, and same reasoning: purely
+   * cosmetic, account-wide. Optional/undefined for any save from before
+   * this system existed -- default to `[]` wherever read, no migration
+   * needed (see GuildHallDecorManager.owned).
+   */
+  ownedGuildHallDecorations?: string[];
+  /**
+   * Which decoration currently sits in which of the 30 physical slots
+   * (GuildHallSlotId -> GuildHallDecorationDef.id). `Partial`, not a full
+   * `Record`, because most slots start (and may stay) empty -- same
+   * "sparse, absence means empty" shape `Hero.equipment` already uses for
+   * its own gear slots. Optional/undefined for any save from before this
+   * system existed -- default to `{}` wherever read, no migration needed
+   * (see GuildHallDecorManager.equipped). A decoration id here is not
+   * necessarily still present in `ownedGuildHallDecorations` or even
+   * still a real content id -- GuildHallDecorManager resolves and
+   * degrades gracefully, same "content may drift out from under an old
+   * save" convention CurioManager.owned already follows.
+   */
+  equippedGuildHallDecorations?: Partial<Record<GuildHallSlotId, string>>;
+  /**
    * Which hero the desktop companion shows. Updates automatically whenever a
    * hero is sent on a quest (so departures are always visible), and can be
    * changed manually by cycling on the widget or picking in the Heroes panel.
@@ -2180,9 +2203,11 @@ export interface CurioDef {
  * physical slot instances themselves (id, position, size, which pool
  * they draw from) are locked design data -- see guild-idler-status.md's
  * "Customizable Guild Hall background" backlog entry for the full
- * layout and coordinates -- and land in code as their own registry once
- * the in-game Customize UI is built; this type only covers the content
- * (the decorations themselves), not yet the slots that hold them.
+ * layout and coordinates -- and now exist in code as their own registry,
+ * `GuildHallSlotDef`/`GUILD_HALL_SLOTS` below/in guildHallSlots.ts (patch
+ * 0203). This type only covers the content (the decorations themselves);
+ * the in-game Customize UI that actually lets a player place one into a
+ * slot is still a separate, later patch.
  */
 export type GuildHallSlotType =
   | 'banner'
@@ -2238,6 +2263,42 @@ export interface GuildHallDecorationDef {
    * art routinely needs shrinking to fit a small slot, not just zooming.
    */
   image?: { path?: string; focusX?: number; focusY?: number; scale?: number };
+}
+
+/**
+ * One of the 30 physical decoration slots baked into the Guild Hall's
+ * background art -- a closed union, not a plain string, because these are
+ * fixed hardcoded positions (see guildHallSlots.ts), the same "code
+ * defines the fixed set" convention `GuildFacility` already uses, not the
+ * "DevTool defines an open-ended set" convention `HeroSkin`/decoration
+ * ids use. Repositioning one is a code change (or, once built, a run of
+ * the still-not-built DevTool slot layout editor prototype -- see the
+ * backlog entry) rather than a DevTool content edit.
+ */
+export type GuildHallSlotId =
+  | 'banner' | 'wall1' | 'wall2' | 'trophycase' | 'centerpiece' | 'floor' | 'cornerL' | 'cornerR'
+  | 'left-0-0' | 'left-0-1' | 'left-1-0' | 'left-1-1' | 'left-2-0' | 'left-2-1' | 'left-3-0' | 'left-3-1'
+  | 'right-0-0' | 'right-0-1' | 'right-1-0' | 'right-1-1' | 'right-2-0' | 'right-2-1' | 'right-3-0' | 'right-3-1'
+  | 'center-0-0' | 'center-0-1' | 'center-1-0' | 'center-1-1' | 'center-2-0' | 'center-2-1';
+
+/**
+ * Geometry + pool for one physical slot, in % of the Guild Hall
+ * background art's own bounding box -- exactly the coordinates locked in
+ * during the mockup pass (guild-idler-status.md's "Final locked slot
+ * coordinates" JSON block), transcribed verbatim into guildHallSlots.ts
+ * rather than re-derived. `slotType` is which `GuildHallDecorationDef`s
+ * are eligible for this slot (matched against the def's own `slotType`);
+ * `label` is the short mockup-era name (e.g. "L2a"), useful for
+ * debugging/DevTool display, not shown to the player.
+ */
+export interface GuildHallSlotDef {
+  id: GuildHallSlotId;
+  label: string;
+  slotType: GuildHallSlotType;
+  top: number;
+  left: number;
+  width: number;
+  height: number;
 }
 
 /**

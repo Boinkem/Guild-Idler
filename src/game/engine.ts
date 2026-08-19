@@ -1,4 +1,4 @@
-import { ActiveQuest, AutoChainTactics, DiceFace, DiceRollResult, ElementType, GameState, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
+import { ActiveQuest, AutoChainTactics, DiceFace, DiceRollResult, ElementType, GameState, GuildHallSlotId, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -8,6 +8,7 @@ import { SaveManager, SaveAdapter, defaultAdapter, createInitialState } from './
 import { EquipmentManager } from './managers/EquipmentManager';
 import { InventoryManager } from './managers/InventoryManager';
 import { CurioManager } from './managers/CurioManager';
+import { GuildHallDecorManager } from './managers/GuildHallDecorManager';
 import { DlcManager } from './managers/DlcManager';
 import { GuildManager } from './managers/GuildManager';
 import { PrestigeManager } from './managers/PrestigeManager';
@@ -2497,6 +2498,39 @@ export class GameEngine {
       return this.say('That tombstone style is not unlocked yet.');
     }
     this.state.selectedTombstoneStyle = styleId;
+    this.notify();
+    void this.saveNow();
+  }
+
+  /* ------------------------- Guild Hall decorations ------------------------ */
+  /* Patch 0203: state + engine plumbing only -- see GuildHallDecorManager's
+   * own top comment. There's no Customize UI calling these yet; they exist
+   * so a later UI-only patch has a tested, ready-to-use API to wire up. */
+
+  /** Buys a gold-kind decoration outright. Achievement/Grimsby decorations
+   *  have no purchase path -- see GuildHallDecorManager.purchase. */
+  purchaseGuildHallDecoration(decorationId: string) {
+    const error = GuildHallDecorManager.purchase(this.state, decorationId);
+    if (error) return this.say(error);
+    playSound('purchase');
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Places an owned decoration into a physical slot, displacing whatever
+   *  was there before (still owned, just unequipped). */
+  equipGuildHallDecoration(slotId: GuildHallSlotId, decorationId: string) {
+    const error = GuildHallDecorManager.equip(this.state, slotId, decorationId);
+    if (error) return this.say(error);
+    playSound('equip');
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Empties a slot. The decoration stays owned. */
+  unequipGuildHallDecoration(slotId: GuildHallSlotId) {
+    GuildHallDecorManager.unequip(this.state, slotId);
+    playSound('unequip');
     this.notify();
     void this.saveNow();
   }
