@@ -226,6 +226,14 @@ export function StatsPanel() {
     ['Gold earned', formatGold(stats.goldEarned)],
     ['Gold spent', formatGold(stats.goldSpent)],
     ['Highest single reward', formatGold(stats.highestReward)],
+    // Grimsby-specific -- reads its own dedicated counters (peddlerGoldSpent/
+    // peddlerBusts, patch 0197) rather than deriving from the general
+    // totals above, which mix in every other gold sink/loss in the game.
+    // peddlerJackpots already existed (tracked since patch 0191-era work)
+    // but was never actually surfaced anywhere on this tab until now.
+    ['Gold spent at Grimsby', formatGold(stats.peddlerGoldSpent)],
+    ['Grimsby jackpots', stats.peddlerJackpots.toLocaleString()],
+    ['Grimsby busts', stats.peddlerBusts.toLocaleString()],
     ['Items found', stats.itemsFound.toLocaleString()],
     ['Legendary items found', stats.legendaryItemsFound.toLocaleString()],
     ['Injuries suffered', stats.injuriesSuffered.toLocaleString()],

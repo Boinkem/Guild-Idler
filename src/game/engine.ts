@@ -2514,12 +2514,12 @@ export class GameEngine {
    * plays the exact same way, just at peddler.highRollerMultiplier's
    * fee/reward scale -- see PeddlerManager.resolveFlip's own comment.
    */
-  pickPeddlerCard(cardIndex: 0 | 1 | 2, highRoller = false) {
+  pickPeddlerCard(cardIndex: 0 | 1 | 2, highRoller = false, stake = 1) {
     if (!PeddlerManager.isPresent(this.state)) return this.say('There\u2019s no one there right now.');
     if (highRoller && !this.state.grimsbyHighRollerUnlocked) return this.say('High Roller isn\u2019t unlocked yet.');
-    const fee = highRoller ? PeddlerManager.highRollerFeeCost(this.state) : PeddlerManager.feeCost(this.state);
+    const fee = PeddlerManager.feeWithStake(this.state, highRoller, stake);
     if (this.state.gold < fee) return this.say('Not enough gold.');
-    const result = PeddlerManager.resolveFlip(this.state, cardIndex, Date.now(), highRoller);
+    const result = PeddlerManager.resolveFlip(this.state, cardIndex, Date.now(), highRoller, stake);
     if (!result) return this.say('Something about that didn\u2019t work.');
     this.lastGrimsbyResult = result;
     playSound(result.cards[result.pickedIndex].outcome.tier === 'jackpot' ? 'legendary_drop' : 'purchase');

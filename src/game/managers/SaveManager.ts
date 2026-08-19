@@ -146,6 +146,7 @@ export function createInitialState(now = Date.now()): GameState {
       playTimeMs: 0, offlineTimeMs: 0, prestigeCount: 0, bestPrestigeStreak: 0,
       lowestSuccessfulChance: null, blackMarketPurchases: 0, firstPlayedAt: now,
       peddlerFlips: 0, peddlerJackpots: 0, peddlerHighRollerJackpots: 0,
+      peddlerGoldSpent: 0, peddlerBusts: 0,
     },
     log: [],
     discoveredItems: [],
@@ -900,6 +901,27 @@ const MIGRATIONS: Record<number, Migration> = {
       h.autoChainMinutesRemaining = h.autoChainMinutesRemaining ?? null;
     }
     return { ...save, version: 44, heroes };
+  },
+  44: (save) => {
+    // New Grimsby-specific stats (patch 0197): peddlerGoldSpent and
+    // peddlerBusts -- see Statistics' own comments on both. Same
+    // "default an existing save's stats object to 0, don't just let it
+    // come back undefined" shape migration 35 already used for
+    // peddlerFlips/peddlerJackpots/peddlerHighRollerJackpots -- `migrate`
+    // only ever shallow-merges `save.stats` over the fresh-state default,
+    // so a stats object present but missing these two fields would
+    // otherwise leave them undefined rather than falling back to
+    // createInitialState()'s own zeroes.
+    const stats = (save.stats as Record<string, unknown> | undefined) ?? {};
+    return {
+      ...save,
+      version: 45,
+      stats: {
+        ...stats,
+        peddlerGoldSpent: (stats.peddlerGoldSpent as number | undefined) ?? 0,
+        peddlerBusts: (stats.peddlerBusts as number | undefined) ?? 0,
+      },
+    };
   },
 };
 

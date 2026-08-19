@@ -175,6 +175,14 @@ export const PeddlerManager = {
     return Tuning.get('peddler.highRollerMultiplier');
   },
 
+  /** Fee for a flip at a given stake (see STAKE_OPTIONS/resolveFlip's own
+   *  comment) -- the one place the UI (PeddlerPanel/PeddlerCardModal)
+   *  should compute a displayed cost from, so it can never drift from
+   *  what resolveFlip itself actually charges. */
+  feeWithStake(state: GameState, highRoller: boolean, stake: number): number {
+    return (highRoller ? PeddlerManager.highRollerFeeCost(state) : PeddlerManager.feeCost(state)) * stake;
+  },
+
   /** One-time gold cost to unlock High Roller at all -- flat, not
    *  per-level, same shape master_adventurer's own single-purchase
    *  unlock uses. */
@@ -196,9 +204,21 @@ export const PeddlerManager = {
     if (state.gold < cost) return false;
     state.gold -= cost;
     state.stats.goldSpent += cost;
+    state.stats.peddlerGoldSpent += cost;
     state.grimsbyHighRollerUnlocked = true;
     return true;
   },
+
+  /**
+   * Stake multiplier options for a card flip -- a player-chosen (not
+   * Tuning-driven) multiplier applied ON TOP OF the regular/High Roller
+   * fee, for a proportionally bigger reward. "Same with the high roller
+   * function" per direct request -- both regular and High Roller flips
+   * take a stake, and the two multiply together (High Roller's own 3x
+   * fee/reward, times whatever stake is picked), rather than the stake
+   * only applying to one or the other.
+   */
+  STAKE_OPTIONS: [1, 2, 3, 4, 5] as const,
 
   /** True once he's actually here and interactable. Distinct from
    *  questsSinceGrimsby reaching 0 -- see GameState.grimsbyArrivedAt's
@@ -276,16 +296,24 @@ export const PeddlerManager = {
    * are expected to have already checked isPresent/feeCost/
    * highRollerFeeCost before offering the button at all; this is just a
    * defensive guard against a stale/replayed call.
+   *
+   * `stake` (1-5, see STAKE_OPTIONS above) is a player-chosen multiplier
+   * on top of whichever base this already is -- 1 for a regular flip,
+   * peddler.highRollerMultiplier for High Roller -- multiplying together
+   * rather than being its own separate scale, so "High Roller at 3x
+   * stake" really is 3x the fee/reward High Roller already was, not a
+   * flat replacement of it.
    */
-  resolveFlip(state: GameState, pickedIndex: 0 | 1 | 2, now: number, highRoller = false): PeddlerFlipResult | null {
+  resolveFlip(state: GameState, pickedIndex: 0 | 1 | 2, now: number, highRoller = false, stake = 1): PeddlerFlipResult | null {
     if (state.grimsbyArrivedAt === null) return null;
     if (highRoller && !state.grimsbyHighRollerUnlocked) return null;
-    const multiplier = highRoller ? Tuning.get('peddler.highRollerMultiplier') : 1;
+    const multiplier = (highRoller ? Tuning.get('peddler.highRollerMultiplier') : 1) * stake;
     const fee = PeddlerManager.feeCost(state) * multiplier;
     if (state.gold < fee) return null;
 
     state.gold -= fee;
     state.stats.goldSpent += fee;
+    state.stats.peddlerGoldSpent += fee;
 
     const outcomes: [PeddlerCardDef, PeddlerCardDef, PeddlerCardDef] = [
       rollOneOutcome(), rollOneOutcome(), rollOneOutcome(),
@@ -306,6 +334,8 @@ export const PeddlerManager = {
     if (picked.tier === 'jackpot') {
       state.stats.peddlerJackpots += 1;
       if (highRoller) state.stats.peddlerHighRollerJackpots += 1;
+    } else if (picked.tier === 'bust') {
+      state.stats.peddlerBusts += 1;
     }
 
     return {

@@ -13552,3 +13552,68 @@ only other call sites (`HeroesPanel.tsx`, `IdleView.tsx`) -- both already
 treat a `null` return as "no title," no changes needed there. Confirmed
 `ActiveRaid.heroIds` (`types.ts`) is the only per-raid roster the engine
 tracks, and that raids never populate `activeQuestFor`.
+
+### Grimsby: dedicated stats, and a player-chosen stake multiplier (patch 0197)
+
+```discord-update
+Dev Update | Grimsby
+
+- Added three new stats: Gold spent at Grimsby, Grimsby jackpots, and Grimsby busts (Stats tab)
+- Added a Stakes selector (1x-5x) to Grimsby's cart -- raises the fee for a proportionally bigger reward, works with High Roller too
+- Added a Roll Again button once a card's revealed -- straight back to a fresh set of cards without closing the window
+```
+
+**Stats.** Three new counters, all Grimsby-specific rather than reading
+the general lifetime totals (`Statistics.goldSpent`/etc. mix in every
+other gold sink in the game, so "how much have I fed into Grimsby" was
+never actually answerable from those): `peddlerGoldSpent` (every fee
+paid at his cart -- regular flips, High Roller flips at whatever stake,
+and the one-time High Roller unlock), and `peddlerBusts` (flips that
+landed on the 'bust' tier). The third, `peddlerJackpots`, already
+existed -- tracked since the achievements pass, incremented in
+`PeddlerManager.resolveFlip` -- but was never actually shown anywhere on
+the Stats tab until now; added alongside the two new ones rather than
+separately. New rows in `StatsPanel.tsx`: "Gold spent at Grimsby",
+"Grimsby jackpots", "Grimsby busts". `SAVE_VERSION` bumped 44 -> 45;
+migration 44 defaults both new fields to 0 for existing saves, same
+shape migration 35 already used for the first three Grimsby counters.
+
+**Stake multiplier.** `PeddlerManager.STAKE_OPTIONS` (`[1, 2, 3, 4, 5]`)
+is a player-picked multiplier applied on top of whichever fee a flip
+already is -- 1x for a regular flip, `peddler.highRollerMultiplier` for
+High Roller -- multiplying together rather than replacing it, so "High
+Roller at 3x stake" is 3x whatever High Roller's own fee/reward already
+was. One shared selector (`PeddlerPanel.tsx`, a row of `1x`-`5x` chips)
+drives both the "Pick Your Card" and "High Roller" buttons at once, per
+direct request ("same with the high roller function"). `resolveFlip`
+takes a new `stake` parameter (default 1, so every existing call site
+compiles unchanged); the combined multiplier flows through exactly the
+same `applyOutcome`/`summarizeReward` path High Roller's own multiplier
+already used, so gold/material/scrap amounts scale with stake, discrete
+drops (equipment/egg/curio) come back as that many copies, and
+`goldRefund` still isn't double-multiplied (it's a percentage of
+`feePaid`, which already has the stake baked in). New
+`PeddlerManager.feeWithStake(state, highRoller, stake)` is the one place
+both the panel and the modal read a displayed cost from, so the UI can
+never show a number `resolveFlip` wouldn't actually charge.
+
+**Roll Again.** Once a round settles (`revealStage === 'settled'`),
+`PeddlerCardModal`'s footer now offers "Roll Again -- <fee> gold"
+alongside the existing close button. It clears the current result
+(`engine.dismissGrimsbyResult`) and resets the modal's local reveal
+state -- fresh card backs, fresh result backdrop, wave/approval gestures
+free to replay, no leftover burst particles -- landing straight back on
+the face-down card row rather than the "Lay out the cards" screen a
+player's already gotten past this session. It doesn't charge anything by
+itself; picking a card is still what pays the fee, exactly like the
+first round, so this is a shortcut back to that step rather than a new
+purchase action. Disabled (with a tooltip) if the fee can't be afforded,
+or if Grimsby's own leave-window timer happened to expire while the
+modal was still open.
+
+**Verified:** `npx tsc --noEmit` passes clean. Confirmed every existing
+`resolveFlip`/`pickPeddlerCard` call site still compiles with the new
+trailing params defaulted (`stake = 1`), and that `feeWithStake(state,
+highRoller, 1)` matches the pre-patch `feeCost`/`highRollerFeeCost`
+output exactly, so a fresh save at the default stake sees no price
+change from this patch.

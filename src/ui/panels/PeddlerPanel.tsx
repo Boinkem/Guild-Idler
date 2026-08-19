@@ -21,14 +21,23 @@ export function PeddlerPanel() {
   const state = engine.state;
   const now = useNow(1000);
   const [openModal, setOpenModal] = useState<'none' | 'regular' | 'highRoller'>('none');
+  // Stake multiplier -- a player-chosen multiplier on top of whichever
+  // fee this already is (regular or High Roller), for a proportionally
+  // bigger reward. One shared control for both, per direct request
+  // ("same with the high roller function"), rather than two independent
+  // pickers -- see PeddlerManager.STAKE_OPTIONS/resolveFlip's own comment
+  // for how the two multiply together. Local UI state, not persisted --
+  // same "picked fresh each visit" shape junkRarity (EquipmentPanel) uses
+  // for its own transient selector.
+  const [stake, setStake] = useState<number>(1);
 
   const present = PeddlerManager.isPresent(state);
-  const fee = PeddlerManager.feeCost(state);
+  const fee = PeddlerManager.feeWithStake(state, false, stake);
   const canAfford = state.gold >= fee;
   const charmCount = state.inventory.beckoning_charm ?? 0;
 
   const highRollerUnlocked = state.grimsbyHighRollerUnlocked;
-  const highRollerFee = PeddlerManager.highRollerFeeCost(state);
+  const highRollerFee = PeddlerManager.feeWithStake(state, true, stake);
   const canAffordHighRoller = state.gold >= highRollerFee;
   const multiplier = PeddlerManager.highRollerMultiplier();
   const unlockCost = PeddlerManager.highRollerUnlockCost();
@@ -60,6 +69,22 @@ export function PeddlerPanel() {
                 <p className="card-flavour">
                   "Well? Card's a card. Fair chance, for a fair price."
                 </p>
+                {/* Stake selector -- raises the fee (and the eventual
+                    reward) for BOTH buttons below at once, see this
+                    component's own `stake` state comment above. */}
+                <div className="row wrap" style={{ gap: 4, alignItems: 'center', marginBottom: 6 }}>
+                  <span className="tiny muted">Stakes</span>
+                  {PeddlerManager.STAKE_OPTIONS.map((s) => (
+                    <button
+                      key={s}
+                      className={`chip ${stake === s ? 'on' : ''}`}
+                      onClick={() => setStake(s)}
+                      title={s === 1 ? 'Standard fee and payout' : `${s}x the fee, for ${s}x the payout`}
+                    >
+                      {s}x
+                    </button>
+                  ))}
+                </div>
                 <div className="row wrap" style={{ gap: 8 }}>
                   <button
                     className="btn-purple"
@@ -122,7 +147,7 @@ export function PeddlerPanel() {
       )}
 
       {openModal !== 'none' && (
-        <PeddlerCardModal highRoller={openModal === 'highRoller'} onClose={() => setOpenModal('none')} />
+        <PeddlerCardModal highRoller={openModal === 'highRoller'} stake={stake} onClose={() => setOpenModal('none')} />
       )}
     </>
   );

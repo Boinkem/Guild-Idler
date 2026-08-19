@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, CSSProperties } from 'react';
 import { useEngine } from './useEngine';
 import { PeddlerCardDef, PeddlerCardTier } from '../game/types';
+import { PeddlerManager } from '../game/managers/PeddlerManager';
 import { MATERIAL_BY_ID } from '../game/data/materials';
 import { CURIO_BY_ID } from '../game/data/curios';
 import { EQUIPMENT_BY_ID } from '../game/data/equipment';
-import { RARITY_COLOR } from '../game/util';
+import { RARITY_COLOR, formatGold } from '../game/util';
 import { GrimsbySprite } from './sprites/GrimsbySprite';
 import { ItemIcon, MaterialIcon, ConsumableIcon, CurioIcon } from './icons';
 import { EggIcon } from './EggIcon';
@@ -301,19 +302,24 @@ function PeddlerCardDetailOverlay({ outcome, onClose }: { outcome: PeddlerCardDe
   );
 }
 
-export function PeddlerCardModal({ highRoller = false, onClose }: { highRoller?: boolean; onClose: () => void }) {
+export function PeddlerCardModal({
+  highRoller = false, stake = 1, onClose,
+}: { highRoller?: boolean; stake?: number; onClose: () => void }) {
   const engine = useEngine();
   const [showCards, setShowCards] = useState(false);
-  const [localBacks] = useState<[number, number, number]>(() => [
+  // Re-rolled on every "Lay out the cards" AND on Roll Again (see
+  // rollNewRound below) -- a fresh round should show fresh card backs,
+  // not the same 3 the previous round happened to land on.
+  const [localBacks, setLocalBacks] = useState<[number, number, number]>(() => [
     Math.floor(Math.random() * 3), Math.floor(Math.random() * 3), Math.floor(Math.random() * 3),
   ]);
   // Which of the 3 result_N.png backdrops the revealed/picked card uses
-  // -- rolled once per modal open, same "pick once, hold it for the
-  // whole open/close lifetime" shape localBacks (above) already uses for
-  // the face-down cards, even though this one won't actually render
-  // until a result exists. Purely cosmetic/decorative, same reasoning as
+  // -- rolled once per round (see rollNewRound), same "pick once, hold it
+  // for the whole round" shape localBacks (above) already uses for the
+  // face-down cards, even though this one won't actually render until a
+  // result exists. Purely cosmetic/decorative, same reasoning as
   // localBacks -- not read or cared about by the engine at all.
-  const [resultBackIndex] = useState(() => Math.floor(Math.random() * 3));
+  const [resultBackIndex, setResultBackIndex] = useState(() => Math.floor(Math.random() * 3));
   const [browsingLine] = useState(() => {
     const pool = highRoller ? HIGH_ROLLER_LINES : BROWSING_LINES;
     return pool[Math.floor(Math.random() * pool.length)];
@@ -375,7 +381,7 @@ export function PeddlerCardModal({ highRoller = false, onClose }: { highRoller?:
 
   const handlePick = (index: number) => {
     setShowCards(true); // already true by the time this is reachable, kept for clarity
-    engine.pickPeddlerCard(index as 0 | 1 | 2, highRoller);
+    engine.pickPeddlerCard(index as 0 | 1 | 2, highRoller, stake);
   };
 
   const handleClose = () => {
@@ -383,10 +389,41 @@ export function PeddlerCardModal({ highRoller = false, onClose }: { highRoller?:
     onClose();
   };
 
+  /**
+   * "Roll Again" -- clears the settled result and resets every piece of
+   * local reveal state back to "cards laid out, not yet picked" (fresh
+   * card backs, fresh result backdrop, the wave/approval gestures free to
+   * play again, no leftover burst particles), landing the player straight
+   * back on the face-down card row rather than re-showing the "Lay out
+   * the cards" button they've already gotten past once this session.
+   * Doesn't charge anything itself -- picking a card is what pays the fee,
+   * exactly like the very first round; this only shortcuts back to that
+   * step instead of making the player close and reopen the whole modal.
+   */
+  const handleRollAgain = () => {
+    engine.dismissGrimsbyResult();
+    setLocalBacks([Math.floor(Math.random() * 3), Math.floor(Math.random() * 3), Math.floor(Math.random() * 3)]);
+    setResultBackIndex(Math.floor(Math.random() * 3));
+    setRevealStage('idle');
+    setDetailOpen(false);
+    setWaveDone(false);
+    setApprovalDone(false);
+    setBurstParticles(null);
+  };
+
   const pickedCard = result?.cards[result.pickedIndex];
   const headerAnimation = result
     ? (approvalDone ? 'idle' : 'approval')
     : (waveDone ? 'idle' : 'wave');
+
+  // Same fee resolveFlip itself will actually charge on the next pick --
+  // see PeddlerManager.feeWithStake's own comment for why this reads from
+  // there rather than re-deriving it. Roll Again is only ever offered
+  // once Grimsby has already sold this player a round, so `isPresent`
+  // failing here means his leave-window timer expired while the modal was
+  // open, not that anything about the purchase itself is wrong.
+  const rollAgainFee = PeddlerManager.feeWithStake(engine.state, highRoller, stake);
+  const canAffordRollAgain = PeddlerManager.isPresent(engine.state) && engine.state.gold >= rollAgainFee;
 
   return (
     <div className="overlay" onClick={handleClose}>
@@ -486,7 +523,17 @@ export function PeddlerCardModal({ highRoller = false, onClose }: { highRoller?:
           )}
         </div>
 
-        <div className="row end" style={{ marginTop: 14 }}>
+        <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+          {revealStage === 'settled' && (
+            <button
+              className="btn-purple"
+              disabled={!canAffordRollAgain}
+              onClick={handleRollAgain}
+              title={canAffordRollAgain ? undefined : (PeddlerManager.isPresent(engine.state) ? 'Not enough gold' : 'Grimsby’s already gone for now')}
+            >
+              Roll Again -- {formatGold(rollAgainFee)} gold
+            </button>
+          )}
           <button onClick={handleClose}>{result ? 'Thanks, I think' : 'Never mind'}</button>
         </div>
       </div>

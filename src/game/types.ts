@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 44;
+export const SAVE_VERSION = 45;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -1309,6 +1309,24 @@ export interface Statistics {
    *  highRoller flag are only ever together inside resolveFlip's own
    *  scope, not separately reconstructable from state afterward. */
   peddlerHighRollerJackpots: number;
+  /**
+   * Every gold spent at Grimsby's own stall specifically -- card-flip
+   * fees (regular and High Roller both, at whatever stake multiplier was
+   * used) and the one-time High Roller unlock. Deliberately its OWN
+   * counter rather than reading the general `goldSpent` above, which
+   * mixes in every other gold sink in the game (shop, repairs,
+   * upgrades...) -- "how much have I fed into Grimsby" isn't answerable
+   * from that combined total. StatsPanel's own "Gold spent" row stays
+   * reading `goldSpent`; a new "Gold spent at Grimsby" row reads this
+   * instead.
+   */
+  peddlerGoldSpent: number;
+  /**
+   * Bust-tier outcomes at Grimsby specifically -- card flips that landed
+   * on the 'bust' tier. Same "Grimsby-wide, not per-game" idea
+   * peddlerJackpots above already covers: paid in, got nothing back.
+   */
+  peddlerBusts: number;
 }
 
 export interface GameState {
