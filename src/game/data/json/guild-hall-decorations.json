@@ -1,1 +1,13 @@
-[]
+[
+  {
+    "id": "books",
+    "name": "Books 1",
+    "description": "A stack of books",
+    "slotType": "lowerShelf",
+    "acquisitionKind": "gold",
+    "goldCost": 0,
+    "image": {
+      "path": "Items/items1_001.png"
+    }
+  }
+]
