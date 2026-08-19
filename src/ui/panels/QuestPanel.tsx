@@ -14,24 +14,37 @@ import { ConfirmModal } from '../ConfirmModal';
 
 export type Offer = QuestOffer;
 
+/** Pulled out of ChainQuestBanner below so DiscoveredQuestsPanel's own
+ *  compact row thumbnail (ChainRow) can resolve the exact same image
+ *  without duplicating the fallback logic -- same asset, same "missing
+ *  file just fails to paint" convention either way. */
+export function chainBannerSrc(chainId: string, banner?: ChainDef['banner']): string {
+  return banner?.path ? `./lore/${banner.path}` : `./lore/chains/${chainId}.jpg`;
+}
+
 /** Banner strip for a chain's quest-board entry, matching ChainBanner in
  *  LorePanel and RaidBanner in RaidsPanel exactly -- same asset, same
  *  "missing file just fails to paint" convention, so a chain's art shows
  *  up here automatically once it exists, no separate art needed. `banner`
  *  is the same optional DevTool-assigned override + focus point ChainBanner
- *  reads (ChainDef.banner) -- see its own comment in LorePanel.tsx. */
-export function ChainQuestBanner({ chainId, banner }: { chainId: string; banner?: ChainDef['banner'] }) {
-  const src = banner?.path ? `./lore/${banner.path}` : `./lore/chains/${chainId}.jpg`;
+ *  reads (ChainDef.banner) -- see its own comment in LorePanel.tsx.
+ *  `height`/`className` default to the original 70px inline-card strip;
+ *  ChainDetailModal passes its own 90px height to match RaidDetailModal's
+ *  own banner strip instead of introducing a third size. */
+export function ChainQuestBanner({
+  chainId, banner, height = 70, className,
+}: { chainId: string; banner?: ChainDef['banner']; height?: number; className?: string }) {
   return (
     <div
       aria-hidden="true"
+      className={className}
       style={{
-        backgroundImage: `url(${src})`,
+        backgroundImage: `url(${chainBannerSrc(chainId, banner)})`,
         // See ChainBanner's own comment in LorePanel.tsx (patch 0164) --
         // same optional zoom, same fallback to plain 'cover'.
         backgroundSize: banner?.scale && banner.scale !== 100 ? `${banner.scale}%` : 'cover',
         backgroundPosition: `${banner?.focusX ?? 50}% ${banner?.focusY ?? 50}%`,
-        height: 70,
+        height,
         marginBottom: 8,
         borderRadius: 4,
       }}

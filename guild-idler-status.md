@@ -13911,3 +13911,68 @@ over the gap). Now reads "Go to Story Quests" correctly.
 vite.web.config.ts` both pass clean. Grepped the full `src/` tree for
 any remaining literal `u00b7`/`u25c6` escape-as-text after the fix --
 none found outside a proper string/template-literal context.
+
+### Story Quests: collapsed into compact rows, Raids-style (patch 0201)
+
+```discord-update
+Dev Update | Story Quests
+
+- Changed Story Quests from a stack of full-size cards into compact rows -- same list style Raids already uses
+- Added a detail view (tap a row) with the full stats, flavour text, loot preview, and both send buttons
+```
+
+Direct follow-up on feedback that the Story Quests list read as too
+tall -- one full banner card per chain, each the same height a raid
+banner card used to be before Raids collapsed into its own compact row
+list. Mocked up a side-by-side comparison first (before touching any
+code) and got sign-off on the compact-row direction before building it.
+
+**What changed.** `DiscoveredQuestsPanel.tsx` no longer renders a stack
+of `QuestCard`s. Each chain now renders as a `ChainRow` -- reuses
+`.raid-card`/`.raid-card-thumb`/`.raid-card-body`/`.raid-card-name`/
+`.raid-card-meta`/`.raid-card-chevron` directly from `app.css` (`.card
+raid-card`, same class names RaidsPanel's own collapsed row list already
+uses) rather than inventing a parallel set -- the layout is identical
+down to the pixel, a 48px thumbnail + name + one-line meta + chevron, so
+there was nothing chain-specific to diverge on in the CSS itself. The
+row's own meta line keeps the difficulty badge, Chain X/Y badge, a
+success% readout, and the gold reward visible without opening anything,
+matching what the approved mockup showed.
+
+**Detail view.** Tapping a row opens `ChainDetailModal` -- same
+overlay/`.modal raid-detail-modal` shell RaidDetailModal already uses,
+with the banner, name, full stat row (success/time/gold/XP), always-
+visible flavour text, loot preview, the guaranteed-on-completion block
+for a chain's final stage, and both "Send on Quest"/"Chain Quest Steps"
+buttons -- everything QuestCard used to show inline once expanded, now
+behind a tap instead of permanently taking up list space. Built as its
+own component rather than wrapping the existing `QuestCard` in a modal
+shell -- `QuestCard`'s own markup assumes it's a `.card` sitting in a
+list (border, own padding), and every other modal in this game puts its
+content straight into `.modal` with no nested card, so a purpose-built
+modal keeps that convention instead of introducing a first "card inside
+a modal" exception. `QuestCard` itself is completely unchanged and still
+what the Quests & Contracts board uses -- that board wasn't part of the
+complaint, and a hero's own contract list is a different density problem
+(a handful of contracts at a time, not a growing list of every open
+chain).
+
+**Shared banner-image helper.** Pulled the `chainId`/`banner` ->
+image-path fallback logic out of `ChainQuestBanner` (QuestPanel.tsx)
+into its own exported `chainBannerSrc`, so `ChainRow`'s thumbnail
+resolves the exact same image `ChainQuestBanner` would, without
+duplicating the "explicit banner path, else `./lore/chains/<id>.jpg`"
+fallback. `ChainQuestBanner` itself grew optional `height`/`className`
+props (still defaults to the original 70px inline-card strip) so
+`ChainDetailModal` could reuse it at 90px -- matching
+`RaidDetailModal`'s own banner strip height -- instead of a third
+hardcoded size.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Ran it end-to-end in a live build
+(Testing tab -> levelled a hero, bought Guild Charter, forced a board
+refresh) -- confirmed the row list renders with correct difficulty
+colors and badges, a tap opens the detail modal with the full stat row/
+flavour/loot/buttons, and "Send on Quest" actually sends the hero and
+closes the modal, landing correctly on the Quest Board's own "On the
+road" list afterward.
