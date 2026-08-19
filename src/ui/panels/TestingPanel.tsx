@@ -4,6 +4,7 @@ import { formatGold, formatDuration, RARITY_ORDER } from '../../game/util';
 import { PETS } from '../../game/data/pets';
 import { RAIDS } from '../../game/data/raids';
 import { PeddlerManager } from '../../game/managers/PeddlerManager';
+import { GUILD_HALL_DECORATIONS } from '../../game/data/guildHallDecor';
 
 const HOUR = 3600000;
 
@@ -148,6 +149,21 @@ export function TestingPanel() {
           : 'Locked -- the button below unlocks and force-spawns him immediately.'}
       </p>
       <button onClick={() => engine.testForceGrimsbyArrival()}>Force Grimsby to arrive now</button>
+
+      <div className="section-heading">Guild Hall Decorations</div>
+      <p className="small muted" style={{ marginBottom: 8 }}>
+        {GUILD_HALL_DECORATIONS.length === 0
+          ? 'No decorations exist in content yet -- add some in the DevTool first.'
+          : `${(state.ownedGuildHallDecorations ?? []).length} of ${GUILD_HALL_DECORATIONS.length} owned.`}
+        {' '}Grants every decoration outright, skipping gold/achievement/Grimsby entirely -- for exercising the
+        Customize scene's item picker with a full pool.
+      </p>
+      <button
+        disabled={GUILD_HALL_DECORATIONS.length === 0}
+        onClick={() => engine.testGrantAllGuildHallDecorations()}
+      >
+        Grant all Guild Hall decorations ({GUILD_HALL_DECORATIONS.length})
+      </button>
 
       <div className="section-heading">Current state</div>
       <p className="small muted">

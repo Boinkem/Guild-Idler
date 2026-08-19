@@ -7022,17 +7022,28 @@ pass (same caveat as the two entries above).
   now built, ahead of any actual pack -- see "DLC groundwork -- built"
   in the main patch log above.
 - **Customizable Guild Hall background (trophies, banners, shelf
-  trinkets)** -- layout design locked through a visual mockup pass.
+  trinkets)** -- layout design locked through a visual mockup pass, and as
+  of patch 0204 actually playable end to end for gold-kind decorations.
   Purely cosmetic, no stat effect. Core mechanic: a fixed set of
   decoration slots layered over the Guild Hall's existing background
   art, each independently empty or filled -- not a single theme swap.
   Slots are visible and unlocked from the start; there's nothing to
   unlock, only items to earn. **Built so far:** the DevTool content type
-  + placement/scale field (patch 0202), and the 30-slot registry plus
-  owned/equipped decoration state and engine plumbing (patch 0203, see
-  the patch log below for both). **Not built yet:** the in-game
-  Customize UI, and wiring gold/achievement/Grimsby acquisition to
-  actually call the now-built purchase/grant path. Key decisions locked
+  + placement/scale field (patch 0202); the 30-slot registry plus
+  owned/equipped decoration state and engine plumbing (patch 0203); and
+  the in-game "Customize" mode itself -- click a slot, buy-and-place a
+  gold-kind decoration in one click, remove one, all against the real
+  committed background art (patch 0204, see the patch log below for all
+  three). **Not built yet:** wiring achievement completion or a Grimsby
+  pull to actually grant an achievement-/Grimsby-kind decoration --
+  `GuildHallDecorManager.grant` (the shared primitive both paths would
+  call) exists and is tested, but nothing calls it for those two kinds
+  yet, so any decoration authored with `acquisition.kind` other than
+  `'gold'` is currently unobtainable in real play (correctly shown
+  locked in the picker, just with no way to actually unlock it). The
+  DevTool slot layout editor prototype also remains unbuilt, per its own
+  note below -- not a blocker, the 30 slot positions are locked and
+  committed as code either way. Key decisions locked
   in from that discussion:
   - **30 individual slots across 10 slot types**, positioned against the
     actual "empty guild hall" background art (two bookshelves, a glass
@@ -14273,3 +14284,113 @@ game state (no fields touched) correctly reading as empty everywhere
 with no crash -- 28 checks, all passing. Fixture decorations and the
 script were both removed afterward; `guild-hall-decorations.json` ships
 unchanged (still empty), same as every other patch.
+
+### Guild Hall Decorations: in-game Customize mode (patch 0204)
+
+```discord-update
+Dev Update | Guild Hall Decorations
+
+- Added a "Customize" button to the Guild Hall tab -- click it to decorate with trophies, banners, and shelf trinkets
+- Click any open slot to buy and place a decoration in one click, or remove one already placed
+- Purely cosmetic, no effect on stats -- content pool is still small while more decorations get added over time
+```
+
+Third and (for now) final step of the "Customizable Guild Hall
+background" feature -- the DevTool foundation (patch 0202) and the slot
+registry/state plumbing (patch 0203) now have an actual in-game surface
+to drive them. Gold-kind decorations are fully playable end to end;
+achievement-/Grimsby-kind ones are correctly shown locked but still have
+no real unlock path yet (see the updated Brainstorming entry above for
+exactly what's still open).
+
+**The committed background art.** `public/guildhall-customize/bg.jpg`
+(1774x887, converted from the same empty-Guild-Hall room image the
+original mockup pass was built against) is the first time this asset has
+actually landed in the repo -- the mockup and DevTool work in patches
+0202/0203 never needed it committed, only the coordinates that came out
+of measuring it. Re-encoded to JPEG (matches every other `*-bg.jpg` in
+`public/lore/`) rather than kept as the original 2.1MB RGBA PNG -- flat
+opaque room art has no use for an alpha channel, so JPEG at the same
+quality level everything else in `public/lore/` already uses cost
+nothing visually and saved roughly 1.9MB.
+
+**`GuildHallCustomizeScene.tsx`.** New file, not folded into
+`GuildPanel.tsx` itself -- reuses `SlotBox`/`PickerModal`/`Rect` straight
+out of `CraftingStation.tsx` (the exact same percent-rect-over-a-locked-
+aspect-ratio machinery `EggSelectModal.tsx` already reuses for its own
+single-slot picker), just scaled up to all 30 of `guildHallSlots.ts`'s
+slots instead of 1-3. No new slot-box CSS needed at all -- `.craft-slot`
+(hardcoded inside `SlotBox` itself) already does everything a decoration
+slot needs; the only new CSS is `.guildhall-customize-scene`, matching
+`.craft-scene`/`.armor-infusion-scene`'s own shape at the new
+background's own 1774:887 ratio. A new `DecorationArt` component renders
+a decoration's placement art inside whatever box it's given, using the
+exact same `left`/`top`/`transform: translate(-50%,-50%) scale()` +
+`object-fit: contain` math as the DevTool's own `.decor-preview-img` (see
+`renderDecorationField` in `tools/devtool/public/app.js`) -- a decoration
+looks the same in-game as it did to whoever placed it in the DevTool,
+because it's the same formula in both places. Picker rows reuse
+`PickerModal` as-is (no changes to `CraftingStation.tsx` needed): owned
+decorations show their description and equip on pick; unowned gold-kind
+ones show cost and either buy-and-equip in one pick (affordable) or sit
+disabled with "-- not enough gold"; unowned achievement-/Grimsby-kind
+ones sit permanently disabled with "Locked -- earned via achievement" /
+"Locked -- a rare Grimsby find" (no purchase path exists for either, on
+purpose -- see GuildHallDecorManager's own comment). A slot that already
+has something equipped gets a synthetic "Remove decoration" row
+prepended, and the currently-equipped row shows a checkmark via
+`PickerModal`'s existing `selectedKeys` prop.
+
+**`GuildPanel.tsx`.** Gained a `customizing` boolean and a "Customize"
+button next to the tab's own heading. When true, the panel's entire
+normal body (storage plaque, Facilities grid, Permanent Upgrades grid,
+bonus plaque) is replaced outright by `<GuildHallCustomizeScene />` --
+not hidden via CSS, an actual early return -- matching the original
+brainstorm's own ask ("hide the statistics and other panels shown on the
+home tab, then when you're done, they can come back") and the "Inline
+edit mode on Guild Hall tab" option picked over a separate window.
+`GuildHallCustomizeScene`'s own "Done" button flips it back. Local,
+unpersisted state -- Customize mode doesn't survive a tab switch, same
+as this panel's existing `highlightId` consume-once state.
+
+**`engine.ts`.** Added `purchaseAndEquipGuildHallDecoration(slotId,
+decorationId)` -- the picker's actual buy action for an unowned gold-kind
+row, composing `GuildHallDecorManager.purchase` then `.equip` in one
+sound/notify/save rather than forcing a buy-then-reopen-the-picker-then-
+equip round trip through the two separate wrapper methods patch 0203
+already built. Those two (`equipGuildHallDecoration`,
+`unequipGuildHallDecoration`) plus `purchaseGuildHallDecoration` itself
+now have their first real callers.
+
+**Testing tools.** A new "Guild Hall Decorations" section in
+`TestingPanel.tsx` calls a new `engine.testGrantAllGuildHallDecorations()`
+-- grants every decoration in content outright via
+`GuildHallDecorManager.grant`, bypassing gold/achievement/Grimsby
+entirely, so the picker can be exercised with a full pool without
+grinding out real acquisition paths. Direct request from the original
+design brainstorm ("ensure for testing purposes we can have all items
+available").
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean on a fresh clone with patch 0203
+already applied. Ran the actual web build end-to-end via Playwright
+against six temporary fixture decorations (one per acquisition
+kind/pool combination actually being tested) and confirmed, all against
+the real rendered scene, not just code review: the background art and
+all 30 slots line up exactly on the shelves/glass case/floor/walls with
+no manual nudging needed; opening a slot shows only decorations from its
+own pool; an owned decoration equips on click and its art renders
+correctly positioned and uncropped in the slot; an unowned affordable
+gold-kind decoration buys and equips in one click, gold deducts
+correctly, and the now-empty picker state (owned) is reflected
+immediately on reopen; an unowned unaffordable gold-kind decoration
+shows the right cost and sits disabled; achievement- and Grimsby-kind
+decorations show their respective locked messages and are unclickable;
+a filled slot's picker shows a "Remove decoration" row plus a checkmark
+against the currently-equipped item, and using it correctly empties the
+slot back to its default "+" state; and "Done" returns cleanly to the
+normal Facilities/Upgrades view with the "Customize" button back in
+place. Fixture decorations, their temporary `public/decor/` art, and the
+Playwright scripts were all removed afterward -- ships with the same
+empty `guild-hall-decorations.json` and no `public/decor/` directory at
+all, same as every prior patch touching this feature.

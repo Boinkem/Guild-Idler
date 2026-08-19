@@ -6,6 +6,7 @@ import { ModifierManager } from '../../game/managers/ModifierManager';
 import { AUTO_CHAIN_RANGES } from '../../game/data/progression';
 import { describeMods, formatGold } from '../../game/util';
 import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
+import { GuildHallCustomizeScene } from '../GuildHallCustomizeScene';
 import waxSealComplete from '../../assets/wax-seal-complete.png';
 
 function chainRangeText(level: number): string {
@@ -142,6 +143,16 @@ export function GuildPanel() {
   const engine = useEngine();
   const state = engine.state;
   const global = ModifierManager.global(state);
+
+  // Inline "Customize" mode -- per the original design brainstorm's own
+  // pick ("Inline edit mode on Guild Hall tab"), swapping this panel's
+  // normal facility/upgrade content out for GuildHallCustomizeScene
+  // entirely rather than opening a separate window. Local, unpersisted --
+  // same "just a view toggle, not game state" shape `expanded` (a Set)
+  // uses elsewhere in this codebase; leaving Customize mode open when you
+  // switch tabs and back isn't a real requirement here, so it resets on
+  // every remount, same as `highlightId`'s own consume-once shape above.
+  const [customizing, setCustomizing] = useState(false);
 
   // "Jump to and highlight the requirement" landing -- consumed once on
   // mount (this panel remounts fresh each time the nav switches to it, so
@@ -293,12 +304,30 @@ export function GuildPanel() {
     );
   }
 
+  // Customize mode replaces this entire panel's body -- facility/upgrade
+  // grids, the storage plaque, everything below -- with the full-bleed
+  // decoration scene, exactly the "hide the statistics and other panels...
+  // then when you're done, they can come back" behaviour asked for when
+  // this was first brainstormed. Nothing else on this tab renders at all
+  // while customizing is true; GuildHallCustomizeScene's own "Done" button
+  // is the only way back.
+  if (customizing) {
+    return <GuildHallCustomizeScene onDone={() => setCustomizing(false)} />;
+  }
+
   return (
     <>
-      <h2>Guild Hall</h2>
-      <p className="subtitle">
-        Facility levels apply to every hero, now and after every retirement.
-      </p>
+      <div className="spread" style={{ alignItems: 'flex-start' }}>
+        <div>
+          <h2>Guild Hall</h2>
+          <p className="subtitle">
+            Facility levels apply to every hero, now and after every retirement.
+          </p>
+        </div>
+        <button onClick={() => setCustomizing(true)} title="Decorate the Guild Hall with trophies, banners, and shelf trinkets -- purely cosmetic">
+          Customize
+        </button>
+      </div>
       <div className="guild-storage-plaque">
         <span className="guild-storage-label">Gold Storage</span>
         <span className="guild-storage-amount">{formatGold(ModifierManager.goldStorage(state))}</span>

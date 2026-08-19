@@ -9,6 +9,7 @@ import { EquipmentManager } from './managers/EquipmentManager';
 import { InventoryManager } from './managers/InventoryManager';
 import { CurioManager } from './managers/CurioManager';
 import { GuildHallDecorManager } from './managers/GuildHallDecorManager';
+import { GUILD_HALL_DECORATIONS } from './data/guildHallDecor';
 import { DlcManager } from './managers/DlcManager';
 import { GuildManager } from './managers/GuildManager';
 import { PrestigeManager } from './managers/PrestigeManager';
@@ -1053,6 +1054,22 @@ export class GameEngine {
     this.lastRaidResult = raidResult;
     this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
     this.reportGuidance(GuidanceManager.checkAll(this.state));
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Grants every Guild Hall decoration currently in content, regardless
+   *  of acquisition kind -- bypasses the gold/achievement/Grimsby gate
+   *  entirely (calls GuildHallDecorManager.grant directly, not purchase),
+   *  so the Customize scene's item picker can be exercised with a full
+   *  pool without grinding out real acquisition paths first. Direct
+   *  request from the original design brainstorm ("ensure for testing
+   *  purposes we can have all items available"). */
+  testGrantAllGuildHallDecorations() {
+    if (!TESTING_TOOLS_ENABLED) return;
+    for (const def of GUILD_HALL_DECORATIONS) {
+      GuildHallDecorManager.grant(this.state, def.id);
+    }
     this.notify();
     void this.saveNow();
   }
@@ -2503,9 +2520,9 @@ export class GameEngine {
   }
 
   /* ------------------------- Guild Hall decorations ------------------------ */
-  /* Patch 0203: state + engine plumbing only -- see GuildHallDecorManager's
-   * own top comment. There's no Customize UI calling these yet; they exist
-   * so a later UI-only patch has a tested, ready-to-use API to wire up. */
+  /* Patch 0203 built the state + engine plumbing; patch 0204 is the first
+   * real caller -- GuildHallCustomizeScene.tsx, the inline "Customize"
+   * mode on the Guild Hall tab (see GuildPanel.tsx). */
 
   /** Buys a gold-kind decoration outright. Achievement/Grimsby decorations
    *  have no purchase path -- see GuildHallDecorManager.purchase. */
@@ -2531,6 +2548,27 @@ export class GameEngine {
   unequipGuildHallDecoration(slotId: GuildHallSlotId) {
     GuildHallDecorManager.unequip(this.state, slotId);
     playSound('unequip');
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Buys an unowned gold-kind decoration and immediately places it into
+   *  the slot whose picker was open when it was bought, in one click and
+   *  one save -- what GuildHallCustomizeScene's item picker actually
+   *  calls for an unowned row, rather than forcing a buy-then-reopen-
+   *  the-picker-then-equip round trip. Two manager calls (purchase, then
+   *  equip), one sound/notify/save, same "one user action, one save"
+   *  shape every other engine method here already follows. The equip
+   *  step should never actually fail here -- purchase already confirmed
+   *  the def exists and just granted ownership -- but its error is still
+   *  surfaced rather than assumed away, in case a future change to
+   *  either manager method's validation drifts the two apart. */
+  purchaseAndEquipGuildHallDecoration(slotId: GuildHallSlotId, decorationId: string) {
+    const purchaseError = GuildHallDecorManager.purchase(this.state, decorationId);
+    if (purchaseError) return this.say(purchaseError);
+    const equipError = GuildHallDecorManager.equip(this.state, slotId, decorationId);
+    if (equipError) return this.say(equipError);
+    playSound('purchase');
     this.notify();
     void this.saveNow();
   }
