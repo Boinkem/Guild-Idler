@@ -97,7 +97,7 @@ function raidBannerSrc(raidId: string, banner?: RaidDef['banner']) {
  * (RaidDef.banner) -- unset falls all the way back to the original
  * id-convention path at dead-center focus, exactly as before this existed.
  */
-function RaidBanner({
+export function RaidBanner({
   raidId, banner, className,
 }: { raidId: string; banner?: RaidDef['banner']; className: string }) {
   const src = raidBannerSrc(raidId, banner);

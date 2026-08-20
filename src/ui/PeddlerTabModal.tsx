@@ -1,7 +1,10 @@
+import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
 import { PeddlerManager } from '../game/managers/PeddlerManager';
 import { formatGold } from '../game/util';
-import { GrimsbySprite, GrimsbyAnimation } from './sprites/GrimsbySprite';
+import { GrimsbySprite } from './sprites/GrimsbySprite';
+import { measureFlyOffset } from './flyTarget';
+import { RewardGlowParticle } from './RewardGlowParticle';
 
 /**
  * Grimsby's third game -- a repeating push-your-luck: buy in, then each
@@ -19,16 +22,18 @@ import { GrimsbySprite, GrimsbyAnimation } from './sprites/GrimsbySprite';
  * success-chance floor, by design.
  */
 
-/** Grimsby's own reaction to how far a tab has been pushed -- reuses
- *  existing sprite animations rather than needing new art (see
- *  GrimsbySprite's own animation list). Purely a mood readout; the
- *  actual odds are never shown numerically, same "he doesn't tell you
- *  the exact percentage" restraint Pick Your Card's own tiers already
- *  keep. */
-function moodFor(round: number): { animation: GrimsbyAnimation; label: string } {
-  if (round <= 1) return { animation: 'idle', label: 'Patient.' };
-  if (round <= 3) return { animation: 'idle2', label: 'Getting impatient.' };
-  return { animation: 'dialogue', label: 'About done with you.' };
+/**
+ * Bust/settle particle count -- more flourish for a run that actually
+ * went somewhere, same "reads as more of a deal for a better pull"
+ * reasoning PeddlerCardModal's own BURST_PARTICLE_COUNT already
+ * established, keyed off the same round-5-is-a-jackpot threshold the
+ * stats/achievement side of this game already uses (see
+ * peddler.tab.jackpotRound).
+ */
+function settleParticleCount(round: number): number {
+  if (round >= 5) return 5;
+  if (round >= 3) return 3;
+  return 2;
 }
 
 export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
@@ -41,12 +46,63 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
   const tiers = Array.from({ length: tierCount }, (_, i) => i);
   const present = PeddlerManager.isPresent(state);
 
+  // Grimsby stays on 'idle' for the entire time a tab is being played --
+  // open, pushed once, pushed ten times, doesn't matter -- and only
+  // switches to 'idle2' (crossed arms), played once and frozen on its
+  // last frame rather than looping, the moment a tab actually CLOSES,
+  // whether that's a bust or a deliberate Settle. Direct correction from
+  // an earlier version of this file, which switched pose mid-round based
+  // on how far the tab had been pushed -- that read as him reacting to
+  // progress itself, when the actual ask was for the close specifically
+  // to be the one beat that changes his pose.
+  const [closedPose, setClosedPose] = useState(false);
+
+  const settleBtnRef = useRef<HTMLButtonElement>(null);
+  const [burstParticles, setBurstParticles] = useState<{
+    x: number; y: number; dx: number; dy: number; color: string; delay: number;
+  }[] | null>(null);
+
+  // A bust is detected here (not just left to the button handler) because
+  // it can also happen from a tab this component didn't personally open
+  // in this mount -- reacting to the result itself, not the click, is
+  // what stays correct regardless of how the tab got here.
+  useEffect(() => {
+    if (runResult && !runResult.success) setClosedPose(true);
+  }, [runResult]);
+
+  const handleOpen = (tier: number) => {
+    setClosedPose(false);
+    setBurstParticles(null);
+    engine.openGrimsbyTab(tier);
+  };
+
+  const handleSettle = () => {
+    if (!tab) return;
+    setClosedPose(true);
+    // Measured and captured BEFORE calling settleGrimsbyTab -- that call
+    // nulls state.peddlerTab immediately, so tab.round/tab.value need to
+    // be read now, not after. Same "measure the real on-screen distance,
+    // skip gracefully if the target isn't mounted" shape PeddlerCardModal's
+    // own reward flight already uses (see flyTarget.ts).
+    if (settleBtnRef.current) {
+      const offset = measureFlyOffset(settleBtnRef.current, 'gold');
+      if (offset) {
+        const rect = settleBtnRef.current.getBoundingClientRect();
+        const origin = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        const count = settleParticleCount(tab.round);
+        setBurstParticles(Array.from({ length: count }, (_, i) => ({
+          ...origin, dx: offset.dx, dy: offset.dy, color: 'var(--brass)', delay: i * 90,
+        })));
+      }
+    }
+    engine.settleGrimsbyTab();
+  };
+
   const handleClose = () => {
     if (runResult) engine.dismissGrimsbyTabResult();
     onClose();
   };
 
-  const mood = tab ? moodFor(tab.round) : { animation: 'idle' as GrimsbyAnimation, label: '' };
   const nextBuyIn = tab ? PeddlerManager.tabTierBuyIn(tab.tier) : 0;
   const canPush = !!tab && present && state.gold >= nextBuyIn;
 
@@ -58,10 +114,29 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="peddler-modal-header">
-          <GrimsbySprite animation={runResult && !runResult.success ? 'idle' : mood.animation} height={140} />
+          <GrimsbySprite animation={closedPose ? 'idle2' : 'idle'} once={closedPose} height={140} />
         </div>
 
         <div className="peddler-modal-body">
+          {/* Lives above the tab/tier-select split below, not nested inside
+              it -- a bust sets state.peddlerTab to null the instant it
+              happens, so a result message nested under `{tab && ...}` would
+              vanish the same render it needed to show, dropping straight
+              back to the tier-select screen with nothing said. This is
+              exactly that bug, fixed. */}
+          {runResult && (
+            <p
+              className="peddler-corner-comment tiny"
+              style={{ color: runResult.success ? 'var(--brass)' : 'var(--muted)' }}
+            >
+              <b>{runResult.success ? 'Held.' : "Tab's closed."}</b>{' '}
+              {runResult.success
+                ? `Tab climbs to ${formatGold(runResult.value)}g.`
+                : "I'll forget this one if you will."}
+              {runResult.rebate > 0 && ` (+${formatGold(runResult.rebate)}g loyalty)`}
+            </p>
+          )}
+
           {!tab && (
             <>
               <p className="peddler-corner-comment tiny muted">
@@ -79,7 +154,7 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
                       type="button"
                       className="btn-purple"
                       disabled={!canAfford}
-                      onClick={() => engine.openGrimsbyTab(tier)}
+                      onClick={() => handleOpen(tier)}
                       title={present ? (canAfford ? undefined : 'Not enough gold') : 'He’s not here right now'}
                     >
                       Open tab -- {formatGold(buyIn)} gold
@@ -92,21 +167,6 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
 
           {tab && (
             <>
-              {runResult && (
-                <p
-                  className="peddler-corner-comment tiny"
-                  style={{ color: runResult.success ? 'var(--brass)' : 'var(--muted)' }}
-                >
-                  <b>{runResult.success ? 'Held.' : "Tab's closed."}</b>{' '}
-                  {runResult.success
-                    ? `Tab climbs to ${formatGold(runResult.value)}g.`
-                    : "I'll forget this one if you will."}
-                  {runResult.rebate > 0 && ` (+${formatGold(runResult.rebate)}g loyalty)`}
-                </p>
-              )}
-
-              <p className="tiny muted" style={{ textAlign: 'center' }}>{mood.label}</p>
-
               <div className="card" style={{ padding: '8px 12px', margin: '0 auto', maxWidth: 220 }}>
                 {Array.from({ length: tab.round }, (_, i) => i + 1).map((round) => (
                   <div key={round} className="spread tiny" style={{ fontFamily: 'monospace' }}>
@@ -126,12 +186,21 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
                 >
                   Run it up -- {formatGold(nextBuyIn)} gold
                 </button>
-                <button type="button" className="btn-green" onClick={() => engine.settleGrimsbyTab()}>
+                <button ref={settleBtnRef} type="button" className="btn-green" onClick={handleSettle}>
                   Settle -- {formatGold(tab.value)} gold
                 </button>
               </div>
             </>
           )}
+
+          {burstParticles && burstParticles.map((p, i) => (
+            <RewardGlowParticle
+              key={i}
+              x={p.x} y={p.y} dx={p.dx} dy={p.dy}
+              color={p.color} delay={p.delay}
+              durationMs={700}
+            />
+          ))}
         </div>
 
         <div className="row end" style={{ marginTop: 14 }}>

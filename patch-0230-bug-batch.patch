@@ -1,0 +1,1249 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index aeebbd3..1decc80 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -17553,3 +17553,204 @@ steps closed across patches 0224 (data model), 0225 (loot mechanism),
+ this entry (verified no further work needed for step 5).
+ 
+ No code changed in this patch.
++
++### Bug batch: Medium-tier reward scaling, Grimsby's Tab (animation/bust text/gold burst), Sell Junk excluding all crafted commons, and the Lore tab restyled to match the real Raid cards (patch 0230)
++```discord-update
++Dev Update | Bug Fixes
++
++- Fixed Medium-tier quest rewards staying stuck at level-1 numbers forever, even for a max-level hero
++- Fixed Grimsby's Tab: he now stays relaxed while you're playing and only reacts once the tab closes, busting shows a real message instead of silently closing the window, and settling sends a burst of gold flying to your total
++- Fixed Sell Junk skipping crafted Common gear entirely, even when it was genuinely worthless -- also fixed bulk sales not being buyback-recoverable at all
++- Changed the Lore tab's quest and raid cards to match the real Raid cards, and quest chains now show each stage's typical odds and the final reward
++```
++
++Six separate reports handled in one patch since several touch the same
++surface (Grimsby's cart, the Lore tab) or were investigated in the same
++pass. Real patch-numbering note: this patch was originally going to be
++0227, but four chain-replay patches (0226-0229) landed on `main` while
++this one was in progress -- re-pulled fresh, re-confirmed the actual
++next number, and swept every in-code comment that had already been
++written referencing 0227 to correct it to 0230 before finalizing. One
++of this session's own edits (`QuestManager.ts`'s burst/medium cap block)
++had to be reconciled against a genuine 154-line upstream diff from that
++same chain-replay work -- auto-merged clean, independently re-verified
++numerically against the merged code rather than just trusted.
++
++#### The actual root cause of "burst/medium quests pay almost nothing at high level"
++
++Investigated a real player report (screenshot: a level-15 hero's board,
++every offer paying 1-5 gold) by tracing the exact math rather than
++guessing. `fastQuestCapsPerHour`/`fastQuestFloorPerHour` (`balance.ts`)
++both compute a reward-rate estimate by calling `expectedRatePerHour`,
++which -- when no `atLevel` is passed -- silently defaults to evaluating
++the level-scaled reward curve at the DIFFICULTY TIER'S OWN static
++`referenceLevel` (Easy = 1), not the player's actual level. Neither
++function was passing `atLevel` at all. Confirmed by hand-computing both
++sides directly from the live tuning values: Easy's real floor rate is
++~4.47 gold/hr evaluated at level 1 (what it was ALWAYS using) versus
++~14.45 gold/hr at level 15 (what it should have been using) -- roughly
++3x understated, precisely matching the reported symptom.
++
++**This was not overriding a prior deliberate decision, despite a comment
++that reads that way at first glance.** `expectedRatePerHour`'s own
++doc comment says the no-`atLevel` behavior is "preserving the exact
++existing behavior for fastQuestCapsPerHour/fastQuestFloorPerHour...
++which deliberately DO want a fixed, level-independent ceiling reference."
++Read patch 0217's full writeup before touching anything specifically
++because of this: confirmed that comment describes patch 0217
++deliberately SCOPING OUT this exact question (it was fixing the
++Balance Sandbox sim's own staleness, and explicitly chose not to also
++touch cap/floor's behavior in the same patch), not a considered-and-
++affirmed design conclusion that a fixed reference was correct. This
++patch closes what 0217 left open, doesn't reverse anything 0217 argued
++for.
++
++**Fixed:** both functions now take (`fastQuestCapsPerHour` already did
++take `topLevel`, just wasn't passing it through to
++`expectedRatePerHour`; `fastQuestFloorPerHour` gained a new required
++`atLevel` parameter) and pass the player's real level through. Verified
++directly against the real exported functions (not a reimplementation)
++across levels 1/5/6/10/15/20/24/25/30/55.
++
++**A second, subtler bug found while verifying the fix, not shipped
++separately:** at the exact level a tier first becomes the player's
++best-unlocked one, the newly-level-tracking floor could very briefly
++exceed the cap -- confirmed by direct calculation: level 5, Normal just
++unlocked, Normal's `BURST_CAP_FRACTION`-discounted cap (6.14g/hr) sits
++BELOW Easy's own undiscounted floor rate (6.72g/hr) at that exact
++level. Without an explicit clamp, the floor's own `Math.max` would have
++pushed the reward ABOVE the cap it's supposed to sit under -- exactly
++the "out-earn the real best-unlocked tier" outcome the floor's entire
++design exists to prevent. Fixed by explicitly clamping the floor to
++never exceed the cap ceiling in `QuestManager.generateOffer`. Re-verified
++the invariant (`cap >= floor` at every duration) holds cleanly at every
++tested level after this clamp, where it hadn't before it at level 5.
++
++**Flagged, not independently re-verified:** the floor's own "can never
++let Easy out-earn the real best-unlocked tier" invariant was originally
++checked by direct simulation under the OLD (referenceLevel-anchored)
++version. This patch's fix should, if anything, make that comparison
++safer (both sides now evaluated at the same real level instead of two
++different static reference points) -- reasoned through, not re-run
++through `npm run sim`. Worth an actual sim pass before fully trusting
++it the same way the original claim was trusted.
++
++#### Grimsby's Tab
++
++Four related reports, all in `PeddlerTabModal.tsx`:
++
++- **Animation.** Previously switched pose by round count (`idle` →
++  `idle2` → `dialogue`) WHILE a tab was still being played -- read as
++  him reacting to progress itself. Now stays on `idle` for the entire
++  time a tab is open, and only plays `idle2` (crossed arms) once, frozen
++  on its last frame via the existing `once` prop, the moment the tab
++  actually closes -- bust OR settle, both trigger it, per direct
++  request. Bust is detected via a `useEffect` on the transient run
++  result rather than the button click, so it stays correct even if the
++  close didn't originate from a click in this exact mount.
++- **Bust showing nothing.** Real bug, not a design gap: the result
++  message was nested inside `{tab && (...)}`, and a bust sets
++  `state.peddlerTab` to `null` the same render it needs to show a
++  message -- so the message vanished the instant it needed to appear,
++  dropping straight back to the tier-select screen. Fixed by moving the
++  result message above that conditional so it survives the tab closing,
++  exactly mirroring how the Held message already worked while a tab
++  stayed open.
++- **Settle gold burst.** Wired through the exact same mechanism
++  `PeddlerCardModal`'s own reward flights already use
++  (`flyTarget.ts`'s `measureFlyOffset`, targeting `'gold'`) rather than
++  building a parallel system. Extracted `RewardGlowParticle` out of
++  `PeddlerCardModal.tsx` into its own `RewardGlowParticle.tsx` first so
++  both modals share one component instead of a second copy -- same
++  "reused formula, not re-derived" discipline this project already
++  holds itself to elsewhere. Particle count scales with how far the tab
++  was pushed before settling (2/3/5), same "more flourish for a bigger
++  pull" reasoning Cards' own burst count already uses, keyed off the
++  same round-5 jackpot threshold the stats/achievement side already
++  established.
++- **Flavour text.** `PeddlerPanel`'s subtitle only described Cards
++  ("Pay for a card, pick one..."). Broadened to mention all three games
++  now that Dice and the Tab both exist.
++
++#### Sell Junk excluding all crafted Common gear
++
++Confirmed the root cause directly against the reported stash screenshot:
++`sellBelowRarity`'s filter excluded ANY item with `customMods` set
++(i.e. anything crafted), at any rarity, unconditionally -- every item in
++the screenshot was Common AND crafted, so "Sell Junk (0)" was working
++exactly as coded, not broken. Direct decision: crafted items are now
++only excluded from the bulk sweep ABOVE Common -- a crafted Common base
++carries minimal effort/materials invested compared to a crafted Rare+,
++so the original blanket exclusion was protecting something with barely
++any value to protect at that tier while silently making "Common and
++below" mean "nothing, if it happens to be crafted" for anyone crafting
++their own starter gear. Enchanted items (`enchantStats` set) are still
++excluded at every rarity, unconditionally -- unrelated concern, an
++Enchanter investment a Common item wouldn't typically even carry.
++
++**Found and fixed a second gap while implementing this, not shipped
++separately:** `sellBelowRarity` never recorded a buyback entry for
++anything it sold -- only single-item `sell()` did. Confirmed directly
++by reading both functions side by side. This mattered specifically
++because the justification for relaxing the crafted-Common exclusion was
++"they can buy back anyway" -- which was false for the bulk-sell path
++until this patch. Now records a buyback entry for every item a bulk
++sale sells, newest first, trimmed to `shop.buybackMaxEntries` once at
++the end rather than per-item. `EquipmentPanel.tsx`'s `junkPreview`
++(the count/gold shown on the button before pressing it) updated to
++mirror the exact same filter, so the preview never drifts from what
++pressing the button actually does.
++
++Verified directly against the real functions, not just read through:
++constructed a stash with a crafted Common, an ordinary Common, and a
++crafted Rare, ran `sellBelowRarity(state, 'common')` -- confirmed the
++crafted Rare stayed protected, both Commons sold, and both landed in
++the buyback list afterward.
++
++#### Lore tab restyled to match the real Raid cards
++
++Direct request, with one design fork resolved via a quick check-in
++(static per-stage difficulty-based success estimate, not a live
++party-preview picker -- confirmed as the right scope before building
++either). `StoryQuestsTab`'s chain cards and `StoryRaidsTab`'s raid
++history cards previously used a shared `.lore-card` inline-expand
++shell, visually distinct from the REAL Raid cards
++(`RaidsPanel.tsx`'s `RaidCard`, which use `.raid-card`/
++`.raid-card-thumb`/`.raid-card-chevron` and open a detail modal on
++click). Both converted to that same shell and click-opens-a-modal
++pattern -- `ChainCard`/`ChainDetailModal` for quests,
++`RaidCompletedEntry`/`RaidInProgressEntry`/`RaidHistoryDetailModal` for
++raids -- reusing the exact same CSS classes (`.raid-detail-modal`,
++`.raid-encounter-list`, `.raid-encounter-item`) rather than a parallel
++lore-specific set. `ChainBanner` and (newly exported) `RaidBanner`
++both gained the same `className`-driven sizing convention so one
++component now serves the collapsed-row thumbnail and the modal's
++bigger banner, matching how `RaidBanner` already worked before this
++patch touched `ChainBanner` to match it.
++
++**Story Quests' new per-stage detail**, mimicking `RaidDetailModal`'s
++own encounter list: each stage shows a static success estimate (reads
++`DIFFICULTIES[stage.difficulty].baseSuccess` directly -- an honest
++"typical odds at this difficulty" figure, deliberately NOT a live
++per-hero preview, since chain stages are sent individually with
++whatever hero the player picks and the Lore tab has no party-selection
++flow to compute a real one against, unlike raids which commit a full
++party upfront). Loot only shows on the FINAL stage -- chains only
++define a guaranteed reward at chain-completion (`ChainDef.rewardItems`),
++not per-stage the way raid encounters each carry their own loot table,
++so there was nothing earlier stages could show even if this wanted to.
++An in-progress chain still only reveals stages already reached, same
++spoiler-avoidance the old inline view already had ("the story isn't
++finished yet..." placeholder for the rest) -- not relaxed by this
++patch.
++
++Removed `ExpandToggle` and the `chainCardStyle` tier-glow helper --
++both fully unused once every card in this tab moved to the click-opens-
++modal pattern; confirmed via a repo-wide grep that nothing else
++referenced either before removing them.
++
++**Verified with a real build at every stage of this patch, not just at
++the end** -- `npx tsc --noEmit` and `npx vite build` both run clean
++after: the reward-scaling fix alone, the Tab UI fixes alone, the Sell
++Junk fix alone, the Lore restyle alone, and once more after reconciling
++against the upstream chain-replay merge.
+diff --git a/src/game/data/balance.ts b/src/game/data/balance.ts
+index 44e39d6..ae484dc 100644
+--- a/src/game/data/balance.ts
++++ b/src/game/data/balance.ts
+@@ -109,13 +109,24 @@ const BURST_CAP_FRACTION = Tuning.get('balance.burstCapFraction');
+  * (an explicit, generous-feeling reward range reads better than a
+  * proportional slice of the full range), so both need the same protection
+  * against becoming the dominant strategy once out-leveled.
++ *
++ * Passes topLevel through to expectedRatePerHour explicitly (patch 0230) --
++ * previously didn't, which meant this silently fell back to the best-
++ * unlocked tier's own static referenceLevel forever, not the player's
++ * actual current level. Harmless right at the moment a tier is first
++ * unlocked (level ≈ that tier's referenceLevel by definition), but for
++ * anyone who keeps leveling within the same best-unlocked-tier bracket --
++ * which is most play, tiers aren't unlocked every level -- the cap stayed
++ * pinned to that stale reference point instead of climbing with them,
++ * quietly throttling the cap further below what it was actually meant to
++ * represent the longer someone stayed in a bracket.
+  */
+ export function fastQuestCapsPerHour(topLevel: number, legendaryUnlocked: boolean): { gold: number; xp: number } {
+   if (topLevel < MIN_LEVEL_FOR_CAP) return { gold: Infinity, xp: Infinity };
+   const tier = DIFFICULTIES[bestUnlockedTier(topLevel, legendaryUnlocked)];
+   return {
+-    gold: BURST_CAP_FRACTION * expectedRatePerHour(tier, 'gold'),
+-    xp: BURST_CAP_FRACTION * expectedRatePerHour(tier, 'xp'),
++    gold: BURST_CAP_FRACTION * expectedRatePerHour(tier, 'gold', topLevel),
++    xp: BURST_CAP_FRACTION * expectedRatePerHour(tier, 'xp', topLevel),
+   };
+ }
+ 
+@@ -127,22 +138,42 @@ export function fastQuestCapsPerHour(topLevel: number, legendaryUnlocked: boolea
+  * every tier's own rate is, by construction, no higher than any harder
+  * tier's rate (DIFFICULTIES only gets more generous per hour going up),
+  * so flooring an Easy offer at Easy's own rate can never let it out-earn
+- * whatever the player's actual best-unlocked tier currently pays. This
+- * was checked by direct simulation, not assumed: at every tested level
+- * and every tested duration, `tierOwnRate(easy) <= expectedRatePerHour of
+- * the real best-unlocked tier`, with equality only when Easy IS the best
+- * tier (i.e. before level 5, when the cap doesn't even apply yet).
++ * whatever the player's actual best-unlocked tier currently pays.
++ *
++ * Now takes atLevel explicitly (patch 0230) -- previously omitted it
++ * entirely, which meant expectedRatePerHour silently defaulted to Easy's
++ * own static referenceLevel (1) FOREVER, regardless of the player's real
++ * level. This is what actually produced the reported "1-5 gold Medium
++ * quests at level 15" complaint: at level 15, Easy's real per-hour rate is
++ * roughly 3x what it is at level 1 (confirmed by hand-computing both from
++ * the live tuning values -- ~4.5 gold/hr at level 1 vs ~14.5 gold/hr at
++ * level 15), so the floor was quietly capping itself at a fraction of what
++ * it was supposed to guarantee, for every level above 1. Callers now pass
++ * the player's real topLevel, same as fastQuestCapsPerHour's own tier rate
++ * already did (independently) get right.
++ *
++ * The "never lets Easy out-earn the real best-unlocked tier" invariant
++ * this file's own history checked by simulation was verified against the
++ * OLD (referenceLevel-anchored) version of this function -- evaluating
++ * both sides of that comparison at the SAME real level rather than two
++ * different fixed reference points, as this fix now does, should if
++ * anything make the comparison more apples-to-apples, not less safe (Easy
++ * keeps the lowest rewardMultiplier of any tier at every level, per
++ * DIFFICULTIES itself). Flagged rather than re-asserted as proven: this
++ * specific invariant deserves a fresh run through `npm run sim` before
++ * being trusted the same way the original claim was.
+  *
+  * This does NOT fully close the residual overshoot at the very shortest
+  * durations (see QuestManager.generateOffer's own comment on why a
+  * positive-integer floor divided by an arbitrarily short duration can
+  * never be made airtight) -- it meaningfully shrinks it. That's a
+- * confirmed, accepted tradeoff, not an oversight.
++ * confirmed, accepted tradeoff, not an oversight, and unrelated to the
++ * level-anchoring fix above.
+  */
+-export function fastQuestFloorPerHour(cfg: DifficultyConfig): { gold: number; xp: number } {
++export function fastQuestFloorPerHour(cfg: DifficultyConfig, atLevel: number): { gold: number; xp: number } {
+   return {
+-    gold: expectedRatePerHour(cfg, 'gold'),
+-    xp: expectedRatePerHour(cfg, 'xp'),
++    gold: expectedRatePerHour(cfg, 'gold', atLevel),
++    xp: expectedRatePerHour(cfg, 'xp', atLevel),
+   };
+ }
+ 
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index ec32c45..cb4afde 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -438,8 +438,10 @@ export const QuestManager = {
+       const rawXp = rewardXp;
+       const durationHours = duration / HOUR;
+       const caps = fastQuestCapsPerHour(topLevel, legendaryUnlocked);
+-      rewardGold = Math.min(rawGold, Math.max(1, Math.round(caps.gold * durationHours)));
+-      rewardXp = Math.min(rawXp, Math.floor(caps.xp * durationHours));
++      const capCeilingGold = Math.max(1, Math.round(caps.gold * durationHours));
++      const capCeilingXp = Math.floor(caps.xp * durationHours);
++      rewardGold = Math.min(rawGold, capCeilingGold);
++      rewardXp = Math.min(rawXp, capCeilingXp);
+ 
+       // The cap above can legitimately crush a very short duration down to
+       // the bare "1" minimum -- mathematically necessary for the cap to
+@@ -452,9 +454,24 @@ export const QuestManager = {
+       // best-unlocked tier, even though it visibly improves the worst
+       // case. Clamped to never exceed the raw pre-cap roll -- a floor,
+       // not a second, looser cap.
+-      const floor = fastQuestFloorPerHour(cfg);
+-      const floorGold = Math.max(1, Math.round(floor.gold * durationHours));
+-      const floorXp = Math.max(1, Math.round(floor.xp * durationHours));
++      //
++      // ALSO explicitly clamped to capCeilingGold/capCeilingXp (patch
++      // 0230) -- with the floor now tracking the player's real level
++      // (see fastQuestFloorPerHour's own comment on why it didn't before),
++      // right at the exact level a tier first becomes the best-unlocked
++      // one, BURST_CAP_FRACTION's own ~82.5% discount on that tier's rate
++      // can briefly land BELOW Easy's own full, undiscounted rate --
++      // confirmed by direct calculation, not theoretical: level 5, Normal
++      // just unlocked, Normal's discounted cap (6.14g/hr) actually sits
++      // below Easy's own floor rate (6.72g/hr) at that same level. Without
++      // this clamp, the floor would win that Math.max below and push the
++      // reward ABOVE the cap it's supposed to sit under -- exactly the
++      // "out-earn the real best-unlocked tier" outcome the floor's whole
++      // design is built to prevent. This makes the floor a true floor
++      // UNDER the cap, not just under the raw pre-cap roll.
++      const floor = fastQuestFloorPerHour(cfg, topLevel);
++      const floorGold = Math.min(capCeilingGold, Math.max(1, Math.round(floor.gold * durationHours)));
++      const floorXp = Math.min(capCeilingXp, Math.max(1, Math.round(floor.xp * durationHours)));
+       rewardGold = Math.max(rewardGold, Math.min(rawGold, floorGold));
+       rewardXp = Math.max(rewardXp, Math.min(rawXp, floorXp));
+     }
+diff --git a/src/game/managers/ShopManager.ts b/src/game/managers/ShopManager.ts
+index e70b273..11de742 100644
+--- a/src/game/managers/ShopManager.ts
++++ b/src/game/managers/ShopManager.ts
+@@ -354,21 +354,46 @@ export const ShopManager = {
+    * the junk" counterpart to selling one item at a time. Stash-only, same
+    * as sell() -- equipped gear is never touched, so nothing a hero is
+    * currently wearing can be swept up by accident regardless of its
+-   * rarity. Crafted items (`customMods` set) and enchanted items
+-   * (`enchantStats` set) are skipped even if their base rarity qualifies
+-   * -- both represent player effort/materials spent beyond what the
+-   * rarity alone reflects, so a blanket rarity sweep shouldn't be the
+-   * thing that sells one off by surprise. Returns how many items sold and
+-   * the total gold earned, so the caller can report a single summary
+-   * rather than one toast per item.
++   * rarity. Enchanted items (`enchantStats` set) are still always
++   * skipped, at any rarity, regardless of maxRarity -- an Enchanter
++   * investment represents deliberate, later-game spend a common item
++   * wouldn't typically even carry.
++   *
++   * Crafted items (`customMods` set) are ONLY skipped above Common
++   * (patch 0230, direct request) -- a crafted Common base carries
++   * minimal effort/materials invested compared to a crafted Rare+,
++   * so the original blanket "never touch anything crafted" exclusion
++   * was protecting something with barely any value to protect at that
++   * tier, while silently making "Common and below" mean "nothing,
++   * if it happens to be crafted" for anyone who crafts their own
++   * starter gear -- confirmed directly against a real stash screenshot
++   * showing exactly that: an all-Common, all-crafted stash reading
++   * "Sell Junk (0)" despite genuinely junk-tier items sitting right
++   * there. Two existing safety nets make this a reasonable relaxation
++   * rather than a regression: locking (see `item.locked` below, still
++   * respected regardless of rarity or crafted status) protects anything
++   * a player actually cares about keeping, and buyback (see below) means
++   * an accidental sale is reversible, not permanent.
++   *
++   * Records a buyback entry for every item sold, same as sell() already
++   * does for a single item -- previously didn't, which meant a bulk sale
++   * was the one sell path with no way back. Newest sales first (unshift),
++   * trimmed to shop.buybackMaxEntries once at the end rather than after
++   * each individual push, so a bulk sale that clears out a big stash
++   * doesn't burn through the buyback list's own limited slots pushing and
++   * immediately trimming one at a time.
++   *
++   * Returns how many items sold and the total gold earned, so the caller
++   * can report a single summary rather than one toast per item.
+    */
+-  sellBelowRarity(state: GameState, maxRarity: Rarity): { count: number; gold: number } {
++  sellBelowRarity(state: GameState, maxRarity: Rarity, now = Date.now()): { count: number; gold: number } {
+     const maxIndex = RARITY_ORDER.indexOf(maxRarity);
+     const toSell = state.stash.filter((item) => {
+       if (item.locked) return false;
+-      if (item.customMods || (item.enchantStats && Object.keys(item.enchantStats).length > 0)) return false;
++      if (item.enchantStats && Object.keys(item.enchantStats).length > 0) return false;
+       const def = EQUIPMENT_BY_ID[item.defId];
+       if (!def) return false;
++      if (item.customMods && def.rarity !== 'common') return false;
+       return RARITY_ORDER.indexOf(def.rarity) <= maxIndex;
+     });
+     if (toSell.length === 0) return { count: 0, gold: 0 };
+@@ -377,6 +402,11 @@ export const ShopManager = {
+     state.stash = state.stash.filter((i) => !sellUids.has(i.uid));
+     state.gold = Math.min(ModifierManager.goldStorage(state), state.gold + gold);
+     state.stats.goldEarned += gold;
++    for (const item of toSell) {
++      state.buyback.unshift({ item, soldFor: EquipmentManager.sellValue(item), soldAt: now });
++    }
++    const maxEntries = Tuning.get('shop.buybackMaxEntries');
++    if (state.buyback.length > maxEntries) state.buyback.length = maxEntries;
+     return { count: toSell.length, gold };
+   },
+ 
+diff --git a/src/ui/PeddlerCardModal.tsx b/src/ui/PeddlerCardModal.tsx
+index 73cd8cf..720a54e 100644
+--- a/src/ui/PeddlerCardModal.tsx
++++ b/src/ui/PeddlerCardModal.tsx
+@@ -1,4 +1,4 @@
+-import { useEffect, useRef, useState, CSSProperties } from 'react';
++import { useEffect, useRef, useState } from 'react';
+ import { useEngine } from './useEngine';
+ import { PeddlerCardDef, PeddlerCardTier } from '../game/types';
+ import { PeddlerManager } from '../game/managers/PeddlerManager';
+@@ -10,6 +10,7 @@ import { GrimsbySprite } from './sprites/GrimsbySprite';
+ import { ItemIcon, MaterialIcon, ConsumableIcon, CurioIcon } from './icons';
+ import { EggIcon } from './EggIcon';
+ import { measureFlyOffset } from './flyTarget';
++import { RewardGlowParticle } from './RewardGlowParticle';
+ 
+ /**
+  * Random one-liners Grimsby fires off the moment the cards spawn --
+@@ -104,36 +105,6 @@ function burstColorFor(outcome: PeddlerCardDef): string {
+   }
+ }
+ 
+-/**
+- * One flying reward particle -- a colored circular glow (always
+- * present) with an optional icon centered inside it. Deliberately built
+- * so the glow works standalone (today: gold/material/scrap/egg all have
+- * no per-outcome icon set yet) AND continues working once real icons
+- * are assigned via the DevTool later -- `outcome.icon` is the exact
+- * same field PeddlerOutcomeIcon already reads for the revealed card
+- * face, so assigning one there lights up both places at once, not just
+- * this burst. No icon set -> just the glow circle, never a broken-image
+- * placeholder.
+- */
+-function RewardGlowParticle({
+-  color, icon, x, y, dx, dy, delay, durationMs,
+-}: {
+-  color: string; icon?: string; x: number; y: number; dx: number; dy: number; delay: number; durationMs: number;
+-}) {
+-  return (
+-    <span
+-      className="fly-particle reward-glow-particle"
+-      aria-hidden="true"
+-      style={{
+-        position: 'fixed', left: x, top: y,
+-        '--fly-dx': `${dx}px`, '--fly-dy': `${dy}px`, '--glow-color': color,
+-        animationDuration: `${durationMs}ms`, animationDelay: `${delay}ms`,
+-      } as CSSProperties}
+-    >
+-      {icon && <img src={`./item-icons/${icon}`} alt="" />}
+-    </span>
+-  );
+-}
+ 
+ function outcomeDisplayName(outcome: PeddlerCardDef): string {
+   switch (outcome.kind) {
+diff --git a/src/ui/PeddlerTabModal.tsx b/src/ui/PeddlerTabModal.tsx
+index 50c0680..3b93e8b 100644
+--- a/src/ui/PeddlerTabModal.tsx
++++ b/src/ui/PeddlerTabModal.tsx
+@@ -1,7 +1,10 @@
++import { useEffect, useRef, useState } from 'react';
+ import { useEngine } from './useEngine';
+ import { PeddlerManager } from '../game/managers/PeddlerManager';
+ import { formatGold } from '../game/util';
+-import { GrimsbySprite, GrimsbyAnimation } from './sprites/GrimsbySprite';
++import { GrimsbySprite } from './sprites/GrimsbySprite';
++import { measureFlyOffset } from './flyTarget';
++import { RewardGlowParticle } from './RewardGlowParticle';
+ 
+ /**
+  * Grimsby's third game -- a repeating push-your-luck: buy in, then each
+@@ -19,16 +22,18 @@ import { GrimsbySprite, GrimsbyAnimation } from './sprites/GrimsbySprite';
+  * success-chance floor, by design.
+  */
+ 
+-/** Grimsby's own reaction to how far a tab has been pushed -- reuses
+- *  existing sprite animations rather than needing new art (see
+- *  GrimsbySprite's own animation list). Purely a mood readout; the
+- *  actual odds are never shown numerically, same "he doesn't tell you
+- *  the exact percentage" restraint Pick Your Card's own tiers already
+- *  keep. */
+-function moodFor(round: number): { animation: GrimsbyAnimation; label: string } {
+-  if (round <= 1) return { animation: 'idle', label: 'Patient.' };
+-  if (round <= 3) return { animation: 'idle2', label: 'Getting impatient.' };
+-  return { animation: 'dialogue', label: 'About done with you.' };
++/**
++ * Bust/settle particle count -- more flourish for a run that actually
++ * went somewhere, same "reads as more of a deal for a better pull"
++ * reasoning PeddlerCardModal's own BURST_PARTICLE_COUNT already
++ * established, keyed off the same round-5-is-a-jackpot threshold the
++ * stats/achievement side of this game already uses (see
++ * peddler.tab.jackpotRound).
++ */
++function settleParticleCount(round: number): number {
++  if (round >= 5) return 5;
++  if (round >= 3) return 3;
++  return 2;
+ }
+ 
+ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
+@@ -41,12 +46,63 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
+   const tiers = Array.from({ length: tierCount }, (_, i) => i);
+   const present = PeddlerManager.isPresent(state);
+ 
++  // Grimsby stays on 'idle' for the entire time a tab is being played --
++  // open, pushed once, pushed ten times, doesn't matter -- and only
++  // switches to 'idle2' (crossed arms), played once and frozen on its
++  // last frame rather than looping, the moment a tab actually CLOSES,
++  // whether that's a bust or a deliberate Settle. Direct correction from
++  // an earlier version of this file, which switched pose mid-round based
++  // on how far the tab had been pushed -- that read as him reacting to
++  // progress itself, when the actual ask was for the close specifically
++  // to be the one beat that changes his pose.
++  const [closedPose, setClosedPose] = useState(false);
++
++  const settleBtnRef = useRef<HTMLButtonElement>(null);
++  const [burstParticles, setBurstParticles] = useState<{
++    x: number; y: number; dx: number; dy: number; color: string; delay: number;
++  }[] | null>(null);
++
++  // A bust is detected here (not just left to the button handler) because
++  // it can also happen from a tab this component didn't personally open
++  // in this mount -- reacting to the result itself, not the click, is
++  // what stays correct regardless of how the tab got here.
++  useEffect(() => {
++    if (runResult && !runResult.success) setClosedPose(true);
++  }, [runResult]);
++
++  const handleOpen = (tier: number) => {
++    setClosedPose(false);
++    setBurstParticles(null);
++    engine.openGrimsbyTab(tier);
++  };
++
++  const handleSettle = () => {
++    if (!tab) return;
++    setClosedPose(true);
++    // Measured and captured BEFORE calling settleGrimsbyTab -- that call
++    // nulls state.peddlerTab immediately, so tab.round/tab.value need to
++    // be read now, not after. Same "measure the real on-screen distance,
++    // skip gracefully if the target isn't mounted" shape PeddlerCardModal's
++    // own reward flight already uses (see flyTarget.ts).
++    if (settleBtnRef.current) {
++      const offset = measureFlyOffset(settleBtnRef.current, 'gold');
++      if (offset) {
++        const rect = settleBtnRef.current.getBoundingClientRect();
++        const origin = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
++        const count = settleParticleCount(tab.round);
++        setBurstParticles(Array.from({ length: count }, (_, i) => ({
++          ...origin, dx: offset.dx, dy: offset.dy, color: 'var(--brass)', delay: i * 90,
++        })));
++      }
++    }
++    engine.settleGrimsbyTab();
++  };
++
+   const handleClose = () => {
+     if (runResult) engine.dismissGrimsbyTabResult();
+     onClose();
+   };
+ 
+-  const mood = tab ? moodFor(tab.round) : { animation: 'idle' as GrimsbyAnimation, label: '' };
+   const nextBuyIn = tab ? PeddlerManager.tabTierBuyIn(tab.tier) : 0;
+   const canPush = !!tab && present && state.gold >= nextBuyIn;
+ 
+@@ -58,10 +114,29 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
+         onClick={(e) => e.stopPropagation()}
+       >
+         <div className="peddler-modal-header">
+-          <GrimsbySprite animation={runResult && !runResult.success ? 'idle' : mood.animation} height={140} />
++          <GrimsbySprite animation={closedPose ? 'idle2' : 'idle'} once={closedPose} height={140} />
+         </div>
+ 
+         <div className="peddler-modal-body">
++          {/* Lives above the tab/tier-select split below, not nested inside
++              it -- a bust sets state.peddlerTab to null the instant it
++              happens, so a result message nested under `{tab && ...}` would
++              vanish the same render it needed to show, dropping straight
++              back to the tier-select screen with nothing said. This is
++              exactly that bug, fixed. */}
++          {runResult && (
++            <p
++              className="peddler-corner-comment tiny"
++              style={{ color: runResult.success ? 'var(--brass)' : 'var(--muted)' }}
++            >
++              <b>{runResult.success ? 'Held.' : "Tab's closed."}</b>{' '}
++              {runResult.success
++                ? `Tab climbs to ${formatGold(runResult.value)}g.`
++                : "I'll forget this one if you will."}
++              {runResult.rebate > 0 && ` (+${formatGold(runResult.rebate)}g loyalty)`}
++            </p>
++          )}
++
+           {!tab && (
+             <>
+               <p className="peddler-corner-comment tiny muted">
+@@ -79,7 +154,7 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
+                       type="button"
+                       className="btn-purple"
+                       disabled={!canAfford}
+-                      onClick={() => engine.openGrimsbyTab(tier)}
++                      onClick={() => handleOpen(tier)}
+                       title={present ? (canAfford ? undefined : 'Not enough gold') : 'He’s not here right now'}
+                     >
+                       Open tab -- {formatGold(buyIn)} gold
+@@ -92,21 +167,6 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
+ 
+           {tab && (
+             <>
+-              {runResult && (
+-                <p
+-                  className="peddler-corner-comment tiny"
+-                  style={{ color: runResult.success ? 'var(--brass)' : 'var(--muted)' }}
+-                >
+-                  <b>{runResult.success ? 'Held.' : "Tab's closed."}</b>{' '}
+-                  {runResult.success
+-                    ? `Tab climbs to ${formatGold(runResult.value)}g.`
+-                    : "I'll forget this one if you will."}
+-                  {runResult.rebate > 0 && ` (+${formatGold(runResult.rebate)}g loyalty)`}
+-                </p>
+-              )}
+-
+-              <p className="tiny muted" style={{ textAlign: 'center' }}>{mood.label}</p>
+-
+               <div className="card" style={{ padding: '8px 12px', margin: '0 auto', maxWidth: 220 }}>
+                 {Array.from({ length: tab.round }, (_, i) => i + 1).map((round) => (
+                   <div key={round} className="spread tiny" style={{ fontFamily: 'monospace' }}>
+@@ -126,12 +186,21 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
+                 >
+                   Run it up -- {formatGold(nextBuyIn)} gold
+                 </button>
+-                <button type="button" className="btn-green" onClick={() => engine.settleGrimsbyTab()}>
++                <button ref={settleBtnRef} type="button" className="btn-green" onClick={handleSettle}>
+                   Settle -- {formatGold(tab.value)} gold
+                 </button>
+               </div>
+             </>
+           )}
++
++          {burstParticles && burstParticles.map((p, i) => (
++            <RewardGlowParticle
++              key={i}
++              x={p.x} y={p.y} dx={p.dx} dy={p.dy}
++              color={p.color} delay={p.delay}
++              durationMs={700}
++            />
++          ))}
+         </div>
+ 
+         <div className="row end" style={{ marginTop: 14 }}>
+diff --git a/src/ui/RewardGlowParticle.tsx b/src/ui/RewardGlowParticle.tsx
+new file mode 100644
+index 0000000..7f5ee24
+--- /dev/null
++++ b/src/ui/RewardGlowParticle.tsx
+@@ -0,0 +1,33 @@
++import type { CSSProperties } from 'react';
++
++/**
++ * One flying reward particle -- a colored circular glow (always
++ * present) with an optional icon centered inside it. Extracted out of
++ * PeddlerCardModal.tsx (patch 0230) so PeddlerTabModal's own Settle
++ * flourish could reuse it -- a second copy of this exact shape is
++ * exactly the kind of drift risk this project already avoids elsewhere
++ * (see e.g. the sim reusing balance.ts's real formulas instead of
++ * re-deriving them). No behavior change from the original -- same
++ * "glow-only when no icon set" fallback, same CSS custom properties
++ * (`--fly-dx`/`--fly-dy`/`--glow-color`) the shared `.reward-glow-
++ * particle` CSS class already reads.
++ */
++export function RewardGlowParticle({
++  color, icon, x, y, dx, dy, delay, durationMs,
++}: {
++  color: string; icon?: string; x: number; y: number; dx: number; dy: number; delay: number; durationMs: number;
++}) {
++  return (
++    <span
++      className="fly-particle reward-glow-particle"
++      aria-hidden="true"
++      style={{
++        position: 'fixed', left: x, top: y,
++        '--fly-dx': `${dx}px`, '--fly-dy': `${dy}px`, '--glow-color': color,
++        animationDuration: `${durationMs}ms`, animationDelay: `${delay}ms`,
++      } as CSSProperties}
++    >
++      {icon && <img src={`./item-icons/${icon}`} alt="" />}
++    </span>
++  );
++}
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index e7de8aa..ab44560 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -805,16 +805,17 @@ export function EquipmentPanel() {
+   // or something broader -- a bulk sell is higher-stakes than selling one
+   // item at a time, so the default shouldn't be able to surprise anyone.
+   // The preview below mirrors sellBelowRarity's own filter exactly
+-  // (skip crafted/enchanted items regardless of rarity) so the count and
+-  // gold shown on the button are exactly what pressing it will do, not an
+-  // approximation.
++  // (enchanted items always skipped; crafted items only skipped above
++  // Common, patch 0230) so the count and gold shown on the button are
++  // exactly what pressing it will do, not an approximation.
+   const [junkRarity, setJunkRarity] = useState<Rarity>('common');
+   const junkMaxIndex = RARITY_ORDER.indexOf(junkRarity);
+   const junkPreview = state.stash.filter((item) => {
+     if (item.locked) return false;
+-    if (item.customMods || (item.enchantStats && Object.keys(item.enchantStats).length > 0)) return false;
++    if (item.enchantStats && Object.keys(item.enchantStats).length > 0) return false;
+     const def = EQUIPMENT_BY_ID[item.defId];
+     if (!def) return false;
++    if (item.customMods && def.rarity !== 'common') return false;
+     return RARITY_ORDER.indexOf(def.rarity) <= junkMaxIndex;
+   });
+   const junkGold = junkPreview.reduce((sum, item) => sum + EquipmentManager.sellValue(item), 0);
+diff --git a/src/ui/panels/LorePanel.tsx b/src/ui/panels/LorePanel.tsx
+index 58523f8..887bcec 100644
+--- a/src/ui/panels/LorePanel.tsx
++++ b/src/ui/panels/LorePanel.tsx
+@@ -1,70 +1,42 @@
+ import { useState, useEffect } from 'react';
+-import type { MouseEvent, CSSProperties } from 'react';
+-import { QUEST_CHAINS, ChainDef } from '../../game/data/quests';
++import { QUEST_CHAINS, ChainDef, DIFFICULTIES } from '../../game/data/quests';
+ import { GUILD_RANK_TIERS, currentGuildRank, nextGuildRank, powerToNextRank, rankTierForLevel } from '../../game/data/guildRank';
+ import { outgoingConnections, incomingConnections } from '../../game/data/chainConnections';
+ import { RAIDS, RAID_ENCOUNTER_BY_ID, isRaidUnlocked } from '../../game/data/raids';
++import { RaidBanner } from './RaidsPanel';
+ import { EQUIPMENT_BY_ID, ITEM_SETS } from '../../game/data/equipment';
+-import { describeMods, RARITY_COLOR } from '../../game/util';
++import { describeMods, RARITY_COLOR, formatDuration } from '../../game/util';
+ import { isTabUnread } from '../../game/attention';
++import { RarityPill } from '../RarityPill';
+ import { useEngine } from '../useEngine';
+ 
+-/** Shared summary/expand toggle button, matching the Heroes tab pattern. */
+-function ExpandToggle({ open, onClick }: { open: boolean; onClick: (e: MouseEvent) => void }) {
+-  return (
+-    <button className="btn-ghost hero-card-expand" onClick={onClick}>
+-      {open ? 'Less ▲' : 'More ▼'}
+-    </button>
+-  );
+-}
+-
+-/**
+- * Tier-colour accent for a chain card -- separate from the art now (see
+- * ChainBanner below), so this just handles the left-border glow.
+- */
+-function chainCardStyle(chain: ChainDef): CSSProperties {
+-  const tier = rankTierForLevel(chain.reqLevel);
+-  return {
+-    borderLeft: `3px solid ${tier.color}`,
+-    boxShadow: `0 0 10px ${tier.color}40`,
+-  };
+-}
+-
+ /**
+- * Banner strip for a chain card, matching RaidsPanel's RaidBanner exactly.
+- * Previously this art lived as a full-card background behind the text,
+- * scrimmed to 93-97% opaque specifically because at lower opacity it was
+- * washing out the text on top of it -- which worked, but also meant the
+- * art itself was reduced to "a faint texture," practically invisible even
+- * once placed correctly (confirmed: this is why millers_problem.jpg,
+- * correctly placed, didn't visibly appear -- not a loading bug, the scrim
+- * was doing exactly what it was tuned to do). A dedicated strip above the
+- * text, not behind it, solves the original readability problem through
+- * actual separation instead of washing the image down to nothing -- same
+- * "missing file just fails to paint" convention as before, still rolls
+- * out gradually as art lands in public/lore/chains/<id>.jpg.
++ * Banner strip for a chain card and its detail modal -- same
++ * className-driven sizing convention RaidsPanel's own RaidBanner uses
++ * (patch 0230, matching this to the real raid cards per direct request),
++ * replacing the fixed-size single-purpose version this used to be.
++ * `className` picks the surface (.raid-card-thumb for the list row,
++ * .raid-detail-banner for the modal) -- sizing/radius/margin all live in
++ * that class already, shared with raids rather than duplicated here.
+  *
+  * `banner` is the chain's optional DevTool-assigned override + focus point
+  * (ChainDef.banner) -- unset for a chain that hasn't had one assigned, in
+  * which case this falls all the way back to the original id-convention
+- * path at dead-center focus, exactly as before this existed.
++ * path at dead-center focus, exactly as before this existed. Missing art
++ * simply fails to paint, same convention as raids' own banners.
+  */
+-function ChainBanner({ chainId, banner }: { chainId: string; banner?: ChainDef['banner'] }) {
++function ChainBanner({
++  chainId, banner, className,
++}: { chainId: string; banner?: ChainDef['banner']; className: string }) {
+   const src = banner?.path ? `./lore/${banner.path}` : `./lore/chains/${chainId}.jpg`;
+   return (
+     <div
+       aria-hidden="true"
++      className={className}
+       style={{
+         backgroundImage: `url(${src})`,
+-        // banner?.scale (patch 0164) is an optional 100-300 zoom set via
+-        // the DevTool's banner picker, independent of the focus point --
+-        // omitted (or 100) renders the exact same plain 'cover' as before
+-        // this field existed.
+-        backgroundSize: banner?.scale && banner.scale !== 100 ? `${banner.scale}%` : 'cover',
+         backgroundPosition: `${banner?.focusX ?? 50}% ${banner?.focusY ?? 50}%`,
+-        height: 90,
+-        marginBottom: 10,
+-        borderRadius: 4,
++        ...(banner?.scale && banner.scale !== 100 ? { backgroundSize: `${banner.scale}%` } : {}),
+       }}
+     />
+   );
+@@ -93,80 +65,161 @@ function ConnectionTags({ chain, completedIds }: { chain: ChainDef; completedIds
+   );
+ }
+ 
+-function CompletedEntry({ chain, completedIds }: { chain: ChainDef; completedIds: Set<string> }) {
+-  const [open, setOpen] = useState(false);
++/** Static, party-independent success estimate for a chain stage --
++ *  deliberately NOT a live per-hero preview the way raid encounters get
++ *  (raids commit a whole party upfront so a real preview makes sense;
++ *  chain stages are sent individually with whoever the player picks at
++ *  the time, and the Lore tab has no party-selection flow to hang a live
++ *  number off of). Reads the stage's own difficulty tier's baseSuccess
++ *  straight from DIFFICULTIES -- an honest "typical odds at this
++ *  difficulty" figure, same simplification balance.ts's own
++ *  expectedRatePerHour already makes elsewhere rather than modeling a
++ *  specific hero. */
++function stageSuccessEstimate(difficulty: ChainDef['stages'][number]['difficulty']): number {
++  return DIFFICULTIES[difficulty].baseSuccess;
++}
++
++/**
++ * Detail view for a single chain -- opened by clicking a ChainCard below,
++ * same "click a raid-card, get a detail modal" shape RaidDetailModal
++ * already established, reusing its own CSS (.raid-detail-modal/
++ * .raid-detail-banner/.raid-encounter-list/.raid-encounter-item) rather
++ * than a parallel set of lore-specific classes.
++ *
++ * `stage` undefined means completed (reveal every stage); a number means
++ * in-progress at that stage -- only stages already reached are shown,
++ * same spoiler-avoidance the old InProgressEntry already had ("the story
++ * isn't finished yet..." placeholder for the rest).
++ *
++ * Loot only shows on the FINAL stage -- chains only define a guaranteed
++ * reward at chain-completion (ChainDef.rewardItems), not per-stage the
++ * way raid encounters each have their own loot table, so there's nothing
++ * earlier stages could show even if this wanted to.
++ */
++function ChainDetailModal({
++  chain, stage, completedIds, onClose,
++}: { chain: ChainDef; stage?: number; completedIds: Set<string>; onClose: () => void }) {
++  const revealCount = stage ?? chain.stages.length;
+   return (
+-    <div className="card lore-card lore-completed" style={chainCardStyle(chain)}>
+-      <ChainBanner chainId={chain.id} banner={chain.banner} />
+-      <div
+-        className="spread hero-card-summary"
+-        onClick={() => setOpen((v) => !v)}
+-        role="button"
+-        tabIndex={0}
+-        aria-expanded={open}
+-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
+-      >
+-        <span className="card-title hero-card-name">{chain.name}</span>
+-        <span className="tiny gold-text">Lv {chain.reqLevel}</span>
+-      </div>
+-      {!open && chain.title && <p className="tiny muted" style={{ margin: '4px 0 0' }}>Grants the title "{chain.title}"</p>}
+-      {!open && <ConnectionTags chain={chain} completedIds={completedIds} />}
+-      {open && (
+-        <div className="hero-card-details">
+-          {chain.title && <p className="tiny muted" style={{ margin: '0 0 8px' }}>Grants the title "{chain.title}"</p>}
+-          <p className="card-flavour">{chain.description}</p>
+-          <ol className="lore-stage-list">
+-            {chain.stages.map((s) => (
+-              <li key={s.name}>
+-                <b>{s.name}.</b> <span className="muted">{s.flavour}</span>
++    <div className="overlay" onClick={onClose}>
++      <div className="modal raid-detail-modal" onClick={(e) => e.stopPropagation()}>
++        <ChainBanner chainId={chain.id} banner={chain.banner} className="raid-detail-banner" />
++        <div className="spread">
++          <span className="card-title hero-card-name">{chain.name}</span>
++          <span className="tiny gold-text">Lv {chain.reqLevel}</span>
++        </div>
++        <p className="card-flavour">{chain.description}</p>
++        {chain.title && (
++          <p className="tiny muted" style={{ margin: '0 0 8px' }}>
++            Grants the title "{chain.title}"{stage === undefined ? '' : ' on completion'}
++          </p>
++        )}
++
++        <div className="section-heading">Stages</div>
++        <ol className="raid-encounter-list">
++          {chain.stages.slice(0, revealCount).map((s, i) => {
++            const isFinal = i === chain.stages.length - 1;
++            const success = stageSuccessEstimate(s.difficulty);
++            return (
++              <li key={s.name} className="raid-encounter-item">
++                <details>
++                  <summary>
++                    <b>{i + 1}. {s.name}</b>
++                    <span className="tiny muted" style={{ marginLeft: 8 }}>
++                      Typical success <b className={success >= 60 ? 'good' : success >= 35 ? '' : 'bad'}>{success}%</b>
++                      {' · '}Time <b>{formatDuration(s.duration)}</b>
++                    </span>
++                  </summary>
++                  <p className="muted" style={{ marginTop: 4 }}>{s.flavour}</p>
++                  {isFinal && chain.rewardItems.length > 0 && (
++                    <div className="row wrap" style={{ gap: 6, marginTop: 4 }}>
++                      {chain.rewardItems.map((defId) => {
++                        const def = EQUIPMENT_BY_ID[defId];
++                        if (!def) return null;
++                        return (
++                          <div key={defId} className="loot-chip" style={{ cursor: 'default' }}>
++                            <span className="tiny" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</span>
++                            <RarityPill rarity={def.rarity} />
++                          </div>
++                        );
++                      })}
++                    </div>
++                  )}
++                </details>
+               </li>
+-            ))}
+-          </ol>
+-          {chain.epilogue && (
+-            <p
+-              className="tiny lore-epilogue"
+-              style={{ fontStyle: 'italic', borderLeft: '2px solid var(--brass)', paddingLeft: 8, margin: '10px 0 0' }}
+-            >
+-              {chain.epilogue}
+-            </p>
++            );
++          })}
++          {stage !== undefined && stage < chain.stages.length && (
++            <li className="tiny muted">The story isn't finished yet...</li>
+           )}
+-          <ConnectionTags chain={chain} completedIds={completedIds} />
++        </ol>
++
++        {stage === undefined && (chain.rewardGold > 0 || chain.rewardRenown > 0) && (
++          <p className="tiny muted" style={{ marginTop: 8 }}>
++            Completion reward: <b className="gold-text">{chain.rewardGold} gold</b>
++            {chain.rewardRenown > 0 && <> · <b>{chain.rewardRenown} renown</b></>}
++          </p>
++        )}
++
++        {stage === undefined && chain.epilogue && (
++          <p
++            className="tiny lore-epilogue"
++            style={{ fontStyle: 'italic', borderLeft: '2px solid var(--brass)', paddingLeft: 8, margin: '10px 0 0' }}
++          >
++            {chain.epilogue}
++          </p>
++        )}
++
++        {stage === undefined && <ConnectionTags chain={chain} completedIds={completedIds} />}
++
++        <div className="row end" style={{ marginTop: 14 }}>
++          <button onClick={onClose}>Close</button>
+         </div>
+-      )}
+-      <ExpandToggle open={open} onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} />
++      </div>
+     </div>
+   );
+ }
+ 
+-function InProgressEntry({ chain, stage }: { chain: ChainDef; stage: number }) {
+-  const [open, setOpen] = useState(false);
++/**
++ * List-row shell for a chain -- restyled (patch 0230, direct request) to
++ * match RaidsPanel's own RaidCard exactly: thumbnail, name+meta, chevron,
++ * click opens a detail modal, instead of the previous full-banner
++ * inline-expand card. Handles both completed (`stage` omitted) and
++ * in-progress (`stage` set) in one component rather than two near-
++ * identical ones, since the shell itself no longer differs between them
++ * beyond the meta line.
++ */
++function ChainCard({
++  chain, completedIds, stage,
++}: { chain: ChainDef; completedIds: Set<string>; stage?: number }) {
++  const [showModal, setShowModal] = useState(false);
++  const inProgress = stage !== undefined;
+   return (
+-    <div className="card lore-card lore-in-progress" style={chainCardStyle(chain)}>
+-      <ChainBanner chainId={chain.id} banner={chain.banner} />
++    <>
+       <div
+-        className="spread hero-card-summary"
+-        onClick={() => setOpen((v) => !v)}
++        className="card raid-card"
++        onClick={() => setShowModal(true)}
+         role="button"
+         tabIndex={0}
+-        aria-expanded={open}
+-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
++        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
+       >
+-        <span className="card-title hero-card-name">{chain.name}</span>
+-        <span className="tiny muted">{stage}/{chain.stages.length}</span>
+-      </div>
+-      {open && (
+-        <div className="hero-card-details">
+-          <p className="card-flavour">{chain.description}</p>
+-          <ol className="lore-stage-list">
+-            {chain.stages.slice(0, stage).map((s) => (
+-              <li key={s.name}><b>{s.name}.</b> <span className="muted">{s.flavour}</span></li>
+-            ))}
+-            {stage < chain.stages.length && <li className="muted">The story isn't finished yet...</li>}
+-          </ol>
++        <ChainBanner chainId={chain.id} banner={chain.banner} className="raid-card-thumb" />
++        <div className="raid-card-body">
++          <div className="raid-card-name">{chain.name}</div>
++          <div className="raid-card-meta">
++            {inProgress
++              ? <span className="tiny muted">underway — {stage}/{chain.stages.length}</span>
++              : <span className="tiny gold-text">Lv {chain.reqLevel}</span>}
++          </div>
++          {!inProgress && chain.title && <p className="tiny muted" style={{ margin: '2px 0 0' }}>Grants the title "{chain.title}"</p>}
++          {!inProgress && <ConnectionTags chain={chain} completedIds={completedIds} />}
+         </div>
++        <span className="raid-card-chevron" aria-hidden="true">›</span>
++      </div>
++      {showModal && (
++        <ChainDetailModal chain={chain} stage={stage} completedIds={completedIds} onClose={() => setShowModal(false)} />
+       )}
+-      <ExpandToggle open={open} onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} />
+-    </div>
++    </>
+   );
+ }
+ 
+@@ -202,7 +255,7 @@ function StoryQuestsTab() {
+         <>
+           <div className="section-heading">Still unfolding</div>
+           {inProgress.map(({ active, chain }) => (
+-            <InProgressEntry key={chain.id} chain={chain} stage={active.stage} />
++            <ChainCard key={chain.id} chain={chain} completedIds={discoveredIds} stage={active.stage} />
+           ))}
+         </>
+       )}
+@@ -217,7 +270,7 @@ function StoryQuestsTab() {
+       {groups.map(({ tier, chains }) => (
+         <div key={tier.id}>
+           <div className="section-heading" style={{ color: tier.color }}>{tier.name}</div>
+-          {chains.map((chain) => <CompletedEntry key={chain.id} chain={chain} completedIds={completedIds} />)}
++          {chains.map((chain) => <ChainCard key={chain.id} chain={chain} completedIds={completedIds} />)}
+         </div>
+       ))}
+ 
+@@ -230,82 +283,112 @@ function StoryQuestsTab() {
+   );
+ }
+ 
++/**
++ * Detail view for a completed raid's Lore-tab history entry -- opened by
++ * clicking the raid-card row below. Deliberately NOT RaidsPanel's own
++ * RaidDetailModal reused wholesale -- that one drives an actual party-
++ * picker/launch flow, which makes no sense for a read-only history
++ * record of something already cleared. Same content this used to show
++ * inline (description, title, per-encounter name+flavour, epilogue),
++ * just moved into a modal to match the click-to-open shell every other
++ * card in this tab now uses.
++ */
++function RaidHistoryDetailModal({ raidId, onClose }: { raidId: string; onClose: () => void }) {
++  const raid = RAIDS.find((r) => r.id === raidId);
++  if (!raid) return null;
++  return (
++    <div className="overlay" onClick={onClose}>
++      <div className="modal raid-detail-modal" onClick={(e) => e.stopPropagation()}>
++        <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-detail-banner" />
++        <div className="spread">
++          <span className="card-title hero-card-name">{raid.name}</span>
++          <span className="tiny gold-text">Lv {raid.reqLevel}</span>
++        </div>
++        <p className="card-flavour">{raid.description}</p>
++        {raid.title && <p className="tiny muted" style={{ margin: '0 0 8px' }}>Grants the title "{raid.title}" to the whole clearing party</p>}
++        <div className="section-heading">Encounters</div>
++        <ol className="raid-encounter-list">
++          {raid.encounterIds.map((id) => {
++            const enc = RAID_ENCOUNTER_BY_ID[id];
++            if (!enc) return null;
++            return (
++              <li key={id} className="raid-encounter-item">
++                <b>{enc.name}.</b> <span className="muted">{enc.flavour}</span>
++              </li>
++            );
++          })}
++        </ol>
++        {raid.epilogue && (
++          <p
++            className="tiny lore-epilogue"
++            style={{ fontStyle: 'italic', borderLeft: '2px solid var(--brass)', paddingLeft: 8, margin: '10px 0 0' }}
++          >
++            {raid.epilogue}
++          </p>
++        )}
++        <div className="row end" style={{ marginTop: 14 }}>
++          <button onClick={onClose}>Close</button>
++        </div>
++      </div>
++    </div>
++  );
++}
++
+ function RaidCompletedEntry({ raidId }: { raidId: string }) {
+-  const [open, setOpen] = useState(false);
++  const [showModal, setShowModal] = useState(false);
+   const raid = RAIDS.find((r) => r.id === raidId);
+   if (!raid) return null;
+   return (
+-    <div className="card lore-card lore-completed">
++    <>
+       <div
+-        className="spread hero-card-summary"
+-        onClick={() => setOpen((v) => !v)}
++        className="card raid-card"
++        onClick={() => setShowModal(true)}
+         role="button"
+         tabIndex={0}
+-        aria-expanded={open}
+-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
++        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
+       >
+-        <span className="card-title hero-card-name">{raid.name}</span>
+-        <span className="tiny gold-text">Lv {raid.reqLevel}</span>
+-      </div>
+-      {open && (
+-        <div className="hero-card-details">
+-          <p className="card-flavour">{raid.description}</p>
+-          {raid.title && <p className="tiny muted" style={{ margin: '0 0 8px' }}>Grants the title "{raid.title}" to the whole clearing party</p>}
+-          <ol className="lore-stage-list">
+-            {raid.encounterIds.map((id) => {
+-              const enc = RAID_ENCOUNTER_BY_ID[id];
+-              if (!enc) return null;
+-              return (
+-                <li key={id}>
+-                  <b>{enc.name}.</b> <span className="muted">{enc.flavour}</span>
+-                </li>
+-              );
+-            })}
+-          </ol>
+-          {raid.epilogue && (
+-            <p
+-              className="tiny lore-epilogue"
+-              style={{ fontStyle: 'italic', borderLeft: '2px solid var(--brass)', paddingLeft: 8, margin: '10px 0 0' }}
+-            >
+-              {raid.epilogue}
+-            </p>
+-          )}
++        <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-card-thumb" />
++        <div className="raid-card-body">
++          <div className="raid-card-name">{raid.name}</div>
++          <div className="raid-card-meta">
++            <span className="tiny gold-text">Lv {raid.reqLevel}</span>
++          </div>
+         </div>
+-      )}
+-      <ExpandToggle open={open} onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} />
+-    </div>
++        <span className="raid-card-chevron" aria-hidden="true">›</span>
++      </div>
++      {showModal && <RaidHistoryDetailModal raidId={raidId} onClose={() => setShowModal(false)} />}
++    </>
+   );
+ }
+ 
+ function RaidInProgressEntry() {
+   const engine = useEngine();
+   const active = engine.state.activeRaid;
+-  const [open, setOpen] = useState(false);
++  const [showModal, setShowModal] = useState(false);
+   if (!active) return null;
+   const raid = RAIDS.find((r) => r.id === active.raidId);
+   if (!raid) return null;
+ 
+   return (
+-    <div className="card lore-card lore-in-progress">
++    <>
+       <div
+-        className="spread hero-card-summary"
+-        onClick={() => setOpen((v) => !v)}
++        className="card raid-card"
++        onClick={() => setShowModal(true)}
+         role="button"
+         tabIndex={0}
+-        aria-expanded={open}
+-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
++        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
+       >
+-        <span className="card-title hero-card-name">{raid.name}</span>
+-        <span className="tiny muted">underway — {active.difficulty}</span>
+-      </div>
+-      {open && (
+-        <div className="hero-card-details">
+-          <p className="card-flavour">{raid.description}</p>
+-          <p className="tiny muted">The rest of this one is still being written.</p>
++        <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-card-thumb" />
++        <div className="raid-card-body">
++          <div className="raid-card-name">{raid.name}</div>
++          <div className="raid-card-meta">
++            <span className="tiny muted">underway — {active.difficulty}</span>
++          </div>
+         </div>
+-      )}
+-      <ExpandToggle open={open} onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} />
+-    </div>
++        <span className="raid-card-chevron" aria-hidden="true">›</span>
++      </div>
++      {showModal && <RaidHistoryDetailModal raidId={active.raidId} onClose={() => setShowModal(false)} />}
++    </>
+   );
+ }
+ 
+diff --git a/src/ui/panels/PeddlerPanel.tsx b/src/ui/panels/PeddlerPanel.tsx
+index 78d74ad..6c1bd79 100644
+--- a/src/ui/panels/PeddlerPanel.tsx
++++ b/src/ui/panels/PeddlerPanel.tsx
+@@ -54,8 +54,9 @@ export function PeddlerPanel() {
+     <>
+       <h2>Grimsby</h2>
+       <p className="subtitle">
+-        A cart, a cart, and absolutely nothing more, according to him. Pay for a card, pick one, see what
+-        happens -- he swears the odds are fair. He would say that either way.
++        A cart, a cart, and absolutely nothing more, according to him. A card, a die, or -- once he's
++        settled in -- a running tab: pay your way in, see what happens. He swears the odds are fair.
++        He would say that either way.
+       </p>
+ 
+       <div className="card vendor-card" style={{ marginBottom: 12 }}>
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index 138f53c..ae3d9f4 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -97,7 +97,7 @@ function raidBannerSrc(raidId: string, banner?: RaidDef['banner']) {
+  * (RaidDef.banner) -- unset falls all the way back to the original
+  * id-convention path at dead-center focus, exactly as before this existed.
+  */
+-function RaidBanner({
++export function RaidBanner({
+   raidId, banner, className,
+ }: { raidId: string; banner?: RaidDef['banner']; className: string }) {
+   const src = raidBannerSrc(raidId, banner);

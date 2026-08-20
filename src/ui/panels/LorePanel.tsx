@@ -1,70 +1,42 @@
 import { useState, useEffect } from 'react';
-import type { MouseEvent, CSSProperties } from 'react';
-import { QUEST_CHAINS, ChainDef } from '../../game/data/quests';
+import { QUEST_CHAINS, ChainDef, DIFFICULTIES } from '../../game/data/quests';
 import { GUILD_RANK_TIERS, currentGuildRank, nextGuildRank, powerToNextRank, rankTierForLevel } from '../../game/data/guildRank';
 import { outgoingConnections, incomingConnections } from '../../game/data/chainConnections';
 import { RAIDS, RAID_ENCOUNTER_BY_ID, isRaidUnlocked } from '../../game/data/raids';
+import { RaidBanner } from './RaidsPanel';
 import { EQUIPMENT_BY_ID, ITEM_SETS } from '../../game/data/equipment';
-import { describeMods, RARITY_COLOR } from '../../game/util';
+import { describeMods, RARITY_COLOR, formatDuration } from '../../game/util';
 import { isTabUnread } from '../../game/attention';
+import { RarityPill } from '../RarityPill';
 import { useEngine } from '../useEngine';
 
-/** Shared summary/expand toggle button, matching the Heroes tab pattern. */
-function ExpandToggle({ open, onClick }: { open: boolean; onClick: (e: MouseEvent) => void }) {
-  return (
-    <button className="btn-ghost hero-card-expand" onClick={onClick}>
-      {open ? 'Less ▲' : 'More ▼'}
-    </button>
-  );
-}
-
 /**
- * Tier-colour accent for a chain card -- separate from the art now (see
- * ChainBanner below), so this just handles the left-border glow.
- */
-function chainCardStyle(chain: ChainDef): CSSProperties {
-  const tier = rankTierForLevel(chain.reqLevel);
-  return {
-    borderLeft: `3px solid ${tier.color}`,
-    boxShadow: `0 0 10px ${tier.color}40`,
-  };
-}
-
-/**
- * Banner strip for a chain card, matching RaidsPanel's RaidBanner exactly.
- * Previously this art lived as a full-card background behind the text,
- * scrimmed to 93-97% opaque specifically because at lower opacity it was
- * washing out the text on top of it -- which worked, but also meant the
- * art itself was reduced to "a faint texture," practically invisible even
- * once placed correctly (confirmed: this is why millers_problem.jpg,
- * correctly placed, didn't visibly appear -- not a loading bug, the scrim
- * was doing exactly what it was tuned to do). A dedicated strip above the
- * text, not behind it, solves the original readability problem through
- * actual separation instead of washing the image down to nothing -- same
- * "missing file just fails to paint" convention as before, still rolls
- * out gradually as art lands in public/lore/chains/<id>.jpg.
+ * Banner strip for a chain card and its detail modal -- same
+ * className-driven sizing convention RaidsPanel's own RaidBanner uses
+ * (patch 0230, matching this to the real raid cards per direct request),
+ * replacing the fixed-size single-purpose version this used to be.
+ * `className` picks the surface (.raid-card-thumb for the list row,
+ * .raid-detail-banner for the modal) -- sizing/radius/margin all live in
+ * that class already, shared with raids rather than duplicated here.
  *
  * `banner` is the chain's optional DevTool-assigned override + focus point
  * (ChainDef.banner) -- unset for a chain that hasn't had one assigned, in
  * which case this falls all the way back to the original id-convention
- * path at dead-center focus, exactly as before this existed.
+ * path at dead-center focus, exactly as before this existed. Missing art
+ * simply fails to paint, same convention as raids' own banners.
  */
-function ChainBanner({ chainId, banner }: { chainId: string; banner?: ChainDef['banner'] }) {
+function ChainBanner({
+  chainId, banner, className,
+}: { chainId: string; banner?: ChainDef['banner']; className: string }) {
   const src = banner?.path ? `./lore/${banner.path}` : `./lore/chains/${chainId}.jpg`;
   return (
     <div
       aria-hidden="true"
+      className={className}
       style={{
         backgroundImage: `url(${src})`,
-        // banner?.scale (patch 0164) is an optional 100-300 zoom set via
-        // the DevTool's banner picker, independent of the focus point --
-        // omitted (or 100) renders the exact same plain 'cover' as before
-        // this field existed.
-        backgroundSize: banner?.scale && banner.scale !== 100 ? `${banner.scale}%` : 'cover',
         backgroundPosition: `${banner?.focusX ?? 50}% ${banner?.focusY ?? 50}%`,
-        height: 90,
-        marginBottom: 10,
-        borderRadius: 4,
+        ...(banner?.scale && banner.scale !== 100 ? { backgroundSize: `${banner.scale}%` } : {}),
       }}
     />
   );
@@ -93,80 +65,161 @@ function ConnectionTags({ chain, completedIds }: { chain: ChainDef; completedIds
   );
 }
 
-function CompletedEntry({ chain, completedIds }: { chain: ChainDef; completedIds: Set<string> }) {
-  const [open, setOpen] = useState(false);
+/** Static, party-independent success estimate for a chain stage --
+ *  deliberately NOT a live per-hero preview the way raid encounters get
+ *  (raids commit a whole party upfront so a real preview makes sense;
+ *  chain stages are sent individually with whoever the player picks at
+ *  the time, and the Lore tab has no party-selection flow to hang a live
+ *  number off of). Reads the stage's own difficulty tier's baseSuccess
+ *  straight from DIFFICULTIES -- an honest "typical odds at this
+ *  difficulty" figure, same simplification balance.ts's own
+ *  expectedRatePerHour already makes elsewhere rather than modeling a
+ *  specific hero. */
+function stageSuccessEstimate(difficulty: ChainDef['stages'][number]['difficulty']): number {
+  return DIFFICULTIES[difficulty].baseSuccess;
+}
+
+/**
+ * Detail view for a single chain -- opened by clicking a ChainCard below,
+ * same "click a raid-card, get a detail modal" shape RaidDetailModal
+ * already established, reusing its own CSS (.raid-detail-modal/
+ * .raid-detail-banner/.raid-encounter-list/.raid-encounter-item) rather
+ * than a parallel set of lore-specific classes.
+ *
+ * `stage` undefined means completed (reveal every stage); a number means
+ * in-progress at that stage -- only stages already reached are shown,
+ * same spoiler-avoidance the old InProgressEntry already had ("the story
+ * isn't finished yet..." placeholder for the rest).
+ *
+ * Loot only shows on the FINAL stage -- chains only define a guaranteed
+ * reward at chain-completion (ChainDef.rewardItems), not per-stage the
+ * way raid encounters each have their own loot table, so there's nothing
+ * earlier stages could show even if this wanted to.
+ */
+function ChainDetailModal({
+  chain, stage, completedIds, onClose,
+}: { chain: ChainDef; stage?: number; completedIds: Set<string>; onClose: () => void }) {
+  const revealCount = stage ?? chain.stages.length;
   return (
-    <div className="card lore-card lore-completed" style={chainCardStyle(chain)}>
-      <ChainBanner chainId={chain.id} banner={chain.banner} />
-      <div
-        className="spread hero-card-summary"
-        onClick={() => setOpen((v) => !v)}
-        role="button"
-        tabIndex={0}
-        aria-expanded={open}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
-      >
-        <span className="card-title hero-card-name">{chain.name}</span>
-        <span className="tiny gold-text">Lv {chain.reqLevel}</span>
-      </div>
-      {!open && chain.title && <p className="tiny muted" style={{ margin: '4px 0 0' }}>Grants the title "{chain.title}"</p>}
-      {!open && <ConnectionTags chain={chain} completedIds={completedIds} />}
-      {open && (
-        <div className="hero-card-details">
-          {chain.title && <p className="tiny muted" style={{ margin: '0 0 8px' }}>Grants the title "{chain.title}"</p>}
-          <p className="card-flavour">{chain.description}</p>
-          <ol className="lore-stage-list">
-            {chain.stages.map((s) => (
-              <li key={s.name}>
-                <b>{s.name}.</b> <span className="muted">{s.flavour}</span>
-              </li>
-            ))}
-          </ol>
-          {chain.epilogue && (
-            <p
-              className="tiny lore-epilogue"
-              style={{ fontStyle: 'italic', borderLeft: '2px solid var(--brass)', paddingLeft: 8, margin: '10px 0 0' }}
-            >
-              {chain.epilogue}
-            </p>
-          )}
-          <ConnectionTags chain={chain} completedIds={completedIds} />
+    <div className="overlay" onClick={onClose}>
+      <div className="modal raid-detail-modal" onClick={(e) => e.stopPropagation()}>
+        <ChainBanner chainId={chain.id} banner={chain.banner} className="raid-detail-banner" />
+        <div className="spread">
+          <span className="card-title hero-card-name">{chain.name}</span>
+          <span className="tiny gold-text">Lv {chain.reqLevel}</span>
         </div>
-      )}
-      <ExpandToggle open={open} onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} />
+        <p className="card-flavour">{chain.description}</p>
+        {chain.title && (
+          <p className="tiny muted" style={{ margin: '0 0 8px' }}>
+            Grants the title "{chain.title}"{stage === undefined ? '' : ' on completion'}
+          </p>
+        )}
+
+        <div className="section-heading">Stages</div>
+        <ol className="raid-encounter-list">
+          {chain.stages.slice(0, revealCount).map((s, i) => {
+            const isFinal = i === chain.stages.length - 1;
+            const success = stageSuccessEstimate(s.difficulty);
+            return (
+              <li key={s.name} className="raid-encounter-item">
+                <details>
+                  <summary>
+                    <b>{i + 1}. {s.name}</b>
+                    <span className="tiny muted" style={{ marginLeft: 8 }}>
+                      Typical success <b className={success >= 60 ? 'good' : success >= 35 ? '' : 'bad'}>{success}%</b>
+                      {' · '}Time <b>{formatDuration(s.duration)}</b>
+                    </span>
+                  </summary>
+                  <p className="muted" style={{ marginTop: 4 }}>{s.flavour}</p>
+                  {isFinal && chain.rewardItems.length > 0 && (
+                    <div className="row wrap" style={{ gap: 6, marginTop: 4 }}>
+                      {chain.rewardItems.map((defId) => {
+                        const def = EQUIPMENT_BY_ID[defId];
+                        if (!def) return null;
+                        return (
+                          <div key={defId} className="loot-chip" style={{ cursor: 'default' }}>
+                            <span className="tiny" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}</span>
+                            <RarityPill rarity={def.rarity} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </details>
+              </li>
+            );
+          })}
+          {stage !== undefined && stage < chain.stages.length && (
+            <li className="tiny muted">The story isn't finished yet...</li>
+          )}
+        </ol>
+
+        {stage === undefined && (chain.rewardGold > 0 || chain.rewardRenown > 0) && (
+          <p className="tiny muted" style={{ marginTop: 8 }}>
+            Completion reward: <b className="gold-text">{chain.rewardGold} gold</b>
+            {chain.rewardRenown > 0 && <> · <b>{chain.rewardRenown} renown</b></>}
+          </p>
+        )}
+
+        {stage === undefined && chain.epilogue && (
+          <p
+            className="tiny lore-epilogue"
+            style={{ fontStyle: 'italic', borderLeft: '2px solid var(--brass)', paddingLeft: 8, margin: '10px 0 0' }}
+          >
+            {chain.epilogue}
+          </p>
+        )}
+
+        {stage === undefined && <ConnectionTags chain={chain} completedIds={completedIds} />}
+
+        <div className="row end" style={{ marginTop: 14 }}>
+          <button onClick={onClose}>Close</button>
+        </div>
+      </div>
     </div>
   );
 }
 
-function InProgressEntry({ chain, stage }: { chain: ChainDef; stage: number }) {
-  const [open, setOpen] = useState(false);
+/**
+ * List-row shell for a chain -- restyled (patch 0230, direct request) to
+ * match RaidsPanel's own RaidCard exactly: thumbnail, name+meta, chevron,
+ * click opens a detail modal, instead of the previous full-banner
+ * inline-expand card. Handles both completed (`stage` omitted) and
+ * in-progress (`stage` set) in one component rather than two near-
+ * identical ones, since the shell itself no longer differs between them
+ * beyond the meta line.
+ */
+function ChainCard({
+  chain, completedIds, stage,
+}: { chain: ChainDef; completedIds: Set<string>; stage?: number }) {
+  const [showModal, setShowModal] = useState(false);
+  const inProgress = stage !== undefined;
   return (
-    <div className="card lore-card lore-in-progress" style={chainCardStyle(chain)}>
-      <ChainBanner chainId={chain.id} banner={chain.banner} />
+    <>
       <div
-        className="spread hero-card-summary"
-        onClick={() => setOpen((v) => !v)}
+        className="card raid-card"
+        onClick={() => setShowModal(true)}
         role="button"
         tabIndex={0}
-        aria-expanded={open}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
       >
-        <span className="card-title hero-card-name">{chain.name}</span>
-        <span className="tiny muted">{stage}/{chain.stages.length}</span>
-      </div>
-      {open && (
-        <div className="hero-card-details">
-          <p className="card-flavour">{chain.description}</p>
-          <ol className="lore-stage-list">
-            {chain.stages.slice(0, stage).map((s) => (
-              <li key={s.name}><b>{s.name}.</b> <span className="muted">{s.flavour}</span></li>
-            ))}
-            {stage < chain.stages.length && <li className="muted">The story isn't finished yet...</li>}
-          </ol>
+        <ChainBanner chainId={chain.id} banner={chain.banner} className="raid-card-thumb" />
+        <div className="raid-card-body">
+          <div className="raid-card-name">{chain.name}</div>
+          <div className="raid-card-meta">
+            {inProgress
+              ? <span className="tiny muted">underway — {stage}/{chain.stages.length}</span>
+              : <span className="tiny gold-text">Lv {chain.reqLevel}</span>}
+          </div>
+          {!inProgress && chain.title && <p className="tiny muted" style={{ margin: '2px 0 0' }}>Grants the title "{chain.title}"</p>}
+          {!inProgress && <ConnectionTags chain={chain} completedIds={completedIds} />}
         </div>
+        <span className="raid-card-chevron" aria-hidden="true">›</span>
+      </div>
+      {showModal && (
+        <ChainDetailModal chain={chain} stage={stage} completedIds={completedIds} onClose={() => setShowModal(false)} />
       )}
-      <ExpandToggle open={open} onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} />
-    </div>
+    </>
   );
 }
 
@@ -202,7 +255,7 @@ function StoryQuestsTab() {
         <>
           <div className="section-heading">Still unfolding</div>
           {inProgress.map(({ active, chain }) => (
-            <InProgressEntry key={chain.id} chain={chain} stage={active.stage} />
+            <ChainCard key={chain.id} chain={chain} completedIds={discoveredIds} stage={active.stage} />
           ))}
         </>
       )}
@@ -217,7 +270,7 @@ function StoryQuestsTab() {
       {groups.map(({ tier, chains }) => (
         <div key={tier.id}>
           <div className="section-heading" style={{ color: tier.color }}>{tier.name}</div>
-          {chains.map((chain) => <CompletedEntry key={chain.id} chain={chain} completedIds={completedIds} />)}
+          {chains.map((chain) => <ChainCard key={chain.id} chain={chain} completedIds={completedIds} />)}
         </div>
       ))}
 
@@ -230,82 +283,112 @@ function StoryQuestsTab() {
   );
 }
 
-function RaidCompletedEntry({ raidId }: { raidId: string }) {
-  const [open, setOpen] = useState(false);
+/**
+ * Detail view for a completed raid's Lore-tab history entry -- opened by
+ * clicking the raid-card row below. Deliberately NOT RaidsPanel's own
+ * RaidDetailModal reused wholesale -- that one drives an actual party-
+ * picker/launch flow, which makes no sense for a read-only history
+ * record of something already cleared. Same content this used to show
+ * inline (description, title, per-encounter name+flavour, epilogue),
+ * just moved into a modal to match the click-to-open shell every other
+ * card in this tab now uses.
+ */
+function RaidHistoryDetailModal({ raidId, onClose }: { raidId: string; onClose: () => void }) {
   const raid = RAIDS.find((r) => r.id === raidId);
   if (!raid) return null;
   return (
-    <div className="card lore-card lore-completed">
+    <div className="overlay" onClick={onClose}>
+      <div className="modal raid-detail-modal" onClick={(e) => e.stopPropagation()}>
+        <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-detail-banner" />
+        <div className="spread">
+          <span className="card-title hero-card-name">{raid.name}</span>
+          <span className="tiny gold-text">Lv {raid.reqLevel}</span>
+        </div>
+        <p className="card-flavour">{raid.description}</p>
+        {raid.title && <p className="tiny muted" style={{ margin: '0 0 8px' }}>Grants the title "{raid.title}" to the whole clearing party</p>}
+        <div className="section-heading">Encounters</div>
+        <ol className="raid-encounter-list">
+          {raid.encounterIds.map((id) => {
+            const enc = RAID_ENCOUNTER_BY_ID[id];
+            if (!enc) return null;
+            return (
+              <li key={id} className="raid-encounter-item">
+                <b>{enc.name}.</b> <span className="muted">{enc.flavour}</span>
+              </li>
+            );
+          })}
+        </ol>
+        {raid.epilogue && (
+          <p
+            className="tiny lore-epilogue"
+            style={{ fontStyle: 'italic', borderLeft: '2px solid var(--brass)', paddingLeft: 8, margin: '10px 0 0' }}
+          >
+            {raid.epilogue}
+          </p>
+        )}
+        <div className="row end" style={{ marginTop: 14 }}>
+          <button onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RaidCompletedEntry({ raidId }: { raidId: string }) {
+  const [showModal, setShowModal] = useState(false);
+  const raid = RAIDS.find((r) => r.id === raidId);
+  if (!raid) return null;
+  return (
+    <>
       <div
-        className="spread hero-card-summary"
-        onClick={() => setOpen((v) => !v)}
+        className="card raid-card"
+        onClick={() => setShowModal(true)}
         role="button"
         tabIndex={0}
-        aria-expanded={open}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
       >
-        <span className="card-title hero-card-name">{raid.name}</span>
-        <span className="tiny gold-text">Lv {raid.reqLevel}</span>
-      </div>
-      {open && (
-        <div className="hero-card-details">
-          <p className="card-flavour">{raid.description}</p>
-          {raid.title && <p className="tiny muted" style={{ margin: '0 0 8px' }}>Grants the title "{raid.title}" to the whole clearing party</p>}
-          <ol className="lore-stage-list">
-            {raid.encounterIds.map((id) => {
-              const enc = RAID_ENCOUNTER_BY_ID[id];
-              if (!enc) return null;
-              return (
-                <li key={id}>
-                  <b>{enc.name}.</b> <span className="muted">{enc.flavour}</span>
-                </li>
-              );
-            })}
-          </ol>
-          {raid.epilogue && (
-            <p
-              className="tiny lore-epilogue"
-              style={{ fontStyle: 'italic', borderLeft: '2px solid var(--brass)', paddingLeft: 8, margin: '10px 0 0' }}
-            >
-              {raid.epilogue}
-            </p>
-          )}
+        <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-card-thumb" />
+        <div className="raid-card-body">
+          <div className="raid-card-name">{raid.name}</div>
+          <div className="raid-card-meta">
+            <span className="tiny gold-text">Lv {raid.reqLevel}</span>
+          </div>
         </div>
-      )}
-      <ExpandToggle open={open} onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} />
-    </div>
+        <span className="raid-card-chevron" aria-hidden="true">›</span>
+      </div>
+      {showModal && <RaidHistoryDetailModal raidId={raidId} onClose={() => setShowModal(false)} />}
+    </>
   );
 }
 
 function RaidInProgressEntry() {
   const engine = useEngine();
   const active = engine.state.activeRaid;
-  const [open, setOpen] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   if (!active) return null;
   const raid = RAIDS.find((r) => r.id === active.raidId);
   if (!raid) return null;
 
   return (
-    <div className="card lore-card lore-in-progress">
+    <>
       <div
-        className="spread hero-card-summary"
-        onClick={() => setOpen((v) => !v)}
+        className="card raid-card"
+        onClick={() => setShowModal(true)}
         role="button"
         tabIndex={0}
-        aria-expanded={open}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowModal(true); } }}
       >
-        <span className="card-title hero-card-name">{raid.name}</span>
-        <span className="tiny muted">underway — {active.difficulty}</span>
-      </div>
-      {open && (
-        <div className="hero-card-details">
-          <p className="card-flavour">{raid.description}</p>
-          <p className="tiny muted">The rest of this one is still being written.</p>
+        <RaidBanner raidId={raid.id} banner={raid.banner} className="raid-card-thumb" />
+        <div className="raid-card-body">
+          <div className="raid-card-name">{raid.name}</div>
+          <div className="raid-card-meta">
+            <span className="tiny muted">underway — {active.difficulty}</span>
+          </div>
         </div>
-      )}
-      <ExpandToggle open={open} onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} />
-    </div>
+        <span className="raid-card-chevron" aria-hidden="true">›</span>
+      </div>
+      {showModal && <RaidHistoryDetailModal raidId={active.raidId} onClose={() => setShowModal(false)} />}
+    </>
   );
 }
 

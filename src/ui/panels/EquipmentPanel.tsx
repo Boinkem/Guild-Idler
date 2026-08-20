@@ -805,16 +805,17 @@ export function EquipmentPanel() {
   // or something broader -- a bulk sell is higher-stakes than selling one
   // item at a time, so the default shouldn't be able to surprise anyone.
   // The preview below mirrors sellBelowRarity's own filter exactly
-  // (skip crafted/enchanted items regardless of rarity) so the count and
-  // gold shown on the button are exactly what pressing it will do, not an
-  // approximation.
+  // (enchanted items always skipped; crafted items only skipped above
+  // Common, patch 0230) so the count and gold shown on the button are
+  // exactly what pressing it will do, not an approximation.
   const [junkRarity, setJunkRarity] = useState<Rarity>('common');
   const junkMaxIndex = RARITY_ORDER.indexOf(junkRarity);
   const junkPreview = state.stash.filter((item) => {
     if (item.locked) return false;
-    if (item.customMods || (item.enchantStats && Object.keys(item.enchantStats).length > 0)) return false;
+    if (item.enchantStats && Object.keys(item.enchantStats).length > 0) return false;
     const def = EQUIPMENT_BY_ID[item.defId];
     if (!def) return false;
+    if (item.customMods && def.rarity !== 'common') return false;
     return RARITY_ORDER.indexOf(def.rarity) <= junkMaxIndex;
   });
   const junkGold = junkPreview.reduce((sum, item) => sum + EquipmentManager.sellValue(item), 0);

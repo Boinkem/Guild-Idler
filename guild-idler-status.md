@@ -17553,3 +17553,204 @@ steps closed across patches 0224 (data model), 0225 (loot mechanism),
 this entry (verified no further work needed for step 5).
 
 No code changed in this patch.
+
+### Bug batch: Medium-tier reward scaling, Grimsby's Tab (animation/bust text/gold burst), Sell Junk excluding all crafted commons, and the Lore tab restyled to match the real Raid cards (patch 0230)
+```discord-update
+Dev Update | Bug Fixes
+
+- Fixed Medium-tier quest rewards staying stuck at level-1 numbers forever, even for a max-level hero
+- Fixed Grimsby's Tab: he now stays relaxed while you're playing and only reacts once the tab closes, busting shows a real message instead of silently closing the window, and settling sends a burst of gold flying to your total
+- Fixed Sell Junk skipping crafted Common gear entirely, even when it was genuinely worthless -- also fixed bulk sales not being buyback-recoverable at all
+- Changed the Lore tab's quest and raid cards to match the real Raid cards, and quest chains now show each stage's typical odds and the final reward
+```
+
+Six separate reports handled in one patch since several touch the same
+surface (Grimsby's cart, the Lore tab) or were investigated in the same
+pass. Real patch-numbering note: this patch was originally going to be
+0227, but four chain-replay patches (0226-0229) landed on `main` while
+this one was in progress -- re-pulled fresh, re-confirmed the actual
+next number, and swept every in-code comment that had already been
+written referencing 0227 to correct it to 0230 before finalizing. One
+of this session's own edits (`QuestManager.ts`'s burst/medium cap block)
+had to be reconciled against a genuine 154-line upstream diff from that
+same chain-replay work -- auto-merged clean, independently re-verified
+numerically against the merged code rather than just trusted.
+
+#### The actual root cause of "burst/medium quests pay almost nothing at high level"
+
+Investigated a real player report (screenshot: a level-15 hero's board,
+every offer paying 1-5 gold) by tracing the exact math rather than
+guessing. `fastQuestCapsPerHour`/`fastQuestFloorPerHour` (`balance.ts`)
+both compute a reward-rate estimate by calling `expectedRatePerHour`,
+which -- when no `atLevel` is passed -- silently defaults to evaluating
+the level-scaled reward curve at the DIFFICULTY TIER'S OWN static
+`referenceLevel` (Easy = 1), not the player's actual level. Neither
+function was passing `atLevel` at all. Confirmed by hand-computing both
+sides directly from the live tuning values: Easy's real floor rate is
+~4.47 gold/hr evaluated at level 1 (what it was ALWAYS using) versus
+~14.45 gold/hr at level 15 (what it should have been using) -- roughly
+3x understated, precisely matching the reported symptom.
+
+**This was not overriding a prior deliberate decision, despite a comment
+that reads that way at first glance.** `expectedRatePerHour`'s own
+doc comment says the no-`atLevel` behavior is "preserving the exact
+existing behavior for fastQuestCapsPerHour/fastQuestFloorPerHour...
+which deliberately DO want a fixed, level-independent ceiling reference."
+Read patch 0217's full writeup before touching anything specifically
+because of this: confirmed that comment describes patch 0217
+deliberately SCOPING OUT this exact question (it was fixing the
+Balance Sandbox sim's own staleness, and explicitly chose not to also
+touch cap/floor's behavior in the same patch), not a considered-and-
+affirmed design conclusion that a fixed reference was correct. This
+patch closes what 0217 left open, doesn't reverse anything 0217 argued
+for.
+
+**Fixed:** both functions now take (`fastQuestCapsPerHour` already did
+take `topLevel`, just wasn't passing it through to
+`expectedRatePerHour`; `fastQuestFloorPerHour` gained a new required
+`atLevel` parameter) and pass the player's real level through. Verified
+directly against the real exported functions (not a reimplementation)
+across levels 1/5/6/10/15/20/24/25/30/55.
+
+**A second, subtler bug found while verifying the fix, not shipped
+separately:** at the exact level a tier first becomes the player's
+best-unlocked one, the newly-level-tracking floor could very briefly
+exceed the cap -- confirmed by direct calculation: level 5, Normal just
+unlocked, Normal's `BURST_CAP_FRACTION`-discounted cap (6.14g/hr) sits
+BELOW Easy's own undiscounted floor rate (6.72g/hr) at that exact
+level. Without an explicit clamp, the floor's own `Math.max` would have
+pushed the reward ABOVE the cap it's supposed to sit under -- exactly
+the "out-earn the real best-unlocked tier" outcome the floor's entire
+design exists to prevent. Fixed by explicitly clamping the floor to
+never exceed the cap ceiling in `QuestManager.generateOffer`. Re-verified
+the invariant (`cap >= floor` at every duration) holds cleanly at every
+tested level after this clamp, where it hadn't before it at level 5.
+
+**Flagged, not independently re-verified:** the floor's own "can never
+let Easy out-earn the real best-unlocked tier" invariant was originally
+checked by direct simulation under the OLD (referenceLevel-anchored)
+version. This patch's fix should, if anything, make that comparison
+safer (both sides now evaluated at the same real level instead of two
+different static reference points) -- reasoned through, not re-run
+through `npm run sim`. Worth an actual sim pass before fully trusting
+it the same way the original claim was trusted.
+
+#### Grimsby's Tab
+
+Four related reports, all in `PeddlerTabModal.tsx`:
+
+- **Animation.** Previously switched pose by round count (`idle` →
+  `idle2` → `dialogue`) WHILE a tab was still being played -- read as
+  him reacting to progress itself. Now stays on `idle` for the entire
+  time a tab is open, and only plays `idle2` (crossed arms) once, frozen
+  on its last frame via the existing `once` prop, the moment the tab
+  actually closes -- bust OR settle, both trigger it, per direct
+  request. Bust is detected via a `useEffect` on the transient run
+  result rather than the button click, so it stays correct even if the
+  close didn't originate from a click in this exact mount.
+- **Bust showing nothing.** Real bug, not a design gap: the result
+  message was nested inside `{tab && (...)}`, and a bust sets
+  `state.peddlerTab` to `null` the same render it needs to show a
+  message -- so the message vanished the instant it needed to appear,
+  dropping straight back to the tier-select screen. Fixed by moving the
+  result message above that conditional so it survives the tab closing,
+  exactly mirroring how the Held message already worked while a tab
+  stayed open.
+- **Settle gold burst.** Wired through the exact same mechanism
+  `PeddlerCardModal`'s own reward flights already use
+  (`flyTarget.ts`'s `measureFlyOffset`, targeting `'gold'`) rather than
+  building a parallel system. Extracted `RewardGlowParticle` out of
+  `PeddlerCardModal.tsx` into its own `RewardGlowParticle.tsx` first so
+  both modals share one component instead of a second copy -- same
+  "reused formula, not re-derived" discipline this project already
+  holds itself to elsewhere. Particle count scales with how far the tab
+  was pushed before settling (2/3/5), same "more flourish for a bigger
+  pull" reasoning Cards' own burst count already uses, keyed off the
+  same round-5 jackpot threshold the stats/achievement side already
+  established.
+- **Flavour text.** `PeddlerPanel`'s subtitle only described Cards
+  ("Pay for a card, pick one..."). Broadened to mention all three games
+  now that Dice and the Tab both exist.
+
+#### Sell Junk excluding all crafted Common gear
+
+Confirmed the root cause directly against the reported stash screenshot:
+`sellBelowRarity`'s filter excluded ANY item with `customMods` set
+(i.e. anything crafted), at any rarity, unconditionally -- every item in
+the screenshot was Common AND crafted, so "Sell Junk (0)" was working
+exactly as coded, not broken. Direct decision: crafted items are now
+only excluded from the bulk sweep ABOVE Common -- a crafted Common base
+carries minimal effort/materials invested compared to a crafted Rare+,
+so the original blanket exclusion was protecting something with barely
+any value to protect at that tier while silently making "Common and
+below" mean "nothing, if it happens to be crafted" for anyone crafting
+their own starter gear. Enchanted items (`enchantStats` set) are still
+excluded at every rarity, unconditionally -- unrelated concern, an
+Enchanter investment a Common item wouldn't typically even carry.
+
+**Found and fixed a second gap while implementing this, not shipped
+separately:** `sellBelowRarity` never recorded a buyback entry for
+anything it sold -- only single-item `sell()` did. Confirmed directly
+by reading both functions side by side. This mattered specifically
+because the justification for relaxing the crafted-Common exclusion was
+"they can buy back anyway" -- which was false for the bulk-sell path
+until this patch. Now records a buyback entry for every item a bulk
+sale sells, newest first, trimmed to `shop.buybackMaxEntries` once at
+the end rather than per-item. `EquipmentPanel.tsx`'s `junkPreview`
+(the count/gold shown on the button before pressing it) updated to
+mirror the exact same filter, so the preview never drifts from what
+pressing the button actually does.
+
+Verified directly against the real functions, not just read through:
+constructed a stash with a crafted Common, an ordinary Common, and a
+crafted Rare, ran `sellBelowRarity(state, 'common')` -- confirmed the
+crafted Rare stayed protected, both Commons sold, and both landed in
+the buyback list afterward.
+
+#### Lore tab restyled to match the real Raid cards
+
+Direct request, with one design fork resolved via a quick check-in
+(static per-stage difficulty-based success estimate, not a live
+party-preview picker -- confirmed as the right scope before building
+either). `StoryQuestsTab`'s chain cards and `StoryRaidsTab`'s raid
+history cards previously used a shared `.lore-card` inline-expand
+shell, visually distinct from the REAL Raid cards
+(`RaidsPanel.tsx`'s `RaidCard`, which use `.raid-card`/
+`.raid-card-thumb`/`.raid-card-chevron` and open a detail modal on
+click). Both converted to that same shell and click-opens-a-modal
+pattern -- `ChainCard`/`ChainDetailModal` for quests,
+`RaidCompletedEntry`/`RaidInProgressEntry`/`RaidHistoryDetailModal` for
+raids -- reusing the exact same CSS classes (`.raid-detail-modal`,
+`.raid-encounter-list`, `.raid-encounter-item`) rather than a parallel
+lore-specific set. `ChainBanner` and (newly exported) `RaidBanner`
+both gained the same `className`-driven sizing convention so one
+component now serves the collapsed-row thumbnail and the modal's
+bigger banner, matching how `RaidBanner` already worked before this
+patch touched `ChainBanner` to match it.
+
+**Story Quests' new per-stage detail**, mimicking `RaidDetailModal`'s
+own encounter list: each stage shows a static success estimate (reads
+`DIFFICULTIES[stage.difficulty].baseSuccess` directly -- an honest
+"typical odds at this difficulty" figure, deliberately NOT a live
+per-hero preview, since chain stages are sent individually with
+whatever hero the player picks and the Lore tab has no party-selection
+flow to compute a real one against, unlike raids which commit a full
+party upfront). Loot only shows on the FINAL stage -- chains only
+define a guaranteed reward at chain-completion (`ChainDef.rewardItems`),
+not per-stage the way raid encounters each carry their own loot table,
+so there was nothing earlier stages could show even if this wanted to.
+An in-progress chain still only reveals stages already reached, same
+spoiler-avoidance the old inline view already had ("the story isn't
+finished yet..." placeholder for the rest) -- not relaxed by this
+patch.
+
+Removed `ExpandToggle` and the `chainCardStyle` tier-glow helper --
+both fully unused once every card in this tab moved to the click-opens-
+modal pattern; confirmed via a repo-wide grep that nothing else
+referenced either before removing them.
+
+**Verified with a real build at every stage of this patch, not just at
+the end** -- `npx tsc --noEmit` and `npx vite build` both run clean
+after: the reward-scaling fix alone, the Tab UI fixes alone, the Sell
+Junk fix alone, the Lore restyle alone, and once more after reconciling
+against the upstream chain-replay merge.

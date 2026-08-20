@@ -109,13 +109,24 @@ const BURST_CAP_FRACTION = Tuning.get('balance.burstCapFraction');
  * (an explicit, generous-feeling reward range reads better than a
  * proportional slice of the full range), so both need the same protection
  * against becoming the dominant strategy once out-leveled.
+ *
+ * Passes topLevel through to expectedRatePerHour explicitly (patch 0230) --
+ * previously didn't, which meant this silently fell back to the best-
+ * unlocked tier's own static referenceLevel forever, not the player's
+ * actual current level. Harmless right at the moment a tier is first
+ * unlocked (level ≈ that tier's referenceLevel by definition), but for
+ * anyone who keeps leveling within the same best-unlocked-tier bracket --
+ * which is most play, tiers aren't unlocked every level -- the cap stayed
+ * pinned to that stale reference point instead of climbing with them,
+ * quietly throttling the cap further below what it was actually meant to
+ * represent the longer someone stayed in a bracket.
  */
 export function fastQuestCapsPerHour(topLevel: number, legendaryUnlocked: boolean): { gold: number; xp: number } {
   if (topLevel < MIN_LEVEL_FOR_CAP) return { gold: Infinity, xp: Infinity };
   const tier = DIFFICULTIES[bestUnlockedTier(topLevel, legendaryUnlocked)];
   return {
-    gold: BURST_CAP_FRACTION * expectedRatePerHour(tier, 'gold'),
-    xp: BURST_CAP_FRACTION * expectedRatePerHour(tier, 'xp'),
+    gold: BURST_CAP_FRACTION * expectedRatePerHour(tier, 'gold', topLevel),
+    xp: BURST_CAP_FRACTION * expectedRatePerHour(tier, 'xp', topLevel),
   };
 }
 
@@ -127,22 +138,42 @@ export function fastQuestCapsPerHour(topLevel: number, legendaryUnlocked: boolea
  * every tier's own rate is, by construction, no higher than any harder
  * tier's rate (DIFFICULTIES only gets more generous per hour going up),
  * so flooring an Easy offer at Easy's own rate can never let it out-earn
- * whatever the player's actual best-unlocked tier currently pays. This
- * was checked by direct simulation, not assumed: at every tested level
- * and every tested duration, `tierOwnRate(easy) <= expectedRatePerHour of
- * the real best-unlocked tier`, with equality only when Easy IS the best
- * tier (i.e. before level 5, when the cap doesn't even apply yet).
+ * whatever the player's actual best-unlocked tier currently pays.
+ *
+ * Now takes atLevel explicitly (patch 0230) -- previously omitted it
+ * entirely, which meant expectedRatePerHour silently defaulted to Easy's
+ * own static referenceLevel (1) FOREVER, regardless of the player's real
+ * level. This is what actually produced the reported "1-5 gold Medium
+ * quests at level 15" complaint: at level 15, Easy's real per-hour rate is
+ * roughly 3x what it is at level 1 (confirmed by hand-computing both from
+ * the live tuning values -- ~4.5 gold/hr at level 1 vs ~14.5 gold/hr at
+ * level 15), so the floor was quietly capping itself at a fraction of what
+ * it was supposed to guarantee, for every level above 1. Callers now pass
+ * the player's real topLevel, same as fastQuestCapsPerHour's own tier rate
+ * already did (independently) get right.
+ *
+ * The "never lets Easy out-earn the real best-unlocked tier" invariant
+ * this file's own history checked by simulation was verified against the
+ * OLD (referenceLevel-anchored) version of this function -- evaluating
+ * both sides of that comparison at the SAME real level rather than two
+ * different fixed reference points, as this fix now does, should if
+ * anything make the comparison more apples-to-apples, not less safe (Easy
+ * keeps the lowest rewardMultiplier of any tier at every level, per
+ * DIFFICULTIES itself). Flagged rather than re-asserted as proven: this
+ * specific invariant deserves a fresh run through `npm run sim` before
+ * being trusted the same way the original claim was.
  *
  * This does NOT fully close the residual overshoot at the very shortest
  * durations (see QuestManager.generateOffer's own comment on why a
  * positive-integer floor divided by an arbitrarily short duration can
  * never be made airtight) -- it meaningfully shrinks it. That's a
- * confirmed, accepted tradeoff, not an oversight.
+ * confirmed, accepted tradeoff, not an oversight, and unrelated to the
+ * level-anchoring fix above.
  */
-export function fastQuestFloorPerHour(cfg: DifficultyConfig): { gold: number; xp: number } {
+export function fastQuestFloorPerHour(cfg: DifficultyConfig, atLevel: number): { gold: number; xp: number } {
   return {
-    gold: expectedRatePerHour(cfg, 'gold'),
-    xp: expectedRatePerHour(cfg, 'xp'),
+    gold: expectedRatePerHour(cfg, 'gold', atLevel),
+    xp: expectedRatePerHour(cfg, 'xp', atLevel),
   };
 }
 

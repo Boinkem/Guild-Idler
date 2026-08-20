@@ -54,8 +54,9 @@ export function PeddlerPanel() {
     <>
       <h2>Grimsby</h2>
       <p className="subtitle">
-        A cart, a cart, and absolutely nothing more, according to him. Pay for a card, pick one, see what
-        happens -- he swears the odds are fair. He would say that either way.
+        A cart, a cart, and absolutely nothing more, according to him. A card, a die, or -- once he's
+        settled in -- a running tab: pay your way in, see what happens. He swears the odds are fair.
+        He would say that either way.
       </p>
 
       <div className="card vendor-card" style={{ marginBottom: 12 }}>

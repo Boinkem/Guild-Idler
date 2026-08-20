@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEngine } from './useEngine';
 import { PeddlerCardDef, PeddlerCardTier } from '../game/types';
 import { PeddlerManager } from '../game/managers/PeddlerManager';
@@ -10,6 +10,7 @@ import { GrimsbySprite } from './sprites/GrimsbySprite';
 import { ItemIcon, MaterialIcon, ConsumableIcon, CurioIcon } from './icons';
 import { EggIcon } from './EggIcon';
 import { measureFlyOffset } from './flyTarget';
+import { RewardGlowParticle } from './RewardGlowParticle';
 
 /**
  * Random one-liners Grimsby fires off the moment the cards spawn --
@@ -104,36 +105,6 @@ function burstColorFor(outcome: PeddlerCardDef): string {
   }
 }
 
-/**
- * One flying reward particle -- a colored circular glow (always
- * present) with an optional icon centered inside it. Deliberately built
- * so the glow works standalone (today: gold/material/scrap/egg all have
- * no per-outcome icon set yet) AND continues working once real icons
- * are assigned via the DevTool later -- `outcome.icon` is the exact
- * same field PeddlerOutcomeIcon already reads for the revealed card
- * face, so assigning one there lights up both places at once, not just
- * this burst. No icon set -> just the glow circle, never a broken-image
- * placeholder.
- */
-function RewardGlowParticle({
-  color, icon, x, y, dx, dy, delay, durationMs,
-}: {
-  color: string; icon?: string; x: number; y: number; dx: number; dy: number; delay: number; durationMs: number;
-}) {
-  return (
-    <span
-      className="fly-particle reward-glow-particle"
-      aria-hidden="true"
-      style={{
-        position: 'fixed', left: x, top: y,
-        '--fly-dx': `${dx}px`, '--fly-dy': `${dy}px`, '--glow-color': color,
-        animationDuration: `${durationMs}ms`, animationDelay: `${delay}ms`,
-      } as CSSProperties}
-    >
-      {icon && <img src={`./item-icons/${icon}`} alt="" />}
-    </span>
-  );
-}
 
 function outcomeDisplayName(outcome: PeddlerCardDef): string {
   switch (outcome.kind) {

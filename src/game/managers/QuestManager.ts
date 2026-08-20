@@ -438,8 +438,10 @@ export const QuestManager = {
       const rawXp = rewardXp;
       const durationHours = duration / HOUR;
       const caps = fastQuestCapsPerHour(topLevel, legendaryUnlocked);
-      rewardGold = Math.min(rawGold, Math.max(1, Math.round(caps.gold * durationHours)));
-      rewardXp = Math.min(rawXp, Math.floor(caps.xp * durationHours));
+      const capCeilingGold = Math.max(1, Math.round(caps.gold * durationHours));
+      const capCeilingXp = Math.floor(caps.xp * durationHours);
+      rewardGold = Math.min(rawGold, capCeilingGold);
+      rewardXp = Math.min(rawXp, capCeilingXp);
 
       // The cap above can legitimately crush a very short duration down to
       // the bare "1" minimum -- mathematically necessary for the cap to
@@ -452,9 +454,24 @@ export const QuestManager = {
       // best-unlocked tier, even though it visibly improves the worst
       // case. Clamped to never exceed the raw pre-cap roll -- a floor,
       // not a second, looser cap.
-      const floor = fastQuestFloorPerHour(cfg);
-      const floorGold = Math.max(1, Math.round(floor.gold * durationHours));
-      const floorXp = Math.max(1, Math.round(floor.xp * durationHours));
+      //
+      // ALSO explicitly clamped to capCeilingGold/capCeilingXp (patch
+      // 0230) -- with the floor now tracking the player's real level
+      // (see fastQuestFloorPerHour's own comment on why it didn't before),
+      // right at the exact level a tier first becomes the best-unlocked
+      // one, BURST_CAP_FRACTION's own ~82.5% discount on that tier's rate
+      // can briefly land BELOW Easy's own full, undiscounted rate --
+      // confirmed by direct calculation, not theoretical: level 5, Normal
+      // just unlocked, Normal's discounted cap (6.14g/hr) actually sits
+      // below Easy's own floor rate (6.72g/hr) at that same level. Without
+      // this clamp, the floor would win that Math.max below and push the
+      // reward ABOVE the cap it's supposed to sit under -- exactly the
+      // "out-earn the real best-unlocked tier" outcome the floor's whole
+      // design is built to prevent. This makes the floor a true floor
+      // UNDER the cap, not just under the raw pre-cap roll.
+      const floor = fastQuestFloorPerHour(cfg, topLevel);
+      const floorGold = Math.min(capCeilingGold, Math.max(1, Math.round(floor.gold * durationHours)));
+      const floorXp = Math.min(capCeilingXp, Math.max(1, Math.round(floor.xp * durationHours)));
       rewardGold = Math.max(rewardGold, Math.min(rawGold, floorGold));
       rewardXp = Math.max(rewardXp, Math.min(rawXp, floorXp));
     }
