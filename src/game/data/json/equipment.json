@@ -2415,5 +2415,87 @@
     "raidExclusive": false,
     "craftable": true,
     "setId": "masterwork"
+  },
+  {
+    "id": "quartermasters_token",
+    "name": "Quartermaster's Token",
+    "slot": "ring",
+    "rarity": "uncommon",
+    "reqLevel": 1,
+    "maxDurability": 50,
+    "value": 55,
+    "mods": {
+      "gold": 3,
+      "loot": 2
+    },
+    "stats": {
+      "luck": 1
+    },
+    "icon": "accessories/Accessory_03.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": true
+  },
+  {
+    "id": "keepers_last_feather",
+    "name": "Keeper's Last Feather",
+    "slot": "amulet",
+    "rarity": "uncommon",
+    "reqLevel": 5,
+    "maxDurability": 80,
+    "value": 150,
+    "mods": {
+      "injuryResist": 7,
+      "success": 4
+    },
+    "stats": {
+      "wisdom": 2
+    },
+    "icon": "accessories/Accessory_04.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": true
+  },
+  {
+    "id": "grimsbys_loaded_coin",
+    "name": "Grimsby's Loaded Coin",
+    "slot": "ring",
+    "rarity": "uncommon",
+    "reqLevel": 5,
+    "maxDurability": 80,
+    "value": 165,
+    "mods": {
+      "gold": 6,
+      "loot": 4
+    },
+    "stats": {
+      "luck": 3
+    },
+    "icon": "accessories/Accessory_16.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": true
+  },
+  {
+    "id": "last_pilgrims_waystone",
+    "name": "The Last Pilgrim's Waystone",
+    "slot": "amulet",
+    "rarity": "legendary",
+    "reqLevel": 44,
+    "maxDurability": 275,
+    "value": 16800,
+    "mods": {
+      "success": 20,
+      "loot": 12,
+      "xp": 22
+    },
+    "stats": {
+      "wisdom": 14,
+      "luck": 5
+    },
+    "icon": "accessories/Accessory_24.png",
+    "raidExclusive": false,
+    "craftable": false,
+    "chainExclusive": true
   }
 ]

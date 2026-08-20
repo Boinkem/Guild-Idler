@@ -6,7 +6,7 @@
     "reqLevel": 2,
     "rewardGold": 150,
     "rewardItems": [
-      "cellar_dwellers_tooth@5"
+      "cellar_dwellers_tooth"
     ],
     "rewardRenown": 1,
     "title": "First Real Job",
@@ -82,6 +82,9 @@
         "durationMinutes": 120,
         "goldMultiplier": 1.4
       }
+    ],
+    "rewardItems": [
+      "keepers_last_feather"
     ]
   },
   {
@@ -91,7 +94,7 @@
     "reqLevel": 8,
     "rewardGold": 900,
     "rewardItems": [
-      "crow_feather_charm@5"
+      "crow_feather_charm"
     ],
     "rewardRenown": 1,
     "title": "Crow-Friend",
@@ -147,7 +150,7 @@
     "reqLevel": 11,
     "rewardGold": 1300,
     "rewardItems": [
-      "ashwoven_charm@5"
+      "ashwoven_charm"
     ],
     "rewardRenown": 1,
     "title": "Ash-Reader",
@@ -186,7 +189,7 @@
     "reqLevel": 15,
     "rewardGold": 2100,
     "rewardItems": [
-      "seized_glaive@5"
+      "seized_glaive"
     ],
     "rewardRenown": 2,
     "title": "Tally-Breaker",
@@ -227,7 +230,7 @@
     "reqLevel": 19,
     "rewardGold": 2800,
     "rewardItems": [
-      "gravewatchers_band@5"
+      "gravewatchers_band"
     ],
     "rewardRenown": 2,
     "title": "Grave-Watcher",
@@ -274,7 +277,7 @@
     "reqLevel": 16,
     "rewardGold": 3800,
     "rewardItems": [
-      "wardens_signet@5"
+      "wardens_signet"
     ],
     "rewardRenown": 3,
     "title": "Lord of the Keep",
@@ -329,7 +332,7 @@
     "reqLevel": 20,
     "rewardGold": 2400,
     "rewardItems": [
-      "bulwark_cuirass@5"
+      "bulwark_cuirass"
     ],
     "rewardRenown": 2,
     "title": "Garrick's End",
@@ -368,7 +371,7 @@
     "reqLevel": 24,
     "rewardGold": 3200,
     "rewardItems": [
-      "gravekeepers_gloves@5"
+      "gravekeepers_gloves"
     ],
     "rewardRenown": 2,
     "title": "Farmwarden",
@@ -406,8 +409,8 @@
     "reqLevel": 32,
     "rewardGold": 12000,
     "rewardItems": [
-      "sword_of_the_ashen_hand@5",
-      "bulwark_of_the_war_saint@5"
+      "sword_of_the_ashen_hand",
+      "bulwark_of_the_war_saint"
     ],
     "rewardRenown": 5,
     "title": "Ashen-Sworn",
@@ -463,8 +466,8 @@
     "reqLevel": 18,
     "rewardGold": 4000,
     "rewardItems": [
-      "dragon_helm@5",
-      "dragon_blade@5"
+      "dragon_helm",
+      "dragon_blade"
     ],
     "rewardRenown": 2,
     "title": "Dragonbane",
@@ -520,7 +523,7 @@
     "reqLevel": 14,
     "rewardGold": 2600,
     "rewardItems": [
-      "crown_of_the_lost@5"
+      "crown_of_the_lost"
     ],
     "rewardRenown": 1,
     "title": "Kingdom-Finder",
@@ -568,8 +571,8 @@
     "reqLevel": 22,
     "rewardGold": 6500,
     "rewardItems": [
-      "dragon_armor@5",
-      "amulet_of_fortune@5"
+      "dragon_armor",
+      "amulet_of_fortune"
     ],
     "rewardRenown": 3,
     "title": "Hellgate Breaker",
@@ -623,7 +626,7 @@
     "reqLevel": 10,
     "rewardGold": 1800,
     "rewardItems": [
-      "lucky_ring@5"
+      "lucky_ring"
     ],
     "rewardRenown": 1,
     "title": "Crownbearer",
@@ -671,7 +674,7 @@
     "reqLevel": 6,
     "rewardGold": 550,
     "rewardItems": [
-      "warband_cleaver@5"
+      "warband_cleaver"
     ],
     "rewardRenown": 1,
     "title": "Warband-Breaker",
@@ -711,7 +714,7 @@
     "reqLevel": 7,
     "rewardGold": 600,
     "rewardItems": [
-      "tollkeepers_signet@5"
+      "tollkeepers_signet"
     ],
     "rewardRenown": 1,
     "title": "Ridge-Watcher",
@@ -760,8 +763,8 @@
     "reqLevel": 26,
     "rewardGold": 5200,
     "rewardItems": [
-      "choir_mask@5",
-      "silenced_bell@5"
+      "choir_mask",
+      "silenced_bell"
     ],
     "rewardRenown": 2,
     "title": "Choir-Silencer",
@@ -808,10 +811,10 @@
     "reqLevel": 34,
     "rewardGold": 22000,
     "rewardItems": [
-      "voidforged_blade@5",
-      "voidforged_crown@5",
-      "voidforged_plate@5",
-      "voidforged_signet@5"
+      "voidforged_blade",
+      "voidforged_crown",
+      "voidforged_plate",
+      "voidforged_signet"
     ],
     "rewardRenown": 6,
     "title": "World's End",
@@ -872,7 +875,9 @@
     "description": "Travelers along an old, unofficial road have gone missing near a waystone shrine and returned changed. They were not robbed or killed. They were claimed, made to kneel through unknown rites they never agreed to before being released. Every map marks the shrine as abandoned, and has for longer than anyone can say. Whatever is using it now is not abandoned at all.",
     "reqLevel": 44,
     "rewardGold": 30000,
-    "rewardItems": [],
+    "rewardItems": [
+      "last_pilgrims_waystone"
+    ],
     "rewardRenown": 8,
     "title": "Pilgrim's Herald",
     "epilogue": "There is a name for what the guild found beneath that archive, and it is not a monster's name. It once mattered enormously to people who no longer exist to say so. It is still down there, waiting for a pilgrimage that stopped coming centuries before anyone alive could feel guilty about it.",
@@ -918,9 +923,9 @@
     "reqLevel": 45,
     "rewardGold": 42000,
     "rewardItems": [
-      "empyrean_blade@5",
-      "empyrean_halo@5",
-      "empyrean_aegis@5"
+      "empyrean_blade",
+      "empyrean_halo",
+      "empyrean_aegis"
     ],
     "rewardRenown": 10,
     "title": "Kingslayer Twice Over",
@@ -1009,6 +1014,9 @@
         "durationMinutes": 120,
         "goldMultiplier": 1.6
       }
+    ],
+    "rewardItems": [
+      "grimsbys_loaded_coin"
     ]
   },
   {
@@ -1018,7 +1026,7 @@
     "reqLevel": 4,
     "rewardGold": 450,
     "rewardItems": [
-      "tollbreakers_gloves@5"
+      "tollbreakers_gloves"
     ],
     "rewardRenown": 1,
     "title": "Roadwarden",
@@ -1066,7 +1074,7 @@
     "reqLevel": 12,
     "rewardGold": 2100,
     "rewardItems": [
-      "ridgebreakers_pauldron@5"
+      "ridgebreakers_pauldron"
     ],
     "rewardRenown": 1,
     "title": "Ridgebreaker",
@@ -1114,7 +1122,7 @@
     "reqLevel": 17,
     "rewardGold": 3400,
     "rewardItems": [
-      "moonsilver_fang@5"
+      "moonsilver_fang"
     ],
     "rewardRenown": 2,
     "title": "Moonhunter",
@@ -1302,7 +1310,9 @@
     "description": "A grizzled old quartermaster corners the guild before their first real job is even finished. He insists that buying every scrap of ore and timber from the shop is money any guild worth the name should be keeping for itself, if someone is willing to clear the bramble off the old gathering grounds first.",
     "reqLevel": 1,
     "rewardGold": 120,
-    "rewardItems": [],
+    "rewardItems": [
+      "quartermasters_token"
+    ],
     "rewardRenown": 1,
     "title": "Provisioner",
     "epilogue": "The quartermaster has shown the guild everything they know about coaxing ore, timber, herbs, and fish out of the land around Ironrest. The rest is just standing at a node and paying attention. The supply room already looks less bare, and the shop counter is bleeding a lot less gold.",
