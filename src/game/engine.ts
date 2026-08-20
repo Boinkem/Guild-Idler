@@ -1,4 +1,4 @@
-import { ActiveQuest, AutoChainTactics, DiceFace, DiceRollResult, ElementType, GameState, GuildHallSlotId, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
+import { ActiveQuest, AutoChainTactics, DiceFace, DiceRollResult, ElementType, GameState, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -2569,6 +2569,31 @@ export class GameEngine {
     const equipError = GuildHallDecorManager.equip(this.state, slotId, decorationId);
     if (equipError) return this.say(equipError);
     playSound('purchase');
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Moves and/or resizes a slot for the active theme (patch 0212) --
+   *  the Customize scene's own "Rearrange" mode calls this once per
+   *  completed drag or resize gesture (on pointer-up), not on every
+   *  intermediate pointer-move -- the drag itself renders from local
+   *  component state for a smooth in-progress feel, and only commits
+   *  here once the gesture ends, same "one user action, one save" shape
+   *  every other engine method in this section already follows. No sound
+   *  -- a drag/resize is a continuous, silent adjustment, not a discrete
+   *  purchase/equip moment. */
+  setGuildHallSlotRect(slotId: GuildHallSlotId, rect: GuildHallSlotRect) {
+    const clamped = GuildHallDecorManager.setSlotRect(this.state, slotId, rect);
+    if (!clamped) return;
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Clears every player-moved/resized slot for the active theme, back to
+   *  the DevTool-authored default layout -- the Customize scene's own
+   *  "Reset Layout" button. Placed decorations are untouched. */
+  resetGuildHallLayout() {
+    GuildHallDecorManager.resetLayout(this.state);
     this.notify();
     void this.saveNow();
   }

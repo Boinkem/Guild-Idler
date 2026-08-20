@@ -1555,6 +1555,29 @@ export interface GameState {
    */
   activeGuildHallTheme?: string;
   /**
+   * A player's own drag/resize override of a slot's default position and
+   * size, per background theme -- guildhall-themes.json id ->
+   * (GuildHallSlotId -> the slot's own moved/resized rect). Same nesting
+   * shape as `equippedGuildHallDecorations` just above and the same
+   * reasoning: switching themes should never lose a player's layout
+   * tweaks, so each theme remembers its own overrides independently, and
+   * a slot with no entry here simply renders at its DevTool-authored
+   * default (see `GuildHallSlotDef`) -- this field only ever holds the
+   * slots a player has actually touched, not a full copy of every slot's
+   * geometry. Always resolve a slot's actual on-screen rect through
+   * `GuildHallDecorManager.slot`/`.slots` (which merge this override over
+   * the theme default), never by reading `GuildHallSlotDef`'s own
+   * top/left/width/height directly once this field might be set.
+   * Optional/undefined for any save from before this system existed, and
+   * for any save that has simply never moved anything -- default to `{}`
+   * wherever read, no migration needed, same convention every other
+   * Guild Hall Decorations field on this type already follows. An id here
+   * that no longer resolves to a real slot for the active theme (the
+   * DevTool hid or removed it since) is skipped, not an error, same
+   * degrade-gracefully convention as everywhere else in this feature.
+   */
+  customGuildHallSlotLayout?: Partial<Record<string, Partial<Record<GuildHallSlotId, GuildHallSlotRect>>>>;
+  /**
    * Which hero the desktop companion shows. Updates automatically whenever a
    * hero is sent on a quest (so departures are always visible), and can be
    * changed manually by cycling on the widget or picking in the Heroes panel.
@@ -2338,6 +2361,22 @@ export type GuildHallSlotId =
   | 'center-0-0' | 'center-0-1' | 'center-1-0' | 'center-1-1' | 'center-2-0' | 'center-2-1';
 
 /**
+ * A slot's own position + size, in % of the Guild Hall background art's
+ * bounding box -- pulled out as its own shape (patch 0212) so it can be
+ * reused both by `GuildHallSlotDef` (the DevTool-authored, per-theme
+ * default) and by `GameState.customGuildHallSlotLayout` (a player's own
+ * per-save override of that default -- see that field's own doc comment
+ * for why moving/resizing a slot is a save-level override rather than a
+ * new DevTool-owned geometry source).
+ */
+export interface GuildHallSlotRect {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
+/**
  * Geometry + pool for one physical slot, in % of the Guild Hall
  * background art's own bounding box -- exactly the coordinates locked in
  * during the mockup pass (guild-idler-status.md's "Final locked slot
@@ -2345,16 +2384,16 @@ export type GuildHallSlotId =
  * rather than re-derived. `slotType` is which `GuildHallDecorationDef`s
  * are eligible for this slot (matched against the def's own `slotType`);
  * `label` is the short mockup-era name (e.g. "L2a"), useful for
- * debugging/DevTool display, not shown to the player.
+ * debugging/DevTool display, not shown to the player. This is the
+ * *default* geometry a theme ships with -- a player can drag/resize a
+ * slot away from it (patch 0212), which is layered on top per-save
+ * rather than changing this DevTool-owned default; see
+ * `GameState.customGuildHallSlotLayout`.
  */
-export interface GuildHallSlotDef {
+export interface GuildHallSlotDef extends GuildHallSlotRect {
   id: GuildHallSlotId;
   label: string;
   slotType: GuildHallSlotType;
-  top: number;
-  left: number;
-  width: number;
-  height: number;
 }
 
 /**

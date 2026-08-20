@@ -2883,6 +2883,65 @@ button.harvest-item:hover {
   overflow: hidden;
 }
 
+/*
+ * "Rearrange" mode (patch 0212) -- same visual language as the DevTool's
+ * own always-visible slot layout editor (.gh-layout-slot etc.,
+ * tools/devtool/public/style.css), just layered on top of .craft-slot's
+ * existing invisible-until-filled base rather than replacing it: outside
+ * Rearrange mode a .guildhall-slot is exactly the same transparent hit
+ * target every other .craft-slot already is (the artwork is the UI);
+ * only while .rearranging is a dashed brass outline shown on all 30
+ * boxes at once, the same "these are the things you can grab" affordance
+ * the admin tool's always-visible boxes give for free.
+ */
+.craft-slot.guildhall-slot.rearranging {
+  cursor: grab;
+  touch-action: none;
+  border: 2px dashed var(--brass-dim);
+  border-radius: 4px;
+  background: rgba(224, 169, 74, 0.05);
+}
+/* Both the hover bump and the drag/resize-state bump raise the SLOT
+   itself, not just its resize handle -- z-index only orders siblings
+   within the same stacking context, and the handle is a child of the
+   slot, not a sibling of other slots, so giving the handle its own
+   z-index alone can't lift it above a neighboring slot that happens to
+   overlap it. On a tightly-packed shelf (several of the 30 slots sit a
+   few px apart), a slot dragged near a neighbor would otherwise let that
+   later-in-DOM-order neighbor win the hit-test over this slot's own
+   protruding handle -- confirmed via Playwright before this rule was
+   added: grabbing the handle silently landed on the neighboring slot
+   instead. `:hover` alone covers "about to start a drag/resize" (the
+   pointer is physically over the slot or its handle, since :hover
+   propagates to ancestors); the state classes cover "mid-gesture, the
+   pointer raced ahead of the box's own re-rendered position" for a fast
+   drag, where geometry briefly lags behind and :hover would otherwise
+   drop for a frame. */
+.craft-slot.guildhall-slot.rearranging:hover { border-color: var(--brass); background: rgba(224, 169, 74, 0.1); z-index: 10; }
+.craft-slot.guildhall-slot.gh-dragging { cursor: grabbing; border-color: var(--brass); background: rgba(224, 169, 74, 0.18); z-index: 10; }
+.craft-slot.guildhall-slot.gh-resizing { border-color: var(--brass); z-index: 10; }
+
+/* Bottom-right resize handle -- positions against .craft-slot's own
+   `position: absolute` box (any absolutely-positioned element is already
+   a valid containing block for its own absolutely-positioned children,
+   so no extra `position: relative` is needed on the slot itself). Same
+   size/placement as the DevTool's own .gh-layout-resize-handle. */
+.gh-layout-resize-handle {
+  position: absolute; right: -5px; bottom: -5px; width: 12px; height: 12px;
+  background: var(--brass); border: 1px solid var(--edge); border-radius: 3px;
+  cursor: nwse-resize; z-index: 6; touch-action: none;
+}
+
+/* Live coordinate readout, shown only on whichever slot is actively
+   being dragged or resized -- same copy shape as the DevTool's own
+   .gh-layout-readout. */
+.gh-layout-readout {
+  position: absolute; left: 2px; bottom: 1px;
+  font-size: 8px; color: var(--parchment);
+  background: rgba(0, 0, 0, 0.7); padding: 0 3px;
+  pointer-events: none; z-index: 2;
+}
+
 /* An empty Nest slot -- same .card base as a filled one, but a real
    <button> (click anywhere to open EggSelectModal) with a dashed edge and
    dimmer text so it reads as "nothing here yet" rather than content. */

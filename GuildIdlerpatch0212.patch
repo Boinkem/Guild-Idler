@@ -1,0 +1,717 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 6ba9c83..52cbbd2 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -15189,3 +15189,145 @@ cost line, no thrown errors, `#root` fully intact. Temporary fixture
+ decoration and the verification scripts were both removed afterward --
+ ships with the same single real "books" entry in
+ `guild-hall-decorations.json` as before this patch.
++
++### Guild Hall: players can drag/resize their own slots, plus a "Reset Layout" (patch 0212)
++
++```discord-update
++Dev Update | Guild Hall Rearranging
++
++- Added a "Rearrange" mode to the Guild Hall's Customize screen -- drag any frame to move it, drag its handle to resize it
++- Added a "Reset Layout" button to snap everything back to the hall's own default arrangement
++- What a decoration can go in a slot is unchanged -- only where that slot sits and how big it is is now yours to adjust
++```
++
++Direct follow-up to "how difficult would it be to let players move the
++boxes around/resize them within their own customisation" -- the answer
++turned out to be "most of the hard part already exists": the DevTool's
++own "Guild Hall Slot Layout" tool (patches 0205/0206) already has a
++fully working drag-to-move/drag-to-resize interaction
++(`wireSlotLayoutDrag`/`wireSlotLayoutResize`, app.js) for admins
++repositioning a slot for every player at once. This patch ports that
++same math into the in-game Customize scene as a *per-save* override
++instead, so a player can rearrange their own hall without touching
++anyone else's. Scoped per direct answers to the open design questions:
++content pools stay exactly as fixed as they've always been (a shelf item
++still can't go in the trophy case -- only a slot's position/size is
++player-editable, never what it draws from), a slot can be dragged
++anywhere on the background (no bounded "stay near your default spot"
++restriction), and a "Reset Layout" button is included.
++
++**`types.ts`.** Pulled a slot's own position/size out into its own
++`GuildHallSlotRect` shape (`{top, left, width, height}`, all % of the
++background), which `GuildHallSlotDef` now extends -- purely a refactor,
++same fields, but it gives `GameState`'s new field something to reuse
++rather than repeating the four-number shape a third time. That new
++field, `customGuildHallSlotLayout?: Partial<Record<string,
++Partial<Record<GuildHallSlotId, GuildHallSlotRect>>>>`, is a player's own
++drag/resize override, nested by theme id then slot id -- exactly the
++same shape `equippedGuildHallDecorations` already uses and the same
++reasoning: switching themes should never lose a player's layout tweaks,
++so each theme remembers its own overrides independently, and a slot with
++no entry here just renders at its DevTool-authored default. Optional/
++undefined for any save that's never touched it -- default to `{}`
++wherever read, no migration needed, same convention every other Guild
++Hall Decorations field already follows.
++
++**`GuildHallDecorManager.ts`.** `.slot`/`.slots` (the only two places
++anything reads a slot's actual on-screen rect) now merge this override
++over the theme's own default (`{...base, ...override}`) before
++returning it -- every existing caller (the Customize scene's own
++rendering, and `allEquipped` for the general menu backdrop,
++GuildHallMenuBackdrop.tsx patch 0209) picks this up automatically with
++no changes of their own, since they were already going through `.slot`/
++`.slots` rather than reading `slotForTheme` directly. `allEquipped`
++itself now resolves through `.slot` instead of calling `slotForTheme`
++directly, for the same reason -- a moved/resized slot shows up moved on
++the general backdrop too, not just inside Customize, matching patch
++0209's own "the backdrop always mirrors what's actually placed"
++reasoning. Three new methods: `setSlotRect(state, slotId, rect)` clamps
++the rect so it can never leave the background's own 0-100% bounds on
++either axis and never shrinks below a 2% floor (`MIN_SLOT_SIZE`, matching
++the DevTool editor's own floor) before writing it into the active
++theme's own bucket, returning the clamped rect so a caller can trust
++state's own version of it; `hasCustomLayout(state)` reports whether the
++active theme has any overrides at all, driving the Reset button's own
++disabled state; `resetLayout(state)` clears the active theme's entire
++override bucket, restoring every slot to its default in one action
++(decorations themselves are untouched -- this only resets *where* slots
++are).
++
++**`engine.ts`.** Two thin wrappers, same shape as every other Guild Hall
++method in this section: `setGuildHallSlotRect(slotId, rect)` (notify +
++save, no sound -- a drag is a continuous silent adjustment, not a
++discrete purchase/equip moment) and `resetGuildHallLayout()`.
++
++**`GuildHallCustomizeScene.tsx`.** A new `GuildHallSlotBox` component
++(local to this file, not an extension of `SlotBox` -- `SlotBox` is
++shared by three other stations in CraftingStation.tsx that have no
++concept of rearranging, and bolting drag/resize onto its props would
++leak Guild-Hall-only behaviour into every one of them) replaces the
++scene's use of plain `SlotBox`. Outside "Rearrange" mode it behaves
++identically to before (click opens the picker); a new "Rearrange" toggle
++button in the header switches every slot to drag-to-move/drag-to-resize
++instead, using React pointer handlers (`onPointerDown`/`onPointerMove`/
++`onPointerUp` + `setPointerCapture`) doing the same percent-of-container
++delta math as the DevTool's own version. A gesture renders from local
++component state the whole time it's in progress (so a fast drag feels
++immediate) and only calls `engine.setGuildHallSlotRect` once, on
++pointer-up -- committing on every intermediate pointer-move would hammer
++`saveNow()` far harder than this game's "one user action, one save"
++convention intends, and there's no explicit Save button: releasing the
++drag *is* the save, same immediacy equip/unequip/buy already have. A
++"Reset Layout" button (disabled when `hasCustomLayout` is false) sits
++next to the Rearrange toggle, visible only while rearranging.
++
++**A real interaction bug found and fixed during verification, not
++something the ask itself called out.** The resize handle sits 5px
++outside its slot's own box (bottom-right corner, matching the DevTool's
++own handle placement) so it's easy to grab without obscuring the slot's
++content. On a tightly-packed run of slots (several of the 30 sit just a
++few px apart, e.g. the two "LowerA"/"LowerB" shelf compartments), a slot
++dragged near a neighbor let that neighbor -- later in DOM order -- win
++the pointer hit-test over the dragged slot's own protruding handle,
++silently swallowing clicks meant for the handle. Root cause: giving the
++*handle* a high z-index only orders it against its own slot's other
++children, not against sibling slots, since z-index ordering is scoped to
++the nearest positioned ancestor -- the slot itself needed the elevated
++z-index, not just its handle. Fixed with `z-index: 10` on
++`.craft-slot.guildhall-slot` for both `:hover` (covers "about to grab
++the handle," since `:hover` propagates to ancestors whenever the pointer
++is over any descendant) and the `.gh-dragging`/`.gh-resizing` state
++classes (covers "mid-gesture, the pointer raced ahead of the box's own
++re-rendered position" during a fast drag, where `:hover` would otherwise
++drop for a frame). Confirmed via Playwright: deliberately dragged a slot
++into a neighbor's territory, confirmed the resize handle still grabbed
++and grew the slot correctly both before and after the fix (reproduced
++the swallowed-click failure on the pre-fix code first).
++
++**A slot ending up fully overlapping another slot after enough free-roam
++dragging is expected, not a bug** -- per the direct answer to "let them
++drag a slot anywhere," slots have no collision/overlap prevention against
++each other, the same way desktop icons or any other freely-draggable
++frames don't. Clicking a region where two slots' hit-boxes overlap while
++*not* rearranging (plain click-to-pick mode) resolves to whichever slot
++is later in DOM order, same as any other overlapping-elements case --
++not something this patch adds special handling for.
++
++**Verified two ways.** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean. Playwright against the real running
++web build, reading the actual persisted `customGuildHallSlotLayout`
++percentages after each gesture (not pixel measurements -- `.craft-slot`
++has a pre-existing flexbox/percentage-padding quirk, present before this
++patch and shared by every crafting station, where the rendered pixel
++size can sit a few px above the literal declared percentage; confirmed
++this doesn't affect the underlying stored data at all, so verification
++reads state directly instead of fighting that noise): a move by a known
++screen-space delta produced exactly the expected percentage delta; a
++resize likewise, with position left untouched; dragging past every edge
++clamped the stored rect to exactly 0/100 bounds; resizing down to
++nothing floored at exactly the 2% `MIN_SLOT_SIZE`; Reset Layout cleared
++the override back to `null` (default rect) and disabled itself again;
++the moved/resized layout survived a full page reload byte-for-byte, and
++the Customize scene's own rendered slot picked it up correctly after
++that reload; leaving Rearrange mode restored plain click-to-open-picker
++behaviour. Zero uncaught page errors across the whole run.
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 1aba900..ce78a85 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -1,4 +1,4 @@
+-import { ActiveQuest, AutoChainTactics, DiceFace, DiceRollResult, ElementType, GameState, GuildHallSlotId, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
++import { ActiveQuest, AutoChainTactics, DiceFace, DiceRollResult, ElementType, GameState, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
+ import { createRng, uid } from './rng';
+ import { HeroManager } from './managers/HeroManager';
+ import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
+@@ -2573,6 +2573,31 @@ export class GameEngine {
+     void this.saveNow();
+   }
+ 
++  /** Moves and/or resizes a slot for the active theme (patch 0212) --
++   *  the Customize scene's own "Rearrange" mode calls this once per
++   *  completed drag or resize gesture (on pointer-up), not on every
++   *  intermediate pointer-move -- the drag itself renders from local
++   *  component state for a smooth in-progress feel, and only commits
++   *  here once the gesture ends, same "one user action, one save" shape
++   *  every other engine method in this section already follows. No sound
++   *  -- a drag/resize is a continuous, silent adjustment, not a discrete
++   *  purchase/equip moment. */
++  setGuildHallSlotRect(slotId: GuildHallSlotId, rect: GuildHallSlotRect) {
++    const clamped = GuildHallDecorManager.setSlotRect(this.state, slotId, rect);
++    if (!clamped) return;
++    this.notify();
++    void this.saveNow();
++  }
++
++  /** Clears every player-moved/resized slot for the active theme, back to
++   *  the DevTool-authored default layout -- the Customize scene's own
++   *  "Reset Layout" button. Placed decorations are untouched. */
++  resetGuildHallLayout() {
++    GuildHallDecorManager.resetLayout(this.state);
++    this.notify();
++    void this.saveNow();
++  }
++
+   /* ------------------------- Grimsby / the peddler ------------------------- */
+ 
+   /** Dismisses the one-time "you've unlocked Grimsby" spotlight -- same
+diff --git a/src/game/managers/GuildHallDecorManager.ts b/src/game/managers/GuildHallDecorManager.ts
+index eb0b356..b360e53 100644
+--- a/src/game/managers/GuildHallDecorManager.ts
++++ b/src/game/managers/GuildHallDecorManager.ts
+@@ -1,6 +1,13 @@
+ import { GUILD_HALL_DECORATION_BY_ID } from '../data/guildHallDecor';
+ import { DEFAULT_GUILD_HALL_THEME_ID, GUILD_HALL_THEME_BY_ID, slotForTheme, slotsForTheme } from '../data/guildHallSlots';
+-import { GameState, GuildHallDecorationDef, GuildHallSlotDef, GuildHallSlotId } from '../types';
++import { GameState, GuildHallDecorationDef, GuildHallSlotDef, GuildHallSlotId, GuildHallSlotRect } from '../types';
++
++/** Floor for a player-resized slot, in % of the background -- small
++ *  enough to shrink a lot, never small enough to vanish or become
++ *  impossible to grab again. Matches the DevTool's own slot layout
++ *  editor's floor (`wireSlotLayoutResize`, app.js) so a slot behaves the
++ *  same whether an admin or a player is the one resizing it. */
++const MIN_SLOT_SIZE = 2;
+ 
+ /**
+  * Owning/equipping Guild Hall decorations -- the state layer for patch
+@@ -70,17 +77,32 @@ export const GuildHallDecorManager = {
+ 
+   /* ------------------------------- slots ------------------------------- */
+ 
+-  /** The active theme's own definition for one slot -- undefined if the
+-   *  slot doesn't exist, or if the active theme hides it (see
+-   *  `slotForTheme`'s own comment on that distinction). */
++  /** The active theme's own definition for one slot, with any player
++   *  drag/resize override applied on top (patch 0212 --
++   *  `GameState.customGuildHallSlotLayout`) -- undefined if the slot
++   *  doesn't exist, or if the active theme hides it (see `slotForTheme`'s
++   *  own comment on that distinction). Always resolve a slot's actual
++   *  on-screen rect through this (or `.slots` below), never by calling
++   *  `slotForTheme` directly -- that only ever returns the DevTool-
++   *  authored default, blind to anything a player has moved. */
+   slot(state: GameState, slotId: GuildHallSlotId): GuildHallSlotDef | undefined {
+-    return slotForTheme(GuildHallDecorManager.activeThemeId(state), slotId);
++    const theme = GuildHallDecorManager.activeThemeId(state);
++    const base = slotForTheme(theme, slotId);
++    if (!base) return undefined;
++    const override = state.customGuildHallSlotLayout?.[theme]?.[slotId];
++    return override ? { ...base, ...override } : base;
+   },
+ 
+-  /** Every slot visible in the active theme -- may be fewer than 30 if
+-   *  this theme hides some. */
++  /** Every slot visible in the active theme, each with any player
++   *  drag/resize override applied -- may be fewer than 30 if this theme
++   *  hides some. */
+   slots(state: GameState): GuildHallSlotDef[] {
+-    return slotsForTheme(GuildHallDecorManager.activeThemeId(state));
++    const theme = GuildHallDecorManager.activeThemeId(state);
++    const overrides = state.customGuildHallSlotLayout?.[theme];
++    return slotsForTheme(theme).map((base) => {
++      const override = overrides?.[base.id];
++      return override ? { ...base, ...override } : base;
++    });
+   },
+ 
+   /* ----------------------------- ownership ------------------------------ */
+@@ -150,8 +172,14 @@ export const GuildHallDecorManager = {
+   },
+ 
+   /** Every currently-filled slot *of the active theme*, resolved to its
+-   *  slot def + decoration def -- the shape the Customize UI actually
+-   *  renders. Slots whose stored id no longer resolves to a real slot
++   *  slot def (with any player drag/resize override already applied,
++   *  patch 0212 -- see `.slot` above) + decoration def -- the shape both
++   *  the Customize UI and the general menu backdrop
++   *  (GuildHallMenuBackdrop.tsx, patch 0209) actually render. A moved/
++   *  resized slot therefore shows up in its new spot on the general
++   *  backdrop too, same "the backdrop always mirrors what's actually
++   *  placed" reasoning patch 0209 already established for decorations
++   *  themselves. Slots whose stored id no longer resolves to a real slot
+    *  (hidden or removed from this theme since it was equipped) or a real
+    *  decoration are skipped rather than shown broken. */
+   allEquipped(state: GameState): { slot: GuildHallSlotDef; decoration: GuildHallDecorationDef }[] {
+@@ -159,7 +187,7 @@ export const GuildHallDecorManager = {
+     const equipped = state.equippedGuildHallDecorations?.[theme] ?? {};
+     const result: { slot: GuildHallSlotDef; decoration: GuildHallDecorationDef }[] = [];
+     for (const slotId of Object.keys(equipped) as GuildHallSlotId[]) {
+-      const slot = slotForTheme(theme, slotId);
++      const slot = GuildHallDecorManager.slot(state, slotId);
+       const decoration = GuildHallDecorManager.equippedDecoration(state, slotId);
+       if (slot && decoration) result.push({ slot, decoration });
+     }
+@@ -202,4 +230,60 @@ export const GuildHallDecorManager = {
+     if (!equipped) return;
+     delete equipped[slotId];
+   },
++
++  /* ---------------------------- slot layout ---------------------------- */
++  /* Patch 0212: letting a player drag/resize a slot away from its
++   * DevTool-authored default. The content pool a slot draws from
++   * (`slotType`) and which 30 slots exist at all stay exactly as
++   * `SLOT_IDENTITY` defines them -- only a slot's own rect is ever
++   * player-editable, stored per save/per theme in
++   * `GameState.customGuildHallSlotLayout` (see that field's own doc
++   * comment), never touching the shared DevTool content any other player
++   * sees. */
++
++  /** Moves and/or resizes a slot for the active theme -- clamps the rect
++   *  so it can never leave the background's own 0-100% bounds on either
++   *  axis and never shrinks below `MIN_SLOT_SIZE`, the same clamping the
++   *  DevTool's own slot layout editor already applies
++   *  (`wireSlotLayoutDrag`/`wireSlotLayoutResize`, app.js) -- a slot
++   *  behaves the same whether an admin or a player is the one dragging
++   *  it, just written to a different place. Returns the clamped rect
++   *  actually stored (or `null` if the slot doesn't exist/isn't visible
++   *  in this theme), so a caller mid-drag can snap its own preview to
++   *  exactly what state now holds rather than trusting its own math to
++   *  have matched. */
++  setSlotRect(state: GameState, slotId: GuildHallSlotId, rect: GuildHallSlotRect): GuildHallSlotRect | null {
++    const theme = GuildHallDecorManager.activeThemeId(state);
++    if (!slotForTheme(theme, slotId)) return null;
++    const width = Math.max(MIN_SLOT_SIZE, Math.min(100, rect.width));
++    const height = Math.max(MIN_SLOT_SIZE, Math.min(100, rect.height));
++    const left = Math.max(0, Math.min(100 - width, rect.left));
++    const top = Math.max(0, Math.min(100 - height, rect.top));
++    const clamped: GuildHallSlotRect = { top, left, width, height };
++    const byTheme = state.customGuildHallSlotLayout ?? (state.customGuildHallSlotLayout = {});
++    const themeOverrides = byTheme[theme] ?? (byTheme[theme] = {});
++    themeOverrides[slotId] = clamped;
++    return clamped;
++  },
++
++  /** Whether the active theme has any player-moved/resized slots at all
++   *  -- drives the Customize scene's "Reset Layout" button, so it can sit
++   *  disabled on a hall nobody has rearranged yet instead of doing
++   *  nothing when pressed. */
++  hasCustomLayout(state: GameState): boolean {
++    const theme = GuildHallDecorManager.activeThemeId(state);
++    const overrides = state.customGuildHallSlotLayout?.[theme];
++    return !!overrides && Object.keys(overrides).length > 0;
++  },
++
++  /** Clears every slot override for the active theme, snapping it back to
++   *  the DevTool-authored default layout -- only this theme's own bucket
++   *  is touched, same "each theme's own arrangement, untouched by any
++   *  other theme" rule `unequip` already follows for placed decorations.
++   *  Decorations themselves are untouched -- this resets *where* the
++   *  slots are, not what's equipped in them. */
++  resetLayout(state: GameState): void {
++    const theme = GuildHallDecorManager.activeThemeId(state);
++    if (state.customGuildHallSlotLayout) delete state.customGuildHallSlotLayout[theme];
++  },
+ };
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 1cec88a..98a22f2 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -1554,6 +1554,29 @@ export interface GameState {
+    * until one exists.
+    */
+   activeGuildHallTheme?: string;
++  /**
++   * A player's own drag/resize override of a slot's default position and
++   * size, per background theme -- guildhall-themes.json id ->
++   * (GuildHallSlotId -> the slot's own moved/resized rect). Same nesting
++   * shape as `equippedGuildHallDecorations` just above and the same
++   * reasoning: switching themes should never lose a player's layout
++   * tweaks, so each theme remembers its own overrides independently, and
++   * a slot with no entry here simply renders at its DevTool-authored
++   * default (see `GuildHallSlotDef`) -- this field only ever holds the
++   * slots a player has actually touched, not a full copy of every slot's
++   * geometry. Always resolve a slot's actual on-screen rect through
++   * `GuildHallDecorManager.slot`/`.slots` (which merge this override over
++   * the theme default), never by reading `GuildHallSlotDef`'s own
++   * top/left/width/height directly once this field might be set.
++   * Optional/undefined for any save from before this system existed, and
++   * for any save that has simply never moved anything -- default to `{}`
++   * wherever read, no migration needed, same convention every other
++   * Guild Hall Decorations field on this type already follows. An id here
++   * that no longer resolves to a real slot for the active theme (the
++   * DevTool hid or removed it since) is skipped, not an error, same
++   * degrade-gracefully convention as everywhere else in this feature.
++   */
++  customGuildHallSlotLayout?: Partial<Record<string, Partial<Record<GuildHallSlotId, GuildHallSlotRect>>>>;
+   /**
+    * Which hero the desktop companion shows. Updates automatically whenever a
+    * hero is sent on a quest (so departures are always visible), and can be
+@@ -2337,6 +2360,22 @@ export type GuildHallSlotId =
+   | 'right-0-0' | 'right-0-1' | 'right-1-0' | 'right-1-1' | 'right-2-0' | 'right-2-1' | 'right-3-0' | 'right-3-1'
+   | 'center-0-0' | 'center-0-1' | 'center-1-0' | 'center-1-1' | 'center-2-0' | 'center-2-1';
+ 
++/**
++ * A slot's own position + size, in % of the Guild Hall background art's
++ * bounding box -- pulled out as its own shape (patch 0212) so it can be
++ * reused both by `GuildHallSlotDef` (the DevTool-authored, per-theme
++ * default) and by `GameState.customGuildHallSlotLayout` (a player's own
++ * per-save override of that default -- see that field's own doc comment
++ * for why moving/resizing a slot is a save-level override rather than a
++ * new DevTool-owned geometry source).
++ */
++export interface GuildHallSlotRect {
++  top: number;
++  left: number;
++  width: number;
++  height: number;
++}
++
+ /**
+  * Geometry + pool for one physical slot, in % of the Guild Hall
+  * background art's own bounding box -- exactly the coordinates locked in
+@@ -2345,16 +2384,16 @@ export type GuildHallSlotId =
+  * rather than re-derived. `slotType` is which `GuildHallDecorationDef`s
+  * are eligible for this slot (matched against the def's own `slotType`);
+  * `label` is the short mockup-era name (e.g. "L2a"), useful for
+- * debugging/DevTool display, not shown to the player.
++ * debugging/DevTool display, not shown to the player. This is the
++ * *default* geometry a theme ships with -- a player can drag/resize a
++ * slot away from it (patch 0212), which is layered on top per-save
++ * rather than changing this DevTool-owned default; see
++ * `GameState.customGuildHallSlotLayout`.
+  */
+-export interface GuildHallSlotDef {
++export interface GuildHallSlotDef extends GuildHallSlotRect {
+   id: GuildHallSlotId;
+   label: string;
+   slotType: GuildHallSlotType;
+-  top: number;
+-  left: number;
+-  width: number;
+-  height: number;
+ }
+ 
+ /**
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 1ae1add..2648f7c 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -2883,6 +2883,65 @@ button.harvest-item:hover {
+   overflow: hidden;
+ }
+ 
++/*
++ * "Rearrange" mode (patch 0212) -- same visual language as the DevTool's
++ * own always-visible slot layout editor (.gh-layout-slot etc.,
++ * tools/devtool/public/style.css), just layered on top of .craft-slot's
++ * existing invisible-until-filled base rather than replacing it: outside
++ * Rearrange mode a .guildhall-slot is exactly the same transparent hit
++ * target every other .craft-slot already is (the artwork is the UI);
++ * only while .rearranging is a dashed brass outline shown on all 30
++ * boxes at once, the same "these are the things you can grab" affordance
++ * the admin tool's always-visible boxes give for free.
++ */
++.craft-slot.guildhall-slot.rearranging {
++  cursor: grab;
++  touch-action: none;
++  border: 2px dashed var(--brass-dim);
++  border-radius: 4px;
++  background: rgba(224, 169, 74, 0.05);
++}
++/* Both the hover bump and the drag/resize-state bump raise the SLOT
++   itself, not just its resize handle -- z-index only orders siblings
++   within the same stacking context, and the handle is a child of the
++   slot, not a sibling of other slots, so giving the handle its own
++   z-index alone can't lift it above a neighboring slot that happens to
++   overlap it. On a tightly-packed shelf (several of the 30 slots sit a
++   few px apart), a slot dragged near a neighbor would otherwise let that
++   later-in-DOM-order neighbor win the hit-test over this slot's own
++   protruding handle -- confirmed via Playwright before this rule was
++   added: grabbing the handle silently landed on the neighboring slot
++   instead. `:hover` alone covers "about to start a drag/resize" (the
++   pointer is physically over the slot or its handle, since :hover
++   propagates to ancestors); the state classes cover "mid-gesture, the
++   pointer raced ahead of the box's own re-rendered position" for a fast
++   drag, where geometry briefly lags behind and :hover would otherwise
++   drop for a frame. */
++.craft-slot.guildhall-slot.rearranging:hover { border-color: var(--brass); background: rgba(224, 169, 74, 0.1); z-index: 10; }
++.craft-slot.guildhall-slot.gh-dragging { cursor: grabbing; border-color: var(--brass); background: rgba(224, 169, 74, 0.18); z-index: 10; }
++.craft-slot.guildhall-slot.gh-resizing { border-color: var(--brass); z-index: 10; }
++
++/* Bottom-right resize handle -- positions against .craft-slot's own
++   `position: absolute` box (any absolutely-positioned element is already
++   a valid containing block for its own absolutely-positioned children,
++   so no extra `position: relative` is needed on the slot itself). Same
++   size/placement as the DevTool's own .gh-layout-resize-handle. */
++.gh-layout-resize-handle {
++  position: absolute; right: -5px; bottom: -5px; width: 12px; height: 12px;
++  background: var(--brass); border: 1px solid var(--edge); border-radius: 3px;
++  cursor: nwse-resize; z-index: 6; touch-action: none;
++}
++
++/* Live coordinate readout, shown only on whichever slot is actively
++   being dragged or resized -- same copy shape as the DevTool's own
++   .gh-layout-readout. */
++.gh-layout-readout {
++  position: absolute; left: 2px; bottom: 1px;
++  font-size: 8px; color: var(--parchment);
++  background: rgba(0, 0, 0, 0.7); padding: 0 3px;
++  pointer-events: none; z-index: 2;
++}
++
+ /* An empty Nest slot -- same .card base as a filled one, but a real
+    <button> (click anywhere to open EggSelectModal) with a dashed edge and
+    dimmer text so it reads as "nothing here yet" rather than content. */
+diff --git a/src/ui/GuildHallCustomizeScene.tsx b/src/ui/GuildHallCustomizeScene.tsx
+index 03f480a..7061091 100644
+--- a/src/ui/GuildHallCustomizeScene.tsx
++++ b/src/ui/GuildHallCustomizeScene.tsx
+@@ -1,6 +1,6 @@
+-import { useState } from 'react';
++import { ReactNode, useRef, useState } from 'react';
+ import { useEngine } from './useEngine';
+-import { SlotBox, PickerModal, PickerOption, Rect } from './CraftingStation';
++import { PickerModal, PickerOption, Rect } from './CraftingStation';
+ import { GuildHallDecorManager } from '../game/managers/GuildHallDecorManager';
+ import { GUILD_HALL_THEME_BY_ID } from '../game/data/guildHallSlots';
+ import { GUILD_HALL_DECORATIONS } from '../game/data/guildHallDecor';
+@@ -123,6 +123,130 @@ function buildOptions(slot: GuildHallSlotDef, state: GameState): PickerOption[]
+   return options;
+ }
+ 
++/** Same readout format as the DevTool's own slot layout editor
++ *  (`updateSlotLayoutReadout`, app.js) -- "12.3%, 40.1% · 15.0×20.0%". */
++function formatRect(rect: Rect): string {
++  return `${rect.left.toFixed(1)}%, ${rect.top.toFixed(1)}% · ${rect.width.toFixed(1)}×${rect.height.toFixed(1)}%`;
++}
++
++/** Clamps a moved rect so it can never leave the scene's own 0-100%
++ *  bounds -- same clamp `GuildHallDecorManager.setSlotRect` applies when
++ *  the drag actually commits, duplicated here only so the drag *looks*
++ *  right the whole time it's in progress, not just once it lands. */
++function clampMove(start: Rect, dxPct: number, dyPct: number): Rect {
++  const left = Math.max(0, Math.min(100 - start.width, start.left + dxPct));
++  const top = Math.max(0, Math.min(100 - start.height, start.top + dyPct));
++  return { ...start, left, top };
++}
++
++/** Same shape as clampMove, resizing from the bottom-right corner
++ *  instead -- floored at a 2% minimum in each dimension (matches
++ *  GuildHallDecorManager's own MIN_SLOT_SIZE) and capped at the scene's
++ *  own right/bottom edge. */
++function clampResize(start: Rect, dxPct: number, dyPct: number): Rect {
++  const width = Math.max(2, Math.min(100 - start.left, start.width + dxPct));
++  const height = Math.max(2, Math.min(100 - start.top, start.height + dyPct));
++  return { ...start, width, height };
++}
++
++/**
++ * A single Guild Hall slot in the Customize scene -- either a plain
++ * click-to-open frame (`SlotBox` would do fine on its own for this half)
++ * or, while `rearranging` is on, a draggable/resizable one, so this is a
++ * bespoke sibling to `SlotBox` rather than an extension of it: `SlotBox`
++ * is shared by three other stations (CraftingStation.tsx) that have no
++ * concept of rearranging at all, and bolting drag/resize onto its own
++ * props would leak Guild-Hall-only behaviour into every one of them.
++ *
++ * The drag/resize math itself (percent-of-container pointer delta,
++ * clamped to the scene's own bounds, floored at a 2% minimum size) is
++ * ported from the DevTool's own slot layout editor
++ * (`wireSlotLayoutDrag`/`wireSlotLayoutResize`, app.js) -- same feel for
++ * an admin repositioning a slot for everyone and a player repositioning
++ * their own copy of it. Differences from that version: React pointer
++ * handlers instead of raw DOM listeners, a local in-progress preview
++ * (`drag`) that only commits to real state on pointer-up rather than
++ * writing state on every pointer-move (a save-on-every-frame drag would
++ * hammer `saveNow()` far harder than this game's "one user action, one
++ * save" convention intends), and no explicit Save button -- releasing
++ * the drag *is* the save, same immediacy every other Customize action
++ * (equip/unequip/buy) already has.
++ */
++function GuildHallSlotBox({
++  sceneRef, rect, filled, label, rearranging, onOpen, onCommitRect,
++}: {
++  sceneRef: React.RefObject<HTMLDivElement>;
++  rect: Rect;
++  filled: ReactNode | null;
++  label: string;
++  rearranging: boolean;
++  onOpen: () => void;
++  onCommitRect: (rect: Rect) => void;
++}) {
++  // `drag` is real React state -- both the in-progress rect (rendered
++  // immediately, every pointer-move) and which handle started it (for
++  // the dragging/resizing CSS state), so a render always reflects the
++  // gesture actually in flight. `dragStartRef` is pure bookkeeping (the
++  // pointer's own start position, and the rect it started from) that
++  // `move` needs to compute a delta from -- never read for rendering, so
++  // a plain ref (not state) is correct here, same "ref for math the DOM
++  // doesn't need to see, state for what should render" split the rest of
++  // this codebase already follows.
++  const [drag, setDrag] = useState<{ mode: 'move' | 'resize'; rect: Rect } | null>(null);
++  const dragStartRef = useRef<{ mode: 'move' | 'resize'; startX: number; startY: number; start: Rect } | null>(null);
++
++  const shown = drag?.rect ?? rect;
++
++  function begin(e: React.PointerEvent, mode: 'move' | 'resize') {
++    if (!rearranging) return;
++    e.stopPropagation();
++    (e.currentTarget as Element).setPointerCapture(e.pointerId);
++    dragStartRef.current = { mode, startX: e.clientX, startY: e.clientY, start: rect };
++    setDrag({ mode, rect });
++  }
++  function move(e: React.PointerEvent) {
++    const start = dragStartRef.current;
++    if (!start || !sceneRef.current) return;
++    const sceneRect = sceneRef.current.getBoundingClientRect();
++    const dxPct = ((e.clientX - start.startX) / sceneRect.width) * 100;
++    const dyPct = ((e.clientY - start.startY) / sceneRect.height) * 100;
++    const next = start.mode === 'move' ? clampMove(start.start, dxPct, dyPct) : clampResize(start.start, dxPct, dyPct);
++    setDrag({ mode: start.mode, rect: next });
++  }
++  function end() {
++    const start = dragStartRef.current;
++    dragStartRef.current = null;
++    if (!start) return;
++    const finalRect = drag?.rect ?? rect;
++    setDrag(null);
++    onCommitRect(finalRect);
++  }
++
++  return (
++    <div
++      className={`craft-slot guildhall-slot ${filled ? 'filled' : ''} ${rearranging ? 'rearranging' : ''} ${drag ? (drag.mode === 'move' ? 'gh-dragging' : 'gh-resizing') : ''}`}
++      style={{ left: `${shown.left}%`, top: `${shown.top}%`, width: `${shown.width}%`, height: `${shown.height}%` }}
++      onPointerDown={(e) => begin(e, 'move')}
++      onPointerMove={move}
++      onPointerUp={end}
++      onClick={rearranging ? undefined : onOpen}
++      aria-label={label}
++      title={label}
++    >
++      {filled ?? <span className="craft-slot-plus" aria-hidden="true">+</span>}
++      {drag && <span className="gh-layout-readout">{formatRect(drag.rect)}</span>}
++      {rearranging && (
++        <div
++          className="gh-layout-resize-handle"
++          onPointerDown={(e) => begin(e, 'resize')}
++          onPointerMove={move}
++          onPointerUp={end}
++        />
++      )}
++    </div>
++  );
++}
++
+ /**
+  * Inline "Customize" mode for the Guild Hall tab (see GuildPanel.tsx,
+  * which swaps this in for its own normal facility/upgrade content rather
+@@ -131,21 +255,36 @@ function buildOptions(slot: GuildHallSlotDef, state: GameState): PickerOption[]
+  * background art (per the active theme, patch 0207 -- see
+  * `GuildHallDecorManager.activeThemeId`) with that theme's own visible
+  * slots (up to 30, possibly fewer -- see `slotsForTheme` in
+- * guildHallSlots.ts) overlaid as clickable frames, same
+- * `SlotBox`/`PickerModal`/`Rect` machinery CraftingStation.tsx already
+- * built and EggSelectModal.tsx already reuses for its own single-slot
++ * guildHallSlots.ts) overlaid as clickable frames (`GuildHallSlotBox`,
++ * which also carries this scene's own "Rearrange" drag/resize mode as of
++ * patch 0212), reusing `PickerModal`/`Rect` from CraftingStation.tsx the
++ * same way EggSelectModal.tsx already does for its own single-slot
+  * picker, just scaled up to many slots instead of 1-3.
+  */
+ export function GuildHallCustomizeScene({ onDone }: { onDone: () => void }) {
+   const engine = useEngine();
+   const state = engine.state;
+   const [openSlotId, setOpenSlotId] = useState<GuildHallSlotId | null>(null);
++  // "Rearrange" is its own local mode, separate from Customize mode
++  // itself (that toggle lives one level up, in GuildPanel.tsx) -- off by
++  // default so the common case (placing decorations) is exactly the
++  // click-to-open experience this scene has always had; turning it on
++  // swaps every slot from click-to-pick to drag-to-move/resize instead of
++  // trying to make one gesture mean both (see GuildHallSlotBox's own
++  // comment for why click and drag don't safely coexist on one box).
++  // Local, unpersisted UI state -- same as this scene's own openSlotId.
++  const [rearranging, setRearranging] = useState(false);
++  const sceneRef = useRef<HTMLDivElement>(null);
+   // Both resolved against the active theme (patch 0207) -- see
+   // GuildHallDecorManager.activeThemeId's own comment for how a deleted/
+   // unknown theme id degrades safely rather than breaking this scene.
+   const activeTheme = GUILD_HALL_THEME_BY_ID[GuildHallDecorManager.activeThemeId(state)];
++  // Already resolved through any player drag/resize override (patch
++  // 0212 -- see GuildHallDecorManager.slots's own comment), so a moved
++  // slot shows up moved here with zero extra plumbing in this file.
+   const slots = GuildHallDecorManager.slots(state);
+   const openSlot = openSlotId ? GuildHallDecorManager.slot(state, openSlotId) : null;
++  const hasCustomLayout = GuildHallDecorManager.hasCustomLayout(state);
+ 
+   function handlePick(slot: GuildHallSlotDef, key: string) {
+     if (key === UNEQUIP_KEY) {
+@@ -165,25 +304,41 @@ export function GuildHallCustomizeScene({ onDone }: { onDone: () => void }) {
+         <div>
+           <span className="card-title">Customize the Guild Hall</span>
+           <p className="tiny muted" style={{ margin: '2px 0 0' }}>
+-            Click any open frame to place a decoration. Purely cosmetic -- no effect on stats.
++            {rearranging
++              ? 'Drag a frame to move it, drag its brass handle to resize -- both stay inside the hall’s own walls.'
++              : 'Click any open frame to place a decoration. Purely cosmetic -- no effect on stats.'}
+           </p>
+         </div>
+-        <button className="btn-primary" onClick={onDone}>Done</button>
++        <div className="row" style={{ gap: 8 }}>
++          {rearranging && (
++            <button className="btn-ghost" disabled={!hasCustomLayout} onClick={() => engine.resetGuildHallLayout()}>
++              Reset Layout
++            </button>
++          )}
++          <button className={rearranging ? 'btn-primary' : 'btn-ghost'} onClick={() => setRearranging((v) => !v)}>
++            {rearranging ? 'Done Rearranging' : 'Rearrange'}
++          </button>
++          <button className="btn-primary" onClick={onDone}>Done</button>
++        </div>
+       </div>
+ 
+       <div
++        ref={sceneRef}
+         className="guildhall-customize-scene"
+         style={activeTheme ? { backgroundImage: `url(./guildhall-customize/${activeTheme.background})` } : undefined}
+       >
+         {slots.map((slot) => {
+           const decoration = GuildHallDecorManager.equippedDecoration(state, slot.id);
+           return (
+-            <SlotBox
++            <GuildHallSlotBox
+               key={slot.id}
++              sceneRef={sceneRef}
+               rect={{ left: slot.left, top: slot.top, width: slot.width, height: slot.height } as Rect}
+               filled={decoration ? <DecorationArt decoration={decoration} /> : null}
+               label={decoration ? decoration.name : `Empty ${slot.label} slot`}
++              rearranging={rearranging}
+               onOpen={() => setOpenSlotId(slot.id)}
++              onCommitRect={(rect) => engine.setGuildHallSlotRect(slot.id, rect)}
+             />
+           );
+         })}

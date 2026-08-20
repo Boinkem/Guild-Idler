@@ -15189,3 +15189,145 @@ cost line, no thrown errors, `#root` fully intact. Temporary fixture
 decoration and the verification scripts were both removed afterward --
 ships with the same single real "books" entry in
 `guild-hall-decorations.json` as before this patch.
+
+### Guild Hall: players can drag/resize their own slots, plus a "Reset Layout" (patch 0212)
+
+```discord-update
+Dev Update | Guild Hall Rearranging
+
+- Added a "Rearrange" mode to the Guild Hall's Customize screen -- drag any frame to move it, drag its handle to resize it
+- Added a "Reset Layout" button to snap everything back to the hall's own default arrangement
+- What a decoration can go in a slot is unchanged -- only where that slot sits and how big it is is now yours to adjust
+```
+
+Direct follow-up to "how difficult would it be to let players move the
+boxes around/resize them within their own customisation" -- the answer
+turned out to be "most of the hard part already exists": the DevTool's
+own "Guild Hall Slot Layout" tool (patches 0205/0206) already has a
+fully working drag-to-move/drag-to-resize interaction
+(`wireSlotLayoutDrag`/`wireSlotLayoutResize`, app.js) for admins
+repositioning a slot for every player at once. This patch ports that
+same math into the in-game Customize scene as a *per-save* override
+instead, so a player can rearrange their own hall without touching
+anyone else's. Scoped per direct answers to the open design questions:
+content pools stay exactly as fixed as they've always been (a shelf item
+still can't go in the trophy case -- only a slot's position/size is
+player-editable, never what it draws from), a slot can be dragged
+anywhere on the background (no bounded "stay near your default spot"
+restriction), and a "Reset Layout" button is included.
+
+**`types.ts`.** Pulled a slot's own position/size out into its own
+`GuildHallSlotRect` shape (`{top, left, width, height}`, all % of the
+background), which `GuildHallSlotDef` now extends -- purely a refactor,
+same fields, but it gives `GameState`'s new field something to reuse
+rather than repeating the four-number shape a third time. That new
+field, `customGuildHallSlotLayout?: Partial<Record<string,
+Partial<Record<GuildHallSlotId, GuildHallSlotRect>>>>`, is a player's own
+drag/resize override, nested by theme id then slot id -- exactly the
+same shape `equippedGuildHallDecorations` already uses and the same
+reasoning: switching themes should never lose a player's layout tweaks,
+so each theme remembers its own overrides independently, and a slot with
+no entry here just renders at its DevTool-authored default. Optional/
+undefined for any save that's never touched it -- default to `{}`
+wherever read, no migration needed, same convention every other Guild
+Hall Decorations field already follows.
+
+**`GuildHallDecorManager.ts`.** `.slot`/`.slots` (the only two places
+anything reads a slot's actual on-screen rect) now merge this override
+over the theme's own default (`{...base, ...override}`) before
+returning it -- every existing caller (the Customize scene's own
+rendering, and `allEquipped` for the general menu backdrop,
+GuildHallMenuBackdrop.tsx patch 0209) picks this up automatically with
+no changes of their own, since they were already going through `.slot`/
+`.slots` rather than reading `slotForTheme` directly. `allEquipped`
+itself now resolves through `.slot` instead of calling `slotForTheme`
+directly, for the same reason -- a moved/resized slot shows up moved on
+the general backdrop too, not just inside Customize, matching patch
+0209's own "the backdrop always mirrors what's actually placed"
+reasoning. Three new methods: `setSlotRect(state, slotId, rect)` clamps
+the rect so it can never leave the background's own 0-100% bounds on
+either axis and never shrinks below a 2% floor (`MIN_SLOT_SIZE`, matching
+the DevTool editor's own floor) before writing it into the active
+theme's own bucket, returning the clamped rect so a caller can trust
+state's own version of it; `hasCustomLayout(state)` reports whether the
+active theme has any overrides at all, driving the Reset button's own
+disabled state; `resetLayout(state)` clears the active theme's entire
+override bucket, restoring every slot to its default in one action
+(decorations themselves are untouched -- this only resets *where* slots
+are).
+
+**`engine.ts`.** Two thin wrappers, same shape as every other Guild Hall
+method in this section: `setGuildHallSlotRect(slotId, rect)` (notify +
+save, no sound -- a drag is a continuous silent adjustment, not a
+discrete purchase/equip moment) and `resetGuildHallLayout()`.
+
+**`GuildHallCustomizeScene.tsx`.** A new `GuildHallSlotBox` component
+(local to this file, not an extension of `SlotBox` -- `SlotBox` is
+shared by three other stations in CraftingStation.tsx that have no
+concept of rearranging, and bolting drag/resize onto its props would
+leak Guild-Hall-only behaviour into every one of them) replaces the
+scene's use of plain `SlotBox`. Outside "Rearrange" mode it behaves
+identically to before (click opens the picker); a new "Rearrange" toggle
+button in the header switches every slot to drag-to-move/drag-to-resize
+instead, using React pointer handlers (`onPointerDown`/`onPointerMove`/
+`onPointerUp` + `setPointerCapture`) doing the same percent-of-container
+delta math as the DevTool's own version. A gesture renders from local
+component state the whole time it's in progress (so a fast drag feels
+immediate) and only calls `engine.setGuildHallSlotRect` once, on
+pointer-up -- committing on every intermediate pointer-move would hammer
+`saveNow()` far harder than this game's "one user action, one save"
+convention intends, and there's no explicit Save button: releasing the
+drag *is* the save, same immediacy equip/unequip/buy already have. A
+"Reset Layout" button (disabled when `hasCustomLayout` is false) sits
+next to the Rearrange toggle, visible only while rearranging.
+
+**A real interaction bug found and fixed during verification, not
+something the ask itself called out.** The resize handle sits 5px
+outside its slot's own box (bottom-right corner, matching the DevTool's
+own handle placement) so it's easy to grab without obscuring the slot's
+content. On a tightly-packed run of slots (several of the 30 sit just a
+few px apart, e.g. the two "LowerA"/"LowerB" shelf compartments), a slot
+dragged near a neighbor let that neighbor -- later in DOM order -- win
+the pointer hit-test over the dragged slot's own protruding handle,
+silently swallowing clicks meant for the handle. Root cause: giving the
+*handle* a high z-index only orders it against its own slot's other
+children, not against sibling slots, since z-index ordering is scoped to
+the nearest positioned ancestor -- the slot itself needed the elevated
+z-index, not just its handle. Fixed with `z-index: 10` on
+`.craft-slot.guildhall-slot` for both `:hover` (covers "about to grab
+the handle," since `:hover` propagates to ancestors whenever the pointer
+is over any descendant) and the `.gh-dragging`/`.gh-resizing` state
+classes (covers "mid-gesture, the pointer raced ahead of the box's own
+re-rendered position" during a fast drag, where `:hover` would otherwise
+drop for a frame). Confirmed via Playwright: deliberately dragged a slot
+into a neighbor's territory, confirmed the resize handle still grabbed
+and grew the slot correctly both before and after the fix (reproduced
+the swallowed-click failure on the pre-fix code first).
+
+**A slot ending up fully overlapping another slot after enough free-roam
+dragging is expected, not a bug** -- per the direct answer to "let them
+drag a slot anywhere," slots have no collision/overlap prevention against
+each other, the same way desktop icons or any other freely-draggable
+frames don't. Clicking a region where two slots' hit-boxes overlap while
+*not* rearranging (plain click-to-pick mode) resolves to whichever slot
+is later in DOM order, same as any other overlapping-elements case --
+not something this patch adds special handling for.
+
+**Verified two ways.** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Playwright against the real running
+web build, reading the actual persisted `customGuildHallSlotLayout`
+percentages after each gesture (not pixel measurements -- `.craft-slot`
+has a pre-existing flexbox/percentage-padding quirk, present before this
+patch and shared by every crafting station, where the rendered pixel
+size can sit a few px above the literal declared percentage; confirmed
+this doesn't affect the underlying stored data at all, so verification
+reads state directly instead of fighting that noise): a move by a known
+screen-space delta produced exactly the expected percentage delta; a
+resize likewise, with position left untouched; dragging past every edge
+clamped the stored rect to exactly 0/100 bounds; resizing down to
+nothing floored at exactly the 2% `MIN_SLOT_SIZE`; Reset Layout cleared
+the override back to `null` (default rect) and disabled itself again;
+the moved/resized layout survived a full page reload byte-for-byte, and
+the Customize scene's own rendered slot picked it up correctly after
+that reload; leaving Rearrange mode restored plain click-to-open-picker
+behaviour. Zero uncaught page errors across the whole run.

@@ -1,6 +1,13 @@
 import { GUILD_HALL_DECORATION_BY_ID } from '../data/guildHallDecor';
 import { DEFAULT_GUILD_HALL_THEME_ID, GUILD_HALL_THEME_BY_ID, slotForTheme, slotsForTheme } from '../data/guildHallSlots';
-import { GameState, GuildHallDecorationDef, GuildHallSlotDef, GuildHallSlotId } from '../types';
+import { GameState, GuildHallDecorationDef, GuildHallSlotDef, GuildHallSlotId, GuildHallSlotRect } from '../types';
+
+/** Floor for a player-resized slot, in % of the background -- small
+ *  enough to shrink a lot, never small enough to vanish or become
+ *  impossible to grab again. Matches the DevTool's own slot layout
+ *  editor's floor (`wireSlotLayoutResize`, app.js) so a slot behaves the
+ *  same whether an admin or a player is the one resizing it. */
+const MIN_SLOT_SIZE = 2;
 
 /**
  * Owning/equipping Guild Hall decorations -- the state layer for patch
@@ -70,17 +77,32 @@ export const GuildHallDecorManager = {
 
   /* ------------------------------- slots ------------------------------- */
 
-  /** The active theme's own definition for one slot -- undefined if the
-   *  slot doesn't exist, or if the active theme hides it (see
-   *  `slotForTheme`'s own comment on that distinction). */
+  /** The active theme's own definition for one slot, with any player
+   *  drag/resize override applied on top (patch 0212 --
+   *  `GameState.customGuildHallSlotLayout`) -- undefined if the slot
+   *  doesn't exist, or if the active theme hides it (see `slotForTheme`'s
+   *  own comment on that distinction). Always resolve a slot's actual
+   *  on-screen rect through this (or `.slots` below), never by calling
+   *  `slotForTheme` directly -- that only ever returns the DevTool-
+   *  authored default, blind to anything a player has moved. */
   slot(state: GameState, slotId: GuildHallSlotId): GuildHallSlotDef | undefined {
-    return slotForTheme(GuildHallDecorManager.activeThemeId(state), slotId);
+    const theme = GuildHallDecorManager.activeThemeId(state);
+    const base = slotForTheme(theme, slotId);
+    if (!base) return undefined;
+    const override = state.customGuildHallSlotLayout?.[theme]?.[slotId];
+    return override ? { ...base, ...override } : base;
   },
 
-  /** Every slot visible in the active theme -- may be fewer than 30 if
-   *  this theme hides some. */
+  /** Every slot visible in the active theme, each with any player
+   *  drag/resize override applied -- may be fewer than 30 if this theme
+   *  hides some. */
   slots(state: GameState): GuildHallSlotDef[] {
-    return slotsForTheme(GuildHallDecorManager.activeThemeId(state));
+    const theme = GuildHallDecorManager.activeThemeId(state);
+    const overrides = state.customGuildHallSlotLayout?.[theme];
+    return slotsForTheme(theme).map((base) => {
+      const override = overrides?.[base.id];
+      return override ? { ...base, ...override } : base;
+    });
   },
 
   /* ----------------------------- ownership ------------------------------ */
@@ -150,8 +172,14 @@ export const GuildHallDecorManager = {
   },
 
   /** Every currently-filled slot *of the active theme*, resolved to its
-   *  slot def + decoration def -- the shape the Customize UI actually
-   *  renders. Slots whose stored id no longer resolves to a real slot
+   *  slot def (with any player drag/resize override already applied,
+   *  patch 0212 -- see `.slot` above) + decoration def -- the shape both
+   *  the Customize UI and the general menu backdrop
+   *  (GuildHallMenuBackdrop.tsx, patch 0209) actually render. A moved/
+   *  resized slot therefore shows up in its new spot on the general
+   *  backdrop too, same "the backdrop always mirrors what's actually
+   *  placed" reasoning patch 0209 already established for decorations
+   *  themselves. Slots whose stored id no longer resolves to a real slot
    *  (hidden or removed from this theme since it was equipped) or a real
    *  decoration are skipped rather than shown broken. */
   allEquipped(state: GameState): { slot: GuildHallSlotDef; decoration: GuildHallDecorationDef }[] {
@@ -159,7 +187,7 @@ export const GuildHallDecorManager = {
     const equipped = state.equippedGuildHallDecorations?.[theme] ?? {};
     const result: { slot: GuildHallSlotDef; decoration: GuildHallDecorationDef }[] = [];
     for (const slotId of Object.keys(equipped) as GuildHallSlotId[]) {
-      const slot = slotForTheme(theme, slotId);
+      const slot = GuildHallDecorManager.slot(state, slotId);
       const decoration = GuildHallDecorManager.equippedDecoration(state, slotId);
       if (slot && decoration) result.push({ slot, decoration });
     }
@@ -201,5 +229,61 @@ export const GuildHallDecorManager = {
     const equipped = state.equippedGuildHallDecorations?.[theme];
     if (!equipped) return;
     delete equipped[slotId];
+  },
+
+  /* ---------------------------- slot layout ---------------------------- */
+  /* Patch 0212: letting a player drag/resize a slot away from its
+   * DevTool-authored default. The content pool a slot draws from
+   * (`slotType`) and which 30 slots exist at all stay exactly as
+   * `SLOT_IDENTITY` defines them -- only a slot's own rect is ever
+   * player-editable, stored per save/per theme in
+   * `GameState.customGuildHallSlotLayout` (see that field's own doc
+   * comment), never touching the shared DevTool content any other player
+   * sees. */
+
+  /** Moves and/or resizes a slot for the active theme -- clamps the rect
+   *  so it can never leave the background's own 0-100% bounds on either
+   *  axis and never shrinks below `MIN_SLOT_SIZE`, the same clamping the
+   *  DevTool's own slot layout editor already applies
+   *  (`wireSlotLayoutDrag`/`wireSlotLayoutResize`, app.js) -- a slot
+   *  behaves the same whether an admin or a player is the one dragging
+   *  it, just written to a different place. Returns the clamped rect
+   *  actually stored (or `null` if the slot doesn't exist/isn't visible
+   *  in this theme), so a caller mid-drag can snap its own preview to
+   *  exactly what state now holds rather than trusting its own math to
+   *  have matched. */
+  setSlotRect(state: GameState, slotId: GuildHallSlotId, rect: GuildHallSlotRect): GuildHallSlotRect | null {
+    const theme = GuildHallDecorManager.activeThemeId(state);
+    if (!slotForTheme(theme, slotId)) return null;
+    const width = Math.max(MIN_SLOT_SIZE, Math.min(100, rect.width));
+    const height = Math.max(MIN_SLOT_SIZE, Math.min(100, rect.height));
+    const left = Math.max(0, Math.min(100 - width, rect.left));
+    const top = Math.max(0, Math.min(100 - height, rect.top));
+    const clamped: GuildHallSlotRect = { top, left, width, height };
+    const byTheme = state.customGuildHallSlotLayout ?? (state.customGuildHallSlotLayout = {});
+    const themeOverrides = byTheme[theme] ?? (byTheme[theme] = {});
+    themeOverrides[slotId] = clamped;
+    return clamped;
+  },
+
+  /** Whether the active theme has any player-moved/resized slots at all
+   *  -- drives the Customize scene's "Reset Layout" button, so it can sit
+   *  disabled on a hall nobody has rearranged yet instead of doing
+   *  nothing when pressed. */
+  hasCustomLayout(state: GameState): boolean {
+    const theme = GuildHallDecorManager.activeThemeId(state);
+    const overrides = state.customGuildHallSlotLayout?.[theme];
+    return !!overrides && Object.keys(overrides).length > 0;
+  },
+
+  /** Clears every slot override for the active theme, snapping it back to
+   *  the DevTool-authored default layout -- only this theme's own bucket
+   *  is touched, same "each theme's own arrangement, untouched by any
+   *  other theme" rule `unequip` already follows for placed decorations.
+   *  Decorations themselves are untouched -- this resets *where* the
+   *  slots are, not what's equipped in them. */
+  resetLayout(state: GameState): void {
+    const theme = GuildHallDecorManager.activeThemeId(state);
+    if (state.customGuildHallSlotLayout) delete state.customGuildHallSlotLayout[theme];
   },
 };
