@@ -20,8 +20,24 @@ import { Tuning } from './tuning';
  *  (no multiplier -- their extra power already comes through the
  *  rarity/level curve itself -- but still tagged, for consistency and
  *  because a player might reasonably want to know an Epic-quest drop
- *  from a Hard-quest one at the same rarity). */
-export type LootSourceTag = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary' | 'raidHeroic' | 'raidLegendary';
+ *  from a Hard-quest one at the same rarity).
+ *
+ *  `chainReplayHeroic`/`chainReplayLegendary` (patch 0225, Replayable
+ *  Quest Chains -- see guild-idler-status.md's Backlog entry) cover a
+ *  chain replay's *padding* loot only -- whatever a stage's ordinary
+ *  procedural pool-pick already selected, same mechanism `raidHeroic`/
+ *  `raidLegendary` already use for raids. Deliberately separate budget
+ *  multipliers and separate display labels from the raid tags, even
+ *  though the underlying mechanism is identical -- see their own
+ *  comments below for why. The chain's own *dedicated* reward item is a
+ *  different, deliberately non-procedural mechanism entirely (see
+ *  scaleChainExclusiveItem below) -- these two tags never reach that
+ *  path, since dedicated rewards are chainExclusive and therefore never
+ *  isProceduralTemplate() in the first place. */
+export type LootSourceTag =
+  | 'easy' | 'normal' | 'hard' | 'epic' | 'legendary'
+  | 'raidHeroic' | 'raidLegendary'
+  | 'chainReplayHeroic' | 'chainReplayLegendary';
 
 export type BonusRollTier = 'none' | 'fortunate' | 'charmed';
 
@@ -52,13 +68,27 @@ function sourceBudgetMultiplier(sourceTag: LootSourceTag): number {
     case 'raidHeroic': return Tuning.get('loot_procedural.raidHeroicBudgetMultiplier');
     case 'raidLegendary': return Tuning.get('loot_procedural.raidLegendaryBudgetMultiplier');
     case 'hard': return Tuning.get('loot_procedural.hardQuestBudgetMultiplier');
+    // Deliberately their own tuning ids, not a reuse of the raid ones --
+    // chain replay is meant to be lighter-weight solo-hero repeatable
+    // content, not a second raid ladder (same reasoning
+    // CHAIN_REPLAY_DIFFICULTIES' own successPenalty/lootBonus already
+    // used, softer than RAID_DIFFICULTIES' equivalents). Values sit
+    // between hardQuest's 1.15x and raid's 1.5x/2.2x.
+    case 'chainReplayHeroic': return Tuning.get('loot_procedural.chainReplayHeroicBudgetMultiplier');
+    case 'chainReplayLegendary': return Tuning.get('loot_procedural.chainReplayLegendaryBudgetMultiplier');
     default: return 1;
   }
 }
 
 /** Display label for the bracketed source tag -- e.g. "Iron Sword [Hard]".
  *  Easy/Normal quest drops get no bracket at all (the common case
- *  shouldn't be visually noisy); everything else does. */
+ *  shouldn't be visually noisy); everything else does.
+ *
+ *  chainReplayHeroic/Legendary deliberately use "Replay: Heroic"/
+ *  "Replay: Legendary" rather than reusing raid's bare "Heroic"/
+ *  "Legendary" text (confirmed design decision) -- a player should be
+ *  able to tell at a glance whether a drop came from a raid or a chain
+ *  replay, not just that it was hard-won either way. */
 function sourceTagLabel(sourceTag: LootSourceTag): string | null {
   switch (sourceTag) {
     case 'hard': return 'Hard';
@@ -66,6 +96,8 @@ function sourceTagLabel(sourceTag: LootSourceTag): string | null {
     case 'legendary': return 'Legendary';
     case 'raidHeroic': return 'Heroic';
     case 'raidLegendary': return 'Legendary';
+    case 'chainReplayHeroic': return 'Replay: Heroic';
+    case 'chainReplayLegendary': return 'Replay: Legendary';
     default: return null; // easy, normal
   }
 }
@@ -159,3 +191,82 @@ export function isProceduralTemplate(def: { mods?: Partial<Modifiers>; stats?: P
   const hasStats = !!def.stats && Object.keys(def.stats).length > 0;
   return !hasMods && !hasStats;
 }
+
+export interface ChainExclusiveScale {
+  /** The item's FULL scaled mods, meant to fully replace def.mods, not
+   *  add to it -- see this function's own comment for why mods and
+   *  stats need different treatment here. */
+  customMods: Partial<Modifiers>;
+  /** Only the DELTA above def.stats (scaledValue - baseValue), meant to
+   *  be added on top, not the full scaled total -- see this function's
+   *  own comment. */
+  enchantStatsDelta: Partial<Stats>;
+  displayName: string;
+}
+
+/**
+ * Scales an already-authored `chainExclusive` item's own mods/stats for
+ * a Heroic/Legendary chain replay drop -- the dedicated-item counterpart
+ * to rollProceduralItem above, but a genuinely different mechanism, not
+ * a variant of it. `chainExclusive` rewards are permanently exempt from
+ * procedural generation (isProceduralTemplate() is false for them by
+ * construction), so there's no "blank budget" to roll from the way a
+ * padding item has -- this instead multiplies the item's own real,
+ * hand-authored numbers, the same category Sets are in, but with new
+ * tier variants specifically for this one feature (confirmed decision:
+ * NOT reviving the hand-duplicated-item pattern patch 0214 deleted 84
+ * of; this multiplies the SAME def's numbers at drop time instead of
+ * reading a separate `_heroic`/`_legendary` def).
+ *
+ * Multiplier values come from real precedent, not invented: comparing
+ * `knights_blade` (a padding item) and `gravewatchers_band` (a dedicated
+ * reward item, the same category this function scales) against their
+ * own pre-0214 hand-authored Heroic/Legendary tiers independently
+ * converged on the same range -- roughly +20-33% at Heroic, a further
+ * +25-35% on top at Legendary (~+60-75% cumulative). Deliberately
+ * distinct tuning ids from loot_procedural's budget multipliers above --
+ * this scales an authored item's actual numbers directly, not a rarity-
+ * based budget, so the same numeric range needed its own category rather
+ * than reusing those.
+ *
+ * **Mods vs Stats need different treatment, matching how
+ * HeroManager.equipmentMods/equipmentStats already combine an item's def
+ * with its EquipmentItem overrides**: equipmentMods does
+ * `item.customMods ?? def.mods` (customMods, if set, REPLACES def.mods
+ * entirely) while equipmentStats does `def.stats + item.enchantStats`
+ * (enchantStats ADDS on top of def.stats). So `customMods` here carries
+ * the item's full scaled mod total (correct for a full replacement), but
+ * `enchantStatsDelta` carries only the difference above the def's own
+ * base stats (correct for an additive field) -- setting the full scaled
+ * stat total into enchantStats would double-count def.stats underneath
+ * it.
+ *
+ * No Fortunate/Charmed bonus roll here, unlike rollProceduralItem --
+ * these are already unique, named story rewards; a random bonus prefix
+ * on top would read as redundant rather than exciting, so this
+ * deliberately doesn't offer one.
+ */
+export function scaleChainExclusiveItem(
+  def: { name: string; mods?: Partial<Modifiers>; stats?: Partial<Stats> },
+  sourceTag: 'chainReplayHeroic' | 'chainReplayLegendary',
+): ChainExclusiveScale {
+  const multiplier = sourceTag === 'chainReplayHeroic'
+    ? Tuning.get('chain_replay_dedicated.heroicMultiplier')
+    : Tuning.get('chain_replay_dedicated.legendaryMultiplier');
+
+  const customMods: Partial<Modifiers> = {};
+  for (const [key, value] of Object.entries(def.mods ?? {}) as [keyof Modifiers, number][]) {
+    customMods[key] = Math.round(value * multiplier);
+  }
+
+  const enchantStatsDelta: Partial<Stats> = {};
+  for (const [key, value] of Object.entries(def.stats ?? {}) as [keyof Stats, number][]) {
+    enchantStatsDelta[key] = Math.round(value * multiplier) - value;
+  }
+
+  const tagLabel = sourceTagLabel(sourceTag);
+  const displayName = tagLabel ? `${def.name} [${tagLabel}]` : def.name;
+
+  return { customMods, enchantStatsDelta, displayName };
+}
+

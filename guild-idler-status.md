@@ -1200,14 +1200,23 @@ Two minimal, deliberately read-only query helpers added to
 purchase or resolution logic yet, that's steps (2)/(3) below, kept
 strictly out of this patch's scope.
 
-Still to come, roughly in this order: (2) the new `LootSourceTag`
-values + budget multipliers + the dedicated-item hybrid scaling code
-path (small, no new equipment content); (3) `QuestManager`/`GameEngine`
-resolution logic -- difficulty-modified success, the tag-based loot
-resolution, reset-on-fail, and the actual tier-purchase mutation; (4)
-Replay Memories UI itself -- band cards, difficulty picker, loot-table
-view; (5) DevTool schema updates so the new content types are editable
-the same way everything else already is.
+Still to come, roughly in this order: **(2) done, patch 0225** -- the
+new `LootSourceTag` values (`'chainReplayHeroic'`/`'chainReplayLegendary'`)
+and their own budget multipliers for padding loot; `scaleChainExclusiveItem()`
+in `proceduralLoot.ts`, a genuinely new (not procedural-roll) mechanism
+that multiplies a `chainExclusive` reward's own authored mods/stats
+directly, wired into `EquipmentManager.instantiate` as a second branch
+alongside the existing procedural-template one. Verified numerically
+against real precedent: the 1.3x/1.7x multipliers reproduce
+`gravewatchers_band`'s pre-0214 hand-authored Heroic/Legendary numbers
+exactly (success 6->8->10, injuryResist 14->18->24). No new equipment
+content -- confirmed, this step needed none. (3) `QuestManager`/
+`GameEngine` resolution logic -- difficulty-modified success, calling
+the two mechanisms above at the right moments, reset-on-fail, and the
+actual tier-purchase mutation; (4) Replay Memories UI itself -- band
+cards, difficulty picker, loot-table view; (5) DevTool schema updates so
+the new content types are editable the same way everything else already
+is.
 
 ### Uncapped gold/xp multipliers -- resolved, patch 0214
 Was flagged here (see git history for the original entry) during the
@@ -17001,3 +17010,77 @@ referenced, 29 unique, zero duplicates, zero chains left uncovered,
 zero band entries pointing at a nonexistent chain id. `SAVE_VERSION`
 chain confirmed contiguous (45->46->47) and no duplicate `Tuning` ids
 introduced.
+
+### Replayable Quest Chains: the loot mechanism itself (patch 0225)
+
+```discord-update
+Dev Update | Feature (foundation)
+
+- Second step toward replaying story chains -- the actual loot math is built now, still nothing playable yet
+- Chain replay padding loot and a chain's own unique reward item both get real Heroic/Legendary scaling, tagged distinctly from raid drops so you can tell them apart at a glance
+```
+
+Step (2) of the sequencing plan from patch 0223/0224's Backlog entry --
+the loot mechanism itself, still no UI and no way to actually trigger a
+replay yet (that's step 3).
+
+**Padding loot** (`proceduralLoot.ts`): two new `LootSourceTag` values,
+`'chainReplayHeroic'`/`'chainReplayLegendary'`, plumbed through
+`sourceBudgetMultiplier`/`sourceTagLabel` exactly the way `'raidHeroic'`/
+`'raidLegendary'` already are. Own tuning ids
+(`loot_procedural.chainReplayHeroicBudgetMultiplier`/
+`chainReplayLegendaryBudgetMultiplier`, 1.3x/1.8x) rather than reusing
+raids' 1.5x/2.2x -- confirmed design, chain replay is meant to be
+lighter-weight solo content, not a second raid ladder. Own display
+labels too -- `[Replay: Heroic]`/`[Replay: Legendary]`, not raid's bare
+`[Heroic]`/`[Legendary]` -- so a player can tell at a glance which
+system a drop came from.
+
+**The dedicated item** (new `scaleChainExclusiveItem()` in
+`proceduralLoot.ts`): a genuinely different mechanism from the padding
+case above, not a variant of it. `chainExclusive` rewards are
+permanently exempt from procedural generation (never
+`isProceduralTemplate()`), so there's no blank budget to roll from --
+this instead multiplies the item's own authored `mods`/`stats` directly.
+New `chain_replay_dedicated.heroicMultiplier`/`legendaryMultiplier`
+(1.3x/1.7x) -- **verified numerically against real precedent**, not just
+derived: applying these multipliers to `gravewatchers_band`'s own base
+mods reproduces its pre-0214 hand-authored Heroic/Legendary numbers
+exactly (success 6->8->10, injuryResist 14->18->24).
+
+**Mods and Stats needed different treatment**, caught by actually
+reading `HeroManager.equipmentMods`/`equipmentStats` before writing this
+rather than assuming symmetry: `equipmentMods` does
+`item.customMods ?? def.mods` (a full replacement when set), while
+`equipmentStats` does `def.stats + item.enchantStats` (additive). So
+`scaleChainExclusiveItem` returns `customMods` as the item's full scaled
+mod total, but `enchantStatsDelta` as only the difference above the
+def's own base stats -- setting the full scaled stat total into
+`enchantStats` would have silently double-counted `def.stats`
+underneath it. Deliberately no Fortunate/Charmed bonus roll on this
+path, unlike an ordinary procedural roll -- these are already unique
+named story rewards, a random bonus prefix on top would read as
+redundant rather than exciting.
+
+**`EquipmentManager.instantiate`** gained a second branch alongside the
+existing procedural-template one: when `roll.sourceTag` is one of the
+two new chain-replay tags AND `def.chainExclusive` is true, calls
+`scaleChainExclusiveItem` instead of `rollProceduralItem`. Deliberately
+does **not** set `rolledItemLevel` -- gear relevance decay falls back to
+`def.reqLevel` for this hand-authored item, same as every other
+authored item (Sets, craftables, an ordinary first-clear chain reward)
+already does.
+
+4 new `Tuning` entries (2 padding budget multipliers, 2 dedicated-item
+scale multipliers). No equipment.json content added -- confirmed, this
+step needed none.
+
+No UI changed, no engine action added, no existing loot behavior
+touched -- every new code path is additive and only reachable via a
+`sourceTag` nothing calls yet.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. The mods/stats scaling was checked
+numerically against `gravewatchers_band`'s real pre-0214 tiered values,
+not just read for plausibility -- exact match at both Heroic and
+Legendary. No duplicate `Tuning` ids introduced.

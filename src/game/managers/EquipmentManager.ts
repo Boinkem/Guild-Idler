@@ -3,7 +3,7 @@ import { EquipmentDef, EquipmentItem, ElementType, GameState, Hero, Modifiers, S
 import { uid, Rng } from '../rng';
 import { clamp } from '../util';
 import { Tuning } from '../data/tuning';
-import { isProceduralTemplate, rollProceduralItem, LootSourceTag } from '../data/proceduralLoot';
+import { isProceduralTemplate, rollProceduralItem, scaleChainExclusiveItem, LootSourceTag } from '../data/proceduralLoot';
 
 export const MAX_PLUS = 10;
 
@@ -19,6 +19,20 @@ export const EquipmentManager = {
    * convention the rest of this codebase already follows, though every
    * real call site (QuestManager, RaidManager, chain rewards) always
    * passes one.
+   *
+   * A second, narrower case (patch 0225, Replayable Quest Chains): a
+   * `chainExclusive` item is never isProceduralTemplate() (it has its
+   * own authored mods/stats by definition), so it falls through the
+   * branch above untouched for an ordinary first-clear grant -- correct,
+   * unchanged behavior. But when `roll.sourceTag` is specifically
+   * `'chainReplayHeroic'`/`'chainReplayLegendary'`, that IS a real
+   * instruction to scale the item, just via a different mechanism (see
+   * scaleChainExclusiveItem's own comment in proceduralLoot.ts for why
+   * this multiplies the def's own authored numbers rather than rolling
+   * from a blank budget). Deliberately does NOT set `rolledItemLevel` --
+   * gear relevance decay should fall back to `def.reqLevel` for this
+   * hand-authored item, same as every other authored item (Sets,
+   * craftables, an ordinary first-clear chain reward) already does.
    */
   instantiate(defId: string, roll?: {
     itemLevel: number; sourceTag: LootSourceTag; rng: Rng;
@@ -35,6 +49,11 @@ export const EquipmentManager = {
       item.enchantStats = result.stats;
       item.proceduralName = result.displayName;
       item.rolledItemLevel = roll.itemLevel;
+    } else if (roll && def.chainExclusive && (roll.sourceTag === 'chainReplayHeroic' || roll.sourceTag === 'chainReplayLegendary')) {
+      const result = scaleChainExclusiveItem(def, roll.sourceTag);
+      item.customMods = result.customMods;
+      item.enchantStats = result.enchantStatsDelta;
+      item.proceduralName = result.displayName;
     }
     return item;
   },
