@@ -1,5 +1,5 @@
 import { EQUIPMENT_BY_ID, RARITY_PRICE_MULT } from '../data/equipment';
-import { EquipmentDef, EquipmentItem, ElementType, GameState, Hero } from '../types';
+import { EquipmentDef, EquipmentItem, ElementType, GameState, Hero, Modifiers, Stats } from '../types';
 import { uid, Rng } from '../rng';
 import { clamp } from '../util';
 import { Tuning } from '../data/tuning';
@@ -20,15 +20,21 @@ export const EquipmentManager = {
    * real call site (QuestManager, RaidManager, chain rewards) always
    * passes one.
    */
-  instantiate(defId: string, roll?: { itemLevel: number; sourceTag: LootSourceTag; rng: Rng }): EquipmentItem | null {
+  instantiate(defId: string, roll?: {
+    itemLevel: number; sourceTag: LootSourceTag; rng: Rng;
+    weightedKey?: keyof Modifiers | keyof Stats; weightMultiplier?: number;
+  }): EquipmentItem | null {
     const def = EQUIPMENT_BY_ID[defId];
     if (!def) return null;
     const item: EquipmentItem = { uid: uid('it'), defId, durability: def.maxDurability, plus: 0 };
     if (roll && isProceduralTemplate(def)) {
-      const result = rollProceduralItem(def.rarity, roll.itemLevel, roll.sourceTag, def.name, roll.rng);
+      const result = rollProceduralItem(
+        def.rarity, roll.itemLevel, roll.sourceTag, def.name, roll.rng, roll.weightedKey, roll.weightMultiplier,
+      );
       item.customMods = result.mods;
       item.enchantStats = result.stats;
       item.proceduralName = result.displayName;
+      item.rolledItemLevel = roll.itemLevel;
     }
     return item;
   },
@@ -199,6 +205,61 @@ export const EquipmentManager = {
     state.stats.goldSpent += cost;
     item.plus += 1;
     item.durability = EquipmentManager.maxDurability(item);
+    return null;
+  },
+
+  /**
+   * Blacksmith re-leveling (patch 0215) -- only meaningful for a
+   * procedurally-generated item (isProceduralTemplate(def)); a Set piece
+   * or hand-authored legendary has no `rolledItemLevel` to raise, its
+   * power is fixed by definition. Cost for raising ONE level -- deliberately
+   * NOT multiplied by RARITY_PRICE_MULT on top of def.value the way
+   * repairCost's flat per-durability-point rate needs to be: def.value
+   * already scales with rarity on its own (a legendary's value is
+   * already far above a common's), so adding RARITY_PRICE_MULT again
+   * here would double-count it -- caught directly by testing this
+   * against ring_of_endless_roads (legendary, value 7600) before this
+   * shipped: the double-counted version priced +10 levels at 1.2 million
+   * gold, wildly out of scale with the rest of the game's economy (the
+   * fixed formula prices the same raise at 38,000). Same "coefficient *
+   * def.value" shape upgradeCost already uses, just linear in
+   * levelsToRaise instead of exponential in item.plus -- re-leveling is
+   * meant to keep pace with normal leveling, not become its own separate
+   * grind curve the way Workshop's `+N` refinement is. `levelsToRaise`
+   * lets the caller quote (or pay for) raising several levels in one
+   * action.
+   */
+  relevelCost(item: EquipmentItem, levelsToRaise: number): { gold: number; scrap: number } {
+    const def = EQUIPMENT_BY_ID[item.defId];
+    if (!def || levelsToRaise <= 0) return { gold: 0, scrap: 0 };
+    const gold = Math.ceil(def.value * 0.5 * levelsToRaise);
+    const scrap = 2 * levelsToRaise;
+    return { gold, scrap };
+  },
+
+  /**
+   * Raises `item.rolledItemLevel` toward (never past) `heroLevel` --
+   * `targetLevel` is clamped into [current rolledItemLevel, heroLevel]
+   * so a caller can't accidentally re-level an item above the hero
+   * wearing it, or "re-level" it downward. No-op (with a reason) on a
+   * hand-authored item, which has no `rolledItemLevel` field to raise in
+   * the first place.
+   */
+  relevel(state: GameState, item: EquipmentItem, targetLevel: number, heroLevel: number): string | null {
+    const def = EQUIPMENT_BY_ID[item.defId];
+    if (!def) return 'Unknown item.';
+    if (!isProceduralTemplate(def)) return 'This item\'s power is fixed -- nothing to re-level.';
+    const current = item.rolledItemLevel ?? def.reqLevel;
+    const clampedTarget = Math.max(current, Math.min(targetLevel, heroLevel));
+    const levelsToRaise = clampedTarget - current;
+    if (levelsToRaise <= 0) return 'Already at its target level.';
+    const cost = EquipmentManager.relevelCost(item, levelsToRaise);
+    if (state.gold < cost.gold) return 'Not enough gold for re-leveling.';
+    if (state.scrap < cost.scrap) return 'Not enough scrap for re-leveling.';
+    state.gold -= cost.gold;
+    state.stats.goldSpent += cost.gold;
+    state.scrap -= cost.scrap;
+    item.rolledItemLevel = clampedTarget;
     return null;
   },
 

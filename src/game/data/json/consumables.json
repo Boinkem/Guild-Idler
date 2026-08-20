@@ -163,5 +163,77 @@
     "effect": {
       "peddlerCounterReduction": 3
     }
+  },
+  {
+    "id": "minor_fortune_charm_gold",
+    "name": "Minor Fortune Charm (Gold)",
+    "description": "A faint pull toward coin. Loot drops on this quest are a little more likely to roll Gold.",
+    "cost": 40,
+    "rarity": "common",
+    "glyph": "\u2666",
+    "effect": {
+      "lootWeightStat": "gold",
+      "lootWeightMultiplier": 2
+    }
+  },
+  {
+    "id": "fortune_charm_gold",
+    "name": "Fortune Charm (Gold)",
+    "description": "A real pull toward coin. Loot drops on this quest are noticeably more likely to roll Gold.",
+    "cost": 90,
+    "rarity": "uncommon",
+    "glyph": "\u2666",
+    "effect": {
+      "lootWeightStat": "gold",
+      "lootWeightMultiplier": 3.5
+    }
+  },
+  {
+    "id": "greater_fortune_charm_gold",
+    "name": "Greater Fortune Charm (Gold)",
+    "description": "Coin, and nothing else. Every loot drop on this quest that rolls procedurally rolls Gold on every affix.",
+    "cost": 220,
+    "rarity": "rare",
+    "glyph": "\u2666",
+    "effect": {
+      "lootWeightStat": "gold",
+      "lootWeightMultiplier": 999
+    }
+  },
+  {
+    "id": "minor_fortune_charm_xp",
+    "name": "Minor Fortune Charm (Insight)",
+    "description": "A faint pull toward understanding. Loot drops on this quest are a little more likely to roll Experience.",
+    "cost": 40,
+    "rarity": "common",
+    "glyph": "\u2726",
+    "effect": {
+      "lootWeightStat": "xp",
+      "lootWeightMultiplier": 2
+    }
+  },
+  {
+    "id": "fortune_charm_xp",
+    "name": "Fortune Charm (Insight)",
+    "description": "A real pull toward understanding. Loot drops on this quest are noticeably more likely to roll Experience.",
+    "cost": 90,
+    "rarity": "uncommon",
+    "glyph": "\u2726",
+    "effect": {
+      "lootWeightStat": "xp",
+      "lootWeightMultiplier": 3.5
+    }
+  },
+  {
+    "id": "greater_fortune_charm_xp",
+    "name": "Greater Fortune Charm (Insight)",
+    "description": "Understanding, and nothing else. Every loot drop on this quest that rolls procedurally rolls Experience on every affix.",
+    "cost": 220,
+    "rarity": "rare",
+    "glyph": "\u2726",
+    "effect": {
+      "lootWeightStat": "xp",
+      "lootWeightMultiplier": 999
+    }
   }
 ]

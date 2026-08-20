@@ -263,6 +263,24 @@ export interface ConsumableDef {
      * counter/threshold this actually reduces.
      */
     peddlerCounterReduction?: number;
+    /**
+     * Fortune Charms (patch 0215) -- biases a procedural loot roll
+     * (QuestManager.resolve's loot loop -> rollProceduralItem) toward one
+     * specific Modifiers category instead of the flat uniform pick every
+     * other roll uses. `lootWeightStat` names which category
+     * (`'gold'`/`'xp'`/`'success'`/`'loot'`, the categories actually
+     * authored so far); `lootWeightMultiplier` is how much more often
+     * that category gets picked per affix slot relative to every other
+     * category's own weight of 1 -- e.g. 2 for a Minor charm, 3.5 for a
+     * standard one. A very large multiplier (999) is the "Greater" tier's
+     * full-override shape: every slot lands on the chosen category. Both
+     * fields are ignored by every quest that doesn't actually drop a
+     * procedural item -- equipping one on a quest with no loot table, or
+     * one that only drops hand-authored/Set gear, simply does nothing,
+     * same as any other situational consumable effect that doesn't apply.
+     */
+    lootWeightStat?: keyof Modifiers | keyof Stats;
+    lootWeightMultiplier?: number;
   };
 }
 
@@ -372,6 +390,20 @@ export interface EquipmentItem {
    * Set piece) never sets this at all.
    */
   proceduralName?: string;
+  /**
+   * Set only on procedurally-generated items (patch 0214), and updated by
+   * Blacksmith re-leveling (patch 0215) -- the level this specific
+   * instance's mods/stats were actually rolled against, distinct from
+   * `def.reqLevel` (the shared template's equip-*minimum*, not its
+   * power level). Fixes a real gap in the original patch 0214 rollout:
+   * gearRelevance() used to read def.reqLevel for every item, which is
+   * correct for hand-authored gear (equip-minimum and power level are
+   * the same authored number there) but wrong for procedural gear -- a
+   * `reqLevel: 1` template rolled at itemLevel 50 was decaying to the
+   * relevance floor almost immediately, regardless of how big a budget
+   * it actually rolled with. See HeroManager.gearRelevance.
+   */
+  rolledItemLevel?: number;
   /**
    * Set by the Blacksmith's Infuse station, weapon slot only -- the
    * element this weapon deals. A single value, not a set: infusing again

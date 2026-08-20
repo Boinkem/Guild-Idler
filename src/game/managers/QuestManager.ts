@@ -855,6 +855,11 @@ export const QuestManager = {
       // HeroManager.personalLootBonus for why this moved.
       const lootChance = cfg.lootChance + quest.lootBonus + events.lootDelta;
       const personalLoot = hero ? HeroManager.personalLootBonus(HeroManager.totalStats(hero)) : 0;
+      // Fortune Charms (patch 0215) -- re-derived from quest.consumables
+      // (locked in at departure) rather than stored on ActiveQuest itself,
+      // same "recompute from the source of truth" approach personalLoot
+      // just above already uses.
+      const lootLoadout = InventoryManager.loadoutEffects(state, quest.consumables);
       for (const entry of quest.offer.loot) {
         const chance = Math.min(90, entry.chance * (1 + lootChance / 100) * (1 + personalLoot / 100));
         if (rng.chance(chance)) {
@@ -868,6 +873,7 @@ export const QuestManager = {
             // (which would desync the rng and silently reroll it).
             const item = EquipmentManager.instantiate(def.id, {
               itemLevel: quest.offer.reqLevel, sourceTag: quest.offer.difficulty, rng,
+              weightedKey: lootLoadout.lootWeightStat, weightMultiplier: lootLoadout.lootWeightMultiplier,
             });
             if (item) {
               lootItems.push(item);

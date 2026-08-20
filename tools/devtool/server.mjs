@@ -1214,6 +1214,11 @@ const EFFECT_KEYS = [
   'health', 'restoreHealth', 'healthDamageReduction', 'revivalDiscount',
   'petHealth', 'petRevivalDiscount', 'peddlerCounterReduction',
   'preventInjury', 'guaranteedGoodEvent', 'healInjury',
+  // Fortune Charms (patch 0215) -- lootWeightStat is a string key name
+  // (a Modifiers or Stats key, e.g. 'gold'/'xp'), not itself a numeric
+  // effect value, so it's validated separately below rather than via the
+  // generic numeric-field path every other EFFECT_KEYS entry uses.
+  'lootWeightStat', 'lootWeightMultiplier',
 ];
 const EVENT_EFFECT_KEYS = ['success', 'goldPct', 'flatGold', 'xpPct', 'loot', 'durability', 'delay', 'injury', 'guaranteedLoot'];
 const MATERIAL_KEYS = ['ore', 'timber', 'herbs', 'fish'];

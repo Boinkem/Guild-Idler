@@ -1,5 +1,5 @@
 import { CONSUMABLE_BY_ID, CONSUMABLES } from '../data/items';
-import { ConsumableDef, GameState, Hero, Modifiers } from '../types';
+import { ConsumableDef, GameState, Hero, Modifiers, Stats } from '../types';
 import { HeroManager } from './HeroManager';
 import { ModifierManager } from './ModifierManager';
 
@@ -102,6 +102,8 @@ export const InventoryManager = {
     preventInjury: boolean;
     guaranteedGoodEvent: boolean;
     healthDamageReduction: number;
+    lootWeightStat?: keyof Modifiers | keyof Stats;
+    lootWeightMultiplier?: number;
   } {
     let success = 0;
     let gold = 0;
@@ -112,6 +114,13 @@ export const InventoryManager = {
     let preventInjury = false;
     let guaranteedGoodEvent = false;
     let healthDamageReduction = 0;
+    // Fortune Charms (patch 0215) -- only one weighted stat can apply per
+    // roll, so if multiple charms somehow end up equipped at once the
+    // strongest weight wins rather than trying to combine them (combining
+    // two different target stats' weights has no sensible single-key
+    // meaning for rollProceduralItem to apply).
+    let lootWeightStat: keyof Modifiers | keyof Stats | undefined;
+    let lootWeightMultiplier = 0;
     for (const id of defIds) {
       const def = InventoryManager.resolveDef(state, id);
       if (!def) continue;
@@ -124,12 +133,18 @@ export const InventoryManager = {
       preventInjury ||= !!def.effect.preventInjury;
       guaranteedGoodEvent ||= !!def.effect.guaranteedGoodEvent;
       healthDamageReduction += def.effect.healthDamageReduction ?? 0;
+      if (def.effect.lootWeightStat && (def.effect.lootWeightMultiplier ?? 0) > lootWeightMultiplier) {
+        lootWeightStat = def.effect.lootWeightStat;
+        lootWeightMultiplier = def.effect.lootWeightMultiplier ?? 0;
+      }
     }
     return {
       mods: { success, gold, xp, loot, injuryResist, speed },
       preventInjury,
       guaranteedGoodEvent,
       healthDamageReduction: Math.min(100, healthDamageReduction),
+      lootWeightStat,
+      lootWeightMultiplier: lootWeightStat ? lootWeightMultiplier : undefined,
     };
   },
 };

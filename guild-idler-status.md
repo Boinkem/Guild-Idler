@@ -991,38 +991,37 @@ Was flagged here (see git history for the original entry) during the
 hero-stat rebalance discussion. Fixed as part of patch 0214's soft-cap
 system -- see that patch's own writeup below for the full mechanism.
 
-### Consumable stat-weighted procedural rolls -- idea logged, not scoped
-Raised during the procedural-loot design discussion (patch 0214, see
-that entry below): a consumable that biases a procedural roll's category
-distribution toward a chosen stat, instead of the flat random spread
-every roll currently uses (`rollProceduralItem` picks uniformly across
-all 10 Modifiers/Stats keys per affix slot). Not scoped -- open questions
-include whether it's a full override (100% of slots hit the chosen
-category) or a soft weight (chosen category rolls N times as often),
-whether it consumes on use or is reusable, and where it'd be
-crafted/purchased.
+### Consumable stat-weighted procedural rolls -- built, patch 0215
+Was logged here as an idea during patch 0214's design discussion. Built
+as Fortune Charms -- see patch 0215's own writeup below for the full
+mechanism (weighted, not full-override for the two lower tiers; the
+Greater tier is the full-override version this entry originally asked
+about).
 
-### Gear re-leveling (spend gold + scrap to raise an item's own level) -- idea logged, not scoped
-Raised in the same conversation as the gear relevance decay mechanic
-(patch 0214, see below): the natural pressure-release valve for that
-decay -- a liked item with a good procedural roll can be re-leveled up to
-the hero's current level instead of just aging out, refreshing its own
-`reqLevel` (and therefore `HeroManager.gearRelevance`'s ratio) without
-losing the specific instance or its rolled `customMods`/`enchantStats`.
-Not scoped -- open questions include the gold/scrap cost curve, whether
-it's capped per item (can't out-level the hero, or can it go beyond?),
-and whether it's a Workshop/Blacksmith feature or its own new station.
+### Gear re-leveling (spend gold + scrap to raise an item's own level) -- built, patch 0215
+Was logged here as an idea during patch 0214's design discussion. Built
+as Blacksmith re-leveling -- see patch 0215's own writeup below. Also
+surfaced and fixed a real bug in patch 0214's own `gearRelevance` (it was
+reading `def.reqLevel`, the shared equip-minimum, instead of the actual
+rolled item level) while scoping this.
 
-### Enchanter reroll (reroll a procedural item's rolled stats) -- idea logged, not scoped
-Same conversation as the two entries above. A service that spends gold +
-materials to reroll a procedurally-generated item's `customMods`/
-`enchantStats` in place -- same rarity/level budget
-(`rollProceduralItem`), a fresh random distribution across the affix
-pool. Pairs with gear re-leveling above: together they cover both axes
-of "I like this item, let me invest in it further" (re-leveling raises
-the ceiling, reroll reshapes what it rolled). Not scoped -- likely lives
-on the Enchanter/Blacksmith station given the name, but the actual
-station and cost curve aren't decided.
+### Enchanter reroll (reroll a procedural item's rolled stats) -- built, patch 0215, with a real scope limitation
+Was logged here as an idea during patch 0214's design discussion. Built
+-- see patch 0215's own writeup below -- but deliberately scoped to only
+reroll `customMods`, not `enchantStats`, after finding `enchantStats` is
+shared with the pre-existing, additive Armour Infusion/Enchanting system
+(`CraftingManager.enchantItem`). A full reroll of `enchantStats` would
+silently destroy any legitimate Enchant investment a player separately
+paid for, with no way to distinguish "originally-rolled procedural
+stats" from "later, purchased enchant stats" once they're merged into
+one field. **Real follow-up worth doing**: give procedurally-rolled
+stats their own field (e.g. `EquipmentItem.proceduralStats`), separate
+from `enchantStats`, so `equipmentStats()` sums three sources instead of
+two (def.stats + proceduralStats + enchantStats) and a reroll can safely
+regenerate `proceduralStats` alone without any risk to purchased
+Enchant investment. Not done now because it touches the same summing
+logic `gearRelevance` decay also applies to, and this patch was already
+large enough to want that as its own separately-reviewable change.
 
 ### Procedural item names not yet wired into every UI surface -- known gap, patch 0214
 `EquipmentItem.proceduralName` (the rolled "Fortunate Iron Sword [Hard]"
@@ -15826,3 +15825,157 @@ environment (`node_modules` not preinstalled in the conversation
 environment; installed here to run the checks above) -- worth a manual
 pass through a fresh recruit's first few quests, a Hard drop, and a raid
 clear before this ships, given the size of this patch.
+
+### Gear re-leveling (Blacksmith), Enchanter reroll, Fortune Charm consumables, and a real `gearRelevance` bug fix (patch 0215)
+
+```discord-update
+Dev Update | Patch 0215
+
+- Blacksmith: re-level a piece of gear you like toward your current character level, restoring its full stat contribution instead of letting it quietly decay
+- Enchanter: reroll a procedural item's stat affixes for a fresh spread, using its current level as the roll basis
+- Added 6 new Fortune Charm consumables (3 tiers each for Gold and Insight/XP) that bias loot rolls toward the stat you want on the quest you use them
+- Fixed a real bug from last patch -- gear relevance decay was comparing against the wrong number for procedurally-rolled items, making some of them fade in power much faster than intended
+
+Also, catching up on something that never got its own post: patch 0210 rebalanced every hero class's starting bonuses onto a fair, fixed budget by recruit tier -- no class is a clear best pick anymore, each is just differently shaped. Gladiator specifically got toned down after stacking gold/loot/speed bonuses directly on top of its own strongest stat, far beyond every other class.
+```
+
+Direct follow-up to patch 0214's own backlog -- all three items logged
+there ("Consumable stat-weighted procedural rolls," "Gear re-leveling,"
+"Enchanter reroll") are built here, planned and scoped together in one
+pass per direct request, since re-leveling and reroll were explicitly
+meant to pair (raise the ceiling, then reshape the roll) and Fortune
+Charms feed the same `rollProceduralItem` both of those reuse.
+
+#### A real bug found while scoping this, fixed first
+
+`HeroManager.gearRelevance()` was reading `def.reqLevel` for every
+equipped item -- correct for hand-authored gear (its equip-minimum and
+its power level are the same authored number) but wrong for procedural
+gear, whose real power comes from whatever level it actually rolled at,
+often far above a template's low equip floor. Checked directly:
+`rusty_sword` has `reqLevel: 1`; a copy that happened to roll from a
+level-50 Hard quest would decay to the relevance floor for almost any
+hero above level ~4, regardless of how big a budget it actually rolled
+with. This has been live since patch 0214 shipped.
+
+**Fix**: new `EquipmentItem.rolledItemLevel?: number`, set once at
+generation (`EquipmentManager.instantiate`) to the same `itemLevel`
+already used to size the roll's budget. Both `gearRelevance()` call
+sites (`equipmentStats`/`equipmentMods` in `HeroManager`) now read
+`item.rolledItemLevel ?? def.reqLevel` -- hand-authored items (no
+`rolledItemLevel`) fall back to the old, correct behavior unchanged.
+
+#### Blacksmith: re-level
+
+`EquipmentManager.relevelCost(item, levelsToRaise)` /
+`EquipmentManager.relevel(state, item, targetLevel, heroLevel)`. Only
+offered on procedural items (`isProceduralTemplate(def)` -- a Set piece
+or hand-authored legendary has no `rolledItemLevel` to raise, nothing to
+do). Raises `rolledItemLevel` toward, never past, `heroLevel`; can't be
+used to lower it. Deliberately does **not** touch the item's existing
+`customMods`/`enchantStats` -- it restores the *existing* roll's full
+effective value by removing the decay penalty, it doesn't hand out a
+bigger budget the way a fresh drop at the new level would. That's the
+intended split from "a good stat roll you specifically like": re-leveling
+keeps it, reroll (below) is the only way to get a different one.
+
+```
+gold = ceil(def.value * 0.5 * levelsToRaise)
+scrap = 2 * levelsToRaise
+```
+
+**Caught and fixed a real formula bug before this shipped**: the first
+version also multiplied by `RARITY_PRICE_MULT[def.rarity]`, copying
+`repairCost`'s pattern without checking whether it applied here. It
+doesn't -- `def.value` already scales with rarity on its own (a
+legendary's value is already far above a common's), so multiplying by
+`RARITY_PRICE_MULT` again double-counted it. Caught by testing against
+real data before writing a single line of UI: `ring_of_endless_roads`
+(legendary, value 7600) priced +10 levels at **1.2 million gold** under
+the double-counted formula -- wildly out of scale with the rest of the
+game's economy (guild facilities cap out around 1.16M cumulative, total,
+across every facility). Fixed version prices the same raise at 38,000.
+Re-verified across the full rarity spread after the fix (common through
+legendary) -- costs now scale sensibly: common ~50g for +10 levels,
+legendary ~38-45k.
+
+#### Enchanter: reroll
+
+`CraftingManager.rerollCost(state, item)` / `CraftingManager.reroll
+(state, item, heroLevel)`. Uses the item's *current* `rolledItemLevel`
+(post any re-leveling) as the budget basis for a fresh roll -- re-level
+first, then reroll, is the correct order to get the most out of both.
+
+```
+gold = round(def.value * 1.2 * (1 - Enchanter Arcane Discount / 100))
+herbs = 20 (flat)
+```
+
+**Deliberately scoped to `customMods` only, not `enchantStats`** -- a
+real, known limitation, not an oversight. `enchantStats` turned out to
+already be shared with the pre-existing, additive Armour Infusion/
+Enchanting system (`CraftingManager.enchantItem`), which *adds* its
+recipe stats onto whatever a procedural roll already put there. A full
+reroll of `enchantStats` would silently wipe out any Enchant investment
+a player separately paid gold/materials for, with no way to tell "this
+was the original procedural roll" apart from "this was a later,
+legitimate purchase" once they're merged into one field. Rerolling only
+`customMods` (via `rollProceduralItem`'s new `poolRestriction: 'mods'`
+option) avoids that risk entirely, at the cost of only half a procedural
+item's affixes being rerollable today. Logged in the Backlog above as
+the real follow-up: split procedurally-rolled stats onto their own
+field, separate from `enchantStats`, so a future reroll can safely cover
+both pools.
+
+`rollProceduralItem` gained a `poolRestriction: 'mods' | 'stats' |
+'both'` parameter for this (defaults to `'both'`, so every existing call
+site -- ordinary drops -- is unaffected).
+
+#### Fortune Charm consumables
+
+Six new `consumables.json` entries -- Minor/Standard/Greater tiers,
+Gold and Insight(xp) flavors. Rather than a single "pick the stat at use
+time" consumable (considered, but the existing consumable system has no
+runtime-chosen-parameter mechanism the way Weapon Enchanting's
+element-at-use-time flow does -- would have needed new state plumbing
+beyond this patch's scope), each charm targets one fixed category, same
+pattern the game's own elemental gems already use (craft/buy a specific
+variant, apply it generically).
+
+| Tier | Weight | Cost | Rarity |
+|-|-|-|-|
+| Minor | 2x | 40g | common |
+| Standard | 3.5x | 90g | uncommon |
+| Greater | 999x (effectively full override) | 220g | rare |
+
+`ConsumableDef.effect` gained `lootWeightStat`/`lootWeightMultiplier`.
+`InventoryManager.loadoutEffects` now also returns these (strongest
+equipped charm wins if somehow more than one is equipped at once --
+combining two different target stats has no sensible single-key meaning
+for the roll to apply). `QuestManager.resolve`'s loot loop re-derives
+`loadoutEffects` from `quest.consumables` (locked in at departure, same
+"recompute from source of truth" approach `personalLoot` already uses
+just above it) and passes the weighting into `EquipmentManager.
+instantiate`. **Quest-only in this patch** -- not wired into `RaidManager`'s
+loot loop, which doesn't currently support per-hero equipped consumables
+the same way; raids still roll unweighted.
+
+Verified the weighting mechanic numerically (not just by reading the
+code): a scripted 1,000-roll simulation of the Greater tier (weight 999)
+landed on the target category 993/1000 times; the Minor tier (weight 2
+against a 10-key pool, expected ~18.2%) landed 173/1000, within normal
+sampling variance of that target. Also confirmed a `'mods'`-restricted
+pool (what reroll uses) never once produces a stat-pool key across the
+same test.
+
+#### Verified
+
+`npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` both
+pass clean against a fresh clone of `main` (through patch 0214) with
+only this patch's diff applied. Re-level/reroll cost formulas checked
+directly against real item data across the full rarity spread (not just
+one sample) after the RARITY_PRICE_MULT double-count was caught and
+fixed. Fortune Charm weighting and reroll pool-restriction both verified
+by direct simulation, not just code review. No live playtest in this
+environment -- same caveat as patch 0214, worth a manual pass at the
+Blacksmith and Enchanter stations specifically before this ships.

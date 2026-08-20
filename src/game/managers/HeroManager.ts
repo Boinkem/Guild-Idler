@@ -229,20 +229,30 @@ export const HeroManager = {
   },
 
   /**
-   * Gear relevance decay (patch 0214) -- how much of an equipped item's
-   * stats/mods actually apply, given how far the hero has leveled past
-   * the item's own reqLevel. `clamp(item.reqLevel / hero.level, floor,
-   * 1)`: an item at or above the hero's current level always gives full
-   * value; every level the hero climbs past it shrinks the ratio, down to
-   * `gear_relevance.floor` (never all the way to zero -- outleveled gear
-   * should read as "time to upgrade," not "worthless junk"). Same
-   * mechanism WoW's itemLevel-vs-character-level squish uses. Applies to
-   * every equipped item regardless of source -- procedural drops, Sets,
-   * and hand-authored legendaries alike (deliberate, see
-   * guild-idler-status.md's patch 0214 writeup: Sets are no longer
-   * "acquire once, BiS forever" now that everything drops within a
-   * rolling level window). `def.reqLevel` doubles as the item's own
-   * "item level" here, same convention gearScoreForItem already uses.
+   * Gear relevance decay (patch 0214, `rolledItemLevel` fix patch 0215)
+   * -- how much of an equipped item's stats/mods actually apply, given
+   * how far the hero has leveled past the item's own effective level.
+   * `clamp(itemLevel / hero.level, floor, 1)`: an item at or above the
+   * hero's current level always gives full value; every level the hero
+   * climbs past it shrinks the ratio, down to `gear_relevance.floor`
+   * (never all the way to zero -- outleveled gear should read as "time
+   * to upgrade," not "worthless junk"). Same mechanism WoW's itemLevel-
+   * vs-character-level squish uses. Applies to every equipped item
+   * regardless of source -- procedural drops, Sets, and hand-authored
+   * legendaries alike (deliberate, see guild-idler-status.md's patch
+   * 0214 writeup: Sets are no longer "acquire once, BiS forever" now
+   * that everything drops within a rolling level window).
+   *
+   * Callers pass `item.rolledItemLevel ?? def.reqLevel` as `itemReqLevel`
+   * -- NOT `def.reqLevel` alone. `def.reqLevel` is the shared template's
+   * equip-*minimum*, correct as a power-level stand-in for hand-authored
+   * gear (the two happen to be the same authored number there) but wrong
+   * for procedural gear, whose real power comes from whatever level it
+   * actually rolled at (often much higher than a template's low equip
+   * floor). `rolledItemLevel` is set once at generation
+   * (EquipmentManager.instantiate) and updated by Blacksmith re-leveling
+   * (patch 0215, EquipmentManager.relevel) -- this was a real bug in the
+   * original patch 0214 rollout, caught while designing re-leveling.
    */
   gearRelevance(itemReqLevel: number, heroLevel: number): number {
     if (heroLevel <= 0) return 1;
@@ -257,7 +267,7 @@ export const HeroManager = {
       if (!item || item.durability <= 0) continue;
       const def = EQUIPMENT_BY_ID[item.defId];
       if (!def) continue;
-      const scale = (1 + item.plus * 0.15) * HeroManager.gearRelevance(def.reqLevel, hero.level);
+      const scale = (1 + item.plus * 0.15) * HeroManager.gearRelevance(item.rolledItemLevel ?? def.reqLevel, hero.level);
       const base = def.stats;
       const enchant = item.enchantStats;
       if (!base && !enchant) continue;
@@ -510,7 +520,7 @@ export const HeroManager = {
       if (!item || item.durability <= 0) continue;
       const def = EQUIPMENT_BY_ID[item.defId];
       if (!def) continue;
-      const relevance = HeroManager.gearRelevance(def.reqLevel, hero.level);
+      const relevance = HeroManager.gearRelevance(item.rolledItemLevel ?? def.reqLevel, hero.level);
       // Crafted items carry their own chosen mods (EquipmentItem.customMods)
       // instead of the def's -- see that field's own comment in types.ts.
       sources.push(scaleMods(item.customMods ?? def.mods, (1 + item.plus * 0.15) * relevance));

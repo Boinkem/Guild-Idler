@@ -82,9 +82,25 @@ export interface ProceduralRoll {
  * template's authored flavor name (e.g. "Iron Sword") -- this only ever
  * decorates it with a bonus-roll prefix and/or a source-tag suffix, never
  * invents a new base name.
+ *
+ * `weightedKey`/`weightMultiplier` (patch 0215, Fortune Charms) bias
+ * which category each affix slot lands on -- every other key keeps its
+ * default weight of 1, `weightedKey` gets `weightMultiplier` instead.
+ * Omitted entirely for an ordinary unweighted roll (the overwhelming
+ * majority of drops), in which case this is byte-identical to the
+ * original patch 0214 behavior.
+ *
+ * `poolRestriction` (patch 0215, Enchanter reroll) limits which of the
+ * two pools this roll can draw from -- 'mods' for a reroll (see
+ * CraftingManager.reroll's own comment for why: `enchantStats` is
+ * shared with the pre-existing, additive Armour Infusion system, so a
+ * reroll only safely touches `customMods`, never `enchantStats`).
+ * Defaults to 'both', an ordinary drop's normal behavior.
  */
 export function rollProceduralItem(
   rarity: Rarity, itemLevel: number, sourceTag: LootSourceTag, baseName: string, rng: Rng,
+  weightedKey?: keyof Modifiers | keyof Stats, weightMultiplier?: number,
+  poolRestriction: 'mods' | 'stats' | 'both' = 'both',
 ): ProceduralRoll {
   let budget = GEAR_SCORE_BY_RARITY[rarity]
     * Tuning.get('loot_procedural.budgetRarityMultiplier')
@@ -106,14 +122,16 @@ export function rollProceduralItem(
   const slots = AFFIX_SLOTS_BY_RARITY[rarity];
   const perSlot = Math.max(1, Math.round(budget / slots));
   const pool: { fromStats: boolean; key: string }[] = [
-    ...MODIFIER_KEYS.map((key) => ({ fromStats: false, key })),
-    ...STAT_KEYS.map((key) => ({ fromStats: true, key })),
+    ...(poolRestriction !== 'stats' ? MODIFIER_KEYS.map((key) => ({ fromStats: false, key })) : []),
+    ...(poolRestriction !== 'mods' ? STAT_KEYS.map((key) => ({ fromStats: true, key })) : []),
   ];
 
   const mods: Partial<Modifiers> = {};
   const stats: Partial<Stats> = {};
   for (let i = 0; i < slots; i++) {
-    const picked = rng.pick(pool);
+    const picked = weightedKey
+      ? rng.weighted(pool.map((p) => ({ item: p, weight: p.key === weightedKey ? (weightMultiplier ?? 1) : 1 })))
+      : rng.pick(pool);
     if (picked.fromStats) {
       const k = picked.key as keyof Stats;
       stats[k] = (stats[k] ?? 0) + perSlot;

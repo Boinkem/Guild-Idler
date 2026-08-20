@@ -1,4 +1,4 @@
-import { CraftingRecipeDef, ElementType, GameState, MaterialId, Modifiers, Stats } from '../types';
+import { CraftingRecipeDef, ElementType, EquipmentItem, GameState, MaterialId, Modifiers, Stats } from '../types';
 import { CRAFTING_RECIPE_BY_ID } from '../data/craftingRecipes';
 import { CONSUMABLE_BY_ID } from '../data/items';
 import { EquipmentManager } from './EquipmentManager';
@@ -6,6 +6,9 @@ import { InventoryManager } from './InventoryManager';
 import { ModifierManager } from './ModifierManager';
 import { MATERIAL_BY_ID } from '../data/materials';
 import { MOD_LABEL } from '../util';
+import { EQUIPMENT_BY_ID } from '../data/equipment';
+import { isProceduralTemplate, rollProceduralItem } from '../data/proceduralLoot';
+import { createRng } from '../rng';
 
 export const CraftingManager = {
   /**
@@ -229,6 +232,68 @@ export const CraftingManager = {
     for (const [materialId, amount] of Object.entries(recipe.materialCost) as [MaterialId, number][]) {
       state.materials[materialId] -= amount;
     }
+    return null;
+  },
+
+  /**
+   * Enchanter reroll (patch 0215) -- rerolls a procedurally-generated
+   * item's `customMods` using its *current* `rolledItemLevel` (post any
+   * Blacksmith re-leveling, see EquipmentManager.relevel) as the budget
+   * basis, so re-level-then-reroll is the correct min-max order.
+   *
+   * Deliberately only touches `customMods`, never `enchantStats`, even
+   * though a fresh drop's procedural roll populates both -- `enchantStats`
+   * is shared with the pre-existing, additive Armour Infusion/Enchanting
+   * system above (enchantItem), which ADDS its recipe stats onto whatever
+   * a procedural roll already put there. A full reroll of `enchantStats`
+   * would silently destroy any Enchant investment the player separately
+   * paid gold/materials for, with no way to tell "which part was the
+   * original procedural roll" apart from "which part was a later,
+   * legitimate purchase" once they're merged into one field. Scoping
+   * reroll to `customMods` only (rollProceduralItem's `poolRestriction:
+   * 'mods'`) avoids that risk entirely -- a real, known limitation (only
+   * half a procedural item's affixes are rerollable today), not an
+   * oversight. See guild-idler-status.md's Backlog for the cleaner fix
+   * (separate the procedural stat roll onto its own field, distinct from
+   * `enchantStats`) that would let a reroll safely cover both pools.
+   *
+   * Not routed through the Tuning-driven crafting-recipe system the way
+   * every other CraftingManager action is -- this isn't picking from a
+   * fixed pool of authored recipes, it's re-running the same generator
+   * that made the item in the first place, so its own cost formula lives
+   * here instead.
+   */
+  rerollCost(state: GameState, item: EquipmentItem): { gold: number; herbs: number } | null {
+    const def = EQUIPMENT_BY_ID[item.defId];
+    if (!def || !isProceduralTemplate(def)) return null;
+    const goldRaw = def.value * 1.2;
+    const discount = ModifierManager.global(state).enchantDiscount ?? 0;
+    return { gold: Math.max(0, Math.round(goldRaw * (1 - discount / 100))), herbs: 20 };
+  },
+
+  reroll(state: GameState, item: EquipmentItem, heroLevel: number): string | null {
+    const def = EQUIPMENT_BY_ID[item.defId];
+    if (!def) return 'Unknown item.';
+    if (!isProceduralTemplate(def)) return 'This item\u2019s power is fixed -- nothing to reroll.';
+    const goldRaw = def.value * 1.2;
+    const discount = ModifierManager.global(state).enchantDiscount ?? 0;
+    const goldCost = Math.max(0, Math.round(goldRaw * (1 - discount / 100)));
+    const herbsCost = 20;
+    if (state.gold < goldCost) return 'Not enough gold for the reroll.';
+    if ((state.materials.herbs ?? 0) < herbsCost) return 'Not enough herbs for the reroll.';
+
+    const itemLevel = item.rolledItemLevel ?? Math.min(def.reqLevel, heroLevel);
+    const rng = createRng(`reroll:${item.uid}:${Date.now()}`);
+    const result = rollProceduralItem(def.rarity, itemLevel, 'normal', def.name, rng, undefined, undefined, 'mods');
+    item.customMods = result.mods;
+    // Reroll deliberately doesn't touch the bonus-roll tier or the
+    // bracketed source tag baked into proceduralName at drop time --
+    // those describe where the item came from, not its current stats,
+    // and shouldn't change just because the mods were rerolled.
+
+    state.gold -= goldCost;
+    state.stats.goldSpent += goldCost;
+    state.materials.herbs -= herbsCost;
     return null;
   },
 };
