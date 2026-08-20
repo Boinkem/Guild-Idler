@@ -981,6 +981,34 @@ raid fight).
   lands mid-animation) instead of jumping to it instantly. No more
   numeric text living in more than one place per catch, so nothing can
   misrepresent the amount by construction.
+- **Quest-mark ("!") badge sometimes renders out of frame / pushed out
+  of the idle companion sprite on cold launch, self-corrects the moment
+  Guild Hall is opened then closed** -- reported directly, not yet
+  fixed. Likely the same bug *family* as the already-fixed "hero sprite
+  never loading on cold boot" issue right above `backgroundThrottling:
+  false` in `electron/main.ts` (frameless/transparent/always-on-top/
+  tiny/corner-pinned window, Chromium's occlusion heuristic delays async
+  work in it), just not the exact same symptom or confirmed root cause.
+  `.quest-mark` is `position: absolute; left: 50%; transform:
+  translateX(-50%)` centered against `.idle-stage`, which has no fixed
+  width of its own -- it shrink-wraps around whatever the hero sprite
+  (from `PixelSprite`, same async manifest-driven asset pipeline as the
+  already-fixed bug) currently measures. If that sprite content (or the
+  external Pixelify Sans `@import` at the top of `app.css`, also
+  network-fetched) resolves a beat after first paint, the badge's
+  centering computes against a stale/narrower box. The idle window is
+  fixed-size (260x300, `resizable: false`) and never resizes itself;
+  entering then leaving Guild Hall calls `win.setBounds()` twice
+  (`window:setMode`), forcing a full Chromium relayout that happens to
+  paper over the stale-centering race -- consistent with "toggling the
+  menu fixes it." Not yet confirmed which specific async resource is
+  the actual culprit (sprite manifest vs. font vs. something else), and
+  no live reproduction/instrumentation done yet, so this is a strong
+  working theory from code inspection and precedent, not a confirmed
+  root cause. Leading fix candidate if it holds up: give `.idle-stage`
+  (or a wrapper) a fixed width up front instead of letting it derive
+  from async content, the same "pin to something stable instead of
+  content-derived" fix `.hero-carousel`'s own height race already got.
 
 ---
 
@@ -16388,3 +16416,109 @@ this check needs no un-set logic. Re-ran the growRoster sim after the
 fix and confirmed the real before/after day-count shift (451 -> 455),
 not just that it still runs. No live playtest in this environment --
 same standing caveat as every patch since 0214.
+
+### Grimsby's "A Permanent Spot", Gold-for-Renown Exchange, and Fund the Guild -- three new forever gold sinks (patch 0220)
+
+```discord-update
+Dev Update | Patch 0220
+
+- Added "A Permanent Spot" to Grimsby -- a one-time unlock that keeps his cart, Dice, and card game around for good instead of only during his visits
+- Added the Gold-for-Renown Exchange -- unlock it once, then trade gold for a trickle of Renown at a deliberately harsh rate
+- Added Fund the Guild -- donate gold any time for a small, permanent sliver of Guild Power that grows forever, just slower each time
+```
+
+Three connected gold sinks, designed together across a few planning
+rounds (see the design discussion this patch grew out of) before any
+code was written -- all three exist because Grimsby's Dice was the only
+thing in the game so far that let a player spend an arbitrary amount of
+gold at a real risk/reward or investment rate, and even that was gated
+behind his arrival cycle rather than always available.
+
+**1. Grimsby: "A Permanent Spot".** New one-time unlock on his own tab,
+visible the moment `peddlerUnlocked` is (i.e. right after "The Man Who
+Sells Maybe" completes) -- 8,000g flat, same single-purchase shape as
+the existing High Roller unlock, and reusing High Roller's own
+`grimsbyHighRollerUnlocked` pattern almost exactly:
+`GameState.grimsbyPermanentSpotUnlocked`, a `PeddlerManager
+.unlockPermanentSpot`/`canUnlockPermanentSpot`/`permanentSpotUnlockCost`
+trio, and a `GameEngine.unlockGrimsbyPermanentSpot` wrapper. The actual
+effect is a single, surgical change: `PeddlerManager.isPresent` --
+already the one function gating the whole PeddlerPanel body, the tab's
+"!" badge (`MenuWindow.tsx`), and both `resolveFlip`/`rollDice` --  now
+also returns true once this is bought, regardless of
+`grimsbyArrivedAt`. `resolveFlip`/`rollDice` were previously checking
+`state.grimsbyArrivedAt === null` directly instead of calling
+`isPresent`, which would have silently bypassed the new permanent
+state -- both now route through `isPresent()` like everything else
+already did, so one change covers the whole feature instead of three.
+`grimsbyArrivedAt`/`grimsbyLeavesAt`/`questsSinceGrimsby` are left
+completely alone -- the arrival/leave cycle still ticks along
+underneath for players who haven't bought this, `isPresent` is just no
+longer the only thing that matters. The "X left" countdown on his card
+is hidden once permanent (nothing left to count down).
+
+**2. Gold-for-Renown Exchange.** New Treasury section on the Guild Hall
+tab. Gated behind its own one-time 40,000g unlock
+(`GameState.goldRenownExchangeUnlocked`, same shape as #1 above) --
+direct request, so a player can't stumble into the exchange without
+deliberately buying into it first. Once unlocked: a flat, deliberately
+harsh 50,000 gold per 1 Renown (`GuildManager.goldPerRenown`) --
+calibrated against `renownForRetirement`'s real output (typically
+single-to-low-double-digit Renown per retirement even at high hero
+level), so this can never come close to competing with actually
+retiring a hero, only give genuinely excess late-game gold somewhere to
+go. `GuildManager.exchangeGoldForRenown` floors the entered gold amount
+down to however many *whole* Renown it actually buys at that rate and
+only charges for that (a non-multiple-of-50,000 offer never silently
+loses its remainder) -- returns `null` (nothing charged) if the offer
+doesn't even cover 1 Renown. UI is a free-form gold input (same
+string-state shape as Grimsby's Dice wager field) with a live "-- N
+Renown" preview on the Exchange button itself, so the conversion is
+visible before committing, not a surprise after.
+
+**3. Fund the Guild.** New button next to the Guild Hall tab's existing
+Gold Storage plaque, opening a new `FundGuildModal` -- free-form gold
+amount in the center (own "Max" shortcut, same shape as Grimsby's Dice
+wager field again), "Fund Power" button showing a live "+N Power"
+preview for whatever's currently typed. No catalog, no max level, no
+unlock gate -- available from the start, since unlike the exchange
+above there's no existing system this could undercut by being too
+easy to reach. Every gold donated adds to a new lifetime counter,
+`GameState.guildDonationsTotal` (never decreases, survives prestige).
+That counter feeds a new `donations` component in
+`power.ts`'s `guildPowerBreakdown` -- `floor(0.1 * sqrt
+(guildDonationsTotal))`, deliberately a diminishing curve rather than
+linear so it stays "a very small portion" of Guild Power no matter how
+much gets donated over a save's lifetime, rather than eventually
+becoming the dominant power strategy (the exact class of problem the
+existing "Uncapped gold/xp multipliers" backlog entry already flags
+being careful about). Worked out against the known
+`GUILD_POWER_CEILING` (9,900 at everything else maxed, excluding
+ascension): the very first Power point costs roughly 100g, but the
+*next* point gets steadily more expensive from there (~2,000g/point
+at a 10,000g lifetime total, ~20,000g/point at 1,000,000g, ~200,000g/
+point at 100,000,000g) -- a true asymptotic taper with no single
+breakpoint, not a cliff. Excluded from `GUILD_POWER_CEILING` for the
+same reason ascension already is: it's uncapped by design, so counting
+it there would make the ceiling a moving target. The modal's own
+backdrop (`.fund-guild-scene`, `./lore/guild-hall/fund-guild.jpg`) is
+ready for art whenever it exists -- deliberately `background-size:
+cover` rather than `CraftingStation`'s exact-ratio treatment, since
+this modal has no painted hit-targets that need to land on specific
+pixels, just a form floating over a backdrop; falls back to a plain
+dark panel until the file is actually dropped in, same "renders once
+present" convention every other not-yet-illustrated spot already
+follows.
+
+**Save compatibility.** All three new fields
+(`grimsbyPermanentSpotUnlocked`/`goldRenownExchangeUnlocked`/
+`guildDonationsTotal`) added to `createInitialState` (fresh saves) and
+a new migration 45 -> 46 (existing saves), same "false/false/0 is
+exactly correct for a save that predates this" shape migration 33
+already established for Grimsby's original fields. `SAVE_VERSION`
+45 -> 46.
+
+Not run through a real build in this environment (no `node_modules`
+installed here) -- same standing caveat as every patch since 0214.
+Worth a `tsc --noEmit`/`vite build` pass, and a live playtest of the
+exchange/donation math specifically, before merging.

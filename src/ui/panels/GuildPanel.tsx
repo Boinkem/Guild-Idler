@@ -7,6 +7,7 @@ import { AUTO_CHAIN_RANGES } from '../../game/data/progression';
 import { describeMods, formatGold } from '../../game/util';
 import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
 import { GuildHallCustomizeScene } from '../GuildHallCustomizeScene';
+import { FundGuildModal } from '../FundGuildModal';
 import waxSealComplete from '../../assets/wax-seal-complete.png';
 
 function chainRangeText(level: number): string {
@@ -165,6 +166,10 @@ export function GuildPanel() {
   // sub-tab requests -- GuildPanel just isn't one of those panels
   // otherwise, so the id can't collide with a real sub-tab anywhere.
   const [customizing, setCustomizing] = useState(() => engine.consumeRequestedSubTab() === 'customize');
+
+  // "Fund the Guild" modal -- patch 0220, its own local view toggle, same
+  // "just a view flag, not game state" shape `customizing` above uses.
+  const [fundingOpen, setFundingOpen] = useState(false);
 
   // "Jump to and highlight the requirement" landing -- consumed once on
   // mount (this panel remounts fresh each time the nav switches to it, so
@@ -335,9 +340,20 @@ export function GuildPanel() {
           Facility levels apply to every hero, now and after every retirement.
         </p>
       </div>
-      <div className="guild-storage-plaque">
-        <span className="guild-storage-label">Gold Storage</span>
-        <span className="guild-storage-amount">{formatGold(ModifierManager.goldStorage(state))}</span>
+      <div className="row" style={{ gap: 10, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+        <div className="guild-storage-plaque" style={{ margin: 0 }}>
+          <span className="guild-storage-label">Gold Storage</span>
+          <span className="guild-storage-amount">{formatGold(ModifierManager.goldStorage(state))}</span>
+        </div>
+        {/* "Fund the Guild" -- patch 0220, direct request. An open-ended
+            gold sink with no catalog and no max level: opens a modal to
+            enter any amount, which feeds a small, permanently-diminishing
+            slice of Guild Power (see power.ts's donations component) --
+            see GuildManager.donateToGuild's own comment for the full
+            reasoning on why the curve isn't linear. */}
+        <button className="btn-primary" onClick={() => setFundingOpen(true)}>
+          Fund the Guild
+        </button>
       </div>
 
       <div className="section-heading guild-section-heading">Facilities</div>
@@ -361,6 +377,83 @@ export function GuildPanel() {
       <div className="grid two guild-facility-grid">
         {generalUpgrades.map(generalUpgradeCard)}
       </div>
+
+      {/* Treasury -- patch 0220, direct request. Gold-for-Renown exchange:
+          a one-time unlock, then a deliberately harsh flat rate (see
+          GuildManager.goldPerRenown's own comment) -- an outlet for
+          genuinely excess gold, never a substitute for actually retiring
+          a hero. Same locked-upgrade card shape Grimsby's own High
+          Roller/Permanent Spot cards use. */}
+      <div className="section-heading guild-section-heading">Treasury</div>
+      {!state.goldRenownExchangeUnlocked ? (
+        <div className="card locked-upgrade">
+          <div className="card-title">Gold-for-Renown Exchange</div>
+          <p className="card-flavour muted">
+            Turn a real fortune into a trickle of Renown -- {formatGold(GuildManager.goldPerRenown())} gold
+            per 1 Renown once unlocked. Never worth it over actually retiring a hero; just somewhere for
+            excess gold to go.
+          </p>
+          <button
+            className="btn-primary"
+            disabled={!GuildManager.canUnlockRenownExchange(state)}
+            onClick={() => engine.unlockRenownExchange()}
+            title={GuildManager.canUnlockRenownExchange(state) ? undefined : 'Not enough gold'}
+          >
+            Unlock -- {formatGold(GuildManager.renownExchangeUnlockCost())} gold
+          </button>
+        </div>
+      ) : (
+        <RenownExchangeCard />
+      )}
+
+      {fundingOpen && <FundGuildModal onClose={() => setFundingOpen(false)} />}
     </>
+  );
+}
+
+/**
+ * The exchange itself, once unlocked -- own free-form gold amount input,
+ * same string-state shape PeddlerDiceModal's wager field already uses
+ * (empty while typing rather than snapping to 0), validated/floored on
+ * submit. Split out from GuildPanel's main body purely so its own local
+ * `offerText` state doesn't need to live alongside everything else that
+ * component already tracks.
+ */
+function RenownExchangeCard() {
+  const engine = useEngine();
+  const state = engine.state;
+  const [offerText, setOfferText] = useState('');
+  const rate = GuildManager.goldPerRenown();
+  const offer = Math.floor(Number(offerText));
+  const validOffer = Number.isFinite(offer) && offer > 0;
+  const renownPreview = validOffer ? Math.floor(offer / rate) : 0;
+  const canExchange = validOffer && renownPreview >= 1 && state.gold >= renownPreview * rate;
+
+  return (
+    <div className="card">
+      <div className="card-title">Gold-for-Renown Exchange</div>
+      <p className="card-flavour muted">{formatGold(rate)} gold per 1 Renown.</p>
+      <div className="row wrap" style={{ gap: 6, alignItems: 'center' }}>
+        <input
+          type="number"
+          min={rate}
+          value={offerText}
+          onChange={(e) => setOfferText(e.target.value)}
+          placeholder="Gold to offer"
+          style={{
+            width: 130, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+            color: 'var(--parchment)', padding: '5px 8px', fontSize: '0.75rem',
+          }}
+        />
+        <button
+          className="btn-primary"
+          disabled={!canExchange}
+          onClick={() => { engine.exchangeGoldForRenown(offer); setOfferText(''); }}
+          title={renownPreview >= 1 ? `Get ${renownPreview} Renown for ${formatGold(renownPreview * rate)} gold` : `Offer at least ${formatGold(rate)} gold`}
+        >
+          Exchange{renownPreview >= 1 ? ` -- ${renownPreview} Renown` : ''}
+        </button>
+      </div>
+    </div>
   );
 }

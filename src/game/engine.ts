@@ -2704,6 +2704,55 @@ export class GameEngine {
     void this.saveNow();
   }
 
+  /** Buys "A Permanent Spot" -- same shape as unlockHighRoller above,
+   *  see PeddlerManager.unlockPermanentSpot and
+   *  GameState.grimsbyPermanentSpotUnlocked's own comments. */
+  unlockGrimsbyPermanentSpot() {
+    if (!PeddlerManager.canUnlockPermanentSpot(this.state)) return this.say('Not enough gold.');
+    PeddlerManager.unlockPermanentSpot(this.state);
+    playSound('purchase');
+    this.say('Grimsby grins. \u201cWell, don\u2019t mind if I do.\u201d', 'peddler');
+    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Buys the Gold-for-Renown exchange unlock -- see
+   *  GuildManager.unlockRenownExchange and
+   *  GameState.goldRenownExchangeUnlocked's own comments. */
+  unlockRenownExchange() {
+    if (!GuildManager.canUnlockRenownExchange(this.state)) return this.say('Not enough gold.');
+    GuildManager.unlockRenownExchange(this.state);
+    playSound('purchase');
+    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Spends `goldOffered` gold for as much Renown as it actually buys --
+   *  see GuildManager.exchangeGoldForRenown's own comment for why this
+   *  can charge less than the full amount entered. */
+  exchangeGoldForRenown(goldOffered: number) {
+    const result = GuildManager.exchangeGoldForRenown(this.state, goldOffered);
+    if (!result) return this.say('Not enough gold for even 1 Renown at the current rate.');
+    playSound('purchase');
+    this.notify();
+    void this.saveNow();
+    return result;
+  }
+
+  /** "Fund the Guild" -- see GuildManager.donateToGuild's own comment.
+   *  Returns the amount actually donated (for the modal's own live
+   *  feedback) or undefined if the amount was invalid/unaffordable. */
+  donateToGuild(amount: number) {
+    const donated = GuildManager.donateToGuild(this.state, amount);
+    if (donated === null) return this.say('Enter a valid amount first.');
+    playSound('purchase');
+    this.notify();
+    void this.saveNow();
+    return donated;
+  }
+
   /**
    * Uses an enticement consumable (e.g. Beckoning Charm) -- deliberately
    * NOT routed through InventoryManager.useOnHero the way healing/injury

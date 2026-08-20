@@ -203,6 +203,9 @@ export function createInitialState(now = Date.now()): GameState {
     grimsbyArrivedAt: null,
     grimsbyLeavesAt: null,
     grimsbyHighRollerUnlocked: false,
+    grimsbyPermanentSpotUnlocked: false,
+    goldRenownExchangeUnlocked: false,
+    guildDonationsTotal: 0,
   };
 }
 
@@ -923,6 +926,20 @@ const MIGRATIONS: Record<number, Migration> = {
       },
     };
   },
+  45: (save) => ({
+    // Three new fields for patch 0220's gold-sink trio -- "A Permanent
+    // Spot" (Grimsby), the Gold-for-Renown exchange, and Fund the Guild.
+    // false/false/0 is exactly "never bought either unlock, never
+    // donated," the correct starting state for a save that predates all
+    // three, not a placeholder needing correction -- same "undiscovered
+    // content stays undiscovered" shape migration 33 already gave
+    // Grimsby's own original unlock fields.
+    ...save,
+    version: 46,
+    grimsbyPermanentSpotUnlocked: (save.grimsbyPermanentSpotUnlocked as boolean | undefined) ?? false,
+    goldRenownExchangeUnlocked: (save.goldRenownExchangeUnlocked as boolean | undefined) ?? false,
+    guildDonationsTotal: (save.guildDonationsTotal as number | undefined) ?? 0,
+  }),
 };
 
 export const SaveManager = {

@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 45;
+export const SAVE_VERSION = 46;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -1979,6 +1979,33 @@ export interface GameState {
    *  a vendor, and every other Grimsby-specific number already lives in
    *  its own `peddler.*` tuning namespace rather than that shared list. */
   grimsbyHighRollerUnlocked: boolean;
+  /** True once "A Permanent Spot" has been bought on Grimsby's own page
+   *  (patch 0220) -- a one-time, persistent unlock, same "flip once,
+   *  stays flipped" shape grimsbyHighRollerUnlocked already uses.
+   *  PeddlerManager.isPresent reads this alongside grimsbyArrivedAt, so
+   *  once true, Pick Your Card/Dice/the "!" tab badge all read as
+   *  present permanently, independent of the arrival/leave-timer cycle
+   *  arrivedAt/leavesAt still drive for a player who hasn't bought this.
+   *  grimsbyArrivedAt/grimsbyLeavesAt are left completely alone by this
+   *  flag -- still tick normally underneath, just no longer the only
+   *  thing presence depends on. */
+  grimsbyPermanentSpotUnlocked: boolean;
+  /** True once the Gold-for-Renown exchange has been unlocked (patch
+   *  0220) -- one-time gold cost, same "flip once, stays flipped" shape
+   *  as grimsbyHighRollerUnlocked. Deliberately its own boolean rather
+   *  than a general UPGRADES entry: this isn't a stat bonus with
+   *  modsPerLevel, it gates a standalone exchange action
+   *  (GuildManager.exchangeGoldForRenown) instead. See
+   *  Tuning "treasury.renownExchangeUnlockCost"/"treasury.goldPerRenown". */
+  goldRenownExchangeUnlocked: boolean;
+  /** Lifetime gold ever donated via "Fund the Guild" (patch 0220) --
+   *  never decreases, survives prestige/retirement, same "counts up
+   *  forever" shape state.stats' own lifetime counters use. Feeds a
+   *  small, deliberately diminishing-returns component of Guild Power
+   *  (see power.ts's guildPowerBreakdown -- sqrt of this value, not
+   *  linear, so it stays "a very small portion" no matter how large this
+   *  gets) rather than granting any stat bonus directly. */
+  guildDonationsTotal: number;
 }
 
 /**

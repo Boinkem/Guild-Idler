@@ -316,6 +316,7 @@ export function DashboardPanel() {
             <div className="spread"><span>Renown Perks</span><span>{breakdown.renownPerks.toLocaleString()}</span></div>
             <div className="spread"><span>Completed Chains</span><span>{breakdown.completedChains.toLocaleString()}</span></div>
             <div className="spread"><span>Ascension</span><span>{breakdown.ascension.toLocaleString()}</span></div>
+            <div className="spread"><span>Donations</span><span>{breakdown.donations.toLocaleString()}</span></div>
           </div>
         )}
       </div>

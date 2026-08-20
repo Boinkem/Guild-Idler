@@ -2874,6 +2874,40 @@ button.harvest-item:hover {
   overflow: hidden;
 }
 
+/* "Fund the Guild" -- patch 0220. Deliberately NOT the exact-ratio
+   .craft-scene treatment above: that shape exists because CraftingStation
+   has invisible hit-targets that have to land on specific painted pixels
+   in the art, so the box's aspect ratio has to match the art's exact
+   dimensions. This modal has no hit-targets at all, just a form floating
+   over a backdrop, so a plain cover/center background works regardless of
+   whatever the eventual art's own dimensions turn out to be -- and
+   gracefully falls back to a plain dark panel (var(--night), same as
+   .craft-scene's own background-color fallback) until fund-guild.jpg
+   actually exists, same "renders once present" convention. */
+.fund-guild-modal { max-width: 420px; }
+.fund-guild-scene {
+  position: relative;
+  min-height: 260px;
+  border-radius: 6px;
+  overflow: hidden;
+  background-color: var(--night);
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Same translucent dark backing .idle-plate/.idle-away-banner already use
+   over their own art -- keeps the input/button legible over whatever
+   backdrop lands here, without needing a fixed-opacity image edit. */
+.fund-guild-content {
+  position: relative;
+  width: 100%;
+  text-align: center;
+  padding: 20px 16px;
+  background: color-mix(in srgb, var(--night) 55%, transparent);
+}
+
 /* Transparent hit-targets sitting directly over the art's own painted
    frames -- no visible chrome of their own until filled, so the artwork
    stays the actual visual, not a UI overlay drawn on top of it. */

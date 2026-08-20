@@ -44,6 +44,10 @@ export function PeddlerPanel() {
   const unlockCost = PeddlerManager.highRollerUnlockCost();
   const canAffordUnlock = PeddlerManager.canUnlockHighRoller(state);
 
+  const permanentSpotUnlocked = state.grimsbyPermanentSpotUnlocked;
+  const permanentSpotCost = PeddlerManager.permanentSpotUnlockCost();
+  const canAffordPermanentSpot = PeddlerManager.canUnlockPermanentSpot(state);
+
   return (
     <>
       <h2>Grimsby</h2>
@@ -58,7 +62,7 @@ export function PeddlerPanel() {
           <div style={{ flex: 1 }}>
             <div className="spread">
               <span className="card-title">Grimsby</span>
-              {present && (
+              {present && !permanentSpotUnlocked && (
                 <span className="tiny muted">
                   {formatDuration(Math.max(0, (state.grimsbyLeavesAt ?? now) - now))} left
                 </span>
@@ -190,6 +194,29 @@ export function PeddlerPanel() {
       )}
       {openModal === 'dice' && (
         <PeddlerDiceModal onClose={() => setOpenModal('none')} />
+      )}
+
+      {/* "A Permanent Spot" -- patch 0220, direct request. Same one-time,
+          permanent-unlock shape as High Roller above, but this one flips
+          PeddlerManager.isPresent itself rather than adding a new game --
+          once bought, his cart never leaves again, so Pick Your Card,
+          Dice, and the tab's own "!" badge are all available all the
+          time instead of only during his 5-10-quest arrival cycle. */}
+      {!permanentSpotUnlocked && (
+        <div className="card locked-upgrade">
+          <div className="card-title">A Permanent Spot</div>
+          <p className="card-flavour muted">
+            He's tired of hauling that cart in and out of town. Buy him a real spot, and he stays for good.
+          </p>
+          <button
+            className="btn-primary"
+            disabled={!canAffordPermanentSpot}
+            onClick={() => engine.unlockGrimsbyPermanentSpot()}
+            title={canAffordPermanentSpot ? undefined : 'Not enough gold'}
+          >
+            Unlock -- {formatGold(permanentSpotCost)} gold
+          </button>
+        </div>
       )}
     </>
   );

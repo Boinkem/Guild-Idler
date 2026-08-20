@@ -4190,5 +4190,41 @@
     "min": 0,
     "max": 200,
     "description": "Extra statBudget% on a Fortunate roll."
+  },
+  {
+    "id": "peddler.permanentSpotUnlockCost",
+    "label": "A Permanent Spot: unlock cost",
+    "category": "peddler",
+    "value": 8000,
+    "default": 8000,
+    "min": 0,
+    "description": "One-time gold cost to give Grimsby a permanent spot -- once bought, Pick Your Card/Dice/the tab badge are all available regardless of his arrival/leave-timer cycle. See GameState.grimsbyPermanentSpotUnlocked."
+  },
+  {
+    "id": "treasury.renownExchangeUnlockCost",
+    "label": "Gold-for-Renown exchange: unlock cost",
+    "category": "treasury",
+    "value": 40000,
+    "default": 40000,
+    "min": 0,
+    "description": "One-time gold cost to unlock the Gold-for-Renown exchange on the Guild Hall tab. See GameState.goldRenownExchangeUnlocked."
+  },
+  {
+    "id": "treasury.goldPerRenown",
+    "label": "Gold-for-Renown exchange: gold per Renown",
+    "category": "treasury",
+    "value": 50000,
+    "default": 50000,
+    "min": 1,
+    "description": "How much gold buys exactly 1 Renown once the exchange is unlocked. Deliberately harsh -- Renown from actually retiring a hero is typically single-to-low-double digits, so this is meant as an outlet for genuinely excess gold, never a substitute for the retirement loop. See GuildManager.exchangeGoldForRenown."
+  },
+  {
+    "id": "treasury.donationPowerWeight",
+    "label": "Fund the Guild: power weight",
+    "category": "treasury",
+    "value": 0.1,
+    "min": 0,
+    "default": 0.1,
+    "description": "Multiplier on sqrt(lifetime gold donated) that becomes the Donations line in Guild Power (see power.ts guildPowerBreakdown). Deliberately a diminishing curve, not linear, so this stays a small, ever-shrinking-per-gold bonus no matter how much is donated over a save's lifetime."
   }
 ]

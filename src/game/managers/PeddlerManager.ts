@@ -222,9 +222,42 @@ export const PeddlerManager = {
 
   /** True once he's actually here and interactable. Distinct from
    *  questsSinceGrimsby reaching 0 -- see GameState.grimsbyArrivedAt's
-   *  own comment for why this is the flag to check, not the counter. */
+   *  own comment for why this is the flag to check, not the counter.
+   *  Patch 0220: also true once grimsbyPermanentSpotUnlocked is bought,
+   *  independent of the arrival/leave-timer cycle entirely -- every
+   *  caller (this panel, the tab badge, resolveFlip, rollDice) already
+   *  routes through this one function rather than checking
+   *  grimsbyArrivedAt directly, so the permanent unlock only needed to
+   *  change here. */
   isPresent(state: GameState): boolean {
-    return state.grimsbyArrivedAt !== null;
+    return state.grimsbyArrivedAt !== null || state.grimsbyPermanentSpotUnlocked;
+  },
+
+  /** One-time gold cost for "A Permanent Spot" -- same flat,
+   *  single-purchase shape as highRollerUnlockCost above. */
+  permanentSpotUnlockCost(): number {
+    return Tuning.get('peddler.permanentSpotUnlockCost');
+  },
+
+  canUnlockPermanentSpot(state: GameState): boolean {
+    return !state.grimsbyPermanentSpotUnlocked && state.gold >= PeddlerManager.permanentSpotUnlockCost();
+  },
+
+  /** Buys "A Permanent Spot" outright -- same defensive-guard shape
+   *  unlockHighRoller uses (caller is expected to have already checked
+   *  canUnlockPermanentSpot). Deliberately does NOT touch
+   *  grimsbyArrivedAt/grimsbyLeavesAt/questsSinceGrimsby -- the
+   *  arrival/leave cycle keeps ticking underneath exactly as before,
+   *  isPresent above is just no longer the only thing gating on it. */
+  unlockPermanentSpot(state: GameState): boolean {
+    if (state.grimsbyPermanentSpotUnlocked) return false;
+    const cost = PeddlerManager.permanentSpotUnlockCost();
+    if (state.gold < cost) return false;
+    state.gold -= cost;
+    state.stats.goldSpent += cost;
+    state.stats.peddlerGoldSpent += cost;
+    state.grimsbyPermanentSpotUnlocked = true;
+    return true;
   },
 
   /**
@@ -305,7 +338,7 @@ export const PeddlerManager = {
    * flat replacement of it.
    */
   resolveFlip(state: GameState, pickedIndex: 0 | 1 | 2, now: number, highRoller = false, stake = 1): PeddlerFlipResult | null {
-    if (state.grimsbyArrivedAt === null) return null;
+    if (!PeddlerManager.isPresent(state)) return null;
     if (highRoller && !state.grimsbyHighRollerUnlocked) return null;
     const multiplier = (highRoller ? Tuning.get('peddler.highRollerMultiplier') : 1) * stake;
     const fee = PeddlerManager.feeCost(state) * multiplier;
@@ -433,7 +466,7 @@ export const PeddlerManager = {
    * resolveFlip's own doc comment already establishes.
    */
   rollDice(state: GameState, wager: number, chosen: DiceFace): DiceRollResult | null {
-    if (state.grimsbyArrivedAt === null) return null;
+    if (!PeddlerManager.isPresent(state)) return null;
     const stake = Math.floor(wager);
     if (!Number.isFinite(stake) || stake <= 0) return null;
     if (state.gold < stake) return null;

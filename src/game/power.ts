@@ -1,5 +1,6 @@
 import { GameState } from './types';
 import { HeroManager } from './managers/HeroManager';
+import { Tuning } from './data/tuning';
 
 /**
  * Every source contributes at this same "1 level/perk = 20 points" rate --
@@ -26,6 +27,14 @@ export interface GuildPowerBreakdown {
   raidUpgrades: number;
   renownPerks: number;
   completedChains: number;
+  /** "Fund the Guild" lifetime donations (patch 0220) -- weight *
+   *  sqrt(state.guildDonationsTotal), a deliberately diminishing curve
+   *  rather than a linear one, so this stays a small, ever-shrinking-
+   *  per-gold bonus regardless of how much gets donated over a save's
+   *  lifetime. Excluded from GUILD_POWER_CEILING below for the same
+   *  reason ascension is -- donations are uncapped by design, so
+   *  counting them there would make the ceiling a moving target too. */
+  donations: number;
   total: number;
 }
 
@@ -57,10 +66,12 @@ export function guildPowerBreakdown(state: GameState): GuildPowerBreakdown {
   const renownPerks = Object.values(state.renownPerks).reduce((sum, lvl) => sum + lvl, 0) * UPGRADE_LEVEL_WEIGHT;
   const completedChains = state.completedChains.length * CHAIN_WEIGHT;
 
-  const total = heroStats + gearScore + ascension + facilities + vendorUpgrades + raidUpgrades + renownPerks + completedChains;
+  const donations = Math.floor(Tuning.get('treasury.donationPowerWeight') * Math.sqrt(state.guildDonationsTotal));
+
+  const total = heroStats + gearScore + ascension + facilities + vendorUpgrades + raidUpgrades + renownPerks + completedChains + donations;
 
   return {
-    heroStats, gearScore, ascension, facilities, vendorUpgrades, raidUpgrades, renownPerks, completedChains,
+    heroStats, gearScore, ascension, facilities, vendorUpgrades, raidUpgrades, renownPerks, completedChains, donations,
     total: Math.floor(total),
   };
 }

@@ -7,6 +7,7 @@ import { GameState, GuildFacility, HeroClass, VendorId } from '../types';
 import { Rng } from '../rng';
 import { HeroManager } from './HeroManager';
 import { ModifierManager } from './ModifierManager';
+import { Tuning } from '../data/tuning';
 
 export const GuildManager = {
   facilityLevel(state: GameState, id: GuildFacility): number {
@@ -179,5 +180,84 @@ export const GuildManager = {
 
   raidUpgrades() {
     return RAID_UPGRADES;
+  },
+
+  /* ------------------------------ treasury ------------------------------ */
+  // Two standalone gold sinks added in patch 0220, neither routed through
+  // the general UPGRADES list above -- same reasoning grimsbyHighRollerUnlocked
+  // already established for Grimsby: these aren't stat bonuses with a
+  // modsPerLevel curve, they gate/perform a standalone action instead.
+
+  /** One-time gold cost to unlock the Gold-for-Renown exchange. */
+  renownExchangeUnlockCost(): number {
+    return Tuning.get('treasury.renownExchangeUnlockCost');
+  },
+
+  canUnlockRenownExchange(state: GameState): boolean {
+    return !state.goldRenownExchangeUnlocked && state.gold >= GuildManager.renownExchangeUnlockCost();
+  },
+
+  /** Buys the exchange outright -- same defensive-guard shape
+   *  PeddlerManager.unlockHighRoller already uses. */
+  unlockRenownExchange(state: GameState): boolean {
+    if (state.goldRenownExchangeUnlocked) return false;
+    const cost = GuildManager.renownExchangeUnlockCost();
+    if (state.gold < cost) return false;
+    state.gold -= cost;
+    state.stats.goldSpent += cost;
+    state.goldRenownExchangeUnlocked = true;
+    return true;
+  },
+
+  /** Flat gold cost per 1 Renown, once the exchange is unlocked --
+   *  deliberately harsh (50,000g default), see the tuning entry's own
+   *  comment for why: real Renown from retiring a hero is typically
+   *  single-to-low-double digits, so this can never come close to
+   *  competing with the retirement loop, only give genuinely excess
+   *  gold somewhere to go. */
+  goldPerRenown(): number {
+    return Tuning.get('treasury.goldPerRenown');
+  },
+
+  /**
+   * Converts `goldOffered` into as many whole Renown as it actually
+   * buys at goldPerRenown's rate, charging only for what's actually
+   * converted (floored) rather than the full amount entered -- so
+   * entering an amount that isn't an exact multiple of the rate never
+   * silently burns the remainder. Returns null (nothing charged) if the
+   * exchange isn't unlocked, the offer is invalid, or it doesn't even
+   * cover 1 Renown at the current rate.
+   */
+  exchangeGoldForRenown(state: GameState, goldOffered: number): { renownGained: number; goldSpent: number } | null {
+    if (!state.goldRenownExchangeUnlocked) return null;
+    const offered = Math.floor(goldOffered);
+    if (!Number.isFinite(offered) || offered <= 0) return null;
+    const rate = GuildManager.goldPerRenown();
+    const renownGained = Math.floor(offered / rate);
+    if (renownGained < 1) return null;
+    const goldSpent = renownGained * rate;
+    if (state.gold < goldSpent) return null;
+    state.gold -= goldSpent;
+    state.stats.goldSpent += goldSpent;
+    state.renown += renownGained;
+    return { renownGained, goldSpent };
+  },
+
+  /**
+   * "Fund the Guild" -- an open-ended, uncapped gold sink with no
+   * catalog and no max level: any amount donated adds straight to the
+   * lifetime `guildDonationsTotal` counter, which in turn feeds a small,
+   * deliberately diminishing-returns component of Guild Power (see
+   * power.ts guildPowerBreakdown -- sqrt of this total, not linear).
+   * Returns null (nothing charged) for an invalid/unaffordable amount.
+   */
+  donateToGuild(state: GameState, amount: number): number | null {
+    const donated = Math.floor(amount);
+    if (!Number.isFinite(donated) || donated <= 0) return null;
+    if (state.gold < donated) return null;
+    state.gold -= donated;
+    state.stats.goldSpent += donated;
+    state.guildDonationsTotal += donated;
+    return donated;
   },
 };
