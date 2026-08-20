@@ -142,9 +142,22 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
           </>
         )}
 
-        {result.injuries.length > 0 && (
+        {(result.injuries.length > 0 || result.heroesFallen?.length || result.petsFallen?.length) && (
           <>
             <div className="section-heading">Damage report</div>
+            {/* Same "Fallen earns its own bolded line above the ordinary
+                injury list" treatment as QuestResultModal -- see that
+                file's own comment for the full reasoning. */}
+            {result.heroesFallen?.map((h) => (
+              <div key={`fallen-${h.heroId}`} className="small bad" style={{ fontWeight: 700 }}>
+                {h.heroName} has fallen — revive them from the Heroes tab before sending them out again.
+              </div>
+            ))}
+            {result.petsFallen?.map((p, i) => (
+              <div key={`pet-fallen-${i}`} className="small bad" style={{ fontWeight: 700 }}>
+                {p.petName} has fallen — revive them from the Heroes tab.
+              </div>
+            ))}
             {result.injuries.map((i) => (
               <div key={i.heroId} className="small bad">{i.heroName}: {i.injury.name}</div>
             ))}

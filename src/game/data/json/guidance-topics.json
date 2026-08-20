@@ -91,5 +91,13 @@
       "Each hero's very first Treat and first Repair are free, on the guild. everything after that costs gold. A Physician's Charity or Smith's Charity guild upgrade can make more of each free every day, for every hero."
     ],
     "targetTab": "heroes"
+  },
+  {
+    "id": "first_hero_fallen",
+    "messages": [
+      "A hero's Health just hit zero and they're Fallen -- benched until revived, no quests or raids for them until then.",
+      "Revive them for gold right from the Heroes tab, or wait out the Infirmary's free auto-revive timer once it's unlocked."
+    ],
+    "targetTab": "heroes"
   }
 ]

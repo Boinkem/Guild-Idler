@@ -522,6 +522,19 @@ export class GameEngine {
         this.state.hasEarnedFirstTitle = true;
         this.say(`${result.heroName} has earned the title "${result.titleGranted}"!`, 'heroes', isFirst);
       }
+      // Fallen is a bigger deal than an ordinary injury -- routine
+      // injuries get no toast at all, just the modal/log -- because it
+      // changes what the player can actually do with this hero (or pet)
+      // right now, not just their odds on the next send. Same banner
+      // treatment recovering from Fallen already gets a few lines up in
+      // the tick loop above; going in deserves the same prominence
+      // coming out does.
+      if (result.heroFallen) {
+        this.say(`${result.heroName} has fallen and needs to be revived before questing again.`, 'heroes', true);
+      }
+      if (result.petFallen) {
+        this.say(`${result.petFallen.petName} has fallen and needs to be revived.`, 'heroes', true);
+      }
       this.reportAchievements(AchievementManager.checkAll(this.state, now));
       this.reportGuidance(GuidanceManager.checkAll(this.state));
 
@@ -566,6 +579,29 @@ export class GameEngine {
           : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
         const verb = names.length === 1 ? 'has' : 'have';
         this.say(`${who} ${verb} earned the title "${raidResult.titleGranted}"!`, 'heroes', isFirst);
+      }
+      // Same "Fallen earns its own prominent callout" treatment as the
+      // quest path above -- see that comment for the full reasoning.
+      // Grouped into one toast per kind (heroes / pets) rather than one
+      // per faller, same "credit everyone in one line" shape the title
+      // toast just above already uses for a multi-hero party.
+      if (raidResult.heroesFallen?.length) {
+        const names = raidResult.heroesFallen.map((h) => h.heroName);
+        const who = names.length === 1
+          ? names[0]
+          : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+        const verb = names.length === 1 ? 'has' : 'have';
+        const noun = names.length === 1 ? 'needs' : 'need';
+        this.say(`${who} ${verb} fallen and ${noun} to be revived before questing again.`, 'heroes', true);
+      }
+      if (raidResult.petsFallen?.length) {
+        const names = raidResult.petsFallen.map((p) => p.petName);
+        const who = names.length === 1
+          ? names[0]
+          : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+        const verb = names.length === 1 ? 'has' : 'have';
+        const noun = names.length === 1 ? 'needs' : 'need';
+        this.say(`${who} ${verb} fallen and ${noun} to be revived.`, 'heroes', true);
       }
       this.reportAchievements(AchievementManager.checkAll(this.state, now));
       this.reportGuidance(GuidanceManager.checkAll(this.state));
@@ -749,6 +785,18 @@ export class GameEngine {
       const quest = due[0];
       const result = QuestManager.resolve(this.state, quest, quest.endsAt);
       results.push(result);
+      // Same information as the live-play toasts above, same "quietly,
+      // no toast" treatment as titles/achievements/guidance already get
+      // for offline progress -- still archived to the Notifications log
+      // (and still visible in the offline report itself, via
+      // result.heroFallen/petFallen) so it's not lost, just not a wall
+      // of banners on reopen.
+      if (result.heroFallen) {
+        this.archive(`${result.heroName} fell while you were away and needs to be revived before questing again.`, 'heroes');
+      }
+      if (result.petFallen) {
+        this.archive(`${result.petFallen.petName} fell while you were away and needs to be revived.`, 'heroes');
+      }
       if (result.titleGranted) {
         this.state.hasEarnedFirstTitle = true;
         this.archive(`${result.heroName} has earned the title "${result.titleGranted}"!`, 'heroes');
@@ -807,6 +855,22 @@ export class GameEngine {
       const raidEndsAt = this.state.activeRaid.endsAt;
       const raidResult = RaidManager.resolve(this.state, this.state.activeRaid, raidEndsAt);
       raidResults.push(raidResult);
+      // Same quiet offline treatment as the quest loop above.
+      if (raidResult.heroesFallen?.length) {
+        const names = raidResult.heroesFallen.map((h) => h.heroName);
+        const who = names.length === 1
+          ? names[0]
+          : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+        const verb = names.length === 1 ? 'has' : 'have';
+        this.archive(`${who} ${verb} fallen and need to be revived before questing again.`, 'heroes');
+      }
+      if (raidResult.petsFallen?.length) {
+        const names = raidResult.petsFallen.map((p) => p.petName);
+        const who = names.length === 1
+          ? names[0]
+          : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+        this.archive(`${who} ${names.length === 1 ? 'has' : 'have'} fallen and need to be revived.`, 'heroes');
+      }
       if (raidResult.titleGranted && raidResult.titledHeroNames?.length) {
         this.state.hasEarnedFirstTitle = true;
         const names = raidResult.titledHeroNames;

@@ -989,6 +989,13 @@ export const QuestManager = {
 
     /* ------------------------------- injury ------------------------------- */
     let injury: QuestResult['injury'];
+    // Set inside the health-damage block below, only if THIS quest's
+    // damage roll was what actually dropped the hero (or their paired
+    // pet) to 0 -- see QuestResult.heroFallen's own comment in types.ts
+    // for why this needs to be its own signal rather than reusing
+    // `injury`, which fires on any injury regardless of severity.
+    let heroFallen = false;
+    let petFallen: QuestResult['petFallen'];
     const injuryRisk = success
       ? (events.forcedInjury ? 25 : 0)
       : clamp(35 + DIFFICULTY_ORDER.indexOf(quest.offer.difficulty) * 8 - quest.injuryResist, MIN_INJURY_RISK, 90);
@@ -1022,6 +1029,12 @@ export const QuestManager = {
           const reduction = quest.healthDamageReduction ?? 0;
           const damagePercent = healthDamagePercentForInjuryDef(def) * (1 - reduction / 100);
           HeroManager.applyHealthDamage(hero, damagePercent);
+          // hero.status flips to 'fallen' inside applyHealthDamage itself
+          // the instant Health reaches 0 -- reading it right back off the
+          // hero here is what turns "damage happened" into "this damage
+          // was the killing blow," which is the whole point of a
+          // dedicated heroFallen flag over reusing `injury`.
+          if (hero.status === 'fallen') heroFallen = true;
           // Real per-hero pet pairing (see Hero.equippedPetId): whichever
           // pet is paired with THIS hero shares the exact same
           // damagePercent -- same % of ITS OWN Max Health, not a
@@ -1030,7 +1043,10 @@ export const QuestManager = {
           // damagePercent before either applies it.
           if (hero.equippedPetId) {
             const pet = state.pets.find((p) => p.uid === hero.equippedPetId);
-            if (pet) PetManager.applyHealthDamage(state, pet, damagePercent);
+            if (pet) {
+              PetManager.applyHealthDamage(state, pet, damagePercent);
+              if (PetManager.isFallen(pet)) petFallen = { petName: pet.name };
+            }
           }
         }
       }
@@ -1231,6 +1247,8 @@ export const QuestManager = {
       critBonus: critBonus || undefined,
       grimsbyArrived: grimsbyArrived || undefined,
       titleGranted,
+      heroFallen: heroFallen || undefined,
+      petFallen,
     };
     state.log.unshift(result);
     if (state.log.length > 60) state.log.length = 60;

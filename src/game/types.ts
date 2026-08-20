@@ -805,6 +805,24 @@ export interface QuestResult {
    *  engine.ts; not set on a repeat/no-op grant so re-clearing old
    *  content never re-announces a title the hero already has. */
   titleGranted?: string;
+  /** True if THIS quest's health damage (see QuestManager.resolve's
+   *  injury block) was what dropped the hero to 0 and flipped
+   *  hero.status to 'fallen' -- deliberately separate from `injury`
+   *  above, which fires on any injury regardless of whether it happened
+   *  to be the killing blow. `injury` alone already reads as "a routine
+   *  scrape," so the UI needs its own signal to call out "this hero
+   *  can't be sent again until revived" as a distinct beat rather than
+   *  leaving it buried in the ordinary Damage report line. Not set for
+   *  a hero who was already Fallen going in (can't happen in practice --
+   *  a Fallen hero can't be sent -- but matches applyHealthDamage's own
+   *  no-op-if-already-fallen guard for safety). */
+  heroFallen?: boolean;
+  /** Same reasoning as heroFallen, for this hero's own paired pet if the
+   *  same damage roll happened to drop IT to 0 too (see
+   *  PetManager.applyHealthDamage, called right alongside the hero's own
+   *  in QuestManager.resolve). Independent of heroFallen -- different max
+   *  health curves mean one can fall without the other. */
+  petFallen?: { petName: string };
   /** An ordinary curio drop rolled this quest, if any -- same shape and
    *  same "flat % chance on success, scaled by difficulty" pattern as
    *  eggDropped above, just for QuestManager's own curio-drop roll
@@ -1142,6 +1160,17 @@ export interface RaidResult {
    *  earned it, never the roster at large. */
   titleGranted?: string;
   titledHeroNames?: string[];
+  /** Heroes whose own health damage this run dropped to 0, flipping them
+   *  to 'fallen' -- a subset of `injuries` above (a heroId can appear in
+   *  both), kept as its own field for the same reason
+   *  QuestResult.heroFallen is separate from QuestResult.injury: an
+   *  ordinary injury line reads as routine, and Fallen changes what the
+   *  player can actually do with that hero right now, so it needs its
+   *  own callout rather than being buried in the Damage report list. */
+  heroesFallen?: { heroId: string; heroName: string }[];
+  /** Same reasoning, for any paired pets that fell alongside their hero
+   *  this run -- see QuestResult.petFallen's own comment. */
+  petsFallen?: { petName: string }[];
 }
 
 /* -------------------------- progression -------------------------- */

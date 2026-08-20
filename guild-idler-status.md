@@ -16522,3 +16522,99 @@ Not run through a real build in this environment (no `node_modules`
 installed here) -- same standing caveat as every patch since 0214.
 Worth a `tsc --noEmit`/`vite build` pass, and a live playtest of the
 exchange/donation math specifically, before merging.
+
+### Fallen no longer buried inside the ordinary injury line -- built (patch 0221)
+```discord-update
+Dev Update | Fallen Feedback
+
+- Added a dedicated callout the moment a hero (or their paired pet) actually falls -- no more missing it inside the ordinary injury text
+- Added a one-time tip explaining what Fallen means and how to revive, the first time it happens to you
+- Changed quest, raid, and offline-report result screens to bold and separate a Fallen hero/pet from routine injuries
+```
+
+Direct follow-up from a review pass: Health hitting 0 flips a hero to
+`'fallen'` (can't quest or raid until revived), but nothing in the game
+actually said so distinctly. `QuestResultModal`/`RaidResultModal`/
+`StatsPanel`'s own log detail all rendered a Fallen hero's injury text
+under the same "Damage report" heading, same `.bad` red styling, as any
+routine scrape -- there was no signal anywhere that this specific injury
+was the one that put the hero out of commission. `GuidanceManager` also
+had a `first_injury_or_wear` topic covering ordinary injuries and worn
+gear, but nothing for the actually-bigger moment of a hero's first time
+going Fallen -- a real gap against the game's own established pattern of
+giving every other "first X" moment (first level-up, first legendary
+drop, first raid unlock, etc.) a dedicated one-time nudge.
+
+**`types.ts`.** `QuestResult` gained `heroFallen?: boolean` and
+`petFallen?: { petName: string }`, deliberately separate fields from the
+existing `injury`/`injuries` -- those already fire on any injury
+regardless of severity, so a UI reading them alone can't tell "routine
+scrape" from "this was the killing blow" without re-deriving it itself.
+`RaidResult` gained the equivalent `heroesFallen?: { heroId, heroName
+}[]` and `petsFallen?: { petName }[]`, plural since a raid party is
+more than one hero.
+
+**`QuestManager.ts`.** `resolve()`'s existing injury/health-damage block
+already called `HeroManager.applyHealthDamage`/`PetManager.applyHealthDamage`,
+which themselves already flip `status` to `'fallen'` the instant Health
+hits 0 -- nothing new to trigger there. The only change is reading that
+status right back off the hero/pet immediately after applying the
+damage, so `heroFallen`/`petFallen` capture whether *this specific
+quest's* damage was the one that did it, not just whether the hero
+happens to be Fallen for some unrelated reason.
+
+**`RaidManager.ts`.** Same treatment inside the per-hero injury loop --
+`heroesFallen`/`petsFallen` arrays built alongside the existing
+`injuries` array, checked the same way right after each
+`applyHealthDamage` call.
+
+**`engine.ts`.** Live play (the `tick()` due-quest and due-raid
+branches) now fires a `banner: true` toast the instant `heroFallen`/
+`petFallen`/`heroesFallen`/`petsFallen` comes back set -- same
+prominence recovering from Fallen already gets a few lines up in the
+same function (`"${hero.name} has recovered and returns to the
+roster."`), so going in is now exactly as loud as coming out already
+was. Raid toasts group multiple fallers into one line ("X, Y and Z have
+fallen..."), same shape the existing raid title-toast already uses for
+crediting a multi-hero party. Offline catch-up (`catchUpOffline()`)
+gets the identical information `archive()`'d quietly instead of
+toasted -- same "still logged, not a wall of banners on reopen"
+treatment titles/achievements/guidance already get for offline
+progress; the offline report itself also now tags a Fallen hero/pet
+inline on its compact result cards.
+
+**`GuidanceManager.ts` / `guidance-topics.json`.** New `first_hero_fallen`
+topic, checked the same way every other topic here is (`state.heroes.some
+((h) => h.status === 'fallen')`) -- safe to read live state directly
+since `GuidanceManager.checkAll` runs immediately after
+`QuestManager.resolve`/`RaidManager.resolve` in the same tick, before
+any revive action could possibly have happened yet. Two messages:
+what Fallen means, and where to fix it (paid revive now, or the
+Infirmary's free auto-revive timer once unlocked).
+
+**UI.** `QuestResultModal.tsx`, `RaidResultModal.tsx`, and
+`StatsPanel.tsx`'s shared log-detail view all now render a bolded,
+separate line ("X has fallen -- revive them from the Heroes tab...")
+above the ordinary injury list whenever `heroFallen`/`heroesFallen`/
+`petFallen`/`petsFallen` is set, instead of relying on the injury's own
+description text to imply it. `OfflineReportModal.tsx`'s compact
+per-result cards gained a bold "Fallen" tag alongside the existing
+inline injury tag for the same reason.
+
+**Checked, not touched:** a stale-reading comment in `PeddlerManager.ts`
+(`checkExpiry`'s own doc comment, "caller... responsible for the actual
+banner/toast; this only updates state") suggested Grimsby's departure
+might not actually be announced -- traced the real call site
+(`engine.ts`'s `refreshWorld`) and confirmed it already fires `this.say
+('The cart\u2019s gone when you look again...')` correctly; the comment
+was just outdated, not the code. Also swept `HarvestManager.ts`,
+`CraftingManager.ts`, and `PetManager.ts`'s non-Health methods for the
+same "state changes, nothing tells the player" pattern -- everything
+else in those is a direct, player-clicked action with its own immediate
+visual result (particle burst, stat change on the card actively being
+looked at), not a background side effect the way Fallen was, so no
+further gaps found this pass.
+
+**Verified with a real build, not just read through.** `npx tsc
+--noEmit` and `npx vite build` both pass clean against the actual
+`node_modules` installed in this environment.

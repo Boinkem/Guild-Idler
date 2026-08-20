@@ -67,6 +67,12 @@ const CHECKS: Record<string, Check> = {
   first_bard_track_unlocked: (state) => (state.unlockedBardTracks ?? []).length >= 1,
   first_injury_or_wear: (state) => state.heroes.some((h) => h.injuries.length > 0
     || Object.values(h.equipment).some((item) => item && item.durability < EquipmentManager.maxDurability(item))),
+  // Deliberately checks live state (some hero currently Fallen) rather
+  // than a log/result flag -- this runs immediately after
+  // QuestManager.resolve/RaidManager.resolve in the same tick, before
+  // any revive action could possibly have happened yet, so the state is
+  // guaranteed fresh. Same "first X" shape as every other topic here.
+  first_hero_fallen: (state) => state.heroes.some((h) => h.status === 'fallen'),
 };
 
 export const GuidanceManager = {

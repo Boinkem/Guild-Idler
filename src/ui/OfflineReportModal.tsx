@@ -127,6 +127,10 @@ export function OfflineReportModal({ active }: { active: boolean }) {
                     </span>
                   ))}
                   {result.injury && <span className="bad">{result.injury.name}</span>}
+                  {result.heroFallen && <span className="bad" style={{ fontWeight: 700 }}>Fallen</span>}
+                  {result.petFallen && (
+                    <span className="bad" style={{ fontWeight: 700 }}>{result.petFallen.petName} Fallen</span>
+                  )}
                 </div>
               </div>
             ))}
@@ -155,6 +159,12 @@ export function OfflineReportModal({ active }: { active: boolean }) {
                     >
                       ◇ {l.name}
                     </span>
+                  ))}
+                  {raid.heroesFallen?.map((h) => (
+                    <span key={`fallen-${h.heroId}`} className="bad" style={{ fontWeight: 700 }}>{h.heroName} Fallen</span>
+                  ))}
+                  {raid.petsFallen?.map((p, i) => (
+                    <span key={`pet-fallen-${i}`} className="bad" style={{ fontWeight: 700 }}>{p.petName} Fallen</span>
                   ))}
                   {raid.injuries.map((inj) => (
                     <span key={inj.heroId} className="bad">{inj.heroName}: {inj.injury.name}</span>

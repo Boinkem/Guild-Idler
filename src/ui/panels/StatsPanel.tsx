@@ -120,14 +120,34 @@ function ResultDetailModal({ entry, onClose }: { entry: ResultEntry; onClose: ()
         {quest && (quest.injury || quest.brokenItems.length > 0) && (
           <>
             <div className="section-heading">Damage report</div>
+            {quest.heroFallen && (
+              <div className="small bad" style={{ fontWeight: 700 }}>
+                {quest.heroName} has fallen — revive them from the Heroes tab before sending them out again.
+              </div>
+            )}
+            {quest.petFallen && (
+              <div className="small bad" style={{ fontWeight: 700 }}>
+                {quest.petFallen.petName} has fallen — revive them from the Heroes tab.
+              </div>
+            )}
             {quest.injury && <div className="small bad">{quest.injury.name} — {quest.injury.description}</div>}
             {quest.brokenItems.length > 0 && <div className="small bad">Broken: {quest.brokenItems.join(', ')}</div>}
           </>
         )}
 
-        {raid && raid.injuries.length > 0 && (
+        {raid && (raid.injuries.length > 0 || raid.heroesFallen?.length || raid.petsFallen?.length) && (
           <>
             <div className="section-heading">Damage report</div>
+            {raid.heroesFallen?.map((h) => (
+              <div key={`fallen-${h.heroId}`} className="small bad" style={{ fontWeight: 700 }}>
+                {h.heroName} has fallen — revive them from the Heroes tab before sending them out again.
+              </div>
+            ))}
+            {raid.petsFallen?.map((p, i) => (
+              <div key={`pet-fallen-${i}`} className="small bad" style={{ fontWeight: 700 }}>
+                {p.petName} has fallen — revive them from the Heroes tab.
+              </div>
+            ))}
             {raid.injuries.map((i) => (
               <div key={i.heroId} className="small bad">{i.heroName}: {i.injury.name}</div>
             ))}

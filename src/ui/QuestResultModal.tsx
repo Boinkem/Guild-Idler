@@ -246,6 +246,21 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
         {(result.injury || result.brokenItems.length > 0) && (
           <>
             <div className="section-heading">Damage report</div>
+            {/* Fallen gets its own line, above the ordinary injury text and
+                bolded -- an ordinary injury line reads as routine, but this
+                hero can't be sent on another quest or raid until revived,
+                which is worth calling out distinctly rather than leaving
+                buried in the same line as any other scrape. */}
+            {result.heroFallen && (
+              <div className="small bad" style={{ fontWeight: 700 }}>
+                {result.heroName} has fallen — revive them from the Heroes tab before sending them out again.
+              </div>
+            )}
+            {result.petFallen && (
+              <div className="small bad" style={{ fontWeight: 700 }}>
+                {result.petFallen.petName} has fallen — revive them from the Heroes tab.
+              </div>
+            )}
             {result.injury && (
               <div className="small bad">{result.injury.name} — {result.injury.description}</div>
             )}

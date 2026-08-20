@@ -387,6 +387,12 @@ export const RaidManager = {
     // everyone who went in shares the risk, not just whoever caused a stop.
     // Risk scales with difficulty and eases if the run was a full clear.
     const injuries: RaidResult['injuries'] = [];
+    // Same reasoning as QuestResult.heroFallen/petFallen -- see that
+    // comment in types.ts. `injuries` above already reads as routine, so
+    // a hero (or their paired pet) actually dropping to 0 this run needs
+    // its own signal for the UI to call out distinctly.
+    const heroesFallen: NonNullable<RaidResult['heroesFallen']> = [];
+    const petsFallen: NonNullable<RaidResult['petsFallen']> = [];
     for (const hero of heroes) {
       const resist = sumMods(HeroManager.heroMods(state, hero, resolvedAt), ModifierManager.global(state)).injuryResist ?? 0;
       const risk = clamp(30 + diffCfg.successPenalty - resist + (fullClear ? -10 : 10), MIN_INJURY_RISK, 90);
@@ -407,13 +413,17 @@ export const RaidManager = {
         if (def) {
           const damagePercent = healthDamagePercentForInjuryDef(def);
           HeroManager.applyHealthDamage(hero, damagePercent);
+          if (hero.status === 'fallen') heroesFallen.push({ heroId: hero.id, heroName: hero.name });
           // Same per-hero pet pairing as QuestManager.resolve -- raids
           // have no loadout/consumable system, so there's no Guardian's
           // Retainer-style reduction to bake in here, just the raw
           // damagePercent shared as-is.
           if (hero.equippedPetId) {
             const pet = state.pets.find((p) => p.uid === hero.equippedPetId);
-            if (pet) PetManager.applyHealthDamage(state, pet, damagePercent);
+            if (pet) {
+              PetManager.applyHealthDamage(state, pet, damagePercent);
+              if (PetManager.isFallen(pet)) petsFallen.push({ petName: pet.name });
+            }
           }
         }
       }
@@ -438,6 +448,8 @@ export const RaidManager = {
       resolvedAt,
       titleGranted: titledHeroNames.length > 0 ? raid?.title : undefined,
       titledHeroNames: titledHeroNames.length > 0 ? titledHeroNames : undefined,
+      heroesFallen: heroesFallen.length > 0 ? heroesFallen : undefined,
+      petsFallen: petsFallen.length > 0 ? petsFallen : undefined,
     };
 
     state.raidLog.unshift(result);
