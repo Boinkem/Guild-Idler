@@ -16618,3 +16618,55 @@ further gaps found this pass.
 **Verified with a real build, not just read through.** `npx tsc
 --noEmit` and `npx vite build` both pass clean against the actual
 `node_modules` installed in this environment.
+
+### DevTool: "Fill from selected patch" never actually matched a real patch filename -- fixed (patch 0222)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed "Fill from selected patch" always falling back to a plain title instead of pulling the real changelog blurb
+- Root cause: it only recognized filenames starting with bare digits, and no patch file in the repo has ever actually been named that way
+```
+
+Reported directly: patch 0221's own Discord fill produced only "**Guild
+Idler patch 0221** / See the full changelog in guild-idler-status.md" --
+the plain filename-based fallback -- instead of the real
+```discord-update``` blurb that patch's own status.md entry has.
+
+**Root cause.** `findPatchSummary`'s patch-number extraction was
+`/^(\d+)-/` -- filename has to *start* with bare digits then a hyphen
+(`0221-something.patch`). Checked every `*.patch` file actually sitting
+in this repo against that regex directly, not just reasoned about it:
+zero of them matched, across every naming style that's shipped for real
+(`Guild-Idler-patch-NNNN.patch`, `patch-NNNN-description.patch`,
+`GuildIdlerpatch NNNN.patch` with no separator at all). The convention
+the regex assumed was never the convention actually in use -- this
+wasn't a one-off naming mistake on 0221, "Fill from selected patch" has
+apparently never worked for any patch before now, just never gotten
+caught because the plain-filename fallback still produces a plausible-
+enough placeholder that it's easy to skim past.
+
+**Fix.** New `extractPatchNumber` helper, tried in order: the original
+leading-digits form first (most specific, in case a future patch
+actually is named that way), then a fallback matching "patch" followed
+immediately by 3-4 digits *anywhere* in the filename, case-insensitive,
+separator optional -- covers every real naming style in one pass without
+needing them all renamed. Returns the number zero-padded to 4 digits
+either way, matching the `(patch NNNN)` heading convention exactly.
+`backlog-guild-hall-customization.patch` (the one real non-numbered
+patch in the repo) correctly still misses and falls back -- not
+something this needed to force a match for.
+
+**Verified against the real running server, not just the regex in
+isolation.** Started `tools/devtool/server.mjs` for real and hit
+`/api/discord/patch-summary?patch=Guild-Idler-patch-0221.patch` --
+the exact filename and query the reported bug came from -- and
+confirmed `found: true` with the correct blurb text and a correct
+`continuityOk`/`latestPriorPatch` reading, where it previously would
+have returned `found: false` immediately. Also spot-checked every other
+`*.patch` filename currently in the repo against the new extraction
+function directly (all resolve to their correct 4-digit number except
+the one genuinely unnumbered backlog patch, which correctly still
+returns null). `node --check` on the modified `server.mjs` passes;
+`npx tsc --noEmit` on the game itself (untouched by this patch) still
+passes clean, confirming no collateral changes leaked outside the
+DevTool file.

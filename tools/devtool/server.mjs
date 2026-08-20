@@ -2105,10 +2105,38 @@ async function postDiscordUpdate(title, message) {
  * built against a stale local copy of the repo (see patch 0136's own
  * postmortem) rather than an intentional skip.
  */
+/**
+ * Pulls the patch number out of a `.patch` filename -- deliberately
+ * tolerant, since real patch files in this repo have never actually
+ * settled on one naming scheme: `NNNN-description.patch` (leading
+ * digits), `patch-NNNN-description.patch` / `patch_NNNN.patch` ("patch"
+ * then digits, with or without a separator), and `Guild-Idler-patch-
+ * NNNN.patch` (digits anywhere after the word "patch") have all shipped
+ * for real, confirmed by checking every *.patch file actually sitting in
+ * this repo -- none of them matched the original `/^(\d+)-/`-only check,
+ * which meant "Fill from selected patch" silently fell back to the
+ * filename-only default for every single one, patch 0221's own report
+ * being the one that actually got noticed and reported. Tries the
+ * leading-digits form first (most specific), then falls back to
+ * "patch" immediately followed by 3-4 digits anywhere in the name.
+ * Returns the number zero-padded to 4 digits (matching the `(patch
+ * NNNN)` heading convention exactly), or null if neither pattern hits --
+ * a filename with no recognizable patch number (e.g.
+ * `backlog-guild-hall-customization.patch`) is expected to miss and
+ * fall back, not something this needs to force a match for.
+ */
+function extractPatchNumber(patchFilename) {
+  const name = patchFilename || '';
+  const leading = /^(\d{3,4})-/.exec(name);
+  if (leading) return leading[1].padStart(4, '0');
+  const afterWord = /patch[-_]?(\d{3,4})/i.exec(name);
+  if (afterWord) return afterWord[1].padStart(4, '0');
+  return null;
+}
+
 async function findPatchSummary(patchFilename) {
-  const numMatch = /^(\d+)-/.exec(patchFilename || '');
-  if (!numMatch) return { found: false, patchNumber: null, text: null, latestPriorPatch: null, continuityOk: null };
-  const patchNumber = numMatch[1];
+  const patchNumber = extractPatchNumber(patchFilename);
+  if (!patchNumber) return { found: false, patchNumber: null, text: null, latestPriorPatch: null, continuityOk: null };
   const patchNum = parseInt(patchNumber, 10);
 
   let markdown;
