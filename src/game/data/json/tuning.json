@@ -205,10 +205,10 @@
     "id": "guild_facility.treasury.baseCost",
     "label": "Treasury: base cost",
     "category": "guild_facilities",
-    "value": 400,
-    "default": 400,
+    "value": 40,
+    "default": 40,
     "min": 0,
-    "description": "Cost of the first (level 0) Treasury upgrade."
+    "description": "Cost of the first (level 0) Treasury upgrade. Corrected in patch 0218: an initial halving (400 -> 200) based on matching patch 0214's goldPerLevel squish ratio (12 -> 6) turned out to still be wildly unreachable -- simulated directly, 7 heroes at level 282 over 800 days only banked ~3.95M gold against the halved total cost of ~28.9M. Re-derived empirically instead of assumed: binary-searched against the actual Balance Sandbox sim (growRoster mode) for a baseCost where every facility and upgrade in the game completes within a sensible multi-month window. 40 lands full completion (everything, not just Treasury) around day ~451 -- roughly 5x the ~90-day time-to-level-55 milestone, a defensible 'biggest, most aspirational sink, but genuinely achievable' target. Total cost across all 20 levels: ~57.7M (original) -> ~5.77M (patch 0218)."
   },
   {
     "id": "guild_facility.treasury.costGrowth",

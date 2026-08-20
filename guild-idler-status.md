@@ -16225,3 +16225,102 @@ computed across all 8 raids, not asserted. The time-to-55 simulation was
 run directly (not estimated) against the actual fixed formulas via the
 project's own Balance Sandbox sim tool. No live playtest in this
 environment -- same standing caveat as every patch since 0214.
+
+### Dynamic-roster simulation + Treasury cost-curve fix: a real "time to buy everything" number (patch 0218)
+
+```discord-update
+Dev Update | Patch 0218
+
+- Simulated a realistic playthrough that starts with 1 hero and recruits more as gold allows, up to a full 7-hero roster -- confirmed the whole thing (every facility, every upgrade) can now genuinely be completed in about 15 months of active play, roughly 451 days
+- Fixed Treasury's cost -- it was 49x more expensive than every other facility combined, an accidental leftover from the gold-per-level squish a few patches back that quietly doubled its cost-to-benefit ratio without anyone deciding that on purpose
+```
+
+Direct follow-up to the time-to-55 simulation from the last patch: same
+question, but "how long to buy everything," using a realistic growing
+roster instead of a fixed hero count.
+
+#### Built: dynamic roster growth in the Balance Sandbox sim
+
+New `growRoster` sim input. Starts at 1 hero, recruits the cheapest
+currently-recruitable class (`RECRUIT_COST`) whenever a Tavern-granted
+slot is open and gold allows -- checked and spent *before* the ordinary
+facility/upgrade spend loop each tick, since more heroes compounds every
+future tick's income the way a one-time facility level doesn't. Renown's
+Extra Banner perk (further slots beyond Tavern's own 6) stays excluded,
+same Phase 1 scope as every other Renown-gated system in this sim.
+
+#### Found immediately: the sim exposed a real, serious cost-curve bug
+
+Running this for the first time got stuck at 1 hero for the full
+800-day safety window, never recruiting anyone. Root cause, confirmed
+directly rather than assumed: **Treasury cost 57.7 million gold to
+fully max -- 49x more than every other facility combined (1.18M total)
+-- and sat 2nd in spend priority, ahead of Tavern (5th).** The sim
+correctly modeled a player saving every coin toward Treasury
+indefinitely, never reaching the facility that actually unlocks more
+heroes.
+
+**Root cause of the root cause**: patch 0214's facility squish halved
+Treasury's `goldPerLevel` (12 -> 6) to fix the uncapped-gold problem --
+correctly -- but never touched its cost curve, which was still priced
+for a benefit twice as strong as what it now grants. Nobody decided
+Treasury should cost 49x everything else combined; it just drifted
+there as an unintended side effect of a different, correct fix.
+
+**First attempt (halving the cost to match the halved benefit) wasn't
+enough** -- worth stating plainly rather than glossing over: simulated
+directly, even 7 heroes at level 282 across 800 days only banked ~3.95M
+gold against the halved ~28.9M target. The original cost was
+apparently never well-calibrated to begin with, so restoring its old
+*ratio* didn't produce a reachable number. Re-derived empirically
+instead: binary-searched `guild_facility.treasury.baseCost` directly
+against the real sim until every facility and upgrade in the game
+completes within a sensible multi-month window. Landed on **400 -> 40**
+(a 10x cut, not the 2x the ratio-matching logic first suggested) --
+total cost across all 20 levels: ~57.7M -> ~5.77M.
+
+#### Also fixed: Tavern wasn't reachable even with Treasury's cost corrected
+
+Independent of Treasury's price, the plain declared spend order
+(Barracks, Treasury, Workshop, Library, **Tavern**, ...) meant a
+realistic growth-focused player would still grind toward Treasury
+second, before ever reaching the facility that unlocks more hero slots
+at all. `growRoster` mode now reorders Tavern to the very front of
+facility priority specifically (every other facility/upgrade keeps its
+normal declared order) -- same reasoning that already puts recruiting
+ahead of ordinary spend: compound the economy first. Confirmed this
+was the right call, not just a plausible one: with Tavern reordered
+first, the full 7-hero roster fills by day 18 instead of never filling
+at all.
+
+#### Simulated result: a real "days to buy everything" number
+
+Active preset (1 hero, 15-minute check-ins, always plays the best-value
+tier, recruits opportunistically), run against every fix above:
+
+| Day | Milestone |
+|-|-|
+| 1-18 | Roster fills, 1 -> 7 heroes |
+| 35 | Barracks maxed |
+| 376 | Treasury maxed (the last facility to finish, as intended -- still the biggest single sink, just a reachable one now) |
+| 397-421 | Every remaining facility maxed |
+| **451** | **Every facility AND every upgrade in the game fully purchased** |
+
+`hitSafetyCap: false` -- this is a genuine completion, not a run that
+got cut off by the simulator's own safety window. Roughly 5x the ~90-day
+time-to-level-55 milestone from the previous patch, which reads as a
+sensible relationship: reaching the level cap is the "main story," fully
+maxing the guild's entire economic infrastructure is the long-tail
+completionist goal on top of it.
+
+#### Verified
+
+`npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` both
+pass clean. The Treasury fix was derived empirically against the real
+sim tool (binary search across 9 candidate values, not a single
+guess), and the final number re-verified with a full, clean run
+(`hitSafetyCap: false`, every facility and upgrade genuinely completing,
+not truncated). The Tavern-reordering fix's actual effect was confirmed
+by direct before/after comparison (roster stuck at 1 hero forever vs.
+filling by day 18), not assumed from the change alone. No live playtest
+in this environment -- same standing caveat as every patch since 0214.

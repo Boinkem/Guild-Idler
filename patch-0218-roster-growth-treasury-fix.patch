@@ -1,0 +1,266 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 898cb73..1810256 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -16225,3 +16225,102 @@ computed across all 8 raids, not asserted. The time-to-55 simulation was
+ run directly (not estimated) against the actual fixed formulas via the
+ project's own Balance Sandbox sim tool. No live playtest in this
+ environment -- same standing caveat as every patch since 0214.
++
++### Dynamic-roster simulation + Treasury cost-curve fix: a real "time to buy everything" number (patch 0218)
++
++```discord-update
++Dev Update | Patch 0218
++
++- Simulated a realistic playthrough that starts with 1 hero and recruits more as gold allows, up to a full 7-hero roster -- confirmed the whole thing (every facility, every upgrade) can now genuinely be completed in about 15 months of active play, roughly 451 days
++- Fixed Treasury's cost -- it was 49x more expensive than every other facility combined, an accidental leftover from the gold-per-level squish a few patches back that quietly doubled its cost-to-benefit ratio without anyone deciding that on purpose
++```
++
++Direct follow-up to the time-to-55 simulation from the last patch: same
++question, but "how long to buy everything," using a realistic growing
++roster instead of a fixed hero count.
++
++#### Built: dynamic roster growth in the Balance Sandbox sim
++
++New `growRoster` sim input. Starts at 1 hero, recruits the cheapest
++currently-recruitable class (`RECRUIT_COST`) whenever a Tavern-granted
++slot is open and gold allows -- checked and spent *before* the ordinary
++facility/upgrade spend loop each tick, since more heroes compounds every
++future tick's income the way a one-time facility level doesn't. Renown's
++Extra Banner perk (further slots beyond Tavern's own 6) stays excluded,
++same Phase 1 scope as every other Renown-gated system in this sim.
++
++#### Found immediately: the sim exposed a real, serious cost-curve bug
++
++Running this for the first time got stuck at 1 hero for the full
++800-day safety window, never recruiting anyone. Root cause, confirmed
++directly rather than assumed: **Treasury cost 57.7 million gold to
++fully max -- 49x more than every other facility combined (1.18M total)
++-- and sat 2nd in spend priority, ahead of Tavern (5th).** The sim
++correctly modeled a player saving every coin toward Treasury
++indefinitely, never reaching the facility that actually unlocks more
++heroes.
++
++**Root cause of the root cause**: patch 0214's facility squish halved
++Treasury's `goldPerLevel` (12 -> 6) to fix the uncapped-gold problem --
++correctly -- but never touched its cost curve, which was still priced
++for a benefit twice as strong as what it now grants. Nobody decided
++Treasury should cost 49x everything else combined; it just drifted
++there as an unintended side effect of a different, correct fix.
++
++**First attempt (halving the cost to match the halved benefit) wasn't
++enough** -- worth stating plainly rather than glossing over: simulated
++directly, even 7 heroes at level 282 across 800 days only banked ~3.95M
++gold against the halved ~28.9M target. The original cost was
++apparently never well-calibrated to begin with, so restoring its old
++*ratio* didn't produce a reachable number. Re-derived empirically
++instead: binary-searched `guild_facility.treasury.baseCost` directly
++against the real sim until every facility and upgrade in the game
++completes within a sensible multi-month window. Landed on **400 -> 40**
++(a 10x cut, not the 2x the ratio-matching logic first suggested) --
++total cost across all 20 levels: ~57.7M -> ~5.77M.
++
++#### Also fixed: Tavern wasn't reachable even with Treasury's cost corrected
++
++Independent of Treasury's price, the plain declared spend order
++(Barracks, Treasury, Workshop, Library, **Tavern**, ...) meant a
++realistic growth-focused player would still grind toward Treasury
++second, before ever reaching the facility that unlocks more hero slots
++at all. `growRoster` mode now reorders Tavern to the very front of
++facility priority specifically (every other facility/upgrade keeps its
++normal declared order) -- same reasoning that already puts recruiting
++ahead of ordinary spend: compound the economy first. Confirmed this
++was the right call, not just a plausible one: with Tavern reordered
++first, the full 7-hero roster fills by day 18 instead of never filling
++at all.
++
++#### Simulated result: a real "days to buy everything" number
++
++Active preset (1 hero, 15-minute check-ins, always plays the best-value
++tier, recruits opportunistically), run against every fix above:
++
++| Day | Milestone |
++|-|-|
++| 1-18 | Roster fills, 1 -> 7 heroes |
++| 35 | Barracks maxed |
++| 376 | Treasury maxed (the last facility to finish, as intended -- still the biggest single sink, just a reachable one now) |
++| 397-421 | Every remaining facility maxed |
++| **451** | **Every facility AND every upgrade in the game fully purchased** |
++
++`hitSafetyCap: false` -- this is a genuine completion, not a run that
++got cut off by the simulator's own safety window. Roughly 5x the ~90-day
++time-to-level-55 milestone from the previous patch, which reads as a
++sensible relationship: reaching the level cap is the "main story," fully
++maxing the guild's entire economic infrastructure is the long-tail
++completionist goal on top of it.
++
++#### Verified
++
++`npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` both
++pass clean. The Treasury fix was derived empirically against the real
++sim tool (binary search across 9 candidate values, not a single
++guess), and the final number re-verified with a full, clean run
++(`hitSafetyCap: false`, every facility and upgrade genuinely completing,
++not truncated). The Tavern-reordering fix's actual effect was confirmed
++by direct before/after comparison (roster stuck at 1 hero forever vs.
++filling by day 18), not assumed from the change alone. No live playtest
++in this environment -- same standing caveat as every patch since 0214.
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 3c7c2e1..a0eea34 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -205,10 +205,10 @@
+     "id": "guild_facility.treasury.baseCost",
+     "label": "Treasury: base cost",
+     "category": "guild_facilities",
+-    "value": 400,
+-    "default": 400,
++    "value": 40,
++    "default": 40,
+     "min": 0,
+-    "description": "Cost of the first (level 0) Treasury upgrade."
++    "description": "Cost of the first (level 0) Treasury upgrade. Corrected in patch 0218: an initial halving (400 -> 200) based on matching patch 0214's goldPerLevel squish ratio (12 -> 6) turned out to still be wildly unreachable -- simulated directly, 7 heroes at level 282 over 800 days only banked ~3.95M gold against the halved total cost of ~28.9M. Re-derived empirically instead of assumed: binary-searched against the actual Balance Sandbox sim (growRoster mode) for a baseCost where every facility and upgrade in the game completes within a sensible multi-month window. 40 lands full completion (everything, not just Treasury) around day ~451 -- roughly 5x the ~90-day time-to-level-55 milestone, a defensible 'biggest, most aspirational sink, but genuinely achievable' target. Total cost across all 20 levels: ~57.7M (original) -> ~5.77M (patch 0218)."
+   },
+   {
+     "id": "guild_facility.treasury.costGrowth",
+diff --git a/tools/devtool/sim/runSim.ts b/tools/devtool/sim/runSim.ts
+index d67a20b..08911fc 100644
+--- a/tools/devtool/sim/runSim.ts
++++ b/tools/devtool/sim/runSim.ts
+@@ -65,6 +65,11 @@ type SimInput = {
+   overrides: Record<string, number>;
+   maxDays: number;
+   sampleEveryDays: number;
++  /** Patch 0217 -- when true, heroCount starts at 1 and grows dynamically
++   *  via in-loop recruiting instead of staying fixed at heroCountOverride/
++   *  preset.heroCount for the whole run. See the roster-growth comment
++   *  in main() for the full mechanic. */
++  growRoster?: boolean;
+ };
+ 
+ /** Applied before balance.ts/progression.ts are ever imported in this
+@@ -101,6 +106,45 @@ async function main() {
+   const maxDays = input.maxDays;
+   const sampleEveryDays = Math.max(1, input.sampleEveryDays || 5);
+ 
++  // --------------------------------------------------- dynamic roster growth --
++  // Patch 0217 addition: recruiting is now modeled as part of the spend
++  // policy itself, not a fixed heroCount input, when `growRoster` is set --
++  // starts at 1 hero, recruits another whenever a slot is open (Tavern's
++  // own heroSlotsPerLevel, base 1 -- Renown's Extra Banner perk excluded,
++  // same Phase 1 scope reasoning as everywhere else Renown is skipped in
++  // this file) AND gold is available, always the CHEAPEST currently-
++  // recruitable class (RECRUIT_COST) -- a rational choice under this sim's
++  // own "every hero is an identical, same-level earner" simplification
++  // (see file header), since a class's own flavor/mods aren't modeled at
++  // all here, only raw headcount multiplying the income rate. Recruiting
++  // is checked BEFORE the facility/upgrade spend loop each tick, ahead of
++  // it in priority -- more heroes compounds every future tick's income,
++  // unlike a one-time facility level, so a rational player grows the
++  // economy first.
++  //
++  // Original version of this comment claimed Tavern and recruiting
++  // "naturally alternate" without needing to reorder anything -- checked
++  // directly and that was wrong: Tavern sits 5th in GUILD_FACILITIES'
++  // declared order, behind Treasury specifically, which is priced as the
++  // single biggest sink in the game. Under the plain declared order, the
++  // sim gets stuck saving toward Treasury indefinitely and NEVER reaches
++  // Tavern, so roster growth never happens at all -- confirmed directly
++  // (a full run stalls at 1 hero even across an 800-day safety window).
++  // A realistic player pursuing growth rushes the facility that
++  // compounds every future tick's income before a single enormous
++  // one-time sink, the same reasoning that already puts recruiting ahead
++  // of ordinary facility spend above -- so growRoster mode reorders
++  // Tavern to the front of the facility priority list specifically (see
++  // spendList below), leaving every other facility/upgrade in its normal
++  // declared order.
++  const growRoster = input.growRoster === true;
++  let liveHeroCount = growRoster ? 1 : heroCount;
++  const cheapestRecruitCost = Math.min(...Object.values(progression.RECRUIT_COST));
++  const rosterCap = () => progression.GUILD_BY_ID.tavern
++    ? 1 + (levels['tavern'] ?? 0) * (progression.GUILD_BY_ID.tavern.heroSlotsPerLevel ?? 0)
++    : 1;
++  const recruitLog: { day: number; heroCount: number }[] = [];
++
+   // ------------------------------------------------------------ spend list --
+   // Fixed priority order: every Guild Facility to its maxLevel, then every
+   // gold-tier Upgrade to its maxLevel, in the order each is declared in its
+@@ -115,8 +159,11 @@ async function main() {
+     maxLevel: number;
+     costAt: (level: number) => number;
+   };
++  const orderedFacilities = growRoster
++    ? [...progression.GUILD_FACILITIES].sort((a, b) => (a.id === 'tavern' ? -1 : b.id === 'tavern' ? 1 : 0))
++    : progression.GUILD_FACILITIES;
+   const spendList: SpendItem[] = [
+-    ...progression.GUILD_FACILITIES.map((f): SpendItem => ({
++    ...orderedFacilities.map((f): SpendItem => ({
+       kind: 'facility', id: f.id, label: f.name, maxLevel: f.maxLevel,
+       costAt: (level: number) => progression.guildCost(f, level),
+     })),
+@@ -143,9 +190,16 @@ async function main() {
+   let lastSampleDay = -Infinity;
+ 
+   const allSpent = () => spendList.every((item) => levels[item.id] >= item.maxLevel);
++  // Completion for a roster-growth run targets full facility/upgrade
++  // spend AND a maxed-out roster (every Tavern-granted slot filled) --
++  // hero level is tracked and reported but deliberately not part of this
++  // run's own completion condition, since the actual ask was "how long
++  // to buy everything," not "how long to hit 55" (already answered
++  // separately, see the previous patch's own simulation).
++  const rosterMaxed = () => !growRoster || liveHeroCount >= rosterCap();
+ 
+   while (day < maxDays) {
+-    if (level >= 55 && allSpent()) break; // completion condition -- see file comment on the level-55 assumption
++    if (allSpent() && rosterMaxed()) break; // completion condition
+ 
+     // Every difficulty is available at any level now (patch 0214 --
+     // reqLevel rolls near hero.level regardless of tier), so "which tier"
+@@ -183,8 +237,8 @@ async function main() {
+     const goldPerHour = balance.expectedRatePerHour(cfg, 'gold', level);
+     const xpPerHour = balance.expectedRatePerHour(cfg, 'xp', level);
+ 
+-    const goldGain = goldPerHour * heroCount * uptimeFactor * checkInHours;
+-    const xpGain = xpPerHour * heroCount * uptimeFactor * checkInHours;
++    const goldGain = goldPerHour * liveHeroCount * uptimeFactor * checkInHours;
++    const xpGain = xpPerHour * liveHeroCount * uptimeFactor * checkInHours;
+ 
+     gold += goldGain;
+     xp += xpGain;
+@@ -193,6 +247,17 @@ async function main() {
+       level += 1;
+     }
+ 
++    // Recruiting -- highest priority, checked before the facility/upgrade
++    // spend loop below (see the file-level comment on why: more heroes
++    // compounds every future tick's income). Only fires when growRoster
++    // is on, a slot is actually open, and gold covers the cheapest
++    // currently-recruitable class.
++    if (growRoster && liveHeroCount < rosterCap() && gold >= cheapestRecruitCost) {
++      gold -= cheapestRecruitCost;
++      liveHeroCount += 1;
++      recruitLog.push({ day: Math.round(day), heroCount: liveHeroCount });
++    }
++
+     // Immediate spend, strictly in priority order: gold always goes toward
+     // whichever incomplete item is highest-priority first. Deliberately NOT
+     // "buy anything currently affordable, anywhere in the list" -- that
+@@ -266,7 +331,9 @@ async function main() {
+ 
+   const result = {
+     preset: input.preset.id,
+-    heroCount,
++    heroCount: liveHeroCount,
++    growRoster,
++    recruitLog,
+     days: Math.round(day),
+     hitSafetyCap,
+     completed: !hitSafetyCap,
+@@ -279,6 +346,7 @@ async function main() {
+     upgradeCompletionDays: Object.fromEntries(
+       spendList.filter((i) => i.kind === 'upgrade').map((i) => [i.id, completionDay[i.id]]),
+     ),
++    allSpentDay: allSpent() ? Math.round(day) : null,
+     tierRates,
+     burstCheck,
+   };

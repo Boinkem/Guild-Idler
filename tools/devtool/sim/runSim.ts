@@ -65,6 +65,11 @@ type SimInput = {
   overrides: Record<string, number>;
   maxDays: number;
   sampleEveryDays: number;
+  /** Patch 0217 -- when true, heroCount starts at 1 and grows dynamically
+   *  via in-loop recruiting instead of staying fixed at heroCountOverride/
+   *  preset.heroCount for the whole run. See the roster-growth comment
+   *  in main() for the full mechanic. */
+  growRoster?: boolean;
 };
 
 /** Applied before balance.ts/progression.ts are ever imported in this
@@ -101,6 +106,45 @@ async function main() {
   const maxDays = input.maxDays;
   const sampleEveryDays = Math.max(1, input.sampleEveryDays || 5);
 
+  // --------------------------------------------------- dynamic roster growth --
+  // Patch 0217 addition: recruiting is now modeled as part of the spend
+  // policy itself, not a fixed heroCount input, when `growRoster` is set --
+  // starts at 1 hero, recruits another whenever a slot is open (Tavern's
+  // own heroSlotsPerLevel, base 1 -- Renown's Extra Banner perk excluded,
+  // same Phase 1 scope reasoning as everywhere else Renown is skipped in
+  // this file) AND gold is available, always the CHEAPEST currently-
+  // recruitable class (RECRUIT_COST) -- a rational choice under this sim's
+  // own "every hero is an identical, same-level earner" simplification
+  // (see file header), since a class's own flavor/mods aren't modeled at
+  // all here, only raw headcount multiplying the income rate. Recruiting
+  // is checked BEFORE the facility/upgrade spend loop each tick, ahead of
+  // it in priority -- more heroes compounds every future tick's income,
+  // unlike a one-time facility level, so a rational player grows the
+  // economy first.
+  //
+  // Original version of this comment claimed Tavern and recruiting
+  // "naturally alternate" without needing to reorder anything -- checked
+  // directly and that was wrong: Tavern sits 5th in GUILD_FACILITIES'
+  // declared order, behind Treasury specifically, which is priced as the
+  // single biggest sink in the game. Under the plain declared order, the
+  // sim gets stuck saving toward Treasury indefinitely and NEVER reaches
+  // Tavern, so roster growth never happens at all -- confirmed directly
+  // (a full run stalls at 1 hero even across an 800-day safety window).
+  // A realistic player pursuing growth rushes the facility that
+  // compounds every future tick's income before a single enormous
+  // one-time sink, the same reasoning that already puts recruiting ahead
+  // of ordinary facility spend above -- so growRoster mode reorders
+  // Tavern to the front of the facility priority list specifically (see
+  // spendList below), leaving every other facility/upgrade in its normal
+  // declared order.
+  const growRoster = input.growRoster === true;
+  let liveHeroCount = growRoster ? 1 : heroCount;
+  const cheapestRecruitCost = Math.min(...Object.values(progression.RECRUIT_COST));
+  const rosterCap = () => progression.GUILD_BY_ID.tavern
+    ? 1 + (levels['tavern'] ?? 0) * (progression.GUILD_BY_ID.tavern.heroSlotsPerLevel ?? 0)
+    : 1;
+  const recruitLog: { day: number; heroCount: number }[] = [];
+
   // ------------------------------------------------------------ spend list --
   // Fixed priority order: every Guild Facility to its maxLevel, then every
   // gold-tier Upgrade to its maxLevel, in the order each is declared in its
@@ -115,8 +159,11 @@ async function main() {
     maxLevel: number;
     costAt: (level: number) => number;
   };
+  const orderedFacilities = growRoster
+    ? [...progression.GUILD_FACILITIES].sort((a, b) => (a.id === 'tavern' ? -1 : b.id === 'tavern' ? 1 : 0))
+    : progression.GUILD_FACILITIES;
   const spendList: SpendItem[] = [
-    ...progression.GUILD_FACILITIES.map((f): SpendItem => ({
+    ...orderedFacilities.map((f): SpendItem => ({
       kind: 'facility', id: f.id, label: f.name, maxLevel: f.maxLevel,
       costAt: (level: number) => progression.guildCost(f, level),
     })),
@@ -143,9 +190,16 @@ async function main() {
   let lastSampleDay = -Infinity;
 
   const allSpent = () => spendList.every((item) => levels[item.id] >= item.maxLevel);
+  // Completion for a roster-growth run targets full facility/upgrade
+  // spend AND a maxed-out roster (every Tavern-granted slot filled) --
+  // hero level is tracked and reported but deliberately not part of this
+  // run's own completion condition, since the actual ask was "how long
+  // to buy everything," not "how long to hit 55" (already answered
+  // separately, see the previous patch's own simulation).
+  const rosterMaxed = () => !growRoster || liveHeroCount >= rosterCap();
 
   while (day < maxDays) {
-    if (level >= 55 && allSpent()) break; // completion condition -- see file comment on the level-55 assumption
+    if (allSpent() && rosterMaxed()) break; // completion condition
 
     // Every difficulty is available at any level now (patch 0214 --
     // reqLevel rolls near hero.level regardless of tier), so "which tier"
@@ -183,14 +237,25 @@ async function main() {
     const goldPerHour = balance.expectedRatePerHour(cfg, 'gold', level);
     const xpPerHour = balance.expectedRatePerHour(cfg, 'xp', level);
 
-    const goldGain = goldPerHour * heroCount * uptimeFactor * checkInHours;
-    const xpGain = xpPerHour * heroCount * uptimeFactor * checkInHours;
+    const goldGain = goldPerHour * liveHeroCount * uptimeFactor * checkInHours;
+    const xpGain = xpPerHour * liveHeroCount * uptimeFactor * checkInHours;
 
     gold += goldGain;
     xp += xpGain;
     while (xp >= progression.xpForLevel(level)) {
       xp -= progression.xpForLevel(level);
       level += 1;
+    }
+
+    // Recruiting -- highest priority, checked before the facility/upgrade
+    // spend loop below (see the file-level comment on why: more heroes
+    // compounds every future tick's income). Only fires when growRoster
+    // is on, a slot is actually open, and gold covers the cheapest
+    // currently-recruitable class.
+    if (growRoster && liveHeroCount < rosterCap() && gold >= cheapestRecruitCost) {
+      gold -= cheapestRecruitCost;
+      liveHeroCount += 1;
+      recruitLog.push({ day: Math.round(day), heroCount: liveHeroCount });
     }
 
     // Immediate spend, strictly in priority order: gold always goes toward
@@ -266,7 +331,9 @@ async function main() {
 
   const result = {
     preset: input.preset.id,
-    heroCount,
+    heroCount: liveHeroCount,
+    growRoster,
+    recruitLog,
     days: Math.round(day),
     hitSafetyCap,
     completed: !hitSafetyCap,
@@ -279,6 +346,7 @@ async function main() {
     upgradeCompletionDays: Object.fromEntries(
       spendList.filter((i) => i.kind === 'upgrade').map((i) => [i.id, completionDay[i.id]]),
     ),
+    allSpentDay: allSpent() ? Math.round(day) : null,
     tierRates,
     burstCheck,
   };
