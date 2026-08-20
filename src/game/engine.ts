@@ -1,7 +1,8 @@
-import { ActiveQuest, AutoChainTactics, DiceFace, DiceRollResult, ElementType, GameState, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
+import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DiceRollResult, ElementType, GameState, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
+import { CHAIN_REPLAY_TIER_BY_ID } from './data/chainReplay';
 import { RaidManager } from './managers/RaidManager';
 import { ShopManager } from './managers/ShopManager';
 import { SaveManager, SaveAdapter, defaultAdapter, createInitialState } from './managers/SaveManager';
@@ -1415,6 +1416,62 @@ export class GameEngine {
 
     playSound('depart');
     this.say(`${hero.name} sets out: ${offer.name}`, 'quests');
+    void this.saveNow();
+  }
+
+  /**
+   * Sends a hero to replay one stage of a completed chain -- the Replay
+   * Memories counterpart to startQuest above. Deliberately its own
+   * action rather than a startQuest variant: eligibility (band owned AND
+   * chain already completed, both required -- see
+   * GuildManager.isChainReplayEligible's own comment) and offer
+   * generation (QuestManager.chainReplayOffer, not chainOffer) are both
+   * genuinely different from an ordinary send, not just a flag on the
+   * same path.
+   *
+   * Picking a difficulty that doesn't match an already-in-progress
+   * replay attempt for this hero+chain starts fresh at stage 0 --
+   * simplest coherent rule for an edge case that shouldn't come up often
+   * (the UI only ever offers a picker before a fresh attempt begins),
+   * rather than trying to carry partial progress across a difficulty
+   * switch that was never really defined.
+   */
+  startChainReplay(heroId: string, chainId: string, difficulty: ChainReplayDifficulty) {
+    const hero = this.hero(heroId);
+    if (!hero) return;
+    if (!GuildManager.isChainReplayEligible(this.state, chainId)) {
+      return this.say("This chain isn't open for replay yet.");
+    }
+    const chain = CHAIN_BY_ID[chainId];
+    if (!chain) return;
+    const existing = this.state.activeChainReplays.find((r) => r.heroId === heroId && r.chainId === chainId);
+    const stage = existing?.difficulty === difficulty ? existing.stage : 0;
+    const rng = createRng(`chainReplayOffer:${chainId}:${heroId}:${Date.now()}`);
+    const offer = QuestManager.chainReplayOffer(chain, stage, difficulty, rng);
+    const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], Date.now());
+    if (error) return this.say(error);
+    this.state.focusedHeroId = heroId;
+    // Deliberately no Auto-Chain streak interaction here, same reasoning
+    // pickBestQuest's own comment already gives for excluding chain
+    // offers from automation entirely -- a replay is even more clearly a
+    // deliberate, noticed choice than a first-clear chain stage is.
+    hero.autoAdvanceChainId = null;
+    playSound('depart');
+    this.say(`${hero.name} sets out to replay ${chain.name}.`, 'chains');
+    void this.saveNow();
+  }
+
+  /**
+   * Buys one Replay Memories tier (the master unlock or one of the 6
+   * saga bands) -- see GuildManager.buyChainReplayTier's own comment for
+   * the flat one-time-cost shape.
+   */
+  buyChainReplayTier(tierId: string) {
+    const error = GuildManager.buyChainReplayTier(this.state, tierId);
+    if (error) return this.say(error);
+    playSound('purchase');
+    const tier = CHAIN_REPLAY_TIER_BY_ID[tierId];
+    this.say(`${tier?.sagaName ?? 'Replay tier'} unlocked.`, 'chains', true);
     void this.saveNow();
   }
 

@@ -4508,5 +4508,15 @@
     "default": 5,
     "min": 1,
     "description": "Settling the tab at or past this round counts toward stats.peddlerJackpots and stats.peddlerTabJackpots -- per direct request, 'a roll of 5 can be a jackpot,' and specifically on SETTLING, not merely reaching the round and busting past it."
+  },
+  {
+    "id": "chain_replay_dedicated.baseDropChance",
+    "label": "Chain Replay: dedicated item base drop chance",
+    "category": "chain_replay_dedicated",
+    "value": 15,
+    "default": 15,
+    "min": 0,
+    "max": 100,
+    "description": "Base percent chance a chain's dedicated reward item drops on a successful Heroic/Legendary replay completion, before the difficulty's own lootBonus is added. Never rolls at Normal."
   }
 ]

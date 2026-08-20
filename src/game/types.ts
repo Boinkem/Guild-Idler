@@ -696,7 +696,22 @@ export interface QuestOffer {
   loot: LootRoll[];
   reqLevel: number;
   /** Set when this offer is one stage of a chain. */
-  chain?: { chainId: string; stage: number; totalStages: number };
+  /** `replay`, if set, marks this offer as a chain-replay stage rather
+   *  than a first-clear one -- see ChainReplayDifficulty's own comment
+   *  for why this is a distinct union from RaidDifficulty. Drives three
+   *  things at resolve time: which LootSourceTag padding loot rolls
+   *  under ('chainReplayHeroic'/'chainReplayLegendary' instead of the
+   *  offer's own quest-tier difficulty), whether the dedicated item gets
+   *  a chance roll on final-stage success, and which bookkeeping array
+   *  (activeChainReplays, not activeChains/completedChains) tracks
+   *  progress. baseSuccess/duration on a replay offer already have the
+   *  difficulty's successPenalty/durationMultiplier baked in at
+   *  generation time (see QuestManager.chainReplayOffer) -- unlike raids,
+   *  which apply successPenalty fresh at resolve time, ordinary quest
+   *  offers (including chain ones) lock success in at commit via
+   *  previewSuccess reading straight off baseSuccess, so baking it in at
+   *  generation is the consistent approach for this system. */
+  chain?: { chainId: string; stage: number; totalStages: number; replay?: ChainReplayDifficulty };
   /**
    * Rolled at generation time (see QuestManager.rollElementTags) -- what
    * this quest's opposition is weak to (a matching weapon's
@@ -785,6 +800,20 @@ export interface QuestResult {
   brokenItems: string[];
   levelsGained: number;
   chainAdvanced?: { chainId: string; stage: number; totalStages: number; completed: boolean };
+  /**
+   * The replay counterpart to chainAdvanced above -- deliberately a
+   * separate field, not an overload of it, since existing UI code reads
+   * chainAdvanced assuming it corresponds to activeChains/completedChains
+   * state, which a replay attempt never touches (activeChainReplays is
+   * its own bookkeeping, see that type's own comment). `reset: true`
+   * means this replay attempt failed a stage and restarted at stage 0 --
+   * confirmed design, a replay never retries a single stage in place the
+   * way a first clear does.
+   */
+  chainReplayAdvanced?: {
+    chainId: string; stage: number; totalStages: number; completed: boolean;
+    reset: boolean; dedicatedItemDropped: boolean;
+  };
   /** An ordinary egg drop rolled this quest, if any -- independent of
    *  hatchXp progress (a freshly-dropped egg goes to storage, unequipped,
    *  not straight into a nest -- see PetManager.grantEgg). Same

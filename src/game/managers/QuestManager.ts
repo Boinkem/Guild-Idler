@@ -9,8 +9,10 @@ import { CURIOS, questCurioDropChance } from '../data/curios';
 import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
 import { NODE_ORDER, MATERIAL_BY_ID } from '../data/materials';
 import { warehouseCapacity } from '../data/harvestUpgrades';
+import { CHAIN_REPLAY_DIFFICULTIES } from '../data/chainReplay';
 import {
-  ActiveQuest, AutoChainWeightBy, Difficulty, EquipmentItem, GameState, Hero, MaterialId, QuestOffer, QuestResult, Rarity,
+  ActiveQuest, AutoChainWeightBy, ChainReplayDifficulty, Difficulty, EquipmentItem, GameState, Hero,
+  MaterialId, QuestOffer, QuestResult, Rarity,
 } from '../types';
 import { createRng, Rng, uid } from '../rng';
 import { clamp, HOUR, MINUTE, sumMods, softCap } from '../util';
@@ -540,6 +542,50 @@ export const QuestManager = {
   },
 
   /**
+   * The replay counterpart to chainOffer just above -- same per-stage
+   * shape (name/flavour/tag/loot pool all come from the identical
+   * stageDef), but with the replay difficulty's successPenalty and
+   * durationMultiplier baked directly into baseSuccess/duration at
+   * generation time. See QuestOffer.chain.replay's own comment for why
+   * baking in here (rather than applying the penalty fresh at resolve
+   * time, the way RaidManager does for raids) is the consistent choice
+   * for this system -- ordinary quest/chain offers already lock success
+   * in at commit via previewSuccess, raids don't.
+   *
+   * Per-stage rewardGold/rewardXp are NOT reduced or boosted by
+   * difficulty (confirmed design: only loot is difficulty-modified) --
+   * computed the exact same way chainOffer's own do. The chain's
+   * separate, larger completion bonus (ChainDef.rewardGold/rewardRenown/
+   * rewardItems/rewardEgg/title/hatchery-unlock) never applies to a
+   * replay at all regardless of difficulty -- that branch is skipped
+   * entirely in QuestManager.resolve for any offer with `chain.replay`
+   * set, see that function's own chain-completion comment.
+   *
+   * Distinct id namespace (`chainReplay:` vs `chain:`) so a replay
+   * offer can never collide with an in-flight first-clear offer for the
+   * same chain/stage.
+   */
+  chainReplayOffer(chain: ChainDef, stage: number, difficulty: ChainReplayDifficulty, rng: Rng): QuestOffer {
+    const stageDef = chain.stages[stage];
+    const cfg = DIFFICULTIES[stageDef.difficulty];
+    const diffCfg = CHAIN_REPLAY_DIFFICULTIES[difficulty];
+    return {
+      id: `chainReplay:${chain.id}:${stage}:${difficulty}`,
+      name: `${chain.name} — ${stageDef.name}${difficulty !== 'normal' ? ` [Replay: ${difficulty === 'heroic' ? 'Heroic' : 'Legendary'}]` : ' [Replay]'}`,
+      flavour: stageDef.flavour,
+      difficulty: stageDef.difficulty,
+      tag: stageDef.tag,
+      duration: Math.round(stageDef.duration * diffCfg.durationMultiplier),
+      baseSuccess: clamp(cfg.baseSuccess - diffCfg.successPenalty, MIN_SUCCESS, MAX_SUCCESS),
+      rewardGold: Math.floor(questGoldBaseline(chain.reqLevel) * cfg.rewardMultiplier * stageDef.goldMultiplier),
+      rewardXp: Math.floor(questXpBaseline(chain.reqLevel) * cfg.rewardMultiplier * stageDef.goldMultiplier),
+      loot: lootTableFor(stageDef.difficulty, rng),
+      reqLevel: chain.reqLevel,
+      chain: { chainId: chain.id, stage, totalStages: chain.stages.length, replay: difficulty },
+    };
+  },
+
+  /**
    * Picks the best quest currently on offer for a hero — the highest-paying
    * quest at 50%+ odds, otherwise the best odds available rather than
    * stalling. Used by Auto-Chain to pick a hero's next contract without the
@@ -868,6 +914,16 @@ export const QuestManager = {
       // same "recompute from the source of truth" approach personalLoot
       // just above already uses.
       const lootLoadout = InventoryManager.loadoutEffects(state, quest.consumables);
+      // Padding loot for a chain replay stage rolls under its own tags
+      // ('chainReplayHeroic'/'chainReplayLegendary'), not the ordinary
+      // quest-tier one -- see LootSourceTag's own comment in
+      // proceduralLoot.ts. Normal-difficulty replay (and every ordinary
+      // quest, chain or not) falls through to the plain quest-tier tag
+      // unchanged.
+      const replayDifficulty = quest.offer.chain?.replay;
+      const lootSourceTag = replayDifficulty === 'heroic' ? 'chainReplayHeroic'
+        : replayDifficulty === 'legendary' ? 'chainReplayLegendary'
+        : quest.offer.difficulty;
       for (const entry of quest.offer.loot) {
         const chance = Math.min(90, entry.chance * (1 + lootChance / 100) * (1 + personalLoot / 100));
         if (rng.chance(chance)) {
@@ -880,7 +936,7 @@ export const QuestManager = {
             // reuse the exact same rolled item instead of re-instantiating
             // (which would desync the rng and silently reroll it).
             const item = EquipmentManager.instantiate(def.id, {
-              itemLevel: quest.offer.reqLevel, sourceTag: quest.offer.difficulty, rng,
+              itemLevel: quest.offer.reqLevel, sourceTag: lootSourceTag, rng,
               weightedKey: lootLoadout.lootWeightStat, weightMultiplier: lootLoadout.lootWeightMultiplier,
             });
             if (item) {
@@ -1135,8 +1191,72 @@ export const QuestManager = {
 
     /* -------------------------------- chain -------------------------------- */
     let chainAdvanced: QuestResult['chainAdvanced'];
+    let chainReplayAdvanced: QuestResult['chainReplayAdvanced'];
     let titleGranted: string | undefined;
-    if (quest.offer.chain) {
+    if (quest.offer.chain?.replay) {
+      // Replay attempt -- deliberately separate bookkeeping
+      // (state.activeChainReplays, not activeChains/completedChains) and
+      // a genuinely different failure behavior: a first clear's failed
+      // stage retries in place (see the ordinary branch below); a
+      // replay's failed stage resets the WHOLE attempt back to stage 0
+      // (confirmed design decision, not a bug to fix later). Never
+      // touches ChainDef's own rewardGold/rewardRenown/rewardItems/
+      // rewardEgg/title/hatchery-unlock -- those are first-clear-only,
+      // confirmed design; a replay's only possible reward beyond its
+      // own per-stage gold/xp (computed identically to a first clear's,
+      // just difficulty-adjusted at the offer level, see
+      // chainReplayOffer) is a chance at the chain's dedicated item,
+      // rolled only on a completed final stage at Heroic/Legendary.
+      const { chainId, stage, totalStages, replay: difficulty } = quest.offer.chain;
+      let activeReplay = state.activeChainReplays.find((r) => r.heroId === quest.heroId && r.chainId === chainId);
+      if (!activeReplay) {
+        activeReplay = { chainId, heroId: quest.heroId, difficulty, stage: 0, startedAt: resolvedAt, resetCount: 0 };
+        state.activeChainReplays.push(activeReplay);
+      }
+      if (success) {
+        const nextStage = stage + 1;
+        const completed = nextStage >= totalStages;
+        let dedicatedItemDropped = false;
+        if (completed) {
+          const chain = CHAIN_BY_ID[chainId];
+          // Never rolls at Normal -- confirmed design, Normal replay is
+          // a legitimate lower-risk option but was never meant to be
+          // able to hit the actual chase item, only Heroic/Legendary
+          // are (see ChainReplayResult.dedicatedItemDropped's own
+          // comment in types.ts, written when this was still just a
+          // design decision, now the real behavior matching it).
+          const dedicatedId = chain?.rewardItems[0];
+          if (dedicatedId && difficulty !== 'normal') {
+            const diffCfg = CHAIN_REPLAY_DIFFICULTIES[difficulty];
+            const dropChance = Tuning.get('chain_replay_dedicated.baseDropChance') + diffCfg.lootBonus;
+            if (rng.chance(dropChance)) {
+              const dedicatedDef = EQUIPMENT_BY_ID[dedicatedId];
+              const item = EquipmentManager.instantiate(dedicatedId, {
+                itemLevel: chain.reqLevel,
+                sourceTag: difficulty === 'heroic' ? 'chainReplayHeroic' : 'chainReplayLegendary',
+                rng,
+              });
+              if (item && dedicatedDef) {
+                state.stash.push(item);
+                dedicatedItemDropped = true;
+                loot.push({ defId: dedicatedId, name: itemDisplayName(item, dedicatedDef), rarity: dedicatedDef.rarity });
+                if (!state.discoveredItems.includes(dedicatedId)) state.discoveredItems.push(dedicatedId);
+              }
+            }
+          }
+          state.activeChainReplays = state.activeChainReplays.filter((r) => r !== activeReplay);
+        } else {
+          activeReplay.stage = nextStage;
+        }
+        chainReplayAdvanced = {
+          chainId, stage: completed ? totalStages : nextStage, totalStages, completed, reset: false, dedicatedItemDropped,
+        };
+      } else {
+        activeReplay.stage = 0;
+        activeReplay.resetCount += 1;
+        chainReplayAdvanced = { chainId, stage: 0, totalStages, completed: false, reset: true, dedicatedItemDropped: false };
+      }
+    } else if (quest.offer.chain) {
       const { chainId, stage, totalStages } = quest.offer.chain;
       let active = state.activeChains.find((c) => c.chainId === chainId);
       if (!active) {
@@ -1240,6 +1360,7 @@ export const QuestManager = {
       brokenItems: broken,
       levelsGained,
       chainAdvanced,
+      chainReplayAdvanced,
       eggDropped,
       materialGained,
       curioGained,

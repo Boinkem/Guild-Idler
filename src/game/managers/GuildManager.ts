@@ -3,7 +3,7 @@ import {
   guildCost, upgradeCost, vendorLevelCost, isVendorUpgradeUnlocked,
 } from '../data/progression';
 import { RAID_UPGRADES, RAID_UPGRADE_BY_ID, raidUpgradeCost } from '../data/raidUpgrades';
-import { chainReplayTierForChain } from '../data/chainReplay';
+import { chainReplayTierForChain, CHAIN_REPLAY_TIER_BY_ID } from '../data/chainReplay';
 import { GameState, GuildFacility, HeroClass, VendorId } from '../types';
 import { Rng } from '../rng';
 import { HeroManager } from './HeroManager';
@@ -72,6 +72,24 @@ export const GuildManager = {
     if (!state.completedChains.includes(chainId)) return false;
     const tier = chainReplayTierForChain(chainId);
     return !!tier && GuildManager.hasChainReplayTier(state, tier.id);
+  },
+
+  /**
+   * Flat one-time gold purchase, no levels -- unlike buyUpgrade/
+   * levelUpVendor just above, there's exactly one of each
+   * ChainReplayTierDef to ever buy (confirmed design: gold-only, no
+   * growth curve). Same error-message/goldSpent-tracking shape as
+   * buyUpgrade for consistency, just without a level to increment.
+   */
+  buyChainReplayTier(state: GameState, tierId: string): string | null {
+    if (GuildManager.hasChainReplayTier(state, tierId)) return 'Already unlocked.';
+    const tier = CHAIN_REPLAY_TIER_BY_ID[tierId];
+    if (!tier) return 'Unknown tier.';
+    if (state.gold < tier.goldCost) return 'Not enough gold.';
+    state.gold -= tier.goldCost;
+    state.stats.goldSpent += tier.goldCost;
+    state.chainReplayTiersOwned.push(tierId);
+    return null;
   },
 
   nextUpgradeCost(state: GameState, id: string): number | null {

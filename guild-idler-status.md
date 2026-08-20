@@ -1218,6 +1218,32 @@ cards, difficulty picker, loot-table view; (5) DevTool schema updates so
 the new content types are editable the same way everything else already
 is.
 
+**Step (3) done, patch 0227** (renumbered from an originally-generated
+0226 -- that number landed first from a parallel thread's unrelated
+Vendor Rep/Grimsby's Tab patch; same collision shape as the earlier
+0189 incident, resolved the same way: renumber, reconcile the handful
+of files both patches touched -- `tuning.json`/`guild-idler-status.md`/
+`engine.ts` -- and re-verify). `QuestManager.chainReplayOffer` (the
+replay counterpart to `chainOffer`, with the difficulty's
+`successPenalty`/`durationMultiplier` baked directly into
+`baseSuccess`/`duration` at generation time, matching how ordinary
+quest offers already lock success in at commit rather than resolve);
+`QuestOffer.chain.replay`/`QuestResult.chainReplayAdvanced` as new
+fields, deliberately not overloading the existing
+`chain`/`chainAdvanced` shape a first clear uses; a new branch in
+`QuestManager.resolve` handling replay completion/failure entirely
+separately from `activeChains`/`completedChains` (a failed replay stage
+resets `ActiveChainReplay.stage` to 0, confirmed design, not a
+retry-in-place); the dedicated item's chance roll on a completed final
+stage (`chain_replay_dedicated.baseDropChance` + the difficulty's
+`lootBonus`, never at Normal); `GuildManager.buyChainReplayTier` (flat
+one-time gold, no levels); and the two engine actions,
+`startChainReplay`/`buyChainReplayTier`.
+
+Still to come: (4) Replay Memories UI itself -- band cards, difficulty
+picker, loot-table view; (5) DevTool schema updates so the new content
+types are editable the same way everything else already is.
+
 ### Uncapped gold/xp multipliers -- resolved, patch 0214
 Was flagged here (see git history for the original entry) during the
 hero-stat rebalance discussion. Fixed as part of patch 0214's soft-cap
@@ -17252,3 +17278,108 @@ file. Worth naming plainly here rather than pretending the first pass
 was clean: this is exactly what the "verify against a real build, not
 just read through" convention this project already holds itself to is
 for.
+
+### Replayable Quest Chains: resolution logic and purchasing (patch 0227)
+
+```discord-update
+Dev Update | Feature
+
+- Story chains can now actually be replayed -- send a hero to replay a chain's stage at Normal, Heroic, or Legendary once the guild's unlocked it
+- A failed replay stage restarts the whole attempt, not just that one step, unlike a first clear
+- Buy each saga band's unlock inside Replay Memories with gold, any order
+```
+
+Step (3) of the sequencing plan -- the actual resolution logic and
+purchasing, wiring together the data model (patch 0224) and loot
+mechanism (patch 0225) into something a hero can actually be sent on.
+Still no dedicated UI -- these are the underlying engine actions and
+resolve-time behavior the UI lands on top of next.
+
+Renumbered from an originally-generated 0226 -- that number landed
+first from a parallel thread's unrelated Vendor Rep/Grimsby's Tab
+patch, same collision shape as the earlier 0189 incident. Resolved the
+same way: renumbered to the actual next-available slot, and reconciled
+the three files both patches happened to touch
+(`guild-idler-status.md`, `tuning.json`, `src/game/engine.ts`).
+`types.ts`, `GuildManager.ts`, and `QuestManager.ts` applied cleanly
+with no overlap at all. `tuning.json`'s conflict was purely positional
+-- 4 of this patch's 5 new tuning entries had already landed as part of
+patches 0224/0225 (confirmed genuinely live, not just assumed); only
+`chain_replay_dedicated.baseDropChance` was actually missing and
+needed re-adding. `engine.ts`'s conflict was the Vendor Rep patch
+adding its own `PeddlerTabRunResult` to the same import line this
+patch also touches -- reconciled by adding `ChainReplayDifficulty` to
+the current line rather than reverting the Vendor Rep patch's own
+addition.
+
+**`QuestManager.chainReplayOffer`**, the replay counterpart to
+`chainOffer`: same per-stage shape (name/flavour/tag/loot pool all come
+from the identical `stageDef`), but with the chosen difficulty's
+`successPenalty`/`durationMultiplier` baked directly into
+`baseSuccess`/`duration` at generation time. Deliberately baked in
+rather than applied fresh at resolve time the way `RaidManager` does for
+raids -- ordinary quest/chain offers already lock success in at commit
+via `previewSuccess` reading straight off `baseSuccess`, so baking it in
+at generation is the consistent choice for this system, not an
+inconsistency with the raid precedent. Distinct id namespace
+(`chainReplay:` vs `chain:`) so a replay offer can never collide with an
+in-flight first-clear offer for the same chain/stage.
+
+**New fields, deliberately not overloading the existing ones.**
+`QuestOffer.chain` gains an optional `replay?: ChainReplayDifficulty`.
+`QuestResult` gains a whole separate `chainReplayAdvanced` field rather
+than repurposing `chainAdvanced` -- existing UI code reads `chainAdvanced`
+assuming it corresponds to `activeChains`/`completedChains` state, which
+a replay attempt never touches.
+
+**`QuestManager.resolve`'s chain section now branches three ways**: an
+ordinary quest (untouched), a first-clear chain stage (untouched, same
+code as before patch 0223), or a replay stage (new). The replay branch:
+padding loot's `LootSourceTag` is `'chainReplayHeroic'`/
+`'chainReplayLegendary'` instead of the offer's own quest-tier tag
+(Normal replay falls through to the ordinary tag, matching
+`CHAIN_REPLAY_DIFFICULTIES.normal`'s no-op baseline). On a completed
+final stage, the dedicated item gets a chance roll --
+`chain_replay_dedicated.baseDropChance` plus the difficulty's own
+`lootBonus`, **never at Normal** (confirmed design from the original
+discussion, now the actual behavior matching it) -- using
+`scaleChainExclusiveItem` via the `sourceTag` branch patch 0225 built.
+**On failure, the whole attempt resets** -- `ActiveChainReplay.stage`
+back to 0, `resetCount` incremented -- genuinely different from a first
+clear's same-stage retry, confirmed design decision. Never touches
+`ChainDef`'s own `rewardGold`/`rewardRenown`/`rewardItems`/`rewardEgg`/
+`title`/hatchery-unlock -- all first-clear-only, unaffected by replay
+difficulty or how many times a chain gets replayed.
+
+**Purchasing.** `GuildManager.buyChainReplayTier` -- flat one-time gold
+cost, no levels (there's exactly one of each `ChainReplayTierDef` to
+ever buy), same error-message/`goldSpent`-tracking shape as `buyUpgrade`
+otherwise.
+
+**Two new engine actions.** `startChainReplay(heroId, chainId, difficulty)`
+-- checks `GuildManager.isChainReplayEligible` (band owned AND chain
+already completed, both required), builds the offer via
+`chainReplayOffer`, sends through the same `QuestManager.start` every
+ordinary quest uses. Picking a difficulty that doesn't match an
+already-in-progress attempt for that hero+chain starts fresh at stage
+0 -- simplest coherent rule for an edge case the UI shouldn't surface
+often, rather than trying to carry progress across a difficulty switch
+that was never really defined. Deliberately no Auto-Chain streak
+interaction, same reasoning `pickBestQuest` already excludes chain
+offers from automation entirely -- a replay is an even more deliberate,
+noticed choice than a first-clear chain stage. `buyChainReplayTier(tierId)`
+-- thin wrapper, toast, save.
+
+No UI changed -- these are pure engine/manager additions, callable but
+not yet reachable from anywhere in the interface.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against the reconciled tree (which
+now includes both this patch's changes and the unrelated Vendor Rep
+patch's, together). Every new `Tuning.get()` call cross-checked by
+script against the actual registered ids -- 18/18 match exactly (17
+from this feature's own patches plus confirming no accidental
+collision with any Vendor Rep tuning id). Manual proofread of the new
+resolve() branch for state-mutation correctness (stage advancement,
+reset-on-fail, dedicated item gating on Normal) alongside the
+mechanical checks above.
