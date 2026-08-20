@@ -59,6 +59,21 @@ if (!gotSingleInstanceLock) {
  * until `build/icon.png` actually exists -- Electron's own default icon
  * keeps showing in the meantime, exactly like today, rather than every
  * window suddenly going blank the moment this lands.
+ *
+ * Patch 0216 fix: this used to silently resolve to `undefined` in every
+ * PACKAGED build, even though `build/icon.png` was committed and real --
+ * `package.json`'s `build.files` allowlist (what electron-builder actually
+ * copies into the packaged app's asar) only listed `dist/**` and
+ * `dist-electron/**`, never `build/`. `build.win.icon`/`mac.icon`/
+ * `linux.icon` only brand the installer/exe file itself at package time;
+ * they don't cause `build/` to exist inside the running app's own
+ * resources. Dev mode never hit this (running straight from the real
+ * source tree, `build/icon.png` is right there), which is exactly why
+ * testers only saw a missing tray icon in installed builds, never in dev.
+ * Fixed by adding the one specific file this code actually reads
+ * (`build/icon.png`) to `build.files` -- not the whole `build/` folder,
+ * which also holds unused dev-only variants (icon2.ico, 1icon.png,
+ * ICON-README.md) with no reason to ship in the package.
  */
 const APP_ICON_PATH = path.join(__dirname, '..', 'build', 'icon.png');
 function loadAppIcon() {

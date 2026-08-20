@@ -38,7 +38,8 @@
     "productName": "Guildbound",
     "files": [
       "dist/**/*",
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "build/icon.png"
     ],
     "directories": {
       "output": "release"

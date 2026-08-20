@@ -15979,3 +15979,67 @@ fixed. Fortune Charm weighting and reroll pool-restriction both verified
 by direct simulation, not just code review. No live playtest in this
 environment -- same caveat as patch 0214, worth a manual pass at the
 Blacksmith and Enchanter stations specifically before this ships.
+
+### Tray icon missing in packaged installs (worked fine in dev) -- fixed (patch 0216)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed a packaging bug that made the taskbar/tray icon silently disappear in installed builds, even though it worked correctly in dev mode
+```
+
+Direct tester report: no task-tray icon, despite it having landed a
+while back (patch 0120) and dev-mode testing showing it working
+correctly the whole time.
+
+**Root cause, confirmed directly against the live repo, not guessed
+at.** `electron/main.ts`'s `loadAppIcon()` reads `build/icon.png` via
+`path.join(__dirname, '..', 'build', 'icon.png')` -- correct relative
+path within the real source tree, which is exactly why dev mode always
+worked. But `package.json`'s `build.files` (electron-builder's own
+allowlist for what actually gets copied into a packaged app's asar) only
+listed `dist/**/*` and `dist-electron/**/*` -- `build/` was never in it.
+`build.win.icon`/`mac.icon`/`linux.icon` are a *separate* mechanism:
+electron-builder reads those at package time purely to brand the
+installer/exe file itself, and that never causes `build/` to exist
+inside the running app's own bundled resources. So in every packaged
+install, `nativeImage.createFromPath()` was silently handed a path to a
+file that simply wasn't there, correctly returned an empty image,
+`loadAppIcon()` correctly detected that and returned `undefined` exactly
+as its own fallback design intends, and `createTray()` fell back to
+`nativeImage.createEmpty()` -- no error, no crash, nothing to alert
+anyone, just a blank tray entry. Confirmed the exact packaged-runtime
+path this resolves to before calling it fixed, not just asserted it:
+`__dirname` inside a packaged app is `<resources>/app.asar/dist-electron`,
+so `../build/icon.png` needs `<resources>/app.asar/build/icon.png` to
+exist -- which it now will, once `build.files` includes it.
+
+**Also flagged, not separately verified**: `loadAppIcon()` is the same
+function `BrowserWindow`'s runtime `icon:` option uses (the window/
+taskbar icon while the app is actually running, distinct from the
+installer-branded exe file icon on disk, which was never affected by
+this bug). Almost certainly hit the identical silent-fallback bug in
+every packaged build to date -- worth confirming fixed alongside the
+tray icon in the next install test, since it's the same root cause and
+the same fix covers both.
+
+**Fix**: added the one specific file this code actually reads
+(`"build/icon.png"`) to `package.json`'s `build.files` array -- not the
+whole `build/**/*` glob, which would have also shipped several unused
+dev-only variants already sitting in that folder (`icon2.ico`,
+`1icon.png`, `icon2.png`, `ICON-README.md`) with no reason to bloat the
+package.
+
+**Verified**: `build/icon.png` confirmed to exist at the exact path
+electron-builder's `files` entry names (not assumed); `package.json`
+re-parsed after the edit to confirm it's still valid JSON; `npx tsc
+--noEmit` passes clean across the whole project, `electron/` included
+(confirmed in scope via `tsconfig.json`'s own `include` list, not
+assumed). **Not independently verified**: an actual `electron-builder`
+packaged build producing a real installer with a visible tray icon --
+this environment has no Windows target (NSIS packaging needs Windows or
+Wine, neither available here). The fix is a one-line, directly-traced
+config change with a clear, confirmed causal chain from the missing
+`files` entry to the exact runtime failure, but a real install test is
+the only way to close the loop completely -- worth doing before telling
+testers it's resolved.
