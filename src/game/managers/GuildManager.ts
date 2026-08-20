@@ -3,6 +3,7 @@ import {
   guildCost, upgradeCost, vendorLevelCost, isVendorUpgradeUnlocked,
 } from '../data/progression';
 import { RAID_UPGRADES, RAID_UPGRADE_BY_ID, raidUpgradeCost } from '../data/raidUpgrades';
+import { chainReplayTierForChain } from '../data/chainReplay';
 import { GameState, GuildFacility, HeroClass, VendorId } from '../types';
 import { Rng } from '../rng';
 import { HeroManager } from './HeroManager';
@@ -42,6 +43,34 @@ export const GuildManager = {
 
   upgradeLevel(state: GameState, id: string): number {
     return state.upgrades[id] ?? 0;
+  },
+
+  /* ------------------------- chain replay tiers ------------------------- */
+  // Deliberately just the read side here (patch 0224, data-model step of
+  // Replayable Quest Chains -- see guild-idler-status.md's Backlog entry).
+  // Purchasing and difficulty/resolution logic land in later patches, per
+  // that entry's own sequencing plan; these two exist now because
+  // eligibility is fundamentally a data query, not a mutation, and every
+  // later step needs a single correct place to ask it from.
+
+  hasChainReplayTier(state: GameState, tierId: string): boolean {
+    return state.chainReplayTiersOwned.includes(tierId);
+  },
+
+  /**
+   * A chain is replayable once its own saga band is owned AND the chain
+   * is already in completedChains -- both required, neither alone
+   * sufficient (confirmed design: owning a band never bypasses a
+   * chain's first clear). Also requires the 'master' unlock, same as
+   * every band -- a band's own purchase doesn't imply master is owned
+   * too, they're independent per CHAIN_REPLAY_TIERS' own "no forced
+   * ordering" design.
+   */
+  isChainReplayEligible(state: GameState, chainId: string): boolean {
+    if (!GuildManager.hasChainReplayTier(state, 'master')) return false;
+    if (!state.completedChains.includes(chainId)) return false;
+    const tier = chainReplayTierForChain(chainId);
+    return !!tier && GuildManager.hasChainReplayTier(state, tier.id);
   },
 
   nextUpgradeCost(state: GameState, id: string): number | null {

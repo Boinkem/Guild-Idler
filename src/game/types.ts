@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 46;
+export const SAVE_VERSION = 47;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -898,6 +898,122 @@ export interface ActiveChain {
   failedStages: number;
 }
 
+/**
+ * Replayable Quest Chains (patch 0224 on) -- see guild-idler-status.md's
+ * Backlog entry for the full design. Deliberately its own difficulty
+ * union rather than reusing RaidDifficulty, even though the values are
+ * identical strings today -- a replay's difficulty config
+ * (ChainReplayDifficultyConfig below) has a genuinely different shape
+ * from RaidDifficultyConfig (no partySize/roleMismatchCap, no
+ * rewardMultiplier), and keeping the type distinct means a future change
+ * to one can't silently type-check against the other by accident.
+ */
+export type ChainReplayDifficulty = 'normal' | 'heroic' | 'legendary';
+
+export interface ChainReplayDifficultyConfig {
+  difficulty: ChainReplayDifficulty;
+  /** Flat percentage points subtracted from every stage's success chance
+   *  throughout a replay attempt at this difficulty -- applied every
+   *  stage, not just the final one (confirmed design decision). */
+  successPenalty: number;
+  /** Flat percentage points added to the dedicated item's drop chance,
+   *  and passed through to the procedural padding-loot budget multiplier
+   *  for this difficulty (see LootSourceTag 'chainReplayHeroic'/
+   *  'chainReplayLegendary' in proceduralLoot.ts once that lands).
+   *  Deliberately the only reward lever difficulty has here -- no
+   *  rewardMultiplier, confirmed loot-only. */
+  lootBonus: number;
+  /** Multiplies total replay duration, same "harder tiers take longer
+   *  too" shape RaidDifficultyConfig already uses. */
+  durationMultiplier: number;
+}
+
+/**
+ * A chain replay attempt in progress -- deliberately NOT ActiveChain.
+ * Same reasoning RaidManager already established for ActiveRaid being
+ * its own thing rather than bolted onto quest infrastructure: a
+ * replay's failure behavior is a genuine fork from a first clear's (see
+ * `stage` below), not just the same shape reused. A hero can have at
+ * most one of these at a time, same "one active thing per hero" rule
+ * ActiveChain/regular quests already enforce -- checked the same way,
+ * against `heroId`, not against `chainId` (so two different heroes could
+ * in principle be replaying the same or different chains at once).
+ */
+export interface ActiveChainReplay {
+  chainId: string;
+  heroId: string;
+  difficulty: ChainReplayDifficulty;
+  /** Which stage (0-indexed, same numbering ActiveChain.stage uses) is
+   *  currently in progress. Unlike ActiveChain, a failed stage during a
+   *  replay does not retry in place -- the whole attempt resets `stage`
+   *  back to 0 (see QuestManager's replay resolution once it lands),
+   *  confirmed design decision, not a bug to fix later. */
+  stage: number;
+  startedAt: number;
+  /** Total attempts at this replay that have failed at some stage and
+   *  been reset to stage 0 -- a simple counter, same role
+   *  ActiveChain.failedStages plays for a first clear, but counting
+   *  full-attempt resets here instead of same-stage retries. */
+  resetCount: number;
+}
+
+/**
+ * One replay result, distinct from ChainCompleteModal's own first-clear
+ * result shape -- a replay never re-grants the chain's guaranteed
+ * base-tier rewardGold/rewardRenown/rewardItems/rewardEgg/title/
+ * hatchery-unlock (all first-clear-only, confirmed design), so a
+ * replay's result only ever needs to describe what it actually can
+ * grant: loot.
+ */
+export interface ChainReplayResult {
+  chainId: string;
+  chainName: string;
+  difficulty: ChainReplayDifficulty;
+  heroId: string;
+  success: boolean;
+  /** True only if the dedicated item's chance roll hit this run -- see
+   *  ChainReplayDifficultyConfig.lootBonus for how difficulty affects
+   *  the odds. Never true at 'normal' (confirmed: the dedicated item's
+   *  Heroic/Legendary counterparts are the entire point of replaying
+   *  above Normal in the first place). */
+  dedicatedItemDropped: boolean;
+  loot: { defId: string; name: string; rarity: Rarity }[];
+}
+
+/**
+ * A guild-upgrade-gated "saga band" -- which chains a player is allowed
+ * to replay at all, independent of how the loot itself scales (that's
+ * entirely the procedural system's job once the resolution logic lands,
+ * not this def's). Deliberately its own type, not a reuse of
+ * UpgradeDef.unlocks -- that's a simple boolean-flag union with no way
+ * to carry per-entry data like a saga's own name/level-range/chain
+ * membership, same reason raid upgrades got RaidUpgradeDef instead of
+ * joining the general UPGRADES list. Flat one-time gold cost,
+ * deliberately NOT leveled like RaidUpgradeDef (confirmed: gold-only, no
+ * growth curve -- there's exactly one of each band to ever buy).
+ */
+export interface ChainReplayTierDef {
+  id: string;
+  /** e.g. "The Founding Days" -- see the Backlog's saga-name table for
+   *  the full list of six, plus the one master unlock (id 'master',
+   *  sagaName/levelRange unused for that entry -- see its own comment
+   *  in chainReplayTiers.ts). */
+  sagaName: string;
+  /** Display string, e.g. "Levels 1-7" -- not used for any eligibility
+   *  math, purely descriptive; actual gating is entirely via chainIds. */
+  levelRange: string;
+  /** States plainly what buying this does, for the shop card -- e.g.
+   *  "Lets your guild replay The Founding Days for a chance at Heroic
+   *  gear," not flavor text (confirmed design requirement). */
+  description: string;
+  /** Which chains this band covers -- see the Backlog's saga table for
+   *  the authoritative chain-to-band mapping. Empty for the 'master'
+   *  entry, which gates Replay Memories existing at all rather than any
+   *  specific chains. */
+  chainIds: string[];
+  goldCost: number;
+}
+
 /* -------------------------------- raids -------------------------------- */
 
 export type RaidDifficulty = 'normal' | 'heroic' | 'legendary';
@@ -1535,6 +1651,24 @@ export interface GameState {
   activeQuests: ActiveQuest[];
   activeChains: ActiveChain[];
   completedChains: string[];
+  /**
+   * Ids of ChainReplayTierDef entries the guild has bought -- the
+   * master unlock plus however many of the 6 saga bands, in any order
+   * (no forced prerequisite chain between bands, same as
+   * raidsHeroic/raidsLegendary today -- cost alone naturally encourages
+   * roughly-in-order buying). A chain is only actually replayable once
+   * its own band's id is in this array AND the chain is in
+   * completedChains above -- both required, neither alone sufficient
+   * (confirmed: owning a band never bypasses a chain's first clear).
+   */
+  chainReplayTiersOwned: string[];
+  /**
+   * Chain replay attempts currently in progress -- see ActiveChainReplay
+   * for why this is a separate array from activeChains, not a shared
+   * shape. At most one entry per heroId, same "one active thing per
+   * hero" rule the rest of the quest system already enforces.
+   */
+  activeChainReplays: ActiveChainReplay[];
   /** The single raid attempt in progress, if any -- only one at a time, same as how a hero can only be on one quest. */
   activeRaid: ActiveRaid | null;
   /** Raid ids (any difficulty) that have been full-cleared at least once -- gates unlockNextRaidId progression. */

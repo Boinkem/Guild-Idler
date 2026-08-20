@@ -1,0 +1,691 @@
+From a22bcc9bd1d51bebf3b8354a291790a4daa2bbb5 Mon Sep 17 00:00:00 2001
+From: Guild-Idler Patch Tool <patch@guild-idler.local>
+Date: Thu, 20 Aug 2026 09:17:26 +0000
+Subject: [PATCH] 0224: Replayable Quest Chains -- data model foundation
+
+Step (1) of the sequencing plan from patch 0223's rewritten Backlog
+entry. Data model only -- no UI, no purchase logic, no resolution
+logic yet.
+
+New types: ChainReplayDifficulty (own union, not a reuse of
+RaidDifficulty), ChainReplayDifficultyConfig, ActiveChainReplay
+(deliberately not ActiveChain), ChainReplayResult, ChainReplayTierDef
+(own type, not a reuse of UpgradeDef.unlocks).
+
+New data/chainReplay.ts: CHAIN_REPLAY_DIFFICULTIES (Normal literal,
+Heroic/Legendary tuning-backed, deliberately softer than raids' own
+curve), CHAIN_REPLAY_TIERS (master unlock + all 6 saga bands, 29
+chains mapped 1:1, verified by script), chainReplayTierForChain().
+
+New persisted state: chainReplayTiersOwned/activeChainReplays on
+GameState. SAVE_VERSION 46->47, migration 46 backfills both to empty
+arrays. No eligibility backfill needed -- completedChains already
+covers pre-existing clears.
+
+13 new Tuning entries for difficulty config + the 7 gold costs.
+
+Two minimal read-only query helpers on GuildManager:
+hasChainReplayTier/isChainReplayEligible -- enforces master+band+
+completedChains all required, confirmed design.
+
+No UI changed, no engine action added, no existing behavior touched.
+
+Verified: npx tsc --noEmit and npx vite build both pass clean.
+Chain-to-band mapping verified by script: 29 ids, 29 unique, zero
+duplicates, zero gaps. SAVE_VERSION chain contiguous (45->46->47), no
+duplicate Tuning ids.
+---
+ guild-idler-status.md             | 103 +++++++++++++++++++---
+ src/game/data/chainReplay.ts      | 133 +++++++++++++++++++++++++++++
+ src/game/data/json/tuning.json    | 130 ++++++++++++++++++++++++++++
+ src/game/managers/GuildManager.ts |  29 +++++++
+ src/game/managers/SaveManager.ts  |  19 +++++
+ src/game/types.ts                 | 136 +++++++++++++++++++++++++++++-
+ 6 files changed, 538 insertions(+), 12 deletions(-)
+ create mode 100644 src/game/data/chainReplay.ts
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 6138bd9..0acc7e1 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -1184,17 +1184,30 @@ tag-distinct); reusing `ActiveChain` for replay tracking (rejected, own
+ structure); `rewardMultiplier` on replay difficulty (rejected,
+ loot-only).
+ 
+-**Sequencing.** Patch 0223 (this one) covers the content audit/gap-fill
+-and this rewritten spec. Implementation still to come, roughly in this
+-order: (1) data model -- `ChainReplayTierDef`/`ActiveChainReplay`/
+-persisted ownership+progress state, no UI yet; (2) the new
+-`LootSourceTag` values + budget multipliers + the dedicated-item hybrid
+-scaling code path (small, no new equipment content); (3)
+-`QuestManager`/`GameEngine` resolution logic -- difficulty-modified
+-success, the tag-based loot resolution, reset-on-fail; (4) Replay
+-Memories UI itself -- band cards, difficulty picker, loot-table view;
+-(5) DevTool schema updates so the new content types are editable the
+-same way everything else already is.
++**Sequencing.** Patch 0223 covered the content audit/gap-fill and this
++rewritten spec. **Patch 0224 covers step (1), data model -- done:**
++`ChainReplayDifficulty`/`ChainReplayDifficultyConfig`/
++`ActiveChainReplay`/`ChainReplayResult`/`ChainReplayTierDef` added to
++`types.ts`; `CHAIN_REPLAY_DIFFICULTIES`/`CHAIN_REPLAY_TIERS`/
++`chainReplayTierForChain` in new `data/chainReplay.ts` (all 6 saga bands
+++ master unlock, 29 chains mapped 1:1, verified by script -- no
++duplicates, no gaps, no typos); `chainReplayTiersOwned`/
++`activeChainReplays` persisted on `GameState`, `SAVE_VERSION` 46->47
++with migration 46 backfilling both to empty arrays for existing saves;
++13 new `Tuning` entries for the difficulty config and the 7 gold costs.
++Two minimal, deliberately read-only query helpers added to
++`GuildManager` (`hasChainReplayTier`/`isChainReplayEligible`) -- no
++purchase or resolution logic yet, that's steps (2)/(3) below, kept
++strictly out of this patch's scope.
++
++Still to come, roughly in this order: (2) the new `LootSourceTag`
++values + budget multipliers + the dedicated-item hybrid scaling code
++path (small, no new equipment content); (3) `QuestManager`/`GameEngine`
++resolution logic -- difficulty-modified success, the tag-based loot
++resolution, reset-on-fail, and the actual tier-purchase mutation; (4)
++Replay Memories UI itself -- band cards, difficulty picker, loot-table
++view; (5) DevTool schema updates so the new content types are editable
++the same way everything else already is.
+ 
+ ### Uncapped gold/xp multipliers -- resolved, patch 0214
+ Was flagged here (see git history for the original entry) during the
+@@ -16920,3 +16933,71 @@ chains' `rewardItems` entries resolves against `equipment.json` (zero
+ missing fields, zero broken ids, zero unresolvable references,
+ confirmed by script); `npx tsc --noEmit` and `npx vite build --config
+ vite.web.config.ts` both pass clean.
++
++### Replayable Quest Chains: data model foundation (patch 0224)
++
++```discord-update
++Dev Update | Feature (foundation)
++
++- First real step toward replaying story quest chains for a shot at Heroic/Legendary loot -- data model only this patch, nothing playable yet
++- Every save gets two new fields for tracking which "sagas" your guild has unlocked and any replay attempt in progress
++- 13 new tunable values for replay difficulty and the six saga-band unlock costs
++```
++
++Step (1) of the sequencing plan from patch 0223's rewritten Backlog
++entry -- data model only, deliberately no UI, no purchase logic, no
++resolution logic yet. See that entry for the full design; this patch
++just lays the typed, persisted foundation everything else builds on.
++
++**New types** (`types.ts`): `ChainReplayDifficulty` (its own union, not
++a reuse of `RaidDifficulty` -- the two configs have genuinely different
++shapes, no `partySize`/`rewardMultiplier` here), `ChainReplayDifficultyConfig`,
++`ActiveChainReplay` (deliberately not `ActiveChain` -- confirmed design,
++a replay's failure behavior forks from a first clear's), `ChainReplayResult`,
++`ChainReplayTierDef` (its own type, not a reuse of `UpgradeDef.unlocks`
++-- needs per-entry saga name/level-range/chain-membership data that
++enum doesn't carry, same reason raid upgrades got `RaidUpgradeDef`
++instead of joining the general list).
++
++**New data** (`data/chainReplay.ts`): `CHAIN_REPLAY_DIFFICULTIES`
++(Normal literal baseline, Heroic/Legendary tuning-registry-backed,
++deliberately softer than raids' own 20/50 successPenalty curve -- this
++is meant to be lighter-weight solo-hero repeatable content, not a
++second raid ladder). `CHAIN_REPLAY_TIERS`: the master unlock plus all 6
++saga bands from the Backlog's table, `chainIds` mapped against the live
++`quest-chains.json` and verified by script -- all 29 chains covered
++exactly once, zero duplicates, zero typos. `chainReplayTierForChain()`
++helper for the reverse lookup.
++
++**New persisted state**: `chainReplayTiersOwned: string[]` /
++`activeChainReplays: ActiveChainReplay[]` on `GameState`. `SAVE_VERSION`
++46->47, migration 46 backfills both to empty arrays for every existing
++save -- no eligibility backfill needed alongside it, since a chain's
++own `completedChains` membership (already persisted, read directly once
++a band is bought) already covers "chains finished before this patch
++still qualify," confirmed design decision from the original discussion.
++
++**13 new `Tuning` entries**: 6 for `chain_replay_difficulty.heroic`/
++`.legendary` (successPenalty/lootBonus/durationMultiplier each), 7 for
++`chain_replay_tier.*.goldCost` (master + 6 bands). First-pass numbers,
++same "flagged for Balance Sandbox verification" caveat every other new
++economy number in this codebase carries.
++
++**Two minimal query helpers** added to `GuildManager`:
++`hasChainReplayTier`/`isChainReplayEligible` -- deliberately read-only,
++no purchase or resolution logic in this patch. `isChainReplayEligible`
++enforces the confirmed rule exactly: master unlock owned, AND the
++chain's own band owned, AND the chain already in `completedChains` --
++all three required, none alone sufficient.
++
++No UI changed, no engine action added, no existing behavior touched --
++purely new types, new data, new persisted fields, and two pure query
++functions nothing yet calls.
++
++**Verified:** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean. Chain-to-band mapping verified by
++script against the live `quest-chains.json`, not by inspection: 29 ids
++referenced, 29 unique, zero duplicates, zero chains left uncovered,
++zero band entries pointing at a nonexistent chain id. `SAVE_VERSION`
++chain confirmed contiguous (45->46->47) and no duplicate `Tuning` ids
++introduced.
+diff --git a/src/game/data/chainReplay.ts b/src/game/data/chainReplay.ts
+new file mode 100644
+index 0000000..853e60d
+--- /dev/null
++++ b/src/game/data/chainReplay.ts
+@@ -0,0 +1,133 @@
++import { ChainReplayDifficulty, ChainReplayDifficultyConfig, ChainReplayTierDef } from '../types';
++import { Tuning } from './tuning';
++
++/**
++ * Replayable Quest Chains (patch 0224 on) -- see guild-idler-status.md's
++ * Backlog entry for the full design. Lives in its own file for the same
++ * reason RAID_DIFFICULTIES/RAID_UPGRADES live apart from the general
++ * quest data: this is a deliberately separable system, not an extension
++ * of ordinary quest-chain logic.
++ *
++ * Normal's numbers are all baseline zero-point (no penalty, no bonus,
++ * x1 duration) rather than meaningfully "tunable" values, so they stay
++ * literal here, same precedent RAID_DIFFICULTIES' own `normal` entry
++ * already established. Heroic/Legendary read every field from the
++ * tuning registry -- editable live via the devtool's Tuning tab, see
++ * tuning.ts and tuning.json.
++ *
++ * Deliberately softer than RAID_DIFFICULTIES' own Heroic/Legendary
++ * (20/50 successPenalty there vs 15/35 here) -- raids' brutal curve was
++ * an explicit design choice for genuinely hard party content; chain
++ * replay is meant to be a lighter-weight, solo-hero repeatable activity,
++ * not a second raid ladder wearing a different name. First-pass numbers,
++ * same "flagged for Balance Sandbox verification before treated as
++ * final" caveat every other new economy number in this codebase gets.
++ */
++export const CHAIN_REPLAY_DIFFICULTIES: Record<ChainReplayDifficulty, ChainReplayDifficultyConfig> = {
++  normal: { difficulty: 'normal', successPenalty: 0, lootBonus: 0, durationMultiplier: 1 },
++  heroic: {
++    difficulty: 'heroic',
++    successPenalty: Tuning.get('chain_replay_difficulty.heroic.successPenalty'),
++    lootBonus: Tuning.get('chain_replay_difficulty.heroic.lootBonus'),
++    durationMultiplier: Tuning.get('chain_replay_difficulty.heroic.durationMultiplier'),
++  },
++  legendary: {
++    difficulty: 'legendary',
++    successPenalty: Tuning.get('chain_replay_difficulty.legendary.successPenalty'),
++    lootBonus: Tuning.get('chain_replay_difficulty.legendary.lootBonus'),
++    durationMultiplier: Tuning.get('chain_replay_difficulty.legendary.durationMultiplier'),
++  },
++};
++
++/**
++ * The master unlock (reveals Replay Memories existing at all, same role
++ * `'chains'` plays for Discovered Quests) plus the 6 saga bands -- see
++ * the Backlog's saga-name table for the authoritative chain-to-band
++ * mapping this was built from. `chainIds` is empty for `master` since it
++ * gates the feature itself, not any specific chains. No forced
++ * prerequisite ordering between entries (checked purchase-side, not
++ * encoded here) -- same as raidsHeroic/raidsLegendary today, cost alone
++ * naturally encourages roughly-in-order buying.
++ *
++ * goldCost values are first-pass, same Balance Sandbox caveat as the
++ * difficulty numbers above -- not yet verified against a real playtest
++ * curve.
++ */
++export const CHAIN_REPLAY_TIERS: ChainReplayTierDef[] = [
++  {
++    id: 'master',
++    sagaName: 'Replay Memories',
++    levelRange: '',
++    description: 'Unlocks the Replay Memories tab -- revisit completed story chains for a chance at Heroic and Legendary gear.',
++    chainIds: [],
++    goldCost: Tuning.get('chain_replay_tier.master.goldCost'),
++  },
++  {
++    id: 'band1',
++    sagaName: 'The Founding Days',
++    levelRange: 'Levels 1-7',
++    description: 'Lets your guild replay The Founding Days (The First Haul, The Miller\'s Problem, Bandits on the Old Road, The Last Clutch, The Man Who Sells "Maybe", Goblin Warband, The Third Crown) for a chance at Heroic and Legendary gear.',
++    chainIds: [
++      'the_first_haul', 'millers_problem', 'bandits_on_the_old_road', 'the_last_clutch',
++      'the_man_who_sells_maybe', 'goblin_warband', 'third_crown',
++    ],
++    goldCost: Tuning.get('chain_replay_tier.band1.goldCost'),
++  },
++  {
++    id: 'band2',
++    sagaName: "The Harrower's Shadow",
++    levelRange: 'Levels 8-14',
++    description: "Lets your guild replay The Harrower's Shadow (Crow's Warning, Search for the Ancient Crown, Harrower's Foot, Something Big in the Foothills, Lost Kingdom Expedition) for a chance at Heroic and Legendary gear.",
++    chainIds: [
++      'crows_warning', 'ancient_crown', 'harrowers_foot', 'something_big_in_the_foothills', 'lost_kingdom',
++    ],
++    goldCost: Tuning.get('chain_replay_tier.band2.goldCost'),
++  },
++  {
++    id: 'band3',
++    sagaName: 'The Wyrmfire Years',
++    levelRange: 'Levels 15-19',
++    description: "Lets your guild replay The Wyrmfire Years (The Demon General's Ledger, Proving the Bastion, Full Moon Over Ashvale, Dragon Hunt, What the Culled Become) for a chance at Heroic and Legendary gear.",
++    chainIds: [
++      'demon_generals_ledger', 'proving_the_bastion', 'full_moon_over_ashvale', 'dragon_hunt', 'what_the_culled_become',
++    ],
++    goldCost: Tuning.get('chain_replay_tier.band3.goldCost'),
++  },
++  {
++    id: 'band4',
++    sagaName: 'The Fortress Campaign',
++    levelRange: 'Levels 20-26',
++    description: 'Lets your guild replay The Fortress Campaign (Granite Crossing, Demon Fortress Assault, Farm at the Edge, The Hollow Choir) for a chance at Heroic and Legendary gear.',
++    chainIds: ['granite_crossing', 'demon_fortress', 'farm_at_the_edge', 'hollow_choir'],
++    goldCost: Tuning.get('chain_replay_tier.band4.goldCost'),
++  },
++  {
++    id: 'band5',
++    sagaName: 'The Ashen Vigil',
++    levelRange: 'Levels 29-35',
++    description: 'Lets your guild replay The Ashen Vigil (The Body Snatcher Problem, The Pale Rider, World-Ender, Quiet in Millbrook) for a chance at Heroic and Legendary gear.',
++    chainIds: ['body_snatcher_problem', 'the_pale_rider', 'world_ender', 'quiet_in_millbrook'],
++    goldCost: Tuning.get('chain_replay_tier.band5.goldCost'),
++  },
++  {
++    id: 'band6',
++    sagaName: 'The Last Reckoning',
++    levelRange: 'Levels 37-45',
++    description: 'Lets your guild replay The Last Reckoning (Hunt-a-Lich, The Loom Beneath, The Last Pilgrimage, The Hollow King) for a chance at Heroic and Legendary gear.',
++    chainIds: ['hunt_a_lich', 'the_loom_beneath', 'last_pilgrimage', 'hollow_king'],
++    goldCost: Tuning.get('chain_replay_tier.band6.goldCost'),
++  },
++];
++
++export const CHAIN_REPLAY_TIER_BY_ID: Record<string, ChainReplayTierDef> = Object.fromEntries(
++  CHAIN_REPLAY_TIERS.map((t) => [t.id, t]),
++);
++
++/** Which saga band (if any) a given chain id belongs to -- null for the
++ *  'master' entry itself, which covers no specific chains. Used both by
++ *  eligibility checks (is this chain's band owned?) and by the Replay
++ *  Memories UI (which band card does this chain's difficulty picker sit
++ *  under?). */
++export function chainReplayTierForChain(chainId: string): ChainReplayTierDef | undefined {
++  return CHAIN_REPLAY_TIERS.find((t) => t.chainIds.includes(chainId));
++}
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 9a0d42c..a9b69f2 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -4226,5 +4226,135 @@
+     "min": 0,
+     "default": 0.1,
+     "description": "Multiplier on sqrt(lifetime gold donated) that becomes the Donations line in Guild Power (see power.ts guildPowerBreakdown). Deliberately a diminishing curve, not linear, so this stays a small, ever-shrinking-per-gold bonus no matter how much is donated over a save's lifetime."
++  },
++  {
++    "id": "chain_replay_difficulty.heroic.successPenalty",
++    "label": "Chain Replay Heroic: success penalty",
++    "category": "chain_replay_difficulty",
++    "value": 15,
++    "default": 15,
++    "min": 0,
++    "max": 95,
++    "description": "Flat percentage points subtracted from every stage's success chance throughout a Heroic chain replay."
++  },
++  {
++    "id": "chain_replay_difficulty.heroic.lootBonus",
++    "label": "Chain Replay Heroic: loot bonus",
++    "category": "chain_replay_difficulty",
++    "value": 10,
++    "default": 10,
++    "min": 0,
++    "max": 100,
++    "description": "Flat percentage points added to the dedicated item's drop chance, and passed to the procedural padding-loot budget multiplier, at Heroic."
++  },
++  {
++    "id": "chain_replay_difficulty.heroic.durationMultiplier",
++    "label": "Chain Replay Heroic: duration multiplier",
++    "category": "chain_replay_difficulty",
++    "value": 1.15,
++    "default": 1.15,
++    "min": 1,
++    "max": 3,
++    "description": "Multiplies total replay duration at Heroic."
++  },
++  {
++    "id": "chain_replay_difficulty.legendary.successPenalty",
++    "label": "Chain Replay Legendary: success penalty",
++    "category": "chain_replay_difficulty",
++    "value": 35,
++    "default": 35,
++    "min": 0,
++    "max": 95,
++    "description": "Flat percentage points subtracted from every stage's success chance throughout a Legendary chain replay."
++  },
++  {
++    "id": "chain_replay_difficulty.legendary.lootBonus",
++    "label": "Chain Replay Legendary: loot bonus",
++    "category": "chain_replay_difficulty",
++    "value": 25,
++    "default": 25,
++    "min": 0,
++    "max": 100,
++    "description": "Flat percentage points added to the dedicated item's drop chance, and passed to the procedural padding-loot budget multiplier, at Legendary."
++  },
++  {
++    "id": "chain_replay_difficulty.legendary.durationMultiplier",
++    "label": "Chain Replay Legendary: duration multiplier",
++    "category": "chain_replay_difficulty",
++    "value": 1.35,
++    "default": 1.35,
++    "min": 1,
++    "max": 3,
++    "description": "Multiplies total replay duration at Legendary."
++  },
++  {
++    "id": "chain_replay_tier.master.goldCost",
++    "label": "Replay Memories: master unlock cost",
++    "category": "chain_replay_tiers",
++    "value": 500,
++    "default": 500,
++    "min": 0,
++    "max": 1000000,
++    "description": "One-time gold cost to reveal Replay Memories at all."
++  },
++  {
++    "id": "chain_replay_tier.band1.goldCost",
++    "label": "Replay tier: The Founding Days (1-7) cost",
++    "category": "chain_replay_tiers",
++    "value": 1000,
++    "default": 1000,
++    "min": 0,
++    "max": 1000000,
++    "description": "One-time gold cost to unlock replaying The Founding Days saga band."
++  },
++  {
++    "id": "chain_replay_tier.band2.goldCost",
++    "label": "Replay tier: The Harrower's Shadow (8-14) cost",
++    "category": "chain_replay_tiers",
++    "value": 4000,
++    "default": 4000,
++    "min": 0,
++    "max": 1000000,
++    "description": "One-time gold cost to unlock replaying The Harrower's Shadow saga band."
++  },
++  {
++    "id": "chain_replay_tier.band3.goldCost",
++    "label": "Replay tier: The Wyrmfire Years (15-19) cost",
++    "category": "chain_replay_tiers",
++    "value": 12000,
++    "default": 12000,
++    "min": 0,
++    "max": 1000000,
++    "description": "One-time gold cost to unlock replaying The Wyrmfire Years saga band."
++  },
++  {
++    "id": "chain_replay_tier.band4.goldCost",
++    "label": "Replay tier: The Fortress Campaign (20-26) cost",
++    "category": "chain_replay_tiers",
++    "value": 30000,
++    "default": 30000,
++    "min": 0,
++    "max": 1000000,
++    "description": "One-time gold cost to unlock replaying The Fortress Campaign saga band."
++  },
++  {
++    "id": "chain_replay_tier.band5.goldCost",
++    "label": "Replay tier: The Ashen Vigil (29-35) cost",
++    "category": "chain_replay_tiers",
++    "value": 70000,
++    "default": 70000,
++    "min": 0,
++    "max": 1000000,
++    "description": "One-time gold cost to unlock replaying The Ashen Vigil saga band."
++  },
++  {
++    "id": "chain_replay_tier.band6.goldCost",
++    "label": "Replay tier: The Last Reckoning (37-45) cost",
++    "category": "chain_replay_tiers",
++    "value": 150000,
++    "default": 150000,
++    "min": 0,
++    "max": 1000000,
++    "description": "One-time gold cost to unlock replaying The Last Reckoning saga band."
+   }
+ ]
+diff --git a/src/game/managers/GuildManager.ts b/src/game/managers/GuildManager.ts
+index e831fe9..e70fd9f 100644
+--- a/src/game/managers/GuildManager.ts
++++ b/src/game/managers/GuildManager.ts
+@@ -3,6 +3,7 @@ import {
+   guildCost, upgradeCost, vendorLevelCost, isVendorUpgradeUnlocked,
+ } from '../data/progression';
+ import { RAID_UPGRADES, RAID_UPGRADE_BY_ID, raidUpgradeCost } from '../data/raidUpgrades';
++import { chainReplayTierForChain } from '../data/chainReplay';
+ import { GameState, GuildFacility, HeroClass, VendorId } from '../types';
+ import { Rng } from '../rng';
+ import { HeroManager } from './HeroManager';
+@@ -44,6 +45,34 @@ export const GuildManager = {
+     return state.upgrades[id] ?? 0;
+   },
+ 
++  /* ------------------------- chain replay tiers ------------------------- */
++  // Deliberately just the read side here (patch 0224, data-model step of
++  // Replayable Quest Chains -- see guild-idler-status.md's Backlog entry).
++  // Purchasing and difficulty/resolution logic land in later patches, per
++  // that entry's own sequencing plan; these two exist now because
++  // eligibility is fundamentally a data query, not a mutation, and every
++  // later step needs a single correct place to ask it from.
++
++  hasChainReplayTier(state: GameState, tierId: string): boolean {
++    return state.chainReplayTiersOwned.includes(tierId);
++  },
++
++  /**
++   * A chain is replayable once its own saga band is owned AND the chain
++   * is already in completedChains -- both required, neither alone
++   * sufficient (confirmed design: owning a band never bypasses a
++   * chain's first clear). Also requires the 'master' unlock, same as
++   * every band -- a band's own purchase doesn't imply master is owned
++   * too, they're independent per CHAIN_REPLAY_TIERS' own "no forced
++   * ordering" design.
++   */
++  isChainReplayEligible(state: GameState, chainId: string): boolean {
++    if (!GuildManager.hasChainReplayTier(state, 'master')) return false;
++    if (!state.completedChains.includes(chainId)) return false;
++    const tier = chainReplayTierForChain(chainId);
++    return !!tier && GuildManager.hasChainReplayTier(state, tier.id);
++  },
++
+   nextUpgradeCost(state: GameState, id: string): number | null {
+     const def = UPGRADE_BY_ID[id];
+     const level = GuildManager.upgradeLevel(state, id);
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 06b0111..69eafe1 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -133,6 +133,8 @@ export function createInitialState(now = Date.now()): GameState {
+     activeQuests: [],
+     activeChains: [],
+     completedChains: [],
++    chainReplayTiersOwned: [],
++    activeChainReplays: [],
+     upgrades: {},
+     guild: { ...EMPTY_GUILD },
+     renownPerks: {},
+@@ -940,6 +942,23 @@ const MIGRATIONS: Record<number, Migration> = {
+     goldRenownExchangeUnlocked: (save.goldRenownExchangeUnlocked as boolean | undefined) ?? false,
+     guildDonationsTotal: (save.guildDonationsTotal as number | undefined) ?? 0,
+   }),
++  46: (save) => ({
++    // Two new fields for Replayable Quest Chains (patch 0224 on) -- see
++    // guild-idler-status.md's Backlog entry. Empty arrays are exactly
++    // "never bought a replay tier, no replay attempt in progress" for a
++    // save that predates the feature entirely -- same "undiscovered
++    // content stays undiscovered" shape migration 45 just above uses.
++    // No backfill needed for eligibility itself: a chain's own
++    // completedChains membership (already persisted, untouched here) is
++    // read directly by the eligibility check once a band is bought, so
++    // a chain finished long before this patch still qualifies the
++    // moment its band is purchased post-migration -- confirmed design,
++    // not something this migration needs to handle.
++    ...save,
++    version: 47,
++    chainReplayTiersOwned: (save.chainReplayTiersOwned as string[] | undefined) ?? [],
++    activeChainReplays: (save.activeChainReplays as unknown[] | undefined) ?? [],
++  }),
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 894a7e1..f21b644 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 46;
++export const SAVE_VERSION = 47;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -898,6 +898,122 @@ export interface ActiveChain {
+   failedStages: number;
+ }
+ 
++/**
++ * Replayable Quest Chains (patch 0224 on) -- see guild-idler-status.md's
++ * Backlog entry for the full design. Deliberately its own difficulty
++ * union rather than reusing RaidDifficulty, even though the values are
++ * identical strings today -- a replay's difficulty config
++ * (ChainReplayDifficultyConfig below) has a genuinely different shape
++ * from RaidDifficultyConfig (no partySize/roleMismatchCap, no
++ * rewardMultiplier), and keeping the type distinct means a future change
++ * to one can't silently type-check against the other by accident.
++ */
++export type ChainReplayDifficulty = 'normal' | 'heroic' | 'legendary';
++
++export interface ChainReplayDifficultyConfig {
++  difficulty: ChainReplayDifficulty;
++  /** Flat percentage points subtracted from every stage's success chance
++   *  throughout a replay attempt at this difficulty -- applied every
++   *  stage, not just the final one (confirmed design decision). */
++  successPenalty: number;
++  /** Flat percentage points added to the dedicated item's drop chance,
++   *  and passed through to the procedural padding-loot budget multiplier
++   *  for this difficulty (see LootSourceTag 'chainReplayHeroic'/
++   *  'chainReplayLegendary' in proceduralLoot.ts once that lands).
++   *  Deliberately the only reward lever difficulty has here -- no
++   *  rewardMultiplier, confirmed loot-only. */
++  lootBonus: number;
++  /** Multiplies total replay duration, same "harder tiers take longer
++   *  too" shape RaidDifficultyConfig already uses. */
++  durationMultiplier: number;
++}
++
++/**
++ * A chain replay attempt in progress -- deliberately NOT ActiveChain.
++ * Same reasoning RaidManager already established for ActiveRaid being
++ * its own thing rather than bolted onto quest infrastructure: a
++ * replay's failure behavior is a genuine fork from a first clear's (see
++ * `stage` below), not just the same shape reused. A hero can have at
++ * most one of these at a time, same "one active thing per hero" rule
++ * ActiveChain/regular quests already enforce -- checked the same way,
++ * against `heroId`, not against `chainId` (so two different heroes could
++ * in principle be replaying the same or different chains at once).
++ */
++export interface ActiveChainReplay {
++  chainId: string;
++  heroId: string;
++  difficulty: ChainReplayDifficulty;
++  /** Which stage (0-indexed, same numbering ActiveChain.stage uses) is
++   *  currently in progress. Unlike ActiveChain, a failed stage during a
++   *  replay does not retry in place -- the whole attempt resets `stage`
++   *  back to 0 (see QuestManager's replay resolution once it lands),
++   *  confirmed design decision, not a bug to fix later. */
++  stage: number;
++  startedAt: number;
++  /** Total attempts at this replay that have failed at some stage and
++   *  been reset to stage 0 -- a simple counter, same role
++   *  ActiveChain.failedStages plays for a first clear, but counting
++   *  full-attempt resets here instead of same-stage retries. */
++  resetCount: number;
++}
++
++/**
++ * One replay result, distinct from ChainCompleteModal's own first-clear
++ * result shape -- a replay never re-grants the chain's guaranteed
++ * base-tier rewardGold/rewardRenown/rewardItems/rewardEgg/title/
++ * hatchery-unlock (all first-clear-only, confirmed design), so a
++ * replay's result only ever needs to describe what it actually can
++ * grant: loot.
++ */
++export interface ChainReplayResult {
++  chainId: string;
++  chainName: string;
++  difficulty: ChainReplayDifficulty;
++  heroId: string;
++  success: boolean;
++  /** True only if the dedicated item's chance roll hit this run -- see
++   *  ChainReplayDifficultyConfig.lootBonus for how difficulty affects
++   *  the odds. Never true at 'normal' (confirmed: the dedicated item's
++   *  Heroic/Legendary counterparts are the entire point of replaying
++   *  above Normal in the first place). */
++  dedicatedItemDropped: boolean;
++  loot: { defId: string; name: string; rarity: Rarity }[];
++}
++
++/**
++ * A guild-upgrade-gated "saga band" -- which chains a player is allowed
++ * to replay at all, independent of how the loot itself scales (that's
++ * entirely the procedural system's job once the resolution logic lands,
++ * not this def's). Deliberately its own type, not a reuse of
++ * UpgradeDef.unlocks -- that's a simple boolean-flag union with no way
++ * to carry per-entry data like a saga's own name/level-range/chain
++ * membership, same reason raid upgrades got RaidUpgradeDef instead of
++ * joining the general UPGRADES list. Flat one-time gold cost,
++ * deliberately NOT leveled like RaidUpgradeDef (confirmed: gold-only, no
++ * growth curve -- there's exactly one of each band to ever buy).
++ */
++export interface ChainReplayTierDef {
++  id: string;
++  /** e.g. "The Founding Days" -- see the Backlog's saga-name table for
++   *  the full list of six, plus the one master unlock (id 'master',
++   *  sagaName/levelRange unused for that entry -- see its own comment
++   *  in chainReplayTiers.ts). */
++  sagaName: string;
++  /** Display string, e.g. "Levels 1-7" -- not used for any eligibility
++   *  math, purely descriptive; actual gating is entirely via chainIds. */
++  levelRange: string;
++  /** States plainly what buying this does, for the shop card -- e.g.
++   *  "Lets your guild replay The Founding Days for a chance at Heroic
++   *  gear," not flavor text (confirmed design requirement). */
++  description: string;
++  /** Which chains this band covers -- see the Backlog's saga table for
++   *  the authoritative chain-to-band mapping. Empty for the 'master'
++   *  entry, which gates Replay Memories existing at all rather than any
++   *  specific chains. */
++  chainIds: string[];
++  goldCost: number;
++}
++
+ /* -------------------------------- raids -------------------------------- */
+ 
+ export type RaidDifficulty = 'normal' | 'heroic' | 'legendary';
+@@ -1535,6 +1651,24 @@ export interface GameState {
+   activeQuests: ActiveQuest[];
+   activeChains: ActiveChain[];
+   completedChains: string[];
++  /**
++   * Ids of ChainReplayTierDef entries the guild has bought -- the
++   * master unlock plus however many of the 6 saga bands, in any order
++   * (no forced prerequisite chain between bands, same as
++   * raidsHeroic/raidsLegendary today -- cost alone naturally encourages
++   * roughly-in-order buying). A chain is only actually replayable once
++   * its own band's id is in this array AND the chain is in
++   * completedChains above -- both required, neither alone sufficient
++   * (confirmed: owning a band never bypasses a chain's first clear).
++   */
++  chainReplayTiersOwned: string[];
++  /**
++   * Chain replay attempts currently in progress -- see ActiveChainReplay
++   * for why this is a separate array from activeChains, not a shared
++   * shape. At most one entry per heroId, same "one active thing per
++   * hero" rule the rest of the quest system already enforces.
++   */
++  activeChainReplays: ActiveChainReplay[];
+   /** The single raid attempt in progress, if any -- only one at a time, same as how a hero can only be on one quest. */
+   activeRaid: ActiveRaid | null;
+   /** Raid ids (any difficulty) that have been full-cleared at least once -- gates unlockNextRaidId progression. */
+-- 
+2.43.0
+

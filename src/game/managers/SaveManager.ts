@@ -133,6 +133,8 @@ export function createInitialState(now = Date.now()): GameState {
     activeQuests: [],
     activeChains: [],
     completedChains: [],
+    chainReplayTiersOwned: [],
+    activeChainReplays: [],
     upgrades: {},
     guild: { ...EMPTY_GUILD },
     renownPerks: {},
@@ -939,6 +941,23 @@ const MIGRATIONS: Record<number, Migration> = {
     grimsbyPermanentSpotUnlocked: (save.grimsbyPermanentSpotUnlocked as boolean | undefined) ?? false,
     goldRenownExchangeUnlocked: (save.goldRenownExchangeUnlocked as boolean | undefined) ?? false,
     guildDonationsTotal: (save.guildDonationsTotal as number | undefined) ?? 0,
+  }),
+  46: (save) => ({
+    // Two new fields for Replayable Quest Chains (patch 0224 on) -- see
+    // guild-idler-status.md's Backlog entry. Empty arrays are exactly
+    // "never bought a replay tier, no replay attempt in progress" for a
+    // save that predates the feature entirely -- same "undiscovered
+    // content stays undiscovered" shape migration 45 just above uses.
+    // No backfill needed for eligibility itself: a chain's own
+    // completedChains membership (already persisted, untouched here) is
+    // read directly by the eligibility check once a band is bought, so
+    // a chain finished long before this patch still qualifies the
+    // moment its band is purchased post-migration -- confirmed design,
+    // not something this migration needs to handle.
+    ...save,
+    version: 47,
+    chainReplayTiersOwned: (save.chainReplayTiersOwned as string[] | undefined) ?? [],
+    activeChainReplays: (save.activeChainReplays as unknown[] | undefined) ?? [],
   }),
 };
 

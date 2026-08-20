@@ -4226,5 +4226,135 @@
     "min": 0,
     "default": 0.1,
     "description": "Multiplier on sqrt(lifetime gold donated) that becomes the Donations line in Guild Power (see power.ts guildPowerBreakdown). Deliberately a diminishing curve, not linear, so this stays a small, ever-shrinking-per-gold bonus no matter how much is donated over a save's lifetime."
+  },
+  {
+    "id": "chain_replay_difficulty.heroic.successPenalty",
+    "label": "Chain Replay Heroic: success penalty",
+    "category": "chain_replay_difficulty",
+    "value": 15,
+    "default": 15,
+    "min": 0,
+    "max": 95,
+    "description": "Flat percentage points subtracted from every stage's success chance throughout a Heroic chain replay."
+  },
+  {
+    "id": "chain_replay_difficulty.heroic.lootBonus",
+    "label": "Chain Replay Heroic: loot bonus",
+    "category": "chain_replay_difficulty",
+    "value": 10,
+    "default": 10,
+    "min": 0,
+    "max": 100,
+    "description": "Flat percentage points added to the dedicated item's drop chance, and passed to the procedural padding-loot budget multiplier, at Heroic."
+  },
+  {
+    "id": "chain_replay_difficulty.heroic.durationMultiplier",
+    "label": "Chain Replay Heroic: duration multiplier",
+    "category": "chain_replay_difficulty",
+    "value": 1.15,
+    "default": 1.15,
+    "min": 1,
+    "max": 3,
+    "description": "Multiplies total replay duration at Heroic."
+  },
+  {
+    "id": "chain_replay_difficulty.legendary.successPenalty",
+    "label": "Chain Replay Legendary: success penalty",
+    "category": "chain_replay_difficulty",
+    "value": 35,
+    "default": 35,
+    "min": 0,
+    "max": 95,
+    "description": "Flat percentage points subtracted from every stage's success chance throughout a Legendary chain replay."
+  },
+  {
+    "id": "chain_replay_difficulty.legendary.lootBonus",
+    "label": "Chain Replay Legendary: loot bonus",
+    "category": "chain_replay_difficulty",
+    "value": 25,
+    "default": 25,
+    "min": 0,
+    "max": 100,
+    "description": "Flat percentage points added to the dedicated item's drop chance, and passed to the procedural padding-loot budget multiplier, at Legendary."
+  },
+  {
+    "id": "chain_replay_difficulty.legendary.durationMultiplier",
+    "label": "Chain Replay Legendary: duration multiplier",
+    "category": "chain_replay_difficulty",
+    "value": 1.35,
+    "default": 1.35,
+    "min": 1,
+    "max": 3,
+    "description": "Multiplies total replay duration at Legendary."
+  },
+  {
+    "id": "chain_replay_tier.master.goldCost",
+    "label": "Replay Memories: master unlock cost",
+    "category": "chain_replay_tiers",
+    "value": 500,
+    "default": 500,
+    "min": 0,
+    "max": 1000000,
+    "description": "One-time gold cost to reveal Replay Memories at all."
+  },
+  {
+    "id": "chain_replay_tier.band1.goldCost",
+    "label": "Replay tier: The Founding Days (1-7) cost",
+    "category": "chain_replay_tiers",
+    "value": 1000,
+    "default": 1000,
+    "min": 0,
+    "max": 1000000,
+    "description": "One-time gold cost to unlock replaying The Founding Days saga band."
+  },
+  {
+    "id": "chain_replay_tier.band2.goldCost",
+    "label": "Replay tier: The Harrower's Shadow (8-14) cost",
+    "category": "chain_replay_tiers",
+    "value": 4000,
+    "default": 4000,
+    "min": 0,
+    "max": 1000000,
+    "description": "One-time gold cost to unlock replaying The Harrower's Shadow saga band."
+  },
+  {
+    "id": "chain_replay_tier.band3.goldCost",
+    "label": "Replay tier: The Wyrmfire Years (15-19) cost",
+    "category": "chain_replay_tiers",
+    "value": 12000,
+    "default": 12000,
+    "min": 0,
+    "max": 1000000,
+    "description": "One-time gold cost to unlock replaying The Wyrmfire Years saga band."
+  },
+  {
+    "id": "chain_replay_tier.band4.goldCost",
+    "label": "Replay tier: The Fortress Campaign (20-26) cost",
+    "category": "chain_replay_tiers",
+    "value": 30000,
+    "default": 30000,
+    "min": 0,
+    "max": 1000000,
+    "description": "One-time gold cost to unlock replaying The Fortress Campaign saga band."
+  },
+  {
+    "id": "chain_replay_tier.band5.goldCost",
+    "label": "Replay tier: The Ashen Vigil (29-35) cost",
+    "category": "chain_replay_tiers",
+    "value": 70000,
+    "default": 70000,
+    "min": 0,
+    "max": 1000000,
+    "description": "One-time gold cost to unlock replaying The Ashen Vigil saga band."
+  },
+  {
+    "id": "chain_replay_tier.band6.goldCost",
+    "label": "Replay tier: The Last Reckoning (37-45) cost",
+    "category": "chain_replay_tiers",
+    "value": 150000,
+    "default": 150000,
+    "min": 0,
+    "max": 1000000,
+    "description": "One-time gold cost to unlock replaying The Last Reckoning saga band."
   }
 ]

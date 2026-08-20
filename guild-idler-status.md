@@ -1184,17 +1184,30 @@ tag-distinct); reusing `ActiveChain` for replay tracking (rejected, own
 structure); `rewardMultiplier` on replay difficulty (rejected,
 loot-only).
 
-**Sequencing.** Patch 0223 (this one) covers the content audit/gap-fill
-and this rewritten spec. Implementation still to come, roughly in this
-order: (1) data model -- `ChainReplayTierDef`/`ActiveChainReplay`/
-persisted ownership+progress state, no UI yet; (2) the new
-`LootSourceTag` values + budget multipliers + the dedicated-item hybrid
-scaling code path (small, no new equipment content); (3)
-`QuestManager`/`GameEngine` resolution logic -- difficulty-modified
-success, the tag-based loot resolution, reset-on-fail; (4) Replay
-Memories UI itself -- band cards, difficulty picker, loot-table view;
-(5) DevTool schema updates so the new content types are editable the
-same way everything else already is.
+**Sequencing.** Patch 0223 covered the content audit/gap-fill and this
+rewritten spec. **Patch 0224 covers step (1), data model -- done:**
+`ChainReplayDifficulty`/`ChainReplayDifficultyConfig`/
+`ActiveChainReplay`/`ChainReplayResult`/`ChainReplayTierDef` added to
+`types.ts`; `CHAIN_REPLAY_DIFFICULTIES`/`CHAIN_REPLAY_TIERS`/
+`chainReplayTierForChain` in new `data/chainReplay.ts` (all 6 saga bands
++ master unlock, 29 chains mapped 1:1, verified by script -- no
+duplicates, no gaps, no typos); `chainReplayTiersOwned`/
+`activeChainReplays` persisted on `GameState`, `SAVE_VERSION` 46->47
+with migration 46 backfilling both to empty arrays for existing saves;
+13 new `Tuning` entries for the difficulty config and the 7 gold costs.
+Two minimal, deliberately read-only query helpers added to
+`GuildManager` (`hasChainReplayTier`/`isChainReplayEligible`) -- no
+purchase or resolution logic yet, that's steps (2)/(3) below, kept
+strictly out of this patch's scope.
+
+Still to come, roughly in this order: (2) the new `LootSourceTag`
+values + budget multipliers + the dedicated-item hybrid scaling code
+path (small, no new equipment content); (3) `QuestManager`/`GameEngine`
+resolution logic -- difficulty-modified success, the tag-based loot
+resolution, reset-on-fail, and the actual tier-purchase mutation; (4)
+Replay Memories UI itself -- band cards, difficulty picker, loot-table
+view; (5) DevTool schema updates so the new content types are editable
+the same way everything else already is.
 
 ### Uncapped gold/xp multipliers -- resolved, patch 0214
 Was flagged here (see git history for the original entry) during the
@@ -16920,3 +16933,71 @@ chains' `rewardItems` entries resolves against `equipment.json` (zero
 missing fields, zero broken ids, zero unresolvable references,
 confirmed by script); `npx tsc --noEmit` and `npx vite build --config
 vite.web.config.ts` both pass clean.
+
+### Replayable Quest Chains: data model foundation (patch 0224)
+
+```discord-update
+Dev Update | Feature (foundation)
+
+- First real step toward replaying story quest chains for a shot at Heroic/Legendary loot -- data model only this patch, nothing playable yet
+- Every save gets two new fields for tracking which "sagas" your guild has unlocked and any replay attempt in progress
+- 13 new tunable values for replay difficulty and the six saga-band unlock costs
+```
+
+Step (1) of the sequencing plan from patch 0223's rewritten Backlog
+entry -- data model only, deliberately no UI, no purchase logic, no
+resolution logic yet. See that entry for the full design; this patch
+just lays the typed, persisted foundation everything else builds on.
+
+**New types** (`types.ts`): `ChainReplayDifficulty` (its own union, not
+a reuse of `RaidDifficulty` -- the two configs have genuinely different
+shapes, no `partySize`/`rewardMultiplier` here), `ChainReplayDifficultyConfig`,
+`ActiveChainReplay` (deliberately not `ActiveChain` -- confirmed design,
+a replay's failure behavior forks from a first clear's), `ChainReplayResult`,
+`ChainReplayTierDef` (its own type, not a reuse of `UpgradeDef.unlocks`
+-- needs per-entry saga name/level-range/chain-membership data that
+enum doesn't carry, same reason raid upgrades got `RaidUpgradeDef`
+instead of joining the general list).
+
+**New data** (`data/chainReplay.ts`): `CHAIN_REPLAY_DIFFICULTIES`
+(Normal literal baseline, Heroic/Legendary tuning-registry-backed,
+deliberately softer than raids' own 20/50 successPenalty curve -- this
+is meant to be lighter-weight solo-hero repeatable content, not a
+second raid ladder). `CHAIN_REPLAY_TIERS`: the master unlock plus all 6
+saga bands from the Backlog's table, `chainIds` mapped against the live
+`quest-chains.json` and verified by script -- all 29 chains covered
+exactly once, zero duplicates, zero typos. `chainReplayTierForChain()`
+helper for the reverse lookup.
+
+**New persisted state**: `chainReplayTiersOwned: string[]` /
+`activeChainReplays: ActiveChainReplay[]` on `GameState`. `SAVE_VERSION`
+46->47, migration 46 backfills both to empty arrays for every existing
+save -- no eligibility backfill needed alongside it, since a chain's
+own `completedChains` membership (already persisted, read directly once
+a band is bought) already covers "chains finished before this patch
+still qualify," confirmed design decision from the original discussion.
+
+**13 new `Tuning` entries**: 6 for `chain_replay_difficulty.heroic`/
+`.legendary` (successPenalty/lootBonus/durationMultiplier each), 7 for
+`chain_replay_tier.*.goldCost` (master + 6 bands). First-pass numbers,
+same "flagged for Balance Sandbox verification" caveat every other new
+economy number in this codebase carries.
+
+**Two minimal query helpers** added to `GuildManager`:
+`hasChainReplayTier`/`isChainReplayEligible` -- deliberately read-only,
+no purchase or resolution logic in this patch. `isChainReplayEligible`
+enforces the confirmed rule exactly: master unlock owned, AND the
+chain's own band owned, AND the chain already in `completedChains` --
+all three required, none alone sufficient.
+
+No UI changed, no engine action added, no existing behavior touched --
+purely new types, new data, new persisted fields, and two pure query
+functions nothing yet calls.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Chain-to-band mapping verified by
+script against the live `quest-chains.json`, not by inspection: 29 ids
+referenced, 29 unique, zero duplicates, zero chains left uncovered,
+zero band entries pointing at a nonexistent chain id. `SAVE_VERSION`
+chain confirmed contiguous (45->46->47) and no duplicate `Tuning` ids
+introduced.
