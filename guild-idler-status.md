@@ -1262,8 +1262,43 @@ more than one guaranteed reward item (`the_pale_rider`, `dragon_hunt`,
 only the first item in each is the replay "chase" -- the rest stay
 first-clear-only, consistent between the UI and the engine.
 
-Still to come: (5) DevTool schema updates so the new content types are
-editable the same way everything else already is.
+**Step (5), closed out at patch 0229 -- no new work needed, verified
+rather than assumed.** The original sequencing plan assumed this
+feature's new content (the 6 saga bands, the master unlock,
+`chainReplay.ts`) would need its own DevTool schema/picker, matching
+`quest-chains`/`raids`/etc. Checked before building anything: the
+closest real precedent, `RAID_UPGRADES` (a guild-upgrade tree exactly
+like `CHAIN_REPLAY_TIERS`), is itself a hardcoded TS array with zero
+DevTool wiring -- no schema entry in `SCHEMAS`, no picker, nothing.
+Same for the general Guild Hall `UPGRADES`/`GUILD_FACILITIES` arrays.
+The raid difficulty icon paths (`./raid-icons/normal.png`, the exact
+shape `REPLAY_DIFFICULTY_ICON` in `DiscoveredQuestsPanel.tsx` already
+mirrors) have no DevTool wiring either -- confirmed via a direct search
+of `server.mjs`/`app.js`, zero matches. The established, working
+convention for this whole content category is hardcoded TS plus
+drop-the-file-into-`public/<folder>/` by hand, not JSON+schema+picker.
+`chainReplay.ts` already matches that convention correctly; converting
+it would have been inconsistent with the codebase's own precedent, not
+a gap-fill.
+
+What genuinely is already DevTool-editable, confirmed against the
+actual schema list rather than assumed: all 18 chain-replay `Tuning`
+entries (every `successPenalty`/`lootBonus`/`durationMultiplier`, all 7
+gold costs, the dedicated-item drop chance and its two scale
+multipliers) via the existing `'tuning'` schema automatically; every
+chain's `rewardItems` (including the 4 items patch 0223 added) via the
+existing `'quest-chains'` schema, untouched by this feature. The icon
+workflow works exactly as intended with zero new code: drop real files
+into `public/chain-replay-icons/normal.png` (etc.) and they load
+automatically, same graceful `onError`-fallback shape raid icons
+already use.
+
+**Replayable Quest Chains is feature-complete as of patch 0228**, all
+five sequencing steps closed: (1) data model, patch 0224. (2) loot
+mechanism, patch 0225. (3) resolution logic and purchasing, patch 0227
+(renumbered from a collision with an unrelated parallel patch, see that
+entry's own note). (4) Replay Memories UI, patch 0228. (5) verified
+complete without new work, this entry.
 
 ### Uncapped gold/xp multipliers -- resolved, patch 0214
 Was flagged here (see git history for the original entry) during the
@@ -17487,3 +17522,34 @@ considered satisfied). Confirmed the reused `raid-diff-circle`/
 `raid-diff-circle-wrap` CSS classes already exist and need no new
 styling. Cross-checked the multi-reward-item chain list against
 `quest-chains.json` directly rather than from memory.
+
+### Replayable Quest Chains closed out -- no DevTool work needed (patch 0229)
+
+```discord-update
+Dev Update | Design Doc
+
+- Replayable Quest Chains is feature-complete -- closing out the last item on the plan
+- Turns out no new DevTool work was actually needed for it, and here's why
+```
+
+Pure documentation patch, no code. Closes out the sequencing plan's
+last remaining item (see the Backlog's "Replayable Quest Chains" entry
+for the full explanation) -- checked the actual precedent before
+building anything rather than assuming a schema/picker was needed:
+`RAID_UPGRADES` and the general Guild Hall upgrade arrays are
+themselves hardcoded TS with zero DevTool wiring, and raid difficulty
+icons work via a plain drop-file-into-`public/`-by-hand convention with
+no picker either. `chainReplay.ts` already matches that established
+shape correctly. Converting it to JSON+schema would have been
+inconsistent with the codebase's own precedent, not a gap-fill.
+
+Everything that genuinely warrants being editable already is: all 18
+chain-replay `Tuning` entries via the existing `'tuning'` schema, every
+chain's `rewardItems` via the existing `'quest-chains'` schema.
+
+**Replayable Quest Chains is feature-complete**, all five sequencing
+steps closed across patches 0224 (data model), 0225 (loot mechanism),
+0227 (resolution logic and purchasing), 0228 (Replay Memories UI), and
+this entry (verified no further work needed for step 5).
+
+No code changed in this patch.
