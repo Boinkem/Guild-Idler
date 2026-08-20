@@ -100,7 +100,7 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
   const displayXp = useCountUp(result.xp, { from: 0, durationMs: 700 });
 
   // This card renders full detail regardless of whether the idle
-  // companion window (260x300, see IDLE_SIZE in electron/main.ts) or the
+  // companion window (260x340, see IDLE_SIZE in electron/main.ts) or the
   // full menu is what's showing -- unlike ChainCompleteModal/
   // RaidResultModal/HatchReadyModal, a quest result is frequent/routine
   // enough that it shouldn't be gated behind the full menu being open

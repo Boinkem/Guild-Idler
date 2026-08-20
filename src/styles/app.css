@@ -2036,8 +2036,11 @@ input[type='range'] {
   /*
    * Reduced from an earlier attempt that added a combined +50px (130px
    * explicit height, up from a natural ~120px, plus a 40px margin) in a
-   * window that's only 300px tall total. .idle-root anchors content to
-   * the BOTTOM (justify-content: flex-end), so excess total height pushes
+   * window that's only 340px tall total (300px when this comment was
+   * originally written -- bumped since, see IDLE_SIZE's own comment in
+   * electron/main.ts for why; the underlying "bottom-anchored content
+   * pushes off the top, not into scroll" mechanism this describes is
+   * unchanged). .idle-root anchors content to the BOTTOM (justify-content: flex-end), so excess total height pushes
    * earlier elements -- this one specifically -- up and off the TOP of
    * the window instead of growing the window or scrolling. Confirmed as
    * the actual cause of the hero sprite disappearing entirely, not a

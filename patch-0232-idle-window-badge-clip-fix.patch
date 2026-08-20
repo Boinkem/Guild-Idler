@@ -1,0 +1,161 @@
+diff --git a/electron/main.ts b/electron/main.ts
+index ce22870..731b069 100644
+--- a/electron/main.ts
++++ b/electron/main.ts
+@@ -87,8 +87,36 @@ function loadAppIcon() {
+  *  freely resizable; this is just a better starting point, not a new
+  *  cap. Still clamped against the display's actual work area at open
+  *  time (see window:setMode below), so this is safe on any screen size
+- *  regardless of how big MENU_SIZE itself gets. */
+-const IDLE_SIZE = { width: 260, height: 300 };
++ *  regardless of how big MENU_SIZE itself gets.
++ *
++ *  IDLE_SIZE.height bumped 300 -> 340 (patch 0231, direct report + fix)
++ *  -- closes a real, confirmed bug: .idle-root bottom-anchors its content
++ *  (justify-content: flex-end) inside this fixed-height window, so any
++ *  content taller than the window pushes earlier elements up and off the
++ *  TOP, not into a scrollable overflow -- there's no "overflow" here in
++ *  any CSS sense, content pushed above y=0 is pushed past the window's
++ *  own physical boundary and is simply gone. This exact bug already
++ *  happened once before with the pet sprite's own margin (see
++ *  .pet-companion-button's app.css comment) and was fixed THERE by
++ *  shrinking content back into the existing 300px budget rather than
++ *  growing the window -- deliberately NOT the same fix this time: the
++ *  thing getting pushed off-screen this time is the "While you were
++ *  away" banner (IdleView.tsx's awayBanner, plus three siblings --
++ *  chainBanner/raidBanner/hatchReadyBanner -- that can each add their
++ *  own row), and there's no version of shrinking existing UI that makes
++ *  room for a banner that didn't exist when the pet-sprite fix was
++ *  written. Confirmed safe: `idleBounds` is reclamped against the
++ *  CURRENT IDLE_SIZE on every launch (see createWindow below), so a
++ *  saved position from before this change can never end up positioned
++ *  off-screen because of the extra height. The extra 40px is invisible
++ *  in the common (no banner) case -- the window is fully transparent, so
++ *  unused headroom above bottom-anchored content is literally nothing
++ *  on screen, not a visible empty box. Deliberately sized for ONE
++ *  banner row comfortably, not a worst-case stack of all four -- an
++ *  accepted, known limitation (see guild-idler-status.md's own writeup)
++ *  rather than taking on a dynamic window-resize feature for a rare
++ *  multi-banner edge case. */
++const IDLE_SIZE = { width: 260, height: 340 };
+ const MENU_SIZE = { width: 1350, height: 930 };
+ /** The menu is now user-resizable -- this is a floor, not a cap, so the
+  *  panel layout (nav column + content) never gets squeezed into something
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 323d731..774e641 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -17818,3 +17818,82 @@ fallback logic. Ran the actual label-resolution logic standalone for
+ all three roles plus the crafting context and confirmed the exact
+ expected output (`Strength`/`Agility`/`Intellect` for the hero card
+ per role, `Main Stat` uniformly for crafting) before writing this up.
++
++### Companion window: quest-mark badge pushed off-screen by the offline banner (patch 0232)
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed the quest-available ("!") icon sometimes missing entirely on first launch
++- Root cause: the "While you were away" summary was pushing it off the top of the tiny companion window, not hiding it
++```
++
++Direct report, side-by-side screenshots: first launch shows the "While
++you were away: nothing finished yet" banner with no "!" badge above the
++hero; after opening and closing Guild Hall (dismissing the banner), the
++badge is there. Correctly self-diagnosed by the reporter as the away
++banner being the actual cause, not a separate rendering bug -- confirmed
++that read directly against the code before touching anything.
++
++**Root cause.** The idle companion is a genuinely fixed-size window
++(`IDLE_SIZE`, `electron/main.ts`, `resizable: false`). Inside it,
++`.idle-root` is a flex column with `justify-content: flex-end` --
++everything bottom-anchors, and growing content pushes upward from
++there. The quest-mark badge is `position: absolute; top: 4px` on
++`.idle-stage`, sitting at the very top of that stack. When the away
++banner (or any of its three siblings -- chain-complete, raid-result,
++hatch-ready, all independently conditional) adds an extra row, the
++whole stack grows taller than the window's fixed height, and the
++growth pushes the badge above the window's actual physical top edge.
++This isn't a CSS overflow issue `overflow: hidden` could catch -- the
++OS window itself is only that many pixels tall, so anything pushed
++above y=0 is genuinely gone, not clipped-and-scrollable. Closing and
++reopening the menu remounts `IdleView` after the offline report's
++already been acknowledged, which is exactly why that "fixes" it.
++
++**This exact bug class already happened once before**, confirmed
++directly in `app.css`'s own history: the pet-companion-button's margin
++once pushed the hero sprite itself off the top the same way, fixed at
++the time by shrinking content back into the existing budget rather than
++growing the window. Read that comment before deciding on a fix here,
++specifically to check whether "shrink instead of grow" was a
++deliberate standing preference -- concluded it wasn't a rule so much as
++the only viable fix for that specific bug (a margin value with no
++content trade-off to make); there's no equivalent way to shrink a
++banner's actual text to buy the room back this time.
++
++**Two real options were on the table, discussed before picking one:** a
++permanent height bump on the fixed window (invisible in the common
++case since the window is fully transparent and content is bottom-
++anchored -- unused headroom above it is literally nothing on screen,
++not a visible empty box), or making the window resize on demand
++whenever a banner needs to show. Went with the permanent bump --
++`IDLE_SIZE.height` 300 -> 340 -- as the lower-risk fix for the actual
++reported bug. Known, accepted limitation: sized for one banner row
++comfortably, not a worst-case stack of all four banner types at once;
++that residual edge case would need the on-demand-resize approach to
++close completely, and wasn't taken on here.
++
++**Confirmed safe against existing saved window positions**, not just
++assumed: `idleBounds` is reclamped against whatever `IDLE_SIZE` is at
++launch time on every single startup (`createWindow`'s own comment
++already documents why, from an earlier off-screen-companion bug), so a
++position saved before this change can never end up positioned
++incorrectly because the window got taller -- the clamp always uses the
++live constant, not a stored one.
++
++Swept two now-stale comments referencing the old fixed "260x300"/
++"300px" figure (`QuestResultModal.tsx`, `app.css`) and corrected both
++to the real number rather than leaving them to read as inaccurate
++documentation on a future pass.
++
++**Verified with a real build, not just read through:** `npx tsc
++--noEmit` and `npx vite build` both pass clean. Also re-packaged and
++launched the actual Electron app under Xvfb (same real end-to-end
++packaging check this project has used before) to confirm the change
++doesn't break window creation -- couldn't measure exact on-screen
++pixel geometry in this environment (no `wmctrl`/`xdotool` available),
++but confirmed every idle-window sizing call site in `main.ts`
++(creation, return-to-idle, minimum-size) reads from the single
++`IDLE_SIZE` constant with no hardcoded duplicate of the old value
++anywhere, so the fix propagates everywhere it needs to by construction,
++not by having remembered every call site individually.
+diff --git a/src/styles/app.css b/src/styles/app.css
+index a8e9501..23af093 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -2036,8 +2036,11 @@ input[type='range'] {
+   /*
+    * Reduced from an earlier attempt that added a combined +50px (130px
+    * explicit height, up from a natural ~120px, plus a 40px margin) in a
+-   * window that's only 300px tall total. .idle-root anchors content to
+-   * the BOTTOM (justify-content: flex-end), so excess total height pushes
++   * window that's only 340px tall total (300px when this comment was
++   * originally written -- bumped since, see IDLE_SIZE's own comment in
++   * electron/main.ts for why; the underlying "bottom-anchored content
++   * pushes off the top, not into scroll" mechanism this describes is
++   * unchanged). .idle-root anchors content to the BOTTOM (justify-content: flex-end), so excess total height pushes
+    * earlier elements -- this one specifically -- up and off the TOP of
+    * the window instead of growing the window or scrolling. Confirmed as
+    * the actual cause of the hero sprite disappearing entirely, not a
+diff --git a/src/ui/QuestResultModal.tsx b/src/ui/QuestResultModal.tsx
+index c7e40b1..54604d5 100644
+--- a/src/ui/QuestResultModal.tsx
++++ b/src/ui/QuestResultModal.tsx
+@@ -100,7 +100,7 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
+   const displayXp = useCountUp(result.xp, { from: 0, durationMs: 700 });
+ 
+   // This card renders full detail regardless of whether the idle
+-  // companion window (260x300, see IDLE_SIZE in electron/main.ts) or the
++  // companion window (260x340, see IDLE_SIZE in electron/main.ts) or the
+   // full menu is what's showing -- unlike ChainCompleteModal/
+   // RaidResultModal/HatchReadyModal, a quest result is frequent/routine
+   // enough that it shouldn't be gated behind the full menu being open

@@ -87,8 +87,36 @@ function loadAppIcon() {
  *  freely resizable; this is just a better starting point, not a new
  *  cap. Still clamped against the display's actual work area at open
  *  time (see window:setMode below), so this is safe on any screen size
- *  regardless of how big MENU_SIZE itself gets. */
-const IDLE_SIZE = { width: 260, height: 300 };
+ *  regardless of how big MENU_SIZE itself gets.
+ *
+ *  IDLE_SIZE.height bumped 300 -> 340 (patch 0231, direct report + fix)
+ *  -- closes a real, confirmed bug: .idle-root bottom-anchors its content
+ *  (justify-content: flex-end) inside this fixed-height window, so any
+ *  content taller than the window pushes earlier elements up and off the
+ *  TOP, not into a scrollable overflow -- there's no "overflow" here in
+ *  any CSS sense, content pushed above y=0 is pushed past the window's
+ *  own physical boundary and is simply gone. This exact bug already
+ *  happened once before with the pet sprite's own margin (see
+ *  .pet-companion-button's app.css comment) and was fixed THERE by
+ *  shrinking content back into the existing 300px budget rather than
+ *  growing the window -- deliberately NOT the same fix this time: the
+ *  thing getting pushed off-screen this time is the "While you were
+ *  away" banner (IdleView.tsx's awayBanner, plus three siblings --
+ *  chainBanner/raidBanner/hatchReadyBanner -- that can each add their
+ *  own row), and there's no version of shrinking existing UI that makes
+ *  room for a banner that didn't exist when the pet-sprite fix was
+ *  written. Confirmed safe: `idleBounds` is reclamped against the
+ *  CURRENT IDLE_SIZE on every launch (see createWindow below), so a
+ *  saved position from before this change can never end up positioned
+ *  off-screen because of the extra height. The extra 40px is invisible
+ *  in the common (no banner) case -- the window is fully transparent, so
+ *  unused headroom above bottom-anchored content is literally nothing
+ *  on screen, not a visible empty box. Deliberately sized for ONE
+ *  banner row comfortably, not a worst-case stack of all four -- an
+ *  accepted, known limitation (see guild-idler-status.md's own writeup)
+ *  rather than taking on a dynamic window-resize feature for a rare
+ *  multi-banner edge case. */
+const IDLE_SIZE = { width: 260, height: 340 };
 const MENU_SIZE = { width: 1350, height: 930 };
 /** The menu is now user-resizable -- this is a floor, not a cap, so the
  *  panel layout (nav column + content) never gets squeezed into something

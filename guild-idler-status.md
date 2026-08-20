@@ -17818,3 +17818,82 @@ fallback logic. Ran the actual label-resolution logic standalone for
 all three roles plus the crafting context and confirmed the exact
 expected output (`Strength`/`Agility`/`Intellect` for the hero card
 per role, `Main Stat` uniformly for crafting) before writing this up.
+
+### Companion window: quest-mark badge pushed off-screen by the offline banner (patch 0232)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed the quest-available ("!") icon sometimes missing entirely on first launch
+- Root cause: the "While you were away" summary was pushing it off the top of the tiny companion window, not hiding it
+```
+
+Direct report, side-by-side screenshots: first launch shows the "While
+you were away: nothing finished yet" banner with no "!" badge above the
+hero; after opening and closing Guild Hall (dismissing the banner), the
+badge is there. Correctly self-diagnosed by the reporter as the away
+banner being the actual cause, not a separate rendering bug -- confirmed
+that read directly against the code before touching anything.
+
+**Root cause.** The idle companion is a genuinely fixed-size window
+(`IDLE_SIZE`, `electron/main.ts`, `resizable: false`). Inside it,
+`.idle-root` is a flex column with `justify-content: flex-end` --
+everything bottom-anchors, and growing content pushes upward from
+there. The quest-mark badge is `position: absolute; top: 4px` on
+`.idle-stage`, sitting at the very top of that stack. When the away
+banner (or any of its three siblings -- chain-complete, raid-result,
+hatch-ready, all independently conditional) adds an extra row, the
+whole stack grows taller than the window's fixed height, and the
+growth pushes the badge above the window's actual physical top edge.
+This isn't a CSS overflow issue `overflow: hidden` could catch -- the
+OS window itself is only that many pixels tall, so anything pushed
+above y=0 is genuinely gone, not clipped-and-scrollable. Closing and
+reopening the menu remounts `IdleView` after the offline report's
+already been acknowledged, which is exactly why that "fixes" it.
+
+**This exact bug class already happened once before**, confirmed
+directly in `app.css`'s own history: the pet-companion-button's margin
+once pushed the hero sprite itself off the top the same way, fixed at
+the time by shrinking content back into the existing budget rather than
+growing the window. Read that comment before deciding on a fix here,
+specifically to check whether "shrink instead of grow" was a
+deliberate standing preference -- concluded it wasn't a rule so much as
+the only viable fix for that specific bug (a margin value with no
+content trade-off to make); there's no equivalent way to shrink a
+banner's actual text to buy the room back this time.
+
+**Two real options were on the table, discussed before picking one:** a
+permanent height bump on the fixed window (invisible in the common
+case since the window is fully transparent and content is bottom-
+anchored -- unused headroom above it is literally nothing on screen,
+not a visible empty box), or making the window resize on demand
+whenever a banner needs to show. Went with the permanent bump --
+`IDLE_SIZE.height` 300 -> 340 -- as the lower-risk fix for the actual
+reported bug. Known, accepted limitation: sized for one banner row
+comfortably, not a worst-case stack of all four banner types at once;
+that residual edge case would need the on-demand-resize approach to
+close completely, and wasn't taken on here.
+
+**Confirmed safe against existing saved window positions**, not just
+assumed: `idleBounds` is reclamped against whatever `IDLE_SIZE` is at
+launch time on every single startup (`createWindow`'s own comment
+already documents why, from an earlier off-screen-companion bug), so a
+position saved before this change can never end up positioned
+incorrectly because the window got taller -- the clamp always uses the
+live constant, not a stored one.
+
+Swept two now-stale comments referencing the old fixed "260x300"/
+"300px" figure (`QuestResultModal.tsx`, `app.css`) and corrected both
+to the real number rather than leaving them to read as inaccurate
+documentation on a future pass.
+
+**Verified with a real build, not just read through:** `npx tsc
+--noEmit` and `npx vite build` both pass clean. Also re-packaged and
+launched the actual Electron app under Xvfb (same real end-to-end
+packaging check this project has used before) to confirm the change
+doesn't break window creation -- couldn't measure exact on-screen
+pixel geometry in this environment (no `wmctrl`/`xdotool` available),
+but confirmed every idle-window sizing call site in `main.ts`
+(creation, return-to-idle, minimum-size) reads from the single
+`IDLE_SIZE` constant with no hardcoded duplicate of the old value
+anywhere, so the fix propagates everywhere it needs to by construction,
+not by having remembered every call site individually.
