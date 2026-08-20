@@ -123,6 +123,27 @@ const TAB_GROUPS: TabGroup[] = [DASHBOARD_GROUP, GUILD_GROUP, ADVENTURE_GROUP, P
  *  grouped structure above is what actually drives rendering and typing. */
 const ALL_TABS = TAB_GROUPS.flatMap((g) => g.tabs);
 
+/** The AUTOMATIC first-run tour's stops -- see the OnboardingTour usage
+ *  below for why this is deliberately much shorter than ALL_TABS. Just
+ *  enough to get a brand new player looking at their starting hero and
+ *  the already-seeded tutorial quest waiting for them; everything past
+ *  that point is GuidanceManager's job now, not this list's. */
+const FIRST_RUN_TOUR_TAB_IDS = ['dashboard', 'heroes', 'quests'];
+
+/** Copy specific to a brand new guild's very first tour -- overrides
+ *  OnboardingTour's own shared STEP_DESCRIPTIONS for just these two
+ *  stops, only on the automatic short tour (see the description field
+ *  passed into `steps` below). Mentions the Tavern by name for Heroes
+ *  (visible right on that tab as "Go to Tavern," matching direct
+ *  feedback that new players should be shown where MORE heroes come
+ *  from, not just told they start with one) and points Quests at the
+ *  real seeded tutorial quest (see SaveManager's starter-hero comment)
+ *  rather than a generic "quests appear here" description. */
+const FIRST_RUN_TOUR_DESCRIPTIONS: Record<string, string> = {
+  heroes: "You start with one hero already, no cost. Recruit more from the Tavern once you've got the gold.",
+  quests: 'A job is already waiting for your hero below -- send them out to get your first taste of how a quest plays out.',
+};
+
 /**
  * The "?" breakdown for whichever tab is currently open -- a few bullet
  * points on exactly what lives in and can be done from that tab, on
@@ -606,10 +627,34 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
           their own one-off single-step spotlight the moment each first
           unlocks (pendingHatcherySpotlight/pendingPeddlerSpotlight below)
           -- that's a separate, timing-driven nudge, not a substitute for
-          seeing them in a full replay. */}
+          seeing them in a full replay.
+
+          The AUTOMATIC first-run tour is deliberately shortened to just
+          three stops (Dashboard/Heroes/Quests) rather than every visible
+          tab -- direct feedback that touring all 13 back to back was too
+          much information before a new player has done anything at all.
+          A manual replay via the header button still shows the full
+          walkthrough (manualTourOpen branch below) -- shortening the
+          DEFAULT doesn't remove the comprehensive version, it just stops
+          it from being the first thing every new guild sees. Everything
+          past these three stops is now covered by GuidanceManager's
+          event-driven topics instead (first_hero_recruited,
+          second_hero_affordable, guild_hall_intro, and the pre-existing
+          raids_unlocked/first_injury_or_wear/etc.) -- one short toast at
+          the moment it's actually relevant, not a step count to remember
+          from a tour finished an hour ago. */}
       {engine.state.guildName !== '' && (!engine.state.seenOnboarding || manualTourOpen) && (
         <OnboardingTour
-          steps={ALL_TABS.filter((t) => t.id !== 'testing' && isTabVisible(t.id)).map((t) => ({ id: t.id, label: t.label }))}
+          steps={(manualTourOpen ? ALL_TABS : ALL_TABS.filter((t) => FIRST_RUN_TOUR_TAB_IDS.includes(t.id)))
+            .filter((t) => t.id !== 'testing' && isTabVisible(t.id))
+            .map((t) => ({
+              id: t.id,
+              label: t.label,
+              // Only the automatic short tour gets the tailored copy --
+              // see FIRST_RUN_TOUR_DESCRIPTIONS' own comment for why a
+              // manual replay later shouldn't reuse this same wording.
+              description: manualTourOpen ? undefined : FIRST_RUN_TOUR_DESCRIPTIONS[t.id],
+            }))}
           onTabChange={(id) => setTab(id as TabId)}
           onDone={() => { engine.dismissOnboarding(); setManualTourOpen(false); }}
         />

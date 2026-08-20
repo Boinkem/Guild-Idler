@@ -98,7 +98,7 @@ export class GameEngine {
    * needs zero changes: `engine.toast` behaves exactly as it always has,
    * it just advances instead of going straight to null.
    */
-  private toastQueue: { message: string; seq: number }[] = [];
+  private toastQueue: { message: string; seq: number; long?: boolean }[] = [];
   private nextToastSeq = 0;
   /**
    * `seq` exists purely so two back-to-back toasts with identical text
@@ -111,7 +111,7 @@ export class GameEngine {
    * the actual cause of a notification "not going away": it wasn't stuck,
    * it just never had a timer running for it in the first place.
    */
-  get toast(): { message: string; seq: number } | null {
+  get toast(): { message: string; seq: number; long?: boolean } | null {
     return this.toastQueue[0] ?? null;
   }
   /**
@@ -208,7 +208,14 @@ export class GameEngine {
 
   private say(message: string, targetTab?: string, banner = false, targetSubTab?: string) {
     this.archive(message, targetTab, banner, targetSubTab);
-    this.toastQueue.push({ message, seq: this.nextToastSeq++ });
+    // Reuses `banner` as the "this deserves more reading time" signal
+    // too, rather than a separate parameter -- banner already means
+    // "significant enough for the top NotificationBanner + nav shimmer,"
+    // and a moment significant enough for that is exactly the kind of
+    // thing (a guidance topic, a real milestone) that also deserves
+    // longer than the default 3.2s toast window. See Toast.tsx's own
+    // duration constants.
+    this.toastQueue.push({ message, seq: this.nextToastSeq++, long: banner });
     this.notify();
   }
 
@@ -1471,7 +1478,13 @@ export class GameEngine {
     if (error) return this.say(error);
     playSound('purchase');
     const tier = CHAIN_REPLAY_TIER_BY_ID[tierId];
-    this.say(`${tier?.sagaName ?? 'Replay tier'} unlocked.`, 'chains', true);
+    // No targetTab/banner here, unlike most unlock messages -- the only
+    // way to click this purchase at all is from inside Replay Memories
+    // itself (see DiscoveredQuestsPanel.tsx's TierCard), so a "Go to
+    // Discovered Quests" banner and nav shimmer would both be pointing
+    // at the tab the player is already looking at. Direct feedback from
+    // reviewing this exact flow.
+    this.say(`${tier?.sagaName ?? 'Replay tier'} unlocked.`);
     void this.saveNow();
   }
 

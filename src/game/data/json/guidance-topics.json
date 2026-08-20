@@ -99,5 +99,26 @@
       "Revive them for gold right from the Heroes tab, or wait out the Infirmary's free auto-revive timer once it's unlocked."
     ],
     "targetTab": "heroes"
+  },
+  {
+    "id": "first_hero_recruited",
+    "messages": [
+      "Nice, your ranks grow! Send your new hero out too once they're ready."
+    ],
+    "targetTab": "quests"
+  },
+  {
+    "id": "second_hero_affordable",
+    "messages": [
+      "You've got enough gold to recruit a second hero, if you want the extra hands."
+    ],
+    "targetTab": "heroes"
+  },
+  {
+    "id": "guild_hall_intro",
+    "messages": [
+      "The Guild Hall has upgrades that benefit every hero at once -- worth a look once gold starts piling up."
+    ],
+    "targetTab": "guild"
   }
 ]

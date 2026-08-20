@@ -2,6 +2,7 @@ import { GameState } from '../types';
 import { ModifierManager } from './ModifierManager';
 import { GuildManager } from './GuildManager';
 import { EquipmentManager } from './EquipmentManager';
+import { RECRUIT_COST } from '../data/progression';
 
 /**
  * A one-time "how to" nudge, tied to a real state condition. Fires exactly
@@ -73,6 +74,33 @@ const CHECKS: Record<string, Check> = {
   // any revive action could possibly have happened yet, so the state is
   // guaranteed fresh. Same "first X" shape as every other topic here.
   first_hero_fallen: (state) => state.heroes.some((h) => h.status === 'fallen'),
+  // A fresh guild already starts with one hero (see SaveManager's
+  // starter-hero seeding) and the shortened onboarding tour's own last
+  // step already points a brand new player at sending that hero out --
+  // so this is deliberately NOT "recruited a hero at all," it's
+  // specifically the SECOND one (heroes.length >= 2), the first genuine
+  // recruit decision the player makes on their own. Pairs with
+  // second_hero_affordable below, which fires earlier (once gold covers
+  // the cheapest recruit) as the nudge toward actually doing this.
+  first_hero_recruited: (state) => state.heroes.length >= 2,
+  // 150 is the cheapest recruit cost in recruit-costs.json (Adventurer
+  // and Knight both sit there) -- not hardcoded as a guess, read
+  // directly from RECRUIT_COST so this stays correct if those numbers
+  // ever move. heroes.length === 1 (not <= 1) is deliberate: this is
+  // specifically about a guild that's never recruited anyone yet, not
+  // "has fewer than 2 heroes" in general (which would also match a
+  // guild that recruited and then lost someone) -- exact, not a fuzzy
+  // approximation.
+  second_hero_affordable: (state) => state.heroes.length === 1
+    && state.gold >= Math.min(...Object.values(RECRUIT_COST)),
+  // Same trigger as second_hero_affordable above, deliberately -- the
+  // first time a new guild has spare gold at all is a natural moment to
+  // mention both "recruit more" and "the Guild Hall" together, and the
+  // two-topics-one-shared-condition split (rather than one topic with
+  // two messages) exists only because a GuidanceTopic has a single
+  // targetTab, and these two point at different tabs.
+  guild_hall_intro: (state) => state.heroes.length === 1
+    && state.gold >= Math.min(...Object.values(RECRUIT_COST)),
 };
 
 export const GuidanceManager = {

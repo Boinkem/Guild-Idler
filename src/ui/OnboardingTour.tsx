@@ -3,6 +3,14 @@ import { useEffect, useLayoutEffect, useState } from 'react';
 interface Step {
   id: string;
   label: string;
+  /** Overrides STEP_DESCRIPTIONS for this one appearance of the step --
+   *  used by the shortened first-run tour (patch 0233) so its
+   *  Heroes/Quests copy can be specific to a brand new guild ("you start
+   *  with one hero already...") without that same specific wording
+   *  showing up stale on a manual full-tour replay much later, which
+   *  reuses this same component with the plain shared descriptions
+   *  instead. Falls back to STEP_DESCRIPTIONS[id] when omitted. */
+  description?: string;
 }
 
 interface Rect {
@@ -103,7 +111,7 @@ export function OnboardingTour({
       <div className="onboarding-card" style={{ top: cardTop, left: cardLeft }}>
         <div className="tiny muted" style={{ marginBottom: 4 }}>Step {index + 1} of {steps.length}</div>
         <div className="card-title" style={{ marginBottom: 6 }}>{step.label}</div>
-        <p className="small" style={{ margin: '0 0 12px' }}>{STEP_DESCRIPTIONS[step.id] ?? ''}</p>
+        <p className="small" style={{ margin: '0 0 12px' }}>{step.description ?? STEP_DESCRIPTIONS[step.id] ?? ''}</p>
         <div className="row" style={{ gap: 8, justifyContent: 'space-between' }}>
           <button className="btn-ghost" onClick={onDone}>Skip</button>
           <div className="row" style={{ gap: 6 }}>

@@ -17897,3 +17897,81 @@ but confirmed every idle-window sizing call site in `main.ts`
 `IDLE_SIZE` constant with no hardcoded duplicate of the old value
 anywhere, so the fix propagates everywhere it needs to by construction,
 not by having remembered every call site individually.
+
+### Onboarding pacing: shortened first-run tour, event-driven nudges take over from there (patch 0233)
+
+```discord-update
+Dev Update | Feature
+
+- The automatic first-time tour is way shorter now -- Dashboard, Heroes, Quests, then you're playing, instead of touring all 13 tabs back to back
+- New nudges pick up from there: recruiting a second hero, having enough gold to afford one, and a Guild Hall intro once gold starts piling up
+- Guidance toasts (the "how to" tips, not routine confirmations) now linger noticeably longer -- long enough to actually finish reading one
+- The Replay Memories unlock toast no longer tells you to go to the tab you're already standing in
+```
+
+Direct feedback: the 13-step automatic tour front-loaded far too much
+before a new player had done anything at all, and a fixed step count
+assumes a player remembers everything from steps read many clicks ago
+-- neither holds up well for a genuinely new player's first few
+minutes.
+
+**Shortened first-run tour** (`MenuWindow.tsx`). The automatic tour
+(fires once, `!seenOnboarding`) now stops at three tabs --
+Dashboard/Heroes/Quests -- instead of `ALL_TABS`. The manual "Tour"
+button replay is untouched and still shows the full 13-tab walkthrough
+on demand; shortening the *default* doesn't remove the comprehensive
+version, it just stops it from being the first thing every new guild
+sees. Heroes and Quests get tailored first-run copy ("You start with
+one hero already, no cost. Recruit more from the Tavern...", "A job is
+already waiting for your hero below...") via a new optional
+`description` field on `OnboardingTour`'s own `Step` type, deliberately
+NOT baked into the shared `STEP_DESCRIPTIONS` map -- a manual replay
+weeks into a save showing "you start with one hero already" would read
+as stale, so the override only applies to the automatic short tour,
+falling back to the original generic copy everywhere else.
+
+**Three new event-driven nudges** (`GuidanceManager`), same proven
+pattern every existing topic already uses -- no new mechanism, just
+more entries:
+- `first_hero_recruited` (`heroes.length >= 2`) -- deliberately NOT
+  "recruited a hero at all" (a fresh guild already starts with one, see
+  `SaveManager`'s starter-hero seeding), specifically the first
+  genuine recruit decision a player makes on their own.
+- `second_hero_affordable` (`heroes.length === 1 && gold >=` the
+  cheapest recruit cost) -- read directly from `RECRUIT_COST` rather
+  than hardcoded, so it stays correct if those numbers ever move;
+  confirmed the actual minimum is 150 (Adventurer/Knight, both the
+  same price).
+- `guild_hall_intro` -- same trigger as `second_hero_affordable`,
+  deliberately: the first time a new guild has spare gold at all is a
+  natural moment to mention both "recruit more" and "the Guild Hall"
+  together. Split into two topics rather than one with two messages
+  only because `GuidanceTopic` has a single `targetTab`, and these
+  point at different destinations.
+
+**Longer toast duration for guidance-tier messages** (`Toast.tsx`,
+`GameEngine.say`). Routine confirmations ("Sold.", "Repaired.") keep
+the existing 3.2s window; anything already flagged `banner: true`
+(every `GuidanceManager` topic already routes through this) now gets
+~6.5s instead -- reused the existing `banner` signal rather than adding
+a new parameter, since "significant enough for the top banner" is
+already exactly the bar for "also deserves more reading time." Every
+existing guidance topic gets this for free, no changes needed at
+those call sites.
+
+**Replay Memories unlock toast fixed.** `buyChainReplayTier` was
+sending a `targetTab: 'chains', banner: true` message -- but the only
+way to click that purchase is from inside Replay Memories itself, so
+the resulting "Go to Discovered Quests" banner and nav shimmer both
+pointed at the tab the player was already standing in. Now a plain,
+short toast with no target tab at all.
+
+No changes to save data, persisted state, or any existing guidance
+topic's trigger condition -- purely new topics, new tour scoping, and
+toast-duration/targeting fixes.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Confirmed by script: 17 guidance
+topics total, zero duplicate ids, and the recruit-cost minimum used by
+the two new gold-gated topics resolves to exactly 150 against the live
+`recruit-costs.json`, not assumed.

@@ -1,13 +1,22 @@
 import { useEffect } from 'react';
 import { useEngine } from './useEngine';
 
+/** Routine confirmations ("Sold.", "Repaired.") get the short window --
+ *  quick to read, and there are a lot of them. `long` (guidance topics,
+ *  and anything else banner-worthy -- see GameEngine.say's own comment)
+ *  gets roughly double: these are actual instructional sentences, not a
+ *  one-word confirmation, and are exactly the moments a new player most
+ *  needs the extra time to actually finish reading before it's gone. */
+const TOAST_DURATION_MS = 3200;
+const TOAST_DURATION_LONG_MS = 6500;
+
 export function Toast() {
   const engine = useEngine();
   const toast = engine.toast;
 
   useEffect(() => {
     if (!toast) return undefined;
-    const id = window.setTimeout(() => engine.clearToast(), 3200);
+    const id = window.setTimeout(() => engine.clearToast(), toast.long ? TOAST_DURATION_LONG_MS : TOAST_DURATION_MS);
     return () => window.clearTimeout(id);
   }, [toast?.seq, engine]);
 
