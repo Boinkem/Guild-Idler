@@ -10,7 +10,7 @@ import { EquipSlot, EquipmentDef, EquipmentItem, Hero, Rarity, ConsumableDef, Cu
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { CurioManager } from '../../game/managers/CurioManager';
 import { rerollsUsedToday } from '../../game/data/reroll';
-import { describeMods, describeStats, formatGold, RARITY_BANNER, RARITY_COLOR, RARITY_ORDER } from '../../game/util';
+import { describeMods, describeStats, formatGold, RARITY_BANNER, RARITY_COLOR, RARITY_ORDER, MAIN_STAT_TOOLTIP } from '../../game/util';
 import { ItemIcon, ConsumableIcon, CurioIcon } from '../icons';
 import { GearScoreBadge } from '../GearScoreBadge';
 import { Row, Toggle } from './SettingsPanel';
@@ -642,7 +642,13 @@ function SlotCard({
               </div>
               <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
               {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
-                <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
+                <div
+                className="tiny"
+                style={{ marginTop: 2, color: 'var(--brass)' }}
+                title={item.enchantStats.strength ? MAIN_STAT_TOOLTIP : undefined}
+              >
+                Enchanted: {describeStats(item.enchantStats, true).join(' · ')}
+              </div>
               )}
               {def.setId && (
                 <SetInfoBlock hero={hero} setId={def.setId} equipped={item.durability > 0} />
@@ -734,7 +740,13 @@ function StashCard({
               </div>
               <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
               {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
-                <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
+                <div
+                className="tiny"
+                style={{ marginTop: 2, color: 'var(--brass)' }}
+                title={item.enchantStats.strength ? MAIN_STAT_TOOLTIP : undefined}
+              >
+                Enchanted: {describeStats(item.enchantStats, true).join(' · ')}
+              </div>
               )}
               {def.setId && (
                 <SetInfoBlock hero={hero} setId={def.setId} equipped={false} />

@@ -10,7 +10,7 @@ import { rerollsUsedToday } from '../../game/data/reroll';
 import { HERO_CLASSES, PRESTIGE_MIN_LEVEL, RECRUIT_COST, SKINS, infirmaryAutoReviveUnlocked, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
 import { Tuning } from '../../game/data/tuning';
 import { HeroClass, Hero, Stats } from '../../game/types';
-import { describeMods, formatDuration, formatGold, HOUR } from '../../game/util';
+import { describeMods, formatDuration, formatGold, HOUR, roleAwareStatLabel } from '../../game/util';
 import { HeroSprite } from '../sprites/HeroSprite';
 import { GearScoreBadge } from '../GearScoreBadge';
 import { RoleIcon } from '../RoleIcon';
@@ -337,11 +337,10 @@ export function HeroesPanel() {
                 </div>
                 <HealthBar hero={hero} />
                 <AutoHealBar hero={hero} infirmaryLevel={infirmaryLevel} />
-
                 <div className="stat-row" style={{ marginTop: 8 }}>
                   {STAT_KEYS.map((key) => (
                     <span key={key}>
-                      {key} <b>{Math.round(total[key])}</b>
+                      {roleAwareStatLabel(key, HeroManager.activeRole(hero))} <b>{Math.round(total[key])}</b>
                       {hero.statPoints > 0 && (
                         <button
                           className="btn-ghost"

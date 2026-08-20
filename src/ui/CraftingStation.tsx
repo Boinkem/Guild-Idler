@@ -9,7 +9,7 @@ import {
   CraftingRecipeDef, EquipmentDef, EquipmentItem, MaterialId, Modifiers, Stats,
 } from '../game/types';
 import {
-  describeMods, describeStats, formatGold, MOD_LABEL, RARITY_COLOR, STAT_LABEL,
+  describeMods, describeStats, formatGold, MOD_LABEL, RARITY_COLOR, craftingStatLabel, MAIN_STAT_TOOLTIP,
 } from '../game/util';
 import { RecipeIcon, ItemIcon, MaterialIcon } from './icons';
 import { RarityPill } from './RarityPill';
@@ -231,7 +231,13 @@ export function ItemPreviewModal({
         </div>
         <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
         {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
-          <div className="tiny" style={{ marginTop: 2, color: 'var(--brass)' }}>Enchanted: {describeStats(item.enchantStats).join(' · ')}</div>
+          <div
+            className="tiny"
+            style={{ marginTop: 2, color: 'var(--brass)' }}
+            title={item.enchantStats.strength ? MAIN_STAT_TOOLTIP : undefined}
+          >
+            Enchanted: {describeStats(item.enchantStats, true).join(' · ')}
+          </div>
         )}
         <div className="tiny muted" style={{ marginTop: 4 }}>
           {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
@@ -378,7 +384,13 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
   /* -------------------------- enchant stat slot --------------------------- */
   const statOptions: PickerOption[] = (recipe?.statOptions ?? []).map((s) => ({
     key: s,
-    label: `+${recipe?.statValue ?? 0} ${STAT_LABEL[s]}`,
+    label: `+${recipe?.statValue ?? 0} ${craftingStatLabel(s)}`,
+    // Only the Main Stat option gets a sublabel -- the others (Endurance/
+    // Luck/Wisdom) don't need explaining, and an empty "Details" cell next
+    // to them reads fine once at least one row in the table has real
+    // content there (hasSublabels only needs one true to show the column
+    // at all).
+    sublabel: s === 'strength' ? MAIN_STAT_TOOLTIP : undefined,
     disabled: !chosenStats.includes(s) && chosenStats.length >= statsToPick,
   }));
 
@@ -392,8 +404,11 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
   }
 
   const statFilled = chosenStats.length === 0 ? null : (
-    <span className="craft-slot-label">
-      {chosenStats.map((s) => `+${recipe?.statValue} ${STAT_LABEL[s]}`).join(', ')}
+    <span
+      className="craft-slot-label"
+      title={chosenStats.includes('strength') ? MAIN_STAT_TOOLTIP : undefined}
+    >
+      {chosenStats.map((s) => `+${recipe?.statValue} ${craftingStatLabel(s)}`).join(', ')}
     </span>
   );
 

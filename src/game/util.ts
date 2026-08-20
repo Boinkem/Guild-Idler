@@ -1,4 +1,4 @@
-import { Modifiers, Rarity, Stats, ZERO_MODS } from './types';
+import { Modifiers, Rarity, Role, Stats, ZERO_MODS } from './types';
 
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;
@@ -172,9 +172,64 @@ export const STAT_LABEL: Record<keyof Stats, string> = {
   wisdom: 'Wisdom',
 };
 
-/** Enchanting's own flat (non-percentage) bonuses -- see EquipmentItem.enchantStats. */
-export function describeStats(stats: Partial<Stats>): string[] {
+/**
+ * Strength's display name per combat role -- what the stat actually does
+ * never changes (still `strength` under the hood, same growth curve, same
+ * statMods formula), only how it reads against a hero who isn't a Melee.
+ * Only `strength` gets this treatment; endurance/luck/wisdom keep their
+ * plain STAT_LABEL everywhere, confirmed scope. Melee's own entry equals
+ * STAT_LABEL.strength on purpose, so `ROLE_STAT_LABEL[role]` is always a
+ * safe direct substitute with no special-casing needed at the call site.
+ */
+export const ROLE_STAT_LABEL: Record<Role, string> = {
+  melee: 'Strength',
+  ranged: 'Agility',
+  caster: 'Intellect',
+};
+
+/**
+ * Hero-card version -- always has one specific hero, so this can commit to
+ * the real per-role label. See HeroManager.activeRole for the "trained
+ * role, falling back to the class's native one" resolution every caller
+ * should use to get `role` in the first place; this function itself takes
+ * a plain Role, not a Hero, to stay decoupled from HeroManager.
+ */
+export function roleAwareStatLabel(key: keyof Stats, role: Role): string {
+  return key === 'strength' ? ROLE_STAT_LABEL[role] : STAT_LABEL[key];
+}
+
+/**
+ * Crafting/Enchanting's version -- deliberately NOT role-aware, even
+ * though a targeted item is sometimes equipped (and so sometimes has a
+ * resolvable hero/role). Considered resolving a real role there and
+ * decided against it: an enchant target's hero is only known when the
+ * item happens to already be equipped, so the exact same stat would read
+ * "Strength" for an unequipped stash item and "Intellect" for the same
+ * item the moment it's equipped on a caster -- inconsistent within the
+ * same screen, and confusing in a way a single flat label isn't. "Main
+ * Stat" reads correctly regardless of what's equipped where, and the
+ * per-role names are still visible everywhere that actually has one
+ * committed hero (the hero card, via roleAwareStatLabel above).
+ */
+export function craftingStatLabel(key: keyof Stats): string {
+  return key === 'strength' ? 'Main Stat' : STAT_LABEL[key];
+}
+
+/** Hover copy wherever craftingStatLabel's "Main Stat" appears -- kept as
+ *  one shared constant so the wording can't drift between Crafting's
+ *  stat picker and the "Enchanted: ..." display on an already-enchanted
+ *  item, patch 0214/CraftingStation's own settled convention. */
+export const MAIN_STAT_TOOLTIP = 'Strength for Melee heroes, Intellect for Casters, Agility for Ranged.';
+
+/** Enchanting's own flat (non-percentage) bonuses -- see EquipmentItem.enchantStats.
+ *  `useMainStatLabel`, when true, substitutes craftingStatLabel for strength
+ *  instead of the plain STAT_LABEL -- opt-in and defaulted false so every
+ *  existing call site (e.g. Replay Memories' loot preview, which isn't part
+ *  of the Crafting/Enchanting flow this was built for) keeps its current
+ *  literal "Strength" unless it deliberately asks for the Main Stat
+ *  treatment. */
+export function describeStats(stats: Partial<Stats>, useMainStatLabel = false): string[] {
   return (Object.keys(STAT_LABEL) as (keyof Stats)[])
     .filter((key) => (stats[key] ?? 0) !== 0)
-    .map((key) => `${STAT_LABEL[key]} +${stats[key]}`);
+    .map((key) => `${useMainStatLabel ? craftingStatLabel(key) : STAT_LABEL[key]} +${stats[key]}`);
 }

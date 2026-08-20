@@ -17754,3 +17754,67 @@ the end** -- `npx tsc --noEmit` and `npx vite build` both run clean
 after: the reward-scaling fix alone, the Tab UI fixes alone, the Sell
 Junk fix alone, the Lore restyle alone, and once more after reconciling
 against the upstream chain-replay merge.
+
+### Role-aware stat naming: hero card gets Intellect/Agility/Strength, Crafting/Enchanting gets "Main Stat" (patch 0231)
+
+```discord-update
+Dev Update | Feature
+
+- Strength now displays as Intellect for Casters and Agility for Ranged heroes on their own hero card -- Melee still says Strength
+- Crafting and Enchanting call it "Main Stat" instead, since a crafted item's eventual hero isn't known yet -- hover for what that means
+- Also fixed the hero card's stat row rendering raw lowercase field names (strength/endurance/...) instead of proper labels
+```
+
+What the stat actually does never changes anywhere -- still `strength`
+under the hood, same growth curve, same `statMods` formula. Only how
+it's labeled changes, and only for `strength`; Endurance/Luck/Wisdom
+are untouched everywhere, confirmed scope from the start of this
+discussion.
+
+**Hero card** (`HeroesPanel.tsx`): now uses
+`HeroManager.activeRole(hero)` -- the hero's real trained role,
+defaulting to their class's native one, same resolution every other
+role-aware system in this codebase already uses -- to pick between
+Strength (Melee), Intellect (Caster), and Agility (Ranged) via a new
+`roleAwareStatLabel()` in `util.ts`. Caught and fixed a second issue
+in the same block while in there: this row was rendering the raw
+lowercase object key (`{key}`, literally `strength`) directly, never
+actually going through any label lookup at all -- worth flagging
+plainly since it's a visible casing change (`strength 15` becomes
+`Strength 15`), not just the role rename.
+
+**Crafting/Enchanting deliberately does NOT resolve a real role**,
+even though a targeted enchant item is sometimes equipped (and so
+sometimes has a resolvable hero). Considered it and decided against:
+an enchant target's hero is only known when the item happens to
+already be equipped, so the same stat choice would read "Strength" for
+an unequipped stash item and "Intellect" the moment that same item
+gets equipped on a caster -- inconsistent within a single screen in a
+way a flat label isn't. Landed on **"Main Stat"** uniformly instead,
+via a new `craftingStatLabel()`, with a hover tooltip
+(`MAIN_STAT_TOOLTIP`, one shared string so the wording can't drift
+between the two contexts) explaining what it maps to per role. Applied
+everywhere `STAT_LABEL`/`describeStats` touched strength inside the
+Crafting/Enchanting flow: `CraftingStation.tsx`'s stat picker (visible
+explanation via the picker's own `sublabel` column, shown only on the
+Main Stat option, not the other three) and its "Enchanted: ..."
+display, plus the same "Enchanted: ..." line in both places
+`EquipmentPanel.tsx` shows it.
+
+`describeStats()` gained an optional second `useMainStatLabel` param,
+default `false` -- every existing call site that doesn't explicitly
+opt in (Replay Memories' loot preview from patch 0228, which isn't
+part of the Crafting/Enchanting flow this was built for and was
+deliberately left alone) keeps its current literal "Strength" with no
+behavior change.
+
+No changes to `HeroManager`, stat math, or any persisted state --
+purely display-layer relabeling.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Confirmed no remaining raw
+`STAT_LABEL[key]` reads anywhere in `src/ui/` outside `util.ts`'s own
+fallback logic. Ran the actual label-resolution logic standalone for
+all three roles plus the crafting context and confirmed the exact
+expected output (`Strength`/`Agility`/`Intellect` for the hero card
+per role, `Main Stat` uniformly for crafting) before writing this up.
