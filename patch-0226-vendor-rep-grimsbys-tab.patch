@@ -1,0 +1,1456 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index a39bc6b..1526990 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -17084,3 +17084,171 @@ vite.web.config.ts` both pass clean. The mods/stats scaling was checked
+ numerically against `gravewatchers_band`'s real pre-0214 tiered values,
+ not just read for plausibility -- exact match at both Heroic and
+ Legendary. No duplicate `Tuning` ids introduced.
++
++### Vendor Rep + Grimsby's Tab -- the full loyalty system, three vendors, and a third wager game (patch 0226)
++```discord-update
++Dev Update | Vendor Rep & Grimsby's Tab
++
++- Added Vendor Rep -- a loyalty ring on every vendor and Grimsby, filling as you spend, worth a discount and (at Grimsby's cart) a little extra back
++- Added Grimsby's Tab -- a new push-your-luck game: open a tab, push it further for a bigger prize, or settle and walk away, but a bad push loses the whole thing
++- Added a new achievement for settling the Tab at round 5 or later
++```
++
++Full build-out of the Vendor Rep + Grimsby's Tab design discussed over
++several turns this session -- data model, all three shop vendors,
++Grimsby's own discount/rebate, the Tab's complete game logic, the
++achievement, and the ring UI itself, all landing in one patch since none
++of the pieces are independently useful without the others.
++
++**Vendor Rep (`vendorRep.ts`).** `level = floor(sqrt(lifetimeGoldSpent /
++100))`, same diminishing-curve SHAPE Fund the Guild's own Power formula
++already uses (patch 0220) -- reused deliberately rather than inventing a
++new curve. 1% discount per level, capped at level 20 (20%) -- past that
++the level number keeps climbing as pure fame, same "ring stays full,
++number keeps counting" treatment already established for other systems,
++so lifetime spend can never make a vendor's stock or Grimsby's games
++trivially cheap. Confirmed by direct calculation, not just trusted from
++the formula: level 1 at 100g spent, level 5 at 2,500g, level 10 at
++10,000g, level 20 at 40,000g, and 200,000g still caps at exactly 20% --
++matches the design discussion's own worked numbers precisely.
++
++Applies to buy price AND service fees, per direct scope: Blacksmith
++(equipment + reroll), Alchemist (consumables + reroll), Enchanter (Black
++Market + reroll), and vendor-TIED upgrade purchases specifically (not
++guild-wide facility upgrades, which aren't bought "from" anyone). New
++`GameState.vendorGoldSpent: Record<VendorId, number>` tracks lifetime
++spend per vendor, separate from the pre-existing `vendorLevels` (a
++different, spend-to-unlock-upgrades track, not a loyalty measure).
++Deliberately does NOT feed Guild Power -- direct correction mid-session:
++vendor gold is already being spent for its own purchase, so also
++crediting Power would make ordinary shopping strictly better than Fund
++the Guild's own deliberate, no-other-payoff donation, quietly
++undermining that system's whole reason to exist.
++
++Price computed at the SAME point each vendor's price was already being
++computed, not forced into one universal pattern: Blacksmith's rolled
++equipment price and the Black Market's price both bake the discount in
++at roll/refresh time (matching the Black Market's own pre-existing
++`blackMarketDiscount` convention -- accepts the same staleness-between-
++restocks tradeoff that precedent already made); Alchemist's consumable
++price and all three reroll costs compute it live each call (matching
++how those were already computed fresh, not baked at roll time).
++
++**Grimsby's own discount + rebate.** Same level, same percent, same
++cap as the shop vendors, applied to all three of his games per direct
++request. Two distinct effects, not one: `feeWithStake` now returns a
++discounted fee (Cards/Dice both read this -- `resolveFlip` previously
++recomputed its own fee independently of `feeWithStake` despite that
++function's own comment claiming to be "the one place... so it can never
++drift"; now actually routed through it, closing a real duplication this
++patch found while wiring the discount in), AND a new `repRebate`
++gives a small automatic cash-back on whatever was just paid him,
++applied regardless of the round's own outcome -- even a bust still
++gets it, since it's about him being decent to a regular, not a
++consolation prize. Dice has no fixed fee to discount (the wager is a
++free-form typed number, and discounting a number the player just
++entered would just be confusing), so rep's full effect there is the
++rebate alone -- functionally the same net benefit, just expressed as
++gold back instead of a lower charge up front. `PeddlerFlipResult` and
++`DiceRollResult` both gained their own `rebate` field so the UI can
++show it as its own line rather than blending it into the game's own
++payout number.
++
++Confirmed working as of this patch, not left as a TODO: Grimsby's rep
++accumulates from ordinary Cards/Dice spend even before Permanent Spot
++is bought, since `peddlerGoldSpent` is Grimsby-wide and never gated --
++per direct design confirmation, a deliberate touch, so a regular's
++first-ever tab can already carry a real rebate.
++
++**Grimsby's Tab (`PeddlerManager.openTab`/`runItUp`/`settleTab`).**
++Gated behind `grimsbyPermanentSpotUnlocked` -- this is the one game
++where the tension is explicitly his own patience, so it only makes
++sense once he's actually settled in. New `GameState.peddlerTab: {
++tier, round, value } | null` -- round 1 is the guaranteed buy-in (no
++risk roll at all); every push after that pays the tier's buy-in again
++and rolls `tabSuccessChance` (85% at round 2, -15pts/round, floor 15%,
++never a designed ceiling on rounds -- pushes indefinitely toward the
++floor by direct design request, "lets late game players with lots of
++gold high roll"). Success grows the tab by `tabRoundReward` (grows
++~0.55x buy-in more per round) and advances round; a bust wipes the tab
++ENTIRELY -- no partial refund, per direct request ("a bust is a
++bust") -- deliberately the sharper version of the loss since that's
++the one thing that makes this feel different from Cards/Dice.
++
++**Four buy-in tiers** (20g/100g/500g/2,500g, all devtool-tunable),
++specifically so a late-game player with real gold can genuinely high-
++roll instead of being capped at early-game numbers, rather than reusing
++Cards/Dice's shared 1x-5x Stakes selector.
++
++**Stats/achievements, exactly as scoped, nothing extra invented:** a
++bust feeds the existing shared `peddlerBusts` counter directly, no
++separate Tab-specific bust tracking. Settling at or past round 5 (the
++tuned `peddler.tab.jackpotRound`) counts as a jackpot -- BOTH the
++shared `peddlerJackpots` counter (so it feeds the pre-existing
++`PEDDLER_JACKPOT` achievement the same as any other game) and a new
++dedicated `peddlerTabJackpots` counter, same "shared counter for the
++general achievement, own counter for the specific one" pattern
++`peddlerHighRollerJackpots` already established for High Roller. New
++achievement `PEDDLER_TAB_JACKPOT` ("Knew When to Walk Away") fires on
++SETTLING specifically, not merely reaching round 5 and busting past it
++on a later push -- per direct request, rewards the nerve to actually
++bank it, not just the streak to get there.
++
++**UI.** `PeddlerTabModal.tsx` -- same modal/overlay template as
++`PeddlerCardModal`/`PeddlerDiceModal` (peddler-table.png backdrop,
++`.peddler-modal` classes), not a bespoke scene. Grimsby's own reaction
++to how far a tab's been pushed reuses EXISTING sprite animations
++(`idle` → `idle2` → `dialogue` as rounds climb) rather than needing new
++art -- no new animation states invented. Deliberately does NOT display
++the exact success percentage anywhere in the player-facing modal --
++same "he doesn't tell you the odds" restraint Pick Your Card's own
++tiers already keep; the design mockup earlier in this session DID show
++raw odds, but that was explicitly a design-review tool, not the shipped
++player-facing surface, and this patch keeps that distinction rather
++than accidentally shipping the debug view.
++
++**`ReputationRing.tsx`** -- new reusable SVG progress-ring component,
++fills toward the NEXT level (not a lifetime total, which would
++basically never visibly move once rep is high) with the current level
++number centered inside. Deliberately a standalone badge next to each
++vendor's name/portrait rather than overlaid ON TOP of `VendorSprite`/
++`GrimsbySprite`'s own art -- a centered number would cover real
++character art the vendor page already has, but a sub-tab button has no
++art at all to wrap, so one component needed to work both places without
++assuming either. Wired into `VendorsPanel.tsx` (both the sub-tab row and
++each vendor's own page header) and `PeddlerPanel.tsx` (next to
++Grimsby's name).
++
++**Save migration.** `SAVE_VERSION` 47 → 48. `vendorGoldSpent` defaults
++to all-zero and `peddlerTab` to null for a pre-migration save -- both
++are NEW lifetime counters, not a backfill of spend that happened before
++this patch existed (never tracked per-vendor before now, only in the
++combined `stats.goldSpent`, so there's nothing to recover it from) --
++same "undiscovered content stays undiscovered" shape migrations 45/46
++already used. Caught and fixed a real gap while writing this migration,
++not just copied the pattern blindly: `stats.peddlerTabJackpots` needed
++its OWN explicit deep-merge (same shape migration 44 already had to
++work around for `peddlerGoldSpent`/`peddlerBusts`) -- `migrate`'s own
++top-level `{...base, ...save}` fallback only shallow-merges, so a save
++with a `stats` object already present but missing this one new field
++would otherwise come back `undefined` rather than falling back to 0.
++
++**Verified with a real build, not just read through.** `npx tsc
++--noEmit` and `npx vite build` (both the web bundle and the electron
++main/preload bundles) all pass clean. Also hand-verified the actual
++math with real numbers, not just trusted the formula by eye: Vendor
++Rep's discount curve (100g/2,500g/10,000g/40,000g spent → levels
++1/5/10/20, 200,000g still caps at exactly 20%) and the Tab's
++round-by-round value/chance progression both computed and checked
++against the design discussion's own worked examples before considering
++this done.
++
++**One real bug caught mid-implementation, not shipped:** the first
++attempt at inserting `repRebate` accidentally deleted the `export const
++PeddlerManager = {` line it was inserted above, breaking the entire
++file's syntax -- `tsc` caught it immediately (70+ cascading parse
++errors from one missing line) before it went anywhere near a patch
++file. Worth naming plainly here rather than pretending the first pass
++was clean: this is exactly what the "verify against a real build, not
++just read through" convention this project already holds itself to is
++for.
+diff --git a/src/game/data/json/achievements.json b/src/game/data/json/achievements.json
+index 82270c8..bb9280b 100644
+--- a/src/game/data/json/achievements.json
++++ b/src/game/data/json/achievements.json
+@@ -453,5 +453,12 @@
+     "description": "Flip a jackpot-tier card while playing High Roller.",
+     "hidden": false,
+     "unlocksTrackId": "the_silent_lake"
++  },
++  {
++    "id": "PEDDLER_TAB_JACKPOT",
++    "name": "Knew When to Walk Away",
++    "description": "Settle Grimsby's Tab at round 5 or later.",
++    "hidden": false,
++    "unlocksTrackId": ""
+   }
+ ]
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 546f12c..2afc796 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -4396,5 +4396,117 @@
+     "min": 1,
+     "max": 3,
+     "description": "Multiplies a chain's own dedicated reward item's authored mods/stats when it drops from a Legendary replay."
++  },
++  {
++    "id": "vendorRep.goldPerLevelBase",
++    "label": "Vendor Rep: gold divisor",
++    "category": "vendorRep",
++    "value": 100,
++    "default": 100,
++    "min": 1,
++    "description": "level = floor(sqrt(lifetimeGoldSpentAtVendor / this)) -- same diminishing-curve shape as Fund the Guild's Power formula, tuned so level 1 lands at 100g spent, level 10 at 10,000g, level 20 at 40,000g."
++  },
++  {
++    "id": "vendorRep.discountPerLevel",
++    "label": "Vendor Rep: percent per level",
++    "category": "vendorRep",
++    "value": 1,
++    "default": 1,
++    "min": 0,
++    "max": 10,
++    "description": "Percentage points of discount (vendors) or fee-discount-and-payout-bonus (Grimsby) per Vendor Rep level, before the level cap below applies."
++  },
++  {
++    "id": "vendorRep.maxDiscountLevel",
++    "label": "Vendor Rep: level cap for the bonus",
++    "category": "vendorRep",
++    "value": 20,
++    "default": 20,
++    "min": 1,
++    "description": "Vendor Rep level stops increasing the discount/bonus past this level (20 level * 1%/level = 20% ceiling) -- the level number itself keeps climbing as pure fame past this point, same 'ring stays full, number keeps counting' shape prestige-adjacent systems already use, deliberately so lifetime spend can never make a vendor's stock or Grimsby's games trivially cheap."
++  },
++  {
++    "id": "peddler.tab.tier0BuyIn",
++    "label": "Grimsby's Tab: tier 1 buy-in (gold)",
++    "category": "peddler",
++    "value": 20,
++    "default": 20,
++    "min": 1,
++    "description": "Buy-in for the lowest of the Tab's stake tiers -- opens the tab at round 1, no risk roll on this step."
++  },
++  {
++    "id": "peddler.tab.tier1BuyIn",
++    "label": "Grimsby's Tab: tier 2 buy-in (gold)",
++    "category": "peddler",
++    "value": 100,
++    "default": 100,
++    "min": 1,
++    "description": "Buy-in for the Tab's second stake tier."
++  },
++  {
++    "id": "peddler.tab.tier2BuyIn",
++    "label": "Grimsby's Tab: tier 3 buy-in (gold)",
++    "category": "peddler",
++    "value": 500,
++    "default": 500,
++    "min": 1,
++    "description": "Buy-in for the Tab's third stake tier."
++  },
++  {
++    "id": "peddler.tab.tier3BuyIn",
++    "label": "Grimsby's Tab: tier 4 buy-in (gold)",
++    "category": "peddler",
++    "value": 2500,
++    "default": 2500,
++    "min": 1,
++    "description": "Buy-in for the Tab's highest stake tier -- the one aimed at late-game players with real gold to burn, per direct request: 'lets late game players with lots of gold high roll.'"
++  },
++  {
++    "id": "peddler.tab.baseSuccessChance",
++    "label": "Grimsby's Tab: round 2 success chance",
++    "category": "peddler",
++    "value": 0.85,
++    "default": 0.85,
++    "min": 0,
++    "max": 1,
++    "description": "Success chance for the FIRST 'run it up' roll (round 2 -- round 1 is the guaranteed buy-in, no roll). Placeholder shape from the design mockup, not yet balanced against real gold values -- see PeddlerManager.tabSuccessChance."
++  },
++  {
++    "id": "peddler.tab.successDecayPerRound",
++    "label": "Grimsby's Tab: chance lost per round",
++    "category": "peddler",
++    "value": 0.15,
++    "default": 0.15,
++    "min": 0,
++    "max": 1,
++    "description": "Success chance lost per additional round pushed past the second, down to the floor below. No ceiling on rounds -- pushes indefinitely toward the floor, by design."
++  },
++  {
++    "id": "peddler.tab.minSuccessChance",
++    "label": "Grimsby's Tab: success chance floor",
++    "category": "peddler",
++    "value": 0.15,
++    "default": 0.15,
++    "min": 0,
++    "max": 1,
++    "description": "Success chance never drops below this no matter how many rounds are pushed -- keeps the tail of a long run gambling rather than mathematically certain to bust."
++  },
++  {
++    "id": "peddler.tab.rewardGrowthPerRound",
++    "label": "Grimsby's Tab: reward growth per round",
++    "category": "peddler",
++    "value": 0.55,
++    "default": 0.55,
++    "min": 0,
++    "description": "Growth coefficient in reward(r) = buyIn * (0.9 + (r-1) * this) -- each successful round adds more to the tab than the last, same 'the next one might be the one' curve the design mockup validated."
++  },
++  {
++    "id": "peddler.tab.jackpotRound",
++    "label": "Grimsby's Tab: round that counts as a jackpot",
++    "category": "peddler",
++    "value": 5,
++    "default": 5,
++    "min": 1,
++    "description": "Settling the tab at or past this round counts toward stats.peddlerJackpots and stats.peddlerTabJackpots -- per direct request, 'a roll of 5 can be a jackpot,' and specifically on SETTLING, not merely reaching the round and busting past it."
+   }
+ ]
+diff --git a/src/game/data/vendorRep.ts b/src/game/data/vendorRep.ts
+new file mode 100644
+index 0000000..4ace94b
+--- /dev/null
++++ b/src/game/data/vendorRep.ts
+@@ -0,0 +1,53 @@
++import { Tuning } from './tuning';
++
++/**
++ * Vendor Rep -- a loyalty level derived from lifetime gold spent at a
++ * given vendor (or Grimsby), same sqrt-diminishing-curve shape Fund the
++ * Guild's Power formula already uses (see that patch's own writeup in
++ * guild-idler-status.md), reused deliberately rather than inventing a
++ * new curve: level 1 is cheap, every level after costs more, with no
++ * single breakpoint.
++ *
++ * Deliberately NOT stored as its own field -- it's a pure function of
++ * whichever lifetime-gold-spent counter already exists for that source
++ * (GameState.vendorGoldSpent[vendorId] for the three shop vendors,
++ * GameState.stats.peddlerGoldSpent for Grimsby), so there's nothing to
++ * migrate or get out of sync if the formula's constants ever get
++ * retuned via the devtool.
++ *
++ * Never decreases -- the underlying gold-spent counters are lifetime
++ * totals, same as peddlerGoldSpent already was before this patch.
++ */
++export function vendorRepLevel(lifetimeGoldSpent: number): number {
++  return Math.floor(Math.sqrt(lifetimeGoldSpent / Tuning.get('vendorRep.goldPerLevelBase')));
++}
++
++/**
++ * The level, capped -- level keeps climbing as pure fame past the cap,
++ * but the bonus itself stops growing. Read this (never vendorRepLevel
++ * directly) anywhere a discount or bonus percentage is being computed;
++ * read vendorRepLevel directly only for display (the ring's own number).
++ */
++export function vendorRepCappedLevel(lifetimeGoldSpent: number): number {
++  return Math.min(vendorRepLevel(lifetimeGoldSpent), Tuning.get('vendorRep.maxDiscountLevel'));
++}
++
++/**
++ * Percentage points (e.g. 5, meaning 5%) of discount-or-bonus at this
++ * spend level -- same (1 - percent / 100) / (1 + percent / 100)
++ * convention every other percentage-based modifier in this codebase
++ * already uses (see ModifierManager, InventoryManager.price's own
++ * consumableDiscount handling), so call sites don't need their own
++ * unit conversion.
++ */
++export function vendorRepPercent(lifetimeGoldSpent: number): number {
++  return vendorRepCappedLevel(lifetimeGoldSpent) * Tuning.get('vendorRep.discountPerLevel');
++}
++
++/** Applies vendorRepPercent as a price discount, floored at 1 gold so
++ *  compounding discounts can never make something literally free --
++ *  same floor InventoryManager.price already uses for consumableDiscount. */
++export function applyVendorRepDiscount(basePrice: number, lifetimeGoldSpent: number): number {
++  const percent = vendorRepPercent(lifetimeGoldSpent);
++  return Math.max(1, Math.round(basePrice * (1 - percent / 100)));
++}
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index e6bd8f0..8d117aa 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -1,4 +1,4 @@
+-import { ActiveQuest, AutoChainTactics, DiceFace, DiceRollResult, ElementType, GameState, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
++import { ActiveQuest, AutoChainTactics, DiceFace, DiceRollResult, ElementType, GameState, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
+ import { createRng, uid } from './rng';
+ import { HeroManager } from './managers/HeroManager';
+ import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
+@@ -82,6 +82,13 @@ export class GameEngine {
+    *  instead of Pick Your Card -- set by rollGrimsbyDice, cleared by
+    *  dismissGrimsbyDiceResult. Feeds PeddlerDiceModal's own reveal. */
+   lastGrimsbyDiceResult: DiceRollResult | null = null;
++  /** Same shape again, for a single "Run it up" push in Grimsby's Tab --
++   *  set by runUpGrimsbyTab, cleared by dismissGrimsbyTabResult. The
++   *  ONGOING tab itself lives in GameState.peddlerTab (persisted,
++   *  survives a reload); this is just "what happened on the last push,"
++   *  same one-shot-reveal role lastGrimsbyResult/lastGrimsbyDiceResult
++   *  already play for their own games. */
++  lastGrimsbyTabResult: PeddlerTabRunResult | null = null;
+   /**
+    * Queued rather than a single overwritable value -- simultaneous events
+    * (a quest finishing right as it unlocks something) now show one after
+@@ -2749,6 +2756,64 @@ export class GameEngine {
+     this.notify();
+   }
+ 
++  /**
++   * Opens a new Tab at the given tier (0-3, low to high stake -- see
++   * PeddlerManager.tabTierBuyIn). Gated behind Permanent Spot, same
++   * precondition-checked-here-not-in-the-manager shape
++   * pickPeddlerCard/rollGrimsbyDice already use. No transient result to
++   * stash -- GameState.peddlerTab itself IS the ongoing UI state from
++   * here on, read directly rather than through a one-shot reveal field.
++   */
++  openGrimsbyTab(tier: number) {
++    if (!this.state.grimsbyPermanentSpotUnlocked) return this.say('The Tab is only open once Grimsby has a permanent spot.');
++    if (this.state.peddlerTab) return this.say('A tab is already open.');
++    const buyIn = PeddlerManager.tabTierBuyIn(tier);
++    if (this.state.gold < buyIn) return this.say('Not enough gold.');
++    const tab = PeddlerManager.openTab(this.state, tier);
++    if (!tab) return this.say('Something about that didn\u2019t work.');
++    playSound('purchase');
++    this.reportGuidance(GuidanceManager.checkAll(this.state));
++    this.notify();
++    void this.saveNow();
++  }
++
++  /**
++   * The "Run it up" action -- pays the tab's tier buy-in again, rolls
++   * for the next round. Success or bust, the result goes to
++   * lastGrimsbyTabResult for the UI's own reveal beat (see that field's
++   * comment); GameState.peddlerTab reflects the new ongoing state
++   * either way (grown, or null on a bust) by the time this returns.
++   */
++  runUpGrimsbyTab() {
++    const tab = this.state.peddlerTab;
++    if (!tab) return this.say('No tab is open.');
++    const buyIn = PeddlerManager.tabTierBuyIn(tab.tier);
++    if (this.state.gold < buyIn) return this.say('Not enough gold.');
++    const result = PeddlerManager.runItUp(this.state);
++    if (!result) return this.say('Something about that didn\u2019t work.');
++    this.lastGrimsbyTabResult = result;
++    playSound(result.success ? 'purchase' : 'quest_fail');
++    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
++    this.notify();
++    void this.saveNow();
++  }
++
++  /** Banks the open tab's current value and closes it. */
++  settleGrimsbyTab() {
++    const value = PeddlerManager.settleTab(this.state);
++    if (value === null) return this.say('No tab is open.');
++    playSound('purchase');
++    this.say(`Settled for ${value}g.`, 'peddler');
++    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
++    this.notify();
++    void this.saveNow();
++  }
++
++  dismissGrimsbyTabResult() {
++    this.lastGrimsbyTabResult = null;
++    this.notify();
++  }
++
+   /** Buys the High Roller unlock -- see PeddlerManager.unlockHighRoller
+    *  and GameState.grimsbyHighRollerUnlocked's own comments. */
+   unlockHighRoller() {
+diff --git a/src/game/managers/AchievementManager.ts b/src/game/managers/AchievementManager.ts
+index bbef761..fb39504 100644
+--- a/src/game/managers/AchievementManager.ts
++++ b/src/game/managers/AchievementManager.ts
+@@ -134,6 +134,13 @@ const CHECKS: Record<string, Check> = {
+   HIGH_ROLLER_UNLOCKED: (state) => state.grimsbyHighRollerUnlocked === true,
+ 
+   PEDDLER_HIGH_ROLLER_JACKPOT: (state) => (state.stats.peddlerHighRollerJackpots ?? 0) >= 1,
++
++  /** Settling the Tab at or past peddler.tab.jackpotRound -- a strict
++   *  subset of the shared PEDDLER_JACKPOT check above (both fire off the
++   *  same push), same "own achievement for the specific game, shared one
++   *  for the general milestone" pattern PEDDLER_HIGH_ROLLER_JACKPOT
++   *  already established for Cards. */
++  PEDDLER_TAB_JACKPOT: (state) => (state.stats.peddlerTabJackpots ?? 0) >= 1,
+ };
+ 
+ /**
+diff --git a/src/game/managers/GuildManager.ts b/src/game/managers/GuildManager.ts
+index e70fd9f..254174f 100644
+--- a/src/game/managers/GuildManager.ts
++++ b/src/game/managers/GuildManager.ts
+@@ -9,6 +9,7 @@ import { Rng } from '../rng';
+ import { HeroManager } from './HeroManager';
+ import { ModifierManager } from './ModifierManager';
+ import { Tuning } from '../data/tuning';
++import { applyVendorRepDiscount } from '../data/vendorRep';
+ 
+ export const GuildManager = {
+   facilityLevel(state: GameState, id: GuildFacility): number {
+@@ -78,7 +79,12 @@ export const GuildManager = {
+     const level = GuildManager.upgradeLevel(state, id);
+     if (!def || level >= def.maxLevel) return null;
+     if (def.vendor && !isVendorUpgradeUnlocked(state.vendorLevels[def.vendor], def.vendor, def.id)) return null;
+-    return upgradeCost(def, level);
++    const cost = upgradeCost(def, level);
++    // Only vendor-TIED upgrades get Vendor Rep's discount -- a guild
++    // facility upgrade with no def.vendor isn't purchased "from" anyone
++    // specifically, so there's no vendor relationship for it to discount
++    // against.
++    return def.vendor ? applyVendorRepDiscount(cost, state.vendorGoldSpent?.[def.vendor] ?? 0) : cost;
+   },
+ 
+   buyUpgrade(state: GameState, id: string): string | null {
+@@ -89,10 +95,12 @@ export const GuildManager = {
+     }
+     const level = GuildManager.upgradeLevel(state, id);
+     if (level >= def.maxLevel) return 'Already at maximum.';
+-    const cost = upgradeCost(def, level);
++    const cost = GuildManager.nextUpgradeCost(state, id);
++    if (cost === null) return 'Already at maximum.';
+     if (state.gold < cost) return 'Not enough gold.';
+     state.gold -= cost;
+     state.stats.goldSpent += cost;
++    if (def.vendor) state.vendorGoldSpent[def.vendor] += cost;
+     state.upgrades[id] = level + 1;
+     return null;
+   },
+diff --git a/src/game/managers/InventoryManager.ts b/src/game/managers/InventoryManager.ts
+index 256ff65..af3f894 100644
+--- a/src/game/managers/InventoryManager.ts
++++ b/src/game/managers/InventoryManager.ts
+@@ -2,6 +2,7 @@ import { CONSUMABLE_BY_ID, CONSUMABLES } from '../data/items';
+ import { ConsumableDef, GameState, Hero, Modifiers, Stats } from '../types';
+ import { HeroManager } from './HeroManager';
+ import { ModifierManager } from './ModifierManager';
++import { vendorRepPercent } from '../data/vendorRep';
+ 
+ export const InventoryManager = {
+   /**
+@@ -21,14 +22,17 @@ export const InventoryManager = {
+   /**
+    * A single consumable's shop price after the Alchemist's own
+    * Apothecary's Discount vendor upgrade (consumableDiscount, guild-wide
+-   * via ModifierManager.global) -- the one place this discount is
++   * via ModifierManager.global) AND the Alchemist's own Vendor Rep
++   * discount (personal loyalty, stacks with the guild-wide upgrade
++   * rather than competing with it) -- the one place either discount is
+    * applied, so the price shown in the Vendors panel always matches what
+    * buy() actually charges. Floored at 1 gold, same "never free" floor
+    * every other discounted cost in the game uses.
+    */
+   price(state: GameState, def: ConsumableDef): number {
+     const discount = ModifierManager.global(state).consumableDiscount ?? 0;
+-    return Math.max(1, Math.round(def.cost * (1 - discount / 100)));
++    const repPercent = vendorRepPercent(state.vendorGoldSpent?.alchemist ?? 0);
++    return Math.max(1, Math.round(def.cost * (1 - discount / 100) * (1 - repPercent / 100)));
+   },
+ 
+   count(state: GameState, defId: string): number {
+@@ -54,6 +58,7 @@ export const InventoryManager = {
+     if (state.gold < cost) return 'Not enough gold.';
+     state.gold -= cost;
+     state.stats.goldSpent += cost;
++    state.vendorGoldSpent.alchemist += cost;
+     InventoryManager.add(state, defId, amount);
+     return null;
+   },
+diff --git a/src/game/managers/PeddlerManager.ts b/src/game/managers/PeddlerManager.ts
+index 933c268..926282d 100644
+--- a/src/game/managers/PeddlerManager.ts
++++ b/src/game/managers/PeddlerManager.ts
+@@ -1,5 +1,6 @@
+ import {
+-  DiceFace, DiceRollResult, GameState, PeddlerCardDef, PeddlerCardTier, PeddlerFlipCard, PeddlerFlipResult, Rarity,
++  DiceFace, DiceRollResult, GameState, PeddlerCardDef, PeddlerCardTier, PeddlerFlipCard, PeddlerFlipResult,
++  PeddlerTabRunResult, Rarity,
+ } from '../types';
+ import { PEDDLER_CARDS_BY_TIER } from '../data/peddler';
+ import { EQUIPMENT, EQUIPMENT_BY_ID } from '../data/equipment';
+@@ -7,11 +8,16 @@ import { MATERIAL_BY_ID } from '../data/materials';
+ import { CURIO_BY_ID } from '../data/curios';
+ import { warehouseCapacity } from '../data/harvestUpgrades';
+ import { Tuning } from '../data/tuning';
++import { applyVendorRepDiscount, vendorRepPercent } from '../data/vendorRep';
+ import { EquipmentManager } from './EquipmentManager';
+ import { ModifierManager } from './ModifierManager';
+ import { PetManager } from './PetManager';
+ import { CurioManager } from './CurioManager';
+ 
++const TAB_TIER_TUNING_IDS = [
++  'peddler.tab.tier0BuyIn', 'peddler.tab.tier1BuyIn', 'peddler.tab.tier2BuyIn', 'peddler.tab.tier3BuyIn',
++];
++
+ const TIERS: PeddlerCardTier[] = ['bust', 'refund', 'modest', 'good', 'jackpot'];
+ 
+ /** 5-10 by default, both ends tuning-registry values (see
+@@ -145,6 +151,23 @@ function summarizeReward(outcome: PeddlerCardDef, feePaid: number, multiplier: n
+   }
+ }
+ 
++/**
++ * Grimsby's own Vendor Rep payout bonus -- a small automatic cash-back
++ * on whatever was just paid him, regardless of the game's own outcome
++ * (even a bust still gets this rebate; it's about him being a decent
++ * dealer to a regular, not a consolation prize). Shared identically
++ * across Cards, Dice, and the Tab -- same level, same percent, same cap
++ * as feeWithStake's own discount, just pointed at what comes back
++ * instead of what goes out. Reads state.stats.peddlerGoldSpent as of
++ * BEFORE the current transaction's own fee gets added to it -- callers
++ * compute this before incrementing that counter, so the rebate reflects
++ * established loyalty, not the level this very payment just reached.
++ */
++function repRebate(state: GameState, feePaid: number): number {
++  const percent = vendorRepPercent(state.stats.peddlerGoldSpent);
++  return Math.floor((feePaid * percent) / 100);
++}
++
+ export const PeddlerManager = {
+   rollThreshold,
+ 
+@@ -180,7 +203,8 @@ export const PeddlerManager = {
+    *  should compute a displayed cost from, so it can never drift from
+    *  what resolveFlip itself actually charges. */
+   feeWithStake(state: GameState, highRoller: boolean, stake: number): number {
+-    return (highRoller ? PeddlerManager.highRollerFeeCost(state) : PeddlerManager.feeCost(state)) * stake;
++    const base = (highRoller ? PeddlerManager.highRollerFeeCost(state) : PeddlerManager.feeCost(state)) * stake;
++    return applyVendorRepDiscount(base, state.stats.peddlerGoldSpent);
+   },
+ 
+   /** One-time gold cost to unlock High Roller at all -- flat, not
+@@ -341,8 +365,9 @@ export const PeddlerManager = {
+     if (!PeddlerManager.isPresent(state)) return null;
+     if (highRoller && !state.grimsbyHighRollerUnlocked) return null;
+     const multiplier = (highRoller ? Tuning.get('peddler.highRollerMultiplier') : 1) * stake;
+-    const fee = PeddlerManager.feeCost(state) * multiplier;
++    const fee = PeddlerManager.feeWithStake(state, highRoller, stake);
+     if (state.gold < fee) return null;
++    const rebate = repRebate(state, fee);
+ 
+     state.gold -= fee;
+     state.stats.goldSpent += fee;
+@@ -358,6 +383,10 @@ export const PeddlerManager = {
+ 
+     const picked = outcomes[pickedIndex];
+     PeddlerManager.applyOutcome(state, picked, fee, now, multiplier);
++    if (rebate > 0) {
++      const storage = ModifierManager.goldStorage(state);
++      state.gold = Math.min(storage, state.gold + rebate);
++    }
+ 
+     // Achievement-supporting counters -- see Statistics.peddlerFlips'
+     // own comment for why these live here rather than being derived
+@@ -375,6 +404,7 @@ export const PeddlerManager = {
+       cards,
+       pickedIndex,
+       feePaid: fee,
++      rebate,
+       highRoller,
+       rewardSummary: summarizeReward(picked, fee, multiplier),
+     };
+@@ -470,6 +500,13 @@ export const PeddlerManager = {
+     const stake = Math.floor(wager);
+     if (!Number.isFinite(stake) || stake <= 0) return null;
+     if (state.gold < stake) return null;
++    // Dice has no fixed fee to discount the way Cards/Tab do -- the
++    // wager is a free-form player-chosen amount, and discounting a
++    // number the player just typed would be confusing ("I entered 100,
++    // why was I charged 95?"). Vendor Rep's full effect here is the
++    // rebate instead -- functionally the same net benefit, just
++    // expressed as gold back rather than a lower charge up front.
++    const rebate = repRebate(state, stake);
+ 
+     state.gold -= stake;
+     state.stats.goldSpent += stake;
+@@ -485,9 +522,10 @@ export const PeddlerManager = {
+     const outcome: DiceRollResult['outcome'] = distance === 0 ? 'jackpot' : distance === 1 ? 'partial' : 'bust';
+     const payout = outcome === 'jackpot' ? stake * 3 : outcome === 'partial' ? Math.floor(stake / 2) : 0;
+ 
+-    if (payout > 0) {
++    const totalPayout = payout + rebate;
++    if (totalPayout > 0) {
+       const storage = ModifierManager.goldStorage(state);
+-      state.gold = Math.min(storage, state.gold + payout);
++      state.gold = Math.min(storage, state.gold + totalPayout);
+     }
+ 
+     // Grimsby-wide counters, not Dice-specific ones -- see peddlerJackpots/
+@@ -498,6 +536,136 @@ export const PeddlerManager = {
+     if (outcome === 'jackpot') state.stats.peddlerJackpots += 1;
+     else if (outcome === 'bust') state.stats.peddlerBusts += 1;
+ 
+-    return { chosen, landed, wager: stake, outcome, payout };
++    return { chosen, landed, wager: stake, outcome, payout, rebate };
++  },
++
++  /* -------------------------------- the tab -------------------------------- */
++
++  /** Buy-in for a given Tab tier (0-3, low to high) -- see
++   *  TAB_TIER_TUNING_IDS above. Out-of-range tiers fall back to tier 0
++   *  rather than throwing. */
++  tabTierBuyIn(tier: number): number {
++    return Tuning.get(TAB_TIER_TUNING_IDS[tier] ?? TAB_TIER_TUNING_IDS[0]);
++  },
++
++  tabTierCount(): number {
++    return TAB_TIER_TUNING_IDS.length;
++  },
++
++  /** Success chance for pushing TO the given round -- round 2 is the
++   *  first real roll (round 1 is the guaranteed buy-in, no roll at all,
++   *  see openTab). No ceiling on rounds by direct design request --
++   *  decays toward, but never below, the tuned floor no matter how far
++   *  a run is pushed, rather than capping at a designed max round. */
++  tabSuccessChance(round: number): number {
++    const base = Tuning.get('peddler.tab.baseSuccessChance');
++    const decay = Tuning.get('peddler.tab.successDecayPerRound');
++    const floor = Tuning.get('peddler.tab.minSuccessChance');
++    return Math.max(floor, base - (round - 2) * decay);
++  },
++
++  /** Gold ADDED to the tab on a successful push to the given round --
++   *  grows every round, same curve the design mockup validated. Not the
++   *  tab's total value -- callers add this to the running total. */
++  tabRoundReward(tier: number, round: number): number {
++    const buyIn = PeddlerManager.tabTierBuyIn(tier);
++    const growth = Tuning.get('peddler.tab.rewardGrowthPerRound');
++    return Math.round(buyIn * (0.9 + (round - 1) * growth));
++  },
++
++  /** Gated behind Permanent Spot per direct design request -- this is
++   *  the one game where the tension is explicitly Grimsby's own
++   *  patience, so it only makes sense once he's actually settled in.
++   *  isPresent isn't checked separately here -- Permanent Spot already
++   *  implies it (see isPresent's own comment). */
++  canOpenTab(state: GameState): boolean {
++    return state.grimsbyPermanentSpotUnlocked === true && state.peddlerTab === null;
++  },
++
++  /** Opens a new tab at the given tier -- round 1, guaranteed, no risk
++   *  roll (the buy-in itself is never at risk, only what gets pushed on
++   *  top of it). Rep accumulates from Cards/Dice spend even before
++   *  Permanent Spot unlocks (peddlerGoldSpent is Grimsby-wide, not
++   *  gated), so a regular's first tab can already carry a real rebate --
++   *  per direct design confirmation, a deliberate touch, not an
++   *  oversight. */
++  openTab(state: GameState, tier: number): GameState['peddlerTab'] {
++    if (!PeddlerManager.canOpenTab(state)) return null;
++    const buyIn = PeddlerManager.tabTierBuyIn(tier);
++    if (state.gold < buyIn) return null;
++    const rebate = repRebate(state, buyIn);
++
++    state.gold -= buyIn;
++    state.stats.goldSpent += buyIn;
++    state.stats.peddlerGoldSpent += buyIn;
++    if (rebate > 0) {
++      const storage = ModifierManager.goldStorage(state);
++      state.gold = Math.min(storage, state.gold + rebate);
++    }
++
++    state.peddlerTab = { tier, round: 1, value: buyIn };
++    return state.peddlerTab;
++  },
++
++  /** Pushes the open tab one more round -- pay the tier's buy-in again,
++   *  roll tabSuccessChance for the NEXT round. Success grows the tab and
++   *  advances round; a bust wipes the tab ENTIRELY (no partial refund),
++   *  per direct design request -- "a bust is a bust," deliberately the
++   *  sharper, more honest version of the loss rather than a softened
++   *  one, since that's the one thing that makes this feel different
++   *  from Cards/Dice. Grimsby's own rebate still applies to this push's
++   *  fee regardless of the roll's outcome -- see repRebate's own
++   *  comment for why. */
++  runItUp(state: GameState): PeddlerTabRunResult | null {
++    const tab = state.peddlerTab;
++    if (!tab) return null;
++    const buyIn = PeddlerManager.tabTierBuyIn(tab.tier);
++    if (state.gold < buyIn) return null;
++    const rebate = repRebate(state, buyIn);
++
++    state.gold -= buyIn;
++    state.stats.goldSpent += buyIn;
++    state.stats.peddlerGoldSpent += buyIn;
++    if (rebate > 0) {
++      const storage = ModifierManager.goldStorage(state);
++      state.gold = Math.min(storage, state.gold + rebate);
++    }
++
++    const nextRound = tab.round + 1;
++    const chance = PeddlerManager.tabSuccessChance(nextRound);
++    if (Math.random() < chance) {
++      tab.value += PeddlerManager.tabRoundReward(tab.tier, nextRound);
++      tab.round = nextRound;
++      return { success: true, round: tab.round, value: tab.value, rebate };
++    }
++
++    state.peddlerTab = null;
++    state.stats.peddlerBusts += 1;
++    return { success: false, round: nextRound, value: 0, rebate };
++  },
++
++  /** Banks the open tab's current value and closes it. Settling at or
++   *  past peddler.tab.jackpotRound counts as a jackpot -- both the
++   *  shared peddlerJackpots counter (so it feeds the existing
++   *  PEDDLER_JACKPOT achievement the same as any other game) and the
++   *  Tab's own peddlerTabJackpots counter (for a dedicated Tab
++   *  achievement, same "shared counter for the general achievement, own
++   *  counter for the specific one" pattern peddlerHighRollerJackpots
++   *  already established) -- per direct design request, on SETTLING
++   *  specifically, not merely reaching the round and busting past it on
++   *  a later push. Returns null if no tab is open (nothing to settle),
++   *  the banked value otherwise. */
++  settleTab(state: GameState): number | null {
++    const tab = state.peddlerTab;
++    if (!tab) return null;
++    const storage = ModifierManager.goldStorage(state);
++    state.gold = Math.min(storage, state.gold + tab.value);
++    if (tab.round >= Tuning.get('peddler.tab.jackpotRound')) {
++      state.stats.peddlerJackpots += 1;
++      state.stats.peddlerTabJackpots += 1;
++    }
++    const { value } = tab;
++    state.peddlerTab = null;
++    return value;
+   },
+ };
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 69eafe1..e82a5f2 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -148,7 +148,7 @@ export function createInitialState(now = Date.now()): GameState {
+       playTimeMs: 0, offlineTimeMs: 0, prestigeCount: 0, bestPrestigeStreak: 0,
+       lowestSuccessfulChance: null, blackMarketPurchases: 0, firstPlayedAt: now,
+       peddlerFlips: 0, peddlerJackpots: 0, peddlerHighRollerJackpots: 0,
+-      peddlerGoldSpent: 0, peddlerBusts: 0,
++      peddlerGoldSpent: 0, peddlerBusts: 0, peddlerTabJackpots: 0,
+     },
+     log: [],
+     discoveredItems: [],
+@@ -159,6 +159,8 @@ export function createInitialState(now = Date.now()): GameState {
+     unlockedAchievements: {},
+     unlockedBardTracks: [],
+     vendorLevels: { blacksmith: 0, alchemist: 0, enchanter: 0 },
++    vendorGoldSpent: { blacksmith: 0, alchemist: 0, enchanter: 0 },
++    peddlerTab: null,
+     guildName: '',
+     notifiedSetBonuses: [],
+     activeRaid: null,
+@@ -959,6 +961,35 @@ const MIGRATIONS: Record<number, Migration> = {
+     chainReplayTiersOwned: (save.chainReplayTiersOwned as string[] | undefined) ?? [],
+     activeChainReplays: (save.activeChainReplays as unknown[] | undefined) ?? [],
+   }),
++  47: (save) => {
++    // Vendor Rep + Grimsby's Tab. vendorGoldSpent all-zero is exactly
++    // correct for a pre-migration save -- it's a NEW lifetime counter,
++    // not a backfill of gold already spent before this patch existed
++    // (that history was never tracked per-vendor, only in the combined
++    // stats.goldSpent, so there's nothing to recover it from). Same
++    // "undiscovered content stays undiscovered" shape migrations 45/46
++    // already used -- a returning player starts back at Vendor Rep
++    // level 0 with everyone, same as a brand-new save would. peddlerTab
++    // null is the correct "never opened one" default for the same
++    // reason. stats.peddlerTabJackpots needs the same explicit
++    // stats-object deep-merge migration 44 already had to work around
++    // for peddlerGoldSpent/peddlerBusts -- `migrate` only ever
++    // shallow-merges save.stats over the fresh default, so a stats
++    // object present but missing this one field would otherwise come
++    // back undefined rather than falling back to 0.
++    const stats = (save.stats as Record<string, unknown> | undefined) ?? {};
++    return {
++      ...save,
++      version: 48,
++      vendorGoldSpent: (save.vendorGoldSpent as Record<string, number> | undefined)
++        ?? { blacksmith: 0, alchemist: 0, enchanter: 0 },
++      peddlerTab: (save.peddlerTab as { tier: number; round: number; value: number } | null | undefined) ?? null,
++      stats: {
++        ...stats,
++        peddlerTabJackpots: (stats.peddlerTabJackpots as number | undefined) ?? 0,
++      },
++    };
++  },
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/managers/ShopManager.ts b/src/game/managers/ShopManager.ts
+index 5a16410..e70b273 100644
+--- a/src/game/managers/ShopManager.ts
++++ b/src/game/managers/ShopManager.ts
+@@ -7,6 +7,7 @@ import { EquipmentManager } from './EquipmentManager';
+ import { ModifierManager } from './ModifierManager';
+ import { rerollDay, rerollsUsedToday, nextRerollCost } from '../data/reroll';
+ import { Tuning } from '../data/tuning';
++import { applyVendorRepDiscount } from '../data/vendorRep';
+ 
+ export const SHOP_REFRESH_MS = 4 * HOUR;
+ const SHOP_EQUIPMENT_SLOTS = 5;
+@@ -50,10 +51,15 @@ export const ShopManager = {
+       const def = rng.weighted(eligible.map((e) => ({ item: e, weight: RARITY_WEIGHT[e.rarity] })));
+       picks.add(def.id);
+     }
++    // Vendor Rep discount baked in at roll time, same convention
++    // refreshBlackMarket's own blackMarketDiscount modifier already
++    // uses below -- accepts some staleness between a restock and a
++    // level-up mid-window, same tradeoff that precedent already made.
++    const repSpent = state.vendorGoldSpent?.blacksmith ?? 0;
+     return [...picks].map((defId) => ({
+       uid: uid('shopitem'),
+       defId,
+-      price: EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]),
++      price: applyVendorRepDiscount(EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]), repSpent),
+     }));
+   },
+ 
+@@ -110,7 +116,8 @@ export const ShopManager = {
+   blacksmithRerollCost(state: GameState, now: number): number {
+     const used = rerollsUsedToday(state.blacksmithRerollsUsedToday, state.blacksmithRerollDay, now);
+     const free = ModifierManager.vendorFreeRerolls(state, 'blacksmith');
+-    return nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
++    const base = nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
++    return base === 0 ? 0 : applyVendorRepDiscount(base, state.vendorGoldSpent?.blacksmith ?? 0);
+   },
+ 
+   /** Restocks only the Blacksmith's own equipment stock early, spending
+@@ -128,6 +135,7 @@ export const ShopManager = {
+       if (state.gold < cost) return `Not enough gold to reroll (needs ${cost}).`;
+       state.gold -= cost;
+       state.stats.goldSpent += cost;
++      state.vendorGoldSpent.blacksmith += cost;
+     }
+     state.blacksmithRerollsUsedToday += 1;
+     state.shop.equipment = ShopManager.rollEquipment(state, now);
+@@ -139,7 +147,8 @@ export const ShopManager = {
+   alchemistRerollCost(state: GameState, now: number): number {
+     const used = rerollsUsedToday(state.alchemistRerollsUsedToday, state.alchemistRerollDay, now);
+     const free = ModifierManager.vendorFreeRerolls(state, 'alchemist');
+-    return nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
++    const base = nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
++    return base === 0 ? 0 : applyVendorRepDiscount(base, state.vendorGoldSpent?.alchemist ?? 0);
+   },
+ 
+   /** Restocks only the Alchemist's own consumable stock early -- same
+@@ -155,6 +164,7 @@ export const ShopManager = {
+       if (state.gold < cost) return `Not enough gold to reroll (needs ${cost}).`;
+       state.gold -= cost;
+       state.stats.goldSpent += cost;
++      state.vendorGoldSpent.alchemist += cost;
+     }
+     state.alchemistRerollsUsedToday += 1;
+     state.shop.consumables = ShopManager.rollConsumables(state, now);
+@@ -170,7 +180,8 @@ export const ShopManager = {
+   enchanterRerollCost(state: GameState, now: number): number {
+     const used = rerollsUsedToday(state.enchanterRerollsUsedToday, state.enchanterRerollDay, now);
+     const free = ModifierManager.vendorFreeRerolls(state, 'enchanter');
+-    return nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
++    const base = nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
++    return base === 0 ? 0 : applyVendorRepDiscount(base, state.vendorGoldSpent?.enchanter ?? 0);
+   },
+ 
+   /** Forces an early Black Market turnover, spending today's next
+@@ -189,6 +200,7 @@ export const ShopManager = {
+       if (state.gold < cost) return `Not enough gold to reroll (needs ${cost}).`;
+       state.gold -= cost;
+       state.stats.goldSpent += cost;
++      state.vendorGoldSpent.enchanter += cost;
+     }
+     state.enchanterRerollsUsedToday += 1;
+     ShopManager.refreshBlackMarket(state, now, true, now);
+@@ -222,6 +234,11 @@ export const ShopManager = {
+     const window = Math.floor(now / BLACK_MARKET_REFRESH_MS);
+     const rng = createRng(`blackmarket:${window}:${state.createdAt}:${salt}`);
+     const discount = ModifierManager.global(state).blackMarketDiscount ?? 0;
++    // Enchanter's own Vendor Rep discount stacks with the existing
++    // Enchanted Seal blackMarketDiscount modifier -- one's a guild-wide
++    // upgrade, this one's personal loyalty, no reason they should
++    // compete for the same slot.
++    const repSpent = state.vendorGoldSpent?.enchanter ?? 0;
+ 
+     const eligible = EQUIPMENT.filter((def) =>
+       !def.raidExclusive && !def.craftable && !def.chainExclusive && (BLACK_MARKET_RARITIES as readonly string[]).includes(def.rarity));
+@@ -243,7 +260,10 @@ export const ShopManager = {
+       equipment: [...picks].map((defId) => ({
+         uid: uid('blackmarket'),
+         defId,
+-        price: Math.ceil(EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]) * BLACK_MARKET_MARKUP * (1 - discount / 100)),
++        price: applyVendorRepDiscount(
++          Math.ceil(EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]) * BLACK_MARKET_MARKUP * (1 - discount / 100)),
++          repSpent,
++        ),
+       })),
+     };
+     return state.blackMarket;
+@@ -262,6 +282,7 @@ export const ShopManager = {
+     if (!item) return 'Unknown item.';
+     state.gold -= entry.price;
+     state.stats.goldSpent += entry.price;
++    state.vendorGoldSpent.enchanter += entry.price;
+     state.stash.push(item);
+     if (!state.discoveredItems.includes(entry.defId)) state.discoveredItems.push(entry.defId);
+     state.blackMarket.equipment = state.blackMarket.equipment.filter((e) => e.uid !== shopUid);
+@@ -278,6 +299,7 @@ export const ShopManager = {
+     if (!item) return 'Unknown item.';
+     state.gold -= entry.price;
+     state.stats.goldSpent += entry.price;
++    state.vendorGoldSpent.blacksmith += entry.price;
+     state.stash.push(item);
+     if (!state.discoveredItems.includes(entry.defId)) state.discoveredItems.push(entry.defId);
+     state.shop.equipment = state.shop.equipment.filter((e) => e.uid !== shopUid);
+diff --git a/src/game/types.ts b/src/game/types.ts
+index f21b644..9632b97 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 47;
++export const SAVE_VERSION = 48;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -1527,6 +1527,16 @@ export interface Statistics {
+    * represent the same player-facing idea: paid in, got nothing back.
+    */
+   peddlerBusts: number;
++  /**
++   * Tabs SETTLED at or past peddler.tab.jackpotRound (5 by default) --
++   * deliberately requires an active choice to bank it, not just reaching
++   * that round and busting past it on a later push. A strict subset of
++   * peddlerJackpots above (every one of these also increments that
++   * shared counter), same "own counter for the specific achievement,
++   * shared counter for the general one" pattern
++   * peddlerHighRollerJackpots already established.
++   */
++  peddlerTabJackpots: number;
+ }
+ 
+ export interface GameState {
+@@ -1808,6 +1818,30 @@ export interface GameState {
+   unlockedBardTracks: string[];
+   /** How far each vendor's relationship has been invested in — gates how many of their upgrades are visible. */
+   vendorLevels: Record<VendorId, number>;
++  /**
++   * Lifetime gold spent at each of the three shop vendors specifically --
++   * buys, rerolls, vendor-tied upgrade purchases, and (Enchanter) Black
++   * Market buys all count. Deliberately its own counter rather than
++   * reading the combined stats.goldSpent, same reasoning
++   * stats.peddlerGoldSpent already established for Grimsby -- "how much
++   * has this vendor specifically earned from me" isn't answerable from a
++   * total that also includes the other two vendors and everything else.
++   * Feeds vendorRep.ts's formula directly (see that file). Never
++   * decreases -- deliberately distinct from vendorLevels above, which is
++   * a separate spent-to-unlock-upgrades track, not a loyalty measure.
++   */
++  vendorGoldSpent: Record<VendorId, number>;
++  /**
++   * Grimsby's Tab -- a repeating push-your-luck game, gated behind
++   * grimsbyPermanentSpotUnlocked (see PeddlerManager.canOpenTab). null
++   * means no tab is currently open. tier indexes into TAB_TIERS
++   * (PeddlerManager.ts); round starts at 1 the instant the tab opens (the
++   * buy-in itself, no risk roll on it) and has no ceiling -- pushes
++   * indefinitely toward the success-chance floor rather than capping at
++   * a designed max round, by direct design request. value is what
++   * Settle would currently bank.
++   */
++  peddlerTab: { tier: number; round: number; value: number } | null;
+   /**
+    * Player-chosen name for the guild itself, distinct from any hero's name.
+    * Empty string means never set — the naming prompt is shown once on the
+@@ -2661,6 +2695,10 @@ export interface PeddlerFlipResult {
+   cards: [PeddlerFlipCard, PeddlerFlipCard, PeddlerFlipCard];
+   pickedIndex: 0 | 1 | 2;
+   feePaid: number;
++  /** Grimsby's own Vendor Rep rebate on this flip's fee -- already
++   *  applied to GameState.gold on top of whatever the picked card
++   *  granted; purely a display value from here on. 0 at rep level 0. */
++  rebate: number;
+   /** True if this was a High Roller flip (3x fee, 3x reward, same card
+    *  pool/format) rather than the regular one -- see
+    *  GameState.grimsbyHighRollerUnlocked's own comment. */
+@@ -2701,9 +2739,39 @@ export interface DiceRollResult {
+   landed: DiceFace;
+   wager: number;
+   outcome: 'jackpot' | 'partial' | 'bust';
+-  /** Gold actually credited back -- 0 for a bust. Already applied to
+-   *  GameState.gold (and clamped to gold storage) by the time this is
+-   *  returned; purely a display value from here on. */
++  /** Gold actually credited back from the game's OWN payout -- 0 for a
++   *  bust. Already applied to GameState.gold (and clamped to gold
++   *  storage) by the time this is returned; purely a display value from
++   *  here on. Does NOT include rebate below -- kept separate so the UI
++   *  can show "won 150g" and "+3g loyalty" as two distinct lines rather
++   *  than one blended number. */
+   payout: number;
++  /** Grimsby's own Vendor Rep rebate on this roll's wager -- applied to
++   *  GameState.gold on top of payout above, regardless of outcome (even
++   *  a bust still gets this). 0 at rep level 0. */
++  rebate: number;
++}
++
++/**
++ * Result of a single "Run it up" push in Grimsby's Tab -- transient,
++ * same "mutate state, UI reads a returned result" shape
++ * PeddlerFlipResult/DiceRollResult already use for the other two games.
++ * The ONGOING tab itself lives in GameState.peddlerTab (persists across
++ * pushes, unlike this); this is just "what happened on THIS push."
++ */
++export interface PeddlerTabRunResult {
++  success: boolean;
++  /** The tab's round AFTER this push -- meaningless on a bust (the tab
++   *  is gone), present anyway so a bust result can still show "made it
++   *  to round N before busting." */
++  round: number;
++  /** The tab's value after this push -- 0 on a bust (see
++   *  PeddlerManager.runItUp's own comment: no partial refund). */
++  value: number;
++  /** Grimsby's own Vendor Rep rebate on this push's fee -- applied to
++   *  GameState.gold regardless of success/bust, same "he shaves you a
++   *  little back either way" reasoning PeddlerManager.repRebate's own
++   *  comment establishes. Purely a display value from here on. */
++  rebate: number;
+ }
+ 
+diff --git a/src/ui/PeddlerTabModal.tsx b/src/ui/PeddlerTabModal.tsx
+new file mode 100644
+index 0000000..50c0680
+--- /dev/null
++++ b/src/ui/PeddlerTabModal.tsx
+@@ -0,0 +1,143 @@
++import { useEngine } from './useEngine';
++import { PeddlerManager } from '../game/managers/PeddlerManager';
++import { formatGold } from '../game/util';
++import { GrimsbySprite, GrimsbyAnimation } from './sprites/GrimsbySprite';
++
++/**
++ * Grimsby's third game -- a repeating push-your-luck: buy in, then each
++ * round is either Settle (bank the tab and stop) or Run it up (pay the
++ * tier's buy-in again, roll for the next round -- success grows the tab
++ * further, a bust wipes it ENTIRELY, no partial refund, by direct design
++ * request). Gated behind Permanent Spot (see PeddlerPanel's own locked
++ * card) -- this is the one game where the tension is explicitly
++ * Grimsby's own patience, so it only makes sense once he's actually
++ * settled in.
++ *
++ * Same "vendor-table" backdrop template as PeddlerCardModal/
++ * PeddlerDiceModal, per established convention, rather than a bespoke
++ * scene. No ceiling on rounds -- pushes indefinitely toward the
++ * success-chance floor, by design.
++ */
++
++/** Grimsby's own reaction to how far a tab has been pushed -- reuses
++ *  existing sprite animations rather than needing new art (see
++ *  GrimsbySprite's own animation list). Purely a mood readout; the
++ *  actual odds are never shown numerically, same "he doesn't tell you
++ *  the exact percentage" restraint Pick Your Card's own tiers already
++ *  keep. */
++function moodFor(round: number): { animation: GrimsbyAnimation; label: string } {
++  if (round <= 1) return { animation: 'idle', label: 'Patient.' };
++  if (round <= 3) return { animation: 'idle2', label: 'Getting impatient.' };
++  return { animation: 'dialogue', label: 'About done with you.' };
++}
++
++export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
++  const engine = useEngine();
++  const state = engine.state;
++  const tab = state.peddlerTab;
++  const runResult = engine.lastGrimsbyTabResult;
++
++  const tierCount = PeddlerManager.tabTierCount();
++  const tiers = Array.from({ length: tierCount }, (_, i) => i);
++  const present = PeddlerManager.isPresent(state);
++
++  const handleClose = () => {
++    if (runResult) engine.dismissGrimsbyTabResult();
++    onClose();
++  };
++
++  const mood = tab ? moodFor(tab.round) : { animation: 'idle' as GrimsbyAnimation, label: '' };
++  const nextBuyIn = tab ? PeddlerManager.tabTierBuyIn(tab.tier) : 0;
++  const canPush = !!tab && present && state.gold >= nextBuyIn;
++
++  return (
++    <div className="overlay" onClick={handleClose}>
++      <div
++        className="modal peddler-modal"
++        style={{ backgroundImage: 'url(./lore/peddler-table.png)' }}
++        onClick={(e) => e.stopPropagation()}
++      >
++        <div className="peddler-modal-header">
++          <GrimsbySprite animation={runResult && !runResult.success ? 'idle' : mood.animation} height={140} />
++        </div>
++
++        <div className="peddler-modal-body">
++          {!tab && (
++            <>
++              <p className="peddler-corner-comment tiny muted">
++                Name your tier, and he opens a tab. Push it further any time after that, or settle up
++                and walk away with whatever's on it -- but a bad push wipes the whole tab, not just
++                that round.
++              </p>
++              <div className="row wrap" style={{ gap: 6, justifyContent: 'center' }}>
++                {tiers.map((tier) => {
++                  const buyIn = PeddlerManager.tabTierBuyIn(tier);
++                  const canAfford = present && state.gold >= buyIn;
++                  return (
++                    <button
++                      key={tier}
++                      type="button"
++                      className="btn-purple"
++                      disabled={!canAfford}
++                      onClick={() => engine.openGrimsbyTab(tier)}
++                      title={present ? (canAfford ? undefined : 'Not enough gold') : 'He’s not here right now'}
++                    >
++                      Open tab -- {formatGold(buyIn)} gold
++                    </button>
++                  );
++                })}
++              </div>
++            </>
++          )}
++
++          {tab && (
++            <>
++              {runResult && (
++                <p
++                  className="peddler-corner-comment tiny"
++                  style={{ color: runResult.success ? 'var(--brass)' : 'var(--muted)' }}
++                >
++                  <b>{runResult.success ? 'Held.' : "Tab's closed."}</b>{' '}
++                  {runResult.success
++                    ? `Tab climbs to ${formatGold(runResult.value)}g.`
++                    : "I'll forget this one if you will."}
++                  {runResult.rebate > 0 && ` (+${formatGold(runResult.rebate)}g loyalty)`}
++                </p>
++              )}
++
++              <p className="tiny muted" style={{ textAlign: 'center' }}>{mood.label}</p>
++
++              <div className="card" style={{ padding: '8px 12px', margin: '0 auto', maxWidth: 220 }}>
++                {Array.from({ length: tab.round }, (_, i) => i + 1).map((round) => (
++                  <div key={round} className="spread tiny" style={{ fontFamily: 'monospace' }}>
++                    <span className="muted">Round {round}</span>
++                    <span>{formatGold(round === tab.round ? tab.value : 0)}</span>
++                  </div>
++                ))}
++              </div>
++
++              <div className="row wrap" style={{ gap: 8, justifyContent: 'center' }}>
++                <button
++                  type="button"
++                  className="btn-purple"
++                  disabled={!canPush}
++                  onClick={() => engine.runUpGrimsbyTab()}
++                  title={canPush ? undefined : (!present ? 'He’s not here right now' : 'Not enough gold')}
++                >
++                  Run it up -- {formatGold(nextBuyIn)} gold
++                </button>
++                <button type="button" className="btn-green" onClick={() => engine.settleGrimsbyTab()}>
++                  Settle -- {formatGold(tab.value)} gold
++                </button>
++              </div>
++            </>
++          )}
++        </div>
++
++        <div className="row end" style={{ marginTop: 14 }}>
++          <button onClick={handleClose}>Close</button>
++        </div>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/ui/ReputationRing.tsx b/src/ui/ReputationRing.tsx
+new file mode 100644
+index 0000000..7029a87
+--- /dev/null
++++ b/src/ui/ReputationRing.tsx
+@@ -0,0 +1,66 @@
++import { vendorRepLevel } from '../game/data/vendorRep';
++import { Tuning } from '../game/data/tuning';
++
++/**
++ * A small circular progress indicator for Vendor Rep -- the ring itself
++ * fills toward the NEXT level (not a lifetime total, which would never
++ * visibly move once rep is high), current level number centered inside.
++ * Deliberately a standalone badge rather than wrapping a vendor's own
++ * portrait art -- works identically next to a sub-tab's plain text
++ * label (no art) and next to VendorSprite's real artwork (would
++ * otherwise get covered by a centered number), same component either
++ * place it's used.
++ *
++ * goldSpent is whichever lifetime counter applies -- GameState.
++ * vendorGoldSpent[vendorId] for the three shop vendors, GameState.
++ * stats.peddlerGoldSpent for Grimsby -- this component doesn't care
++ * which, it just needs the raw number.
++ */
++export function ReputationRing({ goldSpent, size = 26 }: { goldSpent: number; size?: number }) {
++  const level = vendorRepLevel(goldSpent);
++  const base = Tuning.get('vendorRep.goldPerLevelBase');
++  // Same formula vendorRepLevel itself inverts (level = floor(sqrt(gold
++  // / base))) -- goldForLevel(n) = base * n^2 is its exact inverse, used
++  // here purely for the ring's own fill fraction, not the level number.
++  const goldForLevel = (n: number) => base * n * n;
++  const currentThreshold = goldForLevel(level);
++  const nextThreshold = goldForLevel(level + 1);
++  const progress = nextThreshold > currentThreshold
++    ? Math.min(1, Math.max(0, (goldSpent - currentThreshold) / (nextThreshold - currentThreshold)))
++    : 1;
++
++  const stroke = Math.max(2, Math.round(size * 0.14));
++  const radius = size / 2 - stroke / 2;
++  const circumference = 2 * Math.PI * radius;
++  const offset = circumference * (1 - progress);
++
++  return (
++    <div
++      className="gold-text"
++      style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}
++      title={`Vendor Rep level ${level}`}
++    >
++      <svg width={size} height={size} style={{ position: 'absolute', inset: 0, transform: 'rotate(-90deg)' }}>
++        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="currentColor" strokeWidth={stroke} opacity={0.25} />
++        <circle
++          cx={size / 2}
++          cy={size / 2}
++          r={radius}
++          fill="none"
++          stroke="currentColor"
++          strokeWidth={stroke}
++          strokeLinecap="round"
++          strokeDasharray={circumference}
++          strokeDashoffset={offset}
++        />
++      </svg>
++      <div style={{
++        position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
++        fontSize: Math.max(9, Math.round(size * 0.44)), fontWeight: 700,
++      }}
++      >
++        {level}
++      </div>
++    </div>
++  );
++}
+diff --git a/src/ui/panels/PeddlerPanel.tsx b/src/ui/panels/PeddlerPanel.tsx
+index 187ddea..78d74ad 100644
+--- a/src/ui/panels/PeddlerPanel.tsx
++++ b/src/ui/panels/PeddlerPanel.tsx
+@@ -5,6 +5,8 @@ import { formatGold, formatDuration } from '../../game/util';
+ import { GrimsbySprite } from '../sprites/GrimsbySprite';
+ import { PeddlerCardModal } from '../PeddlerCardModal';
+ import { PeddlerDiceModal } from '../PeddlerDiceModal';
++import { PeddlerTabModal } from '../PeddlerTabModal';
++import { ReputationRing } from '../ReputationRing';
+ 
+ /**
+  * Same "vendor-card" presentation the Blacksmith/Alchemist/Enchanter
+@@ -21,7 +23,7 @@ export function PeddlerPanel() {
+   const engine = useEngine();
+   const state = engine.state;
+   const now = useNow(1000);
+-  const [openModal, setOpenModal] = useState<'none' | 'regular' | 'highRoller' | 'dice'>('none');
++  const [openModal, setOpenModal] = useState<'none' | 'regular' | 'highRoller' | 'dice' | 'tab'>('none');
+   // Stake multiplier -- a player-chosen multiplier on top of whichever
+   // fee this already is (regular or High Roller), for a proportionally
+   // bigger reward. One shared control for both, per direct request
+@@ -61,7 +63,10 @@ export function PeddlerPanel() {
+           <GrimsbySprite animation="idle" height={144} />
+           <div style={{ flex: 1 }}>
+             <div className="spread">
+-              <span className="card-title">Grimsby</span>
++              <span className="card-title row" style={{ gap: 6, alignItems: 'center' }}>
++                Grimsby
++                <ReputationRing goldSpent={state.stats.peddlerGoldSpent} size={20} />
++              </span>
+               {present && !permanentSpotUnlocked && (
+                 <span className="tiny muted">
+                   {formatDuration(Math.max(0, (state.grimsbyLeavesAt ?? now) - now))} left
+@@ -166,6 +171,40 @@ export function PeddlerPanel() {
+         </div>
+       </div>
+ 
++      {/* Grimsby's Tab -- gated behind Permanent Spot (see that card
++          below), same "own card, own flavour" shape Dice/High Roller
++          each get. Shows a locked card until then, same pattern High
++          Roller's own locked-card uses before it's bought. */}
++      {permanentSpotUnlocked ? (
++        <div className="card vendor-card" style={{ marginBottom: 12 }}>
++          <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
++            <GrimsbySprite animation="dialogue" height={144} />
++            <div style={{ flex: 1 }}>
++              <div className="card-title">The Tab</div>
++              <p className="card-flavour">
++                {state.peddlerTab
++                  ? `A tab's open -- ${formatGold(state.peddlerTab.value)} gold on it so far.`
++                  : '"Open a tab. Push it as far as you like. Just don\'t expect me to forget what you owe."'}
++              </p>
++              <button
++                className="btn-purple"
++                onClick={() => setOpenModal('tab')}
++                title="A repeating push-your-luck wager -- push further for more, or settle and walk away."
++              >
++                {state.peddlerTab ? 'Back to the tab' : 'Open a tab'}
++              </button>
++            </div>
++          </div>
++        </div>
++      ) : (
++        <div className="card locked-upgrade">
++          <div className="card-title">The Tab</div>
++          <p className="card-flavour muted">
++            Only for a regular with a permanent spot -- see below.
++          </p>
++        </div>
++      )}
++
+       {/* Permanent, one-time unlock -- not tied to whether he's actually
+           here right now, same "buy it whenever, use it on the next
+           visit" shape a vendor upgrade already has. Once bought, this
+@@ -195,6 +234,9 @@ export function PeddlerPanel() {
+       {openModal === 'dice' && (
+         <PeddlerDiceModal onClose={() => setOpenModal('none')} />
+       )}
++      {openModal === 'tab' && (
++        <PeddlerTabModal onClose={() => setOpenModal('none')} />
++      )}
+ 
+       {/* "A Permanent Spot" -- patch 0220, direct request. Same one-time,
+           permanent-unlock shape as High Roller above, but this one flips
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index 6cff1cf..b4dab28 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -20,6 +20,7 @@ import { EnhanceStation } from '../EnhanceStation';
+ import { WeaponEnchantStation } from '../WeaponEnchantStation';
+ import { ArmourInfusionStation } from '../ArmourInfusionStation';
+ import { ScrapStation } from '../ScrapStation';
++import { ReputationRing } from '../ReputationRing';
+ 
+ /** Confirmed pairing, not a guess -- Blacksmith sells armour, Alchemist sells
+  *  supplies, Enchanter sells the black market. Same mapping decides which
+@@ -62,8 +63,10 @@ export function VendorsPanel() {
+             key={v.id}
+             className={`btn-subtab ${tab === v.id ? 'on' : ''} ${isTabUnread(engine.state, 'vendors', v.id) ? 'subtab-unread' : ''}`}
+             onClick={() => setTab(v.id)}
++            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+           >
+             {v.name}
++            <ReputationRing goldSpent={engine.state.vendorGoldSpent[v.id]} size={18} />
+           </button>
+         ))}
+       </div>
+@@ -153,7 +156,10 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+           <VendorSprite vendor={vendorId} height={72} animate />
+           <div style={{ flex: 1 }}>
+             <div className="spread">
+-              <span className="card-title">{vendorDef.name}</span>
++              <span className="card-title row" style={{ gap: 6, alignItems: 'center' }}>
++                {vendorDef.name}
++                <ReputationRing goldSpent={state.vendorGoldSpent[vendorId]} size={22} />
++              </span>
+               <span className={`small muted ${levelPulses[`vendor:${vendorId}`] ? 'purchase-pulse' : ''}`}>Level {level}/{upgradeList.length}</span>
+             </div>
+             <p className="card-flavour">{vendorDef.blurb}</p>

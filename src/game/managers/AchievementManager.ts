@@ -134,6 +134,13 @@ const CHECKS: Record<string, Check> = {
   HIGH_ROLLER_UNLOCKED: (state) => state.grimsbyHighRollerUnlocked === true,
 
   PEDDLER_HIGH_ROLLER_JACKPOT: (state) => (state.stats.peddlerHighRollerJackpots ?? 0) >= 1,
+
+  /** Settling the Tab at or past peddler.tab.jackpotRound -- a strict
+   *  subset of the shared PEDDLER_JACKPOT check above (both fire off the
+   *  same push), same "own achievement for the specific game, shared one
+   *  for the general milestone" pattern PEDDLER_HIGH_ROLLER_JACKPOT
+   *  already established for Cards. */
+  PEDDLER_TAB_JACKPOT: (state) => (state.stats.peddlerTabJackpots ?? 0) >= 1,
 };
 
 /**

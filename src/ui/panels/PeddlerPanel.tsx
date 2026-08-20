@@ -5,6 +5,8 @@ import { formatGold, formatDuration } from '../../game/util';
 import { GrimsbySprite } from '../sprites/GrimsbySprite';
 import { PeddlerCardModal } from '../PeddlerCardModal';
 import { PeddlerDiceModal } from '../PeddlerDiceModal';
+import { PeddlerTabModal } from '../PeddlerTabModal';
+import { ReputationRing } from '../ReputationRing';
 
 /**
  * Same "vendor-card" presentation the Blacksmith/Alchemist/Enchanter
@@ -21,7 +23,7 @@ export function PeddlerPanel() {
   const engine = useEngine();
   const state = engine.state;
   const now = useNow(1000);
-  const [openModal, setOpenModal] = useState<'none' | 'regular' | 'highRoller' | 'dice'>('none');
+  const [openModal, setOpenModal] = useState<'none' | 'regular' | 'highRoller' | 'dice' | 'tab'>('none');
   // Stake multiplier -- a player-chosen multiplier on top of whichever
   // fee this already is (regular or High Roller), for a proportionally
   // bigger reward. One shared control for both, per direct request
@@ -61,7 +63,10 @@ export function PeddlerPanel() {
           <GrimsbySprite animation="idle" height={144} />
           <div style={{ flex: 1 }}>
             <div className="spread">
-              <span className="card-title">Grimsby</span>
+              <span className="card-title row" style={{ gap: 6, alignItems: 'center' }}>
+                Grimsby
+                <ReputationRing goldSpent={state.stats.peddlerGoldSpent} size={20} />
+              </span>
               {present && !permanentSpotUnlocked && (
                 <span className="tiny muted">
                   {formatDuration(Math.max(0, (state.grimsbyLeavesAt ?? now) - now))} left
@@ -166,6 +171,40 @@ export function PeddlerPanel() {
         </div>
       </div>
 
+      {/* Grimsby's Tab -- gated behind Permanent Spot (see that card
+          below), same "own card, own flavour" shape Dice/High Roller
+          each get. Shows a locked card until then, same pattern High
+          Roller's own locked-card uses before it's bought. */}
+      {permanentSpotUnlocked ? (
+        <div className="card vendor-card" style={{ marginBottom: 12 }}>
+          <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
+            <GrimsbySprite animation="dialogue" height={144} />
+            <div style={{ flex: 1 }}>
+              <div className="card-title">The Tab</div>
+              <p className="card-flavour">
+                {state.peddlerTab
+                  ? `A tab's open -- ${formatGold(state.peddlerTab.value)} gold on it so far.`
+                  : '"Open a tab. Push it as far as you like. Just don\'t expect me to forget what you owe."'}
+              </p>
+              <button
+                className="btn-purple"
+                onClick={() => setOpenModal('tab')}
+                title="A repeating push-your-luck wager -- push further for more, or settle and walk away."
+              >
+                {state.peddlerTab ? 'Back to the tab' : 'Open a tab'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="card locked-upgrade">
+          <div className="card-title">The Tab</div>
+          <p className="card-flavour muted">
+            Only for a regular with a permanent spot -- see below.
+          </p>
+        </div>
+      )}
+
       {/* Permanent, one-time unlock -- not tied to whether he's actually
           here right now, same "buy it whenever, use it on the next
           visit" shape a vendor upgrade already has. Once bought, this
@@ -194,6 +233,9 @@ export function PeddlerPanel() {
       )}
       {openModal === 'dice' && (
         <PeddlerDiceModal onClose={() => setOpenModal('none')} />
+      )}
+      {openModal === 'tab' && (
+        <PeddlerTabModal onClose={() => setOpenModal('none')} />
       )}
 
       {/* "A Permanent Spot" -- patch 0220, direct request. Same one-time,

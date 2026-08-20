@@ -1,5 +1,6 @@
 import {
-  DiceFace, DiceRollResult, GameState, PeddlerCardDef, PeddlerCardTier, PeddlerFlipCard, PeddlerFlipResult, Rarity,
+  DiceFace, DiceRollResult, GameState, PeddlerCardDef, PeddlerCardTier, PeddlerFlipCard, PeddlerFlipResult,
+  PeddlerTabRunResult, Rarity,
 } from '../types';
 import { PEDDLER_CARDS_BY_TIER } from '../data/peddler';
 import { EQUIPMENT, EQUIPMENT_BY_ID } from '../data/equipment';
@@ -7,10 +8,15 @@ import { MATERIAL_BY_ID } from '../data/materials';
 import { CURIO_BY_ID } from '../data/curios';
 import { warehouseCapacity } from '../data/harvestUpgrades';
 import { Tuning } from '../data/tuning';
+import { applyVendorRepDiscount, vendorRepPercent } from '../data/vendorRep';
 import { EquipmentManager } from './EquipmentManager';
 import { ModifierManager } from './ModifierManager';
 import { PetManager } from './PetManager';
 import { CurioManager } from './CurioManager';
+
+const TAB_TIER_TUNING_IDS = [
+  'peddler.tab.tier0BuyIn', 'peddler.tab.tier1BuyIn', 'peddler.tab.tier2BuyIn', 'peddler.tab.tier3BuyIn',
+];
 
 const TIERS: PeddlerCardTier[] = ['bust', 'refund', 'modest', 'good', 'jackpot'];
 
@@ -145,6 +151,23 @@ function summarizeReward(outcome: PeddlerCardDef, feePaid: number, multiplier: n
   }
 }
 
+/**
+ * Grimsby's own Vendor Rep payout bonus -- a small automatic cash-back
+ * on whatever was just paid him, regardless of the game's own outcome
+ * (even a bust still gets this rebate; it's about him being a decent
+ * dealer to a regular, not a consolation prize). Shared identically
+ * across Cards, Dice, and the Tab -- same level, same percent, same cap
+ * as feeWithStake's own discount, just pointed at what comes back
+ * instead of what goes out. Reads state.stats.peddlerGoldSpent as of
+ * BEFORE the current transaction's own fee gets added to it -- callers
+ * compute this before incrementing that counter, so the rebate reflects
+ * established loyalty, not the level this very payment just reached.
+ */
+function repRebate(state: GameState, feePaid: number): number {
+  const percent = vendorRepPercent(state.stats.peddlerGoldSpent);
+  return Math.floor((feePaid * percent) / 100);
+}
+
 export const PeddlerManager = {
   rollThreshold,
 
@@ -180,7 +203,8 @@ export const PeddlerManager = {
    *  should compute a displayed cost from, so it can never drift from
    *  what resolveFlip itself actually charges. */
   feeWithStake(state: GameState, highRoller: boolean, stake: number): number {
-    return (highRoller ? PeddlerManager.highRollerFeeCost(state) : PeddlerManager.feeCost(state)) * stake;
+    const base = (highRoller ? PeddlerManager.highRollerFeeCost(state) : PeddlerManager.feeCost(state)) * stake;
+    return applyVendorRepDiscount(base, state.stats.peddlerGoldSpent);
   },
 
   /** One-time gold cost to unlock High Roller at all -- flat, not
@@ -341,8 +365,9 @@ export const PeddlerManager = {
     if (!PeddlerManager.isPresent(state)) return null;
     if (highRoller && !state.grimsbyHighRollerUnlocked) return null;
     const multiplier = (highRoller ? Tuning.get('peddler.highRollerMultiplier') : 1) * stake;
-    const fee = PeddlerManager.feeCost(state) * multiplier;
+    const fee = PeddlerManager.feeWithStake(state, highRoller, stake);
     if (state.gold < fee) return null;
+    const rebate = repRebate(state, fee);
 
     state.gold -= fee;
     state.stats.goldSpent += fee;
@@ -358,6 +383,10 @@ export const PeddlerManager = {
 
     const picked = outcomes[pickedIndex];
     PeddlerManager.applyOutcome(state, picked, fee, now, multiplier);
+    if (rebate > 0) {
+      const storage = ModifierManager.goldStorage(state);
+      state.gold = Math.min(storage, state.gold + rebate);
+    }
 
     // Achievement-supporting counters -- see Statistics.peddlerFlips'
     // own comment for why these live here rather than being derived
@@ -375,6 +404,7 @@ export const PeddlerManager = {
       cards,
       pickedIndex,
       feePaid: fee,
+      rebate,
       highRoller,
       rewardSummary: summarizeReward(picked, fee, multiplier),
     };
@@ -470,6 +500,13 @@ export const PeddlerManager = {
     const stake = Math.floor(wager);
     if (!Number.isFinite(stake) || stake <= 0) return null;
     if (state.gold < stake) return null;
+    // Dice has no fixed fee to discount the way Cards/Tab do -- the
+    // wager is a free-form player-chosen amount, and discounting a
+    // number the player just typed would be confusing ("I entered 100,
+    // why was I charged 95?"). Vendor Rep's full effect here is the
+    // rebate instead -- functionally the same net benefit, just
+    // expressed as gold back rather than a lower charge up front.
+    const rebate = repRebate(state, stake);
 
     state.gold -= stake;
     state.stats.goldSpent += stake;
@@ -485,9 +522,10 @@ export const PeddlerManager = {
     const outcome: DiceRollResult['outcome'] = distance === 0 ? 'jackpot' : distance === 1 ? 'partial' : 'bust';
     const payout = outcome === 'jackpot' ? stake * 3 : outcome === 'partial' ? Math.floor(stake / 2) : 0;
 
-    if (payout > 0) {
+    const totalPayout = payout + rebate;
+    if (totalPayout > 0) {
       const storage = ModifierManager.goldStorage(state);
-      state.gold = Math.min(storage, state.gold + payout);
+      state.gold = Math.min(storage, state.gold + totalPayout);
     }
 
     // Grimsby-wide counters, not Dice-specific ones -- see peddlerJackpots/
@@ -498,6 +536,136 @@ export const PeddlerManager = {
     if (outcome === 'jackpot') state.stats.peddlerJackpots += 1;
     else if (outcome === 'bust') state.stats.peddlerBusts += 1;
 
-    return { chosen, landed, wager: stake, outcome, payout };
+    return { chosen, landed, wager: stake, outcome, payout, rebate };
+  },
+
+  /* -------------------------------- the tab -------------------------------- */
+
+  /** Buy-in for a given Tab tier (0-3, low to high) -- see
+   *  TAB_TIER_TUNING_IDS above. Out-of-range tiers fall back to tier 0
+   *  rather than throwing. */
+  tabTierBuyIn(tier: number): number {
+    return Tuning.get(TAB_TIER_TUNING_IDS[tier] ?? TAB_TIER_TUNING_IDS[0]);
+  },
+
+  tabTierCount(): number {
+    return TAB_TIER_TUNING_IDS.length;
+  },
+
+  /** Success chance for pushing TO the given round -- round 2 is the
+   *  first real roll (round 1 is the guaranteed buy-in, no roll at all,
+   *  see openTab). No ceiling on rounds by direct design request --
+   *  decays toward, but never below, the tuned floor no matter how far
+   *  a run is pushed, rather than capping at a designed max round. */
+  tabSuccessChance(round: number): number {
+    const base = Tuning.get('peddler.tab.baseSuccessChance');
+    const decay = Tuning.get('peddler.tab.successDecayPerRound');
+    const floor = Tuning.get('peddler.tab.minSuccessChance');
+    return Math.max(floor, base - (round - 2) * decay);
+  },
+
+  /** Gold ADDED to the tab on a successful push to the given round --
+   *  grows every round, same curve the design mockup validated. Not the
+   *  tab's total value -- callers add this to the running total. */
+  tabRoundReward(tier: number, round: number): number {
+    const buyIn = PeddlerManager.tabTierBuyIn(tier);
+    const growth = Tuning.get('peddler.tab.rewardGrowthPerRound');
+    return Math.round(buyIn * (0.9 + (round - 1) * growth));
+  },
+
+  /** Gated behind Permanent Spot per direct design request -- this is
+   *  the one game where the tension is explicitly Grimsby's own
+   *  patience, so it only makes sense once he's actually settled in.
+   *  isPresent isn't checked separately here -- Permanent Spot already
+   *  implies it (see isPresent's own comment). */
+  canOpenTab(state: GameState): boolean {
+    return state.grimsbyPermanentSpotUnlocked === true && state.peddlerTab === null;
+  },
+
+  /** Opens a new tab at the given tier -- round 1, guaranteed, no risk
+   *  roll (the buy-in itself is never at risk, only what gets pushed on
+   *  top of it). Rep accumulates from Cards/Dice spend even before
+   *  Permanent Spot unlocks (peddlerGoldSpent is Grimsby-wide, not
+   *  gated), so a regular's first tab can already carry a real rebate --
+   *  per direct design confirmation, a deliberate touch, not an
+   *  oversight. */
+  openTab(state: GameState, tier: number): GameState['peddlerTab'] {
+    if (!PeddlerManager.canOpenTab(state)) return null;
+    const buyIn = PeddlerManager.tabTierBuyIn(tier);
+    if (state.gold < buyIn) return null;
+    const rebate = repRebate(state, buyIn);
+
+    state.gold -= buyIn;
+    state.stats.goldSpent += buyIn;
+    state.stats.peddlerGoldSpent += buyIn;
+    if (rebate > 0) {
+      const storage = ModifierManager.goldStorage(state);
+      state.gold = Math.min(storage, state.gold + rebate);
+    }
+
+    state.peddlerTab = { tier, round: 1, value: buyIn };
+    return state.peddlerTab;
+  },
+
+  /** Pushes the open tab one more round -- pay the tier's buy-in again,
+   *  roll tabSuccessChance for the NEXT round. Success grows the tab and
+   *  advances round; a bust wipes the tab ENTIRELY (no partial refund),
+   *  per direct design request -- "a bust is a bust," deliberately the
+   *  sharper, more honest version of the loss rather than a softened
+   *  one, since that's the one thing that makes this feel different
+   *  from Cards/Dice. Grimsby's own rebate still applies to this push's
+   *  fee regardless of the roll's outcome -- see repRebate's own
+   *  comment for why. */
+  runItUp(state: GameState): PeddlerTabRunResult | null {
+    const tab = state.peddlerTab;
+    if (!tab) return null;
+    const buyIn = PeddlerManager.tabTierBuyIn(tab.tier);
+    if (state.gold < buyIn) return null;
+    const rebate = repRebate(state, buyIn);
+
+    state.gold -= buyIn;
+    state.stats.goldSpent += buyIn;
+    state.stats.peddlerGoldSpent += buyIn;
+    if (rebate > 0) {
+      const storage = ModifierManager.goldStorage(state);
+      state.gold = Math.min(storage, state.gold + rebate);
+    }
+
+    const nextRound = tab.round + 1;
+    const chance = PeddlerManager.tabSuccessChance(nextRound);
+    if (Math.random() < chance) {
+      tab.value += PeddlerManager.tabRoundReward(tab.tier, nextRound);
+      tab.round = nextRound;
+      return { success: true, round: tab.round, value: tab.value, rebate };
+    }
+
+    state.peddlerTab = null;
+    state.stats.peddlerBusts += 1;
+    return { success: false, round: nextRound, value: 0, rebate };
+  },
+
+  /** Banks the open tab's current value and closes it. Settling at or
+   *  past peddler.tab.jackpotRound counts as a jackpot -- both the
+   *  shared peddlerJackpots counter (so it feeds the existing
+   *  PEDDLER_JACKPOT achievement the same as any other game) and the
+   *  Tab's own peddlerTabJackpots counter (for a dedicated Tab
+   *  achievement, same "shared counter for the general achievement, own
+   *  counter for the specific one" pattern peddlerHighRollerJackpots
+   *  already established) -- per direct design request, on SETTLING
+   *  specifically, not merely reaching the round and busting past it on
+   *  a later push. Returns null if no tab is open (nothing to settle),
+   *  the banked value otherwise. */
+  settleTab(state: GameState): number | null {
+    const tab = state.peddlerTab;
+    if (!tab) return null;
+    const storage = ModifierManager.goldStorage(state);
+    state.gold = Math.min(storage, state.gold + tab.value);
+    if (tab.round >= Tuning.get('peddler.tab.jackpotRound')) {
+      state.stats.peddlerJackpots += 1;
+      state.stats.peddlerTabJackpots += 1;
+    }
+    const { value } = tab;
+    state.peddlerTab = null;
+    return value;
   },
 };

@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 47;
+export const SAVE_VERSION = 48;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -1527,6 +1527,16 @@ export interface Statistics {
    * represent the same player-facing idea: paid in, got nothing back.
    */
   peddlerBusts: number;
+  /**
+   * Tabs SETTLED at or past peddler.tab.jackpotRound (5 by default) --
+   * deliberately requires an active choice to bank it, not just reaching
+   * that round and busting past it on a later push. A strict subset of
+   * peddlerJackpots above (every one of these also increments that
+   * shared counter), same "own counter for the specific achievement,
+   * shared counter for the general one" pattern
+   * peddlerHighRollerJackpots already established.
+   */
+  peddlerTabJackpots: number;
 }
 
 export interface GameState {
@@ -1808,6 +1818,30 @@ export interface GameState {
   unlockedBardTracks: string[];
   /** How far each vendor's relationship has been invested in — gates how many of their upgrades are visible. */
   vendorLevels: Record<VendorId, number>;
+  /**
+   * Lifetime gold spent at each of the three shop vendors specifically --
+   * buys, rerolls, vendor-tied upgrade purchases, and (Enchanter) Black
+   * Market buys all count. Deliberately its own counter rather than
+   * reading the combined stats.goldSpent, same reasoning
+   * stats.peddlerGoldSpent already established for Grimsby -- "how much
+   * has this vendor specifically earned from me" isn't answerable from a
+   * total that also includes the other two vendors and everything else.
+   * Feeds vendorRep.ts's formula directly (see that file). Never
+   * decreases -- deliberately distinct from vendorLevels above, which is
+   * a separate spent-to-unlock-upgrades track, not a loyalty measure.
+   */
+  vendorGoldSpent: Record<VendorId, number>;
+  /**
+   * Grimsby's Tab -- a repeating push-your-luck game, gated behind
+   * grimsbyPermanentSpotUnlocked (see PeddlerManager.canOpenTab). null
+   * means no tab is currently open. tier indexes into TAB_TIERS
+   * (PeddlerManager.ts); round starts at 1 the instant the tab opens (the
+   * buy-in itself, no risk roll on it) and has no ceiling -- pushes
+   * indefinitely toward the success-chance floor rather than capping at
+   * a designed max round, by direct design request. value is what
+   * Settle would currently bank.
+   */
+  peddlerTab: { tier: number; round: number; value: number } | null;
   /**
    * Player-chosen name for the guild itself, distinct from any hero's name.
    * Empty string means never set — the naming prompt is shown once on the
@@ -2661,6 +2695,10 @@ export interface PeddlerFlipResult {
   cards: [PeddlerFlipCard, PeddlerFlipCard, PeddlerFlipCard];
   pickedIndex: 0 | 1 | 2;
   feePaid: number;
+  /** Grimsby's own Vendor Rep rebate on this flip's fee -- already
+   *  applied to GameState.gold on top of whatever the picked card
+   *  granted; purely a display value from here on. 0 at rep level 0. */
+  rebate: number;
   /** True if this was a High Roller flip (3x fee, 3x reward, same card
    *  pool/format) rather than the regular one -- see
    *  GameState.grimsbyHighRollerUnlocked's own comment. */
@@ -2701,9 +2739,39 @@ export interface DiceRollResult {
   landed: DiceFace;
   wager: number;
   outcome: 'jackpot' | 'partial' | 'bust';
-  /** Gold actually credited back -- 0 for a bust. Already applied to
-   *  GameState.gold (and clamped to gold storage) by the time this is
-   *  returned; purely a display value from here on. */
+  /** Gold actually credited back from the game's OWN payout -- 0 for a
+   *  bust. Already applied to GameState.gold (and clamped to gold
+   *  storage) by the time this is returned; purely a display value from
+   *  here on. Does NOT include rebate below -- kept separate so the UI
+   *  can show "won 150g" and "+3g loyalty" as two distinct lines rather
+   *  than one blended number. */
   payout: number;
+  /** Grimsby's own Vendor Rep rebate on this roll's wager -- applied to
+   *  GameState.gold on top of payout above, regardless of outcome (even
+   *  a bust still gets this). 0 at rep level 0. */
+  rebate: number;
+}
+
+/**
+ * Result of a single "Run it up" push in Grimsby's Tab -- transient,
+ * same "mutate state, UI reads a returned result" shape
+ * PeddlerFlipResult/DiceRollResult already use for the other two games.
+ * The ONGOING tab itself lives in GameState.peddlerTab (persists across
+ * pushes, unlike this); this is just "what happened on THIS push."
+ */
+export interface PeddlerTabRunResult {
+  success: boolean;
+  /** The tab's round AFTER this push -- meaningless on a bust (the tab
+   *  is gone), present anyway so a bust result can still show "made it
+   *  to round N before busting." */
+  round: number;
+  /** The tab's value after this push -- 0 on a bust (see
+   *  PeddlerManager.runItUp's own comment: no partial refund). */
+  value: number;
+  /** Grimsby's own Vendor Rep rebate on this push's fee -- applied to
+   *  GameState.gold regardless of success/bust, same "he shaves you a
+   *  little back either way" reasoning PeddlerManager.repRebate's own
+   *  comment establishes. Purely a display value from here on. */
+  rebate: number;
 }
 

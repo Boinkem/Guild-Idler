@@ -453,5 +453,12 @@
     "description": "Flip a jackpot-tier card while playing High Roller.",
     "hidden": false,
     "unlocksTrackId": "the_silent_lake"
+  },
+  {
+    "id": "PEDDLER_TAB_JACKPOT",
+    "name": "Knew When to Walk Away",
+    "description": "Settle Grimsby's Tab at round 5 or later.",
+    "hidden": false,
+    "unlocksTrackId": ""
   }
 ]

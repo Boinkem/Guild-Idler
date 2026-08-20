@@ -20,6 +20,7 @@ import { EnhanceStation } from '../EnhanceStation';
 import { WeaponEnchantStation } from '../WeaponEnchantStation';
 import { ArmourInfusionStation } from '../ArmourInfusionStation';
 import { ScrapStation } from '../ScrapStation';
+import { ReputationRing } from '../ReputationRing';
 
 /** Confirmed pairing, not a guess -- Blacksmith sells armour, Alchemist sells
  *  supplies, Enchanter sells the black market. Same mapping decides which
@@ -62,8 +63,10 @@ export function VendorsPanel() {
             key={v.id}
             className={`btn-subtab ${tab === v.id ? 'on' : ''} ${isTabUnread(engine.state, 'vendors', v.id) ? 'subtab-unread' : ''}`}
             onClick={() => setTab(v.id)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
           >
             {v.name}
+            <ReputationRing goldSpent={engine.state.vendorGoldSpent[v.id]} size={18} />
           </button>
         ))}
       </div>
@@ -153,7 +156,10 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
           <VendorSprite vendor={vendorId} height={72} animate />
           <div style={{ flex: 1 }}>
             <div className="spread">
-              <span className="card-title">{vendorDef.name}</span>
+              <span className="card-title row" style={{ gap: 6, alignItems: 'center' }}>
+                {vendorDef.name}
+                <ReputationRing goldSpent={state.vendorGoldSpent[vendorId]} size={22} />
+              </span>
               <span className={`small muted ${levelPulses[`vendor:${vendorId}`] ? 'purchase-pulse' : ''}`}>Level {level}/{upgradeList.length}</span>
             </div>
             <p className="card-flavour">{vendorDef.blurb}</p>

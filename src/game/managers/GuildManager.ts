@@ -9,6 +9,7 @@ import { Rng } from '../rng';
 import { HeroManager } from './HeroManager';
 import { ModifierManager } from './ModifierManager';
 import { Tuning } from '../data/tuning';
+import { applyVendorRepDiscount } from '../data/vendorRep';
 
 export const GuildManager = {
   facilityLevel(state: GameState, id: GuildFacility): number {
@@ -78,7 +79,12 @@ export const GuildManager = {
     const level = GuildManager.upgradeLevel(state, id);
     if (!def || level >= def.maxLevel) return null;
     if (def.vendor && !isVendorUpgradeUnlocked(state.vendorLevels[def.vendor], def.vendor, def.id)) return null;
-    return upgradeCost(def, level);
+    const cost = upgradeCost(def, level);
+    // Only vendor-TIED upgrades get Vendor Rep's discount -- a guild
+    // facility upgrade with no def.vendor isn't purchased "from" anyone
+    // specifically, so there's no vendor relationship for it to discount
+    // against.
+    return def.vendor ? applyVendorRepDiscount(cost, state.vendorGoldSpent?.[def.vendor] ?? 0) : cost;
   },
 
   buyUpgrade(state: GameState, id: string): string | null {
@@ -89,10 +95,12 @@ export const GuildManager = {
     }
     const level = GuildManager.upgradeLevel(state, id);
     if (level >= def.maxLevel) return 'Already at maximum.';
-    const cost = upgradeCost(def, level);
+    const cost = GuildManager.nextUpgradeCost(state, id);
+    if (cost === null) return 'Already at maximum.';
     if (state.gold < cost) return 'Not enough gold.';
     state.gold -= cost;
     state.stats.goldSpent += cost;
+    if (def.vendor) state.vendorGoldSpent[def.vendor] += cost;
     state.upgrades[id] = level + 1;
     return null;
   },

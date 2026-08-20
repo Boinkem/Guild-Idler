@@ -1,4 +1,4 @@
-import { ActiveQuest, AutoChainTactics, DiceFace, DiceRollResult, ElementType, GameState, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
+import { ActiveQuest, AutoChainTactics, DiceFace, DiceRollResult, ElementType, GameState, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -82,6 +82,13 @@ export class GameEngine {
    *  instead of Pick Your Card -- set by rollGrimsbyDice, cleared by
    *  dismissGrimsbyDiceResult. Feeds PeddlerDiceModal's own reveal. */
   lastGrimsbyDiceResult: DiceRollResult | null = null;
+  /** Same shape again, for a single "Run it up" push in Grimsby's Tab --
+   *  set by runUpGrimsbyTab, cleared by dismissGrimsbyTabResult. The
+   *  ONGOING tab itself lives in GameState.peddlerTab (persisted,
+   *  survives a reload); this is just "what happened on the last push,"
+   *  same one-shot-reveal role lastGrimsbyResult/lastGrimsbyDiceResult
+   *  already play for their own games. */
+  lastGrimsbyTabResult: PeddlerTabRunResult | null = null;
   /**
    * Queued rather than a single overwritable value -- simultaneous events
    * (a quest finishing right as it unlocks something) now show one after
@@ -2746,6 +2753,64 @@ export class GameEngine {
 
   dismissGrimsbyDiceResult() {
     this.lastGrimsbyDiceResult = null;
+    this.notify();
+  }
+
+  /**
+   * Opens a new Tab at the given tier (0-3, low to high stake -- see
+   * PeddlerManager.tabTierBuyIn). Gated behind Permanent Spot, same
+   * precondition-checked-here-not-in-the-manager shape
+   * pickPeddlerCard/rollGrimsbyDice already use. No transient result to
+   * stash -- GameState.peddlerTab itself IS the ongoing UI state from
+   * here on, read directly rather than through a one-shot reveal field.
+   */
+  openGrimsbyTab(tier: number) {
+    if (!this.state.grimsbyPermanentSpotUnlocked) return this.say('The Tab is only open once Grimsby has a permanent spot.');
+    if (this.state.peddlerTab) return this.say('A tab is already open.');
+    const buyIn = PeddlerManager.tabTierBuyIn(tier);
+    if (this.state.gold < buyIn) return this.say('Not enough gold.');
+    const tab = PeddlerManager.openTab(this.state, tier);
+    if (!tab) return this.say('Something about that didn\u2019t work.');
+    playSound('purchase');
+    this.reportGuidance(GuidanceManager.checkAll(this.state));
+    this.notify();
+    void this.saveNow();
+  }
+
+  /**
+   * The "Run it up" action -- pays the tab's tier buy-in again, rolls
+   * for the next round. Success or bust, the result goes to
+   * lastGrimsbyTabResult for the UI's own reveal beat (see that field's
+   * comment); GameState.peddlerTab reflects the new ongoing state
+   * either way (grown, or null on a bust) by the time this returns.
+   */
+  runUpGrimsbyTab() {
+    const tab = this.state.peddlerTab;
+    if (!tab) return this.say('No tab is open.');
+    const buyIn = PeddlerManager.tabTierBuyIn(tab.tier);
+    if (this.state.gold < buyIn) return this.say('Not enough gold.');
+    const result = PeddlerManager.runItUp(this.state);
+    if (!result) return this.say('Something about that didn\u2019t work.');
+    this.lastGrimsbyTabResult = result;
+    playSound(result.success ? 'purchase' : 'quest_fail');
+    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+    this.notify();
+    void this.saveNow();
+  }
+
+  /** Banks the open tab's current value and closes it. */
+  settleGrimsbyTab() {
+    const value = PeddlerManager.settleTab(this.state);
+    if (value === null) return this.say('No tab is open.');
+    playSound('purchase');
+    this.say(`Settled for ${value}g.`, 'peddler');
+    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+    this.notify();
+    void this.saveNow();
+  }
+
+  dismissGrimsbyTabResult() {
+    this.lastGrimsbyTabResult = null;
     this.notify();
   }
 

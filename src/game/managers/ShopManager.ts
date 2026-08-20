@@ -7,6 +7,7 @@ import { EquipmentManager } from './EquipmentManager';
 import { ModifierManager } from './ModifierManager';
 import { rerollDay, rerollsUsedToday, nextRerollCost } from '../data/reroll';
 import { Tuning } from '../data/tuning';
+import { applyVendorRepDiscount } from '../data/vendorRep';
 
 export const SHOP_REFRESH_MS = 4 * HOUR;
 const SHOP_EQUIPMENT_SLOTS = 5;
@@ -50,10 +51,15 @@ export const ShopManager = {
       const def = rng.weighted(eligible.map((e) => ({ item: e, weight: RARITY_WEIGHT[e.rarity] })));
       picks.add(def.id);
     }
+    // Vendor Rep discount baked in at roll time, same convention
+    // refreshBlackMarket's own blackMarketDiscount modifier already
+    // uses below -- accepts some staleness between a restock and a
+    // level-up mid-window, same tradeoff that precedent already made.
+    const repSpent = state.vendorGoldSpent?.blacksmith ?? 0;
     return [...picks].map((defId) => ({
       uid: uid('shopitem'),
       defId,
-      price: EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]),
+      price: applyVendorRepDiscount(EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]), repSpent),
     }));
   },
 
@@ -110,7 +116,8 @@ export const ShopManager = {
   blacksmithRerollCost(state: GameState, now: number): number {
     const used = rerollsUsedToday(state.blacksmithRerollsUsedToday, state.blacksmithRerollDay, now);
     const free = ModifierManager.vendorFreeRerolls(state, 'blacksmith');
-    return nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
+    const base = nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
+    return base === 0 ? 0 : applyVendorRepDiscount(base, state.vendorGoldSpent?.blacksmith ?? 0);
   },
 
   /** Restocks only the Blacksmith's own equipment stock early, spending
@@ -128,6 +135,7 @@ export const ShopManager = {
       if (state.gold < cost) return `Not enough gold to reroll (needs ${cost}).`;
       state.gold -= cost;
       state.stats.goldSpent += cost;
+      state.vendorGoldSpent.blacksmith += cost;
     }
     state.blacksmithRerollsUsedToday += 1;
     state.shop.equipment = ShopManager.rollEquipment(state, now);
@@ -139,7 +147,8 @@ export const ShopManager = {
   alchemistRerollCost(state: GameState, now: number): number {
     const used = rerollsUsedToday(state.alchemistRerollsUsedToday, state.alchemistRerollDay, now);
     const free = ModifierManager.vendorFreeRerolls(state, 'alchemist');
-    return nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
+    const base = nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
+    return base === 0 ? 0 : applyVendorRepDiscount(base, state.vendorGoldSpent?.alchemist ?? 0);
   },
 
   /** Restocks only the Alchemist's own consumable stock early -- same
@@ -155,6 +164,7 @@ export const ShopManager = {
       if (state.gold < cost) return `Not enough gold to reroll (needs ${cost}).`;
       state.gold -= cost;
       state.stats.goldSpent += cost;
+      state.vendorGoldSpent.alchemist += cost;
     }
     state.alchemistRerollsUsedToday += 1;
     state.shop.consumables = ShopManager.rollConsumables(state, now);
@@ -170,7 +180,8 @@ export const ShopManager = {
   enchanterRerollCost(state: GameState, now: number): number {
     const used = rerollsUsedToday(state.enchanterRerollsUsedToday, state.enchanterRerollDay, now);
     const free = ModifierManager.vendorFreeRerolls(state, 'enchanter');
-    return nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
+    const base = nextRerollCost(used, free, 'reroll.vendorBaseCost', 'reroll.vendorCostGrowth');
+    return base === 0 ? 0 : applyVendorRepDiscount(base, state.vendorGoldSpent?.enchanter ?? 0);
   },
 
   /** Forces an early Black Market turnover, spending today's next
@@ -189,6 +200,7 @@ export const ShopManager = {
       if (state.gold < cost) return `Not enough gold to reroll (needs ${cost}).`;
       state.gold -= cost;
       state.stats.goldSpent += cost;
+      state.vendorGoldSpent.enchanter += cost;
     }
     state.enchanterRerollsUsedToday += 1;
     ShopManager.refreshBlackMarket(state, now, true, now);
@@ -222,6 +234,11 @@ export const ShopManager = {
     const window = Math.floor(now / BLACK_MARKET_REFRESH_MS);
     const rng = createRng(`blackmarket:${window}:${state.createdAt}:${salt}`);
     const discount = ModifierManager.global(state).blackMarketDiscount ?? 0;
+    // Enchanter's own Vendor Rep discount stacks with the existing
+    // Enchanted Seal blackMarketDiscount modifier -- one's a guild-wide
+    // upgrade, this one's personal loyalty, no reason they should
+    // compete for the same slot.
+    const repSpent = state.vendorGoldSpent?.enchanter ?? 0;
 
     const eligible = EQUIPMENT.filter((def) =>
       !def.raidExclusive && !def.craftable && !def.chainExclusive && (BLACK_MARKET_RARITIES as readonly string[]).includes(def.rarity));
@@ -243,7 +260,10 @@ export const ShopManager = {
       equipment: [...picks].map((defId) => ({
         uid: uid('blackmarket'),
         defId,
-        price: Math.ceil(EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]) * BLACK_MARKET_MARKUP * (1 - discount / 100)),
+        price: applyVendorRepDiscount(
+          Math.ceil(EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]) * BLACK_MARKET_MARKUP * (1 - discount / 100)),
+          repSpent,
+        ),
       })),
     };
     return state.blackMarket;
@@ -262,6 +282,7 @@ export const ShopManager = {
     if (!item) return 'Unknown item.';
     state.gold -= entry.price;
     state.stats.goldSpent += entry.price;
+    state.vendorGoldSpent.enchanter += entry.price;
     state.stash.push(item);
     if (!state.discoveredItems.includes(entry.defId)) state.discoveredItems.push(entry.defId);
     state.blackMarket.equipment = state.blackMarket.equipment.filter((e) => e.uid !== shopUid);
@@ -278,6 +299,7 @@ export const ShopManager = {
     if (!item) return 'Unknown item.';
     state.gold -= entry.price;
     state.stats.goldSpent += entry.price;
+    state.vendorGoldSpent.blacksmith += entry.price;
     state.stash.push(item);
     if (!state.discoveredItems.includes(entry.defId)) state.discoveredItems.push(entry.defId);
     state.shop.equipment = state.shop.equipment.filter((e) => e.uid !== shopUid);

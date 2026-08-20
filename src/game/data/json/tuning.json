@@ -4396,5 +4396,117 @@
     "min": 1,
     "max": 3,
     "description": "Multiplies a chain's own dedicated reward item's authored mods/stats when it drops from a Legendary replay."
+  },
+  {
+    "id": "vendorRep.goldPerLevelBase",
+    "label": "Vendor Rep: gold divisor",
+    "category": "vendorRep",
+    "value": 100,
+    "default": 100,
+    "min": 1,
+    "description": "level = floor(sqrt(lifetimeGoldSpentAtVendor / this)) -- same diminishing-curve shape as Fund the Guild's Power formula, tuned so level 1 lands at 100g spent, level 10 at 10,000g, level 20 at 40,000g."
+  },
+  {
+    "id": "vendorRep.discountPerLevel",
+    "label": "Vendor Rep: percent per level",
+    "category": "vendorRep",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 10,
+    "description": "Percentage points of discount (vendors) or fee-discount-and-payout-bonus (Grimsby) per Vendor Rep level, before the level cap below applies."
+  },
+  {
+    "id": "vendorRep.maxDiscountLevel",
+    "label": "Vendor Rep: level cap for the bonus",
+    "category": "vendorRep",
+    "value": 20,
+    "default": 20,
+    "min": 1,
+    "description": "Vendor Rep level stops increasing the discount/bonus past this level (20 level * 1%/level = 20% ceiling) -- the level number itself keeps climbing as pure fame past this point, same 'ring stays full, number keeps counting' shape prestige-adjacent systems already use, deliberately so lifetime spend can never make a vendor's stock or Grimsby's games trivially cheap."
+  },
+  {
+    "id": "peddler.tab.tier0BuyIn",
+    "label": "Grimsby's Tab: tier 1 buy-in (gold)",
+    "category": "peddler",
+    "value": 20,
+    "default": 20,
+    "min": 1,
+    "description": "Buy-in for the lowest of the Tab's stake tiers -- opens the tab at round 1, no risk roll on this step."
+  },
+  {
+    "id": "peddler.tab.tier1BuyIn",
+    "label": "Grimsby's Tab: tier 2 buy-in (gold)",
+    "category": "peddler",
+    "value": 100,
+    "default": 100,
+    "min": 1,
+    "description": "Buy-in for the Tab's second stake tier."
+  },
+  {
+    "id": "peddler.tab.tier2BuyIn",
+    "label": "Grimsby's Tab: tier 3 buy-in (gold)",
+    "category": "peddler",
+    "value": 500,
+    "default": 500,
+    "min": 1,
+    "description": "Buy-in for the Tab's third stake tier."
+  },
+  {
+    "id": "peddler.tab.tier3BuyIn",
+    "label": "Grimsby's Tab: tier 4 buy-in (gold)",
+    "category": "peddler",
+    "value": 2500,
+    "default": 2500,
+    "min": 1,
+    "description": "Buy-in for the Tab's highest stake tier -- the one aimed at late-game players with real gold to burn, per direct request: 'lets late game players with lots of gold high roll.'"
+  },
+  {
+    "id": "peddler.tab.baseSuccessChance",
+    "label": "Grimsby's Tab: round 2 success chance",
+    "category": "peddler",
+    "value": 0.85,
+    "default": 0.85,
+    "min": 0,
+    "max": 1,
+    "description": "Success chance for the FIRST 'run it up' roll (round 2 -- round 1 is the guaranteed buy-in, no roll). Placeholder shape from the design mockup, not yet balanced against real gold values -- see PeddlerManager.tabSuccessChance."
+  },
+  {
+    "id": "peddler.tab.successDecayPerRound",
+    "label": "Grimsby's Tab: chance lost per round",
+    "category": "peddler",
+    "value": 0.15,
+    "default": 0.15,
+    "min": 0,
+    "max": 1,
+    "description": "Success chance lost per additional round pushed past the second, down to the floor below. No ceiling on rounds -- pushes indefinitely toward the floor, by design."
+  },
+  {
+    "id": "peddler.tab.minSuccessChance",
+    "label": "Grimsby's Tab: success chance floor",
+    "category": "peddler",
+    "value": 0.15,
+    "default": 0.15,
+    "min": 0,
+    "max": 1,
+    "description": "Success chance never drops below this no matter how many rounds are pushed -- keeps the tail of a long run gambling rather than mathematically certain to bust."
+  },
+  {
+    "id": "peddler.tab.rewardGrowthPerRound",
+    "label": "Grimsby's Tab: reward growth per round",
+    "category": "peddler",
+    "value": 0.55,
+    "default": 0.55,
+    "min": 0,
+    "description": "Growth coefficient in reward(r) = buyIn * (0.9 + (r-1) * this) -- each successful round adds more to the tab than the last, same 'the next one might be the one' curve the design mockup validated."
+  },
+  {
+    "id": "peddler.tab.jackpotRound",
+    "label": "Grimsby's Tab: round that counts as a jackpot",
+    "category": "peddler",
+    "value": 5,
+    "default": 5,
+    "min": 1,
+    "description": "Settling the tab at or past this round counts toward stats.peddlerJackpots and stats.peddlerTabJackpots -- per direct request, 'a roll of 5 can be a jackpot,' and specifically on SETTLING, not merely reaching the round and busting past it."
   }
 ]

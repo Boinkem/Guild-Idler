@@ -148,7 +148,7 @@ export function createInitialState(now = Date.now()): GameState {
       playTimeMs: 0, offlineTimeMs: 0, prestigeCount: 0, bestPrestigeStreak: 0,
       lowestSuccessfulChance: null, blackMarketPurchases: 0, firstPlayedAt: now,
       peddlerFlips: 0, peddlerJackpots: 0, peddlerHighRollerJackpots: 0,
-      peddlerGoldSpent: 0, peddlerBusts: 0,
+      peddlerGoldSpent: 0, peddlerBusts: 0, peddlerTabJackpots: 0,
     },
     log: [],
     discoveredItems: [],
@@ -159,6 +159,8 @@ export function createInitialState(now = Date.now()): GameState {
     unlockedAchievements: {},
     unlockedBardTracks: [],
     vendorLevels: { blacksmith: 0, alchemist: 0, enchanter: 0 },
+    vendorGoldSpent: { blacksmith: 0, alchemist: 0, enchanter: 0 },
+    peddlerTab: null,
     guildName: '',
     notifiedSetBonuses: [],
     activeRaid: null,
@@ -959,6 +961,35 @@ const MIGRATIONS: Record<number, Migration> = {
     chainReplayTiersOwned: (save.chainReplayTiersOwned as string[] | undefined) ?? [],
     activeChainReplays: (save.activeChainReplays as unknown[] | undefined) ?? [],
   }),
+  47: (save) => {
+    // Vendor Rep + Grimsby's Tab. vendorGoldSpent all-zero is exactly
+    // correct for a pre-migration save -- it's a NEW lifetime counter,
+    // not a backfill of gold already spent before this patch existed
+    // (that history was never tracked per-vendor, only in the combined
+    // stats.goldSpent, so there's nothing to recover it from). Same
+    // "undiscovered content stays undiscovered" shape migrations 45/46
+    // already used -- a returning player starts back at Vendor Rep
+    // level 0 with everyone, same as a brand-new save would. peddlerTab
+    // null is the correct "never opened one" default for the same
+    // reason. stats.peddlerTabJackpots needs the same explicit
+    // stats-object deep-merge migration 44 already had to work around
+    // for peddlerGoldSpent/peddlerBusts -- `migrate` only ever
+    // shallow-merges save.stats over the fresh default, so a stats
+    // object present but missing this one field would otherwise come
+    // back undefined rather than falling back to 0.
+    const stats = (save.stats as Record<string, unknown> | undefined) ?? {};
+    return {
+      ...save,
+      version: 48,
+      vendorGoldSpent: (save.vendorGoldSpent as Record<string, number> | undefined)
+        ?? { blacksmith: 0, alchemist: 0, enchanter: 0 },
+      peddlerTab: (save.peddlerTab as { tier: number; round: number; value: number } | null | undefined) ?? null,
+      stats: {
+        ...stats,
+        peddlerTabJackpots: (stats.peddlerTabJackpots as number | undefined) ?? 0,
+      },
+    };
+  },
 };
 
 export const SaveManager = {

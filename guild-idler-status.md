@@ -17084,3 +17084,171 @@ vite.web.config.ts` both pass clean. The mods/stats scaling was checked
 numerically against `gravewatchers_band`'s real pre-0214 tiered values,
 not just read for plausibility -- exact match at both Heroic and
 Legendary. No duplicate `Tuning` ids introduced.
+
+### Vendor Rep + Grimsby's Tab -- the full loyalty system, three vendors, and a third wager game (patch 0226)
+```discord-update
+Dev Update | Vendor Rep & Grimsby's Tab
+
+- Added Vendor Rep -- a loyalty ring on every vendor and Grimsby, filling as you spend, worth a discount and (at Grimsby's cart) a little extra back
+- Added Grimsby's Tab -- a new push-your-luck game: open a tab, push it further for a bigger prize, or settle and walk away, but a bad push loses the whole thing
+- Added a new achievement for settling the Tab at round 5 or later
+```
+
+Full build-out of the Vendor Rep + Grimsby's Tab design discussed over
+several turns this session -- data model, all three shop vendors,
+Grimsby's own discount/rebate, the Tab's complete game logic, the
+achievement, and the ring UI itself, all landing in one patch since none
+of the pieces are independently useful without the others.
+
+**Vendor Rep (`vendorRep.ts`).** `level = floor(sqrt(lifetimeGoldSpent /
+100))`, same diminishing-curve SHAPE Fund the Guild's own Power formula
+already uses (patch 0220) -- reused deliberately rather than inventing a
+new curve. 1% discount per level, capped at level 20 (20%) -- past that
+the level number keeps climbing as pure fame, same "ring stays full,
+number keeps counting" treatment already established for other systems,
+so lifetime spend can never make a vendor's stock or Grimsby's games
+trivially cheap. Confirmed by direct calculation, not just trusted from
+the formula: level 1 at 100g spent, level 5 at 2,500g, level 10 at
+10,000g, level 20 at 40,000g, and 200,000g still caps at exactly 20% --
+matches the design discussion's own worked numbers precisely.
+
+Applies to buy price AND service fees, per direct scope: Blacksmith
+(equipment + reroll), Alchemist (consumables + reroll), Enchanter (Black
+Market + reroll), and vendor-TIED upgrade purchases specifically (not
+guild-wide facility upgrades, which aren't bought "from" anyone). New
+`GameState.vendorGoldSpent: Record<VendorId, number>` tracks lifetime
+spend per vendor, separate from the pre-existing `vendorLevels` (a
+different, spend-to-unlock-upgrades track, not a loyalty measure).
+Deliberately does NOT feed Guild Power -- direct correction mid-session:
+vendor gold is already being spent for its own purchase, so also
+crediting Power would make ordinary shopping strictly better than Fund
+the Guild's own deliberate, no-other-payoff donation, quietly
+undermining that system's whole reason to exist.
+
+Price computed at the SAME point each vendor's price was already being
+computed, not forced into one universal pattern: Blacksmith's rolled
+equipment price and the Black Market's price both bake the discount in
+at roll/refresh time (matching the Black Market's own pre-existing
+`blackMarketDiscount` convention -- accepts the same staleness-between-
+restocks tradeoff that precedent already made); Alchemist's consumable
+price and all three reroll costs compute it live each call (matching
+how those were already computed fresh, not baked at roll time).
+
+**Grimsby's own discount + rebate.** Same level, same percent, same
+cap as the shop vendors, applied to all three of his games per direct
+request. Two distinct effects, not one: `feeWithStake` now returns a
+discounted fee (Cards/Dice both read this -- `resolveFlip` previously
+recomputed its own fee independently of `feeWithStake` despite that
+function's own comment claiming to be "the one place... so it can never
+drift"; now actually routed through it, closing a real duplication this
+patch found while wiring the discount in), AND a new `repRebate`
+gives a small automatic cash-back on whatever was just paid him,
+applied regardless of the round's own outcome -- even a bust still
+gets it, since it's about him being decent to a regular, not a
+consolation prize. Dice has no fixed fee to discount (the wager is a
+free-form typed number, and discounting a number the player just
+entered would just be confusing), so rep's full effect there is the
+rebate alone -- functionally the same net benefit, just expressed as
+gold back instead of a lower charge up front. `PeddlerFlipResult` and
+`DiceRollResult` both gained their own `rebate` field so the UI can
+show it as its own line rather than blending it into the game's own
+payout number.
+
+Confirmed working as of this patch, not left as a TODO: Grimsby's rep
+accumulates from ordinary Cards/Dice spend even before Permanent Spot
+is bought, since `peddlerGoldSpent` is Grimsby-wide and never gated --
+per direct design confirmation, a deliberate touch, so a regular's
+first-ever tab can already carry a real rebate.
+
+**Grimsby's Tab (`PeddlerManager.openTab`/`runItUp`/`settleTab`).**
+Gated behind `grimsbyPermanentSpotUnlocked` -- this is the one game
+where the tension is explicitly his own patience, so it only makes
+sense once he's actually settled in. New `GameState.peddlerTab: {
+tier, round, value } | null` -- round 1 is the guaranteed buy-in (no
+risk roll at all); every push after that pays the tier's buy-in again
+and rolls `tabSuccessChance` (85% at round 2, -15pts/round, floor 15%,
+never a designed ceiling on rounds -- pushes indefinitely toward the
+floor by direct design request, "lets late game players with lots of
+gold high roll"). Success grows the tab by `tabRoundReward` (grows
+~0.55x buy-in more per round) and advances round; a bust wipes the tab
+ENTIRELY -- no partial refund, per direct request ("a bust is a
+bust") -- deliberately the sharper version of the loss since that's
+the one thing that makes this feel different from Cards/Dice.
+
+**Four buy-in tiers** (20g/100g/500g/2,500g, all devtool-tunable),
+specifically so a late-game player with real gold can genuinely high-
+roll instead of being capped at early-game numbers, rather than reusing
+Cards/Dice's shared 1x-5x Stakes selector.
+
+**Stats/achievements, exactly as scoped, nothing extra invented:** a
+bust feeds the existing shared `peddlerBusts` counter directly, no
+separate Tab-specific bust tracking. Settling at or past round 5 (the
+tuned `peddler.tab.jackpotRound`) counts as a jackpot -- BOTH the
+shared `peddlerJackpots` counter (so it feeds the pre-existing
+`PEDDLER_JACKPOT` achievement the same as any other game) and a new
+dedicated `peddlerTabJackpots` counter, same "shared counter for the
+general achievement, own counter for the specific one" pattern
+`peddlerHighRollerJackpots` already established for High Roller. New
+achievement `PEDDLER_TAB_JACKPOT` ("Knew When to Walk Away") fires on
+SETTLING specifically, not merely reaching round 5 and busting past it
+on a later push -- per direct request, rewards the nerve to actually
+bank it, not just the streak to get there.
+
+**UI.** `PeddlerTabModal.tsx` -- same modal/overlay template as
+`PeddlerCardModal`/`PeddlerDiceModal` (peddler-table.png backdrop,
+`.peddler-modal` classes), not a bespoke scene. Grimsby's own reaction
+to how far a tab's been pushed reuses EXISTING sprite animations
+(`idle` → `idle2` → `dialogue` as rounds climb) rather than needing new
+art -- no new animation states invented. Deliberately does NOT display
+the exact success percentage anywhere in the player-facing modal --
+same "he doesn't tell you the odds" restraint Pick Your Card's own
+tiers already keep; the design mockup earlier in this session DID show
+raw odds, but that was explicitly a design-review tool, not the shipped
+player-facing surface, and this patch keeps that distinction rather
+than accidentally shipping the debug view.
+
+**`ReputationRing.tsx`** -- new reusable SVG progress-ring component,
+fills toward the NEXT level (not a lifetime total, which would
+basically never visibly move once rep is high) with the current level
+number centered inside. Deliberately a standalone badge next to each
+vendor's name/portrait rather than overlaid ON TOP of `VendorSprite`/
+`GrimsbySprite`'s own art -- a centered number would cover real
+character art the vendor page already has, but a sub-tab button has no
+art at all to wrap, so one component needed to work both places without
+assuming either. Wired into `VendorsPanel.tsx` (both the sub-tab row and
+each vendor's own page header) and `PeddlerPanel.tsx` (next to
+Grimsby's name).
+
+**Save migration.** `SAVE_VERSION` 47 → 48. `vendorGoldSpent` defaults
+to all-zero and `peddlerTab` to null for a pre-migration save -- both
+are NEW lifetime counters, not a backfill of spend that happened before
+this patch existed (never tracked per-vendor before now, only in the
+combined `stats.goldSpent`, so there's nothing to recover it from) --
+same "undiscovered content stays undiscovered" shape migrations 45/46
+already used. Caught and fixed a real gap while writing this migration,
+not just copied the pattern blindly: `stats.peddlerTabJackpots` needed
+its OWN explicit deep-merge (same shape migration 44 already had to
+work around for `peddlerGoldSpent`/`peddlerBusts`) -- `migrate`'s own
+top-level `{...base, ...save}` fallback only shallow-merges, so a save
+with a `stats` object already present but missing this one new field
+would otherwise come back `undefined` rather than falling back to 0.
+
+**Verified with a real build, not just read through.** `npx tsc
+--noEmit` and `npx vite build` (both the web bundle and the electron
+main/preload bundles) all pass clean. Also hand-verified the actual
+math with real numbers, not just trusted the formula by eye: Vendor
+Rep's discount curve (100g/2,500g/10,000g/40,000g spent → levels
+1/5/10/20, 200,000g still caps at exactly 20%) and the Tab's
+round-by-round value/chance progression both computed and checked
+against the design discussion's own worked examples before considering
+this done.
+
+**One real bug caught mid-implementation, not shipped:** the first
+attempt at inserting `repRebate` accidentally deleted the `export const
+PeddlerManager = {` line it was inserted above, breaking the entire
+file's syntax -- `tsc` caught it immediately (70+ cascading parse
+errors from one missing line) before it went anywhere near a patch
+file. Worth naming plainly here rather than pretending the first pass
+was clean: this is exactly what the "verify against a real build, not
+just read through" convention this project already holds itself to is
+for.
