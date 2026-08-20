@@ -519,12 +519,20 @@ export const QuestManager = {
       duration: stageDef.duration,
       baseSuccess: cfg.baseSuccess,
       // Chains keep their own fixed chain.reqLevel (patch 0214 deliberately
-      // leaves chain reward/level logic untouched) -- only the source of
-      // the gold baseline changed, from the old flat cfg.maxGold constant
-      // to the same level-scaled curve standard offers now use, evaluated
-      // at the chain's own reqLevel rather than a rolled one.
+      // leaves chain reward LEVEL logic untouched -- only the formula
+      // sourcing the reward changed). Gold already read from the
+      // level-scaled curve since patch 0214; xp did NOT -- it was still
+      // using the pre-0214 flat `28 * cfg.xpMultiplier * 1.5` formula,
+      // completely disconnected from chain.reqLevel. Found during the
+      // patch 0217 reward-scaling audit: this meant an early chain
+      // (millers_problem, reqLevel 2) overpaid xp by roughly 5x relative
+      // to what a standard quest at the same level/difficulty now gives,
+      // while a late chain (the_pale_rider, reqLevel 32) underpaid by
+      // roughly 4x -- confirmed with real numbers pulled from every
+      // chain in quest-chains.json, not just this one example. Fixed to
+      // mirror the gold formula's exact shape.
       rewardGold: Math.floor(questGoldBaseline(chain.reqLevel) * cfg.rewardMultiplier * stageDef.goldMultiplier),
-      rewardXp: Math.floor(28 * cfg.xpMultiplier * 1.5),
+      rewardXp: Math.floor(questXpBaseline(chain.reqLevel) * cfg.rewardMultiplier * stageDef.goldMultiplier),
       loot: lootTableFor(stageDef.difficulty, rng),
       reqLevel: chain.reqLevel,
       chain: { chainId: chain.id, stage, totalStages: chain.stages.length },

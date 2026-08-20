@@ -44,7 +44,7 @@
     "weight": 28,
     "color": "#5b8fd6",
     "referenceLevel": 3,
-    "rewardMultiplier": 1.0
+    "rewardMultiplier": 1.5
   },
   {
     "id": "hard",
@@ -57,7 +57,7 @@
     "weight": 22,
     "color": "#c98b3a",
     "referenceLevel": 8,
-    "rewardMultiplier": 1.9
+    "rewardMultiplier": 3.2
   },
   {
     "id": "epic",
@@ -70,7 +70,7 @@
     "weight": 14,
     "color": "#a874d6",
     "referenceLevel": 15,
-    "rewardMultiplier": 3.5
+    "rewardMultiplier": 7.3
   },
   {
     "id": "legendary",
@@ -83,6 +83,6 @@
     "weight": 6,
     "color": "#d9a441",
     "referenceLevel": 25,
-    "rewardMultiplier": 6.5
+    "rewardMultiplier": 19.5
   }
 ]

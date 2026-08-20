@@ -35,18 +35,36 @@ const XP_FAILURE_MULTIPLIER = Tuning.get('balance.xpFailureMultiplier');
  * own header comment. No behavior change for any existing caller; every
  * in-file use below is unaffected by this becoming a named export.
  */
-export function expectedRatePerHour(cfg: DifficultyConfig, kind: 'gold' | 'xp'): number {
+/**
+ * `atLevel` lets a caller estimate this tier's rate for a hero at a
+ * SPECIFIC level, rather than the tier's own fixed `referenceLevel` --
+ * needed for anything tracking a leveling hero's actual income over time
+ * (the Balance Sandbox sim), since reward now scales continuously with
+ * the rolled reqLevel (near hero.level, patch 0214), not with a fixed
+ * per-tier constant. Defaults to `cfg.referenceLevel` when omitted,
+ * preserving the exact existing behavior for fastQuestCapsPerHour/
+ * fastQuestFloorPerHour below, which deliberately DO want a fixed,
+ * level-independent ceiling reference rather than tracking a specific
+ * hero -- see this function's own callers for which is which. Found and
+ * fixed while auditing reward-scaling consistency (patch 0217): the
+ * Balance Sandbox sim was calling this with no `atLevel`, silently
+ * pinning every tier's income estimate to its referenceLevel forever
+ * regardless of how high the simulated hero actually leveled, which
+ * would have made the "days to level 55" simulation meaningless post-
+ * patch-0214 without this.
+ */
+export function expectedRatePerHour(cfg: DifficultyConfig, kind: 'gold' | 'xp', atLevel?: number): number {
   const avgDurationHours = (cfg.minDuration + cfg.maxDuration) / 2 / HOUR;
   const successRate = cfg.baseSuccess / 100;
+  const level = atLevel ?? cfg.referenceLevel;
   // Standard reward no longer reads a flat minGold/maxGold range (patch
   // 0214) -- estimated here off the same level-scaled baseline curve
-  // QuestManager.generateOffer actually rolls against, evaluated at this
-  // tier's referenceLevel as a representative "typical" level. The old
+  // QuestManager.generateOffer actually rolls against. The old
   // xpMin/xpMax base range (BASE_XP_MIN/MAX) is no longer part of the
   // standard-offer xp roll either, only questXpBaseline is.
   const avgReward = kind === 'gold'
-    ? questGoldBaseline(cfg.referenceLevel) * cfg.rewardMultiplier
-    : questXpBaseline(cfg.referenceLevel) * cfg.rewardMultiplier;
+    ? questGoldBaseline(level) * cfg.rewardMultiplier
+    : questXpBaseline(level) * cfg.rewardMultiplier;
   const failureMultiplier = kind === 'gold' ? GOLD_FAILURE_MULTIPLIER : XP_FAILURE_MULTIPLIER;
   const expectedReward = successRate * avgReward + (1 - successRate) * failureMultiplier * avgReward;
   return expectedReward / avgDurationHours;

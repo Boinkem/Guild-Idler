@@ -16043,3 +16043,185 @@ config change with a clear, confirmed causal chain from the missing
 `files` entry to the exact runtime failure, but a real install test is
 the only way to close the loop completely -- worth doing before telling
 testers it's resolved.
+
+### Reward-scaling audit: quest difficulty tiers were strictly worse the harder you went, chain XP was disconnected from level, and a corrected time-to-55 simulation (patch 0217)
+
+```discord-update
+Dev Update | Patch 0217
+
+- Fixed a serious economy bug from patch 0214 -- every quest difficulty above Easy was actually paying LESS gold per hour than Easy, not more, because duration grew faster than the reward did. Every difficulty now properly pays more the harder it is.
+- Fixed quest chain XP rewards, which weren't scaling with a chain's own level at all -- early chains were overpaying XP by up to 5x, late chains underpaying by up to 4x
+- Confirmed raid rewards are properly scaled against the fixed quest baseline -- a full raid party earns roughly 5-7x a solo quest's hourly rate, a sensible reward for coordinating more heroes
+```
+
+Direct request: audit gold/xp consistency across quests, chains, and
+raids now that reward scales with level (patch 0214), and get a real
+simulated time-to-level-55 out of it. Found two serious, previously
+unnoticed bugs doing this -- not a clean bill of health.
+
+#### Bug 1: every quest difficulty above Easy paid less per hour, not more
+
+Computed `expectedRatePerHour` directly for every tier at several levels
+before touching anything. Result: **Easy was the highest gold/xp-per-hour
+tier at every level tested, and each harder tier paid strictly less.**
+
+| Tier | Old `rewardMultiplier` | Duration (avg) | Success | Gold/hr @ lvl30 |
+|-|-|-|-|-|
+| Easy | 0.6 | 1.5h | 70% | 31.29 |
+| Normal | 1.0 | 3h | 60% | 23.10 |
+| Hard | 1.9 | 5h | 50% | 22.94 |
+| Epic | 3.5 | 9h | 40% | 20.01 |
+| Legendary | 6.5 | 18h | 30% | 15.36 |
+
+Root cause: duration grows ~12x from Easy to Legendary (1.5h -> 18h),
+but the `rewardMultiplier` values chosen in patch 0214 only grew ~11x
+(0.6 -> 6.5) while ALSO getting hit by a falling success rate (70% ->
+30%) on top. The reward multiplier needed to grow faster than duration
+just to break even, and it didn't. Confirmed this was specific to the
+*quest* tier system, not a general problem -- raids' own
+`RaidDifficultyConfig` (`durationMultiplier` 1.0/1.15/1.3x, barely
+moving) never had this issue, which is exactly why they didn't need
+touching.
+
+**Fixed** by solving for the `rewardMultiplier` each tier actually needs
+to match Easy's own per-hour rate (duration/success-adjusted, level-
+independent -- the math cancels the shared level term), then layering a
+deliberate premium on top so harder content is a genuine reward, not
+just parity: Easy 1.0x (baseline, unchanged), Normal 1.1x, Hard 1.25x,
+Epic 1.4x, Legendary 1.6x. Solved separately against gold's and xp's own
+failure multipliers (`balance.goldFailureMultiplier` 0.15 vs
+`balance.xpFailureMultiplier` 0.30 -- different enough that a single
+shared `rewardMultiplier` per tier can't perfectly optimize both at
+once, since gold and xp share one field), then averaged the two
+solutions and rounded to clean numbers.
+
+| Tier | `rewardMultiplier`: before -> after |
+|-|-|
+| Easy | 0.6 -> 0.6 (unchanged) |
+| Normal | 1.0 -> 1.5 |
+| Hard | 1.9 -> 3.2 |
+| Epic | 3.5 -> 7.3 |
+| Legendary | 6.5 -> 19.5 |
+
+Re-verified after the fix: gold and xp per-hour now both increase
+monotonically with difficulty at every level tested (1/15/30/55) --
+checked numerically, not assumed from the formula alone.
+
+#### Bug 2: chain XP was never level-scaled at all
+
+Chain gold already read from `questGoldBaseline(chain.reqLevel)` since
+patch 0214. Chain xp did not -- it was still using the pre-0214 flat
+formula, `Math.floor(28 * cfg.xpMultiplier * 1.5)`, which never
+references `chain.reqLevel` at all. Every chain of the same difficulty
+label paid identical xp regardless of its actual level. Pulled real
+numbers across several chains to confirm the actual damage, not just
+the formula shape:
+
+| Chain | reqLevel | Stage 1 difficulty | Old (flat) xp | Correct (level-scaled) xp |
+|-|-|-|-|-|
+| millers_problem | 2 | easy | 42 | 8 (5.3x overpaid) |
+| the_last_clutch | 5 | easy | 42 | 12 (3.5x overpaid) |
+| proving_the_bastion | 16 | normal | 100 | 104 (about right, coincidence) |
+| the_pale_rider | 32 | epic | 504 | 1860 (3.7x underpaid) |
+
+**Fixed** -- `chainOffer`'s `rewardXp` now mirrors the gold formula
+exactly: `questXpBaseline(chain.reqLevel) * cfg.rewardMultiplier *
+stageDef.goldMultiplier`. Reused `stageDef.goldMultiplier` for xp too
+rather than adding a new per-stage xp field -- no dedicated xp scalar
+exists on `ChainStageDef`, and reusing the existing per-stage relative
+weighting keeps a chain's stage-to-stage progression consistent for
+both currencies rather than needing two parallel fields authored
+in sync across all 29 chains.
+
+#### Raids: checked, consistent (one flagged, not changed)
+
+Computed raid gold-per-hero-hour (Normal difficulty, party size 3, total
+encounter reward divided by total duration and party size) against the
+*corrected* quest baseline at each raid's own `reqLevel`. Raids
+consistently pay 4.55x-6.72x a solo quest's hourly rate across 7 of the
+8 raids -- a sensible, deliberate premium for coordinating a full party
+instead of one hero, not something that needs fixing.
+
+One outlier: `silence_the_loom` pays 9.68x, well above the rest.
+Checked its own data before assuming it was a bug -- single encounter,
+6-hour duration, explicitly authored as a single concentrated
+boss-only fight ("no outer ring of guards, no lesser threat to clear
+first" per its own flavour text), unlike every other raid's multi-
+encounter structure. Reads as a deliberate design choice (short, hard,
+concentrated payout) rather than an accident -- left untouched rather
+than unilaterally rebalancing a bespoke, hand-authored raid's numbers
+off one ratio check.
+
+#### The Balance Sandbox sim was itself stale, fixed before trusting its output
+
+`expectedRatePerHour(cfg, kind)` (`balance.ts`) evaluated
+`questGoldBaseline`/`questXpBaseline` at each tier's fixed
+`referenceLevel` -- correct for its original purpose
+(`fastQuestCapsPerHour`/`fastQuestFloorPerHour`'s level-independent
+ceiling), wrong for the sim (`tools/devtool/sim/runSim.ts`), which needs
+to track a *specific, leveling* hero's real income over time. Running
+the sim without this fix would have silently pinned every tier's
+estimated income to a fixed reference level forever, regardless of how
+high the simulated hero actually climbed -- making "days to level 55"
+meaningless post-patch-0214 without catching this first.
+
+**Fixed**: `expectedRatePerHour` gained an optional `atLevel` parameter
+-- when provided, evaluates the curve at that specific level instead of
+`cfg.referenceLevel`. Defaults to the old behavior when omitted, so
+`fastQuestCapsPerHour`/`fastQuestFloorPerHour` (which deliberately want
+the fixed reference, not a tracked hero) are completely unaffected.
+`runSim.ts`'s main loop now also picks its tier by computing
+`expectedRatePerHour` for every difficulty at the hero's actual live
+level and taking the best, rather than reusing `bestUnlockedTier`'s old
+reqLevel-availability heuristic -- correct now that every difficulty is
+available at any level (patch 0214) and tier choice is a pure
+rate-optimization question, not an unlock gate.
+
+#### Simulated time to level 55
+
+Ran the (now-fixed) sim directly, Active preset (1 hero, 15-minute
+check-ins, always plays the best-value tier), against every fix in this
+patch:
+
+| Day | Level |
+|-|-|
+| 0 | 1 |
+| 10 | 15 |
+| 30 | 35 |
+| 50 | 46 |
+| 70 | 52 |
+| **~88-90** | **55 (cap)** |
+| 400 (safety cap) | 90 |
+
+Confirmed the sim correctly picks Epic from level 1 (premium curve
+makes it the best per-hour rate even early) and switches to Legendary
+once it unlocks at level 25 (`quest_reqlevel.legendaryLevelFloor`,
+respected by the sim's tier-eligibility filter). Before this patch's
+fixes, the same preset (using the broken multipliers, tracked against
+the sim's own then-current-but-wrong tier-selection logic) never picked
+anything above Easy for the entire run and reached level 55 around day
+145 -- roughly 60% slower, entirely as an artifact of the reward bug,
+not a real pacing signal.
+
+**Not a target-matching claim** -- the pre-0214 system's own documented
+target was ~62 days (patch 0173/0174's XP curve tuning). ~88-90 days
+under the new system is a genuinely different economy (level-scaled
+reward curve, soft-capped gold/xp, squished facility rates, procedural
+loot all layered in since), not a regression from that old number by
+formula, but worth a direct decision: is ~88-90 days to cap the right
+pace for this new system, or should the reward curve's own breakpoints
+(still flagged as first-pass since patch 0214) get tuned toward the old
+target specifically? Flagged, not decided here.
+
+#### Verified
+
+`npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` both
+pass clean. Every reward-multiplier number in this patch was solved and
+re-verified numerically (not hand-picked) -- monotonic per-hour increase
+confirmed at 4 separate levels after the fix, not just at the level used
+to derive it. Chain xp numbers checked against real data pulled from
+`quest-chains.json`, not a single cherry-picked example. Raid comparison
+computed across all 8 raids, not asserted. The time-to-55 simulation was
+run directly (not estimated) against the actual fixed formulas via the
+project's own Balance Sandbox sim tool. No live playtest in this
+environment -- same standing caveat as every patch since 0214.

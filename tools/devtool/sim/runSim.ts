@@ -147,7 +147,25 @@ async function main() {
   while (day < maxDays) {
     if (level >= 55 && allSpent()) break; // completion condition -- see file comment on the level-55 assumption
 
-    const tier = balance.bestUnlockedTier(level, false);
+    // Every difficulty is available at any level now (patch 0214 --
+    // reqLevel rolls near hero.level regardless of tier), so "which tier"
+    // is a pure pick-the-best-rate optimization now, not an unlock
+    // question the way bestUnlockedTier's old reqLevel-gated logic
+    // modeled. Picks whichever tier's expectedRatePerHour (gold) is
+    // highest AT THE HERO'S CURRENT LEVEL -- both the tier choice and the
+    // rate itself now track live `level`, neither pinned to a fixed
+    // referenceLevel the way this loop read before patch 0217's fix (see
+    // expectedRatePerHour's own comment for why that was wrong here).
+    // Legendary excluded below level 25, matching quest_reqlevel.
+    // legendaryLevelFloor -- this sim doesn't model the Enchanted Seal
+    // unlock at all (Phase 1 scope, see file header), so treating
+    // Legendary as unavailable below the level floor is the closer
+    // approximation of the two.
+    const eligibleTiers = DIFFICULTY_ORDER.filter((d) => d !== 'legendary' || level >= 25);
+    const tier = eligibleTiers.reduce((best, id) => (
+      balance.expectedRatePerHour(DIFFICULTIES[id], 'gold', level)
+        > balance.expectedRatePerHour(DIFFICULTIES[best], 'gold', level) ? id : best
+    ), eligibleTiers[0]);
     if (!tierFirstSeen[tier]) tierFirstSeen[tier] = { day, level };
     const cfg: DifficultyConfig = DIFFICULTIES[tier];
 
@@ -162,8 +180,8 @@ async function main() {
       ? 1
       : Math.min(1, avgDurationMinutes / input.preset.checkInMinutes);
 
-    const goldPerHour = balance.expectedRatePerHour(cfg, 'gold');
-    const xpPerHour = balance.expectedRatePerHour(cfg, 'xp');
+    const goldPerHour = balance.expectedRatePerHour(cfg, 'gold', level);
+    const xpPerHour = balance.expectedRatePerHour(cfg, 'xp', level);
 
     const goldGain = goldPerHour * heroCount * uptimeFactor * checkInHours;
     const xpGain = xpPerHour * heroCount * uptimeFactor * checkInHours;
@@ -206,6 +224,12 @@ async function main() {
   if (day >= maxDays) hitSafetyCap = true;
 
   // ---------------------------------------------------- tier rate summary --
+  // Snapshot of each tier's OWN reference-level rate (a fixed, level-
+  // independent baseline for comparing tiers against each other), not a
+  // tracked hero's live rate -- the sim loop above already reports the
+  // real, level-tracked income via levelCurve/goldPerHour. See
+  // expectedRatePerHour's own comment for the referenceLevel-vs-atLevel
+  // distinction.
   const tierRates: Record<string, unknown> = {};
   for (const id of DIFFICULTY_ORDER) {
     const cfg = DIFFICULTIES[id];
@@ -222,12 +246,15 @@ async function main() {
   // (fastQuestFloorPerHour can never exceed the real best-unlocked tier's
   // own rate) -- re-checked here against whatever tuning is active in THIS
   // process, so a proposed change that breaks the invariant shows up as a
-  // real, flagged regression instead of silently shipping.
+  // real, flagged regression instead of silently shipping. Passes `lvl`
+  // into expectedRatePerHour now (patch 0217 fix) -- this check is about
+  // a specific hero level's real experience, not the tier's own fixed
+  // reference point.
   const burstCheck = [5, 10, 15, 20, 25, 30, 40, 50].map((lvl) => {
     const tier = balance.bestUnlockedTier(lvl, false);
     const cfg = DIFFICULTIES[tier];
     const caps = balance.fastQuestCapsPerHour(lvl, false);
-    const tierGoldPerHour = balance.expectedRatePerHour(cfg, 'gold');
+    const tierGoldPerHour = balance.expectedRatePerHour(cfg, 'gold', lvl);
     return {
       level: lvl,
       tier,
