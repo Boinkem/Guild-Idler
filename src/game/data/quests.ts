@@ -7,12 +7,27 @@ export interface DifficultyConfig {
   baseSuccess: number;
   minDuration: number;
   maxDuration: number;
-  minGold: number;
-  maxGold: number;
   xpMultiplier: number;
   /** Chance that any loot roll happens at all. */
   lootChance: number;
-  reqLevel: number;
+  /**
+   * No longer a real availability gate (patch 0214) -- a quest offer's
+   * actual reqLevel now rolls near hero.level regardless of difficulty
+   * (see QuestManager.rollReqLevel). This survives purely as the "typical
+   * level" reference balance.ts's bestUnlockedTier/expectedRatePerHour
+   * use to estimate this tier's per-hour rate for the burst/medium
+   * fast-quest cap system, which is deliberately untouched by the
+   * reqLevel-roll rework -- same numeric values the old reqLevel had.
+   */
+  referenceLevel: number;
+  /**
+   * Multiplies the level-scaled questGoldBaseline/questXpBaseline curve
+   * (progression.ts) for a standard (non-burst/non-medium) offer --
+   * replaces the old flat minGold/maxGold range, which was calibrated
+   * once around a fixed reqLevel that no longer exists. See
+   * guild-idler-status.md's patch 0214 writeup.
+   */
+  rewardMultiplier: number;
   /** Weight when generating the board. */
   weight: number;
   color: string;
@@ -104,11 +119,10 @@ interface DifficultyConfigJson {
   baseSuccess: number;
   minDurationHours: number;
   maxDurationHours: number;
-  minGold: number;
-  maxGold: number;
   xpMultiplier: number;
   lootChance: number;
-  reqLevel: number;
+  referenceLevel: number;
+  rewardMultiplier: number;
   weight: number;
   color: string;
   burstChance?: number;
@@ -134,8 +148,9 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = Object.fromEnt
     {
       id: d.id, label: d.label, baseSuccess: d.baseSuccess,
       minDuration: d.minDurationHours * HOUR, maxDuration: d.maxDurationHours * HOUR,
-      minGold: d.minGold, maxGold: d.maxGold, xpMultiplier: d.xpMultiplier,
-      lootChance: d.lootChance, reqLevel: d.reqLevel, weight: d.weight, color: d.color,
+      xpMultiplier: d.xpMultiplier,
+      lootChance: d.lootChance, referenceLevel: d.referenceLevel, rewardMultiplier: d.rewardMultiplier,
+      weight: d.weight, color: d.color,
       // Gated on `> 0`, not `!== undefined` -- the DevTool's own generic
       // number-field editor always renders/saves an untouched optional
       // number as 0 rather than leaving it absent (see app.js's

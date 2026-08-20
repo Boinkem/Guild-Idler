@@ -1,0 +1,4820 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 43616ee..7bb48a0 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -986,24 +986,62 @@ raid fight).
+ 
+ ## Backlog
+ 
+-### Uncapped gold/xp multipliers -- flagged, not acted on
+-Raised during the hero-stat rebalance discussion (see "Hero class
+-identity rebalance" above, patch 0210). `success` is clamped 5-95
+-(`MIN_SUCCESS`/`MAX_SUCCESS`) and `speed` is clamped to a 0.25x-1.75x
+-factor (`QuestManager` line ~669), but `goldMultiplier`/`xpMultiplier`
+-are applied as raw `1 + mods.gold/100` / `1 + mods.xp/100` with no
+-ceiling at all -- every additive source (stat curve, class mods,
+-equipment, set bonuses, injuries, pets, guild facilities, renown perks)
+-sums into those two categories unbounded. Same class of problem as the
+-burst-quest exploit fixed earlier (a currency axis with no cap
+-eventually becomes the dominant strategy), just not yet a live problem
+-because gear/facility/renown stacking hasn't caught up. The patch 0210
+-budget rebalance buys headroom by shrinking each class's own flat
+-contribution, but doesn't close the structural gap -- worth adding a
+-`MIN_GOLD_MULT`/`MAX_GOLD_MULT` pair (and xp equivalent) as new
+-`Tuning.json` entries, mirroring the existing speed clamp, once there's
+-a target ceiling to tune against (needs its own number, not decided
+-yet).
++### Uncapped gold/xp multipliers -- resolved, patch 0214
++Was flagged here (see git history for the original entry) during the
++hero-stat rebalance discussion. Fixed as part of patch 0214's soft-cap
++system -- see that patch's own writeup below for the full mechanism.
++
++### Consumable stat-weighted procedural rolls -- idea logged, not scoped
++Raised during the procedural-loot design discussion (patch 0214, see
++that entry below): a consumable that biases a procedural roll's category
++distribution toward a chosen stat, instead of the flat random spread
++every roll currently uses (`rollProceduralItem` picks uniformly across
++all 10 Modifiers/Stats keys per affix slot). Not scoped -- open questions
++include whether it's a full override (100% of slots hit the chosen
++category) or a soft weight (chosen category rolls N times as often),
++whether it consumes on use or is reusable, and where it'd be
++crafted/purchased.
++
++### Gear re-leveling (spend gold + scrap to raise an item's own level) -- idea logged, not scoped
++Raised in the same conversation as the gear relevance decay mechanic
++(patch 0214, see below): the natural pressure-release valve for that
++decay -- a liked item with a good procedural roll can be re-leveled up to
++the hero's current level instead of just aging out, refreshing its own
++`reqLevel` (and therefore `HeroManager.gearRelevance`'s ratio) without
++losing the specific instance or its rolled `customMods`/`enchantStats`.
++Not scoped -- open questions include the gold/scrap cost curve, whether
++it's capped per item (can't out-level the hero, or can it go beyond?),
++and whether it's a Workshop/Blacksmith feature or its own new station.
++
++### Enchanter reroll (reroll a procedural item's rolled stats) -- idea logged, not scoped
++Same conversation as the two entries above. A service that spends gold +
++materials to reroll a procedurally-generated item's `customMods`/
++`enchantStats` in place -- same rarity/level budget
++(`rollProceduralItem`), a fresh random distribution across the affix
++pool. Pairs with gear re-leveling above: together they cover both axes
++of "I like this item, let me invest in it further" (re-leveling raises
++the ceiling, reroll reshapes what it rolled). Not scoped -- likely lives
++on the Enchanter/Blacksmith station given the name, but the actual
++station and cost curve aren't decided.
++
++### Procedural item names not yet wired into every UI surface -- known gap, patch 0214
++`EquipmentItem.proceduralName` (the rolled "Fortunate Iron Sword [Hard]"
++style name) is fully wired into both result screens
++(`QuestResultModal`/`RaidResultModal`, via `QuestResult.loot`/
++`RaidResult.loot`'s `name` field, itself sourced from
++`itemDisplayName()`) -- a drop announces itself correctly the moment it
++happens. `EquipmentPanel.tsx`'s stash/equipped-gear card views still read
++`def.name` directly in several places rather than through
++`itemDisplayName()`, so a procedural item's bracketed tag and bonus-roll
++prefix won't show once it's sitting in the stash or equipped, only at
++the moment it drops. Deliberately not chased down across every card
++variant in this patch (some of those views are aggregate stash-count
++displays grouped by `defId`, where a single shared name is arguably
++correct anyway, since a stack can hold multiple differently-rolled
++instances) -- worth a dedicated UI pass distinguishing the single-item
++detail views (should use `itemDisplayName`) from the grouped/stacked
++views (should keep the plain base name) rather than a blanket find-and-
++replace.
+ 
+ ### Mythic quest tier (above Legendary) -- idea logged, not scoped
+ Raised during the quest success rebalance discussion (see "Quest success
+@@ -15446,3 +15484,345 @@ calling this fully verified, though all three changes are small,
+ localized, and don't touch shared state beyond the one-shot
+ `requestedSubTab` field every sub-tabbed panel already reads the same
+ way.
++
++### Quest/economy/itemization overhaul: reqLevel rolls near hero level, gold/xp soft cap, level-scaled reward curve, gear relevance decay, full procedural loot replacement (patch 0214)
++
++```discord-update
++Dev Update | Patch 0214
++
++- Quests no longer stay locked to one fixed level forever -- Normal, Hard, Epic, and Easy all now roll near your hero's own level every time, so old content stops being trivial busywork
++- Added a soft cap on gold and XP bonuses so late-game stacking can't run away unbounded, while early and mid-game bonuses feel exactly the same as before
++- Gear that's fallen behind your hero's level now contributes less -- time to upgrade, not dead weight, but no longer free power forever
++- Nearly all loot is now randomly rolled at the moment it drops, scaled to your level and rarity, with a rare chance to roll "Fortunate" or "Charmed" for extra stats -- Sets keep their fixed, hand-designed bonuses exactly as before
++- Hard-quest and Heroic/Legendary raid drops get a bonus to their roll and a bracketed tag so you can see where they came from
++- Rebalanced Treasury, Library, Barracks, and two renown perks' per-level bonuses down, now that they stack against a much bigger picture
++```
++
++This is the largest single patch in the project so far -- six
++interconnected systems shaped over a long planning conversation (see
++"Hero class identity rebalance" at patch 0210 for where it started) and
++built together deliberately, since several of them share the same
++underlying level-scaling logic and would have drifted out of sync if
++built separately. Confirmed against a fresh clone of `main` (through
++patch 0213) with only this patch's diff applied -- `npx tsc --noEmit`
++and `npx vite build --config vite.web.config.ts` both pass clean.
++
++#### 1. Gold/XP soft cap
++
++`goldMultiplier`/`xpMultiplier` (`QuestManager`, `RaidManager`) had no
++ceiling at all before this -- flagged in the backlog above during the
++patch 0210 conversation. New shared `softCap(raw, threshold, decay)` in
++`util.ts`: fully linear below `threshold`, then an exponential approach
++to `threshold + decay` above it (slope exactly 1 at the crossover, same
++shape `QuestManager.curveInvestment` already uses for success, `capExtra
++== decay` here specifically so the curve can never return MORE than
++`raw` for any input). Calibrated against a real fully min-maxed level-55
++hero's uncapped totals (612 raw gold / 461 raw xp, computed directly
++from live data, not estimated): gold settles around 5x instead of 7.1x,
++xp around 3x instead of 5.6x, with the softening starting early enough
++that a moderately-geared hero (raw ~50-100) barely notices -- 96-99% of
++their raw bonus still comes through.
++
++| | Threshold | decay (= capExtra) |
++|-|-|-|
++| Gold | 30 | 590 |
++| XP | 25 | 196 |
++
++New `economy.goldSoftCapThreshold`/`economy.goldSoftCapDecay` (+ xp
++equivalents) in `Tuning.json`. Both `QuestManager`'s `goldMultiplier`/
++`xpMultiplier` and `RaidManager`'s per-encounter gold/xp now route
++through the same `softCap()` call -- one formula, not two that could
++drift.
++
++#### 2. reqLevel rolls near hero level (regular quests only -- chains untouched)
++
++Root cause of the "level-22 hero already capping success on Normal"
++report: each difficulty tier owned one fixed `reqLevel` (1/3/8/15/25)
++forever, so `outlevelBonus` (uncurved, ever-climbing) trivialized low
++tiers within the first third of the game. Fix: `QuestManager.
++rollReqLevel(heroLevel, rng)` rolls an offset from a weighted table,
+++-4 window, center-weighted (weight 20 at offset 0, tapering to 3 at
++each edge -- "at level" is the single most common roll, not a coin
++flip). New `quest_reqlevel.offsetWeight*` Tuning entries (9 of them).
++
++Difficulty (`easy`/`normal`/`hard`/`epic`/`legendary`) fully decouples
++from reqLevel -- it's a pure risk/reward pick now (baseSuccess, reward
++multiplier, duration, loot chance), available at any level.
++**Legendary is the one exception**: gated on `hero.level >=
++quest_reqlevel.legendaryLevelFloor` (25) *and* the Enchanted Seal, both
++required, since reqLevel itself can no longer imply "endgame" the way
++its old fixed 25 did.
++
++`difficulties.json`'s old `reqLevel` field is renamed `referenceLevel`
++and repurposed -- it's no longer a real availability gate, it survives
++purely as the "typical level" `balance.ts`'s `bestUnlockedTier`/
++`expectedRatePerHour` read for the burst/medium fast-quest per-hour cap
++system, which is **deliberately left untouched** by this whole rework
++(still reads the same numeric values the old reqLevel had, just via the
++renamed field, so burst/medium behaves byte-identical to before).
++
++`generateContractsForHero`'s old "guaranteed on-level offer" workaround
++is removed entirely -- it existed specifically because a fixed reqLevel
++let Easy/Normal stay nominally "eligible" long after a hero outleveled
++them, risking an all-trivial board on bad RNG. That failure mode can't
++happen anymore now that every offer's reqLevel rolls near hero.level by
++construction, so there's nothing left to guarantee against. Net
++simplification, not just an addition.
++
++**Success formula**, `previewSuccess`: `outlevelBonus`/
++`overLevelPenalty` (the old uncurved, unbounded level-gap terms) replaced
++with `(hero.level - offer.reqLevel) * quest_reqlevel.
++levelGapSuccessCoefficient` (2) -- roughly +-8 points at the roll
++window's own +-4 edges, not the old unbounded climb. The
++`autoGrowthSuccess - baselineSuccess` residual (the small amount of
++"free" stat growth between hero.level and offer.reqLevel specifically)
++is kept alongside it rather than torn out -- same shape as before, it's
++just naturally tiny now that reqLevel is always close to hero.level, so
++it didn't need its own separate curbing the way the old unbounded
++version did. `curveInvestment` and its Tuning entries
++(`investmentLinearThreshold`/`DiminishingCapExtra`/`Decay`) are
++completely unchanged -- this only touches the level-gap term, not the
++investment curve.
++
++Simulated directly against the shipped formula (Knight, moderate
++investment, zero guild-facility bonus) to confirm the fix: a level-3
++hero on Normal (true at-level) still reads 74.2%; the old code's
++level-22-on-Normal problem is structurally impossible now, since
++reqLevel can never sit more than 4 below hero.level in the first place.
++
++#### 3. Level-scaled reward curve (gold/xp)
++
++`minGold`/`maxGold` are gone from `difficulties.json` -- they only ever
++fed the standard (non-burst/non-medium) reward roll, calibrated once
++around each tier's old fixed reqLevel, which no longer exists. Replaced
++with `questGoldBaseline(level)`/`questXpBaseline(level)` in
++`progression.ts`: the exact same piecewise-linear breakpoint shape
++`XP_BREAKPOINTS` already uses for the level-up curve (flat below the
++lowest point, linear ramp between points, flat above the top one),
++pulled out into a shared `evalBreakpoints()` so both curves reuse one
++evaluator instead of copy-pasting the loop.
++
++| Level | Gold baseline | XP baseline |
++|-|-|-|
++| 1 | 15 | 10 |
++| 10 | 32 | 26 |
++| 20 | 65 | 55 |
++| 30 | 105 | 90 |
++| 40 | 155 | 130 |
++| 55 (cap) | 230 | 190 |
++
++Each difficulty applies its own new `rewardMultiplier` on top (replacing
++the implicit scale the old flat minGold/maxGold ranges used to encode):
++Easy 0.6, Normal 1.0, Hard 1.9, Epic 3.5, Legendary 6.5 -- meaningfully
++tamer ratios than the old flat ranges implied (old Legendary's
++minGold/maxGold midpoint was ~76x Easy's; new Legendary is 10.8x Easy at
++the *reward-multiplier* level, with the rest of the gap now coming
++honestly from Legendary quests also rolling at much higher reqLevels on
++average, not from an arbitrary flat number). `generateOffer`'s standard
++branch still uses `t` (duration's position within the tier's own
++min/max range) to interpolate a +-15% band around the baseline -- same
++"a longer standard quest pays a bit more" flavor as before, new source
++for the absolute number.
++
++**Burst/medium fast-quest modes are deliberately untouched** -- they
++keep reading `cfg.burstMinGold`/`mediumMinGold` etc. exactly as before,
++own reward ranges, own per-hour caps via `fastQuestCapsPerHour`/
++`fastQuestFloorPerHour` in `balance.ts`. Those two functions needed a
++small fix regardless: `expectedRatePerHour`'s gold/xp average and
++`bestUnlockedTier`'s level check both read fields that no longer exist
++(`cfg.minGold`/`maxGold`, `cfg.reqLevel`) -- now read
++`questGoldBaseline(cfg.referenceLevel) * cfg.rewardMultiplier` and
++`cfg.referenceLevel` respectively, preserving the exact same behavior
++with the renamed/replaced fields.
++
++**Chains keep their own fixed `chain.reqLevel`** -- completely untouched
++by the reqLevel-roll rework, per the explicit "no chains" scoping
++decision. `chainOffer`'s gold reward source changed from the removed
++flat `cfg.maxGold` to `questGoldBaseline(chain.reqLevel) *
++cfg.rewardMultiplier * stageDef.goldMultiplier` -- same curve everything
++else now uses, evaluated at the chain's own authored level instead of a
++rolled one.
++
++18 new breakpoint Tuning entries (`economy.questGoldBreakLevel1-6`/
++`Value1-6`, xp equivalents) -- first-pass values, explicitly flagged for
++Balance Sandbox verification before being treated as final, same as the
++loot budget numbers below.
++
++#### 4. Gear relevance decay
++
++New `HeroManager.gearRelevance(itemReqLevel, heroLevel)`:
++`clamp(itemReqLevel / heroLevel, gear_relevance.floor, 1)`. An item at or
++above the hero's current level gives full value; every level the hero
++climbs past it shrinks the contribution, down to a floor of **25%**
++(`gear_relevance.floor`, new Tuning entry) -- outleveled gear never goes
++to literal zero, it just clearly signals "time to upgrade." Same
++mechanism WoW's itemLevel-vs-character-level squish uses.
++
++Applied in both `HeroManager.equipmentStats` (raw Stats) and
++`equipmentMods` (Modifiers) -- every equipped item's contribution is
++scaled by its own `gearRelevance()` before summing. **Applies to
++everything equipped, deliberately including Sets and every hand-authored
++legendary** -- explicit decision, not an oversight: Sets are no longer
++"acquire once, BiS forever" now that all loot (including what a Set's
++own pieces will eventually be re-earned as) rolls within a level window
++tied to when it dropped. A set bonus itself doesn't have one single
++reqLevel (it's earned across several pieces, potentially picked up at
++different levels) -- `equipmentMods` averages the relevance of whichever
++equipped pieces count toward that set's threshold as the simplest
++coherent stand-in.
++
++#### 5. Procedural itemization -- full replacement, Sets exempt
++
++New `src/game/data/proceduralLoot.ts`. Any `EquipmentDef` with no
++`mods` and no `stats` populated (`isProceduralTemplate()`) is a "blank"
++template -- rolls real power at drop time instead of reading fixed
++numbers. Sets, chain-exclusive rewards, and craftable bases all keep
++their authored `mods`/`stats` and are exempt by construction (populated
++fields = authored override, no separate devtool toggle needed -- the
++existing optional-field convention already does this for free).
++
++**Budget formula**: `GEAR_SCORE_BY_RARITY[rarity] * loot_procedural.
++budgetRarityMultiplier (3) * levelFactor(itemLevel)`, where
++`levelFactor` is a simple linear 0.1-1 scale across the 1-55 range (not
++curved -- the sqrt/pow shaping still happens downstream the normal way,
++once the rolled raw value reaches `statMods`). The `3` multiplier is a
++real-data anchor, not invented: scored every existing hand-authored
++non-set item (mods + 0.5x-weighted stats) against its own reqLevel/
++rarity and found real items average 2.24x-4.35x their
++`GEAR_SCORE_BY_RARITY` value depending on rarity -- 3 splits that
++observed range. Flagged for Balance Sandbox verification, same as the
++reward curve above, not a locked number.
++
++**Both stat pools** -- each of a rarity's affix slots (1/2/3/4/5 for
++common/uncommon/rare/epic/legendary, mirroring Masterwork's own existing
++`modsToPick` precedent) rolls into either the Modifiers pool
++(success/gold/xp/loot/injuryResist/speed) or the raw Stats pool
++(strength/endurance/luck/wisdom), picked uniformly per slot.
++
++**Raid Heroic/Legendary and Hard-quest drops** get a budget multiplier
++(`loot_procedural.raidHeroicBudgetMultiplier` 1.5x,
++`raidLegendaryBudgetMultiplier` 2.2x, `hardQuestBudgetMultiplier` 1.15x)
++plus a bracketed display tag (`[Heroic]`, `[Legendary]`, `[Hard]`) --
++Easy/Normal/Epic/Legendary-*quest* drops get a tag too (for consistency)
++but no multiplier, since Epic/Legendary's extra power already comes
++through the reward curve's own reqLevel scaling, not a flat bonus like
++the raid-tier and Hard cases needed.
++
++**Bonus rolls** -- "Fortunate" (9% chance, +10% budget) and "Charmed"
++(1% chance, +25% budget, checked first, mutually exclusive with
++Fortunate) -- named for Luck/fortune rather than WoW's Titan-lore
++"Warforged" language, which doesn't fit this setting (see
++`world-lore-pantheon.md`: no Titans, and even self-styled grandiose
++titles read as hubris here). Prefix stacks with the source tag:
++`Fortunate Iron Sword [Hard]`.
++
++**This eliminates the hand-authored raid-tiered-variant pattern
++entirely.** Deleted all 84 `raidExclusive` `_heroic`/`_legendary`
++duplicate items from `equipment.json` (e.g. `frozen_maw_shield_heroic`/
++`_legendary` next to the base `frozen_maw_shield`) -- one template now
++covers every tier via the multiplier + tag above. Confirmed lossless
++before deleting: every raid encounter's `lootHeroic`/`lootLegendary`
++list referenced the exact same base items as its `loot` list, just
++suffixed (scripted check across all 22 encounters, zero mismatches) --
++`lootHeroic`/`lootLegendary` fields removed from every
++`raid-encounters.json` entry, `lootForDifficulty()` already falls back
++to `encounter.loot` when they're absent, so nothing else needed to
++change there. `RaidManager`'s loot loop now passes `{itemLevel:
++raid.reqLevel, sourceTag, rng}` to `EquipmentManager.instantiate`
++instead of the old bare call.
++
++**Exemption scope, precisely**: of the 220 original items, 160 already
++belonged to a Set, 34 were chain-exclusive rewards, and 12 were craftable
++bases -- all stay fully hand-authored, unaffected. Of the 84 deleted
++raid-tiered duplicates, most (64) belonged to a Set too (their *base*
++item does, even where the tiered duplicate itself didn't carry a
++`setId`) -- those bases keep their fixed authored stats and, as a real
++consequence of this design, **no longer have separate Normal/Heroic/
++Legendary power tiers**: a Set piece drops at the same fixed power
++regardless of which raid difficulty it came from now. This is a genuine
++trade-off of "Sets stay exempt," not an oversight -- flagged here in
++case raid-tier scaling for Set drops specifically turns out to be
++missed in practice, in which case a future patch could layer a small
++multiplier onto Set bonuses at raid-drop time without going fully
++procedural. Only the genuinely standalone 21 items (no setId, no
++chainExclusive, no craftable flag -- e.g. `rusty_sword`, `copper_band`,
++`oathkeeper`) had their `mods`/`stats` actually blanked out to become
++procedural templates in practice; `equipment.json` is now 136 items
++(220 minus 84 deleted), of which those 21 generate their power fresh on
++every drop.
++
++`EquipmentItem` gained one new optional field, `proceduralName` (the
++rolled display name), and `EquipmentManager.instantiate` gained an
++optional `roll` parameter -- omitted entirely for hand-authored items
++and chain rewards (which call `instantiate(defId)` exactly as before,
++no behavior change), passed by `QuestManager`/`RaidManager` for real
++drops. `QuestManager.resolve`'s loot handling was restructured so an
++item is only ever instantiated (and therefore only ever rolled) once per
++drop -- the result-summary array and the actual stashed item now share
++the same roll, reusing a parallel `lootItems[]` array instead of calling
++`instantiate` a second time later in the function, which would have
++silently consumed a second, different draw from the same seeded rng and
++desynced the two.
++
++New `itemDisplayName(item, def)` helper in `equipment.ts` -- wired into
++both `QuestResultModal`/`RaidResultModal` via `QuestResult.loot`/
++`RaidResult.loot`'s `name` field, so a drop's bracketed tag and
++bonus-roll prefix show correctly the moment it happens. **Not** yet
++wired into `EquipmentPanel.tsx`'s stash/equipped-gear card views, which
++still read `def.name` directly in several places -- see the matching
++Backlog entry above for why that was deliberately scoped out rather than
++rushed.
++
++#### 6. Facility/renown squish (first pass)
++
++Halved (roughly) the flat per-level rates that apply to every hero
++automatically, regardless of gear/investment -- these were the biggest
++single contributor to the old uncapped gold/xp problem, bigger than any
++one hero's own stat curve:
++
++| Tuning id | Before | After |
++|-|-|-|
++| `guild_facility.treasury.goldPerLevel` | 12 | 6 |
++| `guild_facility.library.xpPerLevel` | 12 | 6 |
++| `guild_facility.barracks.successPerLevel` | 4 | 3 |
++| `renown_perk.legacy_of_wealth.goldPerLevel` | 8 | 4 |
++| `renown_perk.scholars_legacy.xpPerLevel` | 10 | 5 |
++
++First-pass numbers, same "verify against the Balance Sandbox" caveat as
++the reward curve and loot budget above -- squished roughly proportionally
++rather than precisely re-derived against the new reward curve's own
++scale, since deriving all three (cap, curve, squish) simultaneously by
++hand risked compounding errors nothing here could cross-check. Barracks'
++success contribution specifically didn't need as deep a cut as gold/xp
++did -- it already flows through the curved, hard-capped (`MIN_SUCCESS`/
++`MAX_SUCCESS` 5-95) investment pool, unlike gold/xp which had no
++ceiling at all before this patch's soft cap (#1 above).
++
++#### Also removed as dead code/data in this patch
++`quest.overLevelPenaltyPercent` and `balance.baseXpMin`/`baseXpMax`
++Tuning entries (superseded by the level-gap term and the new reward
++curve respectively, both now genuinely unused -- `noUnusedLocals` in
++`tsconfig.json` would have failed the build on the matching TS constants
++otherwise, which is what caught `balance.baseXpMin`/`Max` during this
++patch).
++
++#### Verified
++`npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` both
++pass clean against a fresh clone of `main` (through patch 0213) with
++only this patch's diff applied. Numerically re-validated (not just
++compiled) via direct scripts against the shipped Tuning values: the
++reqLevel roll's weight table sums correctly (22.7% chance of landing
++exactly at-level, the single most common outcome); gear relevance decay
++matches the designed floor/ratio at several item-level/hero-level pairs;
++the reward curve's breakpoints evaluate to the intended values at every
++listed level; the procedural loot budget formula produces sensible,
++monotonically-increasing numbers across every rarity/level/source
++combination tested, including the raid-multiplier and floor cases.
++Confirmed the raid-encounter loot-list simplification (`lootHeroic`/
++`lootLegendary` removal) was lossless by scripting a base-item-id
++comparison across all 22 encounters before deleting anything, not by
++inspection. No live playtest against the running app in this
++environment (`node_modules` not preinstalled in the conversation
++environment; installed here to run the checks above) -- worth a manual
++pass through a fresh recruit's first few quests, a Hard drop, and a raid
++clear before this ships, given the size of this patch.
+diff --git a/src/game/data/balance.ts b/src/game/data/balance.ts
+index 0a49954..93230e6 100644
+--- a/src/game/data/balance.ts
++++ b/src/game/data/balance.ts
+@@ -2,6 +2,7 @@ import { DIFFICULTIES, DIFFICULTY_ORDER, DifficultyConfig } from './quests';
+ import { Difficulty } from '../types';
+ import { HOUR } from '../util';
+ import { Tuning } from './tuning';
++import { questGoldBaseline, questXpBaseline } from './progression';
+ 
+ /**
+  * Replaces the old flat burstTaper(topLevel) curve in QuestManager with a
+@@ -27,11 +28,6 @@ import { Tuning } from './tuning';
+ const GOLD_FAILURE_MULTIPLIER = Tuning.get('balance.goldFailureMultiplier');
+ const XP_FAILURE_MULTIPLIER = Tuning.get('balance.xpFailureMultiplier');
+ 
+-/** Non-burst quests roll XP from this fixed base range before the tier's
+- *  own xpMultiplier applies -- see QuestManager.generateOffer. */
+-const BASE_XP_MIN = Tuning.get('balance.baseXpMin');
+-const BASE_XP_MAX = Tuning.get('balance.baseXpMax');
+-
+ /**
+  * Exported (previously module-private) so the devtool's Sandbox sim
+  * (tools/devtool/sim/runSim.ts) can reuse this exact expected-value
+@@ -42,23 +38,40 @@ const BASE_XP_MAX = Tuning.get('balance.baseXpMax');
+ export function expectedRatePerHour(cfg: DifficultyConfig, kind: 'gold' | 'xp'): number {
+   const avgDurationHours = (cfg.minDuration + cfg.maxDuration) / 2 / HOUR;
+   const successRate = cfg.baseSuccess / 100;
++  // Standard reward no longer reads a flat minGold/maxGold range (patch
++  // 0214) -- estimated here off the same level-scaled baseline curve
++  // QuestManager.generateOffer actually rolls against, evaluated at this
++  // tier's referenceLevel as a representative "typical" level. The old
++  // xpMin/xpMax base range (BASE_XP_MIN/MAX) is no longer part of the
++  // standard-offer xp roll either, only questXpBaseline is.
+   const avgReward = kind === 'gold'
+-    ? (cfg.minGold + cfg.maxGold) / 2
+-    : ((BASE_XP_MIN + BASE_XP_MAX) / 2) * cfg.xpMultiplier;
++    ? questGoldBaseline(cfg.referenceLevel) * cfg.rewardMultiplier
++    : questXpBaseline(cfg.referenceLevel) * cfg.rewardMultiplier;
+   const failureMultiplier = kind === 'gold' ? GOLD_FAILURE_MULTIPLIER : XP_FAILURE_MULTIPLIER;
+   const expectedReward = successRate * avgReward + (1 - successRate) * failureMultiplier * avgReward;
+   return expectedReward / avgDurationHours;
+ }
+ 
+-/** Highest difficulty tier currently available at a given level -- same
+- *  eligibility rule QuestManager.generateContractsForHero already uses
+- *  (level + 2 >= reqLevel, legendary additionally gated by its unlock).
+- *  Called with a specific hero's own level, not the guild's top hero. */
++/**
++ * Highest difficulty tier currently "available" at a given level -- used
++ * only by the burst/medium fast-quest per-hour cap system
++ * (fastQuestCapsPerHour/fastQuestFloorPerHour below), which is
++ * deliberately untouched by the reqLevel-roll rework (see
++ * guild-idler-status.md's patch 0214 writeup). Real quest offers no
++ * longer have a difficulty-based level gate at all (every difficulty's
++ * reqLevel now rolls near hero.level regardless of tier) -- this keeps
++ * reading each tier's `referenceLevel` (the old reqLevel's numeric value,
++ * renamed and repurposed, see DifficultyConfig's own comment) purely as
++ * a "typical level for this tier" heuristic so burst/medium's cap
++ * behaves exactly as it did before, rather than suddenly referencing
++ * Epic/Legendary per-hour rates for a level-1 hero now that nothing
++ * actually blocks those tiers from generating early. Called with a
++ * specific hero's own level, not the guild's top hero. */
+ export function bestUnlockedTier(topLevel: number, legendaryUnlocked: boolean): Difficulty {
+   let best: Difficulty = 'easy';
+   for (const id of DIFFICULTY_ORDER) {
+     if (id === 'legendary' && !legendaryUnlocked) continue;
+-    if (topLevel + 2 >= DIFFICULTIES[id].reqLevel) best = id;
++    if (topLevel + 2 >= DIFFICULTIES[id].referenceLevel) best = id;
+   }
+   return best;
+ }
+diff --git a/src/game/data/equipment.ts b/src/game/data/equipment.ts
+index f8d925d..4297b62 100644
+--- a/src/game/data/equipment.ts
++++ b/src/game/data/equipment.ts
+@@ -78,6 +78,19 @@ export function gearScoreForItem(def: EquipmentDef): number {
+   return base + bonus;
+ }
+ 
++/**
++ * The name to actually show for an item -- a procedurally-generated
++ * item's rolled `proceduralName` (bonus-roll prefix + bracketed source
++ * tag, patch 0214) if it has one, otherwise the def's own plain authored
++ * name. Every display surface should read through this rather than
++ * `def.name` directly once an EquipmentItem instance is in hand, the same
++ * "one shared helper, not a scattered ?? at every call site" convention
++ * gearScoreForItem above already established.
++ */
++export function itemDisplayName(item: { proceduralName?: string }, def: EquipmentDef): string {
++  return item.proceduralName ?? def.name;
++}
++
+ /** Max possible Gear Score for one hero: 9 equipment slots, all legendary,
+  *  each at the level-bonus cap. */
+ export const GEAR_SCORE_MAX = 9 * (GEAR_SCORE_BY_RARITY.legendary + GEAR_SCORE_LEVEL_BONUS_CAP.legendary);
+diff --git a/src/game/data/json/difficulties.json b/src/game/data/json/difficulties.json
+index 3ff9a0b..4418138 100644
+--- a/src/game/data/json/difficulties.json
++++ b/src/game/data/json/difficulties.json
+@@ -19,13 +19,12 @@
+     "mediumMaxGold": 30,
+     "mediumMinXp": 14,
+     "mediumMaxXp": 22,
+-    "minGold": 8,
+-    "maxGold": 25,
+     "xpMultiplier": 1,
+     "lootChance": 12,
+-    "reqLevel": 1,
+     "weight": 30,
+-    "color": "#79a86b"
++    "color": "#79a86b",
++    "referenceLevel": 1,
++    "rewardMultiplier": 0.6
+   },
+   {
+     "id": "normal",
+@@ -40,13 +39,12 @@
+     "mediumMaxGold": 45,
+     "mediumMinXp": 20,
+     "mediumMaxXp": 32,
+-    "minGold": 25,
+-    "maxGold": 60,
+     "xpMultiplier": 2.4,
+     "lootChance": 20,
+-    "reqLevel": 3,
+     "weight": 28,
+-    "color": "#5b8fd6"
++    "color": "#5b8fd6",
++    "referenceLevel": 3,
++    "rewardMultiplier": 1.0
+   },
+   {
+     "id": "hard",
+@@ -54,13 +52,12 @@
+     "baseSuccess": 50,
+     "minDurationHours": 4,
+     "maxDurationHours": 6,
+-    "minGold": 60,
+-    "maxGold": 150,
+     "xpMultiplier": 5,
+     "lootChance": 30,
+-    "reqLevel": 8,
+     "weight": 22,
+-    "color": "#c98b3a"
++    "color": "#c98b3a",
++    "referenceLevel": 8,
++    "rewardMultiplier": 1.9
+   },
+   {
+     "id": "epic",
+@@ -68,13 +65,12 @@
+     "baseSuccess": 40,
+     "minDurationHours": 6,
+     "maxDurationHours": 12,
+-    "minGold": 150,
+-    "maxGold": 400,
+     "xpMultiplier": 12,
+     "lootChance": 45,
+-    "reqLevel": 15,
+     "weight": 14,
+-    "color": "#a874d6"
++    "color": "#a874d6",
++    "referenceLevel": 15,
++    "rewardMultiplier": 3.5
+   },
+   {
+     "id": "legendary",
+@@ -82,12 +78,11 @@
+     "baseSuccess": 30,
+     "minDurationHours": 12,
+     "maxDurationHours": 24,
+-    "minGold": 500,
+-    "maxGold": 2000,
+     "xpMultiplier": 30,
+     "lootChance": 70,
+-    "reqLevel": 25,
+     "weight": 6,
+-    "color": "#d9a441"
++    "color": "#d9a441",
++    "referenceLevel": 25,
++    "rewardMultiplier": 6.5
+   }
+-]
++]
+\ No newline at end of file
+diff --git a/src/game/data/json/equipment.json b/src/game/data/json/equipment.json
+index b3408ff..ad4059e 100644
+--- a/src/game/data/json/equipment.json
++++ b/src/game/data/json/equipment.json
+@@ -23,12 +23,8 @@
+     "reqLevel": 1,
+     "maxDurability": 40,
+     "value": 10,
+-    "mods": {
+-      "success": 2
+-    },
+-    "stats": {
+-      "strength": 1
+-    },
++    "mods": {},
++    "stats": {},
+     "icon": "weapons/Weapon_01.png",
+     "raidExclusive": false,
+     "craftable": false,
+@@ -43,12 +39,8 @@
+     "reqLevel": 2,
+     "maxDurability": 45,
+     "value": 45,
+-    "mods": {
+-      "success": 3
+-    },
+-    "stats": {
+-      "strength": 1
+-    },
++    "mods": {},
++    "stats": {},
+     "icon": "weapons/Weapon_25.png"
+   },
+   {
+@@ -77,14 +69,8 @@
+     "reqLevel": 10,
+     "maxDurability": 90,
+     "value": 520,
+-    "mods": {
+-      "success": 8,
+-      "speed": 5
+-    },
+-    "stats": {
+-      "strength": 4,
+-      "luck": 2
+-    },
++    "mods": {},
++    "stats": {},
+     "icon": "weapons/Weapon_07.png"
+   },
+   {
+@@ -95,14 +81,8 @@
+     "reqLevel": 18,
+     "maxDurability": 130,
+     "value": 1900,
+-    "mods": {
+-      "success": 12,
+-      "injuryResist": 8
+-    },
+-    "stats": {
+-      "strength": 7,
+-      "endurance": 3
+-    },
++    "mods": {},
++    "stats": {},
+     "icon": "weapons/Weapon_09.png"
+   },
+   {
+@@ -165,13 +145,8 @@
+     "reqLevel": 11,
+     "maxDurability": 85,
+     "value": 470,
+-    "mods": {
+-      "success": 4,
+-      "injuryResist": 12
+-    },
+-    "stats": {
+-      "endurance": 4
+-    },
++    "mods": {},
++    "stats": {},
+     "icon": "armor/Armor_31.png"
+   },
+   {
+@@ -220,10 +195,7 @@
+     "reqLevel": 1,
+     "maxDurability": 45,
+     "value": 35,
+-    "mods": {
+-      "injuryResist": 4,
+-      "health": 5
+-    },
++    "mods": {},
+     "icon": "armor/Armor_116.png"
+   },
+   {
+@@ -253,14 +225,8 @@
+     "reqLevel": 12,
+     "maxDurability": 110,
+     "value": 640,
+-    "mods": {
+-      "success": 5,
+-      "injuryResist": 14,
+-      "health": 18
+-    },
+-    "stats": {
+-      "endurance": 6
+-    },
++    "mods": {},
++    "stats": {},
+     "icon": "armor/Armor_05.png"
+   },
+   {
+@@ -363,13 +329,8 @@
+     "reqLevel": 19,
+     "maxDurability": 110,
+     "value": 2000,
+-    "mods": {
+-      "gold": 30,
+-      "loot": 6
+-    },
+-    "stats": {
+-      "luck": 8
+-    },
++    "mods": {},
++    "stats": {},
+     "icon": "armor/Armor_71.png"
+   },
+   {
+@@ -380,9 +341,7 @@
+     "reqLevel": 1,
+     "maxDurability": 32,
+     "value": 22,
+-    "mods": {
+-      "speed": 3
+-    },
++    "mods": {},
+     "icon": "armor/Armor_54.png"
+   },
+   {
+@@ -410,13 +369,8 @@
+     "reqLevel": 13,
+     "maxDurability": 88,
+     "value": 560,
+-    "mods": {
+-      "speed": 14
+-    },
+-    "stats": {
+-      "endurance": 3,
+-      "luck": 2
+-    },
++    "mods": {},
++    "stats": {},
+     "icon": "armor/Armor_52.png"
+   },
+   {
+@@ -427,13 +381,8 @@
+     "reqLevel": 21,
+     "maxDurability": 130,
+     "value": 2300,
+-    "mods": {
+-      "success": 4,
+-      "speed": 22
+-    },
+-    "stats": {
+-      "endurance": 7
+-    },
++    "mods": {},
++    "stats": {},
+     "icon": "armor/Armor_45.png"
+   },
+   {
+@@ -444,9 +393,7 @@
+     "reqLevel": 1,
+     "maxDurability": 60,
+     "value": 30,
+-    "mods": {
+-      "loot": 1
+-    },
++    "mods": {},
+     "icon": "accessories/Accessory_06.png"
+   },
+   {
+@@ -475,14 +422,8 @@
+     "reqLevel": 17,
+     "maxDurability": 140,
+     "value": 2200,
+-    "mods": {
+-      "success": 9,
+-      "injuryResist": 10
+-    },
+-    "stats": {
+-      "luck": 5,
+-      "wisdom": 4
+-    },
++    "mods": {},
++    "stats": {},
+     "icon": "accessories/Accessory_08.png"
+   },
+   {
+@@ -493,15 +434,8 @@
+     "reqLevel": 28,
+     "maxDurability": 210,
+     "value": 7600,
+-    "mods": {
+-      "xp": 30,
+-      "loot": 8,
+-      "speed": 25
+-    },
+-    "stats": {
+-      "luck": 9,
+-      "wisdom": 8
+-    },
++    "mods": {},
++    "stats": {},
+     "icon": "accessories/Accessory_10.png"
+   },
+   {
+@@ -512,9 +446,7 @@
+     "reqLevel": 1,
+     "maxDurability": 55,
+     "value": 28,
+-    "mods": {
+-      "xp": 5
+-    },
++    "mods": {},
+     "icon": "accessories/Accessory_14.png"
+   },
+   {
+@@ -525,12 +457,8 @@
+     "reqLevel": 6,
+     "maxDurability": 80,
+     "value": 190,
+-    "mods": {
+-      "xp": 15
+-    },
+-    "stats": {
+-      "wisdom": 3
+-    },
++    "mods": {},
++    "stats": {},
+     "icon": "accessories/Accessory_17.png"
+   },
+   {
+@@ -559,15 +487,8 @@
+     "reqLevel": 30,
+     "maxDurability": 230,
+     "value": 9000,
+-    "mods": {
+-      "success": 14,
+-      "injuryResist": 18,
+-      "durability": 30
+-    },
+-    "stats": {
+-      "endurance": 12,
+-      "wisdom": 6
+-    },
++    "mods": {},
++    "stats": {},
+     "icon": "accessories/Accessory_13.png"
+   },
+   {
+@@ -723,13 +644,8 @@
+     "reqLevel": 22,
+     "maxDurability": 150,
+     "value": 2100,
+-    "mods": {
+-      "success": 11,
+-      "speed": 6
+-    },
+-    "stats": {
+-      "strength": 8
+-    },
++    "mods": {},
++    "stats": {},
+     "icon": "weapons/Weapon_34.png"
+   },
+   {
+@@ -740,13 +656,8 @@
+     "reqLevel": 23,
+     "maxDurability": 140,
+     "value": 2250,
+-    "mods": {
+-      "injuryResist": 8,
+-      "speed": 24
+-    },
+-    "stats": {
+-      "endurance": 6
+-    },
++    "mods": {},
++    "stats": {},
+     "icon": "armor/Armor_45.png"
+   },
+   {
+@@ -775,14 +686,8 @@
+     "reqLevel": 15,
+     "maxDurability": 115,
+     "value": 680,
+-    "mods": {
+-      "success": 5,
+-      "injuryResist": 16,
+-      "health": 21
+-    },
+-    "stats": {
+-      "endurance": 7
+-    },
++    "mods": {},
++    "stats": {},
+     "icon": "armor/Armor_09.png"
+   },
+   {
+@@ -1056,13 +961,8 @@
+     "reqLevel": 3,
+     "maxDurability": 65,
+     "value": 110,
+-    "mods": {
+-      "gold": 4,
+-      "speed": 5
+-    },
+-    "stats": {
+-      "luck": 2
+-    },
++    "mods": {},
++    "stats": {},
+     "icon": "accessories/Accessory_01.png"
+   },
+   {
+@@ -1346,1192 +1246,150 @@
+     "chainExclusive": true
+   },
+   {
+-    "id": "gravewatchers_band_heroic",
+-    "name": "Gravewatcher's Band (Heroic)",
+-    "slot": "ring",
+-    "rarity": "epic",
+-    "reqLevel": 22,
+-    "maxDurability": 247,
+-    "value": 2535,
+-    "mods": {
+-      "success": 8,
+-      "loot": 6,
+-      "injuryResist": 18
+-    },
+-    "stats": {
+-      "endurance": 4,
+-      "wisdom": 6
+-    },
+-    "icon": "accessories/Accessory_04.png",
+-    "raidExclusive": true,
+-    "craftable": false,
+-    "setId": "bonewrought"
+-  },
+-  {
+-    "id": "gravewatchers_band_legendary",
+-    "name": "Gravewatcher's Band (Legendary)",
+-    "slot": "ring",
++    "id": "frostfang_claw",
++    "name": "Frostfang Claw",
++    "slot": "weapon",
+     "rarity": "epic",
+-    "reqLevel": 22,
+-    "maxDurability": 321,
+-    "value": 3296,
++    "reqLevel": 18,
++    "maxDurability": 150,
++    "value": 1900,
+     "mods": {
+       "success": 10,
+-      "loot": 8,
+-      "injuryResist": 24
++      "speed": 8
+     },
+     "stats": {
+-      "endurance": 5,
+-      "wisdom": 8
++      "strength": 6,
++      "endurance": 3
+     },
+-    "icon": "accessories/Accessory_04.png",
+-    "raidExclusive": true,
+-    "craftable": false,
+-    "setId": "bonewrought"
++    "setId": "wyrmkeep"
+   },
+   {
+-    "id": "ashwoven_charm_heroic",
+-    "name": "Ashwoven Charm (Heroic)",
++    "id": "keepers_warded_charm",
++    "name": "Keeper's Warded Charm",
+     "slot": "amulet",
+     "rarity": "epic",
+-    "reqLevel": 22,
+-    "maxDurability": 169,
+-    "value": 650,
++    "reqLevel": 19,
++    "maxDurability": 140,
++    "value": 2100,
+     "mods": {
++      "injuryResist": 14,
+       "success": 8,
+-      "injuryResist": 10
++      "gold": 10
+     },
+     "stats": {
+-      "wisdom": 5
++      "wisdom": 6,
++      "endurance": 4
+     },
+-    "icon": "accessories/Accessory_15.png",
+-    "raidExclusive": true,
+-    "craftable": false
++    "setId": "wyrmkeep"
+   },
+   {
+-    "id": "ashwoven_charm_legendary",
+-    "name": "Ashwoven Charm (Legendary)",
+-    "slot": "amulet",
++    "id": "frostwalker_treads",
++    "name": "Frostwalker Treads",
++    "slot": "boots",
+     "rarity": "epic",
+-    "reqLevel": 22,
+-    "maxDurability": 220,
+-    "value": 845,
++    "reqLevel": 19,
++    "maxDurability": 145,
++    "value": 2200,
+     "mods": {
+-      "success": 10,
+-      "injuryResist": 14
++      "speed": 20,
++      "injuryResist": 8
+     },
+     "stats": {
+-      "wisdom": 7
++      "endurance": 7
+     },
+-    "icon": "accessories/Accessory_15.png",
+-    "raidExclusive": true,
+-    "craftable": false
++    "setId": "wyrmkeep"
+   },
+   {
+-    "id": "choir_mask_heroic",
+-    "name": "Mask of the Hollow Choir (Heroic)",
+-    "slot": "helmet",
+-    "rarity": "epic",
+-    "reqLevel": 24,
+-    "maxDurability": 162,
+-    "value": 2990,
++    "id": "frozen_maw_shield",
++    "name": "Frozen Maw",
++    "slot": "shield",
++    "rarity": "legendary",
++    "reqLevel": 20,
++    "maxDurability": 200,
++    "value": 5800,
+     "mods": {
+-      "xp": 26,
+-      "loot": 13,
+-      "injuryResist": 8
++      "injuryResist": 24,
++      "success": 10,
++      "health": 53
+     },
+     "stats": {
+-      "wisdom": 12
++      "endurance": 11
+     },
+-    "setId": "bonewrought",
+-    "icon": "armor/Armor_127.png",
+-    "raidExclusive": true,
+-    "craftable": false
++    "setId": "wyrmkeep"
+   },
+   {
+-    "id": "choir_mask_legendary",
+-    "name": "Mask of the Hollow Choir (Legendary)",
+-    "slot": "helmet",
++    "id": "cinder_ash_grip",
++    "name": "Grip of Cinder Ash",
++    "slot": "gloves",
+     "rarity": "epic",
+-    "reqLevel": 24,
+-    "maxDurability": 211,
+-    "value": 3887,
++    "reqLevel": 26,
++    "maxDurability": 165,
++    "value": 2350,
+     "mods": {
+-      "xp": 34,
+-      "loot": 17,
+-      "injuryResist": 10
++      "success": 12,
++      "gold": 14
+     },
+     "stats": {
+-      "wisdom": 15
++      "strength": 7
+     },
+-    "setId": "bonewrought",
+-    "icon": "armor/Armor_127.png",
+-    "raidExclusive": true,
+-    "craftable": false
++    "setId": "what_got_out"
+   },
+   {
+-    "id": "silenced_bell_heroic",
+-    "name": "The Silenced Bell (Heroic)",
+-    "slot": "amulet",
+-    "rarity": "epic",
+-    "reqLevel": 24,
+-    "maxDurability": 169,
+-    "value": 3120,
+-    "mods": {
+-      "success": 13,
+-      "gold": 26
+-    },
+-    "stats": {
+-      "luck": 6,
+-      "wisdom": 8
+-    },
+-    "setId": "bonewrought",
+-    "icon": "misc/Misc_25.png",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "silenced_bell_legendary",
+-    "name": "The Silenced Bell (Legendary)",
+-    "slot": "amulet",
+-    "rarity": "epic",
+-    "reqLevel": 24,
+-    "maxDurability": 220,
+-    "value": 4056,
+-    "mods": {
+-      "success": 17,
+-      "gold": 34
+-    },
+-    "stats": {
+-      "luck": 8,
+-      "wisdom": 10
+-    },
+-    "setId": "bonewrought",
+-    "icon": "misc/Misc_25.png",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "dragon_helm_heroic",
+-    "name": "Dragonscale Helm (Heroic)",
+-    "slot": "helmet",
+-    "rarity": "legendary",
+-    "reqLevel": 25,
+-    "maxDurability": 247,
+-    "value": 8320,
+-    "mods": {
+-      "success": 10,
+-      "injuryResist": 26
+-    },
+-    "stats": {
+-      "endurance": 12
+-    },
+-    "icon": "armor/Armor_40.png",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "dragon_helm_legendary",
+-    "name": "Dragonscale Helm (Legendary)",
+-    "slot": "helmet",
+-    "rarity": "legendary",
+-    "reqLevel": 25,
+-    "maxDurability": 321,
+-    "value": 10816,
+-    "mods": {
+-      "success": 14,
+-      "injuryResist": 34
+-    },
+-    "stats": {
+-      "endurance": 15
+-    },
+-    "icon": "armor/Armor_40.png",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "copper_band_heroic",
+-    "name": "Copper Band (Heroic)",
+-    "slot": "ring",
+-    "rarity": "epic",
+-    "reqLevel": 8,
+-    "maxDurability": 78,
+-    "value": 39,
+-    "mods": {
+-      "loot": 2
+-    },
+-    "icon": "accessories/Accessory_06.png",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "copper_band_legendary",
+-    "name": "Copper Band (Legendary)",
+-    "slot": "ring",
+-    "rarity": "epic",
+-    "reqLevel": 8,
+-    "maxDurability": 101,
+-    "value": 51,
+-    "mods": {
+-      "loot": 3
+-    },
+-    "icon": "accessories/Accessory_06.png",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "work_gloves_legendary",
+-    "name": "Work Gloves (Legendary)",
+-    "slot": "gloves",
+-    "rarity": "epic",
+-    "reqLevel": 8,
+-    "maxDurability": 51,
+-    "value": 34,
+-    "mods": {
+-      "gold": 5
+-    },
+-    "setId": "blackford",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "work_gloves_heroic",
+-    "name": "Work Gloves (Heroic)",
+-    "slot": "gloves",
+-    "rarity": "epic",
+-    "reqLevel": 8,
+-    "maxDurability": 31,
+-    "value": 34,
+-    "mods": {
+-      "gold": 4
+-    },
+-    "setId": "blackford",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "knights_blade_heroic",
+-    "name": "Knight's Blade (Heroic)",
+-    "slot": "weapon",
+-    "rarity": "epic",
+-    "reqLevel": 8,
+-    "maxDurability": 91,
+-    "value": 208,
+-    "mods": {
+-      "success": 6,
+-      "gold": 5
+-    },
+-    "stats": {
+-      "strength": 4
+-    },
+-    "setId": "blackford",
+-    "icon": "weapons/Weapon_03.png",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "knights_blade_legendary",
+-    "name": "Knight's Blade (Legendary)",
+-    "slot": "weapon",
+-    "rarity": "epic",
+-    "reqLevel": 8,
+-    "maxDurability": 118,
+-    "value": 270,
+-    "mods": {
+-      "success": 8,
+-      "gold": 7
+-    },
+-    "stats": {
+-      "strength": 5
+-    },
+-    "setId": "blackford",
+-    "icon": "weapons/Weapon_03.png",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "iron_helm_heroic",
+-    "name": "Iron Helm (Heroic)",
+-    "slot": "helmet",
+-    "rarity": "epic",
+-    "reqLevel": 8,
+-    "maxDurability": 78,
+-    "value": 182,
+-    "mods": {
+-      "success": 3,
+-      "injuryResist": 9
+-    },
+-    "stats": {
+-      "endurance": 3
+-    },
+-    "setId": "blackford",
+-    "icon": "armor/Armor_31.png",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "iron_helm_legendary",
+-    "name": "Iron Helm (Legendary)",
+-    "slot": "helmet",
+-    "rarity": "epic",
+-    "reqLevel": 8,
+-    "maxDurability": 101,
+-    "value": 237,
+-    "mods": {
+-      "success": 3,
+-      "injuryResist": 12
+-    },
+-    "stats": {
+-      "endurance": 3
+-    },
+-    "setId": "blackford",
+-    "icon": "armor/Armor_38.png",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "chainmail_heroic",
+-    "name": "Chainmail Hauberk (Heroic)",
+-    "slot": "chest",
+-    "rarity": "epic",
+-    "reqLevel": 8,
+-    "maxDurability": 98,
+-    "value": 273,
+-    "mods": {
+-      "success": 4,
+-      "injuryResist": 12,
+-      "health": 16
+-    },
+-    "stats": {
+-      "endurance": 4
+-    },
+-    "setId": "blackford",
+-    "icon": "armor/Armor_03.png",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "chainmail_legendary",
+-    "name": "Chainmail Hauberk (Legendary)",
+-    "slot": "chest",
+-    "rarity": "epic",
+-    "reqLevel": 8,
+-    "maxDurability": 127,
+-    "value": 355,
+-    "mods": {
+-      "success": 5,
+-      "injuryResist": 15,
+-      "health": 20
+-    },
+-    "stats": {
+-      "endurance": 5
+-    },
+-    "setId": "blackford",
+-    "icon": "armor/Armor_03.png",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "ranger_boots_heroic",
+-    "name": "Ranger Boots (Heroic)",
+-    "slot": "boots",
+-    "rarity": "epic",
+-    "reqLevel": 8,
+-    "maxDurability": 75,
+-    "value": 176,
+-    "mods": {
+-      "speed": 10
+-    },
+-    "stats": {
+-      "endurance": 6
+-    },
+-    "setId": "blackford",
+-    "icon": "armor/Armor_46.png",
+-    "raidExclusive": true,
+-    "craftable": false,
+-    "chainExclusive": false,
+-    "gearScoreOverride": 0
+-  },
+-  {
+-    "id": "ranger_boots_legendary",
+-    "name": "Ranger Boots (Legendary)",
+-    "slot": "boots",
+-    "rarity": "epic",
+-    "reqLevel": 8,
+-    "maxDurability": 98,
+-    "value": 228,
+-    "mods": {
+-      "speed": 12
+-    },
+-    "stats": {
+-      "endurance": 3
+-    },
+-    "raidExclusive": true,
+-    "setId": "blackford"
+-  },
+-  {
+-    "id": "tollkeepers_signet_heroic",
+-    "name": "Tollkeeper's Signet (Heroic)",
+-    "slot": "ring",
+-    "rarity": "epic",
+-    "reqLevel": 8,
+-    "maxDurability": 98,
+-    "value": 195,
+-    "mods": {
+-      "success": 6,
+-      "gold": 10
+-    },
+-    "stats": {
+-      "luck": 4
+-    },
+-    "raidExclusive": true,
+-    "setId": "blackford"
+-  },
+-  {
+-    "id": "tollkeepers_signet_legendary",
+-    "name": "Tollkeeper's Signet (Legendary)",
+-    "slot": "ring",
+-    "rarity": "epic",
+-    "reqLevel": 8,
+-    "maxDurability": 127,
+-    "value": 254,
+-    "mods": {
+-      "success": 8,
+-      "gold": 14
+-    },
+-    "stats": {
+-      "luck": 5
+-    },
+-    "raidExclusive": true,
+-    "setId": "blackford"
+-  },
+-  {
+-    "id": "frostfang_claw",
+-    "name": "Frostfang Claw",
+-    "slot": "weapon",
+-    "rarity": "epic",
+-    "reqLevel": 18,
+-    "maxDurability": 150,
+-    "value": 1900,
+-    "mods": {
+-      "success": 10,
+-      "speed": 8
+-    },
+-    "stats": {
+-      "strength": 6,
+-      "endurance": 3
+-    },
+-    "setId": "wyrmkeep"
+-  },
+-  {
+-    "id": "frostfang_claw_heroic",
+-    "name": "Frostfang Claw (Heroic)",
+-    "slot": "weapon",
+-    "rarity": "epic",
+-    "reqLevel": 18,
+-    "maxDurability": 195,
+-    "value": 2470,
+-    "mods": {
+-      "success": 13,
+-      "speed": 10
+-    },
+-    "stats": {
+-      "strength": 8,
+-      "endurance": 4
+-    },
+-    "raidExclusive": true,
+-    "setId": "wyrmkeep"
+-  },
+-  {
+-    "id": "frostfang_claw_legendary",
+-    "name": "Frostfang Claw (Legendary)",
+-    "slot": "weapon",
+-    "rarity": "epic",
+-    "reqLevel": 18,
+-    "maxDurability": 254,
+-    "value": 3211,
+-    "mods": {
+-      "success": 17,
+-      "speed": 14
+-    },
+-    "stats": {
+-      "strength": 10,
+-      "endurance": 5
+-    },
+-    "raidExclusive": true,
+-    "setId": "wyrmkeep"
+-  },
+-  {
+-    "id": "keepers_warded_charm",
+-    "name": "Keeper's Warded Charm",
+-    "slot": "amulet",
+-    "rarity": "epic",
+-    "reqLevel": 19,
+-    "maxDurability": 140,
+-    "value": 2100,
+-    "mods": {
+-      "injuryResist": 14,
+-      "success": 8,
+-      "gold": 10
+-    },
+-    "stats": {
+-      "wisdom": 6,
+-      "endurance": 4
+-    },
+-    "setId": "wyrmkeep"
+-  },
+-  {
+-    "id": "keepers_warded_charm_heroic",
+-    "name": "Keeper's Warded Charm (Heroic)",
+-    "slot": "amulet",
+-    "rarity": "epic",
+-    "reqLevel": 19,
+-    "maxDurability": 182,
+-    "value": 2730,
+-    "mods": {
+-      "injuryResist": 18,
+-      "success": 10,
+-      "gold": 13
+-    },
+-    "stats": {
+-      "wisdom": 8,
+-      "endurance": 5
+-    },
+-    "raidExclusive": true,
+-    "setId": "wyrmkeep"
+-  },
+-  {
+-    "id": "keepers_warded_charm_legendary",
+-    "name": "Keeper's Warded Charm (Legendary)",
+-    "slot": "amulet",
+-    "rarity": "epic",
+-    "reqLevel": 19,
+-    "maxDurability": 237,
+-    "value": 3549,
+-    "mods": {
+-      "injuryResist": 24,
+-      "success": 14,
+-      "gold": 17
+-    },
+-    "stats": {
+-      "wisdom": 10,
+-      "endurance": 7
+-    },
+-    "raidExclusive": true,
+-    "setId": "wyrmkeep"
+-  },
+-  {
+-    "id": "frostwalker_treads",
+-    "name": "Frostwalker Treads",
+-    "slot": "boots",
+-    "rarity": "epic",
+-    "reqLevel": 19,
+-    "maxDurability": 145,
+-    "value": 2200,
+-    "mods": {
+-      "speed": 20,
+-      "injuryResist": 8
+-    },
+-    "stats": {
+-      "endurance": 7
+-    },
+-    "setId": "wyrmkeep"
+-  },
+-  {
+-    "id": "frostwalker_treads_heroic",
+-    "name": "Frostwalker Treads (Heroic)",
+-    "slot": "boots",
+-    "rarity": "epic",
+-    "reqLevel": 19,
+-    "maxDurability": 188,
+-    "value": 2860,
+-    "mods": {
+-      "speed": 26,
+-      "injuryResist": 10
+-    },
+-    "stats": {
+-      "endurance": 9
+-    },
+-    "raidExclusive": true,
+-    "setId": "wyrmkeep"
+-  },
+-  {
+-    "id": "frostwalker_treads_legendary",
+-    "name": "Frostwalker Treads (Legendary)",
+-    "slot": "boots",
+-    "rarity": "epic",
+-    "reqLevel": 19,
+-    "maxDurability": 245,
+-    "value": 3718,
+-    "mods": {
+-      "speed": 34,
+-      "injuryResist": 14
+-    },
+-    "stats": {
+-      "endurance": 12
+-    },
+-    "raidExclusive": true,
+-    "setId": "wyrmkeep"
+-  },
+-  {
+-    "id": "frozen_maw_shield",
+-    "name": "Frozen Maw",
+-    "slot": "shield",
+-    "rarity": "legendary",
+-    "reqLevel": 20,
+-    "maxDurability": 200,
+-    "value": 5800,
+-    "mods": {
+-      "injuryResist": 24,
+-      "success": 10,
+-      "health": 53
+-    },
+-    "stats": {
+-      "endurance": 11
+-    },
+-    "setId": "wyrmkeep"
+-  },
+-  {
+-    "id": "frozen_maw_shield_heroic",
+-    "name": "Frozen Maw (Heroic)",
+-    "slot": "shield",
+-    "rarity": "legendary",
+-    "reqLevel": 20,
+-    "maxDurability": 260,
+-    "value": 7540,
+-    "mods": {
+-      "injuryResist": 31,
+-      "success": 13,
+-      "health": 68
+-    },
+-    "stats": {
+-      "endurance": 14
+-    },
+-    "raidExclusive": true,
+-    "setId": "wyrmkeep"
+-  },
+-  {
+-    "id": "frozen_maw_shield_legendary",
+-    "name": "Frozen Maw (Legendary)",
+-    "slot": "shield",
+-    "rarity": "legendary",
+-    "reqLevel": 20,
+-    "maxDurability": 338,
+-    "value": 9802,
+-    "mods": {
+-      "injuryResist": 41,
+-      "success": 17,
+-      "health": 90
+-    },
+-    "stats": {
+-      "endurance": 19
+-    },
+-    "raidExclusive": true,
+-    "setId": "wyrmkeep"
+-  },
+-  {
+-    "id": "cinder_ash_grip",
+-    "name": "Grip of Cinder Ash",
+-    "slot": "gloves",
+-    "rarity": "epic",
+-    "reqLevel": 26,
+-    "maxDurability": 165,
+-    "value": 2350,
+-    "mods": {
+-      "success": 12,
+-      "gold": 14
+-    },
+-    "stats": {
+-      "strength": 7
+-    },
+-    "setId": "what_got_out"
+-  },
+-  {
+-    "id": "cinder_ash_grip_heroic",
+-    "name": "Grip of Cinder Ash (Heroic)",
+-    "slot": "gloves",
+-    "rarity": "epic",
+-    "reqLevel": 26,
+-    "maxDurability": 214,
+-    "value": 3055,
+-    "mods": {
+-      "success": 16,
+-      "gold": 18
+-    },
+-    "stats": {
+-      "strength": 9
+-    },
+-    "raidExclusive": true,
+-    "setId": "what_got_out"
+-  },
+-  {
+-    "id": "cinder_ash_grip_legendary",
+-    "name": "Grip of Cinder Ash (Legendary)",
+-    "slot": "gloves",
+-    "rarity": "epic",
+-    "reqLevel": 26,
+-    "maxDurability": 279,
+-    "value": 3972,
+-    "mods": {
+-      "success": 20,
+-      "gold": 24
+-    },
+-    "stats": {
+-      "strength": 12
+-    },
+-    "raidExclusive": true,
+-    "setId": "what_got_out"
+-  },
+-  {
+-    "id": "loyalists_brand",
+-    "name": "The Loyalist's Brand",
+-    "slot": "ring",
+-    "rarity": "epic",
+-    "reqLevel": 26,
+-    "maxDurability": 150,
+-    "value": 2500,
+-    "mods": {
+-      "success": 10,
+-      "injuryResist": 12,
+-      "loot": 6
+-    },
+-    "stats": {
+-      "wisdom": 5,
+-      "endurance": 4
+-    },
+-    "setId": "what_got_out"
+-  },
+-  {
+-    "id": "loyalists_brand_heroic",
+-    "name": "The Loyalist's Brand (Heroic)",
+-    "slot": "ring",
+-    "rarity": "epic",
+-    "reqLevel": 26,
+-    "maxDurability": 195,
+-    "value": 3250,
+-    "mods": {
+-      "success": 13,
+-      "injuryResist": 16,
+-      "loot": 8
+-    },
+-    "stats": {
+-      "wisdom": 6,
+-      "endurance": 5
+-    },
+-    "raidExclusive": true,
+-    "setId": "what_got_out"
+-  },
+-  {
+-    "id": "loyalists_brand_legendary",
+-    "name": "The Loyalist's Brand (Legendary)",
+-    "slot": "ring",
+-    "rarity": "epic",
+-    "reqLevel": 26,
+-    "maxDurability": 254,
+-    "value": 4225,
+-    "mods": {
+-      "success": 17,
+-      "injuryResist": 20,
+-      "loot": 10
+-    },
+-    "stats": {
+-      "wisdom": 8,
+-      "endurance": 7
+-    },
+-    "raidExclusive": true,
+-    "setId": "what_got_out"
+-  },
+-  {
+-    "id": "cornered_fang",
+-    "name": "Cornered Fang",
+-    "slot": "weapon",
+-    "rarity": "legendary",
+-    "reqLevel": 27,
+-    "maxDurability": 220,
+-    "value": 7000,
+-    "mods": {
+-      "success": 18,
+-      "gold": 14,
+-      "loot": 6
+-    },
+-    "stats": {
+-      "strength": 14,
+-      "luck": 4
+-    },
+-    "setId": "what_got_out"
+-  },
+-  {
+-    "id": "cornered_fang_heroic",
+-    "name": "Cornered Fang (Heroic)",
+-    "slot": "weapon",
+-    "rarity": "legendary",
+-    "reqLevel": 27,
+-    "maxDurability": 286,
+-    "value": 9100,
+-    "mods": {
+-      "success": 23,
+-      "gold": 18,
+-      "loot": 8
+-    },
+-    "stats": {
+-      "strength": 18,
+-      "luck": 5
+-    },
+-    "raidExclusive": true,
+-    "setId": "what_got_out"
+-  },
+-  {
+-    "id": "cornered_fang_legendary",
+-    "name": "Cornered Fang (Legendary)",
+-    "slot": "weapon",
+-    "rarity": "legendary",
+-    "reqLevel": 27,
+-    "maxDurability": 372,
+-    "value": 11830,
+-    "mods": {
+-      "success": 30,
+-      "gold": 24,
+-      "loot": 10
+-    },
+-    "stats": {
+-      "strength": 24,
+-      "luck": 7
+-    },
+-    "raidExclusive": true,
+-    "setId": "what_got_out"
+-  },
+-  {
+-    "id": "desperate_ends_crown",
+-    "name": "Crown of a Desperate End",
+-    "slot": "helmet",
+-    "rarity": "legendary",
+-    "reqLevel": 27,
+-    "maxDurability": 215,
+-    "value": 7400,
+-    "mods": {
+-      "injuryResist": 26,
+-      "success": 12,
+-      "xp": 16
+-    },
+-    "stats": {
+-      "endurance": 10,
+-      "wisdom": 5
+-    },
+-    "setId": "what_got_out"
+-  },
+-  {
+-    "id": "desperate_ends_crown_heroic",
+-    "name": "Crown of a Desperate End (Heroic)",
+-    "slot": "helmet",
+-    "rarity": "legendary",
+-    "reqLevel": 27,
+-    "maxDurability": 280,
+-    "value": 9620,
+-    "mods": {
+-      "injuryResist": 34,
+-      "success": 16,
+-      "xp": 21
+-    },
+-    "stats": {
+-      "endurance": 13,
+-      "wisdom": 6
+-    },
+-    "raidExclusive": true,
+-    "setId": "what_got_out"
+-  },
+-  {
+-    "id": "desperate_ends_crown_legendary",
+-    "name": "Crown of a Desperate End (Legendary)",
+-    "slot": "helmet",
+-    "rarity": "legendary",
+-    "reqLevel": 27,
+-    "maxDurability": 363,
+-    "value": 12506,
+-    "mods": {
+-      "injuryResist": 44,
+-      "success": 20,
+-      "xp": 27
+-    },
+-    "stats": {
+-      "endurance": 17,
+-      "wisdom": 8
+-    },
+-    "raidExclusive": true,
+-    "setId": "what_got_out"
+-  },
+-  {
+-    "id": "the_last_ember_heroic",
+-    "name": "The Last Ember (Heroic)",
+-    "slot": "amulet",
+-    "rarity": "legendary",
+-    "reqLevel": 55,
+-    "maxDurability": 520,
+-    "value": 52000,
+-    "mods": {
+-      "success": 26,
+-      "gold": 58,
+-      "loot": 26,
+-      "xp": 46,
+-      "injuryResist": 26
+-    },
+-    "stats": {
+-      "strength": 13,
+-      "endurance": 13,
+-      "luck": 13,
+-      "wisdom": 13
+-    },
+-    "raidExclusive": true
+-  },
+-  {
+-    "id": "the_last_ember_legendary",
+-    "name": "The Last Ember (Legendary)",
+-    "slot": "amulet",
+-    "rarity": "legendary",
+-    "reqLevel": 55,
+-    "maxDurability": 676,
+-    "value": 67600,
+-    "mods": {
+-      "success": 34,
+-      "gold": 76,
+-      "loot": 34,
+-      "xp": 59,
+-      "injuryResist": 34
+-    },
+-    "stats": {
+-      "strength": 17,
+-      "endurance": 17,
+-      "luck": 17,
+-      "wisdom": 17
+-    },
+-    "raidExclusive": true
+-  },
+-  {
+-    "id": "requiem_blade_heroic",
+-    "name": "Requiem Edge (Heroic)",
+-    "slot": "weapon",
+-    "rarity": "legendary",
+-    "reqLevel": 55,
+-    "maxDurability": 455,
+-    "value": 39000,
+-    "mods": {
+-      "success": 36,
+-      "gold": 31,
+-      "loot": 18,
+-      "speed": 16
+-    },
+-    "stats": {
+-      "strength": 31,
+-      "luck": 8
+-    },
+-    "raidExclusive": true
+-  },
+-  {
+-    "id": "requiem_blade_legendary",
+-    "name": "Requiem Edge (Legendary)",
+-    "slot": "weapon",
+-    "rarity": "legendary",
+-    "reqLevel": 55,
+-    "maxDurability": 592,
+-    "value": 50700,
+-    "mods": {
+-      "success": 47,
+-      "gold": 41,
+-      "loot": 24,
+-      "speed": 20
+-    },
+-    "stats": {
+-      "strength": 41,
+-      "luck": 10
+-    },
+-    "raidExclusive": true
+-  },
+-  {
+-    "id": "requiem_crown_heroic",
+-    "name": "Requiem Circlet (Heroic)",
+-    "slot": "helmet",
+-    "rarity": "legendary",
+-    "reqLevel": 55,
+-    "maxDurability": 429,
+-    "value": 36400,
+-    "mods": {
+-      "success": 29,
+-      "injuryResist": 39,
+-      "xp": 39
+-    },
+-    "stats": {
+-      "wisdom": 23,
+-      "endurance": 12
+-    },
+-    "raidExclusive": true
+-  },
+-  {
+-    "id": "requiem_crown_legendary",
+-    "name": "Requiem Circlet (Legendary)",
+-    "slot": "helmet",
+-    "rarity": "legendary",
+-    "reqLevel": 55,
+-    "maxDurability": 558,
+-    "value": 47320,
+-    "mods": {
+-      "success": 37,
+-      "injuryResist": 51,
+-      "xp": 51
+-    },
+-    "stats": {
+-      "wisdom": 30,
+-      "endurance": 15
+-    },
+-    "raidExclusive": true
+-  },
+-  {
+-    "id": "requiem_plate_heroic",
+-    "name": "Requiem Vestments (Heroic)",
+-    "slot": "chest",
+-    "rarity": "legendary",
+-    "reqLevel": 55,
+-    "maxDurability": 494,
+-    "value": 41600,
+-    "mods": {
+-      "injuryResist": 49,
+-      "success": 26,
+-      "durability": 46,
+-      "health": 64
+-    },
+-    "stats": {
+-      "endurance": 31,
+-      "strength": 10
+-    },
+-    "raidExclusive": true
+-  },
+-  {
+-    "id": "requiem_plate_legendary",
+-    "name": "Requiem Vestments (Legendary)",
+-    "slot": "chest",
+-    "rarity": "legendary",
+-    "reqLevel": 55,
+-    "maxDurability": 642,
+-    "value": 54080,
+-    "mods": {
+-      "injuryResist": 64,
+-      "success": 34,
+-      "durability": 59,
+-      "health": 83
+-    },
+-    "stats": {
+-      "endurance": 41,
+-      "strength": 14
+-    },
+-    "raidExclusive": true
+-  },
+-  {
+-    "id": "requiem_signet_heroic",
+-    "name": "Requiem Signet (Heroic)",
+-    "slot": "ring",
+-    "rarity": "legendary",
+-    "reqLevel": 55,
+-    "maxDurability": 390,
+-    "value": 33800,
+-    "mods": {
+-      "loot": 26,
+-      "gold": 39,
+-      "speed": 18
+-    },
+-    "stats": {
+-      "luck": 23
+-    },
+-    "raidExclusive": true
+-  },
+-  {
+-    "id": "requiem_signet_legendary",
+-    "name": "Requiem Signet (Legendary)",
++    "id": "loyalists_brand",
++    "name": "The Loyalist's Brand",
+     "slot": "ring",
+-    "rarity": "legendary",
+-    "reqLevel": 55,
+-    "maxDurability": 507,
+-    "value": 43940,
+-    "mods": {
+-      "loot": 34,
+-      "gold": 51,
+-      "speed": 24
+-    },
+-    "stats": {
+-      "luck": 30
+-    },
+-    "raidExclusive": true
+-  },
+-  {
+-    "id": "requiem_grips_heroic",
+-    "name": "Requiem Grasp (Heroic)",
+-    "slot": "gloves",
+-    "rarity": "legendary",
+-    "reqLevel": 55,
+-    "maxDurability": 442,
+-    "value": 35100,
+-    "mods": {
+-      "gold": 42,
+-      "loot": 29,
+-      "success": 23
+-    },
+-    "stats": {
+-      "luck": 21,
+-      "strength": 13
+-    },
+-    "raidExclusive": true
+-  },
+-  {
+-    "id": "requiem_grips_legendary",
+-    "name": "Requiem Grasp (Legendary)",
+-    "slot": "gloves",
+-    "rarity": "legendary",
+-    "reqLevel": 55,
+-    "maxDurability": 575,
+-    "value": 45630,
++    "rarity": "epic",
++    "reqLevel": 26,
++    "maxDurability": 150,
++    "value": 2500,
+     "mods": {
+-      "gold": 54,
+-      "loot": 37,
+-      "success": 30
++      "success": 10,
++      "injuryResist": 12,
++      "loot": 6
+     },
+     "stats": {
+-      "luck": 27,
+-      "strength": 17
++      "wisdom": 5,
++      "endurance": 4
+     },
+-    "raidExclusive": true
++    "setId": "what_got_out"
+   },
+   {
+-    "id": "requiem_striders_heroic",
+-    "name": "Requiem Stride (Heroic)",
+-    "slot": "boots",
++    "id": "cornered_fang",
++    "name": "Cornered Fang",
++    "slot": "weapon",
+     "rarity": "legendary",
+-    "reqLevel": 55,
+-    "maxDurability": 442,
+-    "value": 35750,
++    "reqLevel": 27,
++    "maxDurability": 220,
++    "value": 7000,
+     "mods": {
+-      "speed": 42,
+-      "success": 21,
+-      "injuryResist": 18
++      "success": 18,
++      "gold": 14,
++      "loot": 6
+     },
+     "stats": {
+-      "endurance": 21
++      "strength": 14,
++      "luck": 4
+     },
+-    "raidExclusive": true
++    "setId": "what_got_out"
+   },
+   {
+-    "id": "requiem_striders_legendary",
+-    "name": "Requiem Stride (Legendary)",
+-    "slot": "boots",
++    "id": "desperate_ends_crown",
++    "name": "Crown of a Desperate End",
++    "slot": "helmet",
+     "rarity": "legendary",
+-    "reqLevel": 55,
+-    "maxDurability": 575,
+-    "value": 46475,
++    "reqLevel": 27,
++    "maxDurability": 215,
++    "value": 7400,
+     "mods": {
+-      "speed": 54,
+-      "success": 27,
+-      "injuryResist": 24
++      "injuryResist": 26,
++      "success": 12,
++      "xp": 16
+     },
+     "stats": {
+-      "endurance": 27
++      "endurance": 10,
++      "wisdom": 5
+     },
+-    "raidExclusive": true
++    "setId": "what_got_out"
+   },
+   {
+     "id": "guildmade_blade",
+@@ -3020,46 +1878,6 @@
+     "icon": "armor/Armor_15.png",
+     "setId": "cinderfang"
+   },
+-  {
+-    "id": "cinderfang_gauntlets_heroic",
+-    "name": "Cinderfang Gauntlets (Heroic)",
+-    "slot": "gloves",
+-    "rarity": "epic",
+-    "reqLevel": 30,
+-    "maxDurability": 262,
+-    "value": 3380,
+-    "mods": {
+-      "success": 11,
+-      "injuryResist": 12
+-    },
+-    "stats": {
+-      "strength": 7
+-    },
+-    "icon": "armor/Armor_15.png",
+-    "setId": "cinderfang",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "cinderfang_gauntlets_legendary",
+-    "name": "Cinderfang Gauntlets (Legendary)",
+-    "slot": "gloves",
+-    "rarity": "epic",
+-    "reqLevel": 30,
+-    "maxDurability": 326,
+-    "value": 4290,
+-    "mods": {
+-      "success": 13,
+-      "injuryResist": 14
+-    },
+-    "stats": {
+-      "strength": 8
+-    },
+-    "icon": "armor/Armor_15.png",
+-    "setId": "cinderfang",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+   {
+     "id": "wyrmwardens_cloak",
+     "name": "Wyrmwarden's Cloak",
+@@ -3078,46 +1896,6 @@
+     "icon": "armor/Armor_60.png",
+     "setId": "cinderfang"
+   },
+-  {
+-    "id": "wyrmwardens_cloak_heroic",
+-    "name": "Wyrmwarden's Cloak (Heroic)",
+-    "slot": "cloak",
+-    "rarity": "epic",
+-    "reqLevel": 30,
+-    "maxDurability": 250,
+-    "value": 3250,
+-    "mods": {
+-      "success": 8,
+-      "injuryResist": 19
+-    },
+-    "stats": {
+-      "endurance": 8
+-    },
+-    "icon": "armor/Armor_60.png",
+-    "setId": "cinderfang",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "wyrmwardens_cloak_legendary",
+-    "name": "Wyrmwarden's Cloak (Legendary)",
+-    "slot": "cloak",
+-    "rarity": "epic",
+-    "reqLevel": 30,
+-    "maxDurability": 310,
+-    "value": 4125,
+-    "mods": {
+-      "success": 10,
+-      "injuryResist": 23
+-    },
+-    "stats": {
+-      "endurance": 9
+-    },
+-    "icon": "armor/Armor_60.png",
+-    "setId": "cinderfang",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+   {
+     "id": "scaleknit_boots",
+     "name": "Scaleknit Boots",
+@@ -3136,46 +1914,6 @@
+     "icon": "armor/Armor_70.png",
+     "setId": "cinderfang"
+   },
+-  {
+-    "id": "scaleknit_boots_heroic",
+-    "name": "Scaleknit Boots (Heroic)",
+-    "slot": "boots",
+-    "rarity": "epic",
+-    "reqLevel": 30,
+-    "maxDurability": 244,
+-    "value": 3120,
+-    "mods": {
+-      "speed": 12,
+-      "injuryResist": 10
+-    },
+-    "stats": {
+-      "endurance": 6
+-    },
+-    "icon": "armor/Armor_70.png",
+-    "setId": "cinderfang",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "scaleknit_boots_legendary",
+-    "name": "Scaleknit Boots (Legendary)",
+-    "slot": "boots",
+-    "rarity": "epic",
+-    "reqLevel": 30,
+-    "maxDurability": 302,
+-    "value": 3960,
+-    "mods": {
+-      "speed": 14,
+-      "injuryResist": 12
+-    },
+-    "stats": {
+-      "endurance": 6
+-    },
+-    "icon": "armor/Armor_70.png",
+-    "setId": "cinderfang",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+   {
+     "id": "brood_fang_dagger",
+     "name": "Brood Fang Dagger",
+@@ -3195,48 +1933,6 @@
+     "icon": "weapons/Weapon_33.png",
+     "setId": "cinderfang"
+   },
+-  {
+-    "id": "brood_fang_dagger_heroic",
+-    "name": "Brood Fang Dagger (Heroic)",
+-    "slot": "weapon",
+-    "rarity": "epic",
+-    "reqLevel": 30,
+-    "maxDurability": 219,
+-    "value": 3900,
+-    "mods": {
+-      "success": 14,
+-      "speed": 7
+-    },
+-    "stats": {
+-      "strength": 8,
+-      "luck": 3
+-    },
+-    "icon": "weapons/Weapon_33.png",
+-    "setId": "cinderfang",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "brood_fang_dagger_legendary",
+-    "name": "Brood Fang Dagger (Legendary)",
+-    "slot": "weapon",
+-    "rarity": "epic",
+-    "reqLevel": 30,
+-    "maxDurability": 271,
+-    "value": 4950,
+-    "mods": {
+-      "success": 17,
+-      "speed": 9
+-    },
+-    "stats": {
+-      "strength": 9,
+-      "luck": 4
+-    },
+-    "icon": "weapons/Weapon_33.png",
+-    "setId": "cinderfang",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+   {
+     "id": "blackscale_helm",
+     "name": "Blackscale Helm",
+@@ -3252,112 +1948,28 @@
+     "stats": {
+       "endurance": 10
+     },
+-    "icon": "armor/Armor_41.png",
+-    "setId": "cinderfang"
+-  },
+-  {
+-    "id": "blackscale_helm_heroic",
+-    "name": "Blackscale Helm (Heroic)",
+-    "slot": "helmet",
+-    "rarity": "legendary",
+-    "reqLevel": 30,
+-    "maxDurability": 325,
+-    "value": 11180,
+-    "mods": {
+-      "success": 19,
+-      "injuryResist": 26
+-    },
+-    "stats": {
+-      "endurance": 12
+-    },
+-    "icon": "armor/Armor_41.png",
+-    "setId": "cinderfang",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "blackscale_helm_legendary",
+-    "name": "Blackscale Helm (Legendary)",
+-    "slot": "helmet",
+-    "rarity": "legendary",
+-    "reqLevel": 30,
+-    "maxDurability": 403,
+-    "value": 14190,
+-    "mods": {
+-      "success": 23,
+-      "injuryResist": 32
+-    },
+-    "stats": {
+-      "endurance": 13
+-    },
+-    "icon": "armor/Armor_41.png",
+-    "setId": "cinderfang",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "broodmothers_crown",
+-    "name": "Brood Mother's Crown",
+-    "slot": "amulet",
+-    "rarity": "legendary",
+-    "reqLevel": 30,
+-    "maxDurability": 250,
+-    "value": 9200,
+-    "mods": {
+-      "gold": 22,
+-      "loot": 16,
+-      "xp": 18
+-    },
+-    "stats": {
+-      "luck": 8,
+-      "wisdom": 6
+-    },
+-    "icon": "accessories/Accessory_18.png",
+-    "setId": "cinderfang"
+-  },
+-  {
+-    "id": "broodmothers_crown_heroic",
+-    "name": "Brood Mother's Crown (Heroic)",
+-    "slot": "amulet",
+-    "rarity": "legendary",
+-    "reqLevel": 30,
+-    "maxDurability": 312,
+-    "value": 11960,
+-    "mods": {
+-      "gold": 26,
+-      "loot": 19,
+-      "xp": 22
+-    },
+-    "stats": {
+-      "luck": 9,
+-      "wisdom": 7
+-    },
+-    "icon": "accessories/Accessory_18.png",
+-    "setId": "cinderfang",
+-    "raidExclusive": true,
+-    "craftable": false
++    "icon": "armor/Armor_41.png",
++    "setId": "cinderfang"
+   },
+   {
+-    "id": "broodmothers_crown_legendary",
+-    "name": "Brood Mother's Crown (Legendary)",
++    "id": "broodmothers_crown",
++    "name": "Brood Mother's Crown",
+     "slot": "amulet",
+     "rarity": "legendary",
+     "reqLevel": 30,
+-    "maxDurability": 388,
+-    "value": 15180,
++    "maxDurability": 250,
++    "value": 9200,
+     "mods": {
+-      "gold": 32,
+-      "loot": 23,
+-      "xp": 26
++      "gold": 22,
++      "loot": 16,
++      "xp": 18
+     },
+     "stats": {
+-      "luck": 10,
+-      "wisdom": 8
++      "luck": 8,
++      "wisdom": 6
+     },
+     "icon": "accessories/Accessory_18.png",
+-    "setId": "cinderfang",
+-    "raidExclusive": true,
+-    "craftable": false
++    "setId": "cinderfang"
+   },
+   {
+     "id": "sewn_maw_greataxe",
+@@ -3377,46 +1989,6 @@
+     "icon": "weapons/Weapon_45.png",
+     "setId": "grimward"
+   },
+-  {
+-    "id": "sewn_maw_greataxe_heroic",
+-    "name": "Sewn Maw Greataxe (Heroic)",
+-    "slot": "weapon",
+-    "rarity": "epic",
+-    "reqLevel": 41,
+-    "maxDurability": 325,
+-    "value": 12350,
+-    "mods": {
+-      "success": 19,
+-      "gold": 12
+-    },
+-    "stats": {
+-      "strength": 17
+-    },
+-    "icon": "weapons/Weapon_45.png",
+-    "setId": "grimward",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "sewn_maw_greataxe_legendary",
+-    "name": "Sewn Maw Greataxe (Legendary)",
+-    "slot": "weapon",
+-    "rarity": "epic",
+-    "reqLevel": 41,
+-    "maxDurability": 403,
+-    "value": 15675,
+-    "mods": {
+-      "success": 23,
+-      "gold": 14
+-    },
+-    "stats": {
+-      "strength": 20
+-    },
+-    "icon": "weapons/Weapon_45.png",
+-    "setId": "grimward",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+   {
+     "id": "stitched_hide_vest",
+     "name": "Stitched Hide Vest",
+@@ -3435,46 +2007,6 @@
+     "icon": "armor/Armor_18.png",
+     "setId": "grimward"
+   },
+-  {
+-    "id": "stitched_hide_vest_heroic",
+-    "name": "Stitched Hide Vest (Heroic)",
+-    "slot": "chest",
+-    "rarity": "epic",
+-    "reqLevel": 41,
+-    "maxDurability": 350,
+-    "value": 11960,
+-    "mods": {
+-      "injuryResist": 31,
+-      "success": 10
+-    },
+-    "stats": {
+-      "endurance": 14
+-    },
+-    "icon": "armor/Armor_18.png",
+-    "setId": "grimward",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "stitched_hide_vest_legendary",
+-    "name": "Stitched Hide Vest (Legendary)",
+-    "slot": "chest",
+-    "rarity": "epic",
+-    "reqLevel": 41,
+-    "maxDurability": 434,
+-    "value": 15180,
+-    "mods": {
+-      "injuryResist": 38,
+-      "success": 12
+-    },
+-    "stats": {
+-      "endurance": 16
+-    },
+-    "icon": "armor/Armor_18.png",
+-    "setId": "grimward",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+   {
+     "id": "phylactery_shard_ring",
+     "name": "Phylactery Shard Ring",
+@@ -3494,48 +2026,6 @@
+     "icon": "accessories/Accessory_07.png",
+     "setId": "grimward"
+   },
+-  {
+-    "id": "phylactery_shard_ring_heroic",
+-    "name": "Phylactery Shard Ring (Heroic)",
+-    "slot": "ring",
+-    "rarity": "epic",
+-    "reqLevel": 41,
+-    "maxDurability": 300,
+-    "value": 13650,
+-    "mods": {
+-      "success": 17,
+-      "loot": 14,
+-      "xp": 17
+-    },
+-    "stats": {
+-      "wisdom": 12
+-    },
+-    "icon": "accessories/Accessory_07.png",
+-    "setId": "grimward",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "phylactery_shard_ring_legendary",
+-    "name": "Phylactery Shard Ring (Legendary)",
+-    "slot": "ring",
+-    "rarity": "epic",
+-    "reqLevel": 41,
+-    "maxDurability": 372,
+-    "value": 17325,
+-    "mods": {
+-      "success": 20,
+-      "loot": 17,
+-      "xp": 20
+-    },
+-    "stats": {
+-      "wisdom": 13
+-    },
+-    "icon": "accessories/Accessory_07.png",
+-    "setId": "grimward",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+   {
+     "id": "unbinding_gauntlets",
+     "name": "Unbinding Gauntlets",
+@@ -3555,48 +2045,6 @@
+     "icon": "armor/Armor_16.png",
+     "setId": "grimward"
+   },
+-  {
+-    "id": "unbinding_gauntlets_heroic",
+-    "name": "Unbinding Gauntlets (Heroic)",
+-    "slot": "gloves",
+-    "rarity": "epic",
+-    "reqLevel": 41,
+-    "maxDurability": 319,
+-    "value": 12740,
+-    "mods": {
+-      "success": 14,
+-      "speed": 10
+-    },
+-    "stats": {
+-      "strength": 10,
+-      "endurance": 7
+-    },
+-    "icon": "armor/Armor_16.png",
+-    "setId": "grimward",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "unbinding_gauntlets_legendary",
+-    "name": "Unbinding Gauntlets (Legendary)",
+-    "slot": "gloves",
+-    "rarity": "epic",
+-    "reqLevel": 41,
+-    "maxDurability": 395,
+-    "value": 16170,
+-    "mods": {
+-      "success": 17,
+-      "speed": 12
+-    },
+-    "stats": {
+-      "strength": 12,
+-      "endurance": 8
+-    },
+-    "icon": "armor/Armor_16.png",
+-    "setId": "grimward",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+   {
+     "id": "lichbound_diadem",
+     "name": "Lichbound Diadem",
+@@ -3616,48 +2064,6 @@
+     "icon": "armor/Armor_42.png",
+     "setId": "grimward"
+   },
+-  {
+-    "id": "lichbound_diadem_heroic",
+-    "name": "Lichbound Diadem (Heroic)",
+-    "slot": "helmet",
+-    "rarity": "legendary",
+-    "reqLevel": 41,
+-    "maxDurability": 388,
+-    "value": 22750,
+-    "mods": {
+-      "success": 24,
+-      "xp": 29,
+-      "injuryResist": 24
+-    },
+-    "stats": {
+-      "wisdom": 16
+-    },
+-    "icon": "armor/Armor_42.png",
+-    "setId": "grimward",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "lichbound_diadem_legendary",
+-    "name": "Lichbound Diadem (Legendary)",
+-    "slot": "helmet",
+-    "rarity": "legendary",
+-    "reqLevel": 41,
+-    "maxDurability": 480,
+-    "value": 28875,
+-    "mods": {
+-      "success": 29,
+-      "xp": 35,
+-      "injuryResist": 29
+-    },
+-    "stats": {
+-      "wisdom": 18
+-    },
+-    "icon": "armor/Armor_42.png",
+-    "setId": "grimward",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+   {
+     "id": "grimward_amulet",
+     "name": "Grimward Amulet",
+@@ -3678,50 +2084,6 @@
+     "icon": "accessories/Accessory_19.png",
+     "setId": "grimward"
+   },
+-  {
+-    "id": "grimward_amulet_heroic",
+-    "name": "Grimward Amulet (Heroic)",
+-    "slot": "amulet",
+-    "rarity": "legendary",
+-    "reqLevel": 41,
+-    "maxDurability": 375,
+-    "value": 23660,
+-    "mods": {
+-      "gold": 31,
+-      "loot": 22,
+-      "success": 14
+-    },
+-    "stats": {
+-      "luck": 12,
+-      "wisdom": 9
+-    },
+-    "icon": "accessories/Accessory_19.png",
+-    "setId": "grimward",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "grimward_amulet_legendary",
+-    "name": "Grimward Amulet (Legendary)",
+-    "slot": "amulet",
+-    "rarity": "legendary",
+-    "reqLevel": 41,
+-    "maxDurability": 465,
+-    "value": 30030,
+-    "mods": {
+-      "gold": 38,
+-      "loot": 26,
+-      "success": 17
+-    },
+-    "stats": {
+-      "luck": 13,
+-      "wisdom": 10
+-    },
+-    "icon": "accessories/Accessory_19.png",
+-    "setId": "grimward",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+   {
+     "id": "woven_mind_circlet",
+     "name": "Woven Mind Circlet",
+@@ -3741,48 +2103,6 @@
+     "icon": "armor/Armor_43.png",
+     "setId": "loom"
+   },
+-  {
+-    "id": "woven_mind_circlet_heroic",
+-    "name": "Woven Mind Circlet (Heroic)",
+-    "slot": "helmet",
+-    "rarity": "epic",
+-    "reqLevel": 43,
+-    "maxDurability": 362,
+-    "value": 15600,
+-    "mods": {
+-      "success": 18,
+-      "xp": 24,
+-      "injuryResist": 17
+-    },
+-    "stats": {
+-      "wisdom": 15
+-    },
+-    "icon": "armor/Armor_43.png",
+-    "setId": "loom",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "woven_mind_circlet_legendary",
+-    "name": "Woven Mind Circlet (Legendary)",
+-    "slot": "helmet",
+-    "rarity": "epic",
+-    "reqLevel": 43,
+-    "maxDurability": 450,
+-    "value": 19800,
+-    "mods": {
+-      "success": 22,
+-      "xp": 29,
+-      "injuryResist": 20
+-    },
+-    "stats": {
+-      "wisdom": 17
+-    },
+-    "icon": "armor/Armor_43.png",
+-    "setId": "loom",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+   {
+     "id": "unraveling_cloak",
+     "name": "Unraveling Cloak",
+@@ -3802,48 +2122,6 @@
+     "icon": "armor/Armor_62.png",
+     "setId": "loom"
+   },
+-  {
+-    "id": "unraveling_cloak_heroic",
+-    "name": "Unraveling Cloak (Heroic)",
+-    "slot": "cloak",
+-    "rarity": "epic",
+-    "reqLevel": 43,
+-    "maxDurability": 350,
+-    "value": 15340,
+-    "mods": {
+-      "speed": 17,
+-      "success": 12
+-    },
+-    "stats": {
+-      "luck": 8,
+-      "endurance": 7
+-    },
+-    "icon": "armor/Armor_62.png",
+-    "setId": "loom",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "unraveling_cloak_legendary",
+-    "name": "Unraveling Cloak (Legendary)",
+-    "slot": "cloak",
+-    "rarity": "epic",
+-    "reqLevel": 43,
+-    "maxDurability": 434,
+-    "value": 19470,
+-    "mods": {
+-      "speed": 20,
+-      "success": 14
+-    },
+-    "stats": {
+-      "luck": 9,
+-      "endurance": 8
+-    },
+-    "icon": "armor/Armor_62.png",
+-    "setId": "loom",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+   {
+     "id": "threadcutter",
+     "name": "Threadcutter",
+@@ -3864,50 +2142,6 @@
+     "icon": "weapons/Weapon_50.png",
+     "setId": "loom"
+   },
+-  {
+-    "id": "threadcutter_heroic",
+-    "name": "Threadcutter (Heroic)",
+-    "slot": "weapon",
+-    "rarity": "legendary",
+-    "reqLevel": 43,
+-    "maxDurability": 412,
+-    "value": 25350,
+-    "mods": {
+-      "success": 29,
+-      "gold": 19,
+-      "loot": 12
+-    },
+-    "stats": {
+-      "strength": 14,
+-      "wisdom": 9
+-    },
+-    "icon": "weapons/Weapon_50.png",
+-    "setId": "loom",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+-  {
+-    "id": "threadcutter_legendary",
+-    "name": "Threadcutter (Legendary)",
+-    "slot": "weapon",
+-    "rarity": "legendary",
+-    "reqLevel": 43,
+-    "maxDurability": 512,
+-    "value": 32175,
+-    "mods": {
+-      "success": 35,
+-      "gold": 23,
+-      "loot": 14
+-    },
+-    "stats": {
+-      "strength": 16,
+-      "wisdom": 10
+-    },
+-    "icon": "weapons/Weapon_50.png",
+-    "setId": "loom",
+-    "raidExclusive": true,
+-    "craftable": false
+-  },
+   {
+     "id": "tollbreakers_gloves",
+     "name": "Tollbreaker's Gloves",
+diff --git a/src/game/data/json/raid-encounters.json b/src/game/data/json/raid-encounters.json
+index 8d3b92e..b82b6bd 100644
+--- a/src/game/data/json/raid-encounters.json
++++ b/src/game/data/json/raid-encounters.json
+@@ -10,14 +10,6 @@
+     "loot": [
+       "gravewatchers_band@10",
+       "ashwoven_charm@8"
+-    ],
+-    "lootHeroic": [
+-      "gravewatchers_band_heroic@10",
+-      "ashwoven_charm_heroic@8"
+-    ],
+-    "lootLegendary": [
+-      "gravewatchers_band_legendary@10",
+-      "ashwoven_charm_legendary@8"
+     ]
+   },
+   {
+@@ -31,14 +23,6 @@
+     "loot": [
+       "choir_mask@6",
+       "silenced_bell@6"
+-    ],
+-    "lootHeroic": [
+-      "choir_mask_heroic@6",
+-      "silenced_bell_heroic@6"
+-    ],
+-    "lootLegendary": [
+-      "choir_mask_legendary@6",
+-      "silenced_bell_legendary@6"
+     ]
+   },
+   {
+@@ -53,16 +37,6 @@
+       "dragon_helm@4",
+       "gravewatchers_band@5",
+       "choir_mask@5"
+-    ],
+-    "lootHeroic": [
+-      "dragon_helm_heroic@4",
+-      "gravewatchers_band_heroic@5",
+-      "choir_mask_heroic@5"
+-    ],
+-    "lootLegendary": [
+-      "dragon_helm_legendary@4",
+-      "gravewatchers_band_legendary@5",
+-      "choir_mask_legendary@5"
+     ]
+   },
+   {
+@@ -76,14 +50,6 @@
+     "loot": [
+       "copper_band@12",
+       "work_gloves@10"
+-    ],
+-    "lootHeroic": [
+-      "copper_band_heroic@12",
+-      "work_gloves_heroic@10"
+-    ],
+-    "lootLegendary": [
+-      "copper_band_legendary@12",
+-      "work_gloves_legendary@10"
+     ]
+   },
+   {
+@@ -97,14 +63,6 @@
+     "loot": [
+       "knights_blade@6",
+       "iron_helm@8"
+-    ],
+-    "lootHeroic": [
+-      "knights_blade_heroic@6",
+-      "iron_helm_heroic@8"
+-    ],
+-    "lootLegendary": [
+-      "knights_blade_legendary@6",
+-      "iron_helm_legendary@8"
+     ]
+   },
+   {
+@@ -120,21 +78,11 @@
+       "ranger_boots@6",
+       "tollkeepers_signet@4"
+     ],
+-    "lootHeroic": [
+-      "chainmail_heroic@6",
+-      "ranger_boots_heroic@6",
+-      "tollkeepers_signet_heroic@4"
+-    ],
+     "dealsElement": [
+       "poison"
+     ],
+     "vulnerableTo": [
+       "lightning"
+-    ],
+-    "lootLegendary": [
+-      "chainmail_legendary@6",
+-      "ranger_boots_legendary@6",
+-      "tollkeepers_signet_legendary@4"
+     ]
+   },
+   {
+@@ -148,14 +96,6 @@
+     "loot": [
+       "requiem_signet@12",
+       "requiem_striders@10"
+-    ],
+-    "lootHeroic": [
+-      "requiem_signet_heroic@12",
+-      "requiem_striders_heroic@10"
+-    ],
+-    "lootLegendary": [
+-      "requiem_signet_legendary@12",
+-      "requiem_striders_legendary@10"
+     ]
+   },
+   {
+@@ -170,16 +110,6 @@
+       "requiem_grips@8",
+       "requiem_plate@6",
+       "the_last_ember@4"
+-    ],
+-    "lootHeroic": [
+-      "requiem_grips_heroic@8",
+-      "requiem_plate_heroic@6",
+-      "the_last_ember_heroic@4"
+-    ],
+-    "lootLegendary": [
+-      "requiem_grips_legendary@8",
+-      "requiem_plate_legendary@6",
+-      "the_last_ember_legendary@4"
+     ]
+   },
+   {
+@@ -193,14 +123,6 @@
+     "loot": [
+       "requiem_blade@5",
+       "requiem_crown@4"
+-    ],
+-    "lootHeroic": [
+-      "requiem_blade_heroic@5",
+-      "requiem_crown_heroic@4"
+-    ],
+-    "lootLegendary": [
+-      "requiem_blade_legendary@5",
+-      "requiem_crown_legendary@4"
+     ]
+   },
+   {
+@@ -214,17 +136,11 @@
+     "loot": [
+       "frostfang_claw@10"
+     ],
+-    "lootHeroic": [
+-      "frostfang_claw_heroic@10"
+-    ],
+     "dealsElement": [
+       "frost"
+     ],
+     "vulnerableTo": [
+       "fire"
+-    ],
+-    "lootLegendary": [
+-      "frostfang_claw_legendary@10"
+     ]
+   },
+   {
+@@ -238,14 +154,6 @@
+     "loot": [
+       "keepers_warded_charm@9",
+       "frostwalker_treads@9"
+-    ],
+-    "lootHeroic": [
+-      "keepers_warded_charm_heroic@9",
+-      "frostwalker_treads_heroic@9"
+-    ],
+-    "lootLegendary": [
+-      "keepers_warded_charm_legendary@9",
+-      "frostwalker_treads_legendary@9"
+     ]
+   },
+   {
+@@ -260,10 +168,6 @@
+       "dragon_helm@8",
+       "frozen_maw_shield@5"
+     ],
+-    "lootHeroic": [
+-      "dragon_helm_heroic@8",
+-      "frozen_maw_shield_heroic@5"
+-    ],
+     "dealsElement": [
+       "frost"
+     ],
+@@ -272,10 +176,6 @@
+     ],
+     "vulnerableTo": [
+       "fire"
+-    ],
+-    "lootLegendary": [
+-      "dragon_helm_legendary@8",
+-      "frozen_maw_shield_legendary@5"
+     ]
+   },
+   {
+@@ -288,12 +188,6 @@
+     "rewardXp": 220,
+     "loot": [
+       "cinder_ash_grip@10"
+-    ],
+-    "lootHeroic": [
+-      "cinder_ash_grip_heroic@10"
+-    ],
+-    "lootLegendary": [
+-      "cinder_ash_grip_legendary@10"
+     ]
+   },
+   {
+@@ -306,12 +200,6 @@
+     "rewardXp": 380,
+     "loot": [
+       "loyalists_brand@9"
+-    ],
+-    "lootHeroic": [
+-      "loyalists_brand_heroic@9"
+-    ],
+-    "lootLegendary": [
+-      "loyalists_brand_legendary@9"
+     ]
+   },
+   {
+@@ -325,14 +213,6 @@
+     "loot": [
+       "cornered_fang@5",
+       "desperate_ends_crown@4"
+-    ],
+-    "lootHeroic": [
+-      "cornered_fang_heroic@5",
+-      "desperate_ends_crown_heroic@4"
+-    ],
+-    "lootLegendary": [
+-      "cornered_fang_legendary@5",
+-      "desperate_ends_crown_legendary@4"
+     ]
+   },
+   {
+@@ -347,19 +227,11 @@
+       "cinderfang_gauntlets@10",
+       "wyrmwardens_cloak@9"
+     ],
+-    "lootHeroic": [
+-      "cinderfang_gauntlets_heroic@10",
+-      "wyrmwardens_cloak_heroic@9"
+-    ],
+     "vulnerableTo": [
+       "frost"
+     ],
+     "dealsElement": [
+       "fire"
+-    ],
+-    "lootLegendary": [
+-      "cinderfang_gauntlets_legendary@10",
+-      "wyrmwardens_cloak_legendary@9"
+     ]
+   },
+   {
+@@ -374,19 +246,11 @@
+       "scaleknit_boots@9",
+       "brood_fang_dagger@7"
+     ],
+-    "lootHeroic": [
+-      "scaleknit_boots_heroic@9",
+-      "brood_fang_dagger_heroic@7"
+-    ],
+     "vulnerableTo": [
+       "frost"
+     ],
+     "dealsElement": [
+       "fire"
+-    ],
+-    "lootLegendary": [
+-      "scaleknit_boots_legendary@9",
+-      "brood_fang_dagger_legendary@7"
+     ]
+   },
+   {
+@@ -401,10 +265,6 @@
+       "blackscale_helm@5",
+       "broodmothers_crown@4"
+     ],
+-    "lootHeroic": [
+-      "blackscale_helm_heroic@5",
+-      "broodmothers_crown_heroic@4"
+-    ],
+     "eggLoot": [
+       "epic:black_dragonling@8"
+     ],
+@@ -416,10 +276,6 @@
+     ],
+     "immuneTo": [
+       "fire"
+-    ],
+-    "lootLegendary": [
+-      "blackscale_helm_legendary@5",
+-      "broodmothers_crown_legendary@4"
+     ]
+   },
+   {
+@@ -433,14 +289,6 @@
+     "loot": [
+       "sewn_maw_greataxe@8",
+       "stitched_hide_vest@8"
+-    ],
+-    "lootHeroic": [
+-      "sewn_maw_greataxe_heroic@8",
+-      "stitched_hide_vest_heroic@8"
+-    ],
+-    "lootLegendary": [
+-      "sewn_maw_greataxe_legendary@8",
+-      "stitched_hide_vest_legendary@8"
+     ]
+   },
+   {
+@@ -454,14 +302,6 @@
+     "loot": [
+       "phylactery_shard_ring@7",
+       "unbinding_gauntlets@7"
+-    ],
+-    "lootHeroic": [
+-      "phylactery_shard_ring_heroic@7",
+-      "unbinding_gauntlets_heroic@7"
+-    ],
+-    "lootLegendary": [
+-      "phylactery_shard_ring_legendary@7",
+-      "unbinding_gauntlets_legendary@7"
+     ]
+   },
+   {
+@@ -475,14 +315,6 @@
+     "loot": [
+       "lichbound_diadem@5",
+       "grimward_amulet@4"
+-    ],
+-    "lootHeroic": [
+-      "lichbound_diadem_heroic@5",
+-      "grimward_amulet_heroic@4"
+-    ],
+-    "lootLegendary": [
+-      "lichbound_diadem_legendary@5",
+-      "grimward_amulet_legendary@4"
+     ]
+   },
+   {
+@@ -497,16 +329,6 @@
+       "woven_mind_circlet@6",
+       "unraveling_cloak@6",
+       "threadcutter@3"
+-    ],
+-    "lootHeroic": [
+-      "woven_mind_circlet_heroic@6",
+-      "unraveling_cloak_heroic@6",
+-      "threadcutter_heroic@3"
+-    ],
+-    "lootLegendary": [
+-      "woven_mind_circlet_legendary@6",
+-      "unraveling_cloak_legendary@6",
+-      "threadcutter_legendary@3"
+     ]
+   }
+-]
++]
+\ No newline at end of file
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index 22efe1c..3c7c2e1 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -195,11 +195,11 @@
+     "id": "guild_facility.barracks.successPerLevel",
+     "label": "Barracks: success % per level",
+     "category": "guild_facilities",
+-    "value": 4,
+-    "default": 4,
++    "value": 3,
++    "default": 3,
+     "min": 0,
+     "max": 20,
+-    "description": "Flat success percentage points granted per level, guild-wide."
++    "description": "Flat success percentage points granted per level, guild-wide. -- squished from 4 as part of patch 0214's facility/renown rebalance (see guild-idler-status.md); first-pass, verify against the Balance Sandbox."
+   },
+   {
+     "id": "guild_facility.treasury.baseCost",
+@@ -233,11 +233,11 @@
+     "id": "guild_facility.treasury.goldPerLevel",
+     "label": "Treasury: gold % per level",
+     "category": "guild_facilities",
+-    "value": 12,
+-    "default": 12,
++    "value": 6,
++    "default": 6,
+     "min": 0,
+     "max": 20,
+-    "description": "Flat gold percentage granted per level, guild-wide. storagePerLevel (gold storage) is a separate, still-hardcoded field -- not included in this pass."
++    "description": "Flat gold percentage granted per level, guild-wide. storagePerLevel (gold storage) is a separate, still-hardcoded field -- not included in this pass. -- squished from 12 as part of patch 0214's facility/renown rebalance (see guild-idler-status.md); first-pass, verify against the Balance Sandbox."
+   },
+   {
+     "id": "guild_facility.workshop.baseCost",
+@@ -309,11 +309,11 @@
+     "id": "guild_facility.library.xpPerLevel",
+     "label": "Library: xp % per level",
+     "category": "guild_facilities",
+-    "value": 12,
+-    "default": 12,
++    "value": 6,
++    "default": 6,
+     "min": 0,
+     "max": 40,
+-    "description": "Flat xp percentage granted per level, guild-wide."
++    "description": "Flat xp percentage granted per level, guild-wide. -- squished from 12 as part of patch 0214's facility/renown rebalance (see guild-idler-status.md); first-pass, verify against the Balance Sandbox."
+   },
+   {
+     "id": "guild_facility.tavern.baseCost",
+@@ -730,16 +730,6 @@
+     "min": 0,
+     "description": "Additional spawn-interval reduction per tool level, on top of the idle-hero reduction."
+   },
+-  {
+-    "id": "quest.overLevelPenaltyPercent",
+-    "label": "Quests: over-level attempt penalty (% per level)",
+-    "category": "quests",
+-    "value": 10,
+-    "default": 10,
+-    "min": 0,
+-    "max": 50,
+-    "description": "Success-chance penalty applied per level a hero is BELOW a quest's own reqLevel, when they attempt it anyway. Sending on a quest above your level is allowed (only auto-queue/pickBestQuest still restricts itself to quests a hero already qualifies for) -- this is what makes doing so a real trade rather than a free pass. 10 means a hero 3 levels under a quest's reqLevel loses 30 percentage points of success attempting it, on top of everything else. Existing MIN_SUCCESS/MAX_SUCCESS clamps (5-95) still apply, so it's always technically attemptable, never literally impossible or free."
+-  },
+   {
+     "id": "pets.egg.common.hatchXpThreshold",
+     "label": "Pets: Common egg hatch XP",
+@@ -1375,9 +1365,9 @@
+     "id": "renown_perk.legacy_of_wealth.goldPerLevel",
+     "label": "Legacy of Wealth: gold per level",
+     "category": "renown_perks",
+-    "value": 8,
+-    "default": 8,
+-    "description": "gold bonus granted per Legacy of Wealth level.",
++    "value": 4,
++    "default": 4,
++    "description": "gold bonus granted per Legacy of Wealth level. -- squished from 8 as part of patch 0214's facility/renown rebalance (see guild-idler-status.md); first-pass, verify against the Balance Sandbox.",
+     "min": 0
+   },
+   {
+@@ -1627,9 +1617,9 @@
+     "id": "renown_perk.scholars_legacy.xpPerLevel",
+     "label": "Scholar's Legacy: xp per level",
+     "category": "renown_perks",
+-    "value": 10,
+-    "default": 10,
+-    "description": "xp bonus granted per Scholar's Legacy level.",
++    "value": 5,
++    "default": 5,
++    "description": "xp bonus granted per Scholar's Legacy level. -- squished from 10 as part of patch 0214's facility/renown rebalance (see guild-idler-status.md); first-pass, verify against the Balance Sandbox.",
+     "min": 0
+   },
+   {
+@@ -3481,26 +3471,6 @@
+     "max": 1,
+     "description": "Fraction of the rolled xp a failed quest still pays out. Matches QuestManager.resolve's actual formula exactly."
+   },
+-  {
+-    "id": "balance.baseXpMin",
+-    "label": "Balance: base xp min",
+-    "category": "balance",
+-    "value": 18,
+-    "default": 18,
+-    "min": 0,
+-    "max": 200,
+-    "description": "Lower bound of the fixed xp range non-burst quests roll from, before the tier's own xpMultiplier applies."
+-  },
+-  {
+-    "id": "balance.baseXpMax",
+-    "label": "Balance: base xp max",
+-    "category": "balance",
+-    "value": 30,
+-    "default": 30,
+-    "min": 0,
+-    "max": 200,
+-    "description": "Upper bound of the fixed xp range non-burst quests roll from, before the tier's own xpMultiplier applies."
+-  },
+   {
+     "id": "balance.minLevelForCap",
+     "label": "Balance: min level for burst/medium cap",
+@@ -3740,5 +3710,485 @@
+     "min": 0.1,
+     "max": 15,
+     "description": "XP multiplier at breakpoint 7's level."
++  },
++  {
++    "id": "economy.goldSoftCapThreshold",
++    "label": "Gold soft cap: linear threshold",
++    "category": "economy",
++    "value": 30,
++    "default": 30,
++    "min": 0,
++    "max": 200,
++    "description": "Raw invested mods.gold below this counts fully 1:1, same shape as quest.investmentLinearThreshold. Above it, curveInvestment-style diminishing returns apply -- see economy.goldSoftCapDecay."
++  },
++  {
++    "id": "economy.goldSoftCapDecay",
++    "label": "Gold soft cap: decay/capExtra",
++    "category": "economy",
++    "value": 590,
++    "default": 590,
++    "min": 1,
++    "max": 5000,
++    "description": "Asymptotic extra gold% invested sources can contribute beyond the linear threshold, approached but never reached. capExtra == decay (matches quest.investmentDiminishingCapExtra/Decay convention) so slope is exactly 1 at the threshold. Calibrated so a fully min-maxed level-55 hero (612 raw pre-cap) lands ~5x gold instead of ~7.1x uncapped."
++  },
++  {
++    "id": "economy.xpSoftCapThreshold",
++    "label": "XP soft cap: linear threshold",
++    "category": "economy",
++    "value": 25,
++    "default": 25,
++    "min": 0,
++    "max": 200,
++    "description": "Same shape as economy.goldSoftCapThreshold, applied to mods.xp instead."
++  },
++  {
++    "id": "economy.xpSoftCapDecay",
++    "label": "XP soft cap: decay/capExtra",
++    "category": "economy",
++    "value": 196,
++    "default": 196,
++    "min": 1,
++    "max": 5000,
++    "description": "Same shape as economy.goldSoftCapDecay. Calibrated so a fully min-maxed level-55 hero (461 raw pre-cap) lands ~3x xp instead of ~5.6x uncapped."
++  },
++  {
++    "id": "economy.questGoldBreakLevel1",
++    "label": "Quest gold curve: breakpoint 1 level",
++    "category": "economy",
++    "value": 1,
++    "default": 1,
++    "min": 1,
++    "max": 55,
++    "description": "First breakpoint level for the quest gold baseline curve."
++  },
++  {
++    "id": "economy.questGoldBreakValue1",
++    "label": "Quest gold curve: breakpoint 1 value",
++    "category": "economy",
++    "value": 15,
++    "default": 15,
++    "min": 0,
++    "max": 1000,
++    "description": "Baseline gold at breakpoint 1's level."
++  },
++  {
++    "id": "economy.questGoldBreakLevel2",
++    "label": "Quest gold curve: breakpoint 2 level",
++    "category": "economy",
++    "value": 10,
++    "default": 10,
++    "min": 1,
++    "max": 55,
++    "description": "Second breakpoint level."
++  },
++  {
++    "id": "economy.questGoldBreakValue2",
++    "label": "Quest gold curve: breakpoint 2 value",
++    "category": "economy",
++    "value": 32,
++    "default": 32,
++    "min": 0,
++    "max": 1000,
++    "description": "Baseline gold at breakpoint 2's level."
++  },
++  {
++    "id": "economy.questGoldBreakLevel3",
++    "label": "Quest gold curve: breakpoint 3 level",
++    "category": "economy",
++    "value": 20,
++    "default": 20,
++    "min": 1,
++    "max": 55,
++    "description": "Third breakpoint level."
++  },
++  {
++    "id": "economy.questGoldBreakValue3",
++    "label": "Quest gold curve: breakpoint 3 value",
++    "category": "economy",
++    "value": 65,
++    "default": 65,
++    "min": 0,
++    "max": 1000,
++    "description": "Baseline gold at breakpoint 3's level."
++  },
++  {
++    "id": "economy.questGoldBreakLevel4",
++    "label": "Quest gold curve: breakpoint 4 level",
++    "category": "economy",
++    "value": 30,
++    "default": 30,
++    "min": 1,
++    "max": 55,
++    "description": "Fourth breakpoint level."
++  },
++  {
++    "id": "economy.questGoldBreakValue4",
++    "label": "Quest gold curve: breakpoint 4 value",
++    "category": "economy",
++    "value": 105,
++    "default": 105,
++    "min": 0,
++    "max": 1000,
++    "description": "Baseline gold at breakpoint 4's level."
++  },
++  {
++    "id": "economy.questGoldBreakLevel5",
++    "label": "Quest gold curve: breakpoint 5 level",
++    "category": "economy",
++    "value": 40,
++    "default": 40,
++    "min": 1,
++    "max": 55,
++    "description": "Fifth breakpoint level."
++  },
++  {
++    "id": "economy.questGoldBreakValue5",
++    "label": "Quest gold curve: breakpoint 5 value",
++    "category": "economy",
++    "value": 155,
++    "default": 155,
++    "min": 0,
++    "max": 1000,
++    "description": "Baseline gold at breakpoint 5's level."
++  },
++  {
++    "id": "economy.questGoldBreakLevel6",
++    "label": "Quest gold curve: breakpoint 6 level",
++    "category": "economy",
++    "value": 55,
++    "default": 55,
++    "min": 1,
++    "max": 55,
++    "description": "Sixth (top) breakpoint level -- holds flat above this, matching XP_BREAKPOINTS' own convention."
++  },
++  {
++    "id": "economy.questGoldBreakValue6",
++    "label": "Quest gold curve: breakpoint 6 value",
++    "category": "economy",
++    "value": 230,
++    "default": 230,
++    "min": 0,
++    "max": 1000,
++    "description": "Baseline gold at breakpoint 6's level."
++  },
++  {
++    "id": "economy.questXpBreakLevel1",
++    "label": "Quest xp curve: breakpoint 1 level",
++    "category": "economy",
++    "value": 1,
++    "default": 1,
++    "min": 1,
++    "max": 55,
++    "description": "First breakpoint level for the quest xp baseline curve."
++  },
++  {
++    "id": "economy.questXpBreakValue1",
++    "label": "Quest xp curve: breakpoint 1 value",
++    "category": "economy",
++    "value": 10,
++    "default": 10,
++    "min": 0,
++    "max": 1000,
++    "description": "Baseline xp at breakpoint 1's level."
++  },
++  {
++    "id": "economy.questXpBreakLevel2",
++    "label": "Quest xp curve: breakpoint 2 level",
++    "category": "economy",
++    "value": 10,
++    "default": 10,
++    "min": 1,
++    "max": 55,
++    "description": "Second breakpoint level."
++  },
++  {
++    "id": "economy.questXpBreakValue2",
++    "label": "Quest xp curve: breakpoint 2 value",
++    "category": "economy",
++    "value": 26,
++    "default": 26,
++    "min": 0,
++    "max": 1000,
++    "description": "Baseline xp at breakpoint 2's level."
++  },
++  {
++    "id": "economy.questXpBreakLevel3",
++    "label": "Quest xp curve: breakpoint 3 level",
++    "category": "economy",
++    "value": 20,
++    "default": 20,
++    "min": 1,
++    "max": 55,
++    "description": "Third breakpoint level."
++  },
++  {
++    "id": "economy.questXpBreakValue3",
++    "label": "Quest xp curve: breakpoint 3 value",
++    "category": "economy",
++    "value": 55,
++    "default": 55,
++    "min": 0,
++    "max": 1000,
++    "description": "Baseline xp at breakpoint 3's level."
++  },
++  {
++    "id": "economy.questXpBreakLevel4",
++    "label": "Quest xp curve: breakpoint 4 level",
++    "category": "economy",
++    "value": 30,
++    "default": 30,
++    "min": 1,
++    "max": 55,
++    "description": "Fourth breakpoint level."
++  },
++  {
++    "id": "economy.questXpBreakValue4",
++    "label": "Quest xp curve: breakpoint 4 value",
++    "category": "economy",
++    "value": 90,
++    "default": 90,
++    "min": 0,
++    "max": 1000,
++    "description": "Baseline xp at breakpoint 4's level."
++  },
++  {
++    "id": "economy.questXpBreakLevel5",
++    "label": "Quest xp curve: breakpoint 5 level",
++    "category": "economy",
++    "value": 40,
++    "default": 40,
++    "min": 1,
++    "max": 55,
++    "description": "Fifth breakpoint level."
++  },
++  {
++    "id": "economy.questXpBreakValue5",
++    "label": "Quest xp curve: breakpoint 5 value",
++    "category": "economy",
++    "value": 130,
++    "default": 130,
++    "min": 0,
++    "max": 1000,
++    "description": "Baseline xp at breakpoint 5's level."
++  },
++  {
++    "id": "economy.questXpBreakLevel6",
++    "label": "Quest xp curve: breakpoint 6 level",
++    "category": "economy",
++    "value": 55,
++    "default": 55,
++    "min": 1,
++    "max": 55,
++    "description": "Sixth (top) breakpoint level -- holds flat above this."
++  },
++  {
++    "id": "economy.questXpBreakValue6",
++    "label": "Quest xp curve: breakpoint 6 value",
++    "category": "economy",
++    "value": 190,
++    "default": 190,
++    "min": 0,
++    "max": 1000,
++    "description": "Baseline xp at breakpoint 6's level."
++  },
++  {
++    "id": "quest_reqlevel.offsetWeightM4",
++    "label": "reqLevel roll: weight at hero.level-4",
++    "category": "quest_reqlevel",
++    "value": 3,
++    "default": 3,
++    "min": 0,
++    "max": 100,
++    "description": "Weight for the -4 offset in the reqLevel roll table."
++  },
++  {
++    "id": "quest_reqlevel.offsetWeightM3",
++    "label": "reqLevel roll: weight at hero.level-3",
++    "category": "quest_reqlevel",
++    "value": 6,
++    "default": 6,
++    "min": 0,
++    "max": 100,
++    "description": "Weight for the -3 offset."
++  },
++  {
++    "id": "quest_reqlevel.offsetWeightM2",
++    "label": "reqLevel roll: weight at hero.level-2",
++    "category": "quest_reqlevel",
++    "value": 10,
++    "default": 10,
++    "min": 0,
++    "max": 100,
++    "description": "Weight for the -2 offset."
++  },
++  {
++    "id": "quest_reqlevel.offsetWeightM1",
++    "label": "reqLevel roll: weight at hero.level-1",
++    "category": "quest_reqlevel",
++    "value": 15,
++    "default": 15,
++    "min": 0,
++    "max": 100,
++    "description": "Weight for the -1 offset."
++  },
++  {
++    "id": "quest_reqlevel.offsetWeightZero",
++    "label": "reqLevel roll: weight at hero.level",
++    "category": "quest_reqlevel",
++    "value": 20,
++    "default": 20,
++    "min": 0,
++    "max": 100,
++    "description": "Weight for the 0 (exactly at-level) offset -- the most common roll."
++  },
++  {
++    "id": "quest_reqlevel.offsetWeightP1",
++    "label": "reqLevel roll: weight at hero.level+1",
++    "category": "quest_reqlevel",
++    "value": 15,
++    "default": 15,
++    "min": 0,
++    "max": 100,
++    "description": "Weight for the +1 offset."
++  },
++  {
++    "id": "quest_reqlevel.offsetWeightP2",
++    "label": "reqLevel roll: weight at hero.level+2",
++    "category": "quest_reqlevel",
++    "value": 10,
++    "default": 10,
++    "min": 0,
++    "max": 100,
++    "description": "Weight for the +2 offset."
++  },
++  {
++    "id": "quest_reqlevel.offsetWeightP3",
++    "label": "reqLevel roll: weight at hero.level+3",
++    "category": "quest_reqlevel",
++    "value": 6,
++    "default": 6,
++    "min": 0,
++    "max": 100,
++    "description": "Weight for the +3 offset."
++  },
++  {
++    "id": "quest_reqlevel.offsetWeightP4",
++    "label": "reqLevel roll: weight at hero.level+4",
++    "category": "quest_reqlevel",
++    "value": 3,
++    "default": 3,
++    "min": 0,
++    "max": 100,
++    "description": "Weight for the +4 offset."
++  },
++  {
++    "id": "quest_reqlevel.levelGapSuccessCoefficient",
++    "label": "reqLevel roll: success per level of gap",
++    "category": "quest_reqlevel",
++    "value": 2,
++    "default": 2,
++    "min": 0,
++    "max": 20,
++    "description": "Replaces the old outlevelBonus/overLevelPenalty mechanism now that reqLevel always rolls within a small window of hero.level (see guild-idler-status.md patch 0214). Success = baseSuccess + curveInvestment(invested) + (hero.level - reqLevel) * this. At the +-4 roll window's edges that's a +-8 point swing, not the old unbounded climb."
++  },
++  {
++    "id": "quest_reqlevel.legendaryLevelFloor",
++    "label": "Legendary: minimum hero level",
++    "category": "quest_reqlevel",
++    "value": 25,
++    "default": 25,
++    "min": 1,
++    "max": 55,
++    "description": "Legendary is only offered if hero.level >= this AND the Enchanted Seal is owned -- both required now that reqLevel no longer implies difficulty tier."
++  },
++  {
++    "id": "gear_relevance.floor",
++    "label": "Gear relevance: minimum multiplier",
++    "category": "gear_relevance",
++    "value": 0.25,
++    "default": 0.25,
++    "min": 0,
++    "max": 1,
++    "description": "An equipped item's mods/stats contribution is scaled by clamp(item.reqLevel / hero.level, floor, 1) -- outleveled gear never drops below this floor. See guild-idler-status.md patch 0214."
++  },
++  {
++    "id": "loot_procedural.budgetRarityMultiplier",
++    "label": "Procedural loot: rarity budget multiplier",
++    "category": "loot_procedural",
++    "value": 3,
++    "default": 3,
++    "min": 0,
++    "max": 20,
++    "description": "statBudget = GEAR_SCORE_BY_RARITY[rarity] * this * levelFactor(itemLevel). 3 is a first-pass calibration against the average real power-per-GSR-point of the existing hand-authored item set (2.24-4.25 across rarities) -- verify against the Balance Sandbox before treating as final."
++  },
++  {
++    "id": "loot_procedural.raidHeroicBudgetMultiplier",
++    "label": "Procedural loot: Heroic raid budget multiplier",
++    "category": "loot_procedural",
++    "value": 1.5,
++    "default": 1.5,
++    "min": 1,
++    "max": 10,
++    "description": "Applied on top of the normal rarity/level budget for items generated from a Heroic raid encounter."
++  },
++  {
++    "id": "loot_procedural.raidLegendaryBudgetMultiplier",
++    "label": "Procedural loot: Legendary raid budget multiplier",
++    "category": "loot_procedural",
++    "value": 2.2,
++    "default": 2.2,
++    "min": 1,
++    "max": 10,
++    "description": "Applied on top of the normal rarity/level budget for items generated from a Legendary raid encounter."
++  },
++  {
++    "id": "loot_procedural.hardQuestBudgetMultiplier",
++    "label": "Procedural loot: Hard-quest budget multiplier",
++    "category": "loot_procedural",
++    "value": 1.15,
++    "default": 1.15,
++    "min": 1,
++    "max": 5,
++    "description": "The 'teeny bonus' for Hard-tier quest drops specifically -- small compared to the raid multipliers above."
++  },
++  {
++    "id": "loot_procedural.charmedChance",
++    "label": "Procedural loot: Charmed roll chance (%)",
++    "category": "loot_procedural",
++    "value": 1,
++    "default": 1,
++    "min": 0,
++    "max": 100,
++    "description": "Chance a procedurally-generated item rolls the rare 'Charmed' bonus tier. Checked before Fortunate; mutually exclusive."
++  },
++  {
++    "id": "loot_procedural.charmedBudgetBonus",
++    "label": "Procedural loot: Charmed budget bonus (%)",
++    "category": "loot_procedural",
++    "value": 25,
++    "default": 25,
++    "min": 0,
++    "max": 200,
++    "description": "Extra statBudget% on a Charmed roll."
++  },
++  {
++    "id": "loot_procedural.fortunateChance",
++    "label": "Procedural loot: Fortunate roll chance (%)",
++    "category": "loot_procedural",
++    "value": 9,
++    "default": 9,
++    "min": 0,
++    "max": 100,
++    "description": "Chance a procedurally-generated item rolls the common 'Fortunate' bonus tier (only checked if Charmed didn't hit)."
++  },
++  {
++    "id": "loot_procedural.fortunateBudgetBonus",
++    "label": "Procedural loot: Fortunate budget bonus (%)",
++    "category": "loot_procedural",
++    "value": 10,
++    "default": 10,
++    "min": 0,
++    "max": 200,
++    "description": "Extra statBudget% on a Fortunate roll."
+   }
+-]
++]
+\ No newline at end of file
+diff --git a/src/game/data/proceduralLoot.ts b/src/game/data/proceduralLoot.ts
+new file mode 100644
+index 0000000..ee594c0
+--- /dev/null
++++ b/src/game/data/proceduralLoot.ts
+@@ -0,0 +1,143 @@
++import { Modifiers, Rarity, Stats } from '../types';
++import { Rng } from '../rng';
++import { GEAR_SCORE_BY_RARITY } from './equipment';
++import { Tuning } from './tuning';
++
++/**
++ * Procedural itemization (patch 0214) -- see guild-idler-status.md's full
++ * writeup. Full replacement for how ordinary loot gets its power: any
++ * EquipmentDef with no `mods` and no `stats` populated is a "blank"
++ * template (slot/rarity/visuals only), and rolls its real mods/stats here
++ * at drop time instead of reading fixed hand-authored numbers. Sets and
++ * any other deliberately hand-authored item (a populated `mods`/`stats`
++ * on the def) opt OUT of this entirely -- see EquipmentManager.instantiate,
++ * the one call site that decides whether to roll at all.
++ */
++
++/** Where a procedurally-generated item came from -- drives both the
++ *  budget multiplier and the bracketed display tag. `standard` covers
++ *  Easy/Normal (no multiplier, no tag) and Epic/Legendary quest tiers
++ *  (no multiplier -- their extra power already comes through the
++ *  rarity/level curve itself -- but still tagged, for consistency and
++ *  because a player might reasonably want to know an Epic-quest drop
++ *  from a Hard-quest one at the same rarity). */
++export type LootSourceTag = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary' | 'raidHeroic' | 'raidLegendary';
++
++export type BonusRollTier = 'none' | 'fortunate' | 'charmed';
++
++const MODIFIER_KEYS: (keyof Modifiers)[] = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed'];
++const STAT_KEYS: (keyof Stats)[] = ['strength', 'endurance', 'luck', 'wisdom'];
++
++/** How many independent affix rolls a rarity gets -- more slots at higher
++ *  rarity, same "rarity earns more distinct rolls, not just bigger
++ *  numbers on one roll" idea Masterwork's own modsToPick already
++ *  established (see equipment.ts). */
++const AFFIX_SLOTS_BY_RARITY: Record<Rarity, number> = {
++  common: 1, uncommon: 2, rare: 3, epic: 4, legendary: 5,
++};
++
++/**
++ * Fraction of full power a given item level is worth, 0.1-1 across the
++ * 1-55 level range. Deliberately simple and linear (unlike statMods'
++ * sqrt curves) -- this is a budget-sizing input, not a diminishing-
++ * returns conversion; the sqrt/pow shaping still happens downstream, the
++ * normal way, once the rolled raw stat actually reaches statMods.
++ */
++function levelFactor(itemLevel: number): number {
++  return Math.max(0.1, Math.min(1, itemLevel / 55));
++}
++
++function sourceBudgetMultiplier(sourceTag: LootSourceTag): number {
++  switch (sourceTag) {
++    case 'raidHeroic': return Tuning.get('loot_procedural.raidHeroicBudgetMultiplier');
++    case 'raidLegendary': return Tuning.get('loot_procedural.raidLegendaryBudgetMultiplier');
++    case 'hard': return Tuning.get('loot_procedural.hardQuestBudgetMultiplier');
++    default: return 1;
++  }
++}
++
++/** Display label for the bracketed source tag -- e.g. "Iron Sword [Hard]".
++ *  Easy/Normal quest drops get no bracket at all (the common case
++ *  shouldn't be visually noisy); everything else does. */
++function sourceTagLabel(sourceTag: LootSourceTag): string | null {
++  switch (sourceTag) {
++    case 'hard': return 'Hard';
++    case 'epic': return 'Epic';
++    case 'legendary': return 'Legendary';
++    case 'raidHeroic': return 'Heroic';
++    case 'raidLegendary': return 'Legendary';
++    default: return null; // easy, normal
++  }
++}
++
++export interface ProceduralRoll {
++  mods: Partial<Modifiers>;
++  stats: Partial<Stats>;
++  bonusTier: BonusRollTier;
++  displayName: string;
++}
++
++/**
++ * Rolls a procedurally-generated item's real power. `baseName` is the
++ * template's authored flavor name (e.g. "Iron Sword") -- this only ever
++ * decorates it with a bonus-roll prefix and/or a source-tag suffix, never
++ * invents a new base name.
++ */
++export function rollProceduralItem(
++  rarity: Rarity, itemLevel: number, sourceTag: LootSourceTag, baseName: string, rng: Rng,
++): ProceduralRoll {
++  let budget = GEAR_SCORE_BY_RARITY[rarity]
++    * Tuning.get('loot_procedural.budgetRarityMultiplier')
++    * levelFactor(itemLevel)
++    * sourceBudgetMultiplier(sourceTag);
++
++  // Charmed checked first, Fortunate only if Charmed didn't hit --
++  // mutually exclusive, matches the "rare tier wins if both would apply"
++  // shape most loot-rarity rolls already use elsewhere in this game.
++  let bonusTier: BonusRollTier = 'none';
++  if (rng.chance(Tuning.get('loot_procedural.charmedChance'))) {
++    bonusTier = 'charmed';
++    budget *= 1 + Tuning.get('loot_procedural.charmedBudgetBonus') / 100;
++  } else if (rng.chance(Tuning.get('loot_procedural.fortunateChance'))) {
++    bonusTier = 'fortunate';
++    budget *= 1 + Tuning.get('loot_procedural.fortunateBudgetBonus') / 100;
++  }
++
++  const slots = AFFIX_SLOTS_BY_RARITY[rarity];
++  const perSlot = Math.max(1, Math.round(budget / slots));
++  const pool: { fromStats: boolean; key: string }[] = [
++    ...MODIFIER_KEYS.map((key) => ({ fromStats: false, key })),
++    ...STAT_KEYS.map((key) => ({ fromStats: true, key })),
++  ];
++
++  const mods: Partial<Modifiers> = {};
++  const stats: Partial<Stats> = {};
++  for (let i = 0; i < slots; i++) {
++    const picked = rng.pick(pool);
++    if (picked.fromStats) {
++      const k = picked.key as keyof Stats;
++      stats[k] = (stats[k] ?? 0) + perSlot;
++    } else {
++      const k = picked.key as keyof Modifiers;
++      mods[k] = (mods[k] ?? 0) + perSlot;
++    }
++  }
++
++  let displayName = baseName;
++  if (bonusTier === 'charmed') displayName = `Charmed ${displayName}`;
++  else if (bonusTier === 'fortunate') displayName = `Fortunate ${displayName}`;
++  const tagLabel = sourceTagLabel(sourceTag);
++  if (tagLabel) displayName = `${displayName} [${tagLabel}]`;
++
++  return { mods, stats, bonusTier, displayName };
++}
++
++/** True if a def has no authored power of its own -- the "blank
++ *  template" signal that opts an item INTO procedural generation. Sets
++ *  and every other hand-authored item populate at least one of these two
++ *  fields and are exempt. */
++export function isProceduralTemplate(def: { mods?: Partial<Modifiers>; stats?: Partial<Stats> }): boolean {
++  const hasMods = !!def.mods && Object.keys(def.mods).length > 0;
++  const hasStats = !!def.stats && Object.keys(def.stats).length > 0;
++  return !hasMods && !hasStats;
++}
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index caa4f02..a58e044 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -1066,6 +1066,75 @@ function xpCurveMultiplier(level: number): number {
+   return XP_BREAKPOINTS[XP_BREAKPOINTS.length - 1].multiplier;
+ }
+ 
++/**
++ * Generic piecewise-linear breakpoint evaluator -- the exact same shape as
++ * xpCurveMultiplier above (flat below the lowest point, linear ramp
++ * between points, flat above the highest), pulled out standalone so the
++ * quest gold/xp reward curves below can share it instead of copy-pasting
++ * the loop a second and third time.
++ */
++function evalBreakpoints(points: { level: number; value: number }[], level: number): number {
++  if (points.length === 0) return 0;
++  if (level <= points[0].level) return points[0].value;
++  for (let i = 1; i < points.length; i++) {
++    if (level <= points[i].level) {
++      const lo = points[i - 1];
++      const hi = points[i];
++      const t = (level - lo.level) / (hi.level - lo.level);
++      return lo.value + (hi.value - lo.value) * t;
++    }
++  }
++  return points[points.length - 1].value;
++}
++
++/**
++ * Quest reward baseline curves (patch 0214) -- gold/xp for a *standard*
++ * quest offer, indexed to the offer's own rolled reqLevel (now always
++ * near hero.level, see QuestManager.rollReqLevel) rather than each
++ * difficulty tier owning a flat min/max constant calibrated once around a
++ * fixed reqLevel that no longer exists. Difficulty applies its own
++ * `rewardMultiplier` (difficulties.json) on top of whichever of these two
++ * baselines comes back -- same "level-scaled baseline * tier multiplier"
++ * split raids already use via RaidDifficultyConfig.rewardMultiplier.
++ *
++ * Same breakpoint shape as XP_BREAKPOINTS above, same reasoning: a
++ * designer can make later levels pay progressively more without any two
++ * neighboring levels paying a visibly different amount, and the curve
++ * holds flat past the top breakpoint (55, matching MAX_HERO_LEVEL) rather
++ * than extrapolating unboundedly past it.
++ *
++ * First-pass values, not a final balance -- see guild-idler-status.md's
++ * patch 0214 writeup for how these were chosen (anchored loosely against
++ * the old flat per-difficulty minGold/maxGold ranges' own relative
++ * scale) and the explicit note that these need Balance Sandbox
++ * verification before being treated as locked numbers.
++ */
++const QUEST_GOLD_BREAKPOINTS = [
++  { level: Tuning.get('economy.questGoldBreakLevel1'), value: Tuning.get('economy.questGoldBreakValue1') },
++  { level: Tuning.get('economy.questGoldBreakLevel2'), value: Tuning.get('economy.questGoldBreakValue2') },
++  { level: Tuning.get('economy.questGoldBreakLevel3'), value: Tuning.get('economy.questGoldBreakValue3') },
++  { level: Tuning.get('economy.questGoldBreakLevel4'), value: Tuning.get('economy.questGoldBreakValue4') },
++  { level: Tuning.get('economy.questGoldBreakLevel5'), value: Tuning.get('economy.questGoldBreakValue5') },
++  { level: Tuning.get('economy.questGoldBreakLevel6'), value: Tuning.get('economy.questGoldBreakValue6') },
++].sort((a, b) => a.level - b.level);
++
++const QUEST_XP_BREAKPOINTS = [
++  { level: Tuning.get('economy.questXpBreakLevel1'), value: Tuning.get('economy.questXpBreakValue1') },
++  { level: Tuning.get('economy.questXpBreakLevel2'), value: Tuning.get('economy.questXpBreakValue2') },
++  { level: Tuning.get('economy.questXpBreakLevel3'), value: Tuning.get('economy.questXpBreakValue3') },
++  { level: Tuning.get('economy.questXpBreakLevel4'), value: Tuning.get('economy.questXpBreakValue4') },
++  { level: Tuning.get('economy.questXpBreakLevel5'), value: Tuning.get('economy.questXpBreakValue5') },
++  { level: Tuning.get('economy.questXpBreakLevel6'), value: Tuning.get('economy.questXpBreakValue6') },
++].sort((a, b) => a.level - b.level);
++
++export function questGoldBaseline(level: number): number {
++  return evalBreakpoints(QUEST_GOLD_BREAKPOINTS, level);
++}
++
++export function questXpBaseline(level: number): number {
++  return evalBreakpoints(QUEST_XP_BREAKPOINTS, level);
++}
++
+ export function xpForLevel(level: number): number {
+   // Revised after playtesting: 4.6/1.55 fixed the late-game blowup (the
+   // original 55/1.55 curve simulated to ~1,540 days for a full 1->55 +
+diff --git a/src/game/data/quests.ts b/src/game/data/quests.ts
+index d72cd4d..02d9fb9 100644
+--- a/src/game/data/quests.ts
++++ b/src/game/data/quests.ts
+@@ -7,12 +7,27 @@ export interface DifficultyConfig {
+   baseSuccess: number;
+   minDuration: number;
+   maxDuration: number;
+-  minGold: number;
+-  maxGold: number;
+   xpMultiplier: number;
+   /** Chance that any loot roll happens at all. */
+   lootChance: number;
+-  reqLevel: number;
++  /**
++   * No longer a real availability gate (patch 0214) -- a quest offer's
++   * actual reqLevel now rolls near hero.level regardless of difficulty
++   * (see QuestManager.rollReqLevel). This survives purely as the "typical
++   * level" reference balance.ts's bestUnlockedTier/expectedRatePerHour
++   * use to estimate this tier's per-hour rate for the burst/medium
++   * fast-quest cap system, which is deliberately untouched by the
++   * reqLevel-roll rework -- same numeric values the old reqLevel had.
++   */
++  referenceLevel: number;
++  /**
++   * Multiplies the level-scaled questGoldBaseline/questXpBaseline curve
++   * (progression.ts) for a standard (non-burst/non-medium) offer --
++   * replaces the old flat minGold/maxGold range, which was calibrated
++   * once around a fixed reqLevel that no longer exists. See
++   * guild-idler-status.md's patch 0214 writeup.
++   */
++  rewardMultiplier: number;
+   /** Weight when generating the board. */
+   weight: number;
+   color: string;
+@@ -104,11 +119,10 @@ interface DifficultyConfigJson {
+   baseSuccess: number;
+   minDurationHours: number;
+   maxDurationHours: number;
+-  minGold: number;
+-  maxGold: number;
+   xpMultiplier: number;
+   lootChance: number;
+-  reqLevel: number;
++  referenceLevel: number;
++  rewardMultiplier: number;
+   weight: number;
+   color: string;
+   burstChance?: number;
+@@ -134,8 +148,9 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = Object.fromEnt
+     {
+       id: d.id, label: d.label, baseSuccess: d.baseSuccess,
+       minDuration: d.minDurationHours * HOUR, maxDuration: d.maxDurationHours * HOUR,
+-      minGold: d.minGold, maxGold: d.maxGold, xpMultiplier: d.xpMultiplier,
+-      lootChance: d.lootChance, reqLevel: d.reqLevel, weight: d.weight, color: d.color,
++      xpMultiplier: d.xpMultiplier,
++      lootChance: d.lootChance, referenceLevel: d.referenceLevel, rewardMultiplier: d.rewardMultiplier,
++      weight: d.weight, color: d.color,
+       // Gated on `> 0`, not `!== undefined` -- the DevTool's own generic
+       // number-field editor always renders/saves an untouched optional
+       // number as 0 rather than leaving it absent (see app.js's
+diff --git a/src/game/managers/EquipmentManager.ts b/src/game/managers/EquipmentManager.ts
+index 85f4073..c564bf1 100644
+--- a/src/game/managers/EquipmentManager.ts
++++ b/src/game/managers/EquipmentManager.ts
+@@ -1,16 +1,36 @@
+ import { EQUIPMENT_BY_ID, RARITY_PRICE_MULT } from '../data/equipment';
+ import { EquipmentDef, EquipmentItem, ElementType, GameState, Hero } from '../types';
+-import { uid } from '../rng';
++import { uid, Rng } from '../rng';
+ import { clamp } from '../util';
+ import { Tuning } from '../data/tuning';
++import { isProceduralTemplate, rollProceduralItem, LootSourceTag } from '../data/proceduralLoot';
+ 
+ export const MAX_PLUS = 10;
+ 
+ export const EquipmentManager = {
+-  instantiate(defId: string): EquipmentItem | null {
++  /**
++   * `roll`, if provided, is used to generate real mods/stats for a blank
++   * procedural template (patch 0214) -- omitted entirely for hand-
++   * authored items (Sets, chain/raid capstone rewards, anything with its
++   * own populated mods/stats), which just instantiate exactly as before.
++   * A def that IS procedural but gets instantiated without a `roll`
++   * (e.g. a stray dev/test call) silently comes back with no mods/stats
++   * at all rather than crashing -- same "missing data degrades gracefully"
++   * convention the rest of this codebase already follows, though every
++   * real call site (QuestManager, RaidManager, chain rewards) always
++   * passes one.
++   */
++  instantiate(defId: string, roll?: { itemLevel: number; sourceTag: LootSourceTag; rng: Rng }): EquipmentItem | null {
+     const def = EQUIPMENT_BY_ID[defId];
+     if (!def) return null;
+-    return { uid: uid('it'), defId, durability: def.maxDurability, plus: 0 };
++    const item: EquipmentItem = { uid: uid('it'), defId, durability: def.maxDurability, plus: 0 };
++    if (roll && isProceduralTemplate(def)) {
++      const result = rollProceduralItem(def.rarity, roll.itemLevel, roll.sourceTag, def.name, roll.rng);
++      item.customMods = result.mods;
++      item.enchantStats = result.stats;
++      item.proceduralName = result.displayName;
++    }
++    return item;
+   },
+ 
+   def(item: EquipmentItem): EquipmentDef | undefined {
+diff --git a/src/game/managers/HeroManager.ts b/src/game/managers/HeroManager.ts
+index bd33765..81bbf79 100644
+--- a/src/game/managers/HeroManager.ts
++++ b/src/game/managers/HeroManager.ts
+@@ -5,7 +5,7 @@ import { DIFFICULTY_ORDER } from '../data/quests';
+ import { Tuning } from '../data/tuning';
+ import { Difficulty, GameState, Hero, HeroClass, Injury, Modifiers, Role, Stats } from '../types';
+ import { Rng, uid } from '../rng';
+-import { MINUTE, scaleMods, sumMods } from '../util';
++import { MINUTE, scaleMods, sumMods, clamp } from '../util';
+ import { ModifierManager } from './ModifierManager';
+ 
+ export const HeroManager = {
+@@ -228,6 +228,28 @@ export const HeroManager = {
+     return gained;
+   },
+ 
++  /**
++   * Gear relevance decay (patch 0214) -- how much of an equipped item's
++   * stats/mods actually apply, given how far the hero has leveled past
++   * the item's own reqLevel. `clamp(item.reqLevel / hero.level, floor,
++   * 1)`: an item at or above the hero's current level always gives full
++   * value; every level the hero climbs past it shrinks the ratio, down to
++   * `gear_relevance.floor` (never all the way to zero -- outleveled gear
++   * should read as "time to upgrade," not "worthless junk"). Same
++   * mechanism WoW's itemLevel-vs-character-level squish uses. Applies to
++   * every equipped item regardless of source -- procedural drops, Sets,
++   * and hand-authored legendaries alike (deliberate, see
++   * guild-idler-status.md's patch 0214 writeup: Sets are no longer
++   * "acquire once, BiS forever" now that everything drops within a
++   * rolling level window). `def.reqLevel` doubles as the item's own
++   * "item level" here, same convention gearScoreForItem already uses.
++   */
++  gearRelevance(itemReqLevel: number, heroLevel: number): number {
++    if (heroLevel <= 0) return 1;
++    const floor = Tuning.get('gear_relevance.floor');
++    return clamp(itemReqLevel / heroLevel, floor, 1);
++  },
++
+   /** Stats coming from equipped, unbroken gear -- including any Enchanting on top. */
+   equipmentStats(hero: Hero): Stats {
+     const total: Stats = { strength: 0, endurance: 0, luck: 0, wisdom: 0 };
+@@ -235,7 +257,7 @@ export const HeroManager = {
+       if (!item || item.durability <= 0) continue;
+       const def = EQUIPMENT_BY_ID[item.defId];
+       if (!def) continue;
+-      const scale = 1 + item.plus * 0.15;
++      const scale = (1 + item.plus * 0.15) * HeroManager.gearRelevance(def.reqLevel, hero.level);
+       const base = def.stats;
+       const enchant = item.enchantStats;
+       if (!base && !enchant) continue;
+@@ -483,20 +505,32 @@ export const HeroManager = {
+   equipmentMods(hero: Hero): Partial<Modifiers> {
+     const sources: Partial<Modifiers>[] = [];
+     const setCounts: Record<string, number> = {};
++    const setRelevance: Record<string, number[]> = {};
+     for (const item of Object.values(hero.equipment)) {
+       if (!item || item.durability <= 0) continue;
+       const def = EQUIPMENT_BY_ID[item.defId];
+       if (!def) continue;
++      const relevance = HeroManager.gearRelevance(def.reqLevel, hero.level);
+       // Crafted items carry their own chosen mods (EquipmentItem.customMods)
+       // instead of the def's -- see that field's own comment in types.ts.
+-      sources.push(scaleMods(item.customMods ?? def.mods, 1 + item.plus * 0.15));
+-      if (def.setId) setCounts[def.setId] = (setCounts[def.setId] ?? 0) + 1;
++      sources.push(scaleMods(item.customMods ?? def.mods, (1 + item.plus * 0.15) * relevance));
++      if (def.setId) {
++        setCounts[def.setId] = (setCounts[def.setId] ?? 0) + 1;
++        (setRelevance[def.setId] ??= []).push(relevance);
++      }
+     }
+     for (const [setId, count] of Object.entries(setCounts)) {
+       const set = SET_BY_ID[setId];
+       if (!set) continue;
++      // A set bonus doesn't have one single reqLevel of its own (it's
++      // earned across several pieces, potentially picked up at different
++      // levels) -- averaging the equipped pieces' own relevance is the
++      // simplest coherent stand-in, and in practice a set's pieces are
++      // usually acquired together so this rarely diverges much from any
++      // one piece's own factor.
++      const avgRelevance = setRelevance[setId].reduce((a, b) => a + b, 0) / setRelevance[setId].length;
+       for (const bonus of set.bonuses) {
+-        if (count >= bonus.count) sources.push(bonus.mods);
++        if (count >= bonus.count) sources.push(scaleMods(bonus.mods, avgRelevance));
+       }
+     }
+     return sumMods(...sources);
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 6de3388..453abad 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -1,8 +1,8 @@
+-import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE, gearScoreForItem } from '../data/equipment';
++import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE, gearScoreForItem, itemDisplayName } from '../data/equipment';
+ import {
+   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES, TUTORIAL_QUEST_ID,
+ } from '../data/quests';
+-import { HERO_CLASSES } from '../data/progression';
++import { HERO_CLASSES, questGoldBaseline, questXpBaseline } from '../data/progression';
+ import { fastQuestCapsPerHour, fastQuestFloorPerHour, easyFastModeChances } from '../data/balance';
+ import { questEggDropChance } from '../data/pets';
+ import { CURIOS, questCurioDropChance } from '../data/curios';
+@@ -10,10 +10,10 @@ import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
+ import { NODE_ORDER, MATERIAL_BY_ID } from '../data/materials';
+ import { warehouseCapacity } from '../data/harvestUpgrades';
+ import {
+-  ActiveQuest, AutoChainWeightBy, Difficulty, GameState, Hero, MaterialId, QuestOffer, QuestResult, Rarity,
++  ActiveQuest, AutoChainWeightBy, Difficulty, EquipmentItem, GameState, Hero, MaterialId, QuestOffer, QuestResult, Rarity,
+ } from '../types';
+ import { createRng, Rng, uid } from '../rng';
+-import { clamp, HOUR, MINUTE, sumMods } from '../util';
++import { clamp, HOUR, MINUTE, sumMods, softCap } from '../util';
+ import { HeroManager } from './HeroManager';
+ import { EventManager } from './EventManager';
+ import { InventoryManager } from './InventoryManager';
+@@ -89,10 +89,16 @@ export const QuestManager = {
+     const rng = createRng(`board:${window}:${hero.id}:${state.createdAt}:${salt}`);
+     const legendaryUnlocked = ModifierManager.hasUnlock(state, 'legendaryQuests');
+ 
++    // Difficulty is no longer a level gate at all (patch 0214) -- every
++    // difficulty's reqLevel now rolls near hero.level regardless of tier
++    // (see rollReqLevel), so Easy/Normal/Hard/Epic are always available as
++    // pure risk/reward picks. Legendary is the one exception: it needs a
++    // real level floor (quest_reqlevel.legendaryLevelFloor) alongside the
++    // Enchanted Seal, now that reqLevel itself can no longer imply
++    // "endgame" the way its old fixed reqLevel 25 did.
+     const available = DIFFICULTY_ORDER.filter((d) => {
+-      const cfg = DIFFICULTIES[d];
+-      if (d === 'legendary' && !legendaryUnlocked) return false;
+-      return hero.level + 2 >= cfg.reqLevel;
++      if (d !== 'legendary') return true;
++      return legendaryUnlocked && hero.level >= Tuning.get('quest_reqlevel.legendaryLevelFloor');
+     });
+ 
+     const offers: QuestOffer[] = [];
+@@ -111,30 +117,13 @@ export const QuestManager = {
+       }
+     }
+ 
+-    // Guaranteed on-level offer: a hero could otherwise complete every
+-    // Easy contract in their own pool and have the window regenerate
+-    // into nothing but a tier they're not actually at yet -- both Easy
+-    // (reqLevel 1) and Normal (reqLevel 3) are simultaneously "eligible"
+-    // for a level 1-2 hero (the `hero.level + 2 >= reqLevel` window
+-    // above deliberately looks two levels ahead), so a run of bad RNG on
+-    // a small BOARD_SIZE pool can roll every single slot into the
+-    // higher, penalized tier and leave literally nothing the hero is
+-    // actually at-or-above level for -- reported directly, reproduced at
+-    // level 2 (an all-Normal board) and level 3 (2 Easy landed that
+-    // time, same board, pure chance). This is the same "small pool, high
+-    // variance" shape as the burst/standard duration guarantees below,
+-    // just for difficulty tier instead of duration -- and unlike those
+-    // two, going without ever hitting 0% isn't a flavour loss, it's every
+-    // offer on the board showing a red "reduced success chance" warning
+-    // with nothing else to send the hero on instead. Targets slot 0,
+-    // deliberately never colliding with the burst guarantee's last slot
+-    // or the standard-duration guarantee's second-to-last slot below.
+-    const onLevelDifficulty = [...available].reverse().find((d) => DIFFICULTIES[d].reqLevel <= hero.level) ?? available[0];
+-    if (onLevelDifficulty && !offers.some((o) => DIFFICULTIES[o.difficulty].reqLevel <= hero.level)) {
+-      offers[0] = QuestManager.generateOffer(
+-        onLevelDifficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-on-level`, hero.level, false, legendaryUnlocked,
+-      );
+-    }
++    // The old "guaranteed on-level offer" workaround (this comment used to
++    // sit here) is gone as of patch 0214 -- it existed specifically
++    // because a fixed per-difficulty reqLevel meant Easy/Normal stayed
++    // nominally "eligible" for a hero who had long outleveled them,
++    // risking an all-outleveled board. Every offer's reqLevel now rolls
++    // near hero.level by construction (see rollReqLevel), so that failure
++    // mode can't happen anymore -- nothing to guarantee against.
+ 
+     // Every hero's board is their own now, so "no second pair of hands to
+     // fall back on while waiting out a long quest" is true of every hero
+@@ -329,11 +318,40 @@ export const QuestManager = {
+     return offers;
+   },
+ 
++  /**
++   * Rolls a quest offer's reqLevel near the hero's own level (patch
++   * 0214) -- replaces the old system where each difficulty tier owned a
++   * single fixed reqLevel (1/3/8/15/25) that a hero permanently
++   * outleveled within the first third of the game, which is what made
++   * `outlevelBonus` need to be an uncurved, ever-climbing success term in
++   * the first place. Weighted offset table, +-4 window, centered on 0
++   * (exactly at-level is the single most common roll, tapering toward
++   * the edges) -- see guild-idler-status.md's patch 0214 writeup for the
++   * full design discussion. Chains are NOT rolled this way -- they keep
++   * chain.reqLevel, a fixed authored value, untouched (see chainOffer).
++   */
++  rollReqLevel(heroLevel: number, rng: Rng): number {
++    const weights: { item: number; weight: number }[] = [
++      { item: -4, weight: Tuning.get('quest_reqlevel.offsetWeightM4') },
++      { item: -3, weight: Tuning.get('quest_reqlevel.offsetWeightM3') },
++      { item: -2, weight: Tuning.get('quest_reqlevel.offsetWeightM2') },
++      { item: -1, weight: Tuning.get('quest_reqlevel.offsetWeightM1') },
++      { item: 0, weight: Tuning.get('quest_reqlevel.offsetWeightZero') },
++      { item: 1, weight: Tuning.get('quest_reqlevel.offsetWeightP1') },
++      { item: 2, weight: Tuning.get('quest_reqlevel.offsetWeightP2') },
++      { item: 3, weight: Tuning.get('quest_reqlevel.offsetWeightP3') },
++      { item: 4, weight: Tuning.get('quest_reqlevel.offsetWeightP4') },
++    ];
++    const offset = rng.weighted(weights);
++    return Math.max(1, heroLevel + offset);
++  },
++
+   generateOffer(
+     difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number,
+     forceBurst = false, legendaryUnlocked = false, forceStandard = false,
+   ): QuestOffer {
+     const cfg = DIFFICULTIES[difficulty];
++    const reqLevel = QuestManager.rollReqLevel(topLevel, rng);
+     const tierIndex = DIFFICULTY_ORDER.indexOf(difficulty);
+     const eligible = QUEST_TEMPLATES.filter((t) => {
+       if (!t.minDifficulty) return true;
+@@ -375,12 +393,35 @@ export const QuestManager = {
+     const duration = rng.int(durMin, durMax);
+     const span = durMax - durMin;
+     const t = span > 0 ? (duration - durMin) / span : 1;
+-    const goldMin = useBurst ? cfg.burstMinGold! : useMedium ? cfg.mediumMinGold! : cfg.minGold;
+-    const goldMax = useBurst ? cfg.burstMaxGold! : useMedium ? cfg.mediumMaxGold! : cfg.maxGold;
+-    const xpMin = useBurst ? cfg.burstMinXp! : useMedium ? cfg.mediumMinXp! : 18;
+-    const xpMax = useBurst ? cfg.burstMaxXp! : useMedium ? cfg.mediumMaxXp! : 30;
+-    let rewardGold = Math.max(1, Math.round(goldMin + t * (goldMax - goldMin)));
+-    let rewardXp = Math.floor((xpMin + t * (xpMax - xpMin)) * cfg.xpMultiplier);
++    // Burst/medium keep their own explicit reward ranges exactly as
++    // before -- deliberately untouched by the reqLevel-roll rework (see
++    // guild-idler-status.md's patch 0214 writeup). Only the STANDARD
++    // branch changed: it used to read a flat cfg.minGold/maxGold range
++    // calibrated once around this difficulty's old fixed reqLevel; now it
++    // reads the level-scaled baseline curve at the roll's own reqLevel,
++    // times this difficulty's rewardMultiplier, with the same t (duration
++    // position within this tier's own min/max range) still driving a
++    // +-15% band so a longer standard quest still pays a bit more than a
++    // shorter one of the same difficulty -- same flavor as before, new
++    // source of the absolute number.
++    let rewardGold: number;
++    let rewardXp: number;
++    if (useBurst || useMedium) {
++      const goldMin = useBurst ? cfg.burstMinGold! : cfg.mediumMinGold!;
++      const goldMax = useBurst ? cfg.burstMaxGold! : cfg.mediumMaxGold!;
++      const xpMin = useBurst ? cfg.burstMinXp! : cfg.mediumMinXp!;
++      const xpMax = useBurst ? cfg.burstMaxXp! : cfg.mediumMaxXp!;
++      rewardGold = Math.max(1, Math.round(goldMin + t * (goldMax - goldMin)));
++      rewardXp = Math.floor((xpMin + t * (xpMax - xpMin)) * cfg.xpMultiplier);
++    } else {
++      const goldBaseline = questGoldBaseline(reqLevel) * cfg.rewardMultiplier;
++      const xpBaseline = questXpBaseline(reqLevel) * cfg.rewardMultiplier;
++      const bandLow = 0.85;
++      const bandHigh = 1.15;
++      const factor = bandLow + t * (bandHigh - bandLow);
++      rewardGold = Math.max(1, Math.round(goldBaseline * factor));
++      rewardXp = Math.max(1, Math.round(xpBaseline * factor));
++    }
+ 
+     // Both fast-completion modes are capped at ~80-85% of whatever the best
+     // currently-unlocked tier pays per hour -- live, computed from
+@@ -427,7 +468,7 @@ export const QuestManager = {
+       rewardGold,
+       rewardXp,
+       loot: lootTableFor(difficulty, rng),
+-      reqLevel: cfg.reqLevel,
++      reqLevel,
+       vulnerableTo: rollElementTags(rng, difficulty),
+       dealsElement: rollElementTags(rng, difficulty),
+     };
+@@ -477,7 +518,12 @@ export const QuestManager = {
+       tag: stageDef.tag,
+       duration: stageDef.duration,
+       baseSuccess: cfg.baseSuccess,
+-      rewardGold: Math.floor(cfg.maxGold * stageDef.goldMultiplier),
++      // Chains keep their own fixed chain.reqLevel (patch 0214 deliberately
++      // leaves chain reward/level logic untouched) -- only the source of
++      // the gold baseline changed, from the old flat cfg.maxGold constant
++      // to the same level-scaled curve standard offers now use, evaluated
++      // at the chain's own reqLevel rather than a rolled one.
++      rewardGold: Math.floor(questGoldBaseline(chain.reqLevel) * cfg.rewardMultiplier * stageDef.goldMultiplier),
+       rewardXp: Math.floor(28 * cfg.xpMultiplier * 1.5),
+       loot: lootTableFor(stageDef.difficulty, rng),
+       reqLevel: chain.reqLevel,
+@@ -582,15 +628,19 @@ export const QuestManager = {
+    * including real gear pulled from equipment.json against two actual
+    * playtester heroes.
+    *
+-   * Going the other way -- attempting a quest *above* the hero's own
+-   * level -- is a deliberate, opt-in trade now rather than blocked
+-   * outright (see `start`'s own comment for why). `overLevelPenalty`
+-   * below is the cost of that trade: `quest.overLevelPenaltyPercent`
+-   * (tunable, default 10) success points per level of gap between the
+-   * hero and offer.reqLevel, on top of everything else. A hero already
+-   * at or above reqLevel pays nothing extra here -- this only ever
+-   * subtracts, never adds. Left uncurved, same as the outlevel bonus --
+-   * both are level-gap terms, not investment.
++   * Level-gap term (patch 0214, replacing the old outlevelBonus/
++   * overLevelPenalty pair): offer.reqLevel now always rolls within a
++   * small window of hero.level (see rollReqLevel), never an arbitrarily
++   * distant fixed value the way each difficulty's old flat reqLevel
++   * could be, so this collapses to a single small, bounded term --
++   * `(hero.level - offer.reqLevel) * quest_reqlevel.levelGapSuccessCoefficient`,
++   * roughly +-8 points at the roll window's own +-4 edges, not the old
++   * unbounded climb a heavily outleveled fixed reqLevel used to produce.
++   * The residual `autoGrowthSuccess - baselineSuccess` term below (the
++   * small amount of "free" stat growth between hero.level and
++   * offer.reqLevel specifically) is kept alongside it rather than folded
++   * away entirely -- same shape as before, it's just naturally tiny now
++   * that the two levels it compares are always close together.
+    */
+   previewSuccess(state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number): number {
+     const loadout = InventoryManager.loadoutEffects(state, consumables);
+@@ -629,12 +679,10 @@ export const QuestManager = {
+     const investmentRaw = investedStatSuccess + (investedMods.success ?? 0) + elemental;
+     const investmentCurved = QuestManager.curveInvestment(investmentRaw);
+ 
+-    const outlevelBonus = (autoGrowthSuccess - baselineSuccess) + (hero.level - offer.reqLevel) * 0.4;
+-    const levelGap = Math.max(0, offer.reqLevel - hero.level);
+-    const overLevelPenalty = levelGap * Tuning.get('quest.overLevelPenaltyPercent');
++    const levelGapBonus = (hero.level - offer.reqLevel) * Tuning.get('quest_reqlevel.levelGapSuccessCoefficient');
+ 
+     return clamp(
+-      offer.baseSuccess + investmentCurved + outlevelBonus - overLevelPenalty,
++      offer.baseSuccess + investmentCurved + (autoGrowthSuccess - baselineSuccess) + levelGapBonus,
+       MIN_SUCCESS,
+       MAX_SUCCESS,
+     );
+@@ -734,8 +782,15 @@ export const QuestManager = {
+       startedAt: now,
+       endsAt: now + QuestManager.previewDuration(state, hero, offer, now),
+       finalSuccess: QuestManager.previewSuccess(state, hero, offer, consumables, now),
+-      goldMultiplier: 1 + mods.gold / 100,
+-      xpMultiplier: 1 + mods.xp / 100,
++      // Soft-capped (patch 0214) -- unlike success (MIN/MAX_SUCCESS) and
++      // speed (previewDuration's 0.25x-1.75x clamp), gold/xp had no
++      // ceiling at all before this: every additive source (stat curve,
++      // class mods, gear, sets, facilities, renown) summed unbounded. See
++      // guild-idler-status.md's patch 0214 writeup for the real numbers
++      // this was calibrated against (612 raw gold / 461 raw xp on a fully
++      // min-maxed level-55 hero, uncapped -> ~5x/~3x capped).
++      goldMultiplier: 1 + softCap(mods.gold, Tuning.get('economy.goldSoftCapThreshold'), Tuning.get('economy.goldSoftCapDecay')) / 100,
++      xpMultiplier: 1 + softCap(mods.xp, Tuning.get('economy.xpSoftCapThreshold'), Tuning.get('economy.xpSoftCapDecay')) / 100,
+       lootBonus: mods.loot,
+       injuryResist: mods.injuryResist,
+       injuryImmune: loadout.preventInjury,
+@@ -783,6 +838,7 @@ export const QuestManager = {
+     let gold = 0;
+     let xp = 0;
+     const loot: QuestResult['loot'] = [];
++    const lootItems: EquipmentItem[] = [];
+     let eggDropped: QuestResult['eggDropped'];
+     let curioGained: QuestResult['curioGained'];
+ 
+@@ -803,7 +859,21 @@ export const QuestManager = {
+         const chance = Math.min(90, entry.chance * (1 + lootChance / 100) * (1 + personalLoot / 100));
+         if (rng.chance(chance)) {
+           const def = EQUIPMENT_BY_ID[entry.defId];
+-          if (def) loot.push({ defId: def.id, name: def.name, rarity: def.rarity });
++          if (def) {
++            // Instantiated here, not in the later stash-push loop below --
++            // procedural generation (patch 0214) consumes real rolls off
++            // this same quest-seeded rng, so it can only happen once per
++            // drop. lootItems mirrors `loot` 1:1 so the later loop can
++            // reuse the exact same rolled item instead of re-instantiating
++            // (which would desync the rng and silently reroll it).
++            const item = EquipmentManager.instantiate(def.id, {
++              itemLevel: quest.offer.reqLevel, sourceTag: quest.offer.difficulty, rng,
++            });
++            if (item) {
++              lootItems.push(item);
++              loot.push({ defId: def.id, name: itemDisplayName(item, def), rarity: def.rarity });
++            }
++          }
+         }
+       }
+       // Ordinary egg drop -- flat per-difficulty chance (not scaled by
+@@ -1002,8 +1072,9 @@ export const QuestManager = {
+     const storage = ModifierManager.goldStorage(state);
+     state.gold = Math.min(storage, state.gold + gold);
+ 
+-    for (const drop of loot) {
+-      const item = EquipmentManager.instantiate(drop.defId);
++    for (let dropIndex = 0; dropIndex < loot.length; dropIndex++) {
++      const drop = loot[dropIndex];
++      const item = lootItems[dropIndex];
+       if (item) {
+         // Auto-equip on loot -- opt-in (GameState.autoEquipOnLoot), only
+         // for the hero who actually earned the drop, same gearScoreForItem
+diff --git a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
+index a4b6cb6..b7535f9 100644
+--- a/src/game/managers/RaidManager.ts
++++ b/src/game/managers/RaidManager.ts
+@@ -3,7 +3,7 @@ import {
+ } from '../types';
+ import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty } from '../data/raids';
+ import { Tuning } from '../data/tuning';
+-import { EQUIPMENT_BY_ID } from '../data/equipment';
++import { EQUIPMENT_BY_ID, itemDisplayName } from '../data/equipment';
+ import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
+ import { MIN_SUCCESS, MAX_SUCCESS, MIN_INJURY_RISK } from './QuestManager';
+ import { HeroManager } from './HeroManager';
+@@ -12,7 +12,7 @@ import { ModifierManager } from './ModifierManager';
+ import { PetManager } from './PetManager';
+ import { elementalBonusForHero } from '../data/elements';
+ import { createRng } from '../rng';
+-import { clamp, sumMods, MINUTE } from '../util';
++import { clamp, sumMods, MINUTE, softCap } from '../util';
+ 
+ export const RaidManager = {
+   /**
+@@ -312,8 +312,11 @@ export const RaidManager = {
+       if (!rng.chance(chance)) break;
+ 
+       encountersCleared += 1;
+-      gold += Math.floor(encounter.rewardGold * diffCfg.rewardMultiplier * (1 + economy.gold / 100));
+-      xp += Math.floor(encounter.rewardXp * diffCfg.rewardMultiplier * (1 + economy.xp / 100));
++      // Soft-capped the same way QuestManager's own goldMultiplier/
++      // xpMultiplier are (patch 0214) -- same shared softCap() helper, so
++      // there's one formula for both instead of two that can drift.
++      gold += Math.floor(encounter.rewardGold * diffCfg.rewardMultiplier * (1 + softCap(economy.gold, Tuning.get('economy.goldSoftCapThreshold'), Tuning.get('economy.goldSoftCapDecay')) / 100));
++      xp += Math.floor(encounter.rewardXp * diffCfg.rewardMultiplier * (1 + softCap(economy.xp, Tuning.get('economy.xpSoftCapThreshold'), Tuning.get('economy.xpSoftCapDecay')) / 100));
+ 
+       for (const entry of lootForDifficulty(encounter, active.difficulty)) {
+         const parsed = parseLootEntry(entry);
+@@ -323,13 +326,23 @@ export const RaidManager = {
+         // RaidDifficultyConfig.lootBonus for the reasoning).
+         if (!rng.chance(Math.min(90, parsed.chance * (1 + (economy.loot + diffCfg.lootBonus) / 100)))) continue;
+         const def = EQUIPMENT_BY_ID[parsed.defId];
+-        const item = EquipmentManager.instantiate(parsed.defId);
++        // itemLevel comes from the raid's own fixed reqLevel (raids
++        // aren't part of the reqLevel-roll rework -- see
++        // guild-idler-status.md's patch 0214 writeup), sourceTag maps
++        // Heroic/Legendary to their own budget multiplier + bracketed
++        // tag; Normal raid drops get neither (same as an ordinary
++        // Easy/Normal quest drop).
++        const raidSourceTag = active.difficulty === 'heroic' ? 'raidHeroic'
++          : active.difficulty === 'legendary' ? 'raidLegendary' : 'normal';
++        const item = EquipmentManager.instantiate(parsed.defId, {
++          itemLevel: raid?.reqLevel ?? 1, sourceTag: raidSourceTag, rng,
++        });
+         if (!def || !item) continue;
+         state.stash.push(item);
+         if (!state.discoveredItems.includes(parsed.defId)) state.discoveredItems.push(parsed.defId);
+         state.stats.itemsFound += 1;
+         if (def.rarity === 'legendary') state.stats.legendaryItemsFound += 1;
+-        loot.push({ defId: parsed.defId, name: def.name, rarity: def.rarity, encounterId });
++        loot.push({ defId: parsed.defId, name: itemDisplayName(item, def), rarity: def.rarity, encounterId });
+       }
+ 
+       // Eggs as raid loot -- same devtool-editable "string list, parsed
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 98a22f2..749c462 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -362,6 +362,16 @@ export interface EquipmentItem {
+    * HeroManager.equipmentStats for where this actually gets applied.
+    */
+   enchantStats?: Partial<Stats>;
++  /**
++   * Set only on procedurally-generated items (patch 0214) -- the rolled
++   * display name (bonus-roll prefix + bracketed source tag, e.g.
++   * "Fortunate Iron Sword [Hard]"), since a blank template's own def.name
++   * is just the plain base name shared by every roll of it. See
++   * proceduralLoot.ts's rollProceduralItem. Falls back to def.name
++   * wherever this is absent -- every hand-authored item (including every
++   * Set piece) never sets this at all.
++   */
++  proceduralName?: string;
+   /**
+    * Set by the Blacksmith's Infuse station, weapon slot only -- the
+    * element this weapon deals. A single value, not a set: infusing again
+diff --git a/src/game/util.ts b/src/game/util.ts
+index 67685f8..7d840f0 100644
+--- a/src/game/util.ts
++++ b/src/game/util.ts
+@@ -8,6 +8,28 @@ export function clamp(value: number, min: number, max: number): number {
+   return Math.max(min, Math.min(max, value));
+ }
+ 
++/**
++ * Diminishing-returns soft cap for a raw additive modifier total --
++ * currently used for gold/xp (see QuestManager/RaidManager, and
++ * guild-idler-status.md's patch 0214 writeup), which unlike success/speed
++ * had no ceiling at all before this. Same shape as QuestManager's own
++ * curveInvestment: fully linear (1:1) below `threshold`, then an
++ * exponential approach to `threshold + decay` above it, slope exactly 1 at
++ * the crossover so there's no discontinuous jump. capExtra and decay are
++ * intentionally the same single parameter here (unlike curveInvestment's
++ * independently-tunable capExtra/decay) -- that equality is what
++ * guarantees the curve never returns MORE than raw for any input (the
++ * initial slope capExtra/decay must be <=1 or the "soft cap" would
++ * amplify small values instead of damping them). Never soften a negative
++ * or zero raw value -- same "penalties pass through unchanged" rule
++ * curveInvestment already follows.
++ */
++export function softCap(raw: number, threshold: number, decay: number): number {
++  if (raw <= threshold) return raw;
++  const excess = raw - threshold;
++  return threshold + decay * (1 - Math.exp(-excess / decay));
++}
++
+ export function sumMods(...sources: Partial<Modifiers>[]): Modifiers {
+   const total: Modifiers = { ...ZERO_MODS };
+   for (const source of sources) {
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index c454c53..0774c50 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -537,11 +537,18 @@ const SCHEMAS = {
+       baseSuccess: { type: 'number', required: true },
+       minDurationHours: { type: 'number', required: true },
+       maxDurationHours: { type: 'number', required: true },
+-      minGold: { type: 'number', required: true },
+-      maxGold: { type: 'number', required: true },
+       xpMultiplier: { type: 'number', required: true },
+       lootChance: { type: 'number', required: true },
+-      reqLevel: { type: 'number', required: true },
++      // reqLevel -> referenceLevel + rewardMultiplier (patch 0214) --
++      // reqLevel no longer gates which difficulty a quest offer can roll
++      // at all (see QuestManager.rollReqLevel); referenceLevel survives
++      // purely as the "typical level" balance.ts's burst/medium cap
++      // heuristic reads, and rewardMultiplier drives the new level-scaled
++      // standard-quest gold/xp curve. minGold/maxGold removed -- they
++      // only ever fed the standard reward roll, which now reads that same
++      // curve instead.
++      referenceLevel: { type: 'number', required: true },
++      rewardMultiplier: { type: 'number', required: true },
+       weight: { type: 'number', required: true },
+       color: { type: 'string', required: true },
+       burstChance: { type: 'number', required: false },

@@ -363,6 +363,16 @@ export interface EquipmentItem {
    */
   enchantStats?: Partial<Stats>;
   /**
+   * Set only on procedurally-generated items (patch 0214) -- the rolled
+   * display name (bonus-roll prefix + bracketed source tag, e.g.
+   * "Fortunate Iron Sword [Hard]"), since a blank template's own def.name
+   * is just the plain base name shared by every roll of it. See
+   * proceduralLoot.ts's rollProceduralItem. Falls back to def.name
+   * wherever this is absent -- every hand-authored item (including every
+   * Set piece) never sets this at all.
+   */
+  proceduralName?: string;
+  /**
    * Set by the Blacksmith's Infuse station, weapon slot only -- the
    * element this weapon deals. A single value, not a set: infusing again
    * with a different element replaces it (this is meant to read as

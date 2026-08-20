@@ -78,6 +78,19 @@ export function gearScoreForItem(def: EquipmentDef): number {
   return base + bonus;
 }
 
+/**
+ * The name to actually show for an item -- a procedurally-generated
+ * item's rolled `proceduralName` (bonus-roll prefix + bracketed source
+ * tag, patch 0214) if it has one, otherwise the def's own plain authored
+ * name. Every display surface should read through this rather than
+ * `def.name` directly once an EquipmentItem instance is in hand, the same
+ * "one shared helper, not a scattered ?? at every call site" convention
+ * gearScoreForItem above already established.
+ */
+export function itemDisplayName(item: { proceduralName?: string }, def: EquipmentDef): string {
+  return item.proceduralName ?? def.name;
+}
+
 /** Max possible Gear Score for one hero: 9 equipment slots, all legendary,
  *  each at the level-bonus cap. */
 export const GEAR_SCORE_MAX = 9 * (GEAR_SCORE_BY_RARITY.legendary + GEAR_SCORE_LEVEL_BONUS_CAP.legendary);

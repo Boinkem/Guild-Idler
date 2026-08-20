@@ -3,7 +3,7 @@ import {
 } from '../types';
 import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty } from '../data/raids';
 import { Tuning } from '../data/tuning';
-import { EQUIPMENT_BY_ID } from '../data/equipment';
+import { EQUIPMENT_BY_ID, itemDisplayName } from '../data/equipment';
 import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
 import { MIN_SUCCESS, MAX_SUCCESS, MIN_INJURY_RISK } from './QuestManager';
 import { HeroManager } from './HeroManager';
@@ -12,7 +12,7 @@ import { ModifierManager } from './ModifierManager';
 import { PetManager } from './PetManager';
 import { elementalBonusForHero } from '../data/elements';
 import { createRng } from '../rng';
-import { clamp, sumMods, MINUTE } from '../util';
+import { clamp, sumMods, MINUTE, softCap } from '../util';
 
 export const RaidManager = {
   /**
@@ -312,8 +312,11 @@ export const RaidManager = {
       if (!rng.chance(chance)) break;
 
       encountersCleared += 1;
-      gold += Math.floor(encounter.rewardGold * diffCfg.rewardMultiplier * (1 + economy.gold / 100));
-      xp += Math.floor(encounter.rewardXp * diffCfg.rewardMultiplier * (1 + economy.xp / 100));
+      // Soft-capped the same way QuestManager's own goldMultiplier/
+      // xpMultiplier are (patch 0214) -- same shared softCap() helper, so
+      // there's one formula for both instead of two that can drift.
+      gold += Math.floor(encounter.rewardGold * diffCfg.rewardMultiplier * (1 + softCap(economy.gold, Tuning.get('economy.goldSoftCapThreshold'), Tuning.get('economy.goldSoftCapDecay')) / 100));
+      xp += Math.floor(encounter.rewardXp * diffCfg.rewardMultiplier * (1 + softCap(economy.xp, Tuning.get('economy.xpSoftCapThreshold'), Tuning.get('economy.xpSoftCapDecay')) / 100));
 
       for (const entry of lootForDifficulty(encounter, active.difficulty)) {
         const parsed = parseLootEntry(entry);
@@ -323,13 +326,23 @@ export const RaidManager = {
         // RaidDifficultyConfig.lootBonus for the reasoning).
         if (!rng.chance(Math.min(90, parsed.chance * (1 + (economy.loot + diffCfg.lootBonus) / 100)))) continue;
         const def = EQUIPMENT_BY_ID[parsed.defId];
-        const item = EquipmentManager.instantiate(parsed.defId);
+        // itemLevel comes from the raid's own fixed reqLevel (raids
+        // aren't part of the reqLevel-roll rework -- see
+        // guild-idler-status.md's patch 0214 writeup), sourceTag maps
+        // Heroic/Legendary to their own budget multiplier + bracketed
+        // tag; Normal raid drops get neither (same as an ordinary
+        // Easy/Normal quest drop).
+        const raidSourceTag = active.difficulty === 'heroic' ? 'raidHeroic'
+          : active.difficulty === 'legendary' ? 'raidLegendary' : 'normal';
+        const item = EquipmentManager.instantiate(parsed.defId, {
+          itemLevel: raid?.reqLevel ?? 1, sourceTag: raidSourceTag, rng,
+        });
         if (!def || !item) continue;
         state.stash.push(item);
         if (!state.discoveredItems.includes(parsed.defId)) state.discoveredItems.push(parsed.defId);
         state.stats.itemsFound += 1;
         if (def.rarity === 'legendary') state.stats.legendaryItemsFound += 1;
-        loot.push({ defId: parsed.defId, name: def.name, rarity: def.rarity, encounterId });
+        loot.push({ defId: parsed.defId, name: itemDisplayName(item, def), rarity: def.rarity, encounterId });
       }
 
       // Eggs as raid loot -- same devtool-editable "string list, parsed

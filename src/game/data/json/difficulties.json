@@ -19,13 +19,12 @@
     "mediumMaxGold": 30,
     "mediumMinXp": 14,
     "mediumMaxXp": 22,
-    "minGold": 8,
-    "maxGold": 25,
     "xpMultiplier": 1,
     "lootChance": 12,
-    "reqLevel": 1,
     "weight": 30,
-    "color": "#79a86b"
+    "color": "#79a86b",
+    "referenceLevel": 1,
+    "rewardMultiplier": 0.6
   },
   {
     "id": "normal",
@@ -40,13 +39,12 @@
     "mediumMaxGold": 45,
     "mediumMinXp": 20,
     "mediumMaxXp": 32,
-    "minGold": 25,
-    "maxGold": 60,
     "xpMultiplier": 2.4,
     "lootChance": 20,
-    "reqLevel": 3,
     "weight": 28,
-    "color": "#5b8fd6"
+    "color": "#5b8fd6",
+    "referenceLevel": 3,
+    "rewardMultiplier": 1.0
   },
   {
     "id": "hard",
@@ -54,13 +52,12 @@
     "baseSuccess": 50,
     "minDurationHours": 4,
     "maxDurationHours": 6,
-    "minGold": 60,
-    "maxGold": 150,
     "xpMultiplier": 5,
     "lootChance": 30,
-    "reqLevel": 8,
     "weight": 22,
-    "color": "#c98b3a"
+    "color": "#c98b3a",
+    "referenceLevel": 8,
+    "rewardMultiplier": 1.9
   },
   {
     "id": "epic",
@@ -68,13 +65,12 @@
     "baseSuccess": 40,
     "minDurationHours": 6,
     "maxDurationHours": 12,
-    "minGold": 150,
-    "maxGold": 400,
     "xpMultiplier": 12,
     "lootChance": 45,
-    "reqLevel": 15,
     "weight": 14,
-    "color": "#a874d6"
+    "color": "#a874d6",
+    "referenceLevel": 15,
+    "rewardMultiplier": 3.5
   },
   {
     "id": "legendary",
@@ -82,12 +78,11 @@
     "baseSuccess": 30,
     "minDurationHours": 12,
     "maxDurationHours": 24,
-    "minGold": 500,
-    "maxGold": 2000,
     "xpMultiplier": 30,
     "lootChance": 70,
-    "reqLevel": 25,
     "weight": 6,
-    "color": "#d9a441"
+    "color": "#d9a441",
+    "referenceLevel": 25,
+    "rewardMultiplier": 6.5
   }
 ]

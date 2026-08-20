@@ -1,8 +1,8 @@
-import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE, gearScoreForItem } from '../data/equipment';
+import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE, gearScoreForItem, itemDisplayName } from '../data/equipment';
 import {
   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES, TUTORIAL_QUEST_ID,
 } from '../data/quests';
-import { HERO_CLASSES } from '../data/progression';
+import { HERO_CLASSES, questGoldBaseline, questXpBaseline } from '../data/progression';
 import { fastQuestCapsPerHour, fastQuestFloorPerHour, easyFastModeChances } from '../data/balance';
 import { questEggDropChance } from '../data/pets';
 import { CURIOS, questCurioDropChance } from '../data/curios';
@@ -10,10 +10,10 @@ import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
 import { NODE_ORDER, MATERIAL_BY_ID } from '../data/materials';
 import { warehouseCapacity } from '../data/harvestUpgrades';
 import {
-  ActiveQuest, AutoChainWeightBy, Difficulty, GameState, Hero, MaterialId, QuestOffer, QuestResult, Rarity,
+  ActiveQuest, AutoChainWeightBy, Difficulty, EquipmentItem, GameState, Hero, MaterialId, QuestOffer, QuestResult, Rarity,
 } from '../types';
 import { createRng, Rng, uid } from '../rng';
-import { clamp, HOUR, MINUTE, sumMods } from '../util';
+import { clamp, HOUR, MINUTE, sumMods, softCap } from '../util';
 import { HeroManager } from './HeroManager';
 import { EventManager } from './EventManager';
 import { InventoryManager } from './InventoryManager';
@@ -89,10 +89,16 @@ export const QuestManager = {
     const rng = createRng(`board:${window}:${hero.id}:${state.createdAt}:${salt}`);
     const legendaryUnlocked = ModifierManager.hasUnlock(state, 'legendaryQuests');
 
+    // Difficulty is no longer a level gate at all (patch 0214) -- every
+    // difficulty's reqLevel now rolls near hero.level regardless of tier
+    // (see rollReqLevel), so Easy/Normal/Hard/Epic are always available as
+    // pure risk/reward picks. Legendary is the one exception: it needs a
+    // real level floor (quest_reqlevel.legendaryLevelFloor) alongside the
+    // Enchanted Seal, now that reqLevel itself can no longer imply
+    // "endgame" the way its old fixed reqLevel 25 did.
     const available = DIFFICULTY_ORDER.filter((d) => {
-      const cfg = DIFFICULTIES[d];
-      if (d === 'legendary' && !legendaryUnlocked) return false;
-      return hero.level + 2 >= cfg.reqLevel;
+      if (d !== 'legendary') return true;
+      return legendaryUnlocked && hero.level >= Tuning.get('quest_reqlevel.legendaryLevelFloor');
     });
 
     const offers: QuestOffer[] = [];
@@ -111,30 +117,13 @@ export const QuestManager = {
       }
     }
 
-    // Guaranteed on-level offer: a hero could otherwise complete every
-    // Easy contract in their own pool and have the window regenerate
-    // into nothing but a tier they're not actually at yet -- both Easy
-    // (reqLevel 1) and Normal (reqLevel 3) are simultaneously "eligible"
-    // for a level 1-2 hero (the `hero.level + 2 >= reqLevel` window
-    // above deliberately looks two levels ahead), so a run of bad RNG on
-    // a small BOARD_SIZE pool can roll every single slot into the
-    // higher, penalized tier and leave literally nothing the hero is
-    // actually at-or-above level for -- reported directly, reproduced at
-    // level 2 (an all-Normal board) and level 3 (2 Easy landed that
-    // time, same board, pure chance). This is the same "small pool, high
-    // variance" shape as the burst/standard duration guarantees below,
-    // just for difficulty tier instead of duration -- and unlike those
-    // two, going without ever hitting 0% isn't a flavour loss, it's every
-    // offer on the board showing a red "reduced success chance" warning
-    // with nothing else to send the hero on instead. Targets slot 0,
-    // deliberately never colliding with the burst guarantee's last slot
-    // or the standard-duration guarantee's second-to-last slot below.
-    const onLevelDifficulty = [...available].reverse().find((d) => DIFFICULTIES[d].reqLevel <= hero.level) ?? available[0];
-    if (onLevelDifficulty && !offers.some((o) => DIFFICULTIES[o.difficulty].reqLevel <= hero.level)) {
-      offers[0] = QuestManager.generateOffer(
-        onLevelDifficulty, rng, `q:${window}:${hero.id}:${salt}:guaranteed-on-level`, hero.level, false, legendaryUnlocked,
-      );
-    }
+    // The old "guaranteed on-level offer" workaround (this comment used to
+    // sit here) is gone as of patch 0214 -- it existed specifically
+    // because a fixed per-difficulty reqLevel meant Easy/Normal stayed
+    // nominally "eligible" for a hero who had long outleveled them,
+    // risking an all-outleveled board. Every offer's reqLevel now rolls
+    // near hero.level by construction (see rollReqLevel), so that failure
+    // mode can't happen anymore -- nothing to guarantee against.
 
     // Every hero's board is their own now, so "no second pair of hands to
     // fall back on while waiting out a long quest" is true of every hero
@@ -329,11 +318,40 @@ export const QuestManager = {
     return offers;
   },
 
+  /**
+   * Rolls a quest offer's reqLevel near the hero's own level (patch
+   * 0214) -- replaces the old system where each difficulty tier owned a
+   * single fixed reqLevel (1/3/8/15/25) that a hero permanently
+   * outleveled within the first third of the game, which is what made
+   * `outlevelBonus` need to be an uncurved, ever-climbing success term in
+   * the first place. Weighted offset table, +-4 window, centered on 0
+   * (exactly at-level is the single most common roll, tapering toward
+   * the edges) -- see guild-idler-status.md's patch 0214 writeup for the
+   * full design discussion. Chains are NOT rolled this way -- they keep
+   * chain.reqLevel, a fixed authored value, untouched (see chainOffer).
+   */
+  rollReqLevel(heroLevel: number, rng: Rng): number {
+    const weights: { item: number; weight: number }[] = [
+      { item: -4, weight: Tuning.get('quest_reqlevel.offsetWeightM4') },
+      { item: -3, weight: Tuning.get('quest_reqlevel.offsetWeightM3') },
+      { item: -2, weight: Tuning.get('quest_reqlevel.offsetWeightM2') },
+      { item: -1, weight: Tuning.get('quest_reqlevel.offsetWeightM1') },
+      { item: 0, weight: Tuning.get('quest_reqlevel.offsetWeightZero') },
+      { item: 1, weight: Tuning.get('quest_reqlevel.offsetWeightP1') },
+      { item: 2, weight: Tuning.get('quest_reqlevel.offsetWeightP2') },
+      { item: 3, weight: Tuning.get('quest_reqlevel.offsetWeightP3') },
+      { item: 4, weight: Tuning.get('quest_reqlevel.offsetWeightP4') },
+    ];
+    const offset = rng.weighted(weights);
+    return Math.max(1, heroLevel + offset);
+  },
+
   generateOffer(
     difficulty: Difficulty, rng: Rng, seedTag: string, topLevel: number,
     forceBurst = false, legendaryUnlocked = false, forceStandard = false,
   ): QuestOffer {
     const cfg = DIFFICULTIES[difficulty];
+    const reqLevel = QuestManager.rollReqLevel(topLevel, rng);
     const tierIndex = DIFFICULTY_ORDER.indexOf(difficulty);
     const eligible = QUEST_TEMPLATES.filter((t) => {
       if (!t.minDifficulty) return true;
@@ -375,12 +393,35 @@ export const QuestManager = {
     const duration = rng.int(durMin, durMax);
     const span = durMax - durMin;
     const t = span > 0 ? (duration - durMin) / span : 1;
-    const goldMin = useBurst ? cfg.burstMinGold! : useMedium ? cfg.mediumMinGold! : cfg.minGold;
-    const goldMax = useBurst ? cfg.burstMaxGold! : useMedium ? cfg.mediumMaxGold! : cfg.maxGold;
-    const xpMin = useBurst ? cfg.burstMinXp! : useMedium ? cfg.mediumMinXp! : 18;
-    const xpMax = useBurst ? cfg.burstMaxXp! : useMedium ? cfg.mediumMaxXp! : 30;
-    let rewardGold = Math.max(1, Math.round(goldMin + t * (goldMax - goldMin)));
-    let rewardXp = Math.floor((xpMin + t * (xpMax - xpMin)) * cfg.xpMultiplier);
+    // Burst/medium keep their own explicit reward ranges exactly as
+    // before -- deliberately untouched by the reqLevel-roll rework (see
+    // guild-idler-status.md's patch 0214 writeup). Only the STANDARD
+    // branch changed: it used to read a flat cfg.minGold/maxGold range
+    // calibrated once around this difficulty's old fixed reqLevel; now it
+    // reads the level-scaled baseline curve at the roll's own reqLevel,
+    // times this difficulty's rewardMultiplier, with the same t (duration
+    // position within this tier's own min/max range) still driving a
+    // +-15% band so a longer standard quest still pays a bit more than a
+    // shorter one of the same difficulty -- same flavor as before, new
+    // source of the absolute number.
+    let rewardGold: number;
+    let rewardXp: number;
+    if (useBurst || useMedium) {
+      const goldMin = useBurst ? cfg.burstMinGold! : cfg.mediumMinGold!;
+      const goldMax = useBurst ? cfg.burstMaxGold! : cfg.mediumMaxGold!;
+      const xpMin = useBurst ? cfg.burstMinXp! : cfg.mediumMinXp!;
+      const xpMax = useBurst ? cfg.burstMaxXp! : cfg.mediumMaxXp!;
+      rewardGold = Math.max(1, Math.round(goldMin + t * (goldMax - goldMin)));
+      rewardXp = Math.floor((xpMin + t * (xpMax - xpMin)) * cfg.xpMultiplier);
+    } else {
+      const goldBaseline = questGoldBaseline(reqLevel) * cfg.rewardMultiplier;
+      const xpBaseline = questXpBaseline(reqLevel) * cfg.rewardMultiplier;
+      const bandLow = 0.85;
+      const bandHigh = 1.15;
+      const factor = bandLow + t * (bandHigh - bandLow);
+      rewardGold = Math.max(1, Math.round(goldBaseline * factor));
+      rewardXp = Math.max(1, Math.round(xpBaseline * factor));
+    }
 
     // Both fast-completion modes are capped at ~80-85% of whatever the best
     // currently-unlocked tier pays per hour -- live, computed from
@@ -427,7 +468,7 @@ export const QuestManager = {
       rewardGold,
       rewardXp,
       loot: lootTableFor(difficulty, rng),
-      reqLevel: cfg.reqLevel,
+      reqLevel,
       vulnerableTo: rollElementTags(rng, difficulty),
       dealsElement: rollElementTags(rng, difficulty),
     };
@@ -477,7 +518,12 @@ export const QuestManager = {
       tag: stageDef.tag,
       duration: stageDef.duration,
       baseSuccess: cfg.baseSuccess,
-      rewardGold: Math.floor(cfg.maxGold * stageDef.goldMultiplier),
+      // Chains keep their own fixed chain.reqLevel (patch 0214 deliberately
+      // leaves chain reward/level logic untouched) -- only the source of
+      // the gold baseline changed, from the old flat cfg.maxGold constant
+      // to the same level-scaled curve standard offers now use, evaluated
+      // at the chain's own reqLevel rather than a rolled one.
+      rewardGold: Math.floor(questGoldBaseline(chain.reqLevel) * cfg.rewardMultiplier * stageDef.goldMultiplier),
       rewardXp: Math.floor(28 * cfg.xpMultiplier * 1.5),
       loot: lootTableFor(stageDef.difficulty, rng),
       reqLevel: chain.reqLevel,
@@ -582,15 +628,19 @@ export const QuestManager = {
    * including real gear pulled from equipment.json against two actual
    * playtester heroes.
    *
-   * Going the other way -- attempting a quest *above* the hero's own
-   * level -- is a deliberate, opt-in trade now rather than blocked
-   * outright (see `start`'s own comment for why). `overLevelPenalty`
-   * below is the cost of that trade: `quest.overLevelPenaltyPercent`
-   * (tunable, default 10) success points per level of gap between the
-   * hero and offer.reqLevel, on top of everything else. A hero already
-   * at or above reqLevel pays nothing extra here -- this only ever
-   * subtracts, never adds. Left uncurved, same as the outlevel bonus --
-   * both are level-gap terms, not investment.
+   * Level-gap term (patch 0214, replacing the old outlevelBonus/
+   * overLevelPenalty pair): offer.reqLevel now always rolls within a
+   * small window of hero.level (see rollReqLevel), never an arbitrarily
+   * distant fixed value the way each difficulty's old flat reqLevel
+   * could be, so this collapses to a single small, bounded term --
+   * `(hero.level - offer.reqLevel) * quest_reqlevel.levelGapSuccessCoefficient`,
+   * roughly +-8 points at the roll window's own +-4 edges, not the old
+   * unbounded climb a heavily outleveled fixed reqLevel used to produce.
+   * The residual `autoGrowthSuccess - baselineSuccess` term below (the
+   * small amount of "free" stat growth between hero.level and
+   * offer.reqLevel specifically) is kept alongside it rather than folded
+   * away entirely -- same shape as before, it's just naturally tiny now
+   * that the two levels it compares are always close together.
    */
   previewSuccess(state: GameState, hero: Hero, offer: QuestOffer, consumables: string[], now: number): number {
     const loadout = InventoryManager.loadoutEffects(state, consumables);
@@ -629,12 +679,10 @@ export const QuestManager = {
     const investmentRaw = investedStatSuccess + (investedMods.success ?? 0) + elemental;
     const investmentCurved = QuestManager.curveInvestment(investmentRaw);
 
-    const outlevelBonus = (autoGrowthSuccess - baselineSuccess) + (hero.level - offer.reqLevel) * 0.4;
-    const levelGap = Math.max(0, offer.reqLevel - hero.level);
-    const overLevelPenalty = levelGap * Tuning.get('quest.overLevelPenaltyPercent');
+    const levelGapBonus = (hero.level - offer.reqLevel) * Tuning.get('quest_reqlevel.levelGapSuccessCoefficient');
 
     return clamp(
-      offer.baseSuccess + investmentCurved + outlevelBonus - overLevelPenalty,
+      offer.baseSuccess + investmentCurved + (autoGrowthSuccess - baselineSuccess) + levelGapBonus,
       MIN_SUCCESS,
       MAX_SUCCESS,
     );
@@ -734,8 +782,15 @@ export const QuestManager = {
       startedAt: now,
       endsAt: now + QuestManager.previewDuration(state, hero, offer, now),
       finalSuccess: QuestManager.previewSuccess(state, hero, offer, consumables, now),
-      goldMultiplier: 1 + mods.gold / 100,
-      xpMultiplier: 1 + mods.xp / 100,
+      // Soft-capped (patch 0214) -- unlike success (MIN/MAX_SUCCESS) and
+      // speed (previewDuration's 0.25x-1.75x clamp), gold/xp had no
+      // ceiling at all before this: every additive source (stat curve,
+      // class mods, gear, sets, facilities, renown) summed unbounded. See
+      // guild-idler-status.md's patch 0214 writeup for the real numbers
+      // this was calibrated against (612 raw gold / 461 raw xp on a fully
+      // min-maxed level-55 hero, uncapped -> ~5x/~3x capped).
+      goldMultiplier: 1 + softCap(mods.gold, Tuning.get('economy.goldSoftCapThreshold'), Tuning.get('economy.goldSoftCapDecay')) / 100,
+      xpMultiplier: 1 + softCap(mods.xp, Tuning.get('economy.xpSoftCapThreshold'), Tuning.get('economy.xpSoftCapDecay')) / 100,
       lootBonus: mods.loot,
       injuryResist: mods.injuryResist,
       injuryImmune: loadout.preventInjury,
@@ -783,6 +838,7 @@ export const QuestManager = {
     let gold = 0;
     let xp = 0;
     const loot: QuestResult['loot'] = [];
+    const lootItems: EquipmentItem[] = [];
     let eggDropped: QuestResult['eggDropped'];
     let curioGained: QuestResult['curioGained'];
 
@@ -803,7 +859,21 @@ export const QuestManager = {
         const chance = Math.min(90, entry.chance * (1 + lootChance / 100) * (1 + personalLoot / 100));
         if (rng.chance(chance)) {
           const def = EQUIPMENT_BY_ID[entry.defId];
-          if (def) loot.push({ defId: def.id, name: def.name, rarity: def.rarity });
+          if (def) {
+            // Instantiated here, not in the later stash-push loop below --
+            // procedural generation (patch 0214) consumes real rolls off
+            // this same quest-seeded rng, so it can only happen once per
+            // drop. lootItems mirrors `loot` 1:1 so the later loop can
+            // reuse the exact same rolled item instead of re-instantiating
+            // (which would desync the rng and silently reroll it).
+            const item = EquipmentManager.instantiate(def.id, {
+              itemLevel: quest.offer.reqLevel, sourceTag: quest.offer.difficulty, rng,
+            });
+            if (item) {
+              lootItems.push(item);
+              loot.push({ defId: def.id, name: itemDisplayName(item, def), rarity: def.rarity });
+            }
+          }
         }
       }
       // Ordinary egg drop -- flat per-difficulty chance (not scaled by
@@ -1002,8 +1072,9 @@ export const QuestManager = {
     const storage = ModifierManager.goldStorage(state);
     state.gold = Math.min(storage, state.gold + gold);
 
-    for (const drop of loot) {
-      const item = EquipmentManager.instantiate(drop.defId);
+    for (let dropIndex = 0; dropIndex < loot.length; dropIndex++) {
+      const drop = loot[dropIndex];
+      const item = lootItems[dropIndex];
       if (item) {
         // Auto-equip on loot -- opt-in (GameState.autoEquipOnLoot), only
         // for the hero who actually earned the drop, same gearScoreForItem

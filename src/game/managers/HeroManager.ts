@@ -5,7 +5,7 @@ import { DIFFICULTY_ORDER } from '../data/quests';
 import { Tuning } from '../data/tuning';
 import { Difficulty, GameState, Hero, HeroClass, Injury, Modifiers, Role, Stats } from '../types';
 import { Rng, uid } from '../rng';
-import { MINUTE, scaleMods, sumMods } from '../util';
+import { MINUTE, scaleMods, sumMods, clamp } from '../util';
 import { ModifierManager } from './ModifierManager';
 
 export const HeroManager = {
@@ -228,6 +228,28 @@ export const HeroManager = {
     return gained;
   },
 
+  /**
+   * Gear relevance decay (patch 0214) -- how much of an equipped item's
+   * stats/mods actually apply, given how far the hero has leveled past
+   * the item's own reqLevel. `clamp(item.reqLevel / hero.level, floor,
+   * 1)`: an item at or above the hero's current level always gives full
+   * value; every level the hero climbs past it shrinks the ratio, down to
+   * `gear_relevance.floor` (never all the way to zero -- outleveled gear
+   * should read as "time to upgrade," not "worthless junk"). Same
+   * mechanism WoW's itemLevel-vs-character-level squish uses. Applies to
+   * every equipped item regardless of source -- procedural drops, Sets,
+   * and hand-authored legendaries alike (deliberate, see
+   * guild-idler-status.md's patch 0214 writeup: Sets are no longer
+   * "acquire once, BiS forever" now that everything drops within a
+   * rolling level window). `def.reqLevel` doubles as the item's own
+   * "item level" here, same convention gearScoreForItem already uses.
+   */
+  gearRelevance(itemReqLevel: number, heroLevel: number): number {
+    if (heroLevel <= 0) return 1;
+    const floor = Tuning.get('gear_relevance.floor');
+    return clamp(itemReqLevel / heroLevel, floor, 1);
+  },
+
   /** Stats coming from equipped, unbroken gear -- including any Enchanting on top. */
   equipmentStats(hero: Hero): Stats {
     const total: Stats = { strength: 0, endurance: 0, luck: 0, wisdom: 0 };
@@ -235,7 +257,7 @@ export const HeroManager = {
       if (!item || item.durability <= 0) continue;
       const def = EQUIPMENT_BY_ID[item.defId];
       if (!def) continue;
-      const scale = 1 + item.plus * 0.15;
+      const scale = (1 + item.plus * 0.15) * HeroManager.gearRelevance(def.reqLevel, hero.level);
       const base = def.stats;
       const enchant = item.enchantStats;
       if (!base && !enchant) continue;
@@ -483,20 +505,32 @@ export const HeroManager = {
   equipmentMods(hero: Hero): Partial<Modifiers> {
     const sources: Partial<Modifiers>[] = [];
     const setCounts: Record<string, number> = {};
+    const setRelevance: Record<string, number[]> = {};
     for (const item of Object.values(hero.equipment)) {
       if (!item || item.durability <= 0) continue;
       const def = EQUIPMENT_BY_ID[item.defId];
       if (!def) continue;
+      const relevance = HeroManager.gearRelevance(def.reqLevel, hero.level);
       // Crafted items carry their own chosen mods (EquipmentItem.customMods)
       // instead of the def's -- see that field's own comment in types.ts.
-      sources.push(scaleMods(item.customMods ?? def.mods, 1 + item.plus * 0.15));
-      if (def.setId) setCounts[def.setId] = (setCounts[def.setId] ?? 0) + 1;
+      sources.push(scaleMods(item.customMods ?? def.mods, (1 + item.plus * 0.15) * relevance));
+      if (def.setId) {
+        setCounts[def.setId] = (setCounts[def.setId] ?? 0) + 1;
+        (setRelevance[def.setId] ??= []).push(relevance);
+      }
     }
     for (const [setId, count] of Object.entries(setCounts)) {
       const set = SET_BY_ID[setId];
       if (!set) continue;
+      // A set bonus doesn't have one single reqLevel of its own (it's
+      // earned across several pieces, potentially picked up at different
+      // levels) -- averaging the equipped pieces' own relevance is the
+      // simplest coherent stand-in, and in practice a set's pieces are
+      // usually acquired together so this rarely diverges much from any
+      // one piece's own factor.
+      const avgRelevance = setRelevance[setId].reduce((a, b) => a + b, 0) / setRelevance[setId].length;
       for (const bonus of set.bonuses) {
-        if (count >= bonus.count) sources.push(bonus.mods);
+        if (count >= bonus.count) sources.push(scaleMods(bonus.mods, avgRelevance));
       }
     }
     return sumMods(...sources);

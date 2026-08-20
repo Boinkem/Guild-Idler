@@ -1,16 +1,36 @@
 import { EQUIPMENT_BY_ID, RARITY_PRICE_MULT } from '../data/equipment';
 import { EquipmentDef, EquipmentItem, ElementType, GameState, Hero } from '../types';
-import { uid } from '../rng';
+import { uid, Rng } from '../rng';
 import { clamp } from '../util';
 import { Tuning } from '../data/tuning';
+import { isProceduralTemplate, rollProceduralItem, LootSourceTag } from '../data/proceduralLoot';
 
 export const MAX_PLUS = 10;
 
 export const EquipmentManager = {
-  instantiate(defId: string): EquipmentItem | null {
+  /**
+   * `roll`, if provided, is used to generate real mods/stats for a blank
+   * procedural template (patch 0214) -- omitted entirely for hand-
+   * authored items (Sets, chain/raid capstone rewards, anything with its
+   * own populated mods/stats), which just instantiate exactly as before.
+   * A def that IS procedural but gets instantiated without a `roll`
+   * (e.g. a stray dev/test call) silently comes back with no mods/stats
+   * at all rather than crashing -- same "missing data degrades gracefully"
+   * convention the rest of this codebase already follows, though every
+   * real call site (QuestManager, RaidManager, chain rewards) always
+   * passes one.
+   */
+  instantiate(defId: string, roll?: { itemLevel: number; sourceTag: LootSourceTag; rng: Rng }): EquipmentItem | null {
     const def = EQUIPMENT_BY_ID[defId];
     if (!def) return null;
-    return { uid: uid('it'), defId, durability: def.maxDurability, plus: 0 };
+    const item: EquipmentItem = { uid: uid('it'), defId, durability: def.maxDurability, plus: 0 };
+    if (roll && isProceduralTemplate(def)) {
+      const result = rollProceduralItem(def.rarity, roll.itemLevel, roll.sourceTag, def.name, roll.rng);
+      item.customMods = result.mods;
+      item.enchantStats = result.stats;
+      item.proceduralName = result.displayName;
+    }
+    return item;
   },
 
   def(item: EquipmentItem): EquipmentDef | undefined {

@@ -10,14 +10,6 @@
     "loot": [
       "gravewatchers_band@10",
       "ashwoven_charm@8"
-    ],
-    "lootHeroic": [
-      "gravewatchers_band_heroic@10",
-      "ashwoven_charm_heroic@8"
-    ],
-    "lootLegendary": [
-      "gravewatchers_band_legendary@10",
-      "ashwoven_charm_legendary@8"
     ]
   },
   {
@@ -31,14 +23,6 @@
     "loot": [
       "choir_mask@6",
       "silenced_bell@6"
-    ],
-    "lootHeroic": [
-      "choir_mask_heroic@6",
-      "silenced_bell_heroic@6"
-    ],
-    "lootLegendary": [
-      "choir_mask_legendary@6",
-      "silenced_bell_legendary@6"
     ]
   },
   {
@@ -53,16 +37,6 @@
       "dragon_helm@4",
       "gravewatchers_band@5",
       "choir_mask@5"
-    ],
-    "lootHeroic": [
-      "dragon_helm_heroic@4",
-      "gravewatchers_band_heroic@5",
-      "choir_mask_heroic@5"
-    ],
-    "lootLegendary": [
-      "dragon_helm_legendary@4",
-      "gravewatchers_band_legendary@5",
-      "choir_mask_legendary@5"
     ]
   },
   {
@@ -76,14 +50,6 @@
     "loot": [
       "copper_band@12",
       "work_gloves@10"
-    ],
-    "lootHeroic": [
-      "copper_band_heroic@12",
-      "work_gloves_heroic@10"
-    ],
-    "lootLegendary": [
-      "copper_band_legendary@12",
-      "work_gloves_legendary@10"
     ]
   },
   {
@@ -97,14 +63,6 @@
     "loot": [
       "knights_blade@6",
       "iron_helm@8"
-    ],
-    "lootHeroic": [
-      "knights_blade_heroic@6",
-      "iron_helm_heroic@8"
-    ],
-    "lootLegendary": [
-      "knights_blade_legendary@6",
-      "iron_helm_legendary@8"
     ]
   },
   {
@@ -120,21 +78,11 @@
       "ranger_boots@6",
       "tollkeepers_signet@4"
     ],
-    "lootHeroic": [
-      "chainmail_heroic@6",
-      "ranger_boots_heroic@6",
-      "tollkeepers_signet_heroic@4"
-    ],
     "dealsElement": [
       "poison"
     ],
     "vulnerableTo": [
       "lightning"
-    ],
-    "lootLegendary": [
-      "chainmail_legendary@6",
-      "ranger_boots_legendary@6",
-      "tollkeepers_signet_legendary@4"
     ]
   },
   {
@@ -148,14 +96,6 @@
     "loot": [
       "requiem_signet@12",
       "requiem_striders@10"
-    ],
-    "lootHeroic": [
-      "requiem_signet_heroic@12",
-      "requiem_striders_heroic@10"
-    ],
-    "lootLegendary": [
-      "requiem_signet_legendary@12",
-      "requiem_striders_legendary@10"
     ]
   },
   {
@@ -170,16 +110,6 @@
       "requiem_grips@8",
       "requiem_plate@6",
       "the_last_ember@4"
-    ],
-    "lootHeroic": [
-      "requiem_grips_heroic@8",
-      "requiem_plate_heroic@6",
-      "the_last_ember_heroic@4"
-    ],
-    "lootLegendary": [
-      "requiem_grips_legendary@8",
-      "requiem_plate_legendary@6",
-      "the_last_ember_legendary@4"
     ]
   },
   {
@@ -193,14 +123,6 @@
     "loot": [
       "requiem_blade@5",
       "requiem_crown@4"
-    ],
-    "lootHeroic": [
-      "requiem_blade_heroic@5",
-      "requiem_crown_heroic@4"
-    ],
-    "lootLegendary": [
-      "requiem_blade_legendary@5",
-      "requiem_crown_legendary@4"
     ]
   },
   {
@@ -214,17 +136,11 @@
     "loot": [
       "frostfang_claw@10"
     ],
-    "lootHeroic": [
-      "frostfang_claw_heroic@10"
-    ],
     "dealsElement": [
       "frost"
     ],
     "vulnerableTo": [
       "fire"
-    ],
-    "lootLegendary": [
-      "frostfang_claw_legendary@10"
     ]
   },
   {
@@ -238,14 +154,6 @@
     "loot": [
       "keepers_warded_charm@9",
       "frostwalker_treads@9"
-    ],
-    "lootHeroic": [
-      "keepers_warded_charm_heroic@9",
-      "frostwalker_treads_heroic@9"
-    ],
-    "lootLegendary": [
-      "keepers_warded_charm_legendary@9",
-      "frostwalker_treads_legendary@9"
     ]
   },
   {
@@ -260,10 +168,6 @@
       "dragon_helm@8",
       "frozen_maw_shield@5"
     ],
-    "lootHeroic": [
-      "dragon_helm_heroic@8",
-      "frozen_maw_shield_heroic@5"
-    ],
     "dealsElement": [
       "frost"
     ],
@@ -272,10 +176,6 @@
     ],
     "vulnerableTo": [
       "fire"
-    ],
-    "lootLegendary": [
-      "dragon_helm_legendary@8",
-      "frozen_maw_shield_legendary@5"
     ]
   },
   {
@@ -288,12 +188,6 @@
     "rewardXp": 220,
     "loot": [
       "cinder_ash_grip@10"
-    ],
-    "lootHeroic": [
-      "cinder_ash_grip_heroic@10"
-    ],
-    "lootLegendary": [
-      "cinder_ash_grip_legendary@10"
     ]
   },
   {
@@ -306,12 +200,6 @@
     "rewardXp": 380,
     "loot": [
       "loyalists_brand@9"
-    ],
-    "lootHeroic": [
-      "loyalists_brand_heroic@9"
-    ],
-    "lootLegendary": [
-      "loyalists_brand_legendary@9"
     ]
   },
   {
@@ -325,14 +213,6 @@
     "loot": [
       "cornered_fang@5",
       "desperate_ends_crown@4"
-    ],
-    "lootHeroic": [
-      "cornered_fang_heroic@5",
-      "desperate_ends_crown_heroic@4"
-    ],
-    "lootLegendary": [
-      "cornered_fang_legendary@5",
-      "desperate_ends_crown_legendary@4"
     ]
   },
   {
@@ -347,19 +227,11 @@
       "cinderfang_gauntlets@10",
       "wyrmwardens_cloak@9"
     ],
-    "lootHeroic": [
-      "cinderfang_gauntlets_heroic@10",
-      "wyrmwardens_cloak_heroic@9"
-    ],
     "vulnerableTo": [
       "frost"
     ],
     "dealsElement": [
       "fire"
-    ],
-    "lootLegendary": [
-      "cinderfang_gauntlets_legendary@10",
-      "wyrmwardens_cloak_legendary@9"
     ]
   },
   {
@@ -374,19 +246,11 @@
       "scaleknit_boots@9",
       "brood_fang_dagger@7"
     ],
-    "lootHeroic": [
-      "scaleknit_boots_heroic@9",
-      "brood_fang_dagger_heroic@7"
-    ],
     "vulnerableTo": [
       "frost"
     ],
     "dealsElement": [
       "fire"
-    ],
-    "lootLegendary": [
-      "scaleknit_boots_legendary@9",
-      "brood_fang_dagger_legendary@7"
     ]
   },
   {
@@ -401,10 +265,6 @@
       "blackscale_helm@5",
       "broodmothers_crown@4"
     ],
-    "lootHeroic": [
-      "blackscale_helm_heroic@5",
-      "broodmothers_crown_heroic@4"
-    ],
     "eggLoot": [
       "epic:black_dragonling@8"
     ],
@@ -416,10 +276,6 @@
     ],
     "immuneTo": [
       "fire"
-    ],
-    "lootLegendary": [
-      "blackscale_helm_legendary@5",
-      "broodmothers_crown_legendary@4"
     ]
   },
   {
@@ -433,14 +289,6 @@
     "loot": [
       "sewn_maw_greataxe@8",
       "stitched_hide_vest@8"
-    ],
-    "lootHeroic": [
-      "sewn_maw_greataxe_heroic@8",
-      "stitched_hide_vest_heroic@8"
-    ],
-    "lootLegendary": [
-      "sewn_maw_greataxe_legendary@8",
-      "stitched_hide_vest_legendary@8"
     ]
   },
   {
@@ -454,14 +302,6 @@
     "loot": [
       "phylactery_shard_ring@7",
       "unbinding_gauntlets@7"
-    ],
-    "lootHeroic": [
-      "phylactery_shard_ring_heroic@7",
-      "unbinding_gauntlets_heroic@7"
-    ],
-    "lootLegendary": [
-      "phylactery_shard_ring_legendary@7",
-      "unbinding_gauntlets_legendary@7"
     ]
   },
   {
@@ -475,14 +315,6 @@
     "loot": [
       "lichbound_diadem@5",
       "grimward_amulet@4"
-    ],
-    "lootHeroic": [
-      "lichbound_diadem_heroic@5",
-      "grimward_amulet_heroic@4"
-    ],
-    "lootLegendary": [
-      "lichbound_diadem_legendary@5",
-      "grimward_amulet_legendary@4"
     ]
   },
   {
@@ -497,16 +329,6 @@
       "woven_mind_circlet@6",
       "unraveling_cloak@6",
       "threadcutter@3"
-    ],
-    "lootHeroic": [
-      "woven_mind_circlet_heroic@6",
-      "unraveling_cloak_heroic@6",
-      "threadcutter_heroic@3"
-    ],
-    "lootLegendary": [
-      "woven_mind_circlet_legendary@6",
-      "unraveling_cloak_legendary@6",
-      "threadcutter_legendary@3"
     ]
   }
 ]

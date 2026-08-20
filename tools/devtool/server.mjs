@@ -537,11 +537,18 @@ const SCHEMAS = {
       baseSuccess: { type: 'number', required: true },
       minDurationHours: { type: 'number', required: true },
       maxDurationHours: { type: 'number', required: true },
-      minGold: { type: 'number', required: true },
-      maxGold: { type: 'number', required: true },
       xpMultiplier: { type: 'number', required: true },
       lootChance: { type: 'number', required: true },
-      reqLevel: { type: 'number', required: true },
+      // reqLevel -> referenceLevel + rewardMultiplier (patch 0214) --
+      // reqLevel no longer gates which difficulty a quest offer can roll
+      // at all (see QuestManager.rollReqLevel); referenceLevel survives
+      // purely as the "typical level" balance.ts's burst/medium cap
+      // heuristic reads, and rewardMultiplier drives the new level-scaled
+      // standard-quest gold/xp curve. minGold/maxGold removed -- they
+      // only ever fed the standard reward roll, which now reads that same
+      // curve instead.
+      referenceLevel: { type: 'number', required: true },
+      rewardMultiplier: { type: 'number', required: true },
       weight: { type: 'number', required: true },
       color: { type: 'string', required: true },
       burstChance: { type: 'number', required: false },

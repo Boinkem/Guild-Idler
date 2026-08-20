@@ -1066,6 +1066,75 @@ function xpCurveMultiplier(level: number): number {
   return XP_BREAKPOINTS[XP_BREAKPOINTS.length - 1].multiplier;
 }
 
+/**
+ * Generic piecewise-linear breakpoint evaluator -- the exact same shape as
+ * xpCurveMultiplier above (flat below the lowest point, linear ramp
+ * between points, flat above the highest), pulled out standalone so the
+ * quest gold/xp reward curves below can share it instead of copy-pasting
+ * the loop a second and third time.
+ */
+function evalBreakpoints(points: { level: number; value: number }[], level: number): number {
+  if (points.length === 0) return 0;
+  if (level <= points[0].level) return points[0].value;
+  for (let i = 1; i < points.length; i++) {
+    if (level <= points[i].level) {
+      const lo = points[i - 1];
+      const hi = points[i];
+      const t = (level - lo.level) / (hi.level - lo.level);
+      return lo.value + (hi.value - lo.value) * t;
+    }
+  }
+  return points[points.length - 1].value;
+}
+
+/**
+ * Quest reward baseline curves (patch 0214) -- gold/xp for a *standard*
+ * quest offer, indexed to the offer's own rolled reqLevel (now always
+ * near hero.level, see QuestManager.rollReqLevel) rather than each
+ * difficulty tier owning a flat min/max constant calibrated once around a
+ * fixed reqLevel that no longer exists. Difficulty applies its own
+ * `rewardMultiplier` (difficulties.json) on top of whichever of these two
+ * baselines comes back -- same "level-scaled baseline * tier multiplier"
+ * split raids already use via RaidDifficultyConfig.rewardMultiplier.
+ *
+ * Same breakpoint shape as XP_BREAKPOINTS above, same reasoning: a
+ * designer can make later levels pay progressively more without any two
+ * neighboring levels paying a visibly different amount, and the curve
+ * holds flat past the top breakpoint (55, matching MAX_HERO_LEVEL) rather
+ * than extrapolating unboundedly past it.
+ *
+ * First-pass values, not a final balance -- see guild-idler-status.md's
+ * patch 0214 writeup for how these were chosen (anchored loosely against
+ * the old flat per-difficulty minGold/maxGold ranges' own relative
+ * scale) and the explicit note that these need Balance Sandbox
+ * verification before being treated as locked numbers.
+ */
+const QUEST_GOLD_BREAKPOINTS = [
+  { level: Tuning.get('economy.questGoldBreakLevel1'), value: Tuning.get('economy.questGoldBreakValue1') },
+  { level: Tuning.get('economy.questGoldBreakLevel2'), value: Tuning.get('economy.questGoldBreakValue2') },
+  { level: Tuning.get('economy.questGoldBreakLevel3'), value: Tuning.get('economy.questGoldBreakValue3') },
+  { level: Tuning.get('economy.questGoldBreakLevel4'), value: Tuning.get('economy.questGoldBreakValue4') },
+  { level: Tuning.get('economy.questGoldBreakLevel5'), value: Tuning.get('economy.questGoldBreakValue5') },
+  { level: Tuning.get('economy.questGoldBreakLevel6'), value: Tuning.get('economy.questGoldBreakValue6') },
+].sort((a, b) => a.level - b.level);
+
+const QUEST_XP_BREAKPOINTS = [
+  { level: Tuning.get('economy.questXpBreakLevel1'), value: Tuning.get('economy.questXpBreakValue1') },
+  { level: Tuning.get('economy.questXpBreakLevel2'), value: Tuning.get('economy.questXpBreakValue2') },
+  { level: Tuning.get('economy.questXpBreakLevel3'), value: Tuning.get('economy.questXpBreakValue3') },
+  { level: Tuning.get('economy.questXpBreakLevel4'), value: Tuning.get('economy.questXpBreakValue4') },
+  { level: Tuning.get('economy.questXpBreakLevel5'), value: Tuning.get('economy.questXpBreakValue5') },
+  { level: Tuning.get('economy.questXpBreakLevel6'), value: Tuning.get('economy.questXpBreakValue6') },
+].sort((a, b) => a.level - b.level);
+
+export function questGoldBaseline(level: number): number {
+  return evalBreakpoints(QUEST_GOLD_BREAKPOINTS, level);
+}
+
+export function questXpBaseline(level: number): number {
+  return evalBreakpoints(QUEST_XP_BREAKPOINTS, level);
+}
+
 export function xpForLevel(level: number): number {
   // Revised after playtesting: 4.6/1.55 fixed the late-game blowup (the
   // original 55/1.55 curve simulated to ~1,540 days for a full 1->55 +

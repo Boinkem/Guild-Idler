@@ -986,24 +986,62 @@ raid fight).
 
 ## Backlog
 
-### Uncapped gold/xp multipliers -- flagged, not acted on
-Raised during the hero-stat rebalance discussion (see "Hero class
-identity rebalance" above, patch 0210). `success` is clamped 5-95
-(`MIN_SUCCESS`/`MAX_SUCCESS`) and `speed` is clamped to a 0.25x-1.75x
-factor (`QuestManager` line ~669), but `goldMultiplier`/`xpMultiplier`
-are applied as raw `1 + mods.gold/100` / `1 + mods.xp/100` with no
-ceiling at all -- every additive source (stat curve, class mods,
-equipment, set bonuses, injuries, pets, guild facilities, renown perks)
-sums into those two categories unbounded. Same class of problem as the
-burst-quest exploit fixed earlier (a currency axis with no cap
-eventually becomes the dominant strategy), just not yet a live problem
-because gear/facility/renown stacking hasn't caught up. The patch 0210
-budget rebalance buys headroom by shrinking each class's own flat
-contribution, but doesn't close the structural gap -- worth adding a
-`MIN_GOLD_MULT`/`MAX_GOLD_MULT` pair (and xp equivalent) as new
-`Tuning.json` entries, mirroring the existing speed clamp, once there's
-a target ceiling to tune against (needs its own number, not decided
-yet).
+### Uncapped gold/xp multipliers -- resolved, patch 0214
+Was flagged here (see git history for the original entry) during the
+hero-stat rebalance discussion. Fixed as part of patch 0214's soft-cap
+system -- see that patch's own writeup below for the full mechanism.
+
+### Consumable stat-weighted procedural rolls -- idea logged, not scoped
+Raised during the procedural-loot design discussion (patch 0214, see
+that entry below): a consumable that biases a procedural roll's category
+distribution toward a chosen stat, instead of the flat random spread
+every roll currently uses (`rollProceduralItem` picks uniformly across
+all 10 Modifiers/Stats keys per affix slot). Not scoped -- open questions
+include whether it's a full override (100% of slots hit the chosen
+category) or a soft weight (chosen category rolls N times as often),
+whether it consumes on use or is reusable, and where it'd be
+crafted/purchased.
+
+### Gear re-leveling (spend gold + scrap to raise an item's own level) -- idea logged, not scoped
+Raised in the same conversation as the gear relevance decay mechanic
+(patch 0214, see below): the natural pressure-release valve for that
+decay -- a liked item with a good procedural roll can be re-leveled up to
+the hero's current level instead of just aging out, refreshing its own
+`reqLevel` (and therefore `HeroManager.gearRelevance`'s ratio) without
+losing the specific instance or its rolled `customMods`/`enchantStats`.
+Not scoped -- open questions include the gold/scrap cost curve, whether
+it's capped per item (can't out-level the hero, or can it go beyond?),
+and whether it's a Workshop/Blacksmith feature or its own new station.
+
+### Enchanter reroll (reroll a procedural item's rolled stats) -- idea logged, not scoped
+Same conversation as the two entries above. A service that spends gold +
+materials to reroll a procedurally-generated item's `customMods`/
+`enchantStats` in place -- same rarity/level budget
+(`rollProceduralItem`), a fresh random distribution across the affix
+pool. Pairs with gear re-leveling above: together they cover both axes
+of "I like this item, let me invest in it further" (re-leveling raises
+the ceiling, reroll reshapes what it rolled). Not scoped -- likely lives
+on the Enchanter/Blacksmith station given the name, but the actual
+station and cost curve aren't decided.
+
+### Procedural item names not yet wired into every UI surface -- known gap, patch 0214
+`EquipmentItem.proceduralName` (the rolled "Fortunate Iron Sword [Hard]"
+style name) is fully wired into both result screens
+(`QuestResultModal`/`RaidResultModal`, via `QuestResult.loot`/
+`RaidResult.loot`'s `name` field, itself sourced from
+`itemDisplayName()`) -- a drop announces itself correctly the moment it
+happens. `EquipmentPanel.tsx`'s stash/equipped-gear card views still read
+`def.name` directly in several places rather than through
+`itemDisplayName()`, so a procedural item's bracketed tag and bonus-roll
+prefix won't show once it's sitting in the stash or equipped, only at
+the moment it drops. Deliberately not chased down across every card
+variant in this patch (some of those views are aggregate stash-count
+displays grouped by `defId`, where a single shared name is arguably
+correct anyway, since a stack can hold multiple differently-rolled
+instances) -- worth a dedicated UI pass distinguishing the single-item
+detail views (should use `itemDisplayName`) from the grouped/stacked
+views (should keep the plain base name) rather than a blanket find-and-
+replace.
 
 ### Mythic quest tier (above Legendary) -- idea logged, not scoped
 Raised during the quest success rebalance discussion (see "Quest success
@@ -15446,3 +15484,345 @@ calling this fully verified, though all three changes are small,
 localized, and don't touch shared state beyond the one-shot
 `requestedSubTab` field every sub-tabbed panel already reads the same
 way.
+
+### Quest/economy/itemization overhaul: reqLevel rolls near hero level, gold/xp soft cap, level-scaled reward curve, gear relevance decay, full procedural loot replacement (patch 0214)
+
+```discord-update
+Dev Update | Patch 0214
+
+- Quests no longer stay locked to one fixed level forever -- Normal, Hard, Epic, and Easy all now roll near your hero's own level every time, so old content stops being trivial busywork
+- Added a soft cap on gold and XP bonuses so late-game stacking can't run away unbounded, while early and mid-game bonuses feel exactly the same as before
+- Gear that's fallen behind your hero's level now contributes less -- time to upgrade, not dead weight, but no longer free power forever
+- Nearly all loot is now randomly rolled at the moment it drops, scaled to your level and rarity, with a rare chance to roll "Fortunate" or "Charmed" for extra stats -- Sets keep their fixed, hand-designed bonuses exactly as before
+- Hard-quest and Heroic/Legendary raid drops get a bonus to their roll and a bracketed tag so you can see where they came from
+- Rebalanced Treasury, Library, Barracks, and two renown perks' per-level bonuses down, now that they stack against a much bigger picture
+```
+
+This is the largest single patch in the project so far -- six
+interconnected systems shaped over a long planning conversation (see
+"Hero class identity rebalance" at patch 0210 for where it started) and
+built together deliberately, since several of them share the same
+underlying level-scaling logic and would have drifted out of sync if
+built separately. Confirmed against a fresh clone of `main` (through
+patch 0213) with only this patch's diff applied -- `npx tsc --noEmit`
+and `npx vite build --config vite.web.config.ts` both pass clean.
+
+#### 1. Gold/XP soft cap
+
+`goldMultiplier`/`xpMultiplier` (`QuestManager`, `RaidManager`) had no
+ceiling at all before this -- flagged in the backlog above during the
+patch 0210 conversation. New shared `softCap(raw, threshold, decay)` in
+`util.ts`: fully linear below `threshold`, then an exponential approach
+to `threshold + decay` above it (slope exactly 1 at the crossover, same
+shape `QuestManager.curveInvestment` already uses for success, `capExtra
+== decay` here specifically so the curve can never return MORE than
+`raw` for any input). Calibrated against a real fully min-maxed level-55
+hero's uncapped totals (612 raw gold / 461 raw xp, computed directly
+from live data, not estimated): gold settles around 5x instead of 7.1x,
+xp around 3x instead of 5.6x, with the softening starting early enough
+that a moderately-geared hero (raw ~50-100) barely notices -- 96-99% of
+their raw bonus still comes through.
+
+| | Threshold | decay (= capExtra) |
+|-|-|-|
+| Gold | 30 | 590 |
+| XP | 25 | 196 |
+
+New `economy.goldSoftCapThreshold`/`economy.goldSoftCapDecay` (+ xp
+equivalents) in `Tuning.json`. Both `QuestManager`'s `goldMultiplier`/
+`xpMultiplier` and `RaidManager`'s per-encounter gold/xp now route
+through the same `softCap()` call -- one formula, not two that could
+drift.
+
+#### 2. reqLevel rolls near hero level (regular quests only -- chains untouched)
+
+Root cause of the "level-22 hero already capping success on Normal"
+report: each difficulty tier owned one fixed `reqLevel` (1/3/8/15/25)
+forever, so `outlevelBonus` (uncurved, ever-climbing) trivialized low
+tiers within the first third of the game. Fix: `QuestManager.
+rollReqLevel(heroLevel, rng)` rolls an offset from a weighted table,
++-4 window, center-weighted (weight 20 at offset 0, tapering to 3 at
+each edge -- "at level" is the single most common roll, not a coin
+flip). New `quest_reqlevel.offsetWeight*` Tuning entries (9 of them).
+
+Difficulty (`easy`/`normal`/`hard`/`epic`/`legendary`) fully decouples
+from reqLevel -- it's a pure risk/reward pick now (baseSuccess, reward
+multiplier, duration, loot chance), available at any level.
+**Legendary is the one exception**: gated on `hero.level >=
+quest_reqlevel.legendaryLevelFloor` (25) *and* the Enchanted Seal, both
+required, since reqLevel itself can no longer imply "endgame" the way
+its old fixed 25 did.
+
+`difficulties.json`'s old `reqLevel` field is renamed `referenceLevel`
+and repurposed -- it's no longer a real availability gate, it survives
+purely as the "typical level" `balance.ts`'s `bestUnlockedTier`/
+`expectedRatePerHour` read for the burst/medium fast-quest per-hour cap
+system, which is **deliberately left untouched** by this whole rework
+(still reads the same numeric values the old reqLevel had, just via the
+renamed field, so burst/medium behaves byte-identical to before).
+
+`generateContractsForHero`'s old "guaranteed on-level offer" workaround
+is removed entirely -- it existed specifically because a fixed reqLevel
+let Easy/Normal stay nominally "eligible" long after a hero outleveled
+them, risking an all-trivial board on bad RNG. That failure mode can't
+happen anymore now that every offer's reqLevel rolls near hero.level by
+construction, so there's nothing left to guarantee against. Net
+simplification, not just an addition.
+
+**Success formula**, `previewSuccess`: `outlevelBonus`/
+`overLevelPenalty` (the old uncurved, unbounded level-gap terms) replaced
+with `(hero.level - offer.reqLevel) * quest_reqlevel.
+levelGapSuccessCoefficient` (2) -- roughly +-8 points at the roll
+window's own +-4 edges, not the old unbounded climb. The
+`autoGrowthSuccess - baselineSuccess` residual (the small amount of
+"free" stat growth between hero.level and offer.reqLevel specifically)
+is kept alongside it rather than torn out -- same shape as before, it's
+just naturally tiny now that reqLevel is always close to hero.level, so
+it didn't need its own separate curbing the way the old unbounded
+version did. `curveInvestment` and its Tuning entries
+(`investmentLinearThreshold`/`DiminishingCapExtra`/`Decay`) are
+completely unchanged -- this only touches the level-gap term, not the
+investment curve.
+
+Simulated directly against the shipped formula (Knight, moderate
+investment, zero guild-facility bonus) to confirm the fix: a level-3
+hero on Normal (true at-level) still reads 74.2%; the old code's
+level-22-on-Normal problem is structurally impossible now, since
+reqLevel can never sit more than 4 below hero.level in the first place.
+
+#### 3. Level-scaled reward curve (gold/xp)
+
+`minGold`/`maxGold` are gone from `difficulties.json` -- they only ever
+fed the standard (non-burst/non-medium) reward roll, calibrated once
+around each tier's old fixed reqLevel, which no longer exists. Replaced
+with `questGoldBaseline(level)`/`questXpBaseline(level)` in
+`progression.ts`: the exact same piecewise-linear breakpoint shape
+`XP_BREAKPOINTS` already uses for the level-up curve (flat below the
+lowest point, linear ramp between points, flat above the top one),
+pulled out into a shared `evalBreakpoints()` so both curves reuse one
+evaluator instead of copy-pasting the loop.
+
+| Level | Gold baseline | XP baseline |
+|-|-|-|
+| 1 | 15 | 10 |
+| 10 | 32 | 26 |
+| 20 | 65 | 55 |
+| 30 | 105 | 90 |
+| 40 | 155 | 130 |
+| 55 (cap) | 230 | 190 |
+
+Each difficulty applies its own new `rewardMultiplier` on top (replacing
+the implicit scale the old flat minGold/maxGold ranges used to encode):
+Easy 0.6, Normal 1.0, Hard 1.9, Epic 3.5, Legendary 6.5 -- meaningfully
+tamer ratios than the old flat ranges implied (old Legendary's
+minGold/maxGold midpoint was ~76x Easy's; new Legendary is 10.8x Easy at
+the *reward-multiplier* level, with the rest of the gap now coming
+honestly from Legendary quests also rolling at much higher reqLevels on
+average, not from an arbitrary flat number). `generateOffer`'s standard
+branch still uses `t` (duration's position within the tier's own
+min/max range) to interpolate a +-15% band around the baseline -- same
+"a longer standard quest pays a bit more" flavor as before, new source
+for the absolute number.
+
+**Burst/medium fast-quest modes are deliberately untouched** -- they
+keep reading `cfg.burstMinGold`/`mediumMinGold` etc. exactly as before,
+own reward ranges, own per-hour caps via `fastQuestCapsPerHour`/
+`fastQuestFloorPerHour` in `balance.ts`. Those two functions needed a
+small fix regardless: `expectedRatePerHour`'s gold/xp average and
+`bestUnlockedTier`'s level check both read fields that no longer exist
+(`cfg.minGold`/`maxGold`, `cfg.reqLevel`) -- now read
+`questGoldBaseline(cfg.referenceLevel) * cfg.rewardMultiplier` and
+`cfg.referenceLevel` respectively, preserving the exact same behavior
+with the renamed/replaced fields.
+
+**Chains keep their own fixed `chain.reqLevel`** -- completely untouched
+by the reqLevel-roll rework, per the explicit "no chains" scoping
+decision. `chainOffer`'s gold reward source changed from the removed
+flat `cfg.maxGold` to `questGoldBaseline(chain.reqLevel) *
+cfg.rewardMultiplier * stageDef.goldMultiplier` -- same curve everything
+else now uses, evaluated at the chain's own authored level instead of a
+rolled one.
+
+18 new breakpoint Tuning entries (`economy.questGoldBreakLevel1-6`/
+`Value1-6`, xp equivalents) -- first-pass values, explicitly flagged for
+Balance Sandbox verification before being treated as final, same as the
+loot budget numbers below.
+
+#### 4. Gear relevance decay
+
+New `HeroManager.gearRelevance(itemReqLevel, heroLevel)`:
+`clamp(itemReqLevel / heroLevel, gear_relevance.floor, 1)`. An item at or
+above the hero's current level gives full value; every level the hero
+climbs past it shrinks the contribution, down to a floor of **25%**
+(`gear_relevance.floor`, new Tuning entry) -- outleveled gear never goes
+to literal zero, it just clearly signals "time to upgrade." Same
+mechanism WoW's itemLevel-vs-character-level squish uses.
+
+Applied in both `HeroManager.equipmentStats` (raw Stats) and
+`equipmentMods` (Modifiers) -- every equipped item's contribution is
+scaled by its own `gearRelevance()` before summing. **Applies to
+everything equipped, deliberately including Sets and every hand-authored
+legendary** -- explicit decision, not an oversight: Sets are no longer
+"acquire once, BiS forever" now that all loot (including what a Set's
+own pieces will eventually be re-earned as) rolls within a level window
+tied to when it dropped. A set bonus itself doesn't have one single
+reqLevel (it's earned across several pieces, potentially picked up at
+different levels) -- `equipmentMods` averages the relevance of whichever
+equipped pieces count toward that set's threshold as the simplest
+coherent stand-in.
+
+#### 5. Procedural itemization -- full replacement, Sets exempt
+
+New `src/game/data/proceduralLoot.ts`. Any `EquipmentDef` with no
+`mods` and no `stats` populated (`isProceduralTemplate()`) is a "blank"
+template -- rolls real power at drop time instead of reading fixed
+numbers. Sets, chain-exclusive rewards, and craftable bases all keep
+their authored `mods`/`stats` and are exempt by construction (populated
+fields = authored override, no separate devtool toggle needed -- the
+existing optional-field convention already does this for free).
+
+**Budget formula**: `GEAR_SCORE_BY_RARITY[rarity] * loot_procedural.
+budgetRarityMultiplier (3) * levelFactor(itemLevel)`, where
+`levelFactor` is a simple linear 0.1-1 scale across the 1-55 range (not
+curved -- the sqrt/pow shaping still happens downstream the normal way,
+once the rolled raw value reaches `statMods`). The `3` multiplier is a
+real-data anchor, not invented: scored every existing hand-authored
+non-set item (mods + 0.5x-weighted stats) against its own reqLevel/
+rarity and found real items average 2.24x-4.35x their
+`GEAR_SCORE_BY_RARITY` value depending on rarity -- 3 splits that
+observed range. Flagged for Balance Sandbox verification, same as the
+reward curve above, not a locked number.
+
+**Both stat pools** -- each of a rarity's affix slots (1/2/3/4/5 for
+common/uncommon/rare/epic/legendary, mirroring Masterwork's own existing
+`modsToPick` precedent) rolls into either the Modifiers pool
+(success/gold/xp/loot/injuryResist/speed) or the raw Stats pool
+(strength/endurance/luck/wisdom), picked uniformly per slot.
+
+**Raid Heroic/Legendary and Hard-quest drops** get a budget multiplier
+(`loot_procedural.raidHeroicBudgetMultiplier` 1.5x,
+`raidLegendaryBudgetMultiplier` 2.2x, `hardQuestBudgetMultiplier` 1.15x)
+plus a bracketed display tag (`[Heroic]`, `[Legendary]`, `[Hard]`) --
+Easy/Normal/Epic/Legendary-*quest* drops get a tag too (for consistency)
+but no multiplier, since Epic/Legendary's extra power already comes
+through the reward curve's own reqLevel scaling, not a flat bonus like
+the raid-tier and Hard cases needed.
+
+**Bonus rolls** -- "Fortunate" (9% chance, +10% budget) and "Charmed"
+(1% chance, +25% budget, checked first, mutually exclusive with
+Fortunate) -- named for Luck/fortune rather than WoW's Titan-lore
+"Warforged" language, which doesn't fit this setting (see
+`world-lore-pantheon.md`: no Titans, and even self-styled grandiose
+titles read as hubris here). Prefix stacks with the source tag:
+`Fortunate Iron Sword [Hard]`.
+
+**This eliminates the hand-authored raid-tiered-variant pattern
+entirely.** Deleted all 84 `raidExclusive` `_heroic`/`_legendary`
+duplicate items from `equipment.json` (e.g. `frozen_maw_shield_heroic`/
+`_legendary` next to the base `frozen_maw_shield`) -- one template now
+covers every tier via the multiplier + tag above. Confirmed lossless
+before deleting: every raid encounter's `lootHeroic`/`lootLegendary`
+list referenced the exact same base items as its `loot` list, just
+suffixed (scripted check across all 22 encounters, zero mismatches) --
+`lootHeroic`/`lootLegendary` fields removed from every
+`raid-encounters.json` entry, `lootForDifficulty()` already falls back
+to `encounter.loot` when they're absent, so nothing else needed to
+change there. `RaidManager`'s loot loop now passes `{itemLevel:
+raid.reqLevel, sourceTag, rng}` to `EquipmentManager.instantiate`
+instead of the old bare call.
+
+**Exemption scope, precisely**: of the 220 original items, 160 already
+belonged to a Set, 34 were chain-exclusive rewards, and 12 were craftable
+bases -- all stay fully hand-authored, unaffected. Of the 84 deleted
+raid-tiered duplicates, most (64) belonged to a Set too (their *base*
+item does, even where the tiered duplicate itself didn't carry a
+`setId`) -- those bases keep their fixed authored stats and, as a real
+consequence of this design, **no longer have separate Normal/Heroic/
+Legendary power tiers**: a Set piece drops at the same fixed power
+regardless of which raid difficulty it came from now. This is a genuine
+trade-off of "Sets stay exempt," not an oversight -- flagged here in
+case raid-tier scaling for Set drops specifically turns out to be
+missed in practice, in which case a future patch could layer a small
+multiplier onto Set bonuses at raid-drop time without going fully
+procedural. Only the genuinely standalone 21 items (no setId, no
+chainExclusive, no craftable flag -- e.g. `rusty_sword`, `copper_band`,
+`oathkeeper`) had their `mods`/`stats` actually blanked out to become
+procedural templates in practice; `equipment.json` is now 136 items
+(220 minus 84 deleted), of which those 21 generate their power fresh on
+every drop.
+
+`EquipmentItem` gained one new optional field, `proceduralName` (the
+rolled display name), and `EquipmentManager.instantiate` gained an
+optional `roll` parameter -- omitted entirely for hand-authored items
+and chain rewards (which call `instantiate(defId)` exactly as before,
+no behavior change), passed by `QuestManager`/`RaidManager` for real
+drops. `QuestManager.resolve`'s loot handling was restructured so an
+item is only ever instantiated (and therefore only ever rolled) once per
+drop -- the result-summary array and the actual stashed item now share
+the same roll, reusing a parallel `lootItems[]` array instead of calling
+`instantiate` a second time later in the function, which would have
+silently consumed a second, different draw from the same seeded rng and
+desynced the two.
+
+New `itemDisplayName(item, def)` helper in `equipment.ts` -- wired into
+both `QuestResultModal`/`RaidResultModal` via `QuestResult.loot`/
+`RaidResult.loot`'s `name` field, so a drop's bracketed tag and
+bonus-roll prefix show correctly the moment it happens. **Not** yet
+wired into `EquipmentPanel.tsx`'s stash/equipped-gear card views, which
+still read `def.name` directly in several places -- see the matching
+Backlog entry above for why that was deliberately scoped out rather than
+rushed.
+
+#### 6. Facility/renown squish (first pass)
+
+Halved (roughly) the flat per-level rates that apply to every hero
+automatically, regardless of gear/investment -- these were the biggest
+single contributor to the old uncapped gold/xp problem, bigger than any
+one hero's own stat curve:
+
+| Tuning id | Before | After |
+|-|-|-|
+| `guild_facility.treasury.goldPerLevel` | 12 | 6 |
+| `guild_facility.library.xpPerLevel` | 12 | 6 |
+| `guild_facility.barracks.successPerLevel` | 4 | 3 |
+| `renown_perk.legacy_of_wealth.goldPerLevel` | 8 | 4 |
+| `renown_perk.scholars_legacy.xpPerLevel` | 10 | 5 |
+
+First-pass numbers, same "verify against the Balance Sandbox" caveat as
+the reward curve and loot budget above -- squished roughly proportionally
+rather than precisely re-derived against the new reward curve's own
+scale, since deriving all three (cap, curve, squish) simultaneously by
+hand risked compounding errors nothing here could cross-check. Barracks'
+success contribution specifically didn't need as deep a cut as gold/xp
+did -- it already flows through the curved, hard-capped (`MIN_SUCCESS`/
+`MAX_SUCCESS` 5-95) investment pool, unlike gold/xp which had no
+ceiling at all before this patch's soft cap (#1 above).
+
+#### Also removed as dead code/data in this patch
+`quest.overLevelPenaltyPercent` and `balance.baseXpMin`/`baseXpMax`
+Tuning entries (superseded by the level-gap term and the new reward
+curve respectively, both now genuinely unused -- `noUnusedLocals` in
+`tsconfig.json` would have failed the build on the matching TS constants
+otherwise, which is what caught `balance.baseXpMin`/`Max` during this
+patch).
+
+#### Verified
+`npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` both
+pass clean against a fresh clone of `main` (through patch 0213) with
+only this patch's diff applied. Numerically re-validated (not just
+compiled) via direct scripts against the shipped Tuning values: the
+reqLevel roll's weight table sums correctly (22.7% chance of landing
+exactly at-level, the single most common outcome); gear relevance decay
+matches the designed floor/ratio at several item-level/hero-level pairs;
+the reward curve's breakpoints evaluate to the intended values at every
+listed level; the procedural loot budget formula produces sensible,
+monotonically-increasing numbers across every rarity/level/source
+combination tested, including the raid-multiplier and floor cases.
+Confirmed the raid-encounter loot-list simplification (`lootHeroic`/
+`lootLegendary` removal) was lossless by scripting a base-item-id
+comparison across all 22 encounters before deleting anything, not by
+inspection. No live playtest against the running app in this
+environment (`node_modules` not preinstalled in the conversation
+environment; installed here to run the checks above) -- worth a manual
+pass through a fresh recruit's first few quests, a Hard drop, and a raid
+clear before this ships, given the size of this patch.

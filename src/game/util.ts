@@ -8,6 +8,28 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+/**
+ * Diminishing-returns soft cap for a raw additive modifier total --
+ * currently used for gold/xp (see QuestManager/RaidManager, and
+ * guild-idler-status.md's patch 0214 writeup), which unlike success/speed
+ * had no ceiling at all before this. Same shape as QuestManager's own
+ * curveInvestment: fully linear (1:1) below `threshold`, then an
+ * exponential approach to `threshold + decay` above it, slope exactly 1 at
+ * the crossover so there's no discontinuous jump. capExtra and decay are
+ * intentionally the same single parameter here (unlike curveInvestment's
+ * independently-tunable capExtra/decay) -- that equality is what
+ * guarantees the curve never returns MORE than raw for any input (the
+ * initial slope capExtra/decay must be <=1 or the "soft cap" would
+ * amplify small values instead of damping them). Never soften a negative
+ * or zero raw value -- same "penalties pass through unchanged" rule
+ * curveInvestment already follows.
+ */
+export function softCap(raw: number, threshold: number, decay: number): number {
+  if (raw <= threshold) return raw;
+  const excess = raw - threshold;
+  return threshold + decay * (1 - Math.exp(-excess / decay));
+}
+
 export function sumMods(...sources: Partial<Modifiers>[]): Modifiers {
   const total: Modifiers = { ...ZERO_MODS };
   for (const source of sources) {

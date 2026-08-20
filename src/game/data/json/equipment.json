@@ -23,12 +23,8 @@
     "reqLevel": 1,
     "maxDurability": 40,
     "value": 10,
-    "mods": {
-      "success": 2
-    },
-    "stats": {
-      "strength": 1
-    },
+    "mods": {},
+    "stats": {},
     "icon": "weapons/Weapon_01.png",
     "raidExclusive": false,
     "craftable": false,
@@ -43,12 +39,8 @@
     "reqLevel": 2,
     "maxDurability": 45,
     "value": 45,
-    "mods": {
-      "success": 3
-    },
-    "stats": {
-      "strength": 1
-    },
+    "mods": {},
+    "stats": {},
     "icon": "weapons/Weapon_25.png"
   },
   {
@@ -77,14 +69,8 @@
     "reqLevel": 10,
     "maxDurability": 90,
     "value": 520,
-    "mods": {
-      "success": 8,
-      "speed": 5
-    },
-    "stats": {
-      "strength": 4,
-      "luck": 2
-    },
+    "mods": {},
+    "stats": {},
     "icon": "weapons/Weapon_07.png"
   },
   {
@@ -95,14 +81,8 @@
     "reqLevel": 18,
     "maxDurability": 130,
     "value": 1900,
-    "mods": {
-      "success": 12,
-      "injuryResist": 8
-    },
-    "stats": {
-      "strength": 7,
-      "endurance": 3
-    },
+    "mods": {},
+    "stats": {},
     "icon": "weapons/Weapon_09.png"
   },
   {
@@ -165,13 +145,8 @@
     "reqLevel": 11,
     "maxDurability": 85,
     "value": 470,
-    "mods": {
-      "success": 4,
-      "injuryResist": 12
-    },
-    "stats": {
-      "endurance": 4
-    },
+    "mods": {},
+    "stats": {},
     "icon": "armor/Armor_31.png"
   },
   {
@@ -220,10 +195,7 @@
     "reqLevel": 1,
     "maxDurability": 45,
     "value": 35,
-    "mods": {
-      "injuryResist": 4,
-      "health": 5
-    },
+    "mods": {},
     "icon": "armor/Armor_116.png"
   },
   {
@@ -253,14 +225,8 @@
     "reqLevel": 12,
     "maxDurability": 110,
     "value": 640,
-    "mods": {
-      "success": 5,
-      "injuryResist": 14,
-      "health": 18
-    },
-    "stats": {
-      "endurance": 6
-    },
+    "mods": {},
+    "stats": {},
     "icon": "armor/Armor_05.png"
   },
   {
@@ -363,13 +329,8 @@
     "reqLevel": 19,
     "maxDurability": 110,
     "value": 2000,
-    "mods": {
-      "gold": 30,
-      "loot": 6
-    },
-    "stats": {
-      "luck": 8
-    },
+    "mods": {},
+    "stats": {},
     "icon": "armor/Armor_71.png"
   },
   {
@@ -380,9 +341,7 @@
     "reqLevel": 1,
     "maxDurability": 32,
     "value": 22,
-    "mods": {
-      "speed": 3
-    },
+    "mods": {},
     "icon": "armor/Armor_54.png"
   },
   {
@@ -410,13 +369,8 @@
     "reqLevel": 13,
     "maxDurability": 88,
     "value": 560,
-    "mods": {
-      "speed": 14
-    },
-    "stats": {
-      "endurance": 3,
-      "luck": 2
-    },
+    "mods": {},
+    "stats": {},
     "icon": "armor/Armor_52.png"
   },
   {
@@ -427,13 +381,8 @@
     "reqLevel": 21,
     "maxDurability": 130,
     "value": 2300,
-    "mods": {
-      "success": 4,
-      "speed": 22
-    },
-    "stats": {
-      "endurance": 7
-    },
+    "mods": {},
+    "stats": {},
     "icon": "armor/Armor_45.png"
   },
   {
@@ -444,9 +393,7 @@
     "reqLevel": 1,
     "maxDurability": 60,
     "value": 30,
-    "mods": {
-      "loot": 1
-    },
+    "mods": {},
     "icon": "accessories/Accessory_06.png"
   },
   {
@@ -475,14 +422,8 @@
     "reqLevel": 17,
     "maxDurability": 140,
     "value": 2200,
-    "mods": {
-      "success": 9,
-      "injuryResist": 10
-    },
-    "stats": {
-      "luck": 5,
-      "wisdom": 4
-    },
+    "mods": {},
+    "stats": {},
     "icon": "accessories/Accessory_08.png"
   },
   {
@@ -493,15 +434,8 @@
     "reqLevel": 28,
     "maxDurability": 210,
     "value": 7600,
-    "mods": {
-      "xp": 30,
-      "loot": 8,
-      "speed": 25
-    },
-    "stats": {
-      "luck": 9,
-      "wisdom": 8
-    },
+    "mods": {},
+    "stats": {},
     "icon": "accessories/Accessory_10.png"
   },
   {
@@ -512,9 +446,7 @@
     "reqLevel": 1,
     "maxDurability": 55,
     "value": 28,
-    "mods": {
-      "xp": 5
-    },
+    "mods": {},
     "icon": "accessories/Accessory_14.png"
   },
   {
@@ -525,12 +457,8 @@
     "reqLevel": 6,
     "maxDurability": 80,
     "value": 190,
-    "mods": {
-      "xp": 15
-    },
-    "stats": {
-      "wisdom": 3
-    },
+    "mods": {},
+    "stats": {},
     "icon": "accessories/Accessory_17.png"
   },
   {
@@ -559,15 +487,8 @@
     "reqLevel": 30,
     "maxDurability": 230,
     "value": 9000,
-    "mods": {
-      "success": 14,
-      "injuryResist": 18,
-      "durability": 30
-    },
-    "stats": {
-      "endurance": 12,
-      "wisdom": 6
-    },
+    "mods": {},
+    "stats": {},
     "icon": "accessories/Accessory_13.png"
   },
   {
@@ -723,13 +644,8 @@
     "reqLevel": 22,
     "maxDurability": 150,
     "value": 2100,
-    "mods": {
-      "success": 11,
-      "speed": 6
-    },
-    "stats": {
-      "strength": 8
-    },
+    "mods": {},
+    "stats": {},
     "icon": "weapons/Weapon_34.png"
   },
   {
@@ -740,13 +656,8 @@
     "reqLevel": 23,
     "maxDurability": 140,
     "value": 2250,
-    "mods": {
-      "injuryResist": 8,
-      "speed": 24
-    },
-    "stats": {
-      "endurance": 6
-    },
+    "mods": {},
+    "stats": {},
     "icon": "armor/Armor_45.png"
   },
   {
@@ -775,14 +686,8 @@
     "reqLevel": 15,
     "maxDurability": 115,
     "value": 680,
-    "mods": {
-      "success": 5,
-      "injuryResist": 16,
-      "health": 21
-    },
-    "stats": {
-      "endurance": 7
-    },
+    "mods": {},
+    "stats": {},
     "icon": "armor/Armor_09.png"
   },
   {
@@ -1056,13 +961,8 @@
     "reqLevel": 3,
     "maxDurability": 65,
     "value": 110,
-    "mods": {
-      "gold": 4,
-      "speed": 5
-    },
-    "stats": {
-      "luck": 2
-    },
+    "mods": {},
+    "stats": {},
     "icon": "accessories/Accessory_01.png"
   },
   {
@@ -1346,466 +1246,6 @@
     "chainExclusive": true
   },
   {
-    "id": "gravewatchers_band_heroic",
-    "name": "Gravewatcher's Band (Heroic)",
-    "slot": "ring",
-    "rarity": "epic",
-    "reqLevel": 22,
-    "maxDurability": 247,
-    "value": 2535,
-    "mods": {
-      "success": 8,
-      "loot": 6,
-      "injuryResist": 18
-    },
-    "stats": {
-      "endurance": 4,
-      "wisdom": 6
-    },
-    "icon": "accessories/Accessory_04.png",
-    "raidExclusive": true,
-    "craftable": false,
-    "setId": "bonewrought"
-  },
-  {
-    "id": "gravewatchers_band_legendary",
-    "name": "Gravewatcher's Band (Legendary)",
-    "slot": "ring",
-    "rarity": "epic",
-    "reqLevel": 22,
-    "maxDurability": 321,
-    "value": 3296,
-    "mods": {
-      "success": 10,
-      "loot": 8,
-      "injuryResist": 24
-    },
-    "stats": {
-      "endurance": 5,
-      "wisdom": 8
-    },
-    "icon": "accessories/Accessory_04.png",
-    "raidExclusive": true,
-    "craftable": false,
-    "setId": "bonewrought"
-  },
-  {
-    "id": "ashwoven_charm_heroic",
-    "name": "Ashwoven Charm (Heroic)",
-    "slot": "amulet",
-    "rarity": "epic",
-    "reqLevel": 22,
-    "maxDurability": 169,
-    "value": 650,
-    "mods": {
-      "success": 8,
-      "injuryResist": 10
-    },
-    "stats": {
-      "wisdom": 5
-    },
-    "icon": "accessories/Accessory_15.png",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "ashwoven_charm_legendary",
-    "name": "Ashwoven Charm (Legendary)",
-    "slot": "amulet",
-    "rarity": "epic",
-    "reqLevel": 22,
-    "maxDurability": 220,
-    "value": 845,
-    "mods": {
-      "success": 10,
-      "injuryResist": 14
-    },
-    "stats": {
-      "wisdom": 7
-    },
-    "icon": "accessories/Accessory_15.png",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "choir_mask_heroic",
-    "name": "Mask of the Hollow Choir (Heroic)",
-    "slot": "helmet",
-    "rarity": "epic",
-    "reqLevel": 24,
-    "maxDurability": 162,
-    "value": 2990,
-    "mods": {
-      "xp": 26,
-      "loot": 13,
-      "injuryResist": 8
-    },
-    "stats": {
-      "wisdom": 12
-    },
-    "setId": "bonewrought",
-    "icon": "armor/Armor_127.png",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "choir_mask_legendary",
-    "name": "Mask of the Hollow Choir (Legendary)",
-    "slot": "helmet",
-    "rarity": "epic",
-    "reqLevel": 24,
-    "maxDurability": 211,
-    "value": 3887,
-    "mods": {
-      "xp": 34,
-      "loot": 17,
-      "injuryResist": 10
-    },
-    "stats": {
-      "wisdom": 15
-    },
-    "setId": "bonewrought",
-    "icon": "armor/Armor_127.png",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "silenced_bell_heroic",
-    "name": "The Silenced Bell (Heroic)",
-    "slot": "amulet",
-    "rarity": "epic",
-    "reqLevel": 24,
-    "maxDurability": 169,
-    "value": 3120,
-    "mods": {
-      "success": 13,
-      "gold": 26
-    },
-    "stats": {
-      "luck": 6,
-      "wisdom": 8
-    },
-    "setId": "bonewrought",
-    "icon": "misc/Misc_25.png",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "silenced_bell_legendary",
-    "name": "The Silenced Bell (Legendary)",
-    "slot": "amulet",
-    "rarity": "epic",
-    "reqLevel": 24,
-    "maxDurability": 220,
-    "value": 4056,
-    "mods": {
-      "success": 17,
-      "gold": 34
-    },
-    "stats": {
-      "luck": 8,
-      "wisdom": 10
-    },
-    "setId": "bonewrought",
-    "icon": "misc/Misc_25.png",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "dragon_helm_heroic",
-    "name": "Dragonscale Helm (Heroic)",
-    "slot": "helmet",
-    "rarity": "legendary",
-    "reqLevel": 25,
-    "maxDurability": 247,
-    "value": 8320,
-    "mods": {
-      "success": 10,
-      "injuryResist": 26
-    },
-    "stats": {
-      "endurance": 12
-    },
-    "icon": "armor/Armor_40.png",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "dragon_helm_legendary",
-    "name": "Dragonscale Helm (Legendary)",
-    "slot": "helmet",
-    "rarity": "legendary",
-    "reqLevel": 25,
-    "maxDurability": 321,
-    "value": 10816,
-    "mods": {
-      "success": 14,
-      "injuryResist": 34
-    },
-    "stats": {
-      "endurance": 15
-    },
-    "icon": "armor/Armor_40.png",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "copper_band_heroic",
-    "name": "Copper Band (Heroic)",
-    "slot": "ring",
-    "rarity": "epic",
-    "reqLevel": 8,
-    "maxDurability": 78,
-    "value": 39,
-    "mods": {
-      "loot": 2
-    },
-    "icon": "accessories/Accessory_06.png",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "copper_band_legendary",
-    "name": "Copper Band (Legendary)",
-    "slot": "ring",
-    "rarity": "epic",
-    "reqLevel": 8,
-    "maxDurability": 101,
-    "value": 51,
-    "mods": {
-      "loot": 3
-    },
-    "icon": "accessories/Accessory_06.png",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "work_gloves_legendary",
-    "name": "Work Gloves (Legendary)",
-    "slot": "gloves",
-    "rarity": "epic",
-    "reqLevel": 8,
-    "maxDurability": 51,
-    "value": 34,
-    "mods": {
-      "gold": 5
-    },
-    "setId": "blackford",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "work_gloves_heroic",
-    "name": "Work Gloves (Heroic)",
-    "slot": "gloves",
-    "rarity": "epic",
-    "reqLevel": 8,
-    "maxDurability": 31,
-    "value": 34,
-    "mods": {
-      "gold": 4
-    },
-    "setId": "blackford",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "knights_blade_heroic",
-    "name": "Knight's Blade (Heroic)",
-    "slot": "weapon",
-    "rarity": "epic",
-    "reqLevel": 8,
-    "maxDurability": 91,
-    "value": 208,
-    "mods": {
-      "success": 6,
-      "gold": 5
-    },
-    "stats": {
-      "strength": 4
-    },
-    "setId": "blackford",
-    "icon": "weapons/Weapon_03.png",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "knights_blade_legendary",
-    "name": "Knight's Blade (Legendary)",
-    "slot": "weapon",
-    "rarity": "epic",
-    "reqLevel": 8,
-    "maxDurability": 118,
-    "value": 270,
-    "mods": {
-      "success": 8,
-      "gold": 7
-    },
-    "stats": {
-      "strength": 5
-    },
-    "setId": "blackford",
-    "icon": "weapons/Weapon_03.png",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "iron_helm_heroic",
-    "name": "Iron Helm (Heroic)",
-    "slot": "helmet",
-    "rarity": "epic",
-    "reqLevel": 8,
-    "maxDurability": 78,
-    "value": 182,
-    "mods": {
-      "success": 3,
-      "injuryResist": 9
-    },
-    "stats": {
-      "endurance": 3
-    },
-    "setId": "blackford",
-    "icon": "armor/Armor_31.png",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "iron_helm_legendary",
-    "name": "Iron Helm (Legendary)",
-    "slot": "helmet",
-    "rarity": "epic",
-    "reqLevel": 8,
-    "maxDurability": 101,
-    "value": 237,
-    "mods": {
-      "success": 3,
-      "injuryResist": 12
-    },
-    "stats": {
-      "endurance": 3
-    },
-    "setId": "blackford",
-    "icon": "armor/Armor_38.png",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "chainmail_heroic",
-    "name": "Chainmail Hauberk (Heroic)",
-    "slot": "chest",
-    "rarity": "epic",
-    "reqLevel": 8,
-    "maxDurability": 98,
-    "value": 273,
-    "mods": {
-      "success": 4,
-      "injuryResist": 12,
-      "health": 16
-    },
-    "stats": {
-      "endurance": 4
-    },
-    "setId": "blackford",
-    "icon": "armor/Armor_03.png",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "chainmail_legendary",
-    "name": "Chainmail Hauberk (Legendary)",
-    "slot": "chest",
-    "rarity": "epic",
-    "reqLevel": 8,
-    "maxDurability": 127,
-    "value": 355,
-    "mods": {
-      "success": 5,
-      "injuryResist": 15,
-      "health": 20
-    },
-    "stats": {
-      "endurance": 5
-    },
-    "setId": "blackford",
-    "icon": "armor/Armor_03.png",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "ranger_boots_heroic",
-    "name": "Ranger Boots (Heroic)",
-    "slot": "boots",
-    "rarity": "epic",
-    "reqLevel": 8,
-    "maxDurability": 75,
-    "value": 176,
-    "mods": {
-      "speed": 10
-    },
-    "stats": {
-      "endurance": 6
-    },
-    "setId": "blackford",
-    "icon": "armor/Armor_46.png",
-    "raidExclusive": true,
-    "craftable": false,
-    "chainExclusive": false,
-    "gearScoreOverride": 0
-  },
-  {
-    "id": "ranger_boots_legendary",
-    "name": "Ranger Boots (Legendary)",
-    "slot": "boots",
-    "rarity": "epic",
-    "reqLevel": 8,
-    "maxDurability": 98,
-    "value": 228,
-    "mods": {
-      "speed": 12
-    },
-    "stats": {
-      "endurance": 3
-    },
-    "raidExclusive": true,
-    "setId": "blackford"
-  },
-  {
-    "id": "tollkeepers_signet_heroic",
-    "name": "Tollkeeper's Signet (Heroic)",
-    "slot": "ring",
-    "rarity": "epic",
-    "reqLevel": 8,
-    "maxDurability": 98,
-    "value": 195,
-    "mods": {
-      "success": 6,
-      "gold": 10
-    },
-    "stats": {
-      "luck": 4
-    },
-    "raidExclusive": true,
-    "setId": "blackford"
-  },
-  {
-    "id": "tollkeepers_signet_legendary",
-    "name": "Tollkeeper's Signet (Legendary)",
-    "slot": "ring",
-    "rarity": "epic",
-    "reqLevel": 8,
-    "maxDurability": 127,
-    "value": 254,
-    "mods": {
-      "success": 8,
-      "gold": 14
-    },
-    "stats": {
-      "luck": 5
-    },
-    "raidExclusive": true,
-    "setId": "blackford"
-  },
-  {
     "id": "frostfang_claw",
     "name": "Frostfang Claw",
     "slot": "weapon",
@@ -1821,44 +1261,6 @@
       "strength": 6,
       "endurance": 3
     },
-    "setId": "wyrmkeep"
-  },
-  {
-    "id": "frostfang_claw_heroic",
-    "name": "Frostfang Claw (Heroic)",
-    "slot": "weapon",
-    "rarity": "epic",
-    "reqLevel": 18,
-    "maxDurability": 195,
-    "value": 2470,
-    "mods": {
-      "success": 13,
-      "speed": 10
-    },
-    "stats": {
-      "strength": 8,
-      "endurance": 4
-    },
-    "raidExclusive": true,
-    "setId": "wyrmkeep"
-  },
-  {
-    "id": "frostfang_claw_legendary",
-    "name": "Frostfang Claw (Legendary)",
-    "slot": "weapon",
-    "rarity": "epic",
-    "reqLevel": 18,
-    "maxDurability": 254,
-    "value": 3211,
-    "mods": {
-      "success": 17,
-      "speed": 14
-    },
-    "stats": {
-      "strength": 10,
-      "endurance": 5
-    },
-    "raidExclusive": true,
     "setId": "wyrmkeep"
   },
   {
@@ -1881,46 +1283,6 @@
     "setId": "wyrmkeep"
   },
   {
-    "id": "keepers_warded_charm_heroic",
-    "name": "Keeper's Warded Charm (Heroic)",
-    "slot": "amulet",
-    "rarity": "epic",
-    "reqLevel": 19,
-    "maxDurability": 182,
-    "value": 2730,
-    "mods": {
-      "injuryResist": 18,
-      "success": 10,
-      "gold": 13
-    },
-    "stats": {
-      "wisdom": 8,
-      "endurance": 5
-    },
-    "raidExclusive": true,
-    "setId": "wyrmkeep"
-  },
-  {
-    "id": "keepers_warded_charm_legendary",
-    "name": "Keeper's Warded Charm (Legendary)",
-    "slot": "amulet",
-    "rarity": "epic",
-    "reqLevel": 19,
-    "maxDurability": 237,
-    "value": 3549,
-    "mods": {
-      "injuryResist": 24,
-      "success": 14,
-      "gold": 17
-    },
-    "stats": {
-      "wisdom": 10,
-      "endurance": 7
-    },
-    "raidExclusive": true,
-    "setId": "wyrmkeep"
-  },
-  {
     "id": "frostwalker_treads",
     "name": "Frostwalker Treads",
     "slot": "boots",
@@ -1935,42 +1297,6 @@
     "stats": {
       "endurance": 7
     },
-    "setId": "wyrmkeep"
-  },
-  {
-    "id": "frostwalker_treads_heroic",
-    "name": "Frostwalker Treads (Heroic)",
-    "slot": "boots",
-    "rarity": "epic",
-    "reqLevel": 19,
-    "maxDurability": 188,
-    "value": 2860,
-    "mods": {
-      "speed": 26,
-      "injuryResist": 10
-    },
-    "stats": {
-      "endurance": 9
-    },
-    "raidExclusive": true,
-    "setId": "wyrmkeep"
-  },
-  {
-    "id": "frostwalker_treads_legendary",
-    "name": "Frostwalker Treads (Legendary)",
-    "slot": "boots",
-    "rarity": "epic",
-    "reqLevel": 19,
-    "maxDurability": 245,
-    "value": 3718,
-    "mods": {
-      "speed": 34,
-      "injuryResist": 14
-    },
-    "stats": {
-      "endurance": 12
-    },
-    "raidExclusive": true,
     "setId": "wyrmkeep"
   },
   {
@@ -1992,44 +1318,6 @@
     "setId": "wyrmkeep"
   },
   {
-    "id": "frozen_maw_shield_heroic",
-    "name": "Frozen Maw (Heroic)",
-    "slot": "shield",
-    "rarity": "legendary",
-    "reqLevel": 20,
-    "maxDurability": 260,
-    "value": 7540,
-    "mods": {
-      "injuryResist": 31,
-      "success": 13,
-      "health": 68
-    },
-    "stats": {
-      "endurance": 14
-    },
-    "raidExclusive": true,
-    "setId": "wyrmkeep"
-  },
-  {
-    "id": "frozen_maw_shield_legendary",
-    "name": "Frozen Maw (Legendary)",
-    "slot": "shield",
-    "rarity": "legendary",
-    "reqLevel": 20,
-    "maxDurability": 338,
-    "value": 9802,
-    "mods": {
-      "injuryResist": 41,
-      "success": 17,
-      "health": 90
-    },
-    "stats": {
-      "endurance": 19
-    },
-    "raidExclusive": true,
-    "setId": "wyrmkeep"
-  },
-  {
     "id": "cinder_ash_grip",
     "name": "Grip of Cinder Ash",
     "slot": "gloves",
@@ -2044,42 +1332,6 @@
     "stats": {
       "strength": 7
     },
-    "setId": "what_got_out"
-  },
-  {
-    "id": "cinder_ash_grip_heroic",
-    "name": "Grip of Cinder Ash (Heroic)",
-    "slot": "gloves",
-    "rarity": "epic",
-    "reqLevel": 26,
-    "maxDurability": 214,
-    "value": 3055,
-    "mods": {
-      "success": 16,
-      "gold": 18
-    },
-    "stats": {
-      "strength": 9
-    },
-    "raidExclusive": true,
-    "setId": "what_got_out"
-  },
-  {
-    "id": "cinder_ash_grip_legendary",
-    "name": "Grip of Cinder Ash (Legendary)",
-    "slot": "gloves",
-    "rarity": "epic",
-    "reqLevel": 26,
-    "maxDurability": 279,
-    "value": 3972,
-    "mods": {
-      "success": 20,
-      "gold": 24
-    },
-    "stats": {
-      "strength": 12
-    },
-    "raidExclusive": true,
     "setId": "what_got_out"
   },
   {
@@ -2102,46 +1354,6 @@
     "setId": "what_got_out"
   },
   {
-    "id": "loyalists_brand_heroic",
-    "name": "The Loyalist's Brand (Heroic)",
-    "slot": "ring",
-    "rarity": "epic",
-    "reqLevel": 26,
-    "maxDurability": 195,
-    "value": 3250,
-    "mods": {
-      "success": 13,
-      "injuryResist": 16,
-      "loot": 8
-    },
-    "stats": {
-      "wisdom": 6,
-      "endurance": 5
-    },
-    "raidExclusive": true,
-    "setId": "what_got_out"
-  },
-  {
-    "id": "loyalists_brand_legendary",
-    "name": "The Loyalist's Brand (Legendary)",
-    "slot": "ring",
-    "rarity": "epic",
-    "reqLevel": 26,
-    "maxDurability": 254,
-    "value": 4225,
-    "mods": {
-      "success": 17,
-      "injuryResist": 20,
-      "loot": 10
-    },
-    "stats": {
-      "wisdom": 8,
-      "endurance": 7
-    },
-    "raidExclusive": true,
-    "setId": "what_got_out"
-  },
-  {
     "id": "cornered_fang",
     "name": "Cornered Fang",
     "slot": "weapon",
@@ -2158,46 +1370,6 @@
       "strength": 14,
       "luck": 4
     },
-    "setId": "what_got_out"
-  },
-  {
-    "id": "cornered_fang_heroic",
-    "name": "Cornered Fang (Heroic)",
-    "slot": "weapon",
-    "rarity": "legendary",
-    "reqLevel": 27,
-    "maxDurability": 286,
-    "value": 9100,
-    "mods": {
-      "success": 23,
-      "gold": 18,
-      "loot": 8
-    },
-    "stats": {
-      "strength": 18,
-      "luck": 5
-    },
-    "raidExclusive": true,
-    "setId": "what_got_out"
-  },
-  {
-    "id": "cornered_fang_legendary",
-    "name": "Cornered Fang (Legendary)",
-    "slot": "weapon",
-    "rarity": "legendary",
-    "reqLevel": 27,
-    "maxDurability": 372,
-    "value": 11830,
-    "mods": {
-      "success": 30,
-      "gold": 24,
-      "loot": 10
-    },
-    "stats": {
-      "strength": 24,
-      "luck": 7
-    },
-    "raidExclusive": true,
     "setId": "what_got_out"
   },
   {
@@ -2218,320 +1390,6 @@
       "wisdom": 5
     },
     "setId": "what_got_out"
-  },
-  {
-    "id": "desperate_ends_crown_heroic",
-    "name": "Crown of a Desperate End (Heroic)",
-    "slot": "helmet",
-    "rarity": "legendary",
-    "reqLevel": 27,
-    "maxDurability": 280,
-    "value": 9620,
-    "mods": {
-      "injuryResist": 34,
-      "success": 16,
-      "xp": 21
-    },
-    "stats": {
-      "endurance": 13,
-      "wisdom": 6
-    },
-    "raidExclusive": true,
-    "setId": "what_got_out"
-  },
-  {
-    "id": "desperate_ends_crown_legendary",
-    "name": "Crown of a Desperate End (Legendary)",
-    "slot": "helmet",
-    "rarity": "legendary",
-    "reqLevel": 27,
-    "maxDurability": 363,
-    "value": 12506,
-    "mods": {
-      "injuryResist": 44,
-      "success": 20,
-      "xp": 27
-    },
-    "stats": {
-      "endurance": 17,
-      "wisdom": 8
-    },
-    "raidExclusive": true,
-    "setId": "what_got_out"
-  },
-  {
-    "id": "the_last_ember_heroic",
-    "name": "The Last Ember (Heroic)",
-    "slot": "amulet",
-    "rarity": "legendary",
-    "reqLevel": 55,
-    "maxDurability": 520,
-    "value": 52000,
-    "mods": {
-      "success": 26,
-      "gold": 58,
-      "loot": 26,
-      "xp": 46,
-      "injuryResist": 26
-    },
-    "stats": {
-      "strength": 13,
-      "endurance": 13,
-      "luck": 13,
-      "wisdom": 13
-    },
-    "raidExclusive": true
-  },
-  {
-    "id": "the_last_ember_legendary",
-    "name": "The Last Ember (Legendary)",
-    "slot": "amulet",
-    "rarity": "legendary",
-    "reqLevel": 55,
-    "maxDurability": 676,
-    "value": 67600,
-    "mods": {
-      "success": 34,
-      "gold": 76,
-      "loot": 34,
-      "xp": 59,
-      "injuryResist": 34
-    },
-    "stats": {
-      "strength": 17,
-      "endurance": 17,
-      "luck": 17,
-      "wisdom": 17
-    },
-    "raidExclusive": true
-  },
-  {
-    "id": "requiem_blade_heroic",
-    "name": "Requiem Edge (Heroic)",
-    "slot": "weapon",
-    "rarity": "legendary",
-    "reqLevel": 55,
-    "maxDurability": 455,
-    "value": 39000,
-    "mods": {
-      "success": 36,
-      "gold": 31,
-      "loot": 18,
-      "speed": 16
-    },
-    "stats": {
-      "strength": 31,
-      "luck": 8
-    },
-    "raidExclusive": true
-  },
-  {
-    "id": "requiem_blade_legendary",
-    "name": "Requiem Edge (Legendary)",
-    "slot": "weapon",
-    "rarity": "legendary",
-    "reqLevel": 55,
-    "maxDurability": 592,
-    "value": 50700,
-    "mods": {
-      "success": 47,
-      "gold": 41,
-      "loot": 24,
-      "speed": 20
-    },
-    "stats": {
-      "strength": 41,
-      "luck": 10
-    },
-    "raidExclusive": true
-  },
-  {
-    "id": "requiem_crown_heroic",
-    "name": "Requiem Circlet (Heroic)",
-    "slot": "helmet",
-    "rarity": "legendary",
-    "reqLevel": 55,
-    "maxDurability": 429,
-    "value": 36400,
-    "mods": {
-      "success": 29,
-      "injuryResist": 39,
-      "xp": 39
-    },
-    "stats": {
-      "wisdom": 23,
-      "endurance": 12
-    },
-    "raidExclusive": true
-  },
-  {
-    "id": "requiem_crown_legendary",
-    "name": "Requiem Circlet (Legendary)",
-    "slot": "helmet",
-    "rarity": "legendary",
-    "reqLevel": 55,
-    "maxDurability": 558,
-    "value": 47320,
-    "mods": {
-      "success": 37,
-      "injuryResist": 51,
-      "xp": 51
-    },
-    "stats": {
-      "wisdom": 30,
-      "endurance": 15
-    },
-    "raidExclusive": true
-  },
-  {
-    "id": "requiem_plate_heroic",
-    "name": "Requiem Vestments (Heroic)",
-    "slot": "chest",
-    "rarity": "legendary",
-    "reqLevel": 55,
-    "maxDurability": 494,
-    "value": 41600,
-    "mods": {
-      "injuryResist": 49,
-      "success": 26,
-      "durability": 46,
-      "health": 64
-    },
-    "stats": {
-      "endurance": 31,
-      "strength": 10
-    },
-    "raidExclusive": true
-  },
-  {
-    "id": "requiem_plate_legendary",
-    "name": "Requiem Vestments (Legendary)",
-    "slot": "chest",
-    "rarity": "legendary",
-    "reqLevel": 55,
-    "maxDurability": 642,
-    "value": 54080,
-    "mods": {
-      "injuryResist": 64,
-      "success": 34,
-      "durability": 59,
-      "health": 83
-    },
-    "stats": {
-      "endurance": 41,
-      "strength": 14
-    },
-    "raidExclusive": true
-  },
-  {
-    "id": "requiem_signet_heroic",
-    "name": "Requiem Signet (Heroic)",
-    "slot": "ring",
-    "rarity": "legendary",
-    "reqLevel": 55,
-    "maxDurability": 390,
-    "value": 33800,
-    "mods": {
-      "loot": 26,
-      "gold": 39,
-      "speed": 18
-    },
-    "stats": {
-      "luck": 23
-    },
-    "raidExclusive": true
-  },
-  {
-    "id": "requiem_signet_legendary",
-    "name": "Requiem Signet (Legendary)",
-    "slot": "ring",
-    "rarity": "legendary",
-    "reqLevel": 55,
-    "maxDurability": 507,
-    "value": 43940,
-    "mods": {
-      "loot": 34,
-      "gold": 51,
-      "speed": 24
-    },
-    "stats": {
-      "luck": 30
-    },
-    "raidExclusive": true
-  },
-  {
-    "id": "requiem_grips_heroic",
-    "name": "Requiem Grasp (Heroic)",
-    "slot": "gloves",
-    "rarity": "legendary",
-    "reqLevel": 55,
-    "maxDurability": 442,
-    "value": 35100,
-    "mods": {
-      "gold": 42,
-      "loot": 29,
-      "success": 23
-    },
-    "stats": {
-      "luck": 21,
-      "strength": 13
-    },
-    "raidExclusive": true
-  },
-  {
-    "id": "requiem_grips_legendary",
-    "name": "Requiem Grasp (Legendary)",
-    "slot": "gloves",
-    "rarity": "legendary",
-    "reqLevel": 55,
-    "maxDurability": 575,
-    "value": 45630,
-    "mods": {
-      "gold": 54,
-      "loot": 37,
-      "success": 30
-    },
-    "stats": {
-      "luck": 27,
-      "strength": 17
-    },
-    "raidExclusive": true
-  },
-  {
-    "id": "requiem_striders_heroic",
-    "name": "Requiem Stride (Heroic)",
-    "slot": "boots",
-    "rarity": "legendary",
-    "reqLevel": 55,
-    "maxDurability": 442,
-    "value": 35750,
-    "mods": {
-      "speed": 42,
-      "success": 21,
-      "injuryResist": 18
-    },
-    "stats": {
-      "endurance": 21
-    },
-    "raidExclusive": true
-  },
-  {
-    "id": "requiem_striders_legendary",
-    "name": "Requiem Stride (Legendary)",
-    "slot": "boots",
-    "rarity": "legendary",
-    "reqLevel": 55,
-    "maxDurability": 575,
-    "value": 46475,
-    "mods": {
-      "speed": 54,
-      "success": 27,
-      "injuryResist": 24
-    },
-    "stats": {
-      "endurance": 27
-    },
-    "raidExclusive": true
   },
   {
     "id": "guildmade_blade",
@@ -3021,46 +1879,6 @@
     "setId": "cinderfang"
   },
   {
-    "id": "cinderfang_gauntlets_heroic",
-    "name": "Cinderfang Gauntlets (Heroic)",
-    "slot": "gloves",
-    "rarity": "epic",
-    "reqLevel": 30,
-    "maxDurability": 262,
-    "value": 3380,
-    "mods": {
-      "success": 11,
-      "injuryResist": 12
-    },
-    "stats": {
-      "strength": 7
-    },
-    "icon": "armor/Armor_15.png",
-    "setId": "cinderfang",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "cinderfang_gauntlets_legendary",
-    "name": "Cinderfang Gauntlets (Legendary)",
-    "slot": "gloves",
-    "rarity": "epic",
-    "reqLevel": 30,
-    "maxDurability": 326,
-    "value": 4290,
-    "mods": {
-      "success": 13,
-      "injuryResist": 14
-    },
-    "stats": {
-      "strength": 8
-    },
-    "icon": "armor/Armor_15.png",
-    "setId": "cinderfang",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
     "id": "wyrmwardens_cloak",
     "name": "Wyrmwarden's Cloak",
     "slot": "cloak",
@@ -3079,46 +1897,6 @@
     "setId": "cinderfang"
   },
   {
-    "id": "wyrmwardens_cloak_heroic",
-    "name": "Wyrmwarden's Cloak (Heroic)",
-    "slot": "cloak",
-    "rarity": "epic",
-    "reqLevel": 30,
-    "maxDurability": 250,
-    "value": 3250,
-    "mods": {
-      "success": 8,
-      "injuryResist": 19
-    },
-    "stats": {
-      "endurance": 8
-    },
-    "icon": "armor/Armor_60.png",
-    "setId": "cinderfang",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "wyrmwardens_cloak_legendary",
-    "name": "Wyrmwarden's Cloak (Legendary)",
-    "slot": "cloak",
-    "rarity": "epic",
-    "reqLevel": 30,
-    "maxDurability": 310,
-    "value": 4125,
-    "mods": {
-      "success": 10,
-      "injuryResist": 23
-    },
-    "stats": {
-      "endurance": 9
-    },
-    "icon": "armor/Armor_60.png",
-    "setId": "cinderfang",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
     "id": "scaleknit_boots",
     "name": "Scaleknit Boots",
     "slot": "boots",
@@ -3135,46 +1913,6 @@
     },
     "icon": "armor/Armor_70.png",
     "setId": "cinderfang"
-  },
-  {
-    "id": "scaleknit_boots_heroic",
-    "name": "Scaleknit Boots (Heroic)",
-    "slot": "boots",
-    "rarity": "epic",
-    "reqLevel": 30,
-    "maxDurability": 244,
-    "value": 3120,
-    "mods": {
-      "speed": 12,
-      "injuryResist": 10
-    },
-    "stats": {
-      "endurance": 6
-    },
-    "icon": "armor/Armor_70.png",
-    "setId": "cinderfang",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "scaleknit_boots_legendary",
-    "name": "Scaleknit Boots (Legendary)",
-    "slot": "boots",
-    "rarity": "epic",
-    "reqLevel": 30,
-    "maxDurability": 302,
-    "value": 3960,
-    "mods": {
-      "speed": 14,
-      "injuryResist": 12
-    },
-    "stats": {
-      "endurance": 6
-    },
-    "icon": "armor/Armor_70.png",
-    "setId": "cinderfang",
-    "raidExclusive": true,
-    "craftable": false
   },
   {
     "id": "brood_fang_dagger",
@@ -3196,48 +1934,6 @@
     "setId": "cinderfang"
   },
   {
-    "id": "brood_fang_dagger_heroic",
-    "name": "Brood Fang Dagger (Heroic)",
-    "slot": "weapon",
-    "rarity": "epic",
-    "reqLevel": 30,
-    "maxDurability": 219,
-    "value": 3900,
-    "mods": {
-      "success": 14,
-      "speed": 7
-    },
-    "stats": {
-      "strength": 8,
-      "luck": 3
-    },
-    "icon": "weapons/Weapon_33.png",
-    "setId": "cinderfang",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "brood_fang_dagger_legendary",
-    "name": "Brood Fang Dagger (Legendary)",
-    "slot": "weapon",
-    "rarity": "epic",
-    "reqLevel": 30,
-    "maxDurability": 271,
-    "value": 4950,
-    "mods": {
-      "success": 17,
-      "speed": 9
-    },
-    "stats": {
-      "strength": 9,
-      "luck": 4
-    },
-    "icon": "weapons/Weapon_33.png",
-    "setId": "cinderfang",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
     "id": "blackscale_helm",
     "name": "Blackscale Helm",
     "slot": "helmet",
@@ -3254,46 +1950,6 @@
     },
     "icon": "armor/Armor_41.png",
     "setId": "cinderfang"
-  },
-  {
-    "id": "blackscale_helm_heroic",
-    "name": "Blackscale Helm (Heroic)",
-    "slot": "helmet",
-    "rarity": "legendary",
-    "reqLevel": 30,
-    "maxDurability": 325,
-    "value": 11180,
-    "mods": {
-      "success": 19,
-      "injuryResist": 26
-    },
-    "stats": {
-      "endurance": 12
-    },
-    "icon": "armor/Armor_41.png",
-    "setId": "cinderfang",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "blackscale_helm_legendary",
-    "name": "Blackscale Helm (Legendary)",
-    "slot": "helmet",
-    "rarity": "legendary",
-    "reqLevel": 30,
-    "maxDurability": 403,
-    "value": 14190,
-    "mods": {
-      "success": 23,
-      "injuryResist": 32
-    },
-    "stats": {
-      "endurance": 13
-    },
-    "icon": "armor/Armor_41.png",
-    "setId": "cinderfang",
-    "raidExclusive": true,
-    "craftable": false
   },
   {
     "id": "broodmothers_crown",
@@ -3316,50 +1972,6 @@
     "setId": "cinderfang"
   },
   {
-    "id": "broodmothers_crown_heroic",
-    "name": "Brood Mother's Crown (Heroic)",
-    "slot": "amulet",
-    "rarity": "legendary",
-    "reqLevel": 30,
-    "maxDurability": 312,
-    "value": 11960,
-    "mods": {
-      "gold": 26,
-      "loot": 19,
-      "xp": 22
-    },
-    "stats": {
-      "luck": 9,
-      "wisdom": 7
-    },
-    "icon": "accessories/Accessory_18.png",
-    "setId": "cinderfang",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "broodmothers_crown_legendary",
-    "name": "Brood Mother's Crown (Legendary)",
-    "slot": "amulet",
-    "rarity": "legendary",
-    "reqLevel": 30,
-    "maxDurability": 388,
-    "value": 15180,
-    "mods": {
-      "gold": 32,
-      "loot": 23,
-      "xp": 26
-    },
-    "stats": {
-      "luck": 10,
-      "wisdom": 8
-    },
-    "icon": "accessories/Accessory_18.png",
-    "setId": "cinderfang",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
     "id": "sewn_maw_greataxe",
     "name": "Sewn Maw Greataxe",
     "slot": "weapon",
@@ -3378,46 +1990,6 @@
     "setId": "grimward"
   },
   {
-    "id": "sewn_maw_greataxe_heroic",
-    "name": "Sewn Maw Greataxe (Heroic)",
-    "slot": "weapon",
-    "rarity": "epic",
-    "reqLevel": 41,
-    "maxDurability": 325,
-    "value": 12350,
-    "mods": {
-      "success": 19,
-      "gold": 12
-    },
-    "stats": {
-      "strength": 17
-    },
-    "icon": "weapons/Weapon_45.png",
-    "setId": "grimward",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "sewn_maw_greataxe_legendary",
-    "name": "Sewn Maw Greataxe (Legendary)",
-    "slot": "weapon",
-    "rarity": "epic",
-    "reqLevel": 41,
-    "maxDurability": 403,
-    "value": 15675,
-    "mods": {
-      "success": 23,
-      "gold": 14
-    },
-    "stats": {
-      "strength": 20
-    },
-    "icon": "weapons/Weapon_45.png",
-    "setId": "grimward",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
     "id": "stitched_hide_vest",
     "name": "Stitched Hide Vest",
     "slot": "chest",
@@ -3434,46 +2006,6 @@
     },
     "icon": "armor/Armor_18.png",
     "setId": "grimward"
-  },
-  {
-    "id": "stitched_hide_vest_heroic",
-    "name": "Stitched Hide Vest (Heroic)",
-    "slot": "chest",
-    "rarity": "epic",
-    "reqLevel": 41,
-    "maxDurability": 350,
-    "value": 11960,
-    "mods": {
-      "injuryResist": 31,
-      "success": 10
-    },
-    "stats": {
-      "endurance": 14
-    },
-    "icon": "armor/Armor_18.png",
-    "setId": "grimward",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "stitched_hide_vest_legendary",
-    "name": "Stitched Hide Vest (Legendary)",
-    "slot": "chest",
-    "rarity": "epic",
-    "reqLevel": 41,
-    "maxDurability": 434,
-    "value": 15180,
-    "mods": {
-      "injuryResist": 38,
-      "success": 12
-    },
-    "stats": {
-      "endurance": 16
-    },
-    "icon": "armor/Armor_18.png",
-    "setId": "grimward",
-    "raidExclusive": true,
-    "craftable": false
   },
   {
     "id": "phylactery_shard_ring",
@@ -3495,48 +2027,6 @@
     "setId": "grimward"
   },
   {
-    "id": "phylactery_shard_ring_heroic",
-    "name": "Phylactery Shard Ring (Heroic)",
-    "slot": "ring",
-    "rarity": "epic",
-    "reqLevel": 41,
-    "maxDurability": 300,
-    "value": 13650,
-    "mods": {
-      "success": 17,
-      "loot": 14,
-      "xp": 17
-    },
-    "stats": {
-      "wisdom": 12
-    },
-    "icon": "accessories/Accessory_07.png",
-    "setId": "grimward",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "phylactery_shard_ring_legendary",
-    "name": "Phylactery Shard Ring (Legendary)",
-    "slot": "ring",
-    "rarity": "epic",
-    "reqLevel": 41,
-    "maxDurability": 372,
-    "value": 17325,
-    "mods": {
-      "success": 20,
-      "loot": 17,
-      "xp": 20
-    },
-    "stats": {
-      "wisdom": 13
-    },
-    "icon": "accessories/Accessory_07.png",
-    "setId": "grimward",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
     "id": "unbinding_gauntlets",
     "name": "Unbinding Gauntlets",
     "slot": "gloves",
@@ -3556,48 +2046,6 @@
     "setId": "grimward"
   },
   {
-    "id": "unbinding_gauntlets_heroic",
-    "name": "Unbinding Gauntlets (Heroic)",
-    "slot": "gloves",
-    "rarity": "epic",
-    "reqLevel": 41,
-    "maxDurability": 319,
-    "value": 12740,
-    "mods": {
-      "success": 14,
-      "speed": 10
-    },
-    "stats": {
-      "strength": 10,
-      "endurance": 7
-    },
-    "icon": "armor/Armor_16.png",
-    "setId": "grimward",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "unbinding_gauntlets_legendary",
-    "name": "Unbinding Gauntlets (Legendary)",
-    "slot": "gloves",
-    "rarity": "epic",
-    "reqLevel": 41,
-    "maxDurability": 395,
-    "value": 16170,
-    "mods": {
-      "success": 17,
-      "speed": 12
-    },
-    "stats": {
-      "strength": 12,
-      "endurance": 8
-    },
-    "icon": "armor/Armor_16.png",
-    "setId": "grimward",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
     "id": "lichbound_diadem",
     "name": "Lichbound Diadem",
     "slot": "helmet",
@@ -3615,48 +2063,6 @@
     },
     "icon": "armor/Armor_42.png",
     "setId": "grimward"
-  },
-  {
-    "id": "lichbound_diadem_heroic",
-    "name": "Lichbound Diadem (Heroic)",
-    "slot": "helmet",
-    "rarity": "legendary",
-    "reqLevel": 41,
-    "maxDurability": 388,
-    "value": 22750,
-    "mods": {
-      "success": 24,
-      "xp": 29,
-      "injuryResist": 24
-    },
-    "stats": {
-      "wisdom": 16
-    },
-    "icon": "armor/Armor_42.png",
-    "setId": "grimward",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "lichbound_diadem_legendary",
-    "name": "Lichbound Diadem (Legendary)",
-    "slot": "helmet",
-    "rarity": "legendary",
-    "reqLevel": 41,
-    "maxDurability": 480,
-    "value": 28875,
-    "mods": {
-      "success": 29,
-      "xp": 35,
-      "injuryResist": 29
-    },
-    "stats": {
-      "wisdom": 18
-    },
-    "icon": "armor/Armor_42.png",
-    "setId": "grimward",
-    "raidExclusive": true,
-    "craftable": false
   },
   {
     "id": "grimward_amulet",
@@ -3679,50 +2085,6 @@
     "setId": "grimward"
   },
   {
-    "id": "grimward_amulet_heroic",
-    "name": "Grimward Amulet (Heroic)",
-    "slot": "amulet",
-    "rarity": "legendary",
-    "reqLevel": 41,
-    "maxDurability": 375,
-    "value": 23660,
-    "mods": {
-      "gold": 31,
-      "loot": 22,
-      "success": 14
-    },
-    "stats": {
-      "luck": 12,
-      "wisdom": 9
-    },
-    "icon": "accessories/Accessory_19.png",
-    "setId": "grimward",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "grimward_amulet_legendary",
-    "name": "Grimward Amulet (Legendary)",
-    "slot": "amulet",
-    "rarity": "legendary",
-    "reqLevel": 41,
-    "maxDurability": 465,
-    "value": 30030,
-    "mods": {
-      "gold": 38,
-      "loot": 26,
-      "success": 17
-    },
-    "stats": {
-      "luck": 13,
-      "wisdom": 10
-    },
-    "icon": "accessories/Accessory_19.png",
-    "setId": "grimward",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
     "id": "woven_mind_circlet",
     "name": "Woven Mind Circlet",
     "slot": "helmet",
@@ -3740,48 +2102,6 @@
     },
     "icon": "armor/Armor_43.png",
     "setId": "loom"
-  },
-  {
-    "id": "woven_mind_circlet_heroic",
-    "name": "Woven Mind Circlet (Heroic)",
-    "slot": "helmet",
-    "rarity": "epic",
-    "reqLevel": 43,
-    "maxDurability": 362,
-    "value": 15600,
-    "mods": {
-      "success": 18,
-      "xp": 24,
-      "injuryResist": 17
-    },
-    "stats": {
-      "wisdom": 15
-    },
-    "icon": "armor/Armor_43.png",
-    "setId": "loom",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "woven_mind_circlet_legendary",
-    "name": "Woven Mind Circlet (Legendary)",
-    "slot": "helmet",
-    "rarity": "epic",
-    "reqLevel": 43,
-    "maxDurability": 450,
-    "value": 19800,
-    "mods": {
-      "success": 22,
-      "xp": 29,
-      "injuryResist": 20
-    },
-    "stats": {
-      "wisdom": 17
-    },
-    "icon": "armor/Armor_43.png",
-    "setId": "loom",
-    "raidExclusive": true,
-    "craftable": false
   },
   {
     "id": "unraveling_cloak",
@@ -3803,48 +2123,6 @@
     "setId": "loom"
   },
   {
-    "id": "unraveling_cloak_heroic",
-    "name": "Unraveling Cloak (Heroic)",
-    "slot": "cloak",
-    "rarity": "epic",
-    "reqLevel": 43,
-    "maxDurability": 350,
-    "value": 15340,
-    "mods": {
-      "speed": 17,
-      "success": 12
-    },
-    "stats": {
-      "luck": 8,
-      "endurance": 7
-    },
-    "icon": "armor/Armor_62.png",
-    "setId": "loom",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "unraveling_cloak_legendary",
-    "name": "Unraveling Cloak (Legendary)",
-    "slot": "cloak",
-    "rarity": "epic",
-    "reqLevel": 43,
-    "maxDurability": 434,
-    "value": 19470,
-    "mods": {
-      "speed": 20,
-      "success": 14
-    },
-    "stats": {
-      "luck": 9,
-      "endurance": 8
-    },
-    "icon": "armor/Armor_62.png",
-    "setId": "loom",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
     "id": "threadcutter",
     "name": "Threadcutter",
     "slot": "weapon",
@@ -3863,50 +2141,6 @@
     },
     "icon": "weapons/Weapon_50.png",
     "setId": "loom"
-  },
-  {
-    "id": "threadcutter_heroic",
-    "name": "Threadcutter (Heroic)",
-    "slot": "weapon",
-    "rarity": "legendary",
-    "reqLevel": 43,
-    "maxDurability": 412,
-    "value": 25350,
-    "mods": {
-      "success": 29,
-      "gold": 19,
-      "loot": 12
-    },
-    "stats": {
-      "strength": 14,
-      "wisdom": 9
-    },
-    "icon": "weapons/Weapon_50.png",
-    "setId": "loom",
-    "raidExclusive": true,
-    "craftable": false
-  },
-  {
-    "id": "threadcutter_legendary",
-    "name": "Threadcutter (Legendary)",
-    "slot": "weapon",
-    "rarity": "legendary",
-    "reqLevel": 43,
-    "maxDurability": 512,
-    "value": 32175,
-    "mods": {
-      "success": 35,
-      "gold": 23,
-      "loot": 14
-    },
-    "stats": {
-      "strength": 16,
-      "wisdom": 10
-    },
-    "icon": "weapons/Weapon_50.png",
-    "setId": "loom",
-    "raidExclusive": true,
-    "craftable": false
   },
   {
     "id": "tollbreakers_gloves",

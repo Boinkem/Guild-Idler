@@ -2,6 +2,7 @@ import { DIFFICULTIES, DIFFICULTY_ORDER, DifficultyConfig } from './quests';
 import { Difficulty } from '../types';
 import { HOUR } from '../util';
 import { Tuning } from './tuning';
+import { questGoldBaseline, questXpBaseline } from './progression';
 
 /**
  * Replaces the old flat burstTaper(topLevel) curve in QuestManager with a
@@ -27,11 +28,6 @@ import { Tuning } from './tuning';
 const GOLD_FAILURE_MULTIPLIER = Tuning.get('balance.goldFailureMultiplier');
 const XP_FAILURE_MULTIPLIER = Tuning.get('balance.xpFailureMultiplier');
 
-/** Non-burst quests roll XP from this fixed base range before the tier's
- *  own xpMultiplier applies -- see QuestManager.generateOffer. */
-const BASE_XP_MIN = Tuning.get('balance.baseXpMin');
-const BASE_XP_MAX = Tuning.get('balance.baseXpMax');
-
 /**
  * Exported (previously module-private) so the devtool's Sandbox sim
  * (tools/devtool/sim/runSim.ts) can reuse this exact expected-value
@@ -42,23 +38,40 @@ const BASE_XP_MAX = Tuning.get('balance.baseXpMax');
 export function expectedRatePerHour(cfg: DifficultyConfig, kind: 'gold' | 'xp'): number {
   const avgDurationHours = (cfg.minDuration + cfg.maxDuration) / 2 / HOUR;
   const successRate = cfg.baseSuccess / 100;
+  // Standard reward no longer reads a flat minGold/maxGold range (patch
+  // 0214) -- estimated here off the same level-scaled baseline curve
+  // QuestManager.generateOffer actually rolls against, evaluated at this
+  // tier's referenceLevel as a representative "typical" level. The old
+  // xpMin/xpMax base range (BASE_XP_MIN/MAX) is no longer part of the
+  // standard-offer xp roll either, only questXpBaseline is.
   const avgReward = kind === 'gold'
-    ? (cfg.minGold + cfg.maxGold) / 2
-    : ((BASE_XP_MIN + BASE_XP_MAX) / 2) * cfg.xpMultiplier;
+    ? questGoldBaseline(cfg.referenceLevel) * cfg.rewardMultiplier
+    : questXpBaseline(cfg.referenceLevel) * cfg.rewardMultiplier;
   const failureMultiplier = kind === 'gold' ? GOLD_FAILURE_MULTIPLIER : XP_FAILURE_MULTIPLIER;
   const expectedReward = successRate * avgReward + (1 - successRate) * failureMultiplier * avgReward;
   return expectedReward / avgDurationHours;
 }
 
-/** Highest difficulty tier currently available at a given level -- same
- *  eligibility rule QuestManager.generateContractsForHero already uses
- *  (level + 2 >= reqLevel, legendary additionally gated by its unlock).
- *  Called with a specific hero's own level, not the guild's top hero. */
+/**
+ * Highest difficulty tier currently "available" at a given level -- used
+ * only by the burst/medium fast-quest per-hour cap system
+ * (fastQuestCapsPerHour/fastQuestFloorPerHour below), which is
+ * deliberately untouched by the reqLevel-roll rework (see
+ * guild-idler-status.md's patch 0214 writeup). Real quest offers no
+ * longer have a difficulty-based level gate at all (every difficulty's
+ * reqLevel now rolls near hero.level regardless of tier) -- this keeps
+ * reading each tier's `referenceLevel` (the old reqLevel's numeric value,
+ * renamed and repurposed, see DifficultyConfig's own comment) purely as
+ * a "typical level for this tier" heuristic so burst/medium's cap
+ * behaves exactly as it did before, rather than suddenly referencing
+ * Epic/Legendary per-hour rates for a level-1 hero now that nothing
+ * actually blocks those tiers from generating early. Called with a
+ * specific hero's own level, not the guild's top hero. */
 export function bestUnlockedTier(topLevel: number, legendaryUnlocked: boolean): Difficulty {
   let best: Difficulty = 'easy';
   for (const id of DIFFICULTY_ORDER) {
     if (id === 'legendary' && !legendaryUnlocked) continue;
-    if (topLevel + 2 >= DIFFICULTIES[id].reqLevel) best = id;
+    if (topLevel + 2 >= DIFFICULTIES[id].referenceLevel) best = id;
   }
   return best;
 }

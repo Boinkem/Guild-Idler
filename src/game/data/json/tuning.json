@@ -195,11 +195,11 @@
     "id": "guild_facility.barracks.successPerLevel",
     "label": "Barracks: success % per level",
     "category": "guild_facilities",
-    "value": 4,
-    "default": 4,
+    "value": 3,
+    "default": 3,
     "min": 0,
     "max": 20,
-    "description": "Flat success percentage points granted per level, guild-wide."
+    "description": "Flat success percentage points granted per level, guild-wide. -- squished from 4 as part of patch 0214's facility/renown rebalance (see guild-idler-status.md); first-pass, verify against the Balance Sandbox."
   },
   {
     "id": "guild_facility.treasury.baseCost",
@@ -233,11 +233,11 @@
     "id": "guild_facility.treasury.goldPerLevel",
     "label": "Treasury: gold % per level",
     "category": "guild_facilities",
-    "value": 12,
-    "default": 12,
+    "value": 6,
+    "default": 6,
     "min": 0,
     "max": 20,
-    "description": "Flat gold percentage granted per level, guild-wide. storagePerLevel (gold storage) is a separate, still-hardcoded field -- not included in this pass."
+    "description": "Flat gold percentage granted per level, guild-wide. storagePerLevel (gold storage) is a separate, still-hardcoded field -- not included in this pass. -- squished from 12 as part of patch 0214's facility/renown rebalance (see guild-idler-status.md); first-pass, verify against the Balance Sandbox."
   },
   {
     "id": "guild_facility.workshop.baseCost",
@@ -309,11 +309,11 @@
     "id": "guild_facility.library.xpPerLevel",
     "label": "Library: xp % per level",
     "category": "guild_facilities",
-    "value": 12,
-    "default": 12,
+    "value": 6,
+    "default": 6,
     "min": 0,
     "max": 40,
-    "description": "Flat xp percentage granted per level, guild-wide."
+    "description": "Flat xp percentage granted per level, guild-wide. -- squished from 12 as part of patch 0214's facility/renown rebalance (see guild-idler-status.md); first-pass, verify against the Balance Sandbox."
   },
   {
     "id": "guild_facility.tavern.baseCost",
@@ -729,16 +729,6 @@
     "default": 5000,
     "min": 0,
     "description": "Additional spawn-interval reduction per tool level, on top of the idle-hero reduction."
-  },
-  {
-    "id": "quest.overLevelPenaltyPercent",
-    "label": "Quests: over-level attempt penalty (% per level)",
-    "category": "quests",
-    "value": 10,
-    "default": 10,
-    "min": 0,
-    "max": 50,
-    "description": "Success-chance penalty applied per level a hero is BELOW a quest's own reqLevel, when they attempt it anyway. Sending on a quest above your level is allowed (only auto-queue/pickBestQuest still restricts itself to quests a hero already qualifies for) -- this is what makes doing so a real trade rather than a free pass. 10 means a hero 3 levels under a quest's reqLevel loses 30 percentage points of success attempting it, on top of everything else. Existing MIN_SUCCESS/MAX_SUCCESS clamps (5-95) still apply, so it's always technically attemptable, never literally impossible or free."
   },
   {
     "id": "pets.egg.common.hatchXpThreshold",
@@ -1375,9 +1365,9 @@
     "id": "renown_perk.legacy_of_wealth.goldPerLevel",
     "label": "Legacy of Wealth: gold per level",
     "category": "renown_perks",
-    "value": 8,
-    "default": 8,
-    "description": "gold bonus granted per Legacy of Wealth level.",
+    "value": 4,
+    "default": 4,
+    "description": "gold bonus granted per Legacy of Wealth level. -- squished from 8 as part of patch 0214's facility/renown rebalance (see guild-idler-status.md); first-pass, verify against the Balance Sandbox.",
     "min": 0
   },
   {
@@ -1627,9 +1617,9 @@
     "id": "renown_perk.scholars_legacy.xpPerLevel",
     "label": "Scholar's Legacy: xp per level",
     "category": "renown_perks",
-    "value": 10,
-    "default": 10,
-    "description": "xp bonus granted per Scholar's Legacy level.",
+    "value": 5,
+    "default": 5,
+    "description": "xp bonus granted per Scholar's Legacy level. -- squished from 10 as part of patch 0214's facility/renown rebalance (see guild-idler-status.md); first-pass, verify against the Balance Sandbox.",
     "min": 0
   },
   {
@@ -3482,26 +3472,6 @@
     "description": "Fraction of the rolled xp a failed quest still pays out. Matches QuestManager.resolve's actual formula exactly."
   },
   {
-    "id": "balance.baseXpMin",
-    "label": "Balance: base xp min",
-    "category": "balance",
-    "value": 18,
-    "default": 18,
-    "min": 0,
-    "max": 200,
-    "description": "Lower bound of the fixed xp range non-burst quests roll from, before the tier's own xpMultiplier applies."
-  },
-  {
-    "id": "balance.baseXpMax",
-    "label": "Balance: base xp max",
-    "category": "balance",
-    "value": 30,
-    "default": 30,
-    "min": 0,
-    "max": 200,
-    "description": "Upper bound of the fixed xp range non-burst quests roll from, before the tier's own xpMultiplier applies."
-  },
-  {
     "id": "balance.minLevelForCap",
     "label": "Balance: min level for burst/medium cap",
     "category": "balance",
@@ -3740,5 +3710,485 @@
     "min": 0.1,
     "max": 15,
     "description": "XP multiplier at breakpoint 7's level."
+  },
+  {
+    "id": "economy.goldSoftCapThreshold",
+    "label": "Gold soft cap: linear threshold",
+    "category": "economy",
+    "value": 30,
+    "default": 30,
+    "min": 0,
+    "max": 200,
+    "description": "Raw invested mods.gold below this counts fully 1:1, same shape as quest.investmentLinearThreshold. Above it, curveInvestment-style diminishing returns apply -- see economy.goldSoftCapDecay."
+  },
+  {
+    "id": "economy.goldSoftCapDecay",
+    "label": "Gold soft cap: decay/capExtra",
+    "category": "economy",
+    "value": 590,
+    "default": 590,
+    "min": 1,
+    "max": 5000,
+    "description": "Asymptotic extra gold% invested sources can contribute beyond the linear threshold, approached but never reached. capExtra == decay (matches quest.investmentDiminishingCapExtra/Decay convention) so slope is exactly 1 at the threshold. Calibrated so a fully min-maxed level-55 hero (612 raw pre-cap) lands ~5x gold instead of ~7.1x uncapped."
+  },
+  {
+    "id": "economy.xpSoftCapThreshold",
+    "label": "XP soft cap: linear threshold",
+    "category": "economy",
+    "value": 25,
+    "default": 25,
+    "min": 0,
+    "max": 200,
+    "description": "Same shape as economy.goldSoftCapThreshold, applied to mods.xp instead."
+  },
+  {
+    "id": "economy.xpSoftCapDecay",
+    "label": "XP soft cap: decay/capExtra",
+    "category": "economy",
+    "value": 196,
+    "default": 196,
+    "min": 1,
+    "max": 5000,
+    "description": "Same shape as economy.goldSoftCapDecay. Calibrated so a fully min-maxed level-55 hero (461 raw pre-cap) lands ~3x xp instead of ~5.6x uncapped."
+  },
+  {
+    "id": "economy.questGoldBreakLevel1",
+    "label": "Quest gold curve: breakpoint 1 level",
+    "category": "economy",
+    "value": 1,
+    "default": 1,
+    "min": 1,
+    "max": 55,
+    "description": "First breakpoint level for the quest gold baseline curve."
+  },
+  {
+    "id": "economy.questGoldBreakValue1",
+    "label": "Quest gold curve: breakpoint 1 value",
+    "category": "economy",
+    "value": 15,
+    "default": 15,
+    "min": 0,
+    "max": 1000,
+    "description": "Baseline gold at breakpoint 1's level."
+  },
+  {
+    "id": "economy.questGoldBreakLevel2",
+    "label": "Quest gold curve: breakpoint 2 level",
+    "category": "economy",
+    "value": 10,
+    "default": 10,
+    "min": 1,
+    "max": 55,
+    "description": "Second breakpoint level."
+  },
+  {
+    "id": "economy.questGoldBreakValue2",
+    "label": "Quest gold curve: breakpoint 2 value",
+    "category": "economy",
+    "value": 32,
+    "default": 32,
+    "min": 0,
+    "max": 1000,
+    "description": "Baseline gold at breakpoint 2's level."
+  },
+  {
+    "id": "economy.questGoldBreakLevel3",
+    "label": "Quest gold curve: breakpoint 3 level",
+    "category": "economy",
+    "value": 20,
+    "default": 20,
+    "min": 1,
+    "max": 55,
+    "description": "Third breakpoint level."
+  },
+  {
+    "id": "economy.questGoldBreakValue3",
+    "label": "Quest gold curve: breakpoint 3 value",
+    "category": "economy",
+    "value": 65,
+    "default": 65,
+    "min": 0,
+    "max": 1000,
+    "description": "Baseline gold at breakpoint 3's level."
+  },
+  {
+    "id": "economy.questGoldBreakLevel4",
+    "label": "Quest gold curve: breakpoint 4 level",
+    "category": "economy",
+    "value": 30,
+    "default": 30,
+    "min": 1,
+    "max": 55,
+    "description": "Fourth breakpoint level."
+  },
+  {
+    "id": "economy.questGoldBreakValue4",
+    "label": "Quest gold curve: breakpoint 4 value",
+    "category": "economy",
+    "value": 105,
+    "default": 105,
+    "min": 0,
+    "max": 1000,
+    "description": "Baseline gold at breakpoint 4's level."
+  },
+  {
+    "id": "economy.questGoldBreakLevel5",
+    "label": "Quest gold curve: breakpoint 5 level",
+    "category": "economy",
+    "value": 40,
+    "default": 40,
+    "min": 1,
+    "max": 55,
+    "description": "Fifth breakpoint level."
+  },
+  {
+    "id": "economy.questGoldBreakValue5",
+    "label": "Quest gold curve: breakpoint 5 value",
+    "category": "economy",
+    "value": 155,
+    "default": 155,
+    "min": 0,
+    "max": 1000,
+    "description": "Baseline gold at breakpoint 5's level."
+  },
+  {
+    "id": "economy.questGoldBreakLevel6",
+    "label": "Quest gold curve: breakpoint 6 level",
+    "category": "economy",
+    "value": 55,
+    "default": 55,
+    "min": 1,
+    "max": 55,
+    "description": "Sixth (top) breakpoint level -- holds flat above this, matching XP_BREAKPOINTS' own convention."
+  },
+  {
+    "id": "economy.questGoldBreakValue6",
+    "label": "Quest gold curve: breakpoint 6 value",
+    "category": "economy",
+    "value": 230,
+    "default": 230,
+    "min": 0,
+    "max": 1000,
+    "description": "Baseline gold at breakpoint 6's level."
+  },
+  {
+    "id": "economy.questXpBreakLevel1",
+    "label": "Quest xp curve: breakpoint 1 level",
+    "category": "economy",
+    "value": 1,
+    "default": 1,
+    "min": 1,
+    "max": 55,
+    "description": "First breakpoint level for the quest xp baseline curve."
+  },
+  {
+    "id": "economy.questXpBreakValue1",
+    "label": "Quest xp curve: breakpoint 1 value",
+    "category": "economy",
+    "value": 10,
+    "default": 10,
+    "min": 0,
+    "max": 1000,
+    "description": "Baseline xp at breakpoint 1's level."
+  },
+  {
+    "id": "economy.questXpBreakLevel2",
+    "label": "Quest xp curve: breakpoint 2 level",
+    "category": "economy",
+    "value": 10,
+    "default": 10,
+    "min": 1,
+    "max": 55,
+    "description": "Second breakpoint level."
+  },
+  {
+    "id": "economy.questXpBreakValue2",
+    "label": "Quest xp curve: breakpoint 2 value",
+    "category": "economy",
+    "value": 26,
+    "default": 26,
+    "min": 0,
+    "max": 1000,
+    "description": "Baseline xp at breakpoint 2's level."
+  },
+  {
+    "id": "economy.questXpBreakLevel3",
+    "label": "Quest xp curve: breakpoint 3 level",
+    "category": "economy",
+    "value": 20,
+    "default": 20,
+    "min": 1,
+    "max": 55,
+    "description": "Third breakpoint level."
+  },
+  {
+    "id": "economy.questXpBreakValue3",
+    "label": "Quest xp curve: breakpoint 3 value",
+    "category": "economy",
+    "value": 55,
+    "default": 55,
+    "min": 0,
+    "max": 1000,
+    "description": "Baseline xp at breakpoint 3's level."
+  },
+  {
+    "id": "economy.questXpBreakLevel4",
+    "label": "Quest xp curve: breakpoint 4 level",
+    "category": "economy",
+    "value": 30,
+    "default": 30,
+    "min": 1,
+    "max": 55,
+    "description": "Fourth breakpoint level."
+  },
+  {
+    "id": "economy.questXpBreakValue4",
+    "label": "Quest xp curve: breakpoint 4 value",
+    "category": "economy",
+    "value": 90,
+    "default": 90,
+    "min": 0,
+    "max": 1000,
+    "description": "Baseline xp at breakpoint 4's level."
+  },
+  {
+    "id": "economy.questXpBreakLevel5",
+    "label": "Quest xp curve: breakpoint 5 level",
+    "category": "economy",
+    "value": 40,
+    "default": 40,
+    "min": 1,
+    "max": 55,
+    "description": "Fifth breakpoint level."
+  },
+  {
+    "id": "economy.questXpBreakValue5",
+    "label": "Quest xp curve: breakpoint 5 value",
+    "category": "economy",
+    "value": 130,
+    "default": 130,
+    "min": 0,
+    "max": 1000,
+    "description": "Baseline xp at breakpoint 5's level."
+  },
+  {
+    "id": "economy.questXpBreakLevel6",
+    "label": "Quest xp curve: breakpoint 6 level",
+    "category": "economy",
+    "value": 55,
+    "default": 55,
+    "min": 1,
+    "max": 55,
+    "description": "Sixth (top) breakpoint level -- holds flat above this."
+  },
+  {
+    "id": "economy.questXpBreakValue6",
+    "label": "Quest xp curve: breakpoint 6 value",
+    "category": "economy",
+    "value": 190,
+    "default": 190,
+    "min": 0,
+    "max": 1000,
+    "description": "Baseline xp at breakpoint 6's level."
+  },
+  {
+    "id": "quest_reqlevel.offsetWeightM4",
+    "label": "reqLevel roll: weight at hero.level-4",
+    "category": "quest_reqlevel",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "max": 100,
+    "description": "Weight for the -4 offset in the reqLevel roll table."
+  },
+  {
+    "id": "quest_reqlevel.offsetWeightM3",
+    "label": "reqLevel roll: weight at hero.level-3",
+    "category": "quest_reqlevel",
+    "value": 6,
+    "default": 6,
+    "min": 0,
+    "max": 100,
+    "description": "Weight for the -3 offset."
+  },
+  {
+    "id": "quest_reqlevel.offsetWeightM2",
+    "label": "reqLevel roll: weight at hero.level-2",
+    "category": "quest_reqlevel",
+    "value": 10,
+    "default": 10,
+    "min": 0,
+    "max": 100,
+    "description": "Weight for the -2 offset."
+  },
+  {
+    "id": "quest_reqlevel.offsetWeightM1",
+    "label": "reqLevel roll: weight at hero.level-1",
+    "category": "quest_reqlevel",
+    "value": 15,
+    "default": 15,
+    "min": 0,
+    "max": 100,
+    "description": "Weight for the -1 offset."
+  },
+  {
+    "id": "quest_reqlevel.offsetWeightZero",
+    "label": "reqLevel roll: weight at hero.level",
+    "category": "quest_reqlevel",
+    "value": 20,
+    "default": 20,
+    "min": 0,
+    "max": 100,
+    "description": "Weight for the 0 (exactly at-level) offset -- the most common roll."
+  },
+  {
+    "id": "quest_reqlevel.offsetWeightP1",
+    "label": "reqLevel roll: weight at hero.level+1",
+    "category": "quest_reqlevel",
+    "value": 15,
+    "default": 15,
+    "min": 0,
+    "max": 100,
+    "description": "Weight for the +1 offset."
+  },
+  {
+    "id": "quest_reqlevel.offsetWeightP2",
+    "label": "reqLevel roll: weight at hero.level+2",
+    "category": "quest_reqlevel",
+    "value": 10,
+    "default": 10,
+    "min": 0,
+    "max": 100,
+    "description": "Weight for the +2 offset."
+  },
+  {
+    "id": "quest_reqlevel.offsetWeightP3",
+    "label": "reqLevel roll: weight at hero.level+3",
+    "category": "quest_reqlevel",
+    "value": 6,
+    "default": 6,
+    "min": 0,
+    "max": 100,
+    "description": "Weight for the +3 offset."
+  },
+  {
+    "id": "quest_reqlevel.offsetWeightP4",
+    "label": "reqLevel roll: weight at hero.level+4",
+    "category": "quest_reqlevel",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "max": 100,
+    "description": "Weight for the +4 offset."
+  },
+  {
+    "id": "quest_reqlevel.levelGapSuccessCoefficient",
+    "label": "reqLevel roll: success per level of gap",
+    "category": "quest_reqlevel",
+    "value": 2,
+    "default": 2,
+    "min": 0,
+    "max": 20,
+    "description": "Replaces the old outlevelBonus/overLevelPenalty mechanism now that reqLevel always rolls within a small window of hero.level (see guild-idler-status.md patch 0214). Success = baseSuccess + curveInvestment(invested) + (hero.level - reqLevel) * this. At the +-4 roll window's edges that's a +-8 point swing, not the old unbounded climb."
+  },
+  {
+    "id": "quest_reqlevel.legendaryLevelFloor",
+    "label": "Legendary: minimum hero level",
+    "category": "quest_reqlevel",
+    "value": 25,
+    "default": 25,
+    "min": 1,
+    "max": 55,
+    "description": "Legendary is only offered if hero.level >= this AND the Enchanted Seal is owned -- both required now that reqLevel no longer implies difficulty tier."
+  },
+  {
+    "id": "gear_relevance.floor",
+    "label": "Gear relevance: minimum multiplier",
+    "category": "gear_relevance",
+    "value": 0.25,
+    "default": 0.25,
+    "min": 0,
+    "max": 1,
+    "description": "An equipped item's mods/stats contribution is scaled by clamp(item.reqLevel / hero.level, floor, 1) -- outleveled gear never drops below this floor. See guild-idler-status.md patch 0214."
+  },
+  {
+    "id": "loot_procedural.budgetRarityMultiplier",
+    "label": "Procedural loot: rarity budget multiplier",
+    "category": "loot_procedural",
+    "value": 3,
+    "default": 3,
+    "min": 0,
+    "max": 20,
+    "description": "statBudget = GEAR_SCORE_BY_RARITY[rarity] * this * levelFactor(itemLevel). 3 is a first-pass calibration against the average real power-per-GSR-point of the existing hand-authored item set (2.24-4.25 across rarities) -- verify against the Balance Sandbox before treating as final."
+  },
+  {
+    "id": "loot_procedural.raidHeroicBudgetMultiplier",
+    "label": "Procedural loot: Heroic raid budget multiplier",
+    "category": "loot_procedural",
+    "value": 1.5,
+    "default": 1.5,
+    "min": 1,
+    "max": 10,
+    "description": "Applied on top of the normal rarity/level budget for items generated from a Heroic raid encounter."
+  },
+  {
+    "id": "loot_procedural.raidLegendaryBudgetMultiplier",
+    "label": "Procedural loot: Legendary raid budget multiplier",
+    "category": "loot_procedural",
+    "value": 2.2,
+    "default": 2.2,
+    "min": 1,
+    "max": 10,
+    "description": "Applied on top of the normal rarity/level budget for items generated from a Legendary raid encounter."
+  },
+  {
+    "id": "loot_procedural.hardQuestBudgetMultiplier",
+    "label": "Procedural loot: Hard-quest budget multiplier",
+    "category": "loot_procedural",
+    "value": 1.15,
+    "default": 1.15,
+    "min": 1,
+    "max": 5,
+    "description": "The 'teeny bonus' for Hard-tier quest drops specifically -- small compared to the raid multipliers above."
+  },
+  {
+    "id": "loot_procedural.charmedChance",
+    "label": "Procedural loot: Charmed roll chance (%)",
+    "category": "loot_procedural",
+    "value": 1,
+    "default": 1,
+    "min": 0,
+    "max": 100,
+    "description": "Chance a procedurally-generated item rolls the rare 'Charmed' bonus tier. Checked before Fortunate; mutually exclusive."
+  },
+  {
+    "id": "loot_procedural.charmedBudgetBonus",
+    "label": "Procedural loot: Charmed budget bonus (%)",
+    "category": "loot_procedural",
+    "value": 25,
+    "default": 25,
+    "min": 0,
+    "max": 200,
+    "description": "Extra statBudget% on a Charmed roll."
+  },
+  {
+    "id": "loot_procedural.fortunateChance",
+    "label": "Procedural loot: Fortunate roll chance (%)",
+    "category": "loot_procedural",
+    "value": 9,
+    "default": 9,
+    "min": 0,
+    "max": 100,
+    "description": "Chance a procedurally-generated item rolls the common 'Fortunate' bonus tier (only checked if Charmed didn't hit)."
+  },
+  {
+    "id": "loot_procedural.fortunateBudgetBonus",
+    "label": "Procedural loot: Fortunate budget bonus (%)",
+    "category": "loot_procedural",
+    "value": 10,
+    "default": 10,
+    "min": 0,
+    "max": 200,
+    "description": "Extra statBudget% on a Fortunate roll."
   }
 ]
