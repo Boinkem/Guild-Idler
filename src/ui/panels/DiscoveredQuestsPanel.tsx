@@ -1,14 +1,37 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useEngine, useNow } from '../useEngine';
 import {
   HeroTab, ChainQuestBanner, chainBannerSrc, Offer,
 } from './QuestPanel';
 import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
-import { DIFFICULTIES } from '../../game/data/quests';
-import { Hero } from '../../game/types';
+import { GuildManager } from '../../game/managers/GuildManager';
+import { CHAIN_REPLAY_TIERS, CHAIN_REPLAY_DIFFICULTIES, chainReplayTierForChain } from '../../game/data/chainReplay';
+import { scaleChainExclusiveItem } from '../../game/data/proceduralLoot';
+import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
+import { DIFFICULTIES, ChainDef } from '../../game/data/quests';
+import { Hero, ChainReplayDifficulty, ChainReplayTierDef } from '../../game/types';
+import { isTabUnread } from '../../game/attention';
 import { RarityPill } from '../RarityPill';
 import { EggIcon } from '../EggIcon';
-import { formatDuration, formatGold } from '../../game/util';
+import { formatDuration, formatGold, describeMods, describeStats } from '../../game/util';
+import { Tuning } from '../../game/data/tuning';
+
+const REPLAY_DIFFICULTY_ORDER: ChainReplayDifficulty[] = ['normal', 'heroic', 'legendary'];
+const REPLAY_DIFFICULTY_LABEL: Record<ChainReplayDifficulty, string> = { normal: 'N', heroic: 'H', legendary: 'L' };
+const REPLAY_DIFFICULTY_NAME: Record<ChainReplayDifficulty, string> = { normal: 'Normal', heroic: 'Heroic', legendary: 'Legendary' };
+const REPLAY_DIFFICULTY_COLOR: Record<ChainReplayDifficulty, string> = {
+  normal: 'var(--parchment)', heroic: 'var(--brass)', legendary: 'var(--violet)',
+};
+/** Same graceful icon-with-text-fallback shape RAID_DIFFICULTY_ICON already
+ *  uses (see RaidsPanel's own DifficultyCircle) -- dedicated icon assets
+ *  for these three are still to come; until they land in
+ *  public/chain-replay-icons/, every circle just shows its N/H/L letter,
+ *  same as a raid difficulty circle would before its own icon loaded. */
+const REPLAY_DIFFICULTY_ICON: Record<ChainReplayDifficulty, string> = {
+  normal: './chain-replay-icons/normal.png',
+  heroic: './chain-replay-icons/heroic.png',
+  legendary: './chain-replay-icons/legendary.png',
+};
 
 /**
  * Quest chains, split out of the Quest Board tab into its own destination
@@ -41,9 +64,27 @@ export function DiscoveredQuestsPanel() {
   const now = useNow();
   const state = engine.state;
 
+  const [subTab, setSubTab] = useState<'board' | 'memories'>('board');
+
+  // Deep-link support for a notification's "Go to" button targeting a
+  // specific chains sub-tab -- same consume-once shape every other
+  // sub-tabbed panel uses (see attention.ts's TAB_SUBTABS -- 'chains' is
+  // the 7th panel to join that list).
+  useEffect(() => {
+    const requested = engine.consumeRequestedSubTab();
+    if (requested === 'board' || requested === 'memories') setSubTab(requested);
+  }, [engine, engine.requestedSubTab]);
+
+  // Acknowledges whichever sub-tab is currently open -- on mount (the
+  // default Board) and again on every switch.
+  useEffect(() => {
+    engine.acknowledgeTab('chains', subTab);
+  }, [engine, subTab]);
+
   const [selectedHeroId, setSelectedHeroId] = useState<string | null>(state.heroes[0]?.id ?? null);
   const selectedHero = state.heroes.find((h) => h.id === selectedHeroId) ?? state.heroes[0];
   const [openOfferId, setOpenOfferId] = useState<string | null>(null);
+  const [openReplayChainId, setOpenReplayChainId] = useState<string | null>(null);
 
   // Same per-hero level filter QuestPanel's old chainOffers used -- a
   // chain's discovery is guild-wide (generateChainBoard gates on the
@@ -79,46 +120,74 @@ export function DiscoveredQuestsPanel() {
   return (
     <>
       <h2>Story Quests</h2>
-      <p className="subtitle">
-        Story quest chains your heroes have uncovered on the board. Pick a hero below to see which
-        chains are open to them right now.
-      </p>
 
-      <div className="section-heading">Heroes</div>
-      <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
-        {state.heroes.map((h) => (
-          <HeroTab key={h.id} hero={h} selected={h.id === selectedHero.id} onSelect={() => setSelectedHeroId(h.id)} />
-        ))}
+      <div className="row" style={{ gap: 8, marginBottom: 14 }}>
+        <button
+          className={`btn-subtab ${subTab === 'board' ? 'on' : ''} ${isTabUnread(state, 'chains', 'board') ? 'subtab-unread' : ''}`}
+          onClick={() => setSubTab('board')}
+        >
+          Board
+        </button>
+        <button
+          className={`btn-subtab ${subTab === 'memories' ? 'on' : ''} ${isTabUnread(state, 'chains', 'memories') ? 'subtab-unread' : ''}`}
+          onClick={() => setSubTab('memories')}
+        >
+          Replay Memories
+        </button>
       </div>
 
-      {selectedHero.status === 'questing' ? (
-        <p className="small muted">{selectedHero.name} is already out -- see the Quests tab's "On the road" list.</p>
-      ) : chainOffers.length === 0 ? (
-        <p className="small muted">
-          No quest chains open to {selectedHero.name} yet. Chains appear here once discovered on the
-          board and this hero meets their level requirement.
-        </p>
-      ) : (
-        <div className="raid-list">
-          {chainOffers.map((offer) => (
-            <ChainRow
-              key={offer.id}
-              offer={offer}
+      {subTab === 'board' ? (
+        <>
+          <p className="subtitle">
+            Story quest chains your heroes have uncovered on the board. Pick a hero below to see which
+            chains are open to them right now.
+          </p>
+
+          <div className="section-heading">Heroes</div>
+          <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
+            {state.heroes.map((h) => (
+              <HeroTab key={h.id} hero={h} selected={h.id === selectedHero.id} onSelect={() => setSelectedHeroId(h.id)} />
+            ))}
+          </div>
+
+          {selectedHero.status === 'questing' ? (
+            <p className="small muted">{selectedHero.name} is already out -- see the Quests tab's "On the road" list.</p>
+          ) : chainOffers.length === 0 ? (
+            <p className="small muted">
+              No quest chains open to {selectedHero.name} yet. Chains appear here once discovered on the
+              board and this hero meets their level requirement.
+            </p>
+          ) : (
+            <div className="raid-list">
+              {chainOffers.map((offer) => (
+                <ChainRow
+                  key={offer.id}
+                  offer={offer}
+                  hero={selectedHero}
+                  now={now}
+                  onOpen={() => setOpenOfferId(offer.id)}
+                />
+              ))}
+            </div>
+          )}
+
+          {openOffer && (
+            <ChainDetailModal
+              offer={openOffer}
               hero={selectedHero}
               now={now}
-              onOpen={() => setOpenOfferId(offer.id)}
+              onClose={() => setOpenOfferId(null)}
+              onSend={send}
             />
-          ))}
-        </div>
-      )}
-
-      {openOffer && (
-        <ChainDetailModal
-          offer={openOffer}
-          hero={selectedHero}
-          now={now}
-          onClose={() => setOpenOfferId(null)}
-          onSend={send}
+          )}
+        </>
+      ) : (
+        <ReplayMemoriesView
+          heroes={state.heroes}
+          selectedHero={selectedHero}
+          onSelectHero={setSelectedHeroId}
+          openReplayChainId={openReplayChainId}
+          onOpenReplayChain={setOpenReplayChainId}
         />
       )}
     </>
@@ -295,6 +364,254 @@ function ChainDetailModal({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Replay Memories -- the Board's sub-tab sibling (patch 0228). All 6
+ * saga bands always visible regardless of ownership (name, level range,
+ * chains covered, cost, Buy/Owned state) -- same "X more stories out
+ * there" philosophy the Board tab already has, rather than hiding whole
+ * systems from view. Within an owned band, only chains already in
+ * completedChains open the replay detail -- everything else is
+ * present but disabled with a plain explanation, not hidden.
+ */
+function ReplayMemoriesView({
+  heroes, selectedHero, onSelectHero, openReplayChainId, onOpenReplayChain,
+}: {
+  heroes: Hero[]; selectedHero: Hero; onSelectHero: (id: string) => void;
+  openReplayChainId: string | null; onOpenReplayChain: (id: string | null) => void;
+}) {
+  const openChain = openReplayChainId ? CHAIN_BY_ID[openReplayChainId] : undefined;
+  const openTier = openReplayChainId ? chainReplayTierForChain(openReplayChainId) : undefined;
+
+  return (
+    <>
+      <p className="subtitle">
+        Revisit a story you&rsquo;ve already finished. Unlock a saga below, then replay any of its
+        completed chains at Heroic or Legendary for a chance at their own tougher gear -- the story
+        plays out again in full, so a failed step sends the whole attempt back to the beginning.
+      </p>
+
+      <div className="section-heading">Heroes</div>
+      <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
+        {heroes.map((h) => (
+          <HeroTab key={h.id} hero={h} selected={h.id === selectedHero.id} onSelect={() => onSelectHero(h.id)} />
+        ))}
+      </div>
+
+      <div className="section-heading">Sagas</div>
+      <div className="raid-list">
+        {CHAIN_REPLAY_TIERS.map((tier) => (
+          <TierCard key={tier.id} tier={tier} onOpenChain={onOpenReplayChain} />
+        ))}
+      </div>
+
+      {openChain && openTier && (
+        <ChainReplayDetailModal
+          chain={openChain}
+          tier={openTier}
+          hero={selectedHero}
+          onClose={() => onOpenReplayChain(null)}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * One saga's card -- the master unlock (id 'master', no chains of its
+ * own) plus all 6 bands, each showing its cost, description, and (once
+ * owned) every chain it covers as its own small button, disabled unless
+ * that specific chain is already in completedChains.
+ */
+function TierCard({ tier, onOpenChain }: { tier: ChainReplayTierDef; onOpenChain: (chainId: string) => void }) {
+  const engine = useEngine();
+  const state = engine.state;
+  const isMaster = tier.id === 'master';
+  const owned = GuildManager.hasChainReplayTier(state, tier.id);
+  const masterOwned = GuildManager.hasChainReplayTier(state, 'master');
+  const canAfford = state.gold >= tier.goldCost;
+  const canBuy = !owned && canAfford && (isMaster || masterOwned);
+
+  const buyTitle = owned ? undefined
+    : !masterOwned && !isMaster ? 'Unlock Replay Memories first'
+      : !canAfford ? 'Not enough gold' : undefined;
+
+  return (
+    <div className="card raid-card" style={{ cursor: 'default' }}>
+      <div className="raid-card-body" style={{ width: '100%' }}>
+        <div className="spread">
+          <div className="raid-card-name">{tier.sagaName}</div>
+          {owned ? (
+            <span className="tag" style={{ color: 'var(--brass)' }}>Owned</span>
+          ) : (
+            <button className="btn-primary" disabled={!canBuy} title={buyTitle} onClick={() => engine.buyChainReplayTier(tier.id)}>
+              {formatGold(tier.goldCost)}
+            </button>
+          )}
+        </div>
+        {tier.levelRange && <div className="tiny muted">{tier.levelRange}</div>}
+        <p className="tiny" style={{ margin: '4px 0' }}>{tier.description}</p>
+        {owned && tier.chainIds.length > 0 && (
+          <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
+            {tier.chainIds.map((chainId) => {
+              const chain = CHAIN_BY_ID[chainId];
+              const completed = state.completedChains.includes(chainId);
+              return (
+                <button
+                  key={chainId}
+                  className="btn-ghost"
+                  disabled={!completed}
+                  title={completed ? `Replay ${chain?.name ?? chainId}` : 'Complete this chain first'}
+                  onClick={() => onOpenChain(chainId)}
+                >
+                  {chain?.name ?? chainId}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The actual replay commit screen -- difficulty picker plus the loot
+ * table view (Backlog's own requirement: "so people can see what they
+ * are chasing"). The dedicated item's Heroic/Legendary rows are computed
+ * live via scaleChainExclusiveItem -- a pure function, no rng needed for
+ * a preview -- so this always matches exactly what a real drop would
+ * roll, not a hand-maintained approximation of it.
+ */
+function ChainReplayDetailModal({
+  chain, tier, hero, onClose,
+}: { chain: ChainDef; tier: ChainReplayTierDef; hero: Hero; onClose: () => void }) {
+  const engine = useEngine();
+  const state = engine.state;
+  const [difficulty, setDifficulty] = useState<ChainReplayDifficulty>('normal');
+
+  const dedicatedId = chain.rewardItems[0];
+  const dedicatedDef = dedicatedId ? EQUIPMENT_BY_ID[dedicatedId] : undefined;
+  const baseDropChance = Tuning.get('chain_replay_dedicated.baseDropChance');
+
+  const existing = state.activeChainReplays.find((r) => r.heroId === hero.id && r.chainId === chain.id);
+  const heroBusy = hero.status === 'questing';
+
+  const send = () => {
+    engine.startChainReplay(hero.id, chain.id, difficulty);
+    onClose();
+  };
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal raid-detail-modal" onClick={(e) => e.stopPropagation()}>
+        <ChainQuestBanner chainId={chain.id} banner={chain.banner} height={90} />
+        <div className="spread">
+          <span className="card-title hero-card-name">{chain.name}</span>
+          <span className="tiny muted">{tier.sagaName}</span>
+        </div>
+        <p className="card-flavour">{chain.description}</p>
+
+        {existing && (
+          <p className="tiny" style={{ color: 'var(--blood)', margin: '4px 0' }}>
+            {hero.name} has a {REPLAY_DIFFICULTY_NAME[existing.difficulty]} attempt in progress --
+            stage {existing.stage + 1}/{chain.stages.length}
+            {existing.resetCount > 0 ? ` (reset ${existing.resetCount}×)` : ''}. Picking a different
+            difficulty starts over from stage 1.
+          </p>
+        )}
+
+        <div className="tiny muted" style={{ marginBottom: 4 }}>Difficulty</div>
+        <div className="row" style={{ gap: 14, marginBottom: 10 }}>
+          {REPLAY_DIFFICULTY_ORDER.map((d) => (
+            <ReplayDifficultyCircle key={d} difficulty={d} active={difficulty === d} onClick={() => setDifficulty(d)} />
+          ))}
+        </div>
+
+        {dedicatedDef && (
+          <>
+            <div className="tiny muted" style={{ marginBottom: 2 }}>The chase -- {dedicatedDef.name}</div>
+            <div className="raid-list" style={{ marginBottom: 10 }}>
+              <div className="row spread" style={{ padding: '4px 0' }}>
+                <span className="row" style={{ gap: 6, alignItems: 'center' }}>
+                  <span className="tiny">First clear</span>
+                  <RarityPill rarity={dedicatedDef.rarity} />
+                </span>
+                <span className="tiny muted">Already claimed, guaranteed once</span>
+              </div>
+              {(['heroic', 'legendary'] as const).map((d) => {
+                const diffCfg = CHAIN_REPLAY_DIFFICULTIES[d];
+                const scaled = scaleChainExclusiveItem(dedicatedDef, d === 'heroic' ? 'chainReplayHeroic' : 'chainReplayLegendary');
+                const modLines = describeMods(scaled.customMods);
+                const statLines = describeStats(scaled.enchantStatsDelta);
+                return (
+                  <div key={d} className="row spread" style={{ padding: '4px 0', alignItems: 'flex-start' }}>
+                    <span className="row" style={{ gap: 6, alignItems: 'center' }}>
+                      <span className="tiny" style={{ color: REPLAY_DIFFICULTY_COLOR[d] }}>{REPLAY_DIFFICULTY_NAME[d]}</span>
+                      <RarityPill rarity={dedicatedDef.rarity} />
+                    </span>
+                    <span className="tiny" style={{ textAlign: 'right' }}>
+                      <span className="muted">{Math.round(baseDropChance + diffCfg.lootBonus)}% chance · </span>
+                      {[...modLines, ...statLines].join(', ')}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        <p className="tiny muted" style={{ marginBottom: 8 }}>
+          Padding loot from every stage also rolls tougher at Heroic/Legendary, tagged separately from
+          raid drops.
+        </p>
+
+        <div className="row end" style={{ marginTop: 8, gap: 6 }}>
+          <button className="btn-ghost" onClick={onClose}>Close</button>
+          <button className="btn-primary" disabled={heroBusy} title={heroBusy ? `${hero.name} is already out` : undefined} onClick={send}>
+            {existing && existing.difficulty === difficulty ? `Continue (stage ${existing.stage + 1})` : 'Send'} {hero.name}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Same shape RaidsPanel's own DifficultyCircle uses -- icon with a
+ *  graceful text-label fallback until the dedicated icon assets land
+ *  (see REPLAY_DIFFICULTY_ICON's own comment). No "locked" state here --
+ *  unlike a raid difficulty, which can itself be gated behind an
+ *  upgrade, a chain replay's difficulty choice is always open once the
+ *  chain itself is eligible; the gating already happened one screen
+ *  earlier (band ownership + completedChains). */
+function ReplayDifficultyCircle({
+  difficulty, active, onClick,
+}: { difficulty: ChainReplayDifficulty; active: boolean; onClick: () => void }) {
+  const color = REPLAY_DIFFICULTY_COLOR[difficulty];
+  const [imgFailed, setImgFailed] = useState(false);
+  return (
+    <div className="raid-diff-circle-wrap">
+      <button
+        className={`raid-diff-circle ${active ? 'active' : ''}`}
+        style={{ borderColor: color, color: active ? 'var(--night)' : color, background: active ? color : undefined }}
+        onClick={onClick}
+        title={REPLAY_DIFFICULTY_NAME[difficulty]}
+      >
+        {!imgFailed ? (
+          <img
+            src={REPLAY_DIFFICULTY_ICON[difficulty]}
+            alt=""
+            onError={() => setImgFailed(true)}
+            style={{ width: '70%', height: '70%', objectFit: 'contain' }}
+          />
+        ) : (
+          REPLAY_DIFFICULTY_LABEL[difficulty]
+        )}
+      </button>
+      <span className="tiny" style={{ color, fontWeight: 700 }}>{REPLAY_DIFFICULTY_LABEL[difficulty]}</span>
     </div>
   );
 }

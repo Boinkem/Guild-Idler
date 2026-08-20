@@ -61,6 +61,9 @@ export const TAB_SUBTABS: Record<string, string[]> = {
   raids: ['raids', 'quartermaster'],
   stats: ['overview', 'achievements', 'results'],
   hatchery: ['home', 'pets'],
+  // Board (existing) / Replay Memories (new, patch 0228) -- see
+  // DiscoveredQuestsPanel.tsx's own comment for the full design.
+  chains: ['board', 'memories'],
 };
 
 /**

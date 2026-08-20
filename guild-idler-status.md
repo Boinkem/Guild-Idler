@@ -1240,9 +1240,30 @@ stage (`chain_replay_dedicated.baseDropChance` + the difficulty's
 one-time gold, no levels); and the two engine actions,
 `startChainReplay`/`buyChainReplayTier`.
 
-Still to come: (4) Replay Memories UI itself -- band cards, difficulty
-picker, loot-table view; (5) DevTool schema updates so the new content
-types are editable the same way everything else already is.
+**Step (4) done, patch 0228.** Replay Memories built as a second
+sub-tab on the `chains` tab itself ("Board" / "Replay Memories"),
+extending the existing sub-tab system directly -- `chains` joins
+`TAB_SUBTABS` in `attention.ts` as its own 7th entry, with the same
+deep-link/acknowledge-on-visit wiring every other sub-tabbed panel
+already has. `TierCard` shows all 6 bands + master unlock always
+visible regardless of ownership; owned bands list their member chains
+as buttons, disabled unless that specific chain is already in
+`completedChains`. `ChainReplayDetailModal` is the actual commit
+screen: a difficulty picker (`ReplayDifficultyCircle`, same
+icon-with-text-fallback shape `RaidsPanel`'s own `DifficultyCircle`
+uses, pointing at `public/chain-replay-icons/` for icons still to come)
+plus a live loot-table view computed directly via
+`scaleChainExclusiveItem` -- a pure function, so the preview always
+matches exactly what a real drop would roll, not a hand-maintained
+approximation of it. Known, deliberate scoping limit carried over from
+step (3)'s own resolve() logic, not new to this step: 6 chains have
+more than one guaranteed reward item (`the_pale_rider`, `dragon_hunt`,
+`demon_fortress`, `hollow_choir`, `world_ender`, `hollow_king`), and
+only the first item in each is the replay "chase" -- the rest stay
+first-clear-only, consistent between the UI and the engine.
+
+Still to come: (5) DevTool schema updates so the new content types are
+editable the same way everything else already is.
 
 ### Uncapped gold/xp multipliers -- resolved, patch 0214
 Was flagged here (see git history for the original entry) during the
@@ -17383,3 +17404,86 @@ collision with any Vendor Rep tuning id). Manual proofread of the new
 resolve() branch for state-mutation correctness (stage advancement,
 reset-on-fail, dedicated item gating on Normal) alongside the
 mechanical checks above.
+
+### Replayable Quest Chains: Replay Memories UI (patch 0228)
+
+```discord-update
+Dev Update | Feature
+
+- Replay Memories is live -- a new sub-tab on Story Quests, right next to the board
+- Unlock a saga, then replay any of its finished chains at Heroic or Legendary for a shot at tougher gear
+- See exactly what you're chasing before you commit -- the loot table shows real numbers, not estimates
+```
+
+Step (4) of the sequencing plan -- the actual interface, landing on top
+of patches 0224-0227's data model, loot mechanism, and resolution
+logic. This is the first patch in the whole feature a player can
+actually see and use.
+
+**Board / Replay Memories, a new sub-tab pair.** `DiscoveredQuestsPanel`
+gains its first-ever sub-tabs -- `chains` joins `TAB_SUBTABS` in
+`attention.ts` as a 7th entry (`['board', 'memories']`), getting the
+same deep-link (`consumeRequestedSubTab`) and acknowledge-on-visit
+(`acknowledgeTab`) wiring every other sub-tabbed panel already has from
+patch 0191's system, plus its own `subtab-unread` dot per sub-tab. The
+existing board content is untouched, just now living under its own
+"Board" tab instead of being the panel's only view.
+
+**`TierCard`** -- one per `ChainReplayTierDef` (master unlock + all 6
+saga bands), always visible regardless of ownership, matching the
+Board's own "here's what's out there" philosophy rather than hiding
+locked content. Owned bands list every chain they cover as its own
+button, disabled with a plain tooltip ("Complete this chain first")
+unless that specific chain is already in `completedChains` -- band
+ownership alone never implies a chain is replayable, matching the
+eligibility rule confirmed all the way back at the design stage.
+
+**`ChainReplayDetailModal`**, the actual commit screen. A difficulty
+picker (`ReplayDifficultyCircle`) mirrors `RaidsPanel`'s own
+`DifficultyCircle` shape exactly -- icon with a graceful text-label
+fallback (N/H/L) until dedicated icon assets land in
+`public/chain-replay-icons/`. Below it, a live loot-table view: the
+dedicated item's Heroic/Legendary rows are computed by calling
+`scaleChainExclusiveItem` directly in the render -- it's a pure
+function with no `rng` involved, so what the player sees is exactly
+what a real drop would produce, not a separately-maintained estimate
+that could drift out of sync with the actual mechanic. Drop chance
+shown alongside (`chain_replay_dedicated.baseDropChance` + the
+difficulty's own `lootBonus`, read live from `Tuning`). An in-progress
+attempt shows its current stage and reset count, and the send button
+correctly offers "Continue" vs "Send" depending on whether the picked
+difficulty matches an existing `ActiveChainReplay`.
+
+**A real bug caught and fixed before this reached the patch stage**:
+while wiring the new components into the existing file, a string
+replacement accidentally clipped `ChainDetailModal`'s (the Board tab's
+own, unrelated existing modal) closing content -- its send buttons and
+JSX closing tags -- silently merging its ending into the new code that
+followed. Caught by `tsc --noEmit` itself, not by inspection (it would
+have been a syntax/structural error either way, but this project's own
+process treats a first failed compile as a signal to fix and reverify,
+not a reason to weaken the check) -- restored the missing content and
+re-ran the full check clean before proceeding, same "verify against a
+real build" standard every other patch in this feature has held to.
+
+**One scoping limit carried forward from step (3), not new here**: 6
+chains (`the_pale_rider`, `dragon_hunt`, `demon_fortress`,
+`hollow_choir`, `world_ender`, `hollow_king`) have more than one
+guaranteed reward item; only the first is the replay chase (matching
+`QuestManager.resolve`'s own `chain.rewardItems[0]` logic from patch
+0227) -- the rest stay first-clear-only. Consistent between the engine
+and this UI, not an oversight, but worth naming plainly rather than
+leaving a player to wonder why only one of `world_ender`'s four items
+shows a Heroic/Legendary row.
+
+No changes to `QuestManager`, `GuildManager`, or any persisted state in
+this patch -- purely new UI consuming the engine actions/read helpers
+patches 0224-0227 already built.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean (caught and fixed one real
+structural mistake mid-build, see above, before either check was
+considered satisfied). Confirmed the reused `raid-diff-circle`/
+`raid-diff-circle-wrap` CSS classes already exist and need no new
+styling. Cross-checked the multi-reward-item chain list against
+`quest-chains.json` directly rather than from memory.
