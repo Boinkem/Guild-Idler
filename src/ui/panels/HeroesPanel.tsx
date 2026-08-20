@@ -493,6 +493,11 @@ export function HeroesPanel() {
           const unlocked = recruitable.includes(id);
           const cost = RECRUIT_COST[id];
           const slotsFull = state.heroes.length >= slots;
+          // One of every hero (patch 0219) -- once a class has a living
+          // hero in the roster, it's permanently done recruiting; see
+          // GuildManager.classAlreadyRecruited's own comment for why
+          // this never needs to un-set later.
+          const alreadyRecruited = GuildManager.classAlreadyRecruited(state, id);
           return (
             <div key={id} className="card" style={{ marginBottom: 0 }}>
               <div className="card-title">{def.name}</div>
@@ -502,12 +507,14 @@ export function HeroesPanel() {
               </div>
               <button
                 className="btn-primary"
-                disabled={!unlocked || state.gold < cost || slotsFull}
+                disabled={!unlocked || state.gold < cost || slotsFull || alreadyRecruited}
                 onClick={() => engine.recruit(id)}
               >
-                {!unlocked
-                  ? `Tavern level ${def.unlockTavernLevel}`
-                  : slotsFull ? 'No free slots' : `Recruit · ${formatGold(cost)}`}
+                {alreadyRecruited
+                  ? 'Already Recruited'
+                  : !unlocked
+                    ? `Tavern level ${def.unlockTavernLevel}`
+                    : slotsFull ? 'No free slots' : `Recruit · ${formatGold(cost)}`}
               </button>
               {/* Direct feedback: a locked purchase should link straight to
                   where the blocking requirement actually gets fixed, not

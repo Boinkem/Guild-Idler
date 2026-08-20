@@ -105,12 +105,33 @@ export const GuildManager = {
     );
   },
 
+  /**
+   * True if the guild already has a living hero of this class (patch
+   * 0219 -- "one of every hero" cap, direct request, replacing unlimited
+   * same-class recruiting). Checked against the live `state.heroes`
+   * roster, not `state.roster` (a separate, lifetime "which classes has
+   * this guild ever recruited" tracker used only by AchievementManager --
+   * unrelated to this check and deliberately left untouched). There is
+   * currently no way for a hero to ever leave `state.heroes` once
+   * recruited -- retirement (PrestigeManager.retire) replaces a hero
+   * in-place with a fresh ascended hero of the SAME class rather than
+   * removing them, and no dismiss/release action exists anywhere in the
+   * codebase -- so this check never needs to account for a class
+   * becoming available again later; once recruited, always occupied.
+   */
+  classAlreadyRecruited(state: GameState, heroClass: HeroClass): boolean {
+    return state.heroes.some((h) => h.heroClass === heroClass);
+  },
+
   recruit(state: GameState, heroClass: HeroClass, rng: Rng): string | null {
     if (state.heroes.length >= ModifierManager.heroSlots(state)) {
       return 'No free hero slots. Upgrade the Tavern or buy an Extra Banner.';
     }
     if (!GuildManager.recruitableClasses(state).includes(heroClass)) {
       return `The Tavern is not large enough to attract a ${HERO_CLASSES[heroClass].name}.`;
+    }
+    if (GuildManager.classAlreadyRecruited(state, heroClass)) {
+      return `The guild already has a ${HERO_CLASSES[heroClass].name} -- one of each class only.`;
     }
     const cost = RECRUIT_COST[heroClass];
     if (state.gold < cost) return 'Not enough gold.';

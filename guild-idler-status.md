@@ -16324,3 +16324,67 @@ not truncated). The Tavern-reordering fix's actual effect was confirmed
 by direct before/after comparison (roster stuck at 1 hero forever vs.
 filling by day 18), not assumed from the change alone. No live playtest
 in this environment -- same standing caveat as every patch since 0214.
+
+### Hero stat breakpoint comparison + "one of every hero" recruit cap (patch 0219)
+
+```discord-update
+Dev Update | One of Every Hero
+
+- Recruiting now caps at one hero per class -- no more stacking multiple Knights or Gladiators, the guild grows by variety instead of duplicates
+```
+
+Two direct requests handled together: a level 1/25/55 stat comparison
+table across every class (analysis only, no code -- delivered in
+conversation, not repeated here), and a real recruit-uniqueness cap.
+
+#### One of every hero
+
+`GuildManager.recruit` gained a check: blocks recruiting a class the
+guild already has a living hero of. New `GuildManager.
+classAlreadyRecruited(state, heroClass)`, checked against the live
+`state.heroes` roster -- **not** `state.roster` (a separate, unrelated
+lifetime "which classes has this guild ever recruited" tracker used
+only by `AchievementManager`, deliberately left untouched).
+
+**Confirmed this never needs an "un-set" case**: there is currently no
+way for a hero to ever leave `state.heroes` once recruited anywhere in
+the codebase. Checked `PrestigeManager.retire` directly -- retirement
+replaces a hero in-place with a fresh ascended hero of the *same class*
+rather than removing them, and no dismiss/release action exists at all.
+So once a class is recruited, it's permanently occupied for that save --
+the check is a simple, static lookup, not something that needs to
+account for slots reopening later.
+
+**HeroesPanel.tsx** updated to match: each class card now shows "Already
+Recruited" (disabled) once a living hero of that class exists, same
+disabled-button treatment every other locked purchase in this panel
+already uses.
+
+**Real consequence worth knowing, not hidden**: max possible roster size
+via Tavern (6 slots) + Extra Banner (4 levels) + the base slot is 11 --
+but there are only 9 hero classes total, so "one of every hero" becomes
+the binding cap once a guild owns one of each. A player who fully
+invests in Extra Banner ends up with 2 slots that can never be filled.
+Not fixed here -- flagged as a real design tradeoff to decide on
+separately (leave it, since "collect one of each" is a clean, complete
+goal on its own; or trim Extra Banner's `maxLevel` from 4 to 2 so 1 +
+6 + 2 lands exactly on 9).
+
+**Balance Sandbox sim updated to match** -- `growRoster` mode's
+recruiting logic now tracks which classes are already "recruited" and
+always picks the cheapest *unrecruited* class, same real constraint.
+Confirmed the actual effect on the previous patch's own "days to buy
+everything" result: 451 -> 455 days, roster fill 1->7 heroes by day 18
+-> day 22 -- a small, expected shift, since Tavern's own 7-slot cap
+(well below the 9-class ceiling) means the constraint barely bites at
+this roster size; the cheap classes alone are enough to fill it.
+
+#### Verified
+
+`npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` both
+pass clean. Confirmed directly (not assumed) that no hero-removal path
+exists anywhere in the codebase before relying on that as the reason
+this check needs no un-set logic. Re-ran the growRoster sim after the
+fix and confirmed the real before/after day-count shift (451 -> 455),
+not just that it still runs. No live playtest in this environment --
+same standing caveat as every patch since 0214.

@@ -139,10 +139,31 @@ async function main() {
   // declared order.
   const growRoster = input.growRoster === true;
   let liveHeroCount = growRoster ? 1 : heroCount;
-  const cheapestRecruitCost = Math.min(...Object.values(progression.RECRUIT_COST));
-  const rosterCap = () => progression.GUILD_BY_ID.tavern
-    ? 1 + (levels['tavern'] ?? 0) * (progression.GUILD_BY_ID.tavern.heroSlotsPerLevel ?? 0)
-    : 1;
+  // One of every hero (patch 0219) -- recruiting can't repeat a class, so
+  // this sim needs to track which classes are already "recruited" and
+  // stop offering them, same real constraint GuildManager.recruit now
+  // enforces in the live game. With exactly 9 classes total, roster growth
+  // naturally caps at 9 regardless of how many Tavern/Extra Banner slots
+  // exist beyond that -- rosterCap below reflects this.
+  const recruitedClasses = new Set<string>(['adventurer']); // HeroManager.create's starting class, see file's own preset assumption below
+  const allClasses = Object.keys(progression.RECRUIT_COST);
+  const cheapestUnrecruitedCost = () => {
+    const remaining = allClasses.filter((c) => !recruitedClasses.has(c));
+    return remaining.length > 0 ? Math.min(...remaining.map((c) => progression.RECRUIT_COST[c as keyof typeof progression.RECRUIT_COST])) : Infinity;
+  };
+  const cheapestUnrecruitedClass = () => {
+    const remaining = allClasses.filter((c) => !recruitedClasses.has(c));
+    return remaining.reduce((best, c) => (
+      progression.RECRUIT_COST[c as keyof typeof progression.RECRUIT_COST]
+        < progression.RECRUIT_COST[best as keyof typeof progression.RECRUIT_COST] ? c : best
+    ), remaining[0]);
+  };
+  const rosterCap = () => Math.min(
+    allClasses.length,
+    progression.GUILD_BY_ID.tavern
+      ? 1 + (levels['tavern'] ?? 0) * (progression.GUILD_BY_ID.tavern.heroSlotsPerLevel ?? 0)
+      : 1,
+  );
   const recruitLog: { day: number; heroCount: number }[] = [];
 
   // ------------------------------------------------------------ spend list --
@@ -251,9 +272,13 @@ async function main() {
     // spend loop below (see the file-level comment on why: more heroes
     // compounds every future tick's income). Only fires when growRoster
     // is on, a slot is actually open, and gold covers the cheapest
-    // currently-recruitable class.
-    if (growRoster && liveHeroCount < rosterCap() && gold >= cheapestRecruitCost) {
-      gold -= cheapestRecruitCost;
+    // currently-recruitable (not-yet-recruited) class. "One of every
+    // hero" (patch 0219) means the cheapest option changes over time as
+    // classes get used up -- recomputed fresh each tick, not cached.
+    if (growRoster && liveHeroCount < rosterCap() && gold >= cheapestUnrecruitedCost()) {
+      const cls = cheapestUnrecruitedClass();
+      gold -= progression.RECRUIT_COST[cls as keyof typeof progression.RECRUIT_COST];
+      recruitedClasses.add(cls);
       liveHeroCount += 1;
       recruitLog.push({ day: Math.round(day), heroCount: liveHeroCount });
     }
