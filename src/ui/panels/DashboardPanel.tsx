@@ -225,8 +225,28 @@ export function DashboardPanel() {
 
   return (
     <>
-      <h2>The Guild</h2>
-      <p className="subtitle">Everything the guild has built, at a glance.</p>
+      <div className="spread" style={{ alignItems: 'flex-start' }}>
+        <div>
+          <h2>The Guild</h2>
+          <p className="subtitle">Everything the guild has built, at a glance.</p>
+        </div>
+        {/* Moved here from the Guild Hall tab's own header (patch 0213) --
+            Customize decorates the whole guild's home, not specifically a
+            facility, so it reads better as a home-tab call-to-action than
+            a small header button buried on the Guild Hall tab. Bigger and
+            its own colour (.btn-teal-lg) rather than the plain .btn-ghost
+            it used to be, so it actually stands out here. Navigates to
+            the Guild Hall tab with the 'customize' sub-tab sentinel,
+            which GuildPanel consumes once on mount to open straight into
+            GuildHallCustomizeScene instead of the normal facilities view. */}
+        <button
+          className="btn-teal-lg"
+          onClick={() => engine.requestTab('guild', undefined, 'customize')}
+          title="Decorate the Guild Hall with trophies, banners, and shelf trinkets -- purely cosmetic"
+        >
+          🎨 Customize
+        </button>
+      </div>
 
       <AttentionDigest />
 

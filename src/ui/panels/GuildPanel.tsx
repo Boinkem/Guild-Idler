@@ -152,7 +152,19 @@ export function GuildPanel() {
   // uses elsewhere in this codebase; leaving Customize mode open when you
   // switch tabs and back isn't a real requirement here, so it resets on
   // every remount, same as `highlightId`'s own consume-once shape above.
-  const [customizing, setCustomizing] = useState(false);
+  //
+  // The button that flips this used to live on this panel's own header --
+  // moved to the Guild home tab (DashboardPanel, patch 0213) as a bigger,
+  // coloured call-to-action, since Customize is a whole-guild cosmetic
+  // action, not specifically a Guild Hall/facilities one. Getting here
+  // from that new button reuses the existing requestTab(id, highlightId,
+  // subTab) plumbing rather than adding a new one-shot field: Dashboard
+  // calls requestTab('guild', undefined, 'customize'), and this panel
+  // consumes that sentinel via consumeRequestedSubTab the same way
+  // Harvest/Hatchery/Lore/Raids/Stats/Vendors already consume their own
+  // sub-tab requests -- GuildPanel just isn't one of those panels
+  // otherwise, so the id can't collide with a real sub-tab anywhere.
+  const [customizing, setCustomizing] = useState(() => engine.consumeRequestedSubTab() === 'customize');
 
   // "Jump to and highlight the requirement" landing -- consumed once on
   // mount (this panel remounts fresh each time the nav switches to it, so
@@ -317,16 +329,11 @@ export function GuildPanel() {
 
   return (
     <>
-      <div className="spread" style={{ alignItems: 'flex-start' }}>
-        <div>
-          <h2>Guild Hall</h2>
-          <p className="subtitle">
-            Facility levels apply to every hero, now and after every retirement.
-          </p>
-        </div>
-        <button onClick={() => setCustomizing(true)} title="Decorate the Guild Hall with trophies, banners, and shelf trinkets -- purely cosmetic">
-          Customize
-        </button>
+      <div>
+        <h2>Guild Hall</h2>
+        <p className="subtitle">
+          Facility levels apply to every hero, now and after every retirement.
+        </p>
       </div>
       <div className="guild-storage-plaque">
         <span className="guild-storage-label">Gold Storage</span>

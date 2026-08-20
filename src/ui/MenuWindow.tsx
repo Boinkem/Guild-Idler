@@ -425,22 +425,6 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         >
           {onTop ? 'On top: on' : 'On top: off'}
         </button>
-        {/* Menu-only -- the idle companion is never fullscreenable in the
-            first place (see electron/main.ts's own window:setMode), so this
-            button only ever renders here, not anywhere the companion shows.
-            Falls back to a plain toggle of local state (`!fullscreen`) if
-            littleKnight is unavailable (the browser dev:web build), same
-            shape the "On top" button above already uses. */}
-        <button
-          className="btn-ghost"
-          onClick={async () => {
-            const next = await window.littleKnight?.setFullscreen(!fullscreen);
-            setFullscreen(next ?? !fullscreen);
-          }}
-          title={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-        >
-          {fullscreen ? '🗗 Windowed' : '⛶ Fullscreen'}
-        </button>
         {/* Brings the first-run tour back on demand -- previously it only
             ever ran once (gated on !state.seenOnboarding, see below), with
             no way to see it again short of a hard reset. Sets local
@@ -454,18 +438,44 @@ export function MenuWindow({ onClose }: { onClose: () => void }) {
         >
           ❓ Tour
         </button>
-        {/* Same "Hide" action IdleView's desktop companion already exposes
-            (window.littleKnight.minimize) -- Guild Hall had no way to drop
-            to the taskbar without fully closing back to the desktop view
-            first. */}
-        <button
-          className="btn-ghost"
-          onClick={() => window.littleKnight?.minimize()}
-          title="Minimise to taskbar"
-        >
-          🗕 Minimise
-        </button>
-        <button className="btn-ghost" onClick={onClose}>Close</button>
+        {/* Window controls cluster (patch 0213) -- Minimise / Windowed /
+            Close, reordered to sit together at the end of the titlebar in
+            the standard OS order (close always rightmost), icon-only with
+            a tooltip standing in for the text label each used to carry.
+            Same underlying handlers as before, just regrouped/re-iconed;
+            no behaviour changed. */}
+        <div className="window-controls">
+          {/* Same "Hide" action IdleView's desktop companion already exposes
+              (window.littleKnight.minimize) -- Guild Hall had no way to drop
+              to the taskbar without fully closing back to the desktop view
+              first. */}
+          <button
+            onClick={() => window.littleKnight?.minimize()}
+            title="Minimise to taskbar"
+            aria-label="Minimise"
+          >
+            &#x2212;
+          </button>
+          {/* Menu-only -- the idle companion is never fullscreenable in the
+              first place (see electron/main.ts's own window:setMode), so
+              this button only ever renders here, not anywhere the companion
+              shows. Falls back to a plain toggle of local state
+              (`!fullscreen`) if littleKnight is unavailable (the browser
+              dev:web build), same shape the old "On top" button uses. */}
+          <button
+            onClick={async () => {
+              const next = await window.littleKnight?.setFullscreen(!fullscreen);
+              setFullscreen(next ?? !fullscreen);
+            }}
+            title={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            aria-label={fullscreen ? 'Windowed' : 'Fullscreen'}
+          >
+            {fullscreen ? '\u2752' : '\u26f6'}
+          </button>
+          <button className="win-close" onClick={onClose} title="Close" aria-label="Close">
+            &#x2715;
+          </button>
+        </div>
       </header>
 
       <div className="menu-body" style={{ position: 'relative' }}>

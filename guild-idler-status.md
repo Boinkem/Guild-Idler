@@ -15331,3 +15331,118 @@ the moved/resized layout survived a full page reload byte-for-byte, and
 the Customize scene's own rendered slot picked it up correctly after
 that reload; leaving Rearrange mode restored plain click-to-open-picker
 behaviour. Zero uncaught page errors across the whole run.
+
+### Modern theme swatch pill overflow, window controls reordered/re-iconed, and Guild Hall Customize moved to the Guild home tab (patch 0213)
+
+```discord-update
+Dev Update | Patch 0213
+
+- Fixed the Modern theme's rounded-pill style clipping wrong on the
+  Settings > Theme swatches -- the colour dots no longer poke outside
+  the pill
+- Reordered the window buttons to Minimise, Windowed, Close (in that
+  order, Close always on the far right) and swapped them for plain
+  icons
+- Moved the "Customize" button off the Guild Hall tab onto the Guild
+  home tab, made it bigger, and gave it its own colour
+```
+
+Three direct, unrelated fixes/tweaks bundled into one patch rather than
+three tiny ones -- none of them touch shared state or each other's
+files beyond `app.css`.
+
+**Modern theme swatch pill overflow -- fixed.** Tester screenshot:
+`.theme-swatch` (the Settings > Theme picker's own button, one per
+`THEMES` entry) is a two-row flex button -- a row of 4 small colour-dot
+squares (`.theme-dots`), then the theme's name -- and under
+`[data-style='modern']` its colour-dot corners were visibly poking
+outside the swatch's own rounded pill border instead of sitting inside
+it. Root cause: the Modern style block's generic `[data-style='modern']
+button { border-radius: 999px; ... }` rule catches `.theme-swatch`
+since it's a plain `<button>`, and nothing excluded it the way `.card`
+already is (see that same block's own comment: "Full pill (999px) is
+only for small, single-line controls... it clipped text in its own
+corners once" -- a two-row swatch has exactly the same shape problem a
+tall card does, it just isn't a `.card`). At an 8px padding, a 999px
+stadium curve rounds off substantially more than the padding covers, so
+content sitting right after the padding in the box's own corner --
+here, the first colour dot -- renders past where the pill's rounded
+background actually is. Fixed the same way `.card` already is: a
+dedicated `[data-style='modern'] .theme-swatch` override with a modest
+fixed `border-radius: 12px` instead of inheriting the full pill, plus
+`overflow: hidden` so nothing can visually escape the box again if a
+future swatch layout tweak reintroduces the same shape. `app.css` only;
+no component or class name changed, so nothing else that already reads
+`.theme-swatch` needed touching.
+
+**Window controls reordered and re-iconed -- built.** Direct ask, with
+a reference screenshot of a standard minimise/restore/close icon strip.
+The three window-affecting buttons in `MenuWindow.tsx`'s `.titlebar`
+(Minimise, the Windowed/Fullscreen toggle, Close) previously sat
+scattered through the row in an inconsistent order -- Windowed came
+right after the "On top" toggle, then Tour, then Minimise, then Close
+last -- each rendered as its own `.btn-ghost` with a text label
+(`🗕 Minimise`, `🗗 Windowed`/`⛶ Fullscreen`, plain `Close`). Grouped
+into a new `.window-controls` wrapper at the very end of the titlebar,
+in the standard OS order (minimise, then the restore/maximize-
+equivalent, then close, close always rightmost), each now icon-only
+(`−`, `⧉`/`⛶` depending on fullscreen state, `✕`) with a `title`/
+`aria-label` carrying what the text used to say. No handler logic
+changed at all -- same `window.littleKnight?.minimize()`, same
+`setFullscreen`/`fullscreen` toggle, same `onClose` -- this is purely a
+layout/markup regrouping plus new CSS (`.window-controls` in
+`app.css`: fixed 38x38px icon buttons, plain hover highlight for
+Minimise/Windowed, a red `--blood` hover specifically on Close via a
+new `.win-close` class, matching the "destructive/final action gets its
+own red tell" convention `.btn-danger` already established elsewhere).
+Mute and "On top" stay where they were, ungrouped -- the ask was
+specifically about the three window-chrome buttons, not every button in
+the titlebar.
+
+**Guild Hall "Customize" moved to the Guild home tab -- built.** Direct
+ask: move the button, make it bigger, give it a colour. Previously a
+small `.btn-ghost` in `GuildPanel.tsx`'s own header (the "Guild Hall"
+tab, `id: 'guild'`), immediately flipping that panel's local
+`customizing` state to swap its whole body for
+`GuildHallCustomizeScene`. Moved to `DashboardPanel.tsx` (the "Guild"
+tab up in `DASHBOARD_GROUP`, labelled "The Guild" -- the actual main/
+home page) as a new `.btn-teal-lg` card action next to the page title,
+noticeably larger (10px/20px padding, bumped font-size) and using
+`--teal` -- previously only a border/glow accent on active set-bonus
+gear cards, never a button fill, so this doesn't collide with an
+existing button-colour meaning (green/purple/brass/blood/sky are all
+already claimed by other action families, see that block's own comment
+in `app.css`).
+
+Since `customizing` is local state owned by `GuildPanel`, not
+`DashboardPanel`, clicking the new button can't just flip a boolean
+directly -- it needs to land on the Guild Hall tab already in Customize
+mode. Reused the existing `requestTab(id, highlightId?, subTab?)`
+one-shot request plumbing rather than inventing a new field for this:
+Dashboard calls `engine.requestTab('guild', undefined, 'customize')`,
+and `GuildPanel`'s own `customizing` state now initializes from
+`engine.consumeRequestedSubTab() === 'customize'` instead of a flat
+`useState(false)`. `GuildPanel` was never one of the six panels that
+already consume `requestedSubTab` (Harvest/Hatchery/Lore/Raids/Stats/
+Vendors each read their own sub-tab ids off it), so `'customize'` can't
+collide with a real sub-tab there or anywhere else that field is read.
+`MenuWindow`'s existing tab-switch effect already reacts to a
+`requestTab` call made while it's mounted (this is exactly the same
+path a Guide notification's "Go to" button already exercises), so no
+navigation code needed writing either -- clicking the new button
+switches straight to the Guild Hall tab and opens directly into the
+decoration scene in one action, same as it always did from its old
+spot, just reachable from the new one.
+
+`GuildPanel`'s own header lost the now-empty `.spread` row it used to
+share with the button (title/subtitle no longer need the flex-row
+treatment on their own) and reverted to a plain block; nothing else on
+that tab changed. `GuildHallCustomizeScene`'s own "Done" button is still
+the only way back out of Customize mode, unchanged.
+
+Not run through a real build in this environment (no `node_modules`
+installed here) -- worth a `tsc --noEmit`/`vite build` pass before
+calling this fully verified, though all three changes are small,
+localized, and don't touch shared state beyond the one-shot
+`requestedSubTab` field every sub-tabbed panel already reads the same
+way.

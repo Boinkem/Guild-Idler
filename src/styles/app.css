@@ -661,6 +661,29 @@ button:focus-visible, [tabindex]:focus-visible {
 }
 .btn-subtab.on:hover:not(:disabled) { background: var(--sky); color: var(--ink); }
 
+/* Guild Hall "Customize" -- cosmetic decoration/personalization, its own
+   accent distinct from every other button category already claimed
+   above (green = bulk convenience, purple = crafting, brass/yellow =
+   upgrade purchases, blood/red = destructive, sky = sub-tab nav).
+   --teal was previously only a border/glow accent (equipped-set-bonus
+   cards), never a button fill, so this doesn't collide with an existing
+   meaning. Deliberately larger than a normal action button (patch 0213
+   moved this from a small header button on the Guild Hall tab itself to
+   a standalone card action on the Guild home tab) -- bumped padding/
+   font-size rather than just recoloring a .btn-primary, so it actually
+   reads as a bigger, more inviting call-to-action on its new home. */
+.btn-teal-lg {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--teal) 65%, var(--panel-2)), color-mix(in srgb, var(--teal) 45%, var(--panel-2)));
+  border-color: var(--teal);
+  color: #fff8e6;
+  font-weight: 700;
+  font-size: 0.9375rem;
+  padding: 10px 20px;
+  box-shadow: var(--bevel), 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.btn-teal-lg:hover:not(:disabled) { background: var(--teal); color: var(--ink); }
+.btn-teal-lg:disabled { opacity: 0.5; }
+
 /* ------------------------------ idle companion ------------------------------ */
 
 .idle-root {
@@ -983,6 +1006,35 @@ button:focus-visible, [tabindex]:focus-visible {
 .resources { display: flex; gap: 12px; font-size: 0.6875rem; -webkit-app-region: no-drag; align-items: center; }
 .resources .gold { color: var(--brass); }
 .resources .renown { color: var(--violet); }
+
+/* Window controls cluster (Minimise / Windowed / Close) -- patch 0213.
+   Previously three separate text-label buttons scattered through the
+   titlebar in an inconsistent order (Windowed sat before Tour, Minimise
+   and Close were split apart from it). Grouped into one icon-only strip
+   at the very end of the row instead, in the standard OS order
+   (minimise, then restore/maximize-equivalent, then close, close always
+   rightmost) -- same convention as every desktop title bar, so it reads
+   instantly instead of needing the text labels to explain itself. */
+.window-controls {
+  display: flex;
+  -webkit-app-region: no-drag;
+}
+.window-controls button {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  min-height: 0;
+  width: 38px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8125rem;
+  line-height: 1;
+  color: var(--parchment);
+}
+.window-controls button:hover { background: var(--panel-3); }
+.window-controls .win-close:hover { background: var(--blood); color: #fff; }
 
 /* Header notification icon (next to Gold/Renown) -- opens the Guide's
    Notifications list. Badge only renders when there's an actual unread
@@ -2620,6 +2672,22 @@ input[type='range'] {
   border-color: var(--panel-3);
 }
 [data-style='modern'] .segmented .seg { border-radius: 0; }
+
+/* Bug fix (patch 0213): .theme-swatch is a <button>, so it was picking up
+   the generic [data-style='modern'] button{border-radius:999px} stadium
+   curve above -- exactly the ".card is not a pill" problem the comment
+   near the top of this Modern block already called out for tall/
+   multi-line buttons, just missed here since a theme swatch isn't a
+   .card. On an 8px-padded two-row button (colour dots row + name row)
+   a full 999px radius rounds off far more than the padding covers, so
+   the dot row's own square corners poked out past the pill's rounded
+   silhouette instead of sitting inside it. Same fix as .card got:
+   a modest, fixed radius instead of the full stadium curve, plus
+   overflow:hidden so nothing can visually escape the rounded box again. */
+[data-style='modern'] .theme-swatch {
+  border-radius: 12px;
+  overflow: hidden;
+}
 
 [data-style='modern'] .bar { border-radius: 999px; }
 [data-style='modern'] .bar > span { border-radius: 999px; }
