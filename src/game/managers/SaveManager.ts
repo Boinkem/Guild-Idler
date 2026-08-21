@@ -1001,6 +1001,66 @@ const MIGRATIONS: Record<number, Migration> = {
     version: 49,
     overseerLevel: (save.overseerLevel as number | undefined) ?? 0,
   }),
+  49: (save) => {
+    // Tiered Enchanting/Infusion (patch 0237) -- elemental match
+    // effectiveness moved from a flat per-match bonus to a 5-tier ladder
+    // (GemTier, an alias of Rarity -- common/uncommon/rare/epic/legendary
+    // at 15/30/60/90/100% effectiveness). Two things need migrating:
+    //
+    // - Any already-infused weapon (`elementalDamage` set, no
+    //   `elementalDamageTier` -- couldn't exist before this patch) needs
+    //   a tier value or elementalBonusForHero's new tier lookup falls
+    //   back to 'common' (the lookup's own safety default), silently
+    //   *reducing* a bonus the player already earned rather than
+    //   preserving it. Backfilled to 'uncommon' specifically because the
+    //   new maxMatchBonusPercent/tierEffectivenessPercent formula puts
+    //   Uncommon's effective bonus (10 * 30% = 3) almost exactly at the
+    //   old flat elemental.bonusPerMatchPercent value (3) it's replacing
+    //   -- the closest available tier to "no change," not an arbitrary
+    //   pick.
+    // - `state.gems`/`resistGems` go from a flat per-element COUNT to a
+    //   per-element-per-tier count (GameState.gems/resistGems' new
+    //   nested shape) -- existing counts bucket into the 'common' tier,
+    //   the lowest-value option, since an untiered gem has no real
+    //   provenance to infer a better tier from and 'common' is the only
+    //   choice that can't hand out free high-tier value on migration.
+    //
+    // elementalResist itself is left untouched -- it was always a plain
+    // accumulated number (not a set with provenance), and stays
+    // mechanically valid as-is; only future infusions add tier-scaled
+    // increments on top of whatever a save already earned.
+    const migrateGemPool = (pool: Record<string, number> | undefined): Record<string, Record<string, number>> => {
+      const out: Record<string, Record<string, number>> = {};
+      for (const [element, count] of Object.entries(pool ?? {})) {
+        if (!count) continue;
+        out[element] = { common: count };
+      }
+      return out;
+    };
+    const migrateItem = (item: Record<string, unknown> | null | undefined) => {
+      if (item && item.elementalDamage && !item.elementalDamageTier) {
+        item.elementalDamageTier = 'uncommon';
+      }
+    };
+    const heroes = (save.heroes as Record<string, unknown>[] | undefined) ?? [];
+    for (const hero of heroes) {
+      const equipment = hero.equipment as Record<string, unknown> | undefined;
+      if (equipment) {
+        for (const slot of Object.keys(equipment)) {
+          migrateItem(equipment[slot] as Record<string, unknown> | undefined);
+        }
+      }
+    }
+    const stash = (save.stash as Record<string, unknown>[] | undefined) ?? [];
+    for (const item of stash) migrateItem(item);
+
+    return {
+      ...save,
+      version: 50,
+      gems: migrateGemPool(save.gems as Record<string, number> | undefined),
+      resistGems: migrateGemPool(save.resistGems as Record<string, number> | undefined),
+    };
+  },
 };
 
 export const SaveManager = {

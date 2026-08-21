@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { useEngine } from './useEngine';
 import { EquipmentManager } from '../game/managers/EquipmentManager';
 import { CraftingManager } from '../game/managers/CraftingManager';
-import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH } from '../game/data/elements';
-import { ElementType } from '../game/types';
-import { formatGold } from '../game/util';
+import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH, GEM_TIERS, GEM_TIER_LABEL } from '../game/data/elements';
+import { ElementType, GemTier } from '../game/types';
+import { formatGold, RARITY_COLOR } from '../game/util';
 import { ItemIcon } from './icons';
 import { PickerModal, SlotBox } from './CraftingStation';
 import type { PickerOption, Rect } from './CraftingStation';
@@ -30,11 +30,20 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
 
   const [targetUid, setTargetUid] = useState('');
   const [element, setElement] = useState<ElementType | null>(null);
+  // Reset alongside element (see setElementAndResetTier below) -- a tier
+  // choice from one element carries no meaning against a different one,
+  // each element/tier combo is priced and stocked independently.
+  const [tier, setTier] = useState<GemTier | null>(null);
   const [openItemPicker, setOpenItemPicker] = useState(false);
 
   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
   const item = found?.item;
   const def = item ? EquipmentManager.def(item) : undefined;
+
+  const setElementAndResetTier = (el: ElementType) => {
+    setElement(el);
+    setTier(null);
+  };
 
   const itemOptions: PickerOption[] = EquipmentManager.allItems(state)
     .filter(({ item: i }) => EquipmentManager.def(i)?.slot === 'weapon')
@@ -42,7 +51,9 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
       const d = EquipmentManager.def(i);
       if (!d) return null;
       const owner = heroId ? state.heroes.find((h) => h.id === heroId)?.name ?? 'Stash' : 'Stash';
-      const current = i.elementalDamage ? ELEMENT_LABEL[i.elementalDamage] : 'Uninfused';
+      const current = i.elementalDamage
+        ? `${GEM_TIER_LABEL[i.elementalDamageTier ?? 'common']} ${ELEMENT_LABEL[i.elementalDamage]}`
+        : 'Uninfused';
       return {
         key: i.uid,
         label: d.name,
@@ -53,14 +64,15 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
     .filter((o): o is PickerOption => o !== null);
 
   function handleInfuse() {
-    if (!item || !element) return;
-    engine.infuseItem(item.uid, element);
+    if (!item || !element || !tier) return;
+    engine.infuseItem(item.uid, element, tier);
     setElement(null);
+    setTier(null);
   }
 
-  const cost = element ? CraftingManager.gemCost(state, true, element) : null;
+  const cost = element && tier ? CraftingManager.gemCost(state, true, element, tier) : null;
   const canAfford = !cost || cost.ready || (state.gold >= cost.goldCost && state.scrap >= cost.scrapCost);
-  const canInfuse = !!item && !!element && canAfford;
+  const canInfuse = !!item && !!element && !!tier && canAfford;
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -81,33 +93,61 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
 
         {item && def ? (
           <p className="tiny muted" style={{ margin: '8px 0' }}>
-            {def.name} -- infusing replaces whatever element it currently carries{item.elementalDamage ? ` (currently ${ELEMENT_LABEL[item.elementalDamage]})` : ''}.
+            {def.name} -- infusing replaces whatever element (and tier) it currently carries
+            {item.elementalDamage ? ` (currently ${GEM_TIER_LABEL[item.elementalDamageTier ?? 'common']} ${ELEMENT_LABEL[item.elementalDamage]})` : ''}.
           </p>
         ) : (
-          <p className="tiny muted" style={{ margin: '8px 0' }}>Choose a weapon, then an element, below.</p>
+          <p className="tiny muted" style={{ margin: '8px 0' }}>Choose a weapon, then an element and tier, below.</p>
         )}
 
-        {/* Element row -- each option shows "Ready" if a gem is already in
-            inventory, otherwise the fresh-craft cost (charged automatically
-            on Infuse, no separate crafting step). */}
-        <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
+        {/* Element row -- picks WHICH element, tier picked separately
+            below once an element is chosen (patch 0237, "Tiered
+            Enchanting/Infusion"). No per-option Ready/cost here anymore --
+            that now depends on tier too, so it moved to the tier row. */}
+        <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>
           {ELEMENT_TYPES.map((el) => {
-            const elCost = CraftingManager.gemCost(state, true, el);
             const selected = element === el;
-            const affordable = elCost.ready || (state.gold >= elCost.goldCost && state.scrap >= elCost.scrapCost);
             return (
               <button
                 key={el}
                 className={`chip ${selected ? 'on' : ''}`}
-                disabled={!item || !affordable}
-                onClick={() => setElement(el)}
-                title={elCost.ready ? `${ELEMENT_LABEL[el]} Gem -- ready` : `${ELEMENT_LABEL[el]} Gem -- ${elCost.scrapCost} Scrap + ${formatGold(elCost.goldCost)}`}
+                disabled={!item}
+                onClick={() => setElementAndResetTier(el)}
+                title={ELEMENT_LABEL[el]}
               >
-                {ELEMENT_GLYPH[el]} {ELEMENT_LABEL[el]} {elCost.ready ? '(Ready)' : `(${elCost.scrapCost} Scrap + ${formatGold(elCost.goldCost)})`}
+                {ELEMENT_GLYPH[el]} {ELEMENT_LABEL[el]}
               </button>
             );
           })}
         </div>
+
+        {/* Tier row -- only once an element is picked. Each option shows
+            "Ready" if a gem of that exact element+tier is already in
+            inventory, otherwise the fresh-craft cost (charged
+            automatically on Infuse, no separate crafting step). Higher
+            tiers cost more but land a bigger match bonus -- see
+            elemental.tierEffectivenessPercent in the tuning registry. */}
+        {element && (
+          <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
+            {GEM_TIERS.map((t) => {
+              const tCost = CraftingManager.gemCost(state, true, element, t);
+              const selected = tier === t;
+              const affordable = tCost.ready || (state.gold >= tCost.goldCost && state.scrap >= tCost.scrapCost);
+              return (
+                <button
+                  key={t}
+                  className={`chip ${selected ? 'on' : ''}`}
+                  disabled={!affordable}
+                  onClick={() => setTier(t)}
+                  style={{ borderColor: RARITY_COLOR[t] }}
+                  title={tCost.ready ? `${GEM_TIER_LABEL[t]} ${ELEMENT_LABEL[element]} Gem -- ready` : `${GEM_TIER_LABEL[t]} ${ELEMENT_LABEL[element]} Gem -- ${tCost.scrapCost} Scrap + ${formatGold(tCost.goldCost)}`}
+                >
+                  <span style={{ color: RARITY_COLOR[t] }}>{GEM_TIER_LABEL[t]}</span> {tCost.ready ? '(Ready)' : `(${tCost.scrapCost} Scrap + ${formatGold(tCost.goldCost)})`}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <button className="btn-purple" disabled={!canInfuse} onClick={handleInfuse}>
           Infuse

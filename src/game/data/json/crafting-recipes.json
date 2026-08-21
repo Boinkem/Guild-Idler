@@ -198,9 +198,9 @@
     "statValue": 0
   },
   {
-    "id": "craft_elemental_gem_fire",
-    "name": "Fire Gem",
-    "description": "A shard of raw fire bound into something a blacksmith can work into a blade. Spent at the Infuse station.",
+    "id": "craft_elemental_gem_fire_common",
+    "name": "Common Fire Gem",
+    "description": "A raw, loosely-bound shard of raw fire, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
     "category": "gem",
     "icon": "crafting/Crafting_28.png",
     "materialCost": {},
@@ -212,13 +212,99 @@
     "statValue": 0,
     "resultGem": {
       "kind": "elemental",
-      "element": "fire"
+      "element": "fire",
+      "tier": "common"
     }
   },
   {
-    "id": "craft_elemental_gem_frost",
-    "name": "Frost Gem",
-    "description": "A shard of raw frost bound into something a blacksmith can work into a blade. Spent at the Infuse station.",
+    "id": "craft_elemental_gem_fire_uncommon",
+    "name": "Uncommon Fire Gem",
+    "description": "A cleanly-cut, well-bound shard of raw fire, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+    "category": "gem",
+    "icon": "crafting/Crafting_28.png",
+    "materialCost": {},
+    "goldCost": 300,
+    "scrapCost": 12,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "fire",
+      "tier": "uncommon"
+    }
+  },
+  {
+    "id": "craft_elemental_gem_fire_rare",
+    "name": "Rare Fire Gem",
+    "description": "A dense, brightly-cored shard of raw fire, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+    "category": "gem",
+    "icon": "crafting/Crafting_28.png",
+    "materialCost": {
+      "ore": 10
+    },
+    "goldCost": 600,
+    "scrapCost": 24,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "fire",
+      "tier": "rare"
+    }
+  },
+  {
+    "id": "craft_elemental_gem_fire_epic",
+    "name": "Epic Fire Gem",
+    "description": "A near-flawless, potent shard of raw fire, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+    "category": "gem",
+    "icon": "crafting/Crafting_28.png",
+    "materialCost": {
+      "ore": 20,
+      "herbs": 10
+    },
+    "goldCost": 1200,
+    "scrapCost": 48,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "fire",
+      "tier": "epic"
+    }
+  },
+  {
+    "id": "craft_elemental_gem_fire_legendary",
+    "name": "Legendary Fire Gem",
+    "description": "A flawless, overflowing shard of raw fire, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+    "category": "gem",
+    "icon": "crafting/Crafting_28.png",
+    "materialCost": {
+      "ore": 30,
+      "herbs": 20,
+      "fish": 10
+    },
+    "goldCost": 2400,
+    "scrapCost": 96,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "fire",
+      "tier": "legendary"
+    }
+  },
+  {
+    "id": "craft_elemental_gem_frost_common",
+    "name": "Common Frost Gem",
+    "description": "A raw, loosely-bound shard of raw frost, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
     "category": "gem",
     "icon": "crafting/Crafting_14.png",
     "materialCost": {},
@@ -230,13 +316,99 @@
     "statValue": 0,
     "resultGem": {
       "kind": "elemental",
-      "element": "frost"
+      "element": "frost",
+      "tier": "common"
     }
   },
   {
-    "id": "craft_elemental_gem_lightning",
-    "name": "Lightning Gem",
-    "description": "A shard of raw lightning bound into something a blacksmith can work into a blade. Spent at the Infuse station.",
+    "id": "craft_elemental_gem_frost_uncommon",
+    "name": "Uncommon Frost Gem",
+    "description": "A cleanly-cut, well-bound shard of raw frost, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+    "category": "gem",
+    "icon": "crafting/Crafting_14.png",
+    "materialCost": {},
+    "goldCost": 300,
+    "scrapCost": 12,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "frost",
+      "tier": "uncommon"
+    }
+  },
+  {
+    "id": "craft_elemental_gem_frost_rare",
+    "name": "Rare Frost Gem",
+    "description": "A dense, brightly-cored shard of raw frost, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+    "category": "gem",
+    "icon": "crafting/Crafting_14.png",
+    "materialCost": {
+      "ore": 10
+    },
+    "goldCost": 600,
+    "scrapCost": 24,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "frost",
+      "tier": "rare"
+    }
+  },
+  {
+    "id": "craft_elemental_gem_frost_epic",
+    "name": "Epic Frost Gem",
+    "description": "A near-flawless, potent shard of raw frost, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+    "category": "gem",
+    "icon": "crafting/Crafting_14.png",
+    "materialCost": {
+      "ore": 20,
+      "herbs": 10
+    },
+    "goldCost": 1200,
+    "scrapCost": 48,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "frost",
+      "tier": "epic"
+    }
+  },
+  {
+    "id": "craft_elemental_gem_frost_legendary",
+    "name": "Legendary Frost Gem",
+    "description": "A flawless, overflowing shard of raw frost, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+    "category": "gem",
+    "icon": "crafting/Crafting_14.png",
+    "materialCost": {
+      "ore": 30,
+      "herbs": 20,
+      "fish": 10
+    },
+    "goldCost": 2400,
+    "scrapCost": 96,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "frost",
+      "tier": "legendary"
+    }
+  },
+  {
+    "id": "craft_elemental_gem_lightning_common",
+    "name": "Common Lightning Gem",
+    "description": "A raw, loosely-bound shard of raw lightning, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
     "category": "gem",
     "icon": "crafting/Crafting_21.png",
     "materialCost": {},
@@ -248,13 +420,99 @@
     "statValue": 0,
     "resultGem": {
       "kind": "elemental",
-      "element": "lightning"
+      "element": "lightning",
+      "tier": "common"
     }
   },
   {
-    "id": "craft_elemental_gem_poison",
-    "name": "Poison Gem",
-    "description": "A shard of raw poison bound into something a blacksmith can work into a blade. Spent at the Infuse station.",
+    "id": "craft_elemental_gem_lightning_uncommon",
+    "name": "Uncommon Lightning Gem",
+    "description": "A cleanly-cut, well-bound shard of raw lightning, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+    "category": "gem",
+    "icon": "crafting/Crafting_21.png",
+    "materialCost": {},
+    "goldCost": 300,
+    "scrapCost": 12,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "lightning",
+      "tier": "uncommon"
+    }
+  },
+  {
+    "id": "craft_elemental_gem_lightning_rare",
+    "name": "Rare Lightning Gem",
+    "description": "A dense, brightly-cored shard of raw lightning, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+    "category": "gem",
+    "icon": "crafting/Crafting_21.png",
+    "materialCost": {
+      "ore": 10
+    },
+    "goldCost": 600,
+    "scrapCost": 24,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "lightning",
+      "tier": "rare"
+    }
+  },
+  {
+    "id": "craft_elemental_gem_lightning_epic",
+    "name": "Epic Lightning Gem",
+    "description": "A near-flawless, potent shard of raw lightning, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+    "category": "gem",
+    "icon": "crafting/Crafting_21.png",
+    "materialCost": {
+      "ore": 20,
+      "herbs": 10
+    },
+    "goldCost": 1200,
+    "scrapCost": 48,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "lightning",
+      "tier": "epic"
+    }
+  },
+  {
+    "id": "craft_elemental_gem_lightning_legendary",
+    "name": "Legendary Lightning Gem",
+    "description": "A flawless, overflowing shard of raw lightning, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+    "category": "gem",
+    "icon": "crafting/Crafting_21.png",
+    "materialCost": {
+      "ore": 30,
+      "herbs": 20,
+      "fish": 10
+    },
+    "goldCost": 2400,
+    "scrapCost": 96,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "lightning",
+      "tier": "legendary"
+    }
+  },
+  {
+    "id": "craft_elemental_gem_poison_common",
+    "name": "Common Poison Gem",
+    "description": "A raw, loosely-bound shard of raw poison, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
     "category": "gem",
     "icon": "crafting/Crafting_35.png",
     "materialCost": {},
@@ -266,13 +524,99 @@
     "statValue": 0,
     "resultGem": {
       "kind": "elemental",
-      "element": "poison"
+      "element": "poison",
+      "tier": "common"
     }
   },
   {
-    "id": "craft_resistance_gem_fire",
-    "name": "Fire Resistance Gem",
-    "description": "Tempered to turn aside fire rather than channel it -- worked into armor instead of a blade.",
+    "id": "craft_elemental_gem_poison_uncommon",
+    "name": "Uncommon Poison Gem",
+    "description": "A cleanly-cut, well-bound shard of raw poison, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+    "category": "gem",
+    "icon": "crafting/Crafting_35.png",
+    "materialCost": {},
+    "goldCost": 300,
+    "scrapCost": 12,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "poison",
+      "tier": "uncommon"
+    }
+  },
+  {
+    "id": "craft_elemental_gem_poison_rare",
+    "name": "Rare Poison Gem",
+    "description": "A dense, brightly-cored shard of raw poison, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+    "category": "gem",
+    "icon": "crafting/Crafting_35.png",
+    "materialCost": {
+      "ore": 10
+    },
+    "goldCost": 600,
+    "scrapCost": 24,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "poison",
+      "tier": "rare"
+    }
+  },
+  {
+    "id": "craft_elemental_gem_poison_epic",
+    "name": "Epic Poison Gem",
+    "description": "A near-flawless, potent shard of raw poison, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+    "category": "gem",
+    "icon": "crafting/Crafting_35.png",
+    "materialCost": {
+      "ore": 20,
+      "herbs": 10
+    },
+    "goldCost": 1200,
+    "scrapCost": 48,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "poison",
+      "tier": "epic"
+    }
+  },
+  {
+    "id": "craft_elemental_gem_poison_legendary",
+    "name": "Legendary Poison Gem",
+    "description": "A flawless, overflowing shard of raw poison, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+    "category": "gem",
+    "icon": "crafting/Crafting_35.png",
+    "materialCost": {
+      "ore": 30,
+      "herbs": 20,
+      "fish": 10
+    },
+    "goldCost": 2400,
+    "scrapCost": 96,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "elemental",
+      "element": "poison",
+      "tier": "legendary"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_fire_common",
+    "name": "Common Fire Resistance Gem",
+    "description": "A raw, loosely-bound shard tempered to turn aside fire rather than channel it -- worked into armor at Armour Infusion.",
     "category": "gem",
     "icon": "crafting/Crafting_23.png",
     "materialCost": {},
@@ -284,13 +628,99 @@
     "statValue": 0,
     "resultGem": {
       "kind": "resist",
-      "element": "fire"
+      "element": "fire",
+      "tier": "common"
     }
   },
   {
-    "id": "craft_resistance_gem_frost",
-    "name": "Frost Resistance Gem",
-    "description": "Tempered to turn aside frost rather than channel it -- worked into armor instead of a blade.",
+    "id": "craft_resistance_gem_fire_uncommon",
+    "name": "Uncommon Fire Resistance Gem",
+    "description": "A cleanly-cut, well-bound shard tempered to turn aside fire rather than channel it -- worked into armor at Armour Infusion.",
+    "category": "gem",
+    "icon": "crafting/Crafting_23.png",
+    "materialCost": {},
+    "goldCost": 300,
+    "scrapCost": 12,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "resist",
+      "element": "fire",
+      "tier": "uncommon"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_fire_rare",
+    "name": "Rare Fire Resistance Gem",
+    "description": "A dense, brightly-cored shard tempered to turn aside fire rather than channel it -- worked into armor at Armour Infusion.",
+    "category": "gem",
+    "icon": "crafting/Crafting_23.png",
+    "materialCost": {
+      "ore": 10
+    },
+    "goldCost": 600,
+    "scrapCost": 24,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "resist",
+      "element": "fire",
+      "tier": "rare"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_fire_epic",
+    "name": "Epic Fire Resistance Gem",
+    "description": "A near-flawless, potent shard tempered to turn aside fire rather than channel it -- worked into armor at Armour Infusion.",
+    "category": "gem",
+    "icon": "crafting/Crafting_23.png",
+    "materialCost": {
+      "ore": 20,
+      "herbs": 10
+    },
+    "goldCost": 1200,
+    "scrapCost": 48,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "resist",
+      "element": "fire",
+      "tier": "epic"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_fire_legendary",
+    "name": "Legendary Fire Resistance Gem",
+    "description": "A flawless, overflowing shard tempered to turn aside fire rather than channel it -- worked into armor at Armour Infusion.",
+    "category": "gem",
+    "icon": "crafting/Crafting_23.png",
+    "materialCost": {
+      "ore": 30,
+      "herbs": 20,
+      "fish": 10
+    },
+    "goldCost": 2400,
+    "scrapCost": 96,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "resist",
+      "element": "fire",
+      "tier": "legendary"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_frost_common",
+    "name": "Common Frost Resistance Gem",
+    "description": "A raw, loosely-bound shard tempered to turn aside frost rather than channel it -- worked into armor at Armour Infusion.",
     "category": "gem",
     "icon": "crafting/Crafting_09.png",
     "materialCost": {},
@@ -302,13 +732,99 @@
     "statValue": 0,
     "resultGem": {
       "kind": "resist",
-      "element": "frost"
+      "element": "frost",
+      "tier": "common"
     }
   },
   {
-    "id": "craft_resistance_gem_lightning",
-    "name": "Lightning Resistance Gem",
-    "description": "Tempered to turn aside lightning rather than channel it -- worked into armor instead of a blade.",
+    "id": "craft_resistance_gem_frost_uncommon",
+    "name": "Uncommon Frost Resistance Gem",
+    "description": "A cleanly-cut, well-bound shard tempered to turn aside frost rather than channel it -- worked into armor at Armour Infusion.",
+    "category": "gem",
+    "icon": "crafting/Crafting_09.png",
+    "materialCost": {},
+    "goldCost": 300,
+    "scrapCost": 12,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "resist",
+      "element": "frost",
+      "tier": "uncommon"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_frost_rare",
+    "name": "Rare Frost Resistance Gem",
+    "description": "A dense, brightly-cored shard tempered to turn aside frost rather than channel it -- worked into armor at Armour Infusion.",
+    "category": "gem",
+    "icon": "crafting/Crafting_09.png",
+    "materialCost": {
+      "ore": 10
+    },
+    "goldCost": 600,
+    "scrapCost": 24,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "resist",
+      "element": "frost",
+      "tier": "rare"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_frost_epic",
+    "name": "Epic Frost Resistance Gem",
+    "description": "A near-flawless, potent shard tempered to turn aside frost rather than channel it -- worked into armor at Armour Infusion.",
+    "category": "gem",
+    "icon": "crafting/Crafting_09.png",
+    "materialCost": {
+      "ore": 20,
+      "herbs": 10
+    },
+    "goldCost": 1200,
+    "scrapCost": 48,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "resist",
+      "element": "frost",
+      "tier": "epic"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_frost_legendary",
+    "name": "Legendary Frost Resistance Gem",
+    "description": "A flawless, overflowing shard tempered to turn aside frost rather than channel it -- worked into armor at Armour Infusion.",
+    "category": "gem",
+    "icon": "crafting/Crafting_09.png",
+    "materialCost": {
+      "ore": 30,
+      "herbs": 20,
+      "fish": 10
+    },
+    "goldCost": 2400,
+    "scrapCost": 96,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "resist",
+      "element": "frost",
+      "tier": "legendary"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_lightning_common",
+    "name": "Common Lightning Resistance Gem",
+    "description": "A raw, loosely-bound shard tempered to turn aside lightning rather than channel it -- worked into armor at Armour Infusion.",
     "category": "gem",
     "icon": "crafting/Crafting_16.png",
     "materialCost": {},
@@ -320,13 +836,99 @@
     "statValue": 0,
     "resultGem": {
       "kind": "resist",
-      "element": "lightning"
+      "element": "lightning",
+      "tier": "common"
     }
   },
   {
-    "id": "craft_resistance_gem_poison",
-    "name": "Poison Resistance Gem",
-    "description": "Tempered to turn aside poison rather than channel it -- worked into armor instead of a blade.",
+    "id": "craft_resistance_gem_lightning_uncommon",
+    "name": "Uncommon Lightning Resistance Gem",
+    "description": "A cleanly-cut, well-bound shard tempered to turn aside lightning rather than channel it -- worked into armor at Armour Infusion.",
+    "category": "gem",
+    "icon": "crafting/Crafting_16.png",
+    "materialCost": {},
+    "goldCost": 300,
+    "scrapCost": 12,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "resist",
+      "element": "lightning",
+      "tier": "uncommon"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_lightning_rare",
+    "name": "Rare Lightning Resistance Gem",
+    "description": "A dense, brightly-cored shard tempered to turn aside lightning rather than channel it -- worked into armor at Armour Infusion.",
+    "category": "gem",
+    "icon": "crafting/Crafting_16.png",
+    "materialCost": {
+      "ore": 10
+    },
+    "goldCost": 600,
+    "scrapCost": 24,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "resist",
+      "element": "lightning",
+      "tier": "rare"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_lightning_epic",
+    "name": "Epic Lightning Resistance Gem",
+    "description": "A near-flawless, potent shard tempered to turn aside lightning rather than channel it -- worked into armor at Armour Infusion.",
+    "category": "gem",
+    "icon": "crafting/Crafting_16.png",
+    "materialCost": {
+      "ore": 20,
+      "herbs": 10
+    },
+    "goldCost": 1200,
+    "scrapCost": 48,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "resist",
+      "element": "lightning",
+      "tier": "epic"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_lightning_legendary",
+    "name": "Legendary Lightning Resistance Gem",
+    "description": "A flawless, overflowing shard tempered to turn aside lightning rather than channel it -- worked into armor at Armour Infusion.",
+    "category": "gem",
+    "icon": "crafting/Crafting_16.png",
+    "materialCost": {
+      "ore": 30,
+      "herbs": 20,
+      "fish": 10
+    },
+    "goldCost": 2400,
+    "scrapCost": 96,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "resist",
+      "element": "lightning",
+      "tier": "legendary"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_poison_common",
+    "name": "Common Poison Resistance Gem",
+    "description": "A raw, loosely-bound shard tempered to turn aside poison rather than channel it -- worked into armor at Armour Infusion.",
     "category": "gem",
     "icon": "crafting/Crafting_30.png",
     "materialCost": {},
@@ -338,7 +940,93 @@
     "statValue": 0,
     "resultGem": {
       "kind": "resist",
-      "element": "poison"
+      "element": "poison",
+      "tier": "common"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_poison_uncommon",
+    "name": "Uncommon Poison Resistance Gem",
+    "description": "A cleanly-cut, well-bound shard tempered to turn aside poison rather than channel it -- worked into armor at Armour Infusion.",
+    "category": "gem",
+    "icon": "crafting/Crafting_30.png",
+    "materialCost": {},
+    "goldCost": 300,
+    "scrapCost": 12,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "resist",
+      "element": "poison",
+      "tier": "uncommon"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_poison_rare",
+    "name": "Rare Poison Resistance Gem",
+    "description": "A dense, brightly-cored shard tempered to turn aside poison rather than channel it -- worked into armor at Armour Infusion.",
+    "category": "gem",
+    "icon": "crafting/Crafting_30.png",
+    "materialCost": {
+      "ore": 10
+    },
+    "goldCost": 600,
+    "scrapCost": 24,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "resist",
+      "element": "poison",
+      "tier": "rare"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_poison_epic",
+    "name": "Epic Poison Resistance Gem",
+    "description": "A near-flawless, potent shard tempered to turn aside poison rather than channel it -- worked into armor at Armour Infusion.",
+    "category": "gem",
+    "icon": "crafting/Crafting_30.png",
+    "materialCost": {
+      "ore": 20,
+      "herbs": 10
+    },
+    "goldCost": 1200,
+    "scrapCost": 48,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "resist",
+      "element": "poison",
+      "tier": "epic"
+    }
+  },
+  {
+    "id": "craft_resistance_gem_poison_legendary",
+    "name": "Legendary Poison Resistance Gem",
+    "description": "A flawless, overflowing shard tempered to turn aside poison rather than channel it -- worked into armor at Armour Infusion.",
+    "category": "gem",
+    "icon": "crafting/Crafting_30.png",
+    "materialCost": {
+      "ore": 30,
+      "herbs": 20,
+      "fish": 10
+    },
+    "goldCost": 2400,
+    "scrapCost": 96,
+    "modsToPick": 0,
+    "modValue": 0,
+    "statsToPick": 0,
+    "statValue": 0,
+    "resultGem": {
+      "kind": "resist",
+      "element": "poison",
+      "tier": "legendary"
     }
   },
   {

@@ -1,7 +1,8 @@
-import { Difficulty, ElementType, Hero } from '../types';
+import { Difficulty, ElementType, GemTier, Hero } from '../types';
 import { DIFFICULTY_ORDER } from './quests';
 import { Rng } from '../rng';
 import { Tuning } from './tuning';
+import { RARITY_ORDER } from '../util';
 
 export const ELEMENT_TYPES: ElementType[] = ['fire', 'frost', 'lightning', 'poison'];
 
@@ -12,6 +13,51 @@ export const ELEMENT_LABEL: Record<ElementType, string> = {
 export const ELEMENT_GLYPH: Record<ElementType, string> = {
   fire: '\u{1f525}', frost: '\u{2744}\u{fe0f}', lightning: '\u{26a1}', poison: '\u{2620}\u{fe0f}',
 };
+
+/**
+ * Gem tiers, patch 0237 ("Tiered Enchanting/Infusion"). GemTier is a
+ * plain alias of Rarity (see types.ts), so this is just RARITY_ORDER
+ * under a locally-meaningful name -- kept as its own export rather than
+ * importing RARITY_ORDER directly at every call site, so a reader of
+ * WeaponEnchantStation/ArmourInfusionStation/CraftingManager doesn't have
+ * to go re-derive "oh, GemTier IS Rarity" every time they see it.
+ */
+export const GEM_TIERS: GemTier[] = RARITY_ORDER;
+
+export const GEM_TIER_LABEL: Record<GemTier, string> = {
+  common: 'Common', uncommon: 'Uncommon', rare: 'Rare', epic: 'Epic', legendary: 'Legendary',
+};
+
+/**
+ * How effective each tier's match actually is, as a percentage of
+ * `elemental.maxMatchBonusPercent` -- the flat yes/no match bonus this
+ * replaces (`elemental.bonusPerMatchPercent`, 3% regardless of gem
+ * quality) becoming a real 5-rung ladder was the whole point of patch
+ * 0237. Read from the tuning registry rather than hardcoded so every
+ * tier is independently DevTool-tunable, same as everything else in this
+ * system. Deliberately NOT linear (15/30/60/90/100, not 20/40/60/80/100)
+ * -- the jump from Rare to Epic/Legendary is meant to read as the real
+ * payoff tier, with Common/Uncommon staying closer to "a nice-to-have,"
+ * matching how the old flat 3% bonus was originally framed
+ * ("deliberately modest... not a build-around") for anything below Rare.
+ */
+export function tierEffectivenessPercent(tier: GemTier): number {
+  return Tuning.get(`elemental.tierEffectivenessPercent.${tier}`);
+}
+
+/**
+ * The actual success-chance points a single infusion/match at this tier
+ * is worth -- `elemental.maxMatchBonusPercent` (the Legendary ceiling)
+ * scaled down by that tier's own effectiveness. A Legendary match lands
+ * exactly at the ceiling (100% effectiveness); a Common match lands at
+ * 15% of it. Shared by both the weapon side (a single elementalDamageTier
+ * value) and the armor side (one call per infusion, at CraftAndInfuse
+ * time -- see EquipmentManager.infuse) since both draw from the same
+ * ladder.
+ */
+export function matchBonusForTier(tier: GemTier): number {
+  return Tuning.get('elemental.maxMatchBonusPercent') * tierEffectivenessPercent(tier) / 100;
+}
 
 /**
  * Icon pool for the Scrap "+N Scrap" collect-burst (see ScrapStation.tsx)
@@ -85,25 +131,36 @@ export function rollElementTags(rng: Rng, difficulty: Difficulty): ElementType[]
  * - Weapon side: the hero's equipped weapon's own elementalDamage
  *   (single value, not a magnitude -- see EquipmentItem's own comment on
  *   why infusing replaces rather than stacks) matching one of `tags.
- *   vulnerableTo` adds a flat elemental.bonusPerMatchPercent, UNLESS that
+ *   vulnerableTo` adds matchBonusForTier(elementalDamageTier) -- as of
+ *   patch 0237, how much this is worth depends on the tier of gem it was
+ *   infused with, not a flat amount regardless of quality -- UNLESS that
  *   same element is also listed under `tags.immuneTo` (raid-only) --
  *   immunity describes the encounter's own resilience, so a matching
- *   weapon does nothing special here rather than backfiring.
+ *   weapon does nothing special here rather than backfiring, at any
+ *   tier. `?? 'common'` covers the theoretical case of elementalDamage
+ *   being set without a tier (shouldn't happen post-migration, but a
+ *   missing tier reads as the worst one rather than silently granting a
+ *   full-value untiered bonus).
  * - Armor side: every equipped item's own elementalResist (a numeric
  *   value per element, additive across repeated infusions -- see
  *   EquipmentItem's own comment on why this one DOES stack) is summed
- *   for each element listed in `tags.dealsElement`. Not gated by
- *   `immuneTo` -- immunity is about the encounter's own weakness being
- *   nullified, not its attack type.
+ *   for each element listed in `tags.dealsElement`. Each individual
+ *   infusion's own contribution to that running total is already
+ *   tier-scaled at infuse time (EquipmentManager.infuse), so this read
+ *   side doesn't need to know about tiers at all -- same shape as
+ *   before patch 0237, just bigger/smaller numbers depending on what
+ *   went into it. Not gated by `immuneTo` -- immunity is about the
+ *   encounter's own weakness being nullified, not its attack type.
  */
 export function elementalBonusForHero(
   hero: Hero,
   tags: { vulnerableTo?: ElementType[]; dealsElement?: ElementType[]; immuneTo?: ElementType[] },
 ): number {
   let bonus = 0;
-  const weaponElement = hero.equipment.weapon?.elementalDamage;
+  const weapon = hero.equipment.weapon;
+  const weaponElement = weapon?.elementalDamage;
   if (weaponElement && tags.vulnerableTo?.includes(weaponElement) && !(tags.immuneTo?.includes(weaponElement))) {
-    bonus += Tuning.get('elemental.bonusPerMatchPercent');
+    bonus += matchBonusForTier(weapon?.elementalDamageTier ?? 'common');
   }
   for (const el of tags.dealsElement ?? []) {
     for (const item of Object.values(hero.equipment)) {

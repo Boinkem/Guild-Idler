@@ -6,7 +6,7 @@ import { EquipmentManager } from '../../game/managers/EquipmentManager';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID, gearScoreForItem } from '../../game/data/equipment';
-import { ELEMENT_GLYPH, ELEMENT_LABEL } from '../../game/data/elements';
+import { ELEMENT_GLYPH, ELEMENT_LABEL, GEM_TIER_LABEL } from '../../game/data/elements';
 import { EquipSlot, EquipmentDef, EquipmentItem, ElementType, Hero, Rarity, ConsumableDef, CurioDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { CurioManager } from '../../game/managers/CurioManager';
@@ -587,17 +587,19 @@ function ElementalInfoLine({ item }: { item: EquipmentItem }) {
   const resistEntries = (Object.entries(item.elementalResist ?? {}) as [ElementType, number][])
     .filter(([, value]) => value > 0);
   if (!item.elementalDamage && resistEntries.length === 0) return null;
+  const tier = item.elementalDamageTier ?? 'common';
   return (
     <div className="tiny" style={{ marginTop: 2, color: 'var(--sky)' }}>
       {item.elementalDamage && (
-        <span title={`Deals ${ELEMENT_LABEL[item.elementalDamage]} damage -- bonus success against foes vulnerable to it, nullified against foes immune to it`}>
+        <span title={`${GEM_TIER_LABEL[tier]} tier -- bonus success against foes vulnerable to it, nullified against foes immune to it`}>
           {ELEMENT_GLYPH[item.elementalDamage]} Deals {ELEMENT_LABEL[item.elementalDamage]}
+          {' '}(<span style={{ color: RARITY_COLOR[tier] }}>{GEM_TIER_LABEL[tier]}</span>)
         </span>
       )}
       {item.elementalDamage && resistEntries.length > 0 && ' · '}
       {resistEntries.map(([el, value], i) => (
-        <span key={el} title={`+${value}% success resisting ${ELEMENT_LABEL[el]} attacks`}>
-          {i > 0 ? ' · ' : ''}{ELEMENT_GLYPH[el]} +{value}% {ELEMENT_LABEL[el]} resist
+        <span key={el} title={`+${value.toFixed(1)}% success resisting ${ELEMENT_LABEL[el]} attacks`}>
+          {i > 0 ? ' · ' : ''}{ELEMENT_GLYPH[el]} +{value.toFixed(1)}% {ELEMENT_LABEL[el]} resist
         </span>
       ))}
     </div>

@@ -1479,8 +1479,15 @@ function validateEntry(schema, entry, index) {
           if (!ELEMENT_KEYS.includes(value.element)) {
             errors.push(`entry ${index}: "${key}.element" must be one of ${ELEMENT_KEYS.join(', ')}`);
           }
+          // GemTier, added patch 0237 ("Tiered Enchanting/Infusion") -- a
+          // plain alias of Rarity, reusing RARITY_KEYS rather than a new
+          // list, same "Common through Legendary" ladder every other
+          // 5-tier field in this schema already validates against.
+          if (!RARITY_KEYS.includes(value.tier)) {
+            errors.push(`entry ${index}: "${key}.tier" must be one of ${RARITY_KEYS.join(', ')}`);
+          }
           for (const k of Object.keys(value)) {
-            if (k !== 'kind' && k !== 'element') errors.push(`entry ${index}: unknown key "${k}" in "${key}"`);
+            if (k !== 'kind' && k !== 'element' && k !== 'tier') errors.push(`entry ${index}: unknown key "${k}" in "${key}"`);
           }
         }
         break;

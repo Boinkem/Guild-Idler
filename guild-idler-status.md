@@ -18292,3 +18292,117 @@ enchant/resist effectiveness -- see the open tiering-rework discussion in
 the backlog below.
 
 `npx tsc --noEmit` and `vite build` both pass clean.
+
+### Tiered Enchanting/Infusion: elemental matches are no longer flat yes/no (patch 0237)
+
+```discord-update
+Dev Update | Tiered Enchanting/Infusion
+
+- Elemental gems and resistance gems now come in 5 tiers: Common, Uncommon, Rare, Epic, Legendary
+- Higher-tier gems land a much bigger success bonus when your element matches a boss's weakness or attack type
+- Weapon Enchanting and Armour Infusion both got a new tier picker alongside the element choice
+- 40 new gem recipes at the Enchanter -- one per element and tier
+- Existing infused gear and gem stockpiles carry over automatically, no value lost
+```
+
+Direct follow-up to the raid-weakness review (patch 0236): once the display
+bug was fixed and the match mechanic was actually visible, the flat
+"matched or didn't" shape it had always used (a fixed bonus regardless of
+gem quality) read as thin -- a single gem craft maxed out the mechanic
+forever. Reworked into a real 5-tier ladder, same effectiveness curve the
+person building this game specified directly: 15/30/60/90/100%.
+
+**GemTier is a plain alias of Rarity** (`types.ts`), not a new enum --
+reuses the existing 5-rung ladder and its infra (`RARITY_ORDER`,
+`RARITY_COLOR`, `RarityPill`) wholesale, same convention the potion/
+fortune-charm five-tier ladders (patch 0234) already established for
+this project. `GEM_TIERS`/`GEM_TIER_LABEL` (`data/elements.ts`) are
+thin re-exports under a locally-meaningful name.
+
+**Formula.** `elemental.bonusPerMatchPercent` (flat 3%, same regardless
+of gem quality) is gone, replaced by two tuning values:
+`elemental.maxMatchBonusPercent` (10, the Legendary ceiling) x
+`elemental.tierEffectivenessPercent.<tier>` (15/30/60/90/100, the exact
+curve specified) / 100. Deliberately NOT linear -- Rare through
+Legendary is meant to read as the real payoff tier, Common/Uncommon
+stays closer to "a nice-to-have," matching how the old flat bonus was
+originally framed. Notably, Uncommon lands at exactly 3% (10 x 30%) --
+almost exactly the old flat value, a deliberate anchor point rather than
+a coincidence, so the ladder reads as "the old system, plus real room to
+grow" rather than a clean break.
+
+**Weapon side (`elementalDamage`) gained a paired `elementalDamageTier`**
+-- set/replaced together, same "changing what it's infused with" framing
+the element itself already had (a fresh Common infusion genuinely
+downgrades a previously-Legendary one, on purpose). `elementalBonusForHero`
+(`data/elements.ts`) now calls the new `matchBonusForTier(tier)` instead
+of reading the flat tuning value directly.
+
+**Armor side (`elementalResist`) keeps its existing "stacks with itself"
+shape untouched** -- per direct instruction, multiple infusions (and
+multiple pieces) still sum. What changed is only how much a single
+infusion ADDS: `EquipmentManager.infuse` now adds `matchBonusForTier(tier)`
+instead of the old flat value, so a Legendary Resistance Gem infusion is
+worth roughly 6.7x a Common one, but the accumulation model itself is
+identical to before this patch. `elementalBonusForHero`'s read side
+(`RaidManager`/`QuestManager`) needed zero changes on this side --
+`elementalResist[el]` is still just summed, same as always.
+
+**`GameState.gems`/`resistGems` gained a tier layer**
+(`Partial<Record<ElementType, Partial<Record<GemTier, number>>>>`, was a
+flat per-element count) -- a Common Fire Gem and a Legendary Fire Gem are
+now genuinely different inventory items, not the same counter. `SAVE_VERSION`
+49 -> 50, migration bucket old counts into `'common'` (the lowest tier,
+since an untiered gem has no real provenance to infer a better one from
+-- can't hand out free high-tier value on migration) and backfills any
+already-infused weapon's missing `elementalDamageTier` to `'uncommon'`
+specifically (the tier whose new effective bonus, 3%, lands closest to
+the flat 3% that weapon's infusion was actually worth before this patch
+-- the closest available tier to "no change," not an arbitrary pick).
+`elementalResist` values themselves are left untouched by the migration
+-- always a plain accumulated number with no provenance to re-derive, and
+mechanically still valid as-is; only future infusions add tier-scaled
+amounts on top of whatever a save already earned.
+
+**Content: 40 new gem recipes, replacing the old flat 8.** One per
+element (fire/frost/lightning/poison) x tier (5) x kind (elemental/
+resist) -- `craft_elemental_gem_<element>_<tier>` / `craft_resistance_gem_
+<element>_<tier>`. Cost doubles per tier off the original 150g/6 Scrap
+baseline (150/300/600/1200/2400 gold, 6/12/24/48/96 Scrap) -- same
+doubling-per-rarity shape `elemental.scrapValue.<rarity>` already
+established elsewhere in this system. Rare and above also cost real
+materials for the first time (Rare: 10 Ore; Epic: +20 Ore/10 Herbs;
+Legendary: +30 Ore/20 Herbs/10 Fish) -- Common/Uncommon stay gold+Scrap
+only, matching the original recipe shape exactly at the low end.
+`CraftingRecipeDef.resultGem` gained a required `tier: GemTier` field.
+
+**UI.** `WeaponEnchantStation`: the existing element chip row is
+unchanged (still picks the element first); a new second row of 5 tier
+chips appears once an element is chosen, each showing Ready/cost for
+that exact element+tier combo, colour-coded via `RARITY_COLOR`.
+`ArmourInfusionStation`: the gem `PickerModal` list expanded from 4
+options (one per element) to 20 (element x tier, grouped by element then
+ascending tier), same list-based pattern it already used, no new picker
+paradigm needed. Both stations' "currently infused" summary lines now
+name the tier alongside the element. `EquipmentPanel`'s `ElementalInfoLine`
+(patch 0236) now shows a weapon's tier next to its element, and resist
+percentages display to one decimal place now that they're no longer
+always whole numbers.
+
+**DevTool.** `resultGem`'s schema gained the `tier` sub-field (both
+`server.mjs` validation, reusing the existing `RARITY_KEYS` constant
+already used for `guaranteedLoot`/egg rarity elsewhere in this same
+schema, and `app.js`'s form UI) -- the 40 new recipes are editable the
+same way the original 8 were, no separate follow-up needed this time.
+
+**Not touched, out of scope for this patch:** the raid encounter tag
+content gap (16 of 22 encounters still untagged, unrelated to tiering);
+Melee/Ranged/Caster roles; any UI change to how a boss's own tags display
+(patch 0236 already covers that, tiers are a gear-side concept only, a
+boss doesn't have a tier).
+
+`npx tsc --noEmit` and `vite build` both pass clean. DevTool JS/CSS
+verified via `node --check` on both `server.mjs` and `app.js` (no live
+devtool server available in this environment to check the actual
+rendered form, same limitation prior DevTool-touching patches have
+noted).

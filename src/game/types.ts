@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 49;
+export const SAVE_VERSION = 50;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -16,6 +16,18 @@ export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
  * a piece of armor, or a quest/raid encounter, not of a hero or a class.
  */
 export type ElementType = 'fire' | 'frost' | 'lightning' | 'poison';
+
+/**
+ * How effective an infused element/resist gem actually is -- a plain
+ * alias of Rarity rather than a new enum, per patch 0237 ("Tiered
+ * Enchanting/Infusion"). Deliberately reuses the existing 5-rung ladder
+ * (and its ordering/colour/label infra -- RARITY_ORDER, RARITY_COLOR,
+ * RarityPill) instead of inventing a parallel one, same convention every
+ * other 5-tier progression in this project already follows (the potion/
+ * fortune-charm ladders finished out in patch 0234). See data/elements.ts
+ * for the tier -> match-effectiveness mapping.
+ */
+export type GemTier = Rarity;
 
 export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'shield' | 'gloves' | 'boots' | 'ring' | 'amulet' | 'cloak';
 
@@ -428,6 +440,21 @@ export interface EquipmentItem {
    */
   elementalDamage?: ElementType;
   /**
+   * The tier of gem used for this weapon's current elementalDamage --
+   * set/replaced together with it, never independently (patch 0237,
+   * "Tiered Enchanting/Infusion"). Determines how much of `elemental.
+   * maxMatchBonusPercent` a matching hit actually gets (see
+   * elementalBonusForHero) -- a Common-gem infusion and a Legendary-gem
+   * infusion both set `elementalDamage` to the same element, but land
+   * very different success bonuses. Absent exactly when elementalDamage
+   * itself is absent; a save migrated from before this patch backfills
+   * this to 'uncommon' on any already-infused weapon (see SaveManager
+   * migration 49 -> 50) rather than leaving it undefined, since an
+   * undefined tier would silently zero out a bonus the player already
+   * earned.
+   */
+  elementalDamageTier?: GemTier;
+  /**
    * Set by the Blacksmith's Infuse station, non-weapon slots -- how much
    * this piece resists each element, additive per element if infused
    * again (same "stacks with itself" shape EquipmentItem.enchantStats
@@ -435,6 +462,11 @@ export interface EquipmentItem {
    * Matches against a quest/encounter's own `dealsElement` list -- framed
    * to the player as extra effective endurance against that element's
    * attacks, mechanically just another additive success contribution.
+   * As of patch 0237, each individual infusion's own contribution to
+   * this total is itself tier-scaled (a Legendary Resistance Gem adds far
+   * more than a Common one) -- but the field itself stays a plain,
+   * un-tiered running total, same shape as always; only what gets ADDED
+   * per infusion changed, not how it's stored or read.
    */
   elementalResist?: Partial<Record<ElementType, number>>;
   /**
@@ -2077,13 +2109,21 @@ export interface GameState {
    * state (harvestNodes/harvestTools) the way ore/timber/herbs/food do.
    */
   scrap: number;
-  /** Elemental Gems, one counter per element -- crafted at the Enchanter,
-   *  spent at the Blacksmith's Infuse station on a weapon's
-   *  elementalDamage. See CraftingManager.craftGem/engine.infuseItem. */
-  gems: Partial<Record<ElementType, number>>;
+  /**
+   * Elemental Gems, one counter per element PER TIER -- crafted at the
+   * Enchanter, spent at the Blacksmith's Infuse station on a weapon's
+   * elementalDamage/elementalDamageTier. See CraftingManager.craftGem/
+   * engine.infuseItem. Gained a GemTier layer in patch 0237 ("Tiered
+   * Enchanting/Infusion") -- was a flat per-element count before that
+   * (any gem was equally effective); a save from before this patch
+   * migrates its old flat counts into the 'common' bucket (SaveManager
+   * migration 49 -> 50), the lowest tier, since an untiered gem has no
+   * real provenance to infer a better one from.
+   */
+  gems: Partial<Record<ElementType, Partial<Record<GemTier, number>>>>;
   /** Resistance Gems, same shape again, spent on a non-weapon item's
    *  elementalResist instead. */
-  resistGems: Partial<Record<ElementType, number>>;
+  resistGems: Partial<Record<ElementType, Partial<Record<GemTier, number>>>>;
 
   /* ---------------------------- Pets / Hatchery ---------------------------- */
   /** True once the intro chain that grants the Hatchery has been completed
@@ -2434,12 +2474,16 @@ export interface CraftingRecipeDef {
   statsToPick?: number;
   /** `enchant` recipes only -- fixed strength applied to each picked stat, additive with anything already enchanted. */
   statValue?: number;
-  /** `gem` recipes only -- which counter this recipe adds +1 to on craft
-   *  (GameState.gems or resistGems, for the given element). No player
-   *  choice involved at craft time, unlike gear/enchant -- a gem recipe
-   *  is authored per element, same way Trail Rations vs Herbal Tonic are
-   *  two separate consumable recipes rather than one with a picker. */
-  resultGem?: { kind: 'elemental' | 'resist'; element: ElementType };
+  /**
+   * `gem` recipes only -- which counter this recipe adds +1 to on craft
+   * (GameState.gems or resistGems, for the given element and tier). No
+   * player choice involved at craft time, unlike gear/enchant -- a gem
+   * recipe is authored per element AND per tier (patch 0237 -- 5x more
+   * gem recipes than before this, one per element/tier combo), same way
+   * Trail Rations vs Herbal Tonic are two separate consumable recipes
+   * rather than one with a picker.
+   */
+  resultGem?: { kind: 'elemental' | 'resist'; element: ElementType; tier: GemTier };
 }
 
 /* ----------------------------- Grimsby / the peddler ----------------------------- */

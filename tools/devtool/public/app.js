@@ -676,9 +676,11 @@ function eggRewardInput(id, value) {
 }
 
 /**
- * `resultGem`'s two sub-fields -- which counter a `gem`-category recipe
- * adds to (GameState.gems for a weapon-enchant gem, resistGems for an
- * armor-infusion one) and which of the 4 elements. Needs the same
+ * `resultGem`'s three sub-fields -- which counter a `gem`-category
+ * recipe adds to (GameState.gems for a weapon-enchant gem, resistGems
+ * for an armor-infusion one), which of the 4 elements, and (patch 0237,
+ * "Tiered Enchanting/Infusion") which tier -- reuses RARITY_KEYS rather
+ * than a separate list, since GemTier is a plain alias of Rarity.
  * enabled-toggle eggRewardInput above uses, for the same reason: every
  * field in this schema renders for every recipe regardless of category
  * (there's no category-conditional visibility in this editor), and a
@@ -703,6 +705,10 @@ function resultGemInput(id, value) {
         <label>Element</label>
         <select data-gem-element>
           ${ELEMENT_KEYS.map((el) => `<option value="${el}" ${value?.element === el ? 'selected' : ''}>${el}</option>`).join('')}
+        </select>
+        <label>Tier</label>
+        <select data-gem-tier>
+          ${RARITY_KEYS.map((t) => `<option value="${t}" ${(value?.tier ?? 'common') === t ? 'selected' : ''}>${t}</option>`).join('')}
         </select>
       </div>
     </div>`;
@@ -2078,6 +2084,7 @@ function readField(spec, key) {
     return {
       kind: el.querySelector('[data-gem-kind]').value,
       element: el.querySelector('[data-gem-element]').value,
+      tier: el.querySelector('[data-gem-tier]').value,
     };
   }
   if (spec.type === 'chainStages') {

@@ -1,4 +1,4 @@
-import { CraftingRecipeDef, ElementType, EquipmentItem, GameState, MaterialId, Modifiers, Stats } from '../types';
+import { CraftingRecipeDef, ElementType, EquipmentItem, GameState, GemTier, MaterialId, Modifiers, Stats } from '../types';
 import { CRAFTING_RECIPE_BY_ID } from '../data/craftingRecipes';
 import { CONSUMABLE_BY_ID } from '../data/items';
 import { EquipmentManager } from './EquipmentManager';
@@ -38,10 +38,23 @@ export const CraftingManager = {
   },
 
   /**
+   * The recipe id for a given kind/element/tier combo -- one small helper
+   * rather than repeating this string template at every call site. Patch
+   * 0237 added a tier suffix (`_<tier>`) to what used to be a flat
+   * per-element id (`craft_elemental_gem_fire`) -- 5x more recipes than
+   * before (one per element/tier combo, both kinds), same naming shape
+   * just extended.
+   */
+  gemRecipeId(isWeapon: boolean, element: ElementType, tier: GemTier): string {
+    return isWeapon ? `craft_elemental_gem_${element}_${tier}` : `craft_resistance_gem_${element}_${tier}`;
+  },
+
+  /**
    * Crafts a `gem` recipe -- no player choice at craft time (unlike gear/
-   * enchant), a gem recipe is authored per element/kind already (see
+   * enchant), a gem recipe is authored per element/kind/tier already (see
    * CraftingRecipeDef.resultGem), so this just checks affordability and
-   * adds +1 to the right counter (GameState.gems or resistGems).
+   * adds +1 to the right counter/tier bucket (GameState.gems or
+   * resistGems).
    */
   craftGem(state: GameState, recipeId: string): string | null {
     const recipe = CRAFTING_RECIPE_BY_ID[recipeId];
@@ -49,9 +62,9 @@ export const CraftingManager = {
     const afford = CraftingManager.affordability(state, recipe);
     if (!afford.ok) return afford.reason ?? 'Cannot afford this.';
 
-    const { kind, element } = recipe.resultGem;
+    const { kind, element, tier } = recipe.resultGem;
     const pool = kind === 'elemental' ? state.gems : state.resistGems;
-    pool[element] = (pool[element] ?? 0) + 1;
+    pool[element] = { ...pool[element], [tier]: (pool[element]?.[tier] ?? 0) + 1 };
 
     const goldCost = CraftingManager.goldCost(state, recipe);
     state.gold -= goldCost;
@@ -64,47 +77,49 @@ export const CraftingManager = {
   },
 
   /**
-   * What it costs to infuse a given item with a given element -- 0/0 and
-   * `ready: true` if a matching gem is already sitting in inventory from
-   * an earlier craft (state.gems/resistGems, whichever the item's own
-   * slot points at), otherwise the underlying gem recipe's own
-   * scrapCost/goldCost (Arcane-Discounted, via CraftingManager.goldCost),
-   * since craftAndInfuse below will need to craft one fresh before it can
-   * apply it. Used by both Weapon Enchanting and Armour Infusion to label
-   * each element option ("Ready" vs a cost).
+   * What it costs to infuse a given item with a given element AT a given
+   * tier -- 0/0 and `ready: true` if a matching gem of that exact tier is
+   * already sitting in inventory from an earlier craft (state.gems/
+   * resistGems, whichever the item's own slot points at), otherwise the
+   * underlying gem recipe's own scrapCost/goldCost (Arcane-Discounted,
+   * via CraftingManager.goldCost), since craftAndInfuse below will need
+   * to craft one fresh before it can apply it. Used by both Weapon
+   * Enchanting and Armour Infusion to label each element/tier option
+   * ("Ready" vs a cost) -- a "Ready" at one tier says nothing about
+   * whether another tier is also ready, by design, since each tier is
+   * its own separate gem.
    */
-  gemCost(state: GameState, isWeapon: boolean, element: ElementType): { ready: boolean; scrapCost: number; goldCost: number } {
+  gemCost(state: GameState, isWeapon: boolean, element: ElementType, tier: GemTier): { ready: boolean; scrapCost: number; goldCost: number } {
     const pool = isWeapon ? state.gems : state.resistGems;
-    if ((pool[element] ?? 0) >= 1) return { ready: true, scrapCost: 0, goldCost: 0 };
-    const recipeId = isWeapon ? `craft_elemental_gem_${element}` : `craft_resistance_gem_${element}`;
-    const recipe = CRAFTING_RECIPE_BY_ID[recipeId];
+    if ((pool[element]?.[tier] ?? 0) >= 1) return { ready: true, scrapCost: 0, goldCost: 0 };
+    const recipe = CRAFTING_RECIPE_BY_ID[CraftingManager.gemRecipeId(isWeapon, element, tier)];
     return { ready: false, scrapCost: recipe?.scrapCost ?? 0, goldCost: recipe ? CraftingManager.goldCost(state, recipe) : 0 };
   },
 
   /**
    * Weapon Enchanting and Armour Infusion both collapsed from a two-step
    * "craft a gem, then separately spend it" flow into this single action
-   * -- select gear, select an element, Infuse, done. Uses an already-
-   * owned gem if one exists (state.gems/resistGems, per the item's own
-   * slot -- see EquipmentManager.infuse's own comment for why there's no
-   * separate "kind" choice), otherwise crafts one fresh via the
-   * underlying recipe first. Which pool/recipe applies is decided
-   * entirely by the item's own slot (weapon vs everything else), same as
-   * before.
+   * -- select gear, select an element AND a tier, Infuse, done. Uses an
+   * already-owned gem of that exact tier if one exists (state.gems/
+   * resistGems, per the item's own slot -- see EquipmentManager.infuse's
+   * own comment for why there's no separate "kind" choice), otherwise
+   * crafts one fresh via the underlying recipe first. Which pool/recipe
+   * applies is decided entirely by the item's own slot (weapon vs
+   * everything else), same as before patch 0237 -- tier is now a third
+   * axis alongside that, not a replacement for it.
    */
-  craftAndInfuse(state: GameState, itemUid: string, element: ElementType): string | null {
+  craftAndInfuse(state: GameState, itemUid: string, element: ElementType, tier: GemTier): string | null {
     const found = EquipmentManager.allItems(state).find((e) => e.item.uid === itemUid);
     if (!found) return 'That item can\u2019t be found.';
     const def = EquipmentManager.def(found.item);
     if (!def) return 'That item no longer exists.';
     const isWeapon = def.slot === 'weapon';
     const pool = isWeapon ? state.gems : state.resistGems;
-    if ((pool[element] ?? 0) < 1) {
-      const recipeId = isWeapon ? `craft_elemental_gem_${element}` : `craft_resistance_gem_${element}`;
-      const craftErr = CraftingManager.craftGem(state, recipeId);
+    if ((pool[element]?.[tier] ?? 0) < 1) {
+      const craftErr = CraftingManager.craftGem(state, CraftingManager.gemRecipeId(isWeapon, element, tier));
       if (craftErr) return craftErr;
     }
-    return EquipmentManager.infuse(state, itemUid, element);
+    return EquipmentManager.infuse(state, itemUid, element, tier);
   },
 
   /**

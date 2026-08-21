@@ -1,8 +1,9 @@
 import { EQUIPMENT_BY_ID, RARITY_PRICE_MULT } from '../data/equipment';
-import { EquipmentDef, EquipmentItem, ElementType, GameState, Hero, Modifiers, Stats } from '../types';
+import { EquipmentDef, EquipmentItem, ElementType, GameState, GemTier, Hero, Modifiers, Stats } from '../types';
 import { uid, Rng } from '../rng';
 import { clamp } from '../util';
 import { Tuning } from '../data/tuning';
+import { matchBonusForTier } from '../data/elements';
 import { isProceduralTemplate, rollProceduralItem, scaleChainExclusiveItem, LootSourceTag } from '../data/proceduralLoot';
 
 export const MAX_PLUS = 10;
@@ -295,18 +296,21 @@ export const EquipmentManager = {
   },
 
   /**
-   * Blacksmith's Infuse action -- consumes 1 gem, sets/adds the item's own
-   * elemental field. Which gem pool and which field depends entirely on
-   * the item's own slot (weapon vs everything else), not a separate
-   * player choice -- a weapon can only take elemental damage, everything
-   * else can only take resist, so there's nothing to pick beyond item +
-   * element. Weapon side REPLACES (matches EquipmentItem.elementalDamage's
-   * own "changing what it's infused with" framing); armor side ADDS
-   * (matches elementalResist's own "stacks with itself" framing, same
-   * shape CraftingManager.enchantItem already uses for enchantStats).
-   * Same stash-or-equipped search scope as repair()/enchantItem().
+   * Blacksmith's Infuse action -- consumes 1 gem of the given tier, sets/
+   * adds the item's own elemental field. Which gem pool and which field
+   * depends entirely on the item's own slot (weapon vs everything else),
+   * not a separate player choice -- a weapon can only take elemental
+   * damage, everything else can only take resist, so there's nothing to
+   * pick beyond item + element + tier. Weapon side REPLACES both the
+   * element and its tier together (matches EquipmentItem.elementalDamage's
+   * own "changing what it's infused with" framing -- a fresh Common
+   * infusion genuinely downgrades a previously-Legendary one, on
+   * purpose); armor side ADDS a tier-scaled amount (matches
+   * elementalResist's own "stacks with itself" framing, same shape
+   * CraftingManager.enchantItem already uses for enchantStats). Same
+   * stash-or-equipped search scope as repair()/enchantItem().
    */
-  infuse(state: GameState, itemUid: string, element: ElementType): string | null {
+  infuse(state: GameState, itemUid: string, element: ElementType, tier: GemTier): string | null {
     const found = EquipmentManager.allItems(state).find((e) => e.item.uid === itemUid);
     if (!found) return 'That item can\u2019t be found.';
     const { item } = found;
@@ -314,14 +318,15 @@ export const EquipmentManager = {
     if (!def) return 'That item no longer exists.';
 
     if (def.slot === 'weapon') {
-      if ((state.gems[element] ?? 0) < 1) return 'Not enough Elemental Gems.';
-      state.gems[element] = (state.gems[element] ?? 0) - 1;
+      if ((state.gems[element]?.[tier] ?? 0) < 1) return 'Not enough gems of that tier.';
+      state.gems[element] = { ...state.gems[element], [tier]: (state.gems[element]?.[tier] ?? 0) - 1 };
       item.elementalDamage = element;
+      item.elementalDamageTier = tier;
     } else {
-      if ((state.resistGems[element] ?? 0) < 1) return 'Not enough Resistance Gems.';
-      state.resistGems[element] = (state.resistGems[element] ?? 0) - 1;
+      if ((state.resistGems[element]?.[tier] ?? 0) < 1) return 'Not enough gems of that tier.';
+      state.resistGems[element] = { ...state.resistGems[element], [tier]: (state.resistGems[element]?.[tier] ?? 0) - 1 };
       const updated = { ...item.elementalResist };
-      updated[element] = (updated[element] ?? 0) + Tuning.get('elemental.bonusPerMatchPercent');
+      updated[element] = (updated[element] ?? 0) + matchBonusForTier(tier);
       item.elementalResist = updated;
     }
     return null;

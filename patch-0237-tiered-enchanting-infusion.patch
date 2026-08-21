@@ -1,0 +1,1905 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index cbc95fa..d0d45ea 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -18292,3 +18292,117 @@ enchant/resist effectiveness -- see the open tiering-rework discussion in
+ the backlog below.
+ 
+ `npx tsc --noEmit` and `vite build` both pass clean.
++
++### Tiered Enchanting/Infusion: elemental matches are no longer flat yes/no (patch 0237)
++
++```discord-update
++Dev Update | Tiered Enchanting/Infusion
++
++- Elemental gems and resistance gems now come in 5 tiers: Common, Uncommon, Rare, Epic, Legendary
++- Higher-tier gems land a much bigger success bonus when your element matches a boss's weakness or attack type
++- Weapon Enchanting and Armour Infusion both got a new tier picker alongside the element choice
++- 40 new gem recipes at the Enchanter -- one per element and tier
++- Existing infused gear and gem stockpiles carry over automatically, no value lost
++```
++
++Direct follow-up to the raid-weakness review (patch 0236): once the display
++bug was fixed and the match mechanic was actually visible, the flat
++"matched or didn't" shape it had always used (a fixed bonus regardless of
++gem quality) read as thin -- a single gem craft maxed out the mechanic
++forever. Reworked into a real 5-tier ladder, same effectiveness curve the
++person building this game specified directly: 15/30/60/90/100%.
++
++**GemTier is a plain alias of Rarity** (`types.ts`), not a new enum --
++reuses the existing 5-rung ladder and its infra (`RARITY_ORDER`,
++`RARITY_COLOR`, `RarityPill`) wholesale, same convention the potion/
++fortune-charm five-tier ladders (patch 0234) already established for
++this project. `GEM_TIERS`/`GEM_TIER_LABEL` (`data/elements.ts`) are
++thin re-exports under a locally-meaningful name.
++
++**Formula.** `elemental.bonusPerMatchPercent` (flat 3%, same regardless
++of gem quality) is gone, replaced by two tuning values:
++`elemental.maxMatchBonusPercent` (10, the Legendary ceiling) x
++`elemental.tierEffectivenessPercent.<tier>` (15/30/60/90/100, the exact
++curve specified) / 100. Deliberately NOT linear -- Rare through
++Legendary is meant to read as the real payoff tier, Common/Uncommon
++stays closer to "a nice-to-have," matching how the old flat bonus was
++originally framed. Notably, Uncommon lands at exactly 3% (10 x 30%) --
++almost exactly the old flat value, a deliberate anchor point rather than
++a coincidence, so the ladder reads as "the old system, plus real room to
++grow" rather than a clean break.
++
++**Weapon side (`elementalDamage`) gained a paired `elementalDamageTier`**
++-- set/replaced together, same "changing what it's infused with" framing
++the element itself already had (a fresh Common infusion genuinely
++downgrades a previously-Legendary one, on purpose). `elementalBonusForHero`
++(`data/elements.ts`) now calls the new `matchBonusForTier(tier)` instead
++of reading the flat tuning value directly.
++
++**Armor side (`elementalResist`) keeps its existing "stacks with itself"
++shape untouched** -- per direct instruction, multiple infusions (and
++multiple pieces) still sum. What changed is only how much a single
++infusion ADDS: `EquipmentManager.infuse` now adds `matchBonusForTier(tier)`
++instead of the old flat value, so a Legendary Resistance Gem infusion is
++worth roughly 6.7x a Common one, but the accumulation model itself is
++identical to before this patch. `elementalBonusForHero`'s read side
++(`RaidManager`/`QuestManager`) needed zero changes on this side --
++`elementalResist[el]` is still just summed, same as always.
++
++**`GameState.gems`/`resistGems` gained a tier layer**
++(`Partial<Record<ElementType, Partial<Record<GemTier, number>>>>`, was a
++flat per-element count) -- a Common Fire Gem and a Legendary Fire Gem are
++now genuinely different inventory items, not the same counter. `SAVE_VERSION`
++49 -> 50, migration bucket old counts into `'common'` (the lowest tier,
++since an untiered gem has no real provenance to infer a better one from
++-- can't hand out free high-tier value on migration) and backfills any
++already-infused weapon's missing `elementalDamageTier` to `'uncommon'`
++specifically (the tier whose new effective bonus, 3%, lands closest to
++the flat 3% that weapon's infusion was actually worth before this patch
++-- the closest available tier to "no change," not an arbitrary pick).
++`elementalResist` values themselves are left untouched by the migration
++-- always a plain accumulated number with no provenance to re-derive, and
++mechanically still valid as-is; only future infusions add tier-scaled
++amounts on top of whatever a save already earned.
++
++**Content: 40 new gem recipes, replacing the old flat 8.** One per
++element (fire/frost/lightning/poison) x tier (5) x kind (elemental/
++resist) -- `craft_elemental_gem_<element>_<tier>` / `craft_resistance_gem_
++<element>_<tier>`. Cost doubles per tier off the original 150g/6 Scrap
++baseline (150/300/600/1200/2400 gold, 6/12/24/48/96 Scrap) -- same
++doubling-per-rarity shape `elemental.scrapValue.<rarity>` already
++established elsewhere in this system. Rare and above also cost real
++materials for the first time (Rare: 10 Ore; Epic: +20 Ore/10 Herbs;
++Legendary: +30 Ore/20 Herbs/10 Fish) -- Common/Uncommon stay gold+Scrap
++only, matching the original recipe shape exactly at the low end.
++`CraftingRecipeDef.resultGem` gained a required `tier: GemTier` field.
++
++**UI.** `WeaponEnchantStation`: the existing element chip row is
++unchanged (still picks the element first); a new second row of 5 tier
++chips appears once an element is chosen, each showing Ready/cost for
++that exact element+tier combo, colour-coded via `RARITY_COLOR`.
++`ArmourInfusionStation`: the gem `PickerModal` list expanded from 4
++options (one per element) to 20 (element x tier, grouped by element then
++ascending tier), same list-based pattern it already used, no new picker
++paradigm needed. Both stations' "currently infused" summary lines now
++name the tier alongside the element. `EquipmentPanel`'s `ElementalInfoLine`
++(patch 0236) now shows a weapon's tier next to its element, and resist
++percentages display to one decimal place now that they're no longer
++always whole numbers.
++
++**DevTool.** `resultGem`'s schema gained the `tier` sub-field (both
++`server.mjs` validation, reusing the existing `RARITY_KEYS` constant
++already used for `guaranteedLoot`/egg rarity elsewhere in this same
++schema, and `app.js`'s form UI) -- the 40 new recipes are editable the
++same way the original 8 were, no separate follow-up needed this time.
++
++**Not touched, out of scope for this patch:** the raid encounter tag
++content gap (16 of 22 encounters still untagged, unrelated to tiering);
++Melee/Ranged/Caster roles; any UI change to how a boss's own tags display
++(patch 0236 already covers that, tiers are a gear-side concept only, a
++boss doesn't have a tier).
++
++`npx tsc --noEmit` and `vite build` both pass clean. DevTool JS/CSS
++verified via `node --check` on both `server.mjs` and `app.js` (no live
++devtool server available in this environment to check the actual
++rendered form, same limitation prior DevTool-touching patches have
++noted).
+diff --git a/src/game/data/elements.ts b/src/game/data/elements.ts
+index 84cdf04..7c357eb 100644
+--- a/src/game/data/elements.ts
++++ b/src/game/data/elements.ts
+@@ -1,7 +1,8 @@
+-import { Difficulty, ElementType, Hero } from '../types';
++import { Difficulty, ElementType, GemTier, Hero } from '../types';
+ import { DIFFICULTY_ORDER } from './quests';
+ import { Rng } from '../rng';
+ import { Tuning } from './tuning';
++import { RARITY_ORDER } from '../util';
+ 
+ export const ELEMENT_TYPES: ElementType[] = ['fire', 'frost', 'lightning', 'poison'];
+ 
+@@ -13,6 +14,51 @@ export const ELEMENT_GLYPH: Record<ElementType, string> = {
+   fire: '\u{1f525}', frost: '\u{2744}\u{fe0f}', lightning: '\u{26a1}', poison: '\u{2620}\u{fe0f}',
+ };
+ 
++/**
++ * Gem tiers, patch 0237 ("Tiered Enchanting/Infusion"). GemTier is a
++ * plain alias of Rarity (see types.ts), so this is just RARITY_ORDER
++ * under a locally-meaningful name -- kept as its own export rather than
++ * importing RARITY_ORDER directly at every call site, so a reader of
++ * WeaponEnchantStation/ArmourInfusionStation/CraftingManager doesn't have
++ * to go re-derive "oh, GemTier IS Rarity" every time they see it.
++ */
++export const GEM_TIERS: GemTier[] = RARITY_ORDER;
++
++export const GEM_TIER_LABEL: Record<GemTier, string> = {
++  common: 'Common', uncommon: 'Uncommon', rare: 'Rare', epic: 'Epic', legendary: 'Legendary',
++};
++
++/**
++ * How effective each tier's match actually is, as a percentage of
++ * `elemental.maxMatchBonusPercent` -- the flat yes/no match bonus this
++ * replaces (`elemental.bonusPerMatchPercent`, 3% regardless of gem
++ * quality) becoming a real 5-rung ladder was the whole point of patch
++ * 0237. Read from the tuning registry rather than hardcoded so every
++ * tier is independently DevTool-tunable, same as everything else in this
++ * system. Deliberately NOT linear (15/30/60/90/100, not 20/40/60/80/100)
++ * -- the jump from Rare to Epic/Legendary is meant to read as the real
++ * payoff tier, with Common/Uncommon staying closer to "a nice-to-have,"
++ * matching how the old flat 3% bonus was originally framed
++ * ("deliberately modest... not a build-around") for anything below Rare.
++ */
++export function tierEffectivenessPercent(tier: GemTier): number {
++  return Tuning.get(`elemental.tierEffectivenessPercent.${tier}`);
++}
++
++/**
++ * The actual success-chance points a single infusion/match at this tier
++ * is worth -- `elemental.maxMatchBonusPercent` (the Legendary ceiling)
++ * scaled down by that tier's own effectiveness. A Legendary match lands
++ * exactly at the ceiling (100% effectiveness); a Common match lands at
++ * 15% of it. Shared by both the weapon side (a single elementalDamageTier
++ * value) and the armor side (one call per infusion, at CraftAndInfuse
++ * time -- see EquipmentManager.infuse) since both draw from the same
++ * ladder.
++ */
++export function matchBonusForTier(tier: GemTier): number {
++  return Tuning.get('elemental.maxMatchBonusPercent') * tierEffectivenessPercent(tier) / 100;
++}
++
+ /**
+  * Icon pool for the Scrap "+N Scrap" collect-burst (see ScrapStation.tsx)
+  * -- reuses 5 existing crafting icons rather than needing new art, same
+@@ -85,25 +131,36 @@ export function rollElementTags(rng: Rng, difficulty: Difficulty): ElementType[]
+  * - Weapon side: the hero's equipped weapon's own elementalDamage
+  *   (single value, not a magnitude -- see EquipmentItem's own comment on
+  *   why infusing replaces rather than stacks) matching one of `tags.
+- *   vulnerableTo` adds a flat elemental.bonusPerMatchPercent, UNLESS that
++ *   vulnerableTo` adds matchBonusForTier(elementalDamageTier) -- as of
++ *   patch 0237, how much this is worth depends on the tier of gem it was
++ *   infused with, not a flat amount regardless of quality -- UNLESS that
+  *   same element is also listed under `tags.immuneTo` (raid-only) --
+  *   immunity describes the encounter's own resilience, so a matching
+- *   weapon does nothing special here rather than backfiring.
++ *   weapon does nothing special here rather than backfiring, at any
++ *   tier. `?? 'common'` covers the theoretical case of elementalDamage
++ *   being set without a tier (shouldn't happen post-migration, but a
++ *   missing tier reads as the worst one rather than silently granting a
++ *   full-value untiered bonus).
+  * - Armor side: every equipped item's own elementalResist (a numeric
+  *   value per element, additive across repeated infusions -- see
+  *   EquipmentItem's own comment on why this one DOES stack) is summed
+- *   for each element listed in `tags.dealsElement`. Not gated by
+- *   `immuneTo` -- immunity is about the encounter's own weakness being
+- *   nullified, not its attack type.
++ *   for each element listed in `tags.dealsElement`. Each individual
++ *   infusion's own contribution to that running total is already
++ *   tier-scaled at infuse time (EquipmentManager.infuse), so this read
++ *   side doesn't need to know about tiers at all -- same shape as
++ *   before patch 0237, just bigger/smaller numbers depending on what
++ *   went into it. Not gated by `immuneTo` -- immunity is about the
++ *   encounter's own weakness being nullified, not its attack type.
+  */
+ export function elementalBonusForHero(
+   hero: Hero,
+   tags: { vulnerableTo?: ElementType[]; dealsElement?: ElementType[]; immuneTo?: ElementType[] },
+ ): number {
+   let bonus = 0;
+-  const weaponElement = hero.equipment.weapon?.elementalDamage;
++  const weapon = hero.equipment.weapon;
++  const weaponElement = weapon?.elementalDamage;
+   if (weaponElement && tags.vulnerableTo?.includes(weaponElement) && !(tags.immuneTo?.includes(weaponElement))) {
+-    bonus += Tuning.get('elemental.bonusPerMatchPercent');
++    bonus += matchBonusForTier(weapon?.elementalDamageTier ?? 'common');
+   }
+   for (const el of tags.dealsElement ?? []) {
+     for (const item of Object.values(hero.equipment)) {
+diff --git a/src/game/data/json/crafting-recipes.json b/src/game/data/json/crafting-recipes.json
+index 3c6dea3..8474be4 100644
+--- a/src/game/data/json/crafting-recipes.json
++++ b/src/game/data/json/crafting-recipes.json
+@@ -198,9 +198,9 @@
+     "statValue": 0
+   },
+   {
+-    "id": "craft_elemental_gem_fire",
+-    "name": "Fire Gem",
+-    "description": "A shard of raw fire bound into something a blacksmith can work into a blade. Spent at the Infuse station.",
++    "id": "craft_elemental_gem_fire_common",
++    "name": "Common Fire Gem",
++    "description": "A raw, loosely-bound shard of raw fire, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+     "category": "gem",
+     "icon": "crafting/Crafting_28.png",
+     "materialCost": {},
+@@ -212,13 +212,99 @@
+     "statValue": 0,
+     "resultGem": {
+       "kind": "elemental",
+-      "element": "fire"
++      "element": "fire",
++      "tier": "common"
+     }
+   },
+   {
+-    "id": "craft_elemental_gem_frost",
+-    "name": "Frost Gem",
+-    "description": "A shard of raw frost bound into something a blacksmith can work into a blade. Spent at the Infuse station.",
++    "id": "craft_elemental_gem_fire_uncommon",
++    "name": "Uncommon Fire Gem",
++    "description": "A cleanly-cut, well-bound shard of raw fire, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
++    "category": "gem",
++    "icon": "crafting/Crafting_28.png",
++    "materialCost": {},
++    "goldCost": 300,
++    "scrapCost": 12,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "fire",
++      "tier": "uncommon"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_fire_rare",
++    "name": "Rare Fire Gem",
++    "description": "A dense, brightly-cored shard of raw fire, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
++    "category": "gem",
++    "icon": "crafting/Crafting_28.png",
++    "materialCost": {
++      "ore": 10
++    },
++    "goldCost": 600,
++    "scrapCost": 24,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "fire",
++      "tier": "rare"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_fire_epic",
++    "name": "Epic Fire Gem",
++    "description": "A near-flawless, potent shard of raw fire, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
++    "category": "gem",
++    "icon": "crafting/Crafting_28.png",
++    "materialCost": {
++      "ore": 20,
++      "herbs": 10
++    },
++    "goldCost": 1200,
++    "scrapCost": 48,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "fire",
++      "tier": "epic"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_fire_legendary",
++    "name": "Legendary Fire Gem",
++    "description": "A flawless, overflowing shard of raw fire, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
++    "category": "gem",
++    "icon": "crafting/Crafting_28.png",
++    "materialCost": {
++      "ore": 30,
++      "herbs": 20,
++      "fish": 10
++    },
++    "goldCost": 2400,
++    "scrapCost": 96,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "fire",
++      "tier": "legendary"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_frost_common",
++    "name": "Common Frost Gem",
++    "description": "A raw, loosely-bound shard of raw frost, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+     "category": "gem",
+     "icon": "crafting/Crafting_14.png",
+     "materialCost": {},
+@@ -230,13 +316,99 @@
+     "statValue": 0,
+     "resultGem": {
+       "kind": "elemental",
+-      "element": "frost"
++      "element": "frost",
++      "tier": "common"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_frost_uncommon",
++    "name": "Uncommon Frost Gem",
++    "description": "A cleanly-cut, well-bound shard of raw frost, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
++    "category": "gem",
++    "icon": "crafting/Crafting_14.png",
++    "materialCost": {},
++    "goldCost": 300,
++    "scrapCost": 12,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "frost",
++      "tier": "uncommon"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_frost_rare",
++    "name": "Rare Frost Gem",
++    "description": "A dense, brightly-cored shard of raw frost, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
++    "category": "gem",
++    "icon": "crafting/Crafting_14.png",
++    "materialCost": {
++      "ore": 10
++    },
++    "goldCost": 600,
++    "scrapCost": 24,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "frost",
++      "tier": "rare"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_frost_epic",
++    "name": "Epic Frost Gem",
++    "description": "A near-flawless, potent shard of raw frost, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
++    "category": "gem",
++    "icon": "crafting/Crafting_14.png",
++    "materialCost": {
++      "ore": 20,
++      "herbs": 10
++    },
++    "goldCost": 1200,
++    "scrapCost": 48,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "frost",
++      "tier": "epic"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_frost_legendary",
++    "name": "Legendary Frost Gem",
++    "description": "A flawless, overflowing shard of raw frost, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
++    "category": "gem",
++    "icon": "crafting/Crafting_14.png",
++    "materialCost": {
++      "ore": 30,
++      "herbs": 20,
++      "fish": 10
++    },
++    "goldCost": 2400,
++    "scrapCost": 96,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "frost",
++      "tier": "legendary"
+     }
+   },
+   {
+-    "id": "craft_elemental_gem_lightning",
+-    "name": "Lightning Gem",
+-    "description": "A shard of raw lightning bound into something a blacksmith can work into a blade. Spent at the Infuse station.",
++    "id": "craft_elemental_gem_lightning_common",
++    "name": "Common Lightning Gem",
++    "description": "A raw, loosely-bound shard of raw lightning, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+     "category": "gem",
+     "icon": "crafting/Crafting_21.png",
+     "materialCost": {},
+@@ -248,13 +420,99 @@
+     "statValue": 0,
+     "resultGem": {
+       "kind": "elemental",
+-      "element": "lightning"
++      "element": "lightning",
++      "tier": "common"
+     }
+   },
+   {
+-    "id": "craft_elemental_gem_poison",
+-    "name": "Poison Gem",
+-    "description": "A shard of raw poison bound into something a blacksmith can work into a blade. Spent at the Infuse station.",
++    "id": "craft_elemental_gem_lightning_uncommon",
++    "name": "Uncommon Lightning Gem",
++    "description": "A cleanly-cut, well-bound shard of raw lightning, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
++    "category": "gem",
++    "icon": "crafting/Crafting_21.png",
++    "materialCost": {},
++    "goldCost": 300,
++    "scrapCost": 12,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "lightning",
++      "tier": "uncommon"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_lightning_rare",
++    "name": "Rare Lightning Gem",
++    "description": "A dense, brightly-cored shard of raw lightning, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
++    "category": "gem",
++    "icon": "crafting/Crafting_21.png",
++    "materialCost": {
++      "ore": 10
++    },
++    "goldCost": 600,
++    "scrapCost": 24,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "lightning",
++      "tier": "rare"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_lightning_epic",
++    "name": "Epic Lightning Gem",
++    "description": "A near-flawless, potent shard of raw lightning, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
++    "category": "gem",
++    "icon": "crafting/Crafting_21.png",
++    "materialCost": {
++      "ore": 20,
++      "herbs": 10
++    },
++    "goldCost": 1200,
++    "scrapCost": 48,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "lightning",
++      "tier": "epic"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_lightning_legendary",
++    "name": "Legendary Lightning Gem",
++    "description": "A flawless, overflowing shard of raw lightning, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
++    "category": "gem",
++    "icon": "crafting/Crafting_21.png",
++    "materialCost": {
++      "ore": 30,
++      "herbs": 20,
++      "fish": 10
++    },
++    "goldCost": 2400,
++    "scrapCost": 96,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "lightning",
++      "tier": "legendary"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_poison_common",
++    "name": "Common Poison Gem",
++    "description": "A raw, loosely-bound shard of raw poison, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
+     "category": "gem",
+     "icon": "crafting/Crafting_35.png",
+     "materialCost": {},
+@@ -266,13 +524,99 @@
+     "statValue": 0,
+     "resultGem": {
+       "kind": "elemental",
+-      "element": "poison"
++      "element": "poison",
++      "tier": "common"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_poison_uncommon",
++    "name": "Uncommon Poison Gem",
++    "description": "A cleanly-cut, well-bound shard of raw poison, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
++    "category": "gem",
++    "icon": "crafting/Crafting_35.png",
++    "materialCost": {},
++    "goldCost": 300,
++    "scrapCost": 12,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "poison",
++      "tier": "uncommon"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_poison_rare",
++    "name": "Rare Poison Gem",
++    "description": "A dense, brightly-cored shard of raw poison, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
++    "category": "gem",
++    "icon": "crafting/Crafting_35.png",
++    "materialCost": {
++      "ore": 10
++    },
++    "goldCost": 600,
++    "scrapCost": 24,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "poison",
++      "tier": "rare"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_poison_epic",
++    "name": "Epic Poison Gem",
++    "description": "A near-flawless, potent shard of raw poison, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
++    "category": "gem",
++    "icon": "crafting/Crafting_35.png",
++    "materialCost": {
++      "ore": 20,
++      "herbs": 10
++    },
++    "goldCost": 1200,
++    "scrapCost": 48,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "poison",
++      "tier": "epic"
++    }
++  },
++  {
++    "id": "craft_elemental_gem_poison_legendary",
++    "name": "Legendary Poison Gem",
++    "description": "A flawless, overflowing shard of raw poison, bound into something a blacksmith can work into a blade. Spent at Weapon Enchanting.",
++    "category": "gem",
++    "icon": "crafting/Crafting_35.png",
++    "materialCost": {
++      "ore": 30,
++      "herbs": 20,
++      "fish": 10
++    },
++    "goldCost": 2400,
++    "scrapCost": 96,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "elemental",
++      "element": "poison",
++      "tier": "legendary"
+     }
+   },
+   {
+-    "id": "craft_resistance_gem_fire",
+-    "name": "Fire Resistance Gem",
+-    "description": "Tempered to turn aside fire rather than channel it -- worked into armor instead of a blade.",
++    "id": "craft_resistance_gem_fire_common",
++    "name": "Common Fire Resistance Gem",
++    "description": "A raw, loosely-bound shard tempered to turn aside fire rather than channel it -- worked into armor at Armour Infusion.",
+     "category": "gem",
+     "icon": "crafting/Crafting_23.png",
+     "materialCost": {},
+@@ -284,13 +628,99 @@
+     "statValue": 0,
+     "resultGem": {
+       "kind": "resist",
+-      "element": "fire"
++      "element": "fire",
++      "tier": "common"
+     }
+   },
+   {
+-    "id": "craft_resistance_gem_frost",
+-    "name": "Frost Resistance Gem",
+-    "description": "Tempered to turn aside frost rather than channel it -- worked into armor instead of a blade.",
++    "id": "craft_resistance_gem_fire_uncommon",
++    "name": "Uncommon Fire Resistance Gem",
++    "description": "A cleanly-cut, well-bound shard tempered to turn aside fire rather than channel it -- worked into armor at Armour Infusion.",
++    "category": "gem",
++    "icon": "crafting/Crafting_23.png",
++    "materialCost": {},
++    "goldCost": 300,
++    "scrapCost": 12,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "resist",
++      "element": "fire",
++      "tier": "uncommon"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_fire_rare",
++    "name": "Rare Fire Resistance Gem",
++    "description": "A dense, brightly-cored shard tempered to turn aside fire rather than channel it -- worked into armor at Armour Infusion.",
++    "category": "gem",
++    "icon": "crafting/Crafting_23.png",
++    "materialCost": {
++      "ore": 10
++    },
++    "goldCost": 600,
++    "scrapCost": 24,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "resist",
++      "element": "fire",
++      "tier": "rare"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_fire_epic",
++    "name": "Epic Fire Resistance Gem",
++    "description": "A near-flawless, potent shard tempered to turn aside fire rather than channel it -- worked into armor at Armour Infusion.",
++    "category": "gem",
++    "icon": "crafting/Crafting_23.png",
++    "materialCost": {
++      "ore": 20,
++      "herbs": 10
++    },
++    "goldCost": 1200,
++    "scrapCost": 48,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "resist",
++      "element": "fire",
++      "tier": "epic"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_fire_legendary",
++    "name": "Legendary Fire Resistance Gem",
++    "description": "A flawless, overflowing shard tempered to turn aside fire rather than channel it -- worked into armor at Armour Infusion.",
++    "category": "gem",
++    "icon": "crafting/Crafting_23.png",
++    "materialCost": {
++      "ore": 30,
++      "herbs": 20,
++      "fish": 10
++    },
++    "goldCost": 2400,
++    "scrapCost": 96,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "resist",
++      "element": "fire",
++      "tier": "legendary"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_frost_common",
++    "name": "Common Frost Resistance Gem",
++    "description": "A raw, loosely-bound shard tempered to turn aside frost rather than channel it -- worked into armor at Armour Infusion.",
+     "category": "gem",
+     "icon": "crafting/Crafting_09.png",
+     "materialCost": {},
+@@ -302,13 +732,99 @@
+     "statValue": 0,
+     "resultGem": {
+       "kind": "resist",
+-      "element": "frost"
++      "element": "frost",
++      "tier": "common"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_frost_uncommon",
++    "name": "Uncommon Frost Resistance Gem",
++    "description": "A cleanly-cut, well-bound shard tempered to turn aside frost rather than channel it -- worked into armor at Armour Infusion.",
++    "category": "gem",
++    "icon": "crafting/Crafting_09.png",
++    "materialCost": {},
++    "goldCost": 300,
++    "scrapCost": 12,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "resist",
++      "element": "frost",
++      "tier": "uncommon"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_frost_rare",
++    "name": "Rare Frost Resistance Gem",
++    "description": "A dense, brightly-cored shard tempered to turn aside frost rather than channel it -- worked into armor at Armour Infusion.",
++    "category": "gem",
++    "icon": "crafting/Crafting_09.png",
++    "materialCost": {
++      "ore": 10
++    },
++    "goldCost": 600,
++    "scrapCost": 24,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "resist",
++      "element": "frost",
++      "tier": "rare"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_frost_epic",
++    "name": "Epic Frost Resistance Gem",
++    "description": "A near-flawless, potent shard tempered to turn aside frost rather than channel it -- worked into armor at Armour Infusion.",
++    "category": "gem",
++    "icon": "crafting/Crafting_09.png",
++    "materialCost": {
++      "ore": 20,
++      "herbs": 10
++    },
++    "goldCost": 1200,
++    "scrapCost": 48,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "resist",
++      "element": "frost",
++      "tier": "epic"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_frost_legendary",
++    "name": "Legendary Frost Resistance Gem",
++    "description": "A flawless, overflowing shard tempered to turn aside frost rather than channel it -- worked into armor at Armour Infusion.",
++    "category": "gem",
++    "icon": "crafting/Crafting_09.png",
++    "materialCost": {
++      "ore": 30,
++      "herbs": 20,
++      "fish": 10
++    },
++    "goldCost": 2400,
++    "scrapCost": 96,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "resist",
++      "element": "frost",
++      "tier": "legendary"
+     }
+   },
+   {
+-    "id": "craft_resistance_gem_lightning",
+-    "name": "Lightning Resistance Gem",
+-    "description": "Tempered to turn aside lightning rather than channel it -- worked into armor instead of a blade.",
++    "id": "craft_resistance_gem_lightning_common",
++    "name": "Common Lightning Resistance Gem",
++    "description": "A raw, loosely-bound shard tempered to turn aside lightning rather than channel it -- worked into armor at Armour Infusion.",
+     "category": "gem",
+     "icon": "crafting/Crafting_16.png",
+     "materialCost": {},
+@@ -320,13 +836,99 @@
+     "statValue": 0,
+     "resultGem": {
+       "kind": "resist",
+-      "element": "lightning"
++      "element": "lightning",
++      "tier": "common"
+     }
+   },
+   {
+-    "id": "craft_resistance_gem_poison",
+-    "name": "Poison Resistance Gem",
+-    "description": "Tempered to turn aside poison rather than channel it -- worked into armor instead of a blade.",
++    "id": "craft_resistance_gem_lightning_uncommon",
++    "name": "Uncommon Lightning Resistance Gem",
++    "description": "A cleanly-cut, well-bound shard tempered to turn aside lightning rather than channel it -- worked into armor at Armour Infusion.",
++    "category": "gem",
++    "icon": "crafting/Crafting_16.png",
++    "materialCost": {},
++    "goldCost": 300,
++    "scrapCost": 12,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "resist",
++      "element": "lightning",
++      "tier": "uncommon"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_lightning_rare",
++    "name": "Rare Lightning Resistance Gem",
++    "description": "A dense, brightly-cored shard tempered to turn aside lightning rather than channel it -- worked into armor at Armour Infusion.",
++    "category": "gem",
++    "icon": "crafting/Crafting_16.png",
++    "materialCost": {
++      "ore": 10
++    },
++    "goldCost": 600,
++    "scrapCost": 24,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "resist",
++      "element": "lightning",
++      "tier": "rare"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_lightning_epic",
++    "name": "Epic Lightning Resistance Gem",
++    "description": "A near-flawless, potent shard tempered to turn aside lightning rather than channel it -- worked into armor at Armour Infusion.",
++    "category": "gem",
++    "icon": "crafting/Crafting_16.png",
++    "materialCost": {
++      "ore": 20,
++      "herbs": 10
++    },
++    "goldCost": 1200,
++    "scrapCost": 48,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "resist",
++      "element": "lightning",
++      "tier": "epic"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_lightning_legendary",
++    "name": "Legendary Lightning Resistance Gem",
++    "description": "A flawless, overflowing shard tempered to turn aside lightning rather than channel it -- worked into armor at Armour Infusion.",
++    "category": "gem",
++    "icon": "crafting/Crafting_16.png",
++    "materialCost": {
++      "ore": 30,
++      "herbs": 20,
++      "fish": 10
++    },
++    "goldCost": 2400,
++    "scrapCost": 96,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "resist",
++      "element": "lightning",
++      "tier": "legendary"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_poison_common",
++    "name": "Common Poison Resistance Gem",
++    "description": "A raw, loosely-bound shard tempered to turn aside poison rather than channel it -- worked into armor at Armour Infusion.",
+     "category": "gem",
+     "icon": "crafting/Crafting_30.png",
+     "materialCost": {},
+@@ -338,7 +940,93 @@
+     "statValue": 0,
+     "resultGem": {
+       "kind": "resist",
+-      "element": "poison"
++      "element": "poison",
++      "tier": "common"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_poison_uncommon",
++    "name": "Uncommon Poison Resistance Gem",
++    "description": "A cleanly-cut, well-bound shard tempered to turn aside poison rather than channel it -- worked into armor at Armour Infusion.",
++    "category": "gem",
++    "icon": "crafting/Crafting_30.png",
++    "materialCost": {},
++    "goldCost": 300,
++    "scrapCost": 12,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "resist",
++      "element": "poison",
++      "tier": "uncommon"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_poison_rare",
++    "name": "Rare Poison Resistance Gem",
++    "description": "A dense, brightly-cored shard tempered to turn aside poison rather than channel it -- worked into armor at Armour Infusion.",
++    "category": "gem",
++    "icon": "crafting/Crafting_30.png",
++    "materialCost": {
++      "ore": 10
++    },
++    "goldCost": 600,
++    "scrapCost": 24,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "resist",
++      "element": "poison",
++      "tier": "rare"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_poison_epic",
++    "name": "Epic Poison Resistance Gem",
++    "description": "A near-flawless, potent shard tempered to turn aside poison rather than channel it -- worked into armor at Armour Infusion.",
++    "category": "gem",
++    "icon": "crafting/Crafting_30.png",
++    "materialCost": {
++      "ore": 20,
++      "herbs": 10
++    },
++    "goldCost": 1200,
++    "scrapCost": 48,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "resist",
++      "element": "poison",
++      "tier": "epic"
++    }
++  },
++  {
++    "id": "craft_resistance_gem_poison_legendary",
++    "name": "Legendary Poison Resistance Gem",
++    "description": "A flawless, overflowing shard tempered to turn aside poison rather than channel it -- worked into armor at Armour Infusion.",
++    "category": "gem",
++    "icon": "crafting/Crafting_30.png",
++    "materialCost": {
++      "ore": 30,
++      "herbs": 20,
++      "fish": 10
++    },
++    "goldCost": 2400,
++    "scrapCost": 96,
++    "modsToPick": 0,
++    "modValue": 0,
++    "statsToPick": 0,
++    "statValue": 0,
++    "resultGem": {
++      "kind": "resist",
++      "element": "poison",
++      "tier": "legendary"
+     }
+   },
+   {
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index aaa9557..b3c1547 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -1063,14 +1063,64 @@
+     "description": "Independent chance for each candidate element to actually appear on a quest offer, checked once per element up to that tier's own ceiling (see rollElementTags in elements.ts). At 22%, Easy/Normal (max 1 tag) land ~37% zero tags / 63% one; Hard/Epic/Legendary (max 2-3) land ~37% zero / 41% one / 21% two-or-more -- verified at runtime across 2000 samples per tier."
+   },
+   {
+-    "id": "elemental.bonusPerMatchPercent",
+-    "label": "Elemental: success bonus per matching tag (%)",
++    "id": "elemental.maxMatchBonusPercent",
++    "label": "Elemental: max match bonus at Legendary tier (%)",
+     "category": "elemental",
+-    "value": 3,
+-    "default": 3,
++    "value": 10,
++    "default": 10,
+     "min": 0,
+-    "max": 20,
+-    "description": "Flat success-chance points added per matching element -- a weapon's elementalDamage matching one of the offer's vulnerableTo entries, or a piece of armor's elementalResist matching a dealsElement entry. Deliberately modest (a nice-to-have, not a build-around), and stacks per matching tag if an offer carries more than one."
++    "max": 50,
++    "description": "The success-chance ceiling a Legendary-tier gem match reaches (weapon elementalDamage vs vulnerableTo, or a single armor infusion vs dealsElement) -- patch 0237 replaced the old flat elemental.bonusPerMatchPercent (3%, same value regardless of gem quality) with this ceiling scaled down per tier by elemental.tierEffectivenessPercent.<tier>. See matchBonusForTier in data/elements.ts."
++  },
++  {
++    "id": "elemental.tierEffectivenessPercent.common",
++    "label": "Elemental: tier effectiveness -- Common (%)",
++    "category": "elemental",
++    "value": 15,
++    "default": 15,
++    "min": 0,
++    "max": 100,
++    "description": "What fraction of elemental.maxMatchBonusPercent a Common-tier gem match is worth. GemTier is a plain alias of Rarity -- see types.ts."
++  },
++  {
++    "id": "elemental.tierEffectivenessPercent.uncommon",
++    "label": "Elemental: tier effectiveness -- Uncommon (%)",
++    "category": "elemental",
++    "value": 30,
++    "default": 30,
++    "min": 0,
++    "max": 100,
++    "description": "Same shape as elemental.tierEffectivenessPercent.common, one tier up. At the default 10% ceiling, Uncommon lands at 3% -- almost exactly the old flat elemental.bonusPerMatchPercent this system replaced, a deliberate anchor point rather than an arbitrary jump."
++  },
++  {
++    "id": "elemental.tierEffectivenessPercent.rare",
++    "label": "Elemental: tier effectiveness -- Rare (%)",
++    "category": "elemental",
++    "value": 60,
++    "default": 60,
++    "min": 0,
++    "max": 100,
++    "description": "Same shape as elemental.tierEffectivenessPercent.common, two tiers up."
++  },
++  {
++    "id": "elemental.tierEffectivenessPercent.epic",
++    "label": "Elemental: tier effectiveness -- Epic (%)",
++    "category": "elemental",
++    "value": 90,
++    "default": 90,
++    "min": 0,
++    "max": 100,
++    "description": "Same shape as elemental.tierEffectivenessPercent.common, three tiers up."
++  },
++  {
++    "id": "elemental.tierEffectivenessPercent.legendary",
++    "label": "Elemental: tier effectiveness -- Legendary (%)",
++    "category": "elemental",
++    "value": 100,
++    "default": 100,
++    "min": 0,
++    "max": 100,
++    "description": "Same shape as elemental.tierEffectivenessPercent.common, four tiers up -- always exactly elemental.maxMatchBonusPercent itself, the ceiling every other tier is a fraction of."
+   },
+   {
+     "id": "elemental.scrapValue.common",
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 8c46b85..e03c84a 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -1,4 +1,4 @@
+-import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DiceRollResult, ElementType, GameState, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
++import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DiceRollResult, ElementType, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
+ import { createRng, uid } from './rng';
+ import { HeroManager } from './managers/HeroManager';
+ import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
+@@ -2522,8 +2522,8 @@ export class GameEngine {
+    *  see CraftingManager.craftAndInfuse for the combined craft-then-apply
+    *  flow, which uses an already-owned gem if one exists or crafts one
+    *  fresh otherwise. */
+-  infuseItem(itemUid: string, element: ElementType) {
+-    const error = CraftingManager.craftAndInfuse(this.state, itemUid, element);
++  infuseItem(itemUid: string, element: ElementType, tier: GemTier) {
++    const error = CraftingManager.craftAndInfuse(this.state, itemUid, element, tier);
+     if (error) return this.say(error);
+     playSound('infuse');
+     this.say('The infusion takes.', 'equipment');
+diff --git a/src/game/managers/CraftingManager.ts b/src/game/managers/CraftingManager.ts
+index 35abbc7..4c3c27d 100644
+--- a/src/game/managers/CraftingManager.ts
++++ b/src/game/managers/CraftingManager.ts
+@@ -1,4 +1,4 @@
+-import { CraftingRecipeDef, ElementType, EquipmentItem, GameState, MaterialId, Modifiers, Stats } from '../types';
++import { CraftingRecipeDef, ElementType, EquipmentItem, GameState, GemTier, MaterialId, Modifiers, Stats } from '../types';
+ import { CRAFTING_RECIPE_BY_ID } from '../data/craftingRecipes';
+ import { CONSUMABLE_BY_ID } from '../data/items';
+ import { EquipmentManager } from './EquipmentManager';
+@@ -37,11 +37,24 @@ export const CraftingManager = {
+     return { ok: true };
+   },
+ 
++  /**
++   * The recipe id for a given kind/element/tier combo -- one small helper
++   * rather than repeating this string template at every call site. Patch
++   * 0237 added a tier suffix (`_<tier>`) to what used to be a flat
++   * per-element id (`craft_elemental_gem_fire`) -- 5x more recipes than
++   * before (one per element/tier combo, both kinds), same naming shape
++   * just extended.
++   */
++  gemRecipeId(isWeapon: boolean, element: ElementType, tier: GemTier): string {
++    return isWeapon ? `craft_elemental_gem_${element}_${tier}` : `craft_resistance_gem_${element}_${tier}`;
++  },
++
+   /**
+    * Crafts a `gem` recipe -- no player choice at craft time (unlike gear/
+-   * enchant), a gem recipe is authored per element/kind already (see
++   * enchant), a gem recipe is authored per element/kind/tier already (see
+    * CraftingRecipeDef.resultGem), so this just checks affordability and
+-   * adds +1 to the right counter (GameState.gems or resistGems).
++   * adds +1 to the right counter/tier bucket (GameState.gems or
++   * resistGems).
+    */
+   craftGem(state: GameState, recipeId: string): string | null {
+     const recipe = CRAFTING_RECIPE_BY_ID[recipeId];
+@@ -49,9 +62,9 @@ export const CraftingManager = {
+     const afford = CraftingManager.affordability(state, recipe);
+     if (!afford.ok) return afford.reason ?? 'Cannot afford this.';
+ 
+-    const { kind, element } = recipe.resultGem;
++    const { kind, element, tier } = recipe.resultGem;
+     const pool = kind === 'elemental' ? state.gems : state.resistGems;
+-    pool[element] = (pool[element] ?? 0) + 1;
++    pool[element] = { ...pool[element], [tier]: (pool[element]?.[tier] ?? 0) + 1 };
+ 
+     const goldCost = CraftingManager.goldCost(state, recipe);
+     state.gold -= goldCost;
+@@ -64,47 +77,49 @@ export const CraftingManager = {
+   },
+ 
+   /**
+-   * What it costs to infuse a given item with a given element -- 0/0 and
+-   * `ready: true` if a matching gem is already sitting in inventory from
+-   * an earlier craft (state.gems/resistGems, whichever the item's own
+-   * slot points at), otherwise the underlying gem recipe's own
+-   * scrapCost/goldCost (Arcane-Discounted, via CraftingManager.goldCost),
+-   * since craftAndInfuse below will need to craft one fresh before it can
+-   * apply it. Used by both Weapon Enchanting and Armour Infusion to label
+-   * each element option ("Ready" vs a cost).
++   * What it costs to infuse a given item with a given element AT a given
++   * tier -- 0/0 and `ready: true` if a matching gem of that exact tier is
++   * already sitting in inventory from an earlier craft (state.gems/
++   * resistGems, whichever the item's own slot points at), otherwise the
++   * underlying gem recipe's own scrapCost/goldCost (Arcane-Discounted,
++   * via CraftingManager.goldCost), since craftAndInfuse below will need
++   * to craft one fresh before it can apply it. Used by both Weapon
++   * Enchanting and Armour Infusion to label each element/tier option
++   * ("Ready" vs a cost) -- a "Ready" at one tier says nothing about
++   * whether another tier is also ready, by design, since each tier is
++   * its own separate gem.
+    */
+-  gemCost(state: GameState, isWeapon: boolean, element: ElementType): { ready: boolean; scrapCost: number; goldCost: number } {
++  gemCost(state: GameState, isWeapon: boolean, element: ElementType, tier: GemTier): { ready: boolean; scrapCost: number; goldCost: number } {
+     const pool = isWeapon ? state.gems : state.resistGems;
+-    if ((pool[element] ?? 0) >= 1) return { ready: true, scrapCost: 0, goldCost: 0 };
+-    const recipeId = isWeapon ? `craft_elemental_gem_${element}` : `craft_resistance_gem_${element}`;
+-    const recipe = CRAFTING_RECIPE_BY_ID[recipeId];
++    if ((pool[element]?.[tier] ?? 0) >= 1) return { ready: true, scrapCost: 0, goldCost: 0 };
++    const recipe = CRAFTING_RECIPE_BY_ID[CraftingManager.gemRecipeId(isWeapon, element, tier)];
+     return { ready: false, scrapCost: recipe?.scrapCost ?? 0, goldCost: recipe ? CraftingManager.goldCost(state, recipe) : 0 };
+   },
+ 
+   /**
+    * Weapon Enchanting and Armour Infusion both collapsed from a two-step
+    * "craft a gem, then separately spend it" flow into this single action
+-   * -- select gear, select an element, Infuse, done. Uses an already-
+-   * owned gem if one exists (state.gems/resistGems, per the item's own
+-   * slot -- see EquipmentManager.infuse's own comment for why there's no
+-   * separate "kind" choice), otherwise crafts one fresh via the
+-   * underlying recipe first. Which pool/recipe applies is decided
+-   * entirely by the item's own slot (weapon vs everything else), same as
+-   * before.
++   * -- select gear, select an element AND a tier, Infuse, done. Uses an
++   * already-owned gem of that exact tier if one exists (state.gems/
++   * resistGems, per the item's own slot -- see EquipmentManager.infuse's
++   * own comment for why there's no separate "kind" choice), otherwise
++   * crafts one fresh via the underlying recipe first. Which pool/recipe
++   * applies is decided entirely by the item's own slot (weapon vs
++   * everything else), same as before patch 0237 -- tier is now a third
++   * axis alongside that, not a replacement for it.
+    */
+-  craftAndInfuse(state: GameState, itemUid: string, element: ElementType): string | null {
++  craftAndInfuse(state: GameState, itemUid: string, element: ElementType, tier: GemTier): string | null {
+     const found = EquipmentManager.allItems(state).find((e) => e.item.uid === itemUid);
+     if (!found) return 'That item can\u2019t be found.';
+     const def = EquipmentManager.def(found.item);
+     if (!def) return 'That item no longer exists.';
+     const isWeapon = def.slot === 'weapon';
+     const pool = isWeapon ? state.gems : state.resistGems;
+-    if ((pool[element] ?? 0) < 1) {
+-      const recipeId = isWeapon ? `craft_elemental_gem_${element}` : `craft_resistance_gem_${element}`;
+-      const craftErr = CraftingManager.craftGem(state, recipeId);
++    if ((pool[element]?.[tier] ?? 0) < 1) {
++      const craftErr = CraftingManager.craftGem(state, CraftingManager.gemRecipeId(isWeapon, element, tier));
+       if (craftErr) return craftErr;
+     }
+-    return EquipmentManager.infuse(state, itemUid, element);
++    return EquipmentManager.infuse(state, itemUid, element, tier);
+   },
+ 
+   /**
+diff --git a/src/game/managers/EquipmentManager.ts b/src/game/managers/EquipmentManager.ts
+index bf0b142..c41e1ee 100644
+--- a/src/game/managers/EquipmentManager.ts
++++ b/src/game/managers/EquipmentManager.ts
+@@ -1,8 +1,9 @@
+ import { EQUIPMENT_BY_ID, RARITY_PRICE_MULT } from '../data/equipment';
+-import { EquipmentDef, EquipmentItem, ElementType, GameState, Hero, Modifiers, Stats } from '../types';
++import { EquipmentDef, EquipmentItem, ElementType, GameState, GemTier, Hero, Modifiers, Stats } from '../types';
+ import { uid, Rng } from '../rng';
+ import { clamp } from '../util';
+ import { Tuning } from '../data/tuning';
++import { matchBonusForTier } from '../data/elements';
+ import { isProceduralTemplate, rollProceduralItem, scaleChainExclusiveItem, LootSourceTag } from '../data/proceduralLoot';
+ 
+ export const MAX_PLUS = 10;
+@@ -295,18 +296,21 @@ export const EquipmentManager = {
+   },
+ 
+   /**
+-   * Blacksmith's Infuse action -- consumes 1 gem, sets/adds the item's own
+-   * elemental field. Which gem pool and which field depends entirely on
+-   * the item's own slot (weapon vs everything else), not a separate
+-   * player choice -- a weapon can only take elemental damage, everything
+-   * else can only take resist, so there's nothing to pick beyond item +
+-   * element. Weapon side REPLACES (matches EquipmentItem.elementalDamage's
+-   * own "changing what it's infused with" framing); armor side ADDS
+-   * (matches elementalResist's own "stacks with itself" framing, same
+-   * shape CraftingManager.enchantItem already uses for enchantStats).
+-   * Same stash-or-equipped search scope as repair()/enchantItem().
++   * Blacksmith's Infuse action -- consumes 1 gem of the given tier, sets/
++   * adds the item's own elemental field. Which gem pool and which field
++   * depends entirely on the item's own slot (weapon vs everything else),
++   * not a separate player choice -- a weapon can only take elemental
++   * damage, everything else can only take resist, so there's nothing to
++   * pick beyond item + element + tier. Weapon side REPLACES both the
++   * element and its tier together (matches EquipmentItem.elementalDamage's
++   * own "changing what it's infused with" framing -- a fresh Common
++   * infusion genuinely downgrades a previously-Legendary one, on
++   * purpose); armor side ADDS a tier-scaled amount (matches
++   * elementalResist's own "stacks with itself" framing, same shape
++   * CraftingManager.enchantItem already uses for enchantStats). Same
++   * stash-or-equipped search scope as repair()/enchantItem().
+    */
+-  infuse(state: GameState, itemUid: string, element: ElementType): string | null {
++  infuse(state: GameState, itemUid: string, element: ElementType, tier: GemTier): string | null {
+     const found = EquipmentManager.allItems(state).find((e) => e.item.uid === itemUid);
+     if (!found) return 'That item can\u2019t be found.';
+     const { item } = found;
+@@ -314,14 +318,15 @@ export const EquipmentManager = {
+     if (!def) return 'That item no longer exists.';
+ 
+     if (def.slot === 'weapon') {
+-      if ((state.gems[element] ?? 0) < 1) return 'Not enough Elemental Gems.';
+-      state.gems[element] = (state.gems[element] ?? 0) - 1;
++      if ((state.gems[element]?.[tier] ?? 0) < 1) return 'Not enough gems of that tier.';
++      state.gems[element] = { ...state.gems[element], [tier]: (state.gems[element]?.[tier] ?? 0) - 1 };
+       item.elementalDamage = element;
++      item.elementalDamageTier = tier;
+     } else {
+-      if ((state.resistGems[element] ?? 0) < 1) return 'Not enough Resistance Gems.';
+-      state.resistGems[element] = (state.resistGems[element] ?? 0) - 1;
++      if ((state.resistGems[element]?.[tier] ?? 0) < 1) return 'Not enough gems of that tier.';
++      state.resistGems[element] = { ...state.resistGems[element], [tier]: (state.resistGems[element]?.[tier] ?? 0) - 1 };
+       const updated = { ...item.elementalResist };
+-      updated[element] = (updated[element] ?? 0) + Tuning.get('elemental.bonusPerMatchPercent');
++      updated[element] = (updated[element] ?? 0) + matchBonusForTier(tier);
+       item.elementalResist = updated;
+     }
+     return null;
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index 6f53ddc..fb2b5d3 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -1001,6 +1001,66 @@ const MIGRATIONS: Record<number, Migration> = {
+     version: 49,
+     overseerLevel: (save.overseerLevel as number | undefined) ?? 0,
+   }),
++  49: (save) => {
++    // Tiered Enchanting/Infusion (patch 0237) -- elemental match
++    // effectiveness moved from a flat per-match bonus to a 5-tier ladder
++    // (GemTier, an alias of Rarity -- common/uncommon/rare/epic/legendary
++    // at 15/30/60/90/100% effectiveness). Two things need migrating:
++    //
++    // - Any already-infused weapon (`elementalDamage` set, no
++    //   `elementalDamageTier` -- couldn't exist before this patch) needs
++    //   a tier value or elementalBonusForHero's new tier lookup falls
++    //   back to 'common' (the lookup's own safety default), silently
++    //   *reducing* a bonus the player already earned rather than
++    //   preserving it. Backfilled to 'uncommon' specifically because the
++    //   new maxMatchBonusPercent/tierEffectivenessPercent formula puts
++    //   Uncommon's effective bonus (10 * 30% = 3) almost exactly at the
++    //   old flat elemental.bonusPerMatchPercent value (3) it's replacing
++    //   -- the closest available tier to "no change," not an arbitrary
++    //   pick.
++    // - `state.gems`/`resistGems` go from a flat per-element COUNT to a
++    //   per-element-per-tier count (GameState.gems/resistGems' new
++    //   nested shape) -- existing counts bucket into the 'common' tier,
++    //   the lowest-value option, since an untiered gem has no real
++    //   provenance to infer a better tier from and 'common' is the only
++    //   choice that can't hand out free high-tier value on migration.
++    //
++    // elementalResist itself is left untouched -- it was always a plain
++    // accumulated number (not a set with provenance), and stays
++    // mechanically valid as-is; only future infusions add tier-scaled
++    // increments on top of whatever a save already earned.
++    const migrateGemPool = (pool: Record<string, number> | undefined): Record<string, Record<string, number>> => {
++      const out: Record<string, Record<string, number>> = {};
++      for (const [element, count] of Object.entries(pool ?? {})) {
++        if (!count) continue;
++        out[element] = { common: count };
++      }
++      return out;
++    };
++    const migrateItem = (item: Record<string, unknown> | null | undefined) => {
++      if (item && item.elementalDamage && !item.elementalDamageTier) {
++        item.elementalDamageTier = 'uncommon';
++      }
++    };
++    const heroes = (save.heroes as Record<string, unknown>[] | undefined) ?? [];
++    for (const hero of heroes) {
++      const equipment = hero.equipment as Record<string, unknown> | undefined;
++      if (equipment) {
++        for (const slot of Object.keys(equipment)) {
++          migrateItem(equipment[slot] as Record<string, unknown> | undefined);
++        }
++      }
++    }
++    const stash = (save.stash as Record<string, unknown>[] | undefined) ?? [];
++    for (const item of stash) migrateItem(item);
++
++    return {
++      ...save,
++      version: 50,
++      gems: migrateGemPool(save.gems as Record<string, number> | undefined),
++      resistGems: migrateGemPool(save.resistGems as Record<string, number> | undefined),
++    };
++  },
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index a9e429a..c218321 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 49;
++export const SAVE_VERSION = 50;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -17,6 +17,18 @@ export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+  */
+ export type ElementType = 'fire' | 'frost' | 'lightning' | 'poison';
+ 
++/**
++ * How effective an infused element/resist gem actually is -- a plain
++ * alias of Rarity rather than a new enum, per patch 0237 ("Tiered
++ * Enchanting/Infusion"). Deliberately reuses the existing 5-rung ladder
++ * (and its ordering/colour/label infra -- RARITY_ORDER, RARITY_COLOR,
++ * RarityPill) instead of inventing a parallel one, same convention every
++ * other 5-tier progression in this project already follows (the potion/
++ * fortune-charm ladders finished out in patch 0234). See data/elements.ts
++ * for the tier -> match-effectiveness mapping.
++ */
++export type GemTier = Rarity;
++
+ export type EquipSlot = 'weapon' | 'helmet' | 'chest' | 'shield' | 'gloves' | 'boots' | 'ring' | 'amulet' | 'cloak';
+ 
+ /**
+@@ -427,6 +439,21 @@ export interface EquipmentItem {
+    * under `immuneTo`.
+    */
+   elementalDamage?: ElementType;
++  /**
++   * The tier of gem used for this weapon's current elementalDamage --
++   * set/replaced together with it, never independently (patch 0237,
++   * "Tiered Enchanting/Infusion"). Determines how much of `elemental.
++   * maxMatchBonusPercent` a matching hit actually gets (see
++   * elementalBonusForHero) -- a Common-gem infusion and a Legendary-gem
++   * infusion both set `elementalDamage` to the same element, but land
++   * very different success bonuses. Absent exactly when elementalDamage
++   * itself is absent; a save migrated from before this patch backfills
++   * this to 'uncommon' on any already-infused weapon (see SaveManager
++   * migration 49 -> 50) rather than leaving it undefined, since an
++   * undefined tier would silently zero out a bonus the player already
++   * earned.
++   */
++  elementalDamageTier?: GemTier;
+   /**
+    * Set by the Blacksmith's Infuse station, non-weapon slots -- how much
+    * this piece resists each element, additive per element if infused
+@@ -435,6 +462,11 @@ export interface EquipmentItem {
+    * Matches against a quest/encounter's own `dealsElement` list -- framed
+    * to the player as extra effective endurance against that element's
+    * attacks, mechanically just another additive success contribution.
++   * As of patch 0237, each individual infusion's own contribution to
++   * this total is itself tier-scaled (a Legendary Resistance Gem adds far
++   * more than a Common one) -- but the field itself stays a plain,
++   * un-tiered running total, same shape as always; only what gets ADDED
++   * per infusion changed, not how it's stored or read.
+    */
+   elementalResist?: Partial<Record<ElementType, number>>;
+   /**
+@@ -2077,13 +2109,21 @@ export interface GameState {
+    * state (harvestNodes/harvestTools) the way ore/timber/herbs/food do.
+    */
+   scrap: number;
+-  /** Elemental Gems, one counter per element -- crafted at the Enchanter,
+-   *  spent at the Blacksmith's Infuse station on a weapon's
+-   *  elementalDamage. See CraftingManager.craftGem/engine.infuseItem. */
+-  gems: Partial<Record<ElementType, number>>;
++  /**
++   * Elemental Gems, one counter per element PER TIER -- crafted at the
++   * Enchanter, spent at the Blacksmith's Infuse station on a weapon's
++   * elementalDamage/elementalDamageTier. See CraftingManager.craftGem/
++   * engine.infuseItem. Gained a GemTier layer in patch 0237 ("Tiered
++   * Enchanting/Infusion") -- was a flat per-element count before that
++   * (any gem was equally effective); a save from before this patch
++   * migrates its old flat counts into the 'common' bucket (SaveManager
++   * migration 49 -> 50), the lowest tier, since an untiered gem has no
++   * real provenance to infer a better one from.
++   */
++  gems: Partial<Record<ElementType, Partial<Record<GemTier, number>>>>;
+   /** Resistance Gems, same shape again, spent on a non-weapon item's
+    *  elementalResist instead. */
+-  resistGems: Partial<Record<ElementType, number>>;
++  resistGems: Partial<Record<ElementType, Partial<Record<GemTier, number>>>>;
+ 
+   /* ---------------------------- Pets / Hatchery ---------------------------- */
+   /** True once the intro chain that grants the Hatchery has been completed
+@@ -2434,12 +2474,16 @@ export interface CraftingRecipeDef {
+   statsToPick?: number;
+   /** `enchant` recipes only -- fixed strength applied to each picked stat, additive with anything already enchanted. */
+   statValue?: number;
+-  /** `gem` recipes only -- which counter this recipe adds +1 to on craft
+-   *  (GameState.gems or resistGems, for the given element). No player
+-   *  choice involved at craft time, unlike gear/enchant -- a gem recipe
+-   *  is authored per element, same way Trail Rations vs Herbal Tonic are
+-   *  two separate consumable recipes rather than one with a picker. */
+-  resultGem?: { kind: 'elemental' | 'resist'; element: ElementType };
++  /**
++   * `gem` recipes only -- which counter this recipe adds +1 to on craft
++   * (GameState.gems or resistGems, for the given element and tier). No
++   * player choice involved at craft time, unlike gear/enchant -- a gem
++   * recipe is authored per element AND per tier (patch 0237 -- 5x more
++   * gem recipes than before this, one per element/tier combo), same way
++   * Trail Rations vs Herbal Tonic are two separate consumable recipes
++   * rather than one with a picker.
++   */
++  resultGem?: { kind: 'elemental' | 'resist'; element: ElementType; tier: GemTier };
+ }
+ 
+ /* ----------------------------- Grimsby / the peddler ----------------------------- */
+diff --git a/src/ui/ArmourInfusionStation.tsx b/src/ui/ArmourInfusionStation.tsx
+index ade225b..a6f8b3b 100644
+--- a/src/ui/ArmourInfusionStation.tsx
++++ b/src/ui/ArmourInfusionStation.tsx
+@@ -2,9 +2,9 @@ import { useState } from 'react';
+ import { useEngine } from './useEngine';
+ import { EquipmentManager } from '../game/managers/EquipmentManager';
+ import { CraftingManager } from '../game/managers/CraftingManager';
+-import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH } from '../game/data/elements';
+-import { ElementType } from '../game/types';
+-import { formatGold } from '../game/util';
++import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH, GEM_TIERS, GEM_TIER_LABEL } from '../game/data/elements';
++import { ElementType, GemTier } from '../game/types';
++import { formatGold, RARITY_COLOR } from '../game/util';
+ import { ItemIcon } from './icons';
+ import { PickerModal, SlotBox } from './CraftingStation';
+ import type { PickerOption, Rect } from './CraftingStation';
+@@ -30,6 +30,7 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
+ 
+   const [targetUid, setTargetUid] = useState('');
+   const [element, setElement] = useState<ElementType | null>(null);
++  const [tier, setTier] = useState<GemTier | null>(null);
+   const [openItemPicker, setOpenItemPicker] = useState(false);
+   const [openGemPicker, setOpenGemPicker] = useState(false);
+ 
+@@ -44,7 +45,7 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
+       if (!d) return null;
+       const owner = heroId ? state.heroes.find((h) => h.id === heroId)?.name ?? 'Stash' : 'Stash';
+       const current = Object.keys(i.elementalResist ?? {}).length > 0
+-        ? Object.entries(i.elementalResist ?? {}).map(([el, v]) => `${ELEMENT_LABEL[el as ElementType]} +${v}%`).join(', ')
++        ? Object.entries(i.elementalResist ?? {}).map(([el, v]) => `${ELEMENT_LABEL[el as ElementType]} +${(v as number).toFixed(1)}%`).join(', ')
+         : 'No resist yet';
+       return {
+         key: i.uid,
+@@ -55,30 +56,38 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
+     })
+     .filter((o): o is PickerOption => o !== null);
+ 
+-  const gemOptions: PickerOption[] = ELEMENT_TYPES.map((el) => {
+-    const elCost = CraftingManager.gemCost(state, false, el);
+-    const affordable = elCost.ready || (state.gold >= elCost.goldCost && state.scrap >= elCost.scrapCost);
++  // One option per element/tier combo (patch 0237, "Tiered Enchanting/
++  // Infusion") -- was one option per element only, since any gem was
++  // equally effective before this. Key encodes both (`fire::rare`) since
++  // PickerModal.onPick only carries a single string back. Grouped by
++  // element, then ascending tier within each -- a player scanning for
++  // "the best Fire gem I can afford" reads top-to-bottom within one
++  // block rather than hunting across the whole list.
++  const gemOptions: PickerOption[] = ELEMENT_TYPES.flatMap((el) => GEM_TIERS.map((t) => {
++    const tCost = CraftingManager.gemCost(state, false, el, t);
++    const affordable = tCost.ready || (state.gold >= tCost.goldCost && state.scrap >= tCost.scrapCost);
+     return {
+-      key: el,
+-      label: `${ELEMENT_LABEL[el]} Resistance Gem`,
+-      sublabel: elCost.ready ? 'Ready' : `${elCost.scrapCost} Scrap + ${formatGold(elCost.goldCost)}`,
++      key: `${el}::${t}`,
++      label: `${GEM_TIER_LABEL[t]} ${ELEMENT_LABEL[el]} Resistance Gem`,
++      sublabel: tCost.ready ? 'Ready' : `${tCost.scrapCost} Scrap + ${formatGold(tCost.goldCost)}`,
+       // A real icon slot now, not text embedded in the label -- see
+       // PickerModal's own comment on why an option without one used to
+       // truncate its whole label to almost nothing.
+-      icon: <span style={{ fontSize: '1.4rem' }}>{ELEMENT_GLYPH[el]}</span>,
++      icon: <span style={{ fontSize: '1.4rem', color: RARITY_COLOR[t] }}>{ELEMENT_GLYPH[el]}</span>,
+       disabled: !affordable,
+     };
+-  });
++  }));
+ 
+   function handleInfuse() {
+-    if (!item || !element) return;
+-    engine.infuseItem(item.uid, element);
++    if (!item || !element || !tier) return;
++    engine.infuseItem(item.uid, element, tier);
+     setElement(null);
++    setTier(null);
+   }
+ 
+-  const cost = element ? CraftingManager.gemCost(state, false, element) : null;
++  const cost = element && tier ? CraftingManager.gemCost(state, false, element, tier) : null;
+   const canAfford = !cost || cost.ready || (state.gold >= cost.goldCost && state.scrap >= cost.scrapCost);
+-  const canInfuse = !!item && !!element && canAfford;
++  const canInfuse = !!item && !!element && !!tier && canAfford;
+ 
+   return (
+     <div className="overlay" onClick={onClose}>
+@@ -97,7 +106,9 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
+           />
+           <SlotBox
+             rect={GEM_SLOT}
+-            filled={element ? <span className="craft-slot-label" style={{ fontSize: '1.6rem' }}>{ELEMENT_GLYPH[element]}</span> : null}
++            filled={element && tier ? (
++              <span className="craft-slot-label" style={{ fontSize: '1.6rem', color: RARITY_COLOR[tier] }}>{ELEMENT_GLYPH[element]}</span>
++            ) : null}
+             disabled={!item}
+             label="Choose a resistance gem"
+             onOpen={() => setOpenGemPicker(true)}
+@@ -106,7 +117,8 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
+ 
+         {item && def ? (
+           <p className="tiny muted" style={{ margin: '8px 0' }}>
+-            {def.name} -- infusing adds to (stacks with) any resist it already carries.
++            {def.name} -- infusing adds to (stacks with) any resist it already carries. A higher-tier gem adds more per infusion -- see elemental.tierEffectivenessPercent.
++            {element && tier && <> Selected: <span style={{ color: RARITY_COLOR[tier] }}>{GEM_TIER_LABEL[tier]}</span> {ELEMENT_LABEL[element]}.</>}
+           </p>
+         ) : (
+           <p className="tiny muted" style={{ margin: '8px 0' }}>Choose a piece of armor, then a gem, above.</p>
+@@ -129,7 +141,11 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
+         <PickerModal
+           title="Choose a resistance gem"
+           options={gemOptions}
+-          onPick={(key) => setElement(key as ElementType)}
++          onPick={(key) => {
++            const [el, t] = key.split('::') as [ElementType, GemTier];
++            setElement(el);
++            setTier(t);
++          }}
+           onClose={() => setOpenGemPicker(false)}
+         />
+       )}
+diff --git a/src/ui/WeaponEnchantStation.tsx b/src/ui/WeaponEnchantStation.tsx
+index 956f140..4075d08 100644
+--- a/src/ui/WeaponEnchantStation.tsx
++++ b/src/ui/WeaponEnchantStation.tsx
+@@ -2,9 +2,9 @@ import { useState } from 'react';
+ import { useEngine } from './useEngine';
+ import { EquipmentManager } from '../game/managers/EquipmentManager';
+ import { CraftingManager } from '../game/managers/CraftingManager';
+-import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH } from '../game/data/elements';
+-import { ElementType } from '../game/types';
+-import { formatGold } from '../game/util';
++import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH, GEM_TIERS, GEM_TIER_LABEL } from '../game/data/elements';
++import { ElementType, GemTier } from '../game/types';
++import { formatGold, RARITY_COLOR } from '../game/util';
+ import { ItemIcon } from './icons';
+ import { PickerModal, SlotBox } from './CraftingStation';
+ import type { PickerOption, Rect } from './CraftingStation';
+@@ -30,19 +30,30 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
+ 
+   const [targetUid, setTargetUid] = useState('');
+   const [element, setElement] = useState<ElementType | null>(null);
++  // Reset alongside element (see setElementAndResetTier below) -- a tier
++  // choice from one element carries no meaning against a different one,
++  // each element/tier combo is priced and stocked independently.
++  const [tier, setTier] = useState<GemTier | null>(null);
+   const [openItemPicker, setOpenItemPicker] = useState(false);
+ 
+   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
+   const item = found?.item;
+   const def = item ? EquipmentManager.def(item) : undefined;
+ 
++  const setElementAndResetTier = (el: ElementType) => {
++    setElement(el);
++    setTier(null);
++  };
++
+   const itemOptions: PickerOption[] = EquipmentManager.allItems(state)
+     .filter(({ item: i }) => EquipmentManager.def(i)?.slot === 'weapon')
+     .map(({ item: i, heroId }): PickerOption | null => {
+       const d = EquipmentManager.def(i);
+       if (!d) return null;
+       const owner = heroId ? state.heroes.find((h) => h.id === heroId)?.name ?? 'Stash' : 'Stash';
+-      const current = i.elementalDamage ? ELEMENT_LABEL[i.elementalDamage] : 'Uninfused';
++      const current = i.elementalDamage
++        ? `${GEM_TIER_LABEL[i.elementalDamageTier ?? 'common']} ${ELEMENT_LABEL[i.elementalDamage]}`
++        : 'Uninfused';
+       return {
+         key: i.uid,
+         label: d.name,
+@@ -53,14 +64,15 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
+     .filter((o): o is PickerOption => o !== null);
+ 
+   function handleInfuse() {
+-    if (!item || !element) return;
+-    engine.infuseItem(item.uid, element);
++    if (!item || !element || !tier) return;
++    engine.infuseItem(item.uid, element, tier);
+     setElement(null);
++    setTier(null);
+   }
+ 
+-  const cost = element ? CraftingManager.gemCost(state, true, element) : null;
++  const cost = element && tier ? CraftingManager.gemCost(state, true, element, tier) : null;
+   const canAfford = !cost || cost.ready || (state.gold >= cost.goldCost && state.scrap >= cost.scrapCost);
+-  const canInfuse = !!item && !!element && canAfford;
++  const canInfuse = !!item && !!element && !!tier && canAfford;
+ 
+   return (
+     <div className="overlay" onClick={onClose}>
+@@ -81,34 +93,62 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
+ 
+         {item && def ? (
+           <p className="tiny muted" style={{ margin: '8px 0' }}>
+-            {def.name} -- infusing replaces whatever element it currently carries{item.elementalDamage ? ` (currently ${ELEMENT_LABEL[item.elementalDamage]})` : ''}.
++            {def.name} -- infusing replaces whatever element (and tier) it currently carries
++            {item.elementalDamage ? ` (currently ${GEM_TIER_LABEL[item.elementalDamageTier ?? 'common']} ${ELEMENT_LABEL[item.elementalDamage]})` : ''}.
+           </p>
+         ) : (
+-          <p className="tiny muted" style={{ margin: '8px 0' }}>Choose a weapon, then an element, below.</p>
++          <p className="tiny muted" style={{ margin: '8px 0' }}>Choose a weapon, then an element and tier, below.</p>
+         )}
+ 
+-        {/* Element row -- each option shows "Ready" if a gem is already in
+-            inventory, otherwise the fresh-craft cost (charged automatically
+-            on Infuse, no separate crafting step). */}
+-        <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
++        {/* Element row -- picks WHICH element, tier picked separately
++            below once an element is chosen (patch 0237, "Tiered
++            Enchanting/Infusion"). No per-option Ready/cost here anymore --
++            that now depends on tier too, so it moved to the tier row. */}
++        <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>
+           {ELEMENT_TYPES.map((el) => {
+-            const elCost = CraftingManager.gemCost(state, true, el);
+             const selected = element === el;
+-            const affordable = elCost.ready || (state.gold >= elCost.goldCost && state.scrap >= elCost.scrapCost);
+             return (
+               <button
+                 key={el}
+                 className={`chip ${selected ? 'on' : ''}`}
+-                disabled={!item || !affordable}
+-                onClick={() => setElement(el)}
+-                title={elCost.ready ? `${ELEMENT_LABEL[el]} Gem -- ready` : `${ELEMENT_LABEL[el]} Gem -- ${elCost.scrapCost} Scrap + ${formatGold(elCost.goldCost)}`}
++                disabled={!item}
++                onClick={() => setElementAndResetTier(el)}
++                title={ELEMENT_LABEL[el]}
+               >
+-                {ELEMENT_GLYPH[el]} {ELEMENT_LABEL[el]} {elCost.ready ? '(Ready)' : `(${elCost.scrapCost} Scrap + ${formatGold(elCost.goldCost)})`}
++                {ELEMENT_GLYPH[el]} {ELEMENT_LABEL[el]}
+               </button>
+             );
+           })}
+         </div>
+ 
++        {/* Tier row -- only once an element is picked. Each option shows
++            "Ready" if a gem of that exact element+tier is already in
++            inventory, otherwise the fresh-craft cost (charged
++            automatically on Infuse, no separate crafting step). Higher
++            tiers cost more but land a bigger match bonus -- see
++            elemental.tierEffectivenessPercent in the tuning registry. */}
++        {element && (
++          <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
++            {GEM_TIERS.map((t) => {
++              const tCost = CraftingManager.gemCost(state, true, element, t);
++              const selected = tier === t;
++              const affordable = tCost.ready || (state.gold >= tCost.goldCost && state.scrap >= tCost.scrapCost);
++              return (
++                <button
++                  key={t}
++                  className={`chip ${selected ? 'on' : ''}`}
++                  disabled={!affordable}
++                  onClick={() => setTier(t)}
++                  style={{ borderColor: RARITY_COLOR[t] }}
++                  title={tCost.ready ? `${GEM_TIER_LABEL[t]} ${ELEMENT_LABEL[element]} Gem -- ready` : `${GEM_TIER_LABEL[t]} ${ELEMENT_LABEL[element]} Gem -- ${tCost.scrapCost} Scrap + ${formatGold(tCost.goldCost)}`}
++                >
++                  <span style={{ color: RARITY_COLOR[t] }}>{GEM_TIER_LABEL[t]}</span> {tCost.ready ? '(Ready)' : `(${tCost.scrapCost} Scrap + ${formatGold(tCost.goldCost)})`}
++                </button>
++              );
++            })}
++          </div>
++        )}
++
+         <button className="btn-purple" disabled={!canInfuse} onClick={handleInfuse}>
+           Infuse
+         </button>
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 4b61022..f734447 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -6,7 +6,7 @@ import { EquipmentManager } from '../../game/managers/EquipmentManager';
+ import { HeroManager } from '../../game/managers/HeroManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+ import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID, gearScoreForItem } from '../../game/data/equipment';
+-import { ELEMENT_GLYPH, ELEMENT_LABEL } from '../../game/data/elements';
++import { ELEMENT_GLYPH, ELEMENT_LABEL, GEM_TIER_LABEL } from '../../game/data/elements';
+ import { EquipSlot, EquipmentDef, EquipmentItem, ElementType, Hero, Rarity, ConsumableDef, CurioDef } from '../../game/types';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { CurioManager } from '../../game/managers/CurioManager';
+@@ -587,17 +587,19 @@ function ElementalInfoLine({ item }: { item: EquipmentItem }) {
+   const resistEntries = (Object.entries(item.elementalResist ?? {}) as [ElementType, number][])
+     .filter(([, value]) => value > 0);
+   if (!item.elementalDamage && resistEntries.length === 0) return null;
++  const tier = item.elementalDamageTier ?? 'common';
+   return (
+     <div className="tiny" style={{ marginTop: 2, color: 'var(--sky)' }}>
+       {item.elementalDamage && (
+-        <span title={`Deals ${ELEMENT_LABEL[item.elementalDamage]} damage -- bonus success against foes vulnerable to it, nullified against foes immune to it`}>
++        <span title={`${GEM_TIER_LABEL[tier]} tier -- bonus success against foes vulnerable to it, nullified against foes immune to it`}>
+           {ELEMENT_GLYPH[item.elementalDamage]} Deals {ELEMENT_LABEL[item.elementalDamage]}
++          {' '}(<span style={{ color: RARITY_COLOR[tier] }}>{GEM_TIER_LABEL[tier]}</span>)
+         </span>
+       )}
+       {item.elementalDamage && resistEntries.length > 0 && ' · '}
+       {resistEntries.map(([el, value], i) => (
+-        <span key={el} title={`+${value}% success resisting ${ELEMENT_LABEL[el]} attacks`}>
+-          {i > 0 ? ' · ' : ''}{ELEMENT_GLYPH[el]} +{value}% {ELEMENT_LABEL[el]} resist
++        <span key={el} title={`+${value.toFixed(1)}% success resisting ${ELEMENT_LABEL[el]} attacks`}>
++          {i > 0 ? ' · ' : ''}{ELEMENT_GLYPH[el]} +{value.toFixed(1)}% {ELEMENT_LABEL[el]} resist
+         </span>
+       ))}
+     </div>
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index ce5e8f5..0de0629 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -676,9 +676,11 @@ function eggRewardInput(id, value) {
+ }
+ 
+ /**
+- * `resultGem`'s two sub-fields -- which counter a `gem`-category recipe
+- * adds to (GameState.gems for a weapon-enchant gem, resistGems for an
+- * armor-infusion one) and which of the 4 elements. Needs the same
++ * `resultGem`'s three sub-fields -- which counter a `gem`-category
++ * recipe adds to (GameState.gems for a weapon-enchant gem, resistGems
++ * for an armor-infusion one), which of the 4 elements, and (patch 0237,
++ * "Tiered Enchanting/Infusion") which tier -- reuses RARITY_KEYS rather
++ * than a separate list, since GemTier is a plain alias of Rarity.
+  * enabled-toggle eggRewardInput above uses, for the same reason: every
+  * field in this schema renders for every recipe regardless of category
+  * (there's no category-conditional visibility in this editor), and a
+@@ -704,6 +706,10 @@ function resultGemInput(id, value) {
+         <select data-gem-element>
+           ${ELEMENT_KEYS.map((el) => `<option value="${el}" ${value?.element === el ? 'selected' : ''}>${el}</option>`).join('')}
+         </select>
++        <label>Tier</label>
++        <select data-gem-tier>
++          ${RARITY_KEYS.map((t) => `<option value="${t}" ${(value?.tier ?? 'common') === t ? 'selected' : ''}>${t}</option>`).join('')}
++        </select>
+       </div>
+     </div>`;
+ }
+@@ -2078,6 +2084,7 @@ function readField(spec, key) {
+     return {
+       kind: el.querySelector('[data-gem-kind]').value,
+       element: el.querySelector('[data-gem-element]').value,
++      tier: el.querySelector('[data-gem-tier]').value,
+     };
+   }
+   if (spec.type === 'chainStages') {
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index a665028..c029a4f 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -1479,8 +1479,15 @@ function validateEntry(schema, entry, index) {
+           if (!ELEMENT_KEYS.includes(value.element)) {
+             errors.push(`entry ${index}: "${key}.element" must be one of ${ELEMENT_KEYS.join(', ')}`);
+           }
++          // GemTier, added patch 0237 ("Tiered Enchanting/Infusion") -- a
++          // plain alias of Rarity, reusing RARITY_KEYS rather than a new
++          // list, same "Common through Legendary" ladder every other
++          // 5-tier field in this schema already validates against.
++          if (!RARITY_KEYS.includes(value.tier)) {
++            errors.push(`entry ${index}: "${key}.tier" must be one of ${RARITY_KEYS.join(', ')}`);
++          }
+           for (const k of Object.keys(value)) {
+-            if (k !== 'kind' && k !== 'element') errors.push(`entry ${index}: unknown key "${k}" in "${key}"`);
++            if (k !== 'kind' && k !== 'element' && k !== 'tier') errors.push(`entry ${index}: unknown key "${k}" in "${key}"`);
+           }
+         }
+         break;

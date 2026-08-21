@@ -1063,14 +1063,64 @@
     "description": "Independent chance for each candidate element to actually appear on a quest offer, checked once per element up to that tier's own ceiling (see rollElementTags in elements.ts). At 22%, Easy/Normal (max 1 tag) land ~37% zero tags / 63% one; Hard/Epic/Legendary (max 2-3) land ~37% zero / 41% one / 21% two-or-more -- verified at runtime across 2000 samples per tier."
   },
   {
-    "id": "elemental.bonusPerMatchPercent",
-    "label": "Elemental: success bonus per matching tag (%)",
+    "id": "elemental.maxMatchBonusPercent",
+    "label": "Elemental: max match bonus at Legendary tier (%)",
     "category": "elemental",
-    "value": 3,
-    "default": 3,
+    "value": 10,
+    "default": 10,
     "min": 0,
-    "max": 20,
-    "description": "Flat success-chance points added per matching element -- a weapon's elementalDamage matching one of the offer's vulnerableTo entries, or a piece of armor's elementalResist matching a dealsElement entry. Deliberately modest (a nice-to-have, not a build-around), and stacks per matching tag if an offer carries more than one."
+    "max": 50,
+    "description": "The success-chance ceiling a Legendary-tier gem match reaches (weapon elementalDamage vs vulnerableTo, or a single armor infusion vs dealsElement) -- patch 0237 replaced the old flat elemental.bonusPerMatchPercent (3%, same value regardless of gem quality) with this ceiling scaled down per tier by elemental.tierEffectivenessPercent.<tier>. See matchBonusForTier in data/elements.ts."
+  },
+  {
+    "id": "elemental.tierEffectivenessPercent.common",
+    "label": "Elemental: tier effectiveness -- Common (%)",
+    "category": "elemental",
+    "value": 15,
+    "default": 15,
+    "min": 0,
+    "max": 100,
+    "description": "What fraction of elemental.maxMatchBonusPercent a Common-tier gem match is worth. GemTier is a plain alias of Rarity -- see types.ts."
+  },
+  {
+    "id": "elemental.tierEffectivenessPercent.uncommon",
+    "label": "Elemental: tier effectiveness -- Uncommon (%)",
+    "category": "elemental",
+    "value": 30,
+    "default": 30,
+    "min": 0,
+    "max": 100,
+    "description": "Same shape as elemental.tierEffectivenessPercent.common, one tier up. At the default 10% ceiling, Uncommon lands at 3% -- almost exactly the old flat elemental.bonusPerMatchPercent this system replaced, a deliberate anchor point rather than an arbitrary jump."
+  },
+  {
+    "id": "elemental.tierEffectivenessPercent.rare",
+    "label": "Elemental: tier effectiveness -- Rare (%)",
+    "category": "elemental",
+    "value": 60,
+    "default": 60,
+    "min": 0,
+    "max": 100,
+    "description": "Same shape as elemental.tierEffectivenessPercent.common, two tiers up."
+  },
+  {
+    "id": "elemental.tierEffectivenessPercent.epic",
+    "label": "Elemental: tier effectiveness -- Epic (%)",
+    "category": "elemental",
+    "value": 90,
+    "default": 90,
+    "min": 0,
+    "max": 100,
+    "description": "Same shape as elemental.tierEffectivenessPercent.common, three tiers up."
+  },
+  {
+    "id": "elemental.tierEffectivenessPercent.legendary",
+    "label": "Elemental: tier effectiveness -- Legendary (%)",
+    "category": "elemental",
+    "value": 100,
+    "default": 100,
+    "min": 0,
+    "max": 100,
+    "description": "Same shape as elemental.tierEffectivenessPercent.common, four tiers up -- always exactly elemental.maxMatchBonusPercent itself, the ceiling every other tier is a fraction of."
   },
   {
     "id": "elemental.scrapValue.common",

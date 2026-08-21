@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { useEngine } from './useEngine';
 import { EquipmentManager } from '../game/managers/EquipmentManager';
 import { CraftingManager } from '../game/managers/CraftingManager';
-import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH } from '../game/data/elements';
-import { ElementType } from '../game/types';
-import { formatGold } from '../game/util';
+import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH, GEM_TIERS, GEM_TIER_LABEL } from '../game/data/elements';
+import { ElementType, GemTier } from '../game/types';
+import { formatGold, RARITY_COLOR } from '../game/util';
 import { ItemIcon } from './icons';
 import { PickerModal, SlotBox } from './CraftingStation';
 import type { PickerOption, Rect } from './CraftingStation';
@@ -30,6 +30,7 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
 
   const [targetUid, setTargetUid] = useState('');
   const [element, setElement] = useState<ElementType | null>(null);
+  const [tier, setTier] = useState<GemTier | null>(null);
   const [openItemPicker, setOpenItemPicker] = useState(false);
   const [openGemPicker, setOpenGemPicker] = useState(false);
 
@@ -44,7 +45,7 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
       if (!d) return null;
       const owner = heroId ? state.heroes.find((h) => h.id === heroId)?.name ?? 'Stash' : 'Stash';
       const current = Object.keys(i.elementalResist ?? {}).length > 0
-        ? Object.entries(i.elementalResist ?? {}).map(([el, v]) => `${ELEMENT_LABEL[el as ElementType]} +${v}%`).join(', ')
+        ? Object.entries(i.elementalResist ?? {}).map(([el, v]) => `${ELEMENT_LABEL[el as ElementType]} +${(v as number).toFixed(1)}%`).join(', ')
         : 'No resist yet';
       return {
         key: i.uid,
@@ -55,30 +56,38 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
     })
     .filter((o): o is PickerOption => o !== null);
 
-  const gemOptions: PickerOption[] = ELEMENT_TYPES.map((el) => {
-    const elCost = CraftingManager.gemCost(state, false, el);
-    const affordable = elCost.ready || (state.gold >= elCost.goldCost && state.scrap >= elCost.scrapCost);
+  // One option per element/tier combo (patch 0237, "Tiered Enchanting/
+  // Infusion") -- was one option per element only, since any gem was
+  // equally effective before this. Key encodes both (`fire::rare`) since
+  // PickerModal.onPick only carries a single string back. Grouped by
+  // element, then ascending tier within each -- a player scanning for
+  // "the best Fire gem I can afford" reads top-to-bottom within one
+  // block rather than hunting across the whole list.
+  const gemOptions: PickerOption[] = ELEMENT_TYPES.flatMap((el) => GEM_TIERS.map((t) => {
+    const tCost = CraftingManager.gemCost(state, false, el, t);
+    const affordable = tCost.ready || (state.gold >= tCost.goldCost && state.scrap >= tCost.scrapCost);
     return {
-      key: el,
-      label: `${ELEMENT_LABEL[el]} Resistance Gem`,
-      sublabel: elCost.ready ? 'Ready' : `${elCost.scrapCost} Scrap + ${formatGold(elCost.goldCost)}`,
+      key: `${el}::${t}`,
+      label: `${GEM_TIER_LABEL[t]} ${ELEMENT_LABEL[el]} Resistance Gem`,
+      sublabel: tCost.ready ? 'Ready' : `${tCost.scrapCost} Scrap + ${formatGold(tCost.goldCost)}`,
       // A real icon slot now, not text embedded in the label -- see
       // PickerModal's own comment on why an option without one used to
       // truncate its whole label to almost nothing.
-      icon: <span style={{ fontSize: '1.4rem' }}>{ELEMENT_GLYPH[el]}</span>,
+      icon: <span style={{ fontSize: '1.4rem', color: RARITY_COLOR[t] }}>{ELEMENT_GLYPH[el]}</span>,
       disabled: !affordable,
     };
-  });
+  }));
 
   function handleInfuse() {
-    if (!item || !element) return;
-    engine.infuseItem(item.uid, element);
+    if (!item || !element || !tier) return;
+    engine.infuseItem(item.uid, element, tier);
     setElement(null);
+    setTier(null);
   }
 
-  const cost = element ? CraftingManager.gemCost(state, false, element) : null;
+  const cost = element && tier ? CraftingManager.gemCost(state, false, element, tier) : null;
   const canAfford = !cost || cost.ready || (state.gold >= cost.goldCost && state.scrap >= cost.scrapCost);
-  const canInfuse = !!item && !!element && canAfford;
+  const canInfuse = !!item && !!element && !!tier && canAfford;
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -97,7 +106,9 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
           />
           <SlotBox
             rect={GEM_SLOT}
-            filled={element ? <span className="craft-slot-label" style={{ fontSize: '1.6rem' }}>{ELEMENT_GLYPH[element]}</span> : null}
+            filled={element && tier ? (
+              <span className="craft-slot-label" style={{ fontSize: '1.6rem', color: RARITY_COLOR[tier] }}>{ELEMENT_GLYPH[element]}</span>
+            ) : null}
             disabled={!item}
             label="Choose a resistance gem"
             onOpen={() => setOpenGemPicker(true)}
@@ -106,7 +117,8 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
 
         {item && def ? (
           <p className="tiny muted" style={{ margin: '8px 0' }}>
-            {def.name} -- infusing adds to (stacks with) any resist it already carries.
+            {def.name} -- infusing adds to (stacks with) any resist it already carries. A higher-tier gem adds more per infusion -- see elemental.tierEffectivenessPercent.
+            {element && tier && <> Selected: <span style={{ color: RARITY_COLOR[tier] }}>{GEM_TIER_LABEL[tier]}</span> {ELEMENT_LABEL[element]}.</>}
           </p>
         ) : (
           <p className="tiny muted" style={{ margin: '8px 0' }}>Choose a piece of armor, then a gem, above.</p>
@@ -129,7 +141,11 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
         <PickerModal
           title="Choose a resistance gem"
           options={gemOptions}
-          onPick={(key) => setElement(key as ElementType)}
+          onPick={(key) => {
+            const [el, t] = key.split('::') as [ElementType, GemTier];
+            setElement(el);
+            setTier(t);
+          }}
           onClose={() => setOpenGemPicker(false)}
         />
       )}

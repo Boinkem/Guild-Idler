@@ -1,4 +1,4 @@
-import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DiceRollResult, ElementType, GameState, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
+import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DiceRollResult, ElementType, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -2522,8 +2522,8 @@ export class GameEngine {
    *  see CraftingManager.craftAndInfuse for the combined craft-then-apply
    *  flow, which uses an already-owned gem if one exists or crafts one
    *  fresh otherwise. */
-  infuseItem(itemUid: string, element: ElementType) {
-    const error = CraftingManager.craftAndInfuse(this.state, itemUid, element);
+  infuseItem(itemUid: string, element: ElementType, tier: GemTier) {
+    const error = CraftingManager.craftAndInfuse(this.state, itemUid, element, tier);
     if (error) return this.say(error);
     playSound('infuse');
     this.say('The infusion takes.', 'equipment');
