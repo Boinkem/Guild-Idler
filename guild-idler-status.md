@@ -17975,3 +17975,137 @@ vite.web.config.ts` both pass clean. Confirmed by script: 17 guidance
 topics total, zero duplicate ids, and the recruit-cost minimum used by
 the two new gold-gated topics resolves to exactly 150 against the live
 `recruit-costs.json`, not assumed.
+
+### Consumable economy pass: success/gold rates rebalanced, five-tier ladders filled in, and a real crafted-consumables line (patch 0234)
+
+```discord-update
+Dev Update | Consumable Economy Pass
+
+- Success-boosting potions now scale gold-to-percent consistently instead of a flat cheap bonus -- Healing Potion's +5% for 25g was the outlier, not the norm
+- Standard/Grand Lucky Potions no longer cost more than the gold they hand back -- both now return a real profit
+- New top-end consumables added across Healing, Strength, Lucky, and Fortune Charm lines, so there's finally somewhere to spend gold once the old ceiling stopped mattering
+- Greater Fortune Charm moved from a Rare guaranteed-roll to Epic, with a new Legendary "Boundless" charm taking over as the true guaranteed-roll ceiling
+- The Alchemist/Enchanter crafting bench now makes real sense economically -- crafted potions and charms cost less gold than their shop equivalents (paid partly in materials instead), and land a notch below them in power rather than just being a cheaper copy
+- 11 new craftable consumables added, several with their own dedicated recipes for the first time
+```
+
+Direct follow-up to tester feedback: Healing Potion's 25g for +5% success was
+badly underpriced relative to everything else in the shop, and the two
+Lucky Potions were flagged as actively unprofitable (Standard Lucky Potion
+cost 75g and only returned 55g). Both problems came from the same root
+cause -- these items were tuned once, early, and never revisited once the
+rest of the economy moved around them.
+
+**`consumables.json` -- existing items retuned.** Established a flat rate
+of 0.04% success per gold spent across the Healing line, taken directly
+from the requested Healing Potion/Greater/Supreme numbers (1%/3%/6% at
+25g/75g/150g) and applied consistently everywhere else success scales:
+Strength Potion repriced from 75g/+10% success+25 gold down to a genuine
+low-tier item at 25g/+1% success+5 gold, since it was previously giving
+full Healing-tier value on top of a gold bonus at the same price point
+Greater Healing Potion sat at. Lucky Potions fixed to a consistent ~150%
+gold return instead of a breakeven-or-worse one: Minor Lucky Potion 40g/
++40 gold -> 40g/+60 gold, Standard Lucky Potion 75g/+55 gold -> 75g/+110
+gold. Fortune Charms (Gold and Insight both) dropped from a x2/x3.5
+multiplier down to x1.2/x1.75 at the same Minor/Standard price points,
+per direct request to start the ladder lower now that higher tiers exist
+above it. Greater Fortune Charm's multiplier dropped from an uncapped 999
+(full-override "every slot rolls this stat") down to a finite x5, and its
+rarity bumped Rare -> Epic to make room for two new tiers landing above
+and below it in the ladder below.
+
+**`consumables.json` -- 11 new shop-tier items, five-tier ladders now
+complete on every scaling family:**
+- Healing: **Grand Healing Potion** (100g, +4% success, Rare) slots
+  between Greater and Supreme; **Phoenix Draught** (300g, +12% success,
+  Legendary) is the new ceiling.
+- Strength: **Grand Strength Potion** (150g, +3% success/+25 gold, Rare)
+  and **Titan's Draught** (500g, +6% success/+50 gold, Legendary) --
+  Strength's price curve deliberately runs harsher than Healing's own
+  (base moved to 25g per direct request, but the Legendary tier's price
+  more than triples while its power only doubles, a real diminishing-
+  returns gold sink at the top rather than a flat multiplier all the
+  way up).
+- Lucky: **Grand Lucky Potion** (150g/+225 gold, Rare), **Greater Lucky
+  Potion** (220g/+330 gold, Epic -- fills the one missing rung the other
+  three families already had), **Fortune's Bounty** (300g/+450 gold,
+  Legendary). Return held flat at ~150% the whole ladder, per direct
+  instruction not to harshen this particular curve the way Strength's
+  got harshened.
+- Fortune Charms: **Grand Fortune Charm** (150g, x3.0, Rare) and
+  **Boundless Fortune Charm** (400g, guaranteed roll every affix,
+  Legendary) added for both the Gold and Insight variants (4 new items
+  total) -- Boundless inherits the old x999 full-override behavior
+  Greater used to carry, now correctly gated behind the actual top tier
+  instead of sitting at Rare.
+
+**A new `craftable` flag on `ConsumableDef`** (`types.ts`), same shape
+and same reasoning as `EquipmentDef.craftable` already has for gear --
+true for a variant that only ever exists as a Crafting Station result,
+never sold at the Alchemist's stall. `ShopManager.rollConsumables` now
+filters this out of its eligible pool before weighting/picking, mirroring
+`rollEquipment`'s own pre-existing `craftable` filter exactly (this was
+the one piece of actual code touched this patch -- every other change is
+content-only, in `consumables.json`/`crafting-recipes.json`).
+
+**11 new craft-only consumables**, each with its own Crafting Station
+recipe, priced to land a smidge below its nearest shop equivalent in both
+gold cost and effect -- materials make up the difference rather than
+gold alone, so a recipe is a genuine trade of time/farming for a
+discount, not strictly worse than buying:
+- **Alchemist's Reserve** (65g + 20 Herbs + 5 Fish -> +3% success, ~65%
+  of Grand Healing Potion's gold cost for ~75% of its effect) and
+  **Phoenix Ember** (195g + 50 Herbs + 20 Fish + 10 Ore -> +9% success,
+  same ~65%/~75% ratio against Phoenix Draught).
+- **Warband Feast** (325g + 40 Herbs + 40 Fish + 15 Ore -> +5%
+  success/+38 gold, same ratio against Titan's Draught).
+- **Prospector's Cache** (95g + 25 Fish + 10 Ore -> +170 gold) and
+  **Dragon's Hoard Charm** (195g + 50 Fish + 25 Ore + 15 Herbs -> +340
+  gold), same ratio against Grand Lucky Potion and Fortune's Bounty
+  respectively.
+- **Lucky Charm**, **Fortune Weave**, and **Windfall Sigil** (Gold and
+  Insight variants each, 6 items total) -- the Fortune Charm family's
+  first-ever crafted line, at x1.15/x2.5/x4.2 against the shop's
+  x1.2/x3.0/x5.0 Minor/Grand/Greater tiers, same cost/effect ratio as
+  every other new craftable.
+
+**`crafting-recipes.json` -- 4 existing recipes retuned to match:**
+Herbal Tonic's gold cost dropped 25g -> 15g (herbs 10 -> 8) so it's
+finally cheaper than just buying a Healing Potion outright rather than
+costing the same plus materials for nothing. Trail Rations dropped 20g
+-> 15g, same reasoning, materials unchanged. Meal On The Go repriced 40g
+-> 95g and remapped off the base Strength Potion (which it was
+incorrectly sharing with the much-cheaper Trail Rations) onto the new
+craft-only **Meal On The Go** consumable described above -- its higher
+cost and injuryResist mod finally buy something distinct rather than an
+exact duplicate of the cheaper recipe. Forager's Bundle remapped off
+Minor Lucky Potion onto its own craft-only **Forager's Bundle** item
+(45 gold vs. the shop item's 60), gold cost bumped 15g -> 25g, materials
+bumped to 12 Fish, and its old single-mod-choice system removed in favor
+of a flat effect matching every other consumable recipe's shape.
+
+**11 new recipes added** for every new craft-only consumable listed
+above (`craft_alchemists_reserve`, `craft_phoenix_ember`,
+`craft_warband_feast`, `craft_prospectors_cache`,
+`craft_dragons_hoard_charm`, `craft_lucky_charm_gold/xp`,
+`craft_fortune_weave_gold/xp`, `craft_windfall_sigil_gold/xp`) -- no
+scrap cost on any of them (`CraftingManager.craftConsumable` never
+deducts `state.scrap`, unlike the gem-crafting path, so scrap was left
+out of every consumable recipe's cost rather than adding a field that
+would silently do nothing).
+
+**Untouched, per direct instruction:** Pet Treat and Beckoning Charm,
+both the shop items and their existing crafting recipes -- no changes to
+either. Protection Charm, Elixir of Fortune, Field Bandage, both
+Restorative Draughts, and Guardian's Retainer are also untouched -- flat/
+boolean effects (prevent injury, restore fixed HP, guarantee an event,
+etc.), not success-rate or loot-weight numbers, so the gold-to-percent
+rebalance metric doesn't map onto them; flagged as a possible separate
+pass if wanted later.
+
+Not yet verified against a live `npx tsc --noEmit`/`vite build` in this
+environment (JSON content + one small, mechanically-identical filter
+change mirrored from existing `rollEquipment` code) -- worth a real
+build pass before merge to confirm the new `craftable` field doesn't
+trip anything unexpected in DevTool's Consumables table or the Alchemist
+shop UI.

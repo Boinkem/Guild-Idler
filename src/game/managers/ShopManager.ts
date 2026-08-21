@@ -70,13 +70,17 @@ export const ShopManager = {
    *  any slicing/selection here at all) -- now picks CONSUMABLE_SHOP_SLOTS
    *  distinct items, weighted by RARITY_WEIGHT exactly the same way
    *  rollEquipment already weights gear, now that every ConsumableDef
-   *  carries a rarity. */
+   *  carries a rarity. Craft-only variants (ConsumableDef.craftable,
+   *  patch 0234) are filtered out of the eligible pool first -- same
+   *  reasoning rollEquipment's own craftable filter already uses, a
+   *  crafted-only item was never meant to also turn up for sale. */
   rollConsumables(state: GameState, seed: number | string) {
+    const eligible = CONSUMABLES.filter((c) => !c.craftable);
     const rng = createRng(`shop-consumables:${seed}:${state.createdAt}`);
     const picks = new Set<string>();
     let guard = 0;
-    while (picks.size < Math.min(CONSUMABLE_SHOP_SLOTS, CONSUMABLES.length) && guard++ < 200) {
-      const def = rng.weighted(CONSUMABLES.map((c) => ({ item: c, weight: RARITY_WEIGHT[c.rarity] })));
+    while (picks.size < Math.min(CONSUMABLE_SHOP_SLOTS, eligible.length) && guard++ < 200) {
+      const def = rng.weighted(eligible.map((c) => ({ item: c, weight: RARITY_WEIGHT[c.rarity] })));
       picks.add(def.id);
     }
     return [...picks].map((defId) => ({ defId, stock: rng.int(2, 8) }));

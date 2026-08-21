@@ -185,6 +185,17 @@ export interface ConsumableDef {
    *  EquipmentDef.icon -- falls back to `glyph` when unset, same
    *  "missing file just fails to paint, never a broken image" rule. */
   icon?: string;
+  /**
+   * True for craft-only variants sitting a rung below the shop's own
+   * tier ladder (Alchemist's Reserve, Warband Feast, the Fortune-Charm-
+   * shaped "Weave"/"Sigil" line, etc., patch 0234) -- these only ever
+   * exist as a Crafting Station result, never sold at the Alchemist's
+   * stall. Same shape and same reasoning as EquipmentDef.craftable
+   * above: ShopManager.rollConsumables filters this out the same way
+   * rollEquipment already filters a craftable gear base, so a crafted
+   * variant can never show up for sale at its own reference `cost`.
+   */
+  craftable?: boolean;
   effect: {
     success?: number;
     gold?: number;

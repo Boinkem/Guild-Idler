@@ -8,7 +8,7 @@
     "glyph": "\u2764",
     "icon": "potions/Potion_10.png",
     "effect": {
-      "success": 5
+      "success": 1
     }
   },
   {
@@ -20,7 +20,7 @@
     "glyph": "\u2764",
     "icon": "potions/Potion_34.png",
     "effect": {
-      "success": 15
+      "success": 6
     }
   },
   {
@@ -32,7 +32,31 @@
     "glyph": "\u2764",
     "icon": "potions/Potion_42.png",
     "effect": {
-      "success": 10
+      "success": 3
+    }
+  },
+  {
+    "id": "grand_healing_potion",
+    "name": "Grand Healing Potion",
+    "description": "Steadies the hands before a fight. A serious dose, well past what a standard potion offers.",
+    "cost": 100,
+    "rarity": "rare",
+    "glyph": "\u2764",
+    "icon": "potions/Potion_42.png",
+    "effect": {
+      "success": 4
+    }
+  },
+  {
+    "id": "phoenix_draught",
+    "name": "Phoenix Draught",
+    "description": "Bottled resolve. The strongest success bonus coin can buy.",
+    "cost": 300,
+    "rarity": "legendary",
+    "glyph": "\u2764",
+    "icon": "potions/Potion_34.png",
+    "effect": {
+      "success": 12
     }
   },
   {
@@ -44,7 +68,7 @@
     "glyph": "\u2726",
     "icon": "potions/Potion_12.png",
     "effect": {
-      "gold": 40
+      "gold": 60
     }
   },
   {
@@ -56,20 +80,82 @@
     "glyph": "\u2726",
     "icon": "potions/Potion_36.png",
     "effect": {
-      "gold": 55
+      "gold": 110
+    }
+  },
+  {
+    "id": "grand_lucky_potion",
+    "name": "Grand Lucky Potion",
+    "description": "Coins seem to find their way into pockets, and then some.",
+    "cost": 150,
+    "rarity": "rare",
+    "glyph": "\u2726",
+    "icon": "potions/Potion_36.png",
+    "effect": {
+      "gold": 225
+    }
+  },
+  {
+    "id": "greater_lucky_potion",
+    "name": "Greater Lucky Potion",
+    "description": "Coins seem to find their way into pockets, and then some. A stronger brew than the Grand tier.",
+    "cost": 220,
+    "rarity": "epic",
+    "glyph": "\u2726",
+    "icon": "potions/Potion_12.png",
+    "effect": {
+      "gold": 330
+    }
+  },
+  {
+    "id": "fortunes_bounty",
+    "name": "Fortune's Bounty",
+    "description": "Every pocket on this hero is somehow already full before they've left the guild hall.",
+    "cost": 300,
+    "rarity": "legendary",
+    "glyph": "\u2726",
+    "icon": "potions/Potion_45.png",
+    "effect": {
+      "gold": 450
     }
   },
   {
     "id": "strength_potion",
     "name": "Strength Potion",
     "description": "A hard swing and a fair price for it.\nIncreases success rate, and gold drops",
-    "cost": 75,
-    "rarity": "uncommon",
+    "cost": 25,
+    "rarity": "common",
     "glyph": "\u2694",
     "icon": "potions/Potion_33.png",
     "effect": {
-      "success": 10,
+      "success": 1,
+      "gold": 5
+    }
+  },
+  {
+    "id": "grand_strength_potion",
+    "name": "Grand Strength Potion",
+    "description": "A hard swing and a fair price for it. Hits harder than a standard Strength Potion.",
+    "cost": 150,
+    "rarity": "rare",
+    "glyph": "\u2694",
+    "icon": "potions/Potion_33.png",
+    "effect": {
+      "success": 3,
       "gold": 25
+    }
+  },
+  {
+    "id": "titans_draught",
+    "name": "Titan's Draught",
+    "description": "A hard swing and a fair price for it. The strongest brew the Alchemist stocks.",
+    "cost": 500,
+    "rarity": "legendary",
+    "glyph": "\u2694",
+    "icon": "potions/Potion_33.png",
+    "effect": {
+      "success": 6,
+      "gold": 50
     }
   },
   {
@@ -173,7 +259,7 @@
     "glyph": "\u2666",
     "effect": {
       "lootWeightStat": "gold",
-      "lootWeightMultiplier": 2
+      "lootWeightMultiplier": 1.2
     }
   },
   {
@@ -185,15 +271,39 @@
     "glyph": "\u2666",
     "effect": {
       "lootWeightStat": "gold",
-      "lootWeightMultiplier": 3.5
+      "lootWeightMultiplier": 1.75
+    }
+  },
+  {
+    "id": "grand_fortune_charm_gold",
+    "name": "Grand Fortune Charm (Gold)",
+    "description": "A strong pull toward coin. Loot drops on this quest lean hard toward Gold.",
+    "cost": 150,
+    "rarity": "rare",
+    "glyph": "\u2666",
+    "effect": {
+      "lootWeightStat": "gold",
+      "lootWeightMultiplier": 3
     }
   },
   {
     "id": "greater_fortune_charm_gold",
     "name": "Greater Fortune Charm (Gold)",
-    "description": "Coin, and nothing else. Every loot drop on this quest that rolls procedurally rolls Gold on every affix.",
+    "description": "Coin, above all else. Loot drops on this quest are heavily biased toward Gold.",
     "cost": 220,
-    "rarity": "rare",
+    "rarity": "epic",
+    "glyph": "\u2666",
+    "effect": {
+      "lootWeightStat": "gold",
+      "lootWeightMultiplier": 5
+    }
+  },
+  {
+    "id": "boundless_fortune_charm_gold",
+    "name": "Boundless Fortune Charm (Gold)",
+    "description": "Coin, and nothing else. Every loot drop on this quest that rolls procedurally rolls Gold on every affix.",
+    "cost": 400,
+    "rarity": "legendary",
     "glyph": "\u2666",
     "effect": {
       "lootWeightStat": "gold",
@@ -209,7 +319,7 @@
     "glyph": "\u2726",
     "effect": {
       "lootWeightStat": "xp",
-      "lootWeightMultiplier": 2
+      "lootWeightMultiplier": 1.2
     }
   },
   {
@@ -221,19 +331,214 @@
     "glyph": "\u2726",
     "effect": {
       "lootWeightStat": "xp",
-      "lootWeightMultiplier": 3.5
+      "lootWeightMultiplier": 1.75
+    }
+  },
+  {
+    "id": "grand_fortune_charm_xp",
+    "name": "Grand Fortune Charm (Insight)",
+    "description": "A strong pull toward understanding. Loot drops on this quest lean hard toward Experience.",
+    "cost": 150,
+    "rarity": "rare",
+    "glyph": "\u2726",
+    "effect": {
+      "lootWeightStat": "xp",
+      "lootWeightMultiplier": 3
     }
   },
   {
     "id": "greater_fortune_charm_xp",
     "name": "Greater Fortune Charm (Insight)",
-    "description": "Understanding, and nothing else. Every loot drop on this quest that rolls procedurally rolls Experience on every affix.",
+    "description": "Understanding, above all else. Loot drops on this quest are heavily biased toward Experience.",
     "cost": 220,
-    "rarity": "rare",
+    "rarity": "epic",
+    "glyph": "\u2726",
+    "effect": {
+      "lootWeightStat": "xp",
+      "lootWeightMultiplier": 5
+    }
+  },
+  {
+    "id": "boundless_fortune_charm_xp",
+    "name": "Boundless Fortune Charm (Insight)",
+    "description": "Understanding, and nothing else. Every loot drop on this quest that rolls procedurally rolls Experience on every affix.",
+    "cost": 400,
+    "rarity": "legendary",
     "glyph": "\u2726",
     "effect": {
       "lootWeightStat": "xp",
       "lootWeightMultiplier": 999
+    }
+  },
+  {
+    "id": "alchemists_reserve",
+    "name": "Alchemist's Reserve",
+    "description": "Home-brewed rather than shelf-bought. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 100,
+    "rarity": "uncommon",
+    "glyph": "\u2764",
+    "icon": "potions/Potion_10.png",
+    "craftable": true,
+    "effect": {
+      "success": 3
+    }
+  },
+  {
+    "id": "phoenix_ember",
+    "name": "Phoenix Ember",
+    "description": "A guttering coal of the real thing. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 300,
+    "rarity": "rare",
+    "glyph": "\u2764",
+    "icon": "potions/Potion_28.png",
+    "craftable": true,
+    "effect": {
+      "success": 9
+    }
+  },
+  {
+    "id": "foragers_bundle_potion",
+    "name": "Forager's Bundle",
+    "description": "Wild berries and whatever else looked worth picking along the treeline. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 40,
+    "rarity": "common",
+    "glyph": "\u2726",
+    "icon": "food/Food_01.png",
+    "craftable": true,
+    "effect": {
+      "gold": 45
+    }
+  },
+  {
+    "id": "meal_on_the_go_potion",
+    "name": "Meal On The Go",
+    "description": "Hearty, meat n' veg stew, ladled out before the road. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 150,
+    "rarity": "uncommon",
+    "glyph": "\u2694",
+    "icon": "food/Food_20.png",
+    "craftable": true,
+    "effect": {
+      "success": 2,
+      "gold": 18
+    }
+  },
+  {
+    "id": "warband_feast_item",
+    "name": "Warband Feast",
+    "description": "Enough food to feed a war party, cooked for one hero heading out alone. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 500,
+    "rarity": "rare",
+    "glyph": "\u2694",
+    "icon": "food/Food_36.png",
+    "craftable": true,
+    "effect": {
+      "success": 5,
+      "gold": 38
+    }
+  },
+  {
+    "id": "prospectors_cache_item",
+    "name": "Prospector's Cache",
+    "description": "A handful of ore and river silt, panned rather than paid for. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 150,
+    "rarity": "rare",
+    "glyph": "\u2726",
+    "icon": "crafting/Crafting_30.png",
+    "craftable": true,
+    "effect": {
+      "gold": 170
+    }
+  },
+  {
+    "id": "dragons_hoard_charm_item",
+    "name": "Dragon's Hoard Charm",
+    "description": "Smells faintly of brimstone and old coin. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 300,
+    "rarity": "epic",
+    "glyph": "\u2726",
+    "icon": "misc/Misc_75.png",
+    "craftable": true,
+    "effect": {
+      "gold": 340
+    }
+  },
+  {
+    "id": "lucky_charm_gold",
+    "name": "Lucky Charm (Gold)",
+    "description": "A rough-cut equivalent to the Alchemist's own Fortune Charms. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 40,
+    "rarity": "common",
+    "glyph": "\u2666",
+    "craftable": true,
+    "effect": {
+      "lootWeightStat": "gold",
+      "lootWeightMultiplier": 1.15
+    }
+  },
+  {
+    "id": "lucky_charm_xp",
+    "name": "Lucky Charm (Insight)",
+    "description": "A rough-cut equivalent to the Alchemist's own Fortune Charms. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 40,
+    "rarity": "common",
+    "glyph": "\u2726",
+    "craftable": true,
+    "effect": {
+      "lootWeightStat": "xp",
+      "lootWeightMultiplier": 1.15
+    }
+  },
+  {
+    "id": "fortune_weave_gold",
+    "name": "Fortune Weave (Gold)",
+    "description": "Ore and herb, worked into the same trick the Alchemist's own charms use. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 150,
+    "rarity": "rare",
+    "glyph": "\u2666",
+    "craftable": true,
+    "effect": {
+      "lootWeightStat": "gold",
+      "lootWeightMultiplier": 2.5
+    }
+  },
+  {
+    "id": "fortune_weave_xp",
+    "name": "Fortune Weave (Insight)",
+    "description": "Ore and herb, worked into the same trick the Alchemist's own charms use. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 150,
+    "rarity": "rare",
+    "glyph": "\u2726",
+    "craftable": true,
+    "effect": {
+      "lootWeightStat": "xp",
+      "lootWeightMultiplier": 2.5
+    }
+  },
+  {
+    "id": "windfall_sigil_gold",
+    "name": "Windfall Sigil (Gold)",
+    "description": "The strongest pull toward coin the Enchanter's bench can manage. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 220,
+    "rarity": "epic",
+    "glyph": "\u2666",
+    "craftable": true,
+    "effect": {
+      "lootWeightStat": "gold",
+      "lootWeightMultiplier": 4.2
+    }
+  },
+  {
+    "id": "windfall_sigil_xp",
+    "name": "Windfall Sigil (Insight)",
+    "description": "The strongest pull toward understanding the Enchanter's bench can manage. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 220,
+    "rarity": "epic",
+    "glyph": "\u2726",
+    "craftable": true,
+    "effect": {
+      "lootWeightStat": "xp",
+      "lootWeightMultiplier": 4.2
     }
   }
 ]
