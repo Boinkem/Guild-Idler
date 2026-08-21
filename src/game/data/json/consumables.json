@@ -397,6 +397,33 @@
     }
   },
   {
+    "id": "trail_rations_item",
+    "name": "Trail Rations",
+    "description": "Smoked fish and dried herbs, packed for a hero who won\u2019t be home for dinner. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 25,
+    "rarity": "common",
+    "glyph": "\u2694",
+    "icon": "food/Food_36.png",
+    "craftable": true,
+    "effect": {
+      "success": 1,
+      "gold": 5
+    }
+  },
+  {
+    "id": "herbal_tonic_item",
+    "name": "Herbal Tonic",
+    "description": "The Herb Garden\u2019s own cure-all, brewed in-house rather than bought off a vendor's shelf. Craft-only -- not sold at the Alchemist's stall.",
+    "cost": 25,
+    "rarity": "common",
+    "glyph": "\u2764",
+    "icon": "potions/Potion_10.png",
+    "craftable": true,
+    "effect": {
+      "success": 1
+    }
+  },
+  {
     "id": "foragers_bundle_potion",
     "name": "Forager's Bundle",
     "description": "Wild berries and whatever else looked worth picking along the treeline. Craft-only -- not sold at the Alchemist's stall.",

@@ -18535,3 +18535,81 @@ Guild Rank Tiers.
 
 `node --check` passes on `server.mjs`; `npx tsc --noEmit` and `vite build`
 both still pass clean (no TypeScript touched, DevTool-only).
+
+### Alchemist recipe/result mismatch: Trail Rations and Herbal Tonic were silently crafting Strength/Healing Potions (patch 0240)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed Trail Rations actually crafting a Strength Potion instead of its own item
+- Fixed Herbal Tonic actually crafting a Healing Potion instead of its own item
+- Both now produce a correctly-named item matching what you picked to craft
+```
+
+Direct bug report: "the name of the recipe they select to craft doesn't
+actually create an item with that name -- one or two just turn into
+Strength Potions." Confirmed exactly as described, and confirmed it was
+only ever these two.
+
+**Root cause.** `CraftingRecipeDef` carries its own `name` (what the
+Crafting Station's recipe list shows -- `CraftingStation.tsx` renders
+`recipe.name`, which was always correct) completely independent of
+`resultConsumableId` (what `CraftingManager.craftConsumable` actually
+adds to inventory via `InventoryManager.add`). `craft_trail_rations` and
+`craft_herbal_tonic` had `resultConsumableId` still pointing at
+`strength_potion`/`healing_potion` respectively -- an artifact of both
+recipes originally being reskins of those two shop potions before either
+ever got its own dedicated item. Patch 0234's consumable economy pass
+already fixed this exact bug for **Meal On The Go** (was silently
+sharing `strength_potion`) and **Forager's Bundle** (was silently
+sharing `minor_lucky_potion`), each remapped onto a new dedicated
+craft-only item at the time -- Trail Rations and Herbal Tonic were the
+two that pass missed. Audited every `consumable`-category recipe against
+its `resultConsumableId` this time (`recipe.name` vs.
+`CONSUMABLE_BY_ID[resultConsumableId].name`, all 17) to confirm these
+were the only two remaining, not just the two reported.
+
+**`consumables.json` -- two new dedicated craft-only items**, same
+`"craftable": true` shape as the four added in patch 0234, each mirroring
+the exact effect of the shop potion it used to silently alias to (this
+was already the design intent per patch 0234's own writeup -- "finally
+cheaper than just buying a Healing Potion outright" only makes sense if
+the two have the same effect and Herbal Tonic just costs less gold via a
+materials trade-off, not if it's a weaker item):
+- **Trail Rations** (`trail_rations_item`, common, same icon
+  `food/Food_36.png` the recipe already used) -- `{success: 1, gold: 5}`,
+  identical to Strength Potion's effect.
+- **Herbal Tonic** (`herbal_tonic_item`, common, same icon
+  `potions/Potion_10.png` the recipe already used) -- `{success: 1}`,
+  identical to Healing Potion's effect.
+
+Both priced at `cost: 25` (display/value field, not a shop price since
+neither is sold -- same ~1.5-1.7x-recipe-goldCost ratio the existing
+craft-only items already use: Alchemist's Reserve 100 vs. its 65g
+recipe, Forager's Bundle 40 vs. its 25g recipe).
+
+**`crafting-recipes.json` -- two `resultConsumableId` fields
+corrected:** `craft_trail_rations` -> `trail_rations_item`,
+`craft_herbal_tonic` -> `herbal_tonic_item`. No other field on either
+recipe touched -- cost, materials, and description were already correct
+and already matched the recipe's own name; only the output pointer was
+wrong.
+
+**No code changes.** `CraftingManager.craftConsumable`,
+`CraftingStation.tsx`, and the DevTool's existing generic Consumables/
+Crafting Recipes tables all already handle this correctly -- this was a
+content-only mismatch, not a logic bug, so nothing else needed touching.
+Confirmed no other system references these two recipe ids or assumes
+their old output (`grep` across the repo for `craft_trail_rations`/
+`craft_herbal_tonic` turns up only the recipe's own entry).
+
+**Save compatibility:** no migration needed. Any `strength_potion`/
+`healing_potion` a player already crafted under the old, mislabeled
+recipe stays exactly what it already was -- a perfectly valid item,
+nothing to fix retroactively. Only future crafts of these two recipes
+are affected.
+
+**Not yet verified** against a live `npx tsc --noEmit`/`vite build` in
+this environment -- pure JSON content change (two new consumables, two
+corrected id references), no TypeScript touched, same low-risk shape as
+patch 0234's own JSON-only additions.

@@ -58,7 +58,7 @@
     "goldCost": 15,
     "modsToPick": 0,
     "modValue": 0,
-    "resultConsumableId": "strength_potion",
+    "resultConsumableId": "trail_rations_item",
     "statsToPick": 0,
     "statValue": 0
   },
@@ -94,7 +94,7 @@
     "goldCost": 15,
     "modsToPick": 0,
     "modValue": 0,
-    "resultConsumableId": "healing_potion",
+    "resultConsumableId": "herbal_tonic_item",
     "statsToPick": 0,
     "statValue": 0
   },
