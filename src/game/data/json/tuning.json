@@ -547,6 +547,44 @@
     "description": "One-time gold cost to unlock selling materials for gold."
   },
   {
+    "id": "harvest.overseer.baseCost",
+    "label": "Overseer: base cost",
+    "category": "harvest",
+    "value": 4000,
+    "default": 4000,
+    "min": 0,
+    "description": "Cost of the first Overseer level (of 3)."
+  },
+  {
+    "id": "harvest.overseer.costGrowth",
+    "label": "Overseer: cost growth",
+    "category": "harvest",
+    "value": 2.2,
+    "default": 2.2,
+    "min": 1,
+    "max": 5,
+    "description": "Multiplier applied per level. Steeper than Warehouse/Tools on purpose -- Overseer is a pure convenience buy, not a hard progression gate, so it's priced as a late-game gold sink rather than something to rush."
+  },
+  {
+    "id": "harvest.overseer.maxLevel",
+    "label": "Overseer: max level",
+    "category": "harvest",
+    "value": 3,
+    "default": 3,
+    "min": 1,
+    "description": "Highest level the Overseer upgrade can reach."
+  },
+  {
+    "id": "harvest.overseer.rescueChancePercentPerLevel",
+    "label": "Overseer: rescue chance per level (%)",
+    "category": "harvest",
+    "value": 25,
+    "default": 25,
+    "min": 0,
+    "max": 100,
+    "description": "Chance, per level, that a spawn about to despawn unclicked is auto-caught instead -- 25/50/75% at levels 1/2/3. Deliberately linear and deliberately short of 100% at max level: this is a background safety net for a spawn that was about to be lost, not a click-replacement, so an attentive player never loses anything by maxing it, and an idle player still nets meaningfully below both manual clicking and a Gathering Bounty (quest.gatheringMaterialPerHour) at every tier."
+  },
+  {
     "id": "harvest_tool.ore.baseCost",
     "label": "Pickaxe (Quarry): base cost",
     "category": "harvest_tools",

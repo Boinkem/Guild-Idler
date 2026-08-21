@@ -4,8 +4,9 @@ import { RaidDifficulty } from '../game/types';
 import { RAID_DIFFICULTY_LABEL } from '../game/data/raids';
 import { useEngine } from './useEngine';
 import { useSettings } from './useSettings';
-import { formatDuration, formatGold, RARITY_COLOR } from '../game/util';
+import { formatDuration, formatGold, formatMaterial, RARITY_COLOR } from '../game/util';
 import { useCountUp } from './useCountUp';
+import { MATERIAL_BY_ID, NODE_ORDER } from '../game/data/materials';
 
 /** Same rarity-parallel palette RaidsPanel already uses for Normal/Heroic/
  *  Legendary -- kept local rather than shared, matching how RaidResultModal
@@ -77,7 +78,15 @@ export function OfflineReportModal({ active }: { active: boolean }) {
 
   if (!active || !report || !settings.offlineReportOnLaunch) return null;
 
-  const hasAnyResults = report.results.length > 0 || report.raidResults.length > 0;
+  // Ordered the same as every other Harvest surface (NODE_ORDER: ore, timber,
+  // herbs, fish) rather than however Object.entries happens to iterate --
+  // report.materialsGained only ever holds nonzero entries to begin with
+  // (see HarvestManager.offlineAutoHarvest), so filtering here is just
+  // picking the ones present, not re-checking for zero.
+  const materialsGained = NODE_ORDER
+    .map((id) => ({ id, amount: report.materialsGained[id] ?? 0 }))
+    .filter((m) => m.amount > 0);
+  const hasAnyResults = report.results.length > 0 || report.raidResults.length > 0 || materialsGained.length > 0;
   const levelsGained = report.results.reduce((sum, r) => sum + r.levelsGained, 0);
   const hasLegendary = report.results.some((r) => r.loot.some((l) => l.rarity === 'legendary'))
     || report.raidResults.some((r) => r.loot.some((l) => l.rarity === 'legendary'));
@@ -98,13 +107,23 @@ export function OfflineReportModal({ active }: { active: boolean }) {
               <span className="gold-text">+{formatGold(displayGold)} gold</span>
               <span>+{displayXp} experience</span>
               {levelsGained > 0 && <span className="good">+{levelsGained} level{levelsGained === 1 ? '' : 's'}</span>}
-              <span>
-                {report.results.length > 0 && `${report.results.length} quest${report.results.length === 1 ? '' : 's'}`}
-                {report.results.length > 0 && report.raidResults.length > 0 && ', '}
-                {report.raidResults.length > 0 && `${report.raidResults.length} raid${report.raidResults.length === 1 ? '' : 's'}`}
-                {' resolved'}
-              </span>
+              {(report.results.length > 0 || report.raidResults.length > 0) && (
+                <span>
+                  {report.results.length > 0 && `${report.results.length} quest${report.results.length === 1 ? '' : 's'}`}
+                  {report.results.length > 0 && report.raidResults.length > 0 && ', '}
+                  {report.raidResults.length > 0 && `${report.raidResults.length} raid${report.raidResults.length === 1 ? '' : 's'}`}
+                  {' resolved'}
+                </span>
+              )}
             </div>
+            {materialsGained.length > 0 && (
+              <div className="stat-row" style={{ marginBottom: 10 }}>
+                <span className="small muted">Overseer gathered:</span>
+                {materialsGained.map((m) => (
+                  <span key={m.id}>+{formatMaterial(m.amount)} {MATERIAL_BY_ID[m.id].name}</span>
+                ))}
+              </div>
+            )}
             {report.results.map((result) => (
               <div key={result.questId} className={`card ${result.difficulty}`}>
                 <div className="spread">

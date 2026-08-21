@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 48;
+export const SAVE_VERSION = 49;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -2052,6 +2052,21 @@ export interface GameState {
    *  OnboardingTour that pendingHatcherySpotlight/pendingPeddlerSpotlight
    *  already do. */
   pendingHarvestSpotlight: boolean;
+  /**
+   * Levels bought in the Overseer upgrade (0-3), Warehouse sub-tab. Each
+   * level gives every node a chance to auto-catch a spawn that would
+   * otherwise expire unclicked -- `harvest.overseer.rescueChancePercentPerLevel`
+   * (25) times this level, so 25/50/75% at levels 1/2/3. Deliberately never
+   * reaches 100%, and an auto-catch never rolls the bonus glint multiplier
+   * -- see HarvestManager.ensureSpawns' rescue-roll comment. This is a
+   * background safety net, not a replacement for clicking: it only ever
+   * fires on an item that was about to be lost anyway, so an attentive
+   * player loses nothing by having it maxed. Also drives a duration-scaled
+   * credit during offline catch-up (see GameEngine.catchUpOffline) -- the
+   * first time Harvest has participated in offline progress at all, since
+   * a purely-manual node has nothing sensible to simulate while closed.
+   */
+  overseerLevel: number;
 
   /* --------------------------- Elemental infusion --------------------------- */
   /**

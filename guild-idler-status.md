@@ -718,7 +718,14 @@ through the tuning registry -- none scoped or started yet.
 material nodes (Quarry/Woodyard/Herb Garden/Fish Weir) via a click-the-
 falling-item mechanic, spent on a Warehouse-tab Crafting UI (gear with
 player-chosen mods, or fixed consumables) plus a Trade Route for selling
-surplus. See its own section below for the full built-status writeup.
+surplus. See its own section below for the full built-status writeup. A
+3-level Overseer upgrade (Warehouse sub-tab) now gives every node a
+25/50/75% chance to auto-catch a spawn that would otherwise despawn
+unclicked, including a real duration-scaled credit during offline
+catch-up -- the first background/idle income Harvest has ever had, still
+deliberately below both manual clicking and a Gathering Bounty at every
+tier (see "Tiered Auto-Harvest: the Overseer upgrade (patch 0235)" at the
+end of this file).
 
 **Harvest unlock + Gathering Bounty -- built.** Two related additions:
 - **`the_first_haul`** (reqLevel 1, 2 short stages, ~75min total, title
@@ -18109,3 +18116,98 @@ change mirrored from existing `rollEquipment` code) -- worth a real
 build pass before merge to confirm the new `craftable` field doesn't
 trip anything unexpected in DevTool's Consumables table or the Alchemist
 shop UI.
+
+### Tiered Auto-Harvest: the Overseer upgrade (patch 0235)
+
+```discord-update
+Dev Update | Tiered Auto-Harvest
+
+- Added the Overseer: a new 3-level upgrade in Harvest's Warehouse tab
+- Each level gives every gathering node a chance to auto-catch a spawn you'd otherwise miss -- 25/50/75% at levels 1/2/3
+- Auto-catches never roll the bonus glint, and the top tier still falls short of clicking it yourself
+- Materials can now trickle in while the app is closed for the first time, based on your Overseer level
+- The "while you were away" screen shows what the Overseer gathered, if anything
+```
+
+Direct follow-up to an investigation into whether Harvest could get any kind
+of background income -- it never has, on purpose (a purely-manual click
+loop had nothing to auto-resolve), but "off-mission engagement" has sat in
+the backlog since before Harvest even existed as the thing that was
+supposed to eventually fill it. Landed as a tiered upgrade rather than a
+flat unlock so it reads as a real progression payoff, not a toggle.
+
+**Design constraint, deliberate from the start:** auto-harvest must never
+beat manual clicking, or clicking becomes the wrong way to play. Three
+existing numbers set the ceiling -- a perfect manual clicker nets ~50/hr
+per node (45s spawn, 0.5 base yield, 12% chance of a 3x bonus glint), and
+Gathering Bounty (the existing quest-board alternative that ties up a
+hero+quest slot) was deliberately calibrated to 40/hr, 80% of that. The
+Overseer, costing nothing but gold and no opportunity cost at all, is
+tuned to land below *both*: 25/50/75% rescue chance at levels 1/2/3 works
+out to roughly 10/21/31 material/hr per node using baseYield only (auto-
+catches never roll the bonus multiplier) -- 20/42/62% of manual, 25/52/77%
+of Bounty. Never reaches 100% at any tier by design.
+
+**Mechanically a rescue net, not a second catch path.** `HarvestManager
+.ensureSpawns` already clears a node's `pending` item the moment it
+expires unclicked; the roll happens in that exact branch, so a player who
+clicked in time never interacts with this code path at all (it's
+literally unreachable once `catch()` has already nulled `pending`).
+Nothing about manual play changes -- same spawn timing, same despawn
+window, same bonus-glint odds and payout.
+
+**New `GameState.overseerLevel` (0-3)**, bought via `HarvestManager
+.upgradeOverseer` from a new `OVERSEER_UPGRADE` const in
+`harvestUpgrades.ts` -- same `baseCost`/`costGrowth` shape as
+`WAREHOUSE_UPGRADE`, all four numbers (`baseCost` 4000, `costGrowth` 2.2,
+`maxLevel` 3, `rescueChancePercentPerLevel` 25) read from the tuning
+registry from day one, so it's DevTool-editable immediately, no schema
+changes needed (the generic tuning-category editor already covers any new
+`harvest.*` id). Priced steeper than Warehouse/Tools on purpose -- this is
+a convenience buy, not a progression gate.
+
+**Offline catch-up finally has something to do for Harvest.**
+`HarvestManager.ensureSpawns` only ever collapses to the *current*
+pending/next-spawn state regardless of how long the app was closed --
+correct before this patch (nothing could auto-catch a missed cycle
+anyway, so simulating N of them was pointless), wrong now that Overseer
+exists. Rather than looping every missed spawn cycle (expensive, and
+idle-hero count -- which feeds spawn interval -- isn't actually constant
+across a long offline gap either), added `HarvestManager
+.offlineAutoHarvest(state, elapsedMs)`: for each node, `elapsed /
+spawnIntervalMs` (evaluated once, at the idle-hero count as it stands at
+the *end* of the gap, after quests have already resolved) gives an
+expected cycle count, times rescue chance, times `baseYield` -- the same
+per-catch formula as the live roll, just an expectation instead of a coin
+flip. Called once from `GameEngine.catchUpOffline`, after the existing
+quest/raid resolution loops (so it reads post-resolution idle-hero count,
+not pre-). No-ops entirely (empty result) for `overseerLevel === 0`, so
+this is a free no-op for the overwhelming majority of existing saves.
+
+**`OfflineReport` gained a `materialsGained` field** (`Partial<Record
+<MaterialId, number>>`, only nonzero entries). `OfflineReportModal.tsx`
+shows an "Overseer gathered:" row when non-empty, ordered by `NODE_ORDER`
+same as every other Harvest surface. The report-trigger condition also
+now fires on materials-gained-alone (previously `results.length > 0 ||
+raidResults.length > 0 || elapsed > 5min` -- a short gap with nothing
+else due but a few Overseer catches would otherwise silently vanish with
+no report at all).
+
+**UI:** new `OverseerCard` in the Warehouse sub-tab, next to Trade Route
+-- same `.card`/`btn-yellow` shapes as every other Harvest upgrade card,
+shows current rescue % and the next tier's %, `MaxFlash`/
+`usePulsesOnChange` reused exactly as `ToolUpgradeCard` already does for
+its own level display.
+
+**Save migration 48 -> 49:** `overseerLevel` defaults to 0 -- exactly
+"never bought a level," same "undiscovered content stays undiscovered"
+shape as the last several harvest-adjacent migrations, not a backfill.
+
+**Known gap, deliberately not blocking this patch:** the offline-credit
+estimate uses idle-hero count at the *end* of the gap for the entire
+duration, same coarse-approximation shape `catchUpOffline`'s existing
+health-regen block already uses for hero status -- a guild whose roster
+composition changed a lot mid-gap (several quests finishing at very
+different points) will be slightly off in either direction, not
+exactly wrong just imprecise. Consistent with how offline catch-up
+already treats other systems, not a new standard being introduced here.

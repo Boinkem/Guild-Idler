@@ -20,6 +20,7 @@ import { ACHIEVEMENT_BY_ID } from './data/achievements';
 import { BARD_TRACK_BY_ID } from './data/bard';
 import { GuidanceManager, GuidanceTopic } from './managers/GuidanceManager';
 import { HarvestManager } from './managers/HarvestManager';
+import { OVERSEER_UPGRADE } from './data/harvestUpgrades';
 import { PetManager } from './managers/PetManager';
 import { PeddlerManager } from './managers/PeddlerManager';
 import { CraftingManager } from './managers/CraftingManager';
@@ -40,6 +41,10 @@ export interface OfflineReport {
   raidResults: RaidResult[];
   goldGained: number;
   xpGained: number;
+  /** Overseer auto-harvest credit for the gap, keyed by material -- only
+   *  nonzero entries, empty for a save with no Overseer level bought.
+   *  See HarvestManager.offlineAutoHarvest for how this is estimated. */
+  materialsGained: Partial<Record<MaterialId, number>>;
 }
 
 /** Data for the "Story Chain Complete" overlay -- transient like lastResult
@@ -903,16 +908,27 @@ export class GameEngine {
       }
     }
 
+    // Overseer auto-harvest credit -- see HarvestManager.offlineAutoHarvest
+    // for the estimation shape. No-ops (returns {}) for a save with no
+    // Overseer level bought, so this is a free no-op for the vast
+    // majority of existing saves. Deliberately placed after the quest/raid
+    // loops above so it reads idle-hero count (which those loops can
+    // change, heroes returning from quests) as it stands at the end of
+    // the gap, not the start.
+    const materialsGained = HarvestManager.offlineAutoHarvest(this.state, elapsed);
+
     this.state.stats.offlineTimeMs += elapsed;
     this.state.lastSeen = now;
 
-    if (results.length > 0 || raidResults.length > 0 || elapsed > 5 * 60_000) {
+    const hasMaterialsGained = Object.values(materialsGained).some((v) => (v ?? 0) > 0);
+    if (results.length > 0 || raidResults.length > 0 || hasMaterialsGained || elapsed > 5 * 60_000) {
       this.offlineReport = {
         elapsedMs: elapsed,
         results,
         raidResults,
         goldGained: results.reduce((sum, r) => sum + r.gold, 0) + raidResults.reduce((sum, r) => sum + r.gold, 0),
         xpGained: results.reduce((sum, r) => sum + r.xp, 0) + raidResults.reduce((sum, r) => sum + r.xp, 0),
+        materialsGained,
       };
     }
   }
@@ -2309,6 +2325,21 @@ export class GameEngine {
     playSound('purchase');
     // WAREHOUSE_MAXED/COMPLETIONIST gate on this -- same reasoning as buyUpgrade above.
     this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+    this.notify();
+    void this.saveNow();
+  }
+
+  upgradeOverseer() {
+    const error = HarvestManager.upgradeOverseer(this.state);
+    if (error) return this.say(error);
+    playSound('purchase');
+    const level = this.state.overseerLevel;
+    this.say(
+      level >= OVERSEER_UPGRADE.maxLevel
+        ? 'Your Overseer now catches as much as they ever will on their own -- still worth checking in yourself.'
+        : 'Your Overseer will start rescuing a share of whatever you miss.',
+      'harvest', true, 'warehouse',
+    );
     this.notify();
     void this.saveNow();
   }

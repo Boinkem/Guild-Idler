@@ -62,6 +62,32 @@ export function warehouseCapacity(warehouseLevel: number): number {
 
 export const TRADE_ROUTE_COST = Tuning.get('harvest.tradeRoute.cost');
 
+/**
+ * "Overseer" -- a 3-level, gold-only upgrade (Warehouse sub-tab, same
+ * cost-curve shape as WAREHOUSE_UPGRADE) that gives every Harvest node a
+ * chance to auto-catch a spawn that would otherwise despawn unclicked.
+ * Deliberately linear and deliberately capped short of 100% -- see
+ * GameState.overseerLevel's own doc comment for why this stays a
+ * background safety net rather than a click-replacement.
+ */
+export const OVERSEER_UPGRADE = {
+  name: 'Overseer',
+  baseCost: Tuning.get('harvest.overseer.baseCost'),
+  costGrowth: Tuning.get('harvest.overseer.costGrowth'),
+  maxLevel: Tuning.get('harvest.overseer.maxLevel'),
+  rescueChancePercentPerLevel: Tuning.get('harvest.overseer.rescueChancePercentPerLevel'),
+};
+
+export function overseerUpgradeCost(currentLevel: number): number | null {
+  if (currentLevel >= OVERSEER_UPGRADE.maxLevel) return null;
+  return Math.floor(OVERSEER_UPGRADE.baseCost * Math.pow(OVERSEER_UPGRADE.costGrowth, currentLevel));
+}
+
+/** 0 at level 0 (no Overseer bought yet), otherwise level * rescueChancePercentPerLevel. */
+export function overseerRescueChancePercent(level: number): number {
+  return level * OVERSEER_UPGRADE.rescueChancePercentPerLevel;
+}
+
 // Re-exported so callers of this file don't also need to import materials.ts
 // just to name a node in error messages/UI labels.
 export { MATERIAL_BY_ID };

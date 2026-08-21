@@ -186,6 +186,7 @@ export function createInitialState(now = Date.now()): GameState {
     tradeRouteUnlocked: false,
     harvestUnlocked: false,
     pendingHarvestSpotlight: false,
+    overseerLevel: 0,
     scrap: 0,
     gems: {},
     resistGems: {},
@@ -990,6 +991,16 @@ const MIGRATIONS: Record<number, Migration> = {
       },
     };
   },
+  48: (save) => ({
+    // Tiered Auto-Harvest (patch 0235) -- the Overseer upgrade. 0 is
+    // exactly "never bought a level," the correct default for every
+    // existing save regardless of how much Harvest activity it already
+    // has -- same "undiscovered content stays undiscovered" shape
+    // migrations 45/46/47 already used, not a backfill.
+    ...save,
+    version: 49,
+    overseerLevel: (save.overseerLevel as number | undefined) ?? 0,
+  }),
 };
 
 export const SaveManager = {

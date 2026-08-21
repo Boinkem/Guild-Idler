@@ -4,8 +4,8 @@ import { useEngine, useNow } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { MATERIALS, MATERIAL_BY_ID, NODE_ORDER, harvestIconFor } from '../../game/data/materials';
 import {
-  HARVEST_TOOL_BY_NODE, TRADE_ROUTE_COST, WAREHOUSE_UPGRADE,
-  harvestToolCost, warehouseUpgradeCost,
+  HARVEST_TOOL_BY_NODE, OVERSEER_UPGRADE, TRADE_ROUTE_COST, WAREHOUSE_UPGRADE,
+  harvestToolCost, overseerRescueChancePercent, overseerUpgradeCost, warehouseUpgradeCost,
 } from '../../game/data/harvestUpgrades';
 import { HarvestManager } from '../../game/managers/HarvestManager';
 import { MaterialId } from '../../game/types';
@@ -525,6 +525,7 @@ function WarehouseTab() {
       </div>
 
       <TradeRouteCard />
+      <OverseerCard />
 
       <div className="section-heading">Tools</div>
       <p className="tiny muted" style={{ marginBottom: 8 }}>
@@ -535,6 +536,39 @@ function WarehouseTab() {
         {NODE_ORDER.map((nodeId) => <ToolUpgradeCard key={nodeId} nodeId={nodeId} />)}
       </div>
     </>
+  );
+}
+
+function OverseerCard() {
+  const engine = useEngine();
+  const state = engine.state;
+  const level = state.overseerLevel;
+  const cost = overseerUpgradeCost(level);
+  const maxed = cost === null;
+  const chance = overseerRescueChancePercent(level);
+  const nextChance = overseerRescueChancePercent(level + 1);
+  const { flashes, dismiss } = useMaxFlash([{ id: 'overseer', name: OVERSEER_UPGRADE.name, level, maxLevel: OVERSEER_UPGRADE.maxLevel }]);
+  const flash = flashes.overseer;
+  const levelPulses = usePulsesOnChange([{ id: 'overseer', value: level }]);
+
+  return (
+    <div className="card" style={{ marginBottom: 12 }}>
+      <div className="spread">
+        <span className="card-title">Overseer</span>
+        <span className={`small muted ${levelPulses.overseer ? 'purchase-pulse' : ''}`}>
+          Level {level}/{OVERSEER_UPGRADE.maxLevel}
+        </span>
+      </div>
+      <p className="card-flavour">
+        {level === 0
+          ? 'Hire someone to keep an eye on the Fields. A spawn that would otherwise despawn unclicked gets a chance to be caught anyway -- never the bonus glint, and never as reliable as watching yourself, but nothing goes to waste while you\u2019re elsewhere.'
+          : `Currently rescuing ${chance}% of whatever you miss, on every node, including while the app is closed.`}
+      </p>
+      <button className="btn-yellow" disabled={maxed || state.gold < (cost ?? 0)} onClick={() => engine.upgradeOverseer()}>
+        {maxed ? 'Fully staffed' : `${level === 0 ? 'Hire' : 'Promote'} · ${formatGold(cost ?? 0)} (${chance}% \u2192 ${nextChance}%)`}
+      </button>
+      {flash && <MaxFlash key={flash.key} label={flash.name} onDone={() => dismiss('overseer')} />}
+    </div>
   );
 }
 
