@@ -311,7 +311,15 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
     setModSlot0(null);
     setModSlot1(null);
     setChosenStats([]);
-    setConfirmedMaterials(new Set());
+    // Materials are never a real choice -- recipe.materialCost is a fixed
+    // dict (confirmed: no recipe anywhere lets you satisfy a requirement
+    // with an alternate material), so the old "click through each one in
+    // a picker" step was pure busywork duplicating what the have/need
+    // summary row above the Craft button already shows live. Auto-
+    // confirmed the instant a recipe is picked instead of gating on a
+    // manual click-through.
+    const newRecipe = CRAFTING_RECIPES.find((r) => r.id === id);
+    setConfirmedMaterials(new Set(newRecipe ? (Object.keys(newRecipe.materialCost) as MaterialId[]) : []));
     setChosenConsumableMods([]);
   }
 
@@ -338,13 +346,27 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
     && (category !== 'enchant' || (chosenStats.length === statsToPick && targetUid !== ''))
     && (category !== 'consumable' || (materialIds.every((id) => confirmedMaterials.has(id)) && chosenConsumableMods.length === modsToPick));
 
+  /**
+   * "Keep crafting" (direct ask) -- a consumable recipe deliberately stays
+   * selected after a successful craft instead of the old unconditional
+   * reset(), so brewing five of the same potion in a row is five clicks
+   * on the same Craft button rather than five full trips back through the
+   * recipe picker (and, before the materials fix above existed, five more
+   * trips through the materials-confirm picker too). Materials/bonus
+   * choice both carry over as-is; only gold/materials actually change per
+   * craft, which affordability/the have-need row already recompute live.
+   * Scoped to `consumable` only -- gear crafting picks 2 mods per item
+   * and enchant targets one specific piece of gear by uid, neither of
+   * which has the same "make several of the identical thing back to
+   * back" shape a potion recipe does, so both keep resetting after every
+   * craft same as before this patch.
+   */
   function handleCraft() {
     if (!recipe) return;
-    if (category === 'gear') engine.craftGear(recipe.id, chosenMods);
-    else if (category === 'enchant') engine.enchantItem(recipe.id, targetUid, chosenStats);
-    else if (category === 'gem') engine.craftGem(recipe.id);
+    if (category === 'gear') { engine.craftGear(recipe.id, chosenMods); reset(); }
+    else if (category === 'enchant') { engine.enchantItem(recipe.id, targetUid, chosenStats); reset(); }
+    else if (category === 'gem') { engine.craftGem(recipe.id); reset(); }
     else engine.craftConsumable(recipe.id, chosenConsumableMods);
-    reset();
   }
 
   /* ------------------------------- top slot ------------------------------ */
@@ -524,11 +546,16 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
 
       {category === 'consumable' && (
         <>
+          {/* Auto-confirmed the instant a recipe is picked (see pickRecipe's
+              own comment) -- no longer a required click. Still openable to
+              see the same per-material glyph/name/amount info as a detail
+              view, same reasoning gearModSlot's own filled preview stays
+              clickable after it's set. */}
           <SlotBox
             rect={rects.bottomLeft}
             filled={materialsFilled}
             disabled={!recipe}
-            label="Confirm materials"
+            label="Materials"
             onOpen={() => setOpenSlot('bottomLeft')}
           />
           {modsToPick > 0 && (
@@ -665,7 +692,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
 
       {openSlot === 'bottomLeft' && category === 'consumable' && (
         <PickerModal
-          title="Confirm materials"
+          title="Materials"
           options={materialsOptions}
           onPick={(key) => setConfirmedMaterials((prev) => new Set(prev).add(key as MaterialId))}
           onClose={() => setOpenSlot(null)}

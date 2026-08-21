@@ -9,6 +9,12 @@ const api = {
   writeSave: (json: string): Promise<boolean> => ipcRenderer.invoke('save:write', json),
   saveFolder: (): Promise<string> => ipcRenderer.invoke('save:reveal'),
   setWindowMode: (mode: 'idle' | 'menu'): Promise<void> => ipcRenderer.invoke('window:setMode', mode),
+  /** Idle-mode-only, no-op otherwise -- see main.ts's own window:setIdleWidth
+   *  handler for the full reasoning (RaidPartySprites needing real
+   *  horizontal room). Pass IDLE_SIZE.width's own value (260) to restore
+   *  the normal width; there's no separate "reset" call, widening back
+   *  down to the minimum IS the reset. */
+  setIdleWidth: (width: number): Promise<void> => ipcRenderer.invoke('window:setIdleWidth', width),
   setAlwaysOnTop: (value: boolean): Promise<boolean> => ipcRenderer.invoke('window:setAlwaysOnTop', value),
   getAlwaysOnTop: (): Promise<boolean> => ipcRenderer.invoke('window:getAlwaysOnTop'),
   /** Menu-mode-only -- see main.ts's own window:setFullscreen handler for

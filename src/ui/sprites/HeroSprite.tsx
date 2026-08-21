@@ -175,6 +175,21 @@ export interface HeroSpriteProps {
   flip?: boolean;
   className?: string;
   title?: string;
+  /**
+   * Starting point in the animation loop, as a 0-1 fraction of the total
+   * frame count -- lets several simultaneous instances of the same
+   * animation (RaidPartySprites' running party row) desync from each
+   * other instead of stepping through identical frames in lockstep. Every
+   * instance in a row mounts in the same React commit and shares the same
+   * per-animation DEFAULT_FPS, so without this they'd march in perfect
+   * unison -- a party that's supposed to read as several individuals
+   * running together instead reads as one sprite copy-pasted several
+   * times. Ignored (always starts at frame 0) for a `once` playback -- a
+   * one-shot animation (an attack flash) has a specific first frame that
+   * matters, unlike a seamless loop where any starting point looks the
+   * same to a viewer who wasn't watching it start.
+   */
+  framePhase?: number;
 }
 
 export function HeroSprite({
@@ -188,6 +203,7 @@ export function HeroSprite({
   flip = false,
   className,
   title,
+  framePhase,
 }: HeroSpriteProps) {
   const manifest = useManifest();
   const char = manifest?.[heroClass];
@@ -206,7 +222,13 @@ export function HeroSprite({
   const [index, setIndex] = useState(0);
   const doneRef = useRef(false);
 
-  useEffect(() => { setIndex(0); doneRef.current = false; }, [resolved, heroClass, skin]);
+  useEffect(() => {
+    const startIndex = !once && framePhase !== undefined && frames > 1
+      ? Math.floor((((framePhase % 1) + 1) % 1) * frames)
+      : 0;
+    setIndex(startIndex);
+    doneRef.current = false;
+  }, [resolved, heroClass, skin, frames, once, framePhase]);
 
   useEffect(() => {
     if (!char || frames <= 1) return;

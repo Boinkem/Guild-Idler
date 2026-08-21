@@ -1,0 +1,783 @@
+diff --git a/electron/main.ts b/electron/main.ts
+index 731b069..302e9a0 100644
+--- a/electron/main.ts
++++ b/electron/main.ts
+@@ -657,6 +657,36 @@ ipcMain.handle('window:setLocked', (_e, value: boolean) => {
+ 
+ ipcMain.handle('window:getLocked', () => companionLocked);
+ 
++/**
++ * Widens (or restores) the idle companion's width only -- height stays at
++ * IDLE_SIZE.height, position keeps its RIGHT edge anchored (grows/shrinks
++ * leftward) since that's how a bottom-right corner companion naturally
++ * reads, rather than the window's right edge visibly walking further out
++ * toward (or past) the screen edge it's normally tucked against. Direct
++ * feature: showing the whole raid party as a row of running sprites
++ * (RaidPartySprites) needs real horizontal room a fixed 260px was never
++ * going to provide, and standard sprite size (not shrinking per party
++ * size) was the explicit call, so the window has to grow instead.
++ *
++ * No-op outside idle mode (menu mode has its own independent size/resize
++ * story already, `window:setMode` above) and no-op with no window --
++ * matches every other handler in this file's own defensive style rather
++ * than assuming a `win` that might not exist yet during startup ordering.
++ * `width` is clamped to [IDLE_SIZE.width, activeDisplay.workArea.width]
++ * so a caller can't shrink the companion below its normal minimum or
++ * request something wider than the actual screen has room for.
++ */
++ipcMain.handle('window:setIdleWidth', (_e, width: number) => {
++  if (!win || currentMode !== 'idle') return;
++  const activeDisplay = screen.getDisplayMatching(win.getBounds());
++  const clampedWidth = Math.max(IDLE_SIZE.width, Math.min(Math.round(width), activeDisplay.workArea.width));
++  const [curX, curY] = win.getPosition();
++  const [curWidth] = win.getSize();
++  const rightEdge = curX + curWidth;
++  const pos = clampToWorkArea(rightEdge - clampedWidth, curY, clampedWidth, IDLE_SIZE.height, activeDisplay);
++  win.setBounds({ ...pos, width: clampedWidth, height: IDLE_SIZE.height }, false);
++});
++
+ ipcMain.handle('window:minimize', () => win?.minimize());
+ ipcMain.handle('window:quit', () => app.quit());
+ 
+diff --git a/electron/preload.ts b/electron/preload.ts
+index 1e0f2e4..45b394c 100644
+--- a/electron/preload.ts
++++ b/electron/preload.ts
+@@ -9,6 +9,12 @@ const api = {
+   writeSave: (json: string): Promise<boolean> => ipcRenderer.invoke('save:write', json),
+   saveFolder: (): Promise<string> => ipcRenderer.invoke('save:reveal'),
+   setWindowMode: (mode: 'idle' | 'menu'): Promise<void> => ipcRenderer.invoke('window:setMode', mode),
++  /** Idle-mode-only, no-op otherwise -- see main.ts's own window:setIdleWidth
++   *  handler for the full reasoning (RaidPartySprites needing real
++   *  horizontal room). Pass IDLE_SIZE.width's own value (260) to restore
++   *  the normal width; there's no separate "reset" call, widening back
++   *  down to the minimum IS the reset. */
++  setIdleWidth: (width: number): Promise<void> => ipcRenderer.invoke('window:setIdleWidth', width),
+   setAlwaysOnTop: (value: boolean): Promise<boolean> => ipcRenderer.invoke('window:setAlwaysOnTop', value),
+   getAlwaysOnTop: (): Promise<boolean> => ipcRenderer.invoke('window:getAlwaysOnTop'),
+   /** Menu-mode-only -- see main.ts's own window:setFullscreen handler for
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 9992539..fdc4547 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -1021,6 +1021,29 @@ raid fight).
+ 
+ ## Backlog
+ 
++### Idea: flip sprites at the halfway point of a quest/raid timer, to read as "heading back"
++Raised alongside the Raid View feature (patch 0245) but deliberately not
++built as part of it -- explicitly flagged for the backlog rather than
++scope creep onto that patch.
++
++The idea: once a quest or raid's timer crosses its own halfway point,
++flip the relevant hero sprite(s) to face the opposite direction, reading
++as "the party has turned around and is now heading home" rather than
++still traveling out. Framed as "quest/raid" generally, not raid-only --
++so a real implementation would need to touch both the single-hero
++companion (IdleView.tsx's own walking/departing/returning states, for an
++ordinary solo quest) and the new party row (RaidPartySprites, for a
++raid), not just one of the two.
++
++Open questions for whenever this gets picked up: does the flip happen
++instantly at the 50% mark, or ease into it the way depart/arrive already
++transition (900ms eased slide, see .knight-button.departing/.returning
++in app.css)? Does a raid party flip all at once, or does it read better
++staggered per-hero the way their framePhase offsets already desync their
++run-cycle frames? Neither designed yet -- this entry is a placeholder for
++the idea itself, not a scoped plan the way the Quest Chains entry below
++is.
++
+ ### Replayable Quest Chains -- fully scoped (redesigned post-0214), ready to build
+ Original design worked through end to end across several discussion
+ rounds and written up here once already; that write-up has since been
+@@ -18867,3 +18890,140 @@ has) any background-related JSX at all.
+ **No other files touched.** `CraftingStation.tsx` and all four art
+ assets are untouched -- this was purely `VendorsPanel.tsx`'s component
+ structure and `app.css`'s `.vendor-scene`/`.vendor-scene-content` rules.
++
++### Crafting quality-of-life: potions stay selected between crafts, materials stop requiring confirmation clicks (patch 0245)
++
++```discord-update
++Dev Update | Crafting QoL
++
++- Crafting a potion no longer resets your selection -- the Craft button stays ready for the next one
++- Materials for a recipe are now auto-confirmed instead of requiring a click-through step every time
++```
++
++Two direct requests, both scoped to `CraftingStation.tsx`'s `consumable`
++category (potions/tonics at the Alchemist):
++
++**Materials auto-select.** `recipe.materialCost` is a fixed dict --
++confirmed directly, no recipe anywhere in this game offers alternate-
++material substitution -- so the old "click through each required material
++in a picker" step was pure busywork. Worse, it duplicated info a
++have/need summary row (icon + colour-coded `have/need` per material)
++already shows unconditionally above the Craft button; that row's own
++existing comment already noted the redundancy ("rather than making the
++player... open the materials picker just to see a have/need number that
++picker already computed internally") without ever finishing the job of
++removing the gate. `pickRecipe` now auto-populates `confirmedMaterials`
++with every material the recipe needs the instant it's picked, so
++`canCraft`'s existing check is satisfied immediately rather than after a
++manual click-through. The materials slot itself stays (relabelled
++"Materials", not "Confirm materials") and still opens the same detail
++picker for anyone who wants to look, it just no longer gates anything.
++
++**Keep crafting.** `handleCraft` used to call an unconditional `reset()`
++after every craft, wiping the recipe and all selections -- brewing five
++of the same potion meant five full trips back through the recipe picker.
++Now scoped per category: `gear`/`enchant`/`gem` still reset exactly as
++before (a gear recipe's 2 mod picks and an enchant's specific target item
++don't have the same "make several identical things back to back" shape a
++potion does), but a `consumable` craft leaves the recipe and any chosen
++bonus mod in place, so the Craft button is immediately ready to press
++again -- materials re-confirm automatically per the fix above, and
++affordability/the have-need row both already recompute live on every
++render regardless.
++
++`npx tsc --noEmit` and `vite build` both pass clean.
++
++### Raid View: the whole raid party as running sprites, on the corner companion and the Raids tab (patch 0245)
++
++```discord-update
++Dev Update | Raid View
++
++- New: while a raid is active, the corner companion can show your whole party running side by side instead of cycling through one hero at a time
++- New Settings > Knight > "Raid party view" toggle -- on by default
++- The Raids tab's active-raid card now shows the same running party too
++```
++
++Direct feature request, discussed in full before any of it was built.
++Key decisions carried over from that discussion: no actual horizontal
++travel (sprites run in place, "one by one" meant side-by-side formation,
++not a relay), standard sprite size regardless of party size (no
++auto-shrink), and the companion window should widen rather than the
++sprites shrinking to fit a fixed box.
++
++**`HeroSprite` gained a `framePhase` prop (0-1).** Necessary because its
++frame stepping is driven by its own internal `setInterval`/React state,
++not CSS keyframes -- several simultaneous instances of the same
++animation, all mounting in the same React commit at the same frame rate,
++would otherwise step through identical frames in lockstep and read as
++one sprite copy-pasted several times rather than individuals running
++together. `framePhase` seeds the starting frame index as a fraction of
++the resolved animation's real frame count (only known once the manifest
++loads); ignored for a `once` playback, where the first frame specifically
++matters (an attack flash), unlike a seamless loop where any starting
++point looks the same.
++
++**New shared `RaidPartySprites` component** (`src/ui/sprites/
++RaidPartySprites.tsx`) -- takes a hero list + a height, renders each at
++`animation="run"` (HeroSprite's own walk fallback applies per-class same
++as everywhere else) with an independently-randomized `framePhase`, laid
++out in a wrapping flex row (`.raid-party-row`). One component, two call
++sites (the companion and the Raids tab), so "the party is out on a raid"
++reads identically in both rather than two implementations drifting apart
++over time.
++
++**The companion window is NOT actually content-sized -- a real finding
++mid-build, not assumed going in.** `electron/main.ts`'s idle mode uses a
++fixed `IDLE_SIZE = { width: 260, height: 340 }` OS-level `BrowserWindow`
++size, `setResizable(false)`, with a hard `setMinimumSize`. Widening it
++for a run of standard-size sprites genuinely needed a new IPC round-trip,
++not just CSS:
++- New `window:setIdleWidth` handler (`main.ts`) -- idle-mode-only,
++  no-op with no window or in menu mode. Recomputes bounds keeping the
++  window's RIGHT edge anchored (grows/shrinks leftward) rather than
++  letting the right edge walk further toward the screen edge a corner
++  companion is normally tucked against. Clamped to `[IDLE_SIZE.width,
++  activeDisplay.workArea.width]` via the same `clampToWorkArea` helper
++  every other bounds computation in this file already uses, so it can
++  never request more room than the actual screen, or less than the
++  normal minimum.
++- Exposed through `preload.ts` as `littleKnight.setIdleWidth(width)` and
++  typed on the renderer-side `Window.littleKnight` ambient declaration
++  (`SaveManager.ts`) alongside the rest of that bridge.
++- `IdleView.tsx`: `showRaidPartyView` (gated on the new setting, `!
++  hideHeroSprite`, and an active raid with a non-empty party) drives an
++  effect that requests a width estimated from party size x knightHeight
++  (standard sprite height, unchanged by party size) while it's showing,
++  and always restores the normal 260px on the way out -- raid ending,
++  the setting toggled off, or the component unmounting, whichever
++  happens first. Purely additive display state, nothing persisted --
++  even if the app quits mid-raid while widened, `createWindow()` always
++  starts the next launch back at plain `IDLE_SIZE` regardless, since
++  only x/y position (never width) is ever saved to the companion's
++  remembered settings.
++
++**New setting: `raidPartyView` (Settings > Knight), on by default** --
++same "opt-out, not opt-in" precedent `hideHeroSprite`/`hidePetSprite`
++already set for sprite toggles in this file, rather than a new feature
++nobody discovers because it defaulted off.
++
++**`IdleView.tsx`'s carousel** swaps to `RaidPartySprites` in place of the
++single cycling hero + arrows whenever `showRaidPartyView` is true (arrows
++have nothing to cycle through while a party row is showing). New
++`.hero-carousel.raid-view` CSS override lets the row actually use the
++now-widened window instead of staying pinned to the single-hero
++carousel's normal fixed 220px.
++
++**`RaidsPanel.tsx`'s `ActiveRaidCard`** gets the same `RaidPartySprites`
++row (56px, no window-width concerns here -- this is a plain card in
++normal page flow, wraps naturally like any other flex content for a
++wide Legendary-sized party) sitting above the existing plain-text party
++name line, which stays for clarity/accessibility rather than being
++replaced outright.
++
++**Backlog, not this pass:** flipping sprites to face the other way at a
++quest/raid's halfway point, to read as "heading back" -- see the
++Backlog section above for the full note; deliberately not scoped or
++built here.
++
++`npx tsc --noEmit` and `vite build` (including both Electron sub-builds,
++main and preload) all pass clean.
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index fb2b5d3..aeb8218 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -24,6 +24,9 @@ declare global {
+       writeSave(json: string): Promise<boolean>;
+       saveFolder(): Promise<string>;
+       setWindowMode(mode: 'idle' | 'menu'): Promise<void>;
++      /** Idle-mode-only, no-op otherwise. Pass 260 (IDLE_SIZE.width) to
++       *  restore the normal companion width. */
++      setIdleWidth(width: number): Promise<void>;
+       setAlwaysOnTop(value: boolean): Promise<boolean>;
+       getAlwaysOnTop(): Promise<boolean>;
+       setFullscreen(value: boolean): Promise<boolean>;
+diff --git a/src/game/settings.ts b/src/game/settings.ts
+index ca871e2..b9ee1e9 100644
+--- a/src/game/settings.ts
++++ b/src/game/settings.ts
+@@ -107,6 +107,21 @@ export interface Settings {
+    *  stay as-is so the pet reappears at its last configured size/spot
+    *  the moment this is turned back off. */
+   hidePetSprite: boolean;
++  /**
++   * Shows the whole raid party as a row of running sprites on the corner
++   * companion for as long as a raid is active, replacing the normal
++   * single-hero carousel for the duration (see IdleView.tsx's own
++   * showRaidPartyView). On by default -- additive cosmetic flavour, same
++   * "opt-out, not opt-in" precedent hideHeroSprite/hidePetSprite already
++   * set for sprite toggles in this file, rather than a new feature nobody
++   * discovers because it defaulted off. Standard sprite size regardless
++   * of party size (3-9 heroes depending on raid difficulty) -- the
++   * companion window widens to fit them instead of the sprites shrinking
++   * to fit a fixed window, direct design call. No separate scale control
++   * for this yet; a follow-up if a 9-wide Legendary party turns out to
++   * need one in practice.
++   */
++  raidPartyView: boolean;
+ 
+   /** Animation speed multiplier; 0 disables idle bobbing entirely. */
+   animationSpeed: number;     // 0, 0.5, 1, 1.5
+@@ -169,6 +184,7 @@ export const DEFAULT_SETTINGS: Settings = {
+   hideIdleInfo: false,
+   hideHeroSprite: false,
+   hidePetSprite: false,
++  raidPartyView: true,
+   animationSpeed: 1,
+   offlineReportOnLaunch: true,
+   questResultPopups: true,
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 9d155ee..3be6762 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -233,6 +233,14 @@
+  * mood strip here, not the primary identifier the way it is in the list. */
+ .raid-active-banner { height: 48px; border-radius: 6px; margin-bottom: 8px; background-size: cover; background-position: center; }
+ .raid-active-header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
++/* Reuses .raid-party-row's own flex-wrap layout (defined alongside the
++   companion's Raid View styling) -- this card is normal page flow, not a
++   fixed-width floating window, so wrapping is just the natural fallback
++   for a wide Legendary-sized party rather than anything that needs its
++   own special-cased width logic. Compound selector (not a bare class) so
++   this reliably wins over .raid-party-row's own justify-content: center
++   regardless of which rule happens to come first in the file. */
++.raid-party-row.raid-active-party-sprites { margin: 4px 0; justify-content: flex-start; }
+ .raid-active-party { color: var(--muted); font-size: 0.625rem; margin: 3px 0 6px; }
+ .raid-active-eta { font-size: 0.5625rem; color: var(--muted); margin-top: 4px; text-align: right; }
+ 
+@@ -2061,6 +2069,45 @@ input[type='range'] {
+   margin-top: 26px;
+ }
+ 
++/*
++ * Raid View (direct feature request) -- the fixed 220px width above is
++ * sized for one sprite plus its arrows; a running party row needs to be
++ * free to actually use the width the companion window itself has already
++ * been widened to (see IdleView.tsx's own window.littleKnight.
++ * setIdleWidth effect). auto here, not some larger fixed number, since
++ * the requested window width already varies with party size -- pinning
++ * this to a guess would fight that instead of matching it.
++ */
++.hero-carousel.raid-view {
++  width: auto;
++  min-width: 100%;
++}
++
++/*
++ * The party row itself -- centered, wraps rather than clipping if the
++ * actual window ended up narrower than requested (a small/constrained
++ * display, see main.ts's own clampToWorkArea), same defensive shape
++ * every other "requested size vs. actually available" spot in this
++ * companion already takes.
++ */
++.raid-party-row {
++  display: flex;
++  flex-wrap: wrap;
++  align-items: flex-end;
++  justify-content: center;
++  gap: 6px;
++  width: 100%;
++}
++
++/* Same drop-shadow .knight-button's sprite already gets, so a running
++   party member reads as the same kind of character art, not a flatter
++   cutout sitting next to it. No bob/walk-bob animation class here on
++   purpose -- HeroSprite's own `run` frame animation is already doing the
++   motion; stacking a CSS bob on top would double up and read jittery. */
++.raid-party-sprite {
++  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.45));
++}
++
+ .carousel-arrow {
+   position: absolute;
+   top: 50%;
+diff --git a/src/ui/CraftingStation.tsx b/src/ui/CraftingStation.tsx
+index 7cb2372..4d8d5ce 100644
+--- a/src/ui/CraftingStation.tsx
++++ b/src/ui/CraftingStation.tsx
+@@ -311,7 +311,15 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+     setModSlot0(null);
+     setModSlot1(null);
+     setChosenStats([]);
+-    setConfirmedMaterials(new Set());
++    // Materials are never a real choice -- recipe.materialCost is a fixed
++    // dict (confirmed: no recipe anywhere lets you satisfy a requirement
++    // with an alternate material), so the old "click through each one in
++    // a picker" step was pure busywork duplicating what the have/need
++    // summary row above the Craft button already shows live. Auto-
++    // confirmed the instant a recipe is picked instead of gating on a
++    // manual click-through.
++    const newRecipe = CRAFTING_RECIPES.find((r) => r.id === id);
++    setConfirmedMaterials(new Set(newRecipe ? (Object.keys(newRecipe.materialCost) as MaterialId[]) : []));
+     setChosenConsumableMods([]);
+   }
+ 
+@@ -338,13 +346,27 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+     && (category !== 'enchant' || (chosenStats.length === statsToPick && targetUid !== ''))
+     && (category !== 'consumable' || (materialIds.every((id) => confirmedMaterials.has(id)) && chosenConsumableMods.length === modsToPick));
+ 
++  /**
++   * "Keep crafting" (direct ask) -- a consumable recipe deliberately stays
++   * selected after a successful craft instead of the old unconditional
++   * reset(), so brewing five of the same potion in a row is five clicks
++   * on the same Craft button rather than five full trips back through the
++   * recipe picker (and, before the materials fix above existed, five more
++   * trips through the materials-confirm picker too). Materials/bonus
++   * choice both carry over as-is; only gold/materials actually change per
++   * craft, which affordability/the have-need row already recompute live.
++   * Scoped to `consumable` only -- gear crafting picks 2 mods per item
++   * and enchant targets one specific piece of gear by uid, neither of
++   * which has the same "make several of the identical thing back to
++   * back" shape a potion recipe does, so both keep resetting after every
++   * craft same as before this patch.
++   */
+   function handleCraft() {
+     if (!recipe) return;
+-    if (category === 'gear') engine.craftGear(recipe.id, chosenMods);
+-    else if (category === 'enchant') engine.enchantItem(recipe.id, targetUid, chosenStats);
+-    else if (category === 'gem') engine.craftGem(recipe.id);
++    if (category === 'gear') { engine.craftGear(recipe.id, chosenMods); reset(); }
++    else if (category === 'enchant') { engine.enchantItem(recipe.id, targetUid, chosenStats); reset(); }
++    else if (category === 'gem') { engine.craftGem(recipe.id); reset(); }
+     else engine.craftConsumable(recipe.id, chosenConsumableMods);
+-    reset();
+   }
+ 
+   /* ------------------------------- top slot ------------------------------ */
+@@ -524,11 +546,16 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+ 
+       {category === 'consumable' && (
+         <>
++          {/* Auto-confirmed the instant a recipe is picked (see pickRecipe's
++              own comment) -- no longer a required click. Still openable to
++              see the same per-material glyph/name/amount info as a detail
++              view, same reasoning gearModSlot's own filled preview stays
++              clickable after it's set. */}
+           <SlotBox
+             rect={rects.bottomLeft}
+             filled={materialsFilled}
+             disabled={!recipe}
+-            label="Confirm materials"
++            label="Materials"
+             onOpen={() => setOpenSlot('bottomLeft')}
+           />
+           {modsToPick > 0 && (
+@@ -665,7 +692,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+ 
+       {openSlot === 'bottomLeft' && category === 'consumable' && (
+         <PickerModal
+-          title="Confirm materials"
++          title="Materials"
+           options={materialsOptions}
+           onPick={(key) => setConfirmedMaterials((prev) => new Set(prev).add(key as MaterialId))}
+           onClose={() => setOpenSlot(null)}
+diff --git a/src/ui/IdleView.tsx b/src/ui/IdleView.tsx
+index 36ad096..9384560 100644
+--- a/src/ui/IdleView.tsx
++++ b/src/ui/IdleView.tsx
+@@ -3,6 +3,7 @@ import { useEngine, useNow } from './useEngine';
+ import { useSettings } from './useSettings';
+ import { PixelSprite, QUEST_MARK } from './sprites/PixelSprite';
+ import { HeroAnimation, HeroSprite } from './sprites/HeroSprite';
++import { RaidPartySprites } from './sprites/RaidPartySprites';
+ import { PetSprite } from './sprites/PetSprite';
+ import { PET_BY_ID } from '../game/data/pets';
+ import { HeroManager } from '../game/managers/HeroManager';
+@@ -14,6 +15,14 @@ type Anim = 'idle' | 'walking' | 'departing' | 'returning';
+  * worth scheduling — a 5-minute quest would be over before it read clearly. */
+ const MIN_DURATION_FOR_FLASH_MS = 20 * 60 * 1000;
+ const ATTACK_VARIANTS: HeroAnimation[] = ['attack_1', 'attack_2', 'attack_3'];
++/** Mirrors electron/main.ts's own IDLE_SIZE.width -- not shared as an
++ *  actual import (main/preload and the renderer are separate build
++ *  targets in this project, nothing currently bridges a constant between
++ *  them), so this needs to stay numerically in sync with that file by
++ *  hand if it ever changes. Used only to restore the companion's normal
++ *  width once Raid View's widened state (see the effect below) is no
++ *  longer needed. */
++const IDLE_DEFAULT_WIDTH = 260;
+ 
+ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+   const engine = useEngine();
+@@ -249,6 +258,47 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+           : 'Waiting for work';
+ 
+   const others = engine.state.heroes.filter((h) => h.id !== hero.id);
++
++  // Raid View (Settings > Knight) -- the whole raid party as a row of
++  // running sprites instead of the single cycling hero, for as long as a
++  // raid is active. `hero` above stays whichever hero cycleFocusedHero
++  // last focused (unaffected by this -- switching Raid View off mid-raid
++  // should show that same hero exactly as if it had never been on), this
++  // is purely an additional display mode layered on top.
++  const activeRaidParty = engine.state.activeRaid
++    ? engine.state.heroes.filter((h) => engine.state.activeRaid!.heroIds.includes(h.id))
++    : [];
++  const showRaidPartyView = settings.raidPartyView && !settings.hideHeroSprite && activeRaidParty.length > 0;
++
++  /**
++   * Widens the actual OS window (Electron only -- no-op via optional
++   * chaining in a plain browser tab) for the duration of Raid View, and
++   * always restores IDLE_DEFAULT_WIDTH on the way out, whichever path
++   * gets there: the raid ending, the setting being switched off, or this
++   * component unmounting outright. Estimated rather than measured --
++   * HeroSprite's real per-class frame width lives inside its own manifest
++   * data, not exposed up here, so this only needs to be in the right
++   * neighborhood; main.ts's own clampToWorkArea keeps it from ever asking
++   * for more than the actual screen can give regardless. Standard sprite
++   * height (knightHeight, same as the single-hero view) per direct
++   * design call -- sprites don't shrink to fit a party, the window grows
++   * to fit them instead.
++   */
++  useEffect(() => {
++    if (!showRaidPartyView) {
++      void window.littleKnight?.setIdleWidth(IDLE_DEFAULT_WIDTH);
++      return undefined;
++    }
++    const spriteWidthEstimate = knightHeight * 0.75;
++    const gap = 6;
++    const horizontalPadding = 48;
++    const requested = activeRaidParty.length * spriteWidthEstimate
++      + Math.max(0, activeRaidParty.length - 1) * gap + horizontalPadding;
++    void window.littleKnight?.setIdleWidth(Math.round(requested));
++    return () => { void window.littleKnight?.setIdleWidth(IDLE_DEFAULT_WIDTH); };
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [showRaidPartyView, activeRaidParty.length, knightHeight]);
++
+   // Used to just report "+N more at the guild" -- accurate as a headcount,
+   // but gave no sense of whether those heroes were doing anything, so a
+   // full roster sitting idle read identically to one that was fully out
+@@ -329,51 +379,63 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+           independent height keeps the arrows in one universal spot
+           regardless of whose sprite is centered inside it.
+         */}
+-        <div className="hero-carousel" style={{ height: knightHeight }}>
+-          {!settings.hideHeroSprite && others.length > 0 && (
+-            <button
+-              className="carousel-arrow"
+-              onClick={() => engine.cycleFocusedHero(-1)}
+-              title="Show the previous hero"
+-              aria-label="Show the previous hero"
+-            >
+-              ‹
+-            </button>
+-          )}
++        <div className={`hero-carousel ${showRaidPartyView ? 'raid-view' : ''}`} style={{ height: knightHeight }}>
++          {showRaidPartyView ? (
++            // Raid View -- replaces the single cycling hero (and its
++            // arrows, which have nothing to cycle through while this is
++            // showing) with the whole party running in place side by
++            // side. The window itself has already been widened to fit
++            // them by the effect above; this element just needs to get
++            // out of the way and let the row lay out naturally.
++            <RaidPartySprites heroes={activeRaidParty} height={knightHeight} />
++          ) : (
++            <>
++              {!settings.hideHeroSprite && others.length > 0 && (
++                <button
++                  className="carousel-arrow"
++                  onClick={() => engine.cycleFocusedHero(-1)}
++                  title="Show the previous hero"
++                  aria-label="Show the previous hero"
++                >
++                  ‹
++                </button>
++              )}
+ 
+-          {!settings.hideHeroSprite && (
+-            <button
+-              className={`knight-button ${anim}`}
+-              onClick={onOpenMenu}
+-              title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''} — click to open the guild menu`}
+-              aria-label={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}. Open the guild menu.`}
+-            >
+-              <HeroSprite
+-                heroClass={hero.heroClass}
+-                skin={hero.skin}
+-                animation={spriteAnimation}
+-                flip={facingReturn}
+-                height={knightHeight}
+-                title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}`}
+-              />
+-              {floatingText && (
+-                <div className="floating-reward" key={floatingText.key}>
+-                  {floatingText.xp > 0 && <span className="floating-xp">+{floatingText.xp} XP</span>}
+-                  {floatingText.gold > 0 && <span className="floating-gold">+{floatingText.gold} gold</span>}
+-                </div>
++              {!settings.hideHeroSprite && (
++                <button
++                  className={`knight-button ${anim}`}
++                  onClick={onOpenMenu}
++                  title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''} — click to open the guild menu`}
++                  aria-label={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}. Open the guild menu.`}
++                >
++                  <HeroSprite
++                    heroClass={hero.heroClass}
++                    skin={hero.skin}
++                    animation={spriteAnimation}
++                    flip={facingReturn}
++                    height={knightHeight}
++                    title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}`}
++                  />
++                  {floatingText && (
++                    <div className="floating-reward" key={floatingText.key}>
++                      {floatingText.xp > 0 && <span className="floating-xp">+{floatingText.xp} XP</span>}
++                      {floatingText.gold > 0 && <span className="floating-gold">+{floatingText.gold} gold</span>}
++                    </div>
++                  )}
++                </button>
+               )}
+-            </button>
+-          )}
+ 
+-          {!settings.hideHeroSprite && others.length > 0 && (
+-            <button
+-              className="carousel-arrow"
+-              onClick={() => engine.cycleFocusedHero(1)}
+-              title="Show the next hero"
+-              aria-label="Show the next hero"
+-            >
+-              ›
+-            </button>
++              {!settings.hideHeroSprite && others.length > 0 && (
++                <button
++                  className="carousel-arrow"
++                  onClick={() => engine.cycleFocusedHero(1)}
++                  title="Show the next hero"
++                  aria-label="Show the next hero"
++                >
++                  ›
++                </button>
++              )}
++            </>
+           )}
+         </div>
+         {!settings.hideHeroSprite && <div className="knight-shadow" />}
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index 9e584e6..2f7b132 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -17,6 +17,7 @@ import { RoleIcon } from '../RoleIcon';
+ import { RarityPill } from '../RarityPill';
+ import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
+ import { RaidRoomSprite } from '../sprites/RaidRoomSprite';
++import { RaidPartySprites } from '../sprites/RaidPartySprites';
+ import { formatDuration, describeMods, formatGold, formatNumber, RARITY_COLOR } from '../../game/util';
+ 
+ // Single-letter fallback badge (used only if the icon art at
+@@ -780,10 +781,10 @@ function ActiveRaidCard() {
+   const now = Date.now();
+   const total = active.endsAt - active.startedAt;
+   const progress = Math.min(100, ((now - active.startedAt) / Math.max(1, total)) * 100);
+-  const party = active.heroIds
+-    .map((id) => state.heroes.find((h) => h.id === id)?.name)
+-    .filter(Boolean)
+-    .join(', ');
++  const partyHeroes = active.heroIds
++    .map((id) => state.heroes.find((h) => h.id === id))
++    .filter((h): h is Hero => !!h);
++  const party = partyHeroes.map((h) => h.name).join(', ');
+   const color = DIFFICULTY_COLOR[active.difficulty];
+ 
+   return (
+@@ -792,6 +793,13 @@ function ActiveRaidCard() {
+       <div className="raid-active-header">
+         <span className="card-title">{raid?.name ?? 'A raid'} — {active.difficulty}</span>
+       </div>
++      {/* Same shared component as the corner companion's own Raid View
++          (IdleView.tsx) -- "the party is out on a raid" reads the same
++          way in both places rather than two separate implementations.
++          No window-widening concerns here (unlike the companion, this is
++          a plain card in normal page flow), so the row just wraps like
++          any other flex content if a Legendary-sized party runs wide. */}
++      <RaidPartySprites heroes={partyHeroes} height={56} className="raid-active-party-sprites" />
+       <p className="raid-active-party">{party}</p>
+       <div className="bar" style={{ marginTop: 6 }}><span style={{ width: `${progress}%` }} /></div>
+       <p className="raid-active-eta">
+diff --git a/src/ui/panels/SettingsPanel.tsx b/src/ui/panels/SettingsPanel.tsx
+index 3021ed0..0d34bc3 100644
+--- a/src/ui/panels/SettingsPanel.tsx
++++ b/src/ui/panels/SettingsPanel.tsx
+@@ -157,6 +157,10 @@ export function SettingsPanel() {
+         <Toggle value={!settings.hideHeroSprite} onChange={(v) => set('hideHeroSprite')(!v)} />
+       </Row>
+ 
++      <Row label="Raid party view" hint="While a raid is active, shows the whole party running side by side on the corner companion instead of cycling through one hero at a time. The companion window widens to fit them.">
++        <Toggle value={settings.raidPartyView} onChange={set('raidPartyView')} />
++      </Row>
++
+       <Row label="Pet size" hint={`${Math.round(settings.petSpriteScale * 100)}% -- affects the companion pet only, not the hero above`}>
+         <div className="row" style={{ gap: 16, alignItems: 'center' }}>
+           <input
+diff --git a/src/ui/sprites/HeroSprite.tsx b/src/ui/sprites/HeroSprite.tsx
+index 70d5f5e..839bb75 100644
+--- a/src/ui/sprites/HeroSprite.tsx
++++ b/src/ui/sprites/HeroSprite.tsx
+@@ -175,6 +175,21 @@ export interface HeroSpriteProps {
+   flip?: boolean;
+   className?: string;
+   title?: string;
++  /**
++   * Starting point in the animation loop, as a 0-1 fraction of the total
++   * frame count -- lets several simultaneous instances of the same
++   * animation (RaidPartySprites' running party row) desync from each
++   * other instead of stepping through identical frames in lockstep. Every
++   * instance in a row mounts in the same React commit and shares the same
++   * per-animation DEFAULT_FPS, so without this they'd march in perfect
++   * unison -- a party that's supposed to read as several individuals
++   * running together instead reads as one sprite copy-pasted several
++   * times. Ignored (always starts at frame 0) for a `once` playback -- a
++   * one-shot animation (an attack flash) has a specific first frame that
++   * matters, unlike a seamless loop where any starting point looks the
++   * same to a viewer who wasn't watching it start.
++   */
++  framePhase?: number;
+ }
+ 
+ export function HeroSprite({
+@@ -188,6 +203,7 @@ export function HeroSprite({
+   flip = false,
+   className,
+   title,
++  framePhase,
+ }: HeroSpriteProps) {
+   const manifest = useManifest();
+   const char = manifest?.[heroClass];
+@@ -206,7 +222,13 @@ export function HeroSprite({
+   const [index, setIndex] = useState(0);
+   const doneRef = useRef(false);
+ 
+-  useEffect(() => { setIndex(0); doneRef.current = false; }, [resolved, heroClass, skin]);
++  useEffect(() => {
++    const startIndex = !once && framePhase !== undefined && frames > 1
++      ? Math.floor((((framePhase % 1) + 1) % 1) * frames)
++      : 0;
++    setIndex(startIndex);
++    doneRef.current = false;
++  }, [resolved, heroClass, skin, frames, once, framePhase]);
+ 
+   useEffect(() => {
+     if (!char || frames <= 1) return;
+diff --git a/src/ui/sprites/RaidPartySprites.tsx b/src/ui/sprites/RaidPartySprites.tsx
+new file mode 100644
+index 0000000..a5a2653
+--- /dev/null
++++ b/src/ui/sprites/RaidPartySprites.tsx
+@@ -0,0 +1,65 @@
++import { useMemo } from 'react';
++import { HeroSprite } from './HeroSprite';
++import { Hero } from '../../game/types';
++
++/**
++ * A row of running party-member sprites -- shared by the idle companion
++ * (IdleView, gated behind Settings > Raid party view) and the Raids tab's
++ * own ActiveRaidCard, so "your party is out on a raid" reads the same way
++ * in both places rather than two different implementations drifting apart.
++ *
++ * Deliberately NOT scaled down per party size (Normal/Heroic/Legendary
++ * raids run 3/6/9 heroes respectively) -- standard sprite height
++ * regardless of headcount, the row just gets wider for a bigger party.
++ * Direct design call: the companion window already sizes itself to its
++ * content rather than a fixed canvas (see CompanionBackdropId's own
++ * comment in settings.ts), so widening is the natural behavior here
++ * rather than fighting it with auto-shrink logic that would make a
++ * Legendary party's sprites noticeably smaller than a Normal party's for
++ * no reason a player asked for. If this ever needs a scale control, it's
++ * a follow-up once there's real feedback on how a 9-wide row actually
++ * looks in practice, not a guess baked in up front.
++ *
++ * No actual horizontal travel -- every sprite runs in place
++ * (animation="run", HeroSprite's own walk fallback applies per-class same
++ * as everywhere else), formation is the row layout itself, not motion.
++ */
++export function RaidPartySprites({
++  heroes, height, className,
++}: {
++  heroes: Pick<Hero, 'heroClass' | 'skin' | 'name'>[];
++  height: number;
++  className?: string;
++}) {
++  // One random phase per hero, generated once per party (not re-rolled on
++  // every render) -- see HeroSprite's own framePhase comment for why this
++  // matters: without it, every sprite in the row mounts in the same React
++  // commit and shares the same per-animation frame rate, so they'd all
++  // step through identical frames in lockstep and the row would read as
++  // one sprite copy-pasted several times rather than several individuals
++  // running together.
++  const phases = useMemo(
++    () => heroes.map(() => Math.random()),
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++    [heroes.length],
++  );
++
++  if (heroes.length === 0) return null;
++
++  return (
++    <div className={`raid-party-row ${className ?? ''}`}>
++      {heroes.map((hero, i) => (
++        <HeroSprite
++          key={`${hero.name}-${i}`}
++          heroClass={hero.heroClass}
++          skin={hero.skin}
++          animation="run"
++          height={height}
++          framePhase={phases[i]}
++          title={hero.name}
++          className="raid-party-sprite"
++        />
++      ))}
++    </div>
++  );
++}

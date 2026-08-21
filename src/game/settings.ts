@@ -107,6 +107,21 @@ export interface Settings {
    *  stay as-is so the pet reappears at its last configured size/spot
    *  the moment this is turned back off. */
   hidePetSprite: boolean;
+  /**
+   * Shows the whole raid party as a row of running sprites on the corner
+   * companion for as long as a raid is active, replacing the normal
+   * single-hero carousel for the duration (see IdleView.tsx's own
+   * showRaidPartyView). On by default -- additive cosmetic flavour, same
+   * "opt-out, not opt-in" precedent hideHeroSprite/hidePetSprite already
+   * set for sprite toggles in this file, rather than a new feature nobody
+   * discovers because it defaulted off. Standard sprite size regardless
+   * of party size (3-9 heroes depending on raid difficulty) -- the
+   * companion window widens to fit them instead of the sprites shrinking
+   * to fit a fixed window, direct design call. No separate scale control
+   * for this yet; a follow-up if a 9-wide Legendary party turns out to
+   * need one in practice.
+   */
+  raidPartyView: boolean;
 
   /** Animation speed multiplier; 0 disables idle bobbing entirely. */
   animationSpeed: number;     // 0, 0.5, 1, 1.5
@@ -169,6 +184,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hideIdleInfo: false,
   hideHeroSprite: false,
   hidePetSprite: false,
+  raidPartyView: true,
   animationSpeed: 1,
   offlineReportOnLaunch: true,
   questResultPopups: true,

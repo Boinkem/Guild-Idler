@@ -17,6 +17,7 @@ import { RoleIcon } from '../RoleIcon';
 import { RarityPill } from '../RarityPill';
 import { MaxFlash, useMaxFlash, usePulsesOnChange } from '../maxFlash';
 import { RaidRoomSprite } from '../sprites/RaidRoomSprite';
+import { RaidPartySprites } from '../sprites/RaidPartySprites';
 import { formatDuration, describeMods, formatGold, formatNumber, RARITY_COLOR } from '../../game/util';
 
 // Single-letter fallback badge (used only if the icon art at
@@ -780,10 +781,10 @@ function ActiveRaidCard() {
   const now = Date.now();
   const total = active.endsAt - active.startedAt;
   const progress = Math.min(100, ((now - active.startedAt) / Math.max(1, total)) * 100);
-  const party = active.heroIds
-    .map((id) => state.heroes.find((h) => h.id === id)?.name)
-    .filter(Boolean)
-    .join(', ');
+  const partyHeroes = active.heroIds
+    .map((id) => state.heroes.find((h) => h.id === id))
+    .filter((h): h is Hero => !!h);
+  const party = partyHeroes.map((h) => h.name).join(', ');
   const color = DIFFICULTY_COLOR[active.difficulty];
 
   return (
@@ -792,6 +793,13 @@ function ActiveRaidCard() {
       <div className="raid-active-header">
         <span className="card-title">{raid?.name ?? 'A raid'} — {active.difficulty}</span>
       </div>
+      {/* Same shared component as the corner companion's own Raid View
+          (IdleView.tsx) -- "the party is out on a raid" reads the same
+          way in both places rather than two separate implementations.
+          No window-widening concerns here (unlike the companion, this is
+          a plain card in normal page flow), so the row just wraps like
+          any other flex content if a Legendary-sized party runs wide. */}
+      <RaidPartySprites heroes={partyHeroes} height={56} className="raid-active-party-sprites" />
       <p className="raid-active-party">{party}</p>
       <div className="bar" style={{ marginTop: 6 }}><span style={{ width: `${progress}%` }} /></div>
       <p className="raid-active-eta">

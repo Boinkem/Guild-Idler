@@ -3,6 +3,7 @@ import { useEngine, useNow } from './useEngine';
 import { useSettings } from './useSettings';
 import { PixelSprite, QUEST_MARK } from './sprites/PixelSprite';
 import { HeroAnimation, HeroSprite } from './sprites/HeroSprite';
+import { RaidPartySprites } from './sprites/RaidPartySprites';
 import { PetSprite } from './sprites/PetSprite';
 import { PET_BY_ID } from '../game/data/pets';
 import { HeroManager } from '../game/managers/HeroManager';
@@ -14,6 +15,14 @@ type Anim = 'idle' | 'walking' | 'departing' | 'returning';
  * worth scheduling — a 5-minute quest would be over before it read clearly. */
 const MIN_DURATION_FOR_FLASH_MS = 20 * 60 * 1000;
 const ATTACK_VARIANTS: HeroAnimation[] = ['attack_1', 'attack_2', 'attack_3'];
+/** Mirrors electron/main.ts's own IDLE_SIZE.width -- not shared as an
+ *  actual import (main/preload and the renderer are separate build
+ *  targets in this project, nothing currently bridges a constant between
+ *  them), so this needs to stay numerically in sync with that file by
+ *  hand if it ever changes. Used only to restore the companion's normal
+ *  width once Raid View's widened state (see the effect below) is no
+ *  longer needed. */
+const IDLE_DEFAULT_WIDTH = 260;
 
 export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
   const engine = useEngine();
@@ -249,6 +258,47 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
           : 'Waiting for work';
 
   const others = engine.state.heroes.filter((h) => h.id !== hero.id);
+
+  // Raid View (Settings > Knight) -- the whole raid party as a row of
+  // running sprites instead of the single cycling hero, for as long as a
+  // raid is active. `hero` above stays whichever hero cycleFocusedHero
+  // last focused (unaffected by this -- switching Raid View off mid-raid
+  // should show that same hero exactly as if it had never been on), this
+  // is purely an additional display mode layered on top.
+  const activeRaidParty = engine.state.activeRaid
+    ? engine.state.heroes.filter((h) => engine.state.activeRaid!.heroIds.includes(h.id))
+    : [];
+  const showRaidPartyView = settings.raidPartyView && !settings.hideHeroSprite && activeRaidParty.length > 0;
+
+  /**
+   * Widens the actual OS window (Electron only -- no-op via optional
+   * chaining in a plain browser tab) for the duration of Raid View, and
+   * always restores IDLE_DEFAULT_WIDTH on the way out, whichever path
+   * gets there: the raid ending, the setting being switched off, or this
+   * component unmounting outright. Estimated rather than measured --
+   * HeroSprite's real per-class frame width lives inside its own manifest
+   * data, not exposed up here, so this only needs to be in the right
+   * neighborhood; main.ts's own clampToWorkArea keeps it from ever asking
+   * for more than the actual screen can give regardless. Standard sprite
+   * height (knightHeight, same as the single-hero view) per direct
+   * design call -- sprites don't shrink to fit a party, the window grows
+   * to fit them instead.
+   */
+  useEffect(() => {
+    if (!showRaidPartyView) {
+      void window.littleKnight?.setIdleWidth(IDLE_DEFAULT_WIDTH);
+      return undefined;
+    }
+    const spriteWidthEstimate = knightHeight * 0.75;
+    const gap = 6;
+    const horizontalPadding = 48;
+    const requested = activeRaidParty.length * spriteWidthEstimate
+      + Math.max(0, activeRaidParty.length - 1) * gap + horizontalPadding;
+    void window.littleKnight?.setIdleWidth(Math.round(requested));
+    return () => { void window.littleKnight?.setIdleWidth(IDLE_DEFAULT_WIDTH); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showRaidPartyView, activeRaidParty.length, knightHeight]);
+
   // Used to just report "+N more at the guild" -- accurate as a headcount,
   // but gave no sense of whether those heroes were doing anything, so a
   // full roster sitting idle read identically to one that was fully out
@@ -329,51 +379,63 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
           independent height keeps the arrows in one universal spot
           regardless of whose sprite is centered inside it.
         */}
-        <div className="hero-carousel" style={{ height: knightHeight }}>
-          {!settings.hideHeroSprite && others.length > 0 && (
-            <button
-              className="carousel-arrow"
-              onClick={() => engine.cycleFocusedHero(-1)}
-              title="Show the previous hero"
-              aria-label="Show the previous hero"
-            >
-              ‹
-            </button>
-          )}
-
-          {!settings.hideHeroSprite && (
-            <button
-              className={`knight-button ${anim}`}
-              onClick={onOpenMenu}
-              title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''} — click to open the guild menu`}
-              aria-label={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}. Open the guild menu.`}
-            >
-              <HeroSprite
-                heroClass={hero.heroClass}
-                skin={hero.skin}
-                animation={spriteAnimation}
-                flip={facingReturn}
-                height={knightHeight}
-                title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}`}
-              />
-              {floatingText && (
-                <div className="floating-reward" key={floatingText.key}>
-                  {floatingText.xp > 0 && <span className="floating-xp">+{floatingText.xp} XP</span>}
-                  {floatingText.gold > 0 && <span className="floating-gold">+{floatingText.gold} gold</span>}
-                </div>
+        <div className={`hero-carousel ${showRaidPartyView ? 'raid-view' : ''}`} style={{ height: knightHeight }}>
+          {showRaidPartyView ? (
+            // Raid View -- replaces the single cycling hero (and its
+            // arrows, which have nothing to cycle through while this is
+            // showing) with the whole party running in place side by
+            // side. The window itself has already been widened to fit
+            // them by the effect above; this element just needs to get
+            // out of the way and let the row lay out naturally.
+            <RaidPartySprites heroes={activeRaidParty} height={knightHeight} />
+          ) : (
+            <>
+              {!settings.hideHeroSprite && others.length > 0 && (
+                <button
+                  className="carousel-arrow"
+                  onClick={() => engine.cycleFocusedHero(-1)}
+                  title="Show the previous hero"
+                  aria-label="Show the previous hero"
+                >
+                  ‹
+                </button>
               )}
-            </button>
-          )}
 
-          {!settings.hideHeroSprite && others.length > 0 && (
-            <button
-              className="carousel-arrow"
-              onClick={() => engine.cycleFocusedHero(1)}
-              title="Show the next hero"
-              aria-label="Show the next hero"
-            >
-              ›
-            </button>
+              {!settings.hideHeroSprite && (
+                <button
+                  className={`knight-button ${anim}`}
+                  onClick={onOpenMenu}
+                  title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''} — click to open the guild menu`}
+                  aria-label={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}. Open the guild menu.`}
+                >
+                  <HeroSprite
+                    heroClass={hero.heroClass}
+                    skin={hero.skin}
+                    animation={spriteAnimation}
+                    flip={facingReturn}
+                    height={knightHeight}
+                    title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}`}
+                  />
+                  {floatingText && (
+                    <div className="floating-reward" key={floatingText.key}>
+                      {floatingText.xp > 0 && <span className="floating-xp">+{floatingText.xp} XP</span>}
+                      {floatingText.gold > 0 && <span className="floating-gold">+{floatingText.gold} gold</span>}
+                    </div>
+                  )}
+                </button>
+              )}
+
+              {!settings.hideHeroSprite && others.length > 0 && (
+                <button
+                  className="carousel-arrow"
+                  onClick={() => engine.cycleFocusedHero(1)}
+                  title="Show the next hero"
+                  aria-label="Show the next hero"
+                >
+                  ›
+                </button>
+              )}
+            </>
           )}
         </div>
         {!settings.hideHeroSprite && <div className="knight-shadow" />}

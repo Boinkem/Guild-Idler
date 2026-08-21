@@ -233,6 +233,14 @@
  * mood strip here, not the primary identifier the way it is in the list. */
 .raid-active-banner { height: 48px; border-radius: 6px; margin-bottom: 8px; background-size: cover; background-position: center; }
 .raid-active-header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+/* Reuses .raid-party-row's own flex-wrap layout (defined alongside the
+   companion's Raid View styling) -- this card is normal page flow, not a
+   fixed-width floating window, so wrapping is just the natural fallback
+   for a wide Legendary-sized party rather than anything that needs its
+   own special-cased width logic. Compound selector (not a bare class) so
+   this reliably wins over .raid-party-row's own justify-content: center
+   regardless of which rule happens to come first in the file. */
+.raid-party-row.raid-active-party-sprites { margin: 4px 0; justify-content: flex-start; }
 .raid-active-party { color: var(--muted); font-size: 0.625rem; margin: 3px 0 6px; }
 .raid-active-eta { font-size: 0.5625rem; color: var(--muted); margin-top: 4px; text-align: right; }
 
@@ -2059,6 +2067,45 @@ input[type='range'] {
      sprite, so this buys back clearance without approaching the height
      budget that caused the sprite to disappear entirely before. */
   margin-top: 26px;
+}
+
+/*
+ * Raid View (direct feature request) -- the fixed 220px width above is
+ * sized for one sprite plus its arrows; a running party row needs to be
+ * free to actually use the width the companion window itself has already
+ * been widened to (see IdleView.tsx's own window.littleKnight.
+ * setIdleWidth effect). auto here, not some larger fixed number, since
+ * the requested window width already varies with party size -- pinning
+ * this to a guess would fight that instead of matching it.
+ */
+.hero-carousel.raid-view {
+  width: auto;
+  min-width: 100%;
+}
+
+/*
+ * The party row itself -- centered, wraps rather than clipping if the
+ * actual window ended up narrower than requested (a small/constrained
+ * display, see main.ts's own clampToWorkArea), same defensive shape
+ * every other "requested size vs. actually available" spot in this
+ * companion already takes.
+ */
+.raid-party-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+}
+
+/* Same drop-shadow .knight-button's sprite already gets, so a running
+   party member reads as the same kind of character art, not a flatter
+   cutout sitting next to it. No bob/walk-bob animation class here on
+   purpose -- HeroSprite's own `run` frame animation is already doing the
+   motion; stacking a CSS bob on top would double up and read jittery. */
+.raid-party-sprite {
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.45));
 }
 
 .carousel-arrow {

@@ -24,6 +24,9 @@ declare global {
       writeSave(json: string): Promise<boolean>;
       saveFolder(): Promise<string>;
       setWindowMode(mode: 'idle' | 'menu'): Promise<void>;
+      /** Idle-mode-only, no-op otherwise. Pass 260 (IDLE_SIZE.width) to
+       *  restore the normal companion width. */
+      setIdleWidth(width: number): Promise<void>;
       setAlwaysOnTop(value: boolean): Promise<boolean>;
       getAlwaysOnTop(): Promise<boolean>;
       setFullscreen(value: boolean): Promise<boolean>;

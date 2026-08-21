@@ -157,6 +157,10 @@ export function SettingsPanel() {
         <Toggle value={!settings.hideHeroSprite} onChange={(v) => set('hideHeroSprite')(!v)} />
       </Row>
 
+      <Row label="Raid party view" hint="While a raid is active, shows the whole party running side by side on the corner companion instead of cycling through one hero at a time. The companion window widens to fit them.">
+        <Toggle value={settings.raidPartyView} onChange={set('raidPartyView')} />
+      </Row>
+
       <Row label="Pet size" hint={`${Math.round(settings.petSpriteScale * 100)}% -- affects the companion pet only, not the hero above`}>
         <div className="row" style={{ gap: 16, alignItems: 'center' }}>
           <input

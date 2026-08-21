@@ -1021,6 +1021,29 @@ raid fight).
 
 ## Backlog
 
+### Idea: flip sprites at the halfway point of a quest/raid timer, to read as "heading back"
+Raised alongside the Raid View feature (patch 0245) but deliberately not
+built as part of it -- explicitly flagged for the backlog rather than
+scope creep onto that patch.
+
+The idea: once a quest or raid's timer crosses its own halfway point,
+flip the relevant hero sprite(s) to face the opposite direction, reading
+as "the party has turned around and is now heading home" rather than
+still traveling out. Framed as "quest/raid" generally, not raid-only --
+so a real implementation would need to touch both the single-hero
+companion (IdleView.tsx's own walking/departing/returning states, for an
+ordinary solo quest) and the new party row (RaidPartySprites, for a
+raid), not just one of the two.
+
+Open questions for whenever this gets picked up: does the flip happen
+instantly at the 50% mark, or ease into it the way depart/arrive already
+transition (900ms eased slide, see .knight-button.departing/.returning
+in app.css)? Does a raid party flip all at once, or does it read better
+staggered per-hero the way their framePhase offsets already desync their
+run-cycle frames? Neither designed yet -- this entry is a placeholder for
+the idea itself, not a scoped plan the way the Quest Chains entry below
+is.
+
 ### Replayable Quest Chains -- fully scoped (redesigned post-0214), ready to build
 Original design worked through end to end across several discussion
 rounds and written up here once already; that write-up has since been
@@ -18867,3 +18890,140 @@ has) any background-related JSX at all.
 **No other files touched.** `CraftingStation.tsx` and all four art
 assets are untouched -- this was purely `VendorsPanel.tsx`'s component
 structure and `app.css`'s `.vendor-scene`/`.vendor-scene-content` rules.
+
+### Crafting quality-of-life: potions stay selected between crafts, materials stop requiring confirmation clicks (patch 0245)
+
+```discord-update
+Dev Update | Crafting QoL
+
+- Crafting a potion no longer resets your selection -- the Craft button stays ready for the next one
+- Materials for a recipe are now auto-confirmed instead of requiring a click-through step every time
+```
+
+Two direct requests, both scoped to `CraftingStation.tsx`'s `consumable`
+category (potions/tonics at the Alchemist):
+
+**Materials auto-select.** `recipe.materialCost` is a fixed dict --
+confirmed directly, no recipe anywhere in this game offers alternate-
+material substitution -- so the old "click through each required material
+in a picker" step was pure busywork. Worse, it duplicated info a
+have/need summary row (icon + colour-coded `have/need` per material)
+already shows unconditionally above the Craft button; that row's own
+existing comment already noted the redundancy ("rather than making the
+player... open the materials picker just to see a have/need number that
+picker already computed internally") without ever finishing the job of
+removing the gate. `pickRecipe` now auto-populates `confirmedMaterials`
+with every material the recipe needs the instant it's picked, so
+`canCraft`'s existing check is satisfied immediately rather than after a
+manual click-through. The materials slot itself stays (relabelled
+"Materials", not "Confirm materials") and still opens the same detail
+picker for anyone who wants to look, it just no longer gates anything.
+
+**Keep crafting.** `handleCraft` used to call an unconditional `reset()`
+after every craft, wiping the recipe and all selections -- brewing five
+of the same potion meant five full trips back through the recipe picker.
+Now scoped per category: `gear`/`enchant`/`gem` still reset exactly as
+before (a gear recipe's 2 mod picks and an enchant's specific target item
+don't have the same "make several identical things back to back" shape a
+potion does), but a `consumable` craft leaves the recipe and any chosen
+bonus mod in place, so the Craft button is immediately ready to press
+again -- materials re-confirm automatically per the fix above, and
+affordability/the have-need row both already recompute live on every
+render regardless.
+
+`npx tsc --noEmit` and `vite build` both pass clean.
+
+### Raid View: the whole raid party as running sprites, on the corner companion and the Raids tab (patch 0245)
+
+```discord-update
+Dev Update | Raid View
+
+- New: while a raid is active, the corner companion can show your whole party running side by side instead of cycling through one hero at a time
+- New Settings > Knight > "Raid party view" toggle -- on by default
+- The Raids tab's active-raid card now shows the same running party too
+```
+
+Direct feature request, discussed in full before any of it was built.
+Key decisions carried over from that discussion: no actual horizontal
+travel (sprites run in place, "one by one" meant side-by-side formation,
+not a relay), standard sprite size regardless of party size (no
+auto-shrink), and the companion window should widen rather than the
+sprites shrinking to fit a fixed box.
+
+**`HeroSprite` gained a `framePhase` prop (0-1).** Necessary because its
+frame stepping is driven by its own internal `setInterval`/React state,
+not CSS keyframes -- several simultaneous instances of the same
+animation, all mounting in the same React commit at the same frame rate,
+would otherwise step through identical frames in lockstep and read as
+one sprite copy-pasted several times rather than individuals running
+together. `framePhase` seeds the starting frame index as a fraction of
+the resolved animation's real frame count (only known once the manifest
+loads); ignored for a `once` playback, where the first frame specifically
+matters (an attack flash), unlike a seamless loop where any starting
+point looks the same.
+
+**New shared `RaidPartySprites` component** (`src/ui/sprites/
+RaidPartySprites.tsx`) -- takes a hero list + a height, renders each at
+`animation="run"` (HeroSprite's own walk fallback applies per-class same
+as everywhere else) with an independently-randomized `framePhase`, laid
+out in a wrapping flex row (`.raid-party-row`). One component, two call
+sites (the companion and the Raids tab), so "the party is out on a raid"
+reads identically in both rather than two implementations drifting apart
+over time.
+
+**The companion window is NOT actually content-sized -- a real finding
+mid-build, not assumed going in.** `electron/main.ts`'s idle mode uses a
+fixed `IDLE_SIZE = { width: 260, height: 340 }` OS-level `BrowserWindow`
+size, `setResizable(false)`, with a hard `setMinimumSize`. Widening it
+for a run of standard-size sprites genuinely needed a new IPC round-trip,
+not just CSS:
+- New `window:setIdleWidth` handler (`main.ts`) -- idle-mode-only,
+  no-op with no window or in menu mode. Recomputes bounds keeping the
+  window's RIGHT edge anchored (grows/shrinks leftward) rather than
+  letting the right edge walk further toward the screen edge a corner
+  companion is normally tucked against. Clamped to `[IDLE_SIZE.width,
+  activeDisplay.workArea.width]` via the same `clampToWorkArea` helper
+  every other bounds computation in this file already uses, so it can
+  never request more room than the actual screen, or less than the
+  normal minimum.
+- Exposed through `preload.ts` as `littleKnight.setIdleWidth(width)` and
+  typed on the renderer-side `Window.littleKnight` ambient declaration
+  (`SaveManager.ts`) alongside the rest of that bridge.
+- `IdleView.tsx`: `showRaidPartyView` (gated on the new setting, `!
+  hideHeroSprite`, and an active raid with a non-empty party) drives an
+  effect that requests a width estimated from party size x knightHeight
+  (standard sprite height, unchanged by party size) while it's showing,
+  and always restores the normal 260px on the way out -- raid ending,
+  the setting toggled off, or the component unmounting, whichever
+  happens first. Purely additive display state, nothing persisted --
+  even if the app quits mid-raid while widened, `createWindow()` always
+  starts the next launch back at plain `IDLE_SIZE` regardless, since
+  only x/y position (never width) is ever saved to the companion's
+  remembered settings.
+
+**New setting: `raidPartyView` (Settings > Knight), on by default** --
+same "opt-out, not opt-in" precedent `hideHeroSprite`/`hidePetSprite`
+already set for sprite toggles in this file, rather than a new feature
+nobody discovers because it defaulted off.
+
+**`IdleView.tsx`'s carousel** swaps to `RaidPartySprites` in place of the
+single cycling hero + arrows whenever `showRaidPartyView` is true (arrows
+have nothing to cycle through while a party row is showing). New
+`.hero-carousel.raid-view` CSS override lets the row actually use the
+now-widened window instead of staying pinned to the single-hero
+carousel's normal fixed 220px.
+
+**`RaidsPanel.tsx`'s `ActiveRaidCard`** gets the same `RaidPartySprites`
+row (56px, no window-width concerns here -- this is a plain card in
+normal page flow, wraps naturally like any other flex content for a
+wide Legendary-sized party) sitting above the existing plain-text party
+name line, which stays for clarity/accessibility rather than being
+replaced outright.
+
+**Backlog, not this pass:** flipping sprites to face the other way at a
+quest/raid's halfway point, to read as "heading back" -- see the
+Backlog section above for the full note; deliberately not scoped or
+built here.
+
+`npx tsc --noEmit` and `vite build` (including both Electron sub-builds,
+main and preload) all pass clean.

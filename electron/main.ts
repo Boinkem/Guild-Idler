@@ -657,6 +657,36 @@ ipcMain.handle('window:setLocked', (_e, value: boolean) => {
 
 ipcMain.handle('window:getLocked', () => companionLocked);
 
+/**
+ * Widens (or restores) the idle companion's width only -- height stays at
+ * IDLE_SIZE.height, position keeps its RIGHT edge anchored (grows/shrinks
+ * leftward) since that's how a bottom-right corner companion naturally
+ * reads, rather than the window's right edge visibly walking further out
+ * toward (or past) the screen edge it's normally tucked against. Direct
+ * feature: showing the whole raid party as a row of running sprites
+ * (RaidPartySprites) needs real horizontal room a fixed 260px was never
+ * going to provide, and standard sprite size (not shrinking per party
+ * size) was the explicit call, so the window has to grow instead.
+ *
+ * No-op outside idle mode (menu mode has its own independent size/resize
+ * story already, `window:setMode` above) and no-op with no window --
+ * matches every other handler in this file's own defensive style rather
+ * than assuming a `win` that might not exist yet during startup ordering.
+ * `width` is clamped to [IDLE_SIZE.width, activeDisplay.workArea.width]
+ * so a caller can't shrink the companion below its normal minimum or
+ * request something wider than the actual screen has room for.
+ */
+ipcMain.handle('window:setIdleWidth', (_e, width: number) => {
+  if (!win || currentMode !== 'idle') return;
+  const activeDisplay = screen.getDisplayMatching(win.getBounds());
+  const clampedWidth = Math.max(IDLE_SIZE.width, Math.min(Math.round(width), activeDisplay.workArea.width));
+  const [curX, curY] = win.getPosition();
+  const [curWidth] = win.getSize();
+  const rightEdge = curX + curWidth;
+  const pos = clampToWorkArea(rightEdge - clampedWidth, curY, clampedWidth, IDLE_SIZE.height, activeDisplay);
+  win.setBounds({ ...pos, width: clampedWidth, height: IDLE_SIZE.height }, false);
+});
+
 ipcMain.handle('window:minimize', () => win?.minimize());
 ipcMain.handle('window:quit', () => app.quit());
 
