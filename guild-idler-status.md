@@ -19217,3 +19217,89 @@ value, not a `GameState` field -- no `SAVE_VERSION` bump.
 this patch spans a type change, a JSON recategorization, five station
 components, one panel wrap, and CSS, so a real build/visual pass is
 worth doing before merge, more so than usual given the breadth here.
+
+### Quest Board redesign: contracts move to the same row + detail-modal pattern as Raids (patch 0248)
+
+```discord-update
+Dev Update | Quest Tabs Redesign
+
+- Quest Board contracts are now a compact list, same look as Raids
+- Tap a contract to see its full details, loot odds, and send options in a popup
+- Story Quests' detail popup gets a matching Close button
+```
+
+Design handoff from Claude Design (`Quest Tabs Redesign.dc.html` mockup +
+written spec) -- brings the Quest Board's contract list in line with the
+row-list + detail-modal pattern RaidsPanel (patch 0201-era) and Story
+Quests' own `ChainRow`/`ChainDetailModal` (patch 0190/0201) already use.
+Purely visual/structural; no engine methods, props, or handlers changed
+underneath.
+
+**`QuestCard` (`QuestPanel.tsx`) split into `QuestRow` + `QuestDetailModal`.**
+`QuestCard` was the last place in the app still using the old
+always-expanded tall card with an inline More/Less toggle. Replaced with:
+- `QuestRow` -- a `.card.raid-card` row: 56×56 thumbnail
+  (`.raid-card-thumb`), name + a one-line meta strip (difficulty tag,
+  Chain X/Y tag, ❄ Frozen tag, success%, gold), and a chevron. Click/
+  Enter/Space opens the detail modal, same handling `RaidCard`/`ChainRow`
+  already use.
+- `QuestDetailModal` -- same `.overlay` > `.modal.raid-detail-modal` shell
+  as `RaidDetailModal`/`ChainDetailModal`. Banner, name/difficulty header,
+  Chain/Frozen tags, flavour text (now always visible -- opening the
+  modal *is* "more"), the full stat row, loot preview, and the
+  chain-completion block are all the same markup `QuestCard` used to show
+  inline, just living in the modal now. All four action-row branches
+  (Freeze/Unfreeze, Chain continue vs. Chain Quest Steps, Send Once vs.
+  Send & Chain, plain Send) preserved exactly -- same conditions, same
+  `onSend`/`onToggleFreeze` calls -- plus a new plain Close button, first
+  in the row, matching `ChainDetailModal`'s own footer order.
+
+**Thumbnail/banner art.** Chain offers keep using `ChainQuestBanner`'s
+existing source (`chainBannerSrc`). Standard offers used to get a
+full-card faint tag wash (`QuestTagBanner`, an absolutely-positioned
+backdrop) -- that component's rendering half is gone; its source-
+resolution logic survives as an exported `questTagBannerSrc(tag)`
+helper, now feeding a plain `.raid-card-thumb` background-image on the
+row and a `.raid-detail-banner` background-image on the modal, same
+"missing art just fails to paint, background-color fallback carries it"
+convention as `chainBannerSrc` everywhere else. Per-tag focus-point/zoom
+overrides (`QUEST_TAG_BY_ID[tag].banner.focusX/focusY/scale`) aren't
+threaded through here -- `ChainRow`'s own thumbnail doesn't honor
+`ChainDef.banner`'s focus/scale either, so this keeps the same
+precedent rather than giving quest tags a capability chains don't have
+at this size.
+
+**State.** `QuestPanel`'s `expanded: Set<string>` (drove the old inline
+toggle) replaced with `openOfferId: string | null`, same shape
+`DiscoveredQuestsPanel` already uses. `contractOffers.map` now renders
+`QuestRow`s inside a `.raid-list`; the open offer's `QuestDetailModal`
+renders once, alongside the list, keyed off `openOfferId`.
+
+**`DiscoveredQuestsPanel.tsx` (Story Quests).** No structural change --
+`ChainRow`/`ChainDetailModal` already matched this pattern. Checked
+`ChainDetailModal`'s footer against the new `QuestDetailModal`'s: it
+already had its own Close button, first in the row, same position -- no
+edit needed there, just confirmed the two now read as one consistent
+family instead of a near-miss.
+
+**Unchanged, per the handoff's own scope note:** the "On the road"
+active-quest cards, hero tabs, Send All Idle, Chain Tactics card,
+sort/reroll/freeze-count controls, Quick-assign, and the Recall confirm
+modal -- all still their original markup and handlers. `RaidsPanel.tsx`
+untouched (reference only). `.quest-title` stays -- still live on the
+"On the road" active-quest card's own title span, unrelated to the
+retired `QuestCard`. `.quest-tag-banner`/`.quest-card-content`
+(`app.css`) were the CSS half of the removed full-card tag wash and had
+no other consumer -- confirmed via a repo-wide grep before removing, not
+left as new dead weight for the next scan to catch (see the "resolved
+(patch 0102)" dead-class entry above -- that scan predates this patch,
+so it couldn't have caught these). The three placeholder chain images in
+the design handoff (`HollowKing.png`, `Goblin Warband.png`, `Crows
+Warning.png`) were already present in `public/lore/chains/` -- nothing
+added.
+
+**No save migration.** UI-only; no `GameState` fields touched, no
+`SAVE_VERSION` bump.
+
+**Verified** against a live `tsc --noEmit` and `vite build` in this
+environment -- both clean.

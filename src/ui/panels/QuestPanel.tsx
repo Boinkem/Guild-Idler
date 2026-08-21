@@ -52,71 +52,108 @@ export function ChainQuestBanner({
   );
 }
 
-/** Faint, full-card backdrop matching a quest's own tag (Combat, Escort,
- *  Explore, Arcane, Stealth, Defense) -- same optional-art-override +
- *  focus-point shape as ChainQuestBanner/ChainDef.banner just above, but
- *  rendered as a subtle absolutely-positioned wash behind the whole card
- *  (see .quest-tag-banner in app.css) rather than a bold reserved-height
- *  strip. Every quest offer has a tag, so this always has something to
- *  show once QUEST_TAG_BY_ID[tag].banner exists; a tag with no banner art
- *  assigned yet just renders nothing, same "missing file fails to paint
- *  quietly" convention as ChainQuestBanner.
- *
- *  Chain-quest offers skip this entirely (see the caller below) -- a
- *  chain already owns its own banner treatment (ChainQuestBanner), and
- *  most chains don't have dedicated art yet, so layering the generic tag
- *  wash behind them read as the tag art *replacing* the chain's own
- *  banner rather than a subtle backdrop next to it. */
-function QuestTagBanner({ tag }: { tag: Offer['tag'] }) {
+/** Resolves a quest tag's own banner art (Combat, Escort, Explore, Arcane,
+ *  Stealth, Defense) to a plain image src -- same source QUEST_TAG_BY_ID
+ *  [tag].banner has always used, just returned as a string instead of
+ *  rendered as its own absolutely-positioned wash. Used two places now:
+ *  QuestRow's 56×56 thumbnail (background-image + object-fit-equivalent
+ *  cover, same technique ChainRow already uses for chainBannerSrc in
+ *  DiscoveredQuestsPanel.tsx) and QuestDetailModal's full-width banner
+ *  strip. Returns undefined if the tag has no banner art yet -- same
+ *  "missing file just fails to paint quietly" convention as
+ *  chainBannerSrc, the caller's own background-color fallback
+ *  (.raid-card-thumb / .raid-detail-banner) carries the blank case. */
+export function questTagBannerSrc(tag: Offer['tag']): string | undefined {
   const def = QUEST_TAG_BY_ID[tag];
-  if (!def?.banner) return null;
-  const src = def.banner.path ? `./lore/${def.banner.path}` : `./lore/quest-tags/${tag}.jpg`;
-  const { scale } = def.banner;
+  if (!def?.banner) return undefined;
+  return def.banner.path ? `./lore/${def.banner.path}` : `./lore/quest-tags/${tag}.jpg`;
+}
+
+/**
+ * Collapsed row -- same shape as RaidsPanel's own .raid-card (thumbnail +
+ * name/meta + chevron) and DiscoveredQuestsPanel's ChainRow, reusing that
+ * exact class family rather than inventing a parallel one. A chain offer's
+ * thumbnail uses ChainQuestBanner's own source (chainBannerSrc); a
+ * standard offer uses its tag's art (questTagBannerSrc) instead of the
+ * old full-width wash strip. Difficulty/Chain/Frozen tags plus a quick
+ * success%/gold glance keep the odds and payout visible without opening
+ * the detail modal -- same four data points the old always-expanded card
+ * showed in its header + stat row, condensed onto one line.
+ */
+export function QuestRow({
+  offer, hero, now, isFrozen, onOpen,
+}: { offer: Offer; hero: Hero; now: number; isFrozen?: boolean; onOpen: () => void }) {
+  const engine = useEngine();
+  const state = engine.state;
+  const cfg = DIFFICULTIES[offer.difficulty];
+  const chain = offer.chain ? CHAIN_BY_ID[offer.chain.chainId] : undefined;
+  const chance = QuestManager.previewSuccess(state, hero, offer, hero.equippedConsumables ?? [], now);
+  const thumbSrc = offer.chain
+    ? chainBannerSrc(offer.chain.chainId, chain?.banner)
+    : questTagBannerSrc(offer.tag);
+
   return (
     <div
-      aria-hidden="true"
-      className="quest-tag-banner"
-      style={{
-        backgroundImage: `url(${src})`,
-        backgroundPosition: `${def.banner.focusX ?? 50}% ${def.banner.focusY ?? 50}%`,
-        // .quest-tag-banner's own `background-size: cover` (app.css)
-        // covers the omitted/100 case already -- only overridden inline
-        // when an actual zoom (patch 0164) has been set via the DevTool.
-        ...(scale && scale !== 100 ? { backgroundSize: `${scale}%` } : {}),
-      }}
-    />
+      className="card raid-card"
+      onClick={onOpen}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
+    >
+      <div
+        className="raid-card-thumb"
+        style={thumbSrc ? { backgroundImage: `url(${thumbSrc})` } : undefined}
+      />
+      <div className="raid-card-body">
+        <div className="raid-card-name">{offer.name}</div>
+        <div className="raid-card-meta">
+          <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
+          {offer.chain && (
+            <span className="tag" style={{ color: 'var(--blood)' }}>
+              Chain {offer.chain.stage + 1}/{offer.chain.totalStages}
+            </span>
+          )}
+          {isFrozen && (
+            <span className="tag" style={{ color: 'var(--sky)' }} title="This contract is frozen -- it won't be replaced by a board refresh, reroll, or restock">
+              ❄ Frozen
+            </span>
+          )}
+          <span className="tiny">{Math.round(chance)}% success</span>
+          <span className="tiny gold-text">{formatGold(offer.rewardGold)} gold</span>
+        </div>
+      </div>
+      <span className="raid-card-chevron" aria-hidden="true">›</span>
+    </div>
   );
 }
 
-export interface QuestCardProps {
-  offer: Offer;
-  isOpen: boolean;
-  hero: Hero;
-  now: number;
-  onToggleExpanded: (offerId: string) => void;
+/**
+ * Full detail, opened by tapping a QuestRow -- same overlay/modal shell
+ * RaidDetailModal/ChainDetailModal already use, content directly in the
+ * modal (no nested .card). Everything here previously lived inline on
+ * QuestCard once expanded: the 90px banner, full stat row, always-visible
+ * flavour text (opening the modal *is* "more" now, no separate toggle),
+ * loot preview, guaranteed-on-completion block for a chain's final stage,
+ * and every action button -- all four branches preserved exactly, just
+ * living in the modal footer instead of the card footer. Shared by both
+ * a hero's own Contracts (freeze/autoChain-aware) and, indirectly, the
+ * same shape DiscoveredQuestsPanel's own ChainDetailModal already used
+ * for Story Quests.
+ */
+export function QuestDetailModal({
+  offer, hero, now, onClose, onSend,
+  isFrozen, canFreeze, onToggleFreeze, autoChainOwned,
+}: {
+  offer: Offer; hero: Hero; now: number; onClose: () => void;
   onSend: (offer: Offer, chainSteps?: boolean, startStreak?: boolean) => void;
-  /** Freeze is only meaningful for a hero's own board contracts -- chain
-   *  stages are guild-wide and always omit these. */
+  /** Freeze is only meaningful for a hero's own board contracts. */
   isFrozen?: boolean;
   canFreeze?: boolean;
   onToggleFreeze?: (offer: Offer) => void;
   /** Only meaningful for a standard (non-chain) offer -- gates the
-   *  "Send Once"/"Send & Chain" choice below. Omitted by
-   *  DiscoveredQuestsPanel entirely since every offer it renders has
-   *  `offer.chain` set, so that branch never applies there regardless. */
+   *  "Send Once"/"Send & Chain" choice below. */
   autoChainOwned?: boolean;
-}
-
-/** Shared card body for both a hero's own Contracts and their Discovered
- *  Quests -- identical behaviour either way, the only difference is the
- *  banner art shown for a chain entry specifically. Always renders against
- *  whichever hero's tab is currently open (see QuestPanel) -- there's no
- *  separate hero picker inside the card anymore, since picking the hero is
- *  now the very first thing the player does on this tab. */
-export function QuestCard({
-  offer, isOpen, hero, now, onToggleExpanded, onSend,
-  isFrozen, canFreeze, onToggleFreeze, autoChainOwned,
-}: QuestCardProps) {
+}) {
   const engine = useEngine();
   const state = engine.state;
   const cfg = DIFFICULTIES[offer.difficulty];
@@ -124,161 +161,150 @@ export function QuestCard({
   const duration = QuestManager.previewDuration(state, hero, offer, now);
   const chain = offer.chain ? CHAIN_BY_ID[offer.chain.chainId] : undefined;
   const levelGap = Math.max(0, offer.reqLevel - hero.level);
+  const loot = QuestManager.previewLoot(state, hero, offer, [], now);
+  const completion = chain && offer.chain && offer.chain.stage + 1 === offer.chain.totalStages
+    ? QuestManager.chainCompletionPreview(chain) : null;
+  const tagSrc = !offer.chain ? questTagBannerSrc(offer.tag) : undefined;
 
   return (
-    <div className={`card quest-card ${offer.difficulty} ${offer.chain ? 'chain' : ''}`}>
-      {!offer.chain && <QuestTagBanner tag={offer.tag} />}
-      <div className="quest-card-content">
-      {offer.chain && <ChainQuestBanner chainId={offer.chain.chainId} banner={chain?.banner} />}
-      <div
-        className="card-head hero-card-summary"
-        onClick={() => onToggleExpanded(offer.id)}
-        role="button"
-        tabIndex={0}
-        aria-expanded={isOpen}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleExpanded(offer.id); } }}
-      >
-        <span className="card-title quest-title hero-card-name">{offer.name}</span>
-        <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
-        {isFrozen && (
-          <span className="tag" style={{ color: 'var(--sky)' }} title="This contract is frozen -- it won't be replaced by a board refresh, reroll, or restock">
-            ❄ Frozen
-          </span>
-        )}
+    <div className="overlay" onClick={onClose}>
+      <div className="modal raid-detail-modal" onClick={(e) => e.stopPropagation()}>
+        {offer.chain ? (
+          <ChainQuestBanner chainId={offer.chain.chainId} banner={chain?.banner} height={90} />
+        ) : tagSrc ? (
+          <div className="raid-detail-banner" style={{ backgroundImage: `url(${tagSrc})` }} />
+        ) : null}
+        <div className="spread">
+          <span className="card-title hero-card-name">{offer.name}</span>
+          <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
+        </div>
         {offer.chain && (
-          <span className="tag" style={{ color: 'var(--blood)' }}>
+          <div className="tag" style={{ color: 'var(--blood)', display: 'inline-block', marginTop: 4 }}>
             Chain {offer.chain.stage + 1}/{offer.chain.totalStages}
-          </span>
+          </div>
         )}
-      </div>
+        {isFrozen && (
+          <div className="tag" style={{ color: 'var(--sky)', display: 'inline-block', marginTop: 4 }}>
+            ❄ Frozen
+          </div>
+        )}
+        <p className="card-flavour">{chain ? `${chain.description} — ${offer.flavour}` : offer.flavour}</p>
 
-      <div className="stat-row" style={{ margin: '6px 0' }}>
         {levelGap > 0 && (
-          <span className="tiny" style={{ color: 'var(--blood)' }}>
+          <p className="tiny" style={{ color: 'var(--blood)', margin: '0 0 6px' }}>
             {levelGap} level{levelGap === 1 ? '' : 's'} under -- reduced success chance
-          </span>
+          </p>
         )}
-        <span>Success <b className={chance >= 60 ? 'good' : chance >= 35 ? '' : 'bad'}>{Math.round(chance)}%</b></span>
-        <span>Time <b>{formatDuration(duration)}</b></span>
-        <span>Gold <b className="gold-text">{formatGold(offer.rewardGold)}</b></span>
-        <span>XP <b>{offer.rewardXp}</b></span>
-      </div>
+        <div className="stat-row" style={{ margin: '6px 0' }}>
+          <span>Success <b className={chance >= 60 ? 'good' : chance >= 35 ? '' : 'bad'}>{Math.round(chance)}%</b></span>
+          <span>Time <b>{formatDuration(duration)}</b></span>
+          <span>Gold <b className="gold-text">{formatGold(offer.rewardGold)}</b></span>
+          <span>XP <b>{offer.rewardXp}</b></span>
+        </div>
 
-      {isOpen && (
-        <>
-          <p className="card-flavour">{chain ? `${chain.description} — ${offer.flavour}` : offer.flavour}</p>
-          {QuestManager.previewLoot(state, hero, offer, [], now).length > 0 && (
-            <>
-              <div className="tiny muted" style={{ marginBottom: 2 }}>Chance to find</div>
-              <div className="row wrap quest-popout-loot" style={{ gap: 6, alignItems: 'center' }}>
-                {QuestManager.previewLoot(state, hero, offer, [], now).map((entry) => (
-                  <span key={entry.name} className="row" style={{ gap: 4, alignItems: 'center' }}>
-                    <span className="tiny">{entry.name}</span>
-                    <span className="tiny muted">{Math.round(entry.chance)}%</span>
-                    <RarityPill rarity={entry.rarity} />
-                  </span>
-                ))}
-              </div>
-            </>
+        {loot.length > 0 && (
+          <>
+            <div className="tiny muted" style={{ marginBottom: 2 }}>Chance to find</div>
+            <div className="row wrap quest-popout-loot" style={{ gap: 6, alignItems: 'center', marginBottom: 8 }}>
+              {loot.map((entry) => (
+                <span key={entry.name} className="row" style={{ gap: 4, alignItems: 'center' }}>
+                  <span className="tiny">{entry.name}</span>
+                  <span className="tiny muted">{Math.round(entry.chance)}%</span>
+                  <RarityPill rarity={entry.rarity} />
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+
+        {completion && (
+          <>
+            <div className="tiny muted" style={{ marginTop: 8, marginBottom: 2 }}>
+              Guaranteed on completion
+            </div>
+            <div className="row wrap" style={{ gap: 6, alignItems: 'center', marginBottom: 8 }}>
+              <span className="tiny gold-text">+{formatGold(completion.rewardGold)} gold</span>
+              {completion.rewardRenown > 0 && (
+                <span className="tiny" style={{ color: 'var(--violet)' }}>+{completion.rewardRenown} renown</span>
+              )}
+              {completion.items.map((item) => (
+                <span key={item.name} className="row" style={{ gap: 4, alignItems: 'center' }}>
+                  <span className="tiny">{item.name}</span>
+                  <RarityPill rarity={item.rarity} />
+                </span>
+              ))}
+              {completion.egg && (
+                <span className="row" style={{ gap: 4, alignItems: 'center' }}>
+                  <EggIcon rarity={completion.egg.rarity} size={16} />
+                  <span className="tiny">Egg</span>
+                  <RarityPill rarity={completion.egg.rarity} />
+                </span>
+              )}
+            </div>
+          </>
+        )}
+
+        <div className="row end" style={{ marginTop: 8, gap: 6 }}>
+          <button className="btn-ghost" onClick={onClose}>Close</button>
+          {!offer.chain && onToggleFreeze && (
+            <button
+              className="btn-ghost"
+              onClick={() => onToggleFreeze(offer)}
+              disabled={!isFrozen && !canFreeze}
+              title={isFrozen
+                ? 'Unfreeze -- always free, this contract will refresh normally again'
+                : canFreeze
+                  ? "Freeze -- keep this contract on the board through the next refresh, reroll, or restock"
+                  : 'No freezes left today'}
+            >
+              {isFrozen ? '❄ Unfreeze' : '❄ Freeze'}
+            </button>
           )}
-          {chain && offer.chain && offer.chain.stage + 1 === offer.chain.totalStages && (() => {
-            const completion = QuestManager.chainCompletionPreview(chain);
-            return (
-              <>
-                <div className="tiny muted" style={{ marginTop: 8, marginBottom: 2 }}>
-                  Guaranteed on completion
-                </div>
-                <div className="row wrap" style={{ gap: 6, alignItems: 'center' }}>
-                  <span className="tiny gold-text">+{formatGold(completion.rewardGold)} gold</span>
-                  {completion.rewardRenown > 0 && (
-                    <span className="tiny" style={{ color: 'var(--violet)' }}>+{completion.rewardRenown} renown</span>
-                  )}
-                  {completion.items.map((item) => (
-                    <span key={item.name} className="row" style={{ gap: 4, alignItems: 'center' }}>
-                      <span className="tiny">{item.name}</span>
-                      <RarityPill rarity={item.rarity} />
-                    </span>
-                  ))}
-                  {completion.egg && (
-                    <span className="row" style={{ gap: 4, alignItems: 'center' }}>
-                      <EggIcon rarity={completion.egg.rarity} size={16} />
-                      <span className="tiny">Egg</span>
-                      <RarityPill rarity={completion.egg.rarity} />
-                    </span>
-                  )}
-                </div>
-              </>
-            );
-          })()}
-        </>
-      )}
-
-      <div className="row end" style={{ marginTop: 8, gap: 6 }} onClick={(e) => e.stopPropagation()}>
-        <button
-          className="btn-ghost hero-card-expand"
-          onClick={() => onToggleExpanded(offer.id)}
-        >
-          {isOpen ? 'Less ▲' : 'More ▼'}
-        </button>
-        {!offer.chain && onToggleFreeze && (
-          <button
-            className="btn-ghost"
-            onClick={() => onToggleFreeze(offer)}
-            disabled={!isFrozen && !canFreeze}
-            title={isFrozen
-              ? 'Unfreeze -- always free, this contract will refresh normally again'
-              : canFreeze
-                ? "Freeze -- keep this contract on the board through the next refresh, reroll, or restock"
-                : 'No freezes left today'}
-          >
-            {isFrozen ? '❄ Unfreeze' : '❄ Freeze'}
-          </button>
-        )}
-        {offer.chain && offer.chain.stage + 1 < offer.chain.totalStages ? (
-          <>
-            <button
-              className="btn-ghost"
-              title="Send this stage only -- return to the board afterward"
-              onClick={() => onSend(offer, false)}
-            >
-              Send on Quest
+          {offer.chain && offer.chain.stage + 1 < offer.chain.totalStages ? (
+            <>
+              <button
+                className="btn-ghost"
+                title="Send this stage only -- return to the board afterward"
+                onClick={() => onSend(offer, false)}
+              >
+                Send on Quest
+              </button>
+              <button
+                className="btn-primary"
+                title="Automatically continue this hero through the rest of the chain"
+                onClick={() => onSend(offer, true)}
+              >
+                Chain Quest Steps
+              </button>
+            </>
+          ) : !offer.chain && autoChainOwned ? (
+            // Standard-contract counterpart to the chain-stage pair above --
+            // previously a plain "Send" here always silently rolled an
+            // Auto-Chain bounty streak with no way to opt out short of not
+            // owning the upgrade at all. See GameEngine.startQuest's own
+            // `startStreak` doc comment.
+            <>
+              <button
+                className="btn-ghost"
+                title="Send just this one -- no Auto-Chain streak"
+                onClick={() => onSend(offer, false, false)}
+              >
+                Send Once
+              </button>
+              <button
+                className="btn-primary"
+                title="Send, then automatically keep this hero chaining into further contracts"
+                onClick={() => onSend(offer, false, true)}
+              >
+                Send &amp; Chain
+              </button>
+            </>
+          ) : (
+            <button className="btn-primary" onClick={() => onSend(offer)}>
+              Send {hero.name}
             </button>
-            <button
-              className="btn-primary"
-              title="Automatically continue this hero through the rest of the chain"
-              onClick={() => onSend(offer, true)}
-            >
-              Chain Quest Steps
-            </button>
-          </>
-        ) : !offer.chain && autoChainOwned ? (
-          // Standard-contract counterpart to the chain-stage pair above --
-          // previously a plain "Send" here always silently rolled an
-          // Auto-Chain bounty streak with no way to opt out short of not
-          // owning the upgrade at all. See GameEngine.startQuest's own
-          // `startStreak` doc comment.
-          <>
-            <button
-              className="btn-ghost"
-              title="Send just this one -- no Auto-Chain streak"
-              onClick={() => onSend(offer, false, false)}
-            >
-              Send Once
-            </button>
-            <button
-              className="btn-primary"
-              title="Send, then automatically keep this hero chaining into further contracts"
-              onClick={() => onSend(offer, false, true)}
-            >
-              Send &amp; Chain
-            </button>
-          </>
-        ) : (
-          <button className="btn-primary" onClick={() => onSend(offer)}>
-            Send {hero.name}
-          </button>
-        )}
-      </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -307,17 +333,11 @@ export function QuestPanel() {
   const now = useNow();
   const state = engine.state;
 
-  // Condensed by default, same pattern as the Heroes tab -- a full board of
-  // contracts used to run the panel very long. Flavour text and the full
-  // loot list live behind the per-card toggle now.
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const toggleExpanded = (offerId: string) => {
-    setExpanded((current) => {
-      const next = new Set(current);
-      if (next.has(offerId)) next.delete(offerId); else next.add(offerId);
-      return next;
-    });
-  };
+  // Which row's detail modal is currently open -- replaces the old
+  // per-card expand/collapse toggle now that a row opens a full modal
+  // instead of expanding inline (same shape DiscoveredQuestsPanel already
+  // uses for its own openOfferId).
+  const [openOfferId, setOpenOfferId] = useState<string | null>(null);
 
   // Which hero's own log is currently open. A large, level-varied roster
   // used to share one 6-slot board -- messy, since the board's difficulty
@@ -371,6 +391,8 @@ export function QuestPanel() {
     }
     return offers.sort((a, b) => DIFFICULTY_ORDER.indexOf(a.difficulty) - DIFFICULTY_ORDER.indexOf(b.difficulty));
   }, [state.questBoards[selectedHero.id], selectedHero, sortMode, now]);
+
+  const openContractOffer = openOfferId ? contractOffers.find((o) => o.id === openOfferId) ?? null : null;
 
   // Consumables no longer live on this tab -- quests automatically use
   // whatever's equipped on the sent hero's own consumable slots instead of
@@ -598,21 +620,34 @@ export function QuestPanel() {
             </div>
           </div>
           {contractOffers.length === 0 && <p className="small muted">Nothing open right now. New contracts arrive within the half hour.</p>}
-          {contractOffers.map((offer) => (
-            <QuestCard
-              key={offer.id}
-              offer={offer}
-              isOpen={expanded.has(offer.id)}
+          <div className="raid-list">
+            {contractOffers.map((offer) => (
+              <QuestRow
+                key={offer.id}
+                offer={offer}
+                hero={selectedHero}
+                now={now}
+                isFrozen={frozenOfferId === offer.id}
+                onOpen={() => setOpenOfferId(offer.id)}
+              />
+            ))}
+          </div>
+          {openContractOffer && (
+            <QuestDetailModal
+              offer={openContractOffer}
               hero={selectedHero}
               now={now}
-              onToggleExpanded={toggleExpanded}
-              onSend={send}
-              isFrozen={frozenOfferId === offer.id}
+              onClose={() => setOpenOfferId(null)}
+              onSend={(offer, chainSteps, startStreak) => {
+                send(offer, chainSteps, startStreak);
+                setOpenOfferId(null);
+              }}
+              isFrozen={frozenOfferId === openContractOffer.id}
               canFreeze={freezeChangesLeft > 0}
               onToggleFreeze={toggleFreeze}
               autoChainOwned={autoChainOwned}
             />
-          ))}
+          )}
         </>
       )}
 
