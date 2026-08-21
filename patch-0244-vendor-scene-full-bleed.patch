@@ -1,0 +1,366 @@
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index 506528f..b8ae5fd 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -31,13 +31,19 @@ const VENDOR_CRAFT_CATEGORY: Record<VendorId, CraftingRecipeDef['category']> = {
+ };
+ 
+ /**
+- * One backdrop scene per vendor page (patch 0242) -- the same room each
+- * vendor's own dedicated crafting/enhance/scrap stations already show in
+- * their own modals (STATION_BG in CraftingStation.tsx and its siblings),
+- * now behind the vendor's whole page rather than just its sub-stations.
+- * Committed art under public/lore/ like every other background this game
+- * paints, not the gitignored-licensed public/vendors/ convention
+- * VendorSprite.tsx has to fall back gracefully without.
++ * One backdrop scene per vendor tab (patch 0242, moved up to wrap the
++ * whole Vendors page in patch 0244) -- the same room each vendor's own
++ * dedicated crafting/enhance/scrap stations already show in their own
++ * modals (STATION_BG in CraftingStation.tsx and its siblings), now
++ * behind the entire Vendors page -- header, tab row, and the active
++ * vendor's own content -- rather than just the sub-stations or just
++ * VendorPage's own content below the tab row. Keyed by `tab` (the
++ * currently open vendor) here in VendorsPanel rather than by VendorPage's
++ * own `vendorId` prop -- same value, just read one component higher now
++ * that the wrapper lives up here. Committed art under public/lore/ like
++ * every other background this game paints, not the gitignored-licensed
++ * public/vendors/ convention VendorSprite.tsx has to fall back
++ * gracefully without.
+  */
+ const VENDOR_BG: Record<VendorId, string> = {
+   blacksmith: './lore/vendors/blacksmith.jpg',
+@@ -69,26 +75,28 @@ export function VendorsPanel() {
+   }, [engine, tab]);
+ 
+   return (
+-    <>
+-      <h2>Vendors</h2>
+-      <p className="subtitle">Upgrades, stock, and Crafting all live on each vendor's own page now.</p>
+-
+-      <div className="row wrap" style={{ gap: 8, marginBottom: 14 }}>
+-        {VENDORS.map((v) => (
+-          <button
+-            key={v.id}
+-            className={`btn-subtab ${tab === v.id ? 'on' : ''} ${isTabUnread(engine.state, 'vendors', v.id) ? 'subtab-unread' : ''}`}
+-            onClick={() => setTab(v.id)}
+-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+-          >
+-            {v.name}
+-            <ReputationRing goldSpent={engine.state.vendorGoldSpent[v.id]} size={18} />
+-          </button>
+-        ))}
+-      </div>
++    <div className="vendor-scene" style={{ backgroundImage: `url(${VENDOR_BG[tab]})` }}>
++      <div className="vendor-scene-content">
++        <h2>Vendors</h2>
++        <p className="subtitle">Upgrades, stock, and Crafting all live on each vendor's own page now.</p>
++
++        <div className="row wrap" style={{ gap: 8, marginBottom: 14 }}>
++          {VENDORS.map((v) => (
++            <button
++              key={v.id}
++              className={`btn-subtab ${tab === v.id ? 'on' : ''} ${isTabUnread(engine.state, 'vendors', v.id) ? 'subtab-unread' : ''}`}
++              onClick={() => setTab(v.id)}
++              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
++            >
++              {v.name}
++              <ReputationRing goldSpent={engine.state.vendorGoldSpent[v.id]} size={18} />
++            </button>
++          ))}
++        </div>
+ 
+-      {VENDORS.filter((v) => v.id === tab).map((v) => <VendorPage key={v.id} vendorId={v.id} />)}
+-    </>
++        {VENDORS.filter((v) => v.id === tab).map((v) => <VendorPage key={v.id} vendorId={v.id} />)}
++      </div>
++    </div>
+   );
+ }
+ 
+@@ -166,72 +174,70 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+   }
+ 
+   return (
+-    <div className="vendor-scene" style={{ backgroundImage: `url(${VENDOR_BG[vendorId]})` }}>
+-      <div className="vendor-scene-content">
+-        <div className="card vendor-card" style={{ marginBottom: 12 }}>
+-          <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
+-            <VendorSprite vendor={vendorId} height={72} animate />
+-            <div style={{ flex: 1 }}>
+-              <div className="spread">
+-                <span className="card-title row" style={{ gap: 6, alignItems: 'center' }}>
+-                  {vendorDef.name}
+-                  <ReputationRing goldSpent={state.vendorGoldSpent[vendorId]} size={22} />
+-                </span>
+-                <span className={`small muted ${levelPulses[`vendor:${vendorId}`] ? 'purchase-pulse' : ''}`}>Level {level}/{upgradeList.length}</span>
+-              </div>
+-              <p className="card-flavour">{vendorDef.blurb}</p>
+-              <div className="row" style={{ gap: 8 }}>
+-                <button
+-                  className="btn-yellow"
+-                  disabled={maxed || cost === null || state.gold < cost}
+-                  onClick={() => engine.levelUpVendor(vendorId)}
+-                >
+-                  {maxed ? 'Nothing more to teach' : `Level up · ◆ ${formatGold(cost ?? 0)}`}
+-                </button>
+-                <button className="btn-purple" onClick={() => setShowCrafting(true)}>Crafting</button>
+-                {/* Durability repair -- moved here from a per-item button
+-                    buried in the Inventory tab, gear-specific so it only
+-                    makes sense on the Blacksmith's own page. */}
+-                {vendorId === 'blacksmith' && (
+-                  <button className="btn-purple" onClick={() => setShowEnhance(true)}>Enhance</button>
+-                )}
+-                {/* Breaks an owned item down into Scrap instead of gold --
+-                    its own dedicated station now (own background art),
+-                    moved off the stash list the same way Enhance moved off
+-                    the Inventory tab before it. */}
+-                {vendorId === 'blacksmith' && (
+-                  <button className="btn-purple" onClick={() => setShowScrap(true)}>Scrap</button>
+-                )}
+-                {/* Elemental infusion moved here entirely, split in two --
+-                    Weapon Enchanting (weapons only) and Armour Infusion
+-                    (everything else), both now living at the Enchanter
+-                    rather than split across Blacksmith (apply) and
+-                    Enchanter (craft the gem first, separately). Each is a
+-                    single collapsed craft-then-apply action now -- see
+-                    CraftingManager.craftAndInfuse. */}
+-                {vendorId === 'enchanter' && (
+-                  <button className="btn-purple" onClick={() => setShowWeaponEnchant(true)}>Weapon Enchanting</button>
+-                )}
+-                {vendorId === 'enchanter' && (
+-                  <button className="btn-purple" onClick={() => setShowArmourInfusion(true)}>Armour Infusion</button>
+-                )}
+-              </div>
++    <>
++      <div className="card vendor-card" style={{ marginBottom: 12 }}>
++        <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
++          <VendorSprite vendor={vendorId} height={72} animate />
++          <div style={{ flex: 1 }}>
++            <div className="spread">
++              <span className="card-title row" style={{ gap: 6, alignItems: 'center' }}>
++                {vendorDef.name}
++                <ReputationRing goldSpent={state.vendorGoldSpent[vendorId]} size={22} />
++              </span>
++              <span className={`small muted ${levelPulses[`vendor:${vendorId}`] ? 'purchase-pulse' : ''}`}>Level {level}/{upgradeList.length}</span>
++            </div>
++            <p className="card-flavour">{vendorDef.blurb}</p>
++            <div className="row" style={{ gap: 8 }}>
++              <button
++                className="btn-yellow"
++                disabled={maxed || cost === null || state.gold < cost}
++                onClick={() => engine.levelUpVendor(vendorId)}
++              >
++                {maxed ? 'Nothing more to teach' : `Level up · ◆ ${formatGold(cost ?? 0)}`}
++              </button>
++              <button className="btn-purple" onClick={() => setShowCrafting(true)}>Crafting</button>
++              {/* Durability repair -- moved here from a per-item button
++                  buried in the Inventory tab, gear-specific so it only
++                  makes sense on the Blacksmith's own page. */}
++              {vendorId === 'blacksmith' && (
++                <button className="btn-purple" onClick={() => setShowEnhance(true)}>Enhance</button>
++              )}
++              {/* Breaks an owned item down into Scrap instead of gold --
++                  its own dedicated station now (own background art),
++                  moved off the stash list the same way Enhance moved off
++                  the Inventory tab before it. */}
++              {vendorId === 'blacksmith' && (
++                <button className="btn-purple" onClick={() => setShowScrap(true)}>Scrap</button>
++              )}
++              {/* Elemental infusion moved here entirely, split in two --
++                  Weapon Enchanting (weapons only) and Armour Infusion
++                  (everything else), both now living at the Enchanter
++                  rather than split across Blacksmith (apply) and
++                  Enchanter (craft the gem first, separately). Each is a
++                  single collapsed craft-then-apply action now -- see
++                  CraftingManager.craftAndInfuse. */}
++              {vendorId === 'enchanter' && (
++                <button className="btn-purple" onClick={() => setShowWeaponEnchant(true)}>Weapon Enchanting</button>
++              )}
++              {vendorId === 'enchanter' && (
++                <button className="btn-purple" onClick={() => setShowArmourInfusion(true)}>Armour Infusion</button>
++              )}
+             </div>
+           </div>
+-          {vendorFlash && <MaxFlash key={vendorFlash.key} label={vendorFlash.name} onDone={() => dismiss(`vendor:${vendorId}`)} />}
+-        </div>
+-
+-        <div className="section-heading">Upgrades</div>
+-        <div className="grid two">
+-          {upgradeList.map((def, index) => (level >= index + 1 ? upgradeCard(def) : lockedCard(index + 1)))}
+         </div>
++        {vendorFlash && <MaxFlash key={vendorFlash.key} label={vendorFlash.name} onDone={() => dismiss(`vendor:${vendorId}`)} />}
++      </div>
+ 
+-        <div className="section-heading">Stock</div>
+-        {vendorId === 'blacksmith' && <ArmourStock now={now} settings={settings} />}
+-        {vendorId === 'alchemist' && <SuppliesStock />}
+-        {vendorId === 'enchanter' && <BlackMarketStock now={now} />}
++      <div className="section-heading">Upgrades</div>
++      <div className="grid two">
++        {upgradeList.map((def, index) => (level >= index + 1 ? upgradeCard(def) : lockedCard(index + 1)))}
+       </div>
+ 
++      <div className="section-heading">Stock</div>
++      {vendorId === 'blacksmith' && <ArmourStock now={now} settings={settings} />}
++      {vendorId === 'alchemist' && <SuppliesStock />}
++      {vendorId === 'enchanter' && <BlackMarketStock now={now} />}
++
+       {showCrafting && (
+         <CraftingStation category={VENDOR_CRAFT_CATEGORY[vendorId]} onClose={() => setShowCrafting(false)} />
+       )}
+@@ -239,7 +245,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+       {showScrap && <ScrapStation onClose={() => setShowScrap(false)} />}
+       {showWeaponEnchant && <WeaponEnchantStation onClose={() => setShowWeaponEnchant(false)} />}
+       {showArmourInfusion && <ArmourInfusionStation onClose={() => setShowArmourInfusion(false)} />}
+-    </div>
++    </>
+   );
+ }
+ 
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 81b7b93..9d155ee 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -2220,40 +2220,52 @@ input[type='range'] {
+ }
+ 
+ /*
+- * Vendor page backdrop (patch 0242) -- one scene per vendor
++ * Vendor page backdrop (patch 0242, moved to wrap the whole Vendors page
++ * and made full-bleed in patch 0244) -- one scene per vendor
+  * (Blacksmith/Alchemist/Enchanter), the same room each vendor's own
+  * dedicated crafting/enhance/scrap stations already show in their own
+- * modals (.craft-scene etc. below), now behind the vendor's whole page
+- * too. Deliberately NOT the locked-aspect-ratio .craft-scene treatment --
+- * that shape exists for pixel-perfect hit-targets landing on painted
+- * frames, and this page has none: its height varies with content (a
+- * short upgrade list vs. a big stock grid), so a locked ratio + 100%/100%
+- * stretch would distort the art the moment content height doesn't match
+- * the image's own ratio. Plain cover/center instead, same reasoning
+- * .fund-guild-scene above already uses for its own no-hit-target
+- * backdrop -- and the same translucent dark backing .fund-guild-content
+- * uses over its own art, so cards/text on top stay legible regardless of
+- * how bright a given vendor's room art is.
++ * modals (.craft-scene etc. below), now behind the entire Vendors page --
++ * header, tab row, and the active vendor's own content -- rather than
++ * just the sub-stations. Deliberately NOT the locked-aspect-ratio
++ * .craft-scene treatment -- that shape exists for pixel-perfect
++ * hit-targets landing on painted frames, and this page has none: its
++ * height varies with content (a short upgrade list vs. a big stock
++ * grid), so a locked ratio + 100%/100% stretch would distort the art the
++ * moment content height doesn't match the image's own ratio. Plain
++ * cover/center instead, same reasoning .fund-guild-scene above already
++ * uses for its own no-hit-target backdrop -- and the same translucent
++ * dark backing .fund-guild-content uses over its own art, so cards/text
++ * on top stay legible regardless of how bright a given vendor's room art
++ * is.
+  *
+- * `min-height: 100%` is load-bearing, not decorative -- without it this
+- * div sizes to its own content only (the header card + upgrade grid +
+- * stock list), which on a short page (few upgrades, small stock grid)
+- * left a visible seam where the art just stopped partway down and the
+- * plain panel backdrop showed through underneath -- the background
+- * looked like it was painted onto the vendor-card specifically rather
+- * than the page. `.panel` (this div's actual container -- VendorPage's
+- * Fragment contributes no DOM node of its own, so .vendor-scene is a
+- * direct child) gets a definite height from `.menu-body`'s `flex: 1`,
+- * which is exactly why a plain `100%` here resolves correctly instead of
+- * collapsing to 0 the way percentage heights usually do without a
+- * definite ancestor. `min-` rather than a flat `height` so a genuinely
+- * tall page (a big Stock grid) still grows the scene to match rather
+- * than clipping it.
++ * Full-bleed via negative margin, not just `min-height: 100%` (patch
++ * 0242's first pass) -- `min-height: 100%` alone still left the plain
++ * .panel backdrop visible in .panel's own padding gutter (14px top,
++ * 16px sides, 24px bottom -- see .panel above) all the way around the
++ * scene, and above it entirely (the Vendors heading/subtitle/tab row
++ * weren't wrapped at all yet at that point), reported as "the background
++ * only applied to the card" and "still shows around the edges and the
++ * top of the page." Fixed by moving this wrapper up to the top of
++ * VendorsPanel() (now wraps literally everything .panel renders for this
++ * tab, keyed by the currently-open vendor) and cancelling .panel's own
++ * padding with an equal-and-opposite negative margin here, so the art
++ * itself reaches .panel's true edges on all four sides while
++ * `.vendor-scene-content` restores that same padding on top of it purely
++ * visually, keeping every child's on-screen position identical to
++ * before. `min-height: calc(100% + 38px)` is the same `min-height: 100%`
++ * reasoning as before (percentage resolves against .panel's own definite
++ * flex-derived height, via `.menu-body`'s `flex: 1`) plus the 14px+24px
++ * this rule's own negative top/bottom margin just pulled back in, so the
++ * scene's bottom edge still lands exactly on .panel's true bottom edge
++ * instead of stopping 38px short of it. `border-radius` dropped entirely
++ * now that the art bleeds flush to .panel's real boundary -- a rounded
++ * corner there would just re-open the exact gap this patch closes, at
++ * the four corners specifically.
+  */
+ .vendor-scene {
+   position: relative;
+-  min-height: 100%;
+-  border-radius: 8px;
++  margin: -14px -16px -24px;
++  min-height: calc(100% + 38px);
+   overflow: hidden;
+   background-size: cover;
+   background-position: top center;
+@@ -2261,7 +2273,7 @@ input[type='range'] {
+ }
+ .vendor-scene-content {
+   position: relative;
+-  padding: 14px;
++  padding: 14px 16px 24px;
+   background: color-mix(in srgb, var(--night) 45%, transparent);
+ }
+ 
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index fac348d..9992539 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -18822,3 +18822,48 @@ the scene to match instead of clipping it.
+ **Scope:** one CSS rule, one file. Nothing else from patch 0242 needed
+ touching -- `VendorsPanel.tsx`, `CraftingStation.tsx`, and all four art
+ assets were already correct and are untouched here.
++
++### Vendor background still gapped at the edges and above the tab row (patch 0244)
++
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed vendor backgrounds leaving a gap around the edges and above the tab row
++- The background now covers the entire Vendors page, edge to edge
++```
++
++Follow-up to patch 0243 -- reported again with a screenshot, red box drawn
++around exactly the area the new art *was* covering: `min-height: 100%`
++(0243) fixed the bottom of the page, but the plain panel backdrop was
++still visible in `.panel`'s own padding gutter all the way around the
++scene, and entirely above it -- the Vendors heading, subtitle, and tab
++row weren't wrapped in the scene at all, so they still sat on the
++default backdrop no matter which vendor was open.
++
++**Two changes, same root fix.** First, moved the `.vendor-scene` wrapper
++up from `VendorPage` to the top of `VendorsPanel()` itself, so it now
++wraps literally everything the Vendors tab renders -- heading, subtitle,
++tab row, and the active vendor's own page -- keyed by `tab` (the
++currently-open vendor) instead of `VendorPage`'s own `vendorId` prop,
++same value either way. Second, made the scene genuinely full-bleed: a
++negative margin (`-14px -16px -24px`) cancelling out `.panel`'s own
++padding exactly, so the art reaches `.panel`'s true edges on all four
++sides instead of stopping at the padding gutter, with
++`.vendor-scene-content` restoring that same padding purely visually on
++top of the now-edge-to-edge art -- every card and heading ends up in
++the exact same on-screen position as before, just with real art behind
++the gutter instead of the default backdrop. `min-height` adjusted from
++`100%` to `calc(100% + 38px)` (the 14px+24px the negative margin just
++pulled back in) so the bottom edge still lands exactly on `.panel`'s true
++bottom rather than stopping 38px short. Dropped `border-radius` --
++flush against `.panel`'s real boundary, a rounded corner would just
++reopen the same gap at the four corners specifically.
++
++**`VendorPage`'s own return is back to a plain Fragment** -- the
++`.vendor-scene`/`.vendor-scene-content` wrapper it briefly had in patch
++0242 moved up to its caller, so `VendorPage` itself no longer needs (or
++has) any background-related JSX at all.
++
++**No other files touched.** `CraftingStation.tsx` and all four art
++assets are untouched -- this was purely `VendorsPanel.tsx`'s component
++structure and `app.css`'s `.vendor-scene`/`.vendor-scene-content` rules.

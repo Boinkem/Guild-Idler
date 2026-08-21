@@ -31,13 +31,19 @@ const VENDOR_CRAFT_CATEGORY: Record<VendorId, CraftingRecipeDef['category']> = {
 };
 
 /**
- * One backdrop scene per vendor page (patch 0242) -- the same room each
- * vendor's own dedicated crafting/enhance/scrap stations already show in
- * their own modals (STATION_BG in CraftingStation.tsx and its siblings),
- * now behind the vendor's whole page rather than just its sub-stations.
- * Committed art under public/lore/ like every other background this game
- * paints, not the gitignored-licensed public/vendors/ convention
- * VendorSprite.tsx has to fall back gracefully without.
+ * One backdrop scene per vendor tab (patch 0242, moved up to wrap the
+ * whole Vendors page in patch 0244) -- the same room each vendor's own
+ * dedicated crafting/enhance/scrap stations already show in their own
+ * modals (STATION_BG in CraftingStation.tsx and its siblings), now
+ * behind the entire Vendors page -- header, tab row, and the active
+ * vendor's own content -- rather than just the sub-stations or just
+ * VendorPage's own content below the tab row. Keyed by `tab` (the
+ * currently open vendor) here in VendorsPanel rather than by VendorPage's
+ * own `vendorId` prop -- same value, just read one component higher now
+ * that the wrapper lives up here. Committed art under public/lore/ like
+ * every other background this game paints, not the gitignored-licensed
+ * public/vendors/ convention VendorSprite.tsx has to fall back
+ * gracefully without.
  */
 const VENDOR_BG: Record<VendorId, string> = {
   blacksmith: './lore/vendors/blacksmith.jpg',
@@ -69,26 +75,28 @@ export function VendorsPanel() {
   }, [engine, tab]);
 
   return (
-    <>
-      <h2>Vendors</h2>
-      <p className="subtitle">Upgrades, stock, and Crafting all live on each vendor's own page now.</p>
+    <div className="vendor-scene" style={{ backgroundImage: `url(${VENDOR_BG[tab]})` }}>
+      <div className="vendor-scene-content">
+        <h2>Vendors</h2>
+        <p className="subtitle">Upgrades, stock, and Crafting all live on each vendor's own page now.</p>
 
-      <div className="row wrap" style={{ gap: 8, marginBottom: 14 }}>
-        {VENDORS.map((v) => (
-          <button
-            key={v.id}
-            className={`btn-subtab ${tab === v.id ? 'on' : ''} ${isTabUnread(engine.state, 'vendors', v.id) ? 'subtab-unread' : ''}`}
-            onClick={() => setTab(v.id)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            {v.name}
-            <ReputationRing goldSpent={engine.state.vendorGoldSpent[v.id]} size={18} />
-          </button>
-        ))}
+        <div className="row wrap" style={{ gap: 8, marginBottom: 14 }}>
+          {VENDORS.map((v) => (
+            <button
+              key={v.id}
+              className={`btn-subtab ${tab === v.id ? 'on' : ''} ${isTabUnread(engine.state, 'vendors', v.id) ? 'subtab-unread' : ''}`}
+              onClick={() => setTab(v.id)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              {v.name}
+              <ReputationRing goldSpent={engine.state.vendorGoldSpent[v.id]} size={18} />
+            </button>
+          ))}
+        </div>
+
+        {VENDORS.filter((v) => v.id === tab).map((v) => <VendorPage key={v.id} vendorId={v.id} />)}
       </div>
-
-      {VENDORS.filter((v) => v.id === tab).map((v) => <VendorPage key={v.id} vendorId={v.id} />)}
-    </>
+    </div>
   );
 }
 
@@ -166,71 +174,69 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
   }
 
   return (
-    <div className="vendor-scene" style={{ backgroundImage: `url(${VENDOR_BG[vendorId]})` }}>
-      <div className="vendor-scene-content">
-        <div className="card vendor-card" style={{ marginBottom: 12 }}>
-          <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
-            <VendorSprite vendor={vendorId} height={72} animate />
-            <div style={{ flex: 1 }}>
-              <div className="spread">
-                <span className="card-title row" style={{ gap: 6, alignItems: 'center' }}>
-                  {vendorDef.name}
-                  <ReputationRing goldSpent={state.vendorGoldSpent[vendorId]} size={22} />
-                </span>
-                <span className={`small muted ${levelPulses[`vendor:${vendorId}`] ? 'purchase-pulse' : ''}`}>Level {level}/{upgradeList.length}</span>
-              </div>
-              <p className="card-flavour">{vendorDef.blurb}</p>
-              <div className="row" style={{ gap: 8 }}>
-                <button
-                  className="btn-yellow"
-                  disabled={maxed || cost === null || state.gold < cost}
-                  onClick={() => engine.levelUpVendor(vendorId)}
-                >
-                  {maxed ? 'Nothing more to teach' : `Level up · ◆ ${formatGold(cost ?? 0)}`}
-                </button>
-                <button className="btn-purple" onClick={() => setShowCrafting(true)}>Crafting</button>
-                {/* Durability repair -- moved here from a per-item button
-                    buried in the Inventory tab, gear-specific so it only
-                    makes sense on the Blacksmith's own page. */}
-                {vendorId === 'blacksmith' && (
-                  <button className="btn-purple" onClick={() => setShowEnhance(true)}>Enhance</button>
-                )}
-                {/* Breaks an owned item down into Scrap instead of gold --
-                    its own dedicated station now (own background art),
-                    moved off the stash list the same way Enhance moved off
-                    the Inventory tab before it. */}
-                {vendorId === 'blacksmith' && (
-                  <button className="btn-purple" onClick={() => setShowScrap(true)}>Scrap</button>
-                )}
-                {/* Elemental infusion moved here entirely, split in two --
-                    Weapon Enchanting (weapons only) and Armour Infusion
-                    (everything else), both now living at the Enchanter
-                    rather than split across Blacksmith (apply) and
-                    Enchanter (craft the gem first, separately). Each is a
-                    single collapsed craft-then-apply action now -- see
-                    CraftingManager.craftAndInfuse. */}
-                {vendorId === 'enchanter' && (
-                  <button className="btn-purple" onClick={() => setShowWeaponEnchant(true)}>Weapon Enchanting</button>
-                )}
-                {vendorId === 'enchanter' && (
-                  <button className="btn-purple" onClick={() => setShowArmourInfusion(true)}>Armour Infusion</button>
-                )}
-              </div>
+    <>
+      <div className="card vendor-card" style={{ marginBottom: 12 }}>
+        <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
+          <VendorSprite vendor={vendorId} height={72} animate />
+          <div style={{ flex: 1 }}>
+            <div className="spread">
+              <span className="card-title row" style={{ gap: 6, alignItems: 'center' }}>
+                {vendorDef.name}
+                <ReputationRing goldSpent={state.vendorGoldSpent[vendorId]} size={22} />
+              </span>
+              <span className={`small muted ${levelPulses[`vendor:${vendorId}`] ? 'purchase-pulse' : ''}`}>Level {level}/{upgradeList.length}</span>
+            </div>
+            <p className="card-flavour">{vendorDef.blurb}</p>
+            <div className="row" style={{ gap: 8 }}>
+              <button
+                className="btn-yellow"
+                disabled={maxed || cost === null || state.gold < cost}
+                onClick={() => engine.levelUpVendor(vendorId)}
+              >
+                {maxed ? 'Nothing more to teach' : `Level up · ◆ ${formatGold(cost ?? 0)}`}
+              </button>
+              <button className="btn-purple" onClick={() => setShowCrafting(true)}>Crafting</button>
+              {/* Durability repair -- moved here from a per-item button
+                  buried in the Inventory tab, gear-specific so it only
+                  makes sense on the Blacksmith's own page. */}
+              {vendorId === 'blacksmith' && (
+                <button className="btn-purple" onClick={() => setShowEnhance(true)}>Enhance</button>
+              )}
+              {/* Breaks an owned item down into Scrap instead of gold --
+                  its own dedicated station now (own background art),
+                  moved off the stash list the same way Enhance moved off
+                  the Inventory tab before it. */}
+              {vendorId === 'blacksmith' && (
+                <button className="btn-purple" onClick={() => setShowScrap(true)}>Scrap</button>
+              )}
+              {/* Elemental infusion moved here entirely, split in two --
+                  Weapon Enchanting (weapons only) and Armour Infusion
+                  (everything else), both now living at the Enchanter
+                  rather than split across Blacksmith (apply) and
+                  Enchanter (craft the gem first, separately). Each is a
+                  single collapsed craft-then-apply action now -- see
+                  CraftingManager.craftAndInfuse. */}
+              {vendorId === 'enchanter' && (
+                <button className="btn-purple" onClick={() => setShowWeaponEnchant(true)}>Weapon Enchanting</button>
+              )}
+              {vendorId === 'enchanter' && (
+                <button className="btn-purple" onClick={() => setShowArmourInfusion(true)}>Armour Infusion</button>
+              )}
             </div>
           </div>
-          {vendorFlash && <MaxFlash key={vendorFlash.key} label={vendorFlash.name} onDone={() => dismiss(`vendor:${vendorId}`)} />}
         </div>
-
-        <div className="section-heading">Upgrades</div>
-        <div className="grid two">
-          {upgradeList.map((def, index) => (level >= index + 1 ? upgradeCard(def) : lockedCard(index + 1)))}
-        </div>
-
-        <div className="section-heading">Stock</div>
-        {vendorId === 'blacksmith' && <ArmourStock now={now} settings={settings} />}
-        {vendorId === 'alchemist' && <SuppliesStock />}
-        {vendorId === 'enchanter' && <BlackMarketStock now={now} />}
+        {vendorFlash && <MaxFlash key={vendorFlash.key} label={vendorFlash.name} onDone={() => dismiss(`vendor:${vendorId}`)} />}
       </div>
+
+      <div className="section-heading">Upgrades</div>
+      <div className="grid two">
+        {upgradeList.map((def, index) => (level >= index + 1 ? upgradeCard(def) : lockedCard(index + 1)))}
+      </div>
+
+      <div className="section-heading">Stock</div>
+      {vendorId === 'blacksmith' && <ArmourStock now={now} settings={settings} />}
+      {vendorId === 'alchemist' && <SuppliesStock />}
+      {vendorId === 'enchanter' && <BlackMarketStock now={now} />}
 
       {showCrafting && (
         <CraftingStation category={VENDOR_CRAFT_CATEGORY[vendorId]} onClose={() => setShowCrafting(false)} />
@@ -239,7 +245,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
       {showScrap && <ScrapStation onClose={() => setShowScrap(false)} />}
       {showWeaponEnchant && <WeaponEnchantStation onClose={() => setShowWeaponEnchant(false)} />}
       {showArmourInfusion && <ArmourInfusionStation onClose={() => setShowArmourInfusion(false)} />}
-    </div>
+    </>
   );
 }
 

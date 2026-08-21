@@ -2220,40 +2220,52 @@ input[type='range'] {
 }
 
 /*
- * Vendor page backdrop (patch 0242) -- one scene per vendor
+ * Vendor page backdrop (patch 0242, moved to wrap the whole Vendors page
+ * and made full-bleed in patch 0244) -- one scene per vendor
  * (Blacksmith/Alchemist/Enchanter), the same room each vendor's own
  * dedicated crafting/enhance/scrap stations already show in their own
- * modals (.craft-scene etc. below), now behind the vendor's whole page
- * too. Deliberately NOT the locked-aspect-ratio .craft-scene treatment --
- * that shape exists for pixel-perfect hit-targets landing on painted
- * frames, and this page has none: its height varies with content (a
- * short upgrade list vs. a big stock grid), so a locked ratio + 100%/100%
- * stretch would distort the art the moment content height doesn't match
- * the image's own ratio. Plain cover/center instead, same reasoning
- * .fund-guild-scene above already uses for its own no-hit-target
- * backdrop -- and the same translucent dark backing .fund-guild-content
- * uses over its own art, so cards/text on top stay legible regardless of
- * how bright a given vendor's room art is.
+ * modals (.craft-scene etc. below), now behind the entire Vendors page --
+ * header, tab row, and the active vendor's own content -- rather than
+ * just the sub-stations. Deliberately NOT the locked-aspect-ratio
+ * .craft-scene treatment -- that shape exists for pixel-perfect
+ * hit-targets landing on painted frames, and this page has none: its
+ * height varies with content (a short upgrade list vs. a big stock
+ * grid), so a locked ratio + 100%/100% stretch would distort the art the
+ * moment content height doesn't match the image's own ratio. Plain
+ * cover/center instead, same reasoning .fund-guild-scene above already
+ * uses for its own no-hit-target backdrop -- and the same translucent
+ * dark backing .fund-guild-content uses over its own art, so cards/text
+ * on top stay legible regardless of how bright a given vendor's room art
+ * is.
  *
- * `min-height: 100%` is load-bearing, not decorative -- without it this
- * div sizes to its own content only (the header card + upgrade grid +
- * stock list), which on a short page (few upgrades, small stock grid)
- * left a visible seam where the art just stopped partway down and the
- * plain panel backdrop showed through underneath -- the background
- * looked like it was painted onto the vendor-card specifically rather
- * than the page. `.panel` (this div's actual container -- VendorPage's
- * Fragment contributes no DOM node of its own, so .vendor-scene is a
- * direct child) gets a definite height from `.menu-body`'s `flex: 1`,
- * which is exactly why a plain `100%` here resolves correctly instead of
- * collapsing to 0 the way percentage heights usually do without a
- * definite ancestor. `min-` rather than a flat `height` so a genuinely
- * tall page (a big Stock grid) still grows the scene to match rather
- * than clipping it.
+ * Full-bleed via negative margin, not just `min-height: 100%` (patch
+ * 0242's first pass) -- `min-height: 100%` alone still left the plain
+ * .panel backdrop visible in .panel's own padding gutter (14px top,
+ * 16px sides, 24px bottom -- see .panel above) all the way around the
+ * scene, and above it entirely (the Vendors heading/subtitle/tab row
+ * weren't wrapped at all yet at that point), reported as "the background
+ * only applied to the card" and "still shows around the edges and the
+ * top of the page." Fixed by moving this wrapper up to the top of
+ * VendorsPanel() (now wraps literally everything .panel renders for this
+ * tab, keyed by the currently-open vendor) and cancelling .panel's own
+ * padding with an equal-and-opposite negative margin here, so the art
+ * itself reaches .panel's true edges on all four sides while
+ * `.vendor-scene-content` restores that same padding on top of it purely
+ * visually, keeping every child's on-screen position identical to
+ * before. `min-height: calc(100% + 38px)` is the same `min-height: 100%`
+ * reasoning as before (percentage resolves against .panel's own definite
+ * flex-derived height, via `.menu-body`'s `flex: 1`) plus the 14px+24px
+ * this rule's own negative top/bottom margin just pulled back in, so the
+ * scene's bottom edge still lands exactly on .panel's true bottom edge
+ * instead of stopping 38px short of it. `border-radius` dropped entirely
+ * now that the art bleeds flush to .panel's real boundary -- a rounded
+ * corner there would just re-open the exact gap this patch closes, at
+ * the four corners specifically.
  */
 .vendor-scene {
   position: relative;
-  min-height: 100%;
-  border-radius: 8px;
+  margin: -14px -16px -24px;
+  min-height: calc(100% + 38px);
   overflow: hidden;
   background-size: cover;
   background-position: top center;
@@ -2261,7 +2273,7 @@ input[type='range'] {
 }
 .vendor-scene-content {
   position: relative;
-  padding: 14px;
+  padding: 14px 16px 24px;
   background: color-mix(in srgb, var(--night) 45%, transparent);
 }
 

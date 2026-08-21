@@ -18822,3 +18822,48 @@ the scene to match instead of clipping it.
 **Scope:** one CSS rule, one file. Nothing else from patch 0242 needed
 touching -- `VendorsPanel.tsx`, `CraftingStation.tsx`, and all four art
 assets were already correct and are untouched here.
+
+### Vendor background still gapped at the edges and above the tab row (patch 0244)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed vendor backgrounds leaving a gap around the edges and above the tab row
+- The background now covers the entire Vendors page, edge to edge
+```
+
+Follow-up to patch 0243 -- reported again with a screenshot, red box drawn
+around exactly the area the new art *was* covering: `min-height: 100%`
+(0243) fixed the bottom of the page, but the plain panel backdrop was
+still visible in `.panel`'s own padding gutter all the way around the
+scene, and entirely above it -- the Vendors heading, subtitle, and tab
+row weren't wrapped in the scene at all, so they still sat on the
+default backdrop no matter which vendor was open.
+
+**Two changes, same root fix.** First, moved the `.vendor-scene` wrapper
+up from `VendorPage` to the top of `VendorsPanel()` itself, so it now
+wraps literally everything the Vendors tab renders -- heading, subtitle,
+tab row, and the active vendor's own page -- keyed by `tab` (the
+currently-open vendor) instead of `VendorPage`'s own `vendorId` prop,
+same value either way. Second, made the scene genuinely full-bleed: a
+negative margin (`-14px -16px -24px`) cancelling out `.panel`'s own
+padding exactly, so the art reaches `.panel`'s true edges on all four
+sides instead of stopping at the padding gutter, with
+`.vendor-scene-content` restoring that same padding purely visually on
+top of the now-edge-to-edge art -- every card and heading ends up in
+the exact same on-screen position as before, just with real art behind
+the gutter instead of the default backdrop. `min-height` adjusted from
+`100%` to `calc(100% + 38px)` (the 14px+24px the negative margin just
+pulled back in) so the bottom edge still lands exactly on `.panel`'s true
+bottom rather than stopping 38px short. Dropped `border-radius` --
+flush against `.panel`'s real boundary, a rounded corner would just
+reopen the same gap at the four corners specifically.
+
+**`VendorPage`'s own return is back to a plain Fragment** -- the
+`.vendor-scene`/`.vendor-scene-content` wrapper it briefly had in patch
+0242 moved up to its caller, so `VendorPage` itself no longer needs (or
+has) any background-related JSX at all.
+
+**No other files touched.** `CraftingStation.tsx` and all four art
+assets are untouched -- this was purely `VendorsPanel.tsx`'s component
+structure and `app.css`'s `.vendor-scene`/`.vendor-scene-content` rules.
