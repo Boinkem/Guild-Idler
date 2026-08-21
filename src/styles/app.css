@@ -2219,6 +2219,36 @@ input[type='range'] {
   border-left-color: var(--brass);
 }
 
+/*
+ * Vendor page backdrop (patch 0242) -- one scene per vendor
+ * (Blacksmith/Alchemist/Enchanter), the same room each vendor's own
+ * dedicated crafting/enhance/scrap stations already show in their own
+ * modals (.craft-scene etc. below), now behind the vendor's whole page
+ * too. Deliberately NOT the locked-aspect-ratio .craft-scene treatment --
+ * that shape exists for pixel-perfect hit-targets landing on painted
+ * frames, and this page has none: its height varies with content (a
+ * short upgrade list vs. a big stock grid), so a locked ratio + 100%/100%
+ * stretch would distort the art the moment content height doesn't match
+ * the image's own ratio. Plain cover/center instead, same reasoning
+ * .fund-guild-scene above already uses for its own no-hit-target
+ * backdrop -- and the same translucent dark backing .fund-guild-content
+ * uses over its own art, so cards/text on top stay legible regardless of
+ * how bright a given vendor's room art is.
+ */
+.vendor-scene {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  background-size: cover;
+  background-position: top center;
+  background-color: var(--night);
+}
+.vendor-scene-content {
+  position: relative;
+  padding: 14px;
+  background: color-mix(in srgb, var(--night) 45%, transparent);
+}
+
 .locked-upgrade {
   opacity: 0.5;
   border-style: dashed;
@@ -2870,6 +2900,24 @@ button.harvest-item:hover {
   position: relative;
   width: 100%;
   aspect-ratio: 1402 / 1122;
+  background-size: 100% 100%;
+  background-position: center;
+  background-color: var(--night);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* Alchemist's own crafting scene (patch 0242) -- Alchemist_Crafting_Box.png's
+   canvas (1277x1232) isn't the shared 1402:1122 ratio the other three
+   categories' art uses, so it needs its own aspect-ratio lock rather than
+   reusing .craft-scene directly, same shape as .armor-infusion-scene /
+   .hatchery-select-scene below already use when their own art's ratio
+   didn't match either. Slot rects (SLOT_RECTS.consumable in
+   CraftingStation.tsx) are hand-measured against this exact canvas. */
+.consumable-scene {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1277 / 1232;
   background-size: 100% 100%;
   background-position: center;
   background-color: var(--night);

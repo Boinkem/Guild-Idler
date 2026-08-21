@@ -35,6 +35,19 @@ const STATION_TITLE: Record<Category, string> = {
   gear: 'Crafting', consumable: 'Supplies', enchant: 'Enchanting', gem: 'Gems',
 };
 
+/**
+ * Which locked-aspect-ratio CSS class each category's scene uses (patch
+ * 0242) -- gear/enchant/gem still share .craft-scene's 1402:1122 canvas,
+ * but consumable moved to its own differently-shaped art
+ * (Alchemist_Crafting_Box.png, 1277x1232) and needs its own class
+ * (.consumable-scene, app.css) with a matching aspect-ratio, same
+ * pattern .armor-infusion-scene/.hatchery-select-scene already use for
+ * their own off-ratio art.
+ */
+const SCENE_CLASS: Record<Category, string> = {
+  gear: 'craft-scene', consumable: 'consumable-scene', enchant: 'craft-scene', gem: 'craft-scene',
+};
+
 export interface Rect { left: number; top: number; width: number; height: number; }
 
 /**
@@ -53,9 +66,15 @@ const SLOT_RECTS: Record<Category, { top: Rect; bottomLeft: Rect; bottomRight: R
     bottomRight: { left: 53.9, top: 53.1, width: 15.4, height: 19.3 },
   },
   consumable: {
-    top: { left: 41.4, top: 18.5, width: 16.5, height: 21.0 },
-    bottomLeft: { left: 26.5, top: 52.0, width: 16.0, height: 20.3 },
-    bottomRight: { left: 57.1, top: 52.0, width: 16.0, height: 20.3 },
+    // Hand-measured against Alchemist_Crafting_Box.png's own 1277x1232
+    // canvas (patch 0242) -- replaced the old transparent-square art, so
+    // these four numbers per slot moved too, same as any other art swap
+    // here would require. See .consumable-scene in app.css for why this
+    // category gets its own aspect-ratio lock instead of reusing
+    // .craft-scene's shared 1402:1122 one.
+    top: { left: 40.80, top: 24.68, width: 15.51, height: 19.00 },
+    bottomLeft: { left: 30.00, top: 46.51, width: 18.01, height: 18.34 },
+    bottomRight: { left: 51.92, top: 46.51, width: 18.01, height: 18.34 },
   },
   enchant: {
     top: { left: 42.3, top: 24.5, width: 16.8, height: 21.8 },
@@ -67,7 +86,13 @@ const SLOT_RECTS: Record<Category, { top: Rect; bottomLeft: Rect; bottomRight: R
   // the only choice this category needs), so bottomLeft/bottomRight here
   // are never actually shown; kept centered as a harmless placeholder
   // rather than omitted, since the Record type requires all three either
-  // way. Reuses consumable's top rect pending real commissioned art.
+  // way. These numbers were originally a copy of consumable's own rect as
+  // a stand-in pending real commissioned art -- left as literal values
+  // rather than a live reference, since patch 0242 moved consumable onto
+  // its own differently-shaped art/aspect-ratio (Alchemist_Crafting_Box.png,
+  // 1277x1232) while gem.jpg is still on the original shared 1402x1122
+  // canvas every other .craft-scene category uses. Re-measure properly
+  // once gem gets its own commissioned art.
   gem: {
     top: { left: 41.4, top: 18.5, width: 16.5, height: 21.0 },
     bottomLeft: { left: 26.5, top: 52.0, width: 16.0, height: 20.3 },
@@ -452,7 +477,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
   );
 
   const scene = (
-    <div className="craft-scene" style={{ backgroundImage: `url(${STATION_BG[category]})` }}>
+    <div className={SCENE_CLASS[category]} style={{ backgroundImage: `url(${STATION_BG[category]})` }}>
       <SlotBox
         rect={rects.top}
         filled={topFilled}

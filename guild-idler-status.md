@@ -18716,3 +18716,76 @@ own unrevealed loot.
 roll/price/window logic directly via a standalone script against real
 game data (not just typechecked) -- see the sample roster output and
 price comparisons above.
+
+### Vendor art pass: a background scene for every vendor page, plus a real Alchemist Crafting frame (patch 0242)
+
+```discord-update
+Dev Update | Vendor Backgrounds
+
+- Added a dedicated background scene to every vendor's page -- Blacksmith, Alchemist, Enchanter
+- Replaced the Alchemist's Crafting frame art so it finally matches the Blacksmith/Enchanter's own framed look
+- No gameplay changes -- pure art pass
+```
+
+New commissioned art, four images: a whole-page backdrop each for Blacksmith,
+Alchemist, and Enchanter (previously plain, no art at all behind the vendor
+page itself -- only their crafting/enhance/scrap sub-stations had dedicated
+scenes), plus a replacement for the Alchemist's own Crafting frame so its
+three material slots finally sit inside a proper gold frame matching the
+Blacksmith's riveted-metal one and the Enchanter's own, instead of the
+plainer box it had before.
+
+**Two different visual treatments, on purpose.** The existing crafting/
+enhance/scrap sub-stations (`CraftingStation.tsx` and its four siblings)
+use `.craft-scene`'s locked-`aspect-ratio` + `background-size: 100% 100%`
+approach because they have invisible hit-targets that must land on
+specific painted pixels -- percent-based `SLOT_RECTS`, hand-measured
+against each image's own exact canvas. A vendor's whole page has no such
+hit-targets and no fixed height (a long upgrade list or a big stock grid
+grows it arbitrarily), so stretching a locked-ratio image to fill that
+would distort it the moment the content's own height stops matching the
+art's ratio. New `.vendor-scene`/`.vendor-scene-content` classes instead
+use `background-size: cover` with a translucent dark backing over the
+content -- same shape `.fund-guild-scene`/`.fund-guild-content` already
+established (patch 0220) for exactly this "no hit-targets, arbitrary
+height" case.
+
+**`VendorsPanel.tsx`:** new `VENDOR_BG` map (`blacksmith`/`alchemist`/
+`enchanter` -> `./lore/vendors/*.jpg`), `VendorPage`'s whole return now
+wrapped in `.vendor-scene` (backgroundImage set per `vendorId`) with a
+`.vendor-scene-content` inner wrapper holding everything that used to be
+the bare top-level fragment -- header card, Upgrades grid, Stock list.
+The five station-modal renders (Crafting/Enhance/Scrap/Weapon Enchanting/
+Armour Infusion) stay siblings of that content div rather than inside
+it, same as before -- doesn't matter either way since `.overlay` is
+`position: fixed`, but keeps the new wrapper scoped to only the parts
+that actually need the backdrop treatment.
+
+**Alchemist Crafting frame swap (`consumable.jpg`):** the new art's
+canvas (1277x1232) isn't the 1402x1122 ratio the other three categories
+(`gear`/`enchant`/`gem`) share, so it needed its own CSS class rather
+than reusing `.craft-scene` -- new `.consumable-scene` in app.css, same
+shape as `.armor-infusion-scene`/`.hatchery-select-scene` already use for
+their own off-ratio art. `CraftingStation.tsx` gained a `SCENE_CLASS`
+map so the scene `<div>` picks the right class per category instead of a
+hardcoded `"craft-scene"`. `SLOT_RECTS.consumable`'s four numbers per
+slot were re-measured from scratch against the new canvas (connected-
+component analysis on the art's own gold border pixels, not eyeballed) --
+old percentages would've pointed at empty brick wall on the new image.
+`gem`'s own placeholder rect (still borrowing consumable's *old* numbers,
+pending its own commissioned art) was deliberately left untouched --
+`gem.jpg` is still on the original 1402x1122 canvas, so it would have
+been actively wrong to carry consumable's new numbers over; its comment
+was updated to say so explicitly rather than silently going stale.
+
+**No gameplay/state changes** -- pure art plus the CSS/measurement work
+needed to hang it correctly. No `GameState` fields, no save migration,
+no `SAVE_VERSION` bump.
+
+**Not yet verified** against a live `vite build` in this environment --
+new binary assets plus the `SLOT_RECTS`/CSS-class changes are template-
+literal/JSX edits only (`className={SCENE_CLASS[category]}` instead of a
+hardcoded string), same low compile-risk shape as prior art-only passes,
+but worth an actual build/visual pass before merge to confirm the new
+Alchemist slot rects land exactly where they look right in a live
+browser, not just against the static art in isolation.
