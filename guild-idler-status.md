@@ -18406,3 +18406,54 @@ verified via `node --check` on both `server.mjs` and `app.js` (no live
 devtool server available in this environment to check the actual
 rendered form, same limitation prior DevTool-touching patches have
 noted).
+
+### DevTool: raid encounters can now edit their own elemental tags (patch 0238)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Raid encounters' elemental weakness, attack type, and immunity tags are now editable right in the DevTool
+- No more hand-editing raid-encounters.json to tag a boss's fire weakness or frost immunity
+```
+
+Closes a known gap flagged all the way back in the original elemental-
+infusion patch and again in patch 0236's raid-weakness review: `vulnerableTo`/
+`dealsElement`/`immuneTo` on `RaidEncounterDef` were real, load-bearing
+fields (RaidManager.elementalBonus reads them for a genuine success-chance
+bonus, and patch 0236 finally surfaced them in the UI) but had no DevTool
+support at all -- the 6 currently-tagged encounters were all edited
+directly in the JSON, and tagging the other 16 meant doing the same.
+
+**New `elementList` field type**, added to the DevTool's generic schema
+system alongside the existing `modKeyList`/`statKeyList`/`questTagList`
+(same "a `string[]` validated against a fixed key set" shape, reusing the
+already-shared `listInput` renderer -- no new UI component needed).
+Unlike `questTagList`, which requires at least one tag, `elementList` is
+legitimately empty on most entries (same optional shape `loot`/`eggLoot`
+already have on this exact schema) -- per the original ask that elemental
+tagging stay a curated exception, not mandatory on every encounter.
+
+`raid-encounters`' schema gained all three fields (`vulnerableTo`,
+`dealsElement`, `immuneTo`), each a `string[]` of `fire`/`frost`/
+`lightning`/`poison`, validated server-side against the same `ELEMENT_KEYS`
+constant `resultGem`'s `element` sub-field already uses.
+
+Nothing on the `equipment` schema changed -- `elementalDamage`/
+`elementalResist`/`elementalDamageTier` live on `EquipmentItem` (a
+specific owned instance, set by infusion at runtime), never on
+`EquipmentDef` (the template this schema actually edits), so there was
+never anything there for a schema editor to expose in the first place.
+The original "known gap" note conflated the two; this patch only touches
+the raid-encounters side, which was the real, fixable gap.
+
+Verified directly against the running DevTool server, not just read
+through: `/api/schema` reflects all three new fields on `raid-encounters`;
+all 6 already-tagged encounters round-trip their existing tags correctly
+through `/api/data/raid-encounters`; a valid new tag saves successfully;
+an invalid element value (`"not_a_real_element"`) is correctly rejected
+with a clear per-field error message. Test writes cleaned up afterward,
+not left in the real content file.
+
+`node --check` passes on both `server.mjs` and `app.js`; `npx tsc --noEmit`
+and `vite build` both still pass clean (this patch touches no TypeScript
+source, DevTool-only).

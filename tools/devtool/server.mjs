@@ -794,6 +794,23 @@ const SCHEMAS = {
       // same as loot's own original pre-picker form. See
       // parseEggLootEntry in raids.ts for exactly how this is read.
       eggLoot: { type: 'string[]', required: false },
+      // Elemental weakness/attack-type/immunity tags -- read by
+      // RaidManager.elementalBonus (via the shared elementalBonusForHero,
+      // data/elements.ts) for a real success-chance bonus, but previously
+      // only settable by hand-editing this JSON file directly (flagged as
+      // a known DevTool gap in the original elemental-infusion patch).
+      // Same optional, legitimately-empty shape as loot/eggLoot above --
+      // most encounters carry none of these, per the original ask that
+      // elemental tagging be a curated exception, not mandatory on every
+      // encounter.
+      vulnerableTo: { type: 'elementList', required: false },
+      dealsElement: { type: 'elementList', required: false },
+      // Raid-only (no QuestOffer equivalent) -- nullifies vulnerableTo's
+      // weapon-side bonus specifically for this encounter, doesn't touch
+      // armor resist. See EncounterElementTags in RaidsPanel.tsx for how
+      // this reads in the UI ("a fire dragon, immune to fire damage" was
+      // the motivating example).
+      immuneTo: { type: 'elementList', required: false },
     },
   },
   'peddler-cards': {
@@ -1325,6 +1342,17 @@ function validateEntry(schema, entry, index) {
       case 'questTagList':
         if (!Array.isArray(value) || value.length === 0 || value.some((v) => !QUEST_TAG_KEYS.includes(v))) {
           errors.push(`entry ${index}: "${key}" must be a non-empty list containing only ${QUEST_TAG_KEYS.join(', ')}`);
+        }
+        break;
+      case 'elementList':
+        // vulnerableTo/dealsElement/immuneTo on raid-encounters -- same
+        // "optional, legitimately empty" shape modKeyList/statKeyList
+        // already have (most encounters carry no tags at all, see this
+        // schema's own field comments), unlike questTagList's non-empty
+        // requirement just above. Reuses ELEMENT_KEYS, the same 4-value
+        // list resultGem's element sub-field already validates against.
+        if (!Array.isArray(value) || value.some((v) => !ELEMENT_KEYS.includes(v))) {
+          errors.push(`entry ${index}: "${key}" must only contain ${ELEMENT_KEYS.join(', ')}`);
         }
         break;
       case 'roleFlavors':

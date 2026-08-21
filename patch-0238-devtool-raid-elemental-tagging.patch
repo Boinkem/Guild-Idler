@@ -1,0 +1,135 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index d0d45ea..495524d 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -18406,3 +18406,54 @@ verified via `node --check` on both `server.mjs` and `app.js` (no live
+ devtool server available in this environment to check the actual
+ rendered form, same limitation prior DevTool-touching patches have
+ noted).
++
++### DevTool: raid encounters can now edit their own elemental tags (patch 0238)
++
++```discord-update
++Dev Update | Bug Fix
++
++- Raid encounters' elemental weakness, attack type, and immunity tags are now editable right in the DevTool
++- No more hand-editing raid-encounters.json to tag a boss's fire weakness or frost immunity
++```
++
++Closes a known gap flagged all the way back in the original elemental-
++infusion patch and again in patch 0236's raid-weakness review: `vulnerableTo`/
++`dealsElement`/`immuneTo` on `RaidEncounterDef` were real, load-bearing
++fields (RaidManager.elementalBonus reads them for a genuine success-chance
++bonus, and patch 0236 finally surfaced them in the UI) but had no DevTool
++support at all -- the 6 currently-tagged encounters were all edited
++directly in the JSON, and tagging the other 16 meant doing the same.
++
++**New `elementList` field type**, added to the DevTool's generic schema
++system alongside the existing `modKeyList`/`statKeyList`/`questTagList`
++(same "a `string[]` validated against a fixed key set" shape, reusing the
++already-shared `listInput` renderer -- no new UI component needed).
++Unlike `questTagList`, which requires at least one tag, `elementList` is
++legitimately empty on most entries (same optional shape `loot`/`eggLoot`
++already have on this exact schema) -- per the original ask that elemental
++tagging stay a curated exception, not mandatory on every encounter.
++
++`raid-encounters`' schema gained all three fields (`vulnerableTo`,
++`dealsElement`, `immuneTo`), each a `string[]` of `fire`/`frost`/
++`lightning`/`poison`, validated server-side against the same `ELEMENT_KEYS`
++constant `resultGem`'s `element` sub-field already uses.
++
++Nothing on the `equipment` schema changed -- `elementalDamage`/
++`elementalResist`/`elementalDamageTier` live on `EquipmentItem` (a
++specific owned instance, set by infusion at runtime), never on
++`EquipmentDef` (the template this schema actually edits), so there was
++never anything there for a schema editor to expose in the first place.
++The original "known gap" note conflated the two; this patch only touches
++the raid-encounters side, which was the real, fixable gap.
++
++Verified directly against the running DevTool server, not just read
++through: `/api/schema` reflects all three new fields on `raid-encounters`;
++all 6 already-tagged encounters round-trip their existing tags correctly
++through `/api/data/raid-encounters`; a valid new tag saves successfully;
++an invalid element value (`"not_a_real_element"`) is correctly rejected
++with a clear per-field error message. Test writes cleaned up afterward,
++not left in the real content file.
++
++`node --check` passes on both `server.mjs` and `app.js`; `npx tsc --noEmit`
++and `vite build` both still pass clean (this patch touches no TypeScript
++source, DevTool-only).
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index 0de0629..f4f953d 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -622,7 +622,7 @@ function fieldControl(spec, key, value) {
+     const opts = spec.options.map((o) => `<option value="${o}" ${o === value ? 'selected' : ''}>${o}</option>`).join('');
+     return `<select id="${id}">${opts}</select>`;
+   }
+-  if (spec.type === 'string[]' || spec.type === 'modKeyList' || spec.type === 'statKeyList' || spec.type === 'questTagList') {
++  if (spec.type === 'string[]' || spec.type === 'modKeyList' || spec.type === 'statKeyList' || spec.type === 'questTagList' || spec.type === 'elementList') {
+     return listInput(id, value ?? []);
+   }
+   if (spec.type === 'boolean') {
+@@ -2035,7 +2035,7 @@ function readField(spec, key) {
+   if (spec.type === 'string' || spec.type === 'enum') return el.value;
+   if (spec.type === 'number') return parseFloat(el.value) || 0;
+   if (spec.type === 'boolean') return el.checked;
+-  if (spec.type === 'string[]' || spec.type === 'modKeyList' || spec.type === 'statKeyList' || spec.type === 'questTagList') {
++  if (spec.type === 'string[]' || spec.type === 'modKeyList' || spec.type === 'statKeyList' || spec.type === 'questTagList' || spec.type === 'elementList') {
+     return [...el.querySelectorAll('[data-list-item]')].map((i) => i.value.trim()).filter(Boolean);
+   }
+   if (['mods', 'stats', 'materials', 'roleRequirements', 'effect', 'eventEffects'].includes(spec.type)) {
+@@ -2118,6 +2118,7 @@ function openEditor(index) {
+       ${spec.type === 'modKeyList' ? `<div class="hint">One per line, must be one of: ${MOD_KEYS.join(', ')}</div>` : ''}
+       ${spec.type === 'statKeyList' ? `<div class="hint">One per line, must be one of: ${STAT_KEYS.join(', ')}</div>` : ''}
+       ${spec.type === 'questTagList' ? `<div class="hint">One per line, must be one of: ${QUEST_TAG_KEYS.join(', ')}. At least one required.</div>` : ''}
++      ${spec.type === 'elementList' ? `<div class="hint">One per line, must be one of: ${ELEMENT_KEYS.join(', ')}. Leave empty for no tag -- most encounters carry none.</div>` : ''}
+     </div>
+   `).join('');
+ 
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index c029a4f..423b5cb 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -794,6 +794,23 @@ const SCHEMAS = {
+       // same as loot's own original pre-picker form. See
+       // parseEggLootEntry in raids.ts for exactly how this is read.
+       eggLoot: { type: 'string[]', required: false },
++      // Elemental weakness/attack-type/immunity tags -- read by
++      // RaidManager.elementalBonus (via the shared elementalBonusForHero,
++      // data/elements.ts) for a real success-chance bonus, but previously
++      // only settable by hand-editing this JSON file directly (flagged as
++      // a known DevTool gap in the original elemental-infusion patch).
++      // Same optional, legitimately-empty shape as loot/eggLoot above --
++      // most encounters carry none of these, per the original ask that
++      // elemental tagging be a curated exception, not mandatory on every
++      // encounter.
++      vulnerableTo: { type: 'elementList', required: false },
++      dealsElement: { type: 'elementList', required: false },
++      // Raid-only (no QuestOffer equivalent) -- nullifies vulnerableTo's
++      // weapon-side bonus specifically for this encounter, doesn't touch
++      // armor resist. See EncounterElementTags in RaidsPanel.tsx for how
++      // this reads in the UI ("a fire dragon, immune to fire damage" was
++      // the motivating example).
++      immuneTo: { type: 'elementList', required: false },
+     },
+   },
+   'peddler-cards': {
+@@ -1327,6 +1344,17 @@ function validateEntry(schema, entry, index) {
+           errors.push(`entry ${index}: "${key}" must be a non-empty list containing only ${QUEST_TAG_KEYS.join(', ')}`);
+         }
+         break;
++      case 'elementList':
++        // vulnerableTo/dealsElement/immuneTo on raid-encounters -- same
++        // "optional, legitimately empty" shape modKeyList/statKeyList
++        // already have (most encounters carry no tags at all, see this
++        // schema's own field comments), unlike questTagList's non-empty
++        // requirement just above. Reuses ELEMENT_KEYS, the same 4-value
++        // list resultGem's element sub-field already validates against.
++        if (!Array.isArray(value) || value.some((v) => !ELEMENT_KEYS.includes(v))) {
++          errors.push(`entry ${index}: "${key}" must only contain ${ELEMENT_KEYS.join(', ')}`);
++        }
++        break;
+       case 'roleFlavors':
+       case 'roleDescriptions':
+         // Every class needs a name for all 3 roles (the native role's own

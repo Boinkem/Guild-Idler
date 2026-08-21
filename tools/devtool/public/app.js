@@ -622,7 +622,7 @@ function fieldControl(spec, key, value) {
     const opts = spec.options.map((o) => `<option value="${o}" ${o === value ? 'selected' : ''}>${o}</option>`).join('');
     return `<select id="${id}">${opts}</select>`;
   }
-  if (spec.type === 'string[]' || spec.type === 'modKeyList' || spec.type === 'statKeyList' || spec.type === 'questTagList') {
+  if (spec.type === 'string[]' || spec.type === 'modKeyList' || spec.type === 'statKeyList' || spec.type === 'questTagList' || spec.type === 'elementList') {
     return listInput(id, value ?? []);
   }
   if (spec.type === 'boolean') {
@@ -2035,7 +2035,7 @@ function readField(spec, key) {
   if (spec.type === 'string' || spec.type === 'enum') return el.value;
   if (spec.type === 'number') return parseFloat(el.value) || 0;
   if (spec.type === 'boolean') return el.checked;
-  if (spec.type === 'string[]' || spec.type === 'modKeyList' || spec.type === 'statKeyList' || spec.type === 'questTagList') {
+  if (spec.type === 'string[]' || spec.type === 'modKeyList' || spec.type === 'statKeyList' || spec.type === 'questTagList' || spec.type === 'elementList') {
     return [...el.querySelectorAll('[data-list-item]')].map((i) => i.value.trim()).filter(Boolean);
   }
   if (['mods', 'stats', 'materials', 'roleRequirements', 'effect', 'eventEffects'].includes(spec.type)) {
@@ -2118,6 +2118,7 @@ function openEditor(index) {
       ${spec.type === 'modKeyList' ? `<div class="hint">One per line, must be one of: ${MOD_KEYS.join(', ')}</div>` : ''}
       ${spec.type === 'statKeyList' ? `<div class="hint">One per line, must be one of: ${STAT_KEYS.join(', ')}</div>` : ''}
       ${spec.type === 'questTagList' ? `<div class="hint">One per line, must be one of: ${QUEST_TAG_KEYS.join(', ')}. At least one required.</div>` : ''}
+      ${spec.type === 'elementList' ? `<div class="hint">One per line, must be one of: ${ELEMENT_KEYS.join(', ')}. Leave empty for no tag -- most encounters carry none.</div>` : ''}
     </div>
   `).join('');
 
