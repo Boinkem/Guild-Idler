@@ -1,0 +1,484 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 61ca60a..4bf3fcd 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -18613,3 +18613,106 @@ are affected.
+ this environment -- pure JSON content change (two new consumables, two
+ corrected id references), no TypeScript touched, same low-risk shape as
+ patch 0234's own JSON-only additions.
++
++### Vendor stock now scales with the hero roster: level range, real rolls, and level-scaled pricing (patch 0241)
++
++```discord-update
++Dev Update | Vendor Stock Rework
++
++- Fixed a real bug: some Blacksmith/Black Market items were secretly selling with zero stats
++- The Blacksmith's stock now spans a range across your whole roster's levels, not just a flat cap off your strongest hero
++- Gear bought from the Blacksmith or Black Market now rolls real, randomised stats -- same system quest and raid loot already use
++- Prices on rolled items now scale up with the level they're rolled at
++```
++
++Direct question: did the hero-level procedural loot rework (patch 0214)
++ever reach the Shop/Black Market, or did vendors stay on the old system?
++Reviewed and confirmed: it never touched vendors at all, and reviewing it
++surfaced a real, active bug alongside the gap.
++
++**The bug, found during review, not reported directly.** `EquipmentManager
++.instantiate()` only rolls real mods/stats for a procedural-template item
++(the 22 blank-`mods`/blank-`stats` defs patch 0214 introduced) when a
++`roll` object is passed in. Neither `ShopManager.buyEquipment` nor
++`buyBlackMarketEquipment` ever passed one -- so any of those 22 templates
++that made it into Shop or Black Market stock (a normal ~24% of the
++eligible pool, picked the same weighted way as every other item) sold as
++a completely blank, statless item. Silent, no error, no crash -- just an
++item with nothing on it.
++
++**The gap.** `ShopManager.rollEquipment` filtered eligible stock by a
++single flat ceiling, `topLevel + 4` (topLevel = the guild's single
++*highest*-level hero, no floor at all) -- unrelated to how quest/raid
++loot now works, where itemLevel rolls near the specific hero being sent,
++with real procedural variance. A guild with a wide level spread (say,
++heroes 5 through 30) saw every shop slot's eligibility capped at the
++*same* 34, with nothing pulling low-level stock toward a newer hero's
++actual level either.
++
++**Fix, per direct design ask ("levels in the range across all your
++heroes, with some variance").** New `ShopManager.heroLevelWindow(state)`:
++`[min(hero levels) - shop.levelVariance, max(hero levels) + shop.
++levelVariance]`, clamped to [1, 55] (variance defaults to 4, tuning-
++registry entry, same magnitude as the old implicit +4). `rollEquipment`
++now rolls each of its 5 slots an independent target itemLevel inside that
++window, then filters/weights eligible defs against that slot's own
++level rather than one shared ceiling for the whole stock -- a wide
++roster now genuinely sees a wide spread of stock, confirmed at runtime
++(a 5/12/30 roster rolled itemLevels 5/7/9/10/21 against a [1,34] window
++in one sample run, not clustered at the top).
++
++**Black Market deliberately NOT folded into the same roster-range logic.**
++Its own existing code comment is explicit: "the point of the black
++market is gear worth aspiring to, not gear you can use today" -- pulling
++it into heroLevelWindow would have quietly reversed that stated design.
++Left its eligibility exactly as-is (rare/epic/legendary only, no level
++filter at all); it still needed *an* itemLevel for the roll/price fix
++below, so `refreshBlackMarket` now rolls each pick at the item's own
++authored `reqLevel` specifically -- enough to fix the statless-item bug
++and price it correctly, without touching what makes the Black Market the
++Black Market.
++
++**Rolling itself.** `EquipmentManager.instantiate` was already fully
++correct -- QuestManager/RaidManager have called it properly with a roll
++for two patches now. The fix is entirely on the caller side: new
++`ShopManager.purchaseRoll(entry, uid)` builds the same `{itemLevel,
++sourceTag: 'normal', rng}` shape at purchase time (fresh RNG per buy, not
++the deterministic per-window stock RNG -- a bought slot is immediately
++removed from stock, there's nothing to keep reproducible), and both buy
++functions now pass it through. `entry.itemLevel` falls back to the def's
++own `reqLevel` for a stock entry generated before this patch (`ShopStock.
++equipment`'s new `itemLevel` field is optional for exactly that reason --
++stock fully regenerates every 4h/16h window regardless, no save
++migration needed).
++
++**Pricing, per direct ask ("cost should increase as the level requirement
++does").** `EquipmentManager.shopPrice(def, itemLevel?)` -- a hand-
++authored fixed-stat item (or any call with no itemLevel) is completely
++unaffected, same flat `value * 1.15` as always, since its power never
++moves. A procedural template WITH an itemLevel now prices off a new
++`shop.baseValuePerLevel * RARITY_PRICE_MULT[rarity] * (1 + itemLevel *
++shop.valueGrowthPerLevelPercent / 100)` curve instead of its own stale
++`value` -- necessary because a template's authored value is anchored to
++its own low base reqLevel (`wooden_sword` is 2 gold), so once itemLevel
++decouples the item's real rolled power from that base, pricing off the
++old value would badly undersell it. Verified directly: `wooden_sword`
++(common) prices at 36g rolled at level 1 vs 317g at level 40; `heart_of_
++the_mountain` (legendary, base reqLevel 30) prices at 7820g at its own
++base level vs 13570g rolled up to 55 -- same order of magnitude as this
++game's existing hand-authored value spread (level-55 legendaries
++currently run 17500-40000g), close enough as a first-pass number, not
++exact by design (three new tuning entries, all independently retunable
++later same as everywhere else in this registry).
++
++**UI (`VendorsPanel.tsx`).** `EquipmentShopCard` now shows the stock
++entry's own rolled `itemLevel` instead of `def.reqLevel` (falls back to
++reqLevel for a pre-patch entry). A procedural pick's detail modal no
++longer shows an empty "No bonuses" stat row (which read as a broken
++item) -- shows "Stats roll when purchased, scaled to level N" instead,
++same honest-about-randomness framing quest offers already use for their
++own unrevealed loot.
++
++`npx tsc --noEmit` and `vite build` both pass clean. Verified the actual
++roll/price/window logic directly via a standalone script against real
++game data (not just typechecked) -- see the sample roster output and
++price comparisons above.
+diff --git a/src/game/data/json/tuning.json b/src/game/data/json/tuning.json
+index b3c1547..6d62559 100644
+--- a/src/game/data/json/tuning.json
++++ b/src/game/data/json/tuning.json
+@@ -1187,6 +1187,35 @@
+     "max": 50,
+     "description": "How many recently-sold items the Blacksmith's buyback list remembers at once -- oldest entry drops off (sold for good, no longer reversible) once a new sale would exceed this."
+   },
++  {
++    "id": "shop.levelVariance",
++    "label": "Shop: level roll variance",
++    "category": "shop",
++    "value": 4,
++    "default": 4,
++    "min": 0,
++    "max": 20,
++    "description": "How far above the guild's highest hero level (and below its lowest) each Blacksmith/Black Market slot's rolled item level can land -- see ShopManager.rollEquipment/refreshBlackMarket. Was an implicit topLevel+4 ceiling with no floor at all before patch 0241; now a real window spanning the whole roster's level range plus this much variance on either end."
++  },
++  {
++    "id": "shop.baseValuePerLevel",
++    "label": "Shop: procedural item base value",
++    "category": "shop",
++    "value": 25,
++    "default": 25,
++    "min": 0,
++    "description": "Base gold reference (before rarity/level scaling) used to price a procedural-template shop pick -- see EquipmentManager.shopPrice. Only applies to the 22 blank procedural templates (isProceduralTemplate); hand-authored fixed-stat items keep pricing off their own authored `value` unchanged, since their power never moves. First-pass number, tunable like everything else here."
++  },
++  {
++    "id": "shop.valueGrowthPerLevelPercent",
++    "label": "Shop: procedural item value growth per level (%)",
++    "category": "shop",
++    "value": 25,
++    "default": 25,
++    "min": 0,
++    "max": 200,
++    "description": "How much a procedural-template shop pick's price grows per point of its own rolled itemLevel -- e.g. at the default 25%, a level-40 roll prices at 1+40*0.25=11x the base. Deliberately steep: a procedural template's own authored `value` is anchored to its low base reqLevel (a wooden_sword is 2 gold), so once itemLevel decouples its real rolled power from that base, price needs to track itemLevel directly rather than the now-irrelevant base value. First-pass number."
++  },
+   {
+     "id": "quest.dailyBurstBonusGold",
+     "label": "Quests: daily first-burst guaranteed gold",
+diff --git a/src/game/managers/EquipmentManager.ts b/src/game/managers/EquipmentManager.ts
+index c41e1ee..631e4f3 100644
+--- a/src/game/managers/EquipmentManager.ts
++++ b/src/game/managers/EquipmentManager.ts
+@@ -158,7 +158,30 @@ export const EquipmentManager = {
+     return Math.max(1, Math.round(base * (1 + bonusPercent / 100)));
+   },
+ 
+-  shopPrice(def: EquipmentDef): number {
++  /**
++   * `itemLevel`, patch 0241 -- the target power level this Shop/Black
++   * Market slot was rolled against (see ShopManager.rollEquipment/
++   * refreshBlackMarket). Only changes anything for a procedural template
++   * (isProceduralTemplate(def)): its own authored `value` is anchored to
++   * its low base reqLevel (a wooden_sword's `value` is 2 gold), so once
++   * itemLevel decouples the item's real rolled power from that base --
++   * the whole point of rolling it fresh rather than selling the bare
++   * template -- pricing off the stale base value would badly undersell
++   * it. Priced instead off a level+rarity baseline
++   * (shop.baseValuePerLevel * RARITY_PRICE_MULT * a per-level growth
++   * curve) that tracks the actual rolled power, ignoring `value`
++   * entirely for this case. A hand-authored fixed-stat item (or any call
++   * with no itemLevel, e.g. sell/repair pricing elsewhere reusing this
++   * same function) is completely unaffected -- its power never moves, so
++   * its existing authored `value` stays the only signal that matters,
++   * same formula as before this patch.
++   */
++  shopPrice(def: EquipmentDef, itemLevel?: number): number {
++    if (itemLevel !== undefined && isProceduralTemplate(def)) {
++      const base = Tuning.get('shop.baseValuePerLevel') * RARITY_PRICE_MULT[def.rarity]
++        * (1 + itemLevel * Tuning.get('shop.valueGrowthPerLevelPercent') / 100);
++      return Math.ceil(base * 1.15);
++    }
+     return Math.ceil(def.value * 1.15);
+   },
+ 
+diff --git a/src/game/managers/ShopManager.ts b/src/game/managers/ShopManager.ts
+index 406a5c7..1b78ff4 100644
+--- a/src/game/managers/ShopManager.ts
++++ b/src/game/managers/ShopManager.ts
+@@ -29,12 +29,41 @@ export const ShopManager = {
+     return now - state.shop.refreshedAt >= SHOP_REFRESH_MS;
+   },
+ 
++  /**
++   * The level window Blacksmith/Black Market rolls draw from -- patch
++   * 0241, replacing the old `topLevel + 4` ceiling-only cap (single
++   * highest hero, no floor at all) with a real window spanning the whole
++   * roster's level range, plus shop.levelVariance on either end. A guild
++   * with heroes level 5-30 now sees stock genuinely spread across
++   * roughly 1-34, not just capped at 34 with nothing stopping a level-55
++   * item from squeaking in under a flat +4 the old ceiling never
++   * actually enforced a floor against either. No heroes yet (a fresh
++   * save) falls back to [1,1] plus variance, same as `topLevel`'s own
++   * old `Math.max(1, ...)` guard.
++   */
++  heroLevelWindow(state: GameState): { min: number; max: number } {
++    const levels = state.heroes.map((h) => h.level);
++    const minLevel = levels.length ? Math.min(...levels) : 1;
++    const maxLevel = levels.length ? Math.max(...levels) : 1;
++    const variance = Tuning.get('shop.levelVariance');
++    // 55 is the same hard level ceiling levelFactor() (proceduralLoot.ts)
++    // and every other level-scaled curve in this game already caps
++    // against -- not a new number, just not worth its own shared
++    // constant for a single extra clamp here.
++    return { min: Math.max(1, minLevel - variance), max: Math.min(55, maxLevel + variance) };
++  },
++
+   /** Equipment half of refresh() below, pulled out standalone so a
+    *  Blacksmith-only reroll (rerollBlacksmith) can regenerate just this
+-   *  half without touching Alchemist stock. Same weighted-pick logic as
+-   *  before, unchanged. */
++   *  half without touching Alchemist stock. Weighted-pick logic per slot
++   *  is unchanged from before; what's new in patch 0241 is that each of
++   *  the SHOP_EQUIPMENT_SLOTS rolls its OWN target itemLevel independently
++   *  within heroLevelWindow (see that function's own comment) rather than
++   *  every slot in the stock sharing one flat ceiling -- a roster with a
++   *  wide level spread now actually sees a wide spread of stock, not just
++   *  everything clustered near the guild's single strongest hero. */
+   rollEquipment(state: GameState, seed: number | string) {
+-    const topLevel = Math.max(1, ...state.heroes.map((h) => h.level));
++    const window = ShopManager.heroLevelWindow(state);
+     const rng = createRng(`shop-equipment:${seed}:${state.createdAt}`);
+     // raidExclusive items (Heroic/Legendary tiered raid loot variants) never
+     // belong in a purchasable pool -- see the comment on EquipmentDef itself
+@@ -44,22 +73,28 @@ export const ShopManager = {
+     // treatment for the same reason: a Quest Chain's guaranteed reward item
+     // showing up for sale before the chain is even discovered undercuts the
+     // whole point of it being a reward.
+-    const eligible = EQUIPMENT.filter((def) => !def.raidExclusive && !def.craftable && !def.chainExclusive && def.reqLevel <= topLevel + 4);
+-    const picks = new Set<string>();
+-    let guard = 0;
+-    while (picks.size < Math.min(SHOP_EQUIPMENT_SLOTS, eligible.length) && guard++ < 200) {
+-      const def = rng.weighted(eligible.map((e) => ({ item: e, weight: RARITY_WEIGHT[e.rarity] })));
+-      picks.add(def.id);
+-    }
++    const basePool = EQUIPMENT.filter((def) => !def.raidExclusive && !def.craftable && !def.chainExclusive);
+     // Vendor Rep discount baked in at roll time, same convention
+     // refreshBlackMarket's own blackMarketDiscount modifier already
+     // uses below -- accepts some staleness between a restock and a
+     // level-up mid-window, same tradeoff that precedent already made.
+     const repSpent = state.vendorGoldSpent?.blacksmith ?? 0;
+-    return [...picks].map((defId) => ({
++    const picks: { defId: string; itemLevel: number }[] = [];
++    const usedIds = new Set<string>();
++    let guard = 0;
++    while (picks.length < SHOP_EQUIPMENT_SLOTS && guard++ < 200) {
++      const itemLevel = rng.int(window.min, window.max);
++      const eligible = basePool.filter((def) => def.reqLevel <= itemLevel && !usedIds.has(def.id));
++      if (eligible.length === 0) continue;
++      const def = rng.weighted(eligible.map((e) => ({ item: e, weight: RARITY_WEIGHT[e.rarity] })));
++      usedIds.add(def.id);
++      picks.push({ defId: def.id, itemLevel });
++    }
++    return picks.map(({ defId, itemLevel }) => ({
+       uid: uid('shopitem'),
+       defId,
+-      price: applyVendorRepDiscount(EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]), repSpent),
++      itemLevel,
++      price: applyVendorRepDiscount(EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId], itemLevel), repSpent),
+     }));
+   },
+ 
+@@ -258,17 +293,35 @@ export const ShopManager = {
+       picks.add(def.id);
+     }
+ 
++    // patch 0241 -- rolled at the item's own authored reqLevel, NOT the
++    // hero-roster window rollEquipment now uses above. Deliberately kept
++    // separate: this schema's own comment above is explicit that Black
++    // Market is meant to stay unconstrained by hero level ("gear worth
++    // aspiring to, not gear you can use today"), so importing the
++    // roster-range logic here would quietly undo that stated intent. The
++    // itemLevel roll still exists for every pick -- needed so a
++    // procedural-template pick actually gets real stats instead of the
++    // blank/statless instance this schema was silently selling before
++    // this patch (EquipmentManager.instantiate never received a roll at
++    // all here) -- it's just anchored to the item's own base level
++    // instead of the guild's, matching what "the black market sells you
++    // this specific item at its full intended power" already implied.
+     state.blackMarket = {
+       refreshedAt: window * BLACK_MARKET_REFRESH_MS,
+       consumables: [],
+-      equipment: [...picks].map((defId) => ({
+-        uid: uid('blackmarket'),
+-        defId,
+-        price: applyVendorRepDiscount(
+-          Math.ceil(EquipmentManager.shopPrice(EQUIPMENT_BY_ID[defId]) * BLACK_MARKET_MARKUP * (1 - discount / 100)),
+-          repSpent,
+-        ),
+-      })),
++      equipment: [...picks].map((defId) => {
++        const def = EQUIPMENT_BY_ID[defId];
++        const itemLevel = def.reqLevel;
++        return {
++          uid: uid('blackmarket'),
++          defId,
++          itemLevel,
++          price: applyVendorRepDiscount(
++            Math.ceil(EquipmentManager.shopPrice(def, itemLevel) * BLACK_MARKET_MARKUP * (1 - discount / 100)),
++            repSpent,
++          ),
++        };
++      }),
+     };
+     return state.blackMarket;
+   },
+@@ -277,12 +330,43 @@ export const ShopManager = {
+     return Math.max(0, (state.blackMarket?.refreshedAt ?? 0) + BLACK_MARKET_REFRESH_MS - now);
+   },
+ 
++  /**
++   * Builds the roll EquipmentManager.instantiate needs to actually give a
++   * procedural-template purchase real stats -- patch 0241 fix for a real
++   * bug: neither buy path below ever passed a `roll` before this, so any
++   * procedural template that made it into Shop/Black Market stock
++   * (22 of ~90 eligible defs) sold as a completely blank, statless item,
++   * silently. `entry.itemLevel` falls back to the def's own reqLevel for
++   * a stock entry generated before this patch (ShopStock.equipment's
++   * `itemLevel` is optional for exactly this reason -- see that field's
++   * own comment) -- stock fully regenerates every refresh window
++   * regardless, so this fallback only ever matters for the remainder of
++   * an in-flight window right after upgrading. Fresh per-purchase RNG
++   * (not the deterministic per-window stock RNG) so buying a slot
++   * actually rolls new random mods each time, matching the "randomised
++   * rolls" quest loot already has -- there's nothing to keep
++   * deterministic here since a bought slot is immediately removed from
++   * stock and can't be "re-previewed" against its own roll anyway.
++   * `'normal'` sourceTag applies no budget multiplier and no bracketed
++   * source tag (see LootSourceTag's own comment) -- a shop purchase
++   * shouldn't visually read as tagged loot the way a Hard-quest or raid
++   * drop does.
++   */
++  purchaseRoll(entry: { defId: string; itemLevel?: number }, uidForSeed: string) {
++    const def = EQUIPMENT_BY_ID[entry.defId];
++    return {
++      itemLevel: entry.itemLevel ?? def?.reqLevel ?? 1,
++      sourceTag: 'normal' as const,
++      rng: createRng(`shop-buy:${uidForSeed}:${Date.now()}`),
++    };
++  },
++
+   buyBlackMarketEquipment(state: GameState, shopUid: string): string | null {
+     const entry = state.blackMarket.equipment.find((e) => e.uid === shopUid);
+     if (!entry) return 'That item has already been sold.';
+     if (state.gold < entry.price) return 'Not enough gold.';
+     if (state.stash.length >= ModifierManager.stashCapacity(state)) return 'The stash is full.';
+-    const item: EquipmentItem | null = EquipmentManager.instantiate(entry.defId);
++    const item: EquipmentItem | null = EquipmentManager.instantiate(entry.defId, ShopManager.purchaseRoll(entry, entry.uid));
+     if (!item) return 'Unknown item.';
+     state.gold -= entry.price;
+     state.stats.goldSpent += entry.price;
+@@ -299,7 +383,7 @@ export const ShopManager = {
+     if (!entry) return 'That item has already been sold.';
+     if (state.gold < entry.price) return 'Not enough gold.';
+     if (state.stash.length >= ModifierManager.stashCapacity(state)) return 'The stash is full.';
+-    const item: EquipmentItem | null = EquipmentManager.instantiate(entry.defId);
++    const item: EquipmentItem | null = EquipmentManager.instantiate(entry.defId, ShopManager.purchaseRoll(entry, entry.uid));
+     if (!item) return 'Unknown item.';
+     state.gold -= entry.price;
+     state.stats.goldSpent += entry.price;
+diff --git a/src/game/types.ts b/src/game/types.ts
+index c218321..7cdbb30 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -1538,7 +1538,19 @@ export interface RenownPerkDef {
+ export interface ShopStock {
+   refreshedAt: number;
+   consumables: { defId: string; stock: number }[];
+-  equipment: { uid: string; defId: string; price: number }[];
++  /**
++   * `itemLevel` (patch 0241, "Vendor stock now scales with the hero
++   * roster") is the target power level this slot was rolled against --
++   * used both to price the entry (EquipmentManager.shopPrice) and, for a
++   * procedural-template pick, as the actual roll budget passed to
++   * EquipmentManager.instantiate at purchase time. Optional purely so an
++   * in-flight save from before this patch doesn't need a version bump --
++   * ShopStock is fully regenerated every refresh window anyway (4h shop /
++   * 16h black market), so a stale pre-patch entry just falls back to the
++   * def's own reqLevel (ShopManager.buyEquipment/buyBlackMarketEquipment)
++   * until the next natural restock replaces it with a real rolled value.
++   */
++  equipment: { uid: string; defId: string; price: number; itemLevel?: number }[];
+ }
+ 
+ export interface Statistics {
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index b4dab28..94292a6 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -7,6 +7,7 @@ import { GuildManager } from '../../game/managers/GuildManager';
+ import { EquipmentManager } from '../../game/managers/EquipmentManager';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+ import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
++import { isProceduralTemplate } from '../../game/data/proceduralLoot';
+ import { CONSUMABLE_BY_ID } from '../../game/data/items';
+ import { VENDORS, vendorUpgrades } from '../../game/data/progression';
+ import { EquipmentDef, ConsumableDef, VendorId, UpgradeDef, CraftingRecipeDef } from '../../game/types';
+@@ -273,6 +274,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell:
+           <EquipmentShopCard
+             key={entry.uid}
+             def={EQUIPMENT_BY_ID[entry.defId]}
++            itemLevel={entry.itemLevel}
+             price={entry.price}
+             canAfford={state.gold >= entry.price}
+             onBuy={() => engine.buyShopEquipment(entry.uid)}
+@@ -431,6 +433,7 @@ function BlackMarketStock({ now }: { now: number }) {
+           <EquipmentShopCard
+             key={entry.uid}
+             def={EQUIPMENT_BY_ID[entry.defId]}
++            itemLevel={entry.itemLevel}
+             price={entry.price}
+             canAfford={state.gold >= entry.price}
+             onBuy={() => engine.buyBlackMarketEquipment(entry.uid)}
+@@ -444,12 +447,19 @@ function BlackMarketStock({ now }: { now: number }) {
+ 
+ /** Collapsed summary (icon, name, price) only -- clicking opens a detail modal. */
+ function EquipmentShopCard({
+-  def, price, canAfford, onBuy, blackMarket,
++  def, itemLevel, price, canAfford, onBuy, blackMarket,
+ }: {
+-  def: EquipmentDef | undefined; price: number; canAfford: boolean; onBuy: () => void; blackMarket?: boolean;
++  def: EquipmentDef | undefined; itemLevel?: number; price: number; canAfford: boolean; onBuy: () => void; blackMarket?: boolean;
+ }) {
+   const [showModal, setShowModal] = useState(false);
+   if (!def) return null;
++  // patch 0241 -- itemLevel is the level this specific stock slot was
++  // actually rolled against (ShopManager.rollEquipment/refreshBlackMarket),
++  // which is what the eventual purchase's real power is budgeted off of.
++  // Falls back to def.reqLevel for a slot generated before this patch
++  // (ShopStock.equipment's itemLevel is optional for exactly that reason).
++  const displayLevel = itemLevel ?? def.reqLevel;
++  const procedural = isProceduralTemplate(def);
+ 
+   return (
+     <>
+@@ -466,7 +476,7 @@ function EquipmentShopCard({
+           <ItemIcon slot={def.slot} icon={def.icon} size={41} />
+           <div style={{ minWidth: 0, flex: 1 }}>
+             <div style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 13 }}>{def.name}</div>
+-            <div className="tiny muted">Lv {def.reqLevel} · {formatGold(price)}</div>
++            <div className="tiny muted">Lv {displayLevel} · {formatGold(price)}</div>
+           </div>
+         </div>
+       </div>
+@@ -483,9 +493,24 @@ function EquipmentShopCard({
+                   <div className="tiny muted">{def.slot} · {def.rarity} · requires level {def.reqLevel}</div>
+                 </div>
+               </div>
+-              <div className="stat-row" style={{ margin: '6px 0 12px' }}>
+-                {describeMods(def.mods).map((line) => <span key={line}>{line}</span>)}
+-              </div>
++              {procedural ? (
++                // Procedural templates (patch 0214) carry no fixed mods of
++                // their own -- def.mods is deliberately empty, real stats
++                // roll fresh at purchase time (EquipmentManager.instantiate,
++                // via ShopManager.purchaseRoll) budgeted off displayLevel
++                // above, same "randomised rolls" quest/raid loot already
++                // has. Showing "No bonuses" here (describeMods({}) would)
++                // read as a broken/statless item rather than what's
++                // actually true, so this reads as intentional mystery
++                // instead.
++                <p className="tiny muted" style={{ margin: '6px 0 12px' }}>
++                  Stats roll when purchased, scaled to level {displayLevel}.
++                </p>
++              ) : (
++                <div className="stat-row" style={{ margin: '6px 0 12px' }}>
++                  {describeMods(def.mods).map((line) => <span key={line}>{line}</span>)}
++                </div>
++              )}
+               <div className="row end" style={{ gap: 8 }}>
+                 <button className="btn-primary" onClick={() => setShowModal(false)}>Close</button>
+                 <button className="btn-primary" disabled={!canAfford} onClick={() => { onBuy(); setShowModal(false); }}>

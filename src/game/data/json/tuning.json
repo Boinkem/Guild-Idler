@@ -1188,6 +1188,35 @@
     "description": "How many recently-sold items the Blacksmith's buyback list remembers at once -- oldest entry drops off (sold for good, no longer reversible) once a new sale would exceed this."
   },
   {
+    "id": "shop.levelVariance",
+    "label": "Shop: level roll variance",
+    "category": "shop",
+    "value": 4,
+    "default": 4,
+    "min": 0,
+    "max": 20,
+    "description": "How far above the guild's highest hero level (and below its lowest) each Blacksmith/Black Market slot's rolled item level can land -- see ShopManager.rollEquipment/refreshBlackMarket. Was an implicit topLevel+4 ceiling with no floor at all before patch 0241; now a real window spanning the whole roster's level range plus this much variance on either end."
+  },
+  {
+    "id": "shop.baseValuePerLevel",
+    "label": "Shop: procedural item base value",
+    "category": "shop",
+    "value": 25,
+    "default": 25,
+    "min": 0,
+    "description": "Base gold reference (before rarity/level scaling) used to price a procedural-template shop pick -- see EquipmentManager.shopPrice. Only applies to the 22 blank procedural templates (isProceduralTemplate); hand-authored fixed-stat items keep pricing off their own authored `value` unchanged, since their power never moves. First-pass number, tunable like everything else here."
+  },
+  {
+    "id": "shop.valueGrowthPerLevelPercent",
+    "label": "Shop: procedural item value growth per level (%)",
+    "category": "shop",
+    "value": 25,
+    "default": 25,
+    "min": 0,
+    "max": 200,
+    "description": "How much a procedural-template shop pick's price grows per point of its own rolled itemLevel -- e.g. at the default 25%, a level-40 roll prices at 1+40*0.25=11x the base. Deliberately steep: a procedural template's own authored `value` is anchored to its low base reqLevel (a wooden_sword is 2 gold), so once itemLevel decouples its real rolled power from that base, price needs to track itemLevel directly rather than the now-irrelevant base value. First-pass number."
+  },
+  {
     "id": "quest.dailyBurstBonusGold",
     "label": "Quests: daily first-burst guaranteed gold",
     "category": "quests",

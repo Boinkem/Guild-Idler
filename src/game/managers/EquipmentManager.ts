@@ -158,7 +158,30 @@ export const EquipmentManager = {
     return Math.max(1, Math.round(base * (1 + bonusPercent / 100)));
   },
 
-  shopPrice(def: EquipmentDef): number {
+  /**
+   * `itemLevel`, patch 0241 -- the target power level this Shop/Black
+   * Market slot was rolled against (see ShopManager.rollEquipment/
+   * refreshBlackMarket). Only changes anything for a procedural template
+   * (isProceduralTemplate(def)): its own authored `value` is anchored to
+   * its low base reqLevel (a wooden_sword's `value` is 2 gold), so once
+   * itemLevel decouples the item's real rolled power from that base --
+   * the whole point of rolling it fresh rather than selling the bare
+   * template -- pricing off the stale base value would badly undersell
+   * it. Priced instead off a level+rarity baseline
+   * (shop.baseValuePerLevel * RARITY_PRICE_MULT * a per-level growth
+   * curve) that tracks the actual rolled power, ignoring `value`
+   * entirely for this case. A hand-authored fixed-stat item (or any call
+   * with no itemLevel, e.g. sell/repair pricing elsewhere reusing this
+   * same function) is completely unaffected -- its power never moves, so
+   * its existing authored `value` stays the only signal that matters,
+   * same formula as before this patch.
+   */
+  shopPrice(def: EquipmentDef, itemLevel?: number): number {
+    if (itemLevel !== undefined && isProceduralTemplate(def)) {
+      const base = Tuning.get('shop.baseValuePerLevel') * RARITY_PRICE_MULT[def.rarity]
+        * (1 + itemLevel * Tuning.get('shop.valueGrowthPerLevelPercent') / 100);
+      return Math.ceil(base * 1.15);
+    }
     return Math.ceil(def.value * 1.15);
   },
 

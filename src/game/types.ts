@@ -1538,7 +1538,19 @@ export interface RenownPerkDef {
 export interface ShopStock {
   refreshedAt: number;
   consumables: { defId: string; stock: number }[];
-  equipment: { uid: string; defId: string; price: number }[];
+  /**
+   * `itemLevel` (patch 0241, "Vendor stock now scales with the hero
+   * roster") is the target power level this slot was rolled against --
+   * used both to price the entry (EquipmentManager.shopPrice) and, for a
+   * procedural-template pick, as the actual roll budget passed to
+   * EquipmentManager.instantiate at purchase time. Optional purely so an
+   * in-flight save from before this patch doesn't need a version bump --
+   * ShopStock is fully regenerated every refresh window anyway (4h shop /
+   * 16h black market), so a stale pre-patch entry just falls back to the
+   * def's own reqLevel (ShopManager.buyEquipment/buyBlackMarketEquipment)
+   * until the next natural restock replaces it with a real rolled value.
+   */
+  equipment: { uid: string; defId: string; price: number; itemLevel?: number }[];
 }
 
 export interface Statistics {

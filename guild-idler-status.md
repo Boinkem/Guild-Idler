@@ -18613,3 +18613,106 @@ are affected.
 this environment -- pure JSON content change (two new consumables, two
 corrected id references), no TypeScript touched, same low-risk shape as
 patch 0234's own JSON-only additions.
+
+### Vendor stock now scales with the hero roster: level range, real rolls, and level-scaled pricing (patch 0241)
+
+```discord-update
+Dev Update | Vendor Stock Rework
+
+- Fixed a real bug: some Blacksmith/Black Market items were secretly selling with zero stats
+- The Blacksmith's stock now spans a range across your whole roster's levels, not just a flat cap off your strongest hero
+- Gear bought from the Blacksmith or Black Market now rolls real, randomised stats -- same system quest and raid loot already use
+- Prices on rolled items now scale up with the level they're rolled at
+```
+
+Direct question: did the hero-level procedural loot rework (patch 0214)
+ever reach the Shop/Black Market, or did vendors stay on the old system?
+Reviewed and confirmed: it never touched vendors at all, and reviewing it
+surfaced a real, active bug alongside the gap.
+
+**The bug, found during review, not reported directly.** `EquipmentManager
+.instantiate()` only rolls real mods/stats for a procedural-template item
+(the 22 blank-`mods`/blank-`stats` defs patch 0214 introduced) when a
+`roll` object is passed in. Neither `ShopManager.buyEquipment` nor
+`buyBlackMarketEquipment` ever passed one -- so any of those 22 templates
+that made it into Shop or Black Market stock (a normal ~24% of the
+eligible pool, picked the same weighted way as every other item) sold as
+a completely blank, statless item. Silent, no error, no crash -- just an
+item with nothing on it.
+
+**The gap.** `ShopManager.rollEquipment` filtered eligible stock by a
+single flat ceiling, `topLevel + 4` (topLevel = the guild's single
+*highest*-level hero, no floor at all) -- unrelated to how quest/raid
+loot now works, where itemLevel rolls near the specific hero being sent,
+with real procedural variance. A guild with a wide level spread (say,
+heroes 5 through 30) saw every shop slot's eligibility capped at the
+*same* 34, with nothing pulling low-level stock toward a newer hero's
+actual level either.
+
+**Fix, per direct design ask ("levels in the range across all your
+heroes, with some variance").** New `ShopManager.heroLevelWindow(state)`:
+`[min(hero levels) - shop.levelVariance, max(hero levels) + shop.
+levelVariance]`, clamped to [1, 55] (variance defaults to 4, tuning-
+registry entry, same magnitude as the old implicit +4). `rollEquipment`
+now rolls each of its 5 slots an independent target itemLevel inside that
+window, then filters/weights eligible defs against that slot's own
+level rather than one shared ceiling for the whole stock -- a wide
+roster now genuinely sees a wide spread of stock, confirmed at runtime
+(a 5/12/30 roster rolled itemLevels 5/7/9/10/21 against a [1,34] window
+in one sample run, not clustered at the top).
+
+**Black Market deliberately NOT folded into the same roster-range logic.**
+Its own existing code comment is explicit: "the point of the black
+market is gear worth aspiring to, not gear you can use today" -- pulling
+it into heroLevelWindow would have quietly reversed that stated design.
+Left its eligibility exactly as-is (rare/epic/legendary only, no level
+filter at all); it still needed *an* itemLevel for the roll/price fix
+below, so `refreshBlackMarket` now rolls each pick at the item's own
+authored `reqLevel` specifically -- enough to fix the statless-item bug
+and price it correctly, without touching what makes the Black Market the
+Black Market.
+
+**Rolling itself.** `EquipmentManager.instantiate` was already fully
+correct -- QuestManager/RaidManager have called it properly with a roll
+for two patches now. The fix is entirely on the caller side: new
+`ShopManager.purchaseRoll(entry, uid)` builds the same `{itemLevel,
+sourceTag: 'normal', rng}` shape at purchase time (fresh RNG per buy, not
+the deterministic per-window stock RNG -- a bought slot is immediately
+removed from stock, there's nothing to keep reproducible), and both buy
+functions now pass it through. `entry.itemLevel` falls back to the def's
+own `reqLevel` for a stock entry generated before this patch (`ShopStock.
+equipment`'s new `itemLevel` field is optional for exactly that reason --
+stock fully regenerates every 4h/16h window regardless, no save
+migration needed).
+
+**Pricing, per direct ask ("cost should increase as the level requirement
+does").** `EquipmentManager.shopPrice(def, itemLevel?)` -- a hand-
+authored fixed-stat item (or any call with no itemLevel) is completely
+unaffected, same flat `value * 1.15` as always, since its power never
+moves. A procedural template WITH an itemLevel now prices off a new
+`shop.baseValuePerLevel * RARITY_PRICE_MULT[rarity] * (1 + itemLevel *
+shop.valueGrowthPerLevelPercent / 100)` curve instead of its own stale
+`value` -- necessary because a template's authored value is anchored to
+its own low base reqLevel (`wooden_sword` is 2 gold), so once itemLevel
+decouples the item's real rolled power from that base, pricing off the
+old value would badly undersell it. Verified directly: `wooden_sword`
+(common) prices at 36g rolled at level 1 vs 317g at level 40; `heart_of_
+the_mountain` (legendary, base reqLevel 30) prices at 7820g at its own
+base level vs 13570g rolled up to 55 -- same order of magnitude as this
+game's existing hand-authored value spread (level-55 legendaries
+currently run 17500-40000g), close enough as a first-pass number, not
+exact by design (three new tuning entries, all independently retunable
+later same as everywhere else in this registry).
+
+**UI (`VendorsPanel.tsx`).** `EquipmentShopCard` now shows the stock
+entry's own rolled `itemLevel` instead of `def.reqLevel` (falls back to
+reqLevel for a pre-patch entry). A procedural pick's detail modal no
+longer shows an empty "No bonuses" stat row (which read as a broken
+item) -- shows "Stats roll when purchased, scaled to level N" instead,
+same honest-about-randomness framing quest offers already use for their
+own unrevealed loot.
+
+`npx tsc --noEmit` and `vite build` both pass clean. Verified the actual
+roll/price/window logic directly via a standalone script against real
+game data (not just typechecked) -- see the sample roster output and
+price comparisons above.

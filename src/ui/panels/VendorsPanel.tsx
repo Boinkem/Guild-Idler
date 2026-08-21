@@ -7,6 +7,7 @@ import { GuildManager } from '../../game/managers/GuildManager';
 import { EquipmentManager } from '../../game/managers/EquipmentManager';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
+import { isProceduralTemplate } from '../../game/data/proceduralLoot';
 import { CONSUMABLE_BY_ID } from '../../game/data/items';
 import { VENDORS, vendorUpgrades } from '../../game/data/progression';
 import { EquipmentDef, ConsumableDef, VendorId, UpgradeDef, CraftingRecipeDef } from '../../game/types';
@@ -273,6 +274,7 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
           <EquipmentShopCard
             key={entry.uid}
             def={EQUIPMENT_BY_ID[entry.defId]}
+            itemLevel={entry.itemLevel}
             price={entry.price}
             canAfford={state.gold >= entry.price}
             onBuy={() => engine.buyShopEquipment(entry.uid)}
@@ -431,6 +433,7 @@ function BlackMarketStock({ now }: { now: number }) {
           <EquipmentShopCard
             key={entry.uid}
             def={EQUIPMENT_BY_ID[entry.defId]}
+            itemLevel={entry.itemLevel}
             price={entry.price}
             canAfford={state.gold >= entry.price}
             onBuy={() => engine.buyBlackMarketEquipment(entry.uid)}
@@ -444,12 +447,19 @@ function BlackMarketStock({ now }: { now: number }) {
 
 /** Collapsed summary (icon, name, price) only -- clicking opens a detail modal. */
 function EquipmentShopCard({
-  def, price, canAfford, onBuy, blackMarket,
+  def, itemLevel, price, canAfford, onBuy, blackMarket,
 }: {
-  def: EquipmentDef | undefined; price: number; canAfford: boolean; onBuy: () => void; blackMarket?: boolean;
+  def: EquipmentDef | undefined; itemLevel?: number; price: number; canAfford: boolean; onBuy: () => void; blackMarket?: boolean;
 }) {
   const [showModal, setShowModal] = useState(false);
   if (!def) return null;
+  // patch 0241 -- itemLevel is the level this specific stock slot was
+  // actually rolled against (ShopManager.rollEquipment/refreshBlackMarket),
+  // which is what the eventual purchase's real power is budgeted off of.
+  // Falls back to def.reqLevel for a slot generated before this patch
+  // (ShopStock.equipment's itemLevel is optional for exactly that reason).
+  const displayLevel = itemLevel ?? def.reqLevel;
+  const procedural = isProceduralTemplate(def);
 
   return (
     <>
@@ -466,7 +476,7 @@ function EquipmentShopCard({
           <ItemIcon slot={def.slot} icon={def.icon} size={41} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ color: RARITY_COLOR[def.rarity], fontWeight: 700, fontSize: 13 }}>{def.name}</div>
-            <div className="tiny muted">Lv {def.reqLevel} · {formatGold(price)}</div>
+            <div className="tiny muted">Lv {displayLevel} · {formatGold(price)}</div>
           </div>
         </div>
       </div>
@@ -483,9 +493,24 @@ function EquipmentShopCard({
                   <div className="tiny muted">{def.slot} · {def.rarity} · requires level {def.reqLevel}</div>
                 </div>
               </div>
-              <div className="stat-row" style={{ margin: '6px 0 12px' }}>
-                {describeMods(def.mods).map((line) => <span key={line}>{line}</span>)}
-              </div>
+              {procedural ? (
+                // Procedural templates (patch 0214) carry no fixed mods of
+                // their own -- def.mods is deliberately empty, real stats
+                // roll fresh at purchase time (EquipmentManager.instantiate,
+                // via ShopManager.purchaseRoll) budgeted off displayLevel
+                // above, same "randomised rolls" quest/raid loot already
+                // has. Showing "No bonuses" here (describeMods({}) would)
+                // read as a broken/statless item rather than what's
+                // actually true, so this reads as intentional mystery
+                // instead.
+                <p className="tiny muted" style={{ margin: '6px 0 12px' }}>
+                  Stats roll when purchased, scaled to level {displayLevel}.
+                </p>
+              ) : (
+                <div className="stat-row" style={{ margin: '6px 0 12px' }}>
+                  {describeMods(def.mods).map((line) => <span key={line}>{line}</span>)}
+                </div>
+              )}
               <div className="row end" style={{ gap: 8 }}>
                 <button className="btn-primary" onClick={() => setShowModal(false)}>Close</button>
                 <button className="btn-primary" disabled={!canAfford} onClick={() => { onBuy(); setShowModal(false); }}>
