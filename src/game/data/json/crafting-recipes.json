@@ -1387,7 +1387,7 @@
     "id": "craft_lucky_charm_gold",
     "name": "Lucky Charm (Gold)",
     "description": "A rough-cut charm worked at the bench rather than bought from the Alchemist's stock.",
-    "category": "consumable",
+    "category": "charm",
     "icon": "crafting/Crafting_28.png",
     "materialCost": {
       "ore": 10
@@ -1403,7 +1403,7 @@
     "id": "craft_lucky_charm_xp",
     "name": "Lucky Charm (Insight)",
     "description": "A rough-cut charm worked at the bench rather than bought from the Alchemist's stock.",
-    "category": "consumable",
+    "category": "charm",
     "icon": "crafting/Crafting_21.png",
     "materialCost": {
       "ore": 10
@@ -1419,7 +1419,7 @@
     "id": "craft_fortune_weave_gold",
     "name": "Fortune Weave (Gold)",
     "description": "Ore and herb worked into the same pull toward coin the Alchemist's own charms use.",
-    "category": "consumable",
+    "category": "charm",
     "icon": "crafting/Crafting_28.png",
     "materialCost": {
       "ore": 25,
@@ -1436,7 +1436,7 @@
     "id": "craft_fortune_weave_xp",
     "name": "Fortune Weave (Insight)",
     "description": "Ore and herb worked into the same pull toward understanding the Alchemist's own charms use.",
-    "category": "consumable",
+    "category": "charm",
     "icon": "crafting/Crafting_21.png",
     "materialCost": {
       "ore": 25,
@@ -1453,7 +1453,7 @@
     "id": "craft_windfall_sigil_gold",
     "name": "Windfall Sigil (Gold)",
     "description": "The Enchanter's own bench-made answer to the Alchemist's Greater Fortune Charm.",
-    "category": "consumable",
+    "category": "charm",
     "icon": "crafting/Crafting_44.png",
     "materialCost": {
       "ore": 40,
@@ -1471,7 +1471,7 @@
     "id": "craft_windfall_sigil_xp",
     "name": "Windfall Sigil (Insight)",
     "description": "The Enchanter's own bench-made answer to the Alchemist's Greater Fortune Charm.",
-    "category": "consumable",
+    "category": "charm",
     "icon": "crafting/Crafting_45.png",
     "materialCost": {
       "ore": 40,

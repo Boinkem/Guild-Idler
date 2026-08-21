@@ -4,7 +4,7 @@ import { EquipmentManager } from '../game/managers/EquipmentManager';
 import { ModifierManager } from '../game/managers/ModifierManager';
 import { scrapIconFor } from '../game/data/elements';
 import { ItemIcon } from './icons';
-import { PickerModal, SlotBox } from './CraftingStation';
+import { ItemPreviewModal, PickerModal, SlotBox } from './CraftingStation';
 import type { PickerOption, Rect } from './CraftingStation';
 import { useCountUp } from './useCountUp';
 
@@ -39,6 +39,14 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
 
   const [targetUid, setTargetUid] = useState('');
   const [openPicker, setOpenPicker] = useState(false);
+  // Shown once, right after a pick -- direct feedback that going straight
+  // from "picked an item" to the Scrap button being live made it easy to
+  // commit an irreversible action against the wrong piece of gear without
+  // really looking at it first. Same shape as EnhanceStation's own
+  // previewUid -- see ItemPreviewModal's own doc comment
+  // (CraftingStation.tsx). Scrap is destructive and permanent, arguably
+  // the station this step matters most for.
+  const [previewUid, setPreviewUid] = useState<string | null>(null);
   const [burst, setBurst] = useState<{ key: number; gained: number; icon: string } | null>(null);
   const [flight, setFlight] = useState<{ key: number; dx: number; dy: number; icon: string } | null>(null);
   const [counterFlash, setCounterFlash] = useState(false);
@@ -73,6 +81,10 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
   const scrapBonus = ModifierManager.global(state).scrapBonus ?? 0;
   const value = item ? EquipmentManager.scrapValue(item, scrapBonus) : 0;
 
+  const previewItem = previewUid ? state.stash.find((i) => i.uid === previewUid) : undefined;
+  const previewDef = previewItem ? EquipmentManager.def(previewItem) : undefined;
+  const previewValue = previewItem ? EquipmentManager.scrapValue(previewItem, scrapBonus) : 0;
+
   // Locked (Vaulted) items stay in the list rather than being hidden --
   // per the Vault design, a destructive picker should show what's
   // protected, not quietly omit it -- but render disabled, matching the
@@ -90,6 +102,7 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
         sublabel: i.locked ? '\uD83D\uDD12 Locked in Vault' : `${EquipmentManager.scrapValue(i, scrapBonus)} Scrap`,
         icon: <ItemIcon slot={d.slot} icon={d.icon} size={40} />,
         disabled: i.locked,
+        rarity: d.rarity,
       };
     })
     .filter((o): o is PickerOption => o !== null);
@@ -252,8 +265,22 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
         <PickerModal
           title="Choose an item"
           options={options}
-          onPick={(key) => setTargetUid(key)}
+          onPick={(key) => setPreviewUid(key)}
           onClose={() => setOpenPicker(false)}
+        />
+      )}
+
+      {previewItem && previewDef && (
+        <ItemPreviewModal
+          item={previewItem}
+          def={previewDef}
+          onBack={() => { setPreviewUid(null); setOpenPicker(true); }}
+          onContinue={() => { setTargetUid(previewItem.uid); setPreviewUid(null); }}
+          extra={(
+            <p className="tiny muted" style={{ margin: '8px 0 0' }}>
+              Breaks down for {previewValue} Scrap. This cannot be undone.
+            </p>
+          )}
         />
       )}
     </div>

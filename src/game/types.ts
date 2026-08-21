@@ -2455,7 +2455,21 @@ export interface CraftingRecipeDef {
   id: string;
   name: string;
   description: string;
-  category: 'gear' | 'consumable' | 'enchant' | 'gem';
+  /**
+   * `charm` (patch 0247) is functionally identical to `consumable`
+   * everywhere in CraftingManager/CraftingStation -- same resultConsumableId
+   * shape, same craftConsumable action, same recipe-list top slot, same
+   * materials/bonus bottom slots. The only thing a separate category buys
+   * is routing: CraftingStation filters purely by category, and
+   * VendorsPanel maps each vendor's Crafting-family buttons to a fixed
+   * category, so a gold/insight charm that's thematically the Enchanter's
+   * own bench-made item (not the Alchemist's) needs its own category value
+   * to end up on the right vendor's page at all -- literally just
+   * `category === 'consumable'` vs `'charm'` deciding Alchemist's Supplies
+   * button vs the Enchanter's own Charms button. See CraftingStation.tsx's
+   * own `isConsumableLike` for where the two are treated identically.
+   */
+  category: 'gear' | 'consumable' | 'enchant' | 'gem' | 'charm';
   /** Relative path under the item-icons folder, same convention as
    *  EquipmentDef.icon/ConsumableDef.icon. No glyph fallback here since
    *  a recipe isn't itself an item -- falls all the way back to a plain

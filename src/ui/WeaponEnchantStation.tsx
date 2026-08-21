@@ -6,7 +6,7 @@ import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH, GEM_TIERS, GEM_TIER_LABEL 
 import { ElementType, GemTier } from '../game/types';
 import { formatGold, RARITY_COLOR } from '../game/util';
 import { ItemIcon } from './icons';
-import { PickerModal, SlotBox } from './CraftingStation';
+import { ItemPreviewModal, PickerModal, SlotBox } from './CraftingStation';
 import type { PickerOption, Rect } from './CraftingStation';
 
 /** Hand-measured against infuse.jpg's own 1402x1122 canvas -- one slot
@@ -35,10 +35,21 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
   // each element/tier combo is priced and stocked independently.
   const [tier, setTier] = useState<GemTier | null>(null);
   const [openItemPicker, setOpenItemPicker] = useState(false);
+  // Shown once, right after a pick -- same reasoning ItemPreviewModal's
+  // own doc comment gives (CraftingStation.tsx): a straight pick-to-live
+  // transition made it easy to commit gold against the wrong weapon
+  // without really looking at it first. Was previously the one item
+  // picker on this page skipping the step Crafting/Enhance already use
+  // (patch 0247).
+  const [previewUid, setPreviewUid] = useState<string | null>(null);
 
   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
   const item = found?.item;
   const def = item ? EquipmentManager.def(item) : undefined;
+
+  const previewFound = previewUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === previewUid) : undefined;
+  const previewItem = previewFound?.item;
+  const previewDef = previewItem ? EquipmentManager.def(previewItem) : undefined;
 
   const setElementAndResetTier = (el: ElementType) => {
     setElement(el);
@@ -59,6 +70,7 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
         label: d.name,
         sublabel: `${owner} -- ${current}`,
         icon: <ItemIcon slot={d.slot} icon={d.icon} size={40} />,
+        rarity: d.rarity,
       };
     })
     .filter((o): o is PickerOption => o !== null);
@@ -158,8 +170,24 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
         <PickerModal
           title="Choose a weapon"
           options={itemOptions}
-          onPick={(key) => { setTargetUid(key); setElement(null); }}
+          onPick={(key) => setPreviewUid(key)}
           onClose={() => setOpenItemPicker(false)}
+        />
+      )}
+
+      {previewItem && previewDef && (
+        <ItemPreviewModal
+          item={previewItem}
+          def={previewDef}
+          onBack={() => { setPreviewUid(null); setOpenItemPicker(true); }}
+          onContinue={() => { setTargetUid(previewItem.uid); setElement(null); setPreviewUid(null); }}
+          extra={(
+            <p className="tiny muted" style={{ margin: '8px 0 0' }}>
+              {previewItem.elementalDamage
+                ? `Currently ${GEM_TIER_LABEL[previewItem.elementalDamageTier ?? 'common']} ${ELEMENT_LABEL[previewItem.elementalDamage]} -- infusing replaces it.`
+                : 'Uninfused -- no elemental damage yet.'}
+            </p>
+          )}
         />
       )}
     </div>

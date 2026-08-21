@@ -280,7 +280,8 @@ export function StatsPanel() {
   ].sort((a, b) => b.resolvedAt - a.resolvedAt);
 
   return (
-    <>
+    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/settings.jpg)' }}>
+      <div className="tab-scene-content">
       <h2>Statistics</h2>
       <p className="subtitle">Everything the guild scribe has bothered to write down.</p>
 
@@ -433,6 +434,7 @@ export function StatsPanel() {
           onCancel={() => setPendingHardReset(false)}
         />
       )}
-    </>
+      </div>
+    </div>
   );
 }

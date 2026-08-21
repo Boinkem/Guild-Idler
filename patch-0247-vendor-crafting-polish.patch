@@ -1,0 +1,805 @@
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 7cdbb30..79f6944 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -2455,7 +2455,21 @@ export interface CraftingRecipeDef {
+   id: string;
+   name: string;
+   description: string;
+-  category: 'gear' | 'consumable' | 'enchant' | 'gem';
++  /**
++   * `charm` (patch 0247) is functionally identical to `consumable`
++   * everywhere in CraftingManager/CraftingStation -- same resultConsumableId
++   * shape, same craftConsumable action, same recipe-list top slot, same
++   * materials/bonus bottom slots. The only thing a separate category buys
++   * is routing: CraftingStation filters purely by category, and
++   * VendorsPanel maps each vendor's Crafting-family buttons to a fixed
++   * category, so a gold/insight charm that's thematically the Enchanter's
++   * own bench-made item (not the Alchemist's) needs its own category value
++   * to end up on the right vendor's page at all -- literally just
++   * `category === 'consumable'` vs `'charm'` deciding Alchemist's Supplies
++   * button vs the Enchanter's own Charms button. See CraftingStation.tsx's
++   * own `isConsumableLike` for where the two are treated identically.
++   */
++  category: 'gear' | 'consumable' | 'enchant' | 'gem' | 'charm';
+   /** Relative path under the item-icons folder, same convention as
+    *  EquipmentDef.icon/ConsumableDef.icon. No glyph fallback here since
+    *  a recipe isn't itself an item -- falls all the way back to a plain
+diff --git a/src/game/data/json/crafting-recipes.json b/src/game/data/json/crafting-recipes.json
+index 2f159b0..ab06804 100644
+--- a/src/game/data/json/crafting-recipes.json
++++ b/src/game/data/json/crafting-recipes.json
+@@ -1387,7 +1387,7 @@
+     "id": "craft_lucky_charm_gold",
+     "name": "Lucky Charm (Gold)",
+     "description": "A rough-cut charm worked at the bench rather than bought from the Alchemist's stock.",
+-    "category": "consumable",
++    "category": "charm",
+     "icon": "crafting/Crafting_28.png",
+     "materialCost": {
+       "ore": 10
+@@ -1403,7 +1403,7 @@
+     "id": "craft_lucky_charm_xp",
+     "name": "Lucky Charm (Insight)",
+     "description": "A rough-cut charm worked at the bench rather than bought from the Alchemist's stock.",
+-    "category": "consumable",
++    "category": "charm",
+     "icon": "crafting/Crafting_21.png",
+     "materialCost": {
+       "ore": 10
+@@ -1419,7 +1419,7 @@
+     "id": "craft_fortune_weave_gold",
+     "name": "Fortune Weave (Gold)",
+     "description": "Ore and herb worked into the same pull toward coin the Alchemist's own charms use.",
+-    "category": "consumable",
++    "category": "charm",
+     "icon": "crafting/Crafting_28.png",
+     "materialCost": {
+       "ore": 25,
+@@ -1436,7 +1436,7 @@
+     "id": "craft_fortune_weave_xp",
+     "name": "Fortune Weave (Insight)",
+     "description": "Ore and herb worked into the same pull toward understanding the Alchemist's own charms use.",
+-    "category": "consumable",
++    "category": "charm",
+     "icon": "crafting/Crafting_21.png",
+     "materialCost": {
+       "ore": 25,
+@@ -1453,7 +1453,7 @@
+     "id": "craft_windfall_sigil_gold",
+     "name": "Windfall Sigil (Gold)",
+     "description": "The Enchanter's own bench-made answer to the Alchemist's Greater Fortune Charm.",
+-    "category": "consumable",
++    "category": "charm",
+     "icon": "crafting/Crafting_44.png",
+     "materialCost": {
+       "ore": 40,
+@@ -1471,7 +1471,7 @@
+     "id": "craft_windfall_sigil_xp",
+     "name": "Windfall Sigil (Insight)",
+     "description": "The Enchanter's own bench-made answer to the Alchemist's Greater Fortune Charm.",
+-    "category": "consumable",
++    "category": "charm",
+     "icon": "crafting/Crafting_45.png",
+     "materialCost": {
+       "ore": 40,
+diff --git a/src/ui/CraftingStation.tsx b/src/ui/CraftingStation.tsx
+index 4d8d5ce..17083f8 100644
+--- a/src/ui/CraftingStation.tsx
++++ b/src/ui/CraftingStation.tsx
+@@ -6,7 +6,7 @@ import { EquipmentManager } from '../game/managers/EquipmentManager';
+ import { CRAFTING_RECIPES } from '../game/data/craftingRecipes';
+ import { MATERIAL_BY_ID } from '../game/data/materials';
+ import {
+-  CraftingRecipeDef, EquipmentDef, EquipmentItem, MaterialId, Modifiers, Stats,
++  CraftingRecipeDef, EquipmentDef, EquipmentItem, MaterialId, Modifiers, Rarity, Stats,
+ } from '../game/types';
+ import {
+   describeMods, describeStats, formatGold, MOD_LABEL, RARITY_COLOR, craftingStatLabel, MAIN_STAT_TOOLTIP,
+@@ -29,23 +29,27 @@ const STATION_BG: Record<Category, string> = {
+   // No commissioned art yet -- same "missing file just fails to paint"
+   // convention every other banner/background in this game already uses.
+   gem: './lore/crafting/gem.jpg',
++  // Same room/canvas as `enchant` -- these are the Enchanter's own bench-
++  // made charms (patch 0247), not a separate physical space, so they
++  // reuse enchant.jpg rather than getting dedicated art of their own.
++  charm: './lore/crafting/enchant.jpg',
+ };
+ 
+ const STATION_TITLE: Record<Category, string> = {
+-  gear: 'Crafting', consumable: 'Supplies', enchant: 'Enchanting', gem: 'Gems',
++  gear: 'Crafting', consumable: 'Supplies', enchant: 'Enchanting', gem: 'Gems', charm: 'Charms',
+ };
+ 
+ /**
+  * Which locked-aspect-ratio CSS class each category's scene uses (patch
+- * 0242) -- gear/enchant/gem still share .craft-scene's 1402:1122 canvas,
+- * but consumable moved to its own differently-shaped art
++ * 0242) -- gear/enchant/gem/charm still share .craft-scene's 1402:1122
++ * canvas, but consumable moved to its own differently-shaped art
+  * (Alchemist_Crafting_Box.png, 1277x1232) and needs its own class
+  * (.consumable-scene, app.css) with a matching aspect-ratio, same
+  * pattern .armor-infusion-scene/.hatchery-select-scene already use for
+  * their own off-ratio art.
+  */
+ const SCENE_CLASS: Record<Category, string> = {
+-  gear: 'craft-scene', consumable: 'consumable-scene', enchant: 'craft-scene', gem: 'craft-scene',
++  gear: 'craft-scene', consumable: 'consumable-scene', enchant: 'craft-scene', gem: 'craft-scene', charm: 'craft-scene',
+ };
+ 
+ export interface Rect { left: number; top: number; width: number; height: number; }
+@@ -98,6 +102,13 @@ const SLOT_RECTS: Record<Category, { top: Rect; bottomLeft: Rect; bottomRight: R
+     bottomLeft: { left: 26.5, top: 52.0, width: 16.0, height: 20.3 },
+     bottomRight: { left: 57.1, top: 52.0, width: 16.0, height: 20.3 },
+   },
++  // Same canvas as `enchant` (enchant.jpg), so the same rects apply --
++  // see STATION_BG's own comment on why `charm` shares that art.
++  charm: {
++    top: { left: 42.3, top: 24.5, width: 16.8, height: 21.8 },
++    bottomLeft: { left: 31.8, top: 52.0, width: 16.4, height: 21.8 },
++    bottomRight: { left: 51.2, top: 52.0, width: 16.8, height: 21.8 },
++  },
+ };
+ 
+ /** A single option row inside a slot's picker popup. */
+@@ -107,6 +118,16 @@ export interface PickerOption {
+   sublabel?: string;
+   icon?: ReactNode;
+   disabled?: boolean;
++  /** Actual equipment only -- a recipe (crafting/enchant/gem/charm) has
++   *  no rarity of its own, so this stays unset for every picker except
++   *  an item picker (CraftingStation's own Enchant top slot, plus every
++   *  other station's item slot -- EnhanceStation, ScrapStation,
++   *  WeaponEnchantStation, ArmourInfusionStation). Drives
++   *  .craft-picker-row's left-edge rarity stripe, same colour set
++   *  RarityPill/item-card names already use (patch 0247, direct
++   *  feedback that the picker table read as flatter than the Inventory
++   *  grid it's showing the exact same items from). */
++  rarity?: Rarity;
+ }
+ 
+ /** One clickable frame on the scene -- shows what's picked, or a plain
+@@ -202,8 +223,13 @@ export function PickerModal({
+                       onClick={() => pick(opt)}
+                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(opt); } }}
+                     >
+-                      <td className="craft-picker-td-icon">{opt.icon ?? null}</td>
+-                      <td className="craft-picker-td-name">{opt.label}</td>
++                      {/* Rarity stripe lives on the icon cell specifically, not
++                          the <tr> -- `border-collapse: collapse` on the table
++                          only respects borders declared on <td>/<th>, an
++                          inline border on <tr> itself is silently dropped by
++                          every browser once collapse is in effect. */}
++                      <td className="craft-picker-td-icon" style={opt.rarity ? { borderLeftColor: RARITY_COLOR[opt.rarity] } : undefined}>{opt.icon ?? null}</td>
++                      <td className="craft-picker-td-name" style={opt.rarity ? { color: RARITY_COLOR[opt.rarity] } : undefined}>{opt.label}</td>
+                       {hasSublabels && <td className="tiny muted craft-picker-td-detail">{opt.sublabel}</td>}
+                       <td className="craft-picker-td-check">{selected && <span aria-hidden="true" className="craft-picker-check">✓</span>}</td>
+                     </tr>
+@@ -341,10 +367,19 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+   const statsToPick = recipe?.statsToPick ?? 0;
+   const chosenMods = [modSlot0, modSlot1].filter((m): m is keyof Modifiers => m !== null);
+ 
++  // `charm` (patch 0247) is a separate category purely so these recipes
++  // route to the Enchanter's own Charms button instead of the Alchemist's
++  // Supplies one -- every actual behaviour (materials/bonus bottom slots,
++  // resultConsumableId, craftConsumable) is identical to `consumable`, so
++  // every place that used to check `category === 'consumable'` checks
++  // this instead, rather than repeating the `|| category === 'charm'`
++  // four separate times.
++  const isConsumableLike = category === 'consumable' || category === 'charm';
++
+   const canCraft = !!recipe && !!afford?.ok
+     && (category !== 'gear' || chosenMods.length === modsToPick)
+     && (category !== 'enchant' || (chosenStats.length === statsToPick && targetUid !== ''))
+-    && (category !== 'consumable' || (materialIds.every((id) => confirmedMaterials.has(id)) && chosenConsumableMods.length === modsToPick));
++    && (!isConsumableLike || (materialIds.every((id) => confirmedMaterials.has(id)) && chosenConsumableMods.length === modsToPick));
+ 
+   /**
+    * "Keep crafting" (direct ask) -- a consumable recipe deliberately stays
+@@ -385,7 +420,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+       if (!def) return null;
+       const owner = heroId ? state.heroes.find((h) => h.id === heroId)?.name : 'Stash';
+       return {
+-        key: item.uid, label: def.name, sublabel: owner ?? 'Stash',
++        key: item.uid, label: def.name, sublabel: owner ?? 'Stash', rarity: def.rarity,
+         icon: <ItemIcon slot={def.slot} icon={def.icon} size={40} />,
+       };
+     }).filter((o): o is PickerOption => o !== null)
+@@ -472,8 +507,15 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+     };
+   });
+   const allMaterialsConfirmed = materialIds.length > 0 && materialIds.every((id) => confirmedMaterials.has(id));
++  // Used to show each material's own glyph here (ore/herbs/fish etc.) --
++  // pulled per direct request (patch 0247): these two bottom boxes are a
++  // planned removal from this screen entirely, so showing resource icons
++  // in a slot that's going away wasn't worth keeping around in the
++  // meantime. A plain checkmark instead -- still confirms materials are
++  // set without naming which ones, the have/need row above the Craft
++  // button already answers that in full anyway.
+   const materialsFilled = allMaterialsConfirmed
+-    ? <span className="craft-slot-label">{materialIds.map((id) => MATERIAL_BY_ID[id].glyph).join(' ')}</span>
++    ? <span className="craft-slot-label" aria-hidden="true">✓</span>
+     : null;
+ 
+   /* ------------------------- consumable: bonus slot ------------------------ */
+@@ -544,13 +586,15 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+         </>
+       )}
+ 
+-      {category === 'consumable' && (
++      {isConsumableLike && (
+         <>
+           {/* Auto-confirmed the instant a recipe is picked (see pickRecipe's
+               own comment) -- no longer a required click. Still openable to
+-              see the same per-material glyph/name/amount info as a detail
+-              view, same reasoning gearModSlot's own filled preview stays
+-              clickable after it's set. */}
++              confirm materials are met, though the slot itself no longer
++              shows what they are -- see materialsFilled's own comment on
++              why the resource glyphs were pulled (patch 0247), same
++              reasoning gearModSlot's own filled preview stays clickable
++              after it's set. */}
+           <SlotBox
+             rect={rects.bottomLeft}
+             filled={materialsFilled}
+@@ -690,7 +734,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+         />
+       )}
+ 
+-      {openSlot === 'bottomLeft' && category === 'consumable' && (
++      {openSlot === 'bottomLeft' && isConsumableLike && (
+         <PickerModal
+           title="Materials"
+           options={materialsOptions}
+@@ -700,7 +744,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
+           selectedKeys={[...confirmedMaterials]}
+         />
+       )}
+-      {openSlot === 'bottomRight' && category === 'consumable' && (
++      {openSlot === 'bottomRight' && isConsumableLike && (
+         <PickerModal
+           title={`Choose a bonus (${chosenConsumableMods.length}/${modsToPick})`}
+           options={consumableModOptions}
+diff --git a/src/ui/EnhanceStation.tsx b/src/ui/EnhanceStation.tsx
+index 528413d..68a011c 100644
+--- a/src/ui/EnhanceStation.tsx
++++ b/src/ui/EnhanceStation.tsx
+@@ -75,6 +75,7 @@ export function EnhanceStation({ onClose }: { onClose: () => void }) {
+         label: `${d.name}${i.plus > 0 ? ` +${i.plus}` : ''}`,
+         sublabel: `${owner} -- ${atMax ? 'max refinement' : `+${i.plus}/${MAX_PLUS}`}`,
+         icon: <ItemIcon slot={d.slot} icon={d.icon} size={40} />,
++        rarity: d.rarity,
+       };
+     })
+     .filter((o): o is PickerOption => o !== null);
+diff --git a/src/ui/ScrapStation.tsx b/src/ui/ScrapStation.tsx
+index 130bb4e..2275951 100644
+--- a/src/ui/ScrapStation.tsx
++++ b/src/ui/ScrapStation.tsx
+@@ -4,7 +4,7 @@ import { EquipmentManager } from '../game/managers/EquipmentManager';
+ import { ModifierManager } from '../game/managers/ModifierManager';
+ import { scrapIconFor } from '../game/data/elements';
+ import { ItemIcon } from './icons';
+-import { PickerModal, SlotBox } from './CraftingStation';
++import { ItemPreviewModal, PickerModal, SlotBox } from './CraftingStation';
+ import type { PickerOption, Rect } from './CraftingStation';
+ import { useCountUp } from './useCountUp';
+ 
+@@ -39,6 +39,14 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
+ 
+   const [targetUid, setTargetUid] = useState('');
+   const [openPicker, setOpenPicker] = useState(false);
++  // Shown once, right after a pick -- direct feedback that going straight
++  // from "picked an item" to the Scrap button being live made it easy to
++  // commit an irreversible action against the wrong piece of gear without
++  // really looking at it first. Same shape as EnhanceStation's own
++  // previewUid -- see ItemPreviewModal's own doc comment
++  // (CraftingStation.tsx). Scrap is destructive and permanent, arguably
++  // the station this step matters most for.
++  const [previewUid, setPreviewUid] = useState<string | null>(null);
+   const [burst, setBurst] = useState<{ key: number; gained: number; icon: string } | null>(null);
+   const [flight, setFlight] = useState<{ key: number; dx: number; dy: number; icon: string } | null>(null);
+   const [counterFlash, setCounterFlash] = useState(false);
+@@ -73,6 +81,10 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
+   const scrapBonus = ModifierManager.global(state).scrapBonus ?? 0;
+   const value = item ? EquipmentManager.scrapValue(item, scrapBonus) : 0;
+ 
++  const previewItem = previewUid ? state.stash.find((i) => i.uid === previewUid) : undefined;
++  const previewDef = previewItem ? EquipmentManager.def(previewItem) : undefined;
++  const previewValue = previewItem ? EquipmentManager.scrapValue(previewItem, scrapBonus) : 0;
++
+   // Locked (Vaulted) items stay in the list rather than being hidden --
+   // per the Vault design, a destructive picker should show what's
+   // protected, not quietly omit it -- but render disabled, matching the
+@@ -90,6 +102,7 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
+         sublabel: i.locked ? '\uD83D\uDD12 Locked in Vault' : `${EquipmentManager.scrapValue(i, scrapBonus)} Scrap`,
+         icon: <ItemIcon slot={d.slot} icon={d.icon} size={40} />,
+         disabled: i.locked,
++        rarity: d.rarity,
+       };
+     })
+     .filter((o): o is PickerOption => o !== null);
+@@ -252,10 +265,24 @@ export function ScrapStation({ onClose }: { onClose: () => void }) {
+         <PickerModal
+           title="Choose an item"
+           options={options}
+-          onPick={(key) => setTargetUid(key)}
++          onPick={(key) => setPreviewUid(key)}
+           onClose={() => setOpenPicker(false)}
+         />
+       )}
++
++      {previewItem && previewDef && (
++        <ItemPreviewModal
++          item={previewItem}
++          def={previewDef}
++          onBack={() => { setPreviewUid(null); setOpenPicker(true); }}
++          onContinue={() => { setTargetUid(previewItem.uid); setPreviewUid(null); }}
++          extra={(
++            <p className="tiny muted" style={{ margin: '8px 0 0' }}>
++              Breaks down for {previewValue} Scrap. This cannot be undone.
++            </p>
++          )}
++        />
++      )}
+     </div>
+   );
+ }
+diff --git a/src/ui/WeaponEnchantStation.tsx b/src/ui/WeaponEnchantStation.tsx
+index 4075d08..0e8c4df 100644
+--- a/src/ui/WeaponEnchantStation.tsx
++++ b/src/ui/WeaponEnchantStation.tsx
+@@ -6,7 +6,7 @@ import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH, GEM_TIERS, GEM_TIER_LABEL
+ import { ElementType, GemTier } from '../game/types';
+ import { formatGold, RARITY_COLOR } from '../game/util';
+ import { ItemIcon } from './icons';
+-import { PickerModal, SlotBox } from './CraftingStation';
++import { ItemPreviewModal, PickerModal, SlotBox } from './CraftingStation';
+ import type { PickerOption, Rect } from './CraftingStation';
+ 
+ /** Hand-measured against infuse.jpg's own 1402x1122 canvas -- one slot
+@@ -35,11 +35,22 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
+   // each element/tier combo is priced and stocked independently.
+   const [tier, setTier] = useState<GemTier | null>(null);
+   const [openItemPicker, setOpenItemPicker] = useState(false);
++  // Shown once, right after a pick -- same reasoning ItemPreviewModal's
++  // own doc comment gives (CraftingStation.tsx): a straight pick-to-live
++  // transition made it easy to commit gold against the wrong weapon
++  // without really looking at it first. Was previously the one item
++  // picker on this page skipping the step Crafting/Enhance already use
++  // (patch 0247).
++  const [previewUid, setPreviewUid] = useState<string | null>(null);
+ 
+   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
+   const item = found?.item;
+   const def = item ? EquipmentManager.def(item) : undefined;
+ 
++  const previewFound = previewUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === previewUid) : undefined;
++  const previewItem = previewFound?.item;
++  const previewDef = previewItem ? EquipmentManager.def(previewItem) : undefined;
++
+   const setElementAndResetTier = (el: ElementType) => {
+     setElement(el);
+     setTier(null);
+@@ -59,6 +70,7 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
+         label: d.name,
+         sublabel: `${owner} -- ${current}`,
+         icon: <ItemIcon slot={d.slot} icon={d.icon} size={40} />,
++        rarity: d.rarity,
+       };
+     })
+     .filter((o): o is PickerOption => o !== null);
+@@ -158,10 +170,26 @@ export function WeaponEnchantStation({ onClose }: { onClose: () => void }) {
+         <PickerModal
+           title="Choose a weapon"
+           options={itemOptions}
+-          onPick={(key) => { setTargetUid(key); setElement(null); }}
++          onPick={(key) => setPreviewUid(key)}
+           onClose={() => setOpenItemPicker(false)}
+         />
+       )}
++
++      {previewItem && previewDef && (
++        <ItemPreviewModal
++          item={previewItem}
++          def={previewDef}
++          onBack={() => { setPreviewUid(null); setOpenItemPicker(true); }}
++          onContinue={() => { setTargetUid(previewItem.uid); setElement(null); setPreviewUid(null); }}
++          extra={(
++            <p className="tiny muted" style={{ margin: '8px 0 0' }}>
++              {previewItem.elementalDamage
++                ? `Currently ${GEM_TIER_LABEL[previewItem.elementalDamageTier ?? 'common']} ${ELEMENT_LABEL[previewItem.elementalDamage]} -- infusing replaces it.`
++                : 'Uninfused -- no elemental damage yet.'}
++            </p>
++          )}
++        />
++      )}
+     </div>
+   );
+ }
+diff --git a/src/ui/ArmourInfusionStation.tsx b/src/ui/ArmourInfusionStation.tsx
+index a6f8b3b..2e05a79 100644
+--- a/src/ui/ArmourInfusionStation.tsx
++++ b/src/ui/ArmourInfusionStation.tsx
+@@ -6,7 +6,7 @@ import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH, GEM_TIERS, GEM_TIER_LABEL
+ import { ElementType, GemTier } from '../game/types';
+ import { formatGold, RARITY_COLOR } from '../game/util';
+ import { ItemIcon } from './icons';
+-import { PickerModal, SlotBox } from './CraftingStation';
++import { ItemPreviewModal, PickerModal, SlotBox } from './CraftingStation';
+ import type { PickerOption, Rect } from './CraftingStation';
+ 
+ /** Hand-measured against armor-infusion.jpg's own 1448x1086 canvas via a
+@@ -33,11 +33,18 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
+   const [tier, setTier] = useState<GemTier | null>(null);
+   const [openItemPicker, setOpenItemPicker] = useState(false);
+   const [openGemPicker, setOpenGemPicker] = useState(false);
++  // Same reasoning as WeaponEnchantStation's own previewUid -- see
++  // ItemPreviewModal's doc comment (CraftingStation.tsx).
++  const [previewUid, setPreviewUid] = useState<string | null>(null);
+ 
+   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
+   const item = found?.item;
+   const def = item ? EquipmentManager.def(item) : undefined;
+ 
++  const previewFound = previewUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === previewUid) : undefined;
++  const previewItem = previewFound?.item;
++  const previewDef = previewItem ? EquipmentManager.def(previewItem) : undefined;
++
+   const itemOptions: PickerOption[] = EquipmentManager.allItems(state)
+     .filter(({ item: i }) => EquipmentManager.def(i)?.slot !== 'weapon')
+     .map(({ item: i, heroId }): PickerOption | null => {
+@@ -52,6 +59,7 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
+         label: d.name,
+         sublabel: `${owner} -- ${current}`,
+         icon: <ItemIcon slot={d.slot} icon={d.icon} size={40} />,
++        rarity: d.rarity,
+       };
+     })
+     .filter((o): o is PickerOption => o !== null);
+@@ -133,10 +141,26 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
+         <PickerModal
+           title="Choose armor"
+           options={itemOptions}
+-          onPick={(key) => { setTargetUid(key); setElement(null); }}
++          onPick={(key) => setPreviewUid(key)}
+           onClose={() => setOpenItemPicker(false)}
+         />
+       )}
++
++      {previewItem && previewDef && (
++        <ItemPreviewModal
++          item={previewItem}
++          def={previewDef}
++          onBack={() => { setPreviewUid(null); setOpenItemPicker(true); }}
++          onContinue={() => { setTargetUid(previewItem.uid); setElement(null); setPreviewUid(null); }}
++          extra={(
++            <p className="tiny muted" style={{ margin: '8px 0 0' }}>
++              {Object.keys(previewItem.elementalResist ?? {}).length > 0
++                ? `Current resist: ${Object.entries(previewItem.elementalResist ?? {}).map(([el, v]) => `${ELEMENT_LABEL[el as ElementType]} +${(v as number).toFixed(1)}%`).join(', ')} -- infusing adds to it.`
++                : 'No resist yet.'}
++            </p>
++          )}
++        />
++      )}
+       {openGemPicker && (
+         <PickerModal
+           title="Choose a resistance gem"
+diff --git a/src/ui/icons.tsx b/src/ui/icons.tsx
+index 38ccb7b..04cf6fa 100644
+--- a/src/ui/icons.tsx
++++ b/src/ui/icons.tsx
+@@ -12,8 +12,8 @@ const SLOT_FALLBACK: Record<EquipSlot, string> = {
+   gloves: '🧤', boots: '👢', ring: '💍', amulet: '📿', cloak: '🧣',
+ };
+ 
+-const CATEGORY_FALLBACK: Record<'gear' | 'consumable' | 'enchant' | 'gem', string> = {
+-  gear: '⚔️', consumable: '🧪', enchant: '✨', gem: '💎',
++const CATEGORY_FALLBACK: Record<'gear' | 'consumable' | 'enchant' | 'gem' | 'charm', string> = {
++  gear: '⚔️', consumable: '🧪', enchant: '✨', gem: '💎', charm: '🍀',
+ };
+ 
+ function IconBox({ icon, size, fallback }: { icon?: string; size: number; fallback: string }) {
+@@ -30,7 +30,14 @@ function IconBox({ icon, size, fallback }: { icon?: string; size: number; fallba
+     <div className="item-icon" style={{ width: size, height: size, fontSize: Math.round(size * 0.55) }}>
+       {showImage
+         ? <img key={icon} src={`./item-icons/${icon}`} alt="" onError={() => setFailed(true)} />
+-        : <span aria-hidden="true">{fallback}</span>}
++        // The emoji fallback (no real icon assigned yet) still gets its
++        // own backdrop -- .item-icon itself dropped its background/border
++        // in patch 0247 so a real, already-transparent icon PNG actually
++        // renders transparent instead of sitting on a painted grey square,
++        // but an emoji glyph has no transparency of its own to preserve
++        // and needs SOME backdrop to stay legible against whatever art is
++        // behind it (a bright background, a busy crafting scene, etc.).
++        : <span className="item-icon-fallback" aria-hidden="true">{fallback}</span>}
+     </div>
+   );
+ }
+@@ -44,8 +51,8 @@ export function ConsumableIcon({ icon, glyph, size = 40 }: { icon?: string; glyp
+   return <IconBox icon={icon} size={size} fallback={glyph} />;
+ }
+ 
+-/** Falls back to a per-category glyph (gear/consumable/enchant/gem) when a recipe has no icon assigned. */
+-export function RecipeIcon({ icon, category, size = 40 }: { icon?: string; category: 'gear' | 'consumable' | 'enchant' | 'gem'; size?: number }) {
++/** Falls back to a per-category glyph (gear/consumable/enchant/gem/charm) when a recipe has no icon assigned. */
++export function RecipeIcon({ icon, category, size = 40 }: { icon?: string; category: 'gear' | 'consumable' | 'enchant' | 'gem' | 'charm'; size?: number }) {
+   return <IconBox icon={icon} size={size} fallback={CATEGORY_FALLBACK[category]} />;
+ }
+ 
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index b8ae5fd..3d7b923 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -110,6 +110,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+   const [showScrap, setShowScrap] = useState(false);
+   const [showWeaponEnchant, setShowWeaponEnchant] = useState(false);
+   const [showArmourInfusion, setShowArmourInfusion] = useState(false);
++  const [showCharms, setShowCharms] = useState(false);
+ 
+   const vendorDef = VENDORS.find((v) => v.id === vendorId)!;
+   const level = GuildManager.vendorLevel(state, vendorId);
+@@ -222,6 +223,20 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+               {vendorId === 'enchanter' && (
+                 <button className="btn-purple" onClick={() => setShowArmourInfusion(true)}>Armour Infusion</button>
+               )}
++              {/* A handful of consumables (Lucky Charm, Fortune Weave,
++                  Windfall Sigil) were mistakenly showing under the
++                  Alchemist's Supplies -- thematically the Enchanter's own
++                  bench-made items (patch 0247), not potions. Given their
++                  own button/category (`charm`) rather than folded into
++                  this page's existing Crafting button, which is
++                  `category="enchant"` here -- an item-application flow,
++                  structurally incompatible with these being simple
++                  recipe crafts (see CraftingRecipeDef.category's own
++                  comment on why `charm` exists as a separate value at
++                  all). */}
++              {vendorId === 'enchanter' && (
++                <button className="btn-purple" onClick={() => setShowCharms(true)}>Charms</button>
++              )}
+             </div>
+           </div>
+         </div>
+@@ -245,6 +260,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+       {showScrap && <ScrapStation onClose={() => setShowScrap(false)} />}
+       {showWeaponEnchant && <WeaponEnchantStation onClose={() => setShowWeaponEnchant(false)} />}
+       {showArmourInfusion && <ArmourInfusionStation onClose={() => setShowArmourInfusion(false)} />}
++      {showCharms && <CraftingStation category="charm" onClose={() => setShowCharms(false)} />}
+     </>
+   );
+ }
+diff --git a/src/ui/panels/StatsPanel.tsx b/src/ui/panels/StatsPanel.tsx
+index 1237b34..e3de810 100644
+--- a/src/ui/panels/StatsPanel.tsx
++++ b/src/ui/panels/StatsPanel.tsx
+@@ -280,7 +280,8 @@ export function StatsPanel() {
+   ].sort((a, b) => b.resolvedAt - a.resolvedAt);
+ 
+   return (
+-    <>
++    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/settings.jpg)' }}>
++      <div className="tab-scene-content">
+       <h2>Statistics</h2>
+       <p className="subtitle">Everything the guild scribe has bothered to write down.</p>
+ 
+@@ -433,6 +434,7 @@ export function StatsPanel() {
+           onCancel={() => setPendingHardReset(false)}
+         />
+       )}
+-    </>
++      </div>
++    </div>
+   );
+ }
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 7be9935..7b75cc3 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -125,11 +125,26 @@
+   display: flex;
+   align-items: center;
+   justify-content: center;
++  /* No background/border here on purpose (patch 0247) -- every icon PNG
++     already has a transparent background baked in; this rule used to
++     paint an opaque panel-grey square + edge border underneath every one
++     regardless, so a transparent icon never actually looked transparent
++     in-game the way its own file already was. The emoji-glyph fallback
++     (IconBox in icons.tsx, shown when an item has no icon file assigned
++     yet) still needs SOME backdrop to read against arbitrary art behind
++     it -- see .item-icon-fallback just below, scoped to only that case. */
++}
++.item-icon img { width: 70%; height: 70%; image-rendering: pixelated; }
++.item-icon-fallback {
++  width: 100%;
++  height: 100%;
++  display: flex;
++  align-items: center;
++  justify-content: center;
+   background: var(--panel-3);
+   border: 1px solid var(--edge);
+   border-radius: 4px;
+ }
+-.item-icon img { width: 70%; height: 70%; image-rendering: pixelated; }
+ .item-card-body { min-width: 0; flex: 1; }
+ .item-card-name {
+   font-size: 11px;
+@@ -2316,6 +2331,21 @@ input[type='range'] {
+   overflow: hidden;
+   background-size: cover;
+   background-position: top center;
++  /* Ties the crop to the viewport instead of this element's own height
++     (patch 0247) -- without this, `cover` scales/crops purely against
++     .vendor-scene's own rendered box, so the exact same image reads
++     noticeably more zoomed-in on a short page than a tall one (a
++     shorter box means less of the image's vertical extent gets
++     revealed, anchored from the top). Confirmed as the actual cause of
++     Guide looking "very zoomed in" next to Lore despite sharing the
++     literal same file -- Guide's default view is just shorter content.
++     `fixed` makes every consumer of this class show the identical
++     crop/scale regardless of that particular page's own content height.
++     Known tradeoff: iOS Safari treats `fixed` as `scroll` (a long-
++     standing platform limitation, not a bug here) -- acceptable since
++     the visible symptom there is simply "acts like the old per-page
++     zoom on that one platform," not any actual breakage. */
++  background-attachment: fixed;
+   background-color: var(--night);
+ }
+ .vendor-scene-content {
+@@ -2357,6 +2387,11 @@ input[type='range'] {
+   overflow: hidden;
+   background-size: cover;
+   background-position: top center;
++  /* See .vendor-scene's own comment above -- same fix, same reason
++     (Guide vs. Lore sharing lore-and-guide.jpg was the actual bug
++     report this line fixes), generalized the same way the rest of this
++     class already was. */
++  background-attachment: fixed;
+   background-color: var(--night);
+ }
+ .tab-scene-content {
+@@ -3277,6 +3312,12 @@ button.harvest-item:hover {
+   z-index: 1;
+ }
+ .craft-picker-th-icon, .craft-picker-td-icon { width: 48px; }
++/* Rarity stripe (patch 0247) -- transparent by default (recipe pickers,
++   which have no rarity), coloured via inline style on real item rows
++   only. Declared on the <td> specifically, not .craft-picker-row -- see
++   the JSX's own comment on why a <tr> border is a no-op under
++   border-collapse: collapse. */
++.craft-picker-td-icon { border-left: 3px solid transparent; }
+ .craft-picker-th-check, .craft-picker-td-check { width: 24px; }
+ .craft-picker-row {
+   cursor: pointer;
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index d8bdadd..a9e6c9b 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -19092,3 +19092,128 @@ assets, same low-risk shape as the Vendors art passes, but worth an
+ actual visual pass in dev before merge given the sheer number of screens
+ touched at once, especially the two panels with a second early-return
+ branch.
++
++### Vendor/crafting art and UX pass: shared-background zoom, item picker rarity + preview cards, charm miscategorization, icon transparency (patch 0247)
++
++```discord-update
++Dev Update | Vendor & Crafting Polish
++
++- Fixed Guide's shared background looking much more zoomed in than Lore's
++- Statistics now shares a background with Settings
++- Every item picker now shows a rarity-coloured outline, and confirms with a detail card before you commit -- previously only some screens had this
++- Cleaned up the Alchemist's recipe picker -- no more resource icons in the boxes that are going away
++- Lucky Charm, Fortune Weave, and Windfall Sigil moved off the Alchemist's Supplies onto the Enchanter's own new Charms button
++- Removed the grey box behind every icon -- transparent PNGs now actually render transparent
++```
++
++A batch of six separate reports, tackled together since several touch the
++same files.
++
++**1. Guide's background looked "very zoomed in" next to Lore's, despite
++sharing the same image file.** Root cause: `.tab-scene`/`.vendor-scene`
++use `background-size: cover`, which scales/crops purely against the
++element's OWN rendered height -- Guide's default page (a couple of
++buttons, a short notification list) is shorter than Lore's (rank card,
++sub-tab content, chain cards), so the exact same image got a tighter,
++more cropped result on the shorter page. Fixed by adding
++`background-attachment: fixed` to both classes -- this ties the crop/
++scale to the *viewport* instead of the element's own box, so every
++consumer of either class now shows an identical framing regardless of
++that specific page's content height. One known tradeoff: iOS Safari
++treats `fixed` as `scroll` (a platform limitation, not new here) --
++acceptable, since the visible symptom there is just "back to the old
++per-page zoom," not any actual breakage.
++
++**2. Statistics now shares a background with Settings.** `StatsPanel.tsx`
++wrapped in `.tab-scene`/`.tab-scene-content` exactly like the ten panels
++patch 0246 already covered, pointed at `settings.jpg`.
++
++**3 & 4. Item pickers: rarity outlines and a consistent preview-card
++step.** The table conversion itself (`.craft-picker-table`) already
++existed from an earlier pass -- what it was missing was any notion of
++rarity (`PickerOption` had no such field) and a confirm-before-you-commit
++step on three of the five stations that pick an existing item.
++- Added `rarity?: Rarity` to `PickerOption`, threaded through every real
++  item list (CraftingStation's Enchant slot, EnhanceStation, ScrapStation,
++  WeaponEnchantStation, ArmourInfusionStation -- recipe/gem lists have no
++  rarity of their own and stay unset). Renders as a coloured left-edge
++  stripe on the row's icon cell -- deliberately on the `<td>`, not the
++  `<tr>`: `border-collapse: collapse` silently drops a border declared on
++  the row itself, only respecting one declared on a cell.
++- `ItemPreviewModal` (pick -> full detail card, matching what clicking a
++  stash item on Inventory already shows -- name/rarity/mods/durability --
++  with "Choose a different item"/"Continue") previously only guarded
++  EnhanceStation and CraftingStation's Enchant slot. Added the same step
++  to `ScrapStation` (arguably matters most here -- Scrap is destructive
++  and permanent), `WeaponEnchantStation`, and `ArmourInfusionStation`,
++  each passing its own `extra` content (current elemental status) the
++  same way EnhanceStation already passes its own refinement preview.
++
++**5. Alchemist recipe picker's bottom-left slot no longer shows resource
++glyphs.** Per direct note that those two bottom boxes are a planned
++removal from this screen entirely -- `materialsFilled` now shows a plain
++checkmark once materials are auto-confirmed, instead of each material's
++own glyph. The have/need row above the Craft button already answers
++"which materials, how many" in full; this slot was only ever a secondary
++echo of that.
++
++**6. Charms/sigils were showing under the Alchemist, not the Enchanter.**
++Confirmed exactly: `craft_lucky_charm_gold/xp`, `craft_fortune_weave_
++gold/xp`, and `craft_windfall_sigil_gold/xp` were all `category:
++"consumable"` -- one's own flavour text even calls it *"The Enchanter's
++own bench-made answer to the Alchemist's Greater Fortune Charm,"*
++confirming the mismatch was accidental, not intentional.
++
++Recategorizing them straight to `category: "enchant"` would have broken
++them outright -- every real `enchant` recipe (Minor/Standard/Greater
++Sigil) applies stats to an *existing* piece of gear (`statsToPick` +
++`targetUid`, via `engine.enchantItem`), while these six are ordinary
++standalone crafts with their own `resultConsumableId`, structurally
++identical to a `consumable` recipe. `CraftingStation`'s top slot renders
++one of two completely different pickers depending on category (item-pick
++for `enchant`, recipe-list for everything else) -- there was no way to
++land these six in the Enchanter's existing Crafting button without
++either breaking their own crafting logic or merging two incompatible
++picker paradigms into one modal.
++
++Added a new `category: "charm"` instead -- functionally a synonym for
++`consumable` everywhere in `CraftingStation.tsx` (a single
++`isConsumableLike = category === 'consumable' || category === 'charm'`
++flag now covers the four spots that used to check `'consumable'` alone:
++`canCraft`'s materials/bonus gate, the bottom-slot JSX, and both
++bottom-slot `PickerModal` openings), but reachable through its own new
++**Charms** button on the Enchanter's page instead of Alchemist's
++Supplies. Reuses `enchant.jpg` and `enchant` category's own slot rects
++(same canvas) rather than getting dedicated art -- these are the
++Enchanter's own bench-made items, not a separate physical room.
++`STATION_BG`/`STATION_TITLE`/`SCENE_CLASS`/`SLOT_RECTS` all gained a
++`charm` entry; `RecipeIcon`'s category union and `CATEGORY_FALLBACK`
++(icons.tsx) did too, for a sensible emoji fallback (🍀) on any of the six
++that's missing a real icon.
++
++**7. Icon "grey box" removed.** `.item-icon` painted a `var(--panel-3)`
++background + border underneath *every* icon unconditionally, so an
++already-transparent source PNG never actually looked transparent
++in-game. Dropped the background/border from `.item-icon` entirely; that
++treatment moved to a new `.item-icon-fallback` class applied only to the
++emoji-glyph case (`icons.tsx`'s `IconBox`) -- a placeholder emoji has no
++transparency of its own and still needs a legible backdrop against
++arbitrary art behind it, but a real icon file no longer gets one it
++never needed.
++
++**Investigated, not changed:** a reported "+" icon offset on the
++Alchemist's top crafting slot. Re-verified the slot's measured position
++against the art and found it tight (a few px at most, consistent with
++every other station's own "hand-measured" tolerance) -- the doubled "+"
++in the screenshot is most likely the pointer (a crosshair-style custom
++cursor) captured mid-hover directly over the UI's own "+" glyph, not a
++rendering bug. Left `SLOT_RECTS.consumable.top` untouched rather than
++guess-adjust numbers that already check out.
++
++**No save migration.** `charm` is a new `CraftingRecipeDef.category`
++value, not a `GameState` field -- no `SAVE_VERSION` bump.
++
++**Not yet verified** against a live `vite build` in this environment --
++this patch spans a type change, a JSON recategorization, five station
++components, one panel wrap, and CSS, so a real build/visual pass is
++worth doing before merge, more so than usual given the breadth here.

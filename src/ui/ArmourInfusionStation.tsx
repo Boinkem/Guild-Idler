@@ -6,7 +6,7 @@ import { ELEMENT_TYPES, ELEMENT_LABEL, ELEMENT_GLYPH, GEM_TIERS, GEM_TIER_LABEL 
 import { ElementType, GemTier } from '../game/types';
 import { formatGold, RARITY_COLOR } from '../game/util';
 import { ItemIcon } from './icons';
-import { PickerModal, SlotBox } from './CraftingStation';
+import { ItemPreviewModal, PickerModal, SlotBox } from './CraftingStation';
 import type { PickerOption, Rect } from './CraftingStation';
 
 /** Hand-measured against armor-infusion.jpg's own 1448x1086 canvas via a
@@ -33,10 +33,17 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
   const [tier, setTier] = useState<GemTier | null>(null);
   const [openItemPicker, setOpenItemPicker] = useState(false);
   const [openGemPicker, setOpenGemPicker] = useState(false);
+  // Same reasoning as WeaponEnchantStation's own previewUid -- see
+  // ItemPreviewModal's doc comment (CraftingStation.tsx).
+  const [previewUid, setPreviewUid] = useState<string | null>(null);
 
   const found = targetUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === targetUid) : undefined;
   const item = found?.item;
   const def = item ? EquipmentManager.def(item) : undefined;
+
+  const previewFound = previewUid ? EquipmentManager.allItems(state).find((e) => e.item.uid === previewUid) : undefined;
+  const previewItem = previewFound?.item;
+  const previewDef = previewItem ? EquipmentManager.def(previewItem) : undefined;
 
   const itemOptions: PickerOption[] = EquipmentManager.allItems(state)
     .filter(({ item: i }) => EquipmentManager.def(i)?.slot !== 'weapon')
@@ -52,6 +59,7 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
         label: d.name,
         sublabel: `${owner} -- ${current}`,
         icon: <ItemIcon slot={d.slot} icon={d.icon} size={40} />,
+        rarity: d.rarity,
       };
     })
     .filter((o): o is PickerOption => o !== null);
@@ -133,8 +141,24 @@ export function ArmourInfusionStation({ onClose }: { onClose: () => void }) {
         <PickerModal
           title="Choose armor"
           options={itemOptions}
-          onPick={(key) => { setTargetUid(key); setElement(null); }}
+          onPick={(key) => setPreviewUid(key)}
           onClose={() => setOpenItemPicker(false)}
+        />
+      )}
+
+      {previewItem && previewDef && (
+        <ItemPreviewModal
+          item={previewItem}
+          def={previewDef}
+          onBack={() => { setPreviewUid(null); setOpenItemPicker(true); }}
+          onContinue={() => { setTargetUid(previewItem.uid); setElement(null); setPreviewUid(null); }}
+          extra={(
+            <p className="tiny muted" style={{ margin: '8px 0 0' }}>
+              {Object.keys(previewItem.elementalResist ?? {}).length > 0
+                ? `Current resist: ${Object.entries(previewItem.elementalResist ?? {}).map(([el, v]) => `${ELEMENT_LABEL[el as ElementType]} +${(v as number).toFixed(1)}%`).join(', ')} -- infusing adds to it.`
+                : 'No resist yet.'}
+            </p>
+          )}
         />
       )}
       {openGemPicker && (

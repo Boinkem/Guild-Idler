@@ -19092,3 +19092,128 @@ assets, same low-risk shape as the Vendors art passes, but worth an
 actual visual pass in dev before merge given the sheer number of screens
 touched at once, especially the two panels with a second early-return
 branch.
+
+### Vendor/crafting art and UX pass: shared-background zoom, item picker rarity + preview cards, charm miscategorization, icon transparency (patch 0247)
+
+```discord-update
+Dev Update | Vendor & Crafting Polish
+
+- Fixed Guide's shared background looking much more zoomed in than Lore's
+- Statistics now shares a background with Settings
+- Every item picker now shows a rarity-coloured outline, and confirms with a detail card before you commit -- previously only some screens had this
+- Cleaned up the Alchemist's recipe picker -- no more resource icons in the boxes that are going away
+- Lucky Charm, Fortune Weave, and Windfall Sigil moved off the Alchemist's Supplies onto the Enchanter's own new Charms button
+- Removed the grey box behind every icon -- transparent PNGs now actually render transparent
+```
+
+A batch of six separate reports, tackled together since several touch the
+same files.
+
+**1. Guide's background looked "very zoomed in" next to Lore's, despite
+sharing the same image file.** Root cause: `.tab-scene`/`.vendor-scene`
+use `background-size: cover`, which scales/crops purely against the
+element's OWN rendered height -- Guide's default page (a couple of
+buttons, a short notification list) is shorter than Lore's (rank card,
+sub-tab content, chain cards), so the exact same image got a tighter,
+more cropped result on the shorter page. Fixed by adding
+`background-attachment: fixed` to both classes -- this ties the crop/
+scale to the *viewport* instead of the element's own box, so every
+consumer of either class now shows an identical framing regardless of
+that specific page's content height. One known tradeoff: iOS Safari
+treats `fixed` as `scroll` (a platform limitation, not new here) --
+acceptable, since the visible symptom there is just "back to the old
+per-page zoom," not any actual breakage.
+
+**2. Statistics now shares a background with Settings.** `StatsPanel.tsx`
+wrapped in `.tab-scene`/`.tab-scene-content` exactly like the ten panels
+patch 0246 already covered, pointed at `settings.jpg`.
+
+**3 & 4. Item pickers: rarity outlines and a consistent preview-card
+step.** The table conversion itself (`.craft-picker-table`) already
+existed from an earlier pass -- what it was missing was any notion of
+rarity (`PickerOption` had no such field) and a confirm-before-you-commit
+step on three of the five stations that pick an existing item.
+- Added `rarity?: Rarity` to `PickerOption`, threaded through every real
+  item list (CraftingStation's Enchant slot, EnhanceStation, ScrapStation,
+  WeaponEnchantStation, ArmourInfusionStation -- recipe/gem lists have no
+  rarity of their own and stay unset). Renders as a coloured left-edge
+  stripe on the row's icon cell -- deliberately on the `<td>`, not the
+  `<tr>`: `border-collapse: collapse` silently drops a border declared on
+  the row itself, only respecting one declared on a cell.
+- `ItemPreviewModal` (pick -> full detail card, matching what clicking a
+  stash item on Inventory already shows -- name/rarity/mods/durability --
+  with "Choose a different item"/"Continue") previously only guarded
+  EnhanceStation and CraftingStation's Enchant slot. Added the same step
+  to `ScrapStation` (arguably matters most here -- Scrap is destructive
+  and permanent), `WeaponEnchantStation`, and `ArmourInfusionStation`,
+  each passing its own `extra` content (current elemental status) the
+  same way EnhanceStation already passes its own refinement preview.
+
+**5. Alchemist recipe picker's bottom-left slot no longer shows resource
+glyphs.** Per direct note that those two bottom boxes are a planned
+removal from this screen entirely -- `materialsFilled` now shows a plain
+checkmark once materials are auto-confirmed, instead of each material's
+own glyph. The have/need row above the Craft button already answers
+"which materials, how many" in full; this slot was only ever a secondary
+echo of that.
+
+**6. Charms/sigils were showing under the Alchemist, not the Enchanter.**
+Confirmed exactly: `craft_lucky_charm_gold/xp`, `craft_fortune_weave_
+gold/xp`, and `craft_windfall_sigil_gold/xp` were all `category:
+"consumable"` -- one's own flavour text even calls it *"The Enchanter's
+own bench-made answer to the Alchemist's Greater Fortune Charm,"*
+confirming the mismatch was accidental, not intentional.
+
+Recategorizing them straight to `category: "enchant"` would have broken
+them outright -- every real `enchant` recipe (Minor/Standard/Greater
+Sigil) applies stats to an *existing* piece of gear (`statsToPick` +
+`targetUid`, via `engine.enchantItem`), while these six are ordinary
+standalone crafts with their own `resultConsumableId`, structurally
+identical to a `consumable` recipe. `CraftingStation`'s top slot renders
+one of two completely different pickers depending on category (item-pick
+for `enchant`, recipe-list for everything else) -- there was no way to
+land these six in the Enchanter's existing Crafting button without
+either breaking their own crafting logic or merging two incompatible
+picker paradigms into one modal.
+
+Added a new `category: "charm"` instead -- functionally a synonym for
+`consumable` everywhere in `CraftingStation.tsx` (a single
+`isConsumableLike = category === 'consumable' || category === 'charm'`
+flag now covers the four spots that used to check `'consumable'` alone:
+`canCraft`'s materials/bonus gate, the bottom-slot JSX, and both
+bottom-slot `PickerModal` openings), but reachable through its own new
+**Charms** button on the Enchanter's page instead of Alchemist's
+Supplies. Reuses `enchant.jpg` and `enchant` category's own slot rects
+(same canvas) rather than getting dedicated art -- these are the
+Enchanter's own bench-made items, not a separate physical room.
+`STATION_BG`/`STATION_TITLE`/`SCENE_CLASS`/`SLOT_RECTS` all gained a
+`charm` entry; `RecipeIcon`'s category union and `CATEGORY_FALLBACK`
+(icons.tsx) did too, for a sensible emoji fallback (🍀) on any of the six
+that's missing a real icon.
+
+**7. Icon "grey box" removed.** `.item-icon` painted a `var(--panel-3)`
+background + border underneath *every* icon unconditionally, so an
+already-transparent source PNG never actually looked transparent
+in-game. Dropped the background/border from `.item-icon` entirely; that
+treatment moved to a new `.item-icon-fallback` class applied only to the
+emoji-glyph case (`icons.tsx`'s `IconBox`) -- a placeholder emoji has no
+transparency of its own and still needs a legible backdrop against
+arbitrary art behind it, but a real icon file no longer gets one it
+never needed.
+
+**Investigated, not changed:** a reported "+" icon offset on the
+Alchemist's top crafting slot. Re-verified the slot's measured position
+against the art and found it tight (a few px at most, consistent with
+every other station's own "hand-measured" tolerance) -- the doubled "+"
+in the screenshot is most likely the pointer (a crosshair-style custom
+cursor) captured mid-hover directly over the UI's own "+" glyph, not a
+rendering bug. Left `SLOT_RECTS.consumable.top` untouched rather than
+guess-adjust numbers that already check out.
+
+**No save migration.** `charm` is a new `CraftingRecipeDef.category`
+value, not a `GameState` field -- no `SAVE_VERSION` bump.
+
+**Not yet verified** against a live `vite build` in this environment --
+this patch spans a type change, a JSON recategorization, five station
+components, one panel wrap, and CSS, so a real build/visual pass is
+worth doing before merge, more so than usual given the breadth here.

@@ -6,7 +6,7 @@ import { EquipmentManager } from '../game/managers/EquipmentManager';
 import { CRAFTING_RECIPES } from '../game/data/craftingRecipes';
 import { MATERIAL_BY_ID } from '../game/data/materials';
 import {
-  CraftingRecipeDef, EquipmentDef, EquipmentItem, MaterialId, Modifiers, Stats,
+  CraftingRecipeDef, EquipmentDef, EquipmentItem, MaterialId, Modifiers, Rarity, Stats,
 } from '../game/types';
 import {
   describeMods, describeStats, formatGold, MOD_LABEL, RARITY_COLOR, craftingStatLabel, MAIN_STAT_TOOLTIP,
@@ -29,23 +29,27 @@ const STATION_BG: Record<Category, string> = {
   // No commissioned art yet -- same "missing file just fails to paint"
   // convention every other banner/background in this game already uses.
   gem: './lore/crafting/gem.jpg',
+  // Same room/canvas as `enchant` -- these are the Enchanter's own bench-
+  // made charms (patch 0247), not a separate physical space, so they
+  // reuse enchant.jpg rather than getting dedicated art of their own.
+  charm: './lore/crafting/enchant.jpg',
 };
 
 const STATION_TITLE: Record<Category, string> = {
-  gear: 'Crafting', consumable: 'Supplies', enchant: 'Enchanting', gem: 'Gems',
+  gear: 'Crafting', consumable: 'Supplies', enchant: 'Enchanting', gem: 'Gems', charm: 'Charms',
 };
 
 /**
  * Which locked-aspect-ratio CSS class each category's scene uses (patch
- * 0242) -- gear/enchant/gem still share .craft-scene's 1402:1122 canvas,
- * but consumable moved to its own differently-shaped art
+ * 0242) -- gear/enchant/gem/charm still share .craft-scene's 1402:1122
+ * canvas, but consumable moved to its own differently-shaped art
  * (Alchemist_Crafting_Box.png, 1277x1232) and needs its own class
  * (.consumable-scene, app.css) with a matching aspect-ratio, same
  * pattern .armor-infusion-scene/.hatchery-select-scene already use for
  * their own off-ratio art.
  */
 const SCENE_CLASS: Record<Category, string> = {
-  gear: 'craft-scene', consumable: 'consumable-scene', enchant: 'craft-scene', gem: 'craft-scene',
+  gear: 'craft-scene', consumable: 'consumable-scene', enchant: 'craft-scene', gem: 'craft-scene', charm: 'craft-scene',
 };
 
 export interface Rect { left: number; top: number; width: number; height: number; }
@@ -98,6 +102,13 @@ const SLOT_RECTS: Record<Category, { top: Rect; bottomLeft: Rect; bottomRight: R
     bottomLeft: { left: 26.5, top: 52.0, width: 16.0, height: 20.3 },
     bottomRight: { left: 57.1, top: 52.0, width: 16.0, height: 20.3 },
   },
+  // Same canvas as `enchant` (enchant.jpg), so the same rects apply --
+  // see STATION_BG's own comment on why `charm` shares that art.
+  charm: {
+    top: { left: 42.3, top: 24.5, width: 16.8, height: 21.8 },
+    bottomLeft: { left: 31.8, top: 52.0, width: 16.4, height: 21.8 },
+    bottomRight: { left: 51.2, top: 52.0, width: 16.8, height: 21.8 },
+  },
 };
 
 /** A single option row inside a slot's picker popup. */
@@ -107,6 +118,16 @@ export interface PickerOption {
   sublabel?: string;
   icon?: ReactNode;
   disabled?: boolean;
+  /** Actual equipment only -- a recipe (crafting/enchant/gem/charm) has
+   *  no rarity of its own, so this stays unset for every picker except
+   *  an item picker (CraftingStation's own Enchant top slot, plus every
+   *  other station's item slot -- EnhanceStation, ScrapStation,
+   *  WeaponEnchantStation, ArmourInfusionStation). Drives
+   *  .craft-picker-row's left-edge rarity stripe, same colour set
+   *  RarityPill/item-card names already use (patch 0247, direct
+   *  feedback that the picker table read as flatter than the Inventory
+   *  grid it's showing the exact same items from). */
+  rarity?: Rarity;
 }
 
 /** One clickable frame on the scene -- shows what's picked, or a plain
@@ -202,8 +223,13 @@ export function PickerModal({
                       onClick={() => pick(opt)}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(opt); } }}
                     >
-                      <td className="craft-picker-td-icon">{opt.icon ?? null}</td>
-                      <td className="craft-picker-td-name">{opt.label}</td>
+                      {/* Rarity stripe lives on the icon cell specifically, not
+                          the <tr> -- `border-collapse: collapse` on the table
+                          only respects borders declared on <td>/<th>, an
+                          inline border on <tr> itself is silently dropped by
+                          every browser once collapse is in effect. */}
+                      <td className="craft-picker-td-icon" style={opt.rarity ? { borderLeftColor: RARITY_COLOR[opt.rarity] } : undefined}>{opt.icon ?? null}</td>
+                      <td className="craft-picker-td-name" style={opt.rarity ? { color: RARITY_COLOR[opt.rarity] } : undefined}>{opt.label}</td>
                       {hasSublabels && <td className="tiny muted craft-picker-td-detail">{opt.sublabel}</td>}
                       <td className="craft-picker-td-check">{selected && <span aria-hidden="true" className="craft-picker-check">✓</span>}</td>
                     </tr>
@@ -341,10 +367,19 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
   const statsToPick = recipe?.statsToPick ?? 0;
   const chosenMods = [modSlot0, modSlot1].filter((m): m is keyof Modifiers => m !== null);
 
+  // `charm` (patch 0247) is a separate category purely so these recipes
+  // route to the Enchanter's own Charms button instead of the Alchemist's
+  // Supplies one -- every actual behaviour (materials/bonus bottom slots,
+  // resultConsumableId, craftConsumable) is identical to `consumable`, so
+  // every place that used to check `category === 'consumable'` checks
+  // this instead, rather than repeating the `|| category === 'charm'`
+  // four separate times.
+  const isConsumableLike = category === 'consumable' || category === 'charm';
+
   const canCraft = !!recipe && !!afford?.ok
     && (category !== 'gear' || chosenMods.length === modsToPick)
     && (category !== 'enchant' || (chosenStats.length === statsToPick && targetUid !== ''))
-    && (category !== 'consumable' || (materialIds.every((id) => confirmedMaterials.has(id)) && chosenConsumableMods.length === modsToPick));
+    && (!isConsumableLike || (materialIds.every((id) => confirmedMaterials.has(id)) && chosenConsumableMods.length === modsToPick));
 
   /**
    * "Keep crafting" (direct ask) -- a consumable recipe deliberately stays
@@ -385,7 +420,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
       if (!def) return null;
       const owner = heroId ? state.heroes.find((h) => h.id === heroId)?.name : 'Stash';
       return {
-        key: item.uid, label: def.name, sublabel: owner ?? 'Stash',
+        key: item.uid, label: def.name, sublabel: owner ?? 'Stash', rarity: def.rarity,
         icon: <ItemIcon slot={def.slot} icon={def.icon} size={40} />,
       };
     }).filter((o): o is PickerOption => o !== null)
@@ -472,8 +507,15 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
     };
   });
   const allMaterialsConfirmed = materialIds.length > 0 && materialIds.every((id) => confirmedMaterials.has(id));
+  // Used to show each material's own glyph here (ore/herbs/fish etc.) --
+  // pulled per direct request (patch 0247): these two bottom boxes are a
+  // planned removal from this screen entirely, so showing resource icons
+  // in a slot that's going away wasn't worth keeping around in the
+  // meantime. A plain checkmark instead -- still confirms materials are
+  // set without naming which ones, the have/need row above the Craft
+  // button already answers that in full anyway.
   const materialsFilled = allMaterialsConfirmed
-    ? <span className="craft-slot-label">{materialIds.map((id) => MATERIAL_BY_ID[id].glyph).join(' ')}</span>
+    ? <span className="craft-slot-label" aria-hidden="true">✓</span>
     : null;
 
   /* ------------------------- consumable: bonus slot ------------------------ */
@@ -544,13 +586,15 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
         </>
       )}
 
-      {category === 'consumable' && (
+      {isConsumableLike && (
         <>
           {/* Auto-confirmed the instant a recipe is picked (see pickRecipe's
               own comment) -- no longer a required click. Still openable to
-              see the same per-material glyph/name/amount info as a detail
-              view, same reasoning gearModSlot's own filled preview stays
-              clickable after it's set. */}
+              confirm materials are met, though the slot itself no longer
+              shows what they are -- see materialsFilled's own comment on
+              why the resource glyphs were pulled (patch 0247), same
+              reasoning gearModSlot's own filled preview stays clickable
+              after it's set. */}
           <SlotBox
             rect={rects.bottomLeft}
             filled={materialsFilled}
@@ -690,7 +734,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
         />
       )}
 
-      {openSlot === 'bottomLeft' && category === 'consumable' && (
+      {openSlot === 'bottomLeft' && isConsumableLike && (
         <PickerModal
           title="Materials"
           options={materialsOptions}
@@ -700,7 +744,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
           selectedKeys={[...confirmedMaterials]}
         />
       )}
-      {openSlot === 'bottomRight' && category === 'consumable' && (
+      {openSlot === 'bottomRight' && isConsumableLike && (
         <PickerModal
           title={`Choose a bonus (${chosenConsumableMods.length}/${modsToPick})`}
           options={consumableModOptions}

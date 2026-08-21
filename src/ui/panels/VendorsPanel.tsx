@@ -110,6 +110,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
   const [showScrap, setShowScrap] = useState(false);
   const [showWeaponEnchant, setShowWeaponEnchant] = useState(false);
   const [showArmourInfusion, setShowArmourInfusion] = useState(false);
+  const [showCharms, setShowCharms] = useState(false);
 
   const vendorDef = VENDORS.find((v) => v.id === vendorId)!;
   const level = GuildManager.vendorLevel(state, vendorId);
@@ -222,6 +223,20 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
               {vendorId === 'enchanter' && (
                 <button className="btn-purple" onClick={() => setShowArmourInfusion(true)}>Armour Infusion</button>
               )}
+              {/* A handful of consumables (Lucky Charm, Fortune Weave,
+                  Windfall Sigil) were mistakenly showing under the
+                  Alchemist's Supplies -- thematically the Enchanter's own
+                  bench-made items (patch 0247), not potions. Given their
+                  own button/category (`charm`) rather than folded into
+                  this page's existing Crafting button, which is
+                  `category="enchant"` here -- an item-application flow,
+                  structurally incompatible with these being simple
+                  recipe crafts (see CraftingRecipeDef.category's own
+                  comment on why `charm` exists as a separate value at
+                  all). */}
+              {vendorId === 'enchanter' && (
+                <button className="btn-purple" onClick={() => setShowCharms(true)}>Charms</button>
+              )}
             </div>
           </div>
         </div>
@@ -245,6 +260,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
       {showScrap && <ScrapStation onClose={() => setShowScrap(false)} />}
       {showWeaponEnchant && <WeaponEnchantStation onClose={() => setShowWeaponEnchant(false)} />}
       {showArmourInfusion && <ArmourInfusionStation onClose={() => setShowArmourInfusion(false)} />}
+      {showCharms && <CraftingStation category="charm" onClose={() => setShowCharms(false)} />}
     </>
   );
 }

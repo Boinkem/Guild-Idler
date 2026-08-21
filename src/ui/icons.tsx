@@ -12,8 +12,8 @@ const SLOT_FALLBACK: Record<EquipSlot, string> = {
   gloves: '🧤', boots: '👢', ring: '💍', amulet: '📿', cloak: '🧣',
 };
 
-const CATEGORY_FALLBACK: Record<'gear' | 'consumable' | 'enchant' | 'gem', string> = {
-  gear: '⚔️', consumable: '🧪', enchant: '✨', gem: '💎',
+const CATEGORY_FALLBACK: Record<'gear' | 'consumable' | 'enchant' | 'gem' | 'charm', string> = {
+  gear: '⚔️', consumable: '🧪', enchant: '✨', gem: '💎', charm: '🍀',
 };
 
 function IconBox({ icon, size, fallback }: { icon?: string; size: number; fallback: string }) {
@@ -30,7 +30,14 @@ function IconBox({ icon, size, fallback }: { icon?: string; size: number; fallba
     <div className="item-icon" style={{ width: size, height: size, fontSize: Math.round(size * 0.55) }}>
       {showImage
         ? <img key={icon} src={`./item-icons/${icon}`} alt="" onError={() => setFailed(true)} />
-        : <span aria-hidden="true">{fallback}</span>}
+        // The emoji fallback (no real icon assigned yet) still gets its
+        // own backdrop -- .item-icon itself dropped its background/border
+        // in patch 0247 so a real, already-transparent icon PNG actually
+        // renders transparent instead of sitting on a painted grey square,
+        // but an emoji glyph has no transparency of its own to preserve
+        // and needs SOME backdrop to stay legible against whatever art is
+        // behind it (a bright background, a busy crafting scene, etc.).
+        : <span className="item-icon-fallback" aria-hidden="true">{fallback}</span>}
     </div>
   );
 }
@@ -44,8 +51,8 @@ export function ConsumableIcon({ icon, glyph, size = 40 }: { icon?: string; glyp
   return <IconBox icon={icon} size={size} fallback={glyph} />;
 }
 
-/** Falls back to a per-category glyph (gear/consumable/enchant/gem) when a recipe has no icon assigned. */
-export function RecipeIcon({ icon, category, size = 40 }: { icon?: string; category: 'gear' | 'consumable' | 'enchant' | 'gem'; size?: number }) {
+/** Falls back to a per-category glyph (gear/consumable/enchant/gem/charm) when a recipe has no icon assigned. */
+export function RecipeIcon({ icon, category, size = 40 }: { icon?: string; category: 'gear' | 'consumable' | 'enchant' | 'gem' | 'charm'; size?: number }) {
   return <IconBox icon={icon} size={size} fallback={CATEGORY_FALLBACK[category]} />;
 }
 
