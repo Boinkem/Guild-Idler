@@ -171,6 +171,15 @@ const SCHEMAS = {
     // reasonable follow-up if that folder ever grows past a handful of
     // files, but isn't needed yet for four entries.
     fields: {
+      // Missing entirely until this pass -- idField pointed at 'id' for
+      // lookups, but 'id' was never actually in this schema's own fields
+      // list. Since the generic editor rebuilds each entry from exactly
+      // its schema's field list on save (same class of bug raidExclusive/
+      // craftable/resultGem each hit before this), saving ANY edit to an
+      // existing tombstone style -- even just a cost tweak -- silently
+      // dropped its `id` entirely, corrupting the entry. Caught in a
+      // DevTool coverage review, not reported directly.
+      id: { type: 'string', required: true, slug: true },
       name: { type: 'string', required: true },
       description: { type: 'string', required: true },
       cost: { type: 'number', required: true, min: 0 },
@@ -292,6 +301,13 @@ const SCHEMAS = {
       description: { type: 'string', required: true },
       cost: { type: 'number', required: true, min: 0 },
       swatch: { type: 'string[]', required: true },
+      // Unset for every base-game skin -- see SkinDef.requiresDlc's own
+      // comment (a Steam pack id, gated via DlcManager.owns, not gold).
+      // Same field hero-classes already exposes for the identical DLC-gate
+      // shape; missing here until this pass meant a DLC skin's cost/swatch
+      // couldn't be edited through the DevTool without silently stripping
+      // its DLC gate on save.
+      requiresDlc: { type: 'string', required: false },
     },
   },
   'ascension-ranks': {
@@ -624,10 +640,23 @@ const SCHEMAS = {
       name: { type: 'string', required: true },
       description: { type: 'string', required: true },
       cost: { type: 'number', required: true },
+      // Required on ConsumableDef itself (drives ShopManager.
+      // rollConsumables' weighting and the Alchemist card's rarity
+      // banner) but missing from this schema entirely until this pass --
+      // same silent-drop bug raidExclusive/craftable/resultGem each hit
+      // before, just worse here since `rarity` isn't optional: saving ANY
+      // edit to an existing consumable through the DevTool was silently
+      // erasing a required field, not just an optional flag.
+      rarity: { type: 'enum', required: true, options: ['common', 'uncommon', 'rare', 'epic', 'legendary'] },
       glyph: { type: 'string', required: true },
       // Falls back to glyph when unset -- same convention equipment's icon
       // field already uses, same picker.
       icon: { type: 'string', required: false, picker: 'icon' },
+      // Same shape and same reasoning as equipment's own `craftable` --
+      // true for a craft-only variant (Alchemist's Reserve, the Fortune-
+      // Charm "Weave"/"Sigil" line, etc.) that should never appear in the
+      // Alchemist's ordinary shop rotation. Also missing until this pass.
+      craftable: { type: 'boolean', required: false },
       effect: { type: 'effect', required: true },
     },
   },
@@ -723,6 +752,14 @@ const SCHEMAS = {
       // EggInstance.dedicatedPetId on the quest/raid loot-assignment side)
       // -- excluded from the general random hatch pool entirely.
       dedicatedOnly: { type: 'boolean', required: false },
+      // Unset for every base-game species -- see PetDef.requiresDlc's own
+      // comment (a Steam pack id, gated via DlcManager.owns, independent
+      // of dedicatedOnly above -- a dedicatedOnly DLC pet is a valid
+      // combination of both). Same field hero-classes/skins already
+      // expose for the identical DLC-gate shape; missing here until this
+      // pass meant a DLC species' description/glyph couldn't be edited
+      // through the DevTool without silently stripping its DLC gate.
+      requiresDlc: { type: 'string', required: false },
     },
   },
   'events': {

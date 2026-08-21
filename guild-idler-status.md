@@ -18457,3 +18457,81 @@ not left in the real content file.
 `node --check` passes on both `server.mjs` and `app.js`; `npx tsc --noEmit`
 and `vite build` both still pass clean (this patch touches no TypeScript
 source, DevTool-only).
+
+### DevTool coverage audit: 4 real "silent field drop" bugs found and fixed (patch 0239)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed a real bug: editing a Tombstone Style in the DevTool was silently deleting its id on save
+- Fixed a real bug: editing a Consumable was silently deleting its rarity and craftable flag on save
+- Fixed a real bug: editing a DLC Skin or DLC Pet was silently un-gating it from its DLC pack on save
+```
+
+Direct request: review every core game feature, then review the DevTool
+to confirm every one of them can actually be added/edited/changed
+through it, not just some of them.
+
+**Breadth check first.** All 32 game-data JSON files in `src/game/data/json/`
+have a corresponding DevTool schema entry -- nothing in this game is
+edit-only-by-hand-JSON at the file level, confirmed directly rather than
+assumed.
+
+**Depth check: where the real bugs were.** Breadth alone doesn't catch the
+bug class this project has hit repeatedly before (equipment's missing
+`raidExclusive`/`craftable`, crafting-recipes' missing `resultGem`, most
+recently raid-encounters' missing elemental tags) -- a schema silently
+missing a field the real TypeScript type actually has. This matters more
+than a normal "can't edit X" gap: the generic editor (`app.js`'s
+`saveBtn.onclick`) rebuilds each entry **from scratch, using only the
+fields listed in that content type's schema**, with no fallback for
+anything not listed. So a missing field isn't just uneditable -- editing
+*anything else* on that same entry and saving silently erases it, live
+data corruption from an otherwise-innocuous edit.
+
+Cross-referenced every content-defining TS interface (`EquipmentDef`,
+`ConsumableDef`, `RaidEncounterDef`, `RaidDef`, `CraftingRecipeDef`,
+`HeroClassDef`, `SkinDef`, `PetDef`, `TombstoneStyleDef`, `InjuryDef`,
+`EventDef`, `MaterialDef`, `DifficultyConfig`, `AchievementDef`,
+`GuildRankTier`, `RoleDef`, `CurioDef`, `GuildHallDecorationDef`,
+`PeddlerCardDef`) field-by-field against its schema's own `fields` list.
+Most matched exactly (naming differences like `durationHours` vs
+`durationMs` are a deliberate unit-conversion convention already
+established, not a gap). Four genuine mismatches found:
+
+- **`tombstone-styles` was missing `id` entirely** -- the most serious of
+  the four. `idField: 'id'` was set for lookups, but `id` itself was never
+  in the schema's `fields` object, so saving *any* edit to an existing
+  tombstone style (even a plain cost tweak) silently dropped its `id` on
+  write. Confirmed concretely, not just reasoned through: simulated the
+  old field-rebuild against real data (`id` genuinely vanished), then
+  verified the fix preserves it through an actual `/api/data/
+  tombstone-styles` POST round-trip against the running server.
+- **`consumables` was missing `rarity`** (required on `ConsumableDef`,
+  drives `ShopManager.rollConsumables`' weighting and the Alchemist
+  card's rarity banner) **and `craftable`** (excludes craft-only variants
+  from ordinary shop stock, same shape equipment's own `craftable`
+  already has). Both silently dropped on any consumable edit before this.
+- **`skins` was missing `requiresDlc`** -- editing a DLC skin's cost or
+  swatch would have silently un-gated it from its Steam pack.
+- **`pets` was missing `requiresDlc`** -- same issue for DLC pet species.
+
+All four now match their real TS types exactly (`rarity` as the same
+5-value enum equipment already validates against; the two `requiresDlc`
+fields as plain optional strings, identical to `hero-classes`' own
+pre-existing field). Verified directly against the running DevTool
+server for all four: schema reflects every new field; existing tagged
+data round-trips correctly through `/api/data/<kind>`; a valid edit
+saves; an invalid value (`rarity: "mythic"`) is correctly rejected with a
+clear per-field error. Test writes reverted afterward via `git checkout`,
+not left in the real content files.
+
+**Everything else checked and found already correct, no changes needed:**
+Equipment, Raids, Raid Encounters (including the elemental tags from
+patch 0238), Crafting Recipes (including the gem tiers from patch 0237),
+Quest Chains, Hero Classes, Roles, Injuries, Events, Materials,
+Difficulties, Curios, Guild Hall Decorations, Peddler Cards, Achievements,
+Guild Rank Tiers.
+
+`node --check` passes on `server.mjs`; `npx tsc --noEmit` and `vite build`
+both still pass clean (no TypeScript touched, DevTool-only).
