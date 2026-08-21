@@ -70,7 +70,8 @@ export function GuidePanel() {
   const [subTab, setSubTab] = useState<'notifications' | 'howto'>('notifications');
 
   return (
-    <>
+    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/lore-and-guide.jpg)' }}>
+      <div className="tab-scene-content">
       <h2>Guide</h2>
       <p className="subtitle">A running log of what's happened, and a quick reference for how everything works.</p>
 
@@ -84,6 +85,7 @@ export function GuidePanel() {
       </div>
 
       {subTab === 'notifications' ? <NotificationsTab /> : <HowToTab />}
-    </>
+      </div>
+    </div>
   );
 }

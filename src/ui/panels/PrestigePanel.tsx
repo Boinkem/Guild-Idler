@@ -221,7 +221,8 @@ export function PrestigePanel() {
     : 0;
 
   return (
-    <>
+    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/prestige.jpg)' }}>
+      <div className="tab-scene-content">
       <h2>Prestige</h2>
       <p className="subtitle">
         Retire a hero at level {PRESTIGE_MIN_LEVEL} or above. They hand in their level, XP, and gear;
@@ -305,6 +306,7 @@ export function PrestigePanel() {
           );
         })}
       </div>
-    </>
+      </div>
+    </div>
   );
 }

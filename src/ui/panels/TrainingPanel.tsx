@@ -135,7 +135,8 @@ export function TrainingPanel() {
   if (!hasTraining) {
     const cost = GuildManager.nextUpgradeCost(state, 'training_grounds');
     return (
-      <>
+      <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/training.jpg)' }}>
+        <div className="tab-scene-content">
         <h2>Training</h2>
         <p className="subtitle">Reassign a hero's battlefield role -- Melee, Ranged, or Caster.</p>
         <div className="card" style={{ marginTop: 12 }}>
@@ -153,12 +154,14 @@ export function TrainingPanel() {
             Fund Training · {cost !== null ? formatGold(cost) : 'unavailable'}
           </button>
         </div>
-      </>
+        </div>
+      </div>
     );
   }
 
   return (
-    <>
+    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/training.jpg)' }}>
+      <div className="tab-scene-content">
       <h2>Training</h2>
       <p className="subtitle">Click a hero to see their available roles.</p>
       {state.heroes.length === 0 ? (
@@ -171,6 +174,7 @@ export function TrainingPanel() {
         </div>
       )}
       {selectedHero && <TrainingModal hero={selectedHero} onClose={() => setSelectedHeroId(null)} />}
-    </>
+      </div>
+    </div>
   );
 }

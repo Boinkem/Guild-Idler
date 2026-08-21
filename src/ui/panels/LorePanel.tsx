@@ -495,7 +495,8 @@ export function LorePanel() {
   const powerNeeded = powerToNextRank(state);
 
   return (
-    <>
+    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/lore-and-guide.jpg)' }}>
+      <div className="tab-scene-content">
       <h2>Lore</h2>
       <p className="subtitle">Every contract tells a small story. This is the guild's record of the ones worth remembering.</p>
 
@@ -540,6 +541,7 @@ export function LorePanel() {
       {subTab === 'quests' && <StoryQuestsTab />}
       {subTab === 'raids' && <StoryRaidsTab />}
       {subTab === 'collection' && <CollectionTab />}
-    </>
+      </div>
+    </div>
   );
 }

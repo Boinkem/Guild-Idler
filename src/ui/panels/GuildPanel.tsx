@@ -333,7 +333,8 @@ export function GuildPanel() {
   }
 
   return (
-    <>
+    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/guildhall.jpg)' }}>
+      <div className="tab-scene-content">
       <div>
         <h2>Guild Hall</h2>
         <p className="subtitle">
@@ -407,7 +408,8 @@ export function GuildPanel() {
       )}
 
       {fundingOpen && <FundGuildModal onClose={() => setFundingOpen(false)} />}
-    </>
+      </div>
+    </div>
   );
 }
 

@@ -19027,3 +19027,68 @@ built here.
 
 `npx tsc --noEmit` and `vite build` (including both Electron sub-builds,
 main and preload) all pass clean.
+
+### Full-page backgrounds for ten more tabs, generalized off the Vendors treatment (patch 0246)
+
+```discord-update
+Dev Update | Backgrounds
+
+- Added a dedicated full-page background to Inventory, Guild Hall, Prestige, Settings, Lore, Guide, Quests & Contracts, Story Quests, Training, and Heroes
+- Same edge-to-edge treatment the Vendors tab already has -- no gaps, no boxed-in look
+```
+
+New commissioned art, eight images, covering ten tabs -- Lore and Guide
+share one image (same study/library room, two tabs), and Quests &
+Contracts and Story Quests share another (same quest-board room). Every
+other tab here gets its own.
+
+**Generalized `.vendor-scene` into `.tab-scene`.** Patches 0242-0244
+worked out the right shape for Vendors the hard way -- full-bleed via a
+negative margin cancelling `.panel`'s own padding, `min-height: calc(100%
++ 38px)` to still land on `.panel`'s true bottom edge, no border-radius,
+plain cover/center rather than `.craft-scene`'s locked-aspect-ratio
+treatment since none of these pages have pixel-perfect hit-targets.
+Rather than copy that whole block into ten more panels, added generic
+`.tab-scene`/`.tab-scene-content` classes carrying the exact same rules,
+and pointed every panel below at those instead of duplicating the
+comment ten times. `.vendor-scene` itself is untouched -- still keyed by
+the currently-open vendor rather than a single fixed image, so it stays
+its own pair of classes rather than being folded into the generic ones.
+
+**Ten panels, one wrap each** (two of them -- `DiscoveredQuestsPanel` and
+`TrainingPanel` -- have a second early-return branch for a locked/empty
+state, wrapped the same way so the backdrop doesn't disappear on those
+screens either):
+- `EquipmentPanel.tsx` (Inventory) -> `inventory.jpg`
+- `GuildPanel.tsx` (Guild Hall) -> `guildhall.jpg` -- only the main
+  return; the `customizing` early-return branch already renders its own
+  dedicated full-bleed `GuildHallCustomizeScene` and was left alone
+- `PrestigePanel.tsx` -> `prestige.jpg`
+- `SettingsPanel.tsx` -> `settings.jpg`
+- `LorePanel.tsx` -> `lore-and-guide.jpg`
+- `GuidePanel.tsx` -> `lore-and-guide.jpg` (same image as Lore)
+- `QuestPanel.tsx` (Quests & Contracts) -> `quests.jpg`
+- `DiscoveredQuestsPanel.tsx` (Story Quests) -> `quests.jpg` (same image
+  as Quests & Contracts), both its "no hero recruited yet" branch and
+  its main return
+- `TrainingPanel.tsx` -> `training.jpg`, both its "Training Grounds not
+  built yet" branch and its main return
+- `HeroesPanel.tsx` -> `heroes.jpg`
+
+Each wrap only touches the return statement's own opening/closing tags
+(`<>` -> `<div className="tab-scene" style={{...}}><div
+className="tab-scene-content">`, and the matching close) -- inner content
+is untouched and deliberately left at its original indentation rather
+than reformatted, to keep the diff to exactly what changed instead of
+a full-file reindent.
+
+**No gameplay/state changes.** Pure art plus the CSS/JSX plumbing to
+hang it correctly, same shape as the Vendors background work. No
+`GameState` fields, no save migration, no `SAVE_VERSION` bump.
+
+**Not yet verified** against a live `vite build` in this environment --
+ten mechanical JSX wraps plus one new CSS block and eight new binary
+assets, same low-risk shape as the Vendors art passes, but worth an
+actual visual pass in dev before merge given the sheer number of screens
+touched at once, especially the two panels with a second early-return
+branch.

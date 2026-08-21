@@ -68,7 +68,8 @@ export function SettingsPanel() {
   const unlockedTracks = BARD_TRACKS.filter((t) => unlockedTrackIds.includes(t.id));
 
   return (
-    <>
+    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/settings.jpg)' }}>
+      <div className="tab-scene-content">
       <h2>Settings</h2>
       <p className="subtitle">Everything here is per-device and saved instantly. It never touches your guild's progress.</p>
 
@@ -320,6 +321,7 @@ export function SettingsPanel() {
       <div className="section-heading">Reset</div>
       <p className="small muted">Restores every setting above to its default. Your guild is untouched.</p>
       <button className="btn-ghost" onClick={reset}>Reset settings to defaults</button>
-    </>
+      </div>
+    </div>
   );
 }

@@ -2324,6 +2324,47 @@ input[type='range'] {
   background: color-mix(in srgb, var(--night) 45%, transparent);
 }
 
+/*
+ * Generic full-bleed panel backdrop (patch 0246) -- same shape as
+ * .vendor-scene/.vendor-scene-content above (patches 0242-0244),
+ * generalized so every OTHER top-level tab with its own dedicated art
+ * (Inventory, Guild Hall, Prestige, Settings, Lore, Guide, Quests &
+ * Contracts, Story Quests, Training, Heroes) can reuse one pair of
+ * classes instead of each getting its own bespoke copy of the same
+ * comment. See .vendor-scene's own comment just above for the full
+ * reasoning this inherits wholesale: plain cover/center rather than
+ * .craft-scene's locked-aspect-ratio treatment (no pixel-perfect
+ * hit-targets on any of these pages, and arbitrary content height);
+ * full-bleed via negative margin cancelling .panel's own padding
+ * exactly, rather than just `min-height: 100%`, so the art reaches
+ * .panel's true edges on all four sides instead of leaving its padding
+ * gutter showing the plain backdrop; `min-height: calc(100% + 38px)` to
+ * still land exactly on .panel's true bottom edge once that margin pulls
+ * the box back up by the 14px+24px it just cancelled; no border-radius,
+ * since flush against .panel's real boundary a rounded corner would
+ * just reopen the same gap at the four corners specifically.
+ *
+ * Each consuming panel wraps its ENTIRE return (not just the content
+ * below its own heading) in these two classes -- same "wrap everything
+ * this tab renders, not just a sub-section of it" fix patch 0244 already
+ * had to make for Vendors after an early version only wrapped part of
+ * the page and the gap reappeared above the tab row.
+ */
+.tab-scene {
+  position: relative;
+  margin: -14px -16px -24px;
+  min-height: calc(100% + 38px);
+  overflow: hidden;
+  background-size: cover;
+  background-position: top center;
+  background-color: var(--night);
+}
+.tab-scene-content {
+  position: relative;
+  padding: 14px 16px 24px;
+  background: color-mix(in srgb, var(--night) 45%, transparent);
+}
+
 .locked-upgrade {
   opacity: 0.5;
   border-style: dashed;

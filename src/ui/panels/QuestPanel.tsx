@@ -435,7 +435,8 @@ export function QuestPanel() {
   };
 
   return (
-    <>
+    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/quests.jpg)' }}>
+      <div className="tab-scene-content">
       <h2>Quest Board</h2>
       <p className="subtitle">
         Each hero keeps their own contracts, scaled to their own level. Pick a hero below to see
@@ -625,6 +626,7 @@ export function QuestPanel() {
           onCancel={() => setPendingRecallHeroId(null)}
         />
       )}
-    </>
+      </div>
+    </div>
   );
 }

@@ -893,7 +893,8 @@ export function EquipmentPanel() {
   });
 
   return (
-    <>
+    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/inventory.jpg)' }}>
+      <div className="tab-scene-content">
       <h2>Inventory</h2>
       <p className="subtitle">
         Everything the guild owns: worn gear, the shared stash, and consumables on hand.
@@ -1146,6 +1147,7 @@ export function EquipmentPanel() {
           onCancel={() => setPendingJunkSell(false)}
         />
       )}
-    </>
+      </div>
+    </div>
   );
 }

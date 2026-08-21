@@ -110,15 +110,18 @@ export function DiscoveredQuestsPanel() {
 
   if (!selectedHero) {
     return (
-      <>
+      <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/quests.jpg)' }}>
+        <div className="tab-scene-content">
         <h2>Story Quests</h2>
         <p className="subtitle">Recruit a hero first -- quest chains open up once you have someone to send.</p>
-      </>
+        </div>
+      </div>
     );
   }
 
   return (
-    <>
+    <div className="tab-scene" style={{ backgroundImage: 'url(./lore/panels/quests.jpg)' }}>
+      <div className="tab-scene-content">
       <h2>Story Quests</h2>
 
       <div className="row" style={{ gap: 8, marginBottom: 14 }}>
@@ -190,7 +193,8 @@ export function DiscoveredQuestsPanel() {
           onOpenReplayChain={setOpenReplayChainId}
         />
       )}
-    </>
+      </div>
+    </div>
   );
 }
 
