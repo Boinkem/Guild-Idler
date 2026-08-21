@@ -19303,3 +19303,74 @@ added.
 
 **Verified** against a live `tsc --noEmit` and `vite build` in this
 environment -- both clean.
+
+### Hero Comparison table (patch 0249)
+
+```discord-update
+Dev Update | Feature
+
+- New "Compare Heroes" button on the Heroes tab -- click it for a sortable table of every hero's gear score, quest/raid win rates, and lifetime gold/xp earned
+- Covers quests, story chains, chain replays, and raids alike
+```
+
+Direct request: a way to compare heroes' individual performance side by
+side, not just their level. Genuinely new tracking, not a display
+change -- before this patch the only per-hero counter that existed at
+all was `questsCompleted` (attempts, not successes, and quest-only --
+raids had zero per-hero tracking whatsoever).
+
+**Five new lifetime counters on `Hero`**: `questsSucceeded` (pairs with
+the existing `questsCompleted`), `raidsParticipated`/`raidsSucceeded`
+(new, separate from the quest counters on purpose -- a raid isn't a
+"quest" in this game's own vocabulary, so folding it into
+`questsCompleted` would misrepresent what that field counts elsewhere),
+and `goldEarnedLifetime`/`xpEarnedLifetime` (combined across every
+source). `SAVE_VERSION` 50->51, migration 50 backfills all five to 0
+for every hero on an existing save -- there's no prior history to
+recover any of this from, same "undiscovered content stays undiscovered"
+limitation every other new-counter migration here already accepts.
+
+**Quests, chains, and chain replays are covered for free** --
+`QuestManager.resolve` is the single shared code path for all three
+(confirmed against patch 0227's own chain-replay branching), so the new
+counters only needed adding in one place. Gold/xp are already
+guaranteed 0 on a failed attempt (both only ever get assigned a nonzero
+value inside this same function's own success-gated blocks), so no
+extra success check was needed for those two.
+
+**Raids needed real new wiring**, since they had none before. Added a
+small per-hero credit loop in `RaidManager.resolve` right after
+`fullClear` is determined -- "succeeded" means the same full-clear
+condition the game already uses to decide `completedRaids`/title
+grants, so a raid that stops partway through isn't credited as a
+success for anyone, consistent with how the game treats that outcome
+everywhere else. Gold/xp are split evenly across the party rather than
+crediting each hero the full pooled reward -- the reward itself is one
+shared pool (`state.gold` gets it once, not once per hero), so full
+credit to everyone would make a 6-hero raid look like it multiplied a
+hero's earning power by 6x in the comparison table, which isn't a
+meaningful reading of what actually happened.
+
+**Gear Score needed zero new tracking** -- `HeroManager.gearScore(hero)`
+already existed and is computed live in the table, not stored.
+
+**UI** (`HeroesPanel.tsx`): a "Compare Heroes" chip, shown once there's
+more than one hero to compare, opening a modal with a sortable table
+(click any column header, click again to reverse). Quests/Raids show
+"won/attempted (pct%)" rather than a bare count -- a hero with 40
+successes out of 40 sent and one with 40 out of 80 both show "40" if
+only the numerator is visible, which would erase exactly the comparison
+this table exists to make. Reuses `GearScoreBadge` as-is for the Gear
+column rather than a new number display, matching how gear score
+already renders everywhere else in the game.
+
+New `.hero-compare-table` CSS, same collapsed-border/sticky-header
+shape `.craft-picker-table` already established, just with clickable
+sortable headers instead of a fixed picker layout.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Confirmed `RaidManager`'s party
+size can never be 0 at the point the new gold/xp split divides by
+`heroes.length` (raid `partySize` config always requires at least 1,
+enforced in `canStart` before `resolve` is ever reachable). `SAVE_VERSION`
+chain confirmed contiguous (49->50->51).

@@ -150,6 +150,11 @@ export function HeroesPanel() {
     });
   };
 
+  // Hero Comparison table (patch 0249) -- behind its own button rather
+  // than shown by default, direct request. See HeroComparisonModal's own
+  // comment for the counters it reads.
+  const [showComparison, setShowComparison] = useState(false);
+
   const { flashes: levelFlashes, dismiss: dismissLevelFlash } = useLevelUpFlash(
     state.heroes.map((h) => ({ id: h.id, level: h.level })),
   );
@@ -173,6 +178,13 @@ export function HeroesPanel() {
       <div className="tab-scene-content">
       <h2>Heroes</h2>
       <p className="subtitle">{state.heroes.length} of {slots} slots filled. Every hero shares the guild's gold and bonuses.</p>
+
+      {state.heroes.length > 1 && (
+        <button className="chip" style={{ marginBottom: 10 }} onClick={() => setShowComparison(true)}>
+          Compare Heroes
+        </button>
+      )}
+      {showComparison && <HeroComparisonModal heroes={state.heroes} onClose={() => setShowComparison(false)} />}
 
       {fallenHeroes.length > 1 && (
         <button
@@ -565,6 +577,106 @@ export function HeroesPanel() {
           );
         })}
       </div>
+      </div>
+    </div>
+  );
+}
+
+type CompareSortKey = 'name' | 'level' | 'gearScore' | 'quests' | 'raids' | 'gold' | 'xp';
+
+/**
+ * Hero Comparison table (patch 0249) -- direct request: "something where
+ * you can compare your heroes' individual actions/success/gold." Behind
+ * its own button rather than shown by default (HeroesPanel's own
+ * "Compare Heroes" chip), and only offered at all once there's more than
+ * one hero to actually compare.
+ *
+ * Every column beyond Gear Score reads from the five new lifetime
+ * counters on Hero (see that type's own comment for the full reasoning
+ * on scope/attribution) -- Gear Score itself needed no new tracking at
+ * all, HeroManager.gearScore(hero) already existed and is computed live
+ * here, not stored.
+ *
+ * Quests/Raids show success rate as "won/attempted (pct%)" rather than
+ * just a raw count -- a hero with 40 successful quests out of 40 sent
+ * and one with 40 out of 80 both show "40" if only the numerator is
+ * shown, which erases exactly the comparison this table exists to make.
+ */
+function HeroComparisonModal({ heroes, onClose }: { heroes: Hero[]; onClose: () => void }) {
+  const [sortKey, setSortKey] = useState<CompareSortKey>('gearScore');
+  const [sortDesc, setSortDesc] = useState(true);
+
+  const rows = heroes.map((h) => {
+    const gearScore = HeroManager.gearScore(h);
+    const questRate = h.questsCompleted > 0 ? h.questsSucceeded / h.questsCompleted : 0;
+    const raidRate = h.raidsParticipated > 0 ? h.raidsSucceeded / h.raidsParticipated : 0;
+    return { hero: h, gearScore, questRate, raidRate };
+  });
+
+  const sorted = [...rows].sort((a, b) => {
+    let cmp = 0;
+    switch (sortKey) {
+      case 'name': cmp = a.hero.name.localeCompare(b.hero.name); break;
+      case 'level': cmp = a.hero.level - b.hero.level; break;
+      case 'gearScore': cmp = a.gearScore - b.gearScore; break;
+      case 'quests': cmp = a.hero.questsSucceeded - b.hero.questsSucceeded; break;
+      case 'raids': cmp = a.hero.raidsSucceeded - b.hero.raidsSucceeded; break;
+      case 'gold': cmp = a.hero.goldEarnedLifetime - b.hero.goldEarnedLifetime; break;
+      case 'xp': cmp = a.hero.xpEarnedLifetime - b.hero.xpEarnedLifetime; break;
+    }
+    return sortDesc ? -cmp : cmp;
+  });
+
+  function sortBy(key: CompareSortKey) {
+    if (key === sortKey) setSortDesc((d) => !d);
+    else { setSortKey(key); setSortDesc(true); }
+  }
+
+  const arrow = (key: CompareSortKey) => (key === sortKey ? (sortDesc ? ' \u25be' : ' \u25b4') : '');
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 640 }} onClick={(e) => e.stopPropagation()}>
+        <div className="spread" style={{ marginBottom: 8 }}>
+          <span className="card-title">Compare Heroes</span>
+          <button className="btn-ghost" onClick={onClose}>Close</button>
+        </div>
+        <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+          <table className="hero-compare-table">
+            <thead>
+              <tr>
+                <th onClick={() => sortBy('name')}>Hero{arrow('name')}</th>
+                <th onClick={() => sortBy('level')}>Lvl{arrow('level')}</th>
+                <th onClick={() => sortBy('gearScore')}>Gear{arrow('gearScore')}</th>
+                <th onClick={() => sortBy('quests')}>Quests{arrow('quests')}</th>
+                <th onClick={() => sortBy('raids')}>Raids{arrow('raids')}</th>
+                <th onClick={() => sortBy('gold')}>Gold{arrow('gold')}</th>
+                <th onClick={() => sortBy('xp')}>XP{arrow('xp')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map(({ hero, gearScore, questRate, raidRate }) => (
+                <tr key={hero.id}>
+                  <td>{hero.name}</td>
+                  <td>{hero.level}</td>
+                  <td><GearScoreBadge score={gearScore} size="small" /></td>
+                  <td title={`${hero.questsSucceeded} won of ${hero.questsCompleted} sent`}>
+                    {hero.questsCompleted > 0 ? `${hero.questsSucceeded}/${hero.questsCompleted} (${Math.round(questRate * 100)}%)` : '\u2014'}
+                  </td>
+                  <td title={`${hero.raidsSucceeded} cleared of ${hero.raidsParticipated} joined`}>
+                    {hero.raidsParticipated > 0 ? `${hero.raidsSucceeded}/${hero.raidsParticipated} (${Math.round(raidRate * 100)}%)` : '\u2014'}
+                  </td>
+                  <td>{formatGold(hero.goldEarnedLifetime)}</td>
+                  <td>{Math.round(hero.xpEarnedLifetime).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="tiny muted" style={{ marginTop: 8 }}>
+          Click a column to sort. Quests/Raids show wins out of attempts. Tracking started with this
+          update, so older heroes' totals only count from here forward.
+        </p>
       </div>
     </div>
   );

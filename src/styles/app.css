@@ -3328,6 +3328,40 @@ button.harvest-item:hover {
 .craft-picker-row:focus-visible { outline: 2px solid var(--brass-dim); outline-offset: -2px; }
 .craft-picker-row.disabled { opacity: 0.4; cursor: default; }
 .craft-picker-row.selected { background: var(--panel-3); }
+
+/* Hero Comparison table (patch 0249) -- same collapsed-border/sticky-header
+   shape as .craft-picker-table above, just with clickable sortable
+   headers instead of a fixed icon/label layout. */
+.hero-compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.6875rem;
+  color: var(--parchment);
+}
+.hero-compare-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--panel-2);
+  color: var(--brass-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--panel-3);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.hero-compare-table thead th:hover { color: var(--brass); }
+.hero-compare-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--panel-3);
+  white-space: nowrap;
+}
+.hero-compare-table tbody tr:last-child td { border-bottom: none; }
+.hero-compare-table tbody tr:hover { background: var(--panel-2); }
 .craft-picker-row td { padding: 6px 8px; vertical-align: middle; }
 .craft-picker-td-name {
   max-width: 0; /* forces the ellipsis below to respect the table's own column width instead of growing it */

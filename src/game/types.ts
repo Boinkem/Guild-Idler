@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 50;
+export const SAVE_VERSION = 51;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -529,6 +529,43 @@ export interface Hero {
   activeQuestId: string | null;
   /** Total quests finished by this hero, used for flavour and stats. */
   questsCompleted: number;
+  /**
+   * Hero Comparison table (patch 0249) -- see HeroesPanel.tsx's own
+   * comment for where these actually get displayed. All five are
+   * lifetime, append-only counters, same "never decreases" shape
+   * questsCompleted above already has. None of these existed before
+   * this patch, so every hero on an existing save starts at 0 the
+   * moment it lands regardless of that hero's real history -- there's
+   * no prior data to backfill from, same "undiscovered content stays
+   * undiscovered" limitation every other new-counter migration in this
+   * project already accepts.
+   *
+   * questsSucceeded pairs with questsCompleted (attempts) above --
+   * quests, a chain's first-clear stages, and a chain replay's stages
+   * all share the exact same QuestManager.resolve code path, so one
+   * pair of counters covers all three without separate wiring per path.
+   *
+   * raidsParticipated/raidsSucceeded are deliberately separate counters,
+   * not folded into questsCompleted/questsSucceeded -- a raid isn't a
+   * "quest" in this game's own vocabulary (its own tab, its own
+   * systems), so reusing that field would misrepresent what it counts
+   * for anyone reading it elsewhere. "Succeeded" means the same
+   * fullClear RaidManager.resolve already uses to decide
+   * completedRaids/title grants.
+   *
+   * goldEarnedLifetime/xpEarnedLifetime combine every source (quests,
+   * chains, chain replays, raids) into one running total each -- for a
+   * raid specifically, the reward is one pool shared by the whole party
+   * (state.gold gets it once, not once per hero), so each participating
+   * hero is credited an even split of that pool rather than the full
+   * amount, to keep a multi-hero raid from making a hero's tracked
+   * earnings look inflated relative to solo quest work.
+   */
+  questsSucceeded: number;
+  raidsParticipated: number;
+  raidsSucceeded: number;
+  goldEarnedLifetime: number;
+  xpEarnedLifetime: number;
   /** Currently worn cosmetic skin. */
   skin: HeroSkin;
   /**

@@ -1150,6 +1150,19 @@ export const QuestManager = {
       if (hero.status !== 'fallen') hero.status = 'idle';
       hero.activeQuestId = null;
       hero.questsCompleted += 1;
+      // New in patch 0249, Hero Comparison table -- gold/xp are already
+      // guaranteed 0 on a failed attempt (both only ever get assigned a
+      // nonzero value inside this same function's own `if (success)`
+      // blocks), so these can just add the already-computed local
+      // variables directly rather than needing their own success check.
+      // Covers ordinary quests, a chain's first-clear stages, AND a
+      // chain replay's stages -- all three route through this one
+      // shared function, so no separate wiring needed per path (see
+      // patch 0227's own resolve() branching for confirmation replay
+      // stages never skip this section).
+      if (success) hero.questsSucceeded += 1;
+      hero.goldEarnedLifetime += gold;
+      hero.xpEarnedLifetime += xp;
       // Only THIS hero's own paired pet can earn from this specific
       // quest now -- see PetManager.grantEquippedXp's own comment for
       // why this moved from an account-wide call to a per-hero one.

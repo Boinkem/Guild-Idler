@@ -1064,6 +1064,27 @@ const MIGRATIONS: Record<number, Migration> = {
       resistGems: migrateGemPool(save.resistGems as Record<string, number> | undefined),
     };
   },
+  50: (save) => {
+    // Hero Comparison table (patch 0249) -- five new lifetime counters
+    // on each hero (see Hero's own comment in types.ts for the full
+    // reasoning). All backfilled to 0 -- there's no prior per-hero
+    // history to recover any of these from (questsCompleted is the only
+    // counter that existed before this, and it doesn't distinguish
+    // success from failure or track gold/xp at all), so an existing
+    // save's heroes start this tracking from a clean slate the moment
+    // this migration runs, same "undiscovered content stays
+    // undiscovered" limitation every other new-counter migration in
+    // this project already accepts.
+    const heroes = (save.heroes as Record<string, unknown>[] | undefined) ?? [];
+    for (const hero of heroes) {
+      hero.questsSucceeded = (hero.questsSucceeded as number | undefined) ?? 0;
+      hero.raidsParticipated = (hero.raidsParticipated as number | undefined) ?? 0;
+      hero.raidsSucceeded = (hero.raidsSucceeded as number | undefined) ?? 0;
+      hero.goldEarnedLifetime = (hero.goldEarnedLifetime as number | undefined) ?? 0;
+      hero.xpEarnedLifetime = (hero.xpEarnedLifetime as number | undefined) ?? 0;
+    }
+    return { ...save, version: 51, heroes };
+  },
 };
 
 export const SaveManager = {

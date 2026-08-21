@@ -360,6 +360,31 @@ export const RaidManager = {
     }
 
     const fullClear = encounterIds.length > 0 && encountersCleared === encounterIds.length;
+
+    // New in patch 0249, Hero Comparison table -- raids never had any
+    // per-hero tracking before this (only QuestManager's questsCompleted
+    // existed, and only for quests/chains). Deliberately a SEPARATE pair
+    // of counters (raidsParticipated/raidsSucceeded) rather than folding
+    // into questsCompleted/questsSucceeded -- a raid isn't a "quest" in
+    // this game's own vocabulary (separate tab, separate systems), so
+    // reusing that field would misrepresent what it counts for anyone
+    // who reads it elsewhere. "Succeeded" here means the same fullClear
+    // this function already uses to decide completedRaids/title grants
+    // -- a raid that stops partway through isn't credited as a success
+    // for any hero, matching how the game already treats that outcome
+    // everywhere else. gold/xp are split evenly across the party rather
+    // than crediting each hero the full pooled amount -- the reward
+    // itself is one shared pool (state.gold gets it once, not once per
+    // hero), so crediting everyone the whole total would make a 6-hero
+    // raid look like it multiplied a hero's earning power by 6x in the
+    // comparison table, which isn't a meaningful reading of what
+    // actually happened.
+    for (const hero of heroes) {
+      hero.raidsParticipated += 1;
+      if (fullClear) hero.raidsSucceeded += 1;
+      hero.goldEarnedLifetime += Math.floor(gold / heroes.length);
+      hero.xpEarnedLifetime += Math.floor(xp / heroes.length);
+    }
     const storage = ModifierManager.goldStorage(state);
     state.gold = Math.min(storage, state.gold + gold);
 

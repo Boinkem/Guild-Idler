@@ -1,0 +1,472 @@
+From ccb3b4eb7ce037820b0cf04203c89370d6a6bf77 Mon Sep 17 00:00:00 2001
+From: Guild-Idler Patch Tool <patch@guild-idler.local>
+Date: Fri, 21 Aug 2026 22:13:51 +0000
+Subject: [PATCH] 0249: Hero Comparison table
+
+New 'Compare Heroes' button on the Heroes tab -- sortable table of
+every hero's gear score, quest/raid win rates, and lifetime gold/xp
+earned. Genuinely new tracking, not a display change -- the only
+per-hero counter that existed before this was questsCompleted
+(attempts, quest-only, no raid tracking at all).
+
+Five new lifetime counters on Hero: questsSucceeded, raidsParticipated,
+raidsSucceeded, goldEarnedLifetime, xpEarnedLifetime. SAVE_VERSION
+50->51, migration 50 backfills all five to 0 for existing saves --
+no prior history to recover any of this from.
+
+Quests/chains/chain-replays covered for free via QuestManager.resolve's
+single shared code path. Raids needed real new wiring in
+RaidManager.resolve: success = the same fullClear condition already
+used for completedRaids/titles; gold/xp split evenly across the party
+rather than full-credited to everyone, so a 6-hero raid doesn't look
+like it multiplied a hero's earning power by 6x.
+
+Gear Score needed zero new tracking -- HeroManager.gearScore(hero)
+already existed, called live in the table.
+
+UI: sortable modal table behind a new chip, shown once there's more
+than one hero. Quests/Raids show won/attempted (pct%), not a bare
+count. New .hero-compare-table CSS matching .craft-picker-table's
+existing conventions.
+
+Verified: npx tsc --noEmit and npx vite build both pass clean against
+the properly re-based tree. Confirmed RaidManager's party size can
+never be 0 at the point of the gold/xp division. SAVE_VERSION chain
+contiguous (49->50->51).
+---
+ guild-idler-status.md             |  71 +++++++++++++++++++
+ src/game/managers/HeroManager.ts  |   5 ++
+ src/game/managers/QuestManager.ts |  13 ++++
+ src/game/managers/RaidManager.ts  |  25 +++++++
+ src/game/managers/SaveManager.ts  |  21 ++++++
+ src/game/types.ts                 |  39 ++++++++++-
+ src/styles/app.css                |  34 +++++++++
+ src/ui/panels/HeroesPanel.tsx     | 112 ++++++++++++++++++++++++++++++
+ 8 files changed, 319 insertions(+), 1 deletion(-)
+
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 0e053f3..ed3d99b 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -19303,3 +19303,74 @@ added.
+ 
+ **Verified** against a live `tsc --noEmit` and `vite build` in this
+ environment -- both clean.
++
++### Hero Comparison table (patch 0249)
++
++```discord-update
++Dev Update | Feature
++
++- New "Compare Heroes" button on the Heroes tab -- click it for a sortable table of every hero's gear score, quest/raid win rates, and lifetime gold/xp earned
++- Covers quests, story chains, chain replays, and raids alike
++```
++
++Direct request: a way to compare heroes' individual performance side by
++side, not just their level. Genuinely new tracking, not a display
++change -- before this patch the only per-hero counter that existed at
++all was `questsCompleted` (attempts, not successes, and quest-only --
++raids had zero per-hero tracking whatsoever).
++
++**Five new lifetime counters on `Hero`**: `questsSucceeded` (pairs with
++the existing `questsCompleted`), `raidsParticipated`/`raidsSucceeded`
++(new, separate from the quest counters on purpose -- a raid isn't a
++"quest" in this game's own vocabulary, so folding it into
++`questsCompleted` would misrepresent what that field counts elsewhere),
++and `goldEarnedLifetime`/`xpEarnedLifetime` (combined across every
++source). `SAVE_VERSION` 50->51, migration 50 backfills all five to 0
++for every hero on an existing save -- there's no prior history to
++recover any of this from, same "undiscovered content stays undiscovered"
++limitation every other new-counter migration here already accepts.
++
++**Quests, chains, and chain replays are covered for free** --
++`QuestManager.resolve` is the single shared code path for all three
++(confirmed against patch 0227's own chain-replay branching), so the new
++counters only needed adding in one place. Gold/xp are already
++guaranteed 0 on a failed attempt (both only ever get assigned a nonzero
++value inside this same function's own success-gated blocks), so no
++extra success check was needed for those two.
++
++**Raids needed real new wiring**, since they had none before. Added a
++small per-hero credit loop in `RaidManager.resolve` right after
++`fullClear` is determined -- "succeeded" means the same full-clear
++condition the game already uses to decide `completedRaids`/title
++grants, so a raid that stops partway through isn't credited as a
++success for anyone, consistent with how the game treats that outcome
++everywhere else. Gold/xp are split evenly across the party rather than
++crediting each hero the full pooled reward -- the reward itself is one
++shared pool (`state.gold` gets it once, not once per hero), so full
++credit to everyone would make a 6-hero raid look like it multiplied a
++hero's earning power by 6x in the comparison table, which isn't a
++meaningful reading of what actually happened.
++
++**Gear Score needed zero new tracking** -- `HeroManager.gearScore(hero)`
++already existed and is computed live in the table, not stored.
++
++**UI** (`HeroesPanel.tsx`): a "Compare Heroes" chip, shown once there's
++more than one hero to compare, opening a modal with a sortable table
++(click any column header, click again to reverse). Quests/Raids show
++"won/attempted (pct%)" rather than a bare count -- a hero with 40
++successes out of 40 sent and one with 40 out of 80 both show "40" if
++only the numerator is visible, which would erase exactly the comparison
++this table exists to make. Reuses `GearScoreBadge` as-is for the Gear
++column rather than a new number display, matching how gear score
++already renders everywhere else in the game.
++
++New `.hero-compare-table` CSS, same collapsed-border/sticky-header
++shape `.craft-picker-table` already established, just with clickable
++sortable headers instead of a fixed picker layout.
++
++**Verified:** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean. Confirmed `RaidManager`'s party
++size can never be 0 at the point the new gold/xp split divides by
++`heroes.length` (raid `partySize` config always requires at least 1,
++enforced in `canStart` before `resolve` is ever reachable). `SAVE_VERSION`
++chain confirmed contiguous (49->50->51).
+diff --git a/src/game/managers/HeroManager.ts b/src/game/managers/HeroManager.ts
+index dbda12d..14d1653 100644
+--- a/src/game/managers/HeroManager.ts
++++ b/src/game/managers/HeroManager.ts
+@@ -36,6 +36,11 @@ export const HeroManager = {
+       status: 'idle',
+       activeQuestId: null,
+       questsCompleted: 0,
++      questsSucceeded: 0,
++      raidsParticipated: 0,
++      raidsSucceeded: 0,
++      goldEarnedLifetime: 0,
++      xpEarnedLifetime: 0,
+       skin: 'original',
+       ascension: 0,
+       autoChainCount: 0,
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index cb4afde..ed3b7b6 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -1150,6 +1150,19 @@ export const QuestManager = {
+       if (hero.status !== 'fallen') hero.status = 'idle';
+       hero.activeQuestId = null;
+       hero.questsCompleted += 1;
++      // New in patch 0249, Hero Comparison table -- gold/xp are already
++      // guaranteed 0 on a failed attempt (both only ever get assigned a
++      // nonzero value inside this same function's own `if (success)`
++      // blocks), so these can just add the already-computed local
++      // variables directly rather than needing their own success check.
++      // Covers ordinary quests, a chain's first-clear stages, AND a
++      // chain replay's stages -- all three route through this one
++      // shared function, so no separate wiring needed per path (see
++      // patch 0227's own resolve() branching for confirmation replay
++      // stages never skip this section).
++      if (success) hero.questsSucceeded += 1;
++      hero.goldEarnedLifetime += gold;
++      hero.xpEarnedLifetime += xp;
+       // Only THIS hero's own paired pet can earn from this specific
+       // quest now -- see PetManager.grantEquippedXp's own comment for
+       // why this moved from an account-wide call to a per-hero one.
+diff --git a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
+index a239c7d..7159f7f 100644
+--- a/src/game/managers/RaidManager.ts
++++ b/src/game/managers/RaidManager.ts
+@@ -360,6 +360,31 @@ export const RaidManager = {
+     }
+ 
+     const fullClear = encounterIds.length > 0 && encountersCleared === encounterIds.length;
++
++    // New in patch 0249, Hero Comparison table -- raids never had any
++    // per-hero tracking before this (only QuestManager's questsCompleted
++    // existed, and only for quests/chains). Deliberately a SEPARATE pair
++    // of counters (raidsParticipated/raidsSucceeded) rather than folding
++    // into questsCompleted/questsSucceeded -- a raid isn't a "quest" in
++    // this game's own vocabulary (separate tab, separate systems), so
++    // reusing that field would misrepresent what it counts for anyone
++    // who reads it elsewhere. "Succeeded" here means the same fullClear
++    // this function already uses to decide completedRaids/title grants
++    // -- a raid that stops partway through isn't credited as a success
++    // for any hero, matching how the game already treats that outcome
++    // everywhere else. gold/xp are split evenly across the party rather
++    // than crediting each hero the full pooled amount -- the reward
++    // itself is one shared pool (state.gold gets it once, not once per
++    // hero), so crediting everyone the whole total would make a 6-hero
++    // raid look like it multiplied a hero's earning power by 6x in the
++    // comparison table, which isn't a meaningful reading of what
++    // actually happened.
++    for (const hero of heroes) {
++      hero.raidsParticipated += 1;
++      if (fullClear) hero.raidsSucceeded += 1;
++      hero.goldEarnedLifetime += Math.floor(gold / heroes.length);
++      hero.xpEarnedLifetime += Math.floor(xp / heroes.length);
++    }
+     const storage = ModifierManager.goldStorage(state);
+     state.gold = Math.min(storage, state.gold + gold);
+ 
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index aeb8218..cd74efe 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -1064,6 +1064,27 @@ const MIGRATIONS: Record<number, Migration> = {
+       resistGems: migrateGemPool(save.resistGems as Record<string, number> | undefined),
+     };
+   },
++  50: (save) => {
++    // Hero Comparison table (patch 0249) -- five new lifetime counters
++    // on each hero (see Hero's own comment in types.ts for the full
++    // reasoning). All backfilled to 0 -- there's no prior per-hero
++    // history to recover any of these from (questsCompleted is the only
++    // counter that existed before this, and it doesn't distinguish
++    // success from failure or track gold/xp at all), so an existing
++    // save's heroes start this tracking from a clean slate the moment
++    // this migration runs, same "undiscovered content stays
++    // undiscovered" limitation every other new-counter migration in
++    // this project already accepts.
++    const heroes = (save.heroes as Record<string, unknown>[] | undefined) ?? [];
++    for (const hero of heroes) {
++      hero.questsSucceeded = (hero.questsSucceeded as number | undefined) ?? 0;
++      hero.raidsParticipated = (hero.raidsParticipated as number | undefined) ?? 0;
++      hero.raidsSucceeded = (hero.raidsSucceeded as number | undefined) ?? 0;
++      hero.goldEarnedLifetime = (hero.goldEarnedLifetime as number | undefined) ?? 0;
++      hero.xpEarnedLifetime = (hero.xpEarnedLifetime as number | undefined) ?? 0;
++    }
++    return { ...save, version: 51, heroes };
++  },
+ };
+ 
+ export const SaveManager = {
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 79f6944..986abdd 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -3,7 +3,7 @@
+  * Every manager reads and writes the same GameState shape defined here.
+  * ========================================================================= */
+ 
+-export const SAVE_VERSION = 50;
++export const SAVE_VERSION = 51;
+ 
+ export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
+ 
+@@ -529,6 +529,43 @@ export interface Hero {
+   activeQuestId: string | null;
+   /** Total quests finished by this hero, used for flavour and stats. */
+   questsCompleted: number;
++  /**
++   * Hero Comparison table (patch 0249) -- see HeroesPanel.tsx's own
++   * comment for where these actually get displayed. All five are
++   * lifetime, append-only counters, same "never decreases" shape
++   * questsCompleted above already has. None of these existed before
++   * this patch, so every hero on an existing save starts at 0 the
++   * moment it lands regardless of that hero's real history -- there's
++   * no prior data to backfill from, same "undiscovered content stays
++   * undiscovered" limitation every other new-counter migration in this
++   * project already accepts.
++   *
++   * questsSucceeded pairs with questsCompleted (attempts) above --
++   * quests, a chain's first-clear stages, and a chain replay's stages
++   * all share the exact same QuestManager.resolve code path, so one
++   * pair of counters covers all three without separate wiring per path.
++   *
++   * raidsParticipated/raidsSucceeded are deliberately separate counters,
++   * not folded into questsCompleted/questsSucceeded -- a raid isn't a
++   * "quest" in this game's own vocabulary (its own tab, its own
++   * systems), so reusing that field would misrepresent what it counts
++   * for anyone reading it elsewhere. "Succeeded" means the same
++   * fullClear RaidManager.resolve already uses to decide
++   * completedRaids/title grants.
++   *
++   * goldEarnedLifetime/xpEarnedLifetime combine every source (quests,
++   * chains, chain replays, raids) into one running total each -- for a
++   * raid specifically, the reward is one pool shared by the whole party
++   * (state.gold gets it once, not once per hero), so each participating
++   * hero is credited an even split of that pool rather than the full
++   * amount, to keep a multi-hero raid from making a hero's tracked
++   * earnings look inflated relative to solo quest work.
++   */
++  questsSucceeded: number;
++  raidsParticipated: number;
++  raidsSucceeded: number;
++  goldEarnedLifetime: number;
++  xpEarnedLifetime: number;
+   /** Currently worn cosmetic skin. */
+   skin: HeroSkin;
+   /**
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 463f6e4..96f2473 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -3328,6 +3328,40 @@ button.harvest-item:hover {
+ .craft-picker-row:focus-visible { outline: 2px solid var(--brass-dim); outline-offset: -2px; }
+ .craft-picker-row.disabled { opacity: 0.4; cursor: default; }
+ .craft-picker-row.selected { background: var(--panel-3); }
++
++/* Hero Comparison table (patch 0249) -- same collapsed-border/sticky-header
++   shape as .craft-picker-table above, just with clickable sortable
++   headers instead of a fixed icon/label layout. */
++.hero-compare-table {
++  width: 100%;
++  border-collapse: collapse;
++  font-size: 0.6875rem;
++  color: var(--parchment);
++}
++.hero-compare-table thead th {
++  position: sticky;
++  top: 0;
++  background: var(--panel-2);
++  color: var(--brass-dim);
++  text-transform: uppercase;
++  letter-spacing: 0.03em;
++  font-size: 0.625rem;
++  font-weight: 700;
++  text-align: left;
++  padding: 6px 8px;
++  border-bottom: 1px solid var(--panel-3);
++  cursor: pointer;
++  user-select: none;
++  white-space: nowrap;
++}
++.hero-compare-table thead th:hover { color: var(--brass); }
++.hero-compare-table td {
++  padding: 6px 8px;
++  border-bottom: 1px solid var(--panel-3);
++  white-space: nowrap;
++}
++.hero-compare-table tbody tr:last-child td { border-bottom: none; }
++.hero-compare-table tbody tr:hover { background: var(--panel-2); }
+ .craft-picker-row td { padding: 6px 8px; vertical-align: middle; }
+ .craft-picker-td-name {
+   max-width: 0; /* forces the ellipsis below to respect the table's own column width instead of growing it */
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index 6cee0c7..7c1ea61 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -150,6 +150,11 @@ export function HeroesPanel() {
+     });
+   };
+ 
++  // Hero Comparison table (patch 0249) -- behind its own button rather
++  // than shown by default, direct request. See HeroComparisonModal's own
++  // comment for the counters it reads.
++  const [showComparison, setShowComparison] = useState(false);
++
+   const { flashes: levelFlashes, dismiss: dismissLevelFlash } = useLevelUpFlash(
+     state.heroes.map((h) => ({ id: h.id, level: h.level })),
+   );
+@@ -174,6 +179,13 @@ export function HeroesPanel() {
+       <h2>Heroes</h2>
+       <p className="subtitle">{state.heroes.length} of {slots} slots filled. Every hero shares the guild's gold and bonuses.</p>
+ 
++      {state.heroes.length > 1 && (
++        <button className="chip" style={{ marginBottom: 10 }} onClick={() => setShowComparison(true)}>
++          Compare Heroes
++        </button>
++      )}
++      {showComparison && <HeroComparisonModal heroes={state.heroes} onClose={() => setShowComparison(false)} />}
++
+       {fallenHeroes.length > 1 && (
+         <button
+           className="chip"
+@@ -569,3 +581,103 @@ export function HeroesPanel() {
+     </div>
+   );
+ }
++
++type CompareSortKey = 'name' | 'level' | 'gearScore' | 'quests' | 'raids' | 'gold' | 'xp';
++
++/**
++ * Hero Comparison table (patch 0249) -- direct request: "something where
++ * you can compare your heroes' individual actions/success/gold." Behind
++ * its own button rather than shown by default (HeroesPanel's own
++ * "Compare Heroes" chip), and only offered at all once there's more than
++ * one hero to actually compare.
++ *
++ * Every column beyond Gear Score reads from the five new lifetime
++ * counters on Hero (see that type's own comment for the full reasoning
++ * on scope/attribution) -- Gear Score itself needed no new tracking at
++ * all, HeroManager.gearScore(hero) already existed and is computed live
++ * here, not stored.
++ *
++ * Quests/Raids show success rate as "won/attempted (pct%)" rather than
++ * just a raw count -- a hero with 40 successful quests out of 40 sent
++ * and one with 40 out of 80 both show "40" if only the numerator is
++ * shown, which erases exactly the comparison this table exists to make.
++ */
++function HeroComparisonModal({ heroes, onClose }: { heroes: Hero[]; onClose: () => void }) {
++  const [sortKey, setSortKey] = useState<CompareSortKey>('gearScore');
++  const [sortDesc, setSortDesc] = useState(true);
++
++  const rows = heroes.map((h) => {
++    const gearScore = HeroManager.gearScore(h);
++    const questRate = h.questsCompleted > 0 ? h.questsSucceeded / h.questsCompleted : 0;
++    const raidRate = h.raidsParticipated > 0 ? h.raidsSucceeded / h.raidsParticipated : 0;
++    return { hero: h, gearScore, questRate, raidRate };
++  });
++
++  const sorted = [...rows].sort((a, b) => {
++    let cmp = 0;
++    switch (sortKey) {
++      case 'name': cmp = a.hero.name.localeCompare(b.hero.name); break;
++      case 'level': cmp = a.hero.level - b.hero.level; break;
++      case 'gearScore': cmp = a.gearScore - b.gearScore; break;
++      case 'quests': cmp = a.hero.questsSucceeded - b.hero.questsSucceeded; break;
++      case 'raids': cmp = a.hero.raidsSucceeded - b.hero.raidsSucceeded; break;
++      case 'gold': cmp = a.hero.goldEarnedLifetime - b.hero.goldEarnedLifetime; break;
++      case 'xp': cmp = a.hero.xpEarnedLifetime - b.hero.xpEarnedLifetime; break;
++    }
++    return sortDesc ? -cmp : cmp;
++  });
++
++  function sortBy(key: CompareSortKey) {
++    if (key === sortKey) setSortDesc((d) => !d);
++    else { setSortKey(key); setSortDesc(true); }
++  }
++
++  const arrow = (key: CompareSortKey) => (key === sortKey ? (sortDesc ? ' \u25be' : ' \u25b4') : '');
++
++  return (
++    <div className="overlay" onClick={onClose}>
++      <div className="modal" style={{ maxWidth: 640 }} onClick={(e) => e.stopPropagation()}>
++        <div className="spread" style={{ marginBottom: 8 }}>
++          <span className="card-title">Compare Heroes</span>
++          <button className="btn-ghost" onClick={onClose}>Close</button>
++        </div>
++        <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
++          <table className="hero-compare-table">
++            <thead>
++              <tr>
++                <th onClick={() => sortBy('name')}>Hero{arrow('name')}</th>
++                <th onClick={() => sortBy('level')}>Lvl{arrow('level')}</th>
++                <th onClick={() => sortBy('gearScore')}>Gear{arrow('gearScore')}</th>
++                <th onClick={() => sortBy('quests')}>Quests{arrow('quests')}</th>
++                <th onClick={() => sortBy('raids')}>Raids{arrow('raids')}</th>
++                <th onClick={() => sortBy('gold')}>Gold{arrow('gold')}</th>
++                <th onClick={() => sortBy('xp')}>XP{arrow('xp')}</th>
++              </tr>
++            </thead>
++            <tbody>
++              {sorted.map(({ hero, gearScore, questRate, raidRate }) => (
++                <tr key={hero.id}>
++                  <td>{hero.name}</td>
++                  <td>{hero.level}</td>
++                  <td><GearScoreBadge score={gearScore} size="small" /></td>
++                  <td title={`${hero.questsSucceeded} won of ${hero.questsCompleted} sent`}>
++                    {hero.questsCompleted > 0 ? `${hero.questsSucceeded}/${hero.questsCompleted} (${Math.round(questRate * 100)}%)` : '\u2014'}
++                  </td>
++                  <td title={`${hero.raidsSucceeded} cleared of ${hero.raidsParticipated} joined`}>
++                    {hero.raidsParticipated > 0 ? `${hero.raidsSucceeded}/${hero.raidsParticipated} (${Math.round(raidRate * 100)}%)` : '\u2014'}
++                  </td>
++                  <td>{formatGold(hero.goldEarnedLifetime)}</td>
++                  <td>{Math.round(hero.xpEarnedLifetime).toLocaleString()}</td>
++                </tr>
++              ))}
++            </tbody>
++          </table>
++        </div>
++        <p className="tiny muted" style={{ marginTop: 8 }}>
++          Click a column to sort. Quests/Raids show wins out of attempts. Tracking started with this
++          update, so older heroes' totals only count from here forward.
++        </p>
++      </div>
++    </div>
++  );
++}
+-- 
+2.43.0
+
