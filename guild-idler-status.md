@@ -18789,3 +18789,36 @@ hardcoded string), same low compile-risk shape as prior art-only passes,
 but worth an actual build/visual pass before merge to confirm the new
 Alchemist slot rects land exactly where they look right in a live
 browser, not just against the static art in isolation.
+
+### Vendor page background wasn't filling the page (patch 0243)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed vendor page backgrounds only covering the cards instead of the whole page
+```
+
+Follow-up to patch 0242's vendor background art -- reported with a
+screenshot: on the Enchanter (a short page -- level 0, nothing unlocked
+yet, small Stock grid), the background scene stopped partway down and
+the plain panel backdrop showed through below it, making the art look
+like it was painted onto the vendor-card specifically rather than
+sitting behind the whole page.
+
+**Root cause:** `.vendor-scene` had no height rule, so it sized to its
+own content only (header card + upgrade grid + stock list) -- fine on a
+vendor with a big enough Stock grid to fill the viewport on its own,
+visibly short everywhere else.
+
+**Fix:** added `min-height: 100%` to `.vendor-scene` in app.css. This
+resolves correctly (rather than collapsing to 0, the usual failure mode
+for a percentage height with no definite ancestor) because
+`.vendor-scene` is a direct child of `.panel` -- `VendorPage`'s Fragment
+contributes no DOM node of its own -- and `.panel` already gets a
+definite height from `.menu-body`'s `flex: 1`. `min-` rather than a flat
+`height` so a vendor page with a genuinely large Stock grid still grows
+the scene to match instead of clipping it.
+
+**Scope:** one CSS rule, one file. Nothing else from patch 0242 needed
+touching -- `VendorsPanel.tsx`, `CraftingStation.tsx`, and all four art
+assets were already correct and are untouched here.

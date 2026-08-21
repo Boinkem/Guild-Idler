@@ -1,0 +1,71 @@
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 68a196a..81b7b93 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -2234,9 +2234,25 @@ input[type='range'] {
+  * backdrop -- and the same translucent dark backing .fund-guild-content
+  * uses over its own art, so cards/text on top stay legible regardless of
+  * how bright a given vendor's room art is.
++ *
++ * `min-height: 100%` is load-bearing, not decorative -- without it this
++ * div sizes to its own content only (the header card + upgrade grid +
++ * stock list), which on a short page (few upgrades, small stock grid)
++ * left a visible seam where the art just stopped partway down and the
++ * plain panel backdrop showed through underneath -- the background
++ * looked like it was painted onto the vendor-card specifically rather
++ * than the page. `.panel` (this div's actual container -- VendorPage's
++ * Fragment contributes no DOM node of its own, so .vendor-scene is a
++ * direct child) gets a definite height from `.menu-body`'s `flex: 1`,
++ * which is exactly why a plain `100%` here resolves correctly instead of
++ * collapsing to 0 the way percentage heights usually do without a
++ * definite ancestor. `min-` rather than a flat `height` so a genuinely
++ * tall page (a big Stock grid) still grows the scene to match rather
++ * than clipping it.
+  */
+ .vendor-scene {
+   position: relative;
++  min-height: 100%;
+   border-radius: 8px;
+   overflow: hidden;
+   background-size: cover;
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 358a082..fac348d 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -18789,3 +18789,36 @@ hardcoded string), same low compile-risk shape as prior art-only passes,
+ but worth an actual build/visual pass before merge to confirm the new
+ Alchemist slot rects land exactly where they look right in a live
+ browser, not just against the static art in isolation.
++
++### Vendor page background wasn't filling the page (patch 0243)
++
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed vendor page backgrounds only covering the cards instead of the whole page
++```
++
++Follow-up to patch 0242's vendor background art -- reported with a
++screenshot: on the Enchanter (a short page -- level 0, nothing unlocked
++yet, small Stock grid), the background scene stopped partway down and
++the plain panel backdrop showed through below it, making the art look
++like it was painted onto the vendor-card specifically rather than
++sitting behind the whole page.
++
++**Root cause:** `.vendor-scene` had no height rule, so it sized to its
++own content only (header card + upgrade grid + stock list) -- fine on a
++vendor with a big enough Stock grid to fill the viewport on its own,
++visibly short everywhere else.
++
++**Fix:** added `min-height: 100%` to `.vendor-scene` in app.css. This
++resolves correctly (rather than collapsing to 0, the usual failure mode
++for a percentage height with no definite ancestor) because
++`.vendor-scene` is a direct child of `.panel` -- `VendorPage`'s Fragment
++contributes no DOM node of its own -- and `.panel` already gets a
++definite height from `.menu-body`'s `flex: 1`. `min-` rather than a flat
++`height` so a vendor page with a genuinely large Stock grid still grows
++the scene to match instead of clipping it.
++
++**Scope:** one CSS rule, one file. Nothing else from patch 0242 needed
++touching -- `VendorsPanel.tsx`, `CraftingStation.tsx`, and all four art
++assets were already correct and are untouched here.
