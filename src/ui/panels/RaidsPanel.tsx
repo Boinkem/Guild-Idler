@@ -10,7 +10,8 @@ import {
   isRaidUnlocked, raidLockReason, parseLootEntry, lootForDifficulty,
 } from '../../game/data/raids';
 import { EQUIPMENT_BY_ID, SET_BY_ID } from '../../game/data/equipment';
-import { RaidDifficulty, RaidUpgradeDef, RaidDef, Hero, Role } from '../../game/types';
+import { ELEMENT_GLYPH, ELEMENT_LABEL } from '../../game/data/elements';
+import { RaidDifficulty, RaidEncounterDef, RaidUpgradeDef, RaidDef, ElementType, Hero, Role } from '../../game/types';
 import { ROLE_BY_ID } from '../../game/data/progression';
 import { RoleIcon } from '../RoleIcon';
 import { RarityPill } from '../RarityPill';
@@ -156,6 +157,48 @@ function LootPreview({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * The encounter's own elemental tags (RaidEncounterDef.vulnerableTo /
+ * dealsElement / immuneTo) -- these already drive a real success-chance
+ * bonus (RaidManager.elementalBonus, folded into both
+ * previewEncounterSuccess and the live resolve() roll), but had no
+ * display anywhere in this panel: a boss's weakness/attack-type/immunity
+ * was invisible to the player, so there was no way to tell the elemental
+ * system was doing anything, let alone plan a party or infusion around
+ * it. Shown in the encounter summary row itself (not gated behind the
+ * `<details>` expand) so a player can see what a boss wants before
+ * picking a party, same reasoning name/success/time already show
+ * unconditionally there.
+ */
+function EncounterElementTags({ encounter }: { encounter: RaidEncounterDef }) {
+  const deals = encounter.dealsElement ?? [];
+  const vulnerable = encounter.vulnerableTo ?? [];
+  const immune = encounter.immuneTo ?? [];
+  if (deals.length === 0 && vulnerable.length === 0 && immune.length === 0) return null;
+  const glyphs = (els: ElementType[]) => els.map((el) => (
+    <span key={el} title={ELEMENT_LABEL[el]}>{ELEMENT_GLYPH[el]}</span>
+  ));
+  return (
+    <span className="tiny muted" style={{ marginLeft: 8 }}>
+      {deals.length > 0 && (
+        <span title={`Attacks with ${deals.map((el) => ELEMENT_LABEL[el]).join('/')} -- matching armor resist adds success`}>
+          Deals {glyphs(deals)}
+        </span>
+      )}
+      {vulnerable.length > 0 && (
+        <span style={{ marginLeft: deals.length > 0 ? 6 : 0 }} title={`Vulnerable to ${vulnerable.map((el) => ELEMENT_LABEL[el]).join('/')} weapons -- a matching infusion adds success`}>
+          Weak to {glyphs(vulnerable)}
+        </span>
+      )}
+      {immune.length > 0 && (
+        <span style={{ marginLeft: (deals.length > 0 || vulnerable.length > 0) ? 6 : 0 }} className="bad" title={`Immune to ${immune.map((el) => ELEMENT_LABEL[el]).join('/')} -- a matching weapon infusion is nullified here`}>
+          Immune {glyphs(immune)}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -441,6 +484,13 @@ function RaidDetailModal({
   const previewHeroIds = selectedHeroIds.length > 0
     ? selectedHeroIds
     : idleHeroes.slice(0, cfg?.partySize ?? 0).map((h) => h.id);
+  // Resolved once here rather than re-deriving per encounter below --
+  // RaidManager.elementalBonus takes actual Hero objects, not ids, same
+  // as the pre-existing `selectedHeroes` derivation further down this
+  // component for the role-requirement check.
+  const previewHeroes = previewHeroIds
+    .map((id) => state.heroes.find((h) => h.id === id))
+    .filter((h): h is Hero => !!h);
   const previewDuration = difficulty && previewHeroIds.length > 0
     ? RaidManager.previewDuration(state, previewHeroIds, raid.id, difficulty, now)
     : null;
@@ -491,6 +541,13 @@ function RaidDetailModal({
                   const encSuccess = difficulty && previewHeroIds.length > 0
                     ? RaidManager.previewEncounterSuccess(state, previewHeroIds, raid.id, difficulty, id, now)
                     : null;
+                  // Broken out separately from encSuccess (which already
+                  // folds this in) purely so the player can see WHY the
+                  // number moved -- same RaidManager.elementalBonus the
+                  // actual roll uses, just surfaced rather than buried.
+                  const elemental = previewHeroes.length > 0
+                    ? RaidManager.elementalBonus(previewHeroes, enc)
+                    : 0;
                   return (
                     <li key={id} className="raid-encounter-item">
                       {/* Collapsed by default (native <details>, no extra
@@ -502,9 +559,15 @@ function RaidDetailModal({
                       <details>
                         <summary>
                           <b>{i + 1}. {enc.name}</b>
+                          <EncounterElementTags encounter={enc} />
                           {encSuccess !== null && (
                             <span className="tiny muted" style={{ marginLeft: 8 }}>
                               Success <b className={encSuccess >= 60 ? 'good' : encSuccess >= 35 ? '' : 'bad'}>{Math.round(encSuccess)}%</b>
+                              {elemental !== 0 && (
+                                <span className={elemental > 0 ? 'good' : 'bad'}>
+                                  {' '}({elemental > 0 ? '+' : ''}{elemental.toFixed(1)}% elemental)
+                                </span>
+                              )}
                               {' · '}Time <b>{formatDuration(enc.duration * (difficulty ? RAID_DIFFICULTIES[difficulty].durationMultiplier : 1))}</b>
                             </span>
                           )}

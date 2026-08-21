@@ -6,7 +6,8 @@ import { EquipmentManager } from '../../game/managers/EquipmentManager';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID, gearScoreForItem } from '../../game/data/equipment';
-import { EquipSlot, EquipmentDef, EquipmentItem, Hero, Rarity, ConsumableDef, CurioDef } from '../../game/types';
+import { ELEMENT_GLYPH, ELEMENT_LABEL } from '../../game/data/elements';
+import { EquipSlot, EquipmentDef, EquipmentItem, ElementType, Hero, Rarity, ConsumableDef, CurioDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { CurioManager } from '../../game/managers/CurioManager';
 import { rerollsUsedToday } from '../../game/data/reroll';
@@ -567,6 +568,42 @@ function ConsumableSlotCard({
  *  when clicked. Same .overlay/.modal shape the shop item cards
  *  (EquipmentShopCard/ConsumableShopCard) and PeddlerCardDetailOverlay
  *  already use. */
+/**
+ * Elemental infusion line for an item's detail modal -- weapons show what
+ * they deal (WeaponEnchantStation, `elementalDamage`, replaces on
+ * reinfuse), everything else shows accumulated resist per element
+ * (ArmourInfusionStation, `elementalResist`, additive across repeat
+ * infusions of the same element). Neither field had ANY display anywhere
+ * outside the infusion stations themselves before this -- not here, not
+ * in RaidsPanel's ItemDetailOverlay -- so a fully-infused item read
+ * identically to a plain one everywhere a player would actually check it,
+ * even though both RaidManager.elementalBonus and
+ * QuestManager.previewSuccess were already folding the values into the
+ * success roll the whole time. Same "own line under the mods list" slot
+ * `enchantStats` already established, distinct colour (--sky, matching
+ * WeaponEnchantStation's own accent) so the two don't blur together.
+ */
+function ElementalInfoLine({ item }: { item: EquipmentItem }) {
+  const resistEntries = (Object.entries(item.elementalResist ?? {}) as [ElementType, number][])
+    .filter(([, value]) => value > 0);
+  if (!item.elementalDamage && resistEntries.length === 0) return null;
+  return (
+    <div className="tiny" style={{ marginTop: 2, color: 'var(--sky)' }}>
+      {item.elementalDamage && (
+        <span title={`Deals ${ELEMENT_LABEL[item.elementalDamage]} damage -- bonus success against foes vulnerable to it, nullified against foes immune to it`}>
+          {ELEMENT_GLYPH[item.elementalDamage]} Deals {ELEMENT_LABEL[item.elementalDamage]}
+        </span>
+      )}
+      {item.elementalDamage && resistEntries.length > 0 && ' · '}
+      {resistEntries.map(([el, value], i) => (
+        <span key={el} title={`+${value}% success resisting ${ELEMENT_LABEL[el]} attacks`}>
+          {i > 0 ? ' · ' : ''}{ELEMENT_GLYPH[el]} +{value}% {ELEMENT_LABEL[el]} resist
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function SlotCard({
   slot, item, workshop, hero, engine,
 }: { slot: EquipSlot; item: EquipmentItem | undefined; workshop: number; hero: Hero; engine: GameEngine }) {
@@ -650,6 +687,7 @@ function SlotCard({
                 Enchanted: {describeStats(item.enchantStats, true).join(' · ')}
               </div>
               )}
+              <ElementalInfoLine item={item} />
               {def.setId && (
                 <SetInfoBlock hero={hero} setId={def.setId} equipped={item.durability > 0} />
               )}
@@ -748,6 +786,7 @@ function StashCard({
                 Enchanted: {describeStats(item.enchantStats, true).join(' · ')}
               </div>
               )}
+              <ElementalInfoLine item={item} />
               {def.setId && (
                 <SetInfoBlock hero={hero} setId={def.setId} equipped={false} />
               )}

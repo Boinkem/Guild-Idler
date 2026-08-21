@@ -18211,3 +18211,84 @@ composition changed a lot mid-gap (several quests finishing at very
 different points) will be slightly off in either direction, not
 exactly wrong just imprecise. Consistent with how offline catch-up
 already treats other systems, not a new standard being introduced here.
+
+### Elemental raid weaknesses: review confirmed the wiring, fixed the display (patch 0236)
+
+```discord-update
+Dev Update | Bug Fix
+
+- Boss weaknesses, attack types, and immunities now show right on the raid encounter list instead of being invisible
+- Raid encounters also show the live elemental bonus your current party is getting, next to their success odds
+- Infused weapons and armor finally show what they're infused with, everywhere an item's details show up
+```
+
+Direct request: review the elemental-infusion/raid-weakness feature end to
+end and confirm it's both wired correctly and displayed correctly, since
+it was suspected to be neither.
+
+**Wiring: confirmed correct, no changes needed.** `RaidManager
+.elementalBonus` (via the shared `elementalBonusForHero`, `data/
+elements.ts`) is folded into both `previewEncounterSuccess` (the UI's odds
+preview) and the live per-encounter roll in `resolve()` -- a weapon's
+`elementalDamage` matching an encounter's `vulnerableTo` adds a flat
+bonus (nullified if that same element is also in `immuneTo`), and armor's
+accumulated `elementalResist` per element sums against `dealsElement`.
+This is exactly the intended raid-weakness/resistance-match mechanic
+described in the original elemental-infusion writeup, and it was already
+correctly live in every success calculation. 6 of 22 raid encounters
+currently carry tags (`blackford_uncrowned`, both Wyrmkeep bosses, all
+three Black Dragon Nest encounters) -- the rest are untagged content, a
+pre-existing known gap, not part of this bug.
+
+**Display: confirmed broken, now fixed.** Despite the mechanic being
+fully wired into the math, neither half of it showed up anywhere in the
+UI:
+- A raid encounter's own `vulnerableTo`/`dealsElement`/`immuneTo` tags
+  were never rendered on `RaidsPanel` at all -- a player had no way to
+  learn a boss's weakness except by trial, success%, or reading the JSON
+  directly.
+- `EquipmentItem.elementalDamage`/`elementalResist` were never rendered
+  anywhere either -- not `EquipmentPanel`'s equipped-slot or stash item
+  modals, not `RaidsPanel`'s own loot-preview item overlay. The only
+  place an element was ever visible was the instant of infusing it
+  (`WeaponEnchantStation`/`ArmourInfusionStation`). Immediately after
+  that click, the info vanished -- an infused weapon and a plain one read
+  identically everywhere a player would actually go to check.
+
+**Fix, `RaidsPanel.tsx`:** new `EncounterElementTags` renders a boss's
+Deals/Weak to/Immune glyphs (reusing `ELEMENT_GLYPH`/`ELEMENT_LABEL` from
+`data/elements.ts`, same convention `WeaponEnchantStation` already
+established) directly in the encounter summary row -- visible
+unconditionally, same as the name/success/time already there, not gated
+behind the `<details>` expand, so a player can plan a party or a trip to
+the Enchanter before ever opening a boss's flavour text. The encounter
+list's success line also now breaks out the elemental contribution
+specifically (`RaidManager.elementalBonus`, the exact same call the real
+roll uses) as `(+X.X% elemental)` next to the overall success%, so the
+number visibly moves as gear/party selection changes instead of the
+bonus being silently baked into a single opaque percentage. Needed a
+small new `previewHeroes` (actual `Hero[]`, resolved once from the
+existing `previewHeroIds`) since `elementalBonus` takes hero objects, not
+ids -- mirrors the pattern the role-requirement check further down the
+same component already used for its own `selectedHeroes`.
+
+**Fix, `EquipmentPanel.tsx`:** new `ElementalInfoLine` renders a weapon's
+"🔥 Deals Fire" or an armor piece's "❄ +12% Frost resist" (one span per
+infused element, `·`-joined the same way `describeMods` output already
+reads) directly under the existing Enchanted stat-roll line, in both the
+equipped-slot modal (`SlotCard`) and the stash item modal (`StashCard`)
+-- the two places a player actually goes to check what's on a piece of
+gear. Distinct colour (`var(--sky)`, matching `WeaponEnchantStation`'s
+own accent) so it doesn't blur into the brass-coloured Enchanted stat
+line right above it. `RaidsPanel`'s own `ItemDetailOverlay` (raid loot
+preview) was deliberately left alone -- it renders off a bare
+`EquipmentDef`, not an instance, and `elementalDamage`/`elementalResist`
+only ever exist on a specific infused `EquipmentItem`, so there's nothing
+for that overlay to show regardless.
+
+**Not touched, out of scope for this patch:** the underlying 3%-flat
+match bonus, the untagged 16 of 22 raid encounters, and any tiering of
+enchant/resist effectiveness -- see the open tiering-rework discussion in
+the backlog below.
+
+`npx tsc --noEmit` and `vite build` both pass clean.
