@@ -831,6 +831,15 @@ const SCHEMAS = {
       // same as loot's own original pre-picker form. See
       // parseEggLootEntry in raids.ts for exactly how this is read.
       eggLoot: { type: 'string[]', required: false },
+      // Difficulty-tiered eggLoot, patch 0250 -- same optional/no-fallback-
+      // required shape as lootHeroic/lootLegendary above, just for eggs.
+      // See eggLootForDifficulty in raids.ts: Heroic/Legendary fall back to
+      // plain eggLoot if their own list is empty, so most encounters (with
+      // an egg drop available at every difficulty) never need to touch
+      // these two at all. A species meant to be unavailable below Heroic
+      // (Dragonling) leaves eggLoot empty and sets these instead.
+      eggLootHeroic: { type: 'string[]', required: false },
+      eggLootLegendary: { type: 'string[]', required: false },
       // Elemental weakness/attack-type/immunity tags -- read by
       // RaidManager.elementalBonus (via the shared elementalBonusForHero,
       // data/elements.ts) for a real success-chance bonus, but previously

@@ -817,6 +817,10 @@
       "voidforged_signet"
     ],
     "rewardRenown": 6,
+    "rewardEgg": {
+      "rarity": "legendary",
+      "dedicatedPetId": "flying_eye"
+    },
     "title": "World's End",
     "epilogue": "It had no name when this began, and it has none now. What it had, it no longer has. That will have to be enough of an ending.",
     "grantsHatchery": false,

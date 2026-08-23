@@ -19374,3 +19374,170 @@ size can never be 0 at the point the new gold/xp split divides by
 `heroes.length` (raid `partySize` config always requires at least 1,
 enforced in `canStart` before `resolve` is ever reachable). `SAVE_VERSION`
 chain confirmed contiguous (49->50->51).
+
+### Eleven new pets, three tool capabilities, and a Heroic-gated egg drop (patch 0250)
+
+```discord-update
+Dev Update | Patch 0250
+
+- Added 11 new pets: Mossback, Tidewhelp, Bandit, Wisplet, Squirrel, Skelly, Imp, Dragonling, Mimic, Skeleton Warrior, and Flying Eye
+- Removed Packrat from the pet pool
+- Skelly, Skeleton Warrior, and Imp now drop from their own raid encounters (Bonewrought Vault and What Got Out); Flying Eye drops from completing The World-Ender's Vigil
+- Changed Dragonling's drop to Heroic difficulty and above only (previously any difficulty)
+- Mimic now always hatches at rare rarity or better
+- Fixed Skeleton Warrior and Dragonling facing the wrong way
+```
+
+Direct request, delivered across several rounds of art and a couple of
+mid-conversation corrections worth recording here since they'd otherwise
+just look like clean first-try decisions.
+
+**Species roster.** Five species already had a placeholder `PetDef` sitting
+on glyph fallback since long before this patch (`mossback`, `tidewhelp`,
+`wisplet`, plus `packrat` and `glimmerwing`, the latter still unart'd) --
+this patch finally supplies real art for three of them and removes the
+fourth outright (`packrat`, per direct request -- no replacement, just
+gone from `pets.json` and `GENERAL_POOL` with it). `bandit` (raccoon) and
+`squirrel` are genuinely new general-pool species. `skelly` (Skeleton
+Mage), `imp`, `mimic`, `skeleton_warrior`, and `flying_eye` are five more
+new species, plus a sixth existing-but-never-arted one --
+`black_dragonling`, renamed to just `dragonling` this patch (see below).
+
+**`black_dragonling` -> `dragonling`, and the black-that-wasn't-black
+problem.** The originally supplied "Baby Dragon" pack turned out to be a
+green colourway, not the black one the id/name promised -- confirmed by
+sampling `IDLE.png` directly (no black or near-black pixel anywhere in its
+palette). Renaming to plain `dragonling` removes the promise the sprite
+couldn't keep. The actual "black" look was then built as a genuine
+one-time colour remap rather than left for later art: `PetSpec` gained a
+`base_recolor` field (source-hex -> target-hex, applied in `build_map`
+BEFORE the usual per-tier hue-shift livery) that substitutes a
+hand-authored black/charcoal/deep-maroon palette in for the source green,
+so Common renders as that black target colour directly and every other
+rarity tier hue-shifts onward FROM black rather than from the original
+green. The small red eye-accent and a white glint were deliberately left
+in `keep` rather than remapped, for a glowing-eyes-in-the-dark read
+instead of a flat silhouette -- confirmed visually against a real render
+before locking it in (see the conversation this shipped in).
+
+**Two more `PetSpec` source shapes**, alongside `base_recolor` above --
+this file's third and fourth, after `sheet_file+rows` and `anim_files`:
+- `frame_files`: an ordered list of individual per-frame image files,
+  concatenated left-to-right into one strip at import time. Otter's pack
+  ships one file per frame (`otter_idle_1.png` .. `_4.png`, `otter_run_1.
+  png` .. `_3.png`) rather than a sheet or a pre-cut strip -- only the
+  idle/run frames were requested, the pack's idle_alt/jump/land/sleep/spin
+  sets are unused this patch.
+- `frame_boxes`: explicit per-animation `(x, y, w, h)` crop rects into
+  `sheet_file`, for a pack that isn't a real uniform grid. Bandit's own
+  sheet has a consistent 24px vertical pitch but a genuinely DIFFERENT
+  horizontal pitch per row (16px for the front-facing row, ~21px for the
+  side-profile walk row) -- not something the single frame_w/frame_h-per-
+  sheet model could express. Every box below came from a connected-
+  component scan of the actual sheet (each opaque blob's own tight
+  bounding box), not eyeballed off a grid guess. Each cropped frame is
+  pasted into the spec's own frame_w x frame_h canvas, horizontally
+  centred and bottom-aligned, so the few px of per-frame size variance
+  doesn't read as the animation hopping or floating.
+
+**Filename collisions caught before shipping, not after.** Skelly, Imp,
+Dragonling, Mimic, Skeleton Warrior, and Flying Eye are all the same "2D
+Pixel Art" template pack family, and every one of them ships its
+animations under the exact same generic names (`IDLE.png`, `WALK.png`,
+`ATTACK.png`, `HURT.png`/`MOVE.png`) inside its own `Sprites/<...>
+_outline/` folder. An early draft of this patch pointed `anim_files` at
+those bare filenames the same way every earlier species does -- fine for
+species whose packs ship uniquely-named files, silently wrong here, since
+six same-named `IDLE.png` files in one shared `--src` folder would
+overwrite each other on extraction with no error raised anywhere. Fixed by
+qualifying every one of those six species' `anim_files` paths with their
+pack's own subfolder (e.g. `'Skeleton Mage 2D Pixel Art/Sprites/
+without_outline/IDLE.png'`) -- this assumes `--src` is the folder each
+pack's own zip extracted INTO (its own top-level folder sitting directly
+under `--src`, unrenamed), which is what a plain unzip already produces
+with zero manual renaming required.
+
+**Frame geometry confirmed by rendering, not just computed.** Every new
+species' frame_w was checked against an actual upscaled render before
+being locked into a `PetSpec`, not trusted from arithmetic alone -- this
+caught two real mistakes mid-draft: Mimic's raw GCD-across-every-file
+calculation landed on 192 (exactly double the true 96px grid, since
+nothing in that particular file set forced the GCD any lower), and an
+initial arithmetic slip on Dragonling's frame width was caught the same
+way. Squirrel's sheet looked like it might be an irregular atlas the same
+shape as Bandit's at first glance (rows with different frame counts), but
+a connected-component scan confirmed it's actually a uniform 32x32, 8-
+column grid with some rows simply not using every column -- ordinary
+`rows=` sufficed, no `frame_boxes` needed.
+
+**Heroic-gated egg drops -- new `eggLootHeroic`/`eggLootLegendary` on
+`RaidEncounterDef`.** Direct request: Dragonling should only drop from
+Heroic difficulty onward, never Normal. `eggLoot` was a single flat field
+before this patch, rolled identically at every difficulty -- unlike
+equipment loot, which already had this exact tiering
+(`loot`/`lootHeroic`/`lootLegendary`). Mirrored that shape exactly rather
+than inventing a different one: new `eggLootForDifficulty` in `raids.ts`
+(same fallback-to-base-list behaviour as the existing `lootForDifficulty`),
+wired into `RaidManager.resolve`'s egg-roll loop in place of the old bare
+`encounter.eggLoot ?? []`. Dragonling's own encounter
+(`blackdragon_the_brood_mother`) leaves `eggLoot` unset entirely and sets
+`eggLootHeroic`/`eggLootLegendary` instead, so Normal correctly falls
+through to nothing. Skelly/Imp/Skeleton Warrior's drops all just use plain
+`eggLoot`, available at every difficulty, same as every eggLoot entry
+before this patch. DevTool schema updated with both new fields (plain
+string-list editor, same as `eggLoot` itself).
+
+**Dedicated drops, one per new raid/chain encounter, no new granting
+mechanism needed** -- every one of these reuses `eggLoot`/`rewardEgg`
+exactly as `the_last_clutch`/`black_dragon_nest` already established:
+- Skelly: `bonewrought_choir_of_bones` (Bonewrought Vault), `epic:skelly@6`
+- Skeleton Warrior: `bonewrought_vault_keeper` (Bonewrought Vault, final
+  encounter), `rare:skeleton_warrior@10`
+- Imp: `gotout_cornered` (What Got Out, final encounter), `rare:imp@10`
+- Flying Eye: `world_ender`'s own `rewardEgg` (`ChainDef.rewardEgg`,
+  previously only used by `the_last_clutch`), `legendary:flying_eye`
+
+**Mimic's rarity floor -- `PetDef.minRarity`, no pool-weighting system.**
+Direct request was "make Mimic feel rare" without building real
+per-species pool weighting (`GENERAL_PET_POOL` still rolls every
+non-dedicated species with equal odds, unchanged). Instead, `PetManager.
+hatch` now floors the resulting `Pet.rarity` at `def.minRarity` when set
+-- the EGG's own rarity (fixed at grant time, drives `hatchXpThreshold`,
+otherwise unrelated to which species eventually rolls) is left completely
+untouched; only the hatched Pet's displayed rarity is raised, and only
+ever raised, never lowered. A Legendary egg that happens to roll Mimic
+still hatches Legendary. `mimic.minRarity = 'rare'` is the only entry
+using this so far.
+
+**Facing fixes -- new `PET_REVERSED_FACING` in `PetSprite.tsx`**, exact
+same shape as `HeroSprite.tsx`'s `HERO_REVERSED_FACING` (the fix that
+originally corrected the Dwarf/Wizard/Witch hero classes). Skeleton
+Warrior and Dragonling both reported facing backward relative to
+everything else running beside them -- both packs are simply authored
+facing the opposite default direction from every other pet species' art.
+Same `effectiveFlip` XOR logic as `HeroSprite`: a reversed-facing species
+flips exactly when a normal one wouldn't, not simply more often.
+
+**Wisplet reflavoured, not re-arted.** The supplied sheet is a warm
+fire-coloured wisp (orange/red/cream palette, confirmed by histogram --
+`#e02807`/`#fa6f19`/`#f5e98b`), not the "pale light, barely warm" the
+existing `pets.json` description promised. Rather than treat that as a
+wrong-asset problem, the flavour text was the thing that was wrong --
+updated to match the actual art instead.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. `tools/import_pets.py` run
+end-to-end against every piece of supplied art (`--src` pointed at all
+eleven packs' own extracted subfolders, unrenamed) -- confirmed real
+output for all eleven species across all five rarity tiers, not just a
+dry parse: Bandit's `frame_boxes` crop/centre/ground pipeline checked by
+rendering every tier side by side (grounded correctly despite 13-20px of
+real per-frame width variance), Dragonling's `base_recolor` checked the
+same way (genuinely black Common tier, red eye-glow intact, later tiers
+hue-shifting from black rather than from the original green), Mossback's
+five-tier auto-tint checked for a clean green -> teal -> blue -> magenta
+progression. No `public/pets` art is committed by this patch itself (same
+standing "art can't travel through a text patch" limitation as every
+prior pet-art patch) -- the host needs to run `import_pets.py` locally
+against the raw packs to actually see any of this in game.
+

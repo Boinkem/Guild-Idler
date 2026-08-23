@@ -1160,8 +1160,20 @@ export interface RaidEncounterDef {
    * a specific dedicated-pool pet) rather than an equipment defId. Rolled
    * independently of `loot`/lootHeroic/lootLegendary, same
    * economy.loot/diffCfg.lootBonus scaling either way.
+   *
+   * Difficulty-gated the same way `loot` is (see eggLootForDifficulty in
+   * raids.ts, mirroring lootForDifficulty exactly): Heroic/Legendary fall
+   * back to plain `eggLoot` if their own list is unset. Most encounters
+   * still just set `eggLoot` alone, same as before this patch (Skelly/
+   * Imp/Skeleton Warrior's drops all work this way -- available at every
+   * difficulty). A species meant to be Heroic-onward ONLY (Dragonling, per
+   * direct request) leaves `eggLoot` unset entirely and sets
+   * `eggLootHeroic`/`eggLootLegendary` instead -- Normal then has nothing
+   * to fall back to, and correctly rolls nothing.
    */
   eggLoot?: string[];
+  eggLootHeroic?: string[];
+  eggLootLegendary?: string[];
   /**
    * Authored, not rolled -- raid encounters are a small curated list
    * (unlike quest offers, which are procedurally generated per board),
@@ -2408,6 +2420,17 @@ export interface PetDef {
    *  pet (a pack's own signature species, granted by its own reward
    *  chain/egg) is a valid combination -- the two flags are independent. */
   requiresDlc?: string;
+  /**
+   * Floors this species' hatched-pet rarity at a minimum tier, applied in
+   * PetManager.hatch AFTER the species roll -- the egg's own rarity (set
+   * whenever it was granted) stays what it was, this only ever raises the
+   * resulting Pet's displayed rarity, never lowers it. Added for Mimic:
+   * direct request was "make Mimic feel rare" with no new pool-weighting
+   * system, so every Mimic that hatches shows as rare-or-better regardless
+   * of which egg happened to produce it -- species odds inside
+   * GENERAL_PET_POOL are unaffected, only the cosmetic result once rolled.
+   */
+  minRarity?: Rarity;
 }
 
 /**

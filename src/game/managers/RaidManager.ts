@@ -1,7 +1,7 @@
 import {
   ActiveRaid, GameState, Hero, Modifiers, RaidDifficulty, RaidEncounterDef, RaidLootDrop, RaidResult, Role,
 } from '../types';
-import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty } from '../data/raids';
+import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty, eggLootForDifficulty } from '../data/raids';
 import { Tuning } from '../data/tuning';
 import { EQUIPMENT_BY_ID, itemDisplayName } from '../data/equipment';
 import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
@@ -350,7 +350,10 @@ export const RaidManager = {
       // different token shape (rarity, optionally a dedicated pet) since
       // an egg isn't an EquipmentDef. Rolled independently of the
       // equipment loot loop, same economy.loot/diffCfg.lootBonus scaling.
-      for (const entry of encounter.eggLoot ?? []) {
+      // eggLootForDifficulty (patch 0250) resolves the tiered eggLoot/
+      // eggLootHeroic/eggLootLegendary fields the same way lootForDifficulty
+      // already does for equipment -- see raids.ts.
+      for (const entry of eggLootForDifficulty(encounter, active.difficulty)) {
         const parsed = parseEggLootEntry(entry);
         if (!parsed) continue;
         if (!rng.chance(Math.min(90, parsed.chance * (1 + (economy.loot + diffCfg.lootBonus) / 100)))) continue;

@@ -1,0 +1,912 @@
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' a/guild-idler-status.md b/guild-idler-status.md
+--- a/guild-idler-status.md	2026-08-23 20:36:59.879804138 +0000
++++ b/guild-idler-status.md	2026-08-23 20:49:25.579848464 +0000
+@@ -19374,3 +19374,170 @@
+ `heroes.length` (raid `partySize` config always requires at least 1,
+ enforced in `canStart` before `resolve` is ever reachable). `SAVE_VERSION`
+ chain confirmed contiguous (49->50->51).
++
++### Eleven new pets, three tool capabilities, and a Heroic-gated egg drop (patch 0250)
++
++```discord-update
++Dev Update | Patch 0250
++
++- Added 11 new pets: Mossback, Tidewhelp, Bandit, Wisplet, Squirrel, Skelly, Imp, Dragonling, Mimic, Skeleton Warrior, and Flying Eye
++- Removed Packrat from the pet pool
++- Skelly, Skeleton Warrior, and Imp now drop from their own raid encounters (Bonewrought Vault and What Got Out); Flying Eye drops from completing The World-Ender's Vigil
++- Changed Dragonling's drop to Heroic difficulty and above only (previously any difficulty)
++- Mimic now always hatches at rare rarity or better
++- Fixed Skeleton Warrior and Dragonling facing the wrong way
++```
++
++Direct request, delivered across several rounds of art and a couple of
++mid-conversation corrections worth recording here since they'd otherwise
++just look like clean first-try decisions.
++
++**Species roster.** Five species already had a placeholder `PetDef` sitting
++on glyph fallback since long before this patch (`mossback`, `tidewhelp`,
++`wisplet`, plus `packrat` and `glimmerwing`, the latter still unart'd) --
++this patch finally supplies real art for three of them and removes the
++fourth outright (`packrat`, per direct request -- no replacement, just
++gone from `pets.json` and `GENERAL_POOL` with it). `bandit` (raccoon) and
++`squirrel` are genuinely new general-pool species. `skelly` (Skeleton
++Mage), `imp`, `mimic`, `skeleton_warrior`, and `flying_eye` are five more
++new species, plus a sixth existing-but-never-arted one --
++`black_dragonling`, renamed to just `dragonling` this patch (see below).
++
++**`black_dragonling` -> `dragonling`, and the black-that-wasn't-black
++problem.** The originally supplied "Baby Dragon" pack turned out to be a
++green colourway, not the black one the id/name promised -- confirmed by
++sampling `IDLE.png` directly (no black or near-black pixel anywhere in its
++palette). Renaming to plain `dragonling` removes the promise the sprite
++couldn't keep. The actual "black" look was then built as a genuine
++one-time colour remap rather than left for later art: `PetSpec` gained a
++`base_recolor` field (source-hex -> target-hex, applied in `build_map`
++BEFORE the usual per-tier hue-shift livery) that substitutes a
++hand-authored black/charcoal/deep-maroon palette in for the source green,
++so Common renders as that black target colour directly and every other
++rarity tier hue-shifts onward FROM black rather than from the original
++green. The small red eye-accent and a white glint were deliberately left
++in `keep` rather than remapped, for a glowing-eyes-in-the-dark read
++instead of a flat silhouette -- confirmed visually against a real render
++before locking it in (see the conversation this shipped in).
++
++**Two more `PetSpec` source shapes**, alongside `base_recolor` above --
++this file's third and fourth, after `sheet_file+rows` and `anim_files`:
++- `frame_files`: an ordered list of individual per-frame image files,
++  concatenated left-to-right into one strip at import time. Otter's pack
++  ships one file per frame (`otter_idle_1.png` .. `_4.png`, `otter_run_1.
++  png` .. `_3.png`) rather than a sheet or a pre-cut strip -- only the
++  idle/run frames were requested, the pack's idle_alt/jump/land/sleep/spin
++  sets are unused this patch.
++- `frame_boxes`: explicit per-animation `(x, y, w, h)` crop rects into
++  `sheet_file`, for a pack that isn't a real uniform grid. Bandit's own
++  sheet has a consistent 24px vertical pitch but a genuinely DIFFERENT
++  horizontal pitch per row (16px for the front-facing row, ~21px for the
++  side-profile walk row) -- not something the single frame_w/frame_h-per-
++  sheet model could express. Every box below came from a connected-
++  component scan of the actual sheet (each opaque blob's own tight
++  bounding box), not eyeballed off a grid guess. Each cropped frame is
++  pasted into the spec's own frame_w x frame_h canvas, horizontally
++  centred and bottom-aligned, so the few px of per-frame size variance
++  doesn't read as the animation hopping or floating.
++
++**Filename collisions caught before shipping, not after.** Skelly, Imp,
++Dragonling, Mimic, Skeleton Warrior, and Flying Eye are all the same "2D
++Pixel Art" template pack family, and every one of them ships its
++animations under the exact same generic names (`IDLE.png`, `WALK.png`,
++`ATTACK.png`, `HURT.png`/`MOVE.png`) inside its own `Sprites/<...>
++_outline/` folder. An early draft of this patch pointed `anim_files` at
++those bare filenames the same way every earlier species does -- fine for
++species whose packs ship uniquely-named files, silently wrong here, since
++six same-named `IDLE.png` files in one shared `--src` folder would
++overwrite each other on extraction with no error raised anywhere. Fixed by
++qualifying every one of those six species' `anim_files` paths with their
++pack's own subfolder (e.g. `'Skeleton Mage 2D Pixel Art/Sprites/
++without_outline/IDLE.png'`) -- this assumes `--src` is the folder each
++pack's own zip extracted INTO (its own top-level folder sitting directly
++under `--src`, unrenamed), which is what a plain unzip already produces
++with zero manual renaming required.
++
++**Frame geometry confirmed by rendering, not just computed.** Every new
++species' frame_w was checked against an actual upscaled render before
++being locked into a `PetSpec`, not trusted from arithmetic alone -- this
++caught two real mistakes mid-draft: Mimic's raw GCD-across-every-file
++calculation landed on 192 (exactly double the true 96px grid, since
++nothing in that particular file set forced the GCD any lower), and an
++initial arithmetic slip on Dragonling's frame width was caught the same
++way. Squirrel's sheet looked like it might be an irregular atlas the same
++shape as Bandit's at first glance (rows with different frame counts), but
++a connected-component scan confirmed it's actually a uniform 32x32, 8-
++column grid with some rows simply not using every column -- ordinary
++`rows=` sufficed, no `frame_boxes` needed.
++
++**Heroic-gated egg drops -- new `eggLootHeroic`/`eggLootLegendary` on
++`RaidEncounterDef`.** Direct request: Dragonling should only drop from
++Heroic difficulty onward, never Normal. `eggLoot` was a single flat field
++before this patch, rolled identically at every difficulty -- unlike
++equipment loot, which already had this exact tiering
++(`loot`/`lootHeroic`/`lootLegendary`). Mirrored that shape exactly rather
++than inventing a different one: new `eggLootForDifficulty` in `raids.ts`
++(same fallback-to-base-list behaviour as the existing `lootForDifficulty`),
++wired into `RaidManager.resolve`'s egg-roll loop in place of the old bare
++`encounter.eggLoot ?? []`. Dragonling's own encounter
++(`blackdragon_the_brood_mother`) leaves `eggLoot` unset entirely and sets
++`eggLootHeroic`/`eggLootLegendary` instead, so Normal correctly falls
++through to nothing. Skelly/Imp/Skeleton Warrior's drops all just use plain
++`eggLoot`, available at every difficulty, same as every eggLoot entry
++before this patch. DevTool schema updated with both new fields (plain
++string-list editor, same as `eggLoot` itself).
++
++**Dedicated drops, one per new raid/chain encounter, no new granting
++mechanism needed** -- every one of these reuses `eggLoot`/`rewardEgg`
++exactly as `the_last_clutch`/`black_dragon_nest` already established:
++- Skelly: `bonewrought_choir_of_bones` (Bonewrought Vault), `epic:skelly@6`
++- Skeleton Warrior: `bonewrought_vault_keeper` (Bonewrought Vault, final
++  encounter), `rare:skeleton_warrior@10`
++- Imp: `gotout_cornered` (What Got Out, final encounter), `rare:imp@10`
++- Flying Eye: `world_ender`'s own `rewardEgg` (`ChainDef.rewardEgg`,
++  previously only used by `the_last_clutch`), `legendary:flying_eye`
++
++**Mimic's rarity floor -- `PetDef.minRarity`, no pool-weighting system.**
++Direct request was "make Mimic feel rare" without building real
++per-species pool weighting (`GENERAL_PET_POOL` still rolls every
++non-dedicated species with equal odds, unchanged). Instead, `PetManager.
++hatch` now floors the resulting `Pet.rarity` at `def.minRarity` when set
++-- the EGG's own rarity (fixed at grant time, drives `hatchXpThreshold`,
++otherwise unrelated to which species eventually rolls) is left completely
++untouched; only the hatched Pet's displayed rarity is raised, and only
++ever raised, never lowered. A Legendary egg that happens to roll Mimic
++still hatches Legendary. `mimic.minRarity = 'rare'` is the only entry
++using this so far.
++
++**Facing fixes -- new `PET_REVERSED_FACING` in `PetSprite.tsx`**, exact
++same shape as `HeroSprite.tsx`'s `HERO_REVERSED_FACING` (the fix that
++originally corrected the Dwarf/Wizard/Witch hero classes). Skeleton
++Warrior and Dragonling both reported facing backward relative to
++everything else running beside them -- both packs are simply authored
++facing the opposite default direction from every other pet species' art.
++Same `effectiveFlip` XOR logic as `HeroSprite`: a reversed-facing species
++flips exactly when a normal one wouldn't, not simply more often.
++
++**Wisplet reflavoured, not re-arted.** The supplied sheet is a warm
++fire-coloured wisp (orange/red/cream palette, confirmed by histogram --
++`#e02807`/`#fa6f19`/`#f5e98b`), not the "pale light, barely warm" the
++existing `pets.json` description promised. Rather than treat that as a
++wrong-asset problem, the flavour text was the thing that was wrong --
++updated to match the actual art instead.
++
++**Verified:** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean. `tools/import_pets.py` run
++end-to-end against every piece of supplied art (`--src` pointed at all
++eleven packs' own extracted subfolders, unrenamed) -- confirmed real
++output for all eleven species across all five rarity tiers, not just a
++dry parse: Bandit's `frame_boxes` crop/centre/ground pipeline checked by
++rendering every tier side by side (grounded correctly despite 13-20px of
++real per-frame width variance), Dragonling's `base_recolor` checked the
++same way (genuinely black Common tier, red eye-glow intact, later tiers
++hue-shifting from black rather than from the original green), Mossback's
++five-tier auto-tint checked for a clean green -> teal -> blue -> magenta
++progression. No `public/pets` art is committed by this patch itself (same
++standing "art can't travel through a text patch" limitation as every
++prior pet-art patch) -- the host needs to run `import_pets.py` locally
++against the raw packs to actually see any of this in game.
++
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' a/src/game/data/json/pets.json b/src/game/data/json/pets.json
+--- a/src/game/data/json/pets.json	2026-08-23 20:37:03.214975337 +0000
++++ b/src/game/data/json/pets.json	2026-08-23 20:45:21.525306503 +0000
+@@ -21,13 +21,6 @@
+     "spriteFolder": "glimmerwing"
+   },
+   {
+-    "id": "packrat",
+-    "name": "Packrat",
+-    "description": "Hoards anything shiny it can fit in its cheeks, including things that were not offered.",
+-    "glyph": "\ud83d\udc00",
+-    "spriteFolder": "packrat"
+-  },
+-  {
+     "id": "ashwing",
+     "name": "Ashwing",
+     "description": "A crow that's taken a shine to the guild's rooftops. Turns up wherever something's about to be dropped, forgotten, or fed to it.",
+@@ -51,7 +44,7 @@
+   {
+     "id": "wisplet",
+     "name": "Wisplet",
+-    "description": "A drifting mote of pale light, barely warm to the touch. Settles on a shoulder and just stays there.",
++    "description": "A knot of campfire light that never quite burns out. Crackles faintly when it's happy, and has never once needed relighting.",
+     "glyph": "\u2728",
+     "spriteFolder": "wisplet"
+   },
+@@ -64,11 +57,11 @@
+     "dedicatedOnly": true
+   },
+   {
+-    "id": "black_dragonling",
+-    "name": "Black Dragonling",
++    "id": "dragonling",
++    "name": "Dragonling",
+     "description": "Small enough to perch on a shoulder, for now. Still lets out a puff of real smoke when startled, and has already learned that food arrives faster if it looks pitiful about asking.",
+     "glyph": "\ud83d\udc09",
+-    "spriteFolder": "black_dragonling",
++    "spriteFolder": "dragonling",
+     "dedicatedOnly": true
+   },
+   {
+@@ -105,5 +98,59 @@
+     "description": "Built for distances nobody here is actually travelling. Happiest mid-sprint for no particular reason, gone quiet and thoughtful the moment it has to stop.",
+     "glyph": "\ud83d\udc15",
+     "spriteFolder": "frostrunner"
++  },
++  {
++    "id": "bandit",
++    "name": "Bandit",
++    "description": "Steals first, sorts the loot later -- usually while sitting directly on top of whatever it took.",
++    "glyph": "\ud83e\udd9d",
++    "spriteFolder": "bandit"
++  },
++  {
++    "id": "squirrel",
++    "name": "Squirrel",
++    "description": "Buries a season's worth of anything shiny and forgets exactly none of it, no matter how insulted it looks when questioned.",
++    "glyph": "\ud83d\udc3f\ufe0f",
++    "spriteFolder": "squirrel"
++  },
++  {
++    "id": "skelly",
++    "name": "Skelly",
++    "description": "Still finishes every spell it started, out of habit more than intent. The staff's glow hasn't dimmed once since the vault sealed over it.",
++    "glyph": "\ud83d\udc80",
++    "spriteFolder": "skelly",
++    "dedicatedOnly": true
++  },
++  {
++    "id": "imp",
++    "name": "Imp",
++    "description": "Small, loud, and delighted by fire it didn't start on purpose. Follows whoever yelled the least.",
++    "glyph": "\ud83d\ude08",
++    "spriteFolder": "imp",
++    "dedicatedOnly": true
++  },
++  {
++    "id": "mimic",
++    "name": "Mimic",
++    "description": "Learned to hold very, very still. Mostly stopped trying to bite the hand that feeds it -- mostly.",
++    "glyph": "\ud83d\udce6",
++    "spriteFolder": "mimic",
++    "minRarity": "rare"
++  },
++  {
++    "id": "skeleton_warrior",
++    "name": "Skeleton Warrior",
++    "description": "Still stands guard duty out of old habit, sword arm swinging at nothing in particular until someone gives it an actual job.",
++    "glyph": "\ud83e\uddb4",
++    "spriteFolder": "skeleton_warrior",
++    "dedicatedOnly": true
++  },
++  {
++    "id": "flying_eye",
++    "name": "Flying Eye",
++    "description": "Watches everything, blinks at nothing, and reports back to something that stopped needing reports a long time ago.",
++    "glyph": "\ud83d\udc41\ufe0f",
++    "spriteFolder": "flying_eye",
++    "dedicatedOnly": true
+   }
+ ]
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' a/src/game/data/json/quest-chains.json b/src/game/data/json/quest-chains.json
+--- a/src/game/data/json/quest-chains.json	2026-08-23 20:37:03.215063747 +0000
++++ b/src/game/data/json/quest-chains.json	2026-08-23 20:46:12.937338343 +0000
+@@ -817,6 +817,10 @@
+       "voidforged_signet"
+     ],
+     "rewardRenown": 6,
++    "rewardEgg": {
++      "rarity": "legendary",
++      "dedicatedPetId": "flying_eye"
++    },
+     "title": "World's End",
+     "epilogue": "It had no name when this began, and it has none now. What it had, it no longer has. That will have to be enough of an ending.",
+     "grantsHatchery": false,
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' a/src/game/data/json/raid-encounters.json b/src/game/data/json/raid-encounters.json
+--- a/src/game/data/json/raid-encounters.json	2026-08-23 20:37:03.215403783 +0000
++++ b/src/game/data/json/raid-encounters.json	2026-08-23 20:45:54.086718455 +0000
+@@ -23,6 +23,9 @@
+     "loot": [
+       "choir_mask@6",
+       "silenced_bell@6"
++    ],
++    "eggLoot": [
++      "epic:skelly@6"
+     ]
+   },
+   {
+@@ -37,6 +40,9 @@
+       "dragon_helm@4",
+       "gravewatchers_band@5",
+       "choir_mask@5"
++    ],
++    "eggLoot": [
++      "rare:skeleton_warrior@10"
+     ]
+   },
+   {
+@@ -213,6 +219,9 @@
+     "loot": [
+       "cornered_fang@5",
+       "desperate_ends_crown@4"
++    ],
++    "eggLoot": [
++      "rare:imp@10"
+     ]
+   },
+   {
+@@ -265,8 +274,11 @@
+       "blackscale_helm@5",
+       "broodmothers_crown@4"
+     ],
+-    "eggLoot": [
+-      "epic:black_dragonling@8"
++    "eggLootHeroic": [
++      "epic:dragonling@8"
++    ],
++    "eggLootLegendary": [
++      "epic:dragonling@8"
+     ],
+     "vulnerableTo": [
+       "frost"
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' a/src/game/data/raids.ts b/src/game/data/raids.ts
+--- a/src/game/data/raids.ts	2026-08-23 20:37:03.217120275 +0000
++++ b/src/game/data/raids.ts	2026-08-23 20:43:53.109042929 +0000
+@@ -156,6 +156,22 @@
+   return encounter.loot;
+ }
+ 
++/**
++ * Same fallback shape as lootForDifficulty above, for eggLoot -- added in
++ * patch 0250 alongside eggLootHeroic/eggLootLegendary on RaidEncounterDef.
++ * The one difference from equipment loot: `loot` itself is required (every
++ * encounter has one, even if empty), while `eggLoot` is optional and most
++ * encounters have none at all -- so this returns `[]` rather than `encounter.
++ * loot`'s always-defined fallback when nothing applies at any level. A
++ * species meant to be Heroic-onward only (see PetDef -- Dragonling) simply
++ * leaves eggLoot unset and relies on this returning [] at Normal.
++ */
++export function eggLootForDifficulty(encounter: RaidEncounterDef, difficulty: RaidDifficulty): string[] {
++  if (difficulty === 'heroic') return encounter.eggLootHeroic ?? encounter.eggLoot ?? [];
++  if (difficulty === 'legendary') return encounter.eggLootLegendary ?? encounter.eggLoot ?? [];
++  return encounter.eggLoot ?? [];
++}
++
+ /** Raids visible in the UI: this one, plus any not-yet-reached raid another
+  *  completed raid points at via unlocksRaidId -- shown greyed-out with the
+  *  name/rewards hidden until actually unlocked, same "???" treatment used
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' a/src/game/managers/PetManager.ts b/src/game/managers/PetManager.ts
+--- a/src/game/managers/PetManager.ts	2026-08-23 20:37:03.219163817 +0000
++++ b/src/game/managers/PetManager.ts	2026-08-23 20:44:21.892763549 +0000
+@@ -1,6 +1,6 @@
+ import { EggInstance, GameState, Hero, MaterialId, Pet, PetBonusType, Rarity } from '../types';
+ import { uid } from '../rng';
+-import { clamp } from '../util';
++import { clamp, RARITY_ORDER } from '../util';
+ import { Tuning } from '../data/tuning';
+ import { PET_BY_ID, hatchXpThreshold, pickHatchedPetDefId } from '../data/pets';
+ import { kennelHealTimeMinutes } from '../data/progression';
+@@ -106,11 +106,19 @@
+     const min = Tuning.get('pets.baseBonusValueMin');
+     const max = Tuning.get('pets.baseBonusValueMax');
+     const baseBonusValue = Math.round((min + Math.random() * (max - min)) * 10) / 10;
++    // PetDef.minRarity (Mimic, patch 0250) floors the DISPLAYED rarity of
++    // the hatched Pet only -- the egg's own rarity (already fixed at grant
++    // time, drives hatchXpThreshold, unrelated to which species eventually
++    // rolls) is left untouched. Never lowers: a Legendary egg that happens
++    // to roll a min-rarity species still hatches Legendary.
++    const rarity = (def?.minRarity && RARITY_ORDER.indexOf(egg.rarity) < RARITY_ORDER.indexOf(def.minRarity))
++      ? def.minRarity
++      : egg.rarity;
+     const pet: Pet = {
+       uid: uid('pet'),
+       defId,
+       name: def?.name ?? 'Unnamed',
+-      rarity: egg.rarity,
++      rarity,
+       bonusType,
+       baseBonusValue,
+       xp: 0,
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' a/src/game/managers/RaidManager.ts b/src/game/managers/RaidManager.ts
+--- a/src/game/managers/RaidManager.ts	2026-08-23 20:37:03.219614678 +0000
++++ b/src/game/managers/RaidManager.ts	2026-08-23 20:44:01.748327423 +0000
+@@ -1,7 +1,7 @@
+ import {
+   ActiveRaid, GameState, Hero, Modifiers, RaidDifficulty, RaidEncounterDef, RaidLootDrop, RaidResult, Role,
+ } from '../types';
+-import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty } from '../data/raids';
++import { RAID_BY_ID, RAID_DIFFICULTIES, RAID_ENCOUNTER_BY_ID, isRaidUnlocked, parseLootEntry, parseEggLootEntry, lootForDifficulty, eggLootForDifficulty } from '../data/raids';
+ import { Tuning } from '../data/tuning';
+ import { EQUIPMENT_BY_ID, itemDisplayName } from '../data/equipment';
+ import { INJURY_BY_ID, healthDamagePercentForInjuryDef } from '../data/items';
+@@ -350,7 +350,10 @@
+       // different token shape (rarity, optionally a dedicated pet) since
+       // an egg isn't an EquipmentDef. Rolled independently of the
+       // equipment loot loop, same economy.loot/diffCfg.lootBonus scaling.
+-      for (const entry of encounter.eggLoot ?? []) {
++      // eggLootForDifficulty (patch 0250) resolves the tiered eggLoot/
++      // eggLootHeroic/eggLootLegendary fields the same way lootForDifficulty
++      // already does for equipment -- see raids.ts.
++      for (const entry of eggLootForDifficulty(encounter, active.difficulty)) {
+         const parsed = parseEggLootEntry(entry);
+         if (!parsed) continue;
+         if (!rng.chance(Math.min(90, parsed.chance * (1 + (economy.loot + diffCfg.lootBonus) / 100)))) continue;
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' a/src/game/types.ts b/src/game/types.ts
+--- a/src/game/types.ts	2026-08-23 20:37:03.220646874 +0000
++++ b/src/game/types.ts	2026-08-23 20:43:44.095065193 +0000
+@@ -1160,8 +1160,20 @@
+    * a specific dedicated-pool pet) rather than an equipment defId. Rolled
+    * independently of `loot`/lootHeroic/lootLegendary, same
+    * economy.loot/diffCfg.lootBonus scaling either way.
++   *
++   * Difficulty-gated the same way `loot` is (see eggLootForDifficulty in
++   * raids.ts, mirroring lootForDifficulty exactly): Heroic/Legendary fall
++   * back to plain `eggLoot` if their own list is unset. Most encounters
++   * still just set `eggLoot` alone, same as before this patch (Skelly/
++   * Imp/Skeleton Warrior's drops all work this way -- available at every
++   * difficulty). A species meant to be Heroic-onward ONLY (Dragonling, per
++   * direct request) leaves `eggLoot` unset entirely and sets
++   * `eggLootHeroic`/`eggLootLegendary` instead -- Normal then has nothing
++   * to fall back to, and correctly rolls nothing.
+    */
+   eggLoot?: string[];
++  eggLootHeroic?: string[];
++  eggLootLegendary?: string[];
+   /**
+    * Authored, not rolled -- raid encounters are a small curated list
+    * (unlike quest offers, which are procedurally generated per board),
+@@ -2408,6 +2420,17 @@
+    *  pet (a pack's own signature species, granted by its own reward
+    *  chain/egg) is a valid combination -- the two flags are independent. */
+   requiresDlc?: string;
++  /**
++   * Floors this species' hatched-pet rarity at a minimum tier, applied in
++   * PetManager.hatch AFTER the species roll -- the egg's own rarity (set
++   * whenever it was granted) stays what it was, this only ever raises the
++   * resulting Pet's displayed rarity, never lowers it. Added for Mimic:
++   * direct request was "make Mimic feel rare" with no new pool-weighting
++   * system, so every Mimic that hatches shows as rare-or-better regardless
++   * of which egg happened to produce it -- species odds inside
++   * GENERAL_PET_POOL are unaffected, only the cosmetic result once rolled.
++   */
++  minRarity?: Rarity;
+ }
+ 
+ /**
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' a/src/ui/sprites/PetSprite.tsx b/src/ui/sprites/PetSprite.tsx
+--- a/src/ui/sprites/PetSprite.tsx	2026-08-23 20:37:03.227260981 +0000
++++ b/src/ui/sprites/PetSprite.tsx	2026-08-23 20:44:38.108292765 +0000
+@@ -14,6 +14,22 @@
+  *   python3 tools/import_pets.py --src <folder with the raw sheets> --out public/pets
+  */
+ 
++/**
++ * Same shape and purpose as HeroSprite's HERO_REVERSED_FACING: every
++ * species' `flip` prop assumes the same default facing direction in its
++ * own source sheet, and a pack authored facing the opposite way needs its
++ * own facing inverted once, here, rather than pushing the quirk onto every
++ * caller of `flip`. Skeleton Warrior reported with the same symptom the
++ * Dwarf/Wizard/Witch hero classes originally had (facing backward relative
++ * to everything else running beside it) -- same fix, same shape. Dragonling
++ * added at the same time, same reported symptom, confirmed against its own
++ * pack directly rather than assumed from the species being new.
++ */
++const PET_REVERSED_FACING: Partial<Record<string, true>> = {
++  skeleton_warrior: true,
++  dragonling: true,
++};
++
+ export type PetAnimation =
+   | 'idle' | 'idle2' | 'movement' | 'sleep' | 'damage'
+   | 'catch' | 'perched' | 'sitting' | 'laying' | 'eating' | 'walking' | 'flying';
+@@ -171,6 +187,10 @@
+ 
+   const scale = height / char.frameH;
+   const url = `./pets/${species}/${rarity}/${resolved}.png`;
++  // XOR, not OR/AND -- a reversed-facing species should flip exactly when
++  // a normal species WOULDN'T, and vice versa, not simply flip more often.
++  // Same logic as HeroSprite's effectiveFlip.
++  const effectiveFlip = PET_REVERSED_FACING[species] ? !flip : flip;
+   const style: CSSProperties = {
+     width: char.frameW * scale,
+     height: char.frameH * scale,
+@@ -179,7 +199,7 @@
+     backgroundPosition: `-${index * char.frameW * scale}px 0`,
+     backgroundRepeat: 'no-repeat',
+     imageRendering: 'pixelated',
+-    transform: flip ? 'scaleX(-1)' : undefined,
++    transform: effectiveFlip ? 'scaleX(-1)' : undefined,
+   };
+ 
+   return (
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+--- a/tools/devtool/server.mjs	2026-08-23 20:37:03.229614766 +0000
++++ b/tools/devtool/server.mjs	2026-08-23 20:46:20.603401656 +0000
+@@ -831,6 +831,15 @@
+       // same as loot's own original pre-picker form. See
+       // parseEggLootEntry in raids.ts for exactly how this is read.
+       eggLoot: { type: 'string[]', required: false },
++      // Difficulty-tiered eggLoot, patch 0250 -- same optional/no-fallback-
++      // required shape as lootHeroic/lootLegendary above, just for eggs.
++      // See eggLootForDifficulty in raids.ts: Heroic/Legendary fall back to
++      // plain eggLoot if their own list is empty, so most encounters (with
++      // an egg drop available at every difficulty) never need to touch
++      // these two at all. A species meant to be unavailable below Heroic
++      // (Dragonling) leaves eggLoot empty and sets these instead.
++      eggLootHeroic: { type: 'string[]', required: false },
++      eggLootLegendary: { type: 'string[]', required: false },
+       // Elemental weakness/attack-type/immunity tags -- read by
+       // RaidManager.elementalBonus (via the shared elementalBonusForHero,
+       // data/elements.ts) for a real success-chance bonus, but previously
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=.git' a/tools/import_pets.py b/tools/import_pets.py
+--- a/tools/import_pets.py	2026-08-23 20:37:03.231069148 +0000
++++ b/tools/import_pets.py	2026-08-23 20:42:29.782798095 +0000
+@@ -75,6 +75,9 @@
+         rows: Dict[str, Tuple[int, int, int]] | None = None,
+         extras: Dict[str, Tuple[int, int]] | None = None,
+         anim_files: Dict[str, str] | None = None,
++        frame_boxes: Dict[str, List[Tuple[int, int, int, int]]] | None = None,
++        frame_files: Dict[str, List[str]] | None = None,
++        base_recolor: Dict[str, str] | None = None,
+     ):
+         self.species_id = species_id
+         self.frame_w = frame_w
+@@ -106,6 +109,43 @@
+         # animations -- (row, col) into the sheet_file grid. Not supported
+         # for the anim_files shape (no species has needed it there yet).
+         self.extras = extras or {}
++        # Fourth source shape, added for Bandit (raccoon): per-animation
++        # EXPLICIT (x, y, w, h) crop boxes into sheet_file, for packs that
++        # aren't a real uniform grid -- Bandit's own sheet has each row on
++        # a consistent 24px vertical pitch but a DIFFERENT horizontal pitch
++        # per row (16px for the front/back rows, ~21px for the side-profile
++        # walk row), which the single frame_w/frame_h-per-sheet model above
++        # can't express. Boxes below were read off the actual sheet via a
++        # connected-component scan (every opaque blob's tight bounding box),
++        # not eyeballed -- see the conversation this shipped in. Each cropped
++        # frame is pasted into this spec's own frame_w x frame_h canvas,
++        # horizontally centred and bottom-aligned (paws stay grounded even
++        # though the raw crops vary a few px in both dimensions frame to
++        # frame) -- see build_strip_from_boxes.
++        self.frame_boxes = frame_boxes or {}
++        # Fifth source shape, added for Tidewhelp (otter): some packs ship
++        # one file PER FRAME rather than a sheet or a pre-cut strip (e.g.
++        # otter_idle_1.png .. otter_idle_4.png). Each animation here is an
++        # ordered list of filenames, concatenated left-to-right into a strip
++        # at import time -- see stitch_frame_files. Every listed file is
++        # assumed to already BE frame_w x frame_h (confirmed true for
++        # Otter's own pack: every loose frame is a uniform 200x200 canvas),
++        # so no cropping/padding happens here the way frame_boxes needs.
++        self.frame_files = frame_files or {}
++        # Sixth addition, added for Dragonling: a one-time FIXED colour
++        # remap applied before the normal per-tier hue-shift livery, for a
++        # species whose only supplied art is the wrong base colour for its
++        # own name (Dragonling's pack is green; the black colourway was
++        # never supplied -- see the conversation this shipped in). Keyed by
++        # the same original source hex the sheet actually uses; build_map
++        # below substitutes this target colour in for that source BEFORE
++        # handing it to apply_livery, so the "common" tier (0deg hue shift)
++        # renders as this fixed target colour exactly, and every other tier
++        # hue-shifts onward FROM that colour rather than from the original
++        # green. Every recolor entry not listed here just passes through as
++        # its own original colour, same as always -- this is additive, not
++        # a replacement for the recolor/keep split.
++        self.base_recolor = {hex_to_rgb(k): hex_to_rgb(v) for k, v in (base_recolor or {}).items()}
+ 
+ 
+ # ------------------------------------------------------------------ specs ---
+@@ -286,7 +326,239 @@
+     keep=['#069d9d', '#4a4b4b'],
+ )
+ 
+-PETS: List[PetSpec] = [FOX, RED_PANDA, CROW, HOUND, GOLDENPAW, FARWATCH, LONGSHADOW, BRIARBEARD, FROSTRUNNER]
++# ---------------------------------------------------------- batch: patch 0250 ---
++# Eleven species in one go -- five general-pool placeholders that already had
++# a `PetDef` waiting on art (mossback/tidewhelp/wisplet, plus two new-species
++# additions bandit/squirrel), and six dedicated-reward species tied to a
++# specific raid encounter or quest chain (see pets.json/raid-encounters.json/
++# quest-chains.json in this same patch). Colours below were picked the same
++# way every prior batch was: sampling the real PNGs' histograms and
++# confirming each colour's role against an enlarged crop, not guessed from
++# the sheet thumbnail alone.
++
++MOSSBACK = PetSpec(
++    species_id='mossback',
++    frame_w=48, frame_h=48,
++    # GreenBrown is the one canonical colourway picked from the pack's six
++    # (BlueBlue/BlueBrown/GreenBlue/GreenBrown/PurpleBlue/PurpleWhite) --
++    # direct request was "use 1, then recolour", so the other five are
++    # simply unused; the usual 5-tier auto-tint below covers the rest.
++    # 'Explosion' (9 frames, a toxic special-attack burst) has no matching
++    # PetAnimation slot yet -- skipped, not lost; the source file stays in
++    # the pack if that vocabulary ever grows.
++    anim_files={
++        'idle': 'Frog/GreenBrown/ToxicFrogGreenBrown_Idle.png',
++        'movement': 'Frog/GreenBrown/ToxicFrogGreenBrown_Hop.png',
++        'catch': 'Frog/GreenBrown/ToxicFrogGreenBrown_Attack.png',
++        'damage': 'Frog/GreenBrown/ToxicFrogGreenBrown_Hurt.png',
++    },
++    recolor=['#63c74d', '#3e8948', '#265c42', '#e4a672', '#ead4aa', '#b86f50', '#733e39'],  # skin greens + belly/spot tans
++    keep=['#181425'],  # outline
++)
++
++TIDEWHELP = PetSpec(
++    species_id='tidewhelp',
++    frame_w=200, frame_h=200,
++    # Loose numbered frames, not a sheet -- see frame_files above. Only the
++    # idle/run frames were asked for; idle_alt/jump/land/sleep/spin are
++    # in the pack but deliberately unused this patch.
++    frame_files={
++        'idle': ['Otter/otter_idle_1.png', 'Otter/otter_idle_2.png', 'Otter/otter_idle_3.png', 'Otter/otter_idle_4.png'],
++        'movement': ['Otter/otter_run_1.png', 'Otter/otter_run_2.png', 'Otter/otter_run_3.png'],
++    },
++    recolor=['#8f563b', '#78432b', '#c4986e', '#eec39a'],  # fur + belly tones
++    keep=['#000000', '#45283c'],  # outline + eye/nose
++)
++
++# Bandit's own sheet ships two colourways (Brown/Grey) that are the exact
++# same shapes with a different palette baked in -- confirmed by identical
++# per-colour pixel counts between the two files. Brown picked as canonical,
++# same "pick one, auto-tint covers the rest" treatment as Mossback above.
++# Box coordinates are the real connected-component scan of
++# RaccoonRun SpriteSheets/BrownRaccoons.png (see PetSpec.frame_boxes) --
++# row 1 (front-facing idle bob) and row 4 (side-profile walk) specifically,
++# the two rows that map onto this game's idle/movement vocabulary. Rows 2
++# (3/4-angle idle, both directions) and 3 (back-facing idle) are real frames
++# in the source pack but have no slot to go in yet.
++BANDIT = PetSpec(
++    species_id='bandit',
++    frame_w=20, frame_h=22,
++    sheet_file='Raccoon/RaccoonRun SpriteSheets/BrownRaccoons.png',
++    frame_boxes={
++        'idle': [(1, 1, 16, 22), (17, 1, 16, 22), (33, 1, 16, 22)],
++        'movement': [(0, 73, 17, 22), (22, 73, 17, 22), (43, 73, 20, 22), (64, 73, 17, 22)],
++    },
++    recolor=['#5e4a40', '#bba69a', '#33241d', '#55433a', '#3b291f', '#4d372b'],  # fur tones
++    keep=['#000000', '#ffffff'],  # outline + tiny highlight
++)
++
++WISPLET = PetSpec(
++    species_id='wisplet',
++    frame_w=288, frame_h=288,
++    # Single 10-frame idle-flicker strip, no other animation supplied --
++    # PetSprite already falls back to idle for movement/etc, same as every
++    # other species missing a row. NOTE: this pack is a warm fire-coloured
++    # wisp (orange/red/cream), not the pale cool light Wisplet's own flavour
++    # text originally described -- flavour text updated in this same patch
++    # (pets.json) to match the actual art instead of the other way around.
++    anim_files={'idle': "Whisp/NoobGodoter'sSpritesheet.png"},
++    recolor=['#e02807', '#fa6f19', '#f5e98b'],  # flame body + pale core
++    keep=['#3d0202'],  # outline
++)
++
++SQUIRREL = PetSpec(
++    species_id='squirrel',
++    frame_w=32, frame_h=32,
++    sheet_file='Squirrel/Squirrel Sprite Sheet.png',
++    # Confirmed directly: this sheet IS a uniform 32x32, 8-col grid despite
++    # not every row being fully populated (row 0 has 6 frames of 8 possible
++    # columns, row 3 has 4) -- row/col placement read off a connected-
++    # component scan, not assumed from a filled-grid guess. Row 0 (idle) and
++    # row 3 (run) per direct instruction; rows 1/2/4/5/6 (a near-duplicate
++    # idle variant, a longer leap cycle, a two-frame "found something" pose,
++    # and a pounce) are real content but unused this patch.
++    rows={
++        'idle': (0, 0, 6),
++        'movement': (3, 0, 4),
++    },
++    recolor=['#825235', '#694129', '#a67354'],  # fur tones (same bright/dark-tone family fox/red panda already use)
++    keep=['#2f2f2e', '#e4e4e4'],  # outline + small highlight
++)
++
++# The next six species (Skelly, Imp, Dragonling, Mimic, Skeleton Warrior,
++# Flying Eye) are all from the same "2D Pixel Art" template pack family --
++# confirmed by their near-identical palette (c42430/891e2b/571c27 reds,
++# 657392/c7cfdd blue-greys turn up in almost every one of them) and, more
++# importantly, by every one of them shipping animation files under the
++# EXACT SAME generic names (IDLE.png/WALK.png/ATTACK.png/HURT.png/
++# MOVE.png/DEATH.png, under Sprites/<with|without>_outline or
++# Sprites/<no|>_outline depending on the pack). Every anim_files path below
++# is deliberately the FULL path from --src, one species subfolder deep,
++# rather than the bare filename every earlier species in this file uses --
++# six same-named IDLE.png files WOULD silently overwrite each other if
++# --src were ever a single flat folder holding all of them side by side.
++# This assumes --src is the folder each pack's own zip extracted INTO
++# (i.e. each pack's own top-level folder -- "Skeleton Mage 2D Pixel Art/",
++# "Imp 2D Pixel Art v1.2/", etc -- sits directly under --src, unrenamed),
++# which is what a normal unzip already produces with zero manual renaming.
++
++SKELLY = PetSpec(
++    species_id='skelly',
++    frame_w=128, frame_h=128,
++    anim_files={
++        'idle': 'Skeleton Mage 2D Pixel Art/Sprites/without_outline/IDLE.png',
++        'movement': 'Skeleton Mage 2D Pixel Art/Sprites/without_outline/WALK.png',
++        'catch': 'Skeleton Mage 2D Pixel Art/Sprites/without_outline/ATTACK.png',
++        'damage': 'Skeleton Mage 2D Pixel Art/Sprites/without_outline/HURT.png',
++    },
++    # Robe/hood purples + the dark blue-black base recolour; bone/skin tones
++    # shift too (a Legendary Skelly reads as a different creature, same as
++    # every fur-based species). The staff orb's glow (edab50/ed7614/ffc825)
++    # is kept fixed across every tier on purpose -- same "constant magic
++    # glow" treatment Frostrunner's eyes already established.
++    recolor=['#03193f', '#622461', '#3b1443', '#93388f', '#ca52c9', '#f6ca9f', '#e69c69', '#f9e6cf', '#5d2c28', '#391f21'],
++    keep=['#131313', '#edab50', '#ed7614', '#ffc825'],
++)
++
++IMP = PetSpec(
++    species_id='imp',
++    frame_w=128, frame_h=48,
++    anim_files={
++        'idle': 'Imp 2D Pixel Art v1.2/Sprites/no_outline/IDLE.png',
++        'movement': 'Imp 2D Pixel Art v1.2/Sprites/no_outline/MOVE.png',
++        'catch': 'Imp 2D Pixel Art v1.2/Sprites/no_outline/ATTACK.png',
++        'damage': 'Imp 2D Pixel Art v1.2/Sprites/no_outline/HURT.png',
++    },
++    recolor=['#c42430', '#891e2b', '#571c27', '#424c6e', '#657392', '#2a2f4e', '#c7cfdd'],  # skin reds + horn/wing blues
++    keep=['#3d3d3d', '#272727', '#5d5d5d', '#080808', '#000000', '#ffffff'],  # outline/shadow family + highlight
++)
++
++# Only the green colourway was supplied (see base_recolor below) -- the
++# actual name/id was shortened from black_dragonling to just "dragonling"
++# in this same patch, since the black art doesn't exist yet and the old id
++# read as a promise the sprite couldn't keep.
++DRAGONLING = PetSpec(
++    species_id='dragonling',
++    frame_w=158, frame_h=125,  # confirmed against IDLE.png (632x125, visually 4 frames) and every other file dividing cleanly at 158
++    anim_files={
++        'idle': 'Baby Dragon 2D Pixel Art/Sprites/without_outline/IDLE.png',
++        'movement': 'Baby Dragon 2D Pixel Art/Sprites/without_outline/MOVE.png',
++        'catch': 'Baby Dragon 2D Pixel Art/Sprites/without_outline/ATTACK.png',
++        'damage': 'Baby Dragon 2D Pixel Art/Sprites/without_outline/HURT.png',
++    },
++    # Every scale/wing/horn tone remapped to a black/charcoal/deep-maroon
++    # palette -- a hand-authored "black dragon" livery, not a hue-shift of
++    # the source green (see PetSpec.base_recolor for why hue-shift alone
++    # can't get there). The small red accent (c42430) and white glint
++    # (ffffff) are deliberately left in `keep` rather than remapped, for a
++    # glowing-eyes-in-the-dark read rather than a flat black silhouette.
++    recolor=['#1e6f50', '#33984b', '#5ac54f', '#e69c69', '#f6ca9f', '#bf6f4a', '#92a1b9', '#c7cfdd', '#657392', '#0c2e44', '#134c4c'],
++    keep=['#c42430', '#ffffff'],
++    base_recolor={
++        '#1e6f50': '#16181c', '#33984b': '#2b2e33', '#5ac54f': '#3d4046',
++        '#e69c69': '#4a1414', '#f6ca9f': '#6b1f1f', '#bf6f4a': '#591818',
++        '#92a1b9': '#14161c', '#c7cfdd': '#262b33', '#657392': '#1b1f28',
++        '#0c2e44': '#0a0a10', '#134c4c': '#0d1616',
++    },
++)
++
++MIMIC = PetSpec(
++    species_id='mimic',
++    frame_w=96, frame_h=96,  # confirmed visually against IDLE.png (768x96, 8 frames) -- the raw GCD across every file lands on 192, exactly double the real grid, since nothing forces it lower
++    anim_files={
++        'idle': 'Mimic 2D Pixel Art v1.2/New Version/Sprites/no_outline/IDLE.png',
++        'movement': 'Mimic 2D Pixel Art v1.2/New Version/Sprites/no_outline/WALK.png',
++        'catch': 'Mimic 2D Pixel Art v1.2/New Version/Sprites/no_outline/ATTACK.png',
++        'damage': 'Mimic 2D Pixel Art v1.2/New Version/Sprites/no_outline/HURT.png',
++    },
++    # 'APPEAR' (8 frames -- the chest "waking up" and standing on its own
++    # legs) has no matching PetAnimation slot yet, same gap as Mossback's
++    # Explosion -- unused this patch, not lost. 'New Version' picked over
++    # 'Old Version' -- newer art, same pack.
++    recolor=['#5d2c28', '#bf6f4a', '#8a4836', '#391f21', '#c7cfdd', '#657392', '#92a1b9'],  # wood tones + metal bands
++    keep=['#c42430', '#571c27', '#891e2b', '#1c121c', '#ffffff', '#b4b4b4'],  # red maw stays red + outline/teeth
++)
++
++# Facing bug reported alongside the art itself -- see PET_REVERSED_FACING
++# in src/ui/sprites/PetSprite.tsx, same fix shape as HeroSprite's
++# HERO_REVERSED_FACING. Only ATTACK 1 of the pack's two attack variants is
++# wired to 'catch'; ATTACK 2 is unused this patch, same as every other
++# pack's extra/unmapped animation this batch. Note the pack's own folder
++# name has a double space ("Warrior  2D") -- kept exactly as extracted
++# rather than "corrected", since that's what --src will actually contain.
++SKELETON_WARRIOR = PetSpec(
++    species_id='skeleton_warrior',
++    frame_w=89, frame_h=78,
++    anim_files={
++        'idle': 'Skeleton Warrior  2D Pixel Art v1.1/Sprites/without_outline/IDLE.png',
++        'movement': 'Skeleton Warrior  2D Pixel Art v1.1/Sprites/without_outline/WALK.png',
++        'catch': 'Skeleton Warrior  2D Pixel Art v1.1/Sprites/without_outline/ATTACK 1.png',
++        'damage': 'Skeleton Warrior  2D Pixel Art v1.1/Sprites/without_outline/HURT.png',
++    },
++    recolor=['#858585', '#b4b4b4', '#5d5d5d', '#3d3d3d', '#657392', '#1a1932', '#2a2f4e', '#c7cfdd', '#92a1b9'],  # bone tones + armour blues
++    keep=['#272727', '#131313', '#0e071b'],  # outline family
++)
++
++# No dedicated idle file in this pack -- MOVE (the floating hover loop) is
++# wired to BOTH idle and movement, same "one animation, two vocabulary
++# slots" shape a stationary-but-always-animated creature needs.
++FLYING_EYE = PetSpec(
++    species_id='flying_eye',
++    frame_w=150, frame_h=150,
++    anim_files={
++        'idle': 'Flying Eye 2D Pixel Art/Sprites/without_outline/MOVE.png',
++        'movement': 'Flying Eye 2D Pixel Art/Sprites/without_outline/MOVE.png',
++        'catch': 'Flying Eye 2D Pixel Art/Sprites/without_outline/ATTACK.png',
++        'damage': 'Flying Eye 2D Pixel Art/Sprites/without_outline/HURT.png',
++    },
++    recolor=['#0c2e44', '#134c4c', '#1e6f50', '#33984b', '#c42430', '#891e2b', '#571c27', '#f5555d', '#f68187'],  # wing/tentacle body greens + iris/tentacle-underside reds
++    keep=['#ffffff', '#b4b4b4', '#858585', '#161c39', '#22284a'],  # sclera + outline family
++)
++
++PETS: List[PetSpec] = [
++    FOX, RED_PANDA, CROW, HOUND, GOLDENPAW, FARWATCH, LONGSHADOW, BRIARBEARD, FROSTRUNNER,
++    MOSSBACK, TIDEWHELP, BANDIT, WISPLET, SQUIRREL, SKELLY, IMP, DRAGONLING, MIMIC, SKELETON_WARRIOR, FLYING_EYE,
++]
+ 
+ 
+ # -------------------------------------------------------------- recolour ---
+@@ -295,7 +567,15 @@
+     livery = RARITY_LIVERY[tier]
+     mapping: Dict[RGB, RGB] = {}
+     for src in spec.recolor:
+-        mapping[src] = apply_livery(src, livery)
++        # base_recolor substitutes a fixed target colour in for src BEFORE
++        # the livery shift, so "common" (0deg shift) renders as that exact
++        # target colour and every other tier hue-shifts onward from there
++        # instead of from the source art's own original colour. No-op for
++        # every species without a base_recolor entry for this src (the
++        # overwhelming majority) -- falls through to the original
++        # hue-shift-from-source behaviour exactly as before.
++        base = spec.base_recolor.get(src, src)
++        mapping[src] = apply_livery(base, livery)
+     for src in spec.keep:
+         mapping[src] = src  # identity, but explicit -- never touched by any tier
+     return mapping
+@@ -328,6 +608,36 @@
+     return out
+ 
+ 
++def build_strip_from_boxes(img: Image.Image, boxes: List[Tuple[int, int, int, int]], frame_w: int, frame_h: int) -> Image.Image:
++    """PetSpec.frame_boxes support -- crops each explicit (x, y, w, h) box
++    out of img and pastes it into a uniform frame_w x frame_h canvas,
++    horizontally centred and bottom-aligned. Centring/bottom-align (rather
++    than pasting at (0, 0) the way slice_strip does for a real grid) matters
++    here specifically because the boxes themselves vary a few px in both
++    dimensions frame to frame -- Bandit's own idle boxes are 16px wide,
++    its walk boxes 17-20px -- so a naive top-left paste would make the
++    animation visibly hop side to side and float up/down as it played."""
++    out = Image.new('RGBA', (frame_w * len(boxes), frame_h))
++    for i, (x, y, w, h) in enumerate(boxes):
++        frame = img.crop((x, y, x + w, y + h))
++        ox = (frame_w - w) // 2
++        oy = frame_h - h
++        out.paste(frame, (i * frame_w + ox, oy), frame)
++    return out
++
++
++def stitch_frame_files(paths: List[str], frame_w: int, frame_h: int) -> Image.Image:
++    """PetSpec.frame_files support -- concatenates a list of individual
++    per-frame files (each assumed to already be frame_w x frame_h, unlike
++    frame_boxes' crops) left to right into one strip, same output shape
++    slice_strip/build_strip_from_boxes both already produce."""
++    out = Image.new('RGBA', (frame_w * len(paths), frame_h))
++    for i, path in enumerate(paths):
++        frame = Image.open(path).convert('RGBA')
++        out.paste(frame, (i * frame_w, 0), frame)
++    return out
++
++
+ def frame_bottom_padding(frame: Image.Image) -> int | None:
+     """Rows of fully-transparent padding below the lowest opaque pixel in
+     this one frame, or None if the frame has no opaque pixels at all.
+@@ -420,6 +730,14 @@
+                 raw_strips[anim] = slice_strip(sheet, spec, row, start_col, count)
+                 source_label[anim] = f'row {row}'
+ 
++            # frame_boxes shares sheet_file with the rows above (Bandit uses
++            # both: none currently, but nothing stops a future spec mixing
++            # them the same way rows+anim_files already do for Rooftail).
++            for anim, boxes in spec.frame_boxes.items():
++                counts[anim] = len(boxes)
++                raw_strips[anim] = build_strip_from_boxes(sheet, boxes, spec.frame_w, spec.frame_h)
++                source_label[anim] = f'{len(boxes)} explicit boxes'
++
+         for anim, filename in spec.anim_files.items():
+             src_path = os.path.join(args.src, filename)
+             if not os.path.exists(src_path):
+@@ -433,6 +751,19 @@
+         if missing:
+             continue
+ 
++        for anim, filenames in spec.frame_files.items():
++            paths = [os.path.join(args.src, f) for f in filenames]
++            not_found = [f for f, p in zip(filenames, paths) if not os.path.exists(p)]
++            if not_found:
++                print(f'  skip {spec.species_id}: {", ".join(not_found)} not found in {args.src}')
++                missing = True
++                break
++            counts[anim] = len(paths)
++            raw_strips[anim] = stitch_frame_files(paths, spec.frame_w, spec.frame_h)
++            source_label[anim] = f'{len(paths)} stitched loose frames'
++        if missing:
++            continue
++
+         if not raw_strips:
+             print(f'  skip {spec.species_id}: no sheet_file or anim_files produced any frames')
+             continue

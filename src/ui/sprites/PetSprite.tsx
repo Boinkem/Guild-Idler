@@ -14,6 +14,22 @@ import { Rarity } from '../../game/types';
  *   python3 tools/import_pets.py --src <folder with the raw sheets> --out public/pets
  */
 
+/**
+ * Same shape and purpose as HeroSprite's HERO_REVERSED_FACING: every
+ * species' `flip` prop assumes the same default facing direction in its
+ * own source sheet, and a pack authored facing the opposite way needs its
+ * own facing inverted once, here, rather than pushing the quirk onto every
+ * caller of `flip`. Skeleton Warrior reported with the same symptom the
+ * Dwarf/Wizard/Witch hero classes originally had (facing backward relative
+ * to everything else running beside it) -- same fix, same shape. Dragonling
+ * added at the same time, same reported symptom, confirmed against its own
+ * pack directly rather than assumed from the species being new.
+ */
+const PET_REVERSED_FACING: Partial<Record<string, true>> = {
+  skeleton_warrior: true,
+  dragonling: true,
+};
+
 export type PetAnimation =
   | 'idle' | 'idle2' | 'movement' | 'sleep' | 'damage'
   | 'catch' | 'perched' | 'sitting' | 'laying' | 'eating' | 'walking' | 'flying';
@@ -171,6 +187,10 @@ export function PetSprite({
 
   const scale = height / char.frameH;
   const url = `./pets/${species}/${rarity}/${resolved}.png`;
+  // XOR, not OR/AND -- a reversed-facing species should flip exactly when
+  // a normal species WOULDN'T, and vice versa, not simply flip more often.
+  // Same logic as HeroSprite's effectiveFlip.
+  const effectiveFlip = PET_REVERSED_FACING[species] ? !flip : flip;
   const style: CSSProperties = {
     width: char.frameW * scale,
     height: char.frameH * scale,
@@ -179,7 +199,7 @@ export function PetSprite({
     backgroundPosition: `-${index * char.frameW * scale}px 0`,
     backgroundRepeat: 'no-repeat',
     imageRendering: 'pixelated',
-    transform: flip ? 'scaleX(-1)' : undefined,
+    transform: effectiveFlip ? 'scaleX(-1)' : undefined,
   };
 
   return (

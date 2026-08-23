@@ -75,6 +75,9 @@ class PetSpec:
         rows: Dict[str, Tuple[int, int, int]] | None = None,
         extras: Dict[str, Tuple[int, int]] | None = None,
         anim_files: Dict[str, str] | None = None,
+        frame_boxes: Dict[str, List[Tuple[int, int, int, int]]] | None = None,
+        frame_files: Dict[str, List[str]] | None = None,
+        base_recolor: Dict[str, str] | None = None,
     ):
         self.species_id = species_id
         self.frame_w = frame_w
@@ -106,6 +109,43 @@ class PetSpec:
         # animations -- (row, col) into the sheet_file grid. Not supported
         # for the anim_files shape (no species has needed it there yet).
         self.extras = extras or {}
+        # Fourth source shape, added for Bandit (raccoon): per-animation
+        # EXPLICIT (x, y, w, h) crop boxes into sheet_file, for packs that
+        # aren't a real uniform grid -- Bandit's own sheet has each row on
+        # a consistent 24px vertical pitch but a DIFFERENT horizontal pitch
+        # per row (16px for the front/back rows, ~21px for the side-profile
+        # walk row), which the single frame_w/frame_h-per-sheet model above
+        # can't express. Boxes below were read off the actual sheet via a
+        # connected-component scan (every opaque blob's tight bounding box),
+        # not eyeballed -- see the conversation this shipped in. Each cropped
+        # frame is pasted into this spec's own frame_w x frame_h canvas,
+        # horizontally centred and bottom-aligned (paws stay grounded even
+        # though the raw crops vary a few px in both dimensions frame to
+        # frame) -- see build_strip_from_boxes.
+        self.frame_boxes = frame_boxes or {}
+        # Fifth source shape, added for Tidewhelp (otter): some packs ship
+        # one file PER FRAME rather than a sheet or a pre-cut strip (e.g.
+        # otter_idle_1.png .. otter_idle_4.png). Each animation here is an
+        # ordered list of filenames, concatenated left-to-right into a strip
+        # at import time -- see stitch_frame_files. Every listed file is
+        # assumed to already BE frame_w x frame_h (confirmed true for
+        # Otter's own pack: every loose frame is a uniform 200x200 canvas),
+        # so no cropping/padding happens here the way frame_boxes needs.
+        self.frame_files = frame_files or {}
+        # Sixth addition, added for Dragonling: a one-time FIXED colour
+        # remap applied before the normal per-tier hue-shift livery, for a
+        # species whose only supplied art is the wrong base colour for its
+        # own name (Dragonling's pack is green; the black colourway was
+        # never supplied -- see the conversation this shipped in). Keyed by
+        # the same original source hex the sheet actually uses; build_map
+        # below substitutes this target colour in for that source BEFORE
+        # handing it to apply_livery, so the "common" tier (0deg hue shift)
+        # renders as this fixed target colour exactly, and every other tier
+        # hue-shifts onward FROM that colour rather than from the original
+        # green. Every recolor entry not listed here just passes through as
+        # its own original colour, same as always -- this is additive, not
+        # a replacement for the recolor/keep split.
+        self.base_recolor = {hex_to_rgb(k): hex_to_rgb(v) for k, v in (base_recolor or {}).items()}
 
 
 # ------------------------------------------------------------------ specs ---
@@ -286,7 +326,239 @@ FROSTRUNNER = PetSpec(
     keep=['#069d9d', '#4a4b4b'],
 )
 
-PETS: List[PetSpec] = [FOX, RED_PANDA, CROW, HOUND, GOLDENPAW, FARWATCH, LONGSHADOW, BRIARBEARD, FROSTRUNNER]
+# ---------------------------------------------------------- batch: patch 0250 ---
+# Eleven species in one go -- five general-pool placeholders that already had
+# a `PetDef` waiting on art (mossback/tidewhelp/wisplet, plus two new-species
+# additions bandit/squirrel), and six dedicated-reward species tied to a
+# specific raid encounter or quest chain (see pets.json/raid-encounters.json/
+# quest-chains.json in this same patch). Colours below were picked the same
+# way every prior batch was: sampling the real PNGs' histograms and
+# confirming each colour's role against an enlarged crop, not guessed from
+# the sheet thumbnail alone.
+
+MOSSBACK = PetSpec(
+    species_id='mossback',
+    frame_w=48, frame_h=48,
+    # GreenBrown is the one canonical colourway picked from the pack's six
+    # (BlueBlue/BlueBrown/GreenBlue/GreenBrown/PurpleBlue/PurpleWhite) --
+    # direct request was "use 1, then recolour", so the other five are
+    # simply unused; the usual 5-tier auto-tint below covers the rest.
+    # 'Explosion' (9 frames, a toxic special-attack burst) has no matching
+    # PetAnimation slot yet -- skipped, not lost; the source file stays in
+    # the pack if that vocabulary ever grows.
+    anim_files={
+        'idle': 'Frog/GreenBrown/ToxicFrogGreenBrown_Idle.png',
+        'movement': 'Frog/GreenBrown/ToxicFrogGreenBrown_Hop.png',
+        'catch': 'Frog/GreenBrown/ToxicFrogGreenBrown_Attack.png',
+        'damage': 'Frog/GreenBrown/ToxicFrogGreenBrown_Hurt.png',
+    },
+    recolor=['#63c74d', '#3e8948', '#265c42', '#e4a672', '#ead4aa', '#b86f50', '#733e39'],  # skin greens + belly/spot tans
+    keep=['#181425'],  # outline
+)
+
+TIDEWHELP = PetSpec(
+    species_id='tidewhelp',
+    frame_w=200, frame_h=200,
+    # Loose numbered frames, not a sheet -- see frame_files above. Only the
+    # idle/run frames were asked for; idle_alt/jump/land/sleep/spin are
+    # in the pack but deliberately unused this patch.
+    frame_files={
+        'idle': ['Otter/otter_idle_1.png', 'Otter/otter_idle_2.png', 'Otter/otter_idle_3.png', 'Otter/otter_idle_4.png'],
+        'movement': ['Otter/otter_run_1.png', 'Otter/otter_run_2.png', 'Otter/otter_run_3.png'],
+    },
+    recolor=['#8f563b', '#78432b', '#c4986e', '#eec39a'],  # fur + belly tones
+    keep=['#000000', '#45283c'],  # outline + eye/nose
+)
+
+# Bandit's own sheet ships two colourways (Brown/Grey) that are the exact
+# same shapes with a different palette baked in -- confirmed by identical
+# per-colour pixel counts between the two files. Brown picked as canonical,
+# same "pick one, auto-tint covers the rest" treatment as Mossback above.
+# Box coordinates are the real connected-component scan of
+# RaccoonRun SpriteSheets/BrownRaccoons.png (see PetSpec.frame_boxes) --
+# row 1 (front-facing idle bob) and row 4 (side-profile walk) specifically,
+# the two rows that map onto this game's idle/movement vocabulary. Rows 2
+# (3/4-angle idle, both directions) and 3 (back-facing idle) are real frames
+# in the source pack but have no slot to go in yet.
+BANDIT = PetSpec(
+    species_id='bandit',
+    frame_w=20, frame_h=22,
+    sheet_file='Raccoon/RaccoonRun SpriteSheets/BrownRaccoons.png',
+    frame_boxes={
+        'idle': [(1, 1, 16, 22), (17, 1, 16, 22), (33, 1, 16, 22)],
+        'movement': [(0, 73, 17, 22), (22, 73, 17, 22), (43, 73, 20, 22), (64, 73, 17, 22)],
+    },
+    recolor=['#5e4a40', '#bba69a', '#33241d', '#55433a', '#3b291f', '#4d372b'],  # fur tones
+    keep=['#000000', '#ffffff'],  # outline + tiny highlight
+)
+
+WISPLET = PetSpec(
+    species_id='wisplet',
+    frame_w=288, frame_h=288,
+    # Single 10-frame idle-flicker strip, no other animation supplied --
+    # PetSprite already falls back to idle for movement/etc, same as every
+    # other species missing a row. NOTE: this pack is a warm fire-coloured
+    # wisp (orange/red/cream), not the pale cool light Wisplet's own flavour
+    # text originally described -- flavour text updated in this same patch
+    # (pets.json) to match the actual art instead of the other way around.
+    anim_files={'idle': "Whisp/NoobGodoter'sSpritesheet.png"},
+    recolor=['#e02807', '#fa6f19', '#f5e98b'],  # flame body + pale core
+    keep=['#3d0202'],  # outline
+)
+
+SQUIRREL = PetSpec(
+    species_id='squirrel',
+    frame_w=32, frame_h=32,
+    sheet_file='Squirrel/Squirrel Sprite Sheet.png',
+    # Confirmed directly: this sheet IS a uniform 32x32, 8-col grid despite
+    # not every row being fully populated (row 0 has 6 frames of 8 possible
+    # columns, row 3 has 4) -- row/col placement read off a connected-
+    # component scan, not assumed from a filled-grid guess. Row 0 (idle) and
+    # row 3 (run) per direct instruction; rows 1/2/4/5/6 (a near-duplicate
+    # idle variant, a longer leap cycle, a two-frame "found something" pose,
+    # and a pounce) are real content but unused this patch.
+    rows={
+        'idle': (0, 0, 6),
+        'movement': (3, 0, 4),
+    },
+    recolor=['#825235', '#694129', '#a67354'],  # fur tones (same bright/dark-tone family fox/red panda already use)
+    keep=['#2f2f2e', '#e4e4e4'],  # outline + small highlight
+)
+
+# The next six species (Skelly, Imp, Dragonling, Mimic, Skeleton Warrior,
+# Flying Eye) are all from the same "2D Pixel Art" template pack family --
+# confirmed by their near-identical palette (c42430/891e2b/571c27 reds,
+# 657392/c7cfdd blue-greys turn up in almost every one of them) and, more
+# importantly, by every one of them shipping animation files under the
+# EXACT SAME generic names (IDLE.png/WALK.png/ATTACK.png/HURT.png/
+# MOVE.png/DEATH.png, under Sprites/<with|without>_outline or
+# Sprites/<no|>_outline depending on the pack). Every anim_files path below
+# is deliberately the FULL path from --src, one species subfolder deep,
+# rather than the bare filename every earlier species in this file uses --
+# six same-named IDLE.png files WOULD silently overwrite each other if
+# --src were ever a single flat folder holding all of them side by side.
+# This assumes --src is the folder each pack's own zip extracted INTO
+# (i.e. each pack's own top-level folder -- "Skeleton Mage 2D Pixel Art/",
+# "Imp 2D Pixel Art v1.2/", etc -- sits directly under --src, unrenamed),
+# which is what a normal unzip already produces with zero manual renaming.
+
+SKELLY = PetSpec(
+    species_id='skelly',
+    frame_w=128, frame_h=128,
+    anim_files={
+        'idle': 'Skeleton Mage 2D Pixel Art/Sprites/without_outline/IDLE.png',
+        'movement': 'Skeleton Mage 2D Pixel Art/Sprites/without_outline/WALK.png',
+        'catch': 'Skeleton Mage 2D Pixel Art/Sprites/without_outline/ATTACK.png',
+        'damage': 'Skeleton Mage 2D Pixel Art/Sprites/without_outline/HURT.png',
+    },
+    # Robe/hood purples + the dark blue-black base recolour; bone/skin tones
+    # shift too (a Legendary Skelly reads as a different creature, same as
+    # every fur-based species). The staff orb's glow (edab50/ed7614/ffc825)
+    # is kept fixed across every tier on purpose -- same "constant magic
+    # glow" treatment Frostrunner's eyes already established.
+    recolor=['#03193f', '#622461', '#3b1443', '#93388f', '#ca52c9', '#f6ca9f', '#e69c69', '#f9e6cf', '#5d2c28', '#391f21'],
+    keep=['#131313', '#edab50', '#ed7614', '#ffc825'],
+)
+
+IMP = PetSpec(
+    species_id='imp',
+    frame_w=128, frame_h=48,
+    anim_files={
+        'idle': 'Imp 2D Pixel Art v1.2/Sprites/no_outline/IDLE.png',
+        'movement': 'Imp 2D Pixel Art v1.2/Sprites/no_outline/MOVE.png',
+        'catch': 'Imp 2D Pixel Art v1.2/Sprites/no_outline/ATTACK.png',
+        'damage': 'Imp 2D Pixel Art v1.2/Sprites/no_outline/HURT.png',
+    },
+    recolor=['#c42430', '#891e2b', '#571c27', '#424c6e', '#657392', '#2a2f4e', '#c7cfdd'],  # skin reds + horn/wing blues
+    keep=['#3d3d3d', '#272727', '#5d5d5d', '#080808', '#000000', '#ffffff'],  # outline/shadow family + highlight
+)
+
+# Only the green colourway was supplied (see base_recolor below) -- the
+# actual name/id was shortened from black_dragonling to just "dragonling"
+# in this same patch, since the black art doesn't exist yet and the old id
+# read as a promise the sprite couldn't keep.
+DRAGONLING = PetSpec(
+    species_id='dragonling',
+    frame_w=158, frame_h=125,  # confirmed against IDLE.png (632x125, visually 4 frames) and every other file dividing cleanly at 158
+    anim_files={
+        'idle': 'Baby Dragon 2D Pixel Art/Sprites/without_outline/IDLE.png',
+        'movement': 'Baby Dragon 2D Pixel Art/Sprites/without_outline/MOVE.png',
+        'catch': 'Baby Dragon 2D Pixel Art/Sprites/without_outline/ATTACK.png',
+        'damage': 'Baby Dragon 2D Pixel Art/Sprites/without_outline/HURT.png',
+    },
+    # Every scale/wing/horn tone remapped to a black/charcoal/deep-maroon
+    # palette -- a hand-authored "black dragon" livery, not a hue-shift of
+    # the source green (see PetSpec.base_recolor for why hue-shift alone
+    # can't get there). The small red accent (c42430) and white glint
+    # (ffffff) are deliberately left in `keep` rather than remapped, for a
+    # glowing-eyes-in-the-dark read rather than a flat black silhouette.
+    recolor=['#1e6f50', '#33984b', '#5ac54f', '#e69c69', '#f6ca9f', '#bf6f4a', '#92a1b9', '#c7cfdd', '#657392', '#0c2e44', '#134c4c'],
+    keep=['#c42430', '#ffffff'],
+    base_recolor={
+        '#1e6f50': '#16181c', '#33984b': '#2b2e33', '#5ac54f': '#3d4046',
+        '#e69c69': '#4a1414', '#f6ca9f': '#6b1f1f', '#bf6f4a': '#591818',
+        '#92a1b9': '#14161c', '#c7cfdd': '#262b33', '#657392': '#1b1f28',
+        '#0c2e44': '#0a0a10', '#134c4c': '#0d1616',
+    },
+)
+
+MIMIC = PetSpec(
+    species_id='mimic',
+    frame_w=96, frame_h=96,  # confirmed visually against IDLE.png (768x96, 8 frames) -- the raw GCD across every file lands on 192, exactly double the real grid, since nothing forces it lower
+    anim_files={
+        'idle': 'Mimic 2D Pixel Art v1.2/New Version/Sprites/no_outline/IDLE.png',
+        'movement': 'Mimic 2D Pixel Art v1.2/New Version/Sprites/no_outline/WALK.png',
+        'catch': 'Mimic 2D Pixel Art v1.2/New Version/Sprites/no_outline/ATTACK.png',
+        'damage': 'Mimic 2D Pixel Art v1.2/New Version/Sprites/no_outline/HURT.png',
+    },
+    # 'APPEAR' (8 frames -- the chest "waking up" and standing on its own
+    # legs) has no matching PetAnimation slot yet, same gap as Mossback's
+    # Explosion -- unused this patch, not lost. 'New Version' picked over
+    # 'Old Version' -- newer art, same pack.
+    recolor=['#5d2c28', '#bf6f4a', '#8a4836', '#391f21', '#c7cfdd', '#657392', '#92a1b9'],  # wood tones + metal bands
+    keep=['#c42430', '#571c27', '#891e2b', '#1c121c', '#ffffff', '#b4b4b4'],  # red maw stays red + outline/teeth
+)
+
+# Facing bug reported alongside the art itself -- see PET_REVERSED_FACING
+# in src/ui/sprites/PetSprite.tsx, same fix shape as HeroSprite's
+# HERO_REVERSED_FACING. Only ATTACK 1 of the pack's two attack variants is
+# wired to 'catch'; ATTACK 2 is unused this patch, same as every other
+# pack's extra/unmapped animation this batch. Note the pack's own folder
+# name has a double space ("Warrior  2D") -- kept exactly as extracted
+# rather than "corrected", since that's what --src will actually contain.
+SKELETON_WARRIOR = PetSpec(
+    species_id='skeleton_warrior',
+    frame_w=89, frame_h=78,
+    anim_files={
+        'idle': 'Skeleton Warrior  2D Pixel Art v1.1/Sprites/without_outline/IDLE.png',
+        'movement': 'Skeleton Warrior  2D Pixel Art v1.1/Sprites/without_outline/WALK.png',
+        'catch': 'Skeleton Warrior  2D Pixel Art v1.1/Sprites/without_outline/ATTACK 1.png',
+        'damage': 'Skeleton Warrior  2D Pixel Art v1.1/Sprites/without_outline/HURT.png',
+    },
+    recolor=['#858585', '#b4b4b4', '#5d5d5d', '#3d3d3d', '#657392', '#1a1932', '#2a2f4e', '#c7cfdd', '#92a1b9'],  # bone tones + armour blues
+    keep=['#272727', '#131313', '#0e071b'],  # outline family
+)
+
+# No dedicated idle file in this pack -- MOVE (the floating hover loop) is
+# wired to BOTH idle and movement, same "one animation, two vocabulary
+# slots" shape a stationary-but-always-animated creature needs.
+FLYING_EYE = PetSpec(
+    species_id='flying_eye',
+    frame_w=150, frame_h=150,
+    anim_files={
+        'idle': 'Flying Eye 2D Pixel Art/Sprites/without_outline/MOVE.png',
+        'movement': 'Flying Eye 2D Pixel Art/Sprites/without_outline/MOVE.png',
+        'catch': 'Flying Eye 2D Pixel Art/Sprites/without_outline/ATTACK.png',
+        'damage': 'Flying Eye 2D Pixel Art/Sprites/without_outline/HURT.png',
+    },
+    recolor=['#0c2e44', '#134c4c', '#1e6f50', '#33984b', '#c42430', '#891e2b', '#571c27', '#f5555d', '#f68187'],  # wing/tentacle body greens + iris/tentacle-underside reds
+    keep=['#ffffff', '#b4b4b4', '#858585', '#161c39', '#22284a'],  # sclera + outline family
+)
+
+PETS: List[PetSpec] = [
+    FOX, RED_PANDA, CROW, HOUND, GOLDENPAW, FARWATCH, LONGSHADOW, BRIARBEARD, FROSTRUNNER,
+    MOSSBACK, TIDEWHELP, BANDIT, WISPLET, SQUIRREL, SKELLY, IMP, DRAGONLING, MIMIC, SKELETON_WARRIOR, FLYING_EYE,
+]
 
 
 # -------------------------------------------------------------- recolour ---
@@ -295,7 +567,15 @@ def build_map(spec: PetSpec, tier: str) -> Dict[RGB, RGB]:
     livery = RARITY_LIVERY[tier]
     mapping: Dict[RGB, RGB] = {}
     for src in spec.recolor:
-        mapping[src] = apply_livery(src, livery)
+        # base_recolor substitutes a fixed target colour in for src BEFORE
+        # the livery shift, so "common" (0deg shift) renders as that exact
+        # target colour and every other tier hue-shifts onward from there
+        # instead of from the source art's own original colour. No-op for
+        # every species without a base_recolor entry for this src (the
+        # overwhelming majority) -- falls through to the original
+        # hue-shift-from-source behaviour exactly as before.
+        base = spec.base_recolor.get(src, src)
+        mapping[src] = apply_livery(base, livery)
     for src in spec.keep:
         mapping[src] = src  # identity, but explicit -- never touched by any tier
     return mapping
@@ -325,6 +605,36 @@ def slice_strip(img: Image.Image, spec: PetSpec, row: int, start_col: int, count
             (start_col + i + 1) * spec.frame_w, (row + 1) * spec.frame_h,
         )
         out.paste(img.crop(box), (i * spec.frame_w, 0))
+    return out
+
+
+def build_strip_from_boxes(img: Image.Image, boxes: List[Tuple[int, int, int, int]], frame_w: int, frame_h: int) -> Image.Image:
+    """PetSpec.frame_boxes support -- crops each explicit (x, y, w, h) box
+    out of img and pastes it into a uniform frame_w x frame_h canvas,
+    horizontally centred and bottom-aligned. Centring/bottom-align (rather
+    than pasting at (0, 0) the way slice_strip does for a real grid) matters
+    here specifically because the boxes themselves vary a few px in both
+    dimensions frame to frame -- Bandit's own idle boxes are 16px wide,
+    its walk boxes 17-20px -- so a naive top-left paste would make the
+    animation visibly hop side to side and float up/down as it played."""
+    out = Image.new('RGBA', (frame_w * len(boxes), frame_h))
+    for i, (x, y, w, h) in enumerate(boxes):
+        frame = img.crop((x, y, x + w, y + h))
+        ox = (frame_w - w) // 2
+        oy = frame_h - h
+        out.paste(frame, (i * frame_w + ox, oy), frame)
+    return out
+
+
+def stitch_frame_files(paths: List[str], frame_w: int, frame_h: int) -> Image.Image:
+    """PetSpec.frame_files support -- concatenates a list of individual
+    per-frame files (each assumed to already be frame_w x frame_h, unlike
+    frame_boxes' crops) left to right into one strip, same output shape
+    slice_strip/build_strip_from_boxes both already produce."""
+    out = Image.new('RGBA', (frame_w * len(paths), frame_h))
+    for i, path in enumerate(paths):
+        frame = Image.open(path).convert('RGBA')
+        out.paste(frame, (i * frame_w, 0), frame)
     return out
 
 
@@ -420,6 +730,14 @@ def main() -> None:
                 raw_strips[anim] = slice_strip(sheet, spec, row, start_col, count)
                 source_label[anim] = f'row {row}'
 
+            # frame_boxes shares sheet_file with the rows above (Bandit uses
+            # both: none currently, but nothing stops a future spec mixing
+            # them the same way rows+anim_files already do for Rooftail).
+            for anim, boxes in spec.frame_boxes.items():
+                counts[anim] = len(boxes)
+                raw_strips[anim] = build_strip_from_boxes(sheet, boxes, spec.frame_w, spec.frame_h)
+                source_label[anim] = f'{len(boxes)} explicit boxes'
+
         for anim, filename in spec.anim_files.items():
             src_path = os.path.join(args.src, filename)
             if not os.path.exists(src_path):
@@ -430,6 +748,19 @@ def main() -> None:
             counts[anim] = strip.width // spec.frame_w
             raw_strips[anim] = strip
             source_label[anim] = filename
+        if missing:
+            continue
+
+        for anim, filenames in spec.frame_files.items():
+            paths = [os.path.join(args.src, f) for f in filenames]
+            not_found = [f for f, p in zip(filenames, paths) if not os.path.exists(p)]
+            if not_found:
+                print(f'  skip {spec.species_id}: {", ".join(not_found)} not found in {args.src}')
+                missing = True
+                break
+            counts[anim] = len(paths)
+            raw_strips[anim] = stitch_frame_files(paths, spec.frame_w, spec.frame_h)
+            source_label[anim] = f'{len(paths)} stitched loose frames'
         if missing:
             continue
 

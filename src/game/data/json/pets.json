@@ -21,13 +21,6 @@
     "spriteFolder": "glimmerwing"
   },
   {
-    "id": "packrat",
-    "name": "Packrat",
-    "description": "Hoards anything shiny it can fit in its cheeks, including things that were not offered.",
-    "glyph": "\ud83d\udc00",
-    "spriteFolder": "packrat"
-  },
-  {
     "id": "ashwing",
     "name": "Ashwing",
     "description": "A crow that's taken a shine to the guild's rooftops. Turns up wherever something's about to be dropped, forgotten, or fed to it.",
@@ -51,7 +44,7 @@
   {
     "id": "wisplet",
     "name": "Wisplet",
-    "description": "A drifting mote of pale light, barely warm to the touch. Settles on a shoulder and just stays there.",
+    "description": "A knot of campfire light that never quite burns out. Crackles faintly when it's happy, and has never once needed relighting.",
     "glyph": "\u2728",
     "spriteFolder": "wisplet"
   },
@@ -64,11 +57,11 @@
     "dedicatedOnly": true
   },
   {
-    "id": "black_dragonling",
-    "name": "Black Dragonling",
+    "id": "dragonling",
+    "name": "Dragonling",
     "description": "Small enough to perch on a shoulder, for now. Still lets out a puff of real smoke when startled, and has already learned that food arrives faster if it looks pitiful about asking.",
     "glyph": "\ud83d\udc09",
-    "spriteFolder": "black_dragonling",
+    "spriteFolder": "dragonling",
     "dedicatedOnly": true
   },
   {
@@ -105,5 +98,59 @@
     "description": "Built for distances nobody here is actually travelling. Happiest mid-sprint for no particular reason, gone quiet and thoughtful the moment it has to stop.",
     "glyph": "\ud83d\udc15",
     "spriteFolder": "frostrunner"
+  },
+  {
+    "id": "bandit",
+    "name": "Bandit",
+    "description": "Steals first, sorts the loot later -- usually while sitting directly on top of whatever it took.",
+    "glyph": "\ud83e\udd9d",
+    "spriteFolder": "bandit"
+  },
+  {
+    "id": "squirrel",
+    "name": "Squirrel",
+    "description": "Buries a season's worth of anything shiny and forgets exactly none of it, no matter how insulted it looks when questioned.",
+    "glyph": "\ud83d\udc3f\ufe0f",
+    "spriteFolder": "squirrel"
+  },
+  {
+    "id": "skelly",
+    "name": "Skelly",
+    "description": "Still finishes every spell it started, out of habit more than intent. The staff's glow hasn't dimmed once since the vault sealed over it.",
+    "glyph": "\ud83d\udc80",
+    "spriteFolder": "skelly",
+    "dedicatedOnly": true
+  },
+  {
+    "id": "imp",
+    "name": "Imp",
+    "description": "Small, loud, and delighted by fire it didn't start on purpose. Follows whoever yelled the least.",
+    "glyph": "\ud83d\ude08",
+    "spriteFolder": "imp",
+    "dedicatedOnly": true
+  },
+  {
+    "id": "mimic",
+    "name": "Mimic",
+    "description": "Learned to hold very, very still. Mostly stopped trying to bite the hand that feeds it -- mostly.",
+    "glyph": "\ud83d\udce6",
+    "spriteFolder": "mimic",
+    "minRarity": "rare"
+  },
+  {
+    "id": "skeleton_warrior",
+    "name": "Skeleton Warrior",
+    "description": "Still stands guard duty out of old habit, sword arm swinging at nothing in particular until someone gives it an actual job.",
+    "glyph": "\ud83e\uddb4",
+    "spriteFolder": "skeleton_warrior",
+    "dedicatedOnly": true
+  },
+  {
+    "id": "flying_eye",
+    "name": "Flying Eye",
+    "description": "Watches everything, blinks at nothing, and reports back to something that stopped needing reports a long time ago.",
+    "glyph": "\ud83d\udc41\ufe0f",
+    "spriteFolder": "flying_eye",
+    "dedicatedOnly": true
   }
 ]

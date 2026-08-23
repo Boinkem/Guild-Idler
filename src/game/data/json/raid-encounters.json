@@ -23,6 +23,9 @@
     "loot": [
       "choir_mask@6",
       "silenced_bell@6"
+    ],
+    "eggLoot": [
+      "epic:skelly@6"
     ]
   },
   {
@@ -37,6 +40,9 @@
       "dragon_helm@4",
       "gravewatchers_band@5",
       "choir_mask@5"
+    ],
+    "eggLoot": [
+      "rare:skeleton_warrior@10"
     ]
   },
   {
@@ -213,6 +219,9 @@
     "loot": [
       "cornered_fang@5",
       "desperate_ends_crown@4"
+    ],
+    "eggLoot": [
+      "rare:imp@10"
     ]
   },
   {
@@ -265,8 +274,11 @@
       "blackscale_helm@5",
       "broodmothers_crown@4"
     ],
-    "eggLoot": [
-      "epic:black_dragonling@8"
+    "eggLootHeroic": [
+      "epic:dragonling@8"
+    ],
+    "eggLootLegendary": [
+      "epic:dragonling@8"
     ],
     "vulnerableTo": [
       "frost"

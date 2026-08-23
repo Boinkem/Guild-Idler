@@ -1,6 +1,6 @@
 import { EggInstance, GameState, Hero, MaterialId, Pet, PetBonusType, Rarity } from '../types';
 import { uid } from '../rng';
-import { clamp } from '../util';
+import { clamp, RARITY_ORDER } from '../util';
 import { Tuning } from '../data/tuning';
 import { PET_BY_ID, hatchXpThreshold, pickHatchedPetDefId } from '../data/pets';
 import { kennelHealTimeMinutes } from '../data/progression';
@@ -106,11 +106,19 @@ export const PetManager = {
     const min = Tuning.get('pets.baseBonusValueMin');
     const max = Tuning.get('pets.baseBonusValueMax');
     const baseBonusValue = Math.round((min + Math.random() * (max - min)) * 10) / 10;
+    // PetDef.minRarity (Mimic, patch 0250) floors the DISPLAYED rarity of
+    // the hatched Pet only -- the egg's own rarity (already fixed at grant
+    // time, drives hatchXpThreshold, unrelated to which species eventually
+    // rolls) is left untouched. Never lowers: a Legendary egg that happens
+    // to roll a min-rarity species still hatches Legendary.
+    const rarity = (def?.minRarity && RARITY_ORDER.indexOf(egg.rarity) < RARITY_ORDER.indexOf(def.minRarity))
+      ? def.minRarity
+      : egg.rarity;
     const pet: Pet = {
       uid: uid('pet'),
       defId,
       name: def?.name ?? 'Unnamed',
-      rarity: egg.rarity,
+      rarity,
       bonusType,
       baseBonusValue,
       xp: 0,

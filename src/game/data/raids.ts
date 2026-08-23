@@ -156,6 +156,22 @@ export function lootForDifficulty(encounter: RaidEncounterDef, difficulty: RaidD
   return encounter.loot;
 }
 
+/**
+ * Same fallback shape as lootForDifficulty above, for eggLoot -- added in
+ * patch 0250 alongside eggLootHeroic/eggLootLegendary on RaidEncounterDef.
+ * The one difference from equipment loot: `loot` itself is required (every
+ * encounter has one, even if empty), while `eggLoot` is optional and most
+ * encounters have none at all -- so this returns `[]` rather than `encounter.
+ * loot`'s always-defined fallback when nothing applies at any level. A
+ * species meant to be Heroic-onward only (see PetDef -- Dragonling) simply
+ * leaves eggLoot unset and relies on this returning [] at Normal.
+ */
+export function eggLootForDifficulty(encounter: RaidEncounterDef, difficulty: RaidDifficulty): string[] {
+  if (difficulty === 'heroic') return encounter.eggLootHeroic ?? encounter.eggLoot ?? [];
+  if (difficulty === 'legendary') return encounter.eggLootLegendary ?? encounter.eggLoot ?? [];
+  return encounter.eggLoot ?? [];
+}
+
 /** Raids visible in the UI: this one, plus any not-yet-reached raid another
  *  completed raid points at via unlocksRaidId -- shown greyed-out with the
  *  name/rewards hidden until actually unlocked, same "???" treatment used
