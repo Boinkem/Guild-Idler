@@ -242,6 +242,11 @@ const SCHEMAS = {
       // DLC pack's own manifest content could, in principle, be authored
       // through the same tooling rather than by hand.
       requiresDlc: { type: 'string', required: false },
+      // Patch 0251 -- see HeroClassDef.milestoneUnlockDescription/
+      // milestoneGoldCost's own comment in progression.ts. Both optional,
+      // go together, unset for every class without a milestone path.
+      milestoneUnlockDescription: { type: 'string', required: false },
+      milestoneGoldCost: { type: 'number', required: false },
     },
   },
   'recruit-costs': {

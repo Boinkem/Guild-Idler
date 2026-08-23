@@ -1275,6 +1275,14 @@ export const QuestManager = {
             }
           }
           state.activeChainReplays = state.activeChainReplays.filter((r) => r !== activeReplay);
+          // Patch 0251 -- first persistent record a replay clear ever
+          // leaves behind (see GameState.chainReplayCompletions' own
+          // comment). Deduped per chain; a difficulty already recorded
+          // here just no-ops on a repeat clear.
+          const recorded = state.chainReplayCompletions[chainId] ?? [];
+          if (!recorded.includes(difficulty)) {
+            state.chainReplayCompletions[chainId] = [...recorded, difficulty];
+          }
         } else {
           activeReplay.stage = nextStage;
         }

@@ -195,11 +195,11 @@
     "id": "guild_facility.barracks.successPerLevel",
     "label": "Barracks: success % per level",
     "category": "guild_facilities",
-    "value": 3,
-    "default": 3,
+    "value": 1.5,
+    "default": 1.5,
     "min": 0,
     "max": 20,
-    "description": "Flat success percentage points granted per level, guild-wide. -- squished from 4 as part of patch 0214's facility/renown rebalance (see guild-idler-status.md); first-pass, verify against the Balance Sandbox."
+    "description": "Flat success percentage points granted per level, guild-wide. Squished from 3 to 1.5 -- an ungeared level 22 test character was already sitting at 95% on Normal story quests and high 80s-90s on Normal standard quests with the old value, leaving no real room to feel Barracks investment matter. (Previously squished from 4 to 3 as part of patch 0214's facility/renown rebalance -- see guild-idler-status.md.)"
   },
   {
     "id": "guild_facility.treasury.baseCost",
@@ -1790,8 +1790,35 @@
     "category": "renown_perks",
     "value": 4,
     "default": 4,
-    "description": "Level cap for Extra Banner -- deliberately no tier-2, hero slots stay a small fixed number.",
+    "description": "Level cap for Extra Banner's base tier. Patch 0251 added a tier2 (see tier2MaxLevel below) -- the old \"deliberately no tier-2, hero slots stay a small fixed number\" reasoning stopped holding once a 4th hero tier (13 classes total) meant the old 11-slot ceiling (1 base + 6 Tavern + 4 here) could no longer fit one of every class.",
     "min": 0
+  },
+  {
+    "id": "renown_perk.extra_banner.tier2MaxLevel",
+    "label": "Extra Banner: tier2 max level",
+    "category": "renown_perks",
+    "value": 6,
+    "default": 6,
+    "description": "Total level cap including tier2 -- 2 further levels beyond the base tier's 4, each still granting +1 hero slot (heroSlotsPerLevel applies uniformly across both tiers, same as every other tier2 perk's own per-level mod). Sized to exactly cover patch 0251's new hero-slot requirement: 1 base + 6 Tavern + 6 here (4 base tier + 2 tier2) = 13, matching the 13 total hero classes after the new tier.",
+    "min": 4
+  },
+  {
+    "id": "renown_perk.extra_banner.tier2StartCost",
+    "label": "Extra Banner: tier2 start cost",
+    "category": "renown_perks",
+    "value": 120,
+    "default": 120,
+    "description": "Renown cost of tier2's first level (level 5) -- picked to sit meaningfully above the base tier's own level-4 cost (53 Renown) without being absurd, same calibration approach as every other tier2 perk. First-pass, flagged for Balance Sandbox verification.",
+    "min": 1
+  },
+  {
+    "id": "renown_perk.extra_banner.tier2CostGrowth",
+    "label": "Extra Banner: tier2 cost growth",
+    "category": "renown_perks",
+    "value": 1.5,
+    "default": 1.5,
+    "description": "Per-level cost multiplier within tier2 -- steeper than the base tier's 2.2 since tier2 only has 2 levels to work with, not 4. First-pass, flagged for Balance Sandbox verification.",
+    "min": 1
   },
   {
     "id": "renown_perk.extra_banner.heroSlotsPerLevel",

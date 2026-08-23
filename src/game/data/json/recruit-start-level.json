@@ -17,5 +17,10 @@
     "id": "tier3",
     "tier": 3,
     "startLevel": 15
+  },
+  {
+    "id": "tier4",
+    "tier": 4,
+    "startLevel": 24
   }
 ]

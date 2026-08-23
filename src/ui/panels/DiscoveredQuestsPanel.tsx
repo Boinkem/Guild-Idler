@@ -5,7 +5,7 @@ import {
 } from './QuestPanel';
 import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
 import { GuildManager } from '../../game/managers/GuildManager';
-import { CHAIN_REPLAY_TIERS, CHAIN_REPLAY_DIFFICULTIES, chainReplayTierForChain } from '../../game/data/chainReplay';
+import { CHAIN_REPLAY_TIERS, CHAIN_REPLAY_DIFFICULTIES, chainReplayTierForChain, chainReplayBandPercent } from '../../game/data/chainReplay';
 import { scaleChainExclusiveItem } from '../../game/data/proceduralLoot';
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
 import { DIFFICULTIES, ChainDef } from '../../game/data/quests';
@@ -438,6 +438,14 @@ function TierCard({ tier, onOpenChain }: { tier: ChainReplayTierDef; onOpenChain
   const masterOwned = GuildManager.hasChainReplayTier(state, 'master');
   const canAfford = state.gold >= tier.goldCost;
   const canBuy = !owned && canAfford && (isMaster || masterOwned);
+  // Direct request: a "% complete" figure on each saga band, updating as
+  // the person switches which difficulty they're checking against --
+  // defaults to Legendary since that's the tier most players actually
+  // care about tracking toward. Own local tab state per card rather than
+  // reusing ChainReplayDetailModal's own `difficulty` state, since that's
+  // scoped to one open chain at a time and this needs to persist across
+  // the whole band's card independent of any modal being open.
+  const [percentDifficulty, setPercentDifficulty] = useState<ChainReplayDifficulty>('legendary');
 
   const buyTitle = owned ? undefined
     : !masterOwned && !isMaster ? 'Unlock Replay Memories first'
@@ -459,23 +467,41 @@ function TierCard({ tier, onOpenChain }: { tier: ChainReplayTierDef; onOpenChain
         {tier.levelRange && <div className="tiny muted">{tier.levelRange}</div>}
         <p className="tiny" style={{ margin: '4px 0' }}>{tier.description}</p>
         {owned && tier.chainIds.length > 0 && (
-          <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
-            {tier.chainIds.map((chainId) => {
-              const chain = CHAIN_BY_ID[chainId];
-              const completed = state.completedChains.includes(chainId);
-              return (
+          <>
+            <div className="row" style={{ gap: 4, alignItems: 'center', margin: '4px 0' }}>
+              <span className="tiny muted">Cleared at:</span>
+              {(['normal', 'heroic', 'legendary'] as ChainReplayDifficulty[]).map((d) => (
                 <button
-                  key={chainId}
-                  className="btn-ghost"
-                  disabled={!completed}
-                  title={completed ? `Replay ${chain?.name ?? chainId}` : 'Complete this chain first'}
-                  onClick={() => onOpenChain(chainId)}
+                  key={d}
+                  className="btn-ghost tiny"
+                  style={percentDifficulty === d ? { color: REPLAY_DIFFICULTY_COLOR[d], fontWeight: 'bold' } : undefined}
+                  onClick={() => setPercentDifficulty(d)}
                 >
-                  {chain?.name ?? chainId}
+                  {REPLAY_DIFFICULTY_NAME[d]}
                 </button>
-              );
-            })}
-          </div>
+              ))}
+              <span className="tiny muted">
+                {chainReplayBandPercent(state, tier.id, percentDifficulty)}%
+              </span>
+            </div>
+            <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
+              {tier.chainIds.map((chainId) => {
+                const chain = CHAIN_BY_ID[chainId];
+                const completed = state.completedChains.includes(chainId);
+                return (
+                  <button
+                    key={chainId}
+                    className="btn-ghost"
+                    disabled={!completed}
+                    title={completed ? `Replay ${chain?.name ?? chainId}` : 'Complete this chain first'}
+                    onClick={() => onOpenChain(chainId)}
+                  >
+                    {chain?.name ?? chainId}
+                  </button>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
     </div>

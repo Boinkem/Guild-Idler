@@ -8,6 +8,7 @@ import { PrestigeManager } from '../../game/managers/PrestigeManager';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { rerollsUsedToday } from '../../game/data/reroll';
 import { HERO_CLASSES, PRESTIGE_MIN_LEVEL, RECRUIT_COST, SKINS, infirmaryAutoReviveUnlocked, TOMBSTONE_STYLES, TOMBSTONE_STYLE_BY_ID } from '../../game/data/progression';
+import { heroMilestoneUnlocked } from '../../game/data/heroMilestones';
 import { Tuning } from '../../game/data/tuning';
 import { HeroClass, Hero, Stats } from '../../game/types';
 import { describeMods, formatDuration, formatGold, HOUR, roleAwareStatLabel } from '../../game/util';
@@ -299,6 +300,20 @@ export function HeroesPanel() {
                     {hero.status === 'fallen'
                       ? <span className="bad">Fallen</span>
                       : (hero.status === 'questing' ? 'away on a quest' : 'at the guild')}
+                    {hero.status === 'questing' && (() => {
+                      // Direct request: a hero mid-chain showed nowhere
+                      // that they're on stage N of M without going back
+                      // into Discovered Quests -- Discovered Quests and
+                      // the Lore tab both already showed this, this card
+                      // was the one place that didn't. Covers replay
+                      // stages too (ActiveQuest.offer.chain is set either
+                      // way); no chain name shown here, matching
+                      // DiscoveredQuestsPanel's own compact "Chain N/M"
+                      // wording rather than a longer line.
+                      const active = state.activeQuests.find((q) => q.heroId === hero.id);
+                      const chain = active?.offer.chain;
+                      return chain ? <span> · Chain {chain.stage + 1}/{chain.totalStages}</span> : null;
+                    })()}
                     {hero.injuries.length > 0 && (
                       <span className="bad"> · {hero.injuries.map((i) => i.name).join(', ')} (expand to Treat)</span>
                     )}
@@ -445,6 +460,11 @@ export function HeroesPanel() {
                   Prefers {classDef.preferred.join(', ')} contracts (+{classDef.preferredBonus}% success) ·
                   {' '}{hero.questsCompleted} quests completed ·
                   {' '}{hero.status === 'fallen' ? 'Fallen' : (hero.status === 'questing' ? 'away on a quest' : 'at the guild')}
+                  {hero.status === 'questing' && (() => {
+                    const active = state.activeQuests.find((q) => q.heroId === hero.id);
+                    const chain = active?.offer.chain;
+                    return chain ? <> (Chain {chain.stage + 1}/{chain.totalStages})</> : null;
+                  })()}
                 </p>
                 <p className="tiny muted" style={{ marginTop: 2 }}>
                   Role: <RoleIcon role={HeroManager.activeRole(hero)} size={13} /> {HeroManager.roleDisplayName(hero)} -- change it from the Training tab.
@@ -503,7 +523,13 @@ export function HeroesPanel() {
         {(Object.keys(HERO_CLASSES) as HeroClass[]).map((id) => {
           const def = HERO_CLASSES[id];
           const unlocked = recruitable.includes(id);
-          const cost = RECRUIT_COST[id];
+          // Patch 0251 -- mirrors GuildManager.recruit's own cost logic
+          // exactly (milestoneGoldCost once the milestone is met, plain
+          // RECRUIT_COST otherwise), so the displayed price and afford
+          // check never drift from what a click would actually charge.
+          const milestoneMet = heroMilestoneUnlocked(state, id);
+          const cost = (def.milestoneGoldCost != null && milestoneMet) ? def.milestoneGoldCost : RECRUIT_COST[id];
+          const tavernUnlocked = GuildManager.facilityLevel(state, 'tavern') >= def.unlockTavernLevel;
           const slotsFull = state.heroes.length >= slots;
           // One of every hero (patch 0219) -- once a class has a living
           // hero in the roster, it's permanently done recruiting; see
@@ -517,6 +543,19 @@ export function HeroesPanel() {
               <div className="stat-row" style={{ marginBottom: 8 }}>
                 {describeMods(def.mods).map((line) => <span key={line}>{line}</span>)}
               </div>
+              {/* Patch 0251 -- shown for any class with a milestone path,
+                  locked or not, so the alternate route is always visible
+                  rather than only appearing once it's already met. Once
+                  met, the checkmark line replaces the plain description
+                  so it reads as "done" rather than repeating an
+                  instruction that's no longer relevant. */}
+              {def.milestoneUnlockDescription && (
+                <p className="tiny muted" style={{ margin: '0 0 6px' }}>
+                  {milestoneMet
+                    ? <span className="good">✓ Milestone met -- {formatGold(def.milestoneGoldCost ?? 0)} recruit unlocked</span>
+                    : <>Or: {def.milestoneUnlockDescription}</>}
+                </p>
+              )}
               <button
                 className="btn-primary"
                 disabled={!unlocked || state.gold < cost || slotsFull || alreadyRecruited}
@@ -533,8 +572,12 @@ export function HeroesPanel() {
                   just name it. Jumps to the Guild Hall and glows the
                   Tavern card itself (see GuildPanel's highlightId/
                   UpgradeCard) rather than leaving the player to hunt for
-                  it among every facility card by hand. */}
-              {!unlocked && (
+                  it among every facility card by hand. Skipped once the
+                  class is only still locked because of the milestone (the
+                  Tavern route wouldn't even be the reason to follow) --
+                  tavernUnlocked distinguishes "locked, Tavern would help"
+                  from "unlocked via milestone, Tavern link irrelevant". */}
+              {!unlocked && !tavernUnlocked && (
                 <button
                   className="btn-ghost"
                   style={{ width: '100%', marginTop: 4, fontSize: '0.6875rem' }}

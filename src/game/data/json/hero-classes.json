@@ -428,5 +428,204 @@
       "ranged": "Trades ritual for reflex, hurling raw arcane bolts wherever the staff used to point.",
       "caster": "Decades of study spent as much on arcane barriers to shield allies as on unleashing the arcane itself."
     }
+  },
+  {
+    "id": "huge_knight",
+    "name": "Huge Knight",
+    "blurb": "Bigger than the armor should allow, and somehow still moving. Nothing gets past him twice.",
+    "baseStats": {
+      "strength": 10,
+      "endurance": 14,
+      "luck": 1,
+      "wisdom": 2
+    },
+    "growth": {
+      "strength": 1.3,
+      "endurance": 1.8,
+      "luck": 0.2,
+      "wisdom": 0.3
+    },
+    "mods": {
+      "success": 2,
+      "injuryResist": 15,
+      "speed": -3,
+      "durability": 20
+    },
+    "preferred": [
+      "combat",
+      "defense"
+    ],
+    "preferredBonus": 15,
+    "unlockTavernLevel": 6,
+    "tier": 4,
+    "names": [
+      "Gareth",
+      "Bors",
+      "Aldous",
+      "Thrain",
+      "Sir Colborne the Immovable"
+    ],
+    "role": "melee",
+    "roleFlavors": {
+      "melee": "Huge Knight",
+      "ranged": "Siege Breaker",
+      "caster": "Warded Colossus"
+    },
+    "roleDescriptions": {
+      "melee": "Bigger than the armor should allow, and somehow still moving. Plants himself between the party and whatever's coming and simply does not leave.",
+      "ranged": "Trades reach for raw mass, hurling anything heavy enough to matter clean across a battlefield.",
+      "caster": "Wards himself in old, borrowed magic rather than learning any of it properly -- just enough to shrug off what should have ended him."
+    },
+    "milestoneUnlockDescription": "Clear any raid on Legendary difficulty.",
+    "milestoneGoldCost": 4000
+  },
+  {
+    "id": "kobold",
+    "name": "Kobold Warrior",
+    "blurb": "Small, fast, and armed with three separate ways to be somewhere else by the time you notice him.",
+    "baseStats": {
+      "strength": 6,
+      "endurance": 5,
+      "luck": 10,
+      "wisdom": 4
+    },
+    "growth": {
+      "strength": 0.9,
+      "endurance": 0.7,
+      "luck": 1.5,
+      "wisdom": 0.5
+    },
+    "mods": {
+      "success": 3,
+      "gold": 5,
+      "loot": 6,
+      "speed": 7
+    },
+    "preferred": [
+      "combat",
+      "explore"
+    ],
+    "preferredBonus": 15,
+    "unlockTavernLevel": 6,
+    "tier": 4,
+    "names": [
+      "Skitter",
+      "Grix",
+      "Nab",
+      "Fessik",
+      "Warchief Yarrick"
+    ],
+    "role": "ranged",
+    "roleFlavors": {
+      "melee": "Dagger-Kobold",
+      "ranged": "Kobold Warrior",
+      "caster": "Trap-Witch"
+    },
+    "roleDescriptions": {
+      "melee": "Gets in close on purpose, on the theory that a target who can't see him coming can't hit back either.",
+      "ranged": "Three attacks, one dash, and an unnerving amount of confidence for something this size.",
+      "caster": "Never trained properly, just picked up enough hex-craft from things it shouldn't have survived meeting."
+    },
+    "milestoneUnlockDescription": "Finish The Founding Days memory tier on Legendary.",
+    "milestoneGoldCost": 4000
+  },
+  {
+    "id": "minotaur",
+    "name": "Minotaur",
+    "blurb": "One very large axe and a complete unwillingness to plan past the first swing.",
+    "baseStats": {
+      "strength": 14,
+      "endurance": 8,
+      "luck": 2,
+      "wisdom": 2
+    },
+    "growth": {
+      "strength": 1.9,
+      "endurance": 1.0,
+      "luck": 0.3,
+      "wisdom": 0.3
+    },
+    "mods": {
+      "success": 5,
+      "gold": -3,
+      "injuryResist": -3,
+      "speed": 2,
+      "durability": 8
+    },
+    "preferred": [
+      "combat"
+    ],
+    "preferredBonus": 18,
+    "unlockTavernLevel": 6,
+    "tier": 4,
+    "names": [
+      "Brontes",
+      "Karnos",
+      "Ux",
+      "Old Redhorn",
+      "The Cairnbreaker"
+    ],
+    "role": "melee",
+    "roleFlavors": {
+      "melee": "Minotaur",
+      "ranged": "Axe-Thrower",
+      "caster": "Warhorn Shaman"
+    },
+    "roleDescriptions": {
+      "melee": "One very large axe and a complete unwillingness to plan past the first swing. Works more often than it should.",
+      "ranged": "Throws the axe instead of swinging it, then goes and gets it back the hard way.",
+      "caster": "Bellows old herd-magic through a cracked horn -- crude, loud, and somehow still effective."
+    },
+    "milestoneUnlockDescription": "Retire a hero for the first time.",
+    "milestoneGoldCost": 3000
+  },
+  {
+    "id": "werewolf",
+    "name": "Werewolf",
+    "blurb": "Kept his mind when the change should have taken it. Still working out what that costs him.",
+    "baseStats": {
+      "strength": 10,
+      "endurance": 7,
+      "luck": 5,
+      "wisdom": 3
+    },
+    "growth": {
+      "strength": 1.5,
+      "endurance": 1.0,
+      "luck": 0.6,
+      "wisdom": 0.4
+    },
+    "mods": {
+      "success": 4,
+      "injuryResist": 6,
+      "speed": 9
+    },
+    "preferred": [
+      "combat",
+      "explore"
+    ],
+    "preferredBonus": 15,
+    "unlockTavernLevel": 6,
+    "tier": 4,
+    "names": [
+      "Josen",
+      "Mireille",
+      "Halric",
+      "Corwin",
+      "Bitten-and-Bound Talia"
+    ],
+    "role": "melee",
+    "roleFlavors": {
+      "melee": "Werewolf",
+      "ranged": "Moonhound",
+      "caster": "Curse-Touched"
+    },
+    "roleDescriptions": {
+      "melee": "Kept his mind when the change should have taken it. Fights with the same claws he spent the first month afraid of.",
+      "ranged": "Lets the wolf's senses do the aiming -- finds an opening before he's consciously decided to take it.",
+      "caster": "The curse left something behind besides teeth -- a low, half-understood magic he's still learning to use on purpose."
+    },
+    "milestoneUnlockDescription": "Complete The Kindred Moon quest chain.",
+    "milestoneGoldCost": 3000
   }
 ]

@@ -93,6 +93,55 @@ CHARACTERS: Dict[str, dict] = {
         'base': 'Dwarf Warrior 2D Pixel Art v1.2/Dwarf Warrior 2D Pixel Art v1.2/New Version/Sprites/outline',
         'map': {'IDLE': 'idle', 'RUN': 'walk', 'ATTACK': 'attack_1', 'HURT': 'hurt', 'DEATH': 'death'},
     },
+    # Four tier-4 classes, patch 0251. All four confirmed by rendering an
+    # upscaled idle strip and counting frames by eye before locking in
+    # frame_w -- same lesson patch 0250's pet batch already paid for once
+    # (Mimic's raw GCD landed on exactly double the true grid there; worth
+    # not trusting arithmetic alone a second time).
+    'huge_knight': {
+        'frame_w': 237, 'frame_h': 187,
+        'base': 'Huge Knight 2D Pixel Art/Sprites/outline',
+        'map': {'IDLE': 'idle', 'WALK': 'walk', 'ATTACK': 'attack_1', 'HURT': 'hurt', 'DEATH': 'death'},
+    },
+    'kobold': {
+        'frame_w': 148, 'frame_h': 96,
+        'base': 'FULL_Kobold Warrior 2D Pixel Art/Sprites/with_outline',
+        # RUN -> walk, same convention every other class's run/movement
+        # sheet already uses. DASH has no matching vocabulary slot (not a
+        # walk, not an attack) -- unused this patch, same "extra animation,
+        # no slot yet" gap Mossback's Explosion/Mimic's APPEAR left in the
+        # pet batch. STRONG ATTACK is real content too, also unused --
+        # HeroAnimation's attack_1/2/3 union is fixed (no attack_4 slot),
+        # and three solid attacks already covers this class fine without
+        # touching that shared vocabulary for one pack's fourth variant.
+        'map': {'IDLE': 'idle', 'RUN': 'walk', 'JUMP': 'jump',
+                'ATTACK 1': 'attack_1', 'ATTACK 2': 'attack_2', 'ATTACK 3': 'attack_3',
+                'HURT': 'hurt', 'DEATH': 'death'},
+    },
+    'minotaur': {
+        'frame_w': 128, 'frame_h': 128,
+        # with_outline specifically -- without_outline's own IDLE file is
+        # shipped as 'iDLE.png' (confirmed by direct listing, presumably a
+        # one-off export typo in that variant only), which would silently
+        # never match this map's 'IDLE' key on a case-sensitive filesystem.
+        # with_outline's own IDLE.png has the correct case, sidestepping
+        # the problem entirely rather than special-casing the typo.
+        'base': 'Minotaur 2D Pixel Art v1.1/Sprites/with_outline',
+        'map': {'IDLE': 'idle', 'WALK': 'walk', 'ATTACK1': 'attack_1', 'ATTACK2': 'attack_2', 'HURT': 'hurt', 'DEATH': 'death'},
+    },
+    'werewolf': {
+        'frame_w': 158, 'frame_h': 125,
+        'base': 'Werewolf 2D Pixel Art/Sprites/outline',
+        # IDLE (the wolf-form loop) is the one wired to 'idle' -- matches
+        # every other animation in this pack (RUN/ATTACK/HURT/DEATH are
+        # all wolf-form too), so it's the pack's own default, not an
+        # arbitrary pick between it and 'IDLE HUMAN'. Human-form idle and
+        # the TRANSFORMATION sequence both have no matching vocabulary slot
+        # (no human/wolf toggle exists anywhere in this game yet) -- real
+        # content, genuinely unused this patch, same as every other pack's
+        # unmapped extras.
+        'map': {'IDLE': 'idle', 'RUN': 'walk', 'ATTACK1': 'attack_1', 'ATTACK2': 'attack_2', 'HURT': 'hurt', 'DEATH': 'death'},
+    },
 }
 
 # ------------------------------------------------------------------- skins ----

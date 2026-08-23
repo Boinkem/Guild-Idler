@@ -1339,5 +1339,56 @@
         "durationMinutes": 45
       }
     ]
+  },
+  {
+    "id": "kindred_moon",
+    "name": "The Kindred Moon",
+    "description": "A letter reaches the guild from Ashvale, addressed by name and asking, carefully, not to be read aloud to anyone else. The man who wrote it survived the pack the guild put down there -- survived the bite, too, and has spent every month since hiding what that actually means. The next full moon is close enough to count in days.",
+    "reqLevel": 46,
+    "requiresChainId": "full_moon_over_ashvale",
+    "rewardGold": 46000,
+    "rewardItems": [
+      "kindred_fang"
+    ],
+    "rewardRenown": 11,
+    "title": "Kindred",
+    "epilogue": "He is still standing when the moon finishes rising, which was never the safe assumption. What walked out of that circle remembers Ashvale, remembers the letter, remembers exactly who he is -- the shape changed permanently; nothing underneath it did. Ashvale does not know what to do with that, and hasn't decided whether it's grateful. The guild has already made up its mind.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "stages": [
+      {
+        "name": "A Name From Ashvale",
+        "flavour": "The letter doesn't ask for a cure, not in so many words -- it asks for privacy first, help second, and mentions, almost as an afterthought, that the wound from that night never fully closed. Ashvale doesn't know. He'd like to keep it that way for as long as possible.",
+        "tag": "explore",
+        "difficulty": "epic",
+        "durationMinutes": 1100,
+        "goldMultiplier": 2.9
+      },
+      {
+        "name": "What the Hedge-Witch Wants",
+        "flavour": "The old woman who might know a rite worth trying does not do anything for free, and what she wants this time is already dangerous before anyone factors in that she wants it fetched during the wrong week of the month. She's not unsympathetic. She's just not going to pretend this is simple.",
+        "tag": "arcane",
+        "difficulty": "legendary",
+        "durationMinutes": 1350,
+        "goldMultiplier": 3.5
+      },
+      {
+        "name": "The Rite at Ashvale",
+        "flavour": "The circle only has to hold until the moon finishes rising, which is exactly the part nobody can promise. He's already changing by the time the first attempt goes wrong -- not the pack's kind of wrong, something older and less patient, drawn by the same working that's supposed to be helping him.",
+        "tag": "combat",
+        "difficulty": "legendary",
+        "durationMinutes": 1650,
+        "goldMultiplier": 4.0
+      },
+      {
+        "name": "What Walked Out of the Circle",
+        "flavour": "Something is standing where he was, and for one very long moment nobody, including him, is certain which parts of him made it through. Then he says the guild's name, correctly, and asks if it worked.",
+        "tag": "combat",
+        "difficulty": "legendary",
+        "durationMinutes": 1850,
+        "goldMultiplier": 4.6
+      }
+    ]
   }
 ]

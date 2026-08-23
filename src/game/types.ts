@@ -3,7 +3,7 @@
  * Every manager reads and writes the same GameState shape defined here.
  * ========================================================================= */
 
-export const SAVE_VERSION = 51;
+export const SAVE_VERSION = 52;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'epic' | 'legendary';
 
@@ -1805,6 +1805,24 @@ export interface GameState {
    * (confirmed: owning a band never bypasses a chain's first clear).
    */
   chainReplayTiersOwned: string[];
+  /**
+   * Which difficulties each chain has been replay-CLEARED at, at least
+   * once -- added in patch 0251. Nothing tracked this before: a replay
+   * completion just deleted the matching ActiveChainReplay entry and
+   * moved on, so there was no way to answer "has this chain ever been
+   * cleared at Legendary" after the fact, which both the new Replay
+   * Memories "% complete" display AND Kobold's milestone unlock need.
+   * Keyed by chainId; each value is a small deduped list of every
+   * ChainReplayDifficulty cleared at least once (Normal included, even
+   * though Normal never rolls the dedicated chase item -- the % display
+   * this powers works the same way across all three of the UI's N/H/L
+   * tabs, not just the two that can drop chase gear). Written once, in
+   * QuestManager.resolve's replay-completed branch, right where
+   * activeChainReplays already gets that entry filtered out -- never
+   * removed afterward, same "once discovered, stays discovered"
+   * permanence every other lifetime-tracking field in this game has.
+   */
+  chainReplayCompletions: Record<string, ChainReplayDifficulty[]>;
   /**
    * Chain replay attempts currently in progress -- see ActiveChainReplay
    * for why this is a separate array from activeChains, not a shared

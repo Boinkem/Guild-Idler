@@ -4,6 +4,7 @@ import {
 } from '../data/progression';
 import { RAID_UPGRADES, RAID_UPGRADE_BY_ID, raidUpgradeCost } from '../data/raidUpgrades';
 import { chainReplayTierForChain, CHAIN_REPLAY_TIER_BY_ID } from '../data/chainReplay';
+import { heroMilestoneUnlocked } from '../data/heroMilestones';
 import { GameState, GuildFacility, HeroClass, VendorId } from '../types';
 import { Rng } from '../rng';
 import { HeroManager } from './HeroManager';
@@ -157,7 +158,11 @@ export const GuildManager = {
   recruitableClasses(state: GameState): HeroClass[] {
     const tavern = GuildManager.facilityLevel(state, 'tavern');
     return (Object.keys(HERO_CLASSES) as HeroClass[]).filter(
-      (id) => HERO_CLASSES[id].unlockTavernLevel <= tavern,
+      // Patch 0251 -- a class becomes recruitable via EITHER its normal
+      // Tavern gate OR its milestone condition (if it has one), whichever
+      // comes first. See heroMilestoneUnlocked/GuildManager.recruit's own
+      // comment for how the cost side of this same OR is handled.
+      (id) => HERO_CLASSES[id].unlockTavernLevel <= tavern || heroMilestoneUnlocked(state, id),
     );
   },
 
@@ -189,7 +194,16 @@ export const GuildManager = {
     if (GuildManager.classAlreadyRecruited(state, heroClass)) {
       return `The guild already has a ${HERO_CLASSES[heroClass].name} -- one of each class only.`;
     }
-    const cost = RECRUIT_COST[heroClass];
+    // Patch 0251 -- a class whose milestone condition is met recruits at
+    // its (cheaper) milestoneGoldCost instead of the normal RECRUIT_COST,
+    // permanently once earned, regardless of whether the Tavern gate is
+    // ALSO independently met by now -- the milestone was the harder,
+    // more specific achievement, so it stays the better price rather than
+    // being undercut by simply waiting for the Tavern route to open too.
+    const def = HERO_CLASSES[heroClass];
+    const cost = (def.milestoneGoldCost != null && heroMilestoneUnlocked(state, heroClass))
+      ? def.milestoneGoldCost
+      : RECRUIT_COST[heroClass];
     if (state.gold < cost) return 'Not enough gold.';
     state.gold -= cost;
     state.stats.goldSpent += cost;

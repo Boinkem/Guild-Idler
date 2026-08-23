@@ -667,8 +667,30 @@ export const RENOWN_PERKS: RenownPerkDef[] = [
     costGrowth: Tuning.get('renown_perk.extra_banner.costGrowth'),
     maxLevel: Tuning.get('renown_perk.extra_banner.maxLevel'),
     modsPerLevel: {}, heroSlotsPerLevel: Tuning.get('renown_perk.extra_banner.heroSlotsPerLevel'),
-    // Deliberately no tier2: hero slots stay a small, fixed number rather
-    // than scaling indefinitely — the roster is meant to stay a roster.
+    // Tier2 added in patch 0251 -- the old "deliberately no tier2, hero
+    // slots stay a small fixed number" reasoning held right up until a
+    // 4th hero tier made it stop holding: 13 total classes (the "one of
+    // every class" cap, see GuildManager.classAlreadyRecruited) can't fit
+    // in the old 11-slot ceiling (1 base + 6 Tavern + 4 here). Extending
+    // THIS perk rather than Tavern's own maxLevel -- Tavern's cost curve
+    // (baseCost 750, growth 2.47) was calibrated for a 6-level arc; two
+    // more levels on that curve would cost 420k-1M+ gold each, wildly out
+    // of proportion with even the new tier-4 heroes' own ~55k recruit
+    // cost. Extra Banner already had a smaller, Renown-priced curve AND
+    // the game's existing generic tier2 mechanism (RenownPerkDef.tier2,
+    // same shape Scholar's Legacy/Companion Legacy already use) built for
+    // exactly this "old cap needs raising later" situation -- no new
+    // machinery needed, just actually using what already existed.
+    // heroSlotsPerLevel keeps applying uniformly across both tiers (see
+    // ModifierManager.heroSlots), so tier2's 2 extra levels are +1 slot
+    // each with zero extra code: 4 (base tier) + 2 (tier2) = 6 total
+    // levels here, 1 + 6 (Tavern) + 6 (here) = 13.
+    tier2: {
+      maxLevel: Tuning.get('renown_perk.extra_banner.tier2MaxLevel'),
+      startCost: Tuning.get('renown_perk.extra_banner.tier2StartCost'),
+      costGrowth: Tuning.get('renown_perk.extra_banner.tier2CostGrowth'),
+      unlockFlavour: 'Word gets around that the guild is hiring again -- a fifth banner goes up, then a sixth.',
+    },
   },
   {
     id: 'scholars_legacy', name: "Scholar's Legacy",
@@ -743,7 +765,10 @@ export interface HeroClassDef {
   preferredBonus: number;
   /** Tavern level needed to recruit. */
   unlockTavernLevel: number;
-  /** Baseline power tier 0-3; higher hires start stronger to justify the cost. */
+  /** Baseline power tier -- higher hires start stronger to justify the
+   *  cost. 0-3 through patch 0250; tier 4 (huge_knight/kobold/minotaur/
+   *  werewolf) added in patch 0251. Nothing enforces an upper bound here;
+   *  the "0-3" ceiling was purely descriptive of what existed at the time. */
   tier: number;
   names: string[];
   /**
@@ -786,6 +811,24 @@ export interface HeroClassDef {
    * recruitCost for the merged, DLC-aware version.
    */
   requiresDlc?: string;
+  /**
+   * Alternate, cheaper unlock path added in patch 0251 -- direct request
+   * was that the new tier-4 heroes shouldn't be ONLY a generic Tavern-
+   * level purchase, so each one also has a specific milestone condition
+   * that, once met, both reveals the class in GuildManager.
+   * recruitableClasses (regardless of Tavern level) AND replaces its
+   * normal recruit-costs.json price with this cheaper one. See
+   * heroMilestones.ts's HERO_MILESTONE_CHECKS for the actual per-class
+   * condition logic -- deliberately hardcoded functions rather than a
+   * generic data-driven condition shape, since the four conditions this
+   * patch needs (a raid-difficulty stat, a chain-replay-band completion
+   * check, a prestige counter, a specific chain's completion) don't share
+   * a common structure worth abstracting over for just four cases. Both
+   * fields optional and go together -- unset for every class without a
+   * milestone path (every base-game class today).
+   */
+  milestoneUnlockDescription?: string;
+  milestoneGoldCost?: number;
 }
 
 /**

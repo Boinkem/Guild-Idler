@@ -1,4 +1,4 @@
-import { ChainReplayDifficulty, ChainReplayDifficultyConfig, ChainReplayTierDef } from '../types';
+import { ChainReplayDifficulty, ChainReplayDifficultyConfig, ChainReplayTierDef, GameState } from '../types';
 import { Tuning } from './tuning';
 
 /**
@@ -130,4 +130,35 @@ export const CHAIN_REPLAY_TIER_BY_ID: Record<string, ChainReplayTierDef> = Objec
  *  under?). */
 export function chainReplayTierForChain(chainId: string): ChainReplayTierDef | undefined {
   return CHAIN_REPLAY_TIERS.find((t) => t.chainIds.includes(chainId));
+}
+
+/**
+ * Percentage of a saga band's own chains that have been replay-cleared at
+ * AT LEAST the given difficulty -- added in patch 0251 for the Replay
+ * Memories "% complete" display, updating live as the person switches
+ * between the N/H/L tabs (direct request). "At least" rather than "exactly"
+ * matches how the difficulty picker itself reads: a chain already cleared
+ * at Legendary obviously also satisfies "cleared at Heroic or better." The
+ * 'master' entry (chainIds: []) always returns 0 -- it gates the feature
+ * itself, not any specific chains, so "% complete" has no meaning there;
+ * callers should simply not render this for it.
+ */
+export function chainReplayBandPercent(state: GameState, bandId: string, difficulty: ChainReplayDifficulty): number {
+  const band = CHAIN_REPLAY_TIER_BY_ID[bandId];
+  if (!band || band.chainIds.length === 0) return 0;
+  const atLeast = (cleared: ChainReplayDifficulty[]) => {
+    if (difficulty === 'normal') return cleared.length > 0;
+    if (difficulty === 'heroic') return cleared.includes('heroic') || cleared.includes('legendary');
+    return cleared.includes('legendary');
+  };
+  const done = band.chainIds.filter((id) => atLeast(state.chainReplayCompletions[id] ?? [])).length;
+  return Math.round((done / band.chainIds.length) * 100);
+}
+
+/** True once every chain in a band has been replay-cleared at least at the
+ *  given difficulty -- thin wrapper around chainReplayBandPercent for
+ *  callers that just need a yes/no (e.g. Kobold's milestone unlock, see
+ *  heroMilestones.ts). */
+export function chainReplayBandComplete(state: GameState, bandId: string, difficulty: ChainReplayDifficulty): boolean {
+  return chainReplayBandPercent(state, bandId, difficulty) >= 100;
 }

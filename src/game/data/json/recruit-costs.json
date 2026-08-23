@@ -34,5 +34,21 @@
   {
     "id": "wizard",
     "cost": 32000
+  },
+  {
+    "id": "huge_knight",
+    "cost": 55000
+  },
+  {
+    "id": "kobold",
+    "cost": 55000
+  },
+  {
+    "id": "minotaur",
+    "cost": 55000
+  },
+  {
+    "id": "werewolf",
+    "cost": 55000
   }
 ]

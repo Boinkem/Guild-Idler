@@ -2199,6 +2199,26 @@
     "chainExclusive": true
   },
   {
+    "id": "kindred_fang",
+    "name": "Kindred Fang",
+    "slot": "weapon",
+    "rarity": "legendary",
+    "reqLevel": 46,
+    "maxDurability": 310,
+    "value": 18800,
+    "mods": {
+      "success": 25,
+      "speed": 12,
+      "injuryResist": 8
+    },
+    "stats": {
+      "strength": 18,
+      "luck": 8
+    },
+    "icon": "weapons/Weapon_08.png",
+    "chainExclusive": true
+  },
+  {
     "id": "unravelers_mark",
     "name": "Unraveler's Mark",
     "slot": "ring",

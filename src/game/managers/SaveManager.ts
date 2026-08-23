@@ -137,6 +137,7 @@ export function createInitialState(now = Date.now()): GameState {
     activeChains: [],
     completedChains: [],
     chainReplayTiersOwned: [],
+    chainReplayCompletions: {},
     activeChainReplays: [],
     upgrades: {},
     guild: { ...EMPTY_GUILD },
@@ -1084,6 +1085,28 @@ const MIGRATIONS: Record<number, Migration> = {
       hero.xpEarnedLifetime = (hero.xpEarnedLifetime as number | undefined) ?? 0;
     }
     return { ...save, version: 51, heroes };
+  },
+  51: (save) => {
+    // Patch 0251: hero-slot cap raise (Extra Banner tier2, no save data of
+    // its own -- renownPerks is a plain level-per-id map that already
+    // handles a brand-new perk id transparently) and 4 new tier-4 heroes
+    // (hero-classes.json/recruit-costs.json/recruit-start-level.json,
+    // also no save-shape change -- HERO_CLASSES/RECRUIT_COST are rebuilt
+    // from JSON at import time, not persisted). Huge Knight's milestone
+    // ("clear any raid on Legendary") turned out to need NO new tracking
+    // at all -- state.completedRaidDifficulties already records exactly
+    // this, confirmed before building a redundant counter. The one
+    // genuinely new piece of save state is chainReplayCompletions, for
+    // Kobold's milestone and the new Replay Memories % display -- starts
+    // from a clean slate, since a replay completion never left any
+    // persistent record at all before this patch (same "undiscovered
+    // content stays undiscovered" limitation every other new-tracking
+    // migration in this file already accepts).
+    return {
+      ...save,
+      version: 52,
+      chainReplayCompletions: (save.chainReplayCompletions as Record<string, string[]> | undefined) ?? {},
+    };
   },
 };
 

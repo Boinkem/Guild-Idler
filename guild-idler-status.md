@@ -19541,3 +19541,160 @@ standing "art can't travel through a text patch" limitation as every
 prior pet-art patch) -- the host needs to run `import_pets.py` locally
 against the raw packs to actually see any of this in game.
 
+### Four new heroes, milestone-gated unlocks, a hero-slot cap raise, and a new endgame chain (patch 0251)
+
+```discord-update
+Dev Update | Patch 0251
+
+- Barracks: success bonus per level dropped from 3% to 1.5% (it was granting way more than intended by max level)
+- Added 4 new heroes: Huge Knight, Kobold Warrior, Minotaur, and Werewolf
+- Each new hero can also be unlocked early, at a discount, by hitting a specific milestone instead of waiting on the Tavern:
+  - Huge Knight -- clear any raid on Legendary
+  - Kobold Warrior -- finish the Founding Days memory tier on Legendary
+  - Minotaur -- retire a hero for the first time
+  - Werewolf -- complete the new "Kindred Moon" quest chain
+- Added The Kindred Moon, a new endgame quest chain continuing the story from Full Moon Over Ashvale
+- Raised the hero-slot cap so a guild can field one of every class at once
+- Replay Memories now shows a live "% cleared" per saga, switchable across Normal/Heroic/Legendary
+- A hero's own card now shows their chain stage (e.g. "Chain 2/4") while they're out questing
+```
+
+Direct request, several pieces bundled into one patch. Two of the four
+asks turned out to need real new systems; the other two turned out to
+already be fully covered by existing state that just needed pointing at.
+
+**Barracks: 3% -> 1.5% per level.** Direct report: an ungeared level-22
+test character was already sitting at 95% on Normal story quests and
+high-80s/90s on Normal standard quests -- Barracks investment had nowhere
+left to go. Single tuning value
+(`guild_facility.barracks.successPerLevel`).
+
+**Four new tier-4 heroes**, all built from real supplied art with frame
+geometry confirmed by rendering and counting, not just computed (same
+lesson patch 0250's pet batch paid for once already): Huge Knight
+(237px/8-frame idle), Kobold Warrior (148px), Minotaur (128px), Werewolf
+(158px). One real bug caught along the way: Minotaur's
+`without_outline/IDLE.png` ships as `iDLE.png` (lowercase i) in the
+source pack -- silently would never have matched on a case-sensitive
+filesystem. Sidestepped by using the `with_outline` variant instead
+(correct case there), rather than special-casing the typo. A second
+near-miss: Kobold's pack ships a fourth attack (`STRONG ATTACK`) and a
+`DASH`, but `HeroAnimation`'s `attack_1/2/3` union is fixed with no
+`attack_4` slot -- rather than extend that shared vocabulary for one
+pack's fourth variant, both stayed unmapped this patch, same "real
+content, no slot yet" treatment Werewolf's own `IDLE HUMAN`/
+`TRANSFORMATION` files get (no human/wolf toggle exists anywhere in this
+game yet -- parked, not lost). Stats/mods/roles are first-pass, flagged
+for Balance Sandbox verification same as every other new numeric content
+in this game.
+
+**Hero-slot cap: Extra Banner gained a tier2, Tavern's own maxLevel left
+alone.** 13 total classes after this patch means the old 11-slot ceiling
+(1 base + 6 Tavern + 4 Extra Banner) can no longer fit the game's existing
+"one of every class" cap (`GuildManager.classAlreadyRecruited`, patch
+0219). Naively extending Tavern's own maxLevel was the first instinct and
+the wrong one -- its cost curve (750 base, 2.47x growth) was calibrated
+for a 6-level arc; two more levels on that curve price out at
+420,000-1,000,000+ gold each, wildly disproportionate next to even a
+tier-4 hero's own ~55,000g recruit cost. Extra Banner already had both a
+smaller Renown-priced curve AND the game's existing generic `tier2`
+mechanism (`RenownPerkDef.tier2`, same shape Scholar's Legacy/Companion
+Legacy already use) built for exactly this "old cap needs raising later"
+situation -- extending it needed zero new machinery, just actually
+reaching for what already existed instead of fighting Tavern's own
+curve or re-opening Extra Banner's old "deliberately no tier2" design
+comment as if it still held. 2 further levels, +1 slot each
+(`heroSlotsPerLevel` already applies uniformly across both tiers): 4 + 2 =
+6 here, 1 + 6 (Tavern) + 6 (here) = 13.
+
+**Milestone-gated unlocks are a genuinely new mechanism** -- every class
+before this patch unlocked exactly one way (`unlockTavernLevel`, plain
+gold purchase). Two new optional fields on `HeroClassDef`
+(`milestoneUnlockDescription`, `milestoneGoldCost`) plus a small
+hardcoded per-class check in new `heroMilestones.ts`
+(`HERO_MILESTONE_CHECKS`, same "authored, not data-driven" shape
+`GuidanceManager`'s own `CHECKS` map already established -- the four
+conditions here don't share enough structure to be worth a generic data
+schema). `GuildManager.recruitableClasses` now returns a class once
+EITHER its Tavern gate OR its milestone condition is met; `recruit` charges
+the cheaper `milestoneGoldCost` once the milestone is met, permanently,
+even if the Tavern gate also independently clears later -- the milestone
+was the harder achievement, so it keeps the better price rather than
+being undercut by simply waiting. Two of the four conditions needed real
+new tracking; two turned out to already exist:
+- **Huge Knight** (clear any raid on Legendary) -- `state.
+  completedRaidDifficulties` already records exactly this. Confirmed
+  directly before reaching for a new counter; needed zero new state.
+- **Minotaur** (retire a hero once) -- `state.stats.prestigeCount`
+  already increments on every retirement. Same story, zero new state.
+- **Kobold** (Founding Days memory tier at Legendary) needed a real gap
+  filled -- see chain-replay completion tracking below.
+- **Werewolf** (complete Kindred Moon) reads `state.completedChains`,
+  the same list every other "has this chain been finished" check already
+  uses.
+
+**Chain-replay completion tracking didn't exist at all before this
+patch** -- a replay completing just deleted the matching
+`ActiveChainReplay` entry and moved on; there was no persistent record
+anywhere of which chains had been cleared at which difficulty. This was
+the actual blocker for both Kobold's milestone AND the separately
+requested Replay Memories "% complete" display -- building it once
+covers both. New `GameState.chainReplayCompletions: Record<string,
+ChainReplayDifficulty[]>`, written in `QuestManager.resolve`'s
+replay-completed branch (deduped per chain, Normal included even though
+Normal never rolls the dedicated chase item, since the % display works
+identically across all three of the UI's N/H/L tabs). New
+`chainReplayBandPercent`/`chainReplayBandComplete` in `chainReplay.ts` --
+"at least this difficulty" semantics (a Legendary clear also counts
+toward the Heroic figure), matching how the difficulty picker itself
+reads. `SAVE_VERSION` 51->52, migration 51 backfills `{}` -- clean slate,
+same "undiscovered content stays undiscovered" limitation every other
+new-tracking migration in this file already accepts.
+
+**The Kindred Moon** -- new endgame chain, reqLevel 46 (one above the
+previous ceiling, `hollow_king`'s 45), gated behind
+`full_moon_over_ashvale` rather than a level alone. Picks up a thread
+that chain's own epilogue already planted ("One of the people the guild
+was sent to protect did not make it through the last stage of this the
+way anyone would have wanted. Nobody is saying that part out loud yet.")
+-- a survivor was bitten and has spent months hiding it. Four stages
+(explore -> arcane -> combat -> combat), difficulty epic through
+legendary, calibrated slightly above `hollow_king`'s own numbers to sit
+as the new hardest content: 46,000g/11 Renown/one dedicated item
+("Kindred Fang," a legendary weapon, reqLevel 46) versus `hollow_king`'s
+42,000g/10 Renown. Deliberately NOT added to any Replay Memories saga
+band this patch -- it's brand new content, not yet back-catalog, same
+"newest chains don't retroactively get replay support immediately"
+pattern the existing 6 bands already follow (several chains newer than
+`kindred_moon`'s own prerequisite aren't in a band yet either).
+
+**Two small UI additions, both direct requests:**
+- **Hero cards show chain stage while questing** -- Discovered Quests and
+  the Lore tab both already showed "stage N/M" for an in-progress chain;
+  the one place that genuinely didn't was a hero's own card, the thing
+  most likely to actually be open while they're out on one. Added to both
+  the compact and expanded card views in `HeroesPanel.tsx`, reading
+  `state.activeQuests` for the hero's current offer -- covers replay
+  stages too, not just first clears.
+- **Replay Memories "% cleared"** -- each saga band card now has a small
+  Normal/Heroic/Legendary tab row (defaulting to Legendary, the tier most
+  players actually chase) showing `chainReplayBandPercent` for whichever
+  tab is selected. Own local state per card, separate from
+  `ChainReplayDetailModal`'s own difficulty picker, since this needs to
+  persist across the whole band regardless of which (if any) chain modal
+  is open.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. `tools/import_characters.py` run
+end-to-end against all four supplied hero packs -- confirmed real output
+across all 5 skins for all 4 classes by rendering side-by-side comparison
+strips, not just a dry parse (this is what caught the Minotaur case
+mismatch before it shipped). `FULL_ROSTER` achievement confirmed already
+dynamic (`Object.keys(HERO_CLASSES).every(...)`, no hardcoded class
+count anywhere) -- needed no changes to correctly require 13 now instead
+of 9. No `public/heroes` art is committed by this patch itself, same
+standing "art can't travel through a text patch" limitation as every
+prior character-art patch -- the host needs to run
+`import_characters.py` locally against the four raw packs to see any of
+this in game.
+
