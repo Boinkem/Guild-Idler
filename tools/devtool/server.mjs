@@ -1283,7 +1283,8 @@ const EFFECT_KEYS = [
   'petHealth', 'petRevivalDiscount', 'peddlerCounterReduction',
   'preventInjury', 'guaranteedGoodEvent', 'healInjury',
   // Fortune Charms (patch 0215) -- lootWeightStat is a string key name
-  // (a Modifiers or Stats key, e.g. 'gold'/'xp'), not itself a numeric
+  // (a Stats key as of patch 0255's all-stats rework, e.g. 'luck'/
+  // 'wisdom' -- see guild-idler-status.md), not itself a numeric
   // effect value, so it's validated separately below rather than via the
   // generic numeric-field path every other EFFECT_KEYS entry uses.
   'lootWeightStat', 'lootWeightMultiplier',
@@ -1381,8 +1382,17 @@ function validateEntry(schema, entry, index) {
         else for (const k of Object.keys(value)) if (!MATERIAL_KEYS.includes(k)) errors.push(`entry ${index}: unknown material "${k}"`);
         break;
       case 'modKeyList':
-        if (!Array.isArray(value) || value.some((v) => !MOD_KEYS.includes(v))) {
-          errors.push(`entry ${index}: "${key}" must only contain ${MOD_KEYS.join(', ')}`);
+        // Patch 0255 (all-stats rework, see guild-idler-status.md):
+        // CraftingRecipeDef.modOptions is a Modifiers/Stats union now --
+        // `gear` recipes pick Stats keys (strength/endurance/luck/
+        // wisdom), `consumable` recipes still pick Modifiers keys (a
+        // temporary buff isn't gear, untouched by that rework). This
+        // validator isn't category-aware, so it accepts either set
+        // rather than trying to cross-check against the entry's own
+        // `category` field -- same permissiveness the real TS-side union
+        // type has.
+        if (!Array.isArray(value) || value.some((v) => !MOD_KEYS.includes(v) && !STAT_KEYS.includes(v))) {
+          errors.push(`entry ${index}: "${key}" must only contain ${MOD_KEYS.join(', ')}, ${STAT_KEYS.join(', ')}`);
         }
         break;
       case 'statKeyList':

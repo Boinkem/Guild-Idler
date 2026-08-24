@@ -493,7 +493,7 @@
     "glyph": "♦",
     "craftable": true,
     "effect": {
-      "lootWeightStat": "gold",
+      "lootWeightStat": "luck",
       "lootWeightMultiplier": 1.15
     }
   },
@@ -506,7 +506,7 @@
     "glyph": "✦",
     "craftable": true,
     "effect": {
-      "lootWeightStat": "xp",
+      "lootWeightStat": "wisdom",
       "lootWeightMultiplier": 1.15
     }
   },
@@ -519,7 +519,7 @@
     "glyph": "♦",
     "craftable": true,
     "effect": {
-      "lootWeightStat": "gold",
+      "lootWeightStat": "luck",
       "lootWeightMultiplier": 2.5
     }
   },
@@ -532,7 +532,7 @@
     "glyph": "✦",
     "craftable": true,
     "effect": {
-      "lootWeightStat": "xp",
+      "lootWeightStat": "wisdom",
       "lootWeightMultiplier": 2.5
     }
   },
@@ -545,7 +545,7 @@
     "glyph": "♦",
     "craftable": true,
     "effect": {
-      "lootWeightStat": "gold",
+      "lootWeightStat": "luck",
       "lootWeightMultiplier": 4.2
     }
   },
@@ -558,7 +558,7 @@
     "glyph": "✦",
     "craftable": true,
     "effect": {
-      "lootWeightStat": "xp",
+      "lootWeightStat": "wisdom",
       "lootWeightMultiplier": 4.2
     }
   }

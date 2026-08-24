@@ -123,26 +123,40 @@ export const CraftingManager = {
   },
 
   /**
-   * Crafts a `gear` recipe, applying `chosenMods` (must be exactly
+   * Crafts a `gear` recipe, applying `chosenStats` (must be exactly
    * recipe.modsToPick entries, each one of recipe.modOptions) as the
-   * result item's customMods at recipe.modValue each. Returns an error
+   * result item's rolledStats at recipe.modValue each. Returns an error
    * string, or null on success.
+   *
+   * `modOptions`/`modValue` used to be Modifiers keys/a flat % (pre-0255
+   * data: e.g. Guildmade picked 2 of ['success','gold','xp','loot'] at
+   * +6% each). Patch 0255 (all-stats rework, see guild-idler-status.md)
+   * remapped every gear recipe's `modOptions` to Stats keys the same way
+   * procedural loot's own pool was remapped -- `success`->`strength`,
+   * `gold`/`loot`->`luck` (collapsed to one option; Loot is a Luck
+   * output now, see HeroManager.statMods, so there's no longer a
+   * separate pick for it), `xp`->`wisdom`, `injuryResist`/`speed`-
+   * >`endurance` (also collapsed -- Endurance grants both outputs
+   * together automatically now, not by separate picks). `modValue` was
+   * recalibrated as a raw stat-point budget rather than left at its old
+   * %-flavored number -- same first-pass/needs-playtest caveat as
+   * `loot_procedural.budgetRarityMultiplier`.
    */
-  craftGear(state: GameState, recipeId: string, chosenMods: (keyof Modifiers)[]): string | null {
+  craftGear(state: GameState, recipeId: string, chosenStats: (keyof Stats)[]): string | null {
     const recipe = CRAFTING_RECIPE_BY_ID[recipeId];
     if (!recipe || recipe.category !== 'gear' || !recipe.resultDefId) return 'Unknown recipe.';
     const modsToPick = recipe.modsToPick ?? 0;
     const modOptions = recipe.modOptions ?? [];
-    if (chosenMods.length !== modsToPick) return `Pick exactly ${modsToPick} bonuses.`;
-    if (new Set(chosenMods).size !== chosenMods.length) return 'Each bonus can only be picked once.';
-    if (chosenMods.some((m) => !modOptions.includes(m))) return 'One of those bonuses isn\u2019t available on this recipe.';
+    if (chosenStats.length !== modsToPick) return `Pick exactly ${modsToPick} bonuses.`;
+    if (new Set(chosenStats).size !== chosenStats.length) return 'Each bonus can only be picked once.';
+    if (chosenStats.some((m) => !modOptions.includes(m))) return 'One of those bonuses isn\u2019t available on this recipe.';
     const afford = CraftingManager.affordability(state, recipe);
     if (!afford.ok) return afford.reason ?? 'Cannot afford this.';
     if (state.stash.length >= ModifierManager.stashCapacity(state)) return 'The stash is full.';
 
     const item = EquipmentManager.instantiate(recipe.resultDefId);
     if (!item) return 'That item no longer exists.';
-    item.customMods = Object.fromEntries(chosenMods.map((m) => [m, recipe.modValue ?? 0])) as Partial<Modifiers>;
+    item.rolledStats = Object.fromEntries(chosenStats.map((m) => [m, recipe.modValue ?? 0])) as Partial<Stats>;
 
     state.gold -= recipe.goldCost;
     state.stats.goldSpent += recipe.goldCost;
@@ -256,21 +270,19 @@ export const CraftingManager = {
    * Blacksmith re-leveling, see EquipmentManager.relevel) as the budget
    * basis, so re-level-then-reroll is the correct min-max order.
    *
-   * Deliberately only touches `customMods`, never `enchantStats`, even
-   * though a fresh drop's procedural roll populates both -- `enchantStats`
-   * is shared with the pre-existing, additive Armour Infusion/Enchanting
-   * system above (enchantItem), which ADDS its recipe stats onto whatever
-   * a procedural roll already put there. A full reroll of `enchantStats`
-   * would silently destroy any Enchant investment the player separately
-   * paid gold/materials for, with no way to tell "which part was the
-   * original procedural roll" apart from "which part was a later,
-   * legitimate purchase" once they're merged into one field. Scoping
-   * reroll to `customMods` only (rollProceduralItem's `poolRestriction:
-   * 'mods'`) avoids that risk entirely -- a real, known limitation (only
-   * half a procedural item's affixes are rerollable today), not an
-   * oversight. See guild-idler-status.md's Backlog for the cleaner fix
-   * (separate the procedural stat roll onto its own field, distinct from
-   * `enchantStats`) that would let a reroll safely cover both pools.
+   * Touches `rolledStats` only, never `enchantStats` -- `enchantStats` is
+   * the pre-existing, additive Armour Infusion/Enchanting system above
+   * (enchantItem), which ADDS its recipe stats onto whatever an item
+   * already has. A reroll that touched `enchantStats` would silently
+   * destroy any Enchant investment the player separately paid gold/
+   * materials for, with no way to tell "which part was the original
+   * procedural roll" apart from "which part was a later, legitimate
+   * purchase" once they're merged into one field. Patch 0255 (all-stats
+   * rework, see guild-idler-status.md) gave a procedural roll's stat
+   * power its own field, `rolledStats`, specifically so reroll could
+   * safely overwrite the WHOLE item -- before that patch this could only
+   * safely touch the (now-retired) `customMods` half, a known limitation
+   * called out here at the time.
    *
    * Not routed through the Tuning-driven crafting-recipe system the way
    * every other CraftingManager action is -- this isn't picking from a
@@ -299,12 +311,12 @@ export const CraftingManager = {
 
     const itemLevel = item.rolledItemLevel ?? Math.min(def.reqLevel, heroLevel);
     const rng = createRng(`reroll:${item.uid}:${Date.now()}`);
-    const result = rollProceduralItem(def.rarity, itemLevel, 'normal', def.name, rng, undefined, undefined, 'mods');
-    item.customMods = result.mods;
+    const result = rollProceduralItem(def.rarity, itemLevel, 'normal', def.name, rng);
+    item.rolledStats = result.stats;
     // Reroll deliberately doesn't touch the bonus-roll tier or the
     // bracketed source tag baked into proceduralName at drop time --
-    // those describe where the item came from, not its current stats,
-    // and shouldn't change just because the mods were rerolled.
+    // those describe where the item came from, not its current power,
+    // and shouldn't change just because the stats were rerolled.
 
     state.gold -= goldCost;
     state.stats.goldSpent += goldCost;

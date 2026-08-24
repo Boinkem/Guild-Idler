@@ -654,7 +654,7 @@ function SlotCard({
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
             <RarityPill rarity={def.rarity} />
             {def.setId && <SetPill />}
-            {item.customMods && <CraftedPill />}
+            {def.craftable && <CraftedPill />}
             <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
           </div>
         </div>
@@ -677,9 +677,21 @@ function SlotCard({
               <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
                 <RarityPill rarity={def.rarity} />
                 {def.setId && <SetPill />}
-                {item.customMods && <CraftedPill />}
+                {def.craftable && <CraftedPill />}
               </div>
-              <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
+              {(() => {
+                const modLines = describeMods(item.customMods ?? def.mods);
+                // patch 0255: a procedural roll or Guildmade/Masterwork craft's
+                // real power lives in item.rolledStats now (all-stats rework,
+                // see guild-idler-status.md) -- folded into the same bonuses
+                // line rather than a separate one, since this occupies the
+                // exact spot the old mod roll used to. Distinct from the
+                // "Enchanted:" line below, which is Armour Infusion's own
+                // purchased stats, never touched by this.
+                const rolledLines = item.rolledStats ? describeStats(item.rolledStats, true) : [];
+                const lines = [...modLines, ...rolledLines];
+                return <div className="tiny muted">{lines.length > 0 ? lines.join(' · ') : 'No bonuses'}</div>;
+              })()}
               {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
                 <div
                 className="tiny"
@@ -749,7 +761,7 @@ function StashCard({
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
             <RarityPill rarity={def.rarity} />
             {def.setId && <SetPill />}
-            {item.customMods && <CraftedPill />}
+            {def.craftable && <CraftedPill />}
             {isUpgrade && <UpgradePill />}
             {item.locked && <LockedPill />}
             <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
@@ -774,11 +786,23 @@ function StashCard({
               <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
                 <RarityPill rarity={def.rarity} />
                 {def.setId && <SetPill />}
-                {item.customMods && <CraftedPill />}
+                {def.craftable && <CraftedPill />}
                 {isUpgrade && <UpgradePill />}
                 {item.locked && <LockedPill />}
               </div>
-              <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
+              {(() => {
+                const modLines = describeMods(item.customMods ?? def.mods);
+                // patch 0255: a procedural roll or Guildmade/Masterwork craft's
+                // real power lives in item.rolledStats now (all-stats rework,
+                // see guild-idler-status.md) -- folded into the same bonuses
+                // line rather than a separate one, since this occupies the
+                // exact spot the old mod roll used to. Distinct from the
+                // "Enchanted:" line below, which is Armour Infusion's own
+                // purchased stats, never touched by this.
+                const rolledLines = item.rolledStats ? describeStats(item.rolledStats, true) : [];
+                const lines = [...modLines, ...rolledLines];
+                return <div className="tiny muted">{lines.length > 0 ? lines.join(' · ') : 'No bonuses'}</div>;
+              })()}
               {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
                 <div
                 className="tiny"

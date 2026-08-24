@@ -19908,3 +19908,163 @@ could.
 
 `npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` both
 pass clean.
+
+### Gear itemization: all-stats rework, part 1 of 2 -- systems/formula (patch 0255)
+
+```discord-update
+Dev Update | Gear Itemization Rework (1/2)
+- Changed: gear no longer rolls direct Success/Gold/XP/Loot/InjuryResist/Speed bonuses -- only the four core stats now (Strength, Endurance, Luck, Wisdom)
+- Changed: Endurance no longer boosts Success -- Strength is now the only stat behind quest Success
+- Changed: Luck now also boosts Loot%, alongside Gold
+- Changed: Guildmade and Masterwork crafting recipes now let you pick stat bonuses instead of flat Success/Gold/XP/Loot bonuses
+- Fixed: Enchanter reroll can now safely reroll a full item's power instead of only half of it
+- Note: item power levels are being rebalanced around this change -- expect some gear to feel different than before, more tuning to follow
+```
+
+Direct follow-through from the stat-weight review earlier this session (see
+this conversation's own analysis): gear's procedural affix pool let a slot
+land on either a raw Stat (diminishing via `sqrt`/`pow` once it reaches
+`HeroManager.statMods`) or a direct Modifier (added linearly, no curve at
+all) at the same odds and the same budget. Since a hero's stat totals only
+grow over a run, a Stat-affix became a worse and worse deal relative to a
+Modifier-affix at the same gear budget the longer you played -- backwards
+from what gear should do, and a real exploit, not just a flavor
+imbalance. Confirmed direction: **remove direct Modifier affixes from
+gear entirely**, including hand-authored items, rather than a smaller
+"decouple the two budgets" patch -- accepted the bigger one-time cost
+(this patch's systems work, plus a follow-up content pass) over
+permanently maintaining two parallel power curves that need to be kept in
+sync by hand. Locked scope decisions going in: **set tier bonuses stay
+flat Modifiers** (a deliberate exception -- they're already a "build-
+around" bonus layered on top of a full set, not itemization RNG); the
+**~107 hand-authored equipment.json items are a separate, follow-up
+patch** (re-authoring all of them against a real stat budget is a
+distinct, higher-risk content pass, not systems work); and **Endurance's
+long-standing 3-output overload gets fixed now**, not deferred, since
+locking 107 items into a stat-inclusive budget first would make walking
+it back later far more expensive.
+
+**`HeroManager.statMods` split (Endurance/Success, Loot/Luck).** Endurance
+used to feed Success (weight 0.8) *in addition to* InjuryResist and
+Speed -- strictly stronger per point than Strength/Luck/Wisdom, which
+each only ever touched one output. Success is now Strength-only, and
+Strength's own weight absorbed Endurance's old 0.8 1-for-1 (1.6 -> 2.4),
+so a hero with roughly equal Strength/Endurance sees no Success
+discontinuity on patch day -- only specializing one way or the other
+actually changes the outcome from here. Separately, a new `loot:
+sqrt(luck) * 1.5` line restores a place for a raw Luck point to matter in
+Loot terms now that gear can't roll a direct `loot` affix -- first-pass
+coefficient, no real drop data to calibrate against yet, same "verify
+before treating as final" caveat every new Tuning entry below carries.
+`personalLootBonus` (Luck's separate legendary-odds multiplier) is
+untouched.
+
+**`proceduralLoot.ts` -- pool is Stats-only now.** `MODIFIER_KEYS` and the
+dual-pool `{fromStats, key}` machinery are gone; `rollProceduralItem`
+picks from `STAT_KEYS` exclusively and its `ProceduralRoll` no longer
+carries a `mods` field at all. `loot_procedural.budgetRarityMultiplier`
+raised 3 -> 6 (Tuning) since half the pool that used to pay out at full
+linear value is gone -- **a first-pass floor, not a value-parity
+attempt**: a literal parity conversion against old legendary items (done
+during the earlier review) came out to ~290 raw Endurance needed on a
+single slot, more than a maxed level-55 hero could ever accumulate on
+their own. The power curve is accepted to flatten/shift rather than
+preserve exact old per-item numbers -- needs real playtest verification,
+not just this one multiplier bump.
+
+**New `EquipmentItem.rolledStats` field, replacing `enchantStats` as
+where a procedural roll's stats land.** Before this patch, a procedural
+roll's stat half was written into `enchantStats` -- the *same* field the
+pre-existing, additive Armour Infusion system also writes into when a
+player pays to add stats. That's exactly why Enchanter reroll
+(`CraftingManager.reroll`) was restricted to rerolling `customMods`
+only: rerolling `enchantStats` would have silently destroyed any Armour
+Infusion investment, with no way to tell "which part was the original
+roll" from "which part was a later, legitimate purchase" once merged.
+Going all-stats made that limitation total instead of half-avoidable (no
+Modifiers half left to safely restrict a reroll to), so `rolledStats`
+gets its own field -- `EquipmentManager.instantiate` writes a fresh
+procedural roll's stats there, `HeroManager.equipmentStats` sums it in
+alongside `def.stats`/`enchantStats`, and `CraftingManager.reroll` now
+safely rerolls the *entire* item instead of only half of it, closing a
+known limitation flagged (but not fixed) back in patch 0215.
+
+**Crafting recipes (Guildmade/Masterwork, `craftGear`) converted to the
+same Stats pool.** `modOptions` on all 12 gear recipes remapped:
+`success`->`strength`, `xp`->`wisdom`, `injuryResist`/`speed`->
+`endurance` (collapsed to one option each -- Endurance now grants both
+outputs together automatically via `statMods`, not by separate picks),
+`gold`/`loot`->`luck` (also collapsed -- Loot is a Luck output now, see
+above). Guildmade's `modValue` 6 -> 14, Masterwork's 14 -> 32, same
+first-pass/needs-playtest calibration as the procedural budget above.
+`CraftingRecipeDef.modOptions` is a `Modifiers | Stats` union at the type
+level now rather than switching field entirely, since `consumable`
+recipes (Trail Rations' Herbal variant, the Enchanter's own Fortune
+Charm equivalents, etc.) are explicitly **out of scope** -- a temporary
+buff isn't gear, and untouched by this rework. `craftGear` itself now
+takes `(keyof Stats)[]` and writes the result into the new
+`rolledStats` field instead of `customMods`.
+
+**Fortune Charm consumables remapped to match** (`lucky_charm_gold/xp`,
+`fortune_weave_gold/xp`, `windfall_sigil_gold/xp`) -- `lootWeightStat`
+biases which category a procedural roll favors, and `gold`/`xp` no
+longer exist in that pool at all post-rework, which would have silently
+turned every Fortune Charm into a no-op. Remapped `gold`->`luck`,
+`xp`->`wisdom`, consistent with the stat/output mapping used everywhere
+else in this patch. `LootLoadout.lootWeightStat` (types.ts) and
+`InventoryManager.loadoutEffects`'s own local copy of the same shape (a
+second, independently-declared inline type with the identical fields --
+found via `tsc`, not inspection) both narrowed from `keyof Modifiers |
+keyof Stats` to `keyof Stats` accordingly.
+
+**Display fixes.** `EquipmentPanel.tsx` (both card and modal views) and
+`CraftingStation.tsx`'s crafting-preview card previously built their
+"bonuses" line from `item.customMods ?? def.mods` alone -- since a
+procedural roll or a Guildmade/Masterwork craft no longer ever populates
+`customMods`, every one of those items would have silently displayed "No
+bonuses" while its real power sat invisible in the new `rolledStats`
+field. Now folds `describeStats(item.rolledStats, true)` into the same
+line alongside the (still-relevant, for not-yet-converted hand-authored
+items) mods line, distinct from the separate "Enchanted:" line just
+below it, which is Armour Infusion's own purchased stats and untouched
+by any of this. Separately, the `<CraftedPill>` badge on every card
+(4 call sites) used to key off `item.customMods` -- true for a procedural
+roll too before this patch, not just a real craft, and now never true
+for anything -- switched to `def.craftable`, the actual per-def flag
+that means "this base only comes from crafting," which is both more
+correct and immune to this rework entirely.
+
+**DevTool (`tools/devtool/server.mjs`).** The `modKeyList` field
+validator (used for `CraftingRecipeDef.modOptions`) checked only against
+`MOD_KEYS` -- widened to accept `MOD_KEYS` OR `STAT_KEYS` rather than
+made category-aware (gear vs. consumable), matching the permissiveness
+of the real TS-side union type rather than trying to cross-check against
+an entry's own `category` field. `lootWeightStat`'s doc comment updated
+to match.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. `node --check` on
+`tools/devtool/server.mjs` passes. No behavioral runtime testing this
+pass (no live game state to drive) -- flagged as a gap, not a "verified
+live" claim.
+
+**A real bug found while in this code, explicitly NOT fixed here (out of
+scope for a systems/formula patch) -- flagging for the backlog.** Every
+Masterwork crafting recipe has `modsToPick: 3`, but the gear-crafting UI
+(`CraftingStation.tsx`'s `gearModSlot`) only ever renders two fixed mod
+slots (`modSlot0`/`modSlot1`). `chosenGearStats.length === modsToPick`
+(2 === 3) is therefore always false for every Masterwork piece, which
+means the Craft button has been permanently disabled for all 6 Masterwork
+recipes since they shipped -- pre-existing, unrelated to this patch,
+confirmed by reading the UI code directly rather than assumed.
+
+**Explicitly deferred to patch 2 (item re-author, follow-up).** The
+~107 hand-authored `equipment.json` items (Sets, chain/raid rewards,
+`chainExclusive` capstones) still carry their old flat Modifier values
+untouched -- `scaleChainExclusiveItem` and every Set bonus are
+unaffected by this patch. Re-authoring those against a real stat budget
+(the same shape this patch already built for the procedural pool) is
+next; a literal per-item output-parity conversion was already ruled out
+during the earlier review (the ~290-raw-Endurance problem on
+`dragon_helm` above), so that pass will target a rarity/level stat
+budget directly rather than back-solving old numbers.

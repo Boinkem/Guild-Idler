@@ -12,6 +12,25 @@ import { Tuning } from './tuning';
  * any other deliberately hand-authored item (a populated `mods`/`stats`
  * on the def) opt OUT of this entirely -- see EquipmentManager.instantiate,
  * the one call site that decides whether to roll at all.
+ *
+ * All-stats rework (patch 0255, see guild-idler-status.md). The roll pool
+ * used to draw from BOTH the 4 raw Stats and 6 direct Modifiers at equal
+ * odds/cost -- a real exploit, not just a flavor choice: a direct
+ * Modifier roll (e.g. `xp: +18`) added linearly, while a Stat roll (e.g.
+ * `wisdom: +18`) first had to pass through statMods' sqrt() curve, so its
+ * marginal value shrank the more of that stat a hero already had. Since a
+ * hero's stat totals only grow over a run, a Stat-affix became a worse
+ * and worse deal relative to a Modifier-affix at the exact same gear
+ * budget the longer you played -- backwards from what gear should do.
+ * The pool is Stats-only now; direct Modifier affixes are retired from
+ * procedural rolls entirely. `budgetRarityMultiplier` was bumped
+ * accordingly (Tuning) since half the pool that used to pay out at full
+ * linear value is gone -- a first-pass floor, not a value-parity attempt
+ * (a literal parity conversion against old legendary items came out to
+ * ~290 raw Endurance on a single slot, more than a maxed hero could ever
+ * accumulate on their own -- the power curve is accepted to flatten/shift
+ * rather than preserve exact old per-item numbers; needs live playtest
+ * verification).
  */
 
 /** Where a procedurally-generated item came from -- drives both the
@@ -41,7 +60,6 @@ export type LootSourceTag =
 
 export type BonusRollTier = 'none' | 'fortunate' | 'charmed';
 
-const MODIFIER_KEYS: (keyof Modifiers)[] = ['success', 'gold', 'xp', 'loot', 'injuryResist', 'speed'];
 const STAT_KEYS: (keyof Stats)[] = ['strength', 'endurance', 'luck', 'wisdom'];
 
 /** How many independent affix rolls a rarity gets -- more slots at higher
@@ -103,7 +121,6 @@ function sourceTagLabel(sourceTag: LootSourceTag): string | null {
 }
 
 export interface ProceduralRoll {
-  mods: Partial<Modifiers>;
   stats: Partial<Stats>;
   bonusTier: BonusRollTier;
   displayName: string;
@@ -116,23 +133,27 @@ export interface ProceduralRoll {
  * invents a new base name.
  *
  * `weightedKey`/`weightMultiplier` (patch 0215, Fortune Charms) bias
- * which category each affix slot lands on -- every other key keeps its
+ * which stat each affix slot lands on -- every other key keeps its
  * default weight of 1, `weightedKey` gets `weightMultiplier` instead.
  * Omitted entirely for an ordinary unweighted roll (the overwhelming
- * majority of drops), in which case this is byte-identical to the
- * original patch 0214 behavior.
+ * majority of drops). As of patch 0255 (all-stats rework) this only
+ * ever meaningfully targets a Stats key -- a Fortune Charm that still
+ * names a retired Modifiers key (pre-0255 data) simply never matches
+ * anything in the pool and degrades to an ordinary unweighted roll
+ * rather than erroring; real Fortune Charm data was remapped in the
+ * same patch (gold -> luck, xp -> wisdom) so this shouldn't come up in
+ * practice.
  *
- * `poolRestriction` (patch 0215, Enchanter reroll) limits which of the
- * two pools this roll can draw from -- 'mods' for a reroll (see
- * CraftingManager.reroll's own comment for why: `enchantStats` is
- * shared with the pre-existing, additive Armour Infusion system, so a
- * reroll only safely touches `customMods`, never `enchantStats`).
- * Defaults to 'both', an ordinary drop's normal behavior.
+ * `poolRestriction` existed pre-0255 (Enchanter reroll, patch 0215) to
+ * keep a reroll from touching `enchantStats` -- moot now that the pool
+ * is Stats-only and the stat half of a roll lives in its own
+ * `rolledStats` field (see EquipmentManager.instantiate and
+ * CraftingManager.reroll), so the parameter is retired along with the
+ * Modifiers half of the pool it used to distinguish.
  */
 export function rollProceduralItem(
   rarity: Rarity, itemLevel: number, sourceTag: LootSourceTag, baseName: string, rng: Rng,
-  weightedKey?: keyof Modifiers | keyof Stats, weightMultiplier?: number,
-  poolRestriction: 'mods' | 'stats' | 'both' = 'both',
+  weightedKey?: keyof Stats, weightMultiplier?: number,
 ): ProceduralRoll {
   let budget = GEAR_SCORE_BY_RARITY[rarity]
     * Tuning.get('loot_procedural.budgetRarityMultiplier')
@@ -153,24 +174,13 @@ export function rollProceduralItem(
 
   const slots = AFFIX_SLOTS_BY_RARITY[rarity];
   const perSlot = Math.max(1, Math.round(budget / slots));
-  const pool: { fromStats: boolean; key: string }[] = [
-    ...(poolRestriction !== 'stats' ? MODIFIER_KEYS.map((key) => ({ fromStats: false, key })) : []),
-    ...(poolRestriction !== 'mods' ? STAT_KEYS.map((key) => ({ fromStats: true, key })) : []),
-  ];
 
-  const mods: Partial<Modifiers> = {};
   const stats: Partial<Stats> = {};
   for (let i = 0; i < slots; i++) {
     const picked = weightedKey
-      ? rng.weighted(pool.map((p) => ({ item: p, weight: p.key === weightedKey ? (weightMultiplier ?? 1) : 1 })))
-      : rng.pick(pool);
-    if (picked.fromStats) {
-      const k = picked.key as keyof Stats;
-      stats[k] = (stats[k] ?? 0) + perSlot;
-    } else {
-      const k = picked.key as keyof Modifiers;
-      mods[k] = (mods[k] ?? 0) + perSlot;
-    }
+      ? rng.weighted(STAT_KEYS.map((k) => ({ item: k, weight: k === weightedKey ? (weightMultiplier ?? 1) : 1 })))
+      : rng.pick(STAT_KEYS);
+    stats[picked] = (stats[picked] ?? 0) + perSlot;
   }
 
   let displayName = baseName;
@@ -179,7 +189,7 @@ export function rollProceduralItem(
   const tagLabel = sourceTagLabel(sourceTag);
   if (tagLabel) displayName = `${displayName} [${tagLabel}]`;
 
-  return { mods, stats, bonusTier, displayName };
+  return { stats, bonusTier, displayName };
 }
 
 /** True if a def has no authored power of its own -- the "blank

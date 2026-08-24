@@ -280,7 +280,19 @@ export function ItemPreviewModal({
         <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
           <RarityPill rarity={def.rarity} />
         </div>
-        <div className="tiny muted">{describeMods(item.customMods ?? def.mods).join(' · ') || 'No bonuses'}</div>
+        {(() => {
+                const modLines = describeMods(item.customMods ?? def.mods);
+                // patch 0255: a procedural roll or Guildmade/Masterwork craft's
+                // real power lives in item.rolledStats now (all-stats rework,
+                // see guild-idler-status.md) -- folded into the same bonuses
+                // line rather than a separate one, since this occupies the
+                // exact spot the old mod roll used to. Distinct from the
+                // "Enchanted:" line below, which is Armour Infusion's own
+                // purchased stats, never touched by this.
+                const rolledLines = item.rolledStats ? describeStats(item.rolledStats, true) : [];
+                const lines = [...modLines, ...rolledLines];
+                return <div className="tiny muted">{lines.length > 0 ? lines.join(' · ') : 'No bonuses'}</div>;
+              })()}
         {item.enchantStats && Object.keys(item.enchantStats).length > 0 && (
           <div
             className="tiny"
@@ -314,9 +326,12 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
 
   // gear -- two independent fixed slots rather than a growing array, so
   // "set bottom-left" and "set bottom-right" can never collide or leave a
-  // hole the way indexing into a shared array would.
-  const [modSlot0, setModSlot0] = useState<keyof Modifiers | null>(null);
-  const [modSlot1, setModSlot1] = useState<keyof Modifiers | null>(null);
+  // hole the way indexing into a shared array would. Stats keys as of
+  // patch 0255 (all-stats rework, see guild-idler-status.md and
+  // CraftingManager.craftGear's own comment) -- gear recipes no longer
+  // pick Modifiers.
+  const [modSlot0, setModSlot0] = useState<keyof Stats | null>(null);
+  const [modSlot1, setModSlot1] = useState<keyof Stats | null>(null);
   // enchant
   const [targetUid, setTargetUid] = useState('');
   const [chosenStats, setChosenStats] = useState<(keyof Stats)[]>([]);
@@ -365,7 +380,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
 
   const modsToPick = recipe?.modsToPick ?? 0;
   const statsToPick = recipe?.statsToPick ?? 0;
-  const chosenMods = [modSlot0, modSlot1].filter((m): m is keyof Modifiers => m !== null);
+  const chosenGearStats = [modSlot0, modSlot1].filter((m): m is keyof Stats => m !== null);
 
   // `charm` (patch 0247) is a separate category purely so these recipes
   // route to the Enchanter's own Charms button instead of the Alchemist's
@@ -377,7 +392,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
   const isConsumableLike = category === 'consumable' || category === 'charm';
 
   const canCraft = !!recipe && !!afford?.ok
-    && (category !== 'gear' || chosenMods.length === modsToPick)
+    && (category !== 'gear' || chosenGearStats.length === modsToPick)
     && (category !== 'enchant' || (chosenStats.length === statsToPick && targetUid !== ''))
     && (!isConsumableLike || (materialIds.every((id) => confirmedMaterials.has(id)) && chosenConsumableMods.length === modsToPick));
 
@@ -398,7 +413,7 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
    */
   function handleCraft() {
     if (!recipe) return;
-    if (category === 'gear') { engine.craftGear(recipe.id, chosenMods); reset(); }
+    if (category === 'gear') { engine.craftGear(recipe.id, chosenGearStats); reset(); }
     else if (category === 'enchant') { engine.enchantItem(recipe.id, targetUid, chosenStats); reset(); }
     else if (category === 'gem') { engine.craftGem(recipe.id); reset(); }
     else engine.craftConsumable(recipe.id, chosenConsumableMods);
@@ -450,14 +465,18 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
     const picked = index === 0 ? modSlot0 : modSlot1;
     const otherPicked = index === 0 ? modSlot1 : modSlot0;
     const setPicked = index === 0 ? setModSlot0 : setModSlot1;
-    const options: PickerOption[] = (recipe?.modOptions ?? [])
+    // patch 0255: gear recipes pick Stats now, not Modifiers -- label
+    // format matches the enchant stat picker just below (`+N Label`, no
+    // `%`, since this is a flat stat point, not a percentage bonus) rather
+    // than the old `+N% Label` mod-flavored text.
+    const options: PickerOption[] = ((recipe?.modOptions ?? []) as (keyof Stats)[])
       .filter((m) => m !== otherPicked)
-      .map((m) => ({ key: m, label: `+${recipe?.modValue ?? 0}% ${MOD_LABEL[m]}` }));
+      .map((m) => ({ key: m, label: `+${recipe?.modValue ?? 0} ${craftingStatLabel(m)}` }));
     return {
-      filled: picked ? <span className="craft-slot-label">+{recipe?.modValue}% {MOD_LABEL[picked]}</span> : null,
+      filled: picked ? <span className="craft-slot-label">+{recipe?.modValue} {craftingStatLabel(picked)}</span> : null,
       options,
       disabled: !recipe,
-      onPick: (key: string) => setPicked(key as keyof Modifiers),
+      onPick: (key: string) => setPicked(key as keyof Stats),
     };
   }
   const mod0 = gearModSlot(0);
@@ -519,7 +538,11 @@ export function CraftingStation({ category, onClose }: { category: Category; onC
     : null;
 
   /* ------------------------- consumable: bonus slot ------------------------ */
-  const consumableModOptions: PickerOption[] = (recipe?.modOptions ?? []).map((m) => ({
+  // Consumable recipes are untouched by patch 0255's all-stats rework (a
+  // temporary buff isn't gear) and still pick Modifiers keys -- cast is
+  // safe since modOptions is only ever a mixed union at the type level to
+  // cover gear's Stats keys too (see CraftingRecipeDef.modOptions).
+  const consumableModOptions: PickerOption[] = ((recipe?.modOptions ?? []) as (keyof Modifiers)[]).map((m) => ({
     key: m,
     label: `+${recipe?.modValue ?? 0}% ${MOD_LABEL[m]}`,
     disabled: !chosenConsumableMods.includes(m) && chosenConsumableMods.length >= modsToPick,

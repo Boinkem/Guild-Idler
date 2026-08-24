@@ -12,13 +12,12 @@
     "goldCost": 400,
     "resultDefId": "guildmade_blade",
     "modOptions": [
-      "success",
-      "gold",
-      "xp",
-      "loot"
+      "strength",
+      "luck",
+      "wisdom"
     ],
     "modsToPick": 2,
-    "modValue": 6,
+    "modValue": 14,
     "statsToPick": 0,
     "statValue": 0
   },
@@ -35,13 +34,12 @@
     "goldCost": 350,
     "resultDefId": "guildmade_band",
     "modOptions": [
-      "success",
-      "gold",
-      "xp",
-      "loot"
+      "strength",
+      "luck",
+      "wisdom"
     ],
     "modsToPick": 2,
-    "modValue": 6,
+    "modValue": 14,
     "statsToPick": 0,
     "statValue": 0
   },
@@ -1060,13 +1058,12 @@
     "goldCost": 420,
     "resultDefId": "guildmade_helm",
     "modOptions": [
-      "success",
-      "gold",
-      "xp",
-      "loot"
+      "strength",
+      "luck",
+      "wisdom"
     ],
     "modsToPick": 2,
-    "modValue": 6,
+    "modValue": 14,
     "statsToPick": 0,
     "statValue": 0
   },
@@ -1083,13 +1080,12 @@
     "goldCost": 450,
     "resultDefId": "guildmade_plate",
     "modOptions": [
-      "success",
-      "gold",
-      "xp",
-      "loot"
+      "strength",
+      "luck",
+      "wisdom"
     ],
     "modsToPick": 2,
-    "modValue": 6,
+    "modValue": 14,
     "statsToPick": 0,
     "statValue": 0
   },
@@ -1106,13 +1102,12 @@
     "goldCost": 380,
     "resultDefId": "guildmade_boots",
     "modOptions": [
-      "success",
-      "gold",
-      "xp",
-      "loot"
+      "strength",
+      "luck",
+      "wisdom"
     ],
     "modsToPick": 2,
-    "modValue": 6,
+    "modValue": 14,
     "statsToPick": 0,
     "statValue": 0
   },
@@ -1129,13 +1124,12 @@
     "goldCost": 400,
     "resultDefId": "guildmade_cloak",
     "modOptions": [
-      "success",
-      "gold",
-      "xp",
-      "loot"
+      "strength",
+      "luck",
+      "wisdom"
     ],
     "modsToPick": 2,
-    "modValue": 6,
+    "modValue": 14,
     "statsToPick": 0,
     "statValue": 0
   },
@@ -1154,14 +1148,13 @@
     "goldCost": 14000,
     "resultDefId": "masterwork_warblade",
     "modOptions": [
-      "success",
-      "gold",
-      "xp",
-      "loot",
-      "speed"
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
     ],
     "modsToPick": 3,
-    "modValue": 14,
+    "modValue": 32,
     "statsToPick": 0,
     "statValue": 0
   },
@@ -1180,14 +1173,13 @@
     "goldCost": 13500,
     "resultDefId": "masterwork_greathelm",
     "modOptions": [
-      "success",
-      "gold",
-      "xp",
-      "loot",
-      "injuryResist"
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
     ],
     "modsToPick": 3,
-    "modValue": 14,
+    "modValue": 32,
     "statsToPick": 0,
     "statValue": 0
   },
@@ -1206,14 +1198,13 @@
     "goldCost": 14500,
     "resultDefId": "masterwork_plate",
     "modOptions": [
-      "success",
-      "gold",
-      "xp",
-      "loot",
-      "injuryResist"
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
     ],
     "modsToPick": 3,
-    "modValue": 14,
+    "modValue": 32,
     "statsToPick": 0,
     "statValue": 0
   },
@@ -1232,14 +1223,13 @@
     "goldCost": 12000,
     "resultDefId": "masterwork_gauntlets",
     "modOptions": [
-      "success",
-      "gold",
-      "xp",
-      "loot",
-      "speed"
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
     ],
     "modsToPick": 3,
-    "modValue": 14,
+    "modValue": 32,
     "statsToPick": 0,
     "statValue": 0
   },
@@ -1258,14 +1248,13 @@
     "goldCost": 12000,
     "resultDefId": "masterwork_sabatons",
     "modOptions": [
-      "success",
-      "gold",
-      "xp",
-      "loot",
-      "speed"
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
     ],
     "modsToPick": 3,
-    "modValue": 14,
+    "modValue": 32,
     "statsToPick": 0,
     "statValue": 0
   },
@@ -1284,14 +1273,13 @@
     "goldCost": 13000,
     "resultDefId": "masterwork_sigil",
     "modOptions": [
-      "success",
-      "gold",
-      "xp",
-      "loot",
-      "injuryResist"
+      "strength",
+      "luck",
+      "wisdom",
+      "endurance"
     ],
     "modsToPick": 3,
-    "modValue": 14,
+    "modValue": 32,
     "statsToPick": 0,
     "statValue": 0
   },

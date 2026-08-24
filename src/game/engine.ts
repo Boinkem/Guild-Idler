@@ -2479,8 +2479,8 @@ export class GameEngine {
     void this.saveNow();
   }
 
-  craftGear(recipeId: string, chosenMods: (keyof Modifiers)[]) {
-    const error = CraftingManager.craftGear(this.state, recipeId, chosenMods);
+  craftGear(recipeId: string, chosenStats: (keyof Stats)[]) {
+    const error = CraftingManager.craftGear(this.state, recipeId, chosenStats);
     if (error) return this.say(error);
     playSound('craft');
     this.say('A new piece, built to spec, lands in the stash.', 'equipment');

@@ -275,11 +275,12 @@ export const HeroManager = {
       const scale = (1 + item.plus * 0.15) * HeroManager.gearRelevance(item.rolledItemLevel ?? def.reqLevel, hero.level);
       const base = def.stats;
       const enchant = item.enchantStats;
-      if (!base && !enchant) continue;
-      total.strength += ((base?.strength ?? 0) + (enchant?.strength ?? 0)) * scale;
-      total.endurance += ((base?.endurance ?? 0) + (enchant?.endurance ?? 0)) * scale;
-      total.luck += ((base?.luck ?? 0) + (enchant?.luck ?? 0)) * scale;
-      total.wisdom += ((base?.wisdom ?? 0) + (enchant?.wisdom ?? 0)) * scale;
+      const rolled = item.rolledStats;
+      if (!base && !enchant && !rolled) continue;
+      total.strength += ((base?.strength ?? 0) + (enchant?.strength ?? 0) + (rolled?.strength ?? 0)) * scale;
+      total.endurance += ((base?.endurance ?? 0) + (enchant?.endurance ?? 0) + (rolled?.endurance ?? 0)) * scale;
+      total.luck += ((base?.luck ?? 0) + (enchant?.luck ?? 0) + (rolled?.luck ?? 0)) * scale;
+      total.wisdom += ((base?.wisdom ?? 0) + (enchant?.wisdom ?? 0) + (rolled?.wisdom ?? 0)) * scale;
     }
     return total;
   },
@@ -478,25 +479,40 @@ export const HeroManager = {
    * upgrades stay relevant deep into the game.
    */
   /**
-   * loot is deliberately absent here now -- Luck's contribution to rare-loot
-   * odds moved to its own function (personalLootBonus below), applied as a
-   * separate multiplicative stage rather than summed into this pool. It
-   * used to be diluted into the same additive total as the difficulty
-   * tier's own flat lootChance and every account-wide bonus combined --
-   * two heroes with wildly different Luck investment (27 vs 79, confirmed
-   * directly) came out within a rounding error of each other, because a
-   * ~4-point gap barely registers inside a 120+ point sum. Equipment,
-   * guild, and renown loot bonuses still flow through the normal Modifiers
-   * pool same as before; only the Luck *stat's* own contribution moved.
+   * loot is deliberately absent from Gold's own line here -- Luck's
+   * contribution to RARE-loot odds specifically lives in its own function
+   * (personalLootBonus below), applied as a separate multiplicative stage
+   * rather than summed into this pool. That part's unchanged. Loot DOES
+   * still get an additive line here as of patch 0255 (see below) -- a
+   * different, smaller thing: ordinary Loot% the same way Gold/XP/Success
+   * already work, restoring a place for a raw Luck point to matter in Loot
+   * terms now that gear can no longer roll a direct `loot` affix at all.
    *
    * speed's curve was also raised (0.5 exponent/0.6 coefficient -> 0.7/1.3)
    * for the same underlying reason -- even a heavily-invested 93 Endurance
    * only saved ~10 minutes off a 3-hour quest under the old curve.
+   *
+   * Endurance/Loot rework, patch 0255 (see guild-idler-status.md):
+   * - success used to be sqrt(strength)*1.6 + sqrt(endurance)*0.8.
+   *   Endurance's slice is removed outright (Endurance was the one stat
+   *   touching three separate outputs -- partial Success, full
+   *   InjuryResist, full Speed -- strictly stronger per point than every
+   *   other stat; this splits Success off so Endurance is InjuryResist +
+   *   Speed only, same shape Strength/Luck/Wisdom already have).
+   *   Strength's own weight absorbs Endurance's old 0.8 1-for-1 (1.6+0.8
+   *   = 2.4), so a hero with roughly equal Strength/Endurance sees no
+   *   Success discontinuity on patch day -- only specializing one way or
+   *   the other actually changes the outcome from here.
+   * - loot: sqrt(luck)*1.5 is new. First-pass coefficient, no real drop
+   *   data to calibrate against yet -- same "verify before treating as
+   *   final" caveat loot_procedural.budgetRarityMultiplier's own comment
+   *   already carries.
    */
   statMods(stats: Stats): Partial<Modifiers> {
     return {
-      success: Math.sqrt(stats.strength) * 1.6 + Math.sqrt(stats.endurance) * 0.8,
+      success: Math.sqrt(stats.strength) * 2.4,
       gold: Math.sqrt(stats.luck) * 2.2,
+      loot: Math.sqrt(stats.luck) * 1.5,
       xp: Math.sqrt(stats.wisdom) * 2.6,
       injuryResist: Math.sqrt(stats.endurance) * 2.0,
       speed: Math.pow(stats.endurance, 0.7) * 1.3,

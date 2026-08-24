@@ -1,5 +1,5 @@
 import { EQUIPMENT_BY_ID, RARITY_PRICE_MULT } from '../data/equipment';
-import { EquipmentDef, EquipmentItem, ElementType, GameState, GemTier, Hero, Modifiers, Stats } from '../types';
+import { EquipmentDef, EquipmentItem, ElementType, GameState, GemTier, Hero, Stats } from '../types';
 import { uid, Rng } from '../rng';
 import { clamp } from '../util';
 import { Tuning } from '../data/tuning';
@@ -37,7 +37,7 @@ export const EquipmentManager = {
    */
   instantiate(defId: string, roll?: {
     itemLevel: number; sourceTag: LootSourceTag; rng: Rng;
-    weightedKey?: keyof Modifiers | keyof Stats; weightMultiplier?: number;
+    weightedKey?: keyof Stats; weightMultiplier?: number;
   }): EquipmentItem | null {
     const def = EQUIPMENT_BY_ID[defId];
     if (!def) return null;
@@ -46,8 +46,11 @@ export const EquipmentManager = {
       const result = rollProceduralItem(
         def.rarity, roll.itemLevel, roll.sourceTag, def.name, roll.rng, roll.weightedKey, roll.weightMultiplier,
       );
-      item.customMods = result.mods;
-      item.enchantStats = result.stats;
+      // patch 0255: a procedural roll's power is entirely stats now (no
+      // more direct Modifier affixes) -- lands in rolledStats, its own
+      // field, never enchantStats (that field is Armour Infusion's own
+      // additive purchases; see rolledStats' own comment in types.ts).
+      item.rolledStats = result.stats;
       item.proceduralName = result.displayName;
       item.rolledItemLevel = roll.itemLevel;
     } else if (roll && def.chainExclusive && (roll.sourceTag === 'chainReplayHeroic' || roll.sourceTag === 'chainReplayLegendary')) {

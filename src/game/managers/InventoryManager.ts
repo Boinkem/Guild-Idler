@@ -107,7 +107,7 @@ export const InventoryManager = {
     preventInjury: boolean;
     guaranteedGoodEvent: boolean;
     healthDamageReduction: number;
-    lootWeightStat?: keyof Modifiers | keyof Stats;
+    lootWeightStat?: keyof Stats;
     lootWeightMultiplier?: number;
   } {
     let success = 0;
@@ -124,7 +124,7 @@ export const InventoryManager = {
     // strongest weight wins rather than trying to combine them (combining
     // two different target stats' weights has no sensible single-key
     // meaning for rollProceduralItem to apply).
-    let lootWeightStat: keyof Modifiers | keyof Stats | undefined;
+    let lootWeightStat: keyof Stats | undefined;
     let lootWeightMultiplier = 0;
     for (const id of defIds) {
       const def = InventoryManager.resolveDef(state, id);

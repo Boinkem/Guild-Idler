@@ -289,20 +289,25 @@ export interface ConsumableDef {
     /**
      * Fortune Charms (patch 0215) -- biases a procedural loot roll
      * (QuestManager.resolve's loot loop -> rollProceduralItem) toward one
-     * specific Modifiers category instead of the flat uniform pick every
-     * other roll uses. `lootWeightStat` names which category
-     * (`'gold'`/`'xp'`/`'success'`/`'loot'`, the categories actually
-     * authored so far); `lootWeightMultiplier` is how much more often
-     * that category gets picked per affix slot relative to every other
-     * category's own weight of 1 -- e.g. 2 for a Minor charm, 3.5 for a
-     * standard one. A very large multiplier (999) is the "Greater" tier's
-     * full-override shape: every slot lands on the chosen category. Both
-     * fields are ignored by every quest that doesn't actually drop a
+     * specific Stats category instead of the flat uniform pick every
+     * other roll uses. `lootWeightStat` names which stat (`'strength'`/
+     * `'endurance'`/`'luck'`/`'wisdom'`); `lootWeightMultiplier` is how
+     * much more often that stat gets picked per affix slot relative to
+     * every other stat's own weight of 1 -- e.g. 2 for a Minor charm, 3.5
+     * for a standard one. A very large multiplier (999) is the "Greater"
+     * tier's full-override shape: every slot lands on the chosen stat.
+     * Both fields are ignored by every quest that doesn't actually drop a
      * procedural item -- equipping one on a quest with no loot table, or
      * one that only drops hand-authored/Set gear, simply does nothing,
      * same as any other situational consumable effect that doesn't apply.
+     *
+     * Narrowed from `keyof Modifiers | keyof Stats` to `keyof Stats` only
+     * in patch 0255 (all-stats rework, see guild-idler-status.md) -- the
+     * procedural pool no longer has a Modifiers half to target, and real
+     * Fortune Charm data was remapped in the same patch (`gold`->`luck`,
+     * `xp`->`wisdom`).
      */
-    lootWeightStat?: keyof Modifiers | keyof Stats;
+    lootWeightStat?: keyof Stats;
     lootWeightMultiplier?: number;
   };
 }
@@ -403,6 +408,21 @@ export interface EquipmentItem {
    * HeroManager.equipmentStats for where this actually gets applied.
    */
   enchantStats?: Partial<Stats>;
+  /**
+   * Set on procedurally-generated items (patch 0214, all-stats rework
+   * patch 0255) and on Guildmade/Masterwork crafted gear -- the item's
+   * own rolled/chosen raw-stat power, kept in its own field rather than
+   * folded into `enchantStats` on purpose. Before patch 0255 a
+   * procedural roll's stat half WAS written into `enchantStats`, which
+   * is why Enchanter reroll (CraftingManager.reroll) had to restrict
+   * itself to `customMods` only -- rerolling `enchantStats` would have
+   * silently destroyed any Armour Infusion the player separately paid
+   * for, with no way to tell the two apart once merged. `rolledStats`
+   * gives reroll/recraft a field that's safe to fully overwrite, the
+   * same way `customMods` always was for a mod-only reroll -- see
+   * HeroManager.equipmentStats for where this actually gets summed in.
+   */
+  rolledStats?: Partial<Stats>;
   /**
    * Set only on procedurally-generated items (patch 0214) -- the rolled
    * display name (bonus-roll prefix + bracketed source tag, e.g.
@@ -2565,7 +2585,14 @@ export interface CraftingRecipeDef {
   /** `gear` recipes only -- the craftable EquipmentDef this recipe produces. */
   resultDefId?: string;
   /** `gear` recipes only -- the eligible mod pool the player picks from. */
-  modOptions?: (keyof Modifiers)[];
+  /**
+   * `gear` recipes: Stats keys as of patch 0255 (all-stats rework -- see
+   * guild-idler-status.md and CraftingManager.craftGear's own comment).
+   * `consumable` recipes are untouched by that rework (a temporary buff
+   * isn't gear) and still pick Modifiers keys, so this stays a union
+   * covering both categories rather than splitting into two fields.
+   */
+  modOptions?: (keyof Modifiers | keyof Stats)[];
   /** `gear` recipes only -- how many of modOptions the player picks, e.g. 2. */
   modsToPick?: number;
   /** `gear` recipes only -- fixed strength applied to each picked mod. */

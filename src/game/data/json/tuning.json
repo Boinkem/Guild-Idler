@@ -4295,11 +4295,11 @@
     "id": "loot_procedural.budgetRarityMultiplier",
     "label": "Procedural loot: rarity budget multiplier",
     "category": "loot_procedural",
-    "value": 3,
-    "default": 3,
+    "value": 6,
+    "default": 6,
     "min": 0,
     "max": 20,
-    "description": "statBudget = GEAR_SCORE_BY_RARITY[rarity] * this * levelFactor(itemLevel). 3 is a first-pass calibration against the average real power-per-GSR-point of the existing hand-authored item set (2.24-4.25 across rarities) -- verify against the Balance Sandbox before treating as final."
+    "description": "statBudget = GEAR_SCORE_BY_RARITY[rarity] * this * levelFactor(itemLevel). Raised 3 -> 6 in patch 0255 (all-stats rework, see guild-idler-status.md) -- the roll pool used to be half Stats (diminishing via sqrt) and half direct Modifiers (full linear value); with Modifiers retired from the pool entirely, every roll now pays out at the diminished rate, so the budget needed a real bump just to keep items from feeling like a flat downgrade. This is a first-pass floor, NOT a value-parity conversion -- a literal parity attempt against old legendary items came out to ~290 raw Endurance on a single slot, more than a maxed hero could ever accumulate; the power curve is accepted to flatten/shift instead. Verify against the Balance Sandbox before treating as final."
   },
   {
     "id": "loot_procedural.raidHeroicBudgetMultiplier",
