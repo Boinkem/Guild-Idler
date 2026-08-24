@@ -20068,3 +20068,96 @@ next; a literal per-item output-parity conversion was already ruled out
 during the earlier review (the ~290-raw-Endurance problem on
 `dragon_helm` above), so that pass will target a rarity/level stat
 budget directly rather than back-solving old numbers.
+
+### Gear itemization: all-stats rework, part 2 of 2 -- item re-author (patch 0256)
+
+```discord-update
+Dev Update | Gear Itemization Rework (2/2)
+- Changed: every hand-authored piece of gear (Sets, chain/raid reward items, legendary capstones -- 107 items) has been re-tuned to grant the four core stats instead of the old flat Success/Gold/XP/Loot/InjuryResist/Speed bonuses
+- Changed: item power now scales with rarity and level the same way for hand-authored gear as it does for random drops
+- Note: some legendary items may feel notably different (stronger or weaker) than before -- this is a first-pass rebalance and will keep getting tuned
+```
+
+Follow-through on patch 0255 (see its own entry above for the full
+mechanical background). That patch fixed the systems -- gear no longer
+*rolls* direct Modifiers -- but explicitly left the ~107 hand-authored
+`equipment.json` items untouched (Sets, chain/raid reward pieces,
+`chainExclusive` legendary capstones), since re-authoring real content
+against a new budget is a distinct, higher-risk pass from systems work.
+This patch is that pass. Scope confirmed unchanged from patch 0255: Set
+tier *bonuses* (`ItemSet.bonuses` in equipment.ts) are untouched, still
+flat Modifiers, by design -- only the individual gear pieces that make
+up a set got re-authored, not the aggregate bonus for wearing several of
+them.
+
+**Approach.** Direct back-solving (preserving each item's exact old
+output through the new sqrt/pow curves) was already ruled out during the
+patch 0255 review -- a real parity attempt against `dragon_helm` alone
+came out to ~290 raw Endurance, more than a maxed level-55 hero could
+ever accumulate on their own. Instead, every item got a **budget-driven
+re-author**, the same shape patch 0255 already built for the procedural
+loot pool, run as a single scripted pass across all 107 items rather
+than 107 individual manual edits (far less error-prone, and it's
+mechanically the same formula the procedural pool already uses):
+
+1. **Budget** -- `GEAR_SCORE_BY_RARITY[rarity] * 6 * levelFactor(reqLevel)`,
+   identical to `loot_procedural.budgetRarityMultiplier`'s own live value
+   (patch 0255). Deliberately not a hand-authored "premium" above the
+   procedural number -- a hand-authored item is guaranteed rather than a
+   gamble, so matching what a procedural roll of the same rarity/level
+   would receive across all its slots combined felt like the right
+   anchor, not an arbitrary bonus number with nothing to justify it.
+2. **Flavor preserved via proportional lean, not exact values.** Each
+   item's OLD mods/stats were mapped through patch 0255's established
+   stat/output pairing (success->strength, gold+loot->luck, xp->wisdom,
+   injuryResist+speed->endurance) and summed per category to get a
+   lean/proportion -- e.g. `dragon_helm`'s old `injuryResist: 20` +
+   `endurance: 9` vs `success: 8` said "this item is ~78% Endurance-
+   flavored, ~22% Strength-flavored." The NEW budget is then split across
+   categories in that same proportion, so a tank helm stays a tank helm
+   and a support ring stays a support ring, without trying to preserve
+   the old raw numbers themselves (which was the thing already ruled
+   out). Every allocated category gets at least 1 point, so a real
+   flavor lean never rounds away to nothing on a low-budget item.
+3. **`durability`/`health` mod bonuses preserved as-is, untouched by any
+   of this (14 items).** These were never part of the stat-vs-mod
+   imbalance patch 0255 fixed in the first place -- neither has a Stats
+   equivalent to convert into (there's no "Durability stat"), and
+   neither was ever in `proceduralLoot.ts`'s old `MODIFIER_KEYS` pool
+   even before patch 0255. Genuinely out of scope, not an oversight.
+
+**Numbers.** `dragon_helm` (legendary, reqLevel 25): old `{success: 8,
+injuryResist: 20}` mods + `{endurance: 9}` stat -> new `{strength: 18,
+endurance: 64}`. `lucky_ring` (rare, reqLevel 7): old `{gold: 10, loot:
+6}` + `{luck: 6}` -> new `{luck: 5}` (rare/low-level budgets shrink fast
+under `levelFactor`'s floor, same as procedural items do). `chainmail`
+(uncommon, reqLevel 6): old `{success: 3, injuryResist: 9, health: 12}`
++ `{endurance: 3}` -> new `{strength: 1, endurance: 2}`, `mods: {health:
+12}` (the health bonus, untouched per point 3 above).
+
+**A specific number worth flagging for playtest, not glossing over:**
+the highest single-category values land on level-55 legendaries with a
+heavy single-stat lean -- `requiem_signet` lands at 149 Luck,
+`requiem_striders` at 143 Endurance. Both are within the same budget
+formula every other item uses (nothing item-specific or hand-tuned), but
+they're the two furthest from a "moderate" result across all 107 items,
+and worth a first, deliberate look once this is live rather than
+assuming the formula's average behavior holds at every extreme.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean against the new `equipment.json`
+(pure data change -- no TS/logic files touched by this patch, `Modifiers`/
+`Stats` are already `Partial<>` types so a shrunk `mods` object or a
+newly-populated `stats` object needs no schema change). `isProceduralTemplate`
+correctly still reads every one of these 107 as hand-authored (not blank
+templates) post-conversion, since `stats` is always populated after this
+pass. No live runtime/gameplay test this pass -- same caveat patch 0255's
+own systems changes carried, flagged rather than silently assumed fine.
+
+**Still out of scope, deliberately:** `chainExclusive` items' Heroic/
+Legendary chain-replay scaling (`scaleChainExclusiveItem`) needed no
+changes -- it already multiplies whatever's in `def.mods`/`def.stats`
+directly rather than reading a fixed table, so it picks up these new,
+bigger `def.stats` numbers automatically and correctly. Crafting recipes,
+Fortune Charms, and the procedural loot pool were all patch 0255's job,
+not this one's -- nothing further needed there.
