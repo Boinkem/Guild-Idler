@@ -4,7 +4,7 @@ import { uid, Rng } from '../rng';
 import { clamp } from '../util';
 import { Tuning } from '../data/tuning';
 import { matchBonusForTier } from '../data/elements';
-import { isProceduralTemplate, rollProceduralItem, scaleChainExclusiveItem, LootSourceTag } from '../data/proceduralLoot';
+import { isProceduralTemplate, rollProceduralItem, scaleDedicatedItem, LootSourceTag } from '../data/proceduralLoot';
 
 export const MAX_PLUS = 10;
 
@@ -12,36 +12,36 @@ export const EquipmentManager = {
   /**
    * `roll`, if provided, is used to generate real mods/stats for a blank
    * procedural template (patch 0214) -- omitted entirely for hand-
-   * authored items (Sets, chain/raid capstone rewards, anything with its
-   * own populated mods/stats), which just instantiate exactly as before.
-   * A def that IS procedural but gets instantiated without a `roll`
-   * (e.g. a stray dev/test call) silently comes back with no mods/stats
-   * at all rather than crashing -- same "missing data degrades gracefully"
-   * convention the rest of this codebase already follows, though every
-   * real call site (QuestManager, RaidManager, chain rewards) always
-   * passes one.
+   * authored items with no roll info at all (e.g. an ordinary first-clear
+   * chain/raid reward grant, or a stray dev/test call), which just
+   * instantiate exactly as before, no scaling of any kind.
    *
-   * A second, narrower case (patch 0225, Replayable Quest Chains): a
-   * `chainExclusive` item is never isProceduralTemplate() (it has its
-   * own authored mods/stats by definition), so it falls through the
-   * branch above untouched for an ordinary first-clear grant -- correct,
-   * unchanged behavior. But when `roll.sourceTag` is specifically
-   * `'chainReplayHeroic'`/`'chainReplayLegendary'`, that IS a real
-   * instruction to scale the item, just via a different mechanism (see
-   * scaleChainExclusiveItem's own comment in proceduralLoot.ts for why
-   * this multiplies the def's own authored numbers rather than rolling
-   * from a blank budget). Deliberately does NOT set `rolledItemLevel` --
-   * gear relevance decay should fall back to `def.reqLevel` for this
-   * hand-authored item, same as every other authored item (Sets,
-   * craftables, an ordinary first-clear chain reward) already does.
+   * A second case (patch 0225, extended patch 0258 -- Dedicated Reward
+   * Level Scaling, see guild-idler-status.md): any hand-authored item
+   * (`!isProceduralTemplate` -- chainExclusive rewards AND ordinary raid
+   * Set pieces alike, extended from chainExclusive-only in patch 0258)
+   * gets real level-scaling when `roll.sourceTag` is one of the four
+   * Heroic/Legendary tags (`chainReplayHeroic/Legendary`,
+   * `raidHeroic/Legendary`) AND `roll.heroLevel` is provided -- see
+   * scaleDedicatedItem's own comment in proceduralLoot.ts for the full
+   * formula. `rolledItemLevel` IS now set to the hero's level at drop
+   * time (patch 0258 reversed the old "deliberately does NOT set" -- see
+   * that patch's own writeup for why leaving it unset was actively
+   * undermining the point of scaling the item up in the first place).
+   * Missing `roll.heroLevel` on an otherwise-eligible sourceTag falls
+   * through untouched rather than crashing, same "missing data degrades
+   * gracefully" convention as the procedural branch above -- every real
+   * call site (QuestManager's replay resolution, RaidManager's loot
+   * resolution) always passes one.
    */
   instantiate(defId: string, roll?: {
     itemLevel: number; sourceTag: LootSourceTag; rng: Rng;
-    weightedKey?: keyof Stats; weightMultiplier?: number;
+    weightedKey?: keyof Stats; weightMultiplier?: number; heroLevel?: number;
   }): EquipmentItem | null {
     const def = EQUIPMENT_BY_ID[defId];
     if (!def) return null;
     const item: EquipmentItem = { uid: uid('it'), defId, durability: def.maxDurability, plus: 0 };
+    const dedicatedTags: LootSourceTag[] = ['chainReplayHeroic', 'chainReplayLegendary', 'raidHeroic', 'raidLegendary'];
     if (roll && isProceduralTemplate(def)) {
       const result = rollProceduralItem(
         def.rarity, roll.itemLevel, roll.sourceTag, def.name, roll.rng, roll.weightedKey, roll.weightMultiplier,
@@ -53,11 +53,21 @@ export const EquipmentManager = {
       item.rolledStats = result.stats;
       item.proceduralName = result.displayName;
       item.rolledItemLevel = roll.itemLevel;
-    } else if (roll && def.chainExclusive && (roll.sourceTag === 'chainReplayHeroic' || roll.sourceTag === 'chainReplayLegendary')) {
-      const result = scaleChainExclusiveItem(def, roll.sourceTag);
-      item.customMods = result.customMods;
-      item.enchantStats = result.enchantStatsDelta;
+    } else if (roll && !isProceduralTemplate(def) && roll.heroLevel != null
+      && (dedicatedTags as string[]).includes(roll.sourceTag)) {
+      const result = scaleDedicatedItem(
+        def, roll.heroLevel,
+        roll.sourceTag as 'chainReplayHeroic' | 'chainReplayLegendary' | 'raidHeroic' | 'raidLegendary',
+      );
+      item.rolledStats = result.rolledStats;
+      // patch 0256/0257: def.mods on a hand-authored item is now only
+      // ever the preserved durability/health pair (or empty) -- writing
+      // the scaled version into customMods correctly REPLACES def.mods
+      // wholesale (HeroManager.equipmentMods reads `item.customMods ??
+      // def.mods`), same as a crafted item's mods already work.
+      if (Object.keys(result.mods).length > 0) item.customMods = result.mods;
       item.proceduralName = result.displayName;
+      item.rolledItemLevel = roll.heroLevel;
     }
     return item;
   },
@@ -287,14 +297,33 @@ export const EquipmentManager = {
    * Raises `item.rolledItemLevel` toward (never past) `heroLevel` --
    * `targetLevel` is clamped into [current rolledItemLevel, heroLevel]
    * so a caller can't accidentally re-level an item above the hero
-   * wearing it, or "re-level" it downward. No-op (with a reason) on a
-   * hand-authored item, which has no `rolledItemLevel` field to raise in
-   * the first place.
+   * wearing it, or "re-level" it downward.
+   *
+   * Patch 0258 (Dedicated Reward Level Scaling, see guild-idler-
+   * status.md): opened up to hand-authored items too, previously a
+   * flat no-op ("this item's power is fixed"). That restriction made
+   * sense back when hand-authored items had no `rolledItemLevel`
+   * concept at all -- patch 0258 gave dedicated Heroic/Legendary
+   * chain/raid drops a real one (see EquipmentManager.instantiate's
+   * own comment), and confirmed design is that those items are fixed
+   * at whatever level they DROPPED at rather than continuing to
+   * rescale live, so re-leveling here is the deliberate, paid
+   * alternative to farming a fresh higher-level drop -- exactly the
+   * design intent this function needed to actually support. Note this
+   * only ever raises `gearRelevance`'s multiplier back toward 1.0
+   * (undoing outleveled decay against whatever `rolledItemLevel`
+   * already is) -- it does NOT recompute a bigger stat budget the way
+   * a fresh drop does; there's no reroll-equivalent for a hand-
+   * authored item's fixed stat proportions. An ordinary Set piece that
+   * never had `rolledItemLevel` set at all (dropped at Normal, or any
+   * first-clear grant) can now also be re-leveled the exact same way,
+   * a deliberate side benefit -- previously EVERY hand-authored item
+   * had zero player agency against outleveled decay; this closes that
+   * gap for all of them, not just the new dedicated-scaling case.
    */
   relevel(state: GameState, item: EquipmentItem, targetLevel: number, heroLevel: number): string | null {
     const def = EQUIPMENT_BY_ID[item.defId];
     if (!def) return 'Unknown item.';
-    if (!isProceduralTemplate(def)) return 'This item\'s power is fixed -- nothing to re-level.';
     const current = item.rolledItemLevel ?? def.reqLevel;
     const clampedTarget = Math.max(current, Math.min(targetLevel, heroLevel));
     const levelsToRaise = clampedTarget - current;

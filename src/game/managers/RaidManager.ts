@@ -288,6 +288,15 @@ export const RaidManager = {
     // every encounter in the loop below reuses this single result rather
     // than re-deriving it per encounter.
     const roleMismatched = RaidManager.hasRoleMismatch(heroes, raid?.requiredRoles);
+    // Patch 0258 (Dedicated Reward Level Scaling, see guild-idler-
+    // status.md) -- the level a hand-authored Set-piece drop scales
+    // against. Party average, rounded, not each hero's own individual
+    // level: loot lands in the shared stash, not on a specific hero, so
+    // there's no single "whose level" to anchor to the way a chain
+    // replay (always one hero) naturally has.
+    const partyLevel = heroes.length > 0
+      ? Math.round(heroes.reduce((sum, h) => sum + h.level, 0) / heroes.length)
+      : 1;
 
     let encountersCleared = 0;
     let gold = 0;
@@ -328,14 +337,18 @@ export const RaidManager = {
         const def = EQUIPMENT_BY_ID[parsed.defId];
         // itemLevel comes from the raid's own fixed reqLevel (raids
         // aren't part of the reqLevel-roll rework -- see
-        // guild-idler-status.md's patch 0214 writeup), sourceTag maps
-        // Heroic/Legendary to their own budget multiplier + bracketed
-        // tag; Normal raid drops get neither (same as an ordinary
-        // Easy/Normal quest drop).
+        // guild-idler-status.md's patch 0214 writeup) and is what a
+        // PROCEDURAL raid drop's budget still uses, unchanged; a
+        // hand-authored Set piece ignores it in favor of `heroLevel`
+        // (patch 0258, see EquipmentManager.instantiate's own comment) --
+        // sourceTag maps Heroic/Legendary to their own budget multiplier
+        // + bracketed tag either way; Normal raid drops get neither
+        // (same as an ordinary Easy/Normal quest drop, and a Normal
+        // Set-piece drop stays at its own unscaled authored numbers).
         const raidSourceTag = active.difficulty === 'heroic' ? 'raidHeroic'
           : active.difficulty === 'legendary' ? 'raidLegendary' : 'normal';
         const item = EquipmentManager.instantiate(parsed.defId, {
-          itemLevel: raid?.reqLevel ?? 1, sourceTag: raidSourceTag, rng,
+          itemLevel: raid?.reqLevel ?? 1, sourceTag: raidSourceTag, rng, heroLevel: partyLevel,
         });
         if (!def || !item) continue;
         state.stash.push(item);

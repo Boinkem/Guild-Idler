@@ -4578,6 +4578,36 @@
     "description": "Multiplies a chain's own dedicated reward item's authored mods/stats when it drops from a Legendary replay."
   },
   {
+    "id": "chain_replay_dedicated.levelScaleBudgetMultiplier",
+    "label": "Chain Replay: dedicated item level-scale multiplier",
+    "category": "chain_replay_dedicated",
+    "value": 6,
+    "default": 6,
+    "min": 0,
+    "max": 20,
+    "description": "Patch 0258 (Dedicated Reward Level Scaling, see guild-idler-status.md). GEAR_SCORE_BY_RARITY[rarity] * this * levelFactor(heroLevel) recomputes a dedicated reward's total stat budget against the replaying hero's CURRENT level at drop time, rather than the chain's own original reqLevel -- the budget is then redistributed across the item's existing stat proportions (preserving its patch 0257 signature-stat lean), and the heroic/legendary multipliers above are applied on top of this, not instead of it. Set equal to equipment_authored's own effective multiplier (patch 0256) so a replay at exactly the chain's own reqLevel with no difficulty bonus reproduces roughly the item's original authored numbers -- verify against the Balance Sandbox before treating as final."
+  },
+  {
+    "id": "raid_dedicated.heroicMultiplier",
+    "label": "Raid Heroic: dedicated item stat multiplier",
+    "category": "raid_dedicated",
+    "value": 1.5,
+    "default": 1.5,
+    "min": 1,
+    "max": 3,
+    "description": "Patch 0258. Multiplies a raid's own hand-authored Set-piece drop (not procedural padding loot, which has its own loot_procedural.raidHeroicBudgetMultiplier) on top of its hero-level-scaled budget when it drops from a Heroic encounter. Matches loot_procedural.raidHeroicBudgetMultiplier's own value -- same premium raids already give procedural loot, now extended to raids' own named gear too."
+  },
+  {
+    "id": "raid_dedicated.legendaryMultiplier",
+    "label": "Raid Legendary: dedicated item stat multiplier",
+    "category": "raid_dedicated",
+    "value": 2.2,
+    "default": 2.2,
+    "min": 1,
+    "max": 4,
+    "description": "Patch 0258. Multiplies a raid's own hand-authored Set-piece drop (not procedural padding loot, which has its own loot_procedural.raidLegendaryBudgetMultiplier) on top of its hero-level-scaled budget when it drops from a Legendary encounter. Matches loot_procedural.raidLegendaryBudgetMultiplier's own value -- same premium raids already give procedural loot, now extended to raids' own named gear too."
+  },
+  {
     "id": "vendorRep.goldPerLevelBase",
     "label": "Vendor Rep: gold divisor",
     "category": "vendorRep",

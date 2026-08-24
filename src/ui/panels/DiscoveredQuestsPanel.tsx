@@ -6,7 +6,7 @@ import {
 import { QuestManager, CHAIN_BY_ID } from '../../game/managers/QuestManager';
 import { GuildManager } from '../../game/managers/GuildManager';
 import { CHAIN_REPLAY_TIERS, CHAIN_REPLAY_DIFFICULTIES, chainReplayTierForChain, chainReplayBandPercent } from '../../game/data/chainReplay';
-import { scaleChainExclusiveItem } from '../../game/data/proceduralLoot';
+import { scaleDedicatedItem } from '../../game/data/proceduralLoot';
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
 import { DIFFICULTIES, ChainDef } from '../../game/data/quests';
 import { Hero, ChainReplayDifficulty, ChainReplayTierDef, EquipmentDef } from '../../game/types';
@@ -646,9 +646,13 @@ function SagaItemDetailOverlay({ defId, onClose }: { defId: string; onClose: () 
  * The actual replay commit screen -- difficulty picker plus the loot
  * table view (Backlog's own requirement: "so people can see what they
  * are chasing"). The dedicated item's Heroic/Legendary rows are computed
- * live via scaleChainExclusiveItem -- a pure function, no rng needed for
- * a preview -- so this always matches exactly what a real drop would
- * roll, not a hand-maintained approximation of it.
+ * live via scaleDedicatedItem -- a pure function, no rng needed for a
+ * preview -- so this always matches exactly what a real drop would roll
+ * TODAY, at `hero`'s current level (patch 0258, Dedicated Reward Level
+ * Scaling -- see guild-idler-status.md). The preview updates naturally
+ * as the hero levels up between visits to this modal, same as the real
+ * drop would scale differently at a higher level -- nothing extra
+ * needed to keep it in sync, it's the same formula either way.
  */
 function ChainReplayDetailModal({
   chain, tier, hero, onClose,
@@ -708,9 +712,9 @@ function ChainReplayDetailModal({
               </div>
               {(['heroic', 'legendary'] as const).map((d) => {
                 const diffCfg = CHAIN_REPLAY_DIFFICULTIES[d];
-                const scaled = scaleChainExclusiveItem(dedicatedDef, d === 'heroic' ? 'chainReplayHeroic' : 'chainReplayLegendary');
-                const modLines = describeMods(scaled.customMods);
-                const statLines = describeStats(scaled.enchantStatsDelta);
+                const scaled = scaleDedicatedItem(dedicatedDef, hero.level, d === 'heroic' ? 'chainReplayHeroic' : 'chainReplayLegendary');
+                const modLines = describeMods(scaled.mods);
+                const statLines = describeStats(scaled.rolledStats, true);
                 return (
                   <div key={d} className="row spread" style={{ padding: '4px 0', alignItems: 'flex-start' }}>
                     <span className="row" style={{ gap: 6, alignItems: 'center' }}>

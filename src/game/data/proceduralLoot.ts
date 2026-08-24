@@ -50,7 +50,7 @@ import { Tuning } from './tuning';
  *  though the underlying mechanism is identical -- see their own
  *  comments below for why. The chain's own *dedicated* reward item is a
  *  different, deliberately non-procedural mechanism entirely (see
- *  scaleChainExclusiveItem below) -- these two tags never reach that
+ *  scaleDedicatedItem below) -- these two tags never reach that
  *  path, since dedicated rewards are chainExclusive and therefore never
  *  isProceduralTemplate() in the first place. */
 export type LootSourceTag =
@@ -202,81 +202,111 @@ export function isProceduralTemplate(def: { mods?: Partial<Modifiers>; stats?: P
   return !hasMods && !hasStats;
 }
 
-export interface ChainExclusiveScale {
-  /** The item's FULL scaled mods, meant to fully replace def.mods, not
-   *  add to it -- see this function's own comment for why mods and
-   *  stats need different treatment here. */
-  customMods: Partial<Modifiers>;
-  /** Only the DELTA above def.stats (scaledValue - baseValue), meant to
-   *  be added on top, not the full scaled total -- see this function's
-   *  own comment. */
-  enchantStatsDelta: Partial<Stats>;
+export interface DedicatedItemScale {
+  /** The item's full scaled stats, meant to fully replace item.rolledStats
+   *  (not def.stats, which stays the item's own unscaled authored
+   *  baseline) -- writes to `rolledStats`, the same field patch 0255 gave
+   *  procedural rolls, never `enchantStats` (that field is Armour
+   *  Infusion's own additive purchases -- see rolledStats' own comment in
+   *  types.ts). Pre-0258 this wrote a delta into `enchantStats`, sharing
+   *  the exact hazard patch 0255 fixed for procedural rolls but left
+   *  alone here at the time (out of scope then); fixed now while this
+   *  function is being rebuilt anyway. */
+  rolledStats: Partial<Stats>;
+  /** Preserved-only mods (durability/health -- see patch 0256's own
+   *  writeup for why these two specifically never converted to Stats),
+   *  scaled by the same ratio as rolledStats so a bigger drop's
+   *  durability/health grows with it rather than staying frozen at the
+   *  item's original authored size. */
+  mods: Partial<Modifiers>;
   displayName: string;
 }
 
 /**
- * Scales an already-authored `chainExclusive` item's own mods/stats for
- * a Heroic/Legendary chain replay drop -- the dedicated-item counterpart
- * to rollProceduralItem above, but a genuinely different mechanism, not
- * a variant of it. `chainExclusive` rewards are permanently exempt from
- * procedural generation (isProceduralTemplate() is false for them by
- * construction), so there's no "blank budget" to roll from the way a
- * padding item has -- this instead multiplies the item's own real,
- * hand-authored numbers, the same category Sets are in, but with new
- * tier variants specifically for this one feature (confirmed decision:
- * NOT reviving the hand-duplicated-item pattern patch 0214 deleted 84
- * of; this multiplies the SAME def's numbers at drop time instead of
- * reading a separate `_heroic`/`_legendary` def).
+ * Scales an already-authored hand-authored item's (chainExclusive
+ * reward OR ordinary raid Set piece) stats for a Heroic/Legendary drop
+ * -- the dedicated-item counterpart to rollProceduralItem above, but a
+ * genuinely different mechanism, not a variant of it.
  *
- * Multiplier values come from real precedent, not invented: comparing
- * `knights_blade` (a padding item) and `gravewatchers_band` (a dedicated
- * reward item, the same category this function scales) against their
- * own pre-0214 hand-authored Heroic/Legendary tiers independently
- * converged on the same range -- roughly +20-33% at Heroic, a further
- * +25-35% on top at Legendary (~+60-75% cumulative). Deliberately
- * distinct tuning ids from loot_procedural's budget multipliers above --
- * this scales an authored item's actual numbers directly, not a rarity-
- * based budget, so the same numeric range needed its own category rather
- * than reusing those.
+ * Patch 0258 (Dedicated Reward Level Scaling, see guild-idler-status.md)
+ * rework: previously this only multiplied the item's own fixed authored
+ * numbers by a flat per-tier multiplier, blind to the hero's actual
+ * level -- a level-50 hero replaying a level-5 chain on Legendary got
+ * the same tiny item a level-6 hero would on first clear (`itemLevel`
+ * was passed as the CHAIN's own reqLevel, and `rolledItemLevel` was
+ * deliberately never set, so gear_relevance decay applied against that
+ * same low number forever after). Now recomputes a fresh stat BUDGET
+ * against the hero's current level, the same `GEAR_SCORE_BY_RARITY *
+ * multiplier * levelFactor` shape rollProceduralItem/patch 0256's
+ * item-re-author already use, then redistributes that budget across the
+ * item's EXISTING stat proportions -- so `wardens_signet` stays an
+ * Endurance/Luck ring (its patch 0257 signature-stat lean, preserved
+ * exactly), just a correspondingly bigger one at level 50 than at its
+ * own level 16. The heroic/legendary multiplier stacks ON TOP of this
+ * level-scaled budget, not instead of it -- direct answer to "should
+ * this scale to hero level or difficulty tier": both, stacked.
  *
- * **Mods vs Stats need different treatment, matching how
- * HeroManager.equipmentMods/equipmentStats already combine an item's def
- * with its EquipmentItem overrides**: equipmentMods does
- * `item.customMods ?? def.mods` (customMods, if set, REPLACES def.mods
- * entirely) while equipmentStats does `def.stats + item.enchantStats`
- * (enchantStats ADDS on top of def.stats). So `customMods` here carries
- * the item's full scaled mod total (correct for a full replacement), but
- * `enchantStatsDelta` carries only the difference above the def's own
- * base stats (correct for an additive field) -- setting the full scaled
- * stat total into enchantStats would double-count def.stats underneath
- * it.
+ * Extended from chainExclusive-only to any hand-authored item
+ * (`!isProceduralTemplate`), since raid Set pieces had literally no
+ * scaling mechanism before this patch, not even the old flat
+ * multiplier chains had -- see EquipmentManager.instantiate's own
+ * comment for the branch condition. `raid_dedicated`'s own multiplier
+ * pair (1.5/2.2) matches loot_procedural's existing raidHeroic/
+ * raidLegendaryBudgetMultiplier values rather than reusing chain
+ * replay's (1.3/1.7) -- raids were already the more generously-tuned
+ * content family for procedural loot, so their own named gear follows
+ * that same existing premium rather than a fresh number.
+ *
+ * Deliberately NOT set to keep re-scaling live as the hero levels
+ * further -- confirmed design: an item is fixed at whatever level it
+ * dropped at (via `rolledItemLevel`, set by the caller), same as any
+ * other piece of gear. A player who wants it to keep pace either pays
+ * to re-level it at the Blacksmith (now open to hand-authored items
+ * too, see EquipmentManager.relevel's own comment) or farms a fresh,
+ * higher-level drop.
  *
  * No Fortunate/Charmed bonus roll here, unlike rollProceduralItem --
- * these are already unique, named story rewards; a random bonus prefix
- * on top would read as redundant rather than exciting, so this
+ * these are already unique, named story/raid rewards; a random bonus
+ * prefix on top would read as redundant rather than exciting, so this
  * deliberately doesn't offer one.
  */
-export function scaleChainExclusiveItem(
-  def: { name: string; mods?: Partial<Modifiers>; stats?: Partial<Stats> },
-  sourceTag: 'chainReplayHeroic' | 'chainReplayLegendary',
-): ChainExclusiveScale {
-  const multiplier = sourceTag === 'chainReplayHeroic'
-    ? Tuning.get('chain_replay_dedicated.heroicMultiplier')
-    : Tuning.get('chain_replay_dedicated.legendaryMultiplier');
+export function scaleDedicatedItem(
+  def: { name: string; rarity: Rarity; mods?: Partial<Modifiers>; stats?: Partial<Stats> },
+  heroLevel: number,
+  sourceTag: 'chainReplayHeroic' | 'chainReplayLegendary' | 'raidHeroic' | 'raidLegendary',
+): DedicatedItemScale {
+  const isRaid = sourceTag === 'raidHeroic' || sourceTag === 'raidLegendary';
+  const isLegendaryTier = sourceTag === 'chainReplayLegendary' || sourceTag === 'raidLegendary';
+  const tierMultiplier = isRaid
+    ? Tuning.get(isLegendaryTier ? 'raid_dedicated.legendaryMultiplier' : 'raid_dedicated.heroicMultiplier')
+    : Tuning.get(isLegendaryTier ? 'chain_replay_dedicated.legendaryMultiplier' : 'chain_replay_dedicated.heroicMultiplier');
 
-  const customMods: Partial<Modifiers> = {};
-  for (const [key, value] of Object.entries(def.mods ?? {}) as [keyof Modifiers, number][]) {
-    customMods[key] = Math.round(value * multiplier);
-  }
+  const originalStats = def.stats ?? {};
+  const originalTotal = Object.values(originalStats).reduce((a, b) => a + b, 0);
+  const levelBudget = GEAR_SCORE_BY_RARITY[def.rarity]
+    * Tuning.get('chain_replay_dedicated.levelScaleBudgetMultiplier')
+    * levelFactor(heroLevel);
+  const scaledBudget = levelBudget * tierMultiplier;
 
-  const enchantStatsDelta: Partial<Stats> = {};
-  for (const [key, value] of Object.entries(def.stats ?? {}) as [keyof Stats, number][]) {
-    enchantStatsDelta[key] = Math.round(value * multiplier) - value;
+  const rolledStats: Partial<Stats> = {};
+  const mods: Partial<Modifiers> = {};
+  if (originalTotal > 0) {
+    for (const [key, value] of Object.entries(originalStats) as [keyof Stats, number][]) {
+      rolledStats[key] = Math.max(1, Math.round(scaledBudget * (value / originalTotal)));
+    }
+    // durability/health (the two preserved mod keys post-0256) scale by
+    // the item's overall budget growth ratio, not the flat tier
+    // multiplier alone -- a level-50 drop's Health bonus should grow
+    // with the rest of the item, not stay frozen at its level-25 size.
+    const growthRatio = scaledBudget / originalTotal;
+    for (const [key, value] of Object.entries(def.mods ?? {}) as [keyof Modifiers, number][]) {
+      mods[key] = Math.max(1, Math.round(value * growthRatio));
+    }
   }
 
   const tagLabel = sourceTagLabel(sourceTag);
   const displayName = tagLabel ? `${def.name} [${tagLabel}]` : def.name;
 
-  return { customMods, enchantStatsDelta, displayName };
+  return { rolledStats, mods, displayName };
 }
 

@@ -1264,7 +1264,7 @@ export const QuestManager = {
               const item = EquipmentManager.instantiate(dedicatedId, {
                 itemLevel: chain.reqLevel,
                 sourceTag: difficulty === 'heroic' ? 'chainReplayHeroic' : 'chainReplayLegendary',
-                rng,
+                rng, heroLevel: hero?.level,
               });
               if (item && dedicatedDef) {
                 state.stash.push(item);

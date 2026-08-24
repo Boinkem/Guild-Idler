@@ -20243,3 +20243,124 @@ new `equipment.json` -- pure data change, same as patch 0256, no
 TS/logic files touched. Set pieces (68) and procedural blank templates
 (34) are untouched by this patch -- confirmed via diff, only the 39
 `chainExclusive` entries changed.
+
+### Dedicated Reward Level Scaling: chain/raid unique drops now scale to hero level (patch 0258)
+
+```discord-update
+Dev Update | Dedicated Reward Level Scaling
+- Changed: chain and raid unique reward items (Replay Memories drops and raid Set-piece drops) now scale up based on the hero's/party's current level, not the chain or raid's original level -- a Legendary replay of an early chain is worth chasing again at max level
+- Changed: raid Set pieces now get a real Heroic/Legendary power bump for the first time -- previously only chain rewards had this
+- Changed: chain/raid unique items can now be re-leveled at the Blacksmith like any other gear, instead of being permanently locked to their drop level
+- Note: an item is fixed at whatever level it drops at -- level up further and it'll fall behind again unless you re-level it or farm a fresh drop
+```
+
+Direct follow-up to the "is it feasible to uplift Replay Memories into a
+real scaling chase-loot system" question. Two real gaps, found by tracing
+the code rather than assumed, both closed by this patch:
+
+**Chain-exclusive drops scaled by a flat per-tier multiplier only,
+totally blind to hero level.** `scaleChainExclusiveItem` (patch 0225)
+multiplied an item's own fixed authored numbers by 1.3x (Heroic) or
+1.7x (Legendary) -- a level-50 hero replaying a level-5 chain on
+Legendary got the exact same item a level-6 hero would receive on
+first clear, because `itemLevel` was passed as the *chain's own*
+reqLevel and `rolledItemLevel` was deliberately never set on the
+result (the old comment said so explicitly: gear relevance decay
+should fall back to `def.reqLevel`). That's the root cause behind the
+low-budget trinket items flagged two patches ago -- no scaling
+mechanism existed to ever make them feel different at a higher level.
+
+**Raid Set pieces had NO scaling mechanism at all, not even the flat
+one chains had.** Confirmed directly in `RaidManager.ts`: raid loot
+resolution passes every drop through `EquipmentManager.instantiate`,
+but the old chainExclusive-only scaling branch never fired for an
+ordinary Set piece (Blackford, Bonewrought, Wyrmkeep, etc. -- none of
+them are `chainExclusive`). The `raidHeroic`/`raidLegendary` budget
+multipliers that already exist only ever applied to that raid's
+*procedural* padding loot, never its own named gear.
+
+**Both fixed with one mechanism.** `scaleDedicatedItem` (`proceduralLoot.ts`,
+replaces `scaleChainExclusiveItem`) now recomputes a fresh stat BUDGET
+against the hero's/party's CURRENT level -- `GEAR_SCORE_BY_RARITY[rarity]
+* chain_replay_dedicated.levelScaleBudgetMultiplier(6) *
+levelFactor(heroLevel)`, the exact same shape rollProceduralItem and
+patch 0256's item-re-author already use -- then redistributes that
+budget across the item's EXISTING stat proportions, so `wardens_signet`
+stays the Endurance/Luck ring patch 0257 made it (its signature-stat
+lean is preserved exactly, never randomized), just correspondingly
+bigger at level 55 than at its own level 16. The heroic/legendary
+multiplier (1.3x/1.7x for chains, unchanged; new 1.5x/2.2x for raids --
+matching `loot_procedural.raidHeroic/LegendaryBudgetMultiplier`'s own
+existing values, since raids were already the more generously-tuned
+content family) stacks ON TOP of this level-scaled budget, not instead
+of it -- direct answer to "hero level or difficulty tier": both,
+stacked, as asked. `durability`/`health` (the preserved mod pair from
+patch 0256) scale by the same budget-growth ratio so they grow with
+the rest of the item rather than staying frozen at drop-day size.
+
+**`EquipmentManager.instantiate`'s scaling branch widened from
+`def.chainExclusive` to `!isProceduralTemplate(def)`** -- any
+hand-authored item, chain-exclusive or ordinary raid Set piece alike,
+now gets this treatment whenever `roll.sourceTag` is one of the four
+Heroic/Legendary tags and `roll.heroLevel` is provided. `rolledItemLevel`
+IS now set on the result (reversing patch 0225's old "deliberately does
+NOT set" decision) -- leaving it unset was actively undermining the
+whole point of scaling the item up, since `equipmentStats`'s gear-
+relevance decay would otherwise keep measuring it against the chain/
+raid's own original low level forever after.
+
+**Fixed at drop time, not live -- confirmed design.** An item scales
+once, when it drops, using the hero's/party's level at that moment.
+Leveling further afterward lets it fall behind again exactly like any
+other piece of gear (`gear_relevance.floor` decay applies normally),
+rather than silently staying current forever. The two ways to keep
+pace: re-level it, or farm a fresh, higher-level drop.
+
+**`EquipmentManager.relevel()` opened up to hand-authored items,**
+previously a flat no-op ("this item's power is fixed"). That
+restriction only made sense while hand-authored items had no
+`rolledItemLevel` concept at all -- this patch gives dedicated
+Heroic/Legendary drops a real one, so re-leveling needed to actually
+work on them to be the alternative to farming a fresh drop the design
+calls for. Only ever raises `gearRelevance`'s multiplier back toward
+1.0 (undoing outleveled decay) -- it does NOT recompute a bigger stat
+budget the way a fresh drop does; there's no reroll-equivalent for a
+hand-authored item's fixed proportions, and `CraftingManager.reroll`
+deliberately stays procedural-only (randomizing a hand-authored item's
+intentional signature-stat lean would undermine patch 0257's whole
+point). Side benefit, not scope creep: an ordinary Set piece that never
+had `rolledItemLevel` set at all (a ordinary Normal-tier drop, or any
+first-clear grant) can now also be re-leveled the same way -- previously
+every hand-authored item had zero player agency against outleveled
+decay, not just the newly-scaled ones.
+
+**`raid_dedicated.heroicMultiplier`/`legendaryMultiplier` (new Tuning
+category, 1.5/2.2)** and **`chain_replay_dedicated.levelScaleBudgetMultiplier`
+(new, 6)** added. `chain_replay_dedicated.heroicMultiplier`/
+`legendaryMultiplier` (1.3/1.7) unchanged, now layered on top of a
+level-scaled budget instead of a fixed one.
+
+**`DiscoveredQuestsPanel.tsx`'s Replay Memories preview updated to
+match** -- the "chase" preview in the chain replay detail modal was
+calling the old function directly (a pure preview, no rng needed) to
+show exactly what a Heroic/Legendary drop would look like before
+committing. Now passes the viewing hero's own current level, so the
+preview always matches what a real drop would actually roll today, and
+naturally updates as that hero levels up between visits -- same formula
+either way, nothing hand-synced.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. No live runtime/gameplay test this
+pass -- same caveat every patch in this series has carried, flagged
+rather than silently assumed fine; worth a real playtest pass checking
+a Legendary replay of an early chain and a Legendary raid Set-piece
+drop at a high hero level specifically, since those are the two cases
+this patch exists for.
+
+**Explicitly out of scope, confirmed:** ordinary *procedural* padding
+loot from a chain replay or raid encounter is untouched -- its own
+`loot_procedural.raidHeroic/LegendaryBudgetMultiplier` and
+`chainReplayHeroic/LegendaryBudgetMultiplier` already scale correctly
+by itemLevel (patch 0214/0215), this patch only ever touches the
+hand-authored dedicated-item path. `CraftingManager.reroll` and the
+107-item content itself (patch 0256/0257) are untouched.
