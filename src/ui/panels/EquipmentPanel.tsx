@@ -680,7 +680,7 @@ function SlotCard({
                 {def.craftable && <CraftedPill />}
               </div>
               {(() => {
-                const modLines = describeMods(item.customMods ?? def.mods);
+                const modLines = describeMods(item.customMods ?? def.mods ?? {});
                 // patch 0255: a procedural roll or Guildmade/Masterwork craft's
                 // real power lives in item.rolledStats now (all-stats rework,
                 // see guild-idler-status.md) -- folded into the same bonuses
@@ -791,7 +791,7 @@ function StashCard({
                 {item.locked && <LockedPill />}
               </div>
               {(() => {
-                const modLines = describeMods(item.customMods ?? def.mods);
+                const modLines = describeMods(item.customMods ?? def.mods ?? {});
                 // patch 0255: a procedural roll or Guildmade/Masterwork craft's
                 // real power lives in item.rolledStats now (all-stats rework,
                 // see guild-idler-status.md) -- folded into the same bonuses

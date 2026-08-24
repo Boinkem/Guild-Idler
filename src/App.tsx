@@ -21,6 +21,24 @@ export type ViewMode = 'idle' | 'menu';
 export function App() {
   const [engine, setEngine] = useState<GameEngine | null>(null);
   const [mode, setMode] = useState<ViewMode>('idle');
+  // Surfaces a real boot-time failure instead of hanging silently on
+  // "Waking the knight..." forever -- previously an uncaught exception
+  // anywhere inside GameEngine.boot() (past SaveManager.load's own safe
+  // try/catch -- catchUpOffline, refreshWorld, start are not wrapped)
+  // rejected this promise with no .catch() anywhere in the chain, so
+  // `engine` just stayed null with no visible error and no console
+  // signal beyond an easy-to-miss "Uncaught (in promise)" line. Real
+  // example that hit this exact gap: patch 0255 stopped setting
+  // item.customMods on procedural drops, and HeroManager.equipmentMods's
+  // `item.customMods ?? def.mods` fell through to undefined for any
+  // procedural/crafted item with no def.mods of its own -- crashed
+  // inside catchUpOffline's regenHealth->maxHealth->equipmentMods chain
+  // on the very first boot after that patch, for any save with one of
+  // those equipped. That specific bug is fixed at its own source (see
+  // guild-idler-status.md's patch 0260 writeup) -- this is the general
+  // safety net so the NEXT unrelated boot-time bug fails loud, not
+  // silent.
+  const [bootError, setBootError] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -29,6 +47,9 @@ export function App() {
       if (!live) return instance.stop();
       created = instance;
       setEngine(instance);
+    }).catch((err: unknown) => {
+      console.error('Boot failed:', err);
+      if (live) setBootError(err instanceof Error ? err.message : String(err));
     });
     return () => {
       live = false;
@@ -103,6 +124,15 @@ export function App() {
     return window.littleKnight?.onRequestFlushSave(() => engine.saveNow());
   }, [engine]);
 
+  if (bootError) {
+    return (
+      <div className="loading">
+        <div>Something went wrong waking the knight.</div>
+        <div className="tiny muted" style={{ marginTop: 8, maxWidth: 420 }}>{bootError}</div>
+        <div className="tiny muted" style={{ marginTop: 8 }}>Check the console for the full stack trace.</div>
+      </div>
+    );
+  }
   if (!engine) return <div className="loading">Waking the knight…</div>;
 
   return (

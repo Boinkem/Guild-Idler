@@ -544,7 +544,7 @@ export const HeroManager = {
       const relevance = HeroManager.gearRelevance(item.rolledItemLevel ?? def.reqLevel, hero.level);
       // Crafted items carry their own chosen mods (EquipmentItem.customMods)
       // instead of the def's -- see that field's own comment in types.ts.
-      sources.push(scaleMods(item.customMods ?? def.mods, (1 + item.plus * 0.15) * relevance));
+      sources.push(scaleMods(item.customMods ?? def.mods ?? {}, (1 + item.plus * 0.15) * relevance));
       if (def.setId) {
         setCounts[def.setId] = (setCounts[def.setId] ?? 0) + 1;
         (setRelevance[def.setId] ??= []).push(relevance);

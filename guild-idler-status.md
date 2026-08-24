@@ -20434,3 +20434,93 @@ cases this patch exists to fix.
 offers (`rollReqLevel` already keeps `reqLevel` close to `hero.level`,
 so this bug never applied to them) and a raid/chain's own gold/XP
 payouts (still keyed off the content's original reqLevel, untouched).
+
+### Bug Fix: boot crash on any equipped procedural/crafted item (patch 0260)
+
+```discord-update
+Dev Update | Bug Fix
+- Fixed: the game could get stuck on "Waking the knight..." forever if a hero had certain gear equipped -- a real crash introduced by the gear itemization rework, now fixed
+- Fixed: boot-time errors now show an actual error screen instead of hanging silently, so this class of bug is loud instead of invisible next time
+```
+
+Reported directly: game stuck on the boot loading screen indefinitely,
+surviving `npm run dev` restarts. DevTools console gave the exact crash
+on the first try:
+
+```
+Uncaught (in promise) TypeError: Cannot convert undefined or null to object
+    at Function.keys (<anonymous>)
+    at scaleMods (util.ts:45:28)
+    at Object.equipmentMods (HeroManager.ts:547:20)
+    at Object.maxHealth (HeroManager.ts:337:35)
+    at Object.regenHealth (HeroManager.ts:398:29)
+    at GameEngine.catchUpOffline (engine.ts:861:21)
+    at GameEngine.boot (engine.ts:183:24)
+```
+
+**Root cause: a real regression from patch 0255, missed because it only
+shows up with live game state, not static analysis.** `HeroManager.
+equipmentMods` builds each equipped item's mod contribution from
+`item.customMods ?? def.mods`. Before patch 0255, a procedural roll
+*always* set `item.customMods` (even to `{}` if nothing landed on a
+Modifier that roll) -- never `undefined`. Patch 0255 (all-stats rework)
+removed that assignment entirely for procedural drops, since Modifiers
+were retired from the roll pool -- but never touched this read site.
+For any procedural or Guildmade/Masterwork-crafted item with no
+`def.mods` of its own (the normal case post-0255/0256 -- `def.mods` is
+either removed entirely or holds only the preserved durability/health
+pair), `item.customMods ?? def.mods` evaluated to `undefined`, and
+`scaleMods(undefined, ...)`'s `Object.keys(undefined)` threw. `npx tsc
+--noEmit` and `npx vite build` both passed clean at every prior patch
+in this series because this path is only exercised by an actual hero
+with actual equipped gear at runtime -- a save file, not a type check.
+Confirmed exactly why the game hung rather than erroring visibly:
+`GameEngine.boot()`'s promise chain in `App.tsx` had no `.catch()`
+anywhere, so this exception rejected `boot()` silently -- `engine`
+stayed `null` forever, `Waking the knight...` never resolved, and
+restarting `npm run dev` never helped since the crash reproduces on
+every single boot for any save with the gear equipped, not a one-off
+timing issue.
+
+**Fixed at every site that had the same gap, not just the one that
+crashed.** A search for the same `?? def.mods`/`?? def.stats` pattern
+turned up three more places with the identical latent bug, not yet hit
+only because they're UI-only code paths the player hadn't opened yet --
+`EquipmentPanel.tsx` (both card and modal bonus lines) and
+`CraftingStation.tsx`'s crafting preview, all building their display
+via `describeMods(item.customMods ?? def.mods)`. `describeMods`/
+`describeStats` had the same problem one level deeper too:
+`mods[key] ?? 0` still throws if `mods` itself is `undefined` --
+property access on `undefined` fails before the `??` can apply.
+`scaleMods`/`describeMods`/`describeStats` (all in `util.ts`) hardened
+to treat a missing mods/stats object as empty rather than throwing, and
+all four call sites also fixed directly at the source (`?? def.mods ??
+{}`) -- belt and suspenders, since a future call site with the same gap
+shouldn't have to rediscover this from a stack trace again.
+
+**`App.tsx`'s boot chain now has a real `.catch()`.** Independent of
+the specific bug above -- any *future* uncaught exception during
+`GameEngine.boot()` (past `SaveManager.load`'s own safe try/catch;
+`catchUpOffline`/`refreshWorld`/`start` are not wrapped) now surfaces a
+visible error screen with the message and a "check the console" hint,
+logged via `console.error` too, instead of hanging on "Waking the
+knight..." forever with no visible signal beyond an easy-to-miss
+"Uncaught (in promise)" console line. This is the general safety net;
+it doesn't replace fixing the actual bug above, which is fixed at its
+own source.
+
+**Verified:** the exact crash shape (`scaleMods`/`describeMods` called
+with the same double-`undefined` input the stack trace showed) no
+longer throws, checked directly against the fixed functions rather
+than just re-running `tsc`. `npx tsc --noEmit` and `npx vite build
+--config vite.web.config.ts` both pass clean.
+
+**A process gap worth naming plainly: this patch series verified via
+type-checking and bundling only, never live gameplay, every single
+time.** Every prior writeup in this series flagged that explicitly as a
+caveat rather than a claim of correctness -- this is the caveat
+cashing in. `Object.values(hero.equipment)`/`equipmentMods` is a path
+that only runs against real save data with real equipped gear, and
+nothing in the patch workflow so far has had a way to exercise that.
+Worth a real playtest pass across 0255-0259 now that boot itself is
+unblocked, not just this one crash site.

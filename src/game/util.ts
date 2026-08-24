@@ -40,8 +40,9 @@ export function sumMods(...sources: Partial<Modifiers>[]): Modifiers {
   return total;
 }
 
-export function scaleMods(mods: Partial<Modifiers>, factor: number): Partial<Modifiers> {
+export function scaleMods(mods: Partial<Modifiers> | undefined, factor: number): Partial<Modifiers> {
   const out: Partial<Modifiers> = {};
+  if (!mods) return out;
   for (const key of Object.keys(mods) as (keyof Modifiers)[]) {
     out[key] = (mods[key] ?? 0) * factor;
   }
@@ -159,10 +160,11 @@ function formatModValue(key: keyof Modifiers, value: number): string {
   return pct(value);
 }
 
-export function describeMods(mods: Partial<Modifiers>): string[] {
+export function describeMods(mods: Partial<Modifiers> | undefined): string[] {
+  const safe = mods ?? {};
   return (Object.keys(MOD_LABEL) as (keyof Modifiers)[])
-    .filter((key) => (mods[key] ?? 0) !== 0)
-    .map((key) => `${MOD_LABEL[key]} ${formatModValue(key, mods[key] ?? 0)}`);
+    .filter((key) => (safe[key] ?? 0) !== 0)
+    .map((key) => `${MOD_LABEL[key]} ${formatModValue(key, safe[key] ?? 0)}`);
 }
 
 export const STAT_LABEL: Record<keyof Stats, string> = {
@@ -228,8 +230,9 @@ export const MAIN_STAT_TOOLTIP = 'Strength for Melee heroes, Intellect for Caste
  *  of the Crafting/Enchanting flow this was built for) keeps its current
  *  literal "Strength" unless it deliberately asks for the Main Stat
  *  treatment. */
-export function describeStats(stats: Partial<Stats>, useMainStatLabel = false): string[] {
+export function describeStats(stats: Partial<Stats> | undefined, useMainStatLabel = false): string[] {
+  const safe = stats ?? {};
   return (Object.keys(STAT_LABEL) as (keyof Stats)[])
-    .filter((key) => (stats[key] ?? 0) !== 0)
-    .map((key) => `${useMainStatLabel ? craftingStatLabel(key) : STAT_LABEL[key]} +${stats[key]}`);
+    .filter((key) => (safe[key] ?? 0) !== 0)
+    .map((key) => `${useMainStatLabel ? craftingStatLabel(key) : STAT_LABEL[key]} +${safe[key]}`);
 }

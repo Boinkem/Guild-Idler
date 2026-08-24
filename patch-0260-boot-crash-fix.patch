@@ -1,0 +1,244 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index ca6dc64..955bc9d 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -20434,3 +20434,93 @@ cases this patch exists to fix.
+ offers (`rollReqLevel` already keeps `reqLevel` close to `hero.level`,
+ so this bug never applied to them) and a raid/chain's own gold/XP
+ payouts (still keyed off the content's original reqLevel, untouched).
++
++### Bug Fix: boot crash on any equipped procedural/crafted item (patch 0260)
++
++```discord-update
++Dev Update | Bug Fix
++- Fixed: the game could get stuck on "Waking the knight..." forever if a hero had certain gear equipped -- a real crash introduced by the gear itemization rework, now fixed
++- Fixed: boot-time errors now show an actual error screen instead of hanging silently, so this class of bug is loud instead of invisible next time
++```
++
++Reported directly: game stuck on the boot loading screen indefinitely,
++surviving `npm run dev` restarts. DevTools console gave the exact crash
++on the first try:
++
++```
++Uncaught (in promise) TypeError: Cannot convert undefined or null to object
++    at Function.keys (<anonymous>)
++    at scaleMods (util.ts:45:28)
++    at Object.equipmentMods (HeroManager.ts:547:20)
++    at Object.maxHealth (HeroManager.ts:337:35)
++    at Object.regenHealth (HeroManager.ts:398:29)
++    at GameEngine.catchUpOffline (engine.ts:861:21)
++    at GameEngine.boot (engine.ts:183:24)
++```
++
++**Root cause: a real regression from patch 0255, missed because it only
++shows up with live game state, not static analysis.** `HeroManager.
++equipmentMods` builds each equipped item's mod contribution from
++`item.customMods ?? def.mods`. Before patch 0255, a procedural roll
++*always* set `item.customMods` (even to `{}` if nothing landed on a
++Modifier that roll) -- never `undefined`. Patch 0255 (all-stats rework)
++removed that assignment entirely for procedural drops, since Modifiers
++were retired from the roll pool -- but never touched this read site.
++For any procedural or Guildmade/Masterwork-crafted item with no
++`def.mods` of its own (the normal case post-0255/0256 -- `def.mods` is
++either removed entirely or holds only the preserved durability/health
++pair), `item.customMods ?? def.mods` evaluated to `undefined`, and
++`scaleMods(undefined, ...)`'s `Object.keys(undefined)` threw. `npx tsc
++--noEmit` and `npx vite build` both passed clean at every prior patch
++in this series because this path is only exercised by an actual hero
++with actual equipped gear at runtime -- a save file, not a type check.
++Confirmed exactly why the game hung rather than erroring visibly:
++`GameEngine.boot()`'s promise chain in `App.tsx` had no `.catch()`
++anywhere, so this exception rejected `boot()` silently -- `engine`
++stayed `null` forever, `Waking the knight...` never resolved, and
++restarting `npm run dev` never helped since the crash reproduces on
++every single boot for any save with the gear equipped, not a one-off
++timing issue.
++
++**Fixed at every site that had the same gap, not just the one that
++crashed.** A search for the same `?? def.mods`/`?? def.stats` pattern
++turned up three more places with the identical latent bug, not yet hit
++only because they're UI-only code paths the player hadn't opened yet --
++`EquipmentPanel.tsx` (both card and modal bonus lines) and
++`CraftingStation.tsx`'s crafting preview, all building their display
++via `describeMods(item.customMods ?? def.mods)`. `describeMods`/
++`describeStats` had the same problem one level deeper too:
++`mods[key] ?? 0` still throws if `mods` itself is `undefined` --
++property access on `undefined` fails before the `??` can apply.
++`scaleMods`/`describeMods`/`describeStats` (all in `util.ts`) hardened
++to treat a missing mods/stats object as empty rather than throwing, and
++all four call sites also fixed directly at the source (`?? def.mods ??
++{}`) -- belt and suspenders, since a future call site with the same gap
++shouldn't have to rediscover this from a stack trace again.
++
++**`App.tsx`'s boot chain now has a real `.catch()`.** Independent of
++the specific bug above -- any *future* uncaught exception during
++`GameEngine.boot()` (past `SaveManager.load`'s own safe try/catch;
++`catchUpOffline`/`refreshWorld`/`start` are not wrapped) now surfaces a
++visible error screen with the message and a "check the console" hint,
++logged via `console.error` too, instead of hanging on "Waking the
++knight..." forever with no visible signal beyond an easy-to-miss
++"Uncaught (in promise)" console line. This is the general safety net;
++it doesn't replace fixing the actual bug above, which is fixed at its
++own source.
++
++**Verified:** the exact crash shape (`scaleMods`/`describeMods` called
++with the same double-`undefined` input the stack trace showed) no
++longer throws, checked directly against the fixed functions rather
++than just re-running `tsc`. `npx tsc --noEmit` and `npx vite build
++--config vite.web.config.ts` both pass clean.
++
++**A process gap worth naming plainly: this patch series verified via
++type-checking and bundling only, never live gameplay, every single
++time.** Every prior writeup in this series flagged that explicitly as a
++caveat rather than a claim of correctness -- this is the caveat
++cashing in. `Object.values(hero.equipment)`/`equipmentMods` is a path
++that only runs against real save data with real equipped gear, and
++nothing in the patch workflow so far has had a way to exercise that.
++Worth a real playtest pass across 0255-0259 now that boot itself is
++unblocked, not just this one crash site.
+diff --git a/src/App.tsx b/src/App.tsx
+index bd09421..07c7b0c 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -21,6 +21,24 @@ export type ViewMode = 'idle' | 'menu';
+ export function App() {
+   const [engine, setEngine] = useState<GameEngine | null>(null);
+   const [mode, setMode] = useState<ViewMode>('idle');
++  // Surfaces a real boot-time failure instead of hanging silently on
++  // "Waking the knight..." forever -- previously an uncaught exception
++  // anywhere inside GameEngine.boot() (past SaveManager.load's own safe
++  // try/catch -- catchUpOffline, refreshWorld, start are not wrapped)
++  // rejected this promise with no .catch() anywhere in the chain, so
++  // `engine` just stayed null with no visible error and no console
++  // signal beyond an easy-to-miss "Uncaught (in promise)" line. Real
++  // example that hit this exact gap: patch 0255 stopped setting
++  // item.customMods on procedural drops, and HeroManager.equipmentMods's
++  // `item.customMods ?? def.mods` fell through to undefined for any
++  // procedural/crafted item with no def.mods of its own -- crashed
++  // inside catchUpOffline's regenHealth->maxHealth->equipmentMods chain
++  // on the very first boot after that patch, for any save with one of
++  // those equipped. That specific bug is fixed at its own source (see
++  // guild-idler-status.md's patch 0260 writeup) -- this is the general
++  // safety net so the NEXT unrelated boot-time bug fails loud, not
++  // silent.
++  const [bootError, setBootError] = useState<string | null>(null);
+ 
+   useEffect(() => {
+     let live = true;
+@@ -29,6 +47,9 @@ export function App() {
+       if (!live) return instance.stop();
+       created = instance;
+       setEngine(instance);
++    }).catch((err: unknown) => {
++      console.error('Boot failed:', err);
++      if (live) setBootError(err instanceof Error ? err.message : String(err));
+     });
+     return () => {
+       live = false;
+@@ -103,6 +124,15 @@ export function App() {
+     return window.littleKnight?.onRequestFlushSave(() => engine.saveNow());
+   }, [engine]);
+ 
++  if (bootError) {
++    return (
++      <div className="loading">
++        <div>Something went wrong waking the knight.</div>
++        <div className="tiny muted" style={{ marginTop: 8, maxWidth: 420 }}>{bootError}</div>
++        <div className="tiny muted" style={{ marginTop: 8 }}>Check the console for the full stack trace.</div>
++      </div>
++    );
++  }
+   if (!engine) return <div className="loading">Waking the knight…</div>;
+ 
+   return (
+diff --git a/src/game/managers/HeroManager.ts b/src/game/managers/HeroManager.ts
+index c18f839..e6c8017 100644
+--- a/src/game/managers/HeroManager.ts
++++ b/src/game/managers/HeroManager.ts
+@@ -544,7 +544,7 @@ export const HeroManager = {
+       const relevance = HeroManager.gearRelevance(item.rolledItemLevel ?? def.reqLevel, hero.level);
+       // Crafted items carry their own chosen mods (EquipmentItem.customMods)
+       // instead of the def's -- see that field's own comment in types.ts.
+-      sources.push(scaleMods(item.customMods ?? def.mods, (1 + item.plus * 0.15) * relevance));
++      sources.push(scaleMods(item.customMods ?? def.mods ?? {}, (1 + item.plus * 0.15) * relevance));
+       if (def.setId) {
+         setCounts[def.setId] = (setCounts[def.setId] ?? 0) + 1;
+         (setRelevance[def.setId] ??= []).push(relevance);
+diff --git a/src/game/util.ts b/src/game/util.ts
+index 94cfa33..32f5776 100644
+--- a/src/game/util.ts
++++ b/src/game/util.ts
+@@ -40,8 +40,9 @@ export function sumMods(...sources: Partial<Modifiers>[]): Modifiers {
+   return total;
+ }
+ 
+-export function scaleMods(mods: Partial<Modifiers>, factor: number): Partial<Modifiers> {
++export function scaleMods(mods: Partial<Modifiers> | undefined, factor: number): Partial<Modifiers> {
+   const out: Partial<Modifiers> = {};
++  if (!mods) return out;
+   for (const key of Object.keys(mods) as (keyof Modifiers)[]) {
+     out[key] = (mods[key] ?? 0) * factor;
+   }
+@@ -159,10 +160,11 @@ function formatModValue(key: keyof Modifiers, value: number): string {
+   return pct(value);
+ }
+ 
+-export function describeMods(mods: Partial<Modifiers>): string[] {
++export function describeMods(mods: Partial<Modifiers> | undefined): string[] {
++  const safe = mods ?? {};
+   return (Object.keys(MOD_LABEL) as (keyof Modifiers)[])
+-    .filter((key) => (mods[key] ?? 0) !== 0)
+-    .map((key) => `${MOD_LABEL[key]} ${formatModValue(key, mods[key] ?? 0)}`);
++    .filter((key) => (safe[key] ?? 0) !== 0)
++    .map((key) => `${MOD_LABEL[key]} ${formatModValue(key, safe[key] ?? 0)}`);
+ }
+ 
+ export const STAT_LABEL: Record<keyof Stats, string> = {
+@@ -228,8 +230,9 @@ export const MAIN_STAT_TOOLTIP = 'Strength for Melee heroes, Intellect for Caste
+  *  of the Crafting/Enchanting flow this was built for) keeps its current
+  *  literal "Strength" unless it deliberately asks for the Main Stat
+  *  treatment. */
+-export function describeStats(stats: Partial<Stats>, useMainStatLabel = false): string[] {
++export function describeStats(stats: Partial<Stats> | undefined, useMainStatLabel = false): string[] {
++  const safe = stats ?? {};
+   return (Object.keys(STAT_LABEL) as (keyof Stats)[])
+-    .filter((key) => (stats[key] ?? 0) !== 0)
+-    .map((key) => `${useMainStatLabel ? craftingStatLabel(key) : STAT_LABEL[key]} +${stats[key]}`);
++    .filter((key) => (safe[key] ?? 0) !== 0)
++    .map((key) => `${useMainStatLabel ? craftingStatLabel(key) : STAT_LABEL[key]} +${safe[key]}`);
+ }
+diff --git a/src/ui/CraftingStation.tsx b/src/ui/CraftingStation.tsx
+index 7da2ac0..13bfc89 100644
+--- a/src/ui/CraftingStation.tsx
++++ b/src/ui/CraftingStation.tsx
+@@ -281,7 +281,7 @@ export function ItemPreviewModal({
+           <RarityPill rarity={def.rarity} />
+         </div>
+         {(() => {
+-                const modLines = describeMods(item.customMods ?? def.mods);
++                const modLines = describeMods(item.customMods ?? def.mods ?? {});
+                 // patch 0255: a procedural roll or Guildmade/Masterwork craft's
+                 // real power lives in item.rolledStats now (all-stats rework,
+                 // see guild-idler-status.md) -- folded into the same bonuses
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index 6c03f8f..bd2a2d8 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -680,7 +680,7 @@ function SlotCard({
+                 {def.craftable && <CraftedPill />}
+               </div>
+               {(() => {
+-                const modLines = describeMods(item.customMods ?? def.mods);
++                const modLines = describeMods(item.customMods ?? def.mods ?? {});
+                 // patch 0255: a procedural roll or Guildmade/Masterwork craft's
+                 // real power lives in item.rolledStats now (all-stats rework,
+                 // see guild-idler-status.md) -- folded into the same bonuses
+@@ -791,7 +791,7 @@ function StashCard({
+                 {item.locked && <LockedPill />}
+               </div>
+               {(() => {
+-                const modLines = describeMods(item.customMods ?? def.mods);
++                const modLines = describeMods(item.customMods ?? def.mods ?? {});
+                 // patch 0255: a procedural roll or Guildmade/Masterwork craft's
+                 // real power lives in item.rolledStats now (all-stats rework,
+                 // see guild-idler-status.md) -- folded into the same bonuses
