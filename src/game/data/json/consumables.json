@@ -5,7 +5,7 @@
     "description": "Steadies the hands before a fight. Increases quest success rate.",
     "cost": 25,
     "rarity": "common",
-    "glyph": "\u2764",
+    "glyph": "❤",
     "icon": "potions/Potion_10.png",
     "effect": {
       "success": 1
@@ -17,7 +17,7 @@
     "description": "Steadies the hands before a fight. Increases quest success rate more than a standard healing potion.",
     "cost": 150,
     "rarity": "epic",
-    "glyph": "\u2764",
+    "glyph": "❤",
     "icon": "potions/Potion_34.png",
     "effect": {
       "success": 6
@@ -29,7 +29,7 @@
     "description": "Steadies the hands before a fight. Increases quest success rate more than a standard healing potion.",
     "cost": 75,
     "rarity": "uncommon",
-    "glyph": "\u2764",
+    "glyph": "❤",
     "icon": "potions/Potion_42.png",
     "effect": {
       "success": 3
@@ -41,7 +41,7 @@
     "description": "Steadies the hands before a fight. A serious dose, well past what a standard potion offers.",
     "cost": 100,
     "rarity": "rare",
-    "glyph": "\u2764",
+    "glyph": "❤",
     "icon": "potions/Potion_42.png",
     "effect": {
       "success": 4
@@ -53,7 +53,7 @@
     "description": "Bottled resolve. The strongest success bonus coin can buy.",
     "cost": 300,
     "rarity": "legendary",
-    "glyph": "\u2764",
+    "glyph": "❤",
     "icon": "potions/Potion_34.png",
     "effect": {
       "success": 12
@@ -65,7 +65,7 @@
     "description": "Coins seem to find their way into pockets.",
     "cost": 40,
     "rarity": "common",
-    "glyph": "\u2726",
+    "glyph": "✦",
     "icon": "potions/Potion_12.png",
     "effect": {
       "gold": 60
@@ -77,7 +77,7 @@
     "description": "Coins seem to find their way into pockets.",
     "cost": 75,
     "rarity": "uncommon",
-    "glyph": "\u2726",
+    "glyph": "✦",
     "icon": "potions/Potion_36.png",
     "effect": {
       "gold": 110
@@ -89,7 +89,7 @@
     "description": "Coins seem to find their way into pockets, and then some.",
     "cost": 150,
     "rarity": "rare",
-    "glyph": "\u2726",
+    "glyph": "✦",
     "icon": "potions/Potion_36.png",
     "effect": {
       "gold": 225
@@ -101,7 +101,7 @@
     "description": "Coins seem to find their way into pockets, and then some. A stronger brew than the Grand tier.",
     "cost": 220,
     "rarity": "epic",
-    "glyph": "\u2726",
+    "glyph": "✦",
     "icon": "potions/Potion_12.png",
     "effect": {
       "gold": 330
@@ -113,7 +113,7 @@
     "description": "Every pocket on this hero is somehow already full before they've left the guild hall.",
     "cost": 300,
     "rarity": "legendary",
-    "glyph": "\u2726",
+    "glyph": "✦",
     "icon": "potions/Potion_45.png",
     "effect": {
       "gold": 450
@@ -125,7 +125,7 @@
     "description": "A hard swing and a fair price for it.\nIncreases success rate, and gold drops",
     "cost": 25,
     "rarity": "common",
-    "glyph": "\u2694",
+    "glyph": "⚔",
     "icon": "potions/Potion_33.png",
     "effect": {
       "success": 1,
@@ -138,7 +138,7 @@
     "description": "A hard swing and a fair price for it. Hits harder than a standard Strength Potion.",
     "cost": 150,
     "rarity": "rare",
-    "glyph": "\u2694",
+    "glyph": "⚔",
     "icon": "potions/Potion_33.png",
     "effect": {
       "success": 3,
@@ -151,7 +151,7 @@
     "description": "A hard swing and a fair price for it. The strongest brew the Alchemist stocks.",
     "cost": 500,
     "rarity": "legendary",
-    "glyph": "\u2694",
+    "glyph": "⚔",
     "icon": "potions/Potion_33.png",
     "effect": {
       "success": 6,
@@ -164,7 +164,7 @@
     "description": "Your knight comes home unhurt, win or lose.",
     "cost": 100,
     "rarity": "rare",
-    "glyph": "\u26e8",
+    "glyph": "⛨",
     "icon": "misc/Misc_75.png",
     "effect": {
       "preventInjury": true
@@ -176,7 +176,7 @@
     "description": "Guarantees a favourable event on the road.",
     "cost": 250,
     "rarity": "legendary",
-    "glyph": "\u2618",
+    "glyph": "☘",
     "icon": "potions/Potion_45.png",
     "effect": {
       "guaranteedGoodEvent": true
@@ -188,7 +188,7 @@
     "description": "Clears one injury immediately.",
     "cost": 60,
     "rarity": "uncommon",
-    "glyph": "\u271a",
+    "glyph": "✚",
     "icon": "crafting/Crafting_74.png",
     "effect": {
       "healInjury": true
@@ -200,7 +200,7 @@
     "description": "Restores a portion of Health immediately. Doesn't revive a Fallen hero -- see the Infirmary or pay to revive directly.",
     "cost": 80,
     "rarity": "uncommon",
-    "glyph": "\u2665",
+    "glyph": "♥",
     "icon": "potions/Potion_20.png",
     "effect": {
       "restoreHealth": 40
@@ -212,7 +212,7 @@
     "description": "Restores a large portion of Health immediately. Doesn't revive a Fallen hero -- see the Infirmary or pay to revive directly.",
     "cost": 180,
     "rarity": "epic",
-    "glyph": "\u2665",
+    "glyph": "♥",
     "icon": "potions/Potion_28.png",
     "effect": {
       "restoreHealth": 80
@@ -224,7 +224,7 @@
     "description": "Equip before sending a hero out. Softens whatever this quest is about to do to them, rather than patching it up afterward.",
     "cost": 90,
     "rarity": "rare",
-    "glyph": "\ud83d\udee1",
+    "glyph": "🛡",
     "icon": "misc/Misc_20.png",
     "effect": {
       "healthDamageReduction": 50
@@ -236,7 +236,9 @@
     "description": "Crafted, not foraged -- a pet's own happiness bar goes up further per treat than raw scraps would give it. Fed directly from the Hatchery's Pets tab, not sent out on quests -- carries no quest effect.",
     "cost": 45,
     "rarity": "common",
-    "glyph": "\ud83c\udf56",
+    "glyph": "🍖",
+    "icon": "food/Food_37.png",
+    "craftable": false,
     "effect": {}
   },
   {
@@ -245,7 +247,9 @@
     "description": "Smells like whatever Grimsby is currently burning to cover up whatever he's actually selling. Somehow, it works -- his cart tends to show up sooner after one of these gets used.",
     "cost": 150,
     "rarity": "epic",
-    "glyph": "\ud83d\udd14",
+    "glyph": "🔔",
+    "icon": "food/Food_12.png",
+    "craftable": false,
     "effect": {
       "peddlerCounterReduction": 3
     }
@@ -256,11 +260,10 @@
     "description": "A faint pull toward coin. Loot drops on this quest are a little more likely to roll Gold.",
     "cost": 40,
     "rarity": "common",
-    "glyph": "\u2666",
-    "effect": {
-      "lootWeightStat": "gold",
-      "lootWeightMultiplier": 1.2
-    }
+    "glyph": "♦",
+    "icon": "misc/Misc_88.png",
+    "craftable": false,
+    "effect": {}
   },
   {
     "id": "fortune_charm_gold",
@@ -268,11 +271,10 @@
     "description": "A real pull toward coin. Loot drops on this quest are noticeably more likely to roll Gold.",
     "cost": 90,
     "rarity": "uncommon",
-    "glyph": "\u2666",
-    "effect": {
-      "lootWeightStat": "gold",
-      "lootWeightMultiplier": 1.75
-    }
+    "glyph": "♦",
+    "icon": "misc/Misc_87.png",
+    "craftable": false,
+    "effect": {}
   },
   {
     "id": "grand_fortune_charm_gold",
@@ -280,11 +282,10 @@
     "description": "A strong pull toward coin. Loot drops on this quest lean hard toward Gold.",
     "cost": 150,
     "rarity": "rare",
-    "glyph": "\u2666",
-    "effect": {
-      "lootWeightStat": "gold",
-      "lootWeightMultiplier": 3
-    }
+    "glyph": "♦",
+    "icon": "misc/Misc_84.png",
+    "craftable": false,
+    "effect": {}
   },
   {
     "id": "greater_fortune_charm_gold",
@@ -292,11 +293,10 @@
     "description": "Coin, above all else. Loot drops on this quest are heavily biased toward Gold.",
     "cost": 220,
     "rarity": "epic",
-    "glyph": "\u2666",
-    "effect": {
-      "lootWeightStat": "gold",
-      "lootWeightMultiplier": 5
-    }
+    "glyph": "♦",
+    "icon": "misc/Misc_80.png",
+    "craftable": false,
+    "effect": {}
   },
   {
     "id": "boundless_fortune_charm_gold",
@@ -304,11 +304,10 @@
     "description": "Coin, and nothing else. Every loot drop on this quest that rolls procedurally rolls Gold on every affix.",
     "cost": 400,
     "rarity": "legendary",
-    "glyph": "\u2666",
-    "effect": {
-      "lootWeightStat": "gold",
-      "lootWeightMultiplier": 999
-    }
+    "glyph": "♦",
+    "icon": "misc/Misc_79.png",
+    "craftable": false,
+    "effect": {}
   },
   {
     "id": "minor_fortune_charm_xp",
@@ -316,11 +315,10 @@
     "description": "A faint pull toward understanding. Loot drops on this quest are a little more likely to roll Experience.",
     "cost": 40,
     "rarity": "common",
-    "glyph": "\u2726",
-    "effect": {
-      "lootWeightStat": "xp",
-      "lootWeightMultiplier": 1.2
-    }
+    "glyph": "✦",
+    "icon": "misc/Misc_75.png",
+    "craftable": false,
+    "effect": {}
   },
   {
     "id": "fortune_charm_xp",
@@ -328,11 +326,10 @@
     "description": "A real pull toward understanding. Loot drops on this quest are noticeably more likely to roll Experience.",
     "cost": 90,
     "rarity": "uncommon",
-    "glyph": "\u2726",
-    "effect": {
-      "lootWeightStat": "xp",
-      "lootWeightMultiplier": 1.75
-    }
+    "glyph": "✦",
+    "icon": "misc/Misc_74.png",
+    "craftable": false,
+    "effect": {}
   },
   {
     "id": "grand_fortune_charm_xp",
@@ -340,11 +337,10 @@
     "description": "A strong pull toward understanding. Loot drops on this quest lean hard toward Experience.",
     "cost": 150,
     "rarity": "rare",
-    "glyph": "\u2726",
-    "effect": {
-      "lootWeightStat": "xp",
-      "lootWeightMultiplier": 3
-    }
+    "glyph": "✦",
+    "icon": "misc/Misc_73.png",
+    "craftable": false,
+    "effect": {}
   },
   {
     "id": "greater_fortune_charm_xp",
@@ -352,11 +348,10 @@
     "description": "Understanding, above all else. Loot drops on this quest are heavily biased toward Experience.",
     "cost": 220,
     "rarity": "epic",
-    "glyph": "\u2726",
-    "effect": {
-      "lootWeightStat": "xp",
-      "lootWeightMultiplier": 5
-    }
+    "glyph": "✦",
+    "icon": "misc/Misc_24.png",
+    "craftable": false,
+    "effect": {}
   },
   {
     "id": "boundless_fortune_charm_xp",
@@ -364,11 +359,10 @@
     "description": "Understanding, and nothing else. Every loot drop on this quest that rolls procedurally rolls Experience on every affix.",
     "cost": 400,
     "rarity": "legendary",
-    "glyph": "\u2726",
-    "effect": {
-      "lootWeightStat": "xp",
-      "lootWeightMultiplier": 999
-    }
+    "glyph": "✦",
+    "icon": "misc/Misc_25.png",
+    "craftable": false,
+    "effect": {}
   },
   {
     "id": "alchemists_reserve",
@@ -376,7 +370,7 @@
     "description": "Home-brewed rather than shelf-bought. Craft-only -- not sold at the Alchemist's stall.",
     "cost": 100,
     "rarity": "uncommon",
-    "glyph": "\u2764",
+    "glyph": "❤",
     "icon": "potions/Potion_10.png",
     "craftable": true,
     "effect": {
@@ -389,7 +383,7 @@
     "description": "A guttering coal of the real thing. Craft-only -- not sold at the Alchemist's stall.",
     "cost": 300,
     "rarity": "rare",
-    "glyph": "\u2764",
+    "glyph": "❤",
     "icon": "potions/Potion_28.png",
     "craftable": true,
     "effect": {
@@ -399,10 +393,10 @@
   {
     "id": "trail_rations_item",
     "name": "Trail Rations",
-    "description": "Smoked fish and dried herbs, packed for a hero who won\u2019t be home for dinner. Craft-only -- not sold at the Alchemist's stall.",
+    "description": "Smoked fish and dried herbs, packed for a hero who won’t be home for dinner. Craft-only -- not sold at the Alchemist's stall.",
     "cost": 25,
     "rarity": "common",
-    "glyph": "\u2694",
+    "glyph": "⚔",
     "icon": "food/Food_36.png",
     "craftable": true,
     "effect": {
@@ -413,10 +407,10 @@
   {
     "id": "herbal_tonic_item",
     "name": "Herbal Tonic",
-    "description": "The Herb Garden\u2019s own cure-all, brewed in-house rather than bought off a vendor's shelf. Craft-only -- not sold at the Alchemist's stall.",
+    "description": "The Herb Garden’s own cure-all, brewed in-house rather than bought off a vendor's shelf. Craft-only -- not sold at the Alchemist's stall.",
     "cost": 25,
     "rarity": "common",
-    "glyph": "\u2764",
+    "glyph": "❤",
     "icon": "potions/Potion_10.png",
     "craftable": true,
     "effect": {
@@ -429,7 +423,7 @@
     "description": "Wild berries and whatever else looked worth picking along the treeline. Craft-only -- not sold at the Alchemist's stall.",
     "cost": 40,
     "rarity": "common",
-    "glyph": "\u2726",
+    "glyph": "✦",
     "icon": "food/Food_01.png",
     "craftable": true,
     "effect": {
@@ -442,7 +436,7 @@
     "description": "Hearty, meat n' veg stew, ladled out before the road. Craft-only -- not sold at the Alchemist's stall.",
     "cost": 150,
     "rarity": "uncommon",
-    "glyph": "\u2694",
+    "glyph": "⚔",
     "icon": "food/Food_20.png",
     "craftable": true,
     "effect": {
@@ -456,7 +450,7 @@
     "description": "Enough food to feed a war party, cooked for one hero heading out alone. Craft-only -- not sold at the Alchemist's stall.",
     "cost": 500,
     "rarity": "rare",
-    "glyph": "\u2694",
+    "glyph": "⚔",
     "icon": "food/Food_36.png",
     "craftable": true,
     "effect": {
@@ -470,7 +464,7 @@
     "description": "A handful of ore and river silt, panned rather than paid for. Craft-only -- not sold at the Alchemist's stall.",
     "cost": 150,
     "rarity": "rare",
-    "glyph": "\u2726",
+    "glyph": "✦",
     "icon": "crafting/Crafting_30.png",
     "craftable": true,
     "effect": {
@@ -483,7 +477,7 @@
     "description": "Smells faintly of brimstone and old coin. Craft-only -- not sold at the Alchemist's stall.",
     "cost": 300,
     "rarity": "epic",
-    "glyph": "\u2726",
+    "glyph": "✦",
     "icon": "misc/Misc_75.png",
     "craftable": true,
     "effect": {
@@ -496,7 +490,7 @@
     "description": "A rough-cut equivalent to the Alchemist's own Fortune Charms. Craft-only -- not sold at the Alchemist's stall.",
     "cost": 40,
     "rarity": "common",
-    "glyph": "\u2666",
+    "glyph": "♦",
     "craftable": true,
     "effect": {
       "lootWeightStat": "gold",
@@ -509,7 +503,7 @@
     "description": "A rough-cut equivalent to the Alchemist's own Fortune Charms. Craft-only -- not sold at the Alchemist's stall.",
     "cost": 40,
     "rarity": "common",
-    "glyph": "\u2726",
+    "glyph": "✦",
     "craftable": true,
     "effect": {
       "lootWeightStat": "xp",
@@ -522,7 +516,7 @@
     "description": "Ore and herb, worked into the same trick the Alchemist's own charms use. Craft-only -- not sold at the Alchemist's stall.",
     "cost": 150,
     "rarity": "rare",
-    "glyph": "\u2666",
+    "glyph": "♦",
     "craftable": true,
     "effect": {
       "lootWeightStat": "gold",
@@ -535,7 +529,7 @@
     "description": "Ore and herb, worked into the same trick the Alchemist's own charms use. Craft-only -- not sold at the Alchemist's stall.",
     "cost": 150,
     "rarity": "rare",
-    "glyph": "\u2726",
+    "glyph": "✦",
     "craftable": true,
     "effect": {
       "lootWeightStat": "xp",
@@ -548,7 +542,7 @@
     "description": "The strongest pull toward coin the Enchanter's bench can manage. Craft-only -- not sold at the Alchemist's stall.",
     "cost": 220,
     "rarity": "epic",
-    "glyph": "\u2666",
+    "glyph": "♦",
     "craftable": true,
     "effect": {
       "lootWeightStat": "gold",
@@ -561,7 +555,7 @@
     "description": "The strongest pull toward understanding the Enchanter's bench can manage. Craft-only -- not sold at the Alchemist's stall.",
     "cost": 220,
     "rarity": "epic",
-    "glyph": "\u2726",
+    "glyph": "✦",
     "craftable": true,
     "effect": {
       "lootWeightStat": "xp",

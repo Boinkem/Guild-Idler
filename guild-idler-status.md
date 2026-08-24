@@ -19698,3 +19698,53 @@ prior character-art patch -- the host needs to run
 `import_characters.py` locally against the four raw packs to see any of
 this in game.
 
+
+### Saga Loot table: Quest / Item / Slot / Found? (patch 0252)
+```discord-update
+Dev Update | Saga Loot table
+
+- Added a "Saga Loot" button to every owned saga band in Replay Memories
+- Shows every chain's dedicated item at a glance: Quest, Item, Slot, and whether you've found it
+- Click any row to open the full item card (once discovered)
+```
+
+Direct request off the Replay Memories screenshots: checking what a saga
+still has to offer meant opening each chain's own replay modal one at a
+time, since the only per-item view lived inside `ChainReplayDetailModal`
+and covered a single chain's dedicated item, not the whole band.
+
+New **Saga Loot** button on `TierCard` (`DiscoveredQuestsPanel.tsx`),
+next to the existing "Cleared at" row, opening a new `SagaLootModal` --
+a plain 4-column table (Quest / Item / Slot / Found?) built from
+`tier.chainIds`, one row per chain that resolves to a real dedicated item
+(`chain.rewardItems[0]` -> `EQUIPMENT_BY_ID`, same lookup
+`ChainReplayDetailModal` already uses for its own "The chase" section).
+"Found?" reads `state.discoveredItems` the same way `LootPreview`
+(RaidsPanel.tsx) and the Collection tab (LorePanel.tsx) already gate
+their own reveals -- an undiscovered item's name and slot stay hidden
+behind "???" in the row, consistent with how loot chips read everywhere
+else in the game. Clicking a found row opens a new `SagaItemDetailOverlay`
+(name, rarity pill, slot + level, mod summary) -- the same shape
+RaidsPanel's own module-private `ItemDetailOverlay` already uses,
+duplicated locally rather than imported since that component isn't
+exported and the two panels are otherwise independent. Clicking an
+undiscovered row shows the existing "Discover this item first." toast
+instead, matching `LootPreview`'s own click-through behaviour.
+
+A chain with no dedicated item (empty `rewardItems`, or an id that
+doesn't resolve to a real `EquipmentDef`) is skipped rather than shown as
+a broken row -- every chain in all 6 existing bands does carry one today,
+but this keeps the table honest if that's ever not true for a future
+band.
+
+New `.saga-loot-table`/`.saga-loot-row` CSS in `app.css` -- a real table
+rather than forcing this into `.raid-list`'s card shape, since the
+content is genuinely tabular (one row per chain, four aligned columns)
+and a card per row would waste most of its width on padding. Row
+hover/focus treatment mirrors `.raid-card`'s own pointer + background
+language for consistency.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. No `SAVE_VERSION` bump -- this reads
+existing `state.discoveredItems`/`chain.rewardItems` and writes nothing
+new to the save.

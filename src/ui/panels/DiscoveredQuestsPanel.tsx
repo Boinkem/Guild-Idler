@@ -9,11 +9,13 @@ import { CHAIN_REPLAY_TIERS, CHAIN_REPLAY_DIFFICULTIES, chainReplayTierForChain,
 import { scaleChainExclusiveItem } from '../../game/data/proceduralLoot';
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
 import { DIFFICULTIES, ChainDef } from '../../game/data/quests';
-import { Hero, ChainReplayDifficulty, ChainReplayTierDef } from '../../game/types';
+import { Hero, ChainReplayDifficulty, ChainReplayTierDef, EquipmentDef } from '../../game/types';
 import { isTabUnread } from '../../game/attention';
 import { RarityPill } from '../RarityPill';
 import { EggIcon } from '../EggIcon';
-import { formatDuration, formatGold, describeMods, describeStats } from '../../game/util';
+import {
+  formatDuration, formatGold, describeMods, describeStats, RARITY_COLOR,
+} from '../../game/util';
 import { Tuning } from '../../game/data/tuning';
 
 const REPLAY_DIFFICULTY_ORDER: ChainReplayDifficulty[] = ['normal', 'heroic', 'legendary'];
@@ -446,6 +448,13 @@ function TierCard({ tier, onOpenChain }: { tier: ChainReplayTierDef; onOpenChain
   // scoped to one open chain at a time and this needs to persist across
   // the whole band's card independent of any modal being open.
   const [percentDifficulty, setPercentDifficulty] = useState<ChainReplayDifficulty>('legendary');
+  // Saga Loot table -- direct request: a band-wide view of every chain's
+  // dedicated item (quest / item / slot / found?), rather than having to
+  // open each chain's own replay modal one at a time just to check what's
+  // still missing. Local to this card, same self-contained shape
+  // openReplayChainId's modal would use if it weren't lifted to the
+  // parent view for deep-link reasons -- this one has no deep-link need.
+  const [showLoot, setShowLoot] = useState(false);
 
   const buyTitle = owned ? undefined
     : !masterOwned && !isMaster ? 'Unlock Replay Memories first'
@@ -468,21 +477,26 @@ function TierCard({ tier, onOpenChain }: { tier: ChainReplayTierDef; onOpenChain
         <p className="tiny" style={{ margin: '4px 0' }}>{tier.description}</p>
         {owned && tier.chainIds.length > 0 && (
           <>
-            <div className="row" style={{ gap: 4, alignItems: 'center', margin: '4px 0' }}>
-              <span className="tiny muted">Cleared at:</span>
-              {(['normal', 'heroic', 'legendary'] as ChainReplayDifficulty[]).map((d) => (
-                <button
-                  key={d}
-                  className="btn-ghost tiny"
-                  style={percentDifficulty === d ? { color: REPLAY_DIFFICULTY_COLOR[d], fontWeight: 'bold' } : undefined}
-                  onClick={() => setPercentDifficulty(d)}
-                >
-                  {REPLAY_DIFFICULTY_NAME[d]}
-                </button>
-              ))}
-              <span className="tiny muted">
-                {chainReplayBandPercent(state, tier.id, percentDifficulty)}%
-              </span>
+            <div className="row spread" style={{ alignItems: 'center', margin: '4px 0' }}>
+              <div className="row" style={{ gap: 4, alignItems: 'center' }}>
+                <span className="tiny muted">Cleared at:</span>
+                {(['normal', 'heroic', 'legendary'] as ChainReplayDifficulty[]).map((d) => (
+                  <button
+                    key={d}
+                    className="btn-ghost tiny"
+                    style={percentDifficulty === d ? { color: REPLAY_DIFFICULTY_COLOR[d], fontWeight: 'bold' } : undefined}
+                    onClick={() => setPercentDifficulty(d)}
+                  >
+                    {REPLAY_DIFFICULTY_NAME[d]}
+                  </button>
+                ))}
+                <span className="tiny muted">
+                  {chainReplayBandPercent(state, tier.id, percentDifficulty)}%
+                </span>
+              </div>
+              <button className="btn-ghost tiny" onClick={() => setShowLoot(true)}>
+                Saga Loot
+              </button>
             </div>
             <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
               {tier.chainIds.map((chainId) => {
@@ -503,6 +517,126 @@ function TierCard({ tier, onOpenChain }: { tier: ChainReplayTierDef; onOpenChain
             </div>
           </>
         )}
+      </div>
+      {showLoot && <SagaLootModal tier={tier} onClose={() => setShowLoot(false)} />}
+    </div>
+  );
+}
+
+/**
+ * Saga Loot -- a band-wide table of every chain's dedicated item (Quest /
+ * Item / Slot / Found?), opened from a TierCard's own "Saga Loot" button.
+ * Direct request: checking what's still missing shouldn't require opening
+ * each chain's own ChainReplayDetailModal one at a time. "Found?" reads
+ * state.discoveredItems the same way LootPreview (RaidsPanel.tsx) and the
+ * Collection tab (LorePanel.tsx) already gate their own item reveals --
+ * an undiscovered item's name stays hidden behind "???" here too, for the
+ * same reason. A chain with no dedicated item (rewardItems empty, or the
+ * id doesn't resolve to a real EquipmentDef) is simply skipped rather than
+ * shown as a broken row -- every chain in every existing band does carry
+ * one today, but this keeps the table honest if that ever isn't true.
+ */
+function SagaLootModal({ tier, onClose }: { tier: ChainReplayTierDef; onClose: () => void }) {
+  const engine = useEngine();
+  const state = engine.state;
+  const [itemDetail, setItemDetail] = useState<string | null>(null);
+
+  const rows = tier.chainIds
+    .map((chainId) => {
+      const chain = CHAIN_BY_ID[chainId];
+      const dedicatedId = chain?.rewardItems[0];
+      const def = dedicatedId ? EQUIPMENT_BY_ID[dedicatedId] : undefined;
+      return chain && dedicatedId && def ? { chain, dedicatedId, def } : null;
+    })
+    .filter((r): r is { chain: ChainDef; dedicatedId: string; def: EquipmentDef } => r !== null);
+
+  return (
+    <>
+      <div className="overlay" onClick={onClose}>
+        <div className="modal raid-detail-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="spread">
+            <span className="card-title hero-card-name">Saga Loot</span>
+            <span className="tiny muted">{tier.sagaName}</span>
+          </div>
+          <p className="tiny muted" style={{ margin: '4px 0 10px' }}>
+            The dedicated item each story chain in this saga can drop on replay.
+          </p>
+
+          {rows.length === 0 ? (
+            <p className="small muted">No dedicated loot found for this saga yet.</p>
+          ) : (
+            <table className="saga-loot-table">
+              <thead>
+                <tr>
+                  <th>Quest</th>
+                  <th>Item</th>
+                  <th>Slot</th>
+                  <th>Found?</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(({ chain, dedicatedId, def }) => {
+                  const found = state.discoveredItems.includes(dedicatedId);
+                  return (
+                    <tr
+                      key={chain.id}
+                      className="saga-loot-row"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => (found ? setItemDetail(dedicatedId) : engine.showToast('Discover this item first.'))}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                        e.preventDefault();
+                        if (found) setItemDetail(dedicatedId); else engine.showToast('Discover this item first.');
+                      }}
+                    >
+                      <td>{chain.name}</td>
+                      <td className={found ? '' : 'muted'} style={found ? { color: RARITY_COLOR[def.rarity] } : undefined}>
+                        {found ? def.name : '???'}
+                      </td>
+                      <td className="tiny muted">{found ? def.slot : '???'}</td>
+                      <td>
+                        {found ? (
+                          <span className="tiny" style={{ color: 'var(--brass)' }}>Yes</span>
+                        ) : (
+                          <span className="tiny muted">No</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+
+          <div className="row end" style={{ marginTop: 10 }}>
+            <button className="btn-ghost" onClick={onClose}>Close</button>
+          </div>
+        </div>
+      </div>
+      {itemDetail && <SagaItemDetailOverlay defId={itemDetail} onClose={() => setItemDetail(null)} />}
+    </>
+  );
+}
+
+/** Same shape RaidsPanel's own module-private ItemDetailOverlay uses
+ *  (name, rarity pill, slot + level, mod summary) -- duplicated locally
+ *  rather than imported since that component isn't exported and the two
+ *  panels are otherwise independent, same "small enough to just repeat"
+ *  call every other cross-panel near-duplicate in this codebase makes. */
+function SagaItemDetailOverlay({ defId, onClose }: { defId: string; onClose: () => void }) {
+  const def = EQUIPMENT_BY_ID[defId];
+  if (!def) return null;
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3>{def.name}</h3>
+        <RarityPill rarity={def.rarity} />
+        <p className="tiny muted" style={{ marginTop: 8 }}>{def.slot} · requires level {def.reqLevel}</p>
+        <p className="small" style={{ marginTop: 8 }}>{describeMods(def.mods).join(' · ') || 'No bonuses'}</p>
+        <div className="row end" style={{ marginTop: 14 }}>
+          <button className="btn-primary" onClick={onClose}>Close</button>
+        </div>
       </div>
     </div>
   );

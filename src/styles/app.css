@@ -201,6 +201,32 @@
 
 .raid-list { display: flex; flex-direction: column; gap: 8px; }
 
+/* Saga Loot table (DiscoveredQuestsPanel.tsx's SagaLootModal) -- a plain
+   4-column data table rather than a card list, since this is genuinely
+   tabular content (one row per chain, four aligned fields per row) and
+   forcing it into .raid-list's card shape would waste most of a row's
+   width on padding. Row hover/click treatment mirrors .raid-card's own
+   pointer + border-color-on-hover language for consistency. */
+.saga-loot-table { width: 100%; border-collapse: collapse; }
+.saga-loot-table th {
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--edge);
+}
+.saga-loot-table td {
+  padding: 6px 8px;
+  font-size: 0.8125rem;
+  border-bottom: 1px solid var(--edge);
+}
+.saga-loot-row { cursor: pointer; }
+.saga-loot-row:hover td { background: var(--panel-3); }
+.saga-loot-row:focus-visible { outline: 2px solid var(--brass); outline-offset: -2px; }
+
 /* Collapsed raid row -- was a full-height banner card; now a compact
    horizontal row (thumbnail + name/level + chevron) so the list scans
    in one glance instead of a wall of tall banner cards. */
