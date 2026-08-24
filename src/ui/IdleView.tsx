@@ -3,7 +3,7 @@ import { useEngine, useNow } from './useEngine';
 import { useSettings } from './useSettings';
 import { PixelSprite, QUEST_MARK } from './sprites/PixelSprite';
 import { HeroAnimation, HeroSprite } from './sprites/HeroSprite';
-import { RaidPartySprites } from './sprites/RaidPartySprites';
+import { RaidPartySprites, raidPartyScale } from './sprites/RaidPartySprites';
 import { PetSprite } from './sprites/PetSprite';
 import { PET_BY_ID } from '../game/data/pets';
 import { HeroManager } from '../game/managers/HeroManager';
@@ -289,7 +289,12 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
       void window.littleKnight?.setIdleWidth(IDLE_DEFAULT_WIDTH);
       return undefined;
     }
-    const spriteWidthEstimate = knightHeight * 0.75;
+    // Scaled by the same raidPartyScale the row itself renders each sprite
+    // at (RaidPartySprites.tsx) -- otherwise this would keep requesting
+    // room for full-height sprites that no longer exist once a party
+    // shrinks below its old fixed size, leaving the widened window mostly
+    // empty padding around a much smaller row.
+    const spriteWidthEstimate = knightHeight * raidPartyScale(activeRaidParty.length) * 0.75;
     const gap = 6;
     const horizontalPadding = 48;
     const requested = activeRaidParty.length * spriteWidthEstimate

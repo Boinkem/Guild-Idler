@@ -3,22 +3,37 @@ import { HeroSprite } from './HeroSprite';
 import { Hero } from '../../game/types';
 
 /**
+ * Party-size scale factor for raid sprites. Follow-up to patch 0245's own
+ * "if this ever needs a scale control, it's a follow-up once there's real
+ * feedback on how a 9-wide row actually looks in practice, not a guess
+ * baked in up front" note -- that feedback landed: a full-height row of
+ * six or nine sprites crowded the corner companion (and widened its OS
+ * window well past what a corner-of-screen companion should ever ask
+ * for). Stepped rather than a continuous curve -- raid party sizes are a
+ * fixed set (Normal 3 / Heroic 6 / Legendary 9, RaidDef's own size
+ * tiers), so a lookup matching those exact tiers reads as an intentional
+ * choice rather than a formula that happens to land on the same numbers.
+ * Exported so IdleView's own window-width estimate can scale by the same
+ * factor it actually renders at, rather than requesting room for
+ * full-height sprites that no longer exist.
+ */
+export function raidPartyScale(count: number): number {
+  if (count <= 3) return 0.6;
+  return 0.3;
+}
+
+/**
  * A row of running party-member sprites -- shared by the idle companion
  * (IdleView, gated behind Settings > Raid party view) and the Raids tab's
  * own ActiveRaidCard, so "your party is out on a raid" reads the same way
  * in both places rather than two different implementations drifting apart.
  *
- * Deliberately NOT scaled down per party size (Normal/Heroic/Legendary
- * raids run 3/6/9 heroes respectively) -- standard sprite height
- * regardless of headcount, the row just gets wider for a bigger party.
- * Direct design call: the companion window already sizes itself to its
- * content rather than a fixed canvas (see CompanionBackdropId's own
- * comment in settings.ts), so widening is the natural behavior here
- * rather than fighting it with auto-shrink logic that would make a
- * Legendary party's sprites noticeably smaller than a Normal party's for
- * no reason a player asked for. If this ever needs a scale control, it's
- * a follow-up once there's real feedback on how a 9-wide row actually
- * looks in practice, not a guess baked in up front.
+ * Scaled down by party size via `raidPartyScale` (see above) -- a
+ * Legendary-size (9) party renders at 30% of the passed-in `height`, a
+ * Normal-size (3) party at 60%. The row still wraps/widens to fit
+ * whatever it's given; scaling per-sprite just keeps a bigger party from
+ * demanding more screen real estate than a smaller one for the same
+ * reason a Normal party currently doesn't.
  *
  * No actual horizontal travel -- every sprite runs in place
  * (animation="run", HeroSprite's own walk fallback applies per-class same
@@ -31,6 +46,7 @@ export function RaidPartySprites({
   height: number;
   className?: string;
 }) {
+  const spriteHeight = Math.round(height * raidPartyScale(heroes.length));
   // One random phase per hero, generated once per party (not re-rolled on
   // every render) -- see HeroSprite's own framePhase comment for why this
   // matters: without it, every sprite in the row mounts in the same React
@@ -54,7 +70,7 @@ export function RaidPartySprites({
           heroClass={hero.heroClass}
           skin={hero.skin}
           animation="run"
-          height={height}
+          height={spriteHeight}
           framePhase={phases[i]}
           title={hero.name}
           className="raid-party-sprite"

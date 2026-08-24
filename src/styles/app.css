@@ -763,13 +763,29 @@ button:focus-visible, [tabindex]:focus-visible {
  *
  * The small utility controls (lock/hide/open-guild, carousel arrows) stay
  * no-drag on purpose, since those are meant to be pure clicks even mid-drag.
+ *
+ * .raid-party-row / .raid-party-sprite need the exact same explicit
+ * inclusion .knight-button already gets, for the exact same reason: both
+ * live inside .hero-carousel, and .hero-carousel itself is unconditionally
+ * no-drag (its own rule below, needed so the normal single-hero carousel
+ * doesn't drag the window from empty space around the arrows). That
+ * blanket no-drag was never overridden for Raid View's own row, so while
+ * .knight-button could always be grabbed to move the companion, none of
+ * the raid party sprites could -- reported directly ("only one of the
+ * sprites is moveable"), and confirmed here as a real gap rather than
+ * something already covered by inheritance: -webkit-app-region does NOT
+ * cascade past a closer ancestor's own explicit value, so .hero-carousel's
+ * no-drag was winning for everything under it except the child selectors
+ * spelled out below.
  */
 .idle-root.unlocked,
 .idle-root.unlocked .idle-stage,
 .idle-root.unlocked .idle-plate,
 .idle-root.unlocked .idle-status,
 .idle-root.unlocked .knight-shadow,
-.idle-root.unlocked .knight-button {
+.idle-root.unlocked .knight-button,
+.idle-root.unlocked .raid-party-row,
+.idle-root.unlocked .raid-party-sprite {
   -webkit-app-region: drag;
 }
 .idle-root.unlocked .idle-actions button,

@@ -19828,3 +19828,83 @@ correct 1-3 band on every win and 4-6 on every loss at a ~50% win rate,
 High Roller Middle lands its correct 3-4 band at a ~33% win rate, and
 payouts are exactly 2x/3x the wager on every single win with no
 exceptions.
+
+### Raid View follow-up: sprites scale down by party size, and the whole row is now draggable (patch 0254)
+
+```discord-update
+Dev Update | Raid View
+- Changed: raid party sprites on the corner companion and Raids tab now shrink as the party gets bigger, instead of staying full size for a 9-hero Legendary party
+- Fixed: every sprite in the raid party row can now drag the companion window, not just one of them
+```
+
+Direct tester feedback, three points from the same report, two of them
+bugs/tuning against patch 0245's own "Raid View" work rather than new
+scope:
+
+1. **Sprites too big at higher party counts.** Patch 0245 deliberately
+   shipped with NO auto-shrink ("if this ever needs a scale control,
+   it's a follow-up once there's real feedback on how a 9-wide row
+   actually looks in practice, not a guess baked in up front") -- that
+   feedback landed. Requested tiers: a 3-hero (Normal) party around 60%
+   of standard sprite height, 6-or-9-hero (Heroic/Legendary) around 30%.
+2. **A Settings toggle to turn the raid sprites off.** Already shipped
+   in patch 0245 -- Settings > Knight > "Raid party view", on by
+   default, gates only the corner companion (the Raids tab's own
+   `ActiveRaidCard` intentionally still shows its party row regardless,
+   same as it always has). No code change needed here; flagged back to
+   the tester rather than silently reimplementing something that
+   already exists.
+3. **Only one sprite in the row could drag the companion window.** A
+   real bug, not a request -- confirmed against the CSS rather than
+   assumed.
+
+**New `raidPartyScale(count)`** (`RaidPartySprites.tsx`) -- a stepped
+lookup, not a continuous formula: `<= 3` heroes returns `0.6`, anything
+above returns `0.3`. Stepped because raid party sizes are a fixed set
+(Normal 3 / Heroic 6 / Legendary 9, `RaidDef`'s own size tiers) rather
+than an arbitrary range, so a lookup matching those exact tiers reads as
+an intentional choice instead of a formula that happens to land on the
+same numbers. Exported (not a local const) so callers that estimate
+layout from the same sprite size can use the identical factor rather
+than guessing at it independently.
+
+**`RaidPartySprites`** now computes `spriteHeight = Math.round(height *
+raidPartyScale(heroes.length))` once and passes that (not the raw
+`height` prop) to every `HeroSprite` in the row -- one change point, so
+both call sites (the companion and the Raids tab's `ActiveRaidCard`)
+shrink together automatically rather than needing to be tuned twice.
+The row's own wrap/center layout is untouched; a smaller sprite just
+takes up less of it.
+
+**`IdleView.tsx`'s window-width estimate** (the effect that widens the
+Electron companion window to fit the party, added in patch 0245) now
+multiplies by the same `raidPartyScale(activeRaidParty.length)` before
+computing `spriteWidthEstimate`, imported directly from
+`RaidPartySprites.tsx` rather than re-derived -- without this the window
+would still request room sized for full-height sprites even though the
+row rendering inside it had shrunk, leaving a widened window mostly
+empty padding around a much smaller party for anyone past 3 heroes.
+
+**The drag bug.** `.hero-carousel` (`app.css`) is unconditionally
+`-webkit-app-region: no-drag` -- needed so the normal single-hero
+carousel's empty space around the arrows doesn't drag the window by
+accident. The single-hero view's own sprite works around this with an
+explicit `.idle-root.unlocked .knight-button { ...: drag; }` override
+(same pattern noted in that rule's own comment, from an earlier fix
+where a blanket no-drag had made the knight sprite itself the one thing
+in the window you couldn't grab) -- `-webkit-app-region` does not
+cascade past a closer ancestor's own explicit value, so a child needs
+its own explicit override to win back `drag`, not just the absence of a
+`no-drag` rule directly on it. Raid View's `.raid-party-row`/
+`.raid-party-sprite` never got that same override when patch 0245 added
+them, so the whole row silently inherited `.hero-carousel`'s no-drag --
+none of the party sprites could move the window (not "only one," as
+literally reported, but the net effect of everything else on the
+companion still being draggable made it read that way). Fixed by adding
+both selectors to the existing `.idle-root.unlocked` override list
+alongside `.knight-button`, so grabbing anywhere in the raid party row
+now drags the companion exactly like the single-hero sprite always
+could.
+
+`npx tsc --noEmit` and `npx vite build --config vite.web.config.ts` both
+pass clean.
