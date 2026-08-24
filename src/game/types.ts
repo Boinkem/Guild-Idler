@@ -2956,6 +2956,44 @@ export interface DiceRollResult {
 }
 
 /**
+ * A call on Grimsby's third dice game, High or Low -- WoW's unofficial
+ * dueling-die wager, reskinned for a solo roll against the house rather
+ * than a second player. 'middle' only ever applies in the High Roller
+ * band split below; the standard band is a plain two-way Under/Over.
+ */
+export type HighLowCall = 'under' | 'over' | 'middle';
+
+/**
+ * One resolved High/Low roll -- Grimsby's third dice game, alongside
+ * Call a Number (DiceRollResult above) and Pick Your Card. Two band
+ * splits share the same D6 roll and the same win/lose shape, gated by
+ * `highRoller` (see PeddlerManager.HIGH_LOW_BANDS for the exact face
+ * ranges and PeddlerManager.rollHighLow for resolution):
+ * - Standard: Under 1-3 / Over 4-6, a coin-flip either way -- 2x payout.
+ * - High Roller: Under 1-2 / Middle 3-4 / Over 5-6, a one-in-three call
+ *   -- 3x payout, and its own higher minimum wager (see
+ *   PeddlerManager.highLowMinWager) since the better payout needs a
+ *   real stake behind it to matter. Reuses the existing
+ *   GameState.grimsbyHighRollerUnlocked gate the card game's own High
+ *   Roller mode already established, rather than a second, parallel
+ *   unlock for the same underlying "bigger stakes" concept.
+ */
+export interface HighLowRollResult {
+  call: HighLowCall;
+  highRoller: boolean;
+  landed: DiceFace;
+  wager: number;
+  win: boolean;
+  /** Gold actually credited back -- 0 on a loss. Already applied to
+   *  GameState.gold (clamped to gold storage). Does NOT include rebate
+   *  below, same split DiceRollResult's own payout/rebate fields keep. */
+  payout: number;
+  /** Grimsby's own Vendor Rep rebate on this roll's wager -- applied on
+   *  top of payout above regardless of outcome, same as DiceRollResult. */
+  rebate: number;
+}
+
+/**
  * Result of a single "Run it up" push in Grimsby's Tab -- transient,
  * same "mutate state, UI reads a returned result" shape
  * PeddlerFlipResult/DiceRollResult already use for the other two games.

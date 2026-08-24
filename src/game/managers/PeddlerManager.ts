@@ -1,6 +1,6 @@
 import {
-  DiceFace, DiceRollResult, GameState, PeddlerCardDef, PeddlerCardTier, PeddlerFlipCard, PeddlerFlipResult,
-  PeddlerTabRunResult, Rarity,
+  DiceFace, DiceRollResult, GameState, HighLowCall, HighLowRollResult, PeddlerCardDef, PeddlerCardTier,
+  PeddlerFlipCard, PeddlerFlipResult, PeddlerTabRunResult, Rarity,
 } from '../types';
 import { PEDDLER_CARDS_BY_TIER } from '../data/peddler';
 import { EQUIPMENT, EQUIPMENT_BY_ID } from '../data/equipment';
@@ -17,6 +17,22 @@ import { CurioManager } from './CurioManager';
 const TAB_TIER_TUNING_IDS = [
   'peddler.tab.tier0BuyIn', 'peddler.tab.tier1BuyIn', 'peddler.tab.tier2BuyIn', 'peddler.tab.tier3BuyIn',
 ];
+
+/**
+ * Face bands for the High/Low game -- standard is a plain two-way split
+ * (Under 1-3 / Over 4-6), High Roller splits into three (Under 1-2 /
+ * Middle 3-4 / Over 5-6). 'middle' simply doesn't exist as a key in the
+ * standard band, rather than existing with an empty face list, so a
+ * standard-mode call of 'middle' fails the lookup below and is rejected
+ * outright instead of silently resolving as a guaranteed loss.
+ */
+const HIGH_LOW_BANDS: {
+  standard: Record<'under' | 'over', DiceFace[]>;
+  highRoller: Record<HighLowCall, DiceFace[]>;
+} = {
+  standard: { under: [1, 2, 3], over: [4, 5, 6] },
+  highRoller: { under: [1, 2], middle: [3, 4], over: [5, 6] },
+};
 
 const TIERS: PeddlerCardTier[] = ['bust', 'refund', 'modest', 'good', 'jackpot'];
 
@@ -537,6 +553,75 @@ export const PeddlerManager = {
     else if (outcome === 'bust') state.stats.peddlerBusts += 1;
 
     return { chosen, landed, wager: stake, outcome, payout, rebate };
+  },
+
+  /**
+   * Lowest wager `rollHighLow` will accept for the given band -- a real
+   * gate, not just a UI hint, since `rollHighLow` itself re-checks this
+   * before touching gold. High Roller's own minimum additionally
+   * requires GameState.grimsbyHighRollerUnlocked; a stale/replayed call
+   * without it is rejected the same way resolveFlip's own highRoller
+   * flag is.
+   */
+  highLowMinWager(highRoller: boolean): number {
+    return highRoller
+      ? Tuning.get('peddler.highLow.highRollerMinWager')
+      : Tuning.get('peddler.highLow.minWager');
+  },
+
+  /**
+   * Resolves one High/Low roll -- Grimsby's third dice game, alongside
+   * Call a Number (rollDice above) and Pick Your Card. Same "he has to
+   * actually be here" gate, same floored/positive/affordable wager
+   * check, same Vendor Rep rebate treatment as rollDice -- the only real
+   * difference is the win condition (landing in the called band, not an
+   * exact/adjacent face) and the flat payout multiplier instead of a
+   * tiered one. `highRoller` selects the three-way band split and the
+   * bigger multiplier, and is rejected outright (null, nothing charged)
+   * without GameState.grimsbyHighRollerUnlocked -- same defensive
+   * re-check resolveFlip's own highRoller flag already gets, so a stale
+   * client can't roll a High Roller call it was never actually granted.
+   */
+  rollHighLow(state: GameState, wager: number, call: HighLowCall, highRoller: boolean): HighLowRollResult | null {
+    if (!PeddlerManager.isPresent(state)) return null;
+    if (highRoller && !state.grimsbyHighRollerUnlocked) return null;
+    const bands = highRoller ? HIGH_LOW_BANDS.highRoller : HIGH_LOW_BANDS.standard;
+    const faces = (bands as Partial<Record<HighLowCall, DiceFace[]>>)[call];
+    if (!faces) return null;
+    const stake = Math.floor(wager);
+    if (!Number.isFinite(stake) || stake <= 0) return null;
+    if (stake < PeddlerManager.highLowMinWager(highRoller)) return null;
+    if (state.gold < stake) return null;
+    // Same "no fixed fee to discount, Vendor Rep pays out as a rebate
+    // instead" reasoning rollDice's own comment gives -- the wager here
+    // is just as free-form.
+    const rebate = repRebate(state, stake);
+
+    state.gold -= stake;
+    state.stats.goldSpent += stake;
+    state.stats.peddlerGoldSpent += stake;
+
+    const landed = (1 + Math.floor(Math.random() * 6)) as DiceFace;
+    const win = faces.includes(landed);
+    const multiplier = highRoller
+      ? Tuning.get('peddler.highLow.highRollerPayoutMultiplier')
+      : Tuning.get('peddler.highLow.standardPayoutMultiplier');
+    const payout = win ? Math.floor(stake * multiplier) : 0;
+
+    const totalPayout = payout + rebate;
+    if (totalPayout > 0) {
+      const storage = ModifierManager.goldStorage(state);
+      state.gold = Math.min(storage, state.gold + totalPayout);
+    }
+
+    // Same shared Grimsby-wide counters rollDice's own comment explains
+    // (not Dice/High-Low-specific ones) -- a win here reads as a
+    // "jackpot" for achievement/stat purposes the same way an exact
+    // Call-a-Number match does.
+    if (win) state.stats.peddlerJackpots += 1;
+    else state.stats.peddlerBusts += 1;
+
+    return { call, highRoller, landed, wager: stake, win, payout, rebate };
   },
 
   /* -------------------------------- the tab -------------------------------- */

@@ -3160,6 +3160,42 @@
     "description": "Both the fee and the reward for a High Roller flip are this many times the regular flip's -- see PeddlerManager.resolveFlip."
   },
   {
+    "id": "peddler.highLow.minWager",
+    "label": "High/Low: standard minimum wager",
+    "category": "peddler",
+    "value": 10,
+    "default": 10,
+    "min": 1,
+    "description": "Lowest gold wager accepted on a standard (Under/Over) High/Low roll -- see PeddlerManager.highLowMinWager."
+  },
+  {
+    "id": "peddler.highLow.highRollerMinWager",
+    "label": "High/Low: High Roller minimum wager",
+    "category": "peddler",
+    "value": 250,
+    "default": 250,
+    "min": 1,
+    "description": "Lowest gold wager accepted on a High Roller (Under/Middle/Over) High/Low roll -- see PeddlerManager.highLowMinWager. Requires GameState.grimsbyHighRollerUnlocked, same gate the card game's own High Roller mode uses."
+  },
+  {
+    "id": "peddler.highLow.standardPayoutMultiplier",
+    "label": "High/Low: standard payout multiplier",
+    "category": "peddler",
+    "value": 2,
+    "default": 2,
+    "min": 1,
+    "description": "Gold paid back per wagered gold on a winning standard (Under/Over, coin-flip odds) High/Low call -- see PeddlerManager.rollHighLow."
+  },
+  {
+    "id": "peddler.highLow.highRollerPayoutMultiplier",
+    "label": "High/Low: High Roller payout multiplier",
+    "category": "peddler",
+    "value": 3,
+    "default": 3,
+    "min": 1,
+    "description": "Gold paid back per wagered gold on a winning High Roller (Under/Middle/Over, one-in-three odds) High/Low call -- see PeddlerManager.rollHighLow."
+  },
+  {
     "id": "quest.gatheringBountyChance",
     "label": "Gathering Bounty: chance per board slot",
     "category": "quests",

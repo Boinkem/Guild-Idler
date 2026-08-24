@@ -1,4 +1,4 @@
-import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DiceRollResult, ElementType, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
+import { ActiveQuest, AutoChainTactics, ChainReplayDifficulty, DiceFace, DiceRollResult, ElementType, GameState, GemTier, GuildHallSlotId, GuildHallSlotRect, Hero, HeroClass, HighLowCall, HighLowRollResult, MaterialId, Modifiers, Pet, PeddlerFlipResult, PeddlerTabRunResult, QuestOffer, QuestResult, Rarity, RaidDifficulty, RaidResult, Role, Stats } from './types';
 import { createRng, uid } from './rng';
 import { HeroManager } from './managers/HeroManager';
 import { QuestManager, BOARD_REFRESH_MS, CHAIN_BY_ID } from './managers/QuestManager';
@@ -88,6 +88,12 @@ export class GameEngine {
    *  instead of Pick Your Card -- set by rollGrimsbyDice, cleared by
    *  dismissGrimsbyDiceResult. Feeds PeddlerDiceModal's own reveal. */
   lastGrimsbyDiceResult: DiceRollResult | null = null;
+  /** Same shape again, for the High/Low game -- set by rollGrimsbyHighLow,
+   *  cleared by dismissGrimsbyHighLowResult. Feeds PeddlerDiceModal's own
+   *  "High or Low" tab reveal, kept fully separate from
+   *  lastGrimsbyDiceResult above so switching tabs mid-result doesn't
+   *  clear or blend the other game's own pending reveal. */
+  lastGrimsbyHighLowResult: HighLowRollResult | null = null;
   /** Same shape again, for a single "Run it up" push in Grimsby's Tab --
    *  set by runUpGrimsbyTab, cleared by dismissGrimsbyTabResult. The
    *  ONGOING tab itself lives in GameState.peddlerTab (persisted,
@@ -2854,6 +2860,37 @@ export class GameEngine {
 
   dismissGrimsbyDiceResult() {
     this.lastGrimsbyDiceResult = null;
+    this.notify();
+  }
+
+  /**
+   * The High/Low game's own "place your wager" action -- same shape as
+   * rollGrimsbyDice just above (validate, resolve, stash the transient
+   * result, play a sound, check achievements, notify, save), against
+   * PeddlerManager.rollHighLow instead of rollDice. Both the wager floor
+   * and the High Roller gate are re-checked here (not just left to
+   * rollHighLow's own defensive checks) so a bad input or a stale High
+   * Roller call gets its own clear message rather than a silent no-op.
+   */
+  rollGrimsbyHighLow(wager: number, call: HighLowCall, highRoller: boolean) {
+    if (!PeddlerManager.isPresent(this.state)) return this.say('There’s no one there right now.');
+    if (highRoller && !this.state.grimsbyHighRollerUnlocked) return this.say('High Roller isn’t unlocked yet.');
+    const stake = Math.floor(wager);
+    if (!Number.isFinite(stake) || stake <= 0) return this.say('Wager something first.');
+    const minWager = PeddlerManager.highLowMinWager(highRoller);
+    if (stake < minWager) return this.say(`The minimum wager here is ${minWager} gold.`);
+    if (this.state.gold < stake) return this.say('Not enough gold.');
+    const result = PeddlerManager.rollHighLow(this.state, stake, call, highRoller);
+    if (!result) return this.say('Something about that didn’t work.');
+    this.lastGrimsbyHighLowResult = result;
+    playSound(result.win ? 'legendary_drop' : 'quest_fail');
+    this.reportAchievements(AchievementManager.checkAll(this.state, Date.now()));
+    this.notify();
+    void this.saveNow();
+  }
+
+  dismissGrimsbyHighLowResult() {
+    this.lastGrimsbyHighLowResult = null;
     this.notify();
   }
 

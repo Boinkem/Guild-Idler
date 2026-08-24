@@ -19748,3 +19748,83 @@ language for consistency.
 vite.web.config.ts` both pass clean. No `SAVE_VERSION` bump -- this reads
 existing `state.discoveredItems`/`chain.rewardItems` and writes nothing
 new to the save.
+
+### Grimsby's Dice: pixel dice-face picker + a new High or Low game (patch 0253)
+```discord-update
+Dev Update | Grimsby's Dice
+
+- Replaced Call a Number's plain 1-6 buttons with real pixel dice that pop up on hover and press down on click
+- Added a new High or Low game: call Under or Over on a d6 roll for double your gold back
+- Unlock High Roller for a tighter Under/Middle/Over call at higher stakes and a bigger payout
+```
+
+Two direct requests off the same conversation, landed together since both
+touch `PeddlerDiceModal.tsx`.
+
+**Dice-face picker.** Call a Number's plain `.chip` number row (1-6 text
+buttons) is now built from the Snoblin Pixel Dice FREE pack -- new
+`DicePickerFace.tsx`, one small component per selectable face, reading
+three loose per-face files (`public/peddler/dice/picker/dice_<n>_
+<normal|hover|dragging>.png`, 22x22 source art) rather than sprite-sheet
+math the way the existing roll-animation die (`DiceSprite.tsx`,
+`dice-sheet.png`) needs -- deliberately kept as two separate components
+since the two assets have nothing in common geometrically. Hovering lifts
+the die and swaps to its hover frame; clicking presses it down into its
+dragging frame for 200ms before committing the pick, matching the
+approved mockup's own "pop up, then press down" behaviour. Both this and
+the new High/Low zones below reuse this hover/pressed sprite-swap
+approach.
+
+**High or Low -- a third Grimsby dice game.** WoW's unofficial dueling-die
+wager, reskinned as a solo roll against the house rather than a second
+player. New types (`HighLowCall`, `HighLowRollResult`), a new
+`PeddlerManager.rollHighLow` (same "he has to actually be here" gate,
+same floored/positive/affordable wager check, same Vendor Rep rebate
+treatment `rollDice` already established for Call a Number), and a new
+engine action pair (`rollGrimsbyHighLow`/`dismissGrimsbyHighLowResult`,
+mirroring `rollGrimsbyDice`/`dismissGrimsbyDiceResult` exactly). Two band
+splits, both direct requests:
+- **Standard** -- Under (1-3) / Over (4-6), a coin-flip either way, 2x
+  payout, 10g minimum wager.
+- **High Roller** -- Under (1-2) / Middle (3-4) / Over (5-6), a
+  one-in-three call, 3x payout, 250g minimum wager. Gated behind
+  `GameState.grimsbyHighRollerUnlocked` -- reuses the existing unlock the
+  card game's own High Roller mode already established (bought once on
+  Grimsby's own page) rather than a second, parallel unlock for the same
+  underlying "bigger stakes" concept. A stale/replayed High Roller call
+  without the unlock is rejected server-side in `rollHighLow`, not just
+  hidden client-side.
+
+All four new numbers (both minimum wagers, both payout multipliers) are
+real `Tuning` registry entries (`peddler.highLow.*`), editable live via
+the devtool same as every other peddler balance number, not hardcoded.
+
+**UI.** `PeddlerDiceModal.tsx` gained an internal sub-tab switcher ("Call
+a Number" / "High or Low") rather than a second vendor-card button on
+`PeddlerPanel.tsx` -- both games share one wager-and-roll shell at the
+same table, so a second modal would have been pure duplication. Each tab
+keeps fully independent wager/rolling/result state (High/Low's own
+`lastGrimsbyHighLowResult`, separate from Call a Number's existing
+`lastGrimsbyDiceResult`) so switching tabs mid-roll never clears or
+blends the other game's pending result. High/Low's own betting zones
+(new `HighLowZone`, local to the modal file) group 2-3 dice-face icons
+under one clickable call -- hovering/clicking any die in a zone lifts/
+presses the whole zone as a single target, matching the approved
+mockup's grouped-zone behaviour, distinct from Call a Number's row where
+every face is its own independent pick.
+
+No `SAVE_VERSION` bump -- `lastGrimsbyHighLowResult` is a transient
+engine field (same shape `lastGrimsbyDiceResult`/`lastGrimsbyResult`
+already are), and High Roller gating reuses the existing persisted
+`grimsbyHighRollerUnlocked` flag rather than adding a new one.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. `rollHighLow` verified directly at
+runtime (not just typechecked) against a real `GameState`: below-minimum
+wagers rejected for both bands without touching gold; a `'middle'` call
+rejected outright in standard mode; a High Roller call rejected without
+the unlock; and, over 20,000 trials each, standard Under lands its
+correct 1-3 band on every win and 4-6 on every loss at a ~50% win rate,
+High Roller Middle lands its correct 3-4 band at a ~33% win rate, and
+payouts are exactly 2x/3x the wager on every single win with no
+exceptions.

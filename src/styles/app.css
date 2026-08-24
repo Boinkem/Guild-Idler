@@ -3804,6 +3804,58 @@ button.harvest-item:hover {
 .dice-roll-button:hover:not(:disabled) { background: none; transform: scale(1.04); }
 .dice-roll-button:disabled { opacity: 0.6; cursor: default; }
 
+/* Sub-tab switcher inside PeddlerDiceModal (Call a Number / High or
+   Low) -- same .btn-subtab family every other sub-tabbed panel uses,
+   just centered since this modal has no left-aligned page chrome to
+   anchor against. */
+.dice-tab-row { display: flex; justify-content: center; gap: 6px; margin-bottom: 10px; }
+
+/* Individual pixel-dice selection buttons (DicePickerFace.tsx) -- the
+   Snoblin pack's own normal/hover/dragging frames handle the visual
+   swap; this only handles the container's own lift/press motion and
+   selected-state highlight, same "hover lifts, click presses down"
+   language HIGH_LOW_ZONE below shares. */
+.dice-picker-face {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 4px;
+  min-height: 0;
+  border-radius: 6px;
+  transition: transform 140ms ease, background 140ms ease;
+}
+.dice-picker-face.hover { transform: translateY(-6px); background: color-mix(in srgb, var(--brass) 12%, transparent); }
+.dice-picker-face.pressed { transform: translateY(3px); }
+.dice-picker-face.selected { background: color-mix(in srgb, var(--brass) 20%, transparent); box-shadow: 0 0 0 2px var(--brass); }
+.dice-picker-face:disabled { opacity: 0.45; cursor: default; }
+
+/* High/Low betting zones (PeddlerDiceModal.tsx's "High or Low" tab) --
+   a card per call (Under/Over, or Under/Middle/Over in High Roller
+   mode), each grouping its own DicePickerFace row so hovering/clicking
+   ANY die in a zone lifts/presses the whole zone as one target, not
+   just that individual face. */
+.high-low-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--panel-3);
+  border-radius: var(--radius);
+  padding: 10px 12px 8px;
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease;
+}
+.high-low-zone.hover { transform: translateY(-6px); border-color: var(--brass); }
+.high-low-zone.pressed { transform: translateY(3px); border-color: var(--brass); }
+.high-low-zone.selected { border-color: var(--moss); box-shadow: 0 0 0 2px var(--moss); }
+.high-low-zone-dice { display: flex; gap: 2px; }
+.high-low-zone-dice img { width: 30px; height: 30px; image-rendering: pixelated; }
+
 /*
  * Rarity banner backgrounds -- RARITY_BANNER art (see util.ts) sits
  * full-bleed behind an item-card and its detail modal, showing rarity as
