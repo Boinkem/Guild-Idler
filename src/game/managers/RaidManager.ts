@@ -57,6 +57,41 @@ export const RaidManager = {
    * unchanged by this -- see the retune note in guild-idler-status.md for
    * why those needed a fresh look regardless once this landed.
    */
+  /** Average party level, rounded -- shared by loot level-scaling (patch
+   *  0258, a dedicated Set-piece drop's stat budget) and success
+   *  re-baselining (patch 0259, see successBaselineLevel below), so both
+   *  systems agree on "how leveled is this party" off one number rather
+   *  than computing it twice and risking drift. */
+  partyLevel(heroes: Hero[]): number {
+    if (heroes.length === 0) return 1;
+    return Math.round(heroes.reduce((sum, h) => sum + h.level, 0) / heroes.length);
+  },
+
+  /**
+   * The level partySuccessBonus's own baselineOffset re-anchors against
+   * -- never below the raid's own reqLevel (a party at or under it gets
+   * exactly the raid's originally-authored difficulty, unchanged), but
+   * raised to the party's own current level once they've out-leveled it.
+   *
+   * Patch 0259 (see guild-idler-status.md): direct fix for "loot now
+   * scales to level (patch 0258), so difficulty needs to as well, or an
+   * out-leveled raid becomes a risk-free farm for chase loot." Without
+   * this, partySuccessBonus's baselineOffset stayed anchored to the
+   * raid's original reqLevel forever -- a heavily over-leveled party's
+   * raw success (which scales with their ACTUAL level/stats, unbounded)
+   * grew without limit relative to that fixed baseline and hit the 95%
+   * ceiling trivially, regardless of real investment. Re-anchoring to
+   * the party's own level removes that free ride entirely (confirmed
+   * choice: full re-baseline, not a partial one) -- only genuine
+   * investment above what's expected for THEIR level (gear, spent stat
+   * points, guild upgrades, elemental matchups) still moves the needle,
+   * the same "recompute against current level, not the content's
+   * original level" principle patch 0258 already applied to loot.
+   */
+  successBaselineLevel(raid: { reqLevel: number }, heroes: Hero[]): number {
+    return Math.max(raid.reqLevel, RaidManager.partyLevel(heroes));
+  },
+
   partySuccessBonus(state: GameState, heroes: Hero[], now: number, reqLevel: number): number {
     if (heroes.length === 0) return 0;
     const contributions = heroes
@@ -165,7 +200,7 @@ export const RaidManager = {
     const encounter = RAID_ENCOUNTER_BY_ID[encounterId];
     if (!raid || !encounter) return 0;
     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)).filter((h): h is Hero => !!h);
-    const bonus = RaidManager.partySuccessBonus(state, heroes, now, raid.reqLevel);
+    const bonus = RaidManager.partySuccessBonus(state, heroes, now, RaidManager.successBaselineLevel(raid, heroes));
     const diffCfg = RAID_DIFFICULTIES[difficulty];
     const elemental = RaidManager.elementalBonus(heroes, encounter);
     const override = raid.successModifier ?? 0;
@@ -249,7 +284,7 @@ export const RaidManager = {
     const heroes = heroIds.map((id) => state.heroes.find((h) => h.id === id)!);
     const raidDef = RAID_BY_ID[raidId]!;
     const roleMismatch = RaidManager.roleMismatchPenalty(heroes, raidDef.requiredRoles);
-    const partySuccessBonus = RaidManager.partySuccessBonus(state, heroes, now, raidDef.reqLevel) - roleMismatch;
+    const partySuccessBonus = RaidManager.partySuccessBonus(state, heroes, now, RaidManager.successBaselineLevel(raidDef, heroes)) - roleMismatch;
     const duration = RaidManager.previewDuration(state, heroIds, raidId, difficulty, now);
 
     const active: ActiveRaid = {
@@ -288,15 +323,17 @@ export const RaidManager = {
     // every encounter in the loop below reuses this single result rather
     // than re-deriving it per encounter.
     const roleMismatched = RaidManager.hasRoleMismatch(heroes, raid?.requiredRoles);
-    // Patch 0258 (Dedicated Reward Level Scaling, see guild-idler-
-    // status.md) -- the level a hand-authored Set-piece drop scales
-    // against. Party average, rounded, not each hero's own individual
-    // level: loot lands in the shared stash, not on a specific hero, so
-    // there's no single "whose level" to anchor to the way a chain
-    // replay (always one hero) naturally has.
-    const partyLevel = heroes.length > 0
-      ? Math.round(heroes.reduce((sum, h) => sum + h.level, 0) / heroes.length)
-      : 1;
+    // Patch 0258 (Dedicated Reward Level Scaling) -- the level a
+    // hand-authored Set-piece drop scales against. Party average,
+    // rounded, not each hero's own individual level: loot lands in the
+    // shared stash, not on a specific hero, so there's no single "whose
+    // level" to anchor to the way a chain replay (always one hero)
+    // naturally has. Patch 0259 reuses this same number for success
+    // re-baselining (successBaselineLevel, applied back in start() --
+    // this raid's own partySuccessBonus was already locked in then, not
+    // recomputed per resolve, same as before) -- one shared helper now,
+    // see partyLevel's own comment.
+    const partyLevel = RaidManager.partyLevel(heroes);
 
     let encountersCleared = 0;
     let gold = 0;

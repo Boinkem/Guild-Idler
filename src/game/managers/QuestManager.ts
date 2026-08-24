@@ -569,6 +569,26 @@ export const QuestManager = {
    * for this system -- ordinary quest/chain offers already lock success
    * in at commit via previewSuccess, raids don't.
    *
+   * `reqLevel` is `Math.max(chain.reqLevel, heroLevel)`, not the chain's
+   * own fixed reqLevel alone -- patch 0259 (see guild-idler-status.md),
+   * the same successBaselineLevel fix RaidManager got, applied here
+   * since this offer feeds directly into previewSuccess's own
+   * baselineStats(hero.heroClass, offer.reqLevel) split. previewSuccess
+   * was built assuming reqLevel always tracks close to hero.level (true
+   * for an ordinary board offer via rollReqLevel, never true for a
+   * chain replay's permanently-fixed original level) -- its own comment
+   * says outright that a genuinely out-leveled reqLevel is "the one
+   * lever that can still reach MAX_SUCCESS on its own." A max-level hero
+   * replaying an early chain on Legendary was hitting exactly that free
+   * ceiling, for patch 0258's now-scaled dedicated loot. Re-anchoring
+   * reqLevel here removes it -- never below the chain's own reqLevel (an
+   * under-leveled hero replaying, if Replay Memories' own unlock allows
+   * it, still faces the chain's originally-authored difficulty
+   * unchanged), only ever raised once the hero's out-leveled it.
+   * `rewardGold`/`rewardXp` below deliberately still key off `chain.
+   * reqLevel` directly, not this adjusted `reqLevel` -- only the success
+   * baseline needed the fix, not the payout, confirmed scope.
+   *
    * Per-stage rewardGold/rewardXp are NOT reduced or boosted by
    * difficulty (confirmed design: only loot is difficulty-modified) --
    * computed the exact same way chainOffer's own do. The chain's
@@ -582,7 +602,7 @@ export const QuestManager = {
    * offer can never collide with an in-flight first-clear offer for the
    * same chain/stage.
    */
-  chainReplayOffer(chain: ChainDef, stage: number, difficulty: ChainReplayDifficulty, rng: Rng): QuestOffer {
+  chainReplayOffer(chain: ChainDef, stage: number, difficulty: ChainReplayDifficulty, rng: Rng, heroLevel: number): QuestOffer {
     const stageDef = chain.stages[stage];
     const cfg = DIFFICULTIES[stageDef.difficulty];
     const diffCfg = CHAIN_REPLAY_DIFFICULTIES[difficulty];
@@ -597,7 +617,7 @@ export const QuestManager = {
       rewardGold: Math.floor(questGoldBaseline(chain.reqLevel) * cfg.rewardMultiplier * stageDef.goldMultiplier),
       rewardXp: Math.floor(questXpBaseline(chain.reqLevel) * cfg.rewardMultiplier * stageDef.goldMultiplier),
       loot: lootTableFor(stageDef.difficulty, rng),
-      reqLevel: chain.reqLevel,
+      reqLevel: Math.max(chain.reqLevel, heroLevel),
       chain: { chainId: chain.id, stage, totalStages: chain.stages.length, replay: difficulty },
     };
   },

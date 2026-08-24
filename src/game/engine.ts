@@ -1476,7 +1476,7 @@ export class GameEngine {
     const existing = this.state.activeChainReplays.find((r) => r.heroId === heroId && r.chainId === chainId);
     const stage = existing?.difficulty === difficulty ? existing.stage : 0;
     const rng = createRng(`chainReplayOffer:${chainId}:${heroId}:${Date.now()}`);
-    const offer = QuestManager.chainReplayOffer(chain, stage, difficulty, rng);
+    const offer = QuestManager.chainReplayOffer(chain, stage, difficulty, rng, hero.level);
     const { error } = QuestManager.start(this.state, hero, offer, hero.equippedConsumables ?? [], Date.now());
     if (error) return this.say(error);
     this.state.focusedHeroId = heroId;

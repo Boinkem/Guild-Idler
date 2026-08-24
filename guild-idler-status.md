@@ -20364,3 +20364,73 @@ loot from a chain replay or raid encounter is untouched -- its own
 by itemLevel (patch 0214/0215), this patch only ever touches the
 hand-authored dedicated-item path. `CraftingManager.reroll` and the
 107-item content itself (patch 0256/0257) are untouched.
+
+### Raid & Chain Replay success now re-baselines to current level (patch 0259)
+
+```discord-update
+Dev Update | Raid & Replay Difficulty Rebalance
+- Fixed: raids and chain replays no longer become a guaranteed 95% success once you've badly out-leveled them -- difficulty now scales to your party's current level, the same way loot already does
+- Changed: over-leveling alone no longer boosts your odds on old content -- real investment (gear, spent stat points, guild upgrades, elemental matchups) is what moves the needle now
+```
+
+Direct follow-up to patch 0258: "loot now scales to level, so difficulty
+needs to as well, or you can't outlevel raids." Traced and confirmed the
+exact same root cause in two places, both fixed here together.
+
+**Raids.** `RaidManager.partySuccessBonus`'s own `baselineOffset` was
+always computed against the raid's fixed `reqLevel` -- a party's `raw`
+success scales with their actual level/stats (unbounded), so once a
+party out-leveled a raid, `raw - baselineOffset` climbed without limit
+and hit the 95% (`MAX_SUCCESS`) ceiling and just sat there, regardless
+of real investment. New `RaidManager.successBaselineLevel(raid, heroes)`
+= `Math.max(raid.reqLevel, partyLevel)` -- never below the raid's own
+authored reqLevel (an at-or-under-level party gets exactly the
+originally-intended difficulty, unchanged), but raised to the party's
+own current level once they've out-leveled it, which zeroes out the
+free ride from level alone. Applied everywhere `partySuccessBonus` gets
+its reqLevel: `start()` (where the whole raid's odds lock in) and
+`previewEncounterSuccess()` (the UI's live preview, so it never shows
+better odds than the real roll will use). New shared
+`RaidManager.partyLevel(heroes)` helper (party average, rounded)
+factored out of patch 0258's own inline calc in `resolve()` -- one
+number, reused by both loot scaling and success re-baselining now,
+instead of two independent computations that could drift apart.
+
+**Chain replays -- the identical bug, found while checking whether the
+same fix was needed here too (it was, and confirmed in scope).**
+`chainReplayOffer`'s `reqLevel` was permanently fixed to the chain's own
+original `reqLevel`, then fed straight into the ordinary
+`QuestManager.previewSuccess` baseline-split formula -- a formula whose
+own comment states outright that genuinely out-leveling a quest's
+reqLevel "is the one lever that can still reach MAX_SUCCESS on its own."
+That's true and intended for the ordinary quest board, where
+`offer.reqLevel` always rolls close to `hero.level` (`rollReqLevel`) --
+but a chain replay's reqLevel never re-rolls at all, so a max-level hero
+replaying an early chain on Legendary hit the exact same free ceiling,
+for the exact same now-scaled dedicated-item loot. Fixed the same way:
+`chainReplayOffer` now takes `heroLevel` and sets `reqLevel:
+Math.max(chain.reqLevel, heroLevel)` -- same floor-never-drops guarantee
+as the raid fix. `rewardGold`/`rewardXp` deliberately still key off
+`chain.reqLevel` directly, not this adjusted value -- only the success
+baseline needed correcting, not the payout, confirmed scope. One call
+site (`engine.ts`'s `startChainReplay`) updated to pass `hero.level`; no
+other caller regenerates this offer (it's created once at commit and
+stored, never reconstructed on resume or offline catch-up).
+
+**Confirmed design: full re-baseline, not a partial one.** Over-leveling
+alone now contributes nothing to success odds past a raid/chain's own
+reqLevel -- only real investment (gear, spent stat points, guild
+upgrades, elemental matchups) does, matching the direct answer to "how
+hard should the correction be."
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. No live runtime/gameplay test this
+pass -- same caveat every patch in this series has carried; worth a
+real playtest checking a heavily over-leveled party's odds on an early
+raid and an early chain replay specifically, since those are the two
+cases this patch exists to fix.
+
+**Explicitly unaffected, confirmed scope:** ordinary quest board
+offers (`rollReqLevel` already keeps `reqLevel` close to `hero.level`,
+so this bug never applied to them) and a raid/chain's own gold/XP
+payouts (still keyed off the content's original reqLevel, untouched).
