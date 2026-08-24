@@ -3826,6 +3826,52 @@ button.harvest-item:hover {
    anchor against. */
 .dice-tab-row { display: flex; justify-content: center; gap: 6px; margin-bottom: 10px; }
 
+/* Shared BUST interstitial (GrimsbyBustCard.tsx, patch 0261) -- solid
+   black card, bold oversized red text, direct request ("Bold, large red
+   text on a black card"). Deliberately opaque black rather than the
+   translucent color-mix() every other Grimsby overlay/panel in this file
+   uses (.peddler-corner-comment, .peddler-result-summary, etc.) -- a
+   bust is meant to read as a hard stop, not another soft parchment-toned
+   info box blending in with the rest of the table. */
+.grimsby-bust-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 220px;
+  min-height: 150px;
+  padding: 24px 20px;
+  background: #0a0a0a;
+  border: 2px solid var(--blood);
+  border-radius: var(--radius);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--blood) 45%, transparent);
+}
+.grimsby-bust-card-label {
+  font-size: 2.4rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  color: #ff3b3b;
+  text-shadow: 0 0 12px color-mix(in srgb, #ff3b3b 60%, transparent);
+}
+.grimsby-bust-card-subtitle {
+  color: var(--muted);
+  text-align: center;
+  margin: 0;
+}
+
+/* The Tab game's own running pot value -- direct request to make this
+   bigger than the round-history rows around it (which stay .tiny/
+   .muted), since it's the one number in that little card that actually
+   matters moment to moment. Only ever applied to the live round's own
+   value (see PeddlerTabModal.tsx), never the historical zeroed-out rows
+   above it. */
+.peddler-tab-pot-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--brass);
+}
+
 /* Individual pixel-dice selection buttons (DicePickerFace.tsx) -- the
    Snoblin pack's own normal/hover/dragging frames handle the visual
    swap; this only handles the container's own lift/press motion and

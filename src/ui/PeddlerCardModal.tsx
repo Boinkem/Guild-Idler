@@ -11,6 +11,7 @@ import { ItemIcon, MaterialIcon, ConsumableIcon, CurioIcon } from './icons';
 import { EggIcon } from './EggIcon';
 import { measureFlyOffset } from './flyTarget';
 import { RewardGlowParticle } from './RewardGlowParticle';
+import { GrimsbyBustCard } from './GrimsbyBustCard';
 
 /**
  * Random one-liners Grimsby fires off the moment the cards spawn --
@@ -475,9 +476,18 @@ export function PeddlerCardModal({
                 })}
               </div>
               {revealStage === 'settled' && (
-                <div className="peddler-result-summary">
-                  <p><b>You got:</b> {result.rewardSummary}</p>
-                </div>
+                pickedCard?.outcome.tier === 'bust' ? (
+                  <GrimsbyBustCard
+                    subtitle="Nothing this time. Try again?"
+                    onGoAgain={handleRollAgain}
+                    goAgainDisabled={!canAffordRollAgain}
+                    goAgainTitle={canAffordRollAgain ? undefined : (PeddlerManager.isPresent(engine.state) ? 'Not enough gold' : 'Grimsby’s already gone for now')}
+                  />
+                ) : (
+                  <div className="peddler-result-summary">
+                    <p><b>You got:</b> {result.rewardSummary}</p>
+                  </div>
+                )
               )}
               {burstParticles && burstParticles.map((p, i) => (
                 <RewardGlowParticle
@@ -495,7 +505,7 @@ export function PeddlerCardModal({
         </div>
 
         <div className="row end" style={{ marginTop: 14, gap: 8 }}>
-          {revealStage === 'settled' && (
+          {revealStage === 'settled' && pickedCard?.outcome.tier !== 'bust' && (
             <button
               className="btn-purple"
               disabled={!canAffordRollAgain}

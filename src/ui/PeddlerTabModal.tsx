@@ -5,6 +5,7 @@ import { formatGold } from '../game/util';
 import { GrimsbySprite } from './sprites/GrimsbySprite';
 import { measureFlyOffset } from './flyTarget';
 import { RewardGlowParticle } from './RewardGlowParticle';
+import { GrimsbyBustCard } from './GrimsbyBustCard';
 
 /**
  * Grimsby's third game -- a repeating push-your-luck: buy in, then each
@@ -56,6 +57,14 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
   // progress itself, when the actual ask was for the close specifically
   // to be the one beat that changes his pose.
   const [closedPose, setClosedPose] = useState(false);
+  // Patch 0261, direct request: a bust used to snap straight back to the
+  // tier-select screen the instant it happened (state.peddlerTab nulls
+  // immediately -- see the comment on the result paragraph below), with
+  // nothing but a small "Tab's closed" line above it to mark the moment.
+  // Gates the tier-select screen behind the shared BUST card
+  // (GrimsbyBustCard.tsx) and a deliberate "Go Again" click instead, same
+  // pattern as the Dice modal.
+  const [bustPending, setBustPending] = useState(false);
 
   const settleBtnRef = useRef<HTMLButtonElement>(null);
   const [burstParticles, setBurstParticles] = useState<{
@@ -67,13 +76,18 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
   // in this mount -- reacting to the result itself, not the click, is
   // what stays correct regardless of how the tab got here.
   useEffect(() => {
-    if (runResult && !runResult.success) setClosedPose(true);
+    if (runResult && !runResult.success) { setClosedPose(true); setBustPending(true); }
   }, [runResult]);
 
   const handleOpen = (tier: number) => {
     setClosedPose(false);
     setBurstParticles(null);
     engine.openGrimsbyTab(tier);
+  };
+
+  const handleGoAgain = () => {
+    engine.dismissGrimsbyTabResult();
+    setBustPending(false);
   };
 
   const handleSettle = () => {
@@ -118,26 +132,29 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="peddler-modal-body">
-          {/* Lives above the tab/tier-select split below, not nested inside
-              it -- a bust sets state.peddlerTab to null the instant it
-              happens, so a result message nested under `{tab && ...}` would
-              vanish the same render it needed to show, dropping straight
-              back to the tier-select screen with nothing said. This is
-              exactly that bug, fixed. */}
-          {runResult && (
-            <p
-              className="peddler-corner-comment tiny"
-              style={{ color: runResult.success ? 'var(--brass)' : 'var(--muted)' }}
-            >
-              <b>{runResult.success ? 'Held.' : "Tab's closed."}</b>{' '}
-              {runResult.success
-                ? `Tab climbs to ${formatGold(runResult.value)}g.`
-                : "I'll forget this one if you will."}
+          {/* Only ever the success message now -- a bust's own message
+              moved into the BUST card's subtitle below (patch 0261),
+              since that card now owns the whole "tab just closed" moment
+              instead of this small line trying to announce it while the
+              tier-select screen reappeared underneath it in the same
+              render. Still lives above the tab/bust/tier-select split,
+              not nested inside any one branch of it, same reasoning as
+              before -- state.peddlerTab nulls the instant a run ends,
+              success or bust, so anything conditioned on `tab` itself
+              would vanish before it could show. */}
+          {runResult && runResult.success && (
+            <p className="peddler-corner-comment tiny" style={{ color: 'var(--brass)' }}>
+              <b>Held.</b> Tab climbs to {formatGold(runResult.value)}g.
               {runResult.rebate > 0 && ` (+${formatGold(runResult.rebate)}g loyalty)`}
             </p>
           )}
 
-          {!tab && (
+          {bustPending ? (
+            <GrimsbyBustCard
+              subtitle="The whole tab's gone. I'll forget this one if you will."
+              onGoAgain={handleGoAgain}
+            />
+          ) : !tab && (
             <>
               <p className="peddler-corner-comment tiny muted">
                 Name your tier, and he opens a tab. Push it further any time after that, or settle up
@@ -171,7 +188,9 @@ export function PeddlerTabModal({ onClose }: { onClose: () => void }) {
                 {Array.from({ length: tab.round }, (_, i) => i + 1).map((round) => (
                   <div key={round} className="spread tiny" style={{ fontFamily: 'monospace' }}>
                     <span className="muted">Round {round}</span>
-                    <span>{formatGold(round === tab.round ? tab.value : 0)}</span>
+                    <span className={round === tab.round ? 'peddler-tab-pot-value' : undefined}>
+                      {formatGold(round === tab.round ? tab.value : 0)}
+                    </span>
                   </div>
                 ))}
               </div>

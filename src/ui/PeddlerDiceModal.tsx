@@ -7,6 +7,7 @@ import { formatGold } from '../game/util';
 import { GrimsbySprite } from './sprites/GrimsbySprite';
 import { DiceSprite } from './sprites/DiceSprite';
 import { DicePickerFace } from './sprites/DicePickerFace';
+import { GrimsbyBustCard } from './GrimsbyBustCard';
 
 const FACES: DiceFace[] = [1, 2, 3, 4, 5, 6];
 
@@ -57,6 +58,18 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
   const [wagerText, setWagerText] = useState('');
   const [rolling, setRolling] = useState(false);
   const rollTimer = useRef<number | null>(null);
+  // Patch 0261, direct request: a bust used to just leave the picker/die
+  // sitting there the whole time with only a small inline "Bust." line to
+  // notice -- nothing stopped a player from immediately picking a new
+  // number and rolling again without the bust ever really registering.
+  // This gates the picker/die/wager row behind a deliberate "Go Again"
+  // click on the shared BUST card (GrimsbyBustCard.tsx) instead, same
+  // pattern as the other two games below. Set the instant a bust result
+  // lands (an effect, not the roll handler itself, so it also catches a
+  // bust that resolves from a source this component didn't personally
+  // trigger the roll for -- consistent with how PeddlerTabModal's own
+  // bust-detection effect already reasons about this exact thing).
+  const [bustPending, setBustPending] = useState(false);
 
   // ---- High or Low state ----
   const [hlHighRoller, setHlHighRoller] = useState(false);
@@ -64,6 +77,7 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
   const [hlWagerText, setHlWagerText] = useState('');
   const [hlRolling, setHlRolling] = useState(false);
   const hlRollTimer = useRef<number | null>(null);
+  const [hlBustPending, setHlBustPending] = useState(false);
 
   useEffect(() => () => {
     if (rollTimer.current !== null) window.clearTimeout(rollTimer.current);
@@ -72,6 +86,13 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
 
   const result = engine.lastGrimsbyDiceResult;
   const hlResult = engine.lastGrimsbyHighLowResult;
+
+  useEffect(() => {
+    if (result && !rolling && result.outcome === 'bust') setBustPending(true);
+  }, [result, rolling]);
+  useEffect(() => {
+    if (hlResult && !hlRolling && !hlResult.win) setHlBustPending(true);
+  }, [hlResult, hlRolling]);
 
   const wager = Math.floor(Number(wagerText));
   const validWager = Number.isFinite(wager) && wager > 0;
@@ -115,6 +136,15 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
     onClose();
   };
 
+  const handleGoAgain = () => {
+    engine.dismissGrimsbyDiceResult();
+    setBustPending(false);
+  };
+  const handleHlGoAgain = () => {
+    engine.dismissGrimsbyHighLowResult();
+    setHlBustPending(false);
+  };
+
   // The die shows: the tumble loop while rolling, the actual landed face
   // once a result has settled, or (Call a Number only) the currently-
   // chosen number as a preview beforehand -- High/Low has no single
@@ -154,138 +184,156 @@ export function PeddlerDiceModal({ onClose }: { onClose: () => void }) {
 
         {tab === 'exact' ? (
           <div className="peddler-modal-body">
-            <button
-              type="button"
-              className="dice-roll-button"
-              onClick={handleRoll}
-              disabled={!canRoll}
-              title={!present ? 'He\u2019s not here right now' : !validWager ? 'Enter a wager first' : !canAfford ? 'Not enough gold' : 'Roll the dice'}
-            >
-              <DiceSprite rolling={rolling} face={diceFace} height={96} title="Roll the dice" />
-            </button>
-
-            {result && !rolling ? (
-              <p className="peddler-corner-comment tiny" style={{ color: outcomeColor }}>
-                <b>{OUTCOME_LABEL[result.outcome]}</b>{' '}
-                Landed on {result.landed} -- {result.payout > 0 ? `+${formatGold(result.payout)} gold back` : `lost the ${formatGold(result.wager)} gold wager`}
-              </p>
-            ) : (
-              <p className="peddler-corner-comment tiny muted">
-                Pick a number, name your wager, then click the die. Land it exactly and triple your gold back;
-                land a face either side of it and get half back; anything else is a bust.
-              </p>
-            )}
-
-            <div className="row wrap" style={{ gap: 2, justifyContent: 'center' }}>
-              {FACES.map((f) => (
-                <DicePickerFace key={f} face={f} selected={chosen === f} disabled={rolling} onSelect={setChosen} size={40} />
-              ))}
-            </div>
-
-            <div className="row wrap" style={{ gap: 6, alignItems: 'center', justifyContent: 'center' }}>
-              <span className="tiny muted">Wager</span>
-              <input
-                type="number"
-                min={1}
-                max={state.gold}
-                value={wagerText}
-                disabled={rolling}
-                onChange={(e) => setWagerText(e.target.value)}
-                placeholder="Gold"
-                style={{
-                  width: 90, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
-                  color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.75rem',
-                }}
+            {bustPending ? (
+              <GrimsbyBustCard
+                subtitle={`Landed on ${result?.landed} -- lost the ${formatGold(result?.wager ?? 0)} gold wager.`}
+                onGoAgain={handleGoAgain}
               />
-              <button type="button" className="btn-ghost" disabled={rolling} onClick={setMax} style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}>
-                Max
-              </button>
-              <span className="tiny muted">\u25c6 {formatGold(state.gold)} on hand</span>
-            </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="dice-roll-button"
+                  onClick={handleRoll}
+                  disabled={!canRoll}
+                  title={!present ? 'He\u2019s not here right now' : !validWager ? 'Enter a wager first' : !canAfford ? 'Not enough gold' : 'Roll the dice'}
+                >
+                  <DiceSprite rolling={rolling} face={diceFace} height={96} title="Roll the dice" />
+                </button>
+
+                {result && !rolling ? (
+                  <p className="peddler-corner-comment tiny" style={{ color: outcomeColor }}>
+                    <b>{OUTCOME_LABEL[result.outcome]}</b>{' '}
+                    Landed on {result.landed} -- {result.payout > 0 ? `+${formatGold(result.payout)} gold back` : `lost the ${formatGold(result.wager)} gold wager`}
+                  </p>
+                ) : (
+                  <p className="peddler-corner-comment tiny muted">
+                    Pick a number, name your wager, then click the die. Land it exactly and triple your gold back;
+                    land a face either side of it and get half back; anything else is a bust.
+                  </p>
+                )}
+
+                <div className="row wrap" style={{ gap: 2, justifyContent: 'center' }}>
+                  {FACES.map((f) => (
+                    <DicePickerFace key={f} face={f} selected={chosen === f} disabled={rolling} onSelect={setChosen} size={40} />
+                  ))}
+                </div>
+
+                <div className="row wrap" style={{ gap: 6, alignItems: 'center', justifyContent: 'center' }}>
+                  <span className="tiny muted">Wager</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={state.gold}
+                    value={wagerText}
+                    disabled={rolling}
+                    onChange={(e) => setWagerText(e.target.value)}
+                    placeholder="Gold"
+                    style={{
+                      width: 90, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+                      color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.75rem',
+                    }}
+                  />
+                  <button type="button" className="btn-ghost" disabled={rolling} onClick={setMax} style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}>
+                    Max
+                  </button>
+                  <span className="tiny muted">\u25c6 {formatGold(state.gold)} on hand</span>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="peddler-modal-body">
-            <div className="row" style={{ gap: 6, justifyContent: 'center' }}>
-              <button
-                type="button"
-                className={`chip ${!hlHighRoller ? 'on' : ''}`}
-                disabled={hlRolling}
-                onClick={() => { setHlHighRoller(false); setHlCall('under'); }}
-              >
-                Standard
-              </button>
-              <button
-                type="button"
-                className={`chip risky ${hlHighRoller ? 'on' : ''}`}
-                disabled={hlRolling || !state.grimsbyHighRollerUnlocked}
-                onClick={() => { setHlHighRoller(true); setHlCall('under'); }}
-                title={state.grimsbyHighRollerUnlocked ? undefined : 'Unlock High Roller on Grimsby\u2019s own page first'}
-              >
-                Highroller
-              </button>
-            </div>
-
-            {hlResult && !hlRolling ? (
-              <p className="peddler-corner-comment tiny" style={{ color: hlOutcomeColor }}>
-                <b>{hlResult.win ? 'Winner!' : 'Bust.'}</b>{' '}
-                Landed on {hlResult.landed} -- {hlResult.payout > 0 ? `+${formatGold(hlResult.payout)} gold back` : `lost the ${formatGold(hlResult.wager)} gold wager`}
-              </p>
-            ) : (
-              <p className="peddler-corner-comment tiny muted">
-                Call Under or Over -- or, at High Roller stakes, Under, Middle, or Over -- name your wager, then
-                roll. Land inside your call and get paid out; anything else is a bust.
-              </p>
-            )}
-
-            <div className="row wrap" style={{ gap: 10, justifyContent: 'center' }}>
-              {hlZones.map((call) => (
-                <HighLowZone
-                  key={call}
-                  call={call}
-                  highRoller={hlHighRoller}
-                  selected={hlCall === call}
-                  disabled={hlRolling}
-                  payoutMultiplier={hlPayoutMultiplier}
-                  onSelect={setHlCall}
-                />
-              ))}
-            </div>
-
-            <button
-              type="button"
-              className="dice-roll-button"
-              onClick={handleHlRoll}
-              disabled={!hlCanRoll}
-              title={
-                !present ? 'He\u2019s not here right now'
-                  : hlHighRoller && !state.grimsbyHighRollerUnlocked ? 'Unlock High Roller first'
-                    : !hlValidWager ? `Minimum wager is ${hlMinWager} gold`
-                      : !hlCanAfford ? 'Not enough gold' : 'Roll the dice'
-              }
-            >
-              <DiceSprite rolling={hlRolling} face={hlDiceFace} height={72} title="Roll the dice" />
-            </button>
-
-            <div className="row wrap" style={{ gap: 6, alignItems: 'center', justifyContent: 'center' }}>
-              <span className="tiny muted">Wager (min {hlMinWager})</span>
-              <input
-                type="number"
-                min={hlMinWager}
-                max={state.gold}
-                value={hlWagerText}
-                disabled={hlRolling}
-                onChange={(e) => setHlWagerText(e.target.value)}
-                placeholder="Gold"
-                style={{
-                  width: 90, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
-                  color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.75rem',
-                }}
+            {hlBustPending ? (
+              <GrimsbyBustCard
+                subtitle={`Landed on ${hlResult?.landed} -- lost the ${formatGold(hlResult?.wager ?? 0)} gold wager.`}
+                onGoAgain={handleHlGoAgain}
               />
-              <button type="button" className="btn-ghost" disabled={hlRolling} onClick={setHlMax} style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}>
-                Max
-              </button>
-              <span className="tiny muted">\u25c6 {formatGold(state.gold)} on hand</span>
-            </div>
+            ) : (
+              <>
+                <div className="row" style={{ gap: 6, justifyContent: 'center' }}>
+                  <button
+                    type="button"
+                    className={`chip ${!hlHighRoller ? 'on' : ''}`}
+                    disabled={hlRolling}
+                    onClick={() => { setHlHighRoller(false); setHlCall('under'); }}
+                  >
+                    Standard
+                  </button>
+                  <button
+                    type="button"
+                    className={`chip risky ${hlHighRoller ? 'on' : ''}`}
+                    disabled={hlRolling || !state.grimsbyHighRollerUnlocked}
+                    onClick={() => { setHlHighRoller(true); setHlCall('under'); }}
+                    title={state.grimsbyHighRollerUnlocked ? undefined : 'Unlock High Roller on Grimsby\u2019s own page first'}
+                  >
+                    Highroller
+                  </button>
+                </div>
+
+                {hlResult && !hlRolling ? (
+                  <p className="peddler-corner-comment tiny" style={{ color: hlOutcomeColor }}>
+                    <b>{hlResult.win ? 'Winner!' : 'Bust.'}</b>{' '}
+                    Landed on {hlResult.landed} -- {hlResult.payout > 0 ? `+${formatGold(hlResult.payout)} gold back` : `lost the ${formatGold(hlResult.wager)} gold wager`}
+                  </p>
+                ) : (
+                  <p className="peddler-corner-comment tiny muted">
+                    Call Under or Over -- or, at High Roller stakes, Under, Middle, or Over -- name your wager, then
+                    roll. Land inside your call and get paid out; anything else is a bust.
+                  </p>
+                )}
+
+                <div className="row wrap" style={{ gap: 10, justifyContent: 'center' }}>
+                  {hlZones.map((call) => (
+                    <HighLowZone
+                      key={call}
+                      call={call}
+                      highRoller={hlHighRoller}
+                      selected={hlCall === call}
+                      disabled={hlRolling}
+                      payoutMultiplier={hlPayoutMultiplier}
+                      onSelect={setHlCall}
+                    />
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  className="dice-roll-button"
+                  onClick={handleHlRoll}
+                  disabled={!hlCanRoll}
+                  title={
+                    !present ? 'He\u2019s not here right now'
+                      : hlHighRoller && !state.grimsbyHighRollerUnlocked ? 'Unlock High Roller first'
+                        : !hlValidWager ? `Minimum wager is ${hlMinWager} gold`
+                          : !hlCanAfford ? 'Not enough gold' : 'Roll the dice'
+                  }
+                >
+                  <DiceSprite rolling={hlRolling} face={hlDiceFace} height={72} title="Roll the dice" />
+                </button>
+
+                <div className="row wrap" style={{ gap: 6, alignItems: 'center', justifyContent: 'center' }}>
+                  <span className="tiny muted">Wager (min {hlMinWager})</span>
+                  <input
+                    type="number"
+                    min={hlMinWager}
+                    max={state.gold}
+                    value={hlWagerText}
+                    disabled={hlRolling}
+                    onChange={(e) => setHlWagerText(e.target.value)}
+                    placeholder="Gold"
+                    style={{
+                      width: 90, background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+                      color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.75rem',
+                    }}
+                  />
+                  <button type="button" className="btn-ghost" disabled={hlRolling} onClick={setHlMax} style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}>
+                    Max
+                  </button>
+                  <span className="tiny muted">\u25c6 {formatGold(state.gold)} on hand</span>
+                </div>
+              </>
+            )}
           </div>
         )}
 

@@ -20524,3 +20524,83 @@ that only runs against real save data with real equipped gear, and
 nothing in the patch workflow so far has had a way to exercise that.
 Worth a real playtest pass across 0255-0259 now that boot itself is
 unblocked, not just this one crash site.
+
+### Grimsby: BUST card, bigger Tab pot text, Go Again everywhere (patch 0261)
+
+```discord-update
+Dev Update | Grimsby's Games
+- Added a real BUST moment to every game where you can bust -- bold red text on a black card, with a manual Go Again button, instead of snapping straight back to the next screen
+- Added a Go Again option to Call a Number and High or Low, so you can keep playing without closing the window
+- Increased the size of the running pot total on Grimsby's Tab
+```
+
+Four direct requests off the same screenshots, three landed here; the
+fourth (visual overlap between Grimsby's Dice UI elements) is still
+open -- see the note at the end.
+
+**Shared `GrimsbyBustCard` component** (new `GrimsbyBustCard.tsx`),
+reused across all three games rather than three near-identical inline
+blocks -- solid black card, bold oversized red "BUST" text (`#ff3b3b`,
+2.4rem/900 weight), a per-game subtitle, and its own "Go Again" button.
+Deliberately opaque black rather than the translucent `color-mix()`
+treatment every other Grimsby panel in this game uses
+(`.peddler-corner-comment`, `.peddler-result-summary`, etc.) -- a bust
+is meant to read as a hard stop, not another soft parchment-toned info
+box blending in with the rest of the table.
+
+**Card game.** Already had a "Roll Again" button next to "Thanks, I
+think" from earlier work -- unchanged for a normal result. A bust
+specifically now swaps the small `.peddler-result-summary` text for the
+BUST card instead, and the footer's "Roll Again" button hides itself
+while it's showing (the BUST card's own "Go Again" replaces it, so
+there's never two competing continue-buttons on screen at once).
+
+**Dice (Call a Number + High or Low).** Neither sub-game had ANY gate
+before -- the picker/die just sat there the whole time with a small
+inline "Bust." line, and nothing stopped immediately picking a new
+number and rolling again without the bust really registering. New
+independent `bustPending`/`hlBustPending` state per sub-tab (each tab
+already keeps fully separate state from the other, per this modal's own
+existing convention) -- set the instant a bust result lands (via an
+effect watching the result, not the roll handler itself, so it also
+catches a bust from a source this component didn't personally trigger
+the roll for), and the whole picker/die/wager block is replaced by the
+BUST card until "Go Again" is clicked, which dismisses the result and
+reveals the picker again -- same shape as a normal reset, just no longer
+automatic.
+
+**Tab.** The real "throws back to the previous card" bug -- a bust
+nulls `state.peddlerTab` the instant it happens, which snapped the UI
+straight back to the tier-select screen with only a small "Tab's
+closed" line above it, no distinct moment, no gate at all. New
+`bustPending` state, set in the same effect that already handles the
+bust-triggered pose change, gates the tier-select screen exactly the
+way it gates Dice's picker above -- "Go Again" reveals tier-select once
+clicked, instead of it reappearing on its own. The success-case message
+("Held. Tab climbs to...") is untouched; only the bust path changes.
+
+**Tab's running pot text, direct size request.** New `.peddler-tab-pot-value`
+class (1.1rem, bold, brass) applied only to the live round's own value
+in the round-history card -- historical rows (always showing 0, by
+design) stay at their existing `.tiny`/`.muted` size, only the number
+that's actually live and worth reading at a glance got bigger.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean.
+
+**Item 1 from the report -- "Grimsby's Dice games's visuals are mixed
+together" -- is NOT fixed in this patch, and that's a deliberate call,
+not an oversight.** Traced every relevant piece: `.peddler-modal-body`'s
+own flex-column layout, `.dice-roll-button`/`.peddler-corner-comment`'s
+CSS, `DiceSprite.tsx`'s sprite-sheet math, and `GrimsbySprite.tsx`'s own
+manifest-driven sizing. None of it uses `position: absolute`, negative
+margins, or any other mechanism that should let sibling elements
+actually overlap in normal flex flow -- and the size math in both sprite
+components checks out against their own manifests/constants. Nothing
+found here that explains the screenshots. Rather than guess and ship a
+change that might not touch the real cause (or might paper over a
+symptom of something else entirely), this needs a DevTools Elements-
+panel screenshot of the actual offending box (right-click the ghosted
+area -> Inspect) so the real element and its computed styles can be
+identified directly, the same way the exact console error pinpointed
+patch 0260's crash immediately instead of a guess.
