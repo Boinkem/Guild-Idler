@@ -20161,3 +20161,85 @@ directly rather than reading a fixed table, so it picks up these new,
 bigger `def.stats` numbers automatically and correctly. Crafting recipes,
 Fortune Charms, and the procedural loot pool were all patch 0255's job,
 not this one's -- nothing further needed there.
+
+### Gear itemization: chain/raid exclusives get a real signature-stat lean (patch 0257)
+
+```discord-update
+Dev Update | Chain & Raid Reward Itemization
+- Changed: all 39 chain and raid exclusive items (Dragon Slayer, Voidforged, Empyrean, and every other named reward) now lean much harder into their 1-2 signature stats instead of spreading evenly across three or four
+- Note: total item power is unchanged -- this is about identity/flavor, not a buff. A few very-low-level reward trinkets are too small a budget to meaningfully lean at all, and stayed close to as-is.
+```
+
+Direct follow-up to patch 0256's finding: chain/raid exclusives (the
+named, individually-chased rewards -- Dragon Slayer, Voidforged,
+Empyrean, and every other one-off reward item, 39 total,
+`chainExclusive: true`) came out of that pass sitting at basically the
+same power level AND the same stat spread as an ordinary Set piece --
+average top-2-stat concentration barely distinguishable from Set gear,
+despite being the game's single most desirable, individually-chased
+items. That's backwards for a chase item, which should read as "the
+Endurance blade" or "the Wisdom ring," not a diffuse four-stat spread.
+
+**Scope decision, direct answer to the open question from last patch:**
+no additional raw power premium here -- `scaleChainExclusiveItem`
+already gives these items a real premium at Heroic/Legendary chain
+replay (+20-33% Heroic, ~+60-75% cumulative Legendary, patch 0225),
+so a second premium on top of the Normal-tier baseline would be
+double-dipping. The differentiation these items need is identity, not
+more raw budget -- so this patch touches ONLY how each item's existing
+total gets split across stats, never the total itself.
+
+**Reshape rule.** For every chain/raid exclusive with 2+ stats, ranked
+its stats by current value, then rebalanced so the top 1-2 stats
+(whichever it naturally already leaned toward, from patch 0256's own
+proportional-lean pass) make up ~75% of the item's total -- the
+midpoint of the requested 70-80% "strong lean" range -- splitting that
+75% between the top two proportionally to their own existing ratio
+(so an item that was already close to single-stat stays close to
+single-stat, and an item with two co-equal flavors keeps both, rather
+than arbitrarily picking a winner). Any 3rd/4th stat shares the
+remaining ~25%, shrinking to a minor flavor touch rather than a full
+peer. **Total per item is mathematically unchanged** -- every reshape
+was verified to sum to the exact same total as before this patch, so
+this is purely a redistribution, not a buff or nerf. Items that already
+had only 1 stat (`lucky_ring`, `amulet_of_fortune`,
+`gravekeepers_gloves`, `quartermasters_token`, `grimsbys_loaded_coin`)
+were left untouched -- already maximally on-identity, nothing to
+reshape.
+
+**Examples.**
+- `wardens_signet` (epic, lvl16): `{strength: 7, endurance: 8, luck: 8,
+  wisdom: 3}` (no real identity, 4-way spread) -> `{endurance: 10,
+  luck: 10, strength: 4, wisdom: 2}` (Endurance/Luck hybrid, 77% of the
+  total between the two).
+- `voidforged_blade` (legendary, lvl36): `{strength: 59, endurance: 13,
+  luck: 46}` -> `{strength: 49, luck: 39, endurance: 30}` -- already a
+  clear Strength/Luck weapon, kept that identity while pulling
+  Endurance down from a near-equal third wheel to a clearly minor
+  stat.
+- `dragon_blade` (legendary, lvl25): `{strength: 52, luck: 30}` ->
+  `{strength: 62, luck: 20}` -- was already 2-stat, just sharpened the
+  lean toward its main stat (76% Strength).
+
+**A real, honest limitation, not silently smoothed over: the lowest-
+level reward trinkets can't meaningfully lean at all.**
+`cellar_dwellers_tooth`, `crow_feather_charm`, and `keepers_last_feather`
+(uncommon, reqLevel 3/8/5) each carry a total budget of only 3 raw
+points split across 3 stats -- there's no way to express a "70-80%
+lean" with whole-number points that small (1/1/1 is already the
+closest integer split available), so they came out of this pass
+unchanged. `warband_cleaver` and `tollbreakers_gloves` (budget of 2)
+hit the same wall. These are genuinely too low-budget for stat
+concentration to read as a design choice rather than noise -- worth a
+look as a separate question (a flat small bonus? a unique mod instead
+of stats, given how tiny the budget is at that level?) rather than
+something this patch's reshape formula can fix by construction.
+
+**Verified:** every reshaped item's new stat total checked
+programmatically against its pre-patch total (exact match, all 39,
+zero exceptions) before writing the file. `npx tsc --noEmit` and `npx
+vite build --config vite.web.config.ts` both pass clean against the
+new `equipment.json` -- pure data change, same as patch 0256, no
+TS/logic files touched. Set pieces (68) and procedural blank templates
+(34) are untouched by this patch -- confirmed via diff, only the 39
+`chainExclusive` entries changed.

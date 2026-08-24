@@ -1,0 +1,443 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 5043e34..b5bef9c 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -20161,3 +20161,85 @@ directly rather than reading a fixed table, so it picks up these new,
+ bigger `def.stats` numbers automatically and correctly. Crafting recipes,
+ Fortune Charms, and the procedural loot pool were all patch 0255's job,
+ not this one's -- nothing further needed there.
++
++### Gear itemization: chain/raid exclusives get a real signature-stat lean (patch 0257)
++
++```discord-update
++Dev Update | Chain & Raid Reward Itemization
++- Changed: all 39 chain and raid exclusive items (Dragon Slayer, Voidforged, Empyrean, and every other named reward) now lean much harder into their 1-2 signature stats instead of spreading evenly across three or four
++- Note: total item power is unchanged -- this is about identity/flavor, not a buff. A few very-low-level reward trinkets are too small a budget to meaningfully lean at all, and stayed close to as-is.
++```
++
++Direct follow-up to patch 0256's finding: chain/raid exclusives (the
++named, individually-chased rewards -- Dragon Slayer, Voidforged,
++Empyrean, and every other one-off reward item, 39 total,
++`chainExclusive: true`) came out of that pass sitting at basically the
++same power level AND the same stat spread as an ordinary Set piece --
++average top-2-stat concentration barely distinguishable from Set gear,
++despite being the game's single most desirable, individually-chased
++items. That's backwards for a chase item, which should read as "the
++Endurance blade" or "the Wisdom ring," not a diffuse four-stat spread.
++
++**Scope decision, direct answer to the open question from last patch:**
++no additional raw power premium here -- `scaleChainExclusiveItem`
++already gives these items a real premium at Heroic/Legendary chain
++replay (+20-33% Heroic, ~+60-75% cumulative Legendary, patch 0225),
++so a second premium on top of the Normal-tier baseline would be
++double-dipping. The differentiation these items need is identity, not
++more raw budget -- so this patch touches ONLY how each item's existing
++total gets split across stats, never the total itself.
++
++**Reshape rule.** For every chain/raid exclusive with 2+ stats, ranked
++its stats by current value, then rebalanced so the top 1-2 stats
++(whichever it naturally already leaned toward, from patch 0256's own
++proportional-lean pass) make up ~75% of the item's total -- the
++midpoint of the requested 70-80% "strong lean" range -- splitting that
++75% between the top two proportionally to their own existing ratio
++(so an item that was already close to single-stat stays close to
++single-stat, and an item with two co-equal flavors keeps both, rather
++than arbitrarily picking a winner). Any 3rd/4th stat shares the
++remaining ~25%, shrinking to a minor flavor touch rather than a full
++peer. **Total per item is mathematically unchanged** -- every reshape
++was verified to sum to the exact same total as before this patch, so
++this is purely a redistribution, not a buff or nerf. Items that already
++had only 1 stat (`lucky_ring`, `amulet_of_fortune`,
++`gravekeepers_gloves`, `quartermasters_token`, `grimsbys_loaded_coin`)
++were left untouched -- already maximally on-identity, nothing to
++reshape.
++
++**Examples.**
++- `wardens_signet` (epic, lvl16): `{strength: 7, endurance: 8, luck: 8,
++  wisdom: 3}` (no real identity, 4-way spread) -> `{endurance: 10,
++  luck: 10, strength: 4, wisdom: 2}` (Endurance/Luck hybrid, 77% of the
++  total between the two).
++- `voidforged_blade` (legendary, lvl36): `{strength: 59, endurance: 13,
++  luck: 46}` -> `{strength: 49, luck: 39, endurance: 30}` -- already a
++  clear Strength/Luck weapon, kept that identity while pulling
++  Endurance down from a near-equal third wheel to a clearly minor
++  stat.
++- `dragon_blade` (legendary, lvl25): `{strength: 52, luck: 30}` ->
++  `{strength: 62, luck: 20}` -- was already 2-stat, just sharpened the
++  lean toward its main stat (76% Strength).
++
++**A real, honest limitation, not silently smoothed over: the lowest-
++level reward trinkets can't meaningfully lean at all.**
++`cellar_dwellers_tooth`, `crow_feather_charm`, and `keepers_last_feather`
++(uncommon, reqLevel 3/8/5) each carry a total budget of only 3 raw
++points split across 3 stats -- there's no way to express a "70-80%
++lean" with whole-number points that small (1/1/1 is already the
++closest integer split available), so they came out of this pass
++unchanged. `warband_cleaver` and `tollbreakers_gloves` (budget of 2)
++hit the same wall. These are genuinely too low-budget for stat
++concentration to read as a design choice rather than noise -- worth a
++look as a separate question (a flat small bonus? a unique mod instead
++of stats, given how tiny the budget is at that level?) rather than
++something this patch's reshape formula can fix by construction.
++
++**Verified:** every reshaped item's new stat total checked
++programmatically against its pre-patch total (exact match, all 39,
++zero exceptions) before writing the file. `npx tsc --noEmit` and `npx
++vite build --config vite.web.config.ts` both pass clean against the
++new `equipment.json` -- pure data change, same as patch 0256, no
++TS/logic files touched. Set pieces (68) and procedural blank templates
++(34) are untouched by this patch -- confirmed via diff, only the 39
++`chainExclusive` entries changed.
+diff --git a/src/game/data/json/equipment.json b/src/game/data/json/equipment.json
+index c7ce612..007362e 100644
+--- a/src/game/data/json/equipment.json
++++ b/src/game/data/json/equipment.json
+@@ -91,8 +91,8 @@
+     "maxDurability": 200,
+     "value": 7200,
+     "stats": {
+-      "strength": 52,
+-      "luck": 30
++      "strength": 62,
++      "luck": 20
+     },
+     "setId": "dragon_slayer",
+     "icon": "weapons/Weapon_60.png",
+@@ -148,9 +148,9 @@
+     "maxDurability": 120,
+     "value": 2100,
+     "stats": {
++      "wisdom": 17,
+       "strength": 3,
+-      "luck": 3,
+-      "wisdom": 20
++      "luck": 6
+     },
+     "icon": "armor/Armor_111.png",
+     "chainExclusive": true
+@@ -164,8 +164,8 @@
+     "maxDurability": 190,
+     "value": 6400,
+     "stats": {
+-      "strength": 18,
+-      "endurance": 64
++      "endurance": 62,
++      "strength": 20
+     },
+     "setId": "dragon_slayer",
+     "icon": "armor/Armor_40.png",
+@@ -225,8 +225,8 @@
+       "health": 29
+     },
+     "stats": {
+-      "strength": 7,
+-      "endurance": 26
++      "endurance": 25,
++      "strength": 8
+     },
+     "icon": "armor/Armor_10.png",
+     "chainExclusive": true
+@@ -244,8 +244,8 @@
+       "health": 36
+     },
+     "stats": {
+-      "strength": 22,
+-      "endurance": 63
++      "endurance": 64,
++      "strength": 21
+     },
+     "setId": "dragon_slayer",
+     "icon": "armor/Armor_19.png",
+@@ -477,9 +477,9 @@
+     "maxDurability": 125,
+     "value": 2300,
+     "stats": {
+-      "endurance": 5,
+-      "luck": 9,
+-      "wisdom": 25
++      "wisdom": 21,
++      "luck": 8,
++      "endurance": 10
+     },
+     "icon": "armor/Armor_127.png",
+     "setId": "bonewrought",
+@@ -494,9 +494,9 @@
+     "maxDurability": 130,
+     "value": 2400,
+     "stats": {
+-      "strength": 10,
+-      "luck": 24,
+-      "wisdom": 6
++      "luck": 21,
++      "strength": 9,
++      "wisdom": 10
+     },
+     "icon": "misc/Misc_25.png",
+     "setId": "bonewrought",
+@@ -511,9 +511,9 @@
+     "maxDurability": 260,
+     "value": 12500,
+     "stats": {
+-      "strength": 59,
+-      "endurance": 13,
+-      "luck": 46
++      "strength": 49,
++      "luck": 39,
++      "endurance": 30
+     },
+     "setId": "voidforged",
+     "icon": "weapons/Voidforgedblade.png",
+@@ -530,9 +530,9 @@
+     "maxDurability": 240,
+     "value": 11800,
+     "stats": {
+-      "strength": 22,
+-      "endurance": 45,
+-      "wisdom": 51
++      "wisdom": 47,
++      "endurance": 41,
++      "strength": 30
+     },
+     "setId": "voidforged",
+     "icon": "armor/Armor_36.png",
+@@ -551,8 +551,8 @@
+       "health": 39
+     },
+     "stats": {
+-      "strength": 32,
+-      "endurance": 86
++      "endurance": 88,
++      "strength": 30
+     },
+     "setId": "voidforged",
+     "icon": "armor/Armor_15.png",
+@@ -567,8 +567,8 @@
+     "maxDurability": 220,
+     "value": 10500,
+     "stats": {
+-      "endurance": 21,
+-      "luck": 104
++      "luck": 94,
++      "endurance": 31
+     },
+     "setId": "voidforged",
+     "icon": "accessories/Accessory_05.png",
+@@ -633,9 +633,9 @@
+     "maxDurability": 300,
+     "value": 18000,
+     "stats": {
+-      "strength": 73,
+-      "endurance": 17,
+-      "luck": 58
++      "strength": 62,
++      "luck": 49,
++      "endurance": 37
+     },
+     "setId": "empyrean",
+     "icon": "weapons/Weapon_61.png",
+@@ -650,9 +650,9 @@
+     "maxDurability": 280,
+     "value": 17200,
+     "stats": {
+-      "strength": 29,
+-      "endurance": 53,
+-      "wisdom": 66
++      "wisdom": 62,
++      "endurance": 49,
++      "strength": 37
+     },
+     "setId": "empyrean",
+     "icon": "armor/Armor_112.png",
+@@ -671,8 +671,8 @@
+       "health": 75
+     },
+     "stats": {
+-      "strength": 43,
+-      "endurance": 105
++      "endurance": 111,
++      "strength": 37
+     },
+     "setId": "empyrean",
+     "icon": "shields/Shield_19.png",
+@@ -744,10 +744,10 @@
+     "maxDurability": 160,
+     "value": 2800,
+     "stats": {
+-      "strength": 7,
+-      "endurance": 8,
+-      "luck": 8,
+-      "wisdom": 3
++      "endurance": 10,
++      "luck": 10,
++      "strength": 4,
++      "wisdom": 2
+     },
+     "icon": "accessories/Accessory_07.png",
+     "raidExclusive": false,
+@@ -763,10 +763,10 @@
+     "maxDurability": 230,
+     "value": 9800,
+     "stats": {
+-      "strength": 62,
+-      "endurance": 16,
++      "strength": 60,
+       "luck": 19,
+-      "wisdom": 8
++      "endurance": 17,
++      "wisdom": 9
+     },
+     "setId": "ashen_hand",
+     "icon": "weapons/Weapon_60.png",
+@@ -787,9 +787,9 @@
+       "health": 66
+     },
+     "stats": {
+-      "strength": 18,
+-      "endurance": 79,
+-      "wisdom": 7
++      "endurance": 64,
++      "strength": 14,
++      "wisdom": 26
+     },
+     "setId": "ashen_hand",
+     "icon": "shields/Shield_24.png",
+@@ -806,8 +806,8 @@
+     "maxDurability": 130,
+     "value": 500,
+     "stats": {
+-      "strength": 3,
+       "endurance": 4,
++      "strength": 3,
+       "wisdom": 2
+     },
+     "icon": "accessories/Accessory_15.png",
+@@ -841,10 +841,10 @@
+     "maxDurability": 190,
+     "value": 1950,
+     "stats": {
+-      "strength": 6,
+-      "endurance": 16,
+-      "luck": 5,
+-      "wisdom": 5
++      "endurance": 17,
++      "strength": 7,
++      "luck": 4,
++      "wisdom": 4
+     },
+     "icon": "accessories/Accessory_10.png",
+     "setId": "bonewrought",
+@@ -1082,8 +1082,8 @@
+     "maxDurability": 75,
+     "value": 150,
+     "stats": {
+-      "strength": 1,
+-      "luck": 2
++      "luck": 2,
++      "strength": 1
+     },
+     "icon": "accessories/Accessory_02.png",
+     "raidExclusive": false,
+@@ -1897,8 +1897,8 @@
+     "maxDurability": 160,
+     "value": 1300,
+     "stats": {
+-      "strength": 5,
+-      "endurance": 5
++      "strength": 8,
++      "endurance": 2
+     },
+     "icon": "armor/Armor_09.png",
+     "chainExclusive": true
+@@ -1912,9 +1912,9 @@
+     "maxDurability": 180,
+     "value": 2500,
+     "stats": {
+-      "strength": 18,
+-      "endurance": 6,
+-      "luck": 4
++      "strength": 16,
++      "endurance": 5,
++      "luck": 7
+     },
+     "icon": "weapons/Weapon_28.png",
+     "chainExclusive": true
+@@ -1928,9 +1928,9 @@
+     "maxDurability": 310,
+     "value": 18800,
+     "stats": {
+-      "strength": 91,
+-      "endurance": 42,
+-      "luck": 17
++      "strength": 77,
++      "endurance": 35,
++      "luck": 38
+     },
+     "icon": "weapons/Weapon_08.png",
+     "chainExclusive": true
+@@ -1944,10 +1944,10 @@
+     "maxDurability": 210,
+     "value": 5200,
+     "stats": {
+-      "strength": 12,
+-      "endurance": 10,
+-      "luck": 17,
+-      "wisdom": 7
++      "luck": 20,
++      "strength": 14,
++      "endurance": 7,
++      "wisdom": 5
+     },
+     "icon": "accessories/Accessory_12.png",
+     "chainExclusive": true
+@@ -1961,9 +1961,9 @@
+     "maxDurability": 240,
+     "value": 8800,
+     "stats": {
+-      "strength": 19,
+-      "luck": 12,
+-      "wisdom": 30
++      "wisdom": 28,
++      "strength": 18,
++      "luck": 15
+     },
+     "icon": "accessories/Accessory_20.png",
+     "chainExclusive": true
+@@ -1977,9 +1977,9 @@
+     "maxDurability": 230,
+     "value": 8200,
+     "stats": {
+-      "strength": 9,
+-      "endurance": 11,
+-      "wisdom": 37
++      "wisdom": 33,
++      "endurance": 10,
++      "strength": 14
+     },
+     "icon": "accessories/Accessory_21.png",
+     "chainExclusive": true
+@@ -1993,9 +1993,9 @@
+     "maxDurability": 270,
+     "value": 15500,
+     "stats": {
+-      "strength": 30,
+-      "luck": 38,
+-      "wisdom": 60
++      "wisdom": 59,
++      "luck": 37,
++      "strength": 32
+     },
+     "icon": "accessories/Accessory_22.png",
+     "chainExclusive": true
+@@ -2199,9 +2199,9 @@
+     "maxDurability": 275,
+     "value": 16800,
+     "stats": {
+-      "strength": 39,
+-      "luck": 34,
+-      "wisdom": 71
++      "wisdom": 70,
++      "strength": 38,
++      "luck": 36
+     },
+     "icon": "accessories/Accessory_24.png",
+     "raidExclusive": false,
