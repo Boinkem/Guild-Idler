@@ -165,6 +165,41 @@
 }
 .item-card-details { padding: 0 8px 8px; }
 
+/**
+ * Quick-action row -- patch 0265, direct request. Three equal-width
+ * buttons (Lock, Sell, Scrap) directly on the card, replacing what used
+ * to require opening the detail modal for every one of those. A plain
+ * button reset (no individual borders/background beyond the shared
+ * divider below) rather than three separate `.btn-*` pills -- three full
+ * pill buttons at this width read as visually louder than the compact,
+ * quiet row this was meant to declutter into. Two-line label (value/icon
+ * on top, action word below) keeps each button legible at the
+ * `minmax(180px, 1fr)` grid width `.item-card-grid` already uses,
+ * without needing a wider card than before.
+ */
+.item-card-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  border-top: 1px solid var(--panel-3);
+  position: relative;
+  z-index: 1;
+}
+.item-card-actions button {
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--panel-3);
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--parchment);
+  padding: 6px 4px;
+  font-size: 10px;
+  line-height: 1.5;
+  min-height: 0;
+}
+.item-card-actions button:last-child { border-right: none; }
+.item-card-actions button:hover:not(:disabled) { background: color-mix(in srgb, var(--brass-dim) 18%, transparent); }
+.item-card-actions button:disabled { opacity: 0.35; cursor: not-allowed; }
+
 /*
  * Story Chain Complete overlay -- deliberately reads as a bigger event than
  * the regular QuestResultModal. Border/glow colour comes from the guild

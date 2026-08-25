@@ -20809,3 +20809,109 @@ regressions specifically live outside a type-checker's or bundler's
 reach, and this exact category of bug (a number that LOOKS
 type-correct but was never actually measured) is what shipped a
 still-broken fix last patch.
+
+### Item card redesign: Scrap moved onto the card, Scrap All, gold-fly on Sell (patch 0265)
+
+```discord-update
+Dev Update | Inventory Overhaul
+- Changed: item cards now show Lock, Sell, and a new Scrap button directly on the card -- no need to open the detail popup or visit the Blacksmith just to scrap something
+- Added: Scrap All, next to Sell Junk, with the same rarity threshold and safety exclusions -- one confirm, then each card pops its own Scrap burst as it goes
+- Fixed: Selling now shows the same gold-flying-up flourish quest and raid rewards already have -- it never did before
+```
+
+Direct follow-through on a design-preview request -- mockups shown and
+approved before any code was touched, matching the actual game's
+palette/typography so what was approved is what shipped.
+
+**Card redesign.** `StashCard`'s old single crowded button row (Close,
+Equip, Lock/Unlock, Sell -- 4 buttons wrapping across lines in the
+detail popup) split in two: the popup keeps only Close and Equip (the
+one action that genuinely needs the hero-context/upgrade-badge already
+built into that view), while Lock, Sell, and the new Scrap button move
+directly onto the card itself as a three-button quick-action row below
+the existing icon/name header -- new `.item-card-actions` CSS, a plain
+button-reset grid rather than three separate pill buttons, kept
+deliberately quiet so it doesn't out-shout the card above it. Verified
+with a real screenshot (the same headless Electron render patch 0264
+used for measurement, `capturePage()` this time instead of just
+`getBoundingClientRect`) before shipping, not just trusted from reading
+the CSS.
+
+**Scrap added to the card, confirmed design: always confirms, disabled
+when locked.** Previously scrap only existed behind the Blacksmith's
+own ScrapStation modal -- kept exactly as it was (still the vendor path
+for anyone who prefers it), but now also reachable in one click from
+the card, using `EquipmentManager.scrapValue` for a live-updating value
+right on the button. Confirmed decision: Scrap always shows a
+`ConfirmModal` before committing regardless of the `confirmSell`
+setting -- ScrapStation's own existing flow already always
+previews/confirms with no opt-out, so this matches that established
+precedent (an irreversible action) rather than introducing a new,
+inconsistent toggle. Disabled for locked/Vaulted items, same rule Sell
+already enforces.
+
+**Scrap All**, mirroring Sell Junk's own exact shape one control over
+(same rarity-threshold dropdown defaulting to Common, same protective
+exclusions -- locked, enchanted, and crafted-above-Common items are
+never swept up by either bulk action, so a bulk scrap can't accidentally
+eat something actually invested in). One confirm dialog showing total
+item count and total Scrap value, per the confirmed design.
+
+**The staggered per-card animation was the real technical piece here.**
+A naive "call scrapItem on everything at once" would make the whole
+batch vanish in one frame -- to get each card popping individually as
+it goes, every matching card's on-screen position is captured up front
+(via a new `data-stash-uid` attribute + `document.querySelector`)
+*before* any item is actually removed, then each one is scrapped on a
+140ms stagger. Capturing positions up front rather than measuring live
+per-iteration matters: once earlier cards start disappearing, the grid
+reflows and later cards physically move to fill the gap, so a
+live-measured position would drift from the snapshot every player
+actually saw. Burst overlays themselves are lifted to the panel level
+(new `bursts`/`goldFlights` state in `EquipmentPanel`, not owned by
+each card) for the same underlying reason: the card that triggered a
+burst gets unmounted the instant its item leaves `state.stash`, which
+would tear a child animation down mid-flight -- rendered as
+`position: fixed` overlays anchored to real `getBoundingClientRect`
+viewport coordinates, they survive their origin card's unmount
+completely independently. Same "measure now, animate against a
+snapshot, never against a live-but-about-to-vanish element" principle
+`ScrapStation.tsx`'s own pre-existing flight already established;
+extended here rather than re-invented.
+
+**Gold-flying-up on Sell, direct request.** Selling triggered zero
+animation before this -- reused `RewardGlowParticle` and the existing
+`flyTarget.ts` registry (the same shared mechanism quest/raid rewards
+and Peddler's Tab already fly gold toward the header's own total via
+`useFlyTargetRef('gold')`) rather than building a new system. A local
+burst (`+N gold`, brass-colored, same `.collect-particle.coin` styling
+sell text already implied elsewhere) always shows; the long-distance
+flight toward the header only fires if that target happens to be
+mounted (`getFlyTargetCenter` returning null is a graceful no-op, same
+convention `flyTarget.ts` itself documents -- never an error, never a
+skipped burst, just a skipped extra flourish on top of it).
+
+**Scrap deliberately did NOT get the same long-distance flight Sell
+did.** Gold has a persistent, always-visible header total to aim
+at; Scrap's own total is only ever shown inside ScrapStation's own
+modal, which usually isn't open while scrapping from a card in the
+Inventory panel -- rather than inventing a new, always-visible Scrap
+counter nobody asked for just to give it somewhere to fly toward,
+Scrap keeps the local pop-and-fade burst only, which is what "keep the
+current animations... apply from each card" asked for regardless.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. The new card layout specifically
+was verified with a real rendered screenshot (Electron
+`capturePage()`), not just read from CSS -- confirmed both a Rare and
+a Legendary example render correctly at the real `.item-card-grid`
+width, colors read right, and the locked/disabled state dims properly.
+No live runtime test of the staggered Scrap All sequence or the
+gold-fly-to-header flight specifically -- those depend on real DOM
+timing/registered targets a static screenshot can't exercise; worth a
+direct playtest of both before trusting them fully.
+
+**Explicitly out of scope for this patch, tracked separately if still
+wanted:** nothing else from the original report remains open after
+this -- items 1-3 shipped in patches 0263/0264, items 4-6 (this
+patch's own scope) are complete here.
