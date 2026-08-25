@@ -1,0 +1,501 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 8904b22..cfba1d8 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -20671,3 +20671,86 @@ vite.web.config.ts` both pass clean. No live runtime test at the actual
+ verified-by-types-and-build-only caveat this whole patch series has
+ carried; worth a direct check against that exact settings combination
+ once this lands, since that's the one profile this patch exists to fix.
++
++### Bug Fix: Pet Treats equippable on heroes, Auto Equip Best ignoring rolled stats (patch 0263)
++
++```discord-update
++Dev Update | Bug Fix
++- Fixed: Pet Treats could still be equipped into a hero's Consumable Slot even though they do nothing there -- they're a Hatchery-only item
++- Fixed: Equip Best Gear, auto-equip-on-loot, and the stash's upgrade badge were all comparing gear by its item TEMPLATE only, never its actual rolled stats -- "best" could mean "whichever same-tier item happened to be looked at first," not the one that actually rolled better
++```
++
++First half of a larger set of reports; the visual dice-modal zoom and
++the item-card/scrap redesign are still open, tracked separately.
++
++**Pet Treats on heroes.** `pet_treat`'s own `effect: {}` already meant
++the per-item detail popup correctly hid its "Equip on {hero}" button --
++but the OTHER equip path, an empty Consumable Slot's own picker list,
++built its options purely from `InventoryManager.owned(state)` filtered
++only by "not already equipped elsewhere," with no check for whether the
++item does anything on a hero at all. `engine.equipConsumable` had no
++server-side guard either -- so a Pet Treat (or any other non-loadout
++consumable) could still get slotted through that second path, sitting
++there doing nothing once a quest actually resolved. Fixed at the root:
++new `InventoryManager.isLoadoutEffect()`, exported and shared, replacing
++a private unexported copy that only the (already-correct) detail popup
++had access to. Wired into the slot-picker's own filter AND into
++`engine.equipConsumable` itself as a server-side backstop, matching how
++gear-equip is already validated both places. Separately confirmed: pet-
++feeding itself (`PetManager.feedCrafted`) was never broken -- traced it
++directly, it correctly consumes one Pet Treat and applies
++`pets.feedCraftedHappinessGain`, no changes needed there.
++
++**Auto Equip Best (and three other places with the identical bug).**
++`gearScoreForItem(def)` only ever reads a static item template --
++rarity, reqLevel, `gearScoreOverride` -- never the actual rolled
++instance. Since patch 0255's all-stats rework, an item's real power
++lives almost entirely in `item.rolledStats`, a per-INSTANCE field this
++function can't see at all -- so it scored every copy of a given def
++identically no matter how well or badly it rolled. A search for every
++caller of this function turned up four places relying on it to mean
++"which item is actually better," not just "what tier is this," all with
++the same bug:
++
++- `engine.equipBestGear` -- the reported button. Could pick an
++  arbitrarily-ordered same-tier item off the stash instead of the one
++  that actually rolled better.
++- `QuestManager`'s auto-equip-on-loot -- could silently replace a
++  superbly-rolled item already worn with a badly-rolled fresh drop, just
++  because the drop happened to be a higher rarity tier on paper.
++- `EquipmentPanel.tsx`'s stash upgrade-arrow badge (`isGearUpgrade`) --
++  had a real `EquipmentItem` instance in scope at its only call site and
++  was discarding it, passing only the def through.
++- `HeroManager.gearScore` -- a hero's own displayed Gear Score total
++  could stay completely flat while swapping in a dramatically
++  better-rolled version of the same base item.
++
++New `gearScoreForInstance(item, def)` (`data/equipment.ts`, exported
++alongside the original `gearScoreForItem`, which stays as the flat
++rarity/level-only base component it always was) converts an item's
++actual rolled stat total (`item.rolledStats` + `item.enchantStats`, not
++`customMods` -- durability/health are flavor, not the power axis this
++tracks) into gear-score-equivalent units via the same `/6` ratio
++`loot_procedural`'s own budget formula already establishes between the
++two, then applies the item's `+N` upgrade multiplier
++(`1 + plus * 0.15`) -- the identical scaling `HeroManager.equipmentStats`
++already gives a `+5` item, so Gear Score and an item's real combat
++contribution can no longer disagree about whether upgrading it mattered.
++All four call sites switched to it; `isGearUpgrade`'s signature widened
++to take the actual `item` its one caller already had on hand instead of
++discarding it.
++
++**Verified:** `npx tsc --noEmit` and `npx vite build --config
++vite.web.config.ts` both pass clean. No live runtime test against an
++actual stash of rolled items -- same verified-by-types-only caveat this
++whole series carries; worth a direct check that Equip Best Gear now
++correctly prefers a well-rolled lower-tier item over a badly-rolled
++higher-tier one, since that's the exact scenario this patch exists to
++fix and the one hardest to catch from reading code alone.
++
++**Still open from the same report, not yet started:** the High or Low
++tab's own background-zoom bug (same root mechanism as patch 0262 --
++Dice's two tabs were never individually measured against the shared
++495px modal floor, only Card's three states were) and the full
++item-card redesign (Sell/Unlock/Scrap layout, scrap-from-card, Scrap
++All with a rarity filter, and the animation requirements around both).
+diff --git a/src/game/data/equipment.ts b/src/game/data/equipment.ts
+index 4297b62..0669921 100644
+--- a/src/game/data/equipment.ts
++++ b/src/game/data/equipment.ts
+@@ -1,4 +1,4 @@
+-import { EquipSlot, EquipmentDef, ItemSet, Rarity } from '../types';
++import { EquipSlot, EquipmentDef, EquipmentItem, ItemSet, Rarity } from '../types';
+ 
+ /** Loot weight and shop pricing scale off rarity. */
+ export const RARITY_WEIGHT: Record<Rarity, number> = {
+@@ -28,9 +28,12 @@ export const RARITY_PRICE_MULT: Record<Rarity, number> = {
+  * NOT derived from the item's actual rolled stats/mods (those already feed
+  * hero power separately via equipmentStats). This used to be the whole
+  * story: a legendary always contributed exactly 30 regardless of which
+- * legendary it was. See gearScoreForItem() below for the real per-item
+- * score now used everywhere -- this table is still that function's flat
+- * base, just no longer the final number on its own (patch 0157).
++ * legendary it was. See gearScoreForItem() below for the def-only score
++ * this table still feeds, and gearScoreForInstance() just past it for the
++ * real per-item score actually used everywhere as of patch 0263 -- this
++ * table is still gearScoreForItem's flat base, just no longer the final
++ * number on its own (patch 0157), and gearScoreForItem itself is no
++ * longer the final number either (patch 0263).
+  */
+ export const GEAR_SCORE_BY_RARITY: Record<Rarity, number> = {
+   common: 1, uncommon: 3, rare: 7, epic: 15, legendary: 30,
+@@ -78,6 +81,44 @@ export function gearScoreForItem(def: EquipmentDef): number {
+   return base + bonus;
+ }
+ 
++/**
++ * The real, per-instance counterpart to gearScoreForItem above -- patch
++ * 0263 (see guild-idler-status.md), a direct bug fix, not a new feature.
++ * gearScoreForItem alone reads only the static def (rarity/reqLevel/
++ * gearScoreOverride), so it scores every instance of a given def
++ * identically regardless of how it actually rolled -- since patch
++ * 0255's all-stats rework, a procedural or Guildmade/Masterwork-crafted
++ * item's real power lives almost entirely in item.rolledStats, a
++ * per-INSTANCE field def-only scoring can't see at all. "Equip Best
++ * Gear," auto-equip-on-loot, the stash's own upgrade-arrow badge, and a
++ * hero's own displayed Gear Score total all compared/summed purely by
++ * def as a result -- meaning "best" could silently mean "whichever
++ * same-tier item happened to iterate first," not the one that actually
++ * rolled better, and a badly-rolled fresh drop could auto-replace a
++ * superbly-rolled item already worn just for being a higher rarity
++ * tier.
++ *
++ * Converts an item's rolled stat total (item.rolledStats +
++ * item.enchantStats -- not customMods; durability/health are flavor,
++ * not the power axis this metric tracks) into gear-score-equivalent
++ * units via the same /6 ratio loot_procedural's own budget formula
++ * (GEAR_SCORE_BY_RARITY * 6 * levelFactor) already establishes between
++ * the two, so this stays on the same scale gearScoreForItem's own
++ * rarity/level numbers already use rather than being swamped by raw
++ * stat points running into the hundreds at high level. Then applies
++ * item.plus's own (1 + plus * 0.15) multiplier -- the identical scaling
++ * HeroManager.equipmentStats already gives a +5 item over a +0 of the
++ * same roll, so Gear Score and an item's actual combat contribution
++ * never disagree about whether upgrading it mattered.
++ */
++export function gearScoreForInstance(item: EquipmentItem, def: EquipmentDef): number {
++  const sum = (stats?: Partial<Record<string, number>>) =>
++    Object.values(stats ?? {}).reduce<number>((total, v) => total + (v ?? 0), 0);
++  const rolledPoints = sum(item.rolledStats) + sum(item.enchantStats);
++  const base = gearScoreForItem(def) + rolledPoints / 6;
++  return base * (1 + item.plus * 0.15);
++}
++
+ /**
+  * The name to actually show for an item -- a procedurally-generated
+  * item's rolled `proceduralName` (bonus-roll prefix + bracketed source
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index 6e51a11..d680367 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -25,7 +25,7 @@ import { PetManager } from './managers/PetManager';
+ import { PeddlerManager } from './managers/PeddlerManager';
+ import { CraftingManager } from './managers/CraftingManager';
+ import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
+-import { EQUIPMENT_BY_ID, SET_BY_ID, gearScoreForItem, EQUIP_SLOTS } from './data/equipment';
++import { EQUIPMENT_BY_ID, SET_BY_ID, gearScoreForInstance, EQUIP_SLOTS } from './data/equipment';
+ import { RAID_BY_ID } from './data/raids';
+ import { Tuning } from './data/tuning';
+ import { rerollDay, rerollsUsedToday } from './data/reroll';
+@@ -1650,10 +1650,21 @@ export class GameEngine {
+    *  re-geared, but could still be handed a fresh consumable loadout, which
+    *  makes no more sense for a potion slotted for THIS run than it does for
+    *  a sword. */
++  /**
++   * Patch 0263 -- rejects a non-loadout consumable (Pet Treats, instant-
++   * use potions, peddler charms) server-side too, matching how a gear
++   * Equip already gets validated both in the UI (canEquip.ok) and here.
++   * Both UI paths that call this (the per-item detail popup, already
++   * correctly gated; the empty-slot picker list, which previously
++   * wasn't) are fixed at their own source too -- this is the last-resort
++   * backstop, not the primary fix.
++   */
+   equipConsumable(heroId: string, defId: string) {
+     const hero = this.hero(heroId);
+     if (!hero) return;
+     if (hero.status === 'questing') return this.say(`${hero.name} is away on a quest.`);
++    const def = InventoryManager.resolveDef(this.state, defId);
++    if (!def || !InventoryManager.isLoadoutEffect(def)) return this.say('That doesn\u2019t do anything equipped on a hero.');
+     const current = hero.equippedConsumables ?? [];
+     const maxSlots = ModifierManager.consumableSlots(this.state);
+     if (current.length >= maxSlots) return this.say('No free consumable slots.');
+@@ -1984,15 +1995,18 @@ export class GameEngine {
+    * For each of a hero's 9 equipment slots, equips the highest-Gear-Score
+    * eligible item currently sitting in the stash if it beats what's
+    * already equipped there -- the bulk counterpart to picking through the
+-   * Stash one item at a time. Gear Score is the same per-item value
+-   * HeroManager.gearScore already sums (see gearScoreForItem in
+-   * data/equipment.ts); ties are left alone rather than swapped for
+-   * swapping's sake. Skips anything the hero can't wear yet (reqLevel),
+-   * same as a manual equip would refuse. Loops slot-by-slot via
+-   * EquipmentManager.equip itself so a displaced item lands back in the
+-   * stash exactly the way a manual equip already handles it, and a later
+-   * slot can immediately see an item the earlier slot's displacement just
+-   * freed up. Returns how many slots actually changed. */
++   * Stash one item at a time. Gear Score is the real per-INSTANCE value
++   * from gearScoreForInstance (patch 0263 -- previously this compared
++   * gearScoreForItem's def-only score, which scores every copy of a
++   * given item identically no matter how it actually rolled; see that
++   * function's own comment in data/equipment.ts for the full bug and
++   * fix). Ties are left alone rather than swapped for swapping's sake.
++   * Skips anything the hero can't wear yet (reqLevel), same as a manual
++   * equip would refuse. Loops slot-by-slot via EquipmentManager.equip
++   * itself so a displaced item lands back in the stash exactly the way a
++   * manual equip already handles it, and a later slot can immediately
++   * see an item the earlier slot's displacement just freed up. Returns
++   * how many slots actually changed. */
+   equipBestGear(heroId: string): number {
+     const hero = this.hero(heroId);
+     if (!hero) return 0;
+@@ -2012,7 +2026,7 @@ export class GameEngine {
+       const currentItem = hero.equipment[slot];
+       if (currentItem) anyAlreadyEquipped = true;
+       const currentDef = currentItem ? EQUIPMENT_BY_ID[currentItem.defId] : undefined;
+-      const currentScore = currentDef ? gearScoreForItem(currentDef) : -1;
++      const currentScore = currentItem && currentDef ? gearScoreForInstance(currentItem, currentDef) : -1;
+       let best: typeof currentItem = undefined;
+       let bestScore = currentScore;
+       for (const item of this.state.stash) {
+@@ -2020,7 +2034,7 @@ export class GameEngine {
+         if (!def || def.slot !== slot) continue;
+         anyCandidateSeen = true;
+         if (hero.level < def.reqLevel) { anyLevelGated = true; continue; }
+-        const score = gearScoreForItem(def);
++        const score = gearScoreForInstance(item, def);
+         if (score > bestScore) {
+           bestScore = score;
+           best = item;
+diff --git a/src/game/managers/HeroManager.ts b/src/game/managers/HeroManager.ts
+index e6c8017..88c6a08 100644
+--- a/src/game/managers/HeroManager.ts
++++ b/src/game/managers/HeroManager.ts
+@@ -1,4 +1,4 @@
+-import { EQUIPMENT_BY_ID, gearScoreForItem, SET_BY_ID } from '../data/equipment';
++import { EQUIPMENT_BY_ID, gearScoreForInstance, SET_BY_ID } from '../data/equipment';
+ import { INJURIES } from '../data/items';
+ import { HERO_CLASSES, RECRUIT_START_LEVEL, MAX_HERO_LEVEL, xpForLevel, infirmaryHealTimeMinutes, roleUnlockCost, roleSwapCost } from '../data/progression';
+ import { DIFFICULTY_ORDER } from '../data/quests';
+@@ -286,15 +286,18 @@ export const HeroManager = {
+   },
+ 
+   /**
+-   * Sum of gearScoreForItem() across every equipped item (see its own
+-   * comment in data/equipment.ts -- GEAR_SCORE_BY_RARITY's flat rarity
+-   * base plus a small reqLevel-scaled bonus, capped so it can never cross
+-   * into the next rarity's own base, unless an item sets gearScoreOverride
+-   * to skip the formula entirely). This is a badge of "how well is this
+-   * hero geared", separate from and in addition to the combat-stat bonus
+-   * gear already grants via equipmentStats(). Broken/zero-durability items
+-   * still count: the badge represents what's equipped, not what's
+-   * currently usable.
++   * Sum of gearScoreForInstance() across every equipped item (see its
++   * own comment in data/equipment.ts -- GEAR_SCORE_BY_RARITY's flat
++   * rarity base plus a small reqLevel-scaled bonus, PLUS the item's own
++   * actual rolled power converted into the same units, PLUS its +N
++   * upgrade multiplier -- patch 0263, was gearScoreForItem, a def-only
++   * sum that couldn't tell a barely-rolled item from a maxed one of the
++   * same def, so this badge could stay completely flat while swapping
++   * to a dramatically better-rolled piece of the identical base item).
++   * This is a badge of "how well is this hero geared", separate from
++   * and in addition to the combat-stat bonus gear already grants via
++   * equipmentStats(). Broken/zero-durability items still count: the
++   * badge represents what's equipped, not what's currently usable.
+    */
+   gearScore(hero: Hero): number {
+     let total = 0;
+@@ -302,7 +305,7 @@ export const HeroManager = {
+       if (!item) continue;
+       const def = EQUIPMENT_BY_ID[item.defId];
+       if (!def) continue;
+-      total += gearScoreForItem(def);
++      total += gearScoreForInstance(item, def);
+     }
+     return total;
+   },
+diff --git a/src/game/managers/InventoryManager.ts b/src/game/managers/InventoryManager.ts
+index df07442..94f4c56 100644
+--- a/src/game/managers/InventoryManager.ts
++++ b/src/game/managers/InventoryManager.ts
+@@ -63,6 +63,31 @@ export const InventoryManager = {
+     return null;
+   },
+ 
++  /**
++   * Whether a consumable is a per-quest loadout pick (equipped into a
++   * hero's Consumable Slot ahead of sending them out), as opposed to an
++   * instant-use item, a peddler charm, or something with no hero-facing
++   * effect at all (Pet Treats -- fed directly from the Hatchery's Pets
++   * tab, `effect: {}`, no quest field of any kind).
++   *
++   * The single shared source of truth for this check -- previously a
++   * private, unexported copy of this exact logic lived only in
++   * EquipmentPanel.tsx, gating the per-consumable detail popup's own
++   * "Equip on {hero}" button correctly. But the OTHER equip path -- an
++   * empty Consumable Slot's own picker list, and engine.equipConsumable
++   * itself -- never checked this at all, so a Pet Treat (or any other
++   * non-loadout consumable) could still be equipped into a hero's slot
++   * through either of those, doing nothing once a quest actually
++   * resolved. Patch 0263 (see guild-idler-status.md) exported this here
++   * and wired both of those gaps to it too, instead of leaving the bug
++   * fixed in only the one place it happened to already be checked.
++   */
++  isLoadoutEffect(def: ConsumableDef): boolean {
++    const e = def.effect;
++    return !!(e.success || e.gold || e.xp || e.loot || e.injuryResist || e.speed
++      || e.preventInjury || e.guaranteedGoodEvent || e.healthDamageReduction);
++  },
++
+   /** Everything with stock > 0 -- both the static shop catalogue and any
+    *  crafted custom variants, since the latter only ever exist in
+    *  `state.inventory` via crafting, never the static `CONSUMABLES` list. */
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 6e92112..45c48da 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -1,4 +1,4 @@
+-import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE, gearScoreForItem, itemDisplayName } from '../data/equipment';
++import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE, gearScoreForInstance, itemDisplayName } from '../data/equipment';
+ import {
+   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES, TUTORIAL_QUEST_ID,
+ } from '../data/quests';
+@@ -1213,20 +1213,25 @@ export const QuestManager = {
+       const item = lootItems[dropIndex];
+       if (item) {
+         // Auto-equip on loot -- opt-in (GameState.autoEquipOnLoot), only
+-        // for the hero who actually earned the drop, same gearScoreForItem
++        // for the hero who actually earned the drop, same gearScoreForInstance
+         // comparison engine.equipBestGear already uses for its own manual
+-        // bulk-equip, so "beats what's worn" means the same thing in both
+-        // places. EquipmentManager.equip handles the displaced item
+-        // landing back in the stash itself -- no separate push needed on
+-        // that path. Falls through to the ordinary stash push when the
+-        // setting is off, hero is missing (shouldn't happen but guarded
+-        // same as the durability block above), or the drop simply isn't
+-        // an upgrade.
++        // bulk-equip (patch 0263 -- was gearScoreForItem, a def-only
++        // comparison that couldn't see a fresh drop's or an already-worn
++        // item's actual rolled power; see that function's own comment in
++        // data/equipment.ts), so "beats what's worn" means the same thing
++        // in both places, and a badly-rolled fresh drop can no longer
++        // silently replace a superbly-rolled item already worn just for
++        // being a higher rarity tier on paper. EquipmentManager.equip
++        // handles the displaced item landing back in the stash itself --
++        // no separate push needed on that path. Falls through to the
++        // ordinary stash push when the setting is off, hero is missing
++        // (shouldn't happen but guarded same as the durability block
++        // above), or the drop simply isn't an upgrade.
+         const def = EQUIPMENT_BY_ID[item.defId];
+         const currentItem = def && hero ? hero.equipment[def.slot] : undefined;
+         const currentDef = currentItem ? EQUIPMENT_BY_ID[currentItem.defId] : undefined;
+-        const currentScore = currentDef ? gearScoreForItem(currentDef) : -1;
+-        const newScore = def ? gearScoreForItem(def) : -1;
++        const currentScore = currentItem && currentDef ? gearScoreForInstance(currentItem, currentDef) : -1;
++        const newScore = def ? gearScoreForInstance(item, def) : -1;
+         const isUpgrade = !!def && !!hero && newScore > currentScore && hero.level >= def.reqLevel;
+         if (state.autoEquipOnLoot && isUpgrade && hero) {
+           EquipmentManager.equip(state, hero, item);
+diff --git a/src/game/power.ts b/src/game/power.ts
+index 3c89b2b..244cf43 100644
+--- a/src/game/power.ts
++++ b/src/game/power.ts
+@@ -18,7 +18,7 @@ const ASCENSION_WEIGHT = 30;
+ export interface GuildPowerBreakdown {
+   /** Sum of every hero's strength+endurance+luck+wisdom (base + gear + bonus stats). */
+   heroStats: number;
+-  /** Sum of every hero's per-item Gear Score (see gearScoreForItem in data/equipment.ts). */
++  /** Sum of every hero's per-item Gear Score (see gearScoreForInstance in data/equipment.ts). */
+   gearScore: number;
+   /** Ascension stacks from retired heroes. Deliberately uncapped -- see guildPowerCeiling(). */
+   ascension: number;
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 57fed35..0e7e4e2 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -2293,7 +2293,7 @@ export interface GameState {
+   autoRepairThresholdPercent: number;
+   /** When true, QuestManager.resolve auto-equips a loot drop straight onto
+    *  the hero who earned it if it beats what they're already wearing in
+-   *  that slot (same gearScoreForItem comparison engine.equipBestGear
++   *  that slot (same gearScoreForInstance comparison engine.equipBestGear
+    *  already uses for its own manual bulk-equip) instead of the drop
+    *  always landing in the stash. Only ever checked against the earning
+    *  hero, never the whole roster -- a stash drop had no "which hero"
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index bd2a2d8..3114a58 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -5,7 +5,7 @@ import { GameEngine } from '../../game/engine';
+ import { EquipmentManager } from '../../game/managers/EquipmentManager';
+ import { HeroManager } from '../../game/managers/HeroManager';
+ import { ModifierManager } from '../../game/managers/ModifierManager';
+-import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID, gearScoreForItem } from '../../game/data/equipment';
++import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID, gearScoreForInstance } from '../../game/data/equipment';
+ import { ELEMENT_GLYPH, ELEMENT_LABEL, GEM_TIER_LABEL } from '../../game/data/elements';
+ import { EquipSlot, EquipmentDef, EquipmentItem, ElementType, Hero, Rarity, ConsumableDef, CurioDef } from '../../game/types';
+ import { InventoryManager } from '../../game/managers/InventoryManager';
+@@ -66,17 +66,24 @@ function LockedPill() {
+ /**
+  * Same "is this actually an upgrade" check engine.equipBestGear and
+  * QuestManager's auto-equip-on-loot both already use -- reqLevel-gated,
+- * then compared via gearScoreForItem against whatever's currently worn in
+- * that slot (an empty slot scores -1, so anything eligible always beats
+- * it). Kept here rather than duplicated per-caller so this badge can never
+- * disagree with what clicking "Equip Best Gear" would actually do.
++ * then compared via gearScoreForInstance against whatever's currently
++ * worn in that slot (an empty slot scores -1, so anything eligible
++ * always beats it). Kept here rather than duplicated per-caller so this
++ * badge can never disagree with what clicking "Equip Best Gear" would
++ * actually do.
++ *
++ * Takes the actual `item` instance now, not just its def (patch 0263 --
++ * the caller below already had a real EquipmentItem in scope and was
++ * silently discarding it, so this badge scored purely by def just like
++ * gearScoreForItem's other three call sites did; see that function's
++ * own comment in data/equipment.ts for the shared bug and fix).
+  */
+-function isGearUpgrade(hero: Hero, def: EquipmentDef): boolean {
++function isGearUpgrade(hero: Hero, item: EquipmentItem, def: EquipmentDef): boolean {
+   if (hero.level < def.reqLevel) return false;
+   const equipped = hero.equipment[def.slot];
+   const equippedDef = equipped ? EQUIPMENT_BY_ID[equipped.defId] : undefined;
+-  const currentScore = equippedDef ? gearScoreForItem(equippedDef) : -1;
+-  return gearScoreForItem(def) > currentScore;
++  const currentScore = equipped && equippedDef ? gearScoreForInstance(equipped, equippedDef) : -1;
++  return gearScoreForInstance(item, def) > currentScore;
+ }
+ 
+ /** Green "would this beat what's worn" flag for a stash item -- arrow +
+@@ -268,15 +275,6 @@ function isInstantUseOnHero(def: ConsumableDef): boolean {
+   return !!def.effect.healInjury || (def.effect.restoreHealth ?? 0) > 0;
+ }
+ 
+-/** Whether a consumable is a per-quest loadout pick (equipped into a
+- *  Consumable Slot ahead of sending a hero out), as opposed to an instant-
+- *  use or peddler-charm item. */
+-function isLoadoutEffect(def: ConsumableDef): boolean {
+-  const e = def.effect;
+-  return !!(e.success || e.gold || e.xp || e.loot || e.injuryResist || e.speed
+-    || e.preventInjury || e.guaranteedGoodEvent || e.healthDamageReduction);
+-}
+-
+ /**
+  * Stash consumables used to be a static, non-interactive chip -- clicking
+  * only expanded the description. Now offers the actual action inline:
+@@ -364,7 +362,7 @@ function ConsumableInfoCard({
+ }: { def: ConsumableDef; count: number; hero: Hero; engine: GameEngine }) {
+   const [open, setOpen] = useState(false);
+   const instantUse = isInstantUseOnHero(def);
+-  const loadout = isLoadoutEffect(def);
++  const loadout = InventoryManager.isLoadoutEffect(def);
+   const peddlerCharm = (def.effect.peddlerCounterReduction ?? 0) > 0;
+   // Same "can't touch a deployed hero's loadout" rule the gear Equip button
+   // (canEquip.ok, below in SlotCard) already enforces -- engine.equipConsumable
+@@ -742,7 +740,7 @@ function StashCard({
+   const def = EQUIPMENT_BY_ID[item.defId];
+   if (!def) return null;
+   const canEquip = EquipmentManager.canEquip(hero, item);
+-  const isUpgrade = isGearUpgrade(hero, def);
++  const isUpgrade = isGearUpgrade(hero, item, def);
+   const doSell = () => { engine.sellItem(item.uid); setPendingSell(false); setOpen(false); };
+ 
+   return (
+@@ -1054,13 +1052,19 @@ export function EquipmentPanel() {
+       <div className="item-card-grid">
+         {Array.from({ length: ModifierManager.consumableSlots(state) }).map((_, i) => {
+           const equipped = hero.equippedConsumables ?? [];
+-          // Available to equip here: owned in excess of however many are
+-          // already slotted (on this hero or any other) -- prevents
+-          // "equipping" the same single potion into two slots at once.
++          // Available to equip here: an actual loadout-effect consumable
++          // (patch 0263 -- previously this list had NO such check at all,
++          // so a Pet Treat or any other non-loadout item could still be
++          // "equipped" into a slot here even though the per-item detail
++          // popup's own Equip button was already correctly gated by this
++          // exact same check; see InventoryManager.isLoadoutEffect's own
++          // comment), owned in excess of however many are already slotted
++          // (on this hero or any other) -- prevents "equipping" the same
++          // single potion into two slots at once.
+           const equippedElsewhereCount = (defId: string) =>
+             state.heroes.reduce((sum, other) => sum + (other.equippedConsumables ?? []).filter((id) => id === defId).length, 0);
+           const available = InventoryManager.owned(state).filter(
+-            ({ def }) => equippedElsewhereCount(def.id) < InventoryManager.count(state, def.id),
++            ({ def }) => InventoryManager.isLoadoutEffect(def) && equippedElsewhereCount(def.id) < InventoryManager.count(state, def.id),
+           );
+           return (
+             <ConsumableSlotCard key={i} hero={hero} equippedDefId={equipped[i]} available={available} engine={engine} />

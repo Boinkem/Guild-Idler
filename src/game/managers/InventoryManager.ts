@@ -63,6 +63,31 @@ export const InventoryManager = {
     return null;
   },
 
+  /**
+   * Whether a consumable is a per-quest loadout pick (equipped into a
+   * hero's Consumable Slot ahead of sending them out), as opposed to an
+   * instant-use item, a peddler charm, or something with no hero-facing
+   * effect at all (Pet Treats -- fed directly from the Hatchery's Pets
+   * tab, `effect: {}`, no quest field of any kind).
+   *
+   * The single shared source of truth for this check -- previously a
+   * private, unexported copy of this exact logic lived only in
+   * EquipmentPanel.tsx, gating the per-consumable detail popup's own
+   * "Equip on {hero}" button correctly. But the OTHER equip path -- an
+   * empty Consumable Slot's own picker list, and engine.equipConsumable
+   * itself -- never checked this at all, so a Pet Treat (or any other
+   * non-loadout consumable) could still be equipped into a hero's slot
+   * through either of those, doing nothing once a quest actually
+   * resolved. Patch 0263 (see guild-idler-status.md) exported this here
+   * and wired both of those gaps to it too, instead of leaving the bug
+   * fixed in only the one place it happened to already be checked.
+   */
+  isLoadoutEffect(def: ConsumableDef): boolean {
+    const e = def.effect;
+    return !!(e.success || e.gold || e.xp || e.loot || e.injuryResist || e.speed
+      || e.preventInjury || e.guaranteedGoodEvent || e.healthDamageReduction);
+  },
+
   /** Everything with stock > 0 -- both the static shop catalogue and any
    *  crafted custom variants, since the latter only ever exist in
    *  `state.inventory` via crafting, never the static `CONSUMABLES` list. */

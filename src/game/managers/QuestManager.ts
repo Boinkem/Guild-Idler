@@ -1,4 +1,4 @@
-import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE, gearScoreForItem, itemDisplayName } from '../data/equipment';
+import { EQUIPMENT, EQUIPMENT_BY_ID, LOOT_RARITY_BY_DIFFICULTY, RARITY_LOOT_CHANCE, gearScoreForInstance, itemDisplayName } from '../data/equipment';
 import {
   ChainDef, DIFFICULTIES, DIFFICULTY_ORDER, QUEST_CHAINS, QUEST_PREFIXES, QUEST_TEMPLATES, TUTORIAL_QUEST_ID,
 } from '../data/quests';
@@ -1213,20 +1213,25 @@ export const QuestManager = {
       const item = lootItems[dropIndex];
       if (item) {
         // Auto-equip on loot -- opt-in (GameState.autoEquipOnLoot), only
-        // for the hero who actually earned the drop, same gearScoreForItem
+        // for the hero who actually earned the drop, same gearScoreForInstance
         // comparison engine.equipBestGear already uses for its own manual
-        // bulk-equip, so "beats what's worn" means the same thing in both
-        // places. EquipmentManager.equip handles the displaced item
-        // landing back in the stash itself -- no separate push needed on
-        // that path. Falls through to the ordinary stash push when the
-        // setting is off, hero is missing (shouldn't happen but guarded
-        // same as the durability block above), or the drop simply isn't
-        // an upgrade.
+        // bulk-equip (patch 0263 -- was gearScoreForItem, a def-only
+        // comparison that couldn't see a fresh drop's or an already-worn
+        // item's actual rolled power; see that function's own comment in
+        // data/equipment.ts), so "beats what's worn" means the same thing
+        // in both places, and a badly-rolled fresh drop can no longer
+        // silently replace a superbly-rolled item already worn just for
+        // being a higher rarity tier on paper. EquipmentManager.equip
+        // handles the displaced item landing back in the stash itself --
+        // no separate push needed on that path. Falls through to the
+        // ordinary stash push when the setting is off, hero is missing
+        // (shouldn't happen but guarded same as the durability block
+        // above), or the drop simply isn't an upgrade.
         const def = EQUIPMENT_BY_ID[item.defId];
         const currentItem = def && hero ? hero.equipment[def.slot] : undefined;
         const currentDef = currentItem ? EQUIPMENT_BY_ID[currentItem.defId] : undefined;
-        const currentScore = currentDef ? gearScoreForItem(currentDef) : -1;
-        const newScore = def ? gearScoreForItem(def) : -1;
+        const currentScore = currentItem && currentDef ? gearScoreForInstance(currentItem, currentDef) : -1;
+        const newScore = def ? gearScoreForInstance(item, def) : -1;
         const isUpgrade = !!def && !!hero && newScore > currentScore && hero.level >= def.reqLevel;
         if (state.autoEquipOnLoot && isUpgrade && hero) {
           EquipmentManager.equip(state, hero, item);

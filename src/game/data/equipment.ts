@@ -1,4 +1,4 @@
-import { EquipSlot, EquipmentDef, ItemSet, Rarity } from '../types';
+import { EquipSlot, EquipmentDef, EquipmentItem, ItemSet, Rarity } from '../types';
 
 /** Loot weight and shop pricing scale off rarity. */
 export const RARITY_WEIGHT: Record<Rarity, number> = {
@@ -28,9 +28,12 @@ export const RARITY_PRICE_MULT: Record<Rarity, number> = {
  * NOT derived from the item's actual rolled stats/mods (those already feed
  * hero power separately via equipmentStats). This used to be the whole
  * story: a legendary always contributed exactly 30 regardless of which
- * legendary it was. See gearScoreForItem() below for the real per-item
- * score now used everywhere -- this table is still that function's flat
- * base, just no longer the final number on its own (patch 0157).
+ * legendary it was. See gearScoreForItem() below for the def-only score
+ * this table still feeds, and gearScoreForInstance() just past it for the
+ * real per-item score actually used everywhere as of patch 0263 -- this
+ * table is still gearScoreForItem's flat base, just no longer the final
+ * number on its own (patch 0157), and gearScoreForItem itself is no
+ * longer the final number either (patch 0263).
  */
 export const GEAR_SCORE_BY_RARITY: Record<Rarity, number> = {
   common: 1, uncommon: 3, rare: 7, epic: 15, legendary: 30,
@@ -76,6 +79,44 @@ export function gearScoreForItem(def: EquipmentDef): number {
   const cap = GEAR_SCORE_LEVEL_BONUS_CAP[def.rarity] ?? 0;
   const bonus = Math.round((def.reqLevel / GEAR_SCORE_LEVEL_CAP) * cap);
   return base + bonus;
+}
+
+/**
+ * The real, per-instance counterpart to gearScoreForItem above -- patch
+ * 0263 (see guild-idler-status.md), a direct bug fix, not a new feature.
+ * gearScoreForItem alone reads only the static def (rarity/reqLevel/
+ * gearScoreOverride), so it scores every instance of a given def
+ * identically regardless of how it actually rolled -- since patch
+ * 0255's all-stats rework, a procedural or Guildmade/Masterwork-crafted
+ * item's real power lives almost entirely in item.rolledStats, a
+ * per-INSTANCE field def-only scoring can't see at all. "Equip Best
+ * Gear," auto-equip-on-loot, the stash's own upgrade-arrow badge, and a
+ * hero's own displayed Gear Score total all compared/summed purely by
+ * def as a result -- meaning "best" could silently mean "whichever
+ * same-tier item happened to iterate first," not the one that actually
+ * rolled better, and a badly-rolled fresh drop could auto-replace a
+ * superbly-rolled item already worn just for being a higher rarity
+ * tier.
+ *
+ * Converts an item's rolled stat total (item.rolledStats +
+ * item.enchantStats -- not customMods; durability/health are flavor,
+ * not the power axis this metric tracks) into gear-score-equivalent
+ * units via the same /6 ratio loot_procedural's own budget formula
+ * (GEAR_SCORE_BY_RARITY * 6 * levelFactor) already establishes between
+ * the two, so this stays on the same scale gearScoreForItem's own
+ * rarity/level numbers already use rather than being swamped by raw
+ * stat points running into the hundreds at high level. Then applies
+ * item.plus's own (1 + plus * 0.15) multiplier -- the identical scaling
+ * HeroManager.equipmentStats already gives a +5 item over a +0 of the
+ * same roll, so Gear Score and an item's actual combat contribution
+ * never disagree about whether upgrading it mattered.
+ */
+export function gearScoreForInstance(item: EquipmentItem, def: EquipmentDef): number {
+  const sum = (stats?: Partial<Record<string, number>>) =>
+    Object.values(stats ?? {}).reduce<number>((total, v) => total + (v ?? 0), 0);
+  const rolledPoints = sum(item.rolledStats) + sum(item.enchantStats);
+  const base = gearScoreForItem(def) + rolledPoints / 6;
+  return base * (1 + item.plus * 0.15);
 }
 
 /**

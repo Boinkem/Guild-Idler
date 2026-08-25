@@ -1,4 +1,4 @@
-import { EQUIPMENT_BY_ID, gearScoreForItem, SET_BY_ID } from '../data/equipment';
+import { EQUIPMENT_BY_ID, gearScoreForInstance, SET_BY_ID } from '../data/equipment';
 import { INJURIES } from '../data/items';
 import { HERO_CLASSES, RECRUIT_START_LEVEL, MAX_HERO_LEVEL, xpForLevel, infirmaryHealTimeMinutes, roleUnlockCost, roleSwapCost } from '../data/progression';
 import { DIFFICULTY_ORDER } from '../data/quests';
@@ -286,15 +286,18 @@ export const HeroManager = {
   },
 
   /**
-   * Sum of gearScoreForItem() across every equipped item (see its own
-   * comment in data/equipment.ts -- GEAR_SCORE_BY_RARITY's flat rarity
-   * base plus a small reqLevel-scaled bonus, capped so it can never cross
-   * into the next rarity's own base, unless an item sets gearScoreOverride
-   * to skip the formula entirely). This is a badge of "how well is this
-   * hero geared", separate from and in addition to the combat-stat bonus
-   * gear already grants via equipmentStats(). Broken/zero-durability items
-   * still count: the badge represents what's equipped, not what's
-   * currently usable.
+   * Sum of gearScoreForInstance() across every equipped item (see its
+   * own comment in data/equipment.ts -- GEAR_SCORE_BY_RARITY's flat
+   * rarity base plus a small reqLevel-scaled bonus, PLUS the item's own
+   * actual rolled power converted into the same units, PLUS its +N
+   * upgrade multiplier -- patch 0263, was gearScoreForItem, a def-only
+   * sum that couldn't tell a barely-rolled item from a maxed one of the
+   * same def, so this badge could stay completely flat while swapping
+   * to a dramatically better-rolled piece of the identical base item).
+   * This is a badge of "how well is this hero geared", separate from
+   * and in addition to the combat-stat bonus gear already grants via
+   * equipmentStats(). Broken/zero-durability items still count: the
+   * badge represents what's equipped, not what's currently usable.
    */
   gearScore(hero: Hero): number {
     let total = 0;
@@ -302,7 +305,7 @@ export const HeroManager = {
       if (!item) continue;
       const def = EQUIPMENT_BY_ID[item.defId];
       if (!def) continue;
-      total += gearScoreForItem(def);
+      total += gearScoreForInstance(item, def);
     }
     return total;
   },

@@ -25,7 +25,7 @@ import { PetManager } from './managers/PetManager';
 import { PeddlerManager } from './managers/PeddlerManager';
 import { CraftingManager } from './managers/CraftingManager';
 import { SKIN_BY_ID, SKIN_PRICE, TOMBSTONE_STYLE_BY_ID, AUTO_CHAIN_RANGES, xpForLevel } from './data/progression';
-import { EQUIPMENT_BY_ID, SET_BY_ID, gearScoreForItem, EQUIP_SLOTS } from './data/equipment';
+import { EQUIPMENT_BY_ID, SET_BY_ID, gearScoreForInstance, EQUIP_SLOTS } from './data/equipment';
 import { RAID_BY_ID } from './data/raids';
 import { Tuning } from './data/tuning';
 import { rerollDay, rerollsUsedToday } from './data/reroll';
@@ -1650,10 +1650,21 @@ export class GameEngine {
    *  re-geared, but could still be handed a fresh consumable loadout, which
    *  makes no more sense for a potion slotted for THIS run than it does for
    *  a sword. */
+  /**
+   * Patch 0263 -- rejects a non-loadout consumable (Pet Treats, instant-
+   * use potions, peddler charms) server-side too, matching how a gear
+   * Equip already gets validated both in the UI (canEquip.ok) and here.
+   * Both UI paths that call this (the per-item detail popup, already
+   * correctly gated; the empty-slot picker list, which previously
+   * wasn't) are fixed at their own source too -- this is the last-resort
+   * backstop, not the primary fix.
+   */
   equipConsumable(heroId: string, defId: string) {
     const hero = this.hero(heroId);
     if (!hero) return;
     if (hero.status === 'questing') return this.say(`${hero.name} is away on a quest.`);
+    const def = InventoryManager.resolveDef(this.state, defId);
+    if (!def || !InventoryManager.isLoadoutEffect(def)) return this.say('That doesn\u2019t do anything equipped on a hero.');
     const current = hero.equippedConsumables ?? [];
     const maxSlots = ModifierManager.consumableSlots(this.state);
     if (current.length >= maxSlots) return this.say('No free consumable slots.');
@@ -1984,15 +1995,18 @@ export class GameEngine {
    * For each of a hero's 9 equipment slots, equips the highest-Gear-Score
    * eligible item currently sitting in the stash if it beats what's
    * already equipped there -- the bulk counterpart to picking through the
-   * Stash one item at a time. Gear Score is the same per-item value
-   * HeroManager.gearScore already sums (see gearScoreForItem in
-   * data/equipment.ts); ties are left alone rather than swapped for
-   * swapping's sake. Skips anything the hero can't wear yet (reqLevel),
-   * same as a manual equip would refuse. Loops slot-by-slot via
-   * EquipmentManager.equip itself so a displaced item lands back in the
-   * stash exactly the way a manual equip already handles it, and a later
-   * slot can immediately see an item the earlier slot's displacement just
-   * freed up. Returns how many slots actually changed. */
+   * Stash one item at a time. Gear Score is the real per-INSTANCE value
+   * from gearScoreForInstance (patch 0263 -- previously this compared
+   * gearScoreForItem's def-only score, which scores every copy of a
+   * given item identically no matter how it actually rolled; see that
+   * function's own comment in data/equipment.ts for the full bug and
+   * fix). Ties are left alone rather than swapped for swapping's sake.
+   * Skips anything the hero can't wear yet (reqLevel), same as a manual
+   * equip would refuse. Loops slot-by-slot via EquipmentManager.equip
+   * itself so a displaced item lands back in the stash exactly the way a
+   * manual equip already handles it, and a later slot can immediately
+   * see an item the earlier slot's displacement just freed up. Returns
+   * how many slots actually changed. */
   equipBestGear(heroId: string): number {
     const hero = this.hero(heroId);
     if (!hero) return 0;
@@ -2012,7 +2026,7 @@ export class GameEngine {
       const currentItem = hero.equipment[slot];
       if (currentItem) anyAlreadyEquipped = true;
       const currentDef = currentItem ? EQUIPMENT_BY_ID[currentItem.defId] : undefined;
-      const currentScore = currentDef ? gearScoreForItem(currentDef) : -1;
+      const currentScore = currentItem && currentDef ? gearScoreForInstance(currentItem, currentDef) : -1;
       let best: typeof currentItem = undefined;
       let bestScore = currentScore;
       for (const item of this.state.stash) {
@@ -2020,7 +2034,7 @@ export class GameEngine {
         if (!def || def.slot !== slot) continue;
         anyCandidateSeen = true;
         if (hero.level < def.reqLevel) { anyLevelGated = true; continue; }
-        const score = gearScoreForItem(def);
+        const score = gearScoreForInstance(item, def);
         if (score > bestScore) {
           bestScore = score;
           best = item;

@@ -5,7 +5,7 @@ import { GameEngine } from '../../game/engine';
 import { EquipmentManager } from '../../game/managers/EquipmentManager';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
-import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID, gearScoreForItem } from '../../game/data/equipment';
+import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID, gearScoreForInstance } from '../../game/data/equipment';
 import { ELEMENT_GLYPH, ELEMENT_LABEL, GEM_TIER_LABEL } from '../../game/data/elements';
 import { EquipSlot, EquipmentDef, EquipmentItem, ElementType, Hero, Rarity, ConsumableDef, CurioDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
@@ -66,17 +66,24 @@ function LockedPill() {
 /**
  * Same "is this actually an upgrade" check engine.equipBestGear and
  * QuestManager's auto-equip-on-loot both already use -- reqLevel-gated,
- * then compared via gearScoreForItem against whatever's currently worn in
- * that slot (an empty slot scores -1, so anything eligible always beats
- * it). Kept here rather than duplicated per-caller so this badge can never
- * disagree with what clicking "Equip Best Gear" would actually do.
+ * then compared via gearScoreForInstance against whatever's currently
+ * worn in that slot (an empty slot scores -1, so anything eligible
+ * always beats it). Kept here rather than duplicated per-caller so this
+ * badge can never disagree with what clicking "Equip Best Gear" would
+ * actually do.
+ *
+ * Takes the actual `item` instance now, not just its def (patch 0263 --
+ * the caller below already had a real EquipmentItem in scope and was
+ * silently discarding it, so this badge scored purely by def just like
+ * gearScoreForItem's other three call sites did; see that function's
+ * own comment in data/equipment.ts for the shared bug and fix).
  */
-function isGearUpgrade(hero: Hero, def: EquipmentDef): boolean {
+function isGearUpgrade(hero: Hero, item: EquipmentItem, def: EquipmentDef): boolean {
   if (hero.level < def.reqLevel) return false;
   const equipped = hero.equipment[def.slot];
   const equippedDef = equipped ? EQUIPMENT_BY_ID[equipped.defId] : undefined;
-  const currentScore = equippedDef ? gearScoreForItem(equippedDef) : -1;
-  return gearScoreForItem(def) > currentScore;
+  const currentScore = equipped && equippedDef ? gearScoreForInstance(equipped, equippedDef) : -1;
+  return gearScoreForInstance(item, def) > currentScore;
 }
 
 /** Green "would this beat what's worn" flag for a stash item -- arrow +
@@ -268,15 +275,6 @@ function isInstantUseOnHero(def: ConsumableDef): boolean {
   return !!def.effect.healInjury || (def.effect.restoreHealth ?? 0) > 0;
 }
 
-/** Whether a consumable is a per-quest loadout pick (equipped into a
- *  Consumable Slot ahead of sending a hero out), as opposed to an instant-
- *  use or peddler-charm item. */
-function isLoadoutEffect(def: ConsumableDef): boolean {
-  const e = def.effect;
-  return !!(e.success || e.gold || e.xp || e.loot || e.injuryResist || e.speed
-    || e.preventInjury || e.guaranteedGoodEvent || e.healthDamageReduction);
-}
-
 /**
  * Stash consumables used to be a static, non-interactive chip -- clicking
  * only expanded the description. Now offers the actual action inline:
@@ -364,7 +362,7 @@ function ConsumableInfoCard({
 }: { def: ConsumableDef; count: number; hero: Hero; engine: GameEngine }) {
   const [open, setOpen] = useState(false);
   const instantUse = isInstantUseOnHero(def);
-  const loadout = isLoadoutEffect(def);
+  const loadout = InventoryManager.isLoadoutEffect(def);
   const peddlerCharm = (def.effect.peddlerCounterReduction ?? 0) > 0;
   // Same "can't touch a deployed hero's loadout" rule the gear Equip button
   // (canEquip.ok, below in SlotCard) already enforces -- engine.equipConsumable
@@ -742,7 +740,7 @@ function StashCard({
   const def = EQUIPMENT_BY_ID[item.defId];
   if (!def) return null;
   const canEquip = EquipmentManager.canEquip(hero, item);
-  const isUpgrade = isGearUpgrade(hero, def);
+  const isUpgrade = isGearUpgrade(hero, item, def);
   const doSell = () => { engine.sellItem(item.uid); setPendingSell(false); setOpen(false); };
 
   return (
@@ -1054,13 +1052,19 @@ export function EquipmentPanel() {
       <div className="item-card-grid">
         {Array.from({ length: ModifierManager.consumableSlots(state) }).map((_, i) => {
           const equipped = hero.equippedConsumables ?? [];
-          // Available to equip here: owned in excess of however many are
-          // already slotted (on this hero or any other) -- prevents
-          // "equipping" the same single potion into two slots at once.
+          // Available to equip here: an actual loadout-effect consumable
+          // (patch 0263 -- previously this list had NO such check at all,
+          // so a Pet Treat or any other non-loadout item could still be
+          // "equipped" into a slot here even though the per-item detail
+          // popup's own Equip button was already correctly gated by this
+          // exact same check; see InventoryManager.isLoadoutEffect's own
+          // comment), owned in excess of however many are already slotted
+          // (on this hero or any other) -- prevents "equipping" the same
+          // single potion into two slots at once.
           const equippedElsewhereCount = (defId: string) =>
             state.heroes.reduce((sum, other) => sum + (other.equippedConsumables ?? []).filter((id) => id === defId).length, 0);
           const available = InventoryManager.owned(state).filter(
-            ({ def }) => equippedElsewhereCount(def.id) < InventoryManager.count(state, def.id),
+            ({ def }) => InventoryManager.isLoadoutEffect(def) && equippedElsewhereCount(def.id) < InventoryManager.count(state, def.id),
           );
           return (
             <ConsumableSlotCard key={i} hero={hero} equippedDefId={equipped[i]} available={available} engine={engine} />

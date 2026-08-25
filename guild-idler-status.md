@@ -20671,3 +20671,86 @@ vite.web.config.ts` both pass clean. No live runtime test at the actual
 verified-by-types-and-build-only caveat this whole patch series has
 carried; worth a direct check against that exact settings combination
 once this lands, since that's the one profile this patch exists to fix.
+
+### Bug Fix: Pet Treats equippable on heroes, Auto Equip Best ignoring rolled stats (patch 0263)
+
+```discord-update
+Dev Update | Bug Fix
+- Fixed: Pet Treats could still be equipped into a hero's Consumable Slot even though they do nothing there -- they're a Hatchery-only item
+- Fixed: Equip Best Gear, auto-equip-on-loot, and the stash's upgrade badge were all comparing gear by its item TEMPLATE only, never its actual rolled stats -- "best" could mean "whichever same-tier item happened to be looked at first," not the one that actually rolled better
+```
+
+First half of a larger set of reports; the visual dice-modal zoom and
+the item-card/scrap redesign are still open, tracked separately.
+
+**Pet Treats on heroes.** `pet_treat`'s own `effect: {}` already meant
+the per-item detail popup correctly hid its "Equip on {hero}" button --
+but the OTHER equip path, an empty Consumable Slot's own picker list,
+built its options purely from `InventoryManager.owned(state)` filtered
+only by "not already equipped elsewhere," with no check for whether the
+item does anything on a hero at all. `engine.equipConsumable` had no
+server-side guard either -- so a Pet Treat (or any other non-loadout
+consumable) could still get slotted through that second path, sitting
+there doing nothing once a quest actually resolved. Fixed at the root:
+new `InventoryManager.isLoadoutEffect()`, exported and shared, replacing
+a private unexported copy that only the (already-correct) detail popup
+had access to. Wired into the slot-picker's own filter AND into
+`engine.equipConsumable` itself as a server-side backstop, matching how
+gear-equip is already validated both places. Separately confirmed: pet-
+feeding itself (`PetManager.feedCrafted`) was never broken -- traced it
+directly, it correctly consumes one Pet Treat and applies
+`pets.feedCraftedHappinessGain`, no changes needed there.
+
+**Auto Equip Best (and three other places with the identical bug).**
+`gearScoreForItem(def)` only ever reads a static item template --
+rarity, reqLevel, `gearScoreOverride` -- never the actual rolled
+instance. Since patch 0255's all-stats rework, an item's real power
+lives almost entirely in `item.rolledStats`, a per-INSTANCE field this
+function can't see at all -- so it scored every copy of a given def
+identically no matter how well or badly it rolled. A search for every
+caller of this function turned up four places relying on it to mean
+"which item is actually better," not just "what tier is this," all with
+the same bug:
+
+- `engine.equipBestGear` -- the reported button. Could pick an
+  arbitrarily-ordered same-tier item off the stash instead of the one
+  that actually rolled better.
+- `QuestManager`'s auto-equip-on-loot -- could silently replace a
+  superbly-rolled item already worn with a badly-rolled fresh drop, just
+  because the drop happened to be a higher rarity tier on paper.
+- `EquipmentPanel.tsx`'s stash upgrade-arrow badge (`isGearUpgrade`) --
+  had a real `EquipmentItem` instance in scope at its only call site and
+  was discarding it, passing only the def through.
+- `HeroManager.gearScore` -- a hero's own displayed Gear Score total
+  could stay completely flat while swapping in a dramatically
+  better-rolled version of the same base item.
+
+New `gearScoreForInstance(item, def)` (`data/equipment.ts`, exported
+alongside the original `gearScoreForItem`, which stays as the flat
+rarity/level-only base component it always was) converts an item's
+actual rolled stat total (`item.rolledStats` + `item.enchantStats`, not
+`customMods` -- durability/health are flavor, not the power axis this
+tracks) into gear-score-equivalent units via the same `/6` ratio
+`loot_procedural`'s own budget formula already establishes between the
+two, then applies the item's `+N` upgrade multiplier
+(`1 + plus * 0.15`) -- the identical scaling `HeroManager.equipmentStats`
+already gives a `+5` item, so Gear Score and an item's real combat
+contribution can no longer disagree about whether upgrading it mattered.
+All four call sites switched to it; `isGearUpgrade`'s signature widened
+to take the actual `item` its one caller already had on hand instead of
+discarding it.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. No live runtime test against an
+actual stash of rolled items -- same verified-by-types-only caveat this
+whole series carries; worth a direct check that Equip Best Gear now
+correctly prefers a well-rolled lower-tier item over a badly-rolled
+higher-tier one, since that's the exact scenario this patch exists to
+fix and the one hardest to catch from reading code alone.
+
+**Still open from the same report, not yet started:** the High or Low
+tab's own background-zoom bug (same root mechanism as patch 0262 --
+Dice's two tabs were never individually measured against the shared
+495px modal floor, only Card's three states were) and the full
+item-card redesign (Sell/Unlock/Scrap layout, scrap-from-card, Scrap
+All with a rarity filter, and the animation requirements around both).
