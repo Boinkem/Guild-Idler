@@ -21007,3 +21007,67 @@ direct playtest of both before trusting them fully.
 wanted:** nothing else from the original report remains open after
 this -- items 1-3 shipped in patches 0263/0264, items 4-6 (this
 patch's own scope) are complete here.
+
+### Sell/Scrap card relocated: Inventory reverted, Vendors (Blacksmith) gets the redesign (patch 0267)
+
+```discord-update
+Dev Update | Inventory / Vendors
+- Reverted: Inventory tab's item cards are back to their original simple form
+- Changed: the new Sell/Scrap card, Scrap All, and both animations now live on the Blacksmith's own "Sell from the stash" section instead
+```
+
+Direct correction to patch 0265's placement -- the redesigned card
+belonged on the Blacksmith's own selling page, not the general
+Inventory tab. Confirmed via a fresh pull that patch 0266 (an unrelated
+internal `little-knight` -> `guildbound` rename, landed independently
+since 0265) never touched either file, so this is a clean move with no
+merge conflicts to reconcile.
+
+**Inventory (`EquipmentPanel.tsx`) reverted to its exact pre-0265
+state.** `StashCard` is back to the single-tier card + click-to-open
+detail modal, with Lock/Sell back in that modal's own footer alongside
+Close/Equip -- no Scrap button, no card-level quick-actions, no
+Scrap All bar. Verified with a direct diff against the pristine
+pre-0265 file rather than hand-reverting -- confirmed byte-identical.
+
+**Vendors -> Blacksmith's "Sell from the stash" gets the full
+redesign**, replacing the old plain list-row layout (which, closer
+inspection turned up, was using a native browser `confirm()` dialog for
+its sell confirmation -- not this game's own themed `ConfirmModal` the
+rest of the app uses; fixed as part of this move, not left behind).
+New `ArmourStashCard` component -- same two-tier card, same
+Lock/Sell/Scrap quick-action row, same confirmed-design rules (Scrap
+always confirms, disabled when locked) -- but deliberately simpler than
+Inventory's original version: no click-to-expand detail modal at all,
+since this page has no hero context to Equip onto, so there's nothing
+for a detail view to add here that the card doesn't already show.
+
+**Scrap All** ported over unchanged in mechanics (same rarity-threshold
+dropdown, same locked/enchanted/crafted-above-Common exclusions, same
+single confirm showing total items and Scrap value, same staggered
+per-card animation via pre-captured `data-stash-uid` positions -- see
+patch 0265's own writeup for why positions have to be captured before
+any removal starts).
+
+**A real upgrade the relocation made possible, not just a like-for-like
+move: Scrap now gets the same long-distance flight Gold already has.**
+Patch 0265 could only give Scrap a local pop-and-fade burst on
+Inventory, because no persistent Scrap total was visible on that page
+to fly toward. The Blacksmith's own stash-sell section already shows
+`Scrap: {state.scrap}` right there, permanently -- now registered as a
+real `useFlyTargetRef('scrap')` target, so a Scrap action here gets the
+identical treatment Sell's gold flight already had: a local burst *and*
+a particle traveling to the counter, landing exactly on it regardless
+of window size, same `flyTarget.ts` mechanism this whole flight system
+already runs on.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Confirmed via grep that
+`EquipmentPanel.tsx` carries zero remaining references to the removed
+redesign (`item-card-actions`, `onScrap`, `data-stash-uid`, etc.) --
+not just visually reverted, actually gone. The relocated card's markup
+is byte-for-byte the same `.item-card`/`.item-card-actions` structure
+already screenshot-verified in patch 0265 (this patch touched zero CSS
+-- same styles, same visual result, just a different parent component
+rendering them), so a fresh screenshot wasn't necessary to re-confirm
+what didn't change.

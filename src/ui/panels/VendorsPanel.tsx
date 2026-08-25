@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, CSSProperties } from 'react';
 import { useEngine, useNow } from '../useEngine';
+import { GameEngine } from '../../game/engine';
 import { useSettings } from '../useSettings';
 import { ShopManager } from '../../game/managers/ShopManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
@@ -8,10 +9,11 @@ import { EquipmentManager } from '../../game/managers/EquipmentManager';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { EQUIPMENT_BY_ID } from '../../game/data/equipment';
 import { isProceduralTemplate } from '../../game/data/proceduralLoot';
+import { scrapIconFor } from '../../game/data/elements';
 import { CONSUMABLE_BY_ID } from '../../game/data/items';
 import { VENDORS, vendorUpgrades } from '../../game/data/progression';
-import { EquipmentDef, ConsumableDef, VendorId, UpgradeDef, CraftingRecipeDef } from '../../game/types';
-import { describeMods, formatDuration, formatGold, RARITY_BANNER, RARITY_COLOR } from '../../game/util';
+import { EquipmentDef, EquipmentItem, ConsumableDef, VendorId, UpgradeDef, CraftingRecipeDef, Rarity } from '../../game/types';
+import { describeMods, formatDuration, formatGold, RARITY_BANNER, RARITY_COLOR, RARITY_ORDER } from '../../game/util';
 import { isTabUnread } from '../../game/attention';
 import { ItemIcon, ConsumableIcon } from '../icons';
 import { VendorSprite } from '../sprites/VendorSprite';
@@ -22,6 +24,9 @@ import { WeaponEnchantStation } from '../WeaponEnchantStation';
 import { ArmourInfusionStation } from '../ArmourInfusionStation';
 import { ScrapStation } from '../ScrapStation';
 import { ReputationRing } from '../ReputationRing';
+import { ConfirmModal } from '../ConfirmModal';
+import { RewardGlowParticle } from '../RewardGlowParticle';
+import { useFlyTargetRef, getFlyTargetCenter } from '../flyTarget';
 
 /** Confirmed pairing, not a guess -- Blacksmith sells armour, Alchemist sells
  *  supplies, Enchanter sells the black market. Same mapping decides which
@@ -299,6 +304,88 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
   const engine = useEngine();
   const state = engine.state;
 
+  /**
+   * The redesigned Sell/Scrap card + Scrap All -- moved here from the
+   * Inventory tab (patch 0265 first landed it there; patch 0267, direct
+   * follow-up request, relocated it to the Blacksmith's own "Sell from
+   * the stash" section instead, where selling/scrapping equipment
+   * actually belongs, and reverted Inventory's own cards back to their
+   * original simple form). See EquipmentPanel.tsx's own StashCard/
+   * EquipmentPanel comments (prior to this patch) for the full original
+   * design reasoning -- unchanged here, just relocated and simplified:
+   * no Equip button or detail-modal click-through exists on this page
+   * (there's no hero context here to equip onto), so this card is the
+   * quick-action row alone, nothing to expand into.
+   */
+  const [bursts, setBursts] = useState<{ key: number; x: number; y: number; gained: number; icon?: string; kind: 'scrap' | 'gold' }[]>([]);
+  const pushBurst = (x: number, y: number, gained: number, kind: 'scrap' | 'gold', icon?: string) => {
+    const key = Date.now() + Math.random();
+    setBursts((prev) => [...prev, { key, x, y, gained, icon, kind }]);
+    window.setTimeout(() => setBursts((prev) => prev.filter((b) => b.key !== key)), 900);
+  };
+  const [goldFlights, setGoldFlights] = useState<{ key: number; x: number; y: number; dx: number; dy: number }[]>([]);
+  const pushGoldFlight = (x: number, y: number, gained: number) => {
+    pushBurst(x, y, gained, 'gold');
+    const target = getFlyTargetCenter('gold');
+    if (target) {
+      const key = Date.now() + Math.random() + 0.5;
+      setGoldFlights((prev) => [...prev, { key, x, y, dx: target.x - x, dy: target.y - y }]);
+      window.setTimeout(() => setGoldFlights((prev) => prev.filter((f) => f.key !== key)), 750);
+    }
+  };
+  /**
+   * Scrap gets the real long-distance flight here too, unlike on
+   * Inventory -- this page has a genuine persistent Scrap total on
+   * screen (the counter just below, `scrapRef`), so there's actually
+   * somewhere for it to fly toward, matching Gold's own treatment
+   * rather than staying local-burst-only the way it had to on
+   * Inventory (no equivalent counter shown there at all).
+   */
+  const scrapRef = useFlyTargetRef<HTMLSpanElement>('scrap');
+  const pushScrapFlight = (x: number, y: number, gained: number, icon: string) => {
+    pushBurst(x, y, gained, 'scrap', icon);
+    const target = getFlyTargetCenter('scrap');
+    if (target) {
+      const key = Date.now() + Math.random() + 0.5;
+      setGoldFlights((prev) => [...prev, { key, x, y, dx: target.x - x, dy: target.y - y }]);
+      window.setTimeout(() => setGoldFlights((prev) => prev.filter((f) => f.key !== key)), 750);
+    }
+  };
+
+  const scrapBonus = ModifierManager.global(state).scrapBonus ?? 0;
+  const [scrapRarity, setScrapRarity] = useState<Rarity>('common');
+  const scrapMaxIndex = RARITY_ORDER.indexOf(scrapRarity);
+  const scrapPreview = state.stash.filter((item) => {
+    if (item.locked) return false;
+    if (item.enchantStats && Object.keys(item.enchantStats).length > 0) return false;
+    const def = EQUIPMENT_BY_ID[item.defId];
+    if (!def) return false;
+    if (item.customMods && def.rarity !== 'common') return false;
+    return RARITY_ORDER.indexOf(def.rarity) <= scrapMaxIndex;
+  });
+  const scrapPreviewTotal = scrapPreview.reduce((sum, item) => sum + EquipmentManager.scrapValue(item, scrapBonus), 0);
+  const [pendingScrapAll, setPendingScrapAll] = useState(false);
+  const STAGGER_MS = 140;
+  const runScrapAll = () => {
+    if (scrapPreview.length === 0) return;
+    const targets = scrapPreview.map((item) => {
+      const el = document.querySelector(`[data-stash-uid="${item.uid}"]`);
+      const rect = el?.getBoundingClientRect();
+      return {
+        uid: item.uid,
+        gained: EquipmentManager.scrapValue(item, scrapBonus),
+        x: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
+        y: rect ? rect.top + rect.height / 2 : window.innerHeight / 2,
+      };
+    });
+    targets.forEach((t, i) => {
+      window.setTimeout(() => {
+        engine.scrapItem(t.uid);
+        pushScrapFlight(t.x, t.y, t.gained, scrapIconFor(Date.now() + i));
+      }, i * STAGGER_MS);
+    });
+  };
+
   return (
     <>
       <div className="spread" style={{ alignItems: 'center', marginBottom: 8 }}>
@@ -323,43 +410,70 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
 
       <div className="spread" style={{ alignItems: 'center' }}>
         <div className="section-heading" style={{ marginBottom: 0 }}>Sell from the stash</div>
-        <span className="tiny muted">Scrap: {state.scrap}</span>
+        <span ref={scrapRef} className="tiny muted">Scrap: {state.scrap}</span>
       </div>
       {state.stash.length === 0 && <p className="small muted">Nothing spare to sell.</p>}
+      {state.stash.length > 0 && (
+        <div className="row" style={{ gap: 6, alignItems: 'center', marginBottom: 8 }}>
+          <select
+            value={scrapRarity}
+            onChange={(e) => setScrapRarity(e.target.value as Rarity)}
+            style={{
+              background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
+              color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.625rem',
+            }}
+          >
+            {RARITY_ORDER.map((r) => (
+              <option key={r} value={r}>{r} and below</option>
+            ))}
+          </select>
+          <button
+            className="btn-purple"
+            style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
+            onClick={() => setPendingScrapAll(true)}
+            disabled={scrapPreview.length === 0}
+            title="Enchanted and Vault-locked items are never swept up by this, regardless of rarity"
+          >
+            Scrap All ({scrapPreview.length}) · {scrapPreviewTotal} ⚙
+          </button>
+        </div>
+      )}
       <div className="grid two">
-        {state.stash.map((item) => {
-          const def = EQUIPMENT_BY_ID[item.defId];
-          if (!def) return null;
-          return (
-            <div key={item.uid} className="spread card" style={{ marginBottom: 0 }}>
-              <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-                <ItemIcon slot={def.slot} icon={def.icon} size={28} />
-                <span style={{ color: RARITY_COLOR[def.rarity], fontSize: 11 }}>
-                  {def.name}{item.plus > 0 ? ` +${item.plus}` : ''}
-                  {item.locked && ' \uD83D\uDD12'}
-                </span>
-              </div>
-              <div className="row" style={{ gap: 6 }}>
-                <button
-                  className="btn-ghost"
-                  style={{ minHeight: 22, padding: '2px 8px', fontSize: '0.625rem' }}
-                  onClick={() => engine.toggleItemLock(item.uid)}
-                  title={item.locked ? 'Unlock this item' : 'Lock in the Vault -- protects it from Sell, Sell Junk, and Scrap'}
-                >
-                  {item.locked ? 'Unlock' : 'Lock'}
-                </button>
-                <button
-                  disabled={item.locked}
-                  title={item.locked ? 'Locked in the Vault -- unlock it first to sell' : undefined}
-                  onClick={() => { if (!settings.confirmSell || confirm('Sell this item?')) engine.sellItem(item.uid); }}
-                >
-                  Sell · {formatGold(EquipmentManager.sellValue(item))}
-                </button>
-              </div>
-            </div>
-          );
-        })}
+        {state.stash.map((item) => (
+          <ArmourStashCard
+            key={item.uid}
+            item={item}
+            confirmSell={settings.confirmSell}
+            engine={engine}
+            scrapBonus={scrapBonus}
+            onSell={pushGoldFlight}
+            onScrap={pushScrapFlight}
+          />
+        ))}
       </div>
+      {/* See EquipmentPanel.tsx's own (pre-0267) bursts/goldFlights
+          comment for why these live at this level rather than inside
+          each card -- the card unmounts the instant its item leaves
+          state.stash, which would tear a child animation down
+          mid-flight. Unchanged reasoning, just relocated here. */}
+      {bursts.map((b) => (
+        <span
+          key={b.key}
+          aria-hidden="true"
+          className={`collect-particle ${b.kind === 'gold' ? 'coin' : 'scrap'}`}
+          style={{ position: 'fixed', left: b.x, top: b.y, zIndex: 50 } as CSSProperties}
+        >
+          {b.icon && <img src={`./item-icons/${b.icon}`} alt="" style={{ width: 18, height: 18, objectFit: 'contain', verticalAlign: '-4px', marginRight: 4 }} />}
+          +{b.gained} {b.kind === 'gold' ? 'gold' : 'Scrap'}
+        </span>
+      ))}
+      {goldFlights.map((f) => (
+        <RewardGlowParticle
+          key={f.key}
+          x={f.x} y={f.y} dx={f.dx} dy={f.dy}
+          color="var(--brass)" delay={0} durationMs={750}
+        />
+      ))}
 
       {/* Second thoughts, for a price -- every sale made through the
           button just above lands here, exact item intact (durability,
@@ -395,6 +509,116 @@ function ArmourStock({ now, settings }: { now: number; settings: { confirmSell: 
             })}
           </div>
         </>
+      )}
+      {pendingScrapAll && (
+        <ConfirmModal
+          title="Scrap all"
+          message={`Scrap ${scrapPreview.length} item${scrapPreview.length === 1 ? '' : 's'} (${scrapRarity} and below) for ${scrapPreviewTotal} Scrap? This cannot be undone.`}
+          confirmLabel="Scrap"
+          onConfirm={() => { runScrapAll(); setPendingScrapAll(false); }}
+          onCancel={() => setPendingScrapAll(false)}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * The Sell/Scrap card for the Blacksmith's own "Sell from the stash"
+ * grid -- patch 0267 (relocated here from Inventory, see ArmourStock's
+ * own comment above). No detail-modal click-through and no Equip button
+ * -- there's no hero context on this page to equip onto, so this card
+ * is just the icon/name header plus the Lock/Sell/Scrap quick-action
+ * row, nothing to expand into.
+ */
+function ArmourStashCard({
+  item, confirmSell, engine, scrapBonus, onSell, onScrap,
+}: {
+  item: EquipmentItem; confirmSell: boolean; engine: GameEngine; scrapBonus: number;
+  onSell: (x: number, y: number, gained: number) => void;
+  onScrap: (x: number, y: number, gained: number, icon: string) => void;
+}) {
+  const [pendingSell, setPendingSell] = useState<{ x: number; y: number } | null>(null);
+  const [pendingScrap, setPendingScrap] = useState<{ x: number; y: number } | null>(null);
+  const def = EQUIPMENT_BY_ID[item.defId];
+  if (!def) return null;
+  const scrapValue = EquipmentManager.scrapValue(item, scrapBonus);
+
+  const centerOf = (el: HTMLElement) => {
+    const rect = el.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  };
+  const doSell = (pos: { x: number; y: number }) => {
+    onSell(pos.x, pos.y, EquipmentManager.sellValue(item));
+    engine.sellItem(item.uid);
+    setPendingSell(null);
+  };
+  const doScrap = (pos: { x: number; y: number }) => {
+    onScrap(pos.x, pos.y, scrapValue, scrapIconFor(Date.now()));
+    engine.scrapItem(item.uid);
+    setPendingScrap(null);
+  };
+
+  return (
+    <>
+      <div className="item-card" data-stash-uid={item.uid}>
+        <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
+        <div className="item-card-summary">
+          <ItemIcon slot={def.slot} icon={def.icon} />
+          <div className="item-card-body">
+            <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
+            <span className="rarity-pill" style={{ color: RARITY_COLOR[def.rarity], borderColor: RARITY_COLOR[def.rarity] }}>{def.rarity}</span>
+            {item.locked && <span className="rarity-pill" style={{ color: 'var(--sky)', borderColor: 'var(--sky)' }}>{'\uD83D\uDD12'} vaulted</span>}
+          </div>
+        </div>
+        <div className="item-card-actions">
+          <button
+            type="button"
+            onClick={() => engine.toggleItemLock(item.uid)}
+            title={item.locked
+              ? 'Unlock -- Sell, Sell Junk, and Scrap can reach this item again'
+              : 'Lock in the Vault -- protects this item from Sell, Sell Junk, and Scrap'}
+          >
+            {item.locked ? '\uD83D\uDD13' : '\uD83D\uDD12'}<br />{item.locked ? 'Unlock' : 'Lock'}
+          </button>
+          <button
+            type="button"
+            disabled={item.locked}
+            title={item.locked ? 'Locked in the Vault -- unlock it first to sell' : undefined}
+            onClick={(e) => {
+              const pos = centerOf(e.currentTarget);
+              if (!confirmSell) doSell(pos); else setPendingSell(pos);
+            }}
+          >
+            <span style={{ color: item.locked ? undefined : 'var(--brass)' }}>{'\u25c6'} {formatGold(EquipmentManager.sellValue(item))}</span><br />Sell
+          </button>
+          <button
+            type="button"
+            disabled={item.locked}
+            title={item.locked ? 'Locked in the Vault -- unlock it first to scrap' : 'Breaks the item down for Scrap materials. This cannot be undone.'}
+            onClick={(e) => setPendingScrap(centerOf(e.currentTarget))}
+          >
+            <span style={{ color: item.locked ? undefined : 'var(--violet)' }}>{'\u2699'} {scrapValue}</span><br />Scrap
+          </button>
+        </div>
+      </div>
+      {pendingSell && (
+        <ConfirmModal
+          title="Sell item"
+          message={`Sell ${def.name} for ${formatGold(EquipmentManager.sellValue(item))}?`}
+          confirmLabel="Sell"
+          onConfirm={() => doSell(pendingSell)}
+          onCancel={() => setPendingSell(null)}
+        />
+      )}
+      {pendingScrap && (
+        <ConfirmModal
+          title="Scrap item"
+          message={`Scrap ${def.name} for ${scrapValue} Scrap? This cannot be undone.`}
+          confirmLabel="Scrap"
+          onConfirm={() => doScrap(pendingScrap)}
+          onCancel={() => setPendingScrap(null)}
+        />
       )}
     </>
   );

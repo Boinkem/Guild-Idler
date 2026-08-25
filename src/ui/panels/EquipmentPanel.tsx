@@ -1,4 +1,4 @@
-import { useState, CSSProperties } from 'react';
+import { useState } from 'react';
 import { useEngine } from '../useEngine';
 import { useSettings } from '../useSettings';
 import { GameEngine } from '../../game/engine';
@@ -6,7 +6,7 @@ import { EquipmentManager } from '../../game/managers/EquipmentManager';
 import { HeroManager } from '../../game/managers/HeroManager';
 import { ModifierManager } from '../../game/managers/ModifierManager';
 import { EQUIPMENT_BY_ID, EQUIP_SLOTS, SET_BY_ID, gearScoreForInstance } from '../../game/data/equipment';
-import { ELEMENT_GLYPH, ELEMENT_LABEL, GEM_TIER_LABEL, scrapIconFor } from '../../game/data/elements';
+import { ELEMENT_GLYPH, ELEMENT_LABEL, GEM_TIER_LABEL } from '../../game/data/elements';
 import { EquipSlot, EquipmentDef, EquipmentItem, ElementType, Hero, Rarity, ConsumableDef, CurioDef } from '../../game/types';
 import { InventoryManager } from '../../game/managers/InventoryManager';
 import { CurioManager } from '../../game/managers/CurioManager';
@@ -16,8 +16,6 @@ import { ItemIcon, ConsumableIcon, CurioIcon } from '../icons';
 import { GearScoreBadge } from '../GearScoreBadge';
 import { Row, Toggle } from './SettingsPanel';
 import { ConfirmModal } from '../ConfirmModal';
-import { RewardGlowParticle } from '../RewardGlowParticle';
-import { getFlyTargetCenter } from '../flyTarget';
 
 const SLOTS = EQUIP_SLOTS;
 
@@ -735,57 +733,27 @@ function SlotCard({
 /** A single stash item -- same overlay-modal treatment as SlotCard above,
  *  replacing the previous inline expand. */
 function StashCard({
-  item, hero, confirmSell, engine, onSell, onScrap,
-}: {
-  item: EquipmentItem; hero: Hero; confirmSell: boolean; engine: GameEngine;
-  onSell: (x: number, y: number, gained: number) => void;
-  onScrap: (x: number, y: number, gained: number, icon: string) => void;
-}) {
+  item, hero, confirmSell, engine,
+}: { item: EquipmentItem; hero: Hero; confirmSell: boolean; engine: GameEngine }) {
   const [open, setOpen] = useState(false);
-  // Position captured at the moment Sell/Scrap is FIRST clicked, not at
-  // actual commit time -- when confirmSell (or Scrap's own, always-on
-  // confirm) gates the action behind a ConfirmModal, the commit itself
-  // fires from that popup's own "Confirm" button, nowhere near this
-  // card. Capturing (x, y) up front and carrying it through means the
-  // burst/flight still animates from the item's real position on the
-  // grid either way, confirmed or instant.
-  const [pendingSell, setPendingSell] = useState<{ x: number; y: number } | null>(null);
-  const [pendingScrap, setPendingScrap] = useState<{ x: number; y: number } | null>(null);
+  const [pendingSell, setPendingSell] = useState(false);
   const def = EQUIPMENT_BY_ID[item.defId];
   if (!def) return null;
   const canEquip = EquipmentManager.canEquip(hero, item);
   const isUpgrade = isGearUpgrade(hero, item, def);
-  const scrapBonus = ModifierManager.global(engine.state).scrapBonus ?? 0;
-  const scrapValue = EquipmentManager.scrapValue(item, scrapBonus);
-
-  const doSell = (pos: { x: number; y: number }) => {
-    onSell(pos.x, pos.y, EquipmentManager.sellValue(item));
-    engine.sellItem(item.uid);
-    setPendingSell(null);
-    setOpen(false);
-  };
-  const doScrap = (pos: { x: number; y: number }) => {
-    onScrap(pos.x, pos.y, scrapValue, scrapIconFor(Date.now()));
-    engine.scrapItem(item.uid);
-    setPendingScrap(null);
-    setOpen(false);
-  };
-  const centerOf = (el: HTMLElement) => {
-    const rect = el.getBoundingClientRect();
-    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-  };
+  const doSell = () => { engine.sellItem(item.uid); setPendingSell(false); setOpen(false); };
 
   return (
     <>
-      <div className="item-card" data-stash-uid={item.uid}>
+      <div
+        className="item-card"
+        onClick={() => setOpen(true)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
+      >
         <div className="rarity-banner" style={{ backgroundImage: `url(${RARITY_BANNER[def.rarity]})` }} />
-        <div
-          className="item-card-summary"
-          onClick={() => setOpen(true)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
-        >
+        <div className="item-card-summary">
           <ItemIcon slot={def.slot} icon={def.icon} />
           <div className="item-card-body">
             <div className="item-card-name" style={{ color: RARITY_COLOR[def.rarity] }}>{def.name}{item.plus > 0 ? ` +${item.plus}` : ''}</div>
@@ -796,44 +764,6 @@ function StashCard({
             {item.locked && <LockedPill />}
             <DurabilityBar item={item} compact thresholdPercent={engine.state.autoRepairEnabled ? engine.state.autoRepairThresholdPercent : undefined} />
           </div>
-        </div>
-        {/* Quick-action row -- patch 0265, direct request: Lock/Sell/Scrap
-            moved off the detail modal's own crowded footer and onto the
-            card itself, so the three most common actions on a stash item
-            never require opening the modal at all. Equip stays modal-only
-            (it's hero-specific and already has its own upgrade-badge
-            context there) -- these three are the ones that don't need
-            that extra context. */}
-        <div className="item-card-actions">
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); engine.toggleItemLock(item.uid); }}
-            title={item.locked
-              ? 'Unlock -- Sell, Sell Junk, and Scrap can reach this item again'
-              : 'Lock in the Vault -- protects this item from Sell, Sell Junk, and Scrap'}
-          >
-            {item.locked ? '\uD83D\uDD13' : '\uD83D\uDD12'}<br />{item.locked ? 'Unlock' : 'Lock'}
-          </button>
-          <button
-            type="button"
-            disabled={item.locked}
-            title={item.locked ? 'Locked in the Vault -- unlock it first to sell' : undefined}
-            onClick={(e) => {
-              e.stopPropagation();
-              const pos = centerOf(e.currentTarget);
-              if (!confirmSell) doSell(pos); else setPendingSell(pos);
-            }}
-          >
-            <span style={{ color: item.locked ? undefined : 'var(--brass)' }}>{'\u25c6'} {formatGold(EquipmentManager.sellValue(item))}</span><br />Sell
-          </button>
-          <button
-            type="button"
-            disabled={item.locked}
-            title={item.locked ? 'Locked in the Vault -- unlock it first to scrap' : 'Breaks the item down for Scrap materials. This cannot be undone.'}
-            onClick={(e) => { e.stopPropagation(); setPendingScrap(centerOf(e.currentTarget)); }}
-          >
-            <span style={{ color: item.locked ? undefined : 'var(--violet)' }}>{'\u2699'} {scrapValue}</span><br />Scrap
-          </button>
         </div>
       </div>
 
@@ -887,12 +817,6 @@ function StashCard({
               <div className="tiny muted" style={{ marginTop: 4 }}>
                 {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
               </div>
-              {/* Lock/Sell/Scrap live on the card itself now (see
-                  .item-card-actions above) -- Close and Equip are the
-                  only two actions that still need a footer here; Equip
-                  because it needs the hero-context/upgrade-badge already
-                  built into this modal, Close because every modal needs
-                  one. */}
               <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
                 <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
                 <button
@@ -902,6 +826,23 @@ function StashCard({
                   title={canEquip.reason}
                 >
                   Equip on {hero.name}
+                </button>
+                <button
+                  onClick={() => engine.toggleItemLock(item.uid)}
+                  title={item.locked
+                    ? 'Unlock -- Sell, Sell Junk, and Scrap can reach this item again'
+                    : 'Lock in the Vault -- protects this item from Sell, Sell Junk, and Scrap'}
+                >
+                  {item.locked ? `${'\uD83D\uDD13'} Unlock` : `${'\uD83D\uDD12'} Lock in Vault`}
+                </button>
+                <button
+                  disabled={item.locked}
+                  title={item.locked ? 'Locked in the Vault -- unlock it first to sell' : undefined}
+                  onClick={() => {
+                    if (!confirmSell) doSell(); else setPendingSell(true);
+                  }}
+                >
+                  Sell {formatGold(EquipmentManager.sellValue(item))}
                 </button>
               </div>
             </div>
@@ -914,17 +855,8 @@ function StashCard({
           title="Sell item"
           message={`Sell ${def.name} for ${formatGold(EquipmentManager.sellValue(item))}?`}
           confirmLabel="Sell"
-          onConfirm={() => doSell(pendingSell)}
-          onCancel={() => setPendingSell(null)}
-        />
-      )}
-      {pendingScrap && (
-        <ConfirmModal
-          title="Scrap item"
-          message={`Scrap ${def.name} for ${scrapValue} Scrap? This cannot be undone.`}
-          confirmLabel="Scrap"
-          onConfirm={() => doScrap(pendingScrap)}
-          onCancel={() => setPendingScrap(null)}
+          onConfirm={doSell}
+          onCancel={() => setPendingSell(false)}
         />
       )}
     </>
@@ -938,56 +870,6 @@ export function EquipmentPanel() {
   const workshop = state.guild.workshop ?? 0;
   const [heroId, setHeroId] = useState(state.heroes[0].id);
   const hero = state.heroes.find((h) => h.id === heroId) ?? state.heroes[0];
-
-  /**
-   * Scrap/Sell burst overlays for the Stash grid -- patch 0265. Lifted up
-   * to the panel level rather than owned by each StashCard, for the same
-   * reason ScrapStation.tsx's own burst/flight state lives in that
-   * modal, not in a per-item component: the item that triggered the
-   * burst gets REMOVED from `state.stash` (and its card unmounted) the
-   * instant engine.scrapItem/sellItem runs, which would tear the burst
-   * down mid-animation if it were a child of that same card. Rendered as
-   * `position: fixed` overlays at a pre-measured screen position, so
-   * they survive their origin card's unmount completely independent of
-   * it -- same "measure now, animate against a snapshot" principle
-   * ScrapStation's own flight already uses via getBoundingClientRect.
-   * Each entry clears itself via its own timeout, matching every other
-   * burst/flight pattern in this game (ScrapStation, HarvestPanel).
-   *
-   * `icon` is only ever set for a Scrap burst (a real scrapIconFor()
-   * material glyph, same as ScrapStation's own) -- gold has no
-   * equivalent `<img>` icon anywhere in this game (every other gold
-   * flourish, e.g. PeddlerTabModal's own Settle burst, is a glow-only
-   * RewardGlowParticle with no icon prop), so a Sell burst stays
-   * glow-only + the "+N gold" text rather than inventing a fake image
-   * path that would just 404.
-   */
-  const [bursts, setBursts] = useState<{ key: number; x: number; y: number; gained: number; icon?: string; kind: 'scrap' | 'gold' }[]>([]);
-  const pushBurst = (x: number, y: number, gained: number, kind: 'scrap' | 'gold', icon?: string) => {
-    const key = Date.now() + Math.random();
-    setBursts((prev) => [...prev, { key, x, y, gained, icon, kind }]);
-    window.setTimeout(() => setBursts((prev) => prev.filter((b) => b.key !== key)), 900);
-  };
-  /** Gold flights specifically also need the real registered 'gold'
-   *  header target (see flyTarget.ts) to actually travel toward -- a
-   *  scrap burst stays local (no persistent Scrap total is shown outside
-   *  ScrapStation's own modal to fly toward), matching "keep the current
-   *  [scrap] animations... apply from each card" without inventing a new
-   *  always-visible Scrap counter nobody asked for. Gold already has one
-   *  (the header's own total; QuestResultModal/HarvestPanel already fly
-   *  toward it), so Sell gets the real long-distance flight on top of
-   *  its own local burst; Scrap gets the local pop-and-fade burst only.
-   */
-  const [goldFlights, setGoldFlights] = useState<{ key: number; x: number; y: number; dx: number; dy: number }[]>([]);
-  const pushGoldFlight = (x: number, y: number, gained: number) => {
-    pushBurst(x, y, gained, 'gold');
-    const target = getFlyTargetCenter('gold');
-    if (target) {
-      const key = Date.now() + Math.random() + 0.5;
-      setGoldFlights((prev) => [...prev, { key, x, y, dx: target.x - x, dy: target.y - y }]);
-      window.setTimeout(() => setGoldFlights((prev) => prev.filter((f) => f.key !== key)), 750);
-    }
-  };
 
   const repairBill = EquipmentManager.allItems(state)
     .reduce((sum, e) => sum + EquipmentManager.repairCost(e.item, workshop, ModifierManager.global(state).repairDiscount ?? 0), 0);
@@ -1018,67 +900,6 @@ export function EquipmentPanel() {
     if (!settings.confirmSell) engine.sellJunk(junkRarity);
     else setPendingJunkSell(true);
   };
-
-  /**
-   * Scrap All -- patch 0265, direct request. Same shape as Sell Junk just
-   * above (same exclusions: locked, enchanted, and crafted-above-Common
-   * items are never swept up by either bulk action, protecting anything
-   * the player actually invested resources into), same "defaults to
-   * Common, the safest threshold" reasoning, same live count+value
-   * preview on the button. Always confirms regardless of settings --
-   * scrap is permanent and has no settings-gated opt-out the way Sell
-   * does (ScrapStation's own existing flow already always previews/
-   * confirms before committing; this matches that established
-   * precedent rather than introducing a new toggle nobody asked for).
-   *
-   * Unlike sellJunk, this does NOT call one atomic bulk engine method --
-   * see runScrapAll below (rendered near the button) for why the actual
-   * scrapping is staggered client-side instead, one item at a time, so
-   * each card gets its own visible burst as it goes rather than the
-   * whole batch vanishing in one frame.
-   */
-  const [scrapRarity, setScrapRarity] = useState<Rarity>('common');
-  const scrapMaxIndex = RARITY_ORDER.indexOf(scrapRarity);
-  const scrapBonus = ModifierManager.global(state).scrapBonus ?? 0;
-  const scrapPreview = state.stash.filter((item) => {
-    if (item.locked) return false;
-    if (item.enchantStats && Object.keys(item.enchantStats).length > 0) return false;
-    const def = EQUIPMENT_BY_ID[item.defId];
-    if (!def) return false;
-    if (item.customMods && def.rarity !== 'common') return false;
-    return RARITY_ORDER.indexOf(def.rarity) <= scrapMaxIndex;
-  });
-  const scrapPreviewTotal = scrapPreview.reduce((sum, item) => sum + EquipmentManager.scrapValue(item, scrapBonus), 0);
-  const [pendingScrapAll, setPendingScrapAll] = useState(false);
-  const STAGGER_MS = 140;
-  const runScrapAll = () => {
-    if (scrapPreview.length === 0) return;
-    // Positions captured up front, before anything is removed -- once
-    // staggered removal starts, earlier cards leaving the grid reflows
-    // the ones after them, so a position measured live at each item's
-    // own turn would drift from where it actually still looks like it
-    // is on screen by then. Capturing everything now and animating
-    // against those fixed snapshots (same principle bursts/pushBurst
-    // already use for a single scrap) keeps every burst anchored to
-    // where its card really was, not where the grid has reshuffled to.
-    const targets = scrapPreview.map((item) => {
-      const el = document.querySelector(`[data-stash-uid="${item.uid}"]`);
-      const rect = el?.getBoundingClientRect();
-      return {
-        uid: item.uid,
-        gained: EquipmentManager.scrapValue(item, scrapBonus),
-        x: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
-        y: rect ? rect.top + rect.height / 2 : window.innerHeight / 2,
-      };
-    });
-    targets.forEach((t, i) => {
-      window.setTimeout(() => {
-        engine.scrapItem(t.uid);
-        pushBurst(t.x, t.y, t.gained, 'scrap', scrapIconFor(Date.now() + i));
-      }, i * STAGGER_MS);
-    });
-  };
-
   const curiosOwned = CurioManager.owned(state);
 
   // Gear-type filter -- sorts the Stash grid down to one slot at a time
@@ -1305,27 +1126,6 @@ export function EquipmentPanel() {
             >
               Sell Junk ({junkPreview.length}) · {formatGold(junkGold)}
             </button>
-            <select
-              value={scrapRarity}
-              onChange={(e) => setScrapRarity(e.target.value as Rarity)}
-              style={{
-                background: 'var(--panel-2)', border: '1px solid var(--panel-3)',
-                color: 'var(--parchment)', padding: '3px 6px', fontSize: '0.625rem',
-              }}
-            >
-              {RARITY_ORDER.map((r) => (
-                <option key={r} value={r}>{r} and below</option>
-              ))}
-            </select>
-            <button
-              className="btn-purple"
-              style={{ minHeight: 22, padding: '2px 10px', fontSize: '0.625rem' }}
-              onClick={() => setPendingScrapAll(true)}
-              disabled={scrapPreview.length === 0}
-              title="Crafted, enchanted, and Vault-locked items are never swept up by this, regardless of rarity"
-            >
-              Scrap All ({scrapPreview.length}) · {scrapPreviewTotal} ⚙
-            </button>
           </div>
         )}
       </div>
@@ -1335,43 +1135,9 @@ export function EquipmentPanel() {
       )}
       <div className="item-card-grid">
         {filteredStash.map((item) => (
-          <StashCard
-            key={item.uid}
-            item={item}
-            hero={hero}
-            confirmSell={settings.confirmSell}
-            engine={engine}
-            onSell={pushGoldFlight}
-            onScrap={(x, y, gained, icon) => pushBurst(x, y, gained, 'scrap', icon)}
-          />
+          <StashCard key={item.uid} item={item} hero={hero} confirmSell={settings.confirmSell} engine={engine} />
         ))}
       </div>
-      {/* Scrap/Sell bursts and gold flights -- see the `bursts`/
-          `goldFlights` state's own comment above for why these live here
-          at the panel level (surviving their origin card's unmount)
-          rather than inside StashCard itself. `position: fixed` inline
-          overrides .collect-particle/.fly-particle's own `position:
-          absolute` -- these coordinates are real viewport coordinates
-          from getBoundingClientRect, not relative to any single
-          ancestor. */}
-      {bursts.map((b) => (
-        <span
-          key={b.key}
-          aria-hidden="true"
-          className={`collect-particle ${b.kind === 'gold' ? 'coin' : 'scrap'}`}
-          style={{ position: 'fixed', left: b.x, top: b.y, zIndex: 50 } as CSSProperties}
-        >
-          {b.icon && <img src={`./item-icons/${b.icon}`} alt="" style={{ width: 18, height: 18, objectFit: 'contain', verticalAlign: '-4px', marginRight: 4 }} />}
-          +{b.gained} {b.kind === 'gold' ? 'gold' : 'Scrap'}
-        </span>
-      ))}
-      {goldFlights.map((f) => (
-        <RewardGlowParticle
-          key={f.key}
-          x={f.x} y={f.y} dx={f.dx} dy={f.dy}
-          color="var(--brass)" delay={0} durationMs={750}
-        />
-      ))}
 
       {/* Sellable odds-and-ends -- see CurioDef's own doc comment in
           types.ts. No per-item "confirm sell" the Stash grid's own
@@ -1407,15 +1173,6 @@ export function EquipmentPanel() {
           confirmLabel="Sell"
           onConfirm={() => { engine.sellJunk(junkRarity); setPendingJunkSell(false); }}
           onCancel={() => setPendingJunkSell(false)}
-        />
-      )}
-      {pendingScrapAll && (
-        <ConfirmModal
-          title="Scrap all"
-          message={`Scrap ${scrapPreview.length} item${scrapPreview.length === 1 ? '' : 's'} (${scrapRarity} and below) for ${scrapPreviewTotal} Scrap? This cannot be undone.`}
-          confirmLabel="Scrap"
-          onConfirm={() => { runScrapAll(); setPendingScrapAll(false); }}
-          onCancel={() => setPendingScrapAll(false)}
         />
       )}
       </div>
