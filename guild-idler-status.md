@@ -20604,3 +20604,70 @@ panel screenshot of the actual offending box (right-click the ghosted
 area -> Inspect) so the real element and its computed styles can be
 identified directly, the same way the exact console error pinpointed
 patch 0260's crash immediately instead of a guess.
+
+### Bug Fix: Grimsby's Dice visuals overlapping under text/sprite accessibility scaling (patch 0262)
+
+```discord-update
+Dev Update | Bug Fix
+- Fixed: Grimsby's Dice tabs and game content could visually overlap and become unreadable for anyone using a larger text/UI scale in Settings
+```
+
+Direct follow-up to patch 0261's own open item -- a DevTools Elements-
+panel screenshot supplied this time (exactly what was asked for) showed
+the real cause immediately: `<html>` carried `--font-scale: 1.2`,
+`--sprite-scale: 1.1`, `--density-scale: 0.7`, and a `font-size: 19.2px`
+root -- an accessibility/large-text profile, not a random rendering
+glitch. Every prior CSS/component trace in patch 0261's writeup came up
+empty because it was all looking for the wrong kind of bug (absolute
+positioning, sprite-sheet math) -- the real mechanism only shows up once
+text/UI genuinely renders bigger than the default scale assumes.
+
+**Root cause.** `.peddler-modal` had a hard fixed `height: 495px`
+(measured once against three game-states at DEFAULT scale only -- see
+the earlier "modal-sizing" patch this number came from).
+`.peddler-modal-body` (the flex child holding the actual game content)
+has `min-height: 0` + `justify-content: center` -- `min-height: 0` is
+what lets a flex child get squeezed smaller than its own content
+actually needs, and `justify-content: center` then centers that
+content within whatever cramped space it's been given, painting the
+overflow symmetrically in BOTH directions rather than clipping it. At
+default scale, 495px was always enough room, so this never showed. At
+1.2x font-scale + 1.1x sprite-scale, the header and body content need
+more real room than 495px leaves once the fixed height is divided up --
+the body gets squeezed below its content's actual size, and the
+overflow bleeds straight up into `.dice-tab-row`'s space directly above
+it. `.modal`'s own `overflow-y: auto` never caught this because the
+OUTER box's total height never actually grew -- from the outer box's
+perspective nothing overflowed IT; the bleed was purely an internal
+paint-time overlap between two flex siblings, invisible to any
+box-level overflow detection.
+
+**Fix: `.peddler-modal`'s `height: 495px` -> `min-height: 495px`.**
+Identical box at default scale (495px was always just a floor those
+three states already met, never a ceiling any of them needed) --
+genuinely grows taller under a scale profile that needs more room,
+instead of forcing that content into a box too small for it. If a
+scale profile ever pushes the modal past the viewport's own available
+height, `.modal`'s existing `max-height: 100%` + `overflow-y: auto`
+(both already there, from the base `.modal` class every modal in this
+game shares) become the real safety net -- an actual scrollbar instead
+of silent internal overlap.
+
+**A known, accepted trade-off, flagged directly in the CSS comment, not
+left to be rediscovered as a surprise regression:** the fixed height
+was originally chosen specifically to stop `background-size: cover`
+from visibly "zooming" the backdrop between game states (a variable
+box height changes what `cover` crops/scales to). Switching to
+`min-height` reopens that door in the one case that needed the more
+urgent fix -- a box forced to grow past 495px under an accessibility
+scale profile will see the backdrop rescale slightly too, same
+mechanism as before. Accepted: unreadable overlapping text is a harder
+failure than a background image rescaling a few percent under a
+specific, non-default settings profile.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. No live runtime test at the actual
+1.2x/1.1x/0.7x accessibility profile that triggered this -- same
+verified-by-types-and-build-only caveat this whole patch series has
+carried; worth a direct check against that exact settings combination
+once this lands, since that's the one profile this patch exists to fix.

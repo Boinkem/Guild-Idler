@@ -3478,24 +3478,42 @@ button.harvest-item:hover {
    since it needs to comfortably fit 3 cards side by side. */
 .peddler-modal {
   max-width: 640px;
-  /* A fixed `height`, not `min-height` -- `min-height: 440px` was only
-     ever a FLOOR, not a ceiling. Measured directly (a headless-browser
-     render of all three states against this exact CSS): the "Lay out
-     the cards" and result states both settle at exactly that 440px
-     floor, but the cards-laid-out state (3 cards + Grimsby's own
-     corner-comment text) needs 491px and was genuinely growing the
-     modal taller to fit -- a real, measured 51px swing, not a rounding
-     artifact. `background-size: cover` (below) recomputes its effective
-     scale from the box's actual height every render, so that swing was
-     exactly what read as "the background zooms in when the cards come
-     out, and back to normal once you pick one" -- confirmed by
-     reproducing the same three-state height measurement before and
-     after this change: identical 495px in all three states now, so
-     `cover` has nothing left to ever recompute differently between
-     them. 495px (vs. the measured 491px minimum) leaves a few px of
-     slack so no state sits exactly at the edge of needing a scrollbar
-     from `.modal`'s own `overflow-y: auto`. */
-  height: 495px;
+  /* `min-height`, not a hard `height` -- was a fixed `height: 495px`
+     (patch, see the "modal-sizing" writeup in guild-idler-status.md for
+     the original 3-state measurement this number came from: 440px floor
+     for the two lighter states, 491px measured for the cards-laid-out
+     state, 495px giving a few px of slack). That measurement was taken
+     at default text/sprite scale only -- a real bug report (patch 0261
+     follow-up) traced a font-scale:1.2/density-scale:0.7 accessibility
+     profile to `.peddler-modal-body`'s own `justify-content: center` +
+     `min-height: 0` (below) overflowing ITS box symmetrically in both
+     directions once its scaled-up content genuinely needed more than
+     the room this fixed height left it -- with `.modal`'s own
+     `overflow-y: auto` never triggering, because the OUTER box's total
+     height never grew to begin with; the bleed painted straight into
+     `.dice-tab-row`'s space just above it instead, which is exactly
+     what "the tab labels and the Standard/Highroller row are mixed
+     together" turned out to be. `min-height: 495px` keeps the box
+     identical at default scale (495px was always just a floor those
+     three states already met, never a ceiling any of them needed) while
+     letting it genuinely grow taller under a scale profile that needs
+     more room -- the correct fix is more room, not a clipped or
+     silently-overlapping fixed box. */
+  min-height: 495px;
+  /* `background-size: cover` recomputes its effective crop/scale from
+     the box's own actual height -- this is exactly what an earlier
+     patch's fixed `height: 495px` was originally chosen to stop (see
+     this rule's own comment above): a variable-height box made the
+     backdrop visibly "zoom" between states. Switching to `min-height`
+     reopens that same door specifically in the one case that needed
+     fixing more urgently -- a box that's forced to grow past 495px
+     under an accessibility text/sprite scale profile will see the
+     backdrop rescale slightly too, same mechanism, same visual as
+     before. Accepted trade-off: unreadable overlapping text is a harder
+     failure than a background image rescaling a few percent, and the
+     rescale only ever triggers in the specific case genuinely needing
+     the extra room. Flagging plainly rather than leaving it to be
+     rediscovered as a surprise regression later. */
   background-size: cover;
   background-position: center;
   text-align: center;
