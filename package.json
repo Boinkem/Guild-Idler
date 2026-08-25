@@ -1,5 +1,5 @@
 {
-  "name": "little-knight",
+  "name": "guildbound",
   "version": "12.16.0",
   "description": "A cozy desktop companion idle game. Send heroes on quests, manage your guild's vendors, and grow a fantasy guild that runs while you work.",
   "author": "Guildbound",
@@ -34,7 +34,7 @@
     "vite-plugin-electron-renderer": "^0.14.6"
   },
   "build": {
-    "appId": "com.littleknight.app",
+    "appId": "com.guildbound.app",
     "productName": "Guildbound",
     "files": [
       "dist/**/*",

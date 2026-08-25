@@ -35,11 +35,13 @@ npm run package
 
 | Platform | Path |
 | --- | --- |
-| Windows | `%APPDATA%/little-knight/little-knight-save.json` |
-| macOS | `~/Library/Application Support/little-knight/little-knight-save.json` |
-| Linux | `~/.config/little-knight/little-knight-save.json` |
+| Windows | `%APPDATA%/guildbound/guildbound-save.json` |
+| macOS | `~/Library/Application Support/guildbound/guildbound-save.json` |
+| Linux | `~/.config/guildbound/guildbound-save.json` |
 
-Saves are written atomically: a temp file is written, the previous save is copied to `little-knight-save.backup.json`, then the temp file is renamed into place. If the main save is unreadable on launch, the backup is loaded instead.
+Saves are written atomically: a temp file is written, the previous save is copied to `guildbound-save.backup.json`, then the temp file is renamed into place. If the main save is unreadable on launch, the backup is loaded instead.
+
+Pre-patch-0266 installs saved under a `little-knight` folder instead (same filenames, `little-knight-` prefixed). The app migrates that folder's contents into the `guildbound` one automatically on first launch after updating -- see `migrateLegacySaveFolder()` in `electron/main.ts`.
 
 The **Statistics** tab has a "Where is my save?" button, plus a reset.
 

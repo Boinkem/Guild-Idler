@@ -290,7 +290,22 @@ export const DENSITY_SCALE: Record<Settings['density'], number> = {
 
 /* ------------------------------- persistence ------------------------------ */
 
-const KEY = 'little-knight-settings';
+/**
+ * Patch 0266: renamed alongside the app.setName('little-knight') ->
+ * 'guildbound' change in electron/main.ts, for consistency. Unlike the
+ * actual save file (see that file's migrateLegacySaveFolder(), which
+ * copies a real JSON file across userData folders on disk), there is no
+ * equivalent migration here: this is Chromium's own localStorage, backed
+ * by a leveldb store physically scoped to the OLD userData folder, not a
+ * plain file this codebase can just fs.copyFile() into the new one. The
+ * practical result, accepted rather than solved: an existing player's
+ * cosmetic UI prefs (theme, density, font scale, reduce-motion) reset to
+ * default the first time they launch a post-0266 build, the same one time
+ * their game save does NOT reset, since that path has real migration.
+ * Cosmetic-only and one-time, not worth the complexity of hand-reading a
+ * second-origin leveldb store to avoid.
+ */
+const KEY = 'guildbound-settings';
 
 type Migration = (s: Record<string, unknown>) => Record<string, unknown>;
 const MIGRATIONS: Record<number, Migration> = {

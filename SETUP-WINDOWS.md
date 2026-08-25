@@ -53,10 +53,10 @@ npm config set ignore-scripts false
 
 ## Step 3 — Clean reinstall
 
-Open **PowerShell** in `C:\little-knight` and run:
+Open **PowerShell** in `C:\guildbound` and run:
 
 ```powershell
-cd C:\little-knight
+cd C:\guildbound
 
 Remove-Item -Recurse -Force node_modules -ErrorAction SilentlyContinue
 Remove-Item -Force package-lock.json -ErrorAction SilentlyContinue
@@ -74,7 +74,7 @@ npm install --foreground-scripts
 If you're in Git Bash rather than PowerShell, the equivalent is:
 
 ```bash
-cd /c/little-knight
+cd /c/guildbound
 rm -rf node_modules package-lock.json
 rm -rf "$LOCALAPPDATA/electron/Cache" "$LOCALAPPDATA/electron-builder/Cache"
 npm cache clean --force
@@ -106,12 +106,12 @@ $env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
 npm install --foreground-scripts
 ```
 
-**Antivirus:** temporarily allow `C:\little-knight\node_modules\electron\` — some scanners quarantine `electron.exe` the moment it's extracted, which produces this exact error.
+**Antivirus:** temporarily allow `C:\guildbound\node_modules\electron\` — some scanners quarantine `electron.exe` the moment it's extracted, which produces this exact error.
 
 **Manual install** (last resort, and reliable): download `electron-v33.2.0-win32-x64.zip` from the [Electron releases page](https://github.com/electron/electron/releases/tag/v33.2.0), then:
 
-1. Extract it into `C:\little-knight\node_modules\electron\dist\`
-2. Create a file `C:\little-knight\node_modules\electron\path.txt` containing exactly one line: `electron.exe`
+1. Extract it into `C:\guildbound\node_modules\electron\dist\`
+2. Create a file `C:\guildbound\node_modules\electron\path.txt` containing exactly one line: `electron.exe`
 3. Run `npx electron -v` to confirm
 
 ---
@@ -119,7 +119,7 @@ npm install --foreground-scripts
 ## Step 6 — Run the game
 
 ```powershell
-cd C:\little-knight
+cd C:\guildbound
 npm run dev
 ```
 
@@ -138,7 +138,7 @@ npm start
 You don't have to wait for Electron. The renderer detects that it isn't running in Electron and falls back to `localStorage` for saves, so the entire game works in a browser tab:
 
 ```powershell
-cd C:\little-knight
+cd C:\guildbound
 npm run dev:web
 ```
 
@@ -148,7 +148,7 @@ Note that the browser save (`localStorage`) and the Electron save (a JSON file i
 
 ```js
 // in the browser, to copy your save out
-copy(localStorage.getItem('little-knight-save'))
+copy(localStorage.getItem('guildbound-save'))
 ```
 
 ---

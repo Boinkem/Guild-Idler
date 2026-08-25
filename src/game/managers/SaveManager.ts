@@ -51,7 +51,11 @@ declare global {
   }
 }
 
-const LOCAL_KEY = 'little-knight-save';
+const LOCAL_KEY = 'guildbound-save';
+/** Pre-rename key -- browser/dev-mode equivalent of main.ts's own
+ *  migrateLegacySaveFolder() for the Electron save file. Same guard
+ *  shape: only consulted when the new key is empty, never overwrites it. */
+const LEGACY_LOCAL_KEY = 'little-knight-save';
 
 export const electronAdapter: SaveAdapter = {
   read: () => window.littleKnight!.readSave(),
@@ -59,7 +63,7 @@ export const electronAdapter: SaveAdapter = {
 };
 
 export const localStorageAdapter: SaveAdapter = {
-  read: async () => window.localStorage.getItem(LOCAL_KEY),
+  read: async () => window.localStorage.getItem(LOCAL_KEY) ?? window.localStorage.getItem(LEGACY_LOCAL_KEY),
   write: async (json) => { window.localStorage.setItem(LOCAL_KEY, json); },
 };
 

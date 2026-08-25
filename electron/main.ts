@@ -10,12 +10,26 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * Electron derives the userData folder (where saves live) from app.getName(),
  * which defaults to package.json's name/productName. Locking it explicitly
  * here means the display name (productName, window titles, installer name)
- * can change freely — as it already has twice now, Little Knight -> Guild Idler -> Guildbound — without
- * silently redirecting existing testers to a new, empty save folder. This
- * must run before any app.getPath('userData') call, including ones inside
- * imported modules that might run at import time.
+ * can change freely — as it already has three times now, Little Knight ->
+ * Guild Idler -> Guildbound -> (internal id) guildbound — without silently
+ * redirecting existing testers to a new, empty save folder. This must run
+ * before any app.getPath('userData') call, including ones inside imported
+ * modules that might run at import time.
+ *
+ * Patch 0266: internal id itself finally moved off the original
+ * 'little-knight' value, in step with package.json's own `name`/`appId`
+ * fields (both were the last "Little Knight" holdouts; productName/author
+ * had already been Guildbound for a while). Changing THIS specific string
+ * is exactly the operation the comment above warns about -- it silently
+ * redirects app.getPath('userData') to a brand-new, empty OS folder the
+ * instant this ships, for every existing player. migrateLegacySaveFolder()
+ * below is what stops that from actually losing anyone's progress: it runs
+ * once, before any save is read, and copies a prior 'little-knight'
+ * install's save/backup/settings files into the new 'guildbound' folder if
+ * (and only if) the new folder doesn't already have its own save. See that
+ * function's own comment for the full guard logic.
  */
-app.setName('little-knight');
+app.setName('guildbound');
 
 /**
  * Single-instance lock -- nothing previously stopped a player launching a
@@ -174,9 +188,66 @@ let lastKnownDisplayId: number | null = null;
 let suppressNextResizeSave = false;
 
 const userDataDir = () => app.getPath('userData');
-const savePath = () => path.join(userDataDir(), 'little-knight-save.json');
-const backupPath = () => path.join(userDataDir(), 'little-knight-save.backup.json');
-const settingsPath = () => path.join(userDataDir(), 'little-knight-settings.json');
+const savePath = () => path.join(userDataDir(), 'guildbound-save.json');
+const backupPath = () => path.join(userDataDir(), 'guildbound-save.backup.json');
+const settingsPath = () => path.join(userDataDir(), 'guildbound-settings.json');
+
+/**
+ * One-time migration for the app.setName('little-knight') -> 'guildbound'
+ * change above. Electron resolves userData as
+ * path.join(app.getPath('appData'), app.getName()) -- since app.getName()
+ * already returned 'guildbound' by the time userDataDir() above ever runs,
+ * that path is reconstructed here by hand from appData + the OLD literal
+ * name, rather than read from anywhere live, since nothing in this process
+ * still has 'little-knight' as its actual app name to ask for.
+ *
+ * Guard order matters: only runs the copy at all if guildbound-save.json
+ * does NOT already exist -- so a player who has already launched a
+ * post-rename build once (and therefore has their own real guildbound
+ * save, however small) can never have it silently overwritten by an old
+ * little-knight save on a later launch. A first-time player with no
+ * little-knight folder at all (never played before this patch) simply
+ * finds nothing to copy and proceeds to createInitialState() exactly as
+ * before -- this function is a no-op for them, not an error path.
+ *
+ * Copies save + backup + settings independently (each guarded by its own
+ * try/catch) rather than all-or-nothing -- a settings file missing
+ * shouldn't block recovering the actual save, which is the part that
+ * matters. Runs before createWindow() in the startup sequence below, so
+ * the very first save:read the renderer ever issues already sees the
+ * migrated file, not a race against it.
+ */
+async function migrateLegacySaveFolder() {
+  const newSave = savePath();
+  try {
+    await fs.access(newSave);
+    return; // already has its own guildbound save -- never touch it
+  } catch {
+    /* fall through -- no guildbound save yet, worth checking for a legacy one */
+  }
+
+  const legacyDir = path.join(app.getPath('appData'), 'little-knight');
+  const legacySave = path.join(legacyDir, 'little-knight-save.json');
+  const legacyBackup = path.join(legacyDir, 'little-knight-save.backup.json');
+  const legacySettings = path.join(legacyDir, 'little-knight-settings.json');
+
+  try {
+    await fs.copyFile(legacySave, newSave);
+    console.log('[migration] copied little-knight save into guildbound userData folder');
+  } catch {
+    return; // no legacy save either -- nothing to migrate, genuinely a fresh install
+  }
+  try {
+    await fs.copyFile(legacyBackup, backupPath());
+  } catch {
+    /* legacy backup missing is fine -- the save copy above is what matters */
+  }
+  try {
+    await fs.copyFile(legacySettings, settingsPath());
+  } catch {
+    /* legacy settings missing is fine -- window falls back to defaults */
+  }
+}
 
 interface Settings {
   alwaysOnTop: boolean;
@@ -732,6 +803,7 @@ app.on('second-instance', () => {
 });
 
 app.whenReady().then(async () => {
+  await migrateLegacySaveFolder();
   await createWindow();
   createTray();
   app.on('activate', () => {

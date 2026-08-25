@@ -19,7 +19,7 @@ Optionally connect a remote (GitHub, GitLab) so your history is backed up and I
 can hand you changes as pull requests:
 
 ```powershell
-git remote add origin https://github.com/you/little-knight.git
+git remote add origin https://github.com/you/guildbound.git
 git push -u origin main
 ```
 

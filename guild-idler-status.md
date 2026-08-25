@@ -25,6 +25,98 @@ Tab hero-log rework" below. Quest success now runs through a combined
 diminishing-returns curve rather than pure linear stacking -- see "Quest
 success rebalance -- built" below.
 
+### Internal rename finished: little-knight -> guildbound (patch 0266)
+```discord-update
+Dev Update | Patch 0266
+
+- Changed the game's internal identifiers to match its actual name, Guildbound
+- Existing saves carry over automatically -- nothing to do on your end
+- Heads up: your theme/font/density settings will reset to default once, sorry! Your actual save is unaffected
+```
+
+Follow-up to the earlier display-only "Rename to Guildbound" pass (title
+bar, `package.json`'s `productName`/`author`, in-menu guild-name
+fallback, dev tool page, docs), which had deliberately left every
+internal identifier -- `package.json`'s own `name`, the electron-builder
+`appId`, `app.setName('little-knight')`, and every `little-knight-*` save/
+settings filename -- untouched on purpose, to avoid silently redirecting
+existing testers to an empty save folder. Confirmed via the live repo
+before starting (not the earlier chat's assumption) that `productName`/
+`author` had in fact already landed as "Guildbound" at some point since
+that original pass; only `name` and `appId` in `package.json` were still
+the old value, narrowing what was actually left to do here.
+
+**What changed:**
+- `package.json`: `name` (`little-knight` -> `guildbound`),
+  `build.appId` (`com.littleknight.app` -> `com.guildbound.app`).
+  `productName`/`author` untouched -- already correct.
+- `package-lock.json`: its own two `name` fields, kept in sync so a
+  fresh `npm install` doesn't reintroduce the old string anywhere.
+- `electron/main.ts`: `app.setName('little-knight')` ->
+  `app.setName('guildbound')` -- the actual trigger for Electron
+  resolving a brand-new `userData` folder, since that path is derived
+  from `app.getName()`. `savePath`/`backupPath`/`settingsPath` renamed
+  to `guildbound-save.json`/`guildbound-save.backup.json`/
+  `guildbound-settings.json` to match.
+- **`migrateLegacySaveFolder()`, new, called once from `whenReady()`
+  before `createWindow()`.** Guard order: only runs its copy at all if
+  `guildbound-save.json` does not already exist, so a player who's
+  already launched a post-rename build even once can never have their
+  own real save overwritten by an older `little-knight` one on a later
+  launch. Reconstructs the old userData path by hand
+  (`path.join(app.getPath('appData'), 'little-knight')`) since nothing
+  in this process still reports that as its own app name to ask
+  Electron for. Copies save, backup, and settings independently, each
+  behind its own `try`/`catch`, so a missing backup or settings file
+  can't block recovering the one file that actually matters. A genuinely
+  fresh install (never played before 0266) finds nothing at that legacy
+  path and falls straight through to `createInitialState()`, unchanged.
+- `src/game/managers/SaveManager.ts`: the browser/dev-mode
+  `localStorageAdapter`'s own key renamed the same way
+  (`little-knight-save` -> `guildbound-save`), with a same-shape
+  fallback read (new key first, old key only if the new one's empty,
+  never writes to the old key again) -- the plain-browser equivalent of
+  the Electron migration above, same guard logic, different storage
+  backend.
+- **`src/game/settings.ts`'s own separate `KEY` constant, same rename,
+  no equivalent migration -- accepted, not solved.** This one persists
+  through Chromium's own `localStorage`, physically backed by a leveldb
+  store scoped to the OLD userData folder -- not a plain file this
+  codebase can `fs.copyFile()` the way the real save is handled above.
+  Practical result: an existing player's cosmetic UI prefs (theme,
+  density, font scale, reduce-motion) reset to default the one time
+  they launch a post-0266 build, the same one time their actual game
+  save does **not** reset, since that path has real migration. Judged
+  not worth the complexity of hand-reading a second-origin leveldb store
+  to avoid a one-time cosmetic reset.
+- Docs: `README.md`'s save-path table updated to the new
+  folder/filenames, with a note on the legacy folder and where the
+  migration code lives; `SETUP-WINDOWS.md` and `WORKFLOW.md`'s
+  `little-knight`-prefixed example paths/URLs updated for consistency
+  (cosmetic, dev-onboarding docs only, no functional effect).
+
+**Steam Cloud config note, not code:** the Cloud Save root path set up
+in the Steamworks partner backend (`WinAppDataLocal`, subdirectory
+`little-knight`, pattern `little-knight-*`) needs its subdirectory and
+pattern updated to `guildbound`/`guildbound-*` to match. A player with
+existing Steam Cloud saves synced under the old subdirectory is covered
+by the same on-launch folder migration above once they update -- Steam
+places files by OS path, and `migrateLegacySaveFolder()` doesn't care
+whether a legacy file arrived via Steam Cloud sync or a plain local
+install.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (app + electron
+main + preload) both pass clean against the live repo, `package.json`/
+`package-lock.json` confirmed valid JSON after editing.
+
+**Not done, out of scope for this pass:** the `window.littleKnight`
+IPC bridge global (`preload.ts`'s exposed API surface, referenced
+throughout the renderer) was deliberately left as-is -- an internal
+bridge name, invisible to players, with no save-path or Steam
+implication the way `app.setName()` has. Renaming it would touch many
+call sites for purely cosmetic consistency; revisit only if it's ever
+actually confusing to a future contributor, not as part of this rename.
+
 ### Set Bonuses card made clickable, full tier breakdown shown inline -- built
 Tester feedback on the Inventory tab's "Active Set Bonuses" summary card,
 two points from the same conversation:
