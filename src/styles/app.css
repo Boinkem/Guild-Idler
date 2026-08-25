@@ -3482,24 +3482,35 @@ button.harvest-item:hover {
      (patch, see the "modal-sizing" writeup in guild-idler-status.md for
      the original 3-state measurement this number came from: 440px floor
      for the two lighter states, 491px measured for the cards-laid-out
-     state, 495px giving a few px of slack). That measurement was taken
-     at default text/sprite scale only -- a real bug report (patch 0261
-     follow-up) traced a font-scale:1.2/density-scale:0.7 accessibility
-     profile to `.peddler-modal-body`'s own `justify-content: center` +
-     `min-height: 0` (below) overflowing ITS box symmetrically in both
-     directions once its scaled-up content genuinely needed more than
-     the room this fixed height left it -- with `.modal`'s own
-     `overflow-y: auto` never triggering, because the OUTER box's total
-     height never grew to begin with; the bleed painted straight into
-     `.dice-tab-row`'s space just above it instead, which is exactly
-     what "the tab labels and the Standard/Highroller row are mixed
-     together" turned out to be. `min-height: 495px` keeps the box
-     identical at default scale (495px was always just a floor those
-     three states already met, never a ceiling any of them needed) while
-     letting it genuinely grow taller under a scale profile that needs
-     more room -- the correct fix is more room, not a clipped or
-     silently-overlapping fixed box. */
-  min-height: 495px;
+     state, 495px giving a few px of slack). Patch 0262 switched the
+     fixed height to `min-height` to fix a real accessibility-scale
+     overflow bug -- but that 495px number was calibrated ONLY against
+     Card's own 3 states, never checked against Dice's OR Tab's own
+     content, which this class is equally shared by. A follow-up report
+     ("clicking High or Low zooms the background") was exactly that gap:
+     measured directly (a real Electron/Chromium render of both Dice
+     tabs against this exact CSS, same "don't guess, measure" approach
+     patch 0261's own note asked for) -- Call a Number needs 544px, High
+     or Low needs 616px, a genuine 72px difference neither state before
+     this had ever been checked against. Both exceed the old 495px floor
+     even at DEFAULT scale, so both tabs were already growing past it
+     (and therefore already triggering `background-size: cover`'s own
+     recompute on every tab switch) well before any accessibility
+     scaling entered the picture at all -- patch 0262 fixed the
+     overlap/bleed specifically, but left this second, separate
+     "different tabs settle at different natural heights" cause of the
+     exact same visual symptom untouched. 630px (a ~14px buffer over the
+     616px measured, matching the original 495-over-491 buffer
+     convention) is now the shared floor -- comfortably fits Call a
+     Number, High or Low, Tab's own tallest typical state (394px,
+     measured the same way), and Card's previously-measured 491px, so
+     every state across all three Peddler modals settles at the exact
+     same height and `cover` never has anything left to recompute
+     between them at default scale. Accessibility-scale growth past
+     this floor is unchanged from patch 0262's own fix -- still handled
+     correctly, still the accepted background-rescale trade-off
+     documented below. */
+  min-height: 630px;
   /* `background-size: cover` recomputes its effective crop/scale from
      the box's own actual height -- this is exactly what an earlier
      patch's fixed `height: 495px` was originally chosen to stop (see

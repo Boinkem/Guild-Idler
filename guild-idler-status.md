@@ -20754,3 +20754,58 @@ Dice's two tabs were never individually measured against the shared
 495px modal floor, only Card's three states were) and the full
 item-card redesign (Sell/Unlock/Scrap layout, scrap-from-card, Scrap
 All with a rarity filter, and the animation requirements around both).
+
+### Bug Fix: High or Low still zooming the backdrop -- Peddler modal floor recalibrated for real this time (patch 0264)
+
+```discord-update
+Dev Update | Bug Fix
+- Fixed: switching to High or Low in Grimsby's Dice still zoomed the background in slightly -- the modal's minimum size was never actually checked against Dice's own two tabs, only Card's states
+```
+
+Direct follow-up to patch 0262's own fix, which solved the accessibility-
+scale overlap bug but left a second, separate cause of the exact same
+symptom untouched: patch 0262's `min-height: 495px` was carried over
+unchanged from the ORIGINAL fixed-height number, which had only ever
+been measured against Card's own 3 states -- Dice's two tabs (and Tab's
+own states) were never individually checked against it at all.
+
+**Measured directly this time, not estimated.** Built minimal static
+reproductions of each Peddler modal state (Call a Number, High or Low,
+Tab's opened-tab state) using the exact real markup/classes and the
+game's own `app.css`, rendered them in a real headless Electron/Chromium
+window (`xvfb-run` + `--no-sandbox`, the same underlying engine this
+game already ships), and measured `.peddler-modal`'s actual rendered
+height via `getBoundingClientRect()` -- the same "don't guess, measure"
+approach patch 0261's own follow-up note asked for, now actually done.
+Results: **Call a Number needs 544px, High or Low needs 616px** -- a
+genuine 72px difference, and both already exceed the OLD 495px floor
+at completely default scale, with no accessibility profile involved at
+all. Both tabs were therefore already growing past 495px and triggering
+`background-size: cover`'s own recompute on every single tab switch,
+for every player, regardless of settings -- patch 0262 only closed the
+overlap/bleed half of the bug, not this "different tabs have different
+natural heights" half.
+
+**Fix: `min-height: 630px`** (a ~14px buffer over the 616px measured,
+matching the original 495-over-491 buffer convention from the very
+first calibration). Verified against the actual applied CSS, not just
+calculated: re-measured all three states with the fix in place --
+**Call a Number, High or Low, and Tab's opened-tab state all now
+render at exactly 630px**, so `cover` has nothing left to recompute
+between any of them at default scale. Tab's own tallest typical state
+measured at 394px and Card's own previously-measured 491px are both
+comfortably under 630px too, so nothing regresses for either of those
+modals -- a strictly taller floor can't newly break a state that
+already fit inside the smaller one. Accessibility-scale growth past
+this new floor is unchanged from patch 0262's own fix -- the same
+`background-size: cover` rescale trade-off documented there still
+applies, just from a correctly-calibrated starting point now.
+
+**Verified:** `npx tsc --noEmit` and `npx vite build --config
+vite.web.config.ts` both pass clean. Also directly runtime-verified via
+the same headless-render measurement described above -- not just
+types/build this time, since this is a CSS-only patch that visual
+regressions specifically live outside a type-checker's or bundler's
+reach, and this exact category of bug (a number that LOOKS
+type-correct but was never actually measured) is what shipped a
+still-broken fix last patch.
