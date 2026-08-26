@@ -124,10 +124,30 @@ export function sortedHeroStatuses(engine: GameEngine, now: number): HeroStatusI
     });
 }
 
-/** The colored circle avatar -- class color fill, optional class icon
- *  overlay (falls back to a plain color-only circle when the class has no
- *  icon assigned in DevTools yet, same graceful-missing-asset convention
- *  every other optional icon field in this project already follows). */
+/**
+ * The colored circle avatar -- class color, optional class icon, falls
+ * back to a plain color-only circle when the class has no icon assigned
+ * in DevTools yet, same graceful-missing-asset convention every other
+ * optional icon field in this project already follows.
+ *
+ * Patch 0271: was sized/rendered for the tiny 16x16 pixel-art convention
+ * every OTHER `picker: 'icon'` field in this project actually holds
+ * (equipment, consumables, materials, etc) -- 60% of the circle's size,
+ * `image-rendering: pixelated` so those blocky little sprites scale up
+ * crisp instead of blurry. The real class icons that got uploaded and
+ * assigned are ~300px framed, painterly art, a completely different
+ * asset type than that convention assumes -- at 60% and pixelated, they
+ * rendered as a tiny, blurry postage stamp floating in the middle of the
+ * circle. Fixed to fill the full circle (`objectFit: 'cover'`, clipped
+ * to the circle by the parent's own `overflow: hidden` + border-radius)
+ * with normal smooth scaling instead of pixelated. The class `color`
+ * moves from a fill (now entirely hidden behind a full-bleed icon) to a
+ * thin ring around it instead, via `border` + `box-sizing: border-box`
+ * (keeps the circle's total rendered size exactly `size`, same as
+ * before) -- keeps the actual point of a *colored* avatar (a glance-able
+ * class signal) intact even once every class has real icon art, rather
+ * than the color becoming purely cosmetic set-dressing behind the icon.
+ */
 function ClassAvatar({ hero, size }: { hero: Hero; size: number }) {
   const def = HERO_CLASSES[hero.heroClass];
   const color = def?.color ?? '#888888';
@@ -137,6 +157,7 @@ function ClassAvatar({ hero, size }: { hero: Hero; size: number }) {
       className="hero-status-avatar"
       style={{
         width: size, height: size, borderRadius: '50%', background: color,
+        border: `2px solid ${color}`, boxSizing: 'border-box', overflow: 'hidden',
         display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
       }}
     >
@@ -144,7 +165,7 @@ function ClassAvatar({ hero, size }: { hero: Hero; size: number }) {
         <img
           src={`./item-icons/${icon}`}
           alt=""
-          style={{ width: Math.round(size * 0.6), height: Math.round(size * 0.6), imageRendering: 'pixelated' }}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         />
       )}
     </div>

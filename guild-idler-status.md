@@ -21571,3 +21571,58 @@ sub-builds included) pass clean. `node --check` passes on both
 `.banner-field` in a schema's editor via `querySelectorAll`, not a single
 lookup -- multiple `bannerImage` fields on one entry render and save
 correctly with zero changes to that code.
+
+### Bug Fix: class icons on the new status bars rendering tiny and blurry -- ClassAvatar rebuilt for real icon art, not pixel-art (patch 0271)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed class icons on the roster/companion status bars rendering as a tiny, blurry blob in the middle of the circle
+- The icon now fills the whole circle, with a thin colored ring around the edge so the class color is still visible at a glance
+```
+
+Direct follow-up, with screenshots, to patch 0269's Status Bars feature:
+real class icon art had been dropped into `public/item-icons/` and assigned
+per-class in DevTools, but `ClassAvatar` (HeroStatusBar.tsx) rendered every
+icon at a fixed 60% of the circle's size with `image-rendering: pixelated`.
+That sizing/rendering was built assuming this project's usual `picker:
+'icon'` convention -- tiny 16x16 pixel-art sprites (equipment, consumables,
+materials, etc), where scaling up small and blocky-crisp is exactly right.
+The actual class icon art supplied is ~300px, framed, painterly artwork --
+a completely different asset type wearing the same field/picker
+convention -- so at 60%/pixelated it rendered as a small, blurry postage
+stamp floating in the middle of the circle instead of filling it.
+
+**`ClassAvatar` rebuilt around what these icons actually are.** The `<img>`
+now fills the full circle (`width`/`height: 100%`, `objectFit: 'cover'`),
+clipped to a circle by the parent's `overflow: hidden` + its existing
+`border-radius: 50%` -- a same-size square source crops cleanly into the
+circle with no letterboxing. `image-rendering: pixelated` dropped in favor
+of normal smooth scaling, correct for real rendered art rather than pixel
+sprites.
+
+**The class `color` moved from a fill to a ring.** With the icon now
+covering the entire circle, a plain background-color fill would sit
+completely hidden behind it -- the actual point of a *colored* class
+avatar (a glance-able signal, independent of whether art exists yet) would
+quietly disappear the moment every class got real icon art. Instead,
+`color` now renders as a 2px ring around the circle (`border` +
+`box-sizing: border-box`, so the circle's total rendered size is
+unchanged) -- visible alongside the icon rather than replaced by it. A
+class with no icon assigned still renders as a plain color-filled circle,
+same as before this fix (the ring and the fill are the same color in that
+case, so it reads identically).
+
+**Scope check:** this only touches `ClassAvatar` (the roster/companion
+status bar avatar). The DevTool's own icon-field preview
+(`.icon-preview img`, 32px, still `image-rendering: pixelated`) is shared
+CSS across every `picker: 'icon'` field in the tool -- equipment,
+consumables, hero-classes, etc -- so it wasn't touched here; changing it
+would make every genuine 16x16 pixel-art icon preview blurry to fix one
+field's now-different asset type. The hero-classes icon field's own
+DevTool preview will still show these class icons small, same as before
+this patch -- flagged, not fixed, since it wasn't what was reported and a
+proper fix would need the icon-field preview to know which schema it
+belongs to rather than sharing one blanket rule.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (both Electron
+sub-builds included) pass clean.

@@ -1,0 +1,119 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 3bf8694..9bdd4b7 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -21571,3 +21571,58 @@ sub-builds included) pass clean. `node --check` passes on both
+ `.banner-field` in a schema's editor via `querySelectorAll`, not a single
+ lookup -- multiple `bannerImage` fields on one entry render and save
+ correctly with zero changes to that code.
++
++### Bug Fix: class icons on the new status bars rendering tiny and blurry -- ClassAvatar rebuilt for real icon art, not pixel-art (patch 0271)
++```discord-update
++Dev Update | Bug Fix
++
++- Fixed class icons on the roster/companion status bars rendering as a tiny, blurry blob in the middle of the circle
++- The icon now fills the whole circle, with a thin colored ring around the edge so the class color is still visible at a glance
++```
++
++Direct follow-up, with screenshots, to patch 0269's Status Bars feature:
++real class icon art had been dropped into `public/item-icons/` and assigned
++per-class in DevTools, but `ClassAvatar` (HeroStatusBar.tsx) rendered every
++icon at a fixed 60% of the circle's size with `image-rendering: pixelated`.
++That sizing/rendering was built assuming this project's usual `picker:
++'icon'` convention -- tiny 16x16 pixel-art sprites (equipment, consumables,
++materials, etc), where scaling up small and blocky-crisp is exactly right.
++The actual class icon art supplied is ~300px, framed, painterly artwork --
++a completely different asset type wearing the same field/picker
++convention -- so at 60%/pixelated it rendered as a small, blurry postage
++stamp floating in the middle of the circle instead of filling it.
++
++**`ClassAvatar` rebuilt around what these icons actually are.** The `<img>`
++now fills the full circle (`width`/`height: 100%`, `objectFit: 'cover'`),
++clipped to a circle by the parent's `overflow: hidden` + its existing
++`border-radius: 50%` -- a same-size square source crops cleanly into the
++circle with no letterboxing. `image-rendering: pixelated` dropped in favor
++of normal smooth scaling, correct for real rendered art rather than pixel
++sprites.
++
++**The class `color` moved from a fill to a ring.** With the icon now
++covering the entire circle, a plain background-color fill would sit
++completely hidden behind it -- the actual point of a *colored* class
++avatar (a glance-able signal, independent of whether art exists yet) would
++quietly disappear the moment every class got real icon art. Instead,
++`color` now renders as a 2px ring around the circle (`border` +
++`box-sizing: border-box`, so the circle's total rendered size is
++unchanged) -- visible alongside the icon rather than replaced by it. A
++class with no icon assigned still renders as a plain color-filled circle,
++same as before this fix (the ring and the fill are the same color in that
++case, so it reads identically).
++
++**Scope check:** this only touches `ClassAvatar` (the roster/companion
++status bar avatar). The DevTool's own icon-field preview
++(`.icon-preview img`, 32px, still `image-rendering: pixelated`) is shared
++CSS across every `picker: 'icon'` field in the tool -- equipment,
++consumables, hero-classes, etc -- so it wasn't touched here; changing it
++would make every genuine 16x16 pixel-art icon preview blurry to fix one
++field's now-different asset type. The hero-classes icon field's own
++DevTool preview will still show these class icons small, same as before
++this patch -- flagged, not fixed, since it wasn't what was reported and a
++proper fix would need the icon-field preview to know which schema it
++belongs to rather than sharing one blanket rule.
++
++**Verified:** `npx tsc --noEmit` and a full `vite build` (both Electron
++sub-builds included) pass clean.
+diff --git a/src/ui/HeroStatusBar.tsx b/src/ui/HeroStatusBar.tsx
+index 08f7ed1..d93fbae 100644
+--- a/src/ui/HeroStatusBar.tsx
++++ b/src/ui/HeroStatusBar.tsx
+@@ -124,10 +124,30 @@ export function sortedHeroStatuses(engine: GameEngine, now: number): HeroStatusI
+     });
+ }
+ 
+-/** The colored circle avatar -- class color fill, optional class icon
+- *  overlay (falls back to a plain color-only circle when the class has no
+- *  icon assigned in DevTools yet, same graceful-missing-asset convention
+- *  every other optional icon field in this project already follows). */
++/**
++ * The colored circle avatar -- class color, optional class icon, falls
++ * back to a plain color-only circle when the class has no icon assigned
++ * in DevTools yet, same graceful-missing-asset convention every other
++ * optional icon field in this project already follows.
++ *
++ * Patch 0271: was sized/rendered for the tiny 16x16 pixel-art convention
++ * every OTHER `picker: 'icon'` field in this project actually holds
++ * (equipment, consumables, materials, etc) -- 60% of the circle's size,
++ * `image-rendering: pixelated` so those blocky little sprites scale up
++ * crisp instead of blurry. The real class icons that got uploaded and
++ * assigned are ~300px framed, painterly art, a completely different
++ * asset type than that convention assumes -- at 60% and pixelated, they
++ * rendered as a tiny, blurry postage stamp floating in the middle of the
++ * circle. Fixed to fill the full circle (`objectFit: 'cover'`, clipped
++ * to the circle by the parent's own `overflow: hidden` + border-radius)
++ * with normal smooth scaling instead of pixelated. The class `color`
++ * moves from a fill (now entirely hidden behind a full-bleed icon) to a
++ * thin ring around it instead, via `border` + `box-sizing: border-box`
++ * (keeps the circle's total rendered size exactly `size`, same as
++ * before) -- keeps the actual point of a *colored* avatar (a glance-able
++ * class signal) intact even once every class has real icon art, rather
++ * than the color becoming purely cosmetic set-dressing behind the icon.
++ */
+ function ClassAvatar({ hero, size }: { hero: Hero; size: number }) {
+   const def = HERO_CLASSES[hero.heroClass];
+   const color = def?.color ?? '#888888';
+@@ -137,6 +157,7 @@ function ClassAvatar({ hero, size }: { hero: Hero; size: number }) {
+       className="hero-status-avatar"
+       style={{
+         width: size, height: size, borderRadius: '50%', background: color,
++        border: `2px solid ${color}`, boxSizing: 'border-box', overflow: 'hidden',
+         display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+       }}
+     >
+@@ -144,7 +165,7 @@ function ClassAvatar({ hero, size }: { hero: Hero; size: number }) {
+         <img
+           src={`./item-icons/${icon}`}
+           alt=""
+-          style={{ width: Math.round(size * 0.6), height: Math.round(size * 0.6), imageRendering: 'pixelated' }}
++          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+         />
+       )}
+     </div>
