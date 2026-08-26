@@ -6,7 +6,7 @@
     "reqLevel": 2,
     "rewardGold": 150,
     "rewardItems": [
-      "cellar_dwellers_tooth"
+      "cellar_dwellers_tooth@5"
     ],
     "rewardRenown": 1,
     "title": "First Real Job",
@@ -15,8 +15,10 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "focusX": 36,
-      "focusY": 81.4
+      "path": "chains/millers_problem.png",
+      "focusX": 58.3,
+      "focusY": 54.3,
+      "scale": 105
     },
     "stages": [
       {
@@ -51,6 +53,9 @@
     "description": "The old hatchery at the edge of town has been failing for years. Its last keeper, too frail now to climb the coop ladder, has kept one final clutch of eggs alive through sheer stubbornness. The roof is failing and the fence is broken, and the clutch will not survive another storm without help.",
     "reqLevel": 5,
     "rewardGold": 400,
+    "rewardItems": [
+      "keepers_last_feather@5"
+    ],
     "rewardRenown": 1,
     "title": "Keeper of the Clutch",
     "epilogue": "The hatchery stands again, its old beams replaced with new timber. The keeper still visits most mornings to check the work, and so far has found nothing to complain about. The eggs are safe now, and whatever hatches from them belongs to the guild to raise.",
@@ -62,8 +67,10 @@
       "dedicatedPetId": "hatchery_hound"
     },
     "banner": {
-      "path": "chains/Last Clutch.png",
-      "scale": 139
+      "path": "chains/the_last_clutch.png",
+      "focusX": 58.8,
+      "focusY": 45.3,
+      "scale": 105
     },
     "stages": [
       {
@@ -82,9 +89,6 @@
         "durationMinutes": 120,
         "goldMultiplier": 1.4
       }
-    ],
-    "rewardItems": [
-      "keepers_last_feather"
     ]
   },
   {
@@ -94,7 +98,7 @@
     "reqLevel": 8,
     "rewardGold": 900,
     "rewardItems": [
-      "crow_feather_charm"
+      "crow_feather_charm@5"
     ],
     "rewardRenown": 1,
     "title": "Crow-Friend",
@@ -103,9 +107,9 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/Crows Warning.png",
-      "focusX": 58.6,
-      "focusY": 17,
+      "path": "chains/crows_warning.png",
+      "focusX": 29.4,
+      "focusY": 16,
       "scale": 138
     },
     "stages": [
@@ -150,7 +154,7 @@
     "reqLevel": 11,
     "rewardGold": 1300,
     "rewardItems": [
-      "ashwoven_charm"
+      "ashwoven_charm@5"
     ],
     "rewardRenown": 1,
     "title": "Ash-Reader",
@@ -160,8 +164,10 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/Harrowers Foot.png",
-      "scale": 133
+      "path": "chains/harrowers_foot.png",
+      "focusX": 62.3,
+      "focusY": 31.6,
+      "scale": 112
     },
     "stages": [
       {
@@ -189,7 +195,7 @@
     "reqLevel": 15,
     "rewardGold": 2100,
     "rewardItems": [
-      "seized_glaive"
+      "seized_glaive@5"
     ],
     "rewardRenown": 2,
     "title": "Tally-Breaker",
@@ -199,9 +205,9 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/quest3.png",
-      "focusX": 46.4,
-      "focusY": 82.7,
+      "path": "chains/demon_generals_ledger.png",
+      "focusX": 57.5,
+      "focusY": 31.6,
       "scale": 126
     },
     "stages": [
@@ -230,7 +236,7 @@
     "reqLevel": 19,
     "rewardGold": 2800,
     "rewardItems": [
-      "gravewatchers_band"
+      "gravewatchers_band@5"
     ],
     "rewardRenown": 2,
     "title": "Grave-Watcher",
@@ -240,7 +246,9 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/Culled.png",
+      "path": "chains/what_the_culled_become.png",
+      "focusX": 67.5,
+      "focusY": 35,
       "scale": 130
     },
     "stages": [
@@ -277,7 +285,7 @@
     "reqLevel": 16,
     "rewardGold": 3800,
     "rewardItems": [
-      "wardens_signet"
+      "wardens_signet@5"
     ],
     "rewardRenown": 3,
     "title": "Lord of the Keep",
@@ -287,7 +295,9 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/Quest.png",
+      "path": "chains/proving_the_bastion.png",
+      "focusX": 70.4,
+      "focusY": 40.3,
       "scale": 119
     },
     "stages": [
@@ -332,7 +342,7 @@
     "reqLevel": 20,
     "rewardGold": 2400,
     "rewardItems": [
-      "bulwark_cuirass"
+      "bulwark_cuirass@5"
     ],
     "rewardRenown": 2,
     "title": "Garrick's End",
@@ -342,7 +352,9 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/Granite.png",
+      "path": "chains/granite_crossing.png",
+      "focusX": 86.7,
+      "focusY": 58.3,
       "scale": 127
     },
     "stages": [
@@ -371,7 +383,7 @@
     "reqLevel": 24,
     "rewardGold": 3200,
     "rewardItems": [
-      "gravekeepers_gloves"
+      "gravekeepers_gloves@5"
     ],
     "rewardRenown": 2,
     "title": "Farmwarden",
@@ -380,7 +392,9 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/FarmattheEdge.png",
+      "path": "chains/farm_at_the_edge.png",
+      "focusX": 71.7,
+      "focusY": 48.3,
       "scale": 132
     },
     "stages": [
@@ -409,8 +423,8 @@
     "reqLevel": 32,
     "rewardGold": 12000,
     "rewardItems": [
-      "sword_of_the_ashen_hand",
-      "bulwark_of_the_war_saint"
+      "sword_of_the_ashen_hand@5",
+      "bulwark_of_the_war_saint@5"
     ],
     "rewardRenown": 5,
     "title": "Ashen-Sworn",
@@ -419,9 +433,9 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/PaleRider.png",
-      "focusX": 43.1,
-      "focusY": 51.9,
+      "path": "chains/the_pale_rider.png",
+      "focusX": 71.9,
+      "focusY": 62.1,
       "scale": 120
     },
     "stages": [
@@ -466,8 +480,8 @@
     "reqLevel": 18,
     "rewardGold": 4000,
     "rewardItems": [
-      "dragon_helm",
-      "dragon_blade"
+      "dragon_helm@5",
+      "dragon_blade@5"
     ],
     "rewardRenown": 2,
     "title": "Dragonbane",
@@ -476,9 +490,9 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/quest2.png",
-      "focusX": 49.3,
-      "focusY": 13.6,
+      "path": "chains/dragon_hunt.png",
+      "focusX": 92.3,
+      "focusY": 45.3,
       "scale": 145
     },
     "stages": [
@@ -523,7 +537,7 @@
     "reqLevel": 14,
     "rewardGold": 2600,
     "rewardItems": [
-      "crown_of_the_lost"
+      "crown_of_the_lost@5"
     ],
     "rewardRenown": 1,
     "title": "Kingdom-Finder",
@@ -532,9 +546,9 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/stacked cards.png",
-      "focusX": 40.1,
-      "focusY": 22.4,
+      "path": "chains/lost_kingdom.png",
+      "focusX": 68.1,
+      "focusY": 50.3,
       "scale": 121
     },
     "stages": [
@@ -571,8 +585,8 @@
     "reqLevel": 22,
     "rewardGold": 6500,
     "rewardItems": [
-      "dragon_armor",
-      "amulet_of_fortune"
+      "dragon_armor@5",
+      "amulet_of_fortune@5"
     ],
     "rewardRenown": 3,
     "title": "Hellgate Breaker",
@@ -581,7 +595,7 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/DemonFort.png",
+      "path": "chains/demon_fortress.png",
       "scale": 121
     },
     "stages": [
@@ -626,7 +640,7 @@
     "reqLevel": 10,
     "rewardGold": 1800,
     "rewardItems": [
-      "lucky_ring"
+      "lucky_ring@5"
     ],
     "rewardRenown": 1,
     "title": "Crownbearer",
@@ -635,9 +649,8 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/Ancient Crown.png",
-      "focusX": 62.4,
-      "focusY": 22.7,
+      "path": "chains/ancient_crown.png",
+      "focusX": 78.5,
       "scale": 112
     },
     "stages": [
@@ -674,7 +687,7 @@
     "reqLevel": 6,
     "rewardGold": 550,
     "rewardItems": [
-      "warband_cleaver"
+      "warband_cleaver@5"
     ],
     "rewardRenown": 1,
     "title": "Warband-Breaker",
@@ -683,9 +696,8 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/Goblin Warband.png",
-      "focusX": 49.2,
-      "focusY": 84.9,
+      "path": "chains/goblin_warband.png",
+      "focusX": 73.3,
       "scale": 120
     },
     "stages": [
@@ -714,7 +726,7 @@
     "reqLevel": 7,
     "rewardGold": 600,
     "rewardItems": [
-      "tollkeepers_signet"
+      "tollkeepers_signet@5"
     ],
     "rewardRenown": 1,
     "title": "Ridge-Watcher",
@@ -724,9 +736,9 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/stacked cards.png",
-      "focusX": 51.3,
-      "focusY": 2.7,
+      "path": "chains/third_crown.png",
+      "focusX": 79.6,
+      "focusY": 35,
       "scale": 119
     },
     "stages": [
@@ -763,8 +775,8 @@
     "reqLevel": 26,
     "rewardGold": 5200,
     "rewardItems": [
-      "choir_mask",
-      "silenced_bell"
+      "choir_mask@5",
+      "silenced_bell@5"
     ],
     "rewardRenown": 2,
     "title": "Choir-Silencer",
@@ -774,7 +786,7 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/HallowChoir.png",
+      "path": "chains/hollow_choir.png",
       "scale": 128
     },
     "stages": [
@@ -811,23 +823,23 @@
     "reqLevel": 34,
     "rewardGold": 22000,
     "rewardItems": [
-      "voidforged_blade",
-      "voidforged_crown",
-      "voidforged_plate",
-      "voidforged_signet"
+      "voidforged_blade@5",
+      "voidforged_crown@5",
+      "voidforged_plate@5",
+      "voidforged_signet@5"
     ],
     "rewardRenown": 6,
-    "rewardEgg": {
-      "rarity": "legendary",
-      "dedicatedPetId": "flying_eye"
-    },
     "title": "World's End",
     "epilogue": "It had no name when this began, and it has none now. What it had, it no longer has. That will have to be enough of an ending.",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
+    "rewardEgg": {
+      "rarity": "legendary",
+      "dedicatedPetId": "flying_eye"
+    },
     "banner": {
-      "path": "chains/WorldEnder.png",
+      "path": "chains/world_ender.png",
       "scale": 128
     },
     "stages": [
@@ -880,43 +892,52 @@
     "reqLevel": 44,
     "rewardGold": 30000,
     "rewardItems": [
-      "last_pilgrims_waystone"
+      "last_pilgrims_waystone@5"
     ],
     "rewardRenown": 8,
     "title": "Pilgrim's Herald",
     "epilogue": "There is a name for what the guild found beneath that archive, and it is not a monster's name. It once mattered enormously to people who no longer exist to say so. It is still down there, waiting for a pilgrimage that stopped coming centuries before anyone alive could feel guilty about it.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/last_pilgrimage.png",
+      "focusX": 66,
+      "focusY": 52.7,
+      "scale": 135
+    },
     "stages": [
       {
         "name": "The Waystone",
         "flavour": "What the survivors describe is not a monster in the usual sense. There are no claws, no roar, nothing that wants a fight. Only something old and confused, pressing strangers through the motions of a rite it still believes someone is meant to receive. It does not attack so much as insist. That is somehow worse.",
         "tag": "arcane",
         "difficulty": "epic",
-        "goldMultiplier": 2.7,
-        "durationMinutes": 1080
+        "durationMinutes": 1080,
+        "goldMultiplier": 2.7
       },
       {
         "name": "The Scribes' Silence",
         "flavour": "An order once kept the records here, every pilgrim's name and every final rite, generation after generation, until one day nobody wrote another entry and nobody came back to ask why. The building still stands locked exactly as its last scribe left it. Whatever moves inside is not guarding treasure. It is guarding an unfinished ledger, the same way the shrine outside is still trying to finish a rite.",
         "tag": "explore",
         "difficulty": "epic",
-        "goldMultiplier": 2.9,
-        "durationMinutes": 1200
+        "durationMinutes": 1200,
+        "goldMultiplier": 2.9
       },
       {
         "name": "What the Archive Remembers",
         "flavour": "Half the pages have turned to dust, and the surviving half do not agree with each other. Names are spelled three different ways, dates contradict, and a century of scribes each half-finished what the last one started. Pieced together, the shape that emerges is not abandonment or betrayal. It is a custom that quietly stopped, one skipped generation at a time, until nobody left alive remembered why the walk had mattered.",
         "tag": "arcane",
         "difficulty": "legendary",
-        "goldMultiplier": 3.4,
-        "durationMinutes": 1320
+        "durationMinutes": 1320,
+        "goldMultiplier": 3.4
       },
       {
         "name": "The Road That Still Opens",
         "flavour": "Beneath the archive's last sealed room, a second road begins, the real one that the shrine outside was only ever an echo of. It leads nowhere on any chart and never was going to, but it remembers one condition for opening: someone willing to walk it in the missing pilgrims' place. The guild did not come here to volunteer for that. It seems the road does not care.",
         "tag": "arcane",
         "difficulty": "legendary",
-        "goldMultiplier": 3.6,
-        "durationMinutes": 1440
+        "durationMinutes": 1440,
+        "goldMultiplier": 3.6
       }
     ]
   },
@@ -927,9 +948,9 @@
     "reqLevel": 45,
     "rewardGold": 42000,
     "rewardItems": [
-      "empyrean_blade",
-      "empyrean_halo",
-      "empyrean_aegis"
+      "empyrean_blade@5",
+      "empyrean_halo@5",
+      "empyrean_aegis@5"
     ],
     "rewardRenown": 10,
     "title": "Kingslayer Twice Over",
@@ -938,8 +959,10 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/HollowKing.png",
-      "scale": 134
+      "path": "chains/hollow_king.png",
+      "focusX": 60.4,
+      "focusY": 47.4,
+      "scale": 105
     },
     "stages": [
       {
@@ -982,6 +1005,9 @@
     "description": "A cart has been working the roads outside town for a week, selling something described only as a chance. Three separate people have already asked the guild to look into it, each for a different reason, and none of them flattering.",
     "reqLevel": 5,
     "rewardGold": 300,
+    "rewardItems": [
+      "grimsbys_loaded_coin@5"
+    ],
     "rewardRenown": 1,
     "title": "The One He Doesn't Cheat",
     "epilogue": "Grimsby never gave a straight answer about where the cart came from or where the coin under the floorboard was headed. What he did give, once he stopped talking his way out of it, was his word, worth exactly as much as anyone's word is worth once it has been checked. He still turns up unannounced and still charges for the privilege, but the deck is real now, and everyone involved knows it. That may be the most honest thing Grimsby has ever agreed to.",
@@ -989,9 +1015,10 @@
     "grantsPeddler": true,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/stacked cards.png",
-      "focusY": 42,
-      "scale": 106
+      "path": "chains/the_man_who_sells_maybe.png",
+      "focusX": 65,
+      "focusY": 82.7,
+      "scale": 115
     },
     "stages": [
       {
@@ -1018,9 +1045,6 @@
         "durationMinutes": 120,
         "goldMultiplier": 1.6
       }
-    ],
-    "rewardItems": [
-      "grimsbys_loaded_coin"
     ]
   },
   {
@@ -1030,7 +1054,7 @@
     "reqLevel": 4,
     "rewardGold": 450,
     "rewardItems": [
-      "tollbreakers_gloves"
+      "tollbreakers_gloves@5"
     ],
     "rewardRenown": 1,
     "title": "Roadwarden",
@@ -1039,7 +1063,7 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/stacked cards.png",
+      "path": "chains/bandits_on_the_old_road.png",
       "focusX": 64.9,
       "focusY": 60.4,
       "scale": 121
@@ -1078,7 +1102,7 @@
     "reqLevel": 12,
     "rewardGold": 2100,
     "rewardItems": [
-      "ridgebreakers_pauldron"
+      "ridgebreakers_pauldron@5"
     ],
     "rewardRenown": 1,
     "title": "Ridgebreaker",
@@ -1087,10 +1111,10 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/stacked cards.png",
-      "focusX": 50.6,
-      "focusY": 82.7,
-      "scale": 118
+      "path": "chains/something_big_in_the_foothills.png",
+      "focusX": 70.2,
+      "focusY": 56.6,
+      "scale": 105
     },
     "stages": [
       {
@@ -1126,7 +1150,7 @@
     "reqLevel": 17,
     "rewardGold": 3400,
     "rewardItems": [
-      "moonsilver_fang"
+      "moonsilver_fang@5"
     ],
     "rewardRenown": 2,
     "title": "Moonhunter",
@@ -1135,9 +1159,9 @@
     "grantsPeddler": false,
     "grantsHarvest": false,
     "banner": {
-      "path": "chains/stacked cards.png",
-      "focusX": 53.1,
-      "focusY": 94.9,
+      "path": "chains/full_moon_over_ashvale.png",
+      "focusX": 62.1,
+      "focusY": 33.3,
       "scale": 120
     },
     "stages": [
@@ -1174,35 +1198,44 @@
     "reqLevel": 29,
     "rewardGold": 7800,
     "rewardItems": [
-      "unravelers_mark"
+      "unravelers_mark@5"
     ],
     "rewardRenown": 3,
     "title": "Unmasker",
     "epilogue": "The body-thief that had been wearing that household is gone now, and so is whatever it was actually made of underneath. The real question, how long it had been doing this and to how many other households nobody has checked, goes conveniently unasked by everyone who would rather not know the answer.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/body_snatcher_problem.png",
+      "focusX": 69.4,
+      "focusY": 40,
+      "scale": 112
+    },
     "stages": [
       {
         "name": "Wrong Rhythm",
         "flavour": "Every answer the family gives is technically correct and somehow still feels rehearsed, as if something learned the shape of a normal household by watching it rather than living in it.",
         "tag": "explore",
         "difficulty": "hard",
-        "goldMultiplier": 2,
-        "durationMinutes": 660
+        "durationMinutes": 660,
+        "goldMultiplier": 2
       },
       {
         "name": "The Grave-Robbers' Trail",
         "flavour": "A disturbed plot in the family crypt leads to a much larger operation than one household's worth of graves. Someone, or something, has been quietly harvesting bodies for far longer than anyone has noticed.",
         "tag": "stealth",
         "difficulty": "epic",
-        "goldMultiplier": 2.4,
-        "durationMinutes": 900
+        "durationMinutes": 900,
+        "goldMultiplier": 2.4
       },
       {
         "name": "What Wears Them Now",
         "flavour": "It is not undead, and it is not wearing a stolen face the way a shapeshifter would. It is copying, methodically, from the inside out, and it does not want to be interrupted.",
         "tag": "combat",
         "difficulty": "epic",
-        "goldMultiplier": 2.8,
-        "durationMinutes": 1080
+        "durationMinutes": 1080,
+        "goldMultiplier": 2.8
       }
     ]
   },
@@ -1213,35 +1246,44 @@
     "reqLevel": 37,
     "rewardGold": 19000,
     "rewardItems": [
-      "lichfinders_compass"
+      "lichfinders_compass@5"
     ],
     "rewardRenown": 5,
     "title": "Grave-Marked",
     "epilogue": "The guild found where the lich is holed up, an old ossuary nobody has bothered mapping in decades, but not what he is actually planning underneath it. He is confident enough in it to have stopped hiding, and that confidence should worry everyone more than it currently does.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/hunt_a_lich.png",
+      "focusX": 73.3,
+      "focusY": 36.6,
+      "scale": 110
+    },
     "stages": [
       {
         "name": "The Dead Don't Usually Plan",
         "flavour": "These are not the shambling, purposeless dead the guild has cleared out before. They take positions, fall back when overwhelmed, and regroup somewhere the guild has not found yet. Something is thinking for them.",
         "tag": "explore",
         "difficulty": "epic",
-        "goldMultiplier": 2.7,
-        "durationMinutes": 1140
+        "durationMinutes": 1140,
+        "goldMultiplier": 2.7
       },
       {
         "name": "A Name in the Dark",
         "flavour": "A captured ritual circlet, still warm, carries the same signature over and over. It is a name half-erased by time and deliberately obscured the rest of the way, belonging to someone who was supposed to have died a very long time ago.",
         "tag": "arcane",
         "difficulty": "epic",
-        "goldMultiplier": 3,
-        "durationMinutes": 1320
+        "durationMinutes": 1320,
+        "goldMultiplier": 3
       },
       {
         "name": "The Door He Didn't Bother Locking",
         "flavour": "The ossuary door is not warded, guarded, or hidden. Either he does not know the guild is close, or he wants them to walk in exactly like this, on his schedule instead of theirs.",
         "tag": "stealth",
         "difficulty": "legendary",
-        "goldMultiplier": 3.6,
-        "durationMinutes": 1560
+        "durationMinutes": 1560,
+        "goldMultiplier": 3.6
       }
     ]
   },
@@ -1252,27 +1294,34 @@
     "reqLevel": 35,
     "rewardGold": 15000,
     "rewardItems": [
-      "millbrook_ledger_page"
+      "millbrook_ledger_page@5"
     ],
     "rewardRenown": 4,
     "title": "Watcher of Millbrook",
     "epilogue": "Nobody in Millbrook is exactly lying. They answer every question truthfully, and every answer arrives at the same conclusion no matter what was actually asked. The guild traced the compulsion to something underneath the town before the trail went dark. Whatever it is, it noticed them looking.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/quiet_in_millbrook.png",
+      "scale": 119
+    },
     "stages": [
       {
         "name": "Flat Answers",
         "flavour": "Every resident gives the same measured, faintly rehearsed answer to a completely different question, down to the same half second pause before speaking, as if they are all listening to something before they respond.",
         "tag": "explore",
         "difficulty": "epic",
-        "goldMultiplier": 2.6,
-        "durationMinutes": 1080
+        "durationMinutes": 1080,
+        "goldMultiplier": 2.6
       },
       {
         "name": "The Trail Goes Quiet",
         "flavour": "Whatever is directing Millbrook does not panic when it is noticed. It simply goes quieter, tightening its grip rather than loosening it, until every lead the guild had goes suddenly and deliberately cold.",
         "tag": "arcane",
         "difficulty": "epic",
-        "goldMultiplier": 3,
-        "durationMinutes": 1320
+        "durationMinutes": 1320,
+        "goldMultiplier": 3
       }
     ]
   },
@@ -1283,28 +1332,35 @@
     "reqLevel": 39,
     "rewardGold": 24000,
     "rewardItems": [
-      "loomsplinter_shard"
+      "loomsplinter_shard@5"
     ],
     "rewardRenown": 6,
     "title": "Thread-Walker",
     "epilogue": "The guild has a name for it now, the Loom, for lack of anything it has ever called itself. They have a location, and a fairly complete picture of what it has been doing to Millbrook and probably other towns nobody has checked yet. What the guild does not have is any plan that avoids someone going down there to end it directly.",
     "requiresChainId": "quiet_in_millbrook",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
+    "grantsHarvest": false,
+    "banner": {
+      "path": "chains/the_loom_beneath.png",
+      "scale": 108
+    },
     "stages": [
       {
         "name": "Underneath",
         "flavour": "The tunnels beneath Millbrook were not dug by anything with hands. The walls are smooth in a way that looks grown rather than carved, and every thread of pale fiber running through the stone pulls faintly toward the same direction.",
         "tag": "explore",
         "difficulty": "legendary",
-        "goldMultiplier": 3.4,
-        "durationMinutes": 1440
+        "durationMinutes": 1440,
+        "goldMultiplier": 3.4
       },
       {
         "name": "One Voice, Too Many Mouths",
         "flavour": "It does not attack. It talks calmly through every captured townsperson at once, in perfect unison, asking in a dozen borrowed voices why the guild would want to unravel something that finally made everyone agree.",
         "tag": "arcane",
         "difficulty": "legendary",
-        "goldMultiplier": 3.8,
-        "durationMinutes": 1560
+        "durationMinutes": 1560,
+        "goldMultiplier": 3.8
       }
     ]
   },
@@ -1315,28 +1371,36 @@
     "reqLevel": 1,
     "rewardGold": 120,
     "rewardItems": [
-      "quartermasters_token"
+      "quartermasters_token@5"
     ],
     "rewardRenown": 1,
     "title": "Provisioner",
     "epilogue": "The quartermaster has shown the guild everything they know about coaxing ore, timber, herbs, and fish out of the land around Ironrest. The rest is just standing at a node and paying attention. The supply room already looks less bare, and the shop counter is bleeding a lot less gold.",
+    "grantsHatchery": false,
+    "grantsPeddler": false,
     "grantsHarvest": true,
+    "banner": {
+      "path": "chains/the_first_haul.png",
+      "focusX": 69,
+      "focusY": 38.3,
+      "scale": 110
+    },
     "stages": [
       {
         "name": "Clearing the Old Grounds",
         "flavour": "The gathering grounds have not been touched in years. Brambles cover the quarry mouth, the woodyard has not been swept, and the herb garden has gone to weed. None of it is dangerous. All of it needs clearing before anyone can use it again.",
         "tag": "explore",
         "difficulty": "easy",
-        "goldMultiplier": 1.1,
-        "durationMinutes": 30
+        "durationMinutes": 30,
+        "goldMultiplier": 1.1
       },
       {
         "name": "A Lesson in the Old Ways",
         "flavour": "The quartermaster walks the guild through every node personally: when to strike, when to wait, and which glints are worth rushing for. It is less a lesson than a demonstration of forty years spent never once paying for a single nail.",
         "tag": "explore",
         "difficulty": "easy",
-        "goldMultiplier": 1.2,
-        "durationMinutes": 45
+        "durationMinutes": 45,
+        "goldMultiplier": 1.2
       }
     ]
   },
@@ -1345,17 +1409,23 @@
     "name": "The Kindred Moon",
     "description": "A letter reaches the guild from Ashvale, addressed by name and asking, carefully, not to be read aloud to anyone else. The man who wrote it survived the pack the guild put down there -- survived the bite, too, and has spent every month since hiding what that actually means. The next full moon is close enough to count in days.",
     "reqLevel": 46,
-    "requiresChainId": "full_moon_over_ashvale",
     "rewardGold": 46000,
     "rewardItems": [
-      "kindred_fang"
+      "kindred_fang@5"
     ],
     "rewardRenown": 11,
     "title": "Kindred",
     "epilogue": "He is still standing when the moon finishes rising, which was never the safe assumption. What walked out of that circle remembers Ashvale, remembers the letter, remembers exactly who he is -- the shape changed permanently; nothing underneath it did. Ashvale does not know what to do with that, and hasn't decided whether it's grateful. The guild has already made up its mind.",
+    "requiresChainId": "full_moon_over_ashvale",
     "grantsHatchery": false,
     "grantsPeddler": false,
     "grantsHarvest": false,
+    "banner": {
+      "path": "chains/kindred_moon.png",
+      "focusX": 76.9,
+      "focusY": 35,
+      "scale": 119
+    },
     "stages": [
       {
         "name": "A Name From Ashvale",
@@ -1379,7 +1449,7 @@
         "tag": "combat",
         "difficulty": "legendary",
         "durationMinutes": 1650,
-        "goldMultiplier": 4.0
+        "goldMultiplier": 4
       },
       {
         "name": "What Walked Out of the Circle",
