@@ -21730,3 +21730,23 @@ sub-builds included) pass clean. Build/typecheck don't depend on the
 actual PNG files being present on disk (a data-driven runtime path
 string, not a build-time asset import), so this passes whether or not
 the art has been dropped in yet.
+
+### Raid banners wired to real dedicated art; quest chain banner art delivered (patch 0274)
+```discord-update
+Dev Update | Banner Art
+
+- All 30 quest chains and all 8 raids now have real dedicated banner artwork ready to drop in
+- Fixed 3 raids still pointing at old placeholder banner filenames
+```
+
+Direct follow-up to patch 0270's separate-icon-vs-banner split and patch 0273's chain icons: real banner art for every quest chain and every raid, delivered as four labeled reference sheets (three for the 30 chains in batches of 10, one for the 8 raids), ready to slot in.
+
+**Extraction was straightforward this time** -- unlike the earlier unlabeled banner sheet from patch 0270-era work, all three quest-chain sheets had a clean numbered label directly under each banner, and a uniform machine-generated grid (2 columns x 5 rows, consistent thin divider lines rather than organic art boundaries), so boundaries were detected precisely via brightness-edge analysis and cross-checked visually before use -- no order-guessing needed, no ambiguity found across any of the 30. The raid sheet had no printed labels at all (the label-text instruction in that generation apparently didn't take), so its 8 banners were extracted using the sheet's own black grid-line separators instead, then verified visually against the already-confirmed raid order from patch 0269-era icon work.
+
+**`quest-chains.json` needed no JSON change at all.** Checked before assuming otherwise: every one of the 30 chains' `banner.path` was already set to the `chains/<id>.png` convention (from earlier DevTool work, alongside the icon assignments patch 0273 wired up) -- confirmed via a direct diff against the freshly-cloned HEAD, which came back empty. The only thing actually missing there was the art file itself, not the wiring.
+
+**`raids.json` did need a real fix.** Three raids were still pointing at old placeholder filenames from earlier testing (e.g. `Raidcard1.png`, not matching any real content path) -- all 8 entries' `banner.path` now point at `raids/<id>.png`, matching the same folder convention `defaultFolder` already used for its id-guess fallback (see patch 0269/0270's own notes on that).
+
+**The actual image files are NOT part of this patch**, same reasoning as patch 0273's icon delivery: binary art doesn't belong in a text diff. Delivered separately as two ready-to-drop folders -- 30 `<chain_id>.png` files for `public/lore/chains/`, 8 `<raid_id>.png` files for `public/lore/raids/`. Once those land, every chain and raid's banner should resolve immediately in both the collapsed-card view (still showing the dedicated `icon` from patch 0273 where assigned) and the detail-modal/active-raid views (which always show this full `banner`, per patch 0270's own split).
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (both Electron sub-builds included) pass clean.

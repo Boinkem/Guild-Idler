@@ -13,7 +13,7 @@
     "unlocksRaidId": "frozen_wyrmkeep",
     "successModifier": 0,
     "banner": {
-      "path": "Raidcard1.png"
+      "path": "raids/blackford_keep.png"
     },
     "icon": {
       "path": "raids-icons/Keep.png"
@@ -38,6 +38,9 @@
     "title": "Vault-Breaker",
     "requiredRoles": {
       "caster": 1
+    },
+    "banner": {
+      "path": "raids/bonewrought_vault.png"
     }
   },
   {
@@ -54,7 +57,7 @@
     "requiresChainId": "last_pilgrimage",
     "successModifier": 0,
     "banner": {
-      "path": "chains/Requiem.png",
+      "path": "raids/requiem_last_god.png",
       "focusX": 44.4,
       "focusY": 62,
       "scale": 200
@@ -88,6 +91,9 @@
     "title": "Wyrmbrood's Bane",
     "requiredRoles": {
       "ranged": 1
+    },
+    "banner": {
+      "path": "raids/frozen_wyrmkeep.png"
     }
   },
   {
@@ -110,6 +116,9 @@
     "requiredRoles": {
       "melee": 1,
       "caster": 1
+    },
+    "banner": {
+      "path": "raids/what_got_out.png"
     }
   },
   {
@@ -125,7 +134,7 @@
     ],
     "successModifier": 0,
     "banner": {
-      "path": "Raidcard2.png",
+      "path": "raids/black_dragon_nest.png",
       "focusX": 55,
       "focusY": 69.8
     },
@@ -157,6 +166,9 @@
     "title": "Marrow-Ender",
     "requiredRoles": {
       "caster": 2
+    },
+    "banner": {
+      "path": "raids/house_of_bones.png"
     }
   },
   {
@@ -179,6 +191,9 @@
       "melee": 1,
       "ranged": 1,
       "caster": 1
+    },
+    "banner": {
+      "path": "raids/silence_the_loom.png"
     }
   }
 ]
