@@ -48,6 +48,8 @@
     "successModifier": 0,
     "banner": {
       "path": "chains/Requiem.png",
+      "focusX": 44.4,
+      "focusY": 62,
       "scale": 200
     },
     "title": "Last Mile Walker",
