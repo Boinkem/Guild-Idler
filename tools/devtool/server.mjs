@@ -209,6 +209,22 @@ const SCHEMAS = {
     fields: {
       id: { type: 'string', required: true, slug: true },
       name: { type: 'string', required: true },
+      // Patch 0269: color-codes this class's circle avatar on the new
+      // roster/companion status-bar views (Settings > Knight -- "Status
+      // bars"). Required, not optional -- unlike icon just below, every
+      // class needs SOME color for its circle to render as anything but
+      // blank, so there's no sensible "unset" state the way a missing
+      // icon can just fall back to a plain glyph-less circle.
+      color: { type: 'color', required: true },
+      // Optional pixel-art overlay inside that same colored circle --
+      // reuses the existing `picker: 'icon'` (ICONS_DIR/item-icons,
+      // 16x16) rather than inventing a new folder just for 13 class
+      // icons, same "don't invent a new picker for a handful of icons"
+      // precedent the `roles` schema's own `icon` field already set.
+      // Falls back to a bare color circle (no icon) when unset, same
+      // graceful-missing-asset convention every other optional icon
+      // field on this page already follows.
+      icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
       blurb: { type: 'string', required: true },
       baseStats: { type: 'stats', required: true },
       growth: { type: 'stats', required: true },
@@ -282,7 +298,7 @@ const SCHEMAS = {
     fields: {
       id: { type: 'enum', options: ['melee', 'ranged', 'caster'], required: true },
       name: { type: 'string', required: true },
-      icon: { type: 'string', required: false, picker: 'icon' },
+      icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
       description: { type: 'string', required: false },
     },
   },
@@ -494,7 +510,16 @@ const SCHEMAS = {
       // render as a fixed-height strip across a card up to 720px wide
       // (ChainBanner: height 90 in LorePanel.tsx), so 8/1 is the real
       // shape being cropped, not the old generic 420x130 box.
-      banner: { type: 'bannerImage', required: false, defaultFolder: 'chains', previewAspect: '8/1' },
+      // `previewSize` (patch 0269, also frontend-only) is a short, plain-
+      // English recommended source resolution shown as a caption under
+      // the preview box -- an aspect ratio alone (8/1) tells an artist
+      // the SHAPE to crop to but not the actual resolution worth
+      // exporting at, which was the real gap a direct request flagged
+      // ("the picker doesn't say what size the image should be"). Purely
+      // advisory text, not validated or enforced server-side -- any
+      // image still uploads and crops fine regardless of its real
+      // dimensions, same as before this field existed.
+      banner: { type: 'bannerImage', required: false, defaultFolder: 'chains', previewAspect: '8/1', previewSize: '~1600x200px' },
       stages: { type: 'chainStages', required: true },
     },
   },
@@ -519,7 +544,7 @@ const SCHEMAS = {
       // there's no single exact ratio the way chains/raids have; 3/1
       // approximates the typical card shape closely enough to preview
       // meaningfully, which is still far closer than the old generic box.
-      banner: { type: 'bannerImage', required: false, defaultFolder: 'quest-tags', previewAspect: '3/1' },
+      banner: { type: 'bannerImage', required: false, defaultFolder: 'quest-tags', previewAspect: '3/1', previewSize: '~900x300px' },
     },
   },
   'difficulties': {
@@ -607,7 +632,7 @@ const SCHEMAS = {
       // `picker: 'icon'` is a frontend hint only -- server-side this
       // validates as a plain optional string (a relative path under
       // ICONS_DIR, e.g. "weapons/sword_03.png"), same as setId above.
-      icon: { type: 'string', required: false, picker: 'icon' },
+      icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
       // Both of these existed on disk (raidExclusive since Heroic/Legendary
       // raid loot variants were added, craftable since Crafting) but
       // weren't in this schema -- the editor rebuilds each entry from
@@ -656,7 +681,7 @@ const SCHEMAS = {
       glyph: { type: 'string', required: true },
       // Falls back to glyph when unset -- same convention equipment's icon
       // field already uses, same picker.
-      icon: { type: 'string', required: false, picker: 'icon' },
+      icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
       // Same shape and same reasoning as equipment's own `craftable` --
       // true for a craft-only variant (Alchemist's Reserve, the Fortune-
       // Charm "Weave"/"Sigil" line, etc.) that should never appear in the
@@ -680,7 +705,7 @@ const SCHEMAS = {
       description: { type: 'string', required: true },
       sellValue: { type: 'number', required: true },
       glyph: { type: 'string', required: true },
-      icon: { type: 'string', required: false, picker: 'icon' },
+      icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
     },
   },
   'materials': {
@@ -703,7 +728,7 @@ const SCHEMAS = {
       // Single stable icon for static UI (Crafting's materials-needed
       // list, Warehouse stock, scrap fly-up particles) -- falls back to
       // glyph when unset, same convention/picker as equipment/consumables.
-      icon: { type: 'string', required: false, picker: 'icon' },
+      icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
       // Pool of filenames for the falling-item Harvest animation's own
       // spawn-to-spawn variety -- deliberately separate from `icon` above
       // and NOT under the shared item-icons picker, since these live under
@@ -927,7 +952,7 @@ const SCHEMAS = {
       // kinds still pull their icon from the referenced def instead --
       // this is only useful for kinds that have no def to look one up
       // from.
-      icon: { type: 'string', required: false, picker: 'icon' },
+      icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
     },
   },
   // NOTE: there used to be a 'peddler-config' schema here -- a single
@@ -984,7 +1009,7 @@ const SCHEMAS = {
       // against (its slotType is a whole pool of differently-shaped
       // slots) -- close enough for judging fit; real per-slot sizing is
       // visible in-game in the Guild Hall's own "Customize" mode.
-      image: { type: 'decorationImage', required: false, defaultFolder: '', previewAspect: '1/1' },
+      image: { type: 'decorationImage', required: false, defaultFolder: '', previewAspect: '1/1', previewSize: '~512x512px' },
     },
   },
   // Which background themes exist for the Guild Hall (patch 0206) -- id/
@@ -1090,7 +1115,7 @@ const SCHEMAS = {
       // all three; this is the closest single default and still a large
       // accuracy improvement over the old generic 420x130 box for the
       // context players see most (the detail modal).
-      banner: { type: 'bannerImage', required: false, defaultFolder: 'raids', previewAspect: '5/1' },
+      banner: { type: 'bannerImage', required: false, defaultFolder: 'raids', previewAspect: '5/1', previewSize: '~1500x300px' },
       // Mirrors quest-chains' own `title` field -- granted to every hero
       // in the clearing party on a full clear, rather than a single
       // hero, since a raid is a party effort. See RaidDef.title's own
@@ -1125,7 +1150,7 @@ const SCHEMAS = {
       name: { type: 'string', required: true },
       description: { type: 'string', required: true },
       category: { type: 'enum', required: true, options: ['gear', 'consumable', 'enchant', 'gem'] },
-      icon: { type: 'string', required: false, picker: 'icon' },
+      icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
       materialCost: { type: 'materials', required: true },
       goldCost: { type: 'number', required: true },
       // gem only -- Scrap is its own standalone currency (GameState.scrap),
@@ -1322,6 +1347,18 @@ function validateEntry(schema, entry, index) {
     switch (spec.type) {
       case 'string':
         if (typeof value !== 'string') errors.push(`entry ${index}: "${key}" must be text`);
+        break;
+      // Patch 0269: a plain 6-digit hex color (e.g. hero-classes' new
+      // `color` field, the roster/companion status-bar avatar tint).
+      // Deliberately its own type rather than reusing 'string' -- a free-
+      // text hex value needs its own validator (format-checked here) and
+      // its own swatch-plus-text render in app.js, the same "own type,
+      // own render" split every other non-plain-text field on this page
+      // already follows (bannerImage, roleFlavors, etc.).
+      case 'color':
+        if (typeof value !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value)) {
+          errors.push(`entry ${index}: "${key}" must be a 6-digit hex color like #4a90d9`);
+        }
         break;
       case 'number':
         if (typeof value !== 'number' || Number.isNaN(value)) errors.push(`entry ${index}: "${key}" must be a number`);

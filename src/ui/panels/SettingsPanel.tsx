@@ -162,6 +162,14 @@ export function SettingsPanel() {
         <Toggle value={settings.raidPartyView} onChange={set('raidPartyView')} />
       </Row>
 
+      <Row label="Status bars (roster)" hint="Replaces the Heroes tab's per-hero sprite cards with a compact list: name, status, and a progress bar for everyone at once, sorted soonest-finishing first.">
+        <Toggle value={settings.heroStatusBars} onChange={set('heroStatusBars')} />
+      </Row>
+
+      <Row label="Status bars (corner companion)" hint="Replaces the corner companion's cycling hero sprite with the same sorted status list. Makes the companion window resizable while this is on, so the full roster can fit without scrolling.">
+        <Toggle value={settings.idleStatusView} onChange={set('idleStatusView')} />
+      </Row>
+
       <Row label="Pet size" hint={`${Math.round(settings.petSpriteScale * 100)}% -- affects the companion pet only, not the hero above`}>
         <div className="row" style={{ gap: 16, alignItems: 'center' }}>
           <input

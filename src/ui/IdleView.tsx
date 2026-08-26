@@ -4,6 +4,7 @@ import { useSettings } from './useSettings';
 import { PixelSprite, QUEST_MARK } from './sprites/PixelSprite';
 import { HeroAnimation, HeroSprite } from './sprites/HeroSprite';
 import { RaidPartySprites, raidPartyScale } from './sprites/RaidPartySprites';
+import { HeroStatusList } from './HeroStatusBar';
 import { PetSprite } from './sprites/PetSprite';
 import { PET_BY_ID } from '../game/data/pets';
 import { HeroManager } from '../game/managers/HeroManager';
@@ -268,7 +269,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
   const activeRaidParty = engine.state.activeRaid
     ? engine.state.heroes.filter((h) => engine.state.activeRaid!.heroIds.includes(h.id))
     : [];
-  const showRaidPartyView = settings.raidPartyView && !settings.hideHeroSprite && activeRaidParty.length > 0;
+  const showRaidPartyView = settings.raidPartyView && !settings.hideHeroSprite && !settings.idleStatusView && activeRaidParty.length > 0;
 
   /**
    * Widens the actual OS window (Electron only -- no-op via optional
@@ -303,6 +304,25 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
     return () => { void window.littleKnight?.setIdleWidth(IDLE_DEFAULT_WIDTH); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showRaidPartyView, activeRaidParty.length, knightHeight]);
+
+  /**
+   * Patch 0269 -- Settings > Knight > "Status bars (corner companion)".
+   * Takes priority over Raid View above (both can't sensibly show at
+   * once; a sorted status list already covers "who's raiding" as one row
+   * among many, so there's nothing Raid View would add on top of it) and
+   * over hideHeroSprite (the status list is a full replacement for the
+   * sprite area, not something that needs the sprite hidden separately).
+   * Tells the OS window to become resizable via the new setIdleDisplay
+   * IPC call -- see main.ts's own handler for the resizable/remembered-
+   * size behavior. Always restores 'sprite' on the way out, whichever
+   * path gets there (setting flipped off, component unmounting), same
+   * "always clean up" shape the Raid View effect above already follows.
+   */
+  const showStatusView = settings.idleStatusView;
+  useEffect(() => {
+    void window.littleKnight?.setIdleDisplay(showStatusView ? 'status' : 'sprite');
+    return () => { void window.littleKnight?.setIdleDisplay('sprite'); };
+  }, [showStatusView]);
 
   // Used to just report "+N more at the guild" -- accurate as a headcount,
   // but gave no sense of whether those heroes were doing anything, so a
@@ -359,6 +379,38 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
   // the menu is open, and an egg finishing incubation is just as likely to
   // land mid-quest while the companion window is the only thing showing.
   const hatchReadyBanner = engine.state.pendingHatchReadyNotice ? 'An egg is ready to hatch! →' : null;
+
+  if (showStatusView) {
+    // Status bars (corner companion) -- a full replacement for the sprite
+    // stage below, not a variant of it: no carousel, no pet, no away/
+    // chain/raid/hatch banners (all of that assumes a single "current
+    // hero" the sprite view is built around; a sorted whole-roster list
+    // doesn't have a single current hero to hang them off, and the
+    // roster's own "Status bars" view -- HeroesPanel.tsx -- already has
+    // no equivalent for them either, so this isn't a regression relative
+    // to that surface). `idle-actions` (open guild / lock / hide) stays,
+    // same "core functionality never disappears" precedent hideHeroSprite
+    // already set -- see that branch's own comment further down for why
+    // clicking through to the guild menu must always stay reachable.
+    return (
+      <div className={`idle-root idle-status-root ${locked ? '' : 'unlocked'}`}>
+        <div className="idle-status-stage">
+          <HeroStatusList engine={engine} now={now} compact />
+          <div className="idle-actions">
+            <button className="btn-ghost" onClick={onOpenMenu}>Open guild</button>
+            <button
+              className="btn-ghost"
+              onClick={toggleLocked}
+              title={locked ? 'Unlock to drag the companion to a new spot' : 'Lock the companion in its current spot'}
+            >
+              {locked ? '🔒' : '🔓'}
+            </button>
+            <button className="btn-ghost" onClick={() => window.littleKnight?.minimize()}>Hide</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`idle-root ${locked ? '' : 'unlocked'}`}>

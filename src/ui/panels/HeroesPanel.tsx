@@ -13,6 +13,7 @@ import { Tuning } from '../../game/data/tuning';
 import { HeroClass, Hero, Stats } from '../../game/types';
 import { describeMods, formatDuration, formatGold, HOUR, roleAwareStatLabel } from '../../game/util';
 import { HeroSprite } from '../sprites/HeroSprite';
+import { HeroStatusList } from '../HeroStatusBar';
 import { GearScoreBadge } from '../GearScoreBadge';
 import { RoleIcon } from '../RoleIcon';
 import { useLevelUpFlash, LevelUpFlash } from '../levelFlash';
@@ -218,7 +219,18 @@ export function HeroesPanel() {
         })}
       </div>
 
-      {state.heroes.map((hero) => {
+      {settings.heroStatusBars ? (
+        // Status bars (Settings > Knight) -- a compact, sorted list of
+        // every hero's current status instead of the full per-hero card
+        // grid below. Deliberately a full replacement, not a toggle on
+        // each card: the whole point is a faster "what's about to
+        // finish" scan across the roster, which a card-by-card sprite
+        // swap wouldn't give. Recruiting/comparison/tombstone-style
+        // controls above stay visible either way -- only the roster
+        // body itself swaps.
+        <HeroStatusList engine={engine} now={now} />
+      ) : (
+      state.heroes.map((hero) => {
         const classDef = HERO_CLASSES[hero.heroClass];
         const total = HeroManager.totalStats(hero);
         const toNext = HeroManager.xpToNext(hero);
@@ -496,7 +508,8 @@ export function HeroesPanel() {
             )}
           </div>
         );
-      })}
+      })
+      )}
 
       <div className="section-heading">Recruit</div>
       {state.heroes.length >= slots && (

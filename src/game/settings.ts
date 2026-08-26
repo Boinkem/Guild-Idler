@@ -123,6 +123,31 @@ export interface Settings {
    */
   raidPartyView: boolean;
 
+  /**
+   * Replaces the per-hero sprite thumbnail on the Heroes roster (Guild
+   * Hall) with a compact status-bar row for every hero instead: name,
+   * current status (questing/raiding/harvesting/injured/idle), and a
+   * progress bar showing percent complete + time remaining. Off by
+   * default -- the sprite grid is the existing, familiar view; this is an
+   * alternate density/info trade-off, not a strict upgrade for everyone.
+   * Independent of hideHeroSprite above, which only affects the corner
+   * companion, not the roster.
+   */
+  heroStatusBars: boolean;
+  /**
+   * Same status-bar-list treatment as heroStatusBars above, but for the
+   * corner companion window instead of the roster: replaces the single
+   * cycling hero sprite (and Raid View, if that's also on) with the same
+   * sorted status list. Because a plain list needs more room than the
+   * companion's normal tiny fixed footprint to be readable without
+   * scrolling, turning this on also makes the companion window
+   * resizable for as long as it's on (see electron/main.ts's
+   * `window:setIdleDisplay` handler) -- dragging it back down small is
+   * fine, nothing is lost, the list just becomes more cramped. Off by
+   * default, same reasoning as heroStatusBars.
+   */
+  idleStatusView: boolean;
+
   /** Animation speed multiplier; 0 disables idle bobbing entirely. */
   animationSpeed: number;     // 0, 0.5, 1, 1.5
 
@@ -185,6 +210,8 @@ export const DEFAULT_SETTINGS: Settings = {
   hideHeroSprite: false,
   hidePetSprite: false,
   raidPartyView: true,
+  heroStatusBars: false,
+  idleStatusView: false,
   animationSpeed: 1,
   offlineReportOnLaunch: true,
   questResultPopups: true,

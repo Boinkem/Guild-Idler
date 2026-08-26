@@ -27,6 +27,11 @@ declare global {
       /** Idle-mode-only, no-op otherwise. Pass 260 (IDLE_SIZE.width) to
        *  restore the normal companion width. */
       setIdleWidth(width: number): Promise<void>;
+      /** Patch 0269. Idle-mode-only, no-op otherwise -- switches the corner
+       *  companion between its fixed-size sprite footprint and a resizable
+       *  status-list footprint. See electron/main.ts's own
+       *  window:setIdleDisplay handler and preload.ts's matching comment. */
+      setIdleDisplay(kind: 'sprite' | 'status'): Promise<void>;
       setAlwaysOnTop(value: boolean): Promise<boolean>;
       getAlwaysOnTop(): Promise<boolean>;
       setFullscreen(value: boolean): Promise<boolean>;

@@ -756,6 +756,25 @@ export function renownCost(def: RenownPerkDef, currentLevel: number): number {
 export interface HeroClassDef {
   id: HeroClass;
   name: string;
+  /**
+   * Patch 0269: the color-coded circle avatar this class shows on the new
+   * roster/companion status-bar views (Settings > Knight -- "Status
+   * bars"). A plain 6-digit hex string, editable in DevTools same as any
+   * other data-driven field now that this migrated off a hardcoded
+   * Record -- see hero-classes' own DevTool schema comment.
+   */
+  color: string;
+  /**
+   * Optional pixel-art overlay inside that same colored circle -- an
+   * item-icons path (same convention/folder every other `picker: 'icon'`
+   * field already uses), or empty string for "no icon, just the plain
+   * color circle." Never null/undefined: `hero-classes.json` always
+   * carries this key (blank string when unset), same "always present,
+   * blank means unset" convention `icon` fields elsewhere in this file
+   * already follow, so call sites can read it directly without an
+   * `?? ''` fallback at every use.
+   */
+  icon: string;
   blurb: string;
   baseStats: Stats;
   growth: Stats;

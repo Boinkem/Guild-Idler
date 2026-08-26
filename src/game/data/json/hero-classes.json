@@ -2,6 +2,8 @@
   {
     "id": "adventurer",
     "name": "Adventurer",
+    "color": "#8c8172",
+    "icon": "",
     "blurb": "No banner, no order, just grit and a willingness to go first. The guild starts here.",
     "baseStats": {
       "strength": 6,
@@ -52,6 +54,8 @@
   {
     "id": "knight",
     "name": "Knight",
+    "color": "#3f6fb0",
+    "icon": "",
     "blurb": "Sworn, drilled, and reliable in a way freelancers rarely are. Cheap for what it brings.",
     "baseStats": {
       "strength": 6,
@@ -99,6 +103,8 @@
   {
     "id": "dwarf",
     "name": "Dwarf Warrior",
+    "color": "#b06a2c",
+    "icon": "",
     "blurb": "A wall with an axe. Almost impossible to put down, in no particular hurry.",
     "baseStats": {
       "strength": 7,
@@ -146,6 +152,8 @@
   {
     "id": "gladiator",
     "name": "Gladiator",
+    "color": "#a83232",
+    "icon": "",
     "blurb": "Sword, net, and a bow for the ones that run. Fast and greedy for spoils.",
     "baseStats": {
       "strength": 7,
@@ -193,6 +201,8 @@
   {
     "id": "samurai",
     "name": "Samurai",
+    "color": "#5b4a9c",
+    "icon": "",
     "blurb": "One clean strike. Prizes a perfect kill and the rare blade it earns.",
     "baseStats": {
       "strength": 9,
@@ -239,6 +249,8 @@
   {
     "id": "witch",
     "name": "Witch",
+    "color": "#8e3f9c",
+    "icon": "",
     "blurb": "Hexes, bargains, and a nose for what a ruin is really worth. Fragile.",
     "baseStats": {
       "strength": 3,
@@ -288,6 +300,8 @@
   {
     "id": "lizardman",
     "name": "Lizardman",
+    "color": "#4d7a3a",
+    "icon": "",
     "blurb": "Scales, claws, and a swamp-born refusal to die. Little sense for coin.",
     "baseStats": {
       "strength": 8,
@@ -336,6 +350,8 @@
   {
     "id": "pyromancer",
     "name": "Pyromancer",
+    "color": "#d9662b",
+    "icon": "",
     "blurb": "Answers every problem with fire. Devastating, and made of paper.",
     "baseStats": {
       "strength": 4,
@@ -383,6 +399,8 @@
   {
     "id": "wizard",
     "name": "Wizard",
+    "color": "#6a4fc4",
+    "icon": "",
     "blurb": "Decades of study in a pointed hat. Unmatched on anything arcane.",
     "baseStats": {
       "strength": 3,
@@ -432,6 +450,8 @@
   {
     "id": "huge_knight",
     "name": "Huge Knight",
+    "color": "#5c5347",
+    "icon": "",
     "blurb": "Bigger than the armor should allow, and somehow still moving. Nothing gets past him twice.",
     "baseStats": {
       "strength": 10,
@@ -482,6 +502,8 @@
   {
     "id": "kobold",
     "name": "Kobold Warrior",
+    "color": "#8a9a3a",
+    "icon": "",
     "blurb": "Small, fast, and armed with three separate ways to be somewhere else by the time you notice him.",
     "baseStats": {
       "strength": 6,
@@ -532,6 +554,8 @@
   {
     "id": "minotaur",
     "name": "Minotaur",
+    "color": "#7a3b2e",
+    "icon": "",
     "blurb": "One very large axe and a complete unwillingness to plan past the first swing.",
     "baseStats": {
       "strength": 14,
@@ -582,6 +606,8 @@
   {
     "id": "werewolf",
     "name": "Werewolf",
+    "color": "#5a6b7a",
+    "icon": "",
     "blurb": "Kept his mind when the change should have taken it. Still working out what that costs him.",
     "baseStats": {
       "strength": 10,

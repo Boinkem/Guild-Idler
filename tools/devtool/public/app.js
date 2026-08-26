@@ -569,8 +569,11 @@ function fieldControl(spec, key, value) {
   if (spec.picker === 'icon') {
     // Just a container here -- renderIconField fills it in and wires the
     // buttons once it's actually attached to the DOM (see wireIconFields,
-    // called alongside wireListInput in openEditor).
-    return `<div class="icon-field" id="${id}" data-value="${escapeHtml(value ?? '')}"></div>`;
+    // called alongside wireListInput in openEditor). `data-preview-size`
+    // (patch 0269) carries the schema's `previewSize` hint through the
+    // same way bannerImage/decorationImage already pass previewAspect --
+    // see renderIconField for where it actually gets shown.
+    return `<div class="icon-field" id="${id}" data-value="${escapeHtml(value ?? '')}" data-preview-size="${escapeHtml(spec.previewSize ?? '')}"></div>`;
   }
   if (spec.picker === 'guildhallBg') {
     // Same deferred-render container shape as the icon field just above,
@@ -596,7 +599,11 @@ function fieldControl(spec, key, value) {
     // of one generic box for every content type -- falls back to the old
     // 420x130-ish "8/2.5" shape if a schema hasn't set one. `data-scale`
     // carries the optional zoom (100 = no zoom, matches plain `cover`).
-    return `<div class="banner-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-scale="${value?.scale ?? 100}" data-folder="${escapeHtml(spec.defaultFolder ?? '')}" data-preview-aspect="${escapeHtml(spec.previewAspect ?? '8/2.5')}"></div>`;
+    // `data-preview-size` (patch 0269) carries the schema's `previewSize`
+    // hint -- a short recommended-resolution caption shown under the
+    // preview box, see renderBannerField. Aspect alone tells an artist
+    // the shape to crop to, not the resolution worth exporting at.
+    return `<div class="banner-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-scale="${value?.scale ?? 100}" data-folder="${escapeHtml(spec.defaultFolder ?? '')}" data-preview-aspect="${escapeHtml(spec.previewAspect ?? '8/2.5')}" data-preview-size="${escapeHtml(spec.previewSize ?? '')}"></div>`;
   }
   if (spec.type === 'decorationImage') {
     // Same deferred-render approach as bannerImage just above -- a bare
@@ -606,7 +613,23 @@ function fieldControl(spec, key, value) {
     // `data-scale` defaults to 100 = the sprite's natural contain-fit
     // size, same "omitted means no-op" meaning bannerImage's scale has,
     // just a different no-op (contain-fit vs plain cover).
-    return `<div class="decor-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-scale="${value?.scale ?? 100}" data-preview-aspect="${escapeHtml(spec.previewAspect ?? '1/1')}"></div>`;
+    // `data-preview-size` (patch 0269) -- same recommended-resolution
+    // caption as bannerImage above, see renderDecorationField.
+    return `<div class="decor-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-scale="${value?.scale ?? 100}" data-preview-aspect="${escapeHtml(spec.previewAspect ?? '1/1')}" data-preview-size="${escapeHtml(spec.previewSize ?? '')}"></div>`;
+  }
+  if (spec.type === 'color') {
+    // Patch 0269 (hero-classes.color). A native <input type="color"> swatch
+    // plus a plain hex text field kept in sync with it, same "two controls,
+    // one value" pairing a slider+number-readout already uses elsewhere on
+    // this page. The text field is what readField() actually reads (see
+    // below) -- the swatch is a convenience for picking, not the source of
+    // truth, so a hand-typed hex value (e.g. pasted from a design doc)
+    // works identically to using the picker.
+    const hex = /^#[0-9a-fA-F]{6}$/.test(value ?? '') ? value : '#888888';
+    return `<div class="color-field" id="${id}">
+      <input type="color" data-color-swatch value="${escapeHtml(hex)}" />
+      <input type="text" data-color-text value="${escapeHtml(value ?? '')}" placeholder="#4a90d9" maxlength="7" />
+    </div>`;
   }
   if (spec.type === 'string' && (key === 'description' || key === 'flavour' || key === 'blurb' || key === 'body' || key === 'licenseSummary')) {
     return `<textarea id="${id}">${escapeHtml(value ?? '')}</textarea>`;
@@ -950,12 +973,14 @@ async function ensureIcons() {
  *  is simpler and hard to get subtly wrong. */
 function renderIconField(field) {
   const value = field.dataset.value || '';
+  const previewSize = field.dataset.previewSize || '';
   field.innerHTML = `
     <div class="icon-preview">
       ${value ? `<img src="/item-icons/${escapeHtml(value)}" alt="" />` : '<span class="icon-preview-empty">?</span>'}
     </div>
     <div class="icon-field-controls">
       <span class="icon-field-name">${value ? escapeHtml(value) : 'No icon assigned'}</span>
+      ${previewSize ? `<span class="icon-field-size tiny muted">${escapeHtml(previewSize)}</span>` : ''}
       <button type="button" data-choose-icon>${value ? 'Change' : 'Choose icon'}</button>
       ${value ? '<button type="button" class="remove" data-clear-icon>Clear</button>' : ''}
     </div>`;
@@ -973,6 +998,25 @@ function renderIconField(field) {
 
 function wireIconFields(container) {
   container.querySelectorAll('.icon-field').forEach((field) => renderIconField(field));
+}
+
+/**
+ * Patch 0269. Keeps the native color swatch and the plain hex text input
+ * in sync both directions -- picking a color updates the text, and typing
+ * a valid 6-digit hex updates the swatch preview. An invalid/partial hex
+ * (still being typed) just doesn't push to the swatch yet rather than
+ * erroring -- readField()/validateEntry (server-side) are what actually
+ * enforce the final format on save, this is just live convenience.
+ */
+function wireColorFields(container) {
+  container.querySelectorAll('.color-field').forEach((field) => {
+    const swatch = field.querySelector('[data-color-swatch]');
+    const text = field.querySelector('[data-color-text]');
+    swatch.oninput = () => { text.value = swatch.value; };
+    text.oninput = () => {
+      if (/^#[0-9a-fA-F]{6}$/.test(text.value.trim())) swatch.value = text.value.trim();
+    };
+  });
 }
 
 /* ------------------------------------------------- guildhall bg field --- */
@@ -1156,6 +1200,7 @@ function renderBannerField(field) {
     </div>
     <div class="banner-field-controls">
       <span class="banner-field-name">${override ? escapeHtml(override) : (defaultPath ? `Using default: ${escapeHtml(defaultPath)}` : 'Set an id first to see the default path')}</span>
+      ${field.dataset.previewSize ? `<span class="banner-field-size tiny muted">Recommended source size: ${escapeHtml(field.dataset.previewSize)}</span>` : ''}
       <span class="banner-field-focus tiny muted" data-focus-readout>Focus: ${Math.round(fx)}%, ${Math.round(fy)}% · Zoom: ${Math.round(scale)}%</span>
       <label class="banner-zoom-row tiny muted">
         Zoom
@@ -1630,6 +1675,7 @@ function renderDecorationField(field) {
     </div>
     <div class="banner-field-controls">
       <span class="banner-field-name">${override ? escapeHtml(override) : 'No art assigned'}</span>
+      ${field.dataset.previewSize ? `<span class="banner-field-size tiny muted">Recommended source size: ${escapeHtml(field.dataset.previewSize)}</span>` : ''}
       <span class="banner-field-focus tiny muted" data-focus-readout>Offset: ${Math.round(fx)}%, ${Math.round(fy)}% · Scale: ${Math.round(scale)}%</span>
       <label class="banner-zoom-row tiny muted">
         Scale
@@ -1994,6 +2040,7 @@ function wireResultGemInput(container) {
 
 function readField(spec, key) {
   const el = document.getElementById(`f_${key}`);
+  if (spec.type === 'color') return el.querySelector('[data-color-text]').value.trim();
   if (spec.picker === 'icon') return el.dataset.value || '';
   if (spec.picker === 'guildhallBg') return el.dataset.value || '';
   if (spec.picker === 'lootTable') return el.__getLootValue ? el.__getLootValue() : [];
@@ -2135,6 +2182,7 @@ function openEditor(index) {
   document.body.appendChild(overlay);
   wireListInput(editor);
   wireIconFields(editor);
+  wireColorFields(editor);
   wireGuildhallBgFields(editor);
   wireBannerFields(editor);
   wireDecorationFields(editor);

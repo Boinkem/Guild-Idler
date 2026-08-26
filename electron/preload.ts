@@ -15,6 +15,19 @@ const api = {
    *  the normal width; there's no separate "reset" call, widening back
    *  down to the minimum IS the reset. */
   setIdleWidth: (width: number): Promise<void> => ipcRenderer.invoke('window:setIdleWidth', width),
+  /**
+   * Patch 0269. Idle-mode-only, no-op otherwise -- switches the corner
+   * companion between its normal fixed-size sprite footprint and a
+   * resizable status-list footprint (Settings > Knight -- "Status bars
+   * (corner companion)"). Unlike setIdleWidth above (which only ever
+   * grows/shrinks width programmatically for Raid View), 'status' makes
+   * the window genuinely user-resizable via its OS-level border, since a
+   * plain scrolling-free list of the whole roster needs real vertical
+   * room a request-a-width call alone can't provide. See main.ts's own
+   * window:setIdleDisplay handler for the full resizable/remembered-size
+   * behavior.
+   */
+  setIdleDisplay: (kind: 'sprite' | 'status'): Promise<void> => ipcRenderer.invoke('window:setIdleDisplay', kind),
   setAlwaysOnTop: (value: boolean): Promise<boolean> => ipcRenderer.invoke('window:setAlwaysOnTop', value),
   getAlwaysOnTop: (): Promise<boolean> => ipcRenderer.invoke('window:getAlwaysOnTop'),
   /** Menu-mode-only -- see main.ts's own window:setFullscreen handler for

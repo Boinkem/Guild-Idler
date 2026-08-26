@@ -1,0 +1,1474 @@
+diff --git a/electron/main.ts b/electron/main.ts
+index 370ce28..1c6664a 100644
+--- a/electron/main.ts
++++ b/electron/main.ts
+@@ -132,6 +132,20 @@ function loadAppIcon() {
+  *  multi-banner edge case. */
+ const IDLE_SIZE = { width: 260, height: 340 };
+ const MENU_SIZE = { width: 1350, height: 930 };
++/**
++ * Patch 0269: the "Status bars (corner companion)" display mode's own
++ * size story -- see window:setIdleDisplay below. STATUS_MIN_SIZE is a
++ * floor (same concept as MENU_MIN_SIZE just above), small enough that a
++ * couple of roster rows still fit; STATUS_DEFAULT_SIZE is the starting
++ * point on first use, roomy enough to show a handful of heroes without
++ * immediately needing to drag it bigger. Both are just starting/floor
++ * values -- a user-resized size (statusWidth/statusHeight in Settings,
++ * same persistence shape menuWidth/menuHeight already have) takes over
++ * from STATUS_DEFAULT_SIZE the moment one exists, exactly like menuSize
++ * already does for the big menu window.
++ */
++const STATUS_MIN_SIZE = { width: 220, height: 160 };
++const STATUS_DEFAULT_SIZE = { width: 300, height: 420 };
+ /** The menu is now user-resizable -- this is a floor, not a cap, so the
+  *  panel layout (nav column + content) never gets squeezed into something
+  *  unusable. No maximum beyond whatever the display itself allows. */
+@@ -151,10 +165,28 @@ let alwaysOnTop = true;
+  */
+ let currentMode: 'idle' | 'menu' = 'idle';
+ let idleBounds: { x: number; y: number } | null = null;
++/**
++ * Patch 0269: which footprint the corner companion shows while
++ * currentMode === 'idle' -- orthogonal to currentMode itself on purpose.
++ * currentMode's job stays exactly "idle vs menu" (the two OS-level window
++ * shapes/behaviors every existing check in this file already branches on);
++ * this is purely "which of the two idle DISPLAYS is showing," so nothing
++ * that already reads currentMode needs to learn about a third value.
++ * Reset to 'sprite' on relaunch same as menuSize/idleBounds's own "starts
++ * fresh, restored from settings inside createWindow" pattern -- see
++ * window:setIdleDisplay below for how a saved statusWidth/statusHeight
++ * actually gets applied once the renderer re-requests 'status' on boot.
++ */
++let idleDisplayKind: 'sprite' | 'status' = 'sprite';
+ /** A user-resized menu size, remembered the same way idleBounds remembers
+  *  position -- null until the user actually resizes it once, at which
+  *  point it takes over from the MENU_SIZE default. */
+ let menuSize: { width: number; height: number } | null = null;
++/** Patch 0269: same remembered-size concept as menuSize just above, for
++ *  the "Status bars (corner companion)" display -- null until the user
++ *  actually resizes it once, at which point it takes over from
++ *  STATUS_DEFAULT_SIZE. */
++let statusSize: { width: number; height: number } | null = null;
+ /** When locked (default), the idle companion can't be dragged at all. */
+ let companionLocked = true;
+ /**
+@@ -259,6 +291,10 @@ interface Settings {
+    *  resets every session would feel like it doesn't actually work. */
+   menuWidth?: number;
+   menuHeight?: number;
++  /** Patch 0269: same persisted-resize philosophy as menuWidth/menuHeight
++   *  above, for the "Status bars (corner companion)" display. */
++  statusWidth?: number;
++  statusHeight?: number;
+ }
+ 
+ async function readSettings(): Promise<Settings> {
+@@ -315,6 +351,10 @@ async function createWindow() {
+   menuSize = settings.menuWidth != null && settings.menuHeight != null
+     ? { width: settings.menuWidth, height: settings.menuHeight }
+     : null;
++  statusSize = settings.statusWidth != null && settings.statusHeight != null
++    ? { width: settings.statusWidth, height: settings.statusHeight }
++    : null;
++  idleDisplayKind = 'sprite';
+ 
+   // Clamped here, not just used raw -- confirmed as the actual root cause of
+   // the companion appearing completely absent (not blank, genuinely
+@@ -454,34 +494,58 @@ async function createWindow() {
+ 
+   win.on('resized', async () => {
+     if (!win) return;
+-    // The idle companion is never resizable (see window:setMode), so this
+-    // only ever fires in menu mode in practice -- checked anyway, same
+-    // defensive shape as the moved listener above, in case that ever
+-    // changes.
+-    if (currentMode !== 'menu') return;
+-    // A fullscreen toggle fires its own 'resized' event (Chromium reports
+-    // the new fullscreen bounds as a resize) -- that's not the player
+-    // choosing a new windowed size, so it must never overwrite the
+-    // remembered menuWidth/menuHeight the way a genuine drag-to-resize
+-    // would. Exiting fullscreen back to the windowed size fires another
+-    // 'resized' event of its own, which is also skipped here since it's
+-    // just restoring the size already on disk, not a new one to save.
+-    if (win.isFullScreen()) return;
+-    // See suppressNextResizeSave's own comment -- this specific resize was
+-    // very likely Windows rescaling the window for a new display's DPI
+-    // scale factor, not the player dragging an edge. The window's actual
+-    // on-screen size is left exactly as Windows/Chromium already set it;
+-    // only the write to disk is skipped, so the player's real, previously
+-    // chosen size survives to be restored next time menu mode opens
+-    // (see window:setMode's own `menuSize ?? MENU_SIZE` fallback) instead
+-    // of being overwritten by whatever this move happened to rescale to.
+-    if (suppressNextResizeSave) {
+-      suppressNextResizeSave = false;
++    // Patch 0269: the idle companion is now genuinely resizable while
++    // showing the "Status bars" display (see window:setIdleDisplay below)
++    // -- this listener used to assume 'menu' was the only mode that could
++    // ever fire it (the plain sprite companion still isn't resizable, so
++    // that assumption stays correct for THAT display specifically). Two
++    // separate remembered-size branches below, one per resizable display,
++    // rather than trying to force them through one shared code path --
++    // menu's fullscreen-guard genuinely doesn't apply to the idle window
++    // (never fullscreenable in the first place, see window:setMode), so
++    // sharing the branch would mean a fullscreen check that's dead code
++    // on one side of it.
++    if (currentMode === 'menu') {
++      // A fullscreen toggle fires its own 'resized' event (Chromium reports
++      // the new fullscreen bounds as a resize) -- that's not the player
++      // choosing a new windowed size, so it must never overwrite the
++      // remembered menuWidth/menuHeight the way a genuine drag-to-resize
++      // would. Exiting fullscreen back to the windowed size fires another
++      // 'resized' event of its own, which is also skipped here since it's
++      // just restoring the size already on disk, not a new one to save.
++      if (win.isFullScreen()) return;
++      // See suppressNextResizeSave's own comment -- this specific resize was
++      // very likely Windows rescaling the window for a new display's DPI
++      // scale factor, not the player dragging an edge. The window's actual
++      // on-screen size is left exactly as Windows/Chromium already set it;
++      // only the write to disk is skipped, so the player's real, previously
++      // chosen size survives to be restored next time menu mode opens
++      // (see window:setMode's own `menuSize ?? MENU_SIZE` fallback) instead
++      // of being overwritten by whatever this move happened to rescale to.
++      if (suppressNextResizeSave) {
++        suppressNextResizeSave = false;
++        return;
++      }
++      const [width, height] = win.getSize();
++      menuSize = { width, height };
++      await writeSettings({ menuWidth: width, menuHeight: height });
++      return;
++    }
++    if (currentMode === 'idle' && idleDisplayKind === 'status') {
++      // Same DPI-rescale guard as the menu branch above -- a cross-monitor
++      // move can fire a native resize that isn't the player dragging an
++      // edge, and that shouldn't overwrite their real chosen size either.
++      if (suppressNextResizeSave) {
++        suppressNextResizeSave = false;
++        return;
++      }
++      const [width, height] = win.getSize();
++      statusSize = { width, height };
++      await writeSettings({ statusWidth: width, statusHeight: height });
+       return;
+     }
+-    const [width, height] = win.getSize();
+-    menuSize = { width, height };
+-    await writeSettings({ menuWidth: width, menuHeight: height });
++    // Plain sprite idle display is never resizable (see window:setMode /
++    // window:setIdleDisplay) -- nothing to persist for it.
+   });
+ 
+   /**
+@@ -669,15 +733,30 @@ ipcMain.handle('window:setMode', (_e, mode: 'idle' | 'menu') => {
+     // clean bottom-right-of-activeDisplay position reads as correct
+     // instead of janky in that case, and keeps idle/menu correlated to
+     // whichever screen the player is actually working on.
++    //
++    // Patch 0269: returning to idle mode needs to restore whichever idle
++    // DISPLAY was actually showing before the menu opened, not always the
++    // plain fixed-size sprite footprint -- a player who had Status Bars
++    // on, opened the menu, then closed it again should land back in the
++    // resizable status view at its own remembered size, not get silently
++    // reset to the sprite companion.
++    const restoreSize = idleDisplayKind === 'status' ? (statusSize ?? STATUS_DEFAULT_SIZE) : IDLE_SIZE;
++    const restoreMin = idleDisplayKind === 'status' ? STATUS_MIN_SIZE : IDLE_SIZE;
++    const size = idleDisplayKind === 'status'
++      ? {
++        width: Math.max(restoreMin.width, Math.min(restoreSize.width, activeDisplay.workArea.width)),
++        height: Math.max(restoreMin.height, Math.min(restoreSize.height, activeDisplay.workArea.height)),
++      }
++      : IDLE_SIZE;
+     const home = idleBounds && pointOnDisplay(idleBounds.x, idleBounds.y, activeDisplay)
+       ? idleBounds
+-      : bottomRight(IDLE_SIZE.width, IDLE_SIZE.height, activeDisplay);
+-    const pos = clampToWorkArea(home.x, home.y, IDLE_SIZE.width, IDLE_SIZE.height, activeDisplay);
+-    win.setBounds({ ...pos, ...IDLE_SIZE }, false);
+-    win.setResizable(false);
++      : bottomRight(size.width, size.height, activeDisplay);
++    const pos = clampToWorkArea(home.x, home.y, size.width, size.height, activeDisplay);
++    win.setBounds({ ...pos, ...size }, false);
++    win.setResizable(idleDisplayKind === 'status');
+     win.setMaximizable(false);
+     win.setFullScreenable(false);
+-    win.setMinimumSize(IDLE_SIZE.width, IDLE_SIZE.height);
++    win.setMinimumSize(restoreMin.width, restoreMin.height);
+   }
+   currentMode = mode;
+ });
+@@ -748,7 +827,14 @@ ipcMain.handle('window:getLocked', () => companionLocked);
+  * request something wider than the actual screen has room for.
+  */
+ ipcMain.handle('window:setIdleWidth', (_e, width: number) => {
+-  if (!win || currentMode !== 'idle') return;
++  // Patch 0269: also a no-op while the Status Bars display is showing --
++  // that display is genuinely user-resizable (window:setIdleDisplay
++  // below), and forcing IDLE_SIZE.height back here on every call would
++  // fight a player who's deliberately resized it taller. IdleView.tsx
++  // itself already only ever calls setIdleWidth for Raid View, which is
++  // gated off whenever the status view is on, so this is a defensive
++  // backstop, not something expected to trigger in normal use.
++  if (!win || currentMode !== 'idle' || idleDisplayKind !== 'sprite') return;
+   const activeDisplay = screen.getDisplayMatching(win.getBounds());
+   const clampedWidth = Math.max(IDLE_SIZE.width, Math.min(Math.round(width), activeDisplay.workArea.width));
+   const [curX, curY] = win.getPosition();
+@@ -758,6 +844,53 @@ ipcMain.handle('window:setIdleWidth', (_e, width: number) => {
+   win.setBounds({ ...pos, width: clampedWidth, height: IDLE_SIZE.height }, false);
+ });
+ 
++/**
++ * Patch 0269. Switches the corner companion between its normal fixed-size
++ * sprite footprint and a resizable "Status bars" footprint (Settings >
++ * Knight -- see settings.ts's own idleStatusView comment), without
++ * touching currentMode itself -- see idleDisplayKind's own comment above
++ * for why this stays a separate, orthogonal flag rather than a third
++ * currentMode value. No-op outside idle mode (menu mode has its own
++ * independent, already-resizable story) and no-op with no window, same
++ * defensive shape window:setIdleWidth just above already uses. A repeat
++ * call with the same kind is a no-op too -- toggling the setting off and
++ * back on with nothing else happening shouldn't reset a size the player
++ * hasn't actually changed.
++ */
++ipcMain.handle('window:setIdleDisplay', (_e, kind: 'sprite' | 'status') => {
++  if (!win || currentMode !== 'idle' || kind === idleDisplayKind) return;
++  const activeDisplay = screen.getDisplayMatching(win.getBounds());
++
++  if (kind === 'status') {
++    // Anchor the top-left corner where the companion already is, same
++    // "grow from where you are" philosophy setIdleWidth's own right-edge
++    // anchoring uses -- the companion shouldn't visually jump to a new
++    // spot just because the display mode changed under it.
++    const [x, y] = win.getPosition();
++    win.setMinimumSize(STATUS_MIN_SIZE.width, STATUS_MIN_SIZE.height);
++    win.setResizable(true);
++    const requested = statusSize ?? STATUS_DEFAULT_SIZE;
++    const size = {
++      width: Math.max(STATUS_MIN_SIZE.width, Math.min(requested.width, activeDisplay.workArea.width)),
++      height: Math.max(STATUS_MIN_SIZE.height, Math.min(requested.height, activeDisplay.workArea.height)),
++    };
++    const pos = clampToWorkArea(x, y, size.width, size.height, activeDisplay);
++    win.setBounds({ ...pos, ...size }, false);
++  } else {
++    // Returning to the plain sprite display -- same restore-to-IDLE_SIZE
++    // shape window:setMode's own idle branch already uses, anchored at
++    // the window's current position rather than jumping back to the
++    // remembered idleBounds (which may be stale if the status window was
++    // dragged around while resizable).
++    const [x, y] = win.getPosition();
++    win.setResizable(false);
++    win.setMinimumSize(IDLE_SIZE.width, IDLE_SIZE.height);
++    const pos = clampToWorkArea(x, y, IDLE_SIZE.width, IDLE_SIZE.height, activeDisplay);
++    win.setBounds({ ...pos, ...IDLE_SIZE }, false);
++  }
++  idleDisplayKind = kind;
++});
++
+ ipcMain.handle('window:minimize', () => win?.minimize());
+ ipcMain.handle('window:quit', () => app.quit());
+ 
+diff --git a/electron/preload.ts b/electron/preload.ts
+index 45b394c..3c8b471 100644
+--- a/electron/preload.ts
++++ b/electron/preload.ts
+@@ -15,6 +15,19 @@ const api = {
+    *  the normal width; there's no separate "reset" call, widening back
+    *  down to the minimum IS the reset. */
+   setIdleWidth: (width: number): Promise<void> => ipcRenderer.invoke('window:setIdleWidth', width),
++  /**
++   * Patch 0269. Idle-mode-only, no-op otherwise -- switches the corner
++   * companion between its normal fixed-size sprite footprint and a
++   * resizable status-list footprint (Settings > Knight -- "Status bars
++   * (corner companion)"). Unlike setIdleWidth above (which only ever
++   * grows/shrinks width programmatically for Raid View), 'status' makes
++   * the window genuinely user-resizable via its OS-level border, since a
++   * plain scrolling-free list of the whole roster needs real vertical
++   * room a request-a-width call alone can't provide. See main.ts's own
++   * window:setIdleDisplay handler for the full resizable/remembered-size
++   * behavior.
++   */
++  setIdleDisplay: (kind: 'sprite' | 'status'): Promise<void> => ipcRenderer.invoke('window:setIdleDisplay', kind),
+   setAlwaysOnTop: (value: boolean): Promise<boolean> => ipcRenderer.invoke('window:setAlwaysOnTop', value),
+   getAlwaysOnTop: (): Promise<boolean> => ipcRenderer.invoke('window:getAlwaysOnTop'),
+   /** Menu-mode-only -- see main.ts's own window:setFullscreen handler for
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 116237b..b2deef0 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -560,7 +560,10 @@ new tunables in the `quests` category (`quest.easyBurstChanceTier1-4`,
+ `quest.easyMediumChanceTier1-4`).
+ 
+ **Heroes** — recruiting, leveling, stat allocation, injuries, skins,
+-ascension/prestige, retirement with streak bonus.
++ascension/prestige, retirement with streak bonus. Each class now carries
++its own DevTool-editable color + optional icon (patch 0269), surfaced as
++a colored avatar circle on the new roster/companion "Status bars" views
++-- see "Hero status bars" below.
+ 
+ **Equipment** — rarities, set bonuses, repair/refine, shop + black market
+ rotation, `raidExclusive` flag (Heroic/Mythic tiered variants can no
+@@ -21261,3 +21264,215 @@ Every new gold-crediting call site was checked by hand against the
+ existing `state.gold = Math.min(storage, ...)` pattern at that exact
+ line, not grepped-and-assumed -- all eight Grimsby sites, both raid and
+ both quest sites, and both Shop sell paths.
++
++### Hero status bars: roster + corner companion toggles, class colors/icons, DevTool picker size labels (patch 0269)
++```discord-update
++Dev Update | Status Bars
++
++- New Settings > Knight > "Status bars (roster)" -- swaps the Heroes tab's sprite cards for a compact list: name, status, and a progress bar for every hero, sorted soonest-finishing first
++- New Settings > Knight > "Status bars (corner companion)" -- same list on the corner companion instead of the cycling hero sprite, and makes that window resizable while it's on
++- Every hero class now has its own color-coded avatar (with an optional icon), editable in DevTools
++- DevTools image pickers now show the recommended pixel size next to the preview, so art always gets uploaded at the right resolution
++```
++
++Direct feature request, mocked up in chat (roster list, then the
++companion window specifically) before any code was written. Three
++follow-up asks folded in during scoping: sort order (soonest-completing/
++completed first), a colored-per-class avatar with an optional icon
++rather than a plain glyph, and -- separately -- a general DevTools gap
++("the picker doesn't say what size the image should be") extended to
++every image picker in the tool, not just this feature's own new one.
++
++**Pulled the live repo fresh before starting, not project knowledge.**
++The chat's own project knowledge doc was badly stale against this file
++(missing everything from roughly patch 0200 onward) -- confirmed via a
++real `git clone` against the actual GitHub repo before touching
++anything, per this file's own "Patch workflow" instructions at the top.
++Every source file referenced below (`electron/main.ts`, `IdleView.tsx`,
++`HeroesPanel.tsx`, `hero-classes.json`, `tools/devtool/server.mjs`/
++`app.js`) was read from that fresh clone, not assumed from memory or an
++earlier summary.
++
++**New shared component, one implementation for both surfaces**
++(`src/ui/HeroStatusBar.tsx`) -- `heroStatusInfo()` computes one hero's
++current status/percent/time-label/sort-kind (questing, raiding, Fallen,
++or idle), `sortedHeroStatuses()` sorts a whole roster by it, and
++`HeroStatusRow`/`HeroStatusList` render it. One implementation rather
++than two near-identical ones so "what counts as ready, what a Fallen
++hero's bar shows" can't quietly drift apart between the roster and
++companion versions over time -- the same reasoning `RaidPartySprites`
++already established for its own two call sites (companion + Raids tab).
++
++- **Sort order** (direct request): anything already at 0 remaining
++  ("Ready to claim") floats to the very top, then active quest/raid
++  timers ascending by time left, then Fallen, then plain Idle heroes
++  last -- an idle hero has nothing to check back on, so it's the least
++  useful row to see first in a list that exists specifically to answer
++  "what's about to finish."
++- **Fallen heroes get an honest percentage, not a fake one.** Only
++  reachable once Infirmary's free auto-revive path is actually unlocked
++  (`infirmaryAutoReviveUnlocked`, same gate `HeroManager.autoReviveDue`
++  already checks) -- below max Infirmary level there is no free timer
++  running at all, so the bar sits at a flat 0% with just a "Fallen"
++  label rather than implying progress toward something that isn't
++  happening on its own.
++- **Raids** read `state.activeRaid` directly (never populate
++  `activeQuestFor`, same distinction `IdleView.tsx`'s own `busy` flag
++  already has to account for) -- percent/remaining come from the raid's
++  shared `startedAt`/`endsAt`, same for every hero in the party.
++- **Class avatar** -- a colored circle (`HeroClassDef.color`) with an
++  optional pixel-art overlay (`HeroClassDef.icon`, empty string = no
++  icon, falls back to a plain color circle, same graceful-missing-asset
++  convention every other optional icon field in this project already
++  follows).
++- **Bar tint reuses the existing shared `.bar` CSS class** (the same one
++  XP/Durability/Health already build on) rather than inventing new
++  track/fill class names -- `.bar` default (moss) for Ready, `.bar.xp`
++  (sky) for an in-progress quest/raid, `.bar.dura.low` (blood red,
++  borrowed from Durability's own "critical" tint) for Fallen. Gets the
++  existing width transition and `data-motion='off'` accessibility
++  override for free, and reads as visually consistent with every other
++  bar in the game rather than a fourth bespoke color scheme.
++
++**`HeroClassDef` gained `color` (required) and `icon` (optional)**
++(`progression.ts`, `hero-classes.json`, all 13 classes). `color` is
++required, not optional like `icon` -- every class needs SOME color for
++its avatar circle to render as anything but blank, so there's no
++sensible "unset" state the way a missing icon can just fall back to a
++bare circle. All 13 base classes assigned a distinct, thematic hex
++(steel blue for Knight, fire orange for Pyromancer, swamp green for
++Lizardman, etc.) -- purely a starting point, fully re-editable in
++DevTools like any other data-driven field now that this migrated off a
++hardcoded Record. `icon` reuses the existing `picker: 'icon'`
++(ICONS_DIR/`item-icons`, 16x16) rather than inventing a new folder for
++13 icons, same "don't invent a new picker for a handful of icons"
++precedent the `roles` schema's own `icon` field already set -- shipped
++blank (no icon assigned) for every class, so the roster/companion views
++render as plain color circles until someone picks icons in DevTools.
++
++**DevTools: new `color` field type** (`server.mjs`/`app.js`) -- a native
++color-swatch input paired with a plain hex text field kept in sync both
++directions, same "two controls, one value" pairing a slider+readout
++already uses elsewhere on this page. Validated server-side as a strict
++6-digit hex (`/^#[0-9a-fA-F]{6}$/`); the text field (not the swatch) is
++what actually gets saved, so a hand-typed/pasted hex value works
++identically to using the picker.
++
++**DevTools: every image picker now shows its recommended size.** The
++direct ask ("the picker doesn't say what size the image should be")
++applied cleanly to every existing image field, not just this feature's
++new one -- a new optional `previewSize` schema hint, threaded through
++`data-preview-size` the same way `previewAspect` already threads
++through `data-preview-aspect`, rendered as a small caption under each
++preview box. Purely advisory text, not validated or enforced -- any
++image still uploads and crops fine regardless of its real dimensions,
++same as before this field existed.
++
++- **Plain icon fields** (all 8: `hero-classes`, `roles`, `equipment`,
++  `consumables`, `curios`, `materials`, `peddler-cards`,
++  `crafting-recipes`) -- confirmed the real on-disk assets in
++  `public/item-icons/` are 16x16 pixel art, so all 8 got
++  `previewSize: '16x16'` rather than a guessed number.
++- **Banner/decoration fields** (quest-chains, quest-tags, raids banners;
++  guild-hall-decorations image) -- each got a recommended source
++  resolution matching its own `previewAspect` shape (e.g. quest-chains'
++  8/1 strip -> "~1600x200px"), a plain-English number an artist can
++  actually export to, on top of the aspect ratio that only tells them
++  the shape to crop.
++
++**Settings** (`settings.ts`) -- two new booleans, `heroStatusBars`
++(roster) and `idleStatusView` (companion), both defaulting `false` --
++the sprite views are the existing, familiar look; this is an alternate
++density/info trade-off, not a strict upgrade for everyone, same "opt-in,
++not opt-out" treatment a genuinely optional display change gets
++(contrast with `hideHeroSprite`/`raidPartyView`, which are themselves
++opt-OUT of an existing default look).
++
++**`HeroesPanel.tsx`.** `settings.heroStatusBars` swaps the entire
++per-hero card grid for `<HeroStatusList>` -- a full replacement, not a
++per-card toggle, since the whole point is a faster "what's about to
++finish" scan across the roster that a card-by-card sprite swap wouldn't
++give. Recruiting/Compare Heroes/tombstone-style controls above the grid
++stay visible either way; only the roster body itself swaps.
++
++**Corner companion -- a real architecture decision, discussed and
++confirmed before building rather than assumed.** The original ask
++("load a second window, resizable") doesn't match how this app is
++actually built: there is no second `BrowserWindow` anywhere in
++`electron/main.ts` today, only one window that flips between an `'idle'`
++and a `'menu'` mode (`window:setMode`) -- and that single window already
++carries all the position-memory, cross-monitor clamping, always-on-top,
++and single-instance logic. A literal second window would have meant
++either duplicating that machinery or refactoring it to be shared, for
++something that behaves identically to a mode switch from the player's
++side. Implemented instead as a new, orthogonal `idleDisplayKind: 'sprite'
++| 'status'` flag alongside `currentMode`, deliberately NOT a third
++`currentMode` value -- `currentMode`'s job stays exactly "idle vs menu,"
++the two OS-level window shapes/behaviors every existing check in the
++file already branches on, so nothing that already reads `currentMode`
++needed to learn about a third value.
++
++- **New `window:setIdleDisplay` IPC handler** (`main.ts`) -- idle-mode-
++  only, no-op otherwise. Switching to `'status'` makes the window
++  genuinely user-resizable (`setResizable(true)`, a `STATUS_MIN_SIZE`
++  floor), sized from a remembered `statusWidth`/`statusHeight` (same
++  persistence shape `menuWidth`/`menuHeight` already have for the menu
++  window) or a `STATUS_DEFAULT_SIZE` starting point, anchored at the
++  window's current top-left rather than jumping to a new spot.
++  Switching back to `'sprite'` restores the fixed `IDLE_SIZE` and
++  `setResizable(false)`, same shape `window:setMode`'s own idle branch
++  already uses.
++- **`resized` listener extended**, not replaced -- it used to assume
++  `'menu'` was the only mode that could ever fire it (true for the plain
++  sprite display, which still isn't resizable) and now has a second
++  branch that persists `statusWidth`/`statusHeight` when
++  `idleDisplayKind === 'status'`, with its own copy of the existing
++  cross-monitor DPI-rescale guard (`suppressNextResizeSave`) rather than
++  trying to force both branches through one shared code path -- the
++  menu branch's fullscreen-guard genuinely doesn't apply to the idle
++  window (never fullscreenable in the first place), so sharing it would
++  mean dead code on one side.
++- **`window:setMode`'s own return-to-idle branch updated** so closing
++  the menu restores whichever idle display was actually showing before
++  it opened, not always the plain sprite footprint -- a player with
++  Status Bars on who opens then closes the guild menu lands back in the
++  resizable status view at its own remembered size, not silently reset
++  to the sprite companion.
++- **`window:setIdleWidth` (Raid View's own width-request call) now also
++  no-ops while the status display is showing** -- that display is
++  genuinely user-resizable, and forcing `IDLE_SIZE.height` back on every
++  call would fight a player who's deliberately resized it taller.
++  `IdleView.tsx` already gates Raid View off whenever the status view is
++  on, so this is a defensive backstop, not expected to trigger in normal
++  use.
++- **`preload.ts`/`SaveManager.ts`'s ambient `Window.littleKnight` type**
++  both gained the new `setIdleDisplay(kind)` method, same shape every
++  other IPC bridge method on this object already follows.
++
++**`IdleView.tsx`.** `settings.idleStatusView` takes priority over both
++Raid View (a sorted status list already covers "who's raiding" as one
++row among many -- nothing left for Raid View to add on top of it) and
++`hideHeroSprite` (the status list is a full replacement for the sprite
++area, not something that needs the sprite separately hidden). A new
++early return renders `<HeroStatusList compact>` plus the existing
++`idle-actions` row (Open guild / lock / hide) -- deliberately no pet,
++carousel, or away/chain/raid/hatch banners here, since all of those
++assume a single "current hero" the sprite view is built around, and the
++roster's own Status Bars view has no equivalent for them either, so this
++isn't a regression relative to that surface. A small effect calls the
++new `setIdleDisplay` IPC on mount/toggle and always restores `'sprite'`
++on the way out (setting flipped off, or the component unmounting),
++same "always clean up" shape the existing Raid View width effect
++already follows.
++
++**New CSS** (`app.css`) -- `.hero-status-list`/`.hero-status-row`/etc.
++for the shared component (with a `.compact` modifier for the companion),
++built on the existing `.bar` class rather than new bar markup (see
++above), plus `.idle-status-stage` for the companion's alternate layout.
++Placed alongside the existing Raid View party-row rules, same "one
++component styled once" convention.
++
++**Verified:** `npx tsc --noEmit` and a full `vite build` (including both
++Electron sub-builds, main and preload) all pass clean against the real,
++freshly-cloned repo. `node --check` passes on both `tools/devtool/
++server.mjs` and `tools/devtool/public/app.js`.
+diff --git a/src/game/data/json/hero-classes.json b/src/game/data/json/hero-classes.json
+index 28800cb..99d2cd2 100644
+--- a/src/game/data/json/hero-classes.json
++++ b/src/game/data/json/hero-classes.json
+@@ -2,6 +2,8 @@
+   {
+     "id": "adventurer",
+     "name": "Adventurer",
++    "color": "#8c8172",
++    "icon": "",
+     "blurb": "No banner, no order, just grit and a willingness to go first. The guild starts here.",
+     "baseStats": {
+       "strength": 6,
+@@ -52,6 +54,8 @@
+   {
+     "id": "knight",
+     "name": "Knight",
++    "color": "#3f6fb0",
++    "icon": "",
+     "blurb": "Sworn, drilled, and reliable in a way freelancers rarely are. Cheap for what it brings.",
+     "baseStats": {
+       "strength": 6,
+@@ -99,6 +103,8 @@
+   {
+     "id": "dwarf",
+     "name": "Dwarf Warrior",
++    "color": "#b06a2c",
++    "icon": "",
+     "blurb": "A wall with an axe. Almost impossible to put down, in no particular hurry.",
+     "baseStats": {
+       "strength": 7,
+@@ -146,6 +152,8 @@
+   {
+     "id": "gladiator",
+     "name": "Gladiator",
++    "color": "#a83232",
++    "icon": "",
+     "blurb": "Sword, net, and a bow for the ones that run. Fast and greedy for spoils.",
+     "baseStats": {
+       "strength": 7,
+@@ -193,6 +201,8 @@
+   {
+     "id": "samurai",
+     "name": "Samurai",
++    "color": "#5b4a9c",
++    "icon": "",
+     "blurb": "One clean strike. Prizes a perfect kill and the rare blade it earns.",
+     "baseStats": {
+       "strength": 9,
+@@ -239,6 +249,8 @@
+   {
+     "id": "witch",
+     "name": "Witch",
++    "color": "#8e3f9c",
++    "icon": "",
+     "blurb": "Hexes, bargains, and a nose for what a ruin is really worth. Fragile.",
+     "baseStats": {
+       "strength": 3,
+@@ -288,6 +300,8 @@
+   {
+     "id": "lizardman",
+     "name": "Lizardman",
++    "color": "#4d7a3a",
++    "icon": "",
+     "blurb": "Scales, claws, and a swamp-born refusal to die. Little sense for coin.",
+     "baseStats": {
+       "strength": 8,
+@@ -336,6 +350,8 @@
+   {
+     "id": "pyromancer",
+     "name": "Pyromancer",
++    "color": "#d9662b",
++    "icon": "",
+     "blurb": "Answers every problem with fire. Devastating, and made of paper.",
+     "baseStats": {
+       "strength": 4,
+@@ -383,6 +399,8 @@
+   {
+     "id": "wizard",
+     "name": "Wizard",
++    "color": "#6a4fc4",
++    "icon": "",
+     "blurb": "Decades of study in a pointed hat. Unmatched on anything arcane.",
+     "baseStats": {
+       "strength": 3,
+@@ -432,6 +450,8 @@
+   {
+     "id": "huge_knight",
+     "name": "Huge Knight",
++    "color": "#5c5347",
++    "icon": "",
+     "blurb": "Bigger than the armor should allow, and somehow still moving. Nothing gets past him twice.",
+     "baseStats": {
+       "strength": 10,
+@@ -482,6 +502,8 @@
+   {
+     "id": "kobold",
+     "name": "Kobold Warrior",
++    "color": "#8a9a3a",
++    "icon": "",
+     "blurb": "Small, fast, and armed with three separate ways to be somewhere else by the time you notice him.",
+     "baseStats": {
+       "strength": 6,
+@@ -532,6 +554,8 @@
+   {
+     "id": "minotaur",
+     "name": "Minotaur",
++    "color": "#7a3b2e",
++    "icon": "",
+     "blurb": "One very large axe and a complete unwillingness to plan past the first swing.",
+     "baseStats": {
+       "strength": 14,
+@@ -582,6 +606,8 @@
+   {
+     "id": "werewolf",
+     "name": "Werewolf",
++    "color": "#5a6b7a",
++    "icon": "",
+     "blurb": "Kept his mind when the change should have taken it. Still working out what that costs him.",
+     "baseStats": {
+       "strength": 10,
+@@ -628,4 +654,4 @@
+     "milestoneUnlockDescription": "Complete The Kindred Moon quest chain.",
+     "milestoneGoldCost": 3000
+   }
+-]
+\ No newline at end of file
++]
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 9b4a535..2a79185 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -756,6 +756,25 @@ export function renownCost(def: RenownPerkDef, currentLevel: number): number {
+ export interface HeroClassDef {
+   id: HeroClass;
+   name: string;
++  /**
++   * Patch 0269: the color-coded circle avatar this class shows on the new
++   * roster/companion status-bar views (Settings > Knight -- "Status
++   * bars"). A plain 6-digit hex string, editable in DevTools same as any
++   * other data-driven field now that this migrated off a hardcoded
++   * Record -- see hero-classes' own DevTool schema comment.
++   */
++  color: string;
++  /**
++   * Optional pixel-art overlay inside that same colored circle -- an
++   * item-icons path (same convention/folder every other `picker: 'icon'`
++   * field already uses), or empty string for "no icon, just the plain
++   * color circle." Never null/undefined: `hero-classes.json` always
++   * carries this key (blank string when unset), same "always present,
++   * blank means unset" convention `icon` fields elsewhere in this file
++   * already follow, so call sites can read it directly without an
++   * `?? ''` fallback at every use.
++   */
++  icon: string;
+   blurb: string;
+   baseStats: Stats;
+   growth: Stats;
+diff --git a/src/game/managers/SaveManager.ts b/src/game/managers/SaveManager.ts
+index c32c640..66a72cb 100644
+--- a/src/game/managers/SaveManager.ts
++++ b/src/game/managers/SaveManager.ts
+@@ -27,6 +27,11 @@ declare global {
+       /** Idle-mode-only, no-op otherwise. Pass 260 (IDLE_SIZE.width) to
+        *  restore the normal companion width. */
+       setIdleWidth(width: number): Promise<void>;
++      /** Patch 0269. Idle-mode-only, no-op otherwise -- switches the corner
++       *  companion between its fixed-size sprite footprint and a resizable
++       *  status-list footprint. See electron/main.ts's own
++       *  window:setIdleDisplay handler and preload.ts's matching comment. */
++      setIdleDisplay(kind: 'sprite' | 'status'): Promise<void>;
+       setAlwaysOnTop(value: boolean): Promise<boolean>;
+       getAlwaysOnTop(): Promise<boolean>;
+       setFullscreen(value: boolean): Promise<boolean>;
+diff --git a/src/game/settings.ts b/src/game/settings.ts
+index 8b20b85..92eb708 100644
+--- a/src/game/settings.ts
++++ b/src/game/settings.ts
+@@ -123,6 +123,31 @@ export interface Settings {
+    */
+   raidPartyView: boolean;
+ 
++  /**
++   * Replaces the per-hero sprite thumbnail on the Heroes roster (Guild
++   * Hall) with a compact status-bar row for every hero instead: name,
++   * current status (questing/raiding/harvesting/injured/idle), and a
++   * progress bar showing percent complete + time remaining. Off by
++   * default -- the sprite grid is the existing, familiar view; this is an
++   * alternate density/info trade-off, not a strict upgrade for everyone.
++   * Independent of hideHeroSprite above, which only affects the corner
++   * companion, not the roster.
++   */
++  heroStatusBars: boolean;
++  /**
++   * Same status-bar-list treatment as heroStatusBars above, but for the
++   * corner companion window instead of the roster: replaces the single
++   * cycling hero sprite (and Raid View, if that's also on) with the same
++   * sorted status list. Because a plain list needs more room than the
++   * companion's normal tiny fixed footprint to be readable without
++   * scrolling, turning this on also makes the companion window
++   * resizable for as long as it's on (see electron/main.ts's
++   * `window:setIdleDisplay` handler) -- dragging it back down small is
++   * fine, nothing is lost, the list just becomes more cramped. Off by
++   * default, same reasoning as heroStatusBars.
++   */
++  idleStatusView: boolean;
++
+   /** Animation speed multiplier; 0 disables idle bobbing entirely. */
+   animationSpeed: number;     // 0, 0.5, 1, 1.5
+ 
+@@ -185,6 +210,8 @@ export const DEFAULT_SETTINGS: Settings = {
+   hideHeroSprite: false,
+   hidePetSprite: false,
+   raidPartyView: true,
++  heroStatusBars: false,
++  idleStatusView: false,
+   animationSpeed: 1,
+   offlineReportOnLaunch: true,
+   questResultPopups: true,
+diff --git a/src/styles/app.css b/src/styles/app.css
+index 563bb8e..462708b 100644
+--- a/src/styles/app.css
++++ b/src/styles/app.css
+@@ -2200,6 +2200,92 @@ input[type='range'] {
+   filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.45));
+ }
+ 
++/*
++ * Status bars (patch 0269) -- HeroStatusBar.tsx's shared list, used both by
++ * the roster's "Status bars" toggle (HeroesPanel.tsx, full-width, roomier
++ * spacing) and the corner companion's own toggle (IdleView.tsx, `compact`,
++ * inside a genuinely resizable window). One shared rule set with a
++ * `.compact` modifier rather than two separate stylesheets, same "one
++ * component, two call sites" precedent RaidPartySprites already set for
++ * the raid-view sprite row.
++ */
++.hero-status-list {
++  display: flex;
++  flex-direction: column;
++  gap: 10px;
++  width: 100%;
++}
++.hero-status-list.compact {
++  gap: 6px;
++  /* The companion window is genuinely resizable while this is showing
++     (see electron/main.ts's window:setIdleDisplay) -- growing the list to
++     fill whatever height the player drags it to, rather than a fixed
++     height that would either clip rows or leave dead space, is the whole
++     point of making it resizable in the first place. */
++  flex: 1;
++  overflow-y: auto;
++}
++.hero-status-row {
++  display: flex;
++  align-items: center;
++  gap: 10px;
++}
++.hero-status-row.compact { gap: 8px; }
++.hero-status-avatar { overflow: hidden; }
++.hero-status-body { flex: 1; min-width: 0; }
++.hero-status-top {
++  display: flex;
++  align-items: baseline;
++  justify-content: space-between;
++  gap: 8px;
++}
++.hero-status-name {
++  font-size: 0.875rem;
++  font-weight: 600;
++  white-space: nowrap;
++  overflow: hidden;
++  text-overflow: ellipsis;
++}
++.hero-status-row.compact .hero-status-name { font-size: 0.75rem; }
++.hero-status-time {
++  font-size: 0.75rem;
++  color: var(--muted);
++  flex-shrink: 0;
++}
++/* Ready-to-claim and Fallen both get a semantic color instead of the
++   plain muted default -- the two states most worth a glance actually
++   registering ("something needs my attention") rather than blending into
++   every other row's timer readout. */
++.hero-status-time.ready { color: var(--moss); }
++.hero-status-time.fallen { color: var(--blood); }
++.hero-status-subtitle {
++  font-size: 0.75rem;
++  margin: 2px 0 6px;
++}
++.hero-status-row.compact .bar { margin-top: 4px; }
++.hero-status-row .bar { width: 100%; }
++
++/*
++ * Patch 0269 -- the corner companion's status-view layout, an alternate to
++ * .idle-stage rather than a modifier of it (see IdleView.tsx's early
++ * return for showStatusView: this never renders alongside the sprite
++ * carousel, banners, or pet, so there's no shared-cascade risk worth
++ * guarding against the way .idle-root.unlocked's drag-region overrides
++ * have to for the sprite view's many pieces).
++ */
++.idle-status-stage {
++  display: flex;
++  flex-direction: column;
++  height: 100%;
++  width: 100%;
++  padding: 10px;
++  box-sizing: border-box;
++  -webkit-app-region: drag;
++}
++.idle-status-stage .hero-status-list { -webkit-app-region: no-drag; }
++.idle-status-stage .idle-actions { margin-top: 8px; }
++.idle-root.unlocked .idle-status-stage { -webkit-app-region: no-drag; }
++
+ .carousel-arrow {
+   position: absolute;
+   top: 50%;
+diff --git a/src/ui/HeroStatusBar.tsx b/src/ui/HeroStatusBar.tsx
+new file mode 100644
+index 0000000..08f7ed1
+--- /dev/null
++++ b/src/ui/HeroStatusBar.tsx
+@@ -0,0 +1,199 @@
++import type { GameEngine } from '../game/engine';
++import { HERO_CLASSES, infirmaryAutoReviveUnlocked } from '../game/data/progression';
++import { RAID_BY_ID } from '../game/data/raids';
++import { GuildManager } from '../game/managers/GuildManager';
++import { Tuning } from '../game/data/tuning';
++import { Hero } from '../game/types';
++import { formatDuration, MINUTE } from '../game/util';
++
++/**
++ * Patch 0269. One computed row for a single hero, shared by both the
++ * roster's "Status bars" view (HeroesPanel.tsx, Settings > Knight) and the
++ * corner companion's own status view (IdleView.tsx). Kept as one function
++ * rather than two near-identical implementations so "what counts as ready,
++ * what a Fallen hero's bar shows" can't quietly drift apart between the two
++ * surfaces over time.
++ */
++export interface HeroStatusInfo {
++  hero: Hero;
++  /** Short present-tense line: "Questing — <offer name>", "Raiding —
++   *  <raid name>", "Fallen", "Idle", etc. */
++  statusLine: string;
++  /** Right-aligned readout: "32m left", "Ready", "Fallen", "Idle". */
++  timeLabel: string;
++  /** 0-100. */
++  percent: number;
++  /** Milliseconds remaining, used purely for sorting -- 0 for anything
++   *  already finished/ready, Infinity for anything with no timer at all
++   *  (idle, or Fallen with no auto-revive path available yet). */
++  remainingMs: number;
++  /** Which semantic bucket this row's bar should render in -- drives the
++   *  bar's tint the same way DurabilityBar/HealthBar's own `low` class
++   *  already switches color by threshold, just keyed to status instead. */
++  kind: 'quest' | 'raid' | 'ready' | 'fallen' | 'idle';
++}
++
++export function heroStatusInfo(engine: GameEngine, now: number, hero: Hero): HeroStatusInfo {
++  const activeRaid = engine.state.activeRaid;
++  const onRaid = !!activeRaid?.heroIds.includes(hero.id);
++
++  if (hero.status === 'fallen') {
++    // Only a hero with the free Infirmary auto-revive path unlocked has any
++    // real ETA to show -- everyone else is stuck until the player pays or
++    // manually revives, so there's no honest percentage to render for them
++    // (see HeroManager.autoReviveDue's own comment). `fallenAt` is always
++    // set alongside `status === 'fallen'` in practice (HeroManager.
++    // applyHealthDamage sets both together), but optional on the type --
++    // treated as "no ETA available" if somehow missing rather than crashing.
++    const infirmaryLevel = GuildManager.facilityLevel(engine.state, 'infirmary');
++    if (hero.fallenAt && infirmaryAutoReviveUnlocked(infirmaryLevel)) {
++      const hours = Tuning.get('guild_facility.infirmary.autoReviveHours');
++      const totalMs = hours * 60 * MINUTE;
++      const elapsed = now - hero.fallenAt;
++      const pct = Math.max(0, Math.min(100, Math.round((elapsed / totalMs) * 100)));
++      return {
++        hero,
++        statusLine: 'Recovering — cannot be sent',
++        timeLabel: pct >= 100 ? 'Revive ready' : 'Fallen',
++        percent: pct,
++        remainingMs: Math.max(0, totalMs - elapsed),
++        kind: 'fallen',
++      };
++    }
++    // No free auto-revive path available yet (Infirmary below max level) --
++    // there's genuinely no ETA to show, so the bar sits at 0 rather than
++    // implying progress toward something that isn't happening on its own.
++    return {
++      hero, statusLine: 'Recovering — cannot be sent', timeLabel: 'Fallen',
++      percent: 0, remainingMs: Number.POSITIVE_INFINITY, kind: 'fallen',
++    };
++  }
++
++  if (onRaid && activeRaid) {
++    const remaining = Math.max(0, activeRaid.endsAt - now);
++    const total = Math.max(1, activeRaid.endsAt - activeRaid.startedAt);
++    const pct = Math.round(((total - remaining) / total) * 100);
++    const raidName = RAID_BY_ID[activeRaid.raidId]?.name ?? 'a raid';
++    return {
++      hero,
++      statusLine: `Raiding — ${raidName}`,
++      timeLabel: remaining <= 0 ? 'Ready to claim' : `${formatDuration(remaining)} left`,
++      percent: Math.min(100, pct),
++      remainingMs: remaining,
++      kind: remaining <= 0 ? 'ready' : 'raid',
++    };
++  }
++
++  const quest = engine.activeQuestFor(hero.id);
++  if (quest) {
++    const remaining = Math.max(0, quest.endsAt - now);
++    const total = Math.max(1, quest.endsAt - quest.startedAt);
++    const pct = Math.round(((total - remaining) / total) * 100);
++    return {
++      hero,
++      statusLine: `Questing — ${quest.offer.name}`,
++      timeLabel: remaining <= 0 ? 'Ready to claim' : `${formatDuration(remaining)} left`,
++      percent: Math.min(100, pct),
++      remainingMs: remaining,
++      kind: remaining <= 0 ? 'ready' : 'quest',
++    };
++  }
++
++  return {
++    hero, statusLine: 'Available for a contract', timeLabel: 'Idle',
++    percent: 0, remainingMs: Number.POSITIVE_INFINITY, kind: 'idle',
++  };
++}
++
++/**
++ * Sorted soonest-completing/completed-first, per direct request: anything
++ * already at 0 remaining (ready to claim) floats to the very top, then
++ * active timers ascending by time left, then Fallen, then plain Idle heroes
++ * last -- an idle hero has nothing to check back on, so it's the least
++ * useful row to see first in a list that exists specifically to answer
++ * "what's about to finish."
++ */
++export function sortedHeroStatuses(engine: GameEngine, now: number): HeroStatusInfo[] {
++  const order: Record<HeroStatusInfo['kind'], number> = { ready: 0, raid: 1, quest: 1, fallen: 2, idle: 3 };
++  return engine.state.heroes
++    .map((h) => heroStatusInfo(engine, now, h))
++    .sort((a, b) => {
++      const bucket = order[a.kind] - order[b.kind];
++      if (bucket !== 0) return bucket;
++      return a.remainingMs - b.remainingMs;
++    });
++}
++
++/** The colored circle avatar -- class color fill, optional class icon
++ *  overlay (falls back to a plain color-only circle when the class has no
++ *  icon assigned in DevTools yet, same graceful-missing-asset convention
++ *  every other optional icon field in this project already follows). */
++function ClassAvatar({ hero, size }: { hero: Hero; size: number }) {
++  const def = HERO_CLASSES[hero.heroClass];
++  const color = def?.color ?? '#888888';
++  const icon = def?.icon ?? '';
++  return (
++    <div
++      className="hero-status-avatar"
++      style={{
++        width: size, height: size, borderRadius: '50%', background: color,
++        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
++      }}
++    >
++      {icon && (
++        <img
++          src={`./item-icons/${icon}`}
++          alt=""
++          style={{ width: Math.round(size * 0.6), height: Math.round(size * 0.6), imageRendering: 'pixelated' }}
++        />
++      )}
++    </div>
++  );
++}
++
++/** One row: avatar, name + right-aligned time label, status subtitle, and a
++ *  progress bar tinted by `kind`. `compact` shrinks type/spacing for the
++ *  tiny idle companion window; the roster view uses the roomier default.
++ *  Reuses the game's existing shared `.bar` class (same one XP/Durability/
++ *  Health already build on -- see app.css) rather than inventing new
++ *  track/fill class names, so this gets the same width transition and
++ *  `data-motion='off'` accessibility override every other bar already has
++ *  for free. `kind` maps onto a `.bar` variant modifier the same way
++ *  `.bar.dura`/`.bar.health` already switch tint by what they represent:
++ *  quest/raid -> `.bar.xp` (sky blue, "in progress"), ready -> `.bar`
++ *  default (moss green, matches a completed/good state), fallen ->
++ *  `.bar.dura.low` (blood red, matches the existing "critical" tint),
++ *  idle has nothing to fill so it's left at 0% on the plain default tint. */
++export function HeroStatusRow({ info, compact }: { info: HeroStatusInfo; compact?: boolean }) {
++  const avatarSize = compact ? 22 : 32;
++  const barClass = info.kind === 'fallen' ? 'bar dura low' : info.kind === 'quest' || info.kind === 'raid' ? 'bar xp' : 'bar';
++  return (
++    <div className={`hero-status-row ${compact ? 'compact' : ''}`}>
++      <ClassAvatar hero={info.hero} size={avatarSize} />
++      <div className="hero-status-body">
++        <div className="hero-status-top">
++          <span className="hero-status-name">{info.hero.name}</span>
++          <span className={`hero-status-time ${info.kind}`}>{info.timeLabel}</span>
++        </div>
++        {!compact && <div className="hero-status-subtitle muted">{info.statusLine}</div>}
++        <div className={barClass}>
++          <span style={{ width: `${info.percent}%` }} />
++        </div>
++      </div>
++    </div>
++  );
++}
++
++/** The full sorted list -- used as-is by both HeroesPanel's roster toggle
++ *  and IdleView's companion toggle. `compact` is passed straight through
++ *  to every row. */
++export function HeroStatusList({ engine, now, compact }: { engine: GameEngine; now: number; compact?: boolean }) {
++  const rows = sortedHeroStatuses(engine, now);
++  return (
++    <div className={`hero-status-list ${compact ? 'compact' : ''}`}>
++      {rows.map((info) => (
++        <HeroStatusRow key={info.hero.id} info={info} compact={compact} />
++      ))}
++    </div>
++  );
++}
+diff --git a/src/ui/IdleView.tsx b/src/ui/IdleView.tsx
+index cd99706..8318f39 100644
+--- a/src/ui/IdleView.tsx
++++ b/src/ui/IdleView.tsx
+@@ -4,6 +4,7 @@ import { useSettings } from './useSettings';
+ import { PixelSprite, QUEST_MARK } from './sprites/PixelSprite';
+ import { HeroAnimation, HeroSprite } from './sprites/HeroSprite';
+ import { RaidPartySprites, raidPartyScale } from './sprites/RaidPartySprites';
++import { HeroStatusList } from './HeroStatusBar';
+ import { PetSprite } from './sprites/PetSprite';
+ import { PET_BY_ID } from '../game/data/pets';
+ import { HeroManager } from '../game/managers/HeroManager';
+@@ -268,7 +269,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+   const activeRaidParty = engine.state.activeRaid
+     ? engine.state.heroes.filter((h) => engine.state.activeRaid!.heroIds.includes(h.id))
+     : [];
+-  const showRaidPartyView = settings.raidPartyView && !settings.hideHeroSprite && activeRaidParty.length > 0;
++  const showRaidPartyView = settings.raidPartyView && !settings.hideHeroSprite && !settings.idleStatusView && activeRaidParty.length > 0;
+ 
+   /**
+    * Widens the actual OS window (Electron only -- no-op via optional
+@@ -304,6 +305,25 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [showRaidPartyView, activeRaidParty.length, knightHeight]);
+ 
++  /**
++   * Patch 0269 -- Settings > Knight > "Status bars (corner companion)".
++   * Takes priority over Raid View above (both can't sensibly show at
++   * once; a sorted status list already covers "who's raiding" as one row
++   * among many, so there's nothing Raid View would add on top of it) and
++   * over hideHeroSprite (the status list is a full replacement for the
++   * sprite area, not something that needs the sprite hidden separately).
++   * Tells the OS window to become resizable via the new setIdleDisplay
++   * IPC call -- see main.ts's own handler for the resizable/remembered-
++   * size behavior. Always restores 'sprite' on the way out, whichever
++   * path gets there (setting flipped off, component unmounting), same
++   * "always clean up" shape the Raid View effect above already follows.
++   */
++  const showStatusView = settings.idleStatusView;
++  useEffect(() => {
++    void window.littleKnight?.setIdleDisplay(showStatusView ? 'status' : 'sprite');
++    return () => { void window.littleKnight?.setIdleDisplay('sprite'); };
++  }, [showStatusView]);
++
+   // Used to just report "+N more at the guild" -- accurate as a headcount,
+   // but gave no sense of whether those heroes were doing anything, so a
+   // full roster sitting idle read identically to one that was fully out
+@@ -360,6 +380,38 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+   // land mid-quest while the companion window is the only thing showing.
+   const hatchReadyBanner = engine.state.pendingHatchReadyNotice ? 'An egg is ready to hatch! →' : null;
+ 
++  if (showStatusView) {
++    // Status bars (corner companion) -- a full replacement for the sprite
++    // stage below, not a variant of it: no carousel, no pet, no away/
++    // chain/raid/hatch banners (all of that assumes a single "current
++    // hero" the sprite view is built around; a sorted whole-roster list
++    // doesn't have a single current hero to hang them off, and the
++    // roster's own "Status bars" view -- HeroesPanel.tsx -- already has
++    // no equivalent for them either, so this isn't a regression relative
++    // to that surface). `idle-actions` (open guild / lock / hide) stays,
++    // same "core functionality never disappears" precedent hideHeroSprite
++    // already set -- see that branch's own comment further down for why
++    // clicking through to the guild menu must always stay reachable.
++    return (
++      <div className={`idle-root idle-status-root ${locked ? '' : 'unlocked'}`}>
++        <div className="idle-status-stage">
++          <HeroStatusList engine={engine} now={now} compact />
++          <div className="idle-actions">
++            <button className="btn-ghost" onClick={onOpenMenu}>Open guild</button>
++            <button
++              className="btn-ghost"
++              onClick={toggleLocked}
++              title={locked ? 'Unlock to drag the companion to a new spot' : 'Lock the companion in its current spot'}
++            >
++              {locked ? '🔒' : '🔓'}
++            </button>
++            <button className="btn-ghost" onClick={() => window.littleKnight?.minimize()}>Hide</button>
++          </div>
++        </div>
++      </div>
++    );
++  }
++
+   return (
+     <div className={`idle-root ${locked ? '' : 'unlocked'}`}>
+       <div className="idle-stage">
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index d85534c..1b0c4c4 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -13,6 +13,7 @@ import { Tuning } from '../../game/data/tuning';
+ import { HeroClass, Hero, Stats } from '../../game/types';
+ import { describeMods, formatDuration, formatGold, HOUR, roleAwareStatLabel } from '../../game/util';
+ import { HeroSprite } from '../sprites/HeroSprite';
++import { HeroStatusList } from '../HeroStatusBar';
+ import { GearScoreBadge } from '../GearScoreBadge';
+ import { RoleIcon } from '../RoleIcon';
+ import { useLevelUpFlash, LevelUpFlash } from '../levelFlash';
+@@ -218,7 +219,18 @@ export function HeroesPanel() {
+         })}
+       </div>
+ 
+-      {state.heroes.map((hero) => {
++      {settings.heroStatusBars ? (
++        // Status bars (Settings > Knight) -- a compact, sorted list of
++        // every hero's current status instead of the full per-hero card
++        // grid below. Deliberately a full replacement, not a toggle on
++        // each card: the whole point is a faster "what's about to
++        // finish" scan across the roster, which a card-by-card sprite
++        // swap wouldn't give. Recruiting/comparison/tombstone-style
++        // controls above stay visible either way -- only the roster
++        // body itself swaps.
++        <HeroStatusList engine={engine} now={now} />
++      ) : (
++      state.heroes.map((hero) => {
+         const classDef = HERO_CLASSES[hero.heroClass];
+         const total = HeroManager.totalStats(hero);
+         const toNext = HeroManager.xpToNext(hero);
+@@ -496,7 +508,8 @@ export function HeroesPanel() {
+             )}
+           </div>
+         );
+-      })}
++      })
++      )}
+ 
+       <div className="section-heading">Recruit</div>
+       {state.heroes.length >= slots && (
+diff --git a/src/ui/panels/SettingsPanel.tsx b/src/ui/panels/SettingsPanel.tsx
+index fa90185..0bda4eb 100644
+--- a/src/ui/panels/SettingsPanel.tsx
++++ b/src/ui/panels/SettingsPanel.tsx
+@@ -162,6 +162,14 @@ export function SettingsPanel() {
+         <Toggle value={settings.raidPartyView} onChange={set('raidPartyView')} />
+       </Row>
+ 
++      <Row label="Status bars (roster)" hint="Replaces the Heroes tab's per-hero sprite cards with a compact list: name, status, and a progress bar for everyone at once, sorted soonest-finishing first.">
++        <Toggle value={settings.heroStatusBars} onChange={set('heroStatusBars')} />
++      </Row>
++
++      <Row label="Status bars (corner companion)" hint="Replaces the corner companion's cycling hero sprite with the same sorted status list. Makes the companion window resizable while this is on, so the full roster can fit without scrolling.">
++        <Toggle value={settings.idleStatusView} onChange={set('idleStatusView')} />
++      </Row>
++
+       <Row label="Pet size" hint={`${Math.round(settings.petSpriteScale * 100)}% -- affects the companion pet only, not the hero above`}>
+         <div className="row" style={{ gap: 16, alignItems: 'center' }}>
+           <input
+diff --git a/tools/devtool/public/app.js b/tools/devtool/public/app.js
+index f4f953d..025f816 100644
+--- a/tools/devtool/public/app.js
++++ b/tools/devtool/public/app.js
+@@ -569,8 +569,11 @@ function fieldControl(spec, key, value) {
+   if (spec.picker === 'icon') {
+     // Just a container here -- renderIconField fills it in and wires the
+     // buttons once it's actually attached to the DOM (see wireIconFields,
+-    // called alongside wireListInput in openEditor).
+-    return `<div class="icon-field" id="${id}" data-value="${escapeHtml(value ?? '')}"></div>`;
++    // called alongside wireListInput in openEditor). `data-preview-size`
++    // (patch 0269) carries the schema's `previewSize` hint through the
++    // same way bannerImage/decorationImage already pass previewAspect --
++    // see renderIconField for where it actually gets shown.
++    return `<div class="icon-field" id="${id}" data-value="${escapeHtml(value ?? '')}" data-preview-size="${escapeHtml(spec.previewSize ?? '')}"></div>`;
+   }
+   if (spec.picker === 'guildhallBg') {
+     // Same deferred-render container shape as the icon field just above,
+@@ -596,7 +599,11 @@ function fieldControl(spec, key, value) {
+     // of one generic box for every content type -- falls back to the old
+     // 420x130-ish "8/2.5" shape if a schema hasn't set one. `data-scale`
+     // carries the optional zoom (100 = no zoom, matches plain `cover`).
+-    return `<div class="banner-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-scale="${value?.scale ?? 100}" data-folder="${escapeHtml(spec.defaultFolder ?? '')}" data-preview-aspect="${escapeHtml(spec.previewAspect ?? '8/2.5')}"></div>`;
++    // `data-preview-size` (patch 0269) carries the schema's `previewSize`
++    // hint -- a short recommended-resolution caption shown under the
++    // preview box, see renderBannerField. Aspect alone tells an artist
++    // the shape to crop to, not the resolution worth exporting at.
++    return `<div class="banner-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-scale="${value?.scale ?? 100}" data-folder="${escapeHtml(spec.defaultFolder ?? '')}" data-preview-aspect="${escapeHtml(spec.previewAspect ?? '8/2.5')}" data-preview-size="${escapeHtml(spec.previewSize ?? '')}"></div>`;
+   }
+   if (spec.type === 'decorationImage') {
+     // Same deferred-render approach as bannerImage just above -- a bare
+@@ -606,7 +613,23 @@ function fieldControl(spec, key, value) {
+     // `data-scale` defaults to 100 = the sprite's natural contain-fit
+     // size, same "omitted means no-op" meaning bannerImage's scale has,
+     // just a different no-op (contain-fit vs plain cover).
+-    return `<div class="decor-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-scale="${value?.scale ?? 100}" data-preview-aspect="${escapeHtml(spec.previewAspect ?? '1/1')}"></div>`;
++    // `data-preview-size` (patch 0269) -- same recommended-resolution
++    // caption as bannerImage above, see renderDecorationField.
++    return `<div class="decor-field" id="${id}" data-path="${escapeHtml(value?.path ?? '')}" data-focus-x="${value?.focusX ?? 50}" data-focus-y="${value?.focusY ?? 50}" data-scale="${value?.scale ?? 100}" data-preview-aspect="${escapeHtml(spec.previewAspect ?? '1/1')}" data-preview-size="${escapeHtml(spec.previewSize ?? '')}"></div>`;
++  }
++  if (spec.type === 'color') {
++    // Patch 0269 (hero-classes.color). A native <input type="color"> swatch
++    // plus a plain hex text field kept in sync with it, same "two controls,
++    // one value" pairing a slider+number-readout already uses elsewhere on
++    // this page. The text field is what readField() actually reads (see
++    // below) -- the swatch is a convenience for picking, not the source of
++    // truth, so a hand-typed hex value (e.g. pasted from a design doc)
++    // works identically to using the picker.
++    const hex = /^#[0-9a-fA-F]{6}$/.test(value ?? '') ? value : '#888888';
++    return `<div class="color-field" id="${id}">
++      <input type="color" data-color-swatch value="${escapeHtml(hex)}" />
++      <input type="text" data-color-text value="${escapeHtml(value ?? '')}" placeholder="#4a90d9" maxlength="7" />
++    </div>`;
+   }
+   if (spec.type === 'string' && (key === 'description' || key === 'flavour' || key === 'blurb' || key === 'body' || key === 'licenseSummary')) {
+     return `<textarea id="${id}">${escapeHtml(value ?? '')}</textarea>`;
+@@ -950,12 +973,14 @@ async function ensureIcons() {
+  *  is simpler and hard to get subtly wrong. */
+ function renderIconField(field) {
+   const value = field.dataset.value || '';
++  const previewSize = field.dataset.previewSize || '';
+   field.innerHTML = `
+     <div class="icon-preview">
+       ${value ? `<img src="/item-icons/${escapeHtml(value)}" alt="" />` : '<span class="icon-preview-empty">?</span>'}
+     </div>
+     <div class="icon-field-controls">
+       <span class="icon-field-name">${value ? escapeHtml(value) : 'No icon assigned'}</span>
++      ${previewSize ? `<span class="icon-field-size tiny muted">${escapeHtml(previewSize)}</span>` : ''}
+       <button type="button" data-choose-icon>${value ? 'Change' : 'Choose icon'}</button>
+       ${value ? '<button type="button" class="remove" data-clear-icon>Clear</button>' : ''}
+     </div>`;
+@@ -975,6 +1000,25 @@ function wireIconFields(container) {
+   container.querySelectorAll('.icon-field').forEach((field) => renderIconField(field));
+ }
+ 
++/**
++ * Patch 0269. Keeps the native color swatch and the plain hex text input
++ * in sync both directions -- picking a color updates the text, and typing
++ * a valid 6-digit hex updates the swatch preview. An invalid/partial hex
++ * (still being typed) just doesn't push to the swatch yet rather than
++ * erroring -- readField()/validateEntry (server-side) are what actually
++ * enforce the final format on save, this is just live convenience.
++ */
++function wireColorFields(container) {
++  container.querySelectorAll('.color-field').forEach((field) => {
++    const swatch = field.querySelector('[data-color-swatch]');
++    const text = field.querySelector('[data-color-text]');
++    swatch.oninput = () => { text.value = swatch.value; };
++    text.oninput = () => {
++      if (/^#[0-9a-fA-F]{6}$/.test(text.value.trim())) swatch.value = text.value.trim();
++    };
++  });
++}
++
+ /* ------------------------------------------------- guildhall bg field --- */
+ // A theme's `background` field (patch 0206) -- deliberately the plain
+ // icon-field shape (a flat path string, preview + choose/clear button),
+@@ -1156,6 +1200,7 @@ function renderBannerField(field) {
+     </div>
+     <div class="banner-field-controls">
+       <span class="banner-field-name">${override ? escapeHtml(override) : (defaultPath ? `Using default: ${escapeHtml(defaultPath)}` : 'Set an id first to see the default path')}</span>
++      ${field.dataset.previewSize ? `<span class="banner-field-size tiny muted">Recommended source size: ${escapeHtml(field.dataset.previewSize)}</span>` : ''}
+       <span class="banner-field-focus tiny muted" data-focus-readout>Focus: ${Math.round(fx)}%, ${Math.round(fy)}% · Zoom: ${Math.round(scale)}%</span>
+       <label class="banner-zoom-row tiny muted">
+         Zoom
+@@ -1630,6 +1675,7 @@ function renderDecorationField(field) {
+     </div>
+     <div class="banner-field-controls">
+       <span class="banner-field-name">${override ? escapeHtml(override) : 'No art assigned'}</span>
++      ${field.dataset.previewSize ? `<span class="banner-field-size tiny muted">Recommended source size: ${escapeHtml(field.dataset.previewSize)}</span>` : ''}
+       <span class="banner-field-focus tiny muted" data-focus-readout>Offset: ${Math.round(fx)}%, ${Math.round(fy)}% · Scale: ${Math.round(scale)}%</span>
+       <label class="banner-zoom-row tiny muted">
+         Scale
+@@ -1994,6 +2040,7 @@ function wireResultGemInput(container) {
+ 
+ function readField(spec, key) {
+   const el = document.getElementById(`f_${key}`);
++  if (spec.type === 'color') return el.querySelector('[data-color-text]').value.trim();
+   if (spec.picker === 'icon') return el.dataset.value || '';
+   if (spec.picker === 'guildhallBg') return el.dataset.value || '';
+   if (spec.picker === 'lootTable') return el.__getLootValue ? el.__getLootValue() : [];
+@@ -2135,6 +2182,7 @@ function openEditor(index) {
+   document.body.appendChild(overlay);
+   wireListInput(editor);
+   wireIconFields(editor);
++  wireColorFields(editor);
+   wireGuildhallBgFields(editor);
+   wireBannerFields(editor);
+   wireDecorationFields(editor);
+diff --git a/tools/devtool/server.mjs b/tools/devtool/server.mjs
+index 1e49200..7cddd22 100644
+--- a/tools/devtool/server.mjs
++++ b/tools/devtool/server.mjs
+@@ -209,6 +209,22 @@ const SCHEMAS = {
+     fields: {
+       id: { type: 'string', required: true, slug: true },
+       name: { type: 'string', required: true },
++      // Patch 0269: color-codes this class's circle avatar on the new
++      // roster/companion status-bar views (Settings > Knight -- "Status
++      // bars"). Required, not optional -- unlike icon just below, every
++      // class needs SOME color for its circle to render as anything but
++      // blank, so there's no sensible "unset" state the way a missing
++      // icon can just fall back to a plain glyph-less circle.
++      color: { type: 'color', required: true },
++      // Optional pixel-art overlay inside that same colored circle --
++      // reuses the existing `picker: 'icon'` (ICONS_DIR/item-icons,
++      // 16x16) rather than inventing a new folder just for 13 class
++      // icons, same "don't invent a new picker for a handful of icons"
++      // precedent the `roles` schema's own `icon` field already set.
++      // Falls back to a bare color circle (no icon) when unset, same
++      // graceful-missing-asset convention every other optional icon
++      // field on this page already follows.
++      icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
+       blurb: { type: 'string', required: true },
+       baseStats: { type: 'stats', required: true },
+       growth: { type: 'stats', required: true },
+@@ -282,7 +298,7 @@ const SCHEMAS = {
+     fields: {
+       id: { type: 'enum', options: ['melee', 'ranged', 'caster'], required: true },
+       name: { type: 'string', required: true },
+-      icon: { type: 'string', required: false, picker: 'icon' },
++      icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
+       description: { type: 'string', required: false },
+     },
+   },
+@@ -494,7 +510,16 @@ const SCHEMAS = {
+       // render as a fixed-height strip across a card up to 720px wide
+       // (ChainBanner: height 90 in LorePanel.tsx), so 8/1 is the real
+       // shape being cropped, not the old generic 420x130 box.
+-      banner: { type: 'bannerImage', required: false, defaultFolder: 'chains', previewAspect: '8/1' },
++      // `previewSize` (patch 0269, also frontend-only) is a short, plain-
++      // English recommended source resolution shown as a caption under
++      // the preview box -- an aspect ratio alone (8/1) tells an artist
++      // the SHAPE to crop to but not the actual resolution worth
++      // exporting at, which was the real gap a direct request flagged
++      // ("the picker doesn't say what size the image should be"). Purely
++      // advisory text, not validated or enforced server-side -- any
++      // image still uploads and crops fine regardless of its real
++      // dimensions, same as before this field existed.
++      banner: { type: 'bannerImage', required: false, defaultFolder: 'chains', previewAspect: '8/1', previewSize: '~1600x200px' },
+       stages: { type: 'chainStages', required: true },
+     },
+   },
+@@ -519,7 +544,7 @@ const SCHEMAS = {
+       // there's no single exact ratio the way chains/raids have; 3/1
+       // approximates the typical card shape closely enough to preview
+       // meaningfully, which is still far closer than the old generic box.
+-      banner: { type: 'bannerImage', required: false, defaultFolder: 'quest-tags', previewAspect: '3/1' },
++      banner: { type: 'bannerImage', required: false, defaultFolder: 'quest-tags', previewAspect: '3/1', previewSize: '~900x300px' },
+     },
+   },
+   'difficulties': {
+@@ -607,7 +632,7 @@ const SCHEMAS = {
+       // `picker: 'icon'` is a frontend hint only -- server-side this
+       // validates as a plain optional string (a relative path under
+       // ICONS_DIR, e.g. "weapons/sword_03.png"), same as setId above.
+-      icon: { type: 'string', required: false, picker: 'icon' },
++      icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
+       // Both of these existed on disk (raidExclusive since Heroic/Legendary
+       // raid loot variants were added, craftable since Crafting) but
+       // weren't in this schema -- the editor rebuilds each entry from
+@@ -656,7 +681,7 @@ const SCHEMAS = {
+       glyph: { type: 'string', required: true },
+       // Falls back to glyph when unset -- same convention equipment's icon
+       // field already uses, same picker.
+-      icon: { type: 'string', required: false, picker: 'icon' },
++      icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
+       // Same shape and same reasoning as equipment's own `craftable` --
+       // true for a craft-only variant (Alchemist's Reserve, the Fortune-
+       // Charm "Weave"/"Sigil" line, etc.) that should never appear in the
+@@ -680,7 +705,7 @@ const SCHEMAS = {
+       description: { type: 'string', required: true },
+       sellValue: { type: 'number', required: true },
+       glyph: { type: 'string', required: true },
+-      icon: { type: 'string', required: false, picker: 'icon' },
++      icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
+     },
+   },
+   'materials': {
+@@ -703,7 +728,7 @@ const SCHEMAS = {
+       // Single stable icon for static UI (Crafting's materials-needed
+       // list, Warehouse stock, scrap fly-up particles) -- falls back to
+       // glyph when unset, same convention/picker as equipment/consumables.
+-      icon: { type: 'string', required: false, picker: 'icon' },
++      icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
+       // Pool of filenames for the falling-item Harvest animation's own
+       // spawn-to-spawn variety -- deliberately separate from `icon` above
+       // and NOT under the shared item-icons picker, since these live under
+@@ -927,7 +952,7 @@ const SCHEMAS = {
+       // kinds still pull their icon from the referenced def instead --
+       // this is only useful for kinds that have no def to look one up
+       // from.
+-      icon: { type: 'string', required: false, picker: 'icon' },
++      icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
+     },
+   },
+   // NOTE: there used to be a 'peddler-config' schema here -- a single
+@@ -984,7 +1009,7 @@ const SCHEMAS = {
+       // against (its slotType is a whole pool of differently-shaped
+       // slots) -- close enough for judging fit; real per-slot sizing is
+       // visible in-game in the Guild Hall's own "Customize" mode.
+-      image: { type: 'decorationImage', required: false, defaultFolder: '', previewAspect: '1/1' },
++      image: { type: 'decorationImage', required: false, defaultFolder: '', previewAspect: '1/1', previewSize: '~512x512px' },
+     },
+   },
+   // Which background themes exist for the Guild Hall (patch 0206) -- id/
+@@ -1090,7 +1115,7 @@ const SCHEMAS = {
+       // all three; this is the closest single default and still a large
+       // accuracy improvement over the old generic 420x130 box for the
+       // context players see most (the detail modal).
+-      banner: { type: 'bannerImage', required: false, defaultFolder: 'raids', previewAspect: '5/1' },
++      banner: { type: 'bannerImage', required: false, defaultFolder: 'raids', previewAspect: '5/1', previewSize: '~1500x300px' },
+       // Mirrors quest-chains' own `title` field -- granted to every hero
+       // in the clearing party on a full clear, rather than a single
+       // hero, since a raid is a party effort. See RaidDef.title's own
+@@ -1125,7 +1150,7 @@ const SCHEMAS = {
+       name: { type: 'string', required: true },
+       description: { type: 'string', required: true },
+       category: { type: 'enum', required: true, options: ['gear', 'consumable', 'enchant', 'gem'] },
+-      icon: { type: 'string', required: false, picker: 'icon' },
++      icon: { type: 'string', required: false, picker: 'icon', previewSize: '16x16' },
+       materialCost: { type: 'materials', required: true },
+       goldCost: { type: 'number', required: true },
+       // gem only -- Scrap is its own standalone currency (GameState.scrap),
+@@ -1323,6 +1348,18 @@ function validateEntry(schema, entry, index) {
+       case 'string':
+         if (typeof value !== 'string') errors.push(`entry ${index}: "${key}" must be text`);
+         break;
++      // Patch 0269: a plain 6-digit hex color (e.g. hero-classes' new
++      // `color` field, the roster/companion status-bar avatar tint).
++      // Deliberately its own type rather than reusing 'string' -- a free-
++      // text hex value needs its own validator (format-checked here) and
++      // its own swatch-plus-text render in app.js, the same "own type,
++      // own render" split every other non-plain-text field on this page
++      // already follows (bannerImage, roleFlavors, etc.).
++      case 'color':
++        if (typeof value !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value)) {
++          errors.push(`entry ${index}: "${key}" must be a 6-digit hex color like #4a90d9`);
++        }
++        break;
+       case 'number':
+         if (typeof value !== 'number' || Number.isNaN(value)) errors.push(`entry ${index}: "${key}" must be a number`);
+         break;

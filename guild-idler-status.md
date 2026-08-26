@@ -560,7 +560,10 @@ new tunables in the `quests` category (`quest.easyBurstChanceTier1-4`,
 `quest.easyMediumChanceTier1-4`).
 
 **Heroes** — recruiting, leveling, stat allocation, injuries, skins,
-ascension/prestige, retirement with streak bonus.
+ascension/prestige, retirement with streak bonus. Each class now carries
+its own DevTool-editable color + optional icon (patch 0269), surfaced as
+a colored avatar circle on the new roster/companion "Status bars" views
+-- see "Hero status bars" below.
 
 **Equipment** — rarities, set bonuses, repair/refine, shop + black market
 rotation, `raidExclusive` flag (Heroic/Mythic tiered variants can no
@@ -21261,3 +21264,215 @@ Every new gold-crediting call site was checked by hand against the
 existing `state.gold = Math.min(storage, ...)` pattern at that exact
 line, not grepped-and-assumed -- all eight Grimsby sites, both raid and
 both quest sites, and both Shop sell paths.
+
+### Hero status bars: roster + corner companion toggles, class colors/icons, DevTool picker size labels (patch 0269)
+```discord-update
+Dev Update | Status Bars
+
+- New Settings > Knight > "Status bars (roster)" -- swaps the Heroes tab's sprite cards for a compact list: name, status, and a progress bar for every hero, sorted soonest-finishing first
+- New Settings > Knight > "Status bars (corner companion)" -- same list on the corner companion instead of the cycling hero sprite, and makes that window resizable while it's on
+- Every hero class now has its own color-coded avatar (with an optional icon), editable in DevTools
+- DevTools image pickers now show the recommended pixel size next to the preview, so art always gets uploaded at the right resolution
+```
+
+Direct feature request, mocked up in chat (roster list, then the
+companion window specifically) before any code was written. Three
+follow-up asks folded in during scoping: sort order (soonest-completing/
+completed first), a colored-per-class avatar with an optional icon
+rather than a plain glyph, and -- separately -- a general DevTools gap
+("the picker doesn't say what size the image should be") extended to
+every image picker in the tool, not just this feature's own new one.
+
+**Pulled the live repo fresh before starting, not project knowledge.**
+The chat's own project knowledge doc was badly stale against this file
+(missing everything from roughly patch 0200 onward) -- confirmed via a
+real `git clone` against the actual GitHub repo before touching
+anything, per this file's own "Patch workflow" instructions at the top.
+Every source file referenced below (`electron/main.ts`, `IdleView.tsx`,
+`HeroesPanel.tsx`, `hero-classes.json`, `tools/devtool/server.mjs`/
+`app.js`) was read from that fresh clone, not assumed from memory or an
+earlier summary.
+
+**New shared component, one implementation for both surfaces**
+(`src/ui/HeroStatusBar.tsx`) -- `heroStatusInfo()` computes one hero's
+current status/percent/time-label/sort-kind (questing, raiding, Fallen,
+or idle), `sortedHeroStatuses()` sorts a whole roster by it, and
+`HeroStatusRow`/`HeroStatusList` render it. One implementation rather
+than two near-identical ones so "what counts as ready, what a Fallen
+hero's bar shows" can't quietly drift apart between the roster and
+companion versions over time -- the same reasoning `RaidPartySprites`
+already established for its own two call sites (companion + Raids tab).
+
+- **Sort order** (direct request): anything already at 0 remaining
+  ("Ready to claim") floats to the very top, then active quest/raid
+  timers ascending by time left, then Fallen, then plain Idle heroes
+  last -- an idle hero has nothing to check back on, so it's the least
+  useful row to see first in a list that exists specifically to answer
+  "what's about to finish."
+- **Fallen heroes get an honest percentage, not a fake one.** Only
+  reachable once Infirmary's free auto-revive path is actually unlocked
+  (`infirmaryAutoReviveUnlocked`, same gate `HeroManager.autoReviveDue`
+  already checks) -- below max Infirmary level there is no free timer
+  running at all, so the bar sits at a flat 0% with just a "Fallen"
+  label rather than implying progress toward something that isn't
+  happening on its own.
+- **Raids** read `state.activeRaid` directly (never populate
+  `activeQuestFor`, same distinction `IdleView.tsx`'s own `busy` flag
+  already has to account for) -- percent/remaining come from the raid's
+  shared `startedAt`/`endsAt`, same for every hero in the party.
+- **Class avatar** -- a colored circle (`HeroClassDef.color`) with an
+  optional pixel-art overlay (`HeroClassDef.icon`, empty string = no
+  icon, falls back to a plain color circle, same graceful-missing-asset
+  convention every other optional icon field in this project already
+  follows).
+- **Bar tint reuses the existing shared `.bar` CSS class** (the same one
+  XP/Durability/Health already build on) rather than inventing new
+  track/fill class names -- `.bar` default (moss) for Ready, `.bar.xp`
+  (sky) for an in-progress quest/raid, `.bar.dura.low` (blood red,
+  borrowed from Durability's own "critical" tint) for Fallen. Gets the
+  existing width transition and `data-motion='off'` accessibility
+  override for free, and reads as visually consistent with every other
+  bar in the game rather than a fourth bespoke color scheme.
+
+**`HeroClassDef` gained `color` (required) and `icon` (optional)**
+(`progression.ts`, `hero-classes.json`, all 13 classes). `color` is
+required, not optional like `icon` -- every class needs SOME color for
+its avatar circle to render as anything but blank, so there's no
+sensible "unset" state the way a missing icon can just fall back to a
+bare circle. All 13 base classes assigned a distinct, thematic hex
+(steel blue for Knight, fire orange for Pyromancer, swamp green for
+Lizardman, etc.) -- purely a starting point, fully re-editable in
+DevTools like any other data-driven field now that this migrated off a
+hardcoded Record. `icon` reuses the existing `picker: 'icon'`
+(ICONS_DIR/`item-icons`, 16x16) rather than inventing a new folder for
+13 icons, same "don't invent a new picker for a handful of icons"
+precedent the `roles` schema's own `icon` field already set -- shipped
+blank (no icon assigned) for every class, so the roster/companion views
+render as plain color circles until someone picks icons in DevTools.
+
+**DevTools: new `color` field type** (`server.mjs`/`app.js`) -- a native
+color-swatch input paired with a plain hex text field kept in sync both
+directions, same "two controls, one value" pairing a slider+readout
+already uses elsewhere on this page. Validated server-side as a strict
+6-digit hex (`/^#[0-9a-fA-F]{6}$/`); the text field (not the swatch) is
+what actually gets saved, so a hand-typed/pasted hex value works
+identically to using the picker.
+
+**DevTools: every image picker now shows its recommended size.** The
+direct ask ("the picker doesn't say what size the image should be")
+applied cleanly to every existing image field, not just this feature's
+new one -- a new optional `previewSize` schema hint, threaded through
+`data-preview-size` the same way `previewAspect` already threads
+through `data-preview-aspect`, rendered as a small caption under each
+preview box. Purely advisory text, not validated or enforced -- any
+image still uploads and crops fine regardless of its real dimensions,
+same as before this field existed.
+
+- **Plain icon fields** (all 8: `hero-classes`, `roles`, `equipment`,
+  `consumables`, `curios`, `materials`, `peddler-cards`,
+  `crafting-recipes`) -- confirmed the real on-disk assets in
+  `public/item-icons/` are 16x16 pixel art, so all 8 got
+  `previewSize: '16x16'` rather than a guessed number.
+- **Banner/decoration fields** (quest-chains, quest-tags, raids banners;
+  guild-hall-decorations image) -- each got a recommended source
+  resolution matching its own `previewAspect` shape (e.g. quest-chains'
+  8/1 strip -> "~1600x200px"), a plain-English number an artist can
+  actually export to, on top of the aspect ratio that only tells them
+  the shape to crop.
+
+**Settings** (`settings.ts`) -- two new booleans, `heroStatusBars`
+(roster) and `idleStatusView` (companion), both defaulting `false` --
+the sprite views are the existing, familiar look; this is an alternate
+density/info trade-off, not a strict upgrade for everyone, same "opt-in,
+not opt-out" treatment a genuinely optional display change gets
+(contrast with `hideHeroSprite`/`raidPartyView`, which are themselves
+opt-OUT of an existing default look).
+
+**`HeroesPanel.tsx`.** `settings.heroStatusBars` swaps the entire
+per-hero card grid for `<HeroStatusList>` -- a full replacement, not a
+per-card toggle, since the whole point is a faster "what's about to
+finish" scan across the roster that a card-by-card sprite swap wouldn't
+give. Recruiting/Compare Heroes/tombstone-style controls above the grid
+stay visible either way; only the roster body itself swaps.
+
+**Corner companion -- a real architecture decision, discussed and
+confirmed before building rather than assumed.** The original ask
+("load a second window, resizable") doesn't match how this app is
+actually built: there is no second `BrowserWindow` anywhere in
+`electron/main.ts` today, only one window that flips between an `'idle'`
+and a `'menu'` mode (`window:setMode`) -- and that single window already
+carries all the position-memory, cross-monitor clamping, always-on-top,
+and single-instance logic. A literal second window would have meant
+either duplicating that machinery or refactoring it to be shared, for
+something that behaves identically to a mode switch from the player's
+side. Implemented instead as a new, orthogonal `idleDisplayKind: 'sprite'
+| 'status'` flag alongside `currentMode`, deliberately NOT a third
+`currentMode` value -- `currentMode`'s job stays exactly "idle vs menu,"
+the two OS-level window shapes/behaviors every existing check in the
+file already branches on, so nothing that already reads `currentMode`
+needed to learn about a third value.
+
+- **New `window:setIdleDisplay` IPC handler** (`main.ts`) -- idle-mode-
+  only, no-op otherwise. Switching to `'status'` makes the window
+  genuinely user-resizable (`setResizable(true)`, a `STATUS_MIN_SIZE`
+  floor), sized from a remembered `statusWidth`/`statusHeight` (same
+  persistence shape `menuWidth`/`menuHeight` already have for the menu
+  window) or a `STATUS_DEFAULT_SIZE` starting point, anchored at the
+  window's current top-left rather than jumping to a new spot.
+  Switching back to `'sprite'` restores the fixed `IDLE_SIZE` and
+  `setResizable(false)`, same shape `window:setMode`'s own idle branch
+  already uses.
+- **`resized` listener extended**, not replaced -- it used to assume
+  `'menu'` was the only mode that could ever fire it (true for the plain
+  sprite display, which still isn't resizable) and now has a second
+  branch that persists `statusWidth`/`statusHeight` when
+  `idleDisplayKind === 'status'`, with its own copy of the existing
+  cross-monitor DPI-rescale guard (`suppressNextResizeSave`) rather than
+  trying to force both branches through one shared code path -- the
+  menu branch's fullscreen-guard genuinely doesn't apply to the idle
+  window (never fullscreenable in the first place), so sharing it would
+  mean dead code on one side.
+- **`window:setMode`'s own return-to-idle branch updated** so closing
+  the menu restores whichever idle display was actually showing before
+  it opened, not always the plain sprite footprint -- a player with
+  Status Bars on who opens then closes the guild menu lands back in the
+  resizable status view at its own remembered size, not silently reset
+  to the sprite companion.
+- **`window:setIdleWidth` (Raid View's own width-request call) now also
+  no-ops while the status display is showing** -- that display is
+  genuinely user-resizable, and forcing `IDLE_SIZE.height` back on every
+  call would fight a player who's deliberately resized it taller.
+  `IdleView.tsx` already gates Raid View off whenever the status view is
+  on, so this is a defensive backstop, not expected to trigger in normal
+  use.
+- **`preload.ts`/`SaveManager.ts`'s ambient `Window.littleKnight` type**
+  both gained the new `setIdleDisplay(kind)` method, same shape every
+  other IPC bridge method on this object already follows.
+
+**`IdleView.tsx`.** `settings.idleStatusView` takes priority over both
+Raid View (a sorted status list already covers "who's raiding" as one
+row among many -- nothing left for Raid View to add on top of it) and
+`hideHeroSprite` (the status list is a full replacement for the sprite
+area, not something that needs the sprite separately hidden). A new
+early return renders `<HeroStatusList compact>` plus the existing
+`idle-actions` row (Open guild / lock / hide) -- deliberately no pet,
+carousel, or away/chain/raid/hatch banners here, since all of those
+assume a single "current hero" the sprite view is built around, and the
+roster's own Status Bars view has no equivalent for them either, so this
+isn't a regression relative to that surface. A small effect calls the
+new `setIdleDisplay` IPC on mount/toggle and always restores `'sprite'`
+on the way out (setting flipped off, or the component unmounting),
+same "always clean up" shape the existing Raid View width effect
+already follows.
+
+**New CSS** (`app.css`) -- `.hero-status-list`/`.hero-status-row`/etc.
+for the shared component (with a `.compact` modifier for the companion),
+built on the existing `.bar` class rather than new bar markup (see
+above), plus `.idle-status-stage` for the companion's alternate layout.
+Placed alongside the existing Raid View party-row rules, same "one
+component styled once" convention.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (including both
+Electron sub-builds, main and preload) all pass clean against the real,
+freshly-cloned repo. `node --check` passes on both `tools/devtool/
+server.mjs` and `tools/devtool/public/app.js`.

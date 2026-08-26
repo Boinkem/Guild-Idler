@@ -132,6 +132,20 @@ function loadAppIcon() {
  *  multi-banner edge case. */
 const IDLE_SIZE = { width: 260, height: 340 };
 const MENU_SIZE = { width: 1350, height: 930 };
+/**
+ * Patch 0269: the "Status bars (corner companion)" display mode's own
+ * size story -- see window:setIdleDisplay below. STATUS_MIN_SIZE is a
+ * floor (same concept as MENU_MIN_SIZE just above), small enough that a
+ * couple of roster rows still fit; STATUS_DEFAULT_SIZE is the starting
+ * point on first use, roomy enough to show a handful of heroes without
+ * immediately needing to drag it bigger. Both are just starting/floor
+ * values -- a user-resized size (statusWidth/statusHeight in Settings,
+ * same persistence shape menuWidth/menuHeight already have) takes over
+ * from STATUS_DEFAULT_SIZE the moment one exists, exactly like menuSize
+ * already does for the big menu window.
+ */
+const STATUS_MIN_SIZE = { width: 220, height: 160 };
+const STATUS_DEFAULT_SIZE = { width: 300, height: 420 };
 /** The menu is now user-resizable -- this is a floor, not a cap, so the
  *  panel layout (nav column + content) never gets squeezed into something
  *  unusable. No maximum beyond whatever the display itself allows. */
@@ -151,10 +165,28 @@ let alwaysOnTop = true;
  */
 let currentMode: 'idle' | 'menu' = 'idle';
 let idleBounds: { x: number; y: number } | null = null;
+/**
+ * Patch 0269: which footprint the corner companion shows while
+ * currentMode === 'idle' -- orthogonal to currentMode itself on purpose.
+ * currentMode's job stays exactly "idle vs menu" (the two OS-level window
+ * shapes/behaviors every existing check in this file already branches on);
+ * this is purely "which of the two idle DISPLAYS is showing," so nothing
+ * that already reads currentMode needs to learn about a third value.
+ * Reset to 'sprite' on relaunch same as menuSize/idleBounds's own "starts
+ * fresh, restored from settings inside createWindow" pattern -- see
+ * window:setIdleDisplay below for how a saved statusWidth/statusHeight
+ * actually gets applied once the renderer re-requests 'status' on boot.
+ */
+let idleDisplayKind: 'sprite' | 'status' = 'sprite';
 /** A user-resized menu size, remembered the same way idleBounds remembers
  *  position -- null until the user actually resizes it once, at which
  *  point it takes over from the MENU_SIZE default. */
 let menuSize: { width: number; height: number } | null = null;
+/** Patch 0269: same remembered-size concept as menuSize just above, for
+ *  the "Status bars (corner companion)" display -- null until the user
+ *  actually resizes it once, at which point it takes over from
+ *  STATUS_DEFAULT_SIZE. */
+let statusSize: { width: number; height: number } | null = null;
 /** When locked (default), the idle companion can't be dragged at all. */
 let companionLocked = true;
 /**
@@ -259,6 +291,10 @@ interface Settings {
    *  resets every session would feel like it doesn't actually work. */
   menuWidth?: number;
   menuHeight?: number;
+  /** Patch 0269: same persisted-resize philosophy as menuWidth/menuHeight
+   *  above, for the "Status bars (corner companion)" display. */
+  statusWidth?: number;
+  statusHeight?: number;
 }
 
 async function readSettings(): Promise<Settings> {
@@ -315,6 +351,10 @@ async function createWindow() {
   menuSize = settings.menuWidth != null && settings.menuHeight != null
     ? { width: settings.menuWidth, height: settings.menuHeight }
     : null;
+  statusSize = settings.statusWidth != null && settings.statusHeight != null
+    ? { width: settings.statusWidth, height: settings.statusHeight }
+    : null;
+  idleDisplayKind = 'sprite';
 
   // Clamped here, not just used raw -- confirmed as the actual root cause of
   // the companion appearing completely absent (not blank, genuinely
@@ -454,34 +494,58 @@ async function createWindow() {
 
   win.on('resized', async () => {
     if (!win) return;
-    // The idle companion is never resizable (see window:setMode), so this
-    // only ever fires in menu mode in practice -- checked anyway, same
-    // defensive shape as the moved listener above, in case that ever
-    // changes.
-    if (currentMode !== 'menu') return;
-    // A fullscreen toggle fires its own 'resized' event (Chromium reports
-    // the new fullscreen bounds as a resize) -- that's not the player
-    // choosing a new windowed size, so it must never overwrite the
-    // remembered menuWidth/menuHeight the way a genuine drag-to-resize
-    // would. Exiting fullscreen back to the windowed size fires another
-    // 'resized' event of its own, which is also skipped here since it's
-    // just restoring the size already on disk, not a new one to save.
-    if (win.isFullScreen()) return;
-    // See suppressNextResizeSave's own comment -- this specific resize was
-    // very likely Windows rescaling the window for a new display's DPI
-    // scale factor, not the player dragging an edge. The window's actual
-    // on-screen size is left exactly as Windows/Chromium already set it;
-    // only the write to disk is skipped, so the player's real, previously
-    // chosen size survives to be restored next time menu mode opens
-    // (see window:setMode's own `menuSize ?? MENU_SIZE` fallback) instead
-    // of being overwritten by whatever this move happened to rescale to.
-    if (suppressNextResizeSave) {
-      suppressNextResizeSave = false;
+    // Patch 0269: the idle companion is now genuinely resizable while
+    // showing the "Status bars" display (see window:setIdleDisplay below)
+    // -- this listener used to assume 'menu' was the only mode that could
+    // ever fire it (the plain sprite companion still isn't resizable, so
+    // that assumption stays correct for THAT display specifically). Two
+    // separate remembered-size branches below, one per resizable display,
+    // rather than trying to force them through one shared code path --
+    // menu's fullscreen-guard genuinely doesn't apply to the idle window
+    // (never fullscreenable in the first place, see window:setMode), so
+    // sharing the branch would mean a fullscreen check that's dead code
+    // on one side of it.
+    if (currentMode === 'menu') {
+      // A fullscreen toggle fires its own 'resized' event (Chromium reports
+      // the new fullscreen bounds as a resize) -- that's not the player
+      // choosing a new windowed size, so it must never overwrite the
+      // remembered menuWidth/menuHeight the way a genuine drag-to-resize
+      // would. Exiting fullscreen back to the windowed size fires another
+      // 'resized' event of its own, which is also skipped here since it's
+      // just restoring the size already on disk, not a new one to save.
+      if (win.isFullScreen()) return;
+      // See suppressNextResizeSave's own comment -- this specific resize was
+      // very likely Windows rescaling the window for a new display's DPI
+      // scale factor, not the player dragging an edge. The window's actual
+      // on-screen size is left exactly as Windows/Chromium already set it;
+      // only the write to disk is skipped, so the player's real, previously
+      // chosen size survives to be restored next time menu mode opens
+      // (see window:setMode's own `menuSize ?? MENU_SIZE` fallback) instead
+      // of being overwritten by whatever this move happened to rescale to.
+      if (suppressNextResizeSave) {
+        suppressNextResizeSave = false;
+        return;
+      }
+      const [width, height] = win.getSize();
+      menuSize = { width, height };
+      await writeSettings({ menuWidth: width, menuHeight: height });
       return;
     }
-    const [width, height] = win.getSize();
-    menuSize = { width, height };
-    await writeSettings({ menuWidth: width, menuHeight: height });
+    if (currentMode === 'idle' && idleDisplayKind === 'status') {
+      // Same DPI-rescale guard as the menu branch above -- a cross-monitor
+      // move can fire a native resize that isn't the player dragging an
+      // edge, and that shouldn't overwrite their real chosen size either.
+      if (suppressNextResizeSave) {
+        suppressNextResizeSave = false;
+        return;
+      }
+      const [width, height] = win.getSize();
+      statusSize = { width, height };
+      await writeSettings({ statusWidth: width, statusHeight: height });
+      return;
+    }
+    // Plain sprite idle display is never resizable (see window:setMode /
+    // window:setIdleDisplay) -- nothing to persist for it.
   });
 
   /**
@@ -669,15 +733,30 @@ ipcMain.handle('window:setMode', (_e, mode: 'idle' | 'menu') => {
     // clean bottom-right-of-activeDisplay position reads as correct
     // instead of janky in that case, and keeps idle/menu correlated to
     // whichever screen the player is actually working on.
+    //
+    // Patch 0269: returning to idle mode needs to restore whichever idle
+    // DISPLAY was actually showing before the menu opened, not always the
+    // plain fixed-size sprite footprint -- a player who had Status Bars
+    // on, opened the menu, then closed it again should land back in the
+    // resizable status view at its own remembered size, not get silently
+    // reset to the sprite companion.
+    const restoreSize = idleDisplayKind === 'status' ? (statusSize ?? STATUS_DEFAULT_SIZE) : IDLE_SIZE;
+    const restoreMin = idleDisplayKind === 'status' ? STATUS_MIN_SIZE : IDLE_SIZE;
+    const size = idleDisplayKind === 'status'
+      ? {
+        width: Math.max(restoreMin.width, Math.min(restoreSize.width, activeDisplay.workArea.width)),
+        height: Math.max(restoreMin.height, Math.min(restoreSize.height, activeDisplay.workArea.height)),
+      }
+      : IDLE_SIZE;
     const home = idleBounds && pointOnDisplay(idleBounds.x, idleBounds.y, activeDisplay)
       ? idleBounds
-      : bottomRight(IDLE_SIZE.width, IDLE_SIZE.height, activeDisplay);
-    const pos = clampToWorkArea(home.x, home.y, IDLE_SIZE.width, IDLE_SIZE.height, activeDisplay);
-    win.setBounds({ ...pos, ...IDLE_SIZE }, false);
-    win.setResizable(false);
+      : bottomRight(size.width, size.height, activeDisplay);
+    const pos = clampToWorkArea(home.x, home.y, size.width, size.height, activeDisplay);
+    win.setBounds({ ...pos, ...size }, false);
+    win.setResizable(idleDisplayKind === 'status');
     win.setMaximizable(false);
     win.setFullScreenable(false);
-    win.setMinimumSize(IDLE_SIZE.width, IDLE_SIZE.height);
+    win.setMinimumSize(restoreMin.width, restoreMin.height);
   }
   currentMode = mode;
 });
@@ -748,7 +827,14 @@ ipcMain.handle('window:getLocked', () => companionLocked);
  * request something wider than the actual screen has room for.
  */
 ipcMain.handle('window:setIdleWidth', (_e, width: number) => {
-  if (!win || currentMode !== 'idle') return;
+  // Patch 0269: also a no-op while the Status Bars display is showing --
+  // that display is genuinely user-resizable (window:setIdleDisplay
+  // below), and forcing IDLE_SIZE.height back here on every call would
+  // fight a player who's deliberately resized it taller. IdleView.tsx
+  // itself already only ever calls setIdleWidth for Raid View, which is
+  // gated off whenever the status view is on, so this is a defensive
+  // backstop, not something expected to trigger in normal use.
+  if (!win || currentMode !== 'idle' || idleDisplayKind !== 'sprite') return;
   const activeDisplay = screen.getDisplayMatching(win.getBounds());
   const clampedWidth = Math.max(IDLE_SIZE.width, Math.min(Math.round(width), activeDisplay.workArea.width));
   const [curX, curY] = win.getPosition();
@@ -756,6 +842,53 @@ ipcMain.handle('window:setIdleWidth', (_e, width: number) => {
   const rightEdge = curX + curWidth;
   const pos = clampToWorkArea(rightEdge - clampedWidth, curY, clampedWidth, IDLE_SIZE.height, activeDisplay);
   win.setBounds({ ...pos, width: clampedWidth, height: IDLE_SIZE.height }, false);
+});
+
+/**
+ * Patch 0269. Switches the corner companion between its normal fixed-size
+ * sprite footprint and a resizable "Status bars" footprint (Settings >
+ * Knight -- see settings.ts's own idleStatusView comment), without
+ * touching currentMode itself -- see idleDisplayKind's own comment above
+ * for why this stays a separate, orthogonal flag rather than a third
+ * currentMode value. No-op outside idle mode (menu mode has its own
+ * independent, already-resizable story) and no-op with no window, same
+ * defensive shape window:setIdleWidth just above already uses. A repeat
+ * call with the same kind is a no-op too -- toggling the setting off and
+ * back on with nothing else happening shouldn't reset a size the player
+ * hasn't actually changed.
+ */
+ipcMain.handle('window:setIdleDisplay', (_e, kind: 'sprite' | 'status') => {
+  if (!win || currentMode !== 'idle' || kind === idleDisplayKind) return;
+  const activeDisplay = screen.getDisplayMatching(win.getBounds());
+
+  if (kind === 'status') {
+    // Anchor the top-left corner where the companion already is, same
+    // "grow from where you are" philosophy setIdleWidth's own right-edge
+    // anchoring uses -- the companion shouldn't visually jump to a new
+    // spot just because the display mode changed under it.
+    const [x, y] = win.getPosition();
+    win.setMinimumSize(STATUS_MIN_SIZE.width, STATUS_MIN_SIZE.height);
+    win.setResizable(true);
+    const requested = statusSize ?? STATUS_DEFAULT_SIZE;
+    const size = {
+      width: Math.max(STATUS_MIN_SIZE.width, Math.min(requested.width, activeDisplay.workArea.width)),
+      height: Math.max(STATUS_MIN_SIZE.height, Math.min(requested.height, activeDisplay.workArea.height)),
+    };
+    const pos = clampToWorkArea(x, y, size.width, size.height, activeDisplay);
+    win.setBounds({ ...pos, ...size }, false);
+  } else {
+    // Returning to the plain sprite display -- same restore-to-IDLE_SIZE
+    // shape window:setMode's own idle branch already uses, anchored at
+    // the window's current position rather than jumping back to the
+    // remembered idleBounds (which may be stale if the status window was
+    // dragged around while resizable).
+    const [x, y] = win.getPosition();
+    win.setResizable(false);
+    win.setMinimumSize(IDLE_SIZE.width, IDLE_SIZE.height);
+    const pos = clampToWorkArea(x, y, IDLE_SIZE.width, IDLE_SIZE.height, activeDisplay);
+    win.setBounds({ ...pos, ...IDLE_SIZE }, false);
+  }
+  idleDisplayKind = kind;
 });
 
 ipcMain.handle('window:minimize', () => win?.minimize());

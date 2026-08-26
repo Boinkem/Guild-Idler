@@ -2200,6 +2200,92 @@ input[type='range'] {
   filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.45));
 }
 
+/*
+ * Status bars (patch 0269) -- HeroStatusBar.tsx's shared list, used both by
+ * the roster's "Status bars" toggle (HeroesPanel.tsx, full-width, roomier
+ * spacing) and the corner companion's own toggle (IdleView.tsx, `compact`,
+ * inside a genuinely resizable window). One shared rule set with a
+ * `.compact` modifier rather than two separate stylesheets, same "one
+ * component, two call sites" precedent RaidPartySprites already set for
+ * the raid-view sprite row.
+ */
+.hero-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+.hero-status-list.compact {
+  gap: 6px;
+  /* The companion window is genuinely resizable while this is showing
+     (see electron/main.ts's window:setIdleDisplay) -- growing the list to
+     fill whatever height the player drags it to, rather than a fixed
+     height that would either clip rows or leave dead space, is the whole
+     point of making it resizable in the first place. */
+  flex: 1;
+  overflow-y: auto;
+}
+.hero-status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hero-status-row.compact { gap: 8px; }
+.hero-status-avatar { overflow: hidden; }
+.hero-status-body { flex: 1; min-width: 0; }
+.hero-status-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.hero-status-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hero-status-row.compact .hero-status-name { font-size: 0.75rem; }
+.hero-status-time {
+  font-size: 0.75rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+/* Ready-to-claim and Fallen both get a semantic color instead of the
+   plain muted default -- the two states most worth a glance actually
+   registering ("something needs my attention") rather than blending into
+   every other row's timer readout. */
+.hero-status-time.ready { color: var(--moss); }
+.hero-status-time.fallen { color: var(--blood); }
+.hero-status-subtitle {
+  font-size: 0.75rem;
+  margin: 2px 0 6px;
+}
+.hero-status-row.compact .bar { margin-top: 4px; }
+.hero-status-row .bar { width: 100%; }
+
+/*
+ * Patch 0269 -- the corner companion's status-view layout, an alternate to
+ * .idle-stage rather than a modifier of it (see IdleView.tsx's early
+ * return for showStatusView: this never renders alongside the sprite
+ * carousel, banners, or pet, so there's no shared-cascade risk worth
+ * guarding against the way .idle-root.unlocked's drag-region overrides
+ * have to for the sprite view's many pieces).
+ */
+.idle-status-stage {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+  -webkit-app-region: drag;
+}
+.idle-status-stage .hero-status-list { -webkit-app-region: no-drag; }
+.idle-status-stage .idle-actions { margin-top: 8px; }
+.idle-root.unlocked .idle-status-stage { -webkit-app-region: no-drag; }
+
 .carousel-arrow {
   position: absolute;
   top: 50%;
