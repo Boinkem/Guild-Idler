@@ -309,14 +309,22 @@
  * mood strip here, not the primary identifier the way it is in the list. */
 .raid-active-banner { height: 48px; border-radius: 6px; margin-bottom: 8px; background-size: cover; background-position: center; }
 .raid-active-header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-/* Reuses .raid-party-row's own flex-wrap layout (defined alongside the
+/* Reuses .raid-party-row's own flex layout (defined alongside the
    companion's Raid View styling) -- this card is normal page flow, not a
    fixed-width floating window, so wrapping is just the natural fallback
    for a wide Legendary-sized party rather than anything that needs its
    own special-cased width logic. Compound selector (not a bare class) so
    this reliably wins over .raid-party-row's own justify-content: center
-   regardless of which rule happens to come first in the file. */
-.raid-party-row.raid-active-party-sprites { margin: 4px 0; justify-content: flex-start; }
+   regardless of which rule happens to come first in the file.
+   `flex-wrap`/`overflow` explicitly overridden back to this card's own
+   original wrap-and-show behavior (patch 0276 switched the *companion's*
+   own bare .raid-party-row to nowrap+hidden, to stop an undershot width
+   estimate there from staggering sprites onto a visibly offset second
+   line -- a fix that's specific to the companion's tiny fixed-width
+   window and doesn't apply here, where there's no equivalent width
+   estimate to undershoot and wrapping already reads as normal, expected
+   layout in a full-width page card). */
+.raid-party-row.raid-active-party-sprites { margin: 4px 0; justify-content: flex-start; flex-wrap: wrap; overflow: visible; }
 .raid-active-party { color: var(--muted); font-size: 0.625rem; margin: 3px 0 6px; }
 .raid-active-eta { font-size: 0.5625rem; color: var(--muted); margin-top: 4px; text-align: right; }
 
@@ -2184,7 +2192,22 @@ input[type='range'] {
  */
 .raid-party-row {
   display: flex;
-  flex-wrap: wrap;
+  /**
+   * Patch 0276: was `wrap`. The companion's own width for Raid View is
+   * only ever an ESTIMATE (IdleView.tsx's own spriteWidthEstimate --
+   * real per-class sprite width lives in HeroSprite's manifest data, not
+   * exposed up here), so it can undershoot slightly for a wider frame of
+   * the running animation. With `wrap`, an undershoot didn't just clip a
+   * few pixels -- it pushed whichever sprite didn't fit onto a second
+   * line entirely, which is exactly the "sprites aren't in line with
+   * each other" bug reported directly (screenshot: two sprites level,
+   * one dropped below and offset). `nowrap` + the `overflow: hidden`
+   * below turns the same undershoot into, at worst, a sliver of the
+   * widest sprite clipped at the window edge -- still visually alongside
+   * its party, never staggered onto its own row.
+   */
+  flex-wrap: nowrap;
+  overflow: hidden;
   align-items: flex-end;
   justify-content: center;
   gap: 6px;

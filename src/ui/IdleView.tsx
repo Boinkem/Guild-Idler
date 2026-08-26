@@ -295,7 +295,18 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
     // room for full-height sprites that no longer exist once a party
     // shrinks below its old fixed size, leaving the widened window mostly
     // empty padding around a much smaller row.
-    const spriteWidthEstimate = knightHeight * raidPartyScale(activeRaidParty.length) * 0.75;
+    //
+    // Patch 0276: bumped 0.75 -> 0.9. This is still just an estimate (see
+    // this effect's own comment above -- real per-class sprite width
+    // isn't available here), but 0.75 was tuned closer to a static
+    // standing pose than the `run` animation these sprites actually use,
+    // which reaches noticeably wider than its resting frame mid-stride
+    // with a weapon or cape extended. .raid-party-row itself now clips
+    // rather than staggers onto a second line if this still undershoots
+    // for a particular class (see that rule's own comment in app.css),
+    // so this number only needs to get CLOSE, not be exact -- just close
+    // enough that clipping is the rare exception, not the common case.
+    const spriteWidthEstimate = knightHeight * raidPartyScale(activeRaidParty.length) * 0.9;
     const gap = 6;
     const horizontalPadding = 48;
     const requested = activeRaidParty.length * spriteWidthEstimate

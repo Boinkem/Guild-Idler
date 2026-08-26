@@ -21774,3 +21774,62 @@ Direct request, with a screenshot: the board's quest chain cards were showing "C
 Touched files: `QuestResultModal.tsx`, `RaidResultModal.tsx`, `GearScoreBadge.tsx`, `DiscoveredQuestsPanel.tsx`, `TestingPanel.tsx`, `StatsPanel.tsx`, `LorePanel.tsx`, `EquipmentPanel.tsx`, `QuestPanel.tsx`, `HatcheryPanel.tsx`, `VendorsPanel.tsx`, `DashboardPanel.tsx`, `HeroesPanel.tsx`, `GuildPanel.tsx`, `RaidsPanel.tsx`, `maxFlash.tsx`, `CraftingStation.tsx`, `OfflineReportModal.tsx`, `IdleView.tsx`, `HeroStatusBar.tsx`, `GuildManager.ts`, `progression.ts`, `engine.ts`. A final full-codebase sweep after all the individual fixes confirmed zero player-facing `—` occurrences remain outside the two deliberately-preserved exceptions above.
 
 **Verified:** `npx tsc --noEmit` and a full `vite build` (both Electron sub-builds included) pass clean.
+
+### Bug Fix: corner companion's raid party sprites staggering onto a second, offset line instead of staying in one row (patch 0276)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed raid party sprites on the corner companion sometimes staggering out of line with each other instead of running in a neat row
+```
+
+Direct report, with a screenshot: a 3-hero raid party's sprites on the
+corner companion (Settings > Knight > "Raid party view", patch 0245)
+weren't level with each other -- two sat together and the third sat
+lower and offset, rather than all three running in one line.
+
+**Root cause: the companion's width for Raid View is only ever an
+estimate, and `.raid-party-row` handled an undershoot badly.**
+`IdleView.tsx`'s own width-request effect can't know a hero sprite's
+real per-class frame width (that lives in `HeroSprite`'s manifest data,
+not exposed at this layer), so it estimates one from a flat multiplier
+of the sprite's rendered height. `.raid-party-row` had `flex-wrap: wrap`
+-- fine when the estimate is roughly right, but the moment it undershot
+even slightly (a `run`-animation frame reaches wider than a resting pose
+mid-stride, with a weapon or cape extended), the sprite that didn't fit
+got pushed onto a whole second line instead of just nudging the row
+a little tight. That's exactly the reported symptom: not a few clipped
+pixels, but one party member visibly dropped and offset from the rest.
+
+**Fixed at the layout level, not just by tuning the estimate.** Tuning
+the multiplier alone would still be fragile -- correct for most classes,
+wrong again for whichever pose or class runs widest next. Instead,
+`.raid-party-row` (the companion's own, undecorated usage --
+`IdleView.tsx`'s call site passes no extra className) switched from
+`flex-wrap: wrap` to `flex-wrap: nowrap` with `overflow: hidden`: every
+sprite in the party now always renders on one line, in order, at the
+same baseline. If the width estimate still undershoots on some
+particular class, the worst case is a sliver of the widest sprite
+clipped at the window's edge -- still visibly part of the same row as
+its party, never staggered onto its own line.
+
+**The Raids tab's own active-raid card was deliberately left wrapping.**
+That usage (`RaidsPanel.tsx`'s `ActiveRaidCard`, passing its own
+`raid-active-party-sprites` className) already had its own compound CSS
+override for this exact class, and lives in normal page flow with no
+equivalent width estimate to undershoot -- wrapping there was already
+the intended, natural fallback for a wide Legendary-sized party, not a
+bug, so that override now explicitly restores `flex-wrap: wrap` and
+`overflow: visible` rather than inheriting the companion's new stricter
+behavior.
+
+**Also bumped the width estimate's own multiplier (0.75 -> 0.9)** as a
+secondary, defense-in-depth improvement -- reduces how often the new
+clip-instead-of-stagger fallback even needs to kick in, without
+pretending to be an exact measurement it still isn't.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (both Electron
+sub-builds included) pass clean. Same caveat as prior companion-window
+fixes in this project: actual sprite alignment inside a real OS window
+can't be exercised headlessly in this environment, so this is a direct,
+traceable fix to the exact CSS/estimate mechanism the screenshot points
+to, not something empirically re-run and watched here.
