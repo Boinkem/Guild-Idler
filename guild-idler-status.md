@@ -21626,3 +21626,58 @@ belongs to rather than sharing one blanket rule.
 
 **Verified:** `npx tsc --noEmit` and a full `vite build` (both Electron
 sub-builds included) pass clean.
+
+### Bug Fix: corner companion stuck oversized after toggling "Status bars (corner companion)" off -- setIdleDisplay made idempotent (patch 0272)
+```discord-update
+Dev Update | Bug Fix
+
+- Fixed the corner companion getting stuck resized/oversized after switching "Status bars (corner companion)" off -- the sprite view now always reliably shrinks back to its normal size
+```
+
+Direct report, with a screenshot: after toggling Settings > Knight >
+"Status bars (corner companion)" on then off, the companion stayed at its
+larger, resizable Status Bars footprint while showing the plain sprite
+view inside it -- sprite pushed to the bottom of a mostly-empty window
+instead of the normal compact companion.
+
+**Root cause: `window:setIdleDisplay` (electron/main.ts) could get
+permanently stuck believing it had nothing to do.** The handler opened
+with `if (... || kind === idleDisplayKind) return;` -- a "repeat call,
+nothing changed" fast path. IdleView.tsx's own effect calls this on BOTH
+its cleanup and its new render body whenever the setting flips off (both
+targeting `'sprite'`); if the first of those two calls hadn't finished
+updating the tracked `idleDisplayKind` flag before the second arrived --
+or the tracked flag drifted from the window's real state for any other
+reason -- every later call believing "already there, nothing to do"
+would silently no-op forever. The window stays stuck at whatever
+size/resizable state it was last actually given, with no path back to
+correct, while the renderer has already moved on to rendering the plain
+sprite view inside it.
+
+**Fix: every call now unconditionally re-applies the full resizable/size
+state for the requested `kind`, dropping the `kind === idleDisplayKind`
+shortcut entirely.** A genuinely redundant repeat call becomes a harmless
+no-op at the OS level instead (`setBounds`/`setResizable` with values
+that already match do nothing visible) rather than an intentional
+early-return that trusted a flag which had no way to self-correct if it
+was ever wrong. `idleDisplayKind` itself is still updated at the end of
+every call, same as before -- this only removes the guard that skipped
+the actual resize work, not the bookkeeping.
+
+**Confirmed the surrounding CSS wasn't a separate contributing bug.**
+`.idle-root` uses `justify-content: flex-end` (bottom-anchors its
+content, by design, so the compact sprite view always sits flush with
+the bottom of a tightly-sized companion window) -- exactly consistent
+with the reported symptom once the window itself failed to shrink back
+down: a large blank gap above, sprite/banners/buttons compressed at the
+bottom. No changes needed there; it was working exactly as designed
+against a window that never returned to its normal size.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (both Electron
+sub-builds included) pass clean. Window resize/resizable behavior itself
+can't be exercised headlessly in this environment (Electron native window
+sizing needs a real display) -- the fix is a direct, traceable removal of
+the exact stale-state guard the symptom points to, not something that
+could be empirically re-run here; flagging that for anyone reviewing
+this rather than presenting it as independently confirmed against the
+live window.

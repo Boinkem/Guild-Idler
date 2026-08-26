@@ -852,13 +852,30 @@ ipcMain.handle('window:setIdleWidth', (_e, width: number) => {
  * for why this stays a separate, orthogonal flag rather than a third
  * currentMode value. No-op outside idle mode (menu mode has its own
  * independent, already-resizable story) and no-op with no window, same
- * defensive shape window:setIdleWidth just above already uses. A repeat
- * call with the same kind is a no-op too -- toggling the setting off and
- * back on with nothing else happening shouldn't reset a size the player
- * hasn't actually changed.
+ * defensive shape window:setIdleWidth just above already uses.
+ *
+ * Patch 0272 (bug fix): used to also skip the whole resize/resizable block
+ * whenever `kind === idleDisplayKind`, on the assumption that a repeat
+ * call means nothing actually changed. In practice this made the switch
+ * back to 'sprite' able to get permanently stuck: IdleView.tsx's own
+ * effect fires this on BOTH its cleanup and its new body when the setting
+ * flips off (both targeting 'sprite'), and if the first of those two
+ * calls hadn't finished updating `idleDisplayKind` yet when the second
+ * arrived -- or any other desync between this tracked flag and the
+ * window's real bounds -- every later call believing "already there,
+ * nothing to do" would silently no-op forever, leaving the companion
+ * stuck resizable and oversized while the renderer had already moved on
+ * to rendering the plain sprite view inside it (exactly the reported
+ * "toggle on then off, sprite view ends up tiny/spread out in a huge
+ * window" bug). Every call now unconditionally re-applies the full
+ * resizable/size state for the requested `kind`, regardless of what
+ * `idleDisplayKind` currently claims -- redundant repeat calls become a
+ * harmless no-op AT THE OS LEVEL instead (setBounds/setResizable with
+ * values that already match do nothing visible), and the window can no
+ * longer get stuck in a state this flag insists it isn't in.
  */
 ipcMain.handle('window:setIdleDisplay', (_e, kind: 'sprite' | 'status') => {
-  if (!win || currentMode !== 'idle' || kind === idleDisplayKind) return;
+  if (!win || currentMode !== 'idle') return;
   const activeDisplay = screen.getDisplayMatching(win.getBounds());
 
   if (kind === 'status') {
