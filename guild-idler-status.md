@@ -21681,3 +21681,52 @@ the exact stale-state guard the symptom points to, not something that
 could be empirically re-run here; flagging that for anyone reviewing
 this rather than presenting it as independently confirmed against the
 live window.
+
+### Quest chain card icons -- all 30 chains wired to real dedicated icon art (patch 0273)
+```discord-update
+Dev Update | Card Icons
+
+- All 30 quest chains now have their own dedicated card icon, wired up and ready to go
+```
+
+Direct follow-up to patch 0270's separate-icon field: real icon art for
+every quest chain was generated as a single labeled 8x4 reference sheet
+(30 numbered, named cells) and handed over ready to slot in.
+
+**Extracted all 30 icons from the sheet programmatically.** Rows 1-3 (24
+icons, 8 per row) used a consistent grid pitch throughout. Row 4 (the
+final 6 icons) turned out to sit at a different, wider column spacing
+than rows 1-3 -- confirmed by a visibly misaligned first-pass crop (seams
+cutting into two of the six icons) before being caught and re-measured
+specifically for that row. Every one of the 30 final crops was visually
+verified against a contact sheet before use, and the resulting numbering
+on the source sheet was cross-checked against the chain order directly
+(unlike the earlier banner sheet from patch 0270-era work, this sheet
+had every cell explicitly labeled with its number and chain name, so no
+order-guessing or content-matching was needed this time).
+
+**`quest-chains.json`: every chain's new `icon.path` (patch 0270's field)
+now points at real art**, `chains-icons/<id>.png`, inserted right after
+each chain's existing `banner` field. Left as `.png` rather than
+converting to `.jpg` -- pixel art holds up better without JPEG's lossy
+block compression, and the banner field's `path` override already
+accepts any filename/extension, not just `.jpg` (the `.jpg` guess is
+only ever the DevTool's own advisory default-path convention, not a
+hard requirement -- see patch 0270's own note on that).
+
+**The actual image files are NOT part of this patch.** Delivered
+separately as a ready-to-drop folder of 30 `<chain_id>.png` files for
+manual placement at `public/lore/chains-icons/` -- same reasoning as
+every other art-asset patch here: binary image files don't belong in a
+text diff, and the DevTool's own icon-picker not needing new code
+(patch 0270) means there's nothing to wire up beyond the JSON path
+already set here. Once those 30 files land in that folder, every quest
+chain's card icon should resolve immediately with no further DevTool
+steps required, though each is still fully re-editable there afterward
+same as any other assigned icon.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (both Electron
+sub-builds included) pass clean. Build/typecheck don't depend on the
+actual PNG files being present on disk (a data-driven runtime path
+string, not a build-time asset import), so this passes whether or not
+the art has been dropped in yet.

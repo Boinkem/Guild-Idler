@@ -20,6 +20,9 @@
       "focusY": 54.3,
       "scale": 105
     },
+    "icon": {
+      "path": "chains-icons/millers_problem.png"
+    },
     "stages": [
       {
         "name": "The Miller's Cellar",
@@ -72,6 +75,9 @@
       "focusY": 45.3,
       "scale": 105
     },
+    "icon": {
+      "path": "chains-icons/the_last_clutch.png"
+    },
     "stages": [
       {
         "name": "The Failing Coop",
@@ -111,6 +117,9 @@
       "focusX": 29.4,
       "focusY": 16,
       "scale": 138
+    },
+    "icon": {
+      "path": "chains-icons/crows_warning.png"
     },
     "stages": [
       {
@@ -169,6 +178,9 @@
       "focusY": 31.6,
       "scale": 112
     },
+    "icon": {
+      "path": "chains-icons/harrowers_foot.png"
+    },
     "stages": [
       {
         "name": "The Pattern in the Ash",
@@ -210,6 +222,9 @@
       "focusY": 31.6,
       "scale": 126
     },
+    "icon": {
+      "path": "chains-icons/demon_generals_ledger.png"
+    },
     "stages": [
       {
         "name": "The General's Column",
@@ -250,6 +265,9 @@
       "focusX": 67.5,
       "focusY": 35,
       "scale": 130
+    },
+    "icon": {
+      "path": "chains-icons/what_the_culled_become.png"
     },
     "stages": [
       {
@@ -299,6 +317,9 @@
       "focusX": 70.4,
       "focusY": 40.3,
       "scale": 119
+    },
+    "icon": {
+      "path": "chains-icons/proving_the_bastion.png"
     },
     "stages": [
       {
@@ -357,6 +378,9 @@
       "focusY": 58.3,
       "scale": 127
     },
+    "icon": {
+      "path": "chains-icons/granite_crossing.png"
+    },
     "stages": [
       {
         "name": "The Silent Quarry",
@@ -396,6 +420,9 @@
       "focusX": 71.7,
       "focusY": 48.3,
       "scale": 132
+    },
+    "icon": {
+      "path": "chains-icons/farm_at_the_edge.png"
     },
     "stages": [
       {
@@ -437,6 +464,9 @@
       "focusX": 71.9,
       "focusY": 62.1,
       "scale": 120
+    },
+    "icon": {
+      "path": "chains-icons/the_pale_rider.png"
     },
     "stages": [
       {
@@ -495,6 +525,9 @@
       "focusY": 45.3,
       "scale": 145
     },
+    "icon": {
+      "path": "chains-icons/dragon_hunt.png"
+    },
     "stages": [
       {
         "name": "Follow the Ash Trail",
@@ -551,6 +584,9 @@
       "focusY": 50.3,
       "scale": 121
     },
+    "icon": {
+      "path": "chains-icons/lost_kingdom.png"
+    },
     "stages": [
       {
         "name": "Chart the Grey Marches",
@@ -597,6 +633,9 @@
     "banner": {
       "path": "chains/demon_fortress.png",
       "scale": 121
+    },
+    "icon": {
+      "path": "chains-icons/demon_fortress.png"
     },
     "stages": [
       {
@@ -653,6 +692,9 @@
       "focusX": 78.5,
       "scale": 112
     },
+    "icon": {
+      "path": "chains-icons/ancient_crown.png"
+    },
     "stages": [
       {
         "name": "The Fragment in the Fen",
@@ -700,6 +742,9 @@
       "focusX": 73.3,
       "scale": 120
     },
+    "icon": {
+      "path": "chains-icons/goblin_warband.png"
+    },
     "stages": [
       {
         "name": "Scatter the Outriders",
@@ -740,6 +785,9 @@
       "focusX": 79.6,
       "focusY": 35,
       "scale": 119
+    },
+    "icon": {
+      "path": "chains-icons/third_crown.png"
     },
     "stages": [
       {
@@ -788,6 +836,9 @@
     "banner": {
       "path": "chains/hollow_choir.png",
       "scale": 128
+    },
+    "icon": {
+      "path": "chains-icons/hollow_choir.png"
     },
     "stages": [
       {
@@ -841,6 +892,9 @@
     "banner": {
       "path": "chains/world_ender.png",
       "scale": 128
+    },
+    "icon": {
+      "path": "chains-icons/world_ender.png"
     },
     "stages": [
       {
@@ -906,6 +960,9 @@
       "focusY": 52.7,
       "scale": 135
     },
+    "icon": {
+      "path": "chains-icons/last_pilgrimage.png"
+    },
     "stages": [
       {
         "name": "The Waystone",
@@ -964,6 +1021,9 @@
       "focusY": 47.4,
       "scale": 105
     },
+    "icon": {
+      "path": "chains-icons/hollow_king.png"
+    },
     "stages": [
       {
         "name": "The Grave Reopens",
@@ -1020,6 +1080,9 @@
       "focusY": 82.7,
       "scale": 115
     },
+    "icon": {
+      "path": "chains-icons/the_man_who_sells_maybe.png"
+    },
     "stages": [
       {
         "name": "A Cart That Wasn't There Yesterday",
@@ -1067,6 +1130,9 @@
       "focusX": 64.9,
       "focusY": 60.4,
       "scale": 121
+    },
+    "icon": {
+      "path": "chains-icons/bandits_on_the_old_road.png"
     },
     "stages": [
       {
@@ -1116,6 +1182,9 @@
       "focusY": 56.6,
       "scale": 105
     },
+    "icon": {
+      "path": "chains-icons/something_big_in_the_foothills.png"
+    },
     "stages": [
       {
         "name": "Torn Fences, Missing Herds",
@@ -1163,6 +1232,9 @@
       "focusX": 62.1,
       "focusY": 33.3,
       "scale": 120
+    },
+    "icon": {
+      "path": "chains-icons/full_moon_over_ashvale.png"
     },
     "stages": [
       {
@@ -1212,6 +1284,9 @@
       "focusY": 40,
       "scale": 112
     },
+    "icon": {
+      "path": "chains-icons/body_snatcher_problem.png"
+    },
     "stages": [
       {
         "name": "Wrong Rhythm",
@@ -1260,6 +1335,9 @@
       "focusY": 36.6,
       "scale": 110
     },
+    "icon": {
+      "path": "chains-icons/hunt_a_lich.png"
+    },
     "stages": [
       {
         "name": "The Dead Don't Usually Plan",
@@ -1306,6 +1384,9 @@
       "path": "chains/quiet_in_millbrook.png",
       "scale": 119
     },
+    "icon": {
+      "path": "chains-icons/quiet_in_millbrook.png"
+    },
     "stages": [
       {
         "name": "Flat Answers",
@@ -1344,6 +1425,9 @@
     "banner": {
       "path": "chains/the_loom_beneath.png",
       "scale": 108
+    },
+    "icon": {
+      "path": "chains-icons/the_loom_beneath.png"
     },
     "stages": [
       {
@@ -1385,6 +1469,9 @@
       "focusY": 38.3,
       "scale": 110
     },
+    "icon": {
+      "path": "chains-icons/the_first_haul.png"
+    },
     "stages": [
       {
         "name": "Clearing the Old Grounds",
@@ -1425,6 +1512,9 @@
       "focusX": 76.9,
       "focusY": 35,
       "scale": 119
+    },
+    "icon": {
+      "path": "chains-icons/kindred_moon.png"
     },
     "stages": [
       {
