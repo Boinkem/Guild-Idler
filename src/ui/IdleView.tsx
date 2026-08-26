@@ -249,9 +249,9 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
     ? ` (auto-chain ${hero.autoChainCount}/${hero.autoChainTarget})`
     : '';
   const status = quest
-    ? `${quest.offer.name} — ${formatDuration(quest.endsAt - now)} left${chainProgress}`
+    ? `${quest.offer.name}, ${formatDuration(quest.endsAt - now)} left${chainProgress}`
     : raiding
-      ? `On a raid — ${formatDuration((engine.state.activeRaid?.endsAt ?? now) - now)} left`
+      ? `On a raid, ${formatDuration((engine.state.activeRaid?.endsAt ?? now) - now)} left`
       : injured
         ? `${hero.injuries[0].name}. Heals in ${formatDuration(hero.injuries[0].healsAt - now)}.`
         : questsReady > 0
@@ -462,7 +462,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
                 <button
                   className={`knight-button ${anim}`}
                   onClick={onOpenMenu}
-                  title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''} — click to open the guild menu`}
+                  title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, click to open the guild menu`}
                   aria-label={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}. Open the guild menu.`}
                 >
                   <HeroSprite
@@ -505,7 +505,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
           // Kept deliberately plain (no sprite-shaped chrome) so it doesn't
           // read as a placeholder waiting for art.
           <button className="btn-ghost" onClick={onOpenMenu} style={{ margin: '20px 0' }}>
-            {hero.name} — open guild
+            {hero.name}, open guild
           </button>
         )}
 
@@ -517,7 +517,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
             onClick={handlePetClick}
             style={{ '--pet-drag-x': `${settings.petOffsetX}px`, '--pet-drag-y': `${settings.petOffsetY}px` } as React.CSSProperties}
             title={equippedPet.name}
-            aria-label={`${equippedPet.name} — open guild, or drag to reposition while unlocked`}
+            aria-label={`${equippedPet.name}, open guild, or drag to reposition while unlocked`}
           >
             <PetSprite
               species={petDef.spriteFolder}

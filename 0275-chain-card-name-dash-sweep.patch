@@ -1,0 +1,737 @@
+diff --git a/guild-idler-status.md b/guild-idler-status.md
+index 9025f87..58eced7 100644
+--- a/guild-idler-status.md
++++ b/guild-idler-status.md
+@@ -21750,3 +21750,27 @@ Direct follow-up to patch 0270's separate-icon-vs-banner split and patch 0273's
+ **The actual image files are NOT part of this patch**, same reasoning as patch 0273's icon delivery: binary art doesn't belong in a text diff. Delivered separately as two ready-to-drop folders -- 30 `<chain_id>.png` files for `public/lore/chains/`, 8 `<raid_id>.png` files for `public/lore/raids/`. Once those land, every chain and raid's banner should resolve immediately in both the collapsed-card view (still showing the dedicated `icon` from patch 0273 where assigned) and the detail-modal/active-raid views (which always show this full `banner`, per patch 0270's own split).
+ 
+ **Verified:** `npx tsc --noEmit` and a full `vite build` (both Electron sub-builds included) pass clean.
++
++### Quest chain board card decluttered to just the chain name; stage moved to the detail view; every "A — B" dash separator in the game replaced (patch 0275)
++```discord-update
++Dev Update | Quest Board
++
++- Quest chain cards on the board now show just the chain's name, not the stage name crammed onto the end of it
++- Tap into a chain quest to see which stage you're on, same as before, just one tap deeper
++- Cleaned up every " — " dash separator across the whole game's text, in favor of plain commas and periods
++```
++
++Direct request, with a screenshot: the board's quest chain cards were showing "Chain Name — Stage Name" as one combined title, competing for space against the difficulty tag, chain-progress tag, success%, and gold already crowding that same row. Two follow-ups folded in during the same request: the stage name shouldn't just disappear (still needs to be visible somewhere after tapping in), and separately, every other place in the game using the same " — " dash-separator convention should switch to a comma or full stop instead.
++
++**`QuestOffer` gained a new `stageName?: string` field** (types.ts), split out from `name`. `QuestManager.chainOffer`/`chainReplayOffer` (the only two places that ever built a chain offer's display name) now set `name` to just `chain.name` -- the replay-difficulty suffix (`[Replay: Heroic]` etc) still attaches directly to `name`, since that's still compact, glanceable board info, not the part anyone asked to declutter. The stage name moves to the new `stageName` field instead of disappearing.
++
++**Both chain detail modals show the stage name now** (`QuestDetailModal` in QuestPanel.tsx, `ChainDetailModal` in DiscoveredQuestsPanel.tsx) -- the existing "Chain 2/4" progress badge became "Chain 2/4, The Failing Coop" (comma, not the dropped em dash) once tapped into, so the stage is still exactly one tap away, just off the compact card itself. The compact card (`QuestRow`/`ChainRow`) only ever read `offer.name` to begin with, so it automatically picked up the shorter title with zero changes needed there.
++
++**The dash-separator sweep went wider than just this card**, per the direct follow-up ask. Checked every `—` in the codebase, filtered down to genuinely player-facing text (UI strings, tooltips, toast messages) -- deliberately left alone: code comments (developer documentation, never shown to a player) and one standalone `'—'` used as a plain "no value" table placeholder in StatsPanel.tsx, a different, standard convention from the "A — B" separator pattern actually being asked about. That left 65 real occurrences across 23 files, each converted to whichever reads more naturally:
++
++- **Comma** for short label/value pairs and title-like combos -- "Raid Name, Heroic", "Auto Heal, full in 12m", "Questing, The Miller's Problem" (HeroStatusBar's own status line from patch 0269), "Gear Score 340, Epic", and so on.
++- **Period** for genuinely separate sentences/clauses -- "Hero has fallen. Revive them from the Heroes tab.", "Bought once, kept forever. Retirement does not take these away.", the chain-description-plus-flavour join in both detail modals.
++
++Touched files: `QuestResultModal.tsx`, `RaidResultModal.tsx`, `GearScoreBadge.tsx`, `DiscoveredQuestsPanel.tsx`, `TestingPanel.tsx`, `StatsPanel.tsx`, `LorePanel.tsx`, `EquipmentPanel.tsx`, `QuestPanel.tsx`, `HatcheryPanel.tsx`, `VendorsPanel.tsx`, `DashboardPanel.tsx`, `HeroesPanel.tsx`, `GuildPanel.tsx`, `RaidsPanel.tsx`, `maxFlash.tsx`, `CraftingStation.tsx`, `OfflineReportModal.tsx`, `IdleView.tsx`, `HeroStatusBar.tsx`, `GuildManager.ts`, `progression.ts`, `engine.ts`. A final full-codebase sweep after all the individual fixes confirmed zero player-facing `—` occurrences remain outside the two deliberately-preserved exceptions above.
++
++**Verified:** `npx tsc --noEmit` and a full `vite build` (both Electron sub-builds included) pass clean.
+diff --git a/src/game/data/progression.ts b/src/game/data/progression.ts
+index 2a79185..851b654 100644
+--- a/src/game/data/progression.ts
++++ b/src/game/data/progression.ts
+@@ -108,7 +108,7 @@ export const UPGRADES: UpgradeDef[] = [
+   },
+   {
+     id: 'black_market_contact', name: 'Black Market Contact',
+-    description: "Someone who knows someone. Unlocks a second, pricier stock rotation biased toward rare and legendary gear — often stock the regular armourer would never touch.",
++    description: "Someone who knows someone. Unlocks a second, pricier stock rotation biased toward rare and legendary gear, often stock the regular armourer would never touch.",
+     baseCost: Tuning.get('upgrade.black_market_contact.baseCost'),
+     costGrowth: Tuning.get('upgrade.black_market_contact.costGrowth'),
+     maxLevel: Tuning.get('upgrade.black_market_contact.maxLevel'),
+@@ -116,7 +116,7 @@ export const UPGRADES: UpgradeDef[] = [
+   },
+   {
+     id: 'auto_chain', name: 'Auto-Chain',
+-    description: 'A hero keeps taking the next contract on their own instead of waiting for orders — for a while. Each level lets the streak run longer before it needs a fresh send.',
++    description: 'A hero keeps taking the next contract on their own instead of waiting for orders, for a while. Each level lets the streak run longer before it needs a fresh send.',
+     baseCost: Tuning.get('upgrade.auto_chain.baseCost'),
+     costGrowth: Tuning.get('upgrade.auto_chain.costGrowth'),
+     maxLevel: Tuning.get('upgrade.auto_chain.maxLevel'),
+diff --git a/src/game/engine.ts b/src/game/engine.ts
+index d28749d..d413ef8 100644
+--- a/src/game/engine.ts
++++ b/src/game/engine.ts
+@@ -571,7 +571,7 @@ export class GameEngine {
+           if (chainResult.continued) {
+             playSound('depart');
+             const label = chainResult.via === 'chain' ? 'chain step' : 'streak';
+-            this.say(`${chainHero.name} keeps going — ${chainResult.completedCount}/${chainResult.target} in this ${label}.`, 'quests');
++            this.say(`${chainHero.name} keeps going, ${chainResult.completedCount}/${chainResult.target} in this ${label}.`, 'quests');
+           } else if (chainResult.stoppedByFailure) {
+             playSound('quest_fail');
+             const note = chainResult.via === 'chain' ? 'a failed stage' : 'a failed quest';
+@@ -1814,7 +1814,7 @@ export class GameEngine {
+         if (this.state.notifiedSetBonuses.includes(key)) continue;
+         this.state.notifiedSetBonuses.push(key);
+         playSound('legendary_drop');
+-        this.say(`${set.name} — ${bonus.label} unlocked!`, 'equipment', true);
++        this.say(`${set.name}, ${bonus.label} unlocked!`, 'equipment', true);
+       }
+     }
+   }
+diff --git a/src/game/managers/GuildManager.ts b/src/game/managers/GuildManager.ts
+index 996ca13..cd7bb43 100644
+--- a/src/game/managers/GuildManager.ts
++++ b/src/game/managers/GuildManager.ts
+@@ -110,7 +110,7 @@ export const GuildManager = {
+     const def = UPGRADE_BY_ID[id];
+     if (!def) return 'Unknown upgrade.';
+     if (def.vendor && !isVendorUpgradeUnlocked(state.vendorLevels[def.vendor], def.vendor, def.id)) {
+-      return 'Not offered yet — level up the vendor first.';
++      return 'Not offered yet. Level up the vendor first.';
+     }
+     const level = GuildManager.upgradeLevel(state, id);
+     if (level >= def.maxLevel) return 'Already at maximum.';
+diff --git a/src/game/managers/QuestManager.ts b/src/game/managers/QuestManager.ts
+index 35e776f..a844b9c 100644
+--- a/src/game/managers/QuestManager.ts
++++ b/src/game/managers/QuestManager.ts
+@@ -531,7 +531,15 @@ export const QuestManager = {
+     const cfg = DIFFICULTIES[stageDef.difficulty];
+     return {
+       id: `chain:${chain.id}:${stage}`,
+-      name: `${chain.name} — ${stageDef.name}`,
++      // Patch 0275: just the chain's own name now, not "Chain — Stage" --
++      // direct request, the board card was reading as cluttered with the
++      // stage name glued on. The stage name doesn't disappear, it moves to
++      // its own `stageName` field instead (see QuestOffer.stageName's own
++      // comment in types.ts) -- still shown, just one tap away in the
++      // detail modal rather than on the compact card every offer already
++      // crowds for space.
++      name: chain.name,
++      stageName: stageDef.name,
+       flavour: stageDef.flavour,
+       difficulty: stageDef.difficulty,
+       tag: stageDef.tag,
+@@ -608,7 +616,12 @@ export const QuestManager = {
+     const diffCfg = CHAIN_REPLAY_DIFFICULTIES[difficulty];
+     return {
+       id: `chainReplay:${chain.id}:${stage}:${difficulty}`,
+-      name: `${chain.name} — ${stageDef.name}${difficulty !== 'normal' ? ` [Replay: ${difficulty === 'heroic' ? 'Heroic' : 'Legendary'}]` : ' [Replay]'}`,
++      // Patch 0275: same name/stageName split as chainOffer above -- the
++      // replay difficulty tag stays attached to `name` (still a compact,
++      // glanceable "what am I looking at" label), the stage name moves to
++      // `stageName`.
++      name: `${chain.name}${difficulty !== 'normal' ? ` [Replay: ${difficulty === 'heroic' ? 'Heroic' : 'Legendary'}]` : ' [Replay]'}`,
++      stageName: stageDef.name,
+       flavour: stageDef.flavour,
+       difficulty: stageDef.difficulty,
+       tag: stageDef.tag,
+diff --git a/src/game/types.ts b/src/game/types.ts
+index 879bdab..9fcb42b 100644
+--- a/src/game/types.ts
++++ b/src/game/types.ts
+@@ -795,6 +795,20 @@ export interface QuestOffer {
+   rewardXp: number;
+   loot: LootRoll[];
+   reqLevel: number;
++  /**
++   * Patch 0275. This stage's own name, distinct from `name` above -- a
++   * chain offer's `name` is now just the chain's own name (e.g. "The
++   * Miller's Problem"), not "Chain Name — Stage Name", since the combined
++   * form read as cluttered on the board card that has to fit a name,
++   * difficulty tag, chain-progress tag, success%, and gold all in one
++   * row. `stageName` carries the part that got dropped -- only ever set
++   * for a chain offer (QuestManager.chainOffer / chainReplayOffer), left
++   * undefined for a plain board offer, which never had a stage to begin
++   * with. Shown in the expanded detail view (QuestDetailModal /
++   * ChainDetailModal), not the compact card -- see those components' own
++   * comments for exactly where.
++   */
++  stageName?: string;
+   /** Set when this offer is one stage of a chain. */
+   /** `replay`, if set, marks this offer as a chain-replay stage rather
+    *  than a first-clear one -- see ChainReplayDifficulty's own comment
+diff --git a/src/ui/CraftingStation.tsx b/src/ui/CraftingStation.tsx
+index 13bfc89..2e05812 100644
+--- a/src/ui/CraftingStation.tsx
++++ b/src/ui/CraftingStation.tsx
+@@ -303,7 +303,7 @@ export function ItemPreviewModal({
+           </div>
+         )}
+         <div className="tiny muted" style={{ marginTop: 4 }}>
+-          {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
++          {item.durability === 0 ? 'Broken, no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+         </div>
+         {extra}
+         <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+diff --git a/src/ui/GearScoreBadge.tsx b/src/ui/GearScoreBadge.tsx
+index 5f62c16..fd652c8 100644
+--- a/src/ui/GearScoreBadge.tsx
++++ b/src/ui/GearScoreBadge.tsx
+@@ -44,7 +44,7 @@ export function GearScoreBadge({
+       <span
+         className={`gear-score-badge ${size === 'small' ? 'gear-score-badge-small' : ''} ${flashing ? 'gear-score-tierup' : ''}`}
+         style={{ '--gear-score-color': tier.color } as React.CSSProperties}
+-        title={`Gear Score ${score} — ${tier.name}${nextTier ? ` (${nextTier.min - score} to ${nextTier.name})` : ' (max tier)'}`}
++        title={`Gear Score ${score}, ${tier.name}${nextTier ? ` (${nextTier.min - score} to ${nextTier.name})` : ' (max tier)'}`}
+       >
+         ⛨ {score}
+       </span>
+diff --git a/src/ui/HeroStatusBar.tsx b/src/ui/HeroStatusBar.tsx
+index d93fbae..a1c8124 100644
+--- a/src/ui/HeroStatusBar.tsx
++++ b/src/ui/HeroStatusBar.tsx
+@@ -53,7 +53,7 @@ export function heroStatusInfo(engine: GameEngine, now: number, hero: Hero): Her
+       const pct = Math.max(0, Math.min(100, Math.round((elapsed / totalMs) * 100)));
+       return {
+         hero,
+-        statusLine: 'Recovering — cannot be sent',
++        statusLine: 'Recovering, cannot be sent',
+         timeLabel: pct >= 100 ? 'Revive ready' : 'Fallen',
+         percent: pct,
+         remainingMs: Math.max(0, totalMs - elapsed),
+@@ -64,7 +64,7 @@ export function heroStatusInfo(engine: GameEngine, now: number, hero: Hero): Her
+     // there's genuinely no ETA to show, so the bar sits at 0 rather than
+     // implying progress toward something that isn't happening on its own.
+     return {
+-      hero, statusLine: 'Recovering — cannot be sent', timeLabel: 'Fallen',
++      hero, statusLine: 'Recovering, cannot be sent', timeLabel: 'Fallen',
+       percent: 0, remainingMs: Number.POSITIVE_INFINITY, kind: 'fallen',
+     };
+   }
+@@ -76,7 +76,7 @@ export function heroStatusInfo(engine: GameEngine, now: number, hero: Hero): Her
+     const raidName = RAID_BY_ID[activeRaid.raidId]?.name ?? 'a raid';
+     return {
+       hero,
+-      statusLine: `Raiding — ${raidName}`,
++      statusLine: `Raiding, ${raidName}`,
+       timeLabel: remaining <= 0 ? 'Ready to claim' : `${formatDuration(remaining)} left`,
+       percent: Math.min(100, pct),
+       remainingMs: remaining,
+@@ -91,7 +91,7 @@ export function heroStatusInfo(engine: GameEngine, now: number, hero: Hero): Her
+     const pct = Math.round(((total - remaining) / total) * 100);
+     return {
+       hero,
+-      statusLine: `Questing — ${quest.offer.name}`,
++      statusLine: `Questing, ${quest.offer.name}`,
+       timeLabel: remaining <= 0 ? 'Ready to claim' : `${formatDuration(remaining)} left`,
+       percent: Math.min(100, pct),
+       remainingMs: remaining,
+diff --git a/src/ui/IdleView.tsx b/src/ui/IdleView.tsx
+index 8318f39..caa348f 100644
+--- a/src/ui/IdleView.tsx
++++ b/src/ui/IdleView.tsx
+@@ -249,9 +249,9 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+     ? ` (auto-chain ${hero.autoChainCount}/${hero.autoChainTarget})`
+     : '';
+   const status = quest
+-    ? `${quest.offer.name} — ${formatDuration(quest.endsAt - now)} left${chainProgress}`
++    ? `${quest.offer.name}, ${formatDuration(quest.endsAt - now)} left${chainProgress}`
+     : raiding
+-      ? `On a raid — ${formatDuration((engine.state.activeRaid?.endsAt ?? now) - now)} left`
++      ? `On a raid, ${formatDuration((engine.state.activeRaid?.endsAt ?? now) - now)} left`
+       : injured
+         ? `${hero.injuries[0].name}. Heals in ${formatDuration(hero.injuries[0].healsAt - now)}.`
+         : questsReady > 0
+@@ -462,7 +462,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+                 <button
+                   className={`knight-button ${anim}`}
+                   onClick={onOpenMenu}
+-                  title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''} — click to open the guild menu`}
++                  title={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, click to open the guild menu`}
+                   aria-label={`${hero.name}${displayTitle ? ', ' + displayTitle : ''}, level ${hero.level}. Open the guild menu.`}
+                 >
+                   <HeroSprite
+@@ -505,7 +505,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+           // Kept deliberately plain (no sprite-shaped chrome) so it doesn't
+           // read as a placeholder waiting for art.
+           <button className="btn-ghost" onClick={onOpenMenu} style={{ margin: '20px 0' }}>
+-            {hero.name} — open guild
++            {hero.name}, open guild
+           </button>
+         )}
+ 
+@@ -517,7 +517,7 @@ export function IdleView({ onOpenMenu }: { onOpenMenu: () => void }) {
+             onClick={handlePetClick}
+             style={{ '--pet-drag-x': `${settings.petOffsetX}px`, '--pet-drag-y': `${settings.petOffsetY}px` } as React.CSSProperties}
+             title={equippedPet.name}
+-            aria-label={`${equippedPet.name} — open guild, or drag to reposition while unlocked`}
++            aria-label={`${equippedPet.name}, open guild, or drag to reposition while unlocked`}
+           >
+             <PetSprite
+               species={petDef.spriteFolder}
+diff --git a/src/ui/OfflineReportModal.tsx b/src/ui/OfflineReportModal.tsx
+index 87e0e0c..2340901 100644
+--- a/src/ui/OfflineReportModal.tsx
++++ b/src/ui/OfflineReportModal.tsx
+@@ -161,7 +161,7 @@ export function OfflineReportModal({ active }: { active: boolean }) {
+               >
+                 <div className="spread">
+                   <span className="card-title">
+-                    {raid.raidName} — {RAID_DIFFICULTY_LABEL[raid.difficulty]}
++                    {raid.raidName}, {RAID_DIFFICULTY_LABEL[raid.difficulty]}
+                   </span>
+                   <span className={`small ${raid.fullClear ? 'good' : raid.encountersCleared > 0 ? '' : 'bad'}`}>
+                     {raid.fullClear ? 'Full clear' : `${raid.encountersCleared}/${raid.totalEncounters}`}
+diff --git a/src/ui/QuestResultModal.tsx b/src/ui/QuestResultModal.tsx
+index 54604d5..1884dc9 100644
+--- a/src/ui/QuestResultModal.tsx
++++ b/src/ui/QuestResultModal.tsx
+@@ -253,16 +253,16 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
+                 buried in the same line as any other scrape. */}
+             {result.heroFallen && (
+               <div className="small bad" style={{ fontWeight: 700 }}>
+-                {result.heroName} has fallen — revive them from the Heroes tab before sending them out again.
++                {result.heroName} has fallen. Revive them from the Heroes tab before sending them out again.
+               </div>
+             )}
+             {result.petFallen && (
+               <div className="small bad" style={{ fontWeight: 700 }}>
+-                {result.petFallen.petName} has fallen — revive them from the Heroes tab.
++                {result.petFallen.petName} has fallen. Revive them from the Heroes tab.
+               </div>
+             )}
+             {result.injury && (
+-              <div className="small bad">{result.injury.name} — {result.injury.description}</div>
++              <div className="small bad">{result.injury.name}. {result.injury.description}</div>
+             )}
+             {result.brokenItems.length > 0 && (
+               <div className="small bad">Broken: {result.brokenItems.join(', ')}</div>
+diff --git a/src/ui/RaidResultModal.tsx b/src/ui/RaidResultModal.tsx
+index 3de0d28..48ba9b6 100644
+--- a/src/ui/RaidResultModal.tsx
++++ b/src/ui/RaidResultModal.tsx
+@@ -108,7 +108,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
+         className={`modal raid-result-modal ${result.fullClear ? 'raid-full-clear' : ''} ${dismissing ? 'dismissing' : ''}`}
+         onClick={(e) => e.stopPropagation()}
+       >
+-        <h3>{result.raidName} — {RAID_DIFFICULTY_LABEL[result.difficulty]}</h3>
++        <h3>{result.raidName}, {RAID_DIFFICULTY_LABEL[result.difficulty]}</h3>
+         <p className={`small ${result.fullClear ? 'good' : result.encountersCleared > 0 ? '' : 'bad'}`} style={{ marginTop: 0 }}>
+           {result.fullClear
+             ? 'Full clear.'
+@@ -150,12 +150,12 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
+                 file's own comment for the full reasoning. */}
+             {result.heroesFallen?.map((h) => (
+               <div key={`fallen-${h.heroId}`} className="small bad" style={{ fontWeight: 700 }}>
+-                {h.heroName} has fallen — revive them from the Heroes tab before sending them out again.
++                {h.heroName} has fallen. Revive them from the Heroes tab before sending them out again.
+               </div>
+             ))}
+             {result.petsFallen?.map((p, i) => (
+               <div key={`pet-fallen-${i}`} className="small bad" style={{ fontWeight: 700 }}>
+-                {p.petName} has fallen — revive them from the Heroes tab.
++                {p.petName} has fallen. Revive them from the Heroes tab.
+               </div>
+             ))}
+             {result.injuries.map((i) => (
+diff --git a/src/ui/maxFlash.tsx b/src/ui/maxFlash.tsx
+index 4539ecd..dc28f37 100644
+--- a/src/ui/maxFlash.tsx
++++ b/src/ui/maxFlash.tsx
+@@ -87,7 +87,7 @@ export function MaxFlash({ label, onDone }: { label: string; onDone: () => void
+ 
+   return (
+     <div className="max-flash-layer" aria-hidden="true">
+-      <span className="max-flash-text">Fully upgraded — {label}</span>
++      <span className="max-flash-text">Fully upgraded, {label}</span>
+       {STAR_BURST.map((s, i) => (
+         <span
+           key={i}
+diff --git a/src/ui/panels/DashboardPanel.tsx b/src/ui/panels/DashboardPanel.tsx
+index 740695c..b8ad657 100644
+--- a/src/ui/panels/DashboardPanel.tsx
++++ b/src/ui/panels/DashboardPanel.tsx
+@@ -288,7 +288,7 @@ export function DashboardPanel() {
+         <p className="tiny muted" style={{ margin: '2px 0 0' }}>{rank.blurb}</p>
+         {next && powerNeeded !== null && (
+           <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+-            Next: {next.name} — {formatNumber(powerNeeded)} more Guild Power.
++            Next: {next.name}, {formatNumber(powerNeeded)} more Guild Power.
+           </p>
+         )}
+       </div>
+diff --git a/src/ui/panels/DiscoveredQuestsPanel.tsx b/src/ui/panels/DiscoveredQuestsPanel.tsx
+index 481e33e..d96ceda 100644
+--- a/src/ui/panels/DiscoveredQuestsPanel.tsx
++++ b/src/ui/panels/DiscoveredQuestsPanel.tsx
+@@ -284,11 +284,13 @@ function ChainDetailModal({
+           <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
+         </div>
+         {offer.chain && (
++          // Patch 0275: same name/stageName split as QuestDetailModal --
++          // see that component's own comment in QuestPanel.tsx.
+           <div className="tag" style={{ color: 'var(--blood)', display: 'inline-block', marginTop: 4 }}>
+-            Chain {offer.chain.stage + 1}/{offer.chain.totalStages}
++            Chain {offer.chain.stage + 1}/{offer.chain.totalStages}{offer.stageName ? `, ${offer.stageName}` : ''}
+           </div>
+         )}
+-        <p className="card-flavour">{chain ? `${chain.description} — ${offer.flavour}` : offer.flavour}</p>
++        <p className="card-flavour">{chain ? `${chain.description} ${offer.flavour}` : offer.flavour}</p>
+ 
+         {levelGap > 0 && (
+           <p className="tiny" style={{ color: 'var(--blood)', margin: '0 0 6px' }}>
+diff --git a/src/ui/panels/EquipmentPanel.tsx b/src/ui/panels/EquipmentPanel.tsx
+index ce58667..b076aec 100644
+--- a/src/ui/panels/EquipmentPanel.tsx
++++ b/src/ui/panels/EquipmentPanel.tsx
+@@ -131,7 +131,7 @@ function DurabilityBar({ item, compact = false, thresholdPercent }: { item: Equi
+           exact number still shows once expanded, same as before. */}
+       {!compact && (
+         <div className="tiny muted">
+-          {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${max}`}
++          {item.durability === 0 ? 'Broken, no bonuses' : `Durability ${item.durability}/${max}`}
+         </div>
+       )}
+     </>
+@@ -179,7 +179,7 @@ function SetInfoBlock({ hero, setId, equipped }: { hero: Hero; setId: string; eq
+   return (
+     <div className="set-info tiny">
+       <div style={{ color: 'var(--teal)' }}>
+-        {set.name} — {count}/{set.pieces.length} equipped on {hero.name}
++        {set.name}, {count}/{set.pieces.length} equipped on {hero.name}
+       </div>
+       {set.bonuses.map((b) => {
+         const met = count >= b.count;
+@@ -704,7 +704,7 @@ function SlotCard({
+                 <SetInfoBlock hero={hero} setId={def.setId} equipped={item.durability > 0} />
+               )}
+               <div className="tiny muted" style={{ marginTop: 4 }}>
+-                {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
++                {item.durability === 0 ? 'Broken, no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+               </div>
+               <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+                 <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
+@@ -815,7 +815,7 @@ function StashCard({
+                 <SetInfoBlock hero={hero} setId={def.setId} equipped={false} />
+               )}
+               <div className="tiny muted" style={{ marginTop: 4 }}>
+-                {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
++                {item.durability === 0 ? 'Broken, no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+               </div>
+               <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
+                 <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
+@@ -920,7 +920,7 @@ export function EquipmentPanel() {
+       <h2>Inventory</h2>
+       <p className="subtitle">
+         Everything the guild owns: worn gear, the shared stash, and consumables on hand.
+-        Buying and selling both happen in the Shop — this is just what you have.
++        Buying and selling both happen in the Shop. This is just what you have.
+       </p>
+ 
+       {/* Guild-wide automation preferences -- live in GameState, not
+diff --git a/src/ui/panels/GuildPanel.tsx b/src/ui/panels/GuildPanel.tsx
+index 52a91d1..5510753 100644
+--- a/src/ui/panels/GuildPanel.tsx
++++ b/src/ui/panels/GuildPanel.tsx
+@@ -364,7 +364,7 @@ export function GuildPanel() {
+ 
+       <div className="section-heading guild-section-heading">Permanent Upgrades</div>
+       <p className="tiny muted" style={{ marginBottom: 10 }}>
+-        Bought once, kept forever — retirement does not take these away. Vendor-specific upgrades
++        Bought once, kept forever. Retirement does not take these away. Vendor-specific upgrades
+         (Blacksmith, Alchemist, Enchanter) live on each vendor's own page in Vendors instead.
+       </p>
+       <div className="card guild-bonus-plaque">
+diff --git a/src/ui/panels/HatcheryPanel.tsx b/src/ui/panels/HatcheryPanel.tsx
+index 4495455..738adb8 100644
+--- a/src/ui/panels/HatcheryPanel.tsx
++++ b/src/ui/panels/HatcheryPanel.tsx
+@@ -247,7 +247,7 @@ function PetCard({ pet, reviveFlash, dismissReviveFlash }: {
+           className="btn-ghost"
+           style={{ padding: 0, border: 'none', background: 'none', minHeight: 0 }}
+           onClick={() => setEnlarged(true)}
+-          title={`${pet.name} — view enlarged`}
++          title={`${pet.name}, view enlarged`}
+         >
+           <PetSprite
+             species={def?.spriteFolder ?? pet.defId}
+diff --git a/src/ui/panels/HeroesPanel.tsx b/src/ui/panels/HeroesPanel.tsx
+index 1b0c4c4..dcd7f2f 100644
+--- a/src/ui/panels/HeroesPanel.tsx
++++ b/src/ui/panels/HeroesPanel.tsx
+@@ -108,7 +108,7 @@ function AutoHealBar({ hero, infirmaryLevel }: { hero: Hero; infirmaryLevel: num
+       <div className="bar heal-timer" style={{ marginTop: 2 }} title="Time until fully healed at the current Infirmary rate">
+         <span style={{ width: `${ratio * 100}%` }} />
+       </div>
+-      <div className="tiny muted">Auto Heal — full in {formatDuration(eta)}</div>
++      <div className="tiny muted">Auto Heal, full in {formatDuration(eta)}</div>
+     </>
+   );
+ }
+@@ -209,7 +209,7 @@ export function HeroesPanel() {
+             <button
+               key={style.id}
+               className={`chip ${active ? 'on' : ''}`}
+-              title={owned ? style.description : `${style.description} — ${formatGold(style.cost)}`}
++              title={owned ? style.description : `${style.description}, ${formatGold(style.cost)}`}
+               onClick={() => (owned ? engine.selectTombstoneStyle(style.id) : engine.buyTombstoneStyle(style.id))}
+               disabled={!owned && state.gold < style.cost}
+             >
+@@ -412,7 +412,7 @@ export function HeroesPanel() {
+                     {hero.injuries.map((injury) => (
+                       <div key={injury.id} className="spread" style={{ marginBottom: 4 }}>
+                         <span className="small bad">
+-                          {injury.name} — heals in {formatDuration(injury.healsAt - now)}
++                          {injury.name}, heals in {formatDuration(injury.healsAt - now)}
+                         </span>
+                         <span className="row">
+                           <button
+@@ -442,8 +442,8 @@ export function HeroesPanel() {
+                       <span className="small bad">
+                         Fallen
+                         {infirmaryAutoReviveUnlocked(infirmaryLevel) && hero.fallenAt
+-                          ? ' — recovers on its own, or pay to skip'
+-                          : ' — needs to be revived before being sent out again'}
++                          ? ', recovers on its own, or pay to skip'
++                          : ', needs to be revived before being sent out again'}
+                       </span>
+                       <button
+                         onClick={() => engine.reviveHero(hero.id)}
+@@ -461,7 +461,7 @@ export function HeroesPanel() {
+                           <div className="bar heal-timer" style={{ marginTop: 4 }} title="Time until free auto-revive">
+                             <span style={{ width: `${ratio * 100}%` }} />
+                           </div>
+-                          <div className="tiny muted">Auto-revive — ready in {formatDuration(remainingMs)}</div>
++                          <div className="tiny muted">Auto-revive, ready in {formatDuration(remainingMs)}</div>
+                         </>
+                       );
+                     })()}
+@@ -492,7 +492,7 @@ export function HeroesPanel() {
+                         key={sk.id}
+                         className={`skin-chip ${active ? 'on' : ''}`}
+                         disabled={!owned}
+-                        title={owned ? sk.name : `${sk.name} — buy in the Skins shop below`}
++                        title={owned ? sk.name : `${sk.name}, buy in the Skins shop below`}
+                         onClick={() => engine.setHeroSkin(hero.id, sk.id)}
+                       >
+                         <span className="skin-dots">
+@@ -517,7 +517,7 @@ export function HeroesPanel() {
+           <p className="small muted">
+             No free slots. The Tavern adds one per level up to 5; beyond that, retire a hero at
+             level {PRESTIGE_MIN_LEVEL}+ in the Prestige tab for Heroic Renown, then spend it on Extra Banner
+-            (up to 4 more) — {slots} is not necessarily your ceiling.
++            (up to 4 more). {slots} is not necessarily your ceiling.
+           </p>
+           {/* Two possible paths named in the prose above, so two links --
+               same "jump to and highlight the requirement" treatment every
+@@ -607,7 +607,7 @@ export function HeroesPanel() {
+       <div className="section-heading">Skins</div>
+       <p className="small muted">
+         Cosmetic liveries, unlocked once for the whole guild and usable by any hero.
+-        A pure gold sink — no effect on stats.
++        A pure gold sink, no effect on stats.
+       </p>
+       <div className="grid three">
+         {SKINS.filter((sk) => sk.id !== 'original').map((sk) => {
+diff --git a/src/ui/panels/LorePanel.tsx b/src/ui/panels/LorePanel.tsx
+index 29b01b1..49eb3f6 100644
+--- a/src/ui/panels/LorePanel.tsx
++++ b/src/ui/panels/LorePanel.tsx
+@@ -214,7 +214,7 @@ function ChainCard({
+           <div className="raid-card-name">{chain.name}</div>
+           <div className="raid-card-meta">
+             {inProgress
+-              ? <span className="tiny muted">underway — {stage}/{chain.stages.length}</span>
++              ? <span className="tiny muted">underway, {stage}/{chain.stages.length}</span>
+               : <span className="tiny gold-text">Lv {chain.reqLevel}</span>}
+           </div>
+           {!inProgress && chain.title && <p className="tiny muted" style={{ margin: '2px 0 0' }}>Grants the title "{chain.title}"</p>}
+@@ -269,7 +269,7 @@ function StoryQuestsTab() {
+       {groups.length === 0 && (
+         <>
+           <div className="section-heading">Completed</div>
+-          <p className="small muted">No chapters finished yet. Contracts on the board sometimes lead somewhere bigger — keep an eye out.</p>
++          <p className="small muted">No chapters finished yet. Contracts on the board sometimes lead somewhere bigger. Keep an eye out.</p>
+         </>
+       )}
+ 
+@@ -388,7 +388,7 @@ function RaidInProgressEntry() {
+         <div className="raid-card-body">
+           <div className="raid-card-name">{raid.name}</div>
+           <div className="raid-card-meta">
+-            <span className="tiny muted">underway — {active.difficulty}</span>
++            <span className="tiny muted">underway, {active.difficulty}</span>
+           </div>
+         </div>
+         <span className="raid-card-chevron" aria-hidden="true">›</span>
+@@ -416,7 +416,7 @@ function StoryRaidsTab() {
+ 
+       <div className="section-heading">Completed</div>
+       {completed.length === 0 ? (
+-        <p className="small muted">No raid has been cleared yet. These need the whole guild, not just one hero — see the Raids tab.</p>
++        <p className="small muted">No raid has been cleared yet. These need the whole guild, not just one hero. See the Raids tab.</p>
+       ) : (
+         completed.map((r) => <RaidCompletedEntry key={r.id} raidId={r.id} />)
+       )}
+@@ -512,13 +512,13 @@ export function LorePanel() {
+             className="card-title"
+             title="Your guild's standing among all who work the Reach."
+           >
+-            {state.guildName || 'This guild'} — {rank.name}
++            {state.guildName || 'This guild'}, {rank.name}
+           </span>
+         </div>
+         <p className="tiny muted" style={{ margin: '4px 0 0' }}>{rank.blurb}</p>
+         {next && powerNeeded !== null && (
+           <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+-            Next: {next.name} — {powerNeeded.toLocaleString()} more Guild Power.
++            Next: {next.name}, {powerNeeded.toLocaleString()} more Guild Power.
+           </p>
+         )}
+       </div>
+diff --git a/src/ui/panels/QuestPanel.tsx b/src/ui/panels/QuestPanel.tsx
+index b470a32..1f2660e 100644
+--- a/src/ui/panels/QuestPanel.tsx
++++ b/src/ui/panels/QuestPanel.tsx
+@@ -212,8 +212,13 @@ export function QuestDetailModal({
+           <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
+         </div>
+         {offer.chain && (
++          // Patch 0275: the stage name lives here now, not glued onto the
++          // card's own title (see QuestOffer.stageName's own comment in
++          // types.ts) -- a comma, not the em dash the card's title used
++          // to use, since this is a direct request to drop that
++          // separator everywhere it showed up.
+           <div className="tag" style={{ color: 'var(--blood)', display: 'inline-block', marginTop: 4 }}>
+-            Chain {offer.chain.stage + 1}/{offer.chain.totalStages}
++            Chain {offer.chain.stage + 1}/{offer.chain.totalStages}{offer.stageName ? `, ${offer.stageName}` : ''}
+           </div>
+         )}
+         {isFrozen && (
+@@ -221,7 +226,7 @@ export function QuestDetailModal({
+             ❄ Frozen
+           </div>
+         )}
+-        <p className="card-flavour">{chain ? `${chain.description} — ${offer.flavour}` : offer.flavour}</p>
++        <p className="card-flavour">{chain ? `${chain.description} ${offer.flavour}` : offer.flavour}</p>
+ 
+         {levelGap > 0 && (
+           <p className="tiny" style={{ color: 'var(--blood)', margin: '0 0 6px' }}>
+diff --git a/src/ui/panels/RaidsPanel.tsx b/src/ui/panels/RaidsPanel.tsx
+index d448472..7e8809d 100644
+--- a/src/ui/panels/RaidsPanel.tsx
++++ b/src/ui/panels/RaidsPanel.tsx
+@@ -709,7 +709,7 @@ function RaidDetailModal({
+           <div className="modal" onClick={(e) => e.stopPropagation()}>
+             <h3>Send the guild?</h3>
+             <p className="small muted" style={{ marginTop: 0 }}>
+-              {raid.name} — {RAID_DIFFICULTY_LABEL[difficulty]}
++              {raid.name}, {RAID_DIFFICULTY_LABEL[difficulty]}
+             </p>
+             <div className="row wrap" style={{ gap: 6, margin: '10px 0' }}>
+               {selectedHeroIds.map((id) => {
+@@ -718,7 +718,7 @@ function RaidDetailModal({
+               })}
+             </div>
+             <p className="small bad" style={{ margin: '0 0 4px' }}>
+-              The whole party is committed until the raid resolves — there's no early retreat.
++              The whole party is committed until the raid resolves. There's no early retreat.
+             </p>
+             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
+               <button onClick={() => setConfirming(false)}>Cancel</button>
+@@ -802,7 +802,7 @@ function ActiveRaidCard() {
+     <div className="card raid-active-card" style={{ borderLeft: `3px solid ${color}` }}>
+       <RaidBanner raidId={active.raidId} banner={raid?.banner} className="raid-active-banner" />
+       <div className="raid-active-header">
+-        <span className="card-title">{raid?.name ?? 'A raid'} — {active.difficulty}</span>
++        <span className="card-title">{raid?.name ?? 'A raid'}, {active.difficulty}</span>
+       </div>
+       {/* Same shared component as the corner companion's own Raid View
+           (IdleView.tsx) -- "the party is out on a raid" reads the same
+diff --git a/src/ui/panels/StatsPanel.tsx b/src/ui/panels/StatsPanel.tsx
+index eb6ed8c..f7c9412 100644
+--- a/src/ui/panels/StatsPanel.tsx
++++ b/src/ui/panels/StatsPanel.tsx
+@@ -64,7 +64,7 @@ function ResultDetailModal({ entry, onClose }: { entry: ResultEntry; onClose: ()
+         )}
+         {raid && (
+           <>
+-            <h3>{raid.raidName} — {RAID_DIFFICULTY_LABEL[raid.difficulty]}</h3>
++            <h3>{raid.raidName}, {RAID_DIFFICULTY_LABEL[raid.difficulty]}</h3>
+             <p className={`small ${raid.fullClear ? 'good' : raid.encountersCleared > 0 ? '' : 'bad'}`} style={{ marginTop: 0 }}>
+               {raid.fullClear
+                 ? 'Full clear.'
+@@ -122,15 +122,15 @@ function ResultDetailModal({ entry, onClose }: { entry: ResultEntry; onClose: ()
+             <div className="section-heading">Damage report</div>
+             {quest.heroFallen && (
+               <div className="small bad" style={{ fontWeight: 700 }}>
+-                {quest.heroName} has fallen — revive them from the Heroes tab before sending them out again.
++                {quest.heroName} has fallen. Revive them from the Heroes tab before sending them out again.
+               </div>
+             )}
+             {quest.petFallen && (
+               <div className="small bad" style={{ fontWeight: 700 }}>
+-                {quest.petFallen.petName} has fallen — revive them from the Heroes tab.
++                {quest.petFallen.petName} has fallen. Revive them from the Heroes tab.
+               </div>
+             )}
+-            {quest.injury && <div className="small bad">{quest.injury.name} — {quest.injury.description}</div>}
++            {quest.injury && <div className="small bad">{quest.injury.name}. {quest.injury.description}</div>}
+             {quest.brokenItems.length > 0 && <div className="small bad">Broken: {quest.brokenItems.join(', ')}</div>}
+           </>
+         )}
+@@ -140,12 +140,12 @@ function ResultDetailModal({ entry, onClose }: { entry: ResultEntry; onClose: ()
+             <div className="section-heading">Damage report</div>
+             {raid.heroesFallen?.map((h) => (
+               <div key={`fallen-${h.heroId}`} className="small bad" style={{ fontWeight: 700 }}>
+-                {h.heroName} has fallen — revive them from the Heroes tab before sending them out again.
++                {h.heroName} has fallen. Revive them from the Heroes tab before sending them out again.
+               </div>
+             ))}
+             {raid.petsFallen?.map((p, i) => (
+               <div key={`pet-fallen-${i}`} className="small bad" style={{ fontWeight: 700 }}>
+-                {p.petName} has fallen — revive them from the Heroes tab.
++                {p.petName} has fallen. Revive them from the Heroes tab.
+               </div>
+             ))}
+             {raid.injuries.map((i) => (
+diff --git a/src/ui/panels/TestingPanel.tsx b/src/ui/panels/TestingPanel.tsx
+index 6c58b50..893d065 100644
+--- a/src/ui/panels/TestingPanel.tsx
++++ b/src/ui/panels/TestingPanel.tsx
+@@ -26,7 +26,7 @@ export function TestingPanel() {
+       <div className="section-heading">Skip time</div>
+       <p className="small muted" style={{ marginBottom: 8 }}>
+         Runs the real offline catch-up (including Auto-Chain) as if this much time had actually
+-        passed — not a free-win button, just not waiting for the clock. Without Auto-Chain, a hero
++        passed, not a free-win button, just not waiting for the clock. Without Auto-Chain, a hero
+         only resolves whatever they were already questing, exactly like real play. Also advances
+         an active raid's own clock the same way, so a skip can resolve one too.
+       </p>
+@@ -99,7 +99,7 @@ export function TestingPanel() {
+             <div>
+               <div className="card-title">{hero.name}</div>
+               <div className="tiny muted">
+-                {quest?.offer.name} — {quest ? formatDuration(quest.endsAt - Date.now()) : '?'} left
++                {quest?.offer.name}, {quest ? formatDuration(quest.endsAt - Date.now()) : '?'} left
+               </div>
+             </div>
+             <button className="btn-primary" onClick={() => engine.testCompleteActiveQuest(hero.id)}>
+@@ -116,7 +116,7 @@ export function TestingPanel() {
+           <div>
+             <div className="card-title">{RAIDS.find((r) => r.id === state.activeRaid!.raidId)?.name ?? 'A raid'}</div>
+             <div className="tiny muted">
+-              {state.activeRaid.difficulty} — {formatDuration(state.activeRaid.endsAt - Date.now())} left
++              {state.activeRaid.difficulty}, {formatDuration(state.activeRaid.endsAt - Date.now())} left
+             </div>
+           </div>
+           <button className="btn-primary" onClick={() => engine.testCompleteActiveRaid()}>
+diff --git a/src/ui/panels/VendorsPanel.tsx b/src/ui/panels/VendorsPanel.tsx
+index 659b56b..804cc4f 100644
+--- a/src/ui/panels/VendorsPanel.tsx
++++ b/src/ui/panels/VendorsPanel.tsx
+@@ -124,7 +124,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
+   const maxed = cost === null;
+ 
+   const { flashes, dismiss } = useMaxFlash([
+-    { id: `vendor:${vendorId}`, name: `${vendorDef.name} — fully trained`, level, maxLevel: upgradeList.length },
++    { id: `vendor:${vendorId}`, name: `${vendorDef.name}, fully trained`, level, maxLevel: upgradeList.length },
+     ...upgradeList.map((def) => ({
+       id: def.id, name: def.name, level: GuildManager.upgradeLevel(state, def.id), maxLevel: def.maxLevel,
+     })),
+@@ -661,7 +661,7 @@ function BlackMarketStock({ now }: { now: number }) {
+     return (
+       <>
+         <p className="small muted">
+-          Rumour is there's a contact who deals in rarer stock — for a price. Unlock via the Black Market
++          Rumour is there's a contact who deals in rarer stock, for a price. Unlock via the Black Market
+           Contact upgrade in Guild Hall.
+         </p>
+         {/* Same "jump to and highlight the requirement" treatment as

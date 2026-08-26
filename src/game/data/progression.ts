@@ -108,7 +108,7 @@ export const UPGRADES: UpgradeDef[] = [
   },
   {
     id: 'black_market_contact', name: 'Black Market Contact',
-    description: "Someone who knows someone. Unlocks a second, pricier stock rotation biased toward rare and legendary gear — often stock the regular armourer would never touch.",
+    description: "Someone who knows someone. Unlocks a second, pricier stock rotation biased toward rare and legendary gear, often stock the regular armourer would never touch.",
     baseCost: Tuning.get('upgrade.black_market_contact.baseCost'),
     costGrowth: Tuning.get('upgrade.black_market_contact.costGrowth'),
     maxLevel: Tuning.get('upgrade.black_market_contact.maxLevel'),
@@ -116,7 +116,7 @@ export const UPGRADES: UpgradeDef[] = [
   },
   {
     id: 'auto_chain', name: 'Auto-Chain',
-    description: 'A hero keeps taking the next contract on their own instead of waiting for orders — for a while. Each level lets the streak run longer before it needs a fresh send.',
+    description: 'A hero keeps taking the next contract on their own instead of waiting for orders, for a while. Each level lets the streak run longer before it needs a fresh send.',
     baseCost: Tuning.get('upgrade.auto_chain.baseCost'),
     costGrowth: Tuning.get('upgrade.auto_chain.costGrowth'),
     maxLevel: Tuning.get('upgrade.auto_chain.maxLevel'),

@@ -124,7 +124,7 @@ function VendorPage({ vendorId }: { vendorId: VendorId }) {
   const maxed = cost === null;
 
   const { flashes, dismiss } = useMaxFlash([
-    { id: `vendor:${vendorId}`, name: `${vendorDef.name} — fully trained`, level, maxLevel: upgradeList.length },
+    { id: `vendor:${vendorId}`, name: `${vendorDef.name}, fully trained`, level, maxLevel: upgradeList.length },
     ...upgradeList.map((def) => ({
       id: def.id, name: def.name, level: GuildManager.upgradeLevel(state, def.id), maxLevel: def.maxLevel,
     })),
@@ -661,7 +661,7 @@ function BlackMarketStock({ now }: { now: number }) {
     return (
       <>
         <p className="small muted">
-          Rumour is there's a contact who deals in rarer stock — for a price. Unlock via the Black Market
+          Rumour is there's a contact who deals in rarer stock, for a price. Unlock via the Black Market
           Contact upgrade in Guild Hall.
         </p>
         {/* Same "jump to and highlight the requirement" treatment as

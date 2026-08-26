@@ -288,7 +288,7 @@ export function DashboardPanel() {
         <p className="tiny muted" style={{ margin: '2px 0 0' }}>{rank.blurb}</p>
         {next && powerNeeded !== null && (
           <p className="tiny muted" style={{ margin: '4px 0 0' }}>
-            Next: {next.name} — {formatNumber(powerNeeded)} more Guild Power.
+            Next: {next.name}, {formatNumber(powerNeeded)} more Guild Power.
           </p>
         )}
       </div>

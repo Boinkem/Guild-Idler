@@ -364,7 +364,7 @@ export function GuildPanel() {
 
       <div className="section-heading guild-section-heading">Permanent Upgrades</div>
       <p className="tiny muted" style={{ marginBottom: 10 }}>
-        Bought once, kept forever — retirement does not take these away. Vendor-specific upgrades
+        Bought once, kept forever. Retirement does not take these away. Vendor-specific upgrades
         (Blacksmith, Alchemist, Enchanter) live on each vendor's own page in Vendors instead.
       </p>
       <div className="card guild-bonus-plaque">

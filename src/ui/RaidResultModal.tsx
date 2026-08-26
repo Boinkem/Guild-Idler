@@ -108,7 +108,7 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
         className={`modal raid-result-modal ${result.fullClear ? 'raid-full-clear' : ''} ${dismissing ? 'dismissing' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3>{result.raidName} — {RAID_DIFFICULTY_LABEL[result.difficulty]}</h3>
+        <h3>{result.raidName}, {RAID_DIFFICULTY_LABEL[result.difficulty]}</h3>
         <p className={`small ${result.fullClear ? 'good' : result.encountersCleared > 0 ? '' : 'bad'}`} style={{ marginTop: 0 }}>
           {result.fullClear
             ? 'Full clear.'
@@ -150,12 +150,12 @@ function RaidResultCard({ result, engine, onViewLore }: { result: RaidResult; en
                 file's own comment for the full reasoning. */}
             {result.heroesFallen?.map((h) => (
               <div key={`fallen-${h.heroId}`} className="small bad" style={{ fontWeight: 700 }}>
-                {h.heroName} has fallen — revive them from the Heroes tab before sending them out again.
+                {h.heroName} has fallen. Revive them from the Heroes tab before sending them out again.
               </div>
             ))}
             {result.petsFallen?.map((p, i) => (
               <div key={`pet-fallen-${i}`} className="small bad" style={{ fontWeight: 700 }}>
-                {p.petName} has fallen — revive them from the Heroes tab.
+                {p.petName} has fallen. Revive them from the Heroes tab.
               </div>
             ))}
             {result.injuries.map((i) => (

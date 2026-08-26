@@ -161,7 +161,7 @@ export function OfflineReportModal({ active }: { active: boolean }) {
               >
                 <div className="spread">
                   <span className="card-title">
-                    {raid.raidName} — {RAID_DIFFICULTY_LABEL[raid.difficulty]}
+                    {raid.raidName}, {RAID_DIFFICULTY_LABEL[raid.difficulty]}
                   </span>
                   <span className={`small ${raid.fullClear ? 'good' : raid.encountersCleared > 0 ? '' : 'bad'}`}>
                     {raid.fullClear ? 'Full clear' : `${raid.encountersCleared}/${raid.totalEncounters}`}

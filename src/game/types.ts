@@ -795,6 +795,20 @@ export interface QuestOffer {
   rewardXp: number;
   loot: LootRoll[];
   reqLevel: number;
+  /**
+   * Patch 0275. This stage's own name, distinct from `name` above -- a
+   * chain offer's `name` is now just the chain's own name (e.g. "The
+   * Miller's Problem"), not "Chain Name — Stage Name", since the combined
+   * form read as cluttered on the board card that has to fit a name,
+   * difficulty tag, chain-progress tag, success%, and gold all in one
+   * row. `stageName` carries the part that got dropped -- only ever set
+   * for a chain offer (QuestManager.chainOffer / chainReplayOffer), left
+   * undefined for a plain board offer, which never had a stage to begin
+   * with. Shown in the expanded detail view (QuestDetailModal /
+   * ChainDetailModal), not the compact card -- see those components' own
+   * comments for exactly where.
+   */
+  stageName?: string;
   /** Set when this offer is one stage of a chain. */
   /** `replay`, if set, marks this offer as a chain-replay stage rather
    *  than a first-clear one -- see ChainReplayDifficulty's own comment

@@ -131,7 +131,7 @@ function DurabilityBar({ item, compact = false, thresholdPercent }: { item: Equi
           exact number still shows once expanded, same as before. */}
       {!compact && (
         <div className="tiny muted">
-          {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${max}`}
+          {item.durability === 0 ? 'Broken, no bonuses' : `Durability ${item.durability}/${max}`}
         </div>
       )}
     </>
@@ -179,7 +179,7 @@ function SetInfoBlock({ hero, setId, equipped }: { hero: Hero; setId: string; eq
   return (
     <div className="set-info tiny">
       <div style={{ color: 'var(--teal)' }}>
-        {set.name} — {count}/{set.pieces.length} equipped on {hero.name}
+        {set.name}, {count}/{set.pieces.length} equipped on {hero.name}
       </div>
       {set.bonuses.map((b) => {
         const met = count >= b.count;
@@ -704,7 +704,7 @@ function SlotCard({
                 <SetInfoBlock hero={hero} setId={def.setId} equipped={item.durability > 0} />
               )}
               <div className="tiny muted" style={{ marginTop: 4 }}>
-                {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+                {item.durability === 0 ? 'Broken, no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
               </div>
               <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
                 <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
@@ -815,7 +815,7 @@ function StashCard({
                 <SetInfoBlock hero={hero} setId={def.setId} equipped={false} />
               )}
               <div className="tiny muted" style={{ marginTop: 4 }}>
-                {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+                {item.durability === 0 ? 'Broken, no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
               </div>
               <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>
                 <button className="btn-primary" onClick={() => setOpen(false)}>Close</button>
@@ -920,7 +920,7 @@ export function EquipmentPanel() {
       <h2>Inventory</h2>
       <p className="subtitle">
         Everything the guild owns: worn gear, the shared stash, and consumables on hand.
-        Buying and selling both happen in the Shop — this is just what you have.
+        Buying and selling both happen in the Shop. This is just what you have.
       </p>
 
       {/* Guild-wide automation preferences -- live in GameState, not

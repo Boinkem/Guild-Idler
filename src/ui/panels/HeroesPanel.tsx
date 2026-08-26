@@ -108,7 +108,7 @@ function AutoHealBar({ hero, infirmaryLevel }: { hero: Hero; infirmaryLevel: num
       <div className="bar heal-timer" style={{ marginTop: 2 }} title="Time until fully healed at the current Infirmary rate">
         <span style={{ width: `${ratio * 100}%` }} />
       </div>
-      <div className="tiny muted">Auto Heal — full in {formatDuration(eta)}</div>
+      <div className="tiny muted">Auto Heal, full in {formatDuration(eta)}</div>
     </>
   );
 }
@@ -209,7 +209,7 @@ export function HeroesPanel() {
             <button
               key={style.id}
               className={`chip ${active ? 'on' : ''}`}
-              title={owned ? style.description : `${style.description} — ${formatGold(style.cost)}`}
+              title={owned ? style.description : `${style.description}, ${formatGold(style.cost)}`}
               onClick={() => (owned ? engine.selectTombstoneStyle(style.id) : engine.buyTombstoneStyle(style.id))}
               disabled={!owned && state.gold < style.cost}
             >
@@ -412,7 +412,7 @@ export function HeroesPanel() {
                     {hero.injuries.map((injury) => (
                       <div key={injury.id} className="spread" style={{ marginBottom: 4 }}>
                         <span className="small bad">
-                          {injury.name} — heals in {formatDuration(injury.healsAt - now)}
+                          {injury.name}, heals in {formatDuration(injury.healsAt - now)}
                         </span>
                         <span className="row">
                           <button
@@ -442,8 +442,8 @@ export function HeroesPanel() {
                       <span className="small bad">
                         Fallen
                         {infirmaryAutoReviveUnlocked(infirmaryLevel) && hero.fallenAt
-                          ? ' — recovers on its own, or pay to skip'
-                          : ' — needs to be revived before being sent out again'}
+                          ? ', recovers on its own, or pay to skip'
+                          : ', needs to be revived before being sent out again'}
                       </span>
                       <button
                         onClick={() => engine.reviveHero(hero.id)}
@@ -461,7 +461,7 @@ export function HeroesPanel() {
                           <div className="bar heal-timer" style={{ marginTop: 4 }} title="Time until free auto-revive">
                             <span style={{ width: `${ratio * 100}%` }} />
                           </div>
-                          <div className="tiny muted">Auto-revive — ready in {formatDuration(remainingMs)}</div>
+                          <div className="tiny muted">Auto-revive, ready in {formatDuration(remainingMs)}</div>
                         </>
                       );
                     })()}
@@ -492,7 +492,7 @@ export function HeroesPanel() {
                         key={sk.id}
                         className={`skin-chip ${active ? 'on' : ''}`}
                         disabled={!owned}
-                        title={owned ? sk.name : `${sk.name} — buy in the Skins shop below`}
+                        title={owned ? sk.name : `${sk.name}, buy in the Skins shop below`}
                         onClick={() => engine.setHeroSkin(hero.id, sk.id)}
                       >
                         <span className="skin-dots">
@@ -517,7 +517,7 @@ export function HeroesPanel() {
           <p className="small muted">
             No free slots. The Tavern adds one per level up to 5; beyond that, retire a hero at
             level {PRESTIGE_MIN_LEVEL}+ in the Prestige tab for Heroic Renown, then spend it on Extra Banner
-            (up to 4 more) — {slots} is not necessarily your ceiling.
+            (up to 4 more). {slots} is not necessarily your ceiling.
           </p>
           {/* Two possible paths named in the prose above, so two links --
               same "jump to and highlight the requirement" treatment every
@@ -607,7 +607,7 @@ export function HeroesPanel() {
       <div className="section-heading">Skins</div>
       <p className="small muted">
         Cosmetic liveries, unlocked once for the whole guild and usable by any hero.
-        A pure gold sink — no effect on stats.
+        A pure gold sink, no effect on stats.
       </p>
       <div className="grid three">
         {SKINS.filter((sk) => sk.id !== 'original').map((sk) => {

@@ -571,7 +571,7 @@ export class GameEngine {
           if (chainResult.continued) {
             playSound('depart');
             const label = chainResult.via === 'chain' ? 'chain step' : 'streak';
-            this.say(`${chainHero.name} keeps going — ${chainResult.completedCount}/${chainResult.target} in this ${label}.`, 'quests');
+            this.say(`${chainHero.name} keeps going, ${chainResult.completedCount}/${chainResult.target} in this ${label}.`, 'quests');
           } else if (chainResult.stoppedByFailure) {
             playSound('quest_fail');
             const note = chainResult.via === 'chain' ? 'a failed stage' : 'a failed quest';
@@ -1814,7 +1814,7 @@ export class GameEngine {
         if (this.state.notifiedSetBonuses.includes(key)) continue;
         this.state.notifiedSetBonuses.push(key);
         playSound('legendary_drop');
-        this.say(`${set.name} — ${bonus.label} unlocked!`, 'equipment', true);
+        this.say(`${set.name}, ${bonus.label} unlocked!`, 'equipment', true);
       }
     }
   }

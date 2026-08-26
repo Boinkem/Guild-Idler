@@ -44,7 +44,7 @@ export function GearScoreBadge({
       <span
         className={`gear-score-badge ${size === 'small' ? 'gear-score-badge-small' : ''} ${flashing ? 'gear-score-tierup' : ''}`}
         style={{ '--gear-score-color': tier.color } as React.CSSProperties}
-        title={`Gear Score ${score} — ${tier.name}${nextTier ? ` (${nextTier.min - score} to ${nextTier.name})` : ' (max tier)'}`}
+        title={`Gear Score ${score}, ${tier.name}${nextTier ? ` (${nextTier.min - score} to ${nextTier.name})` : ' (max tier)'}`}
       >
         ⛨ {score}
       </span>

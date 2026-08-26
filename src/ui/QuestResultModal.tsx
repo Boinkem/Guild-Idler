@@ -253,16 +253,16 @@ function QuestResultCard({ result, engine, onViewLore, onNeedsSpace }: {
                 buried in the same line as any other scrape. */}
             {result.heroFallen && (
               <div className="small bad" style={{ fontWeight: 700 }}>
-                {result.heroName} has fallen — revive them from the Heroes tab before sending them out again.
+                {result.heroName} has fallen. Revive them from the Heroes tab before sending them out again.
               </div>
             )}
             {result.petFallen && (
               <div className="small bad" style={{ fontWeight: 700 }}>
-                {result.petFallen.petName} has fallen — revive them from the Heroes tab.
+                {result.petFallen.petName} has fallen. Revive them from the Heroes tab.
               </div>
             )}
             {result.injury && (
-              <div className="small bad">{result.injury.name} — {result.injury.description}</div>
+              <div className="small bad">{result.injury.name}. {result.injury.description}</div>
             )}
             {result.brokenItems.length > 0 && (
               <div className="small bad">Broken: {result.brokenItems.join(', ')}</div>

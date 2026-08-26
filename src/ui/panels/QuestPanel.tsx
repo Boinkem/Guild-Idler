@@ -212,8 +212,13 @@ export function QuestDetailModal({
           <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
         </div>
         {offer.chain && (
+          // Patch 0275: the stage name lives here now, not glued onto the
+          // card's own title (see QuestOffer.stageName's own comment in
+          // types.ts) -- a comma, not the em dash the card's title used
+          // to use, since this is a direct request to drop that
+          // separator everywhere it showed up.
           <div className="tag" style={{ color: 'var(--blood)', display: 'inline-block', marginTop: 4 }}>
-            Chain {offer.chain.stage + 1}/{offer.chain.totalStages}
+            Chain {offer.chain.stage + 1}/{offer.chain.totalStages}{offer.stageName ? `, ${offer.stageName}` : ''}
           </div>
         )}
         {isFrozen && (
@@ -221,7 +226,7 @@ export function QuestDetailModal({
             ❄ Frozen
           </div>
         )}
-        <p className="card-flavour">{chain ? `${chain.description} — ${offer.flavour}` : offer.flavour}</p>
+        <p className="card-flavour">{chain ? `${chain.description} ${offer.flavour}` : offer.flavour}</p>
 
         {levelGap > 0 && (
           <p className="tiny" style={{ color: 'var(--blood)', margin: '0 0 6px' }}>

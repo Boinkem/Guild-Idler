@@ -53,7 +53,7 @@ export function heroStatusInfo(engine: GameEngine, now: number, hero: Hero): Her
       const pct = Math.max(0, Math.min(100, Math.round((elapsed / totalMs) * 100)));
       return {
         hero,
-        statusLine: 'Recovering — cannot be sent',
+        statusLine: 'Recovering, cannot be sent',
         timeLabel: pct >= 100 ? 'Revive ready' : 'Fallen',
         percent: pct,
         remainingMs: Math.max(0, totalMs - elapsed),
@@ -64,7 +64,7 @@ export function heroStatusInfo(engine: GameEngine, now: number, hero: Hero): Her
     // there's genuinely no ETA to show, so the bar sits at 0 rather than
     // implying progress toward something that isn't happening on its own.
     return {
-      hero, statusLine: 'Recovering — cannot be sent', timeLabel: 'Fallen',
+      hero, statusLine: 'Recovering, cannot be sent', timeLabel: 'Fallen',
       percent: 0, remainingMs: Number.POSITIVE_INFINITY, kind: 'fallen',
     };
   }
@@ -76,7 +76,7 @@ export function heroStatusInfo(engine: GameEngine, now: number, hero: Hero): Her
     const raidName = RAID_BY_ID[activeRaid.raidId]?.name ?? 'a raid';
     return {
       hero,
-      statusLine: `Raiding — ${raidName}`,
+      statusLine: `Raiding, ${raidName}`,
       timeLabel: remaining <= 0 ? 'Ready to claim' : `${formatDuration(remaining)} left`,
       percent: Math.min(100, pct),
       remainingMs: remaining,
@@ -91,7 +91,7 @@ export function heroStatusInfo(engine: GameEngine, now: number, hero: Hero): Her
     const pct = Math.round(((total - remaining) / total) * 100);
     return {
       hero,
-      statusLine: `Questing — ${quest.offer.name}`,
+      statusLine: `Questing, ${quest.offer.name}`,
       timeLabel: remaining <= 0 ? 'Ready to claim' : `${formatDuration(remaining)} left`,
       percent: Math.min(100, pct),
       remainingMs: remaining,

@@ -21750,3 +21750,27 @@ Direct follow-up to patch 0270's separate-icon-vs-banner split and patch 0273's 
 **The actual image files are NOT part of this patch**, same reasoning as patch 0273's icon delivery: binary art doesn't belong in a text diff. Delivered separately as two ready-to-drop folders -- 30 `<chain_id>.png` files for `public/lore/chains/`, 8 `<raid_id>.png` files for `public/lore/raids/`. Once those land, every chain and raid's banner should resolve immediately in both the collapsed-card view (still showing the dedicated `icon` from patch 0273 where assigned) and the detail-modal/active-raid views (which always show this full `banner`, per patch 0270's own split).
 
 **Verified:** `npx tsc --noEmit` and a full `vite build` (both Electron sub-builds included) pass clean.
+
+### Quest chain board card decluttered to just the chain name; stage moved to the detail view; every "A — B" dash separator in the game replaced (patch 0275)
+```discord-update
+Dev Update | Quest Board
+
+- Quest chain cards on the board now show just the chain's name, not the stage name crammed onto the end of it
+- Tap into a chain quest to see which stage you're on, same as before, just one tap deeper
+- Cleaned up every " — " dash separator across the whole game's text, in favor of plain commas and periods
+```
+
+Direct request, with a screenshot: the board's quest chain cards were showing "Chain Name — Stage Name" as one combined title, competing for space against the difficulty tag, chain-progress tag, success%, and gold already crowding that same row. Two follow-ups folded in during the same request: the stage name shouldn't just disappear (still needs to be visible somewhere after tapping in), and separately, every other place in the game using the same " — " dash-separator convention should switch to a comma or full stop instead.
+
+**`QuestOffer` gained a new `stageName?: string` field** (types.ts), split out from `name`. `QuestManager.chainOffer`/`chainReplayOffer` (the only two places that ever built a chain offer's display name) now set `name` to just `chain.name` -- the replay-difficulty suffix (`[Replay: Heroic]` etc) still attaches directly to `name`, since that's still compact, glanceable board info, not the part anyone asked to declutter. The stage name moves to the new `stageName` field instead of disappearing.
+
+**Both chain detail modals show the stage name now** (`QuestDetailModal` in QuestPanel.tsx, `ChainDetailModal` in DiscoveredQuestsPanel.tsx) -- the existing "Chain 2/4" progress badge became "Chain 2/4, The Failing Coop" (comma, not the dropped em dash) once tapped into, so the stage is still exactly one tap away, just off the compact card itself. The compact card (`QuestRow`/`ChainRow`) only ever read `offer.name` to begin with, so it automatically picked up the shorter title with zero changes needed there.
+
+**The dash-separator sweep went wider than just this card**, per the direct follow-up ask. Checked every `—` in the codebase, filtered down to genuinely player-facing text (UI strings, tooltips, toast messages) -- deliberately left alone: code comments (developer documentation, never shown to a player) and one standalone `'—'` used as a plain "no value" table placeholder in StatsPanel.tsx, a different, standard convention from the "A — B" separator pattern actually being asked about. That left 65 real occurrences across 23 files, each converted to whichever reads more naturally:
+
+- **Comma** for short label/value pairs and title-like combos -- "Raid Name, Heroic", "Auto Heal, full in 12m", "Questing, The Miller's Problem" (HeroStatusBar's own status line from patch 0269), "Gear Score 340, Epic", and so on.
+- **Period** for genuinely separate sentences/clauses -- "Hero has fallen. Revive them from the Heroes tab.", "Bought once, kept forever. Retirement does not take these away.", the chain-description-plus-flavour join in both detail modals.
+
+Touched files: `QuestResultModal.tsx`, `RaidResultModal.tsx`, `GearScoreBadge.tsx`, `DiscoveredQuestsPanel.tsx`, `TestingPanel.tsx`, `StatsPanel.tsx`, `LorePanel.tsx`, `EquipmentPanel.tsx`, `QuestPanel.tsx`, `HatcheryPanel.tsx`, `VendorsPanel.tsx`, `DashboardPanel.tsx`, `HeroesPanel.tsx`, `GuildPanel.tsx`, `RaidsPanel.tsx`, `maxFlash.tsx`, `CraftingStation.tsx`, `OfflineReportModal.tsx`, `IdleView.tsx`, `HeroStatusBar.tsx`, `GuildManager.ts`, `progression.ts`, `engine.ts`. A final full-codebase sweep after all the individual fixes confirmed zero player-facing `—` occurrences remain outside the two deliberately-preserved exceptions above.
+
+**Verified:** `npx tsc --noEmit` and a full `vite build` (both Electron sub-builds included) pass clean.

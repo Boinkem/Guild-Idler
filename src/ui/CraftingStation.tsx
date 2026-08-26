@@ -303,7 +303,7 @@ export function ItemPreviewModal({
           </div>
         )}
         <div className="tiny muted" style={{ marginTop: 4 }}>
-          {item.durability === 0 ? 'Broken — no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
+          {item.durability === 0 ? 'Broken, no bonuses' : `Durability ${item.durability}/${EquipmentManager.maxDurability(item)}`}
         </div>
         {extra}
         <div className="row end wrap" style={{ gap: 8, marginTop: 12 }}>

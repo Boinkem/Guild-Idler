@@ -26,7 +26,7 @@ export function TestingPanel() {
       <div className="section-heading">Skip time</div>
       <p className="small muted" style={{ marginBottom: 8 }}>
         Runs the real offline catch-up (including Auto-Chain) as if this much time had actually
-        passed — not a free-win button, just not waiting for the clock. Without Auto-Chain, a hero
+        passed, not a free-win button, just not waiting for the clock. Without Auto-Chain, a hero
         only resolves whatever they were already questing, exactly like real play. Also advances
         an active raid's own clock the same way, so a skip can resolve one too.
       </p>
@@ -99,7 +99,7 @@ export function TestingPanel() {
             <div>
               <div className="card-title">{hero.name}</div>
               <div className="tiny muted">
-                {quest?.offer.name} — {quest ? formatDuration(quest.endsAt - Date.now()) : '?'} left
+                {quest?.offer.name}, {quest ? formatDuration(quest.endsAt - Date.now()) : '?'} left
               </div>
             </div>
             <button className="btn-primary" onClick={() => engine.testCompleteActiveQuest(hero.id)}>
@@ -116,7 +116,7 @@ export function TestingPanel() {
           <div>
             <div className="card-title">{RAIDS.find((r) => r.id === state.activeRaid!.raidId)?.name ?? 'A raid'}</div>
             <div className="tiny muted">
-              {state.activeRaid.difficulty} — {formatDuration(state.activeRaid.endsAt - Date.now())} left
+              {state.activeRaid.difficulty}, {formatDuration(state.activeRaid.endsAt - Date.now())} left
             </div>
           </div>
           <button className="btn-primary" onClick={() => engine.testCompleteActiveRaid()}>

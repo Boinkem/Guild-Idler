@@ -110,7 +110,7 @@ export const GuildManager = {
     const def = UPGRADE_BY_ID[id];
     if (!def) return 'Unknown upgrade.';
     if (def.vendor && !isVendorUpgradeUnlocked(state.vendorLevels[def.vendor], def.vendor, def.id)) {
-      return 'Not offered yet — level up the vendor first.';
+      return 'Not offered yet. Level up the vendor first.';
     }
     const level = GuildManager.upgradeLevel(state, id);
     if (level >= def.maxLevel) return 'Already at maximum.';

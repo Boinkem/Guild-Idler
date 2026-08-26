@@ -284,11 +284,13 @@ function ChainDetailModal({
           <span className="tag" style={{ color: cfg.color }}>{cfg.label}</span>
         </div>
         {offer.chain && (
+          // Patch 0275: same name/stageName split as QuestDetailModal --
+          // see that component's own comment in QuestPanel.tsx.
           <div className="tag" style={{ color: 'var(--blood)', display: 'inline-block', marginTop: 4 }}>
-            Chain {offer.chain.stage + 1}/{offer.chain.totalStages}
+            Chain {offer.chain.stage + 1}/{offer.chain.totalStages}{offer.stageName ? `, ${offer.stageName}` : ''}
           </div>
         )}
-        <p className="card-flavour">{chain ? `${chain.description} — ${offer.flavour}` : offer.flavour}</p>
+        <p className="card-flavour">{chain ? `${chain.description} ${offer.flavour}` : offer.flavour}</p>
 
         {levelGap > 0 && (
           <p className="tiny" style={{ color: 'var(--blood)', margin: '0 0 6px' }}>

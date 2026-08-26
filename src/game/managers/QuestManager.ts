@@ -531,7 +531,15 @@ export const QuestManager = {
     const cfg = DIFFICULTIES[stageDef.difficulty];
     return {
       id: `chain:${chain.id}:${stage}`,
-      name: `${chain.name} — ${stageDef.name}`,
+      // Patch 0275: just the chain's own name now, not "Chain — Stage" --
+      // direct request, the board card was reading as cluttered with the
+      // stage name glued on. The stage name doesn't disappear, it moves to
+      // its own `stageName` field instead (see QuestOffer.stageName's own
+      // comment in types.ts) -- still shown, just one tap away in the
+      // detail modal rather than on the compact card every offer already
+      // crowds for space.
+      name: chain.name,
+      stageName: stageDef.name,
       flavour: stageDef.flavour,
       difficulty: stageDef.difficulty,
       tag: stageDef.tag,
@@ -608,7 +616,12 @@ export const QuestManager = {
     const diffCfg = CHAIN_REPLAY_DIFFICULTIES[difficulty];
     return {
       id: `chainReplay:${chain.id}:${stage}:${difficulty}`,
-      name: `${chain.name} — ${stageDef.name}${difficulty !== 'normal' ? ` [Replay: ${difficulty === 'heroic' ? 'Heroic' : 'Legendary'}]` : ' [Replay]'}`,
+      // Patch 0275: same name/stageName split as chainOffer above -- the
+      // replay difficulty tag stays attached to `name` (still a compact,
+      // glanceable "what am I looking at" label), the stage name moves to
+      // `stageName`.
+      name: `${chain.name}${difficulty !== 'normal' ? ` [Replay: ${difficulty === 'heroic' ? 'Heroic' : 'Legendary'}]` : ' [Replay]'}`,
+      stageName: stageDef.name,
       flavour: stageDef.flavour,
       difficulty: stageDef.difficulty,
       tag: stageDef.tag,

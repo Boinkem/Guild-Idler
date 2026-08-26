@@ -247,7 +247,7 @@ function PetCard({ pet, reviveFlash, dismissReviveFlash }: {
           className="btn-ghost"
           style={{ padding: 0, border: 'none', background: 'none', minHeight: 0 }}
           onClick={() => setEnlarged(true)}
-          title={`${pet.name} — view enlarged`}
+          title={`${pet.name}, view enlarged`}
         >
           <PetSprite
             species={def?.spriteFolder ?? pet.defId}

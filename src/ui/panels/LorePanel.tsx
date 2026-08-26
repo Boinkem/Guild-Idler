@@ -214,7 +214,7 @@ function ChainCard({
           <div className="raid-card-name">{chain.name}</div>
           <div className="raid-card-meta">
             {inProgress
-              ? <span className="tiny muted">underway — {stage}/{chain.stages.length}</span>
+              ? <span className="tiny muted">underway, {stage}/{chain.stages.length}</span>
               : <span className="tiny gold-text">Lv {chain.reqLevel}</span>}
           </div>
           {!inProgress && chain.title && <p className="tiny muted" style={{ margin: '2px 0 0' }}>Grants the title "{chain.title}"</p>}
@@ -269,7 +269,7 @@ function StoryQuestsTab() {
       {groups.length === 0 && (
         <>
           <div className="section-heading">Completed</div>
-          <p className="small muted">No chapters finished yet. Contracts on the board sometimes lead somewhere bigger — keep an eye out.</p>
+          <p className="small muted">No chapters finished yet. Contracts on the board sometimes lead somewhere bigger. Keep an eye out.</p>
         </>
       )}
 
@@ -388,7 +388,7 @@ function RaidInProgressEntry() {
         <div className="raid-card-body">
           <div className="raid-card-name">{raid.name}</div>
           <div className="raid-card-meta">
-            <span className="tiny muted">underway — {active.difficulty}</span>
+            <span className="tiny muted">underway, {active.difficulty}</span>
           </div>
         </div>
         <span className="raid-card-chevron" aria-hidden="true">›</span>
@@ -416,7 +416,7 @@ function StoryRaidsTab() {
 
       <div className="section-heading">Completed</div>
       {completed.length === 0 ? (
-        <p className="small muted">No raid has been cleared yet. These need the whole guild, not just one hero — see the Raids tab.</p>
+        <p className="small muted">No raid has been cleared yet. These need the whole guild, not just one hero. See the Raids tab.</p>
       ) : (
         completed.map((r) => <RaidCompletedEntry key={r.id} raidId={r.id} />)
       )}
@@ -512,13 +512,13 @@ export function LorePanel() {
             className="card-title"
             title="Your guild's standing among all who work the Reach."
           >
-            {state.guildName || 'This guild'} — {rank.name}
+            {state.guildName || 'This guild'}, {rank.name}
           </span>
         </div>
         <p className="tiny muted" style={{ margin: '4px 0 0' }}>{rank.blurb}</p>
         {next && powerNeeded !== null && (
           <p className="tiny muted" style={{ margin: '4px 0 0' }}>
-            Next: {next.name} — {powerNeeded.toLocaleString()} more Guild Power.
+            Next: {next.name}, {powerNeeded.toLocaleString()} more Guild Power.
           </p>
         )}
       </div>

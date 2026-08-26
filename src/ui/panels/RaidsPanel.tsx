@@ -709,7 +709,7 @@ function RaidDetailModal({
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h3>Send the guild?</h3>
             <p className="small muted" style={{ marginTop: 0 }}>
-              {raid.name} — {RAID_DIFFICULTY_LABEL[difficulty]}
+              {raid.name}, {RAID_DIFFICULTY_LABEL[difficulty]}
             </p>
             <div className="row wrap" style={{ gap: 6, margin: '10px 0' }}>
               {selectedHeroIds.map((id) => {
@@ -718,7 +718,7 @@ function RaidDetailModal({
               })}
             </div>
             <p className="small bad" style={{ margin: '0 0 4px' }}>
-              The whole party is committed until the raid resolves — there's no early retreat.
+              The whole party is committed until the raid resolves. There's no early retreat.
             </p>
             <div className="row end" style={{ marginTop: 14, gap: 8 }}>
               <button onClick={() => setConfirming(false)}>Cancel</button>
@@ -802,7 +802,7 @@ function ActiveRaidCard() {
     <div className="card raid-active-card" style={{ borderLeft: `3px solid ${color}` }}>
       <RaidBanner raidId={active.raidId} banner={raid?.banner} className="raid-active-banner" />
       <div className="raid-active-header">
-        <span className="card-title">{raid?.name ?? 'A raid'} — {active.difficulty}</span>
+        <span className="card-title">{raid?.name ?? 'A raid'}, {active.difficulty}</span>
       </div>
       {/* Same shared component as the corner companion's own Raid View
           (IdleView.tsx) -- "the party is out on a raid" reads the same

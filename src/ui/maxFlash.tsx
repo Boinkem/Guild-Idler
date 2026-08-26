@@ -87,7 +87,7 @@ export function MaxFlash({ label, onDone }: { label: string; onDone: () => void 
 
   return (
     <div className="max-flash-layer" aria-hidden="true">
-      <span className="max-flash-text">Fully upgraded — {label}</span>
+      <span className="max-flash-text">Fully upgraded, {label}</span>
       {STAR_BURST.map((s, i) => (
         <span
           key={i}
